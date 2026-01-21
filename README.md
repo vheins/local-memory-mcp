@@ -9,6 +9,7 @@ An MCP (Model Context Protocol) service that provides long-term memory for AI co
 - [Server Skeleton & Contract](docs/SPEC-server.md)
 - [Implementation Skeleton (Node.js)](docs/SPEC-skeleton.md)
 - [Git / Project Scope Resolver](docs/SPEC-git-scope.md)
+- [MCP Tool Schema & Validation](docs/SPEC-tool-schema.md)
 
 ## Overview
 
