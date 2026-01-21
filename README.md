@@ -12,6 +12,7 @@ An MCP (Model Context Protocol) service that provides long-term memory for AI co
 - [MCP Tool Schema & Validation](docs/SPEC-tool-schema.md)
 - [SQLite Schema & Migration](docs/SPEC-sqlite-schema.md)
 - [Vector Search Stub & Similarity Layer](docs/SPEC-vector-search.md)
+- [Test Scenarios (Behavioral Contract)](docs/TEST-scenarios.md)
 
 ## Overview
 
