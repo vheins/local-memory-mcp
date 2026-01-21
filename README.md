@@ -7,6 +7,8 @@ An MCP (Model Context Protocol) service that provides long-term memory for AI co
 - [Product Requirements Document (PRD)](docs/PRD.md)
 - [Auto-Memory Heuristics & Scoping](docs/SPEC-heuristics.md)
 - [Server Skeleton & Contract](docs/SPEC-server.md)
+- [Implementation Skeleton (Node.js)](docs/SPEC-skeleton.md)
+- [Git / Project Scope Resolver](docs/SPEC-git-scope.md)
 
 ## Overview
 
