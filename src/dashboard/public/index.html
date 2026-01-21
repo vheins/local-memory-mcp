@@ -473,21 +473,27 @@
                 const data = await response.json();
                 const select = document.getElementById('repoSelect');
                 
-                select.innerHTML = '<option value="">All Repositories</option>';
-                data.repos.forEach(repo => {
-                    const option = document.createElement('option');
-                    option.value = repo;
-                    option.textContent = repo;
-                    select.appendChild(option);
-                });
+                select.innerHTML = '';
+                
+                if (data.repos && data.repos.length > 0) {
+                    data.repos.forEach(repo => {
+                        const option = document.createElement('option');
+                        option.value = repo;
+                        option.textContent = repo;
+                        select.appendChild(option);
+                    });
 
-                // Set first repo as default if available
-                if (data.repos.length > 0) {
+                    // Set first repo as default
                     currentRepo = data.repos[0];
                     select.value = currentRepo;
+                } else {
+                    select.innerHTML = '<option value="">No repositories found</option>';
+                    currentRepo = null;
                 }
             } catch (err) {
                 console.error('Failed to load repos:', err);
+                const select = document.getElementById('repoSelect');
+                select.innerHTML = '<option value="">Error loading repos</option>';
             }
         }
 
@@ -579,9 +585,14 @@
 
         // Load memories table
         async function loadMemories() {
+            if (!currentRepo) {
+                document.getElementById('tableContainer').innerHTML = '<div class="empty-state">Please select a repository</div>';
+                return;
+            }
+
             try {
                 const typeFilter = document.getElementById('typeFilter').value;
-                let url = currentRepo ? `/api/memories?repo=${encodeURIComponent(currentRepo)}` : '/api/memories';
+                let url = `/api/memories?repo=${encodeURIComponent(currentRepo)}`;
                 
                 if (typeFilter) {
                     url += `&type=${typeFilter}`;
@@ -837,8 +848,10 @@
 
         // Event listeners
         document.getElementById('repoSelect').addEventListener('change', (e) => {
-            currentRepo = e.target.value || null;
-            loadData();
+            currentRepo = e.target.value;
+            if (currentRepo) {
+                loadData();
+            }
         });
 
         document.getElementById('typeFilter').addEventListener('change', () => {

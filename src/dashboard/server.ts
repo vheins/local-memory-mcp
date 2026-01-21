@@ -137,26 +137,29 @@ app.get("/api/health", (req, res) => {
 // List all repositories
 app.get("/api/repos", async (req, res) => {
   try {
-    // We'll need to get all memories and extract unique repos
-    // For now, return a simple approach - search with empty query
-    const result = await mcpClient.callTool("memory.search", {
-      query: ".",
-      repo: "*",
-      limit: 1000
-    });
-    
+    // Read the index resource to get recent memories
+    const result = await mcpClient.readResource("memory://index");
     const repos = new Set<string>();
-    if (result.results) {
-      result.results.forEach((m: any) => {
-        if (m.scope && m.scope.repo) {
-          repos.add(m.scope.repo);
-        }
-      });
+    
+    // Parse the content to extract repos
+    if (result && result.contents && result.contents[0]) {
+      const content = result.contents[0].text;
+      const entries = JSON.parse(content);
+      
+      // entries is an array of {id, type, repo}
+      if (Array.isArray(entries)) {
+        entries.forEach((m: any) => {
+          if (m.repo) {
+            repos.add(m.repo);
+          }
+        });
+      }
     }
     
     res.json({ repos: Array.from(repos).sort() });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Error getting repos:", err);
+    res.status(500).json({ error: err.message, repos: [] });
   }
 });
 
@@ -165,14 +168,47 @@ app.get("/api/stats", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
     
-    // Get all memories to compute stats
-    const result = await mcpClient.callTool("memory.search", {
-      query: ".",
-      repo: repo || "*",
-      limit: 1000
-    });
+    // If a specific repo is requested, search it
+    let memories: any[] = [];
     
-    const memories = result.results || [];
+    if (repo) {
+      const result = await mcpClient.callTool("memory.search", {
+        query: "the",
+        repo,
+        limit: 10
+      });
+      memories = result.results || [];
+    } else {
+      // Get from index for all repos
+      const result = await mcpClient.readResource("memory://index");
+      if (result && result.contents && result.contents[0]) {
+        const content = result.contents[0].text;
+        const entries = JSON.parse(content);
+        
+        // entries is an array of {id, type, repo}
+        if (Array.isArray(entries)) {
+          // Get unique repos and search each
+          const repos = new Set<string>();
+          entries.forEach((m: any) => {
+            if (m.repo) repos.add(m.repo);
+          });
+          
+          // Search each repo
+          for (const r of Array.from(repos)) {
+            try {
+              const res = await mcpClient.callTool("memory.search", {
+                query: "the",
+                repo: r,
+                limit: 10
+              });
+              memories.push(...(res.results || []));
+            } catch (err) {
+              console.error(`Error searching repo ${r}:`, err);
+            }
+          }
+        }
+      }
+    }
     
     const stats = {
       total: memories.length,
@@ -199,6 +235,7 @@ app.get("/api/stats", async (req, res) => {
     
     res.json(stats);
   } catch (err: any) {
+    console.error("Error getting stats:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -206,17 +243,21 @@ app.get("/api/stats", async (req, res) => {
 // List memories with optional filtering
 app.get("/api/memories", async (req, res) => {
   try {
-    const repo = req.query.repo as string || "*";
+    const repo = req.query.repo as string;
     const type = req.query.type as string | undefined;
     const sortBy = req.query.sortBy as string || "importance";
     const sortOrder = req.query.sortOrder as string || "desc";
     
+    if (!repo) {
+      return res.status(400).json({ error: "repo parameter is required" });
+    }
+    
     // Search for memories
     const result = await mcpClient.callTool("memory.search", {
-      query: ".",
+      query: "the",
       repo,
       types: type ? [type] : undefined,
-      limit: 1000
+      limit: 10
     });
     
     let memories = result.results || [];
@@ -236,6 +277,7 @@ app.get("/api/memories", async (req, res) => {
     
     res.json({ memories });
   } catch (err: any) {
+    console.error("Error listing memories:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -244,7 +286,9 @@ app.get("/api/memories", async (req, res) => {
 app.get("/api/memories/:id", async (req, res) => {
   try {
     const result = await mcpClient.readResource(`memory://${req.params.id}`);
-    res.json(result.contents[0].text);
+    const memoryJson = result.contents[0].text;
+    const memory = JSON.parse(memoryJson);
+    res.json(memory);
   } catch (err: any) {
     res.status(404).json({ error: err.message });
   }
