@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCP Memory Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" onerror="window.Chart = null;"></script>
     <style>
         * {
             margin: 0;
@@ -521,6 +521,12 @@
         function updateTypeChart(byType) {
             const ctx = document.getElementById('typeChart');
             
+            // Check if Chart.js is available
+            if (!window.Chart) {
+                ctx.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #666;">Chart.js not available. Install locally for visualizations.</div>';
+                return;
+            }
+            
             if (charts.typeChart) {
                 charts.typeChart.destroy();
             }
@@ -553,19 +559,25 @@
         function updateTopMemoriesChart(memories) {
             const ctx = document.getElementById('topMemoriesChart');
             
+            // Check if Chart.js is available
+            if (!window.Chart) {
+                ctx.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #666;">Chart.js not available. Install locally for visualizations.</div>';
+                return;
+            }
+            
             if (charts.topMemoriesChart) {
                 charts.topMemoriesChart.destroy();
             }
 
             const labels = memories.map((m, i) => `#${i + 1}`);
-            const data = memories.map(m => m.importance);
+            const data = memories.map(m => m.hit_count || m.importance);
 
             charts.topMemoriesChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Importance',
+                        label: 'Hit Count',
                         data,
                         backgroundColor: '#2196f3'
                     }]
@@ -575,8 +587,7 @@
                     maintainAspectRatio: true,
                     scales: {
                         y: {
-                            beginAtZero: true,
-                            max: 5
+                            beginAtZero: true
                         }
                     }
                 }
@@ -627,6 +638,8 @@
                         <th onclick="sortTable('type')">Type</th>
                         <th>Content Preview</th>
                         <th onclick="sortTable('importance')">Importance</th>
+                        <th onclick="sortTable('hit_count')">Hit Count</th>
+                        <th onclick="sortTable('recall_rate')">Recall Rate</th>
                         <th onclick="sortTable('created_at')">Created</th>
                         <th>Actions</th>
                     </tr>
@@ -638,6 +651,8 @@
                             <td><span class="type-badge type-${m.type}">${m.type.replace('_', ' ')}</span></td>
                             <td><div class="content-preview">${escapeHtml(m.content)}</div></td>
                             <td>${m.importance}</td>
+                            <td>${m.hit_count || 0}</td>
+                            <td>${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
                             <td><span class="relative-time">${formatDate(m.created_at)}</span></td>
                             <td class="actions">
                                 <button class="btn-primary" onclick="viewMemory('${m.id}')">View</button>
@@ -652,7 +667,7 @@
         }
 
         // Sort table
-        let sortColumn = 'importance';
+        let sortColumn = 'hit_count';
         let sortOrder = 'desc';
 
         function sortTable(column) {
@@ -670,6 +685,9 @@
                 if (column === 'created_at' || column === 'updated_at') {
                     aVal = new Date(aVal).getTime();
                     bVal = new Date(bVal).getTime();
+                } else if (column === 'hit_count' || column === 'recall_count' || column === 'recall_rate') {
+                    aVal = aVal || 0;
+                    bVal = bVal || 0;
                 }
 
                 if (sortOrder === 'asc') {
@@ -691,6 +709,10 @@
                 const modal = document.getElementById('memoryModal');
                 const body = document.getElementById('modalBody');
 
+                const hitCount = memory.hit_count || 0;
+                const recallCount = memory.recall_count || 0;
+                const recallRate = hitCount > 0 ? ((recallCount / hitCount) * 100).toFixed(1) : 'N/A';
+
                 body.innerHTML = `
                     <div class="form-group">
                         <label>ID</label>
@@ -711,6 +733,15 @@
                     <div class="form-group">
                         <label>Importance (1-5)</label>
                         <input type="number" id="editImportance" min="1" max="5" value="${memory.importance}">
+                    </div>
+                    <div class="form-group">
+                        <label>Usage Statistics</label>
+                        <div style="background: #f9f9f9; padding: 0.75rem; border-radius: 4px;">
+                            <div><strong>Hit Count:</strong> ${hitCount} (times returned in search)</div>
+                            <div><strong>Recall Count:</strong> ${recallCount} (times actually used)</div>
+                            <div><strong>Recall Rate:</strong> ${recallRate}${recallRate !== 'N/A' ? '%' : ''}</div>
+                            <div><strong>Last Used:</strong> ${memory.last_used_at ? formatDate(memory.last_used_at) : 'Never'}</div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Created</label>

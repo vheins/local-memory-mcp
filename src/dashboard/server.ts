@@ -168,101 +168,31 @@ app.get("/api/stats", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
     
-    // If a specific repo is requested, search it
-    let memories: any[] = [];
+    // Use direct database query for accurate stats
+    const { SQLiteStore } = await import("../storage/sqlite.js");
+    const tempDb = new SQLiteStore();
     
-    if (repo) {
-      // Use common words that are likely to match most memories
-      const queries = ["the", "use", "not", "for", "and", "with"];
-      const seenIds = new Set<string>();
+    try {
+      const stats = tempDb.getStats(repo);
       
-      for (const query of queries) {
-        try {
-          const result = await mcpClient.callTool("memory.search", {
-            query,
-            repo,
-            limit: 10
-          });
-          
-          // Add unique memories
-          for (const memory of result.results || []) {
-            if (!seenIds.has(memory.id)) {
-              seenIds.add(memory.id);
-              memories.push(memory);
-            }
+      // Get top memories
+      const allMemories = tempDb.getAllMemoriesWithStats(repo);
+      const topMemories = allMemories
+        .sort((a, b) => {
+          if (a.importance !== b.importance) {
+            return b.importance - a.importance;
           }
-        } catch (err) {
-          console.error(`Error searching with query '${query}':`, err);
-        }
-      }
-    } else {
-      // Get from index for all repos
-      const result = await mcpClient.readResource("memory://index");
-      if (result && result.contents && result.contents[0]) {
-        const content = result.contents[0].text;
-        const entries = JSON.parse(content);
-        
-        // entries is an array of {id, type, repo}
-        if (Array.isArray(entries)) {
-          // Get unique repos and search each
-          const repos = new Set<string>();
-          entries.forEach((m: any) => {
-            if (m.repo) repos.add(m.repo);
-          });
-          
-          // Search each repo with multiple queries
-          const queries = ["the", "use", "not", "for", "and", "with"];
-          const seenIds = new Set<string>();
-          
-          for (const r of Array.from(repos)) {
-            for (const query of queries) {
-              try {
-                const res = await mcpClient.callTool("memory.search", {
-                  query,
-                  repo: r,
-                  limit: 10
-                });
-                
-                // Add unique memories
-                for (const memory of res.results || []) {
-                  if (!seenIds.has(memory.id)) {
-                    seenIds.add(memory.id);
-                    memories.push(memory);
-                  }
-                }
-              } catch (err) {
-                console.error(`Error searching repo ${r} with query '${query}':`, err);
-              }
-            }
-          }
-        }
-      }
+          return b.hit_count - a.hit_count;
+        })
+        .slice(0, 10);
+      
+      res.json({
+        ...stats,
+        topMemories
+      });
+    } finally {
+      tempDb.close();
     }
-    
-    const stats = {
-      total: memories.length,
-      byType: {} as Record<string, number>,
-      unused: 0,
-      topMemories: [] as any[]
-    };
-    
-    // Count by type
-    for (const memory of memories) {
-      const type = memory.type || "unknown";
-      stats.byType[type] = (stats.byType[type] || 0) + 1;
-    }
-    
-    // Get top memories (sorted by importance and created_at)
-    stats.topMemories = memories
-      .sort((a: any, b: any) => {
-        if (a.importance !== b.importance) {
-          return b.importance - a.importance;
-        }
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      })
-      .slice(0, 10);
-    
-    res.json(stats);
   } catch (err: any) {
     console.error("Error getting stats:", err);
     res.status(500).json({ error: err.message });
@@ -274,54 +204,48 @@ app.get("/api/memories", async (req, res) => {
   try {
     const repo = req.query.repo as string;
     const type = req.query.type as string | undefined;
-    const sortBy = req.query.sortBy as string || "importance";
+    const sortBy = req.query.sortBy as string || "hit_count";
     const sortOrder = req.query.sortOrder as string || "desc";
     
     if (!repo) {
       return res.status(400).json({ error: "repo parameter is required" });
     }
     
-    // Search with multiple queries to get more comprehensive results
-    // Note: MCP search has a limit of 10 per query, so we use multiple queries
-    const queries = ["the", "use", "not", "for", "and", "with"];
-    const seenIds = new Set<string>();
-    let memories: any[] = [];
+    // Use direct database query to get all memories with stats
+    // This bypasses the MCP search limitation of 10 results per query
+    // Note: We're still using MCP tools for mutations, only reads go direct
+    const { SQLiteStore } = await import("../storage/sqlite.js");
+    const tempDb = new SQLiteStore();
     
-    for (const query of queries) {
-      try {
-        const result = await mcpClient.callTool("memory.search", {
-          query,
-          repo,
-          types: type ? [type] : undefined,
-          limit: 10
-        });
+    try {
+      let memories = tempDb.getAllMemoriesWithStats(repo);
+      
+      // Filter by type if specified
+      if (type) {
+        memories = memories.filter(m => m.type === type);
+      }
+      
+      // Sort
+      memories.sort((a: any, b: any) => {
+        let comparison = 0;
         
-        // Add unique memories
-        for (const memory of result.results || []) {
-          if (!seenIds.has(memory.id)) {
-            seenIds.add(memory.id);
-            memories.push(memory);
-          }
+        if (sortBy === "importance") {
+          comparison = b.importance - a.importance;
+        } else if (sortBy === "hit_count") {
+          comparison = b.hit_count - a.hit_count;
+        } else if (sortBy === "recall_rate") {
+          comparison = b.recall_rate - a.recall_rate;
+        } else if (sortBy === "created_at" || sortBy === "updated_at") {
+          comparison = new Date(b[sortBy]).getTime() - new Date(a[sortBy]).getTime();
         }
-      } catch (err) {
-        console.error(`Error searching with query '${query}':`, err);
-      }
+        
+        return sortOrder === "asc" ? -comparison : comparison;
+      });
+      
+      res.json({ memories });
+    } finally {
+      tempDb.close();
     }
-    
-    // Sort
-    memories.sort((a: any, b: any) => {
-      let comparison = 0;
-      
-      if (sortBy === "importance") {
-        comparison = b.importance - a.importance;
-      } else if (sortBy === "created_at" || sortBy === "updated_at") {
-        comparison = new Date(b[sortBy]).getTime() - new Date(a[sortBy]).getTime();
-      }
-      
-      return sortOrder === "asc" ? -comparison : comparison;
-    });
-    
-    res.json({ memories });
   } catch (err: any) {
     console.error("Error listing memories:", err);
     res.status(500).json({ error: err.message });
