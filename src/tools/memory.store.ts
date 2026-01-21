@@ -12,11 +12,6 @@ export async function handleMemoryStore(
   // Validate input
   const validated = MemoryStoreSchema.parse(params);
 
-  // Enforce repo scope requirement
-  if (!validated.scope.repo) {
-    throw new Error("Memory must be scoped to a repo");
-  }
-
   // Create memory entry
   const now = new Date().toISOString();
   const entry: MemoryEntry = {

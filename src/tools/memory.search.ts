@@ -12,11 +12,6 @@ export async function handleMemorySearch(
   // Validate input
   const validated = MemorySearchSchema.parse(params);
 
-  // Enforce repo scope requirement
-  if (!validated.repo) {
-    throw new Error("Search requires repo scope");
-  }
-
   // Try vector search first
   const vectorResults = await vectors.search(validated.query, validated.limit);
 
