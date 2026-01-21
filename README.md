@@ -5,6 +5,7 @@ An MCP (Model Context Protocol) service that provides long-term memory for AI co
 ## Documentation
 
 - [Product Requirements Document (PRD)](docs/PRD.md)
+- [Auto-Memory Heuristics & Scoping](docs/SPEC-heuristics.md)
 
 ## Overview
 
