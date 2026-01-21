@@ -4,6 +4,21 @@ import { StubVectorStore } from "../storage/vectors.stub.js";
 import { MemoryEntry } from "../types.js";
 import { normalize } from "../utils/normalize.js";
 
+// Hybrid search configuration
+const HYBRID_WEIGHTS = {
+  similarity: 0.6,
+  vector: 0.3,
+  importance: 0.1
+};
+
+interface ScoredMemory {
+  memory: MemoryEntry;
+  similarityScore: number;
+  vectorScore: number;
+  importanceBoost: number;
+  finalScore: number;
+}
+
 export async function handleMemorySearch(
   params: any,
   db: SQLiteStore,
@@ -12,20 +27,19 @@ export async function handleMemorySearch(
   // Validate input
   const validated = MemorySearchSchema.parse(params);
 
-  // Use text-based similarity search
+  // STEP 1: Repo filter (HARD) + Lightweight similarity scoring
   const similarityResults = db.searchBySimilarity(
     validated.query, 
     validated.repo, 
-    validated.limit
+    validated.limit * 3 // Get more candidates for vector re-ranking
   );
 
-  let results: MemoryEntry[];
+  let candidates: Array<{ memory: MemoryEntry; similarityScore: number }>;
 
   if (similarityResults.length > 0 && similarityResults[0].similarity > 0.1) {
-    // Use similarity results if we have meaningful matches
-    // Strip out the extra fields (similarity, hit_count, etc.) that aren't in MemoryEntry
-    results = similarityResults.map((result) => {
-      const entry: MemoryEntry = {
+    // Use similarity results as candidates
+    candidates = similarityResults.map((result) => ({
+      memory: {
         id: result.id,
         type: result.type,
         content: result.content,
@@ -33,47 +47,114 @@ export async function handleMemorySearch(
         scope: result.scope,
         created_at: result.created_at,
         updated_at: result.updated_at
-      };
-      return entry;
-    });
+      },
+      similarityScore: result.similarity
+    }));
   } else {
-    // Fallback: keyword search in SQLite
+    // Fallback: keyword search as candidates
     const allResults = db.searchByRepo(validated.repo, {
       types: validated.types,
       minImportance: validated.minImportance,
-      limit: validated.limit * 3 // Get more for keyword filtering
+      limit: validated.limit * 3
     });
 
-    // Simple keyword matching - split query into words
     const normalized = normalize(validated.query);
     const queryWords = normalized.split(/\s+/).filter(w => w.length > 2);
     
-    results = allResults.filter((entry) => {
+    const filtered = allResults.filter((entry) => {
       const normalizedContent = normalize(entry.content);
-      // Match if any query word appears in content
       return queryWords.some(word => normalizedContent.includes(word));
     });
 
-    // If no matches, return all results (fallback to importance-based)
-    if (results.length === 0) {
-      results = allResults;
-    }
-
-    // Re-apply limit after filtering
-    results = results.slice(0, validated.limit);
+    const memoriesToUse = filtered.length > 0 ? filtered : allResults;
     
-    // Rank by importance and recency
-    results.sort((a, b) => {
-      // Primary sort: importance
-      if (a.importance !== b.importance) {
-        return b.importance - a.importance;
+    candidates = memoriesToUse.map(memory => ({
+      memory,
+      similarityScore: 0.5 // Default similarity for keyword matches
+    }));
+  }
+
+  // STEP 2: OPTIONAL vector similarity re-rank (only on top candidates)
+  let scoredMemories: ScoredMemory[];
+  
+  try {
+    // Attempt vector search on candidates (if available)
+    const vectorResults = await vectors.search(validated.query, candidates.length);
+    
+    if (vectorResults.length > 0) {
+      // Create a map of memory ID to vector score
+      const vectorScoreMap = new Map<string, number>();
+      for (const vr of vectorResults) {
+        vectorScoreMap.set(vr.id, vr.score);
       }
-      // Secondary sort: recency
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      
+      // Combine scores using hybrid formula
+      scoredMemories = candidates.map(({ memory, similarityScore }) => {
+        const vectorScore = vectorScoreMap.get(memory.id) || 0;
+        const importanceBoost = memory.importance / 5;
+        
+        // Hybrid ranking formula
+        const finalScore = 
+          (similarityScore * HYBRID_WEIGHTS.similarity) +
+          (vectorScore * HYBRID_WEIGHTS.vector) +
+          (importanceBoost * HYBRID_WEIGHTS.importance);
+        
+        return {
+          memory,
+          similarityScore,
+          vectorScore,
+          importanceBoost,
+          finalScore
+        };
+      });
+    } else {
+      // No vector results - use similarity-only ranking
+      scoredMemories = candidates.map(({ memory, similarityScore }) => {
+        const importanceBoost = memory.importance / 5;
+        
+        // Similarity-only formula (re-weight to sum to 1.0)
+        const finalScore = 
+          (similarityScore * 0.85) + // Increased from 0.6
+          (importanceBoost * 0.15);   // Increased from 0.1
+        
+        return {
+          memory,
+          similarityScore,
+          vectorScore: 0,
+          importanceBoost,
+          finalScore
+        };
+      });
+    }
+  } catch (error) {
+    // Vector search failed - gracefully degrade to similarity-only
+    console.error("Vector search failed, using similarity-only:", error);
+    
+    scoredMemories = candidates.map(({ memory, similarityScore }) => {
+      const importanceBoost = memory.importance / 5;
+      
+      const finalScore = 
+        (similarityScore * 0.85) +
+        (importanceBoost * 0.15);
+      
+      return {
+        memory,
+        similarityScore,
+        vectorScore: 0,
+        importanceBoost,
+        finalScore
+      };
     });
   }
 
-  // Increment hit_count for returned memories
+  // STEP 3: Sort by final score and take top results
+  scoredMemories.sort((a, b) => b.finalScore - a.finalScore);
+  
+  const results = scoredMemories
+    .slice(0, validated.limit)
+    .map(sm => sm.memory);
+
+  // STEP 4: Increment hit_count for returned memories
   for (const memory of results) {
     db.incrementHitCount(memory.id);
   }

@@ -392,6 +392,33 @@ export class SQLiteStore {
     }));
   }
 
+  // Store vector embedding (optional - for hybrid search)
+  upsertVectorEmbedding(memoryId: string, vector: number[]): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO memory_vectors (memory_id, vector, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(memory_id) DO UPDATE SET
+        vector = excluded.vector,
+        updated_at = excluded.updated_at
+    `);
+    
+    stmt.run(memoryId, JSON.stringify(vector), new Date().toISOString());
+  }
+
+  // Get vector embedding (optional - for hybrid search)
+  getVectorEmbedding(memoryId: string): number[] | null {
+    const stmt = this.db.prepare("SELECT vector FROM memory_vectors WHERE memory_id = ?");
+    const row = stmt.get(memoryId) as any;
+    
+    if (!row) return null;
+    
+    try {
+      return JSON.parse(row.vector);
+    } catch {
+      return null;
+    }
+  }
+
   close(): void {
     this.db.close();
   }
