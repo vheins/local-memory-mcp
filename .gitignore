@@ -30,3 +30,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+storage/*.db
+storage/*.db-*
