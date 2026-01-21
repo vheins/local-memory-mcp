@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Memory Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: #fff;
+            border-bottom: 2px solid #e0e0e0;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .status-dot.connected {
+            background: #4caf50;
+        }
+
+        select, input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card-title {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .table-section {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .table-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.75rem;
+            background: #f9f9f9;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover {
+            background: #f0f0f0;
+        }
+
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        tr:hover {
+            background: #fafafa;
+        }
+
+        .content-preview {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .type-decision {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .type-mistake {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .type-code_fact {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .type-pattern {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #2196f3;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1976d2;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .btn-secondary {
+            background: #757575;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #616161;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .form-group input[type="number"] {
+            width: 100px;
+        }
+
+        .readonly {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .error {
+            color: #d32f2f;
+            padding: 1rem;
+            background: #ffebee;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .delete-confirmation {
+            padding: 1rem;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .delete-confirmation strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #856404;
+        }
+
+        .id-display {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .relative-time {
+            font-size: 0.85rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MCP Memory Dashboard</h1>
+        <div class="header-controls">
+            <label>
+                Repo:
+                <select id="repoSelect">
+                    <option value="">Loading...</option>
+                </select>
+            </label>
+            <div class="status-indicator">
+                Status: 
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Checking...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="card">
+                <div class="card-title">Total Memories</div>
+                <div class="card-value" id="totalCount">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Decisions</div>
+                <div class="card-value" id="decisionCount">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Mistakes</div>
+                <div class="card-value" id="mistakeCount">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Unused Memories</div>
+                <div class="card-value" id="unusedCount">0</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-section">
+            <div class="chart-card">
+                <div class="chart-title">Memory by Type</div>
+                <canvas id="typeChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">Top 10 Memories by Importance</div>
+                <canvas id="topMemoriesChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Memory Table -->
+        <div class="table-section">
+            <div class="table-controls">
+                <label>
+                    Filter by Type:
+                    <select id="typeFilter">
+                        <option value="">All Types</option>
+                        <option value="decision">Decision</option>
+                        <option value="mistake">Mistake</option>
+                        <option value="code_fact">Code Fact</option>
+                        <option value="pattern">Pattern</option>
+                    </select>
+                </label>
+                <button class="btn-secondary" onclick="loadData()">Refresh</button>
+            </div>
+
+            <div id="errorMessage"></div>
+            <div id="tableContainer">
+                <div class="loading">Loading memories...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory Detail Modal -->
+    <div class="modal" id="memoryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Memory Detail</div>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentRepo = null;
+        let currentMemories = [];
+        let charts = {};
+
+        // Check MCP connection status
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                
+                if (data.connected) {
+                    dot.classList.add('connected');
+                    text.textContent = 'Connected';
+                } else {
+                    dot.classList.remove('connected');
+                    text.textContent = 'Disconnected';
+                }
+            } catch (err) {
+                console.error('Status check failed:', err);
+                document.getElementById('statusDot').classList.remove('connected');
+                document.getElementById('statusText').textContent = 'Error';
+            }
+        }
+
+        // Load repositories
+        async function loadRepos() {
+            try {
+                const response = await fetch('/api/repos');
+                const data = await response.json();
+                const select = document.getElementById('repoSelect');
+                
+                select.innerHTML = '<option value="">All Repositories</option>';
+                data.repos.forEach(repo => {
+                    const option = document.createElement('option');
+                    option.value = repo;
+                    option.textContent = repo;
+                    select.appendChild(option);
+                });
+
+                // Set first repo as default if available
+                if (data.repos.length > 0) {
+                    currentRepo = data.repos[0];
+                    select.value = currentRepo;
+                }
+            } catch (err) {
+                console.error('Failed to load repos:', err);
+            }
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const url = currentRepo ? `/api/stats?repo=${encodeURIComponent(currentRepo)}` : '/api/stats';
+                const response = await fetch(url);
+                const data = await response.json();
+
+                document.getElementById('totalCount').textContent = data.total;
+                document.getElementById('decisionCount').textContent = data.byType.decision || 0;
+                document.getElementById('mistakeCount').textContent = data.byType.mistake || 0;
+                document.getElementById('unusedCount').textContent = data.unused;
+
+                // Update charts
+                updateTypeChart(data.byType);
+                updateTopMemoriesChart(data.topMemories);
+            } catch (err) {
+                console.error('Failed to load stats:', err);
+            }
+        }
+
+        // Update type chart
+        function updateTypeChart(byType) {
+            const ctx = document.getElementById('typeChart');
+            
+            if (charts.typeChart) {
+                charts.typeChart.destroy();
+            }
+
+            const types = Object.keys(byType);
+            const counts = Object.values(byType);
+
+            charts.typeChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: types.map(t => t.replace('_', ' ')),
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: [
+                            '#1976d2',
+                            '#d32f2f',
+                            '#7b1fa2',
+                            '#388e3c'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true
+                }
+            });
+        }
+
+        // Update top memories chart
+        function updateTopMemoriesChart(memories) {
+            const ctx = document.getElementById('topMemoriesChart');
+            
+            if (charts.topMemoriesChart) {
+                charts.topMemoriesChart.destroy();
+            }
+
+            const labels = memories.map((m, i) => `#${i + 1}`);
+            const data = memories.map(m => m.importance);
+
+            charts.topMemoriesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Importance',
+                        data,
+                        backgroundColor: '#2196f3'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load memories table
+        async function loadMemories() {
+            try {
+                const typeFilter = document.getElementById('typeFilter').value;
+                let url = currentRepo ? `/api/memories?repo=${encodeURIComponent(currentRepo)}` : '/api/memories';
+                
+                if (typeFilter) {
+                    url += `&type=${typeFilter}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+                currentMemories = data.memories;
+
+                renderTable(currentMemories);
+            } catch (err) {
+                console.error('Failed to load memories:', err);
+                document.getElementById('errorMessage').innerHTML = 
+                    `<div class="error">Failed to load memories: ${err.message}</div>`;
+            }
+        }
+
+        // Render table
+        function renderTable(memories) {
+            const container = document.getElementById('tableContainer');
+            
+            if (memories.length === 0) {
+                container.innerHTML = '<div class="empty-state">No memories found for this repository</div>';
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('id')">ID</th>
+                        <th onclick="sortTable('type')">Type</th>
+                        <th>Content Preview</th>
+                        <th onclick="sortTable('importance')">Importance</th>
+                        <th onclick="sortTable('created_at')">Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${memories.map(m => `
+                        <tr>
+                            <td><span class="id-display">${m.id.substring(0, 8)}</span></td>
+                            <td><span class="type-badge type-${m.type}">${m.type.replace('_', ' ')}</span></td>
+                            <td><div class="content-preview">${escapeHtml(m.content)}</div></td>
+                            <td>${m.importance}</td>
+                            <td><span class="relative-time">${formatDate(m.created_at)}</span></td>
+                            <td class="actions">
+                                <button class="btn-primary" onclick="viewMemory('${m.id}')">View</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            `;
+
+            container.innerHTML = '';
+            container.appendChild(table);
+        }
+
+        // Sort table
+        let sortColumn = 'importance';
+        let sortOrder = 'desc';
+
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortOrder = 'desc';
+            }
+
+            currentMemories.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (column === 'created_at' || column === 'updated_at') {
+                    aVal = new Date(aVal).getTime();
+                    bVal = new Date(bVal).getTime();
+                }
+
+                if (sortOrder === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+
+            renderTable(currentMemories);
+        }
+
+        // View memory detail
+        async function viewMemory(id) {
+            try {
+                const response = await fetch(`/api/memories/${id}`);
+                const memory = await response.json();
+
+                const modal = document.getElementById('memoryModal');
+                const body = document.getElementById('modalBody');
+
+                body.innerHTML = `
+                    <div class="form-group">
+                        <label>ID</label>
+                        <input type="text" value="${memory.id}" class="readonly" readonly style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <input type="text" value="${memory.type}" class="readonly" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Repository</label>
+                        <input type="text" value="${memory.scope.repo}" class="readonly" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Content</label>
+                        <textarea id="editContent">${escapeHtml(memory.content)}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Importance (1-5)</label>
+                        <input type="number" id="editImportance" min="1" max="5" value="${memory.importance}">
+                    </div>
+                    <div class="form-group">
+                        <label>Created</label>
+                        <input type="text" value="${formatDate(memory.created_at)}" class="readonly" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Last Updated</label>
+                        <input type="text" value="${formatDate(memory.updated_at)}" class="readonly" readonly>
+                    </div>
+                    <div class="actions" style="justify-content: space-between; margin-top: 1.5rem;">
+                        <button class="btn-primary" onclick="saveMemory('${id}')">Save Changes</button>
+                        <button class="btn-danger" onclick="confirmDelete('${id}')">Delete Memory</button>
+                    </div>
+                `;
+
+                modal.classList.add('active');
+            } catch (err) {
+                alert('Failed to load memory: ' + err.message);
+            }
+        }
+
+        // Save memory
+        async function saveMemory(id) {
+            const content = document.getElementById('editContent').value;
+            const importance = parseInt(document.getElementById('editImportance').value);
+
+            if (content.length < 10) {
+                alert('Content must be at least 10 characters');
+                return;
+            }
+
+            if (importance < 1 || importance > 5) {
+                alert('Importance must be between 1 and 5');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to update this memory?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/memories/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, importance })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update memory');
+                }
+
+                alert('Memory updated successfully');
+                closeModal();
+                loadData();
+            } catch (err) {
+                alert('Failed to update memory: ' + err.message);
+            }
+        }
+
+        // Confirm delete
+        function confirmDelete(id) {
+            const modal = document.getElementById('modalBody');
+            
+            modal.innerHTML = `
+                <div class="delete-confirmation">
+                    <strong>⚠️ Warning: This memory will no longer be used by agents</strong>
+                    <p>Type <strong>DELETE</strong> to confirm:</p>
+                    <input type="text" id="deleteConfirmInput" style="width: 100%; margin-top: 0.5rem;">
+                </div>
+                <div class="actions" style="justify-content: space-between; margin-top: 1rem;">
+                    <button class="btn-danger" onclick="deleteMemory('${id}')">Confirm Delete</button>
+                    <button class="btn-secondary" onclick="viewMemory('${id}')">Cancel</button>
+                </div>
+            `;
+        }
+
+        // Delete memory
+        async function deleteMemory(id) {
+            const confirmInput = document.getElementById('deleteConfirmInput').value;
+            
+            if (confirmInput !== 'DELETE') {
+                alert('Please type DELETE to confirm');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/memories/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete memory');
+                }
+
+                alert('Memory deleted successfully');
+                closeModal();
+                loadData();
+            } catch (err) {
+                alert('Failed to delete memory: ' + err.message);
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('memoryModal').classList.remove('active');
+        }
+
+        // Load all data
+        async function loadData() {
+            await checkStatus();
+            await loadStats();
+            await loadMemories();
+        }
+
+        // Helper functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now.getTime() - date.getTime();
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            
+            if (days === 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            if (days < 7) return `${days} days ago`;
+            if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+            if (days < 365) return `${Math.floor(days / 30)} months ago`;
+            return `${Math.floor(days / 365)} years ago`;
+        }
+
+        // Event listeners
+        document.getElementById('repoSelect').addEventListener('change', (e) => {
+            currentRepo = e.target.value || null;
+            loadData();
+        });
+
+        document.getElementById('typeFilter').addEventListener('change', () => {
+            loadMemories();
+        });
+
+        // Close modal on outside click
+        document.getElementById('memoryModal').addEventListener('click', (e) => {
+            if (e.target.id === 'memoryModal') {
+                closeModal();
+            }
+        });
+
+        // Initialize
+        (async function init() {
+            await loadRepos();
+            await loadData();
+            
+            // Refresh status every 5 seconds
+            setInterval(checkStatus, 5000);
+        })();
+    </script>
+</body>
+</html>

@@ -189,6 +189,50 @@ export class SQLiteStore {
     stmt.run(repo, summary, new Date().toISOString());
   }
 
+  delete(id: string): void {
+    const stmt = this.db.prepare("DELETE FROM memories WHERE id = ?");
+    stmt.run(id);
+  }
+
+  listAllRepos(): string[] {
+    const stmt = this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo");
+    const rows = stmt.all() as any[];
+    return rows.map(row => row.repo);
+  }
+
+  getStats(repo?: string): {
+    total: number;
+    byType: Record<string, number>;
+    unused: number;
+  } {
+    let query = "SELECT type, COUNT(*) as count FROM memories";
+    const params: any[] = [];
+    
+    if (repo) {
+      query += " WHERE repo = ?";
+      params.push(repo);
+    }
+    
+    query += " GROUP BY type";
+    
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(...params) as any[];
+    
+    const byType: Record<string, number> = {};
+    let total = 0;
+    
+    for (const row of rows) {
+      byType[row.type] = row.count;
+      total += row.count;
+    }
+    
+    // Count unused (memories with no hit_count - we'll need to add this field)
+    // For now, return 0
+    const unused = 0;
+    
+    return { total, byType, unused };
+  }
+
   close(): void {
     this.db.close();
   }
