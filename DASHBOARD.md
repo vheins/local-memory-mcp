@@ -69,6 +69,14 @@ The dashboard server exposes these REST endpoints:
 - **Port**: Set `PORT` environment variable (default: 3456)
 - **MCP Server**: Automatically spawned from `dist/server.js`
 
+## Known Limitations
+
+1. **Memory Search Constraints**: The MCP `memory.search` tool has a minimum query length of 3 characters and returns a maximum of 10 results per query. To work around this, the dashboard uses multiple common search terms ("the", "use", "not", etc.) and aggregates unique results.
+
+2. **Unused Memory Tracking**: The current SQLite schema does not include a `hit_count` column, so the "Unused Memories" statistic always shows 0. This is a future enhancement that would require a schema migration.
+
+3. **Chart.js CDN**: Charts use Chart.js from CDN, which may be blocked in some environments. The dashboard remains fully functional without charts.
+
 ## Acceptance Criteria Compliance
 
 This dashboard satisfies all acceptance criteria:

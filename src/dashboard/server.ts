@@ -172,12 +172,29 @@ app.get("/api/stats", async (req, res) => {
     let memories: any[] = [];
     
     if (repo) {
-      const result = await mcpClient.callTool("memory.search", {
-        query: "the",
-        repo,
-        limit: 10
-      });
-      memories = result.results || [];
+      // Use common words that are likely to match most memories
+      const queries = ["the", "use", "not", "for", "and", "with"];
+      const seenIds = new Set<string>();
+      
+      for (const query of queries) {
+        try {
+          const result = await mcpClient.callTool("memory.search", {
+            query,
+            repo,
+            limit: 10
+          });
+          
+          // Add unique memories
+          for (const memory of result.results || []) {
+            if (!seenIds.has(memory.id)) {
+              seenIds.add(memory.id);
+              memories.push(memory);
+            }
+          }
+        } catch (err) {
+          console.error(`Error searching with query '${query}':`, err);
+        }
+      }
     } else {
       // Get from index for all repos
       const result = await mcpClient.readResource("memory://index");
@@ -193,17 +210,29 @@ app.get("/api/stats", async (req, res) => {
             if (m.repo) repos.add(m.repo);
           });
           
-          // Search each repo
+          // Search each repo with multiple queries
+          const queries = ["the", "use", "not", "for", "and", "with"];
+          const seenIds = new Set<string>();
+          
           for (const r of Array.from(repos)) {
-            try {
-              const res = await mcpClient.callTool("memory.search", {
-                query: "the",
-                repo: r,
-                limit: 10
-              });
-              memories.push(...(res.results || []));
-            } catch (err) {
-              console.error(`Error searching repo ${r}:`, err);
+            for (const query of queries) {
+              try {
+                const res = await mcpClient.callTool("memory.search", {
+                  query,
+                  repo: r,
+                  limit: 10
+                });
+                
+                // Add unique memories
+                for (const memory of res.results || []) {
+                  if (!seenIds.has(memory.id)) {
+                    seenIds.add(memory.id);
+                    memories.push(memory);
+                  }
+                }
+              } catch (err) {
+                console.error(`Error searching repo ${r} with query '${query}':`, err);
+              }
             }
           }
         }
@@ -252,15 +281,32 @@ app.get("/api/memories", async (req, res) => {
       return res.status(400).json({ error: "repo parameter is required" });
     }
     
-    // Search for memories
-    const result = await mcpClient.callTool("memory.search", {
-      query: "the",
-      repo,
-      types: type ? [type] : undefined,
-      limit: 10
-    });
+    // Search with multiple queries to get more comprehensive results
+    // Note: MCP search has a limit of 10 per query, so we use multiple queries
+    const queries = ["the", "use", "not", "for", "and", "with"];
+    const seenIds = new Set<string>();
+    let memories: any[] = [];
     
-    let memories = result.results || [];
+    for (const query of queries) {
+      try {
+        const result = await mcpClient.callTool("memory.search", {
+          query,
+          repo,
+          types: type ? [type] : undefined,
+          limit: 10
+        });
+        
+        // Add unique memories
+        for (const memory of result.results || []) {
+          if (!seenIds.has(memory.id)) {
+            seenIds.add(memory.id);
+            memories.push(memory);
+          }
+        }
+      } catch (err) {
+        console.error(`Error searching with query '${query}':`, err);
+      }
+    }
     
     // Sort
     memories.sort((a: any, b: any) => {

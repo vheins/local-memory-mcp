@@ -226,8 +226,8 @@ export class SQLiteStore {
       total += row.count;
     }
     
-    // Count unused (memories with no hit_count - we'll need to add this field)
-    // For now, return 0
+    // Note: hit_count tracking is not yet implemented in the schema
+    // Future enhancement: Add hit_count column to track memory usage
     const unused = 0;
     
     return { total, byType, unused };
