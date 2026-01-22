@@ -3,6 +3,7 @@ import { SQLiteStore } from "../storage/sqlite.js";
 import { StubVectorStore } from "../storage/vectors.stub.js";
 import { MemoryEntry } from "../types.js";
 import { normalize } from "../utils/normalize.js";
+import { handleMemoryRecap } from "./memory.recap.js";
 
 // Hybrid search configuration
 const HYBRID_WEIGHTS = {
@@ -26,6 +27,26 @@ export async function handleMemorySearch(
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemorySearchSchema.parse(params);
+
+  // STEP 0: Pre-search recap - get recent 20 memories for context
+  let recapContext = "";
+  try {
+    const recapResult = await handleMemoryRecap(
+      { repo: validated.repo, limit: 20 },
+      db
+    );
+    
+    const recapContent = recapResult.content[0]?.text;
+    if (recapContent) {
+      const recapData = JSON.parse(recapContent);
+      if (recapData.summary) {
+        recapContext = recapData.summary;
+      }
+    }
+  } catch (error) {
+    console.error("Warning: Failed to get recap context:", error);
+    // Continue anyway - recap is optional
+  }
 
   // STEP 1: Repo filter (HARD) + Lightweight similarity scoring
   const similarityResults = db.searchBySimilarity(
@@ -163,7 +184,10 @@ export async function handleMemorySearch(
     content: [
       {
         type: "text",
-        text: JSON.stringify({ results }, null, 2)
+        text: JSON.stringify({ 
+          results,
+          recapContext: recapContext ? `Recent memories context:\n${recapContext}` : undefined
+        }, null, 2)
       }
     ]
   };

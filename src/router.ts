@@ -8,10 +8,11 @@ import { handleMemoryUpdate } from "./tools/memory.update.js";
 import { handleMemorySearch } from "./tools/memory.search.js";
 import { handleMemorySummarize } from "./tools/memory.summarize.js";
 import { handleMemoryDelete } from "./tools/memory.delete.js";
+import { handleMemoryRecap } from "./tools/memory.recap.js";
 
 // Initialize storage
 const db = new SQLiteStore();
-const vectors = new StubVectorStore();
+const vectors = new StubVectorStore(db);
 
 export async function handleMethod(method: string, params: any) {
   switch (method) {
@@ -56,6 +57,9 @@ async function handleToolCall(params: any): Promise<any> {
 
     case "memory-update":
       return await handleMemoryUpdate(args, db, vectors);
+
+    case "memory-recap":
+      return await handleMemoryRecap(args, db);
 
     case "memory-search":
       return await handleMemorySearch(args, db, vectors);

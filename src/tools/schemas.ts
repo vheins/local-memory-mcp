@@ -158,7 +158,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "memory-summarize",
-    description: "Update the antigravity summary for a repository",
+    description: "Update the summary for a repository",
     inputSchema: {
       type: "object",
       properties: {
@@ -192,6 +192,27 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["id"]
+    }
+  },
+  {
+    name: "memory-recap",
+    description: "Get the last 20 memories from a repository for context",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository name (required)"
+        },
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 50,
+          default: 20,
+          description: "Maximum number of memories to retrieve"
+        }
+      },
+      required: ["repo"]
     }
   }
 ];

@@ -393,7 +393,7 @@ export class SQLiteStore {
   }
 
   // Store vector embedding (optional - for hybrid search)
-  upsertVectorEmbedding(memoryId: string, vector: number[]): void {
+  upsertVectorEmbedding(memoryId: string, vector: number[] | string[]): void {
     const stmt = this.db.prepare(`
       INSERT INTO memory_vectors (memory_id, vector, updated_at)
       VALUES (?, ?, ?)
@@ -406,7 +406,7 @@ export class SQLiteStore {
   }
 
   // Get vector embedding (optional - for hybrid search)
-  getVectorEmbedding(memoryId: string): number[] | null {
+  getVectorEmbedding(memoryId: string): number[] | string[] | null {
     const stmt = this.db.prepare("SELECT vector FROM memory_vectors WHERE memory_id = ?");
     const row = stmt.get(memoryId) as any;
     

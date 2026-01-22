@@ -27,8 +27,13 @@ export async function handleMemoryStore(
   // Store in SQLite
   db.insert(entry);
 
-  // Store in vector index (stub for now)
-  await vectors.upsert(entry.id, entry.content);
+  // Automatically generate and store vector embedding
+  try {
+    await vectors.upsert(entry.id, entry.content);
+  } catch (error) {
+    console.error("Warning: Failed to generate vector embedding:", error);
+    // Continue anyway - vectors are optional for search fallback
+  }
 
   return {
     content: [

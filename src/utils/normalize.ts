@@ -2,7 +2,8 @@
 export function normalize(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    // Keep alphanumeric characters and spaces, including Unicode letters (for Indonesian, etc.)
+    .replace(/[^\w\s\u00C0-\u017F]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
