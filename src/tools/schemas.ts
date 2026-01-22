@@ -43,7 +43,7 @@ export const MemorySummarizeSchema = z.object({
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
   {
-    name: "memory.store",
+    name: "memory-store",
     description: "Store a new memory entry that affects future behavior",
     inputSchema: {
       type: "object",
@@ -91,7 +91,7 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
-    name: "memory.update",
+    name: "memory-update",
     description: "Update an existing memory entry",
     inputSchema: {
       type: "object",
@@ -117,7 +117,7 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
-    name: "memory.search",
+    name: "memory-search",
     description: "Search for relevant memories in the current repository",
     inputSchema: {
       type: "object",
@@ -157,7 +157,7 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
-    name: "memory.summarize",
+    name: "memory-summarize",
     description: "Update the antigravity summary for a repository",
     inputSchema: {
       type: "object",
@@ -180,7 +180,7 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
-    name: "memory.delete",
+    name: "memory-delete",
     description: "Soft-delete a memory entry (remove from active use)",
     inputSchema: {
       type: "object",

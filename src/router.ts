@@ -49,19 +49,19 @@ async function handleToolCall(params: any): Promise<any> {
   const { name, arguments: args } = params;
 
   switch (name) {
-    case "memory.store":
+    case "memory-store":
       return await handleMemoryStore(args, db, vectors);
 
-    case "memory.update":
+    case "memory-update":
       return await handleMemoryUpdate(args, db, vectors);
 
-    case "memory.search":
+    case "memory-search":
       return await handleMemorySearch(args, db, vectors);
 
-    case "memory.summarize":
+    case "memory-summarize":
       return await handleMemorySummarize(args, db);
 
-    case "memory.delete":
+    case "memory-delete":
       return await handleMemoryDelete(args, db, vectors);
 
     default:

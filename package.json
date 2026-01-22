@@ -13,6 +13,7 @@
 		"dev": "tsc --watch",
 		"start": "node dist/server.js",
 		"dashboard": "node dist/dashboard/server.js",
+		"both": "npm run start & npm run dashboard",
 		"test": "echo \"No tests yet\" && exit 0"
 	},
 	"keywords": [
