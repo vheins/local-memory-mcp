@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { spawn, ChildProcess } from "child_process";
 import { createInterface } from "readline";
@@ -10,7 +11,18 @@ const app = express();
 const PORT = process.env.PORT || 3456;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+
+// Serve static assets. Prefer built `public` next to this file (dist/dashboard/public),
+// but fall back to the source `src/dashboard/public` when running from the repo.
+const builtPublic = path.join(__dirname, "public");
+const srcPublic = path.join(process.cwd(), "src", "dashboard", "public");
+const staticRoot = fs.existsSync(builtPublic) ? builtPublic : srcPublic;
+
+if (!fs.existsSync(staticRoot)) {
+  console.warn("Dashboard static directory not found:", builtPublic, "or", srcPublic);
+}
+
+app.use(express.static(staticRoot));
 
 // MCP Client - spawns the MCP server and communicates with it
 class MCPClient {
@@ -39,7 +51,7 @@ class MCPClient {
     rl.on("line", (line) => {
       try {
         const response = JSON.parse(line);
-        
+
         // Handle notifications
         if (!response.id) {
           return;
@@ -84,7 +96,7 @@ class MCPClient {
 
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject });
-      
+
       // Set timeout
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
@@ -140,12 +152,12 @@ app.get("/api/repos", async (req, res) => {
     // Read the index resource to get recent memories
     const result = await mcpClient.readResource("memory://index");
     const repos = new Set<string>();
-    
+
     // Parse the content to extract repos
     if (result && result.contents && result.contents[0]) {
       const content = result.contents[0].text;
       const entries = JSON.parse(content);
-      
+
       // entries is an array of {id, type, repo}
       if (Array.isArray(entries)) {
         entries.forEach((m: any) => {
@@ -155,7 +167,7 @@ app.get("/api/repos", async (req, res) => {
         });
       }
     }
-    
+
     res.json({ repos: Array.from(repos).sort() });
   } catch (err: any) {
     console.error("Error getting repos:", err);
@@ -167,14 +179,14 @@ app.get("/api/repos", async (req, res) => {
 app.get("/api/stats", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
-    
+
     // Use direct database query for accurate stats
     const { SQLiteStore } = await import("../storage/sqlite.js");
     const tempDb = new SQLiteStore();
-    
+
     try {
       const stats = tempDb.getStats(repo);
-      
+
       // Get top memories
       const allMemories = tempDb.getAllMemoriesWithStats(repo);
       const topMemories = allMemories
@@ -185,7 +197,7 @@ app.get("/api/stats", async (req, res) => {
           return b.hit_count - a.hit_count;
         })
         .slice(0, 10);
-      
+
       res.json({
         ...stats,
         topMemories
@@ -206,29 +218,29 @@ app.get("/api/memories", async (req, res) => {
     const type = req.query.type as string | undefined;
     const sortBy = req.query.sortBy as string || "hit_count";
     const sortOrder = req.query.sortOrder as string || "desc";
-    
+
     if (!repo) {
       return res.status(400).json({ error: "repo parameter is required" });
     }
-    
+
     // Use direct database query to get all memories with stats
     // This bypasses the MCP search limitation of 10 results per query
     // Note: We're still using MCP tools for mutations, only reads go direct
     const { SQLiteStore } = await import("../storage/sqlite.js");
     const tempDb = new SQLiteStore();
-    
+
     try {
       let memories = tempDb.getAllMemoriesWithStats(repo);
-      
+
       // Filter by type if specified
       if (type) {
         memories = memories.filter(m => m.type === type);
       }
-      
+
       // Sort
       memories.sort((a: any, b: any) => {
         let comparison = 0;
-        
+
         if (sortBy === "importance") {
           comparison = b.importance - a.importance;
         } else if (sortBy === "hit_count") {
@@ -238,10 +250,10 @@ app.get("/api/memories", async (req, res) => {
         } else if (sortBy === "created_at" || sortBy === "updated_at") {
           comparison = new Date(b[sortBy]).getTime() - new Date(a[sortBy]).getTime();
         }
-        
+
         return sortOrder === "asc" ? -comparison : comparison;
       });
-      
+
       res.json({ memories });
     } finally {
       tempDb.close();
@@ -268,13 +280,13 @@ app.get("/api/memories/:id", async (req, res) => {
 app.put("/api/memories/:id", async (req, res) => {
   try {
     const { content, importance } = req.body;
-    
+
     const result = await mcpClient.callTool("memory.update", {
       id: req.params.id,
       content,
       importance
     });
-    
+
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -287,7 +299,7 @@ app.delete("/api/memories/:id", async (req, res) => {
     const result = await mcpClient.callTool("memory.delete", {
       id: req.params.id
     });
-    
+
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

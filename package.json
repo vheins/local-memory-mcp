@@ -1,37 +1,37 @@
 {
-  "name": "mcp-memory-local",
-  "version": "0.1.0",
-  "description": "MCP Local Memory Service for coding copilot agents",
-  "type": "module",
-  "main": "dist/server.js",
-  "bin": {
-    "mcp-memory-local": "./dist/server.js",
-    "mcp-memory-dashboard": "./dist/dashboard/server.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "start": "node dist/server.js",
-    "dashboard": "node dist/dashboard/server.js",
-    "test": "echo \"No tests yet\" && exit 0"
-  },
-  "keywords": [
-    "mcp",
-    "memory",
-    "ai",
-    "coding-copilot"
-  ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "better-sqlite3": "^11.8.1",
-    "express": "^5.2.1",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/express": "^5.0.6",
-    "@types/node": "^22.10.6",
-    "typescript": "^5.7.3"
-  }
+	"name": "mcp-memory-local",
+	"version": "0.1.0",
+	"description": "MCP Local Memory Service for coding copilot agents",
+	"type": "module",
+	"main": "dist/server.js",
+	"bin": {
+		"mcp-memory-local": "./dist/server.js",
+		"mcp-memory-dashboard": "./dist/dashboard/server.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"start": "node dist/server.js",
+		"dashboard": "node dist/dashboard/server.js",
+		"test": "echo \"No tests yet\" && exit 0"
+	},
+	"keywords": [
+		"mcp",
+		"memory",
+		"ai",
+		"coding-copilot"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"better-sqlite3": "^12.6.2",
+		"express": "^5.2.1",
+		"zod": "^4.3.5"
+	},
+	"devDependencies": {
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/express": "^5.0.6",
+		"@types/node": "^22.19.7",
+		"typescript": "^5.7.3"
+	}
 }
