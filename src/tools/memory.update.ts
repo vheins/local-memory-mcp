@@ -6,7 +6,7 @@ export async function handleMemoryUpdate(
   params: any,
   db: SQLiteStore,
   vectors: StubVectorStore
-): Promise<{ success: boolean }> {
+): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemoryUpdateSchema.parse(params);
 
@@ -32,5 +32,12 @@ export async function handleMemoryUpdate(
     await vectors.upsert(validated.id, validated.content);
   }
 
-  return { success: true };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true })
+      }
+    ]
+  };
 }

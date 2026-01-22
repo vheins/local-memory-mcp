@@ -8,7 +8,7 @@ export async function handleMemoryStore(
   params: any,
   db: SQLiteStore,
   vectors: StubVectorStore
-): Promise<{ success: boolean; id: string }> {
+): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemoryStoreSchema.parse(params);
 
@@ -31,7 +31,11 @@ export async function handleMemoryStore(
   await vectors.upsert(entry.id, entry.content);
 
   return {
-    success: true,
-    id: entry.id
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true, id: entry.id })
+      }
+    ]
   };
 }

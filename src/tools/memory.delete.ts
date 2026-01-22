@@ -10,7 +10,7 @@ export async function handleMemoryDelete(
   params: any,
   db: SQLiteStore,
   vectors: StubVectorStore
-): Promise<{ success: boolean }> {
+): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemoryDeleteSchema.parse(params);
 
@@ -26,5 +26,12 @@ export async function handleMemoryDelete(
   // Delete from vector store
   await vectors.remove(validated.id);
 
-  return { success: true };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true })
+      }
+    ]
+  };
 }

@@ -23,7 +23,7 @@ export async function handleMemorySearch(
   params: any,
   db: SQLiteStore,
   vectors: StubVectorStore
-): Promise<{ results: MemoryEntry[] }> {
+): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemorySearchSchema.parse(params);
 
@@ -159,5 +159,12 @@ export async function handleMemorySearch(
     db.incrementHitCount(memory.id);
   }
 
-  return { results };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ results }, null, 2)
+      }
+    ]
+  };
 }

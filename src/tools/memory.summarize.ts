@@ -4,7 +4,7 @@ import { SQLiteStore } from "../storage/sqlite.js";
 export async function handleMemorySummarize(
   params: any,
   db: SQLiteStore
-): Promise<{ success: boolean }> {
+): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemorySummarizeSchema.parse(params);
 
@@ -15,5 +15,12 @@ export async function handleMemorySummarize(
   // Store summary
   db.upsertSummary(validated.repo, fullSummary);
 
-  return { success: true };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true })
+      }
+    ]
+  };
 }

@@ -47,8 +47,10 @@ export async function handleMethod(method: string, params: any) {
 
 async function handleToolCall(params: any): Promise<any> {
   const { name, arguments: args } = params;
+  // Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
+  const toolName = String(name).replace(/\./g, "-");
 
-  switch (name) {
+  switch (toolName) {
     case "memory-store":
       return await handleMemoryStore(args, db, vectors);
 
