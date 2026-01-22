@@ -7,6 +7,7 @@ import { handleMemoryStore } from "./tools/memory.store.js";
 import { handleMemoryUpdate } from "./tools/memory.update.js";
 import { handleMemorySearch } from "./tools/memory.search.js";
 import { handleMemorySummarize } from "./tools/memory.summarize.js";
+import { handleMemoryDelete } from "./tools/memory.delete.js";
 
 // Initialize storage
 const db = new SQLiteStore();
@@ -59,6 +60,9 @@ async function handleToolCall(params: any): Promise<any> {
 
     case "memory.summarize":
       return await handleMemorySummarize(args, db);
+
+    case "memory.delete":
+      return await handleMemoryDelete(args, db, vectors);
 
     default:
       throw new Error(`Unknown tool: ${name}`);

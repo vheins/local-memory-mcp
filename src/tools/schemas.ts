@@ -178,5 +178,20 @@ export const TOOL_DEFINITIONS = [
       },
       required: ["repo", "signals"]
     }
+  },
+  {
+    name: "memory.delete",
+    description: "Soft-delete a memory entry (remove from active use)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          format: "uuid",
+          description: "Memory entry ID to delete"
+        }
+      },
+      required: ["id"]
+    }
   }
 ];

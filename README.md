@@ -1,6 +1,6 @@
 # MCP Local Memory Service
 
-An MCP (Model Context Protocol) service that provides long-term memory for AI coding agents.
+An MCP (Model Context Protocol) service that provides long-term memory for AI coding agents, with a web-based dashboard for visualization and management.
 
 ## Overview
 
@@ -13,6 +13,7 @@ This project implements a local memory service using Node.js and SQLite with vec
 - **Git Scope Isolation**: Memories are scoped per repository to prevent cross-project contamination
 - **Antigravity Summaries**: High-level project summaries to guide agent behavior
 - **MCP Protocol**: Full implementation of MCP resources, tools, and prompts
+- **Web Dashboard**: Browser-based UI for visualizing and managing memories
 
 ## Installation
 
@@ -23,11 +24,32 @@ npm run build
 
 ## Usage
 
+### MCP Server
+
 The server runs as an MCP JSON-RPC server over stdin/stdout:
 
 ```bash
 node dist/server.js
 ```
+
+### Web Dashboard
+
+Start the web dashboard for managing memories:
+
+```bash
+npm run dashboard
+```
+
+Then open your browser to `http://localhost:3456`
+
+The dashboard provides:
+- Live memory visualization by repository
+- Summary statistics and charts
+- Memory browsing with sorting and filtering
+- Edit and delete operations with confirmation
+- Real-time MCP connection status
+
+See [DASHBOARD.md](DASHBOARD.md) for detailed dashboard documentation.
 
 ### MCP Tools
 
@@ -78,6 +100,15 @@ Update the antigravity summary for a repository.
     "Uses raw SQL (no ORM)",
     "Explicit DTO validation required"
   ]
+}
+```
+
+#### memory.delete
+Delete a memory entry (soft delete - removes from active use).
+
+```json
+{
+  "id": "uuid"
 }
 ```
 
