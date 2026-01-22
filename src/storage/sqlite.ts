@@ -297,7 +297,30 @@ export class SQLiteStore {
       .filter(word => word.length > 2);
     
     // Remove common stopwords
-    const stopwords = new Set(['the', 'is', 'at', 'which', 'on', 'and', 'or', 'but', 'for', 'with', 'to', 'from', 'by', 'as', 'in', 'of', 'a', 'an']);
+        const stopwords = new Set([
+      // English stopwords
+      'the', 'is', 'at', 'which', 'on', 'and', 'or', 'but', 'for', 'with', 
+      'to', 'from', 'by', 'as', 'in', 'of', 'a', 'an', 'be', 'this', 'that',
+      'are', 'was', 'were', 'been', 'have', 'has', 'had', 'do', 'does', 'did',
+      // Indonesian stopwords
+      'yang', 'di', 'ke', 'dari', 'untuk', 'dengan', 'oleh', 'pada', 'dalam', 'atas',
+      'bawah', 'depan', 'belakang', 'samping', 'sebelah', 'antara', 'diantara', 'melalui',
+      'selama', 'sampai', 'hingga', 'sejak', 'sebelum', 'sesudah', 'setelah', 'sebelumnya',
+      'kemudian', 'selanjutnya', 'lagi', 'juga', 'pun', 'bahkan', 'malah', 'bahwa',
+      'karena', 'sebab', 'oleh', 'karena', 'sehingga', 'maka', 'lalu', 'kemudian',
+      'saya', 'kamu', 'dia', 'kami', 'kalian', 'mereka', 'aku', 'engkau', 'ia', 'kita',
+      'anda', 'beliau', 'mereka', 'siapa', 'apa', 'dimana', 'kapan', 'bagaimana', 'mengapa',
+      'berapa', 'banyak', 'sedikit', 'semua', 'beberapa', 'banyak', 'sedikit', 'hampir',
+      'hanya', 'sudah', 'belum', 'masih', 'lagi', 'selalu', 'kadang', 'sering', 'jarang',
+      'pernah', 'belum', 'sudah', 'akan', 'sedang', 'telah', 'baru', 'lama', 'cepat',
+      'lambat', 'besar', 'kecil', 'panjang', 'pendek', 'tinggi', 'rendah', 'lebar', 'sempit',
+      'tebal', 'tipis', 'berat', 'ringan', 'kuat', 'lemah', 'baik', 'buruk', 'benar', 'salah',
+      'cantik', 'jelek', 'indah', 'buruk', 'bagus', 'jelek', 'suka', 'tidak', 'bukan',
+      'jangan', 'harus', 'boleh', 'bisa', 'mampu', 'dapat', 'mau', 'ingin', 'perlu', 'penting',
+      // Additional common Indonesian words
+      'dan', 'atau', 'tapi', 'namun', 'lalu', 'kemudian', 'jadi', 'maka', 'yaitu', 'yakni'
+    ]);
+    
     const tokens = normalized.filter(word => !stopwords.has(word));
     
     // Build term frequency vector

@@ -22,7 +22,6 @@ echo "$RESPONSE" | grep -q "memory.search" && echo "✓ memory.search found"
 
 echo ""
 echo "Test 3: Store and retrieve memory"
-rm -f storage/memory.db
 cat << 'EOF' | node dist/server.js > /tmp/test-output.txt
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","content":"Test decision for validation","importance":5,"scope":{"repo":"test-repo"}}}}
