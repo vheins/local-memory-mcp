@@ -269,6 +269,125 @@
             color: #000;
         }
 
+        /* Inline expand & edit */
+        tr.expanded {
+            background: var(--th-bg);
+        }
+
+        tr.expanded td {
+            border-bottom: none;
+        }
+
+        .expanded-content {
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .expanded-content h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .inline-edit-row {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .inline-edit-row textarea {
+            flex: 1;
+            min-height: 80px;
+        }
+
+        .inline-edit-row select {
+            width: 80px;
+        }
+
+        .inline-edit-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Bulk actions */
+        .bulk-action-bar {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px var(--shadow);
+            z-index: 1000;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .bulk-action-bar.active {
+            display: flex;
+        }
+
+        .bulk-action-bar .selected-count {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .bulk-action-bar select {
+            width: 100px;
+        }
+
+        /* Column visibility toggle */
+        .column-visibility-toggle {
+            position: relative;
+            display: inline-block;
+        }
+
+        .column-visibility-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px var(--shadow);
+            z-index: 100;
+            min-width: 150px;
+            padding: 0.5rem;
+        }
+
+        .column-visibility-menu.show {
+            display: block;
+        }
+
+        .column-visibility-menu label {
+            display: block;
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        .column-visibility-menu label:hover {
+            background: var(--th-hover);
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: col-resize;
+            background: transparent;
+        }
+
+        .resize-handle:hover {
+            background: var(--type-decision-bg);
+        }
+
         .table-controls {
             display: flex;
             gap: 1rem;
@@ -762,12 +881,29 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Bulk Action Bar -->
+    <div class="bulk-action-bar" id="bulkActionBar">
+        <span class="selected-count" id="selectedCount">0 selected</span>
+        <select id="bulkImportanceSelect">
+            <option value="1">Importance 1</option>
+            <option value="2">Importance 2</option>
+            <option value="3" selected>Importance 3</option>
+            <option value="4">Importance 4</option>
+            <option value="5">Importance 5</option>
+        </select>
+        <button class="btn-primary" onclick="bulkUpdateImportance()">Update</button>
+        <button class="btn-danger" onclick="showBulkDeleteConfirm()">Delete</button>
+        <button class="btn-secondary" onclick="clearSelection()">Clear</button>
+    </div>
+
     <script>
         let currentRepo = null;
         let currentMemories = [];
         let currentPage = 1;
         let pageSize = 10;
         let totalPages = 1;
+        let selectedIds = new Set();
+        let currentPaginatedData = [];
         let charts = {};
         let lastSyncTime = Date.now();
         let countdownSeconds = 30;
@@ -1170,7 +1306,8 @@
             // Apply pagination
             updatePaginationControls(filtered.length);
             const start = (currentPage - 1) * pageSize;
-            const paginated = filtered.slice(start, start + pageSize);
+            currentPaginatedData = filtered.slice(start, start + pageSize);
+            const paginated = currentPaginatedData;
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="empty-state">No memories found matching your filters</div>';
@@ -1189,28 +1326,63 @@
             table.innerHTML = `
                 <thead>
                     <tr>
-                        <th onclick="sortTable('id')" data-sort="id">ID <span class="sort-icon"></span></th>
-                        <th onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
-                        <th>Content Preview</th>
-                        <th onclick="sortTable('importance')" data-sort="importance">Importance <span class="sort-icon"></span></th>
-                        <th onclick="sortTable('hit_count')" data-sort="hit_count">Hit Count <span class="sort-icon"></span></th>
-                        <th onclick="sortTable('recall_rate')" data-sort="recall_rate">Recall Rate <span class="sort-icon"></span></th>
-                        <th onclick="sortTable('created_at')" data-sort="created_at">Created <span class="sort-icon"></span></th>
-                        <th>Actions</th>
+                        <th data-col="select" style="width: 30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                        <th data-col="id" onclick="sortTable('id')" data-sort="id">ID <span class="sort-icon"></span></th>
+                        <th data-col="type" onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
+                        <th data-col="content">Content Preview</th>
+                        <th data-col="importance" onclick="sortTable('importance')" data-sort="importance">Importance <span class="sort-icon"></span></th>
+                        <th data-col="hit_count" onclick="sortTable('hit_count')" data-sort="hit_count">Hit Count <span class="sort-icon"></span></th>
+                        <th data-col="recall_rate" onclick="sortTable('recall_rate')" data-sort="recall_rate">Recall Rate <span class="sort-icon"></span></th>
+                        <th data-col="created_at" onclick="sortTable('created_at')" data-sort="created_at">Created <span class="sort-icon"></span></th>
+                        <th data-col="actions">
+                            <div class="column-visibility-toggle">
+                                <button class="btn-secondary" onclick="toggleColumnMenu(event)" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">⚙️</button>
+                                <div class="column-visibility-menu" id="columnMenu">
+                                    <label><input type="checkbox" checked data-column="select" onchange="toggleColumn(this)"> Select</label>
+                                    <label><input type="checkbox" checked data-column="id" onchange="toggleColumn(this)"> ID</label>
+                                    <label><input type="checkbox" checked data-column="type" onchange="toggleColumn(this)"> Type</label>
+                                    <label><input type="checkbox" checked data-column="content" onchange="toggleColumn(this)"> Content</label>
+                                    <label><input type="checkbox" checked data-column="importance" onchange="toggleColumn(this)"> Importance</label>
+                                    <label><input type="checkbox" checked data-column="hit_count" onchange="toggleColumn(this)"> Hit Count</label>
+                                    <label><input type="checkbox" checked data-column="recall_rate" onchange="toggleColumn(this)"> Recall Rate</label>
+                                    <label><input type="checkbox" checked data-column="created_at" onchange="toggleColumn(this)"> Created</label>
+                                    <label><input type="checkbox" checked data-column="actions" onchange="toggleColumn(this)"> Actions</label>
+                                </div>
+                            </div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     ${paginated.map(m => `
-                        <tr>
-                            <td><span class="id-display">${m.id.substring(0, 8)}</span></td>
-                            <td><span class="type-badge type-${m.type}">${m.type.replace('_', ' ')}</span></td>
-                            <td><div class="content-preview">${highlightText(m.content, searchQuery)}</div></td>
-                            <td>${m.importance}</td>
-                            <td>${m.hit_count || 0}</td>
-                            <td>${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
-                            <td><span class="relative-time">${formatDate(m.created_at)}</span></td>
-                            <td class="actions">
+                        <tr id="row-${m.id}">
+                            <td data-col="select"><input type="checkbox" class="row-checkbox" value="${m.id}" ${selectedIds.has(m.id) ? 'checked' : ''} onchange="toggleSelect('${m.id}')"></td>
+                            <td data-col="id"><span class="id-display">${m.id.substring(0, 8)}</span></td>
+                            <td data-col="type"><span class="type-badge type-${m.type}">${m.type.replace('_', ' ')}</span></td>
+                            <td data-col="content"><div class="content-preview">${highlightText(m.content, searchQuery)}</div></td>
+                            <td data-col="importance">${m.importance}</td>
+                            <td data-col="hit_count">${m.hit_count || 0}</td>
+                            <td data-col="recall_rate">${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
+                            <td data-col="created_at"><span class="relative-time">${formatDate(m.created_at)}</span></td>
+                            <td data-col="actions" class="actions">
+                                <button class="btn-secondary" onclick="toggleExpand('${m.id}')" title="Expand">▼</button>
                                 <button class="btn-primary" onclick="viewMemory('${m.id}')">View</button>
+                                <button class="btn-secondary" onclick="startInlineEdit('${m.id}')" title="Edit">✏️</button>
+                            </td>
+                        </tr>
+                        <tr id="expand-${m.id}" class="expanded-row" style="display: none;">
+                            <td colspan="8">
+                                <div class="expanded-content">
+                                    <h4>Full Content:</h4>
+                                    <p style="white-space: pre-wrap; margin-bottom: 1rem;">${escapeHtml(m.content)}</p>
+                                    <h4>Metadata:</h4>
+                                    <p><strong>ID:</strong> ${m.id}</p>
+                                    <p><strong>Scope:</strong> ${m.scope?.repo || 'N/A'}</p>
+                                    <p><strong>Created:</strong> ${new Date(m.created_at).toLocaleString()}</p>
+                                    <p><strong>Updated:</strong> ${m.updated_at ? new Date(m.updated_at).toLocaleString() : 'N/A'}</p>
+                                    <p><strong>Hit Count:</strong> ${m.hit_count || 0}</p>
+                                    <p><strong>Recall Count:</strong> ${m.recall_count || 0}</p>
+                                    <p><strong>Expires:</strong> ${m.expires_at ? new Date(m.expires_at).toLocaleString() : 'Never'}</p>
+                                </div>
                             </td>
                         </tr>
                     `).join('')}
@@ -1457,6 +1629,303 @@
             await loadMemories();
         }
 
+        // Toggle row expansion
+        function toggleExpand(id) {
+            const expandRow = document.getElementById(`expand-${id}`);
+            const row = document.getElementById(`row-${id}`);
+            
+            if (expandRow.style.display === 'none') {
+                expandRow.style.display = 'table-row';
+                row.classList.add('expanded');
+            } else {
+                expandRow.style.display = 'none';
+                row.classList.remove('expanded');
+            }
+        }
+
+        // Start inline edit
+        let editingId = null;
+        let originalContent = '';
+        let originalImportance = 0;
+
+        function startInlineEdit(id) {
+            // Cancel any existing edit
+            if (editingId) {
+                cancelInlineEdit();
+            }
+
+            const memory = currentMemories.find(m => m.id === id);
+            if (!memory) return;
+
+            editingId = id;
+            originalContent = memory.content;
+            originalImportance = memory.importance;
+
+            const row = document.getElementById(`row-${id}`);
+            const cells = row.querySelectorAll('td');
+
+            // Make content cell editable
+            const contentCell = cells[2];
+            contentCell.innerHTML = `
+                <div class="inline-edit-row">
+                    <textarea id="edit-content" style="width: 100%;">${escapeHtml(memory.content)}</textarea>
+                </div>
+            `;
+
+            // Make importance cell editable
+            const importanceCell = cells[3];
+            importanceCell.innerHTML = `
+                <select id="edit-importance">
+                    ${[1,2,3,4,5].map(i => `<option value="${i}" ${i === memory.importance ? 'selected' : ''}>${i}</option>`).join('')}
+                </select>
+            `;
+
+            // Update actions
+            const actionsCell = cells[7];
+            actionsCell.innerHTML = `
+                <button class="btn-primary" onclick="saveInlineEdit('${id}')">Save</button>
+                <button class="btn-secondary" onclick="cancelInlineEdit()">Cancel</button>
+            `;
+        }
+
+        // Save inline edit
+        async function saveInlineEdit(id) {
+            const content = document.getElementById('edit-content').value;
+            const importance = parseInt(document.getElementById('edit-importance').value);
+
+            if (content.length < 10) {
+                showToast('Content must be at least 10 characters', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/memories/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, importance })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update memory');
+                }
+
+                showToast('Memory updated successfully', 'success');
+                
+                // Update local data
+                const idx = currentMemories.findIndex(m => m.id === id);
+                if (idx >= 0) {
+                    currentMemories[idx].content = content;
+                    currentMemories[idx].importance = importance;
+                }
+
+                editingId = null;
+                renderTable(currentMemories);
+            } catch (err) {
+                console.error('Update failed:', err);
+                showToast('Failed to update memory', 'error');
+            }
+        }
+
+        // Cancel inline edit
+        function cancelInlineEdit() {
+            if (!editingId) return;
+
+            const memory = currentMemories.find(m => m.id === editingId);
+            if (!memory) return;
+
+            const row = document.getElementById(`row-${editingId}`);
+            const cells = row.querySelectorAll('td');
+
+            // Restore content
+            cells[2].innerHTML = `<div class="content-preview">${escapeHtml(memory.content)}</div>`;
+            
+            // Restore importance
+            cells[3].textContent = memory.importance;
+
+            // Restore actions
+            cells[7].innerHTML = `
+                <button class="btn-secondary" onclick="toggleExpand('${editingId}')" title="Expand">▼</button>
+                <button class="btn-primary" onclick="viewMemory('${editingId}')">View</button>
+                <button class="btn-secondary" onclick="startInlineEdit('${editingId}')" title="Edit">✏️</button>
+            `;
+
+            editingId = null;
+        }
+
+        // Column visibility and resize
+        let columnVisibility = JSON.parse(localStorage.getItem('columnVisibility')) || {
+            select: true, id: true, type: true, content: true,
+            importance: true, hit_count: true, recall_rate: true, created_at: true, actions: true
+        };
+        let columnWidths = JSON.parse(localStorage.getItem('columnWidths')) || {};
+
+        function initColumnVisibility() {
+            document.querySelectorAll('.column-visibility-menu input').forEach(input => {
+                const col = input.dataset.column;
+                input.checked = columnVisibility[col] !== false;
+            });
+            applyColumnVisibility();
+        }
+
+        function toggleColumnMenu(event) {
+            event.stopPropagation();
+            document.getElementById('columnMenu').classList.toggle('show');
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('columnMenu').classList.remove('show');
+        });
+
+        function toggleColumn(input) {
+            const col = input.dataset.column;
+            columnVisibility[col] = input.checked;
+            localStorage.setItem('columnVisibility', JSON.stringify(columnVisibility));
+            applyColumnVisibility();
+        }
+
+        function applyColumnVisibility() {
+            document.querySelectorAll('th[data-col], td[data-col]').forEach(el => {
+                const col = el.dataset.col || el.closest('td')?.dataset.col;
+                if (col && columnVisibility[col] === false) {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = '';
+                }
+            });
+            
+            // Also handle by column index for simple implementation
+            const colMap = { select: 0, id: 1, type: 2, content: 3, importance: 4, hit_count: 5, recall_rate: 6, created_at: 7, actions: 8 };
+            document.querySelectorAll('thead th').forEach((th, idx) => {
+                const colName = Object.keys(colMap).find(k => colMap[k] === idx);
+                if (colName && columnVisibility[colName] === false) {
+                    th.style.display = 'none';
+                } else {
+                    th.style.display = '';
+                }
+            });
+            
+            document.querySelectorAll('tbody td').forEach((td, idx) => {
+                const colIdx = idx % 9;
+                const colName = Object.keys(colMap).find(k => colMap[k] === colIdx);
+                if (colName && columnVisibility[colName] === false) {
+                    td.style.display = 'none';
+                } else {
+                    td.style.display = '';
+                }
+            });
+        }
+
+        function saveColumnWidth(col, width) {
+            columnWidths[col] = width;
+            localStorage.setItem('columnWidths', JSON.stringify(columnWidths));
+        }
+
+        // Bulk selection functions
+        function toggleSelect(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            updateBulkActionBar();
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            
+            if (selectAll.checked) {
+                paginated.forEach(m => selectedIds.add(m.id));
+            } else {
+                checkboxes.forEach(cb => selectedIds.delete(cb.value));
+            }
+            
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateBulkActionBar();
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('selectAll').checked = false;
+            updateBulkActionBar();
+        }
+
+        function updateBulkActionBar() {
+            const bar = document.getElementById('bulkActionBar');
+            const count = document.getElementById('selectedCount');
+            
+            count.textContent = `${selectedIds.size} selected`;
+            
+            if (selectedIds.size > 0) {
+                bar.classList.add('active');
+            } else {
+                bar.classList.remove('active');
+            }
+        }
+
+        async function bulkUpdateImportance() {
+            const importance = parseInt(document.getElementById('bulkImportanceSelect')?.value || '3');
+            
+            if (selectedIds.size === 0) return;
+
+            try {
+                let success = 0;
+                for (const id of selectedIds) {
+                    const response = await fetch(`/api/memories/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ importance })
+                    });
+                    if (response.ok) success++;
+                }
+
+                showToast(`Updated ${success} memories`, 'success');
+                clearSelection();
+                await loadData();
+            } catch (err) {
+                console.error('Bulk update failed:', err);
+                showToast('Failed to update memories', 'error');
+            }
+        }
+
+        function showBulkDeleteConfirm() {
+            const modal = document.getElementById('modalBody');
+            const count = selectedIds.size;
+            
+            modal.innerHTML = `
+                <div class="delete-confirmation">
+                    <p>Are you sure you want to delete <strong>${count}</strong> memories? This action cannot be undone.</p>
+                </div>
+                <div class="actions" style="justify-content: space-between; margin-top: 1rem;">
+                    <button class="btn-danger" onclick="bulkDelete()">Delete ${count} Memories</button>
+                    <button class="btn-secondary" onclick="closeModal(); clearSelection();">Cancel</button>
+                </div>
+            `;
+            
+            document.getElementById('memoryModal').classList.add('active');
+        }
+
+        async function bulkDelete() {
+            try {
+                let success = 0;
+                for (const id of selectedIds) {
+                    const response = await fetch(`/api/memories/${id}`, {
+                        method: 'DELETE'
+                    });
+                    if (response.ok) success++;
+                }
+
+                showToast(`Deleted ${success} memories`, 'success');
+                closeModal();
+                clearSelection();
+                await loadData();
+            } catch (err) {
+                console.error('Bulk delete failed:', err);
+                showToast('Failed to delete memories', 'error');
+            }
+        }
+
         // Export data
         function exportData(format) {
             const searchQuery = document.getElementById('searchInput').value.toLowerCase();
@@ -1570,6 +2039,7 @@
 
         (async function init() {
             initTheme();
+            initColumnVisibility();
             await loadRepos();
             await loadData();
             startCountdown();
