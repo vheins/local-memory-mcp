@@ -82,6 +82,7 @@ export async function handleMemorySearch(
       memory: {
         id: result.id,
         type: result.type,
+        title: result.title,
         content: result.content,
         importance: result.importance,
         scope: result.scope,
@@ -228,7 +229,15 @@ export async function handleMemorySearch(
         id: r.id,
         type: r.type,
         title: r.title,
-        content: r.content
+        content: r.content,
+        importance: r.importance,
+        scope: r.scope,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        hit_count: r.hit_count,
+        recall_count: r.recall_count,
+        last_used_at: r.last_used_at,
+        expires_at: r.expires_at
       }))
     }
   );

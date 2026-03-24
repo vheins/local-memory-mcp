@@ -39,8 +39,11 @@ export function createMcpResponse(
       importance?: number;
       scope?: { repo: string; folder?: string; language?: string };
       created_at?: string;
+      updated_at?: string;
       hit_count?: number;
       recall_count?: number;
+      last_used_at?: string | null;
+      expires_at?: string | null;
     }> 
   }
 ): McpResponse {
@@ -58,6 +61,9 @@ export function createMcpResponse(
     for (const result of results) {
       const resultId = Buffer.from(result.id).toString('base64').substring(0, 8);
       
+      // Generate title from content if not present
+      const title = result.title || (result.content.length > 50 ? result.content.substring(0, 50) + '...' : result.content);
+      
       content.push({
         type: "resource",
         resource: {
@@ -66,13 +72,16 @@ export function createMcpResponse(
           text: JSON.stringify({
             id: result.id,
             type: result.type,
-            title: result.title,
+            title: title,
             content: result.content,
             importance: result.importance,
             scope: result.scope,
             created_at: result.created_at,
+            updated_at: result.updated_at,
             hit_count: result.hit_count,
-            recall_count: result.recall_count
+            recall_count: result.recall_count,
+            last_used_at: result.last_used_at,
+            expires_at: result.expires_at
           })
         }
       });
