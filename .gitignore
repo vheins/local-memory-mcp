@@ -34,3 +34,4 @@ Thumbs.db
 # Database
 storage/*.db
 storage/*.db-*
+.kiro

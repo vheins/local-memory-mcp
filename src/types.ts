@@ -17,6 +17,10 @@ export type MemoryEntry = {
   scope: MemoryScope;
   created_at: string;
   updated_at: string;
+  hit_count: number;
+  recall_count: number;
+  last_used_at: string | null;
+  expires_at: string | null;
 };
 
 export type VectorResult = {

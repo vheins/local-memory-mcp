@@ -6,6 +6,50 @@
     <title>MCP Memory Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" onerror="window.Chart = null;"></script>
     <style>
+        :root {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #fff;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #e0e0e0;
+            --border-light: #f0f0f0;
+            --shadow: rgba(0,0,0,0.1);
+            --type-decision-bg: #e3f2fd;
+            --type-decision-text: #1976d2;
+            --type-mistake-bg: #ffebee;
+            --type-mistake-text: #d32f2f;
+            --type-code_fact-bg: #f3e5f5;
+            --type-code_fact-text: #7b1fa2;
+            --type-pattern-bg: #e8f5e9;
+            --type-pattern-text: #388e3c;
+            --header-bg: #fff;
+            --hover-bg: #fafafa;
+            --th-bg: #f9f9f9;
+            --th-hover: #f0f0f0;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaa;
+            --border-color: #444;
+            --border-light: #3d3d3d;
+            --shadow: rgba(0,0,0,0.3);
+            --type-decision-bg: #1a3a5c;
+            --type-decision-text: #64b5f6;
+            --type-mistake-bg: #5c1a1a;
+            --type-mistake-text: #ef9a9a;
+            --type-code_fact-bg: #3a1a4c;
+            --type-code_fact-text: #ce93d8;
+            --type-pattern-bg: #1a3a1a;
+            --type-pattern-text: #a5d6a7;
+            --header-bg: #2d2d2d;
+            --hover-bg: #3a3a3a;
+            --th-bg: #333;
+            --th-hover: #444;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -14,13 +58,14 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background 0.3s, color 0.3s;
         }
 
         .header {
-            background: #fff;
-            border-bottom: 2px solid #e0e0e0;
+            background: var(--header-bg);
+            border-bottom: 2px solid var(--border-color);
             padding: 1rem 2rem;
             display: flex;
             justify-content: space-between;
@@ -30,12 +75,49 @@
         .header h1 {
             font-size: 1.5rem;
             font-weight: 600;
+            color: var(--text-primary);
         }
 
         .header-controls {
             display: flex;
             gap: 1rem;
             align-items: center;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .memory-badge {
+            background: var(--type-decision-bg);
+            color: var(--type-decision-text);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .sync-timer {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .countdown-bar {
+            width: 60px;
+            height: 4px;
+            background: var(--border-light);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .countdown-fill {
+            height: 100%;
+            background: #2196f3;
+            transition: width 1s linear;
         }
 
         .status-indicator {
@@ -75,50 +157,116 @@
             margin-bottom: 2rem;
         }
 
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px var(--shadow);
+            transition: background 0.3s;
+        }
+
+        .chart-card canvas {
+            max-height: 250px;
+            width: 100% !important;
+            height: auto !important;
+        }
+
         .card {
-            background: #fff;
+            background: var(--bg-secondary);
             padding: 1.5rem;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px var(--shadow);
+            transition: background 0.3s;
         }
 
         .card-title {
             font-size: 0.9rem;
-            color: #666;
+            color: var(--text-secondary);
             margin-bottom: 0.5rem;
         }
 
         .card-value {
             font-size: 2rem;
             font-weight: 700;
-            color: #333;
-        }
-
-        .charts-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .chart-card {
-            background: #fff;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            color: var(--text-primary);
         }
 
         .chart-title {
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 600;
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
         }
 
         .table-section {
-            background: #fff;
+            background: var(--bg-secondary);
             padding: 1.5rem;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px var(--shadow);
+            transition: background 0.3s;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-light);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .pagination-controls button {
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        .pagination-controls button:hover:not(:disabled) {
+            background: var(--th-hover);
+        }
+
+        .pagination-controls button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .page-size-selector select {
+            padding: 0.25rem;
+        }
+
+        mark {
+            background: #ffeb3b;
+            color: #333;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+
+        [data-theme="dark"] mark {
+            background: #ffc107;
+            color: #000;
         }
 
         .table-controls {
@@ -136,24 +284,42 @@
         th {
             text-align: left;
             padding: 0.75rem;
-            background: #f9f9f9;
-            border-bottom: 2px solid #e0e0e0;
+            background: var(--th-bg);
+            border-bottom: 2px solid var(--border-color);
             font-weight: 600;
             cursor: pointer;
             user-select: none;
+            color: var(--text-primary);
+            white-space: nowrap;
         }
 
         th:hover {
-            background: #f0f0f0;
+            background: var(--th-hover);
+        }
+
+        .sort-icon {
+            margin-left: 0.25rem;
+            opacity: 0.3;
+        }
+
+        th.sorted-asc .sort-icon::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        th.sorted-desc .sort-icon::after {
+            content: '↓';
+            opacity: 1;
         }
 
         td {
             padding: 0.75rem;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-primary);
         }
 
         tr:hover {
-            background: #fafafa;
+            background: var(--hover-bg);
         }
 
         .content-preview {
@@ -172,23 +338,23 @@
         }
 
         .type-decision {
-            background: #e3f2fd;
-            color: #1976d2;
+            background: var(--type-decision-bg);
+            color: var(--type-decision-text);
         }
 
         .type-mistake {
-            background: #ffebee;
-            color: #d32f2f;
+            background: var(--type-mistake-bg);
+            color: var(--type-mistake-text);
         }
 
         .type-code_fact {
-            background: #f3e5f5;
-            color: #7b1fa2;
+            background: var(--type-code_fact-bg);
+            color: var(--type-code_fact-text);
         }
 
         .type-pattern {
-            background: #e8f5e9;
-            color: #388e3c;
+            background: var(--type-pattern-bg);
+            color: var(--type-pattern-text);
         }
 
         .actions {
@@ -249,14 +415,82 @@
             align-items: center;
         }
 
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toast {
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: slideIn 0.3s ease;
+            max-width: 300px;
+        }
+
+        .toast.success { background: #4caf50; }
+        .toast.error { background: #f44336; }
+        .toast.info { background: #2196f3; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+
+        .toast.removing {
+            animation: slideOut 0.3s ease forwards;
+        }
+
         .modal-content {
-            background: #fff;
+            background: var(--bg-secondary);
             padding: 2rem;
             border-radius: 8px;
             max-width: 600px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            color: var(--text-primary);
+        }
+
+        input, textarea, select {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #2196f3;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        select {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
         }
 
         .modal-header {
@@ -358,17 +592,27 @@
     <div class="header">
         <h1>MCP Memory Dashboard</h1>
         <div class="header-controls">
+            <div class="header-stats">
+                <span class="memory-badge" id="memoryBadge">0 memories</span>
+            </div>
             <label>
                 Repo:
                 <select id="repoSelect">
                     <option value="">Loading...</option>
                 </select>
             </label>
+            <div class="sync-timer">
+                <span id="syncStatus">Synced 0s ago</span>
+                <div class="countdown-bar">
+                    <div class="countdown-fill" id="countdownFill"></div>
+                </div>
+            </div>
             <div class="status-indicator">
                 Status: 
                 <div class="status-dot" id="statusDot"></div>
                 <span id="statusText">Checking...</span>
             </div>
+            <button id="themeToggle" class="btn-secondary" title="Toggle dark mode">🌙</button>
         </div>
     </div>
 
@@ -378,6 +622,22 @@
             <div class="card">
                 <div class="card-title">Total Memories</div>
                 <div class="card-value" id="totalCount">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Avg Importance</div>
+                <div class="card-value" id="avgImportance">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Total Hits</div>
+                <div class="card-value" id="totalHits">0</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Most Active Repo</div>
+                <div class="card-value" id="mostActiveRepo" style="font-size: 1rem;">-</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Expiring Soon</div>
+                <div class="card-value" id="expiringSoon">0</div>
             </div>
             <div class="card">
                 <div class="card-title">Decisions</div>
@@ -400,6 +660,18 @@
                 <canvas id="typeChart"></canvas>
             </div>
             <div class="chart-card">
+                <div class="chart-title">Importance Distribution</div>
+                <canvas id="importanceChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">Memories Over Time (30 days)</div>
+                <canvas id="timeSeriesChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">Importance vs Hit Count</div>
+                <canvas id="scatterChart"></canvas>
+            </div>
+            <div class="chart-card">
                 <div class="chart-title">Top 10 Memories by Importance</div>
                 <canvas id="topMemoriesChart"></canvas>
             </div>
@@ -408,8 +680,9 @@
         <!-- Memory Table -->
         <div class="table-section">
             <div class="table-controls">
+                <input type="text" id="searchInput" placeholder="Search memories..." style="width: 200px;">
                 <label>
-                    Filter by Type:
+                    Type:
                     <select id="typeFilter">
                         <option value="">All Types</option>
                         <option value="decision">Decision</option>
@@ -418,12 +691,59 @@
                         <option value="pattern">Pattern</option>
                     </select>
                 </label>
+                <label>
+                    Min Importance:
+                    <select id="minImportanceFilter">
+                        <option value="">Any</option>
+                        <option value="1">1+</option>
+                        <option value="2">2+</option>
+                        <option value="3">3+</option>
+                        <option value="4">4+</option>
+                        <option value="5">5</option>
+                    </select>
+                </label>
+                <label>
+                    Max Importance:
+                    <select id="maxImportanceFilter">
+                        <option value="">Any</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5 or less</option>
+                    </select>
+                </label>
                 <button class="btn-secondary" onclick="loadData()">Refresh</button>
+                <button class="btn-secondary" onclick="exportData('json')">Export JSON</button>
+                <button class="btn-secondary" onclick="exportData('csv')">Export CSV</button>
+                <button class="btn-secondary" onclick="archiveExpired()">Archive Expired</button>
             </div>
 
             <div id="errorMessage"></div>
             <div id="tableContainer">
                 <div class="loading">Loading memories...</div>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="pagination" id="paginationControls">
+                <div class="pagination-info" id="paginationInfo"></div>
+                <div class="pagination-controls">
+                    <button id="firstPageBtn" onclick="goToPage(1)">First</button>
+                    <button id="prevPageBtn" onclick="goToPage(currentPage - 1)">Prev</button>
+                    <span id="pageNumbers"></span>
+                    <button id="nextPageBtn" onclick="goToPage(currentPage + 1)">Next</button>
+                    <button id="lastPageBtn" onclick="goToPage(totalPages)">Last</button>
+                </div>
+                <div class="page-size-selector">
+                    <label>Per page:
+                        <select id="pageSizeSelect" onchange="changePageSize()">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
+                </div>
             </div>
         </div>
     </div>
@@ -439,12 +759,86 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
         let currentRepo = null;
         let currentMemories = [];
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalPages = 1;
         let charts = {};
+        let lastSyncTime = Date.now();
+        let countdownSeconds = 30;
+        let countdownInterval = null;
 
-        // Check MCP connection status
+        // Dark mode toggle
+        function initTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+            document.getElementById('themeToggle').textContent = saved === 'dark' ? '☀️' : '🌙';
+        }
+
+        function startCountdown() {
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownSeconds = 30;
+            updateCountdown();
+            
+            countdownInterval = setInterval(() => {
+                countdownSeconds--;
+                if (countdownSeconds <= 0) {
+                    countdownSeconds = 30;
+                    loadData();
+                }
+                updateCountdown();
+            }, 1000);
+        }
+
+        function updateCountdown() {
+            const fill = document.getElementById('countdownFill');
+            const status = document.getElementById('syncStatus');
+            const percent = (countdownSeconds / 30) * 100;
+            fill.style.width = percent + '%';
+            
+            if (countdownSeconds <= 5) {
+                fill.style.background = '#f44336';
+            } else if (countdownSeconds <= 10) {
+                fill.style.background = '#ff9800';
+            } else {
+                fill.style.background = '#2196f3';
+            }
+            
+            status.textContent = `Synced ${countdownSeconds}s ago`;
+        }
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+            document.getElementById('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙';
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                closeModal();
+            } else if (e.key === 'r' || e.key === 'R') {
+                loadData();
+            } else if (e.key === '/') {
+                e.preventDefault();
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            }
+        });
+
         async function checkStatus() {
             try {
                 const response = await fetch('/api/health');
@@ -459,6 +853,11 @@
                     dot.classList.remove('connected');
                     text.textContent = 'Disconnected';
                 }
+
+                // Update memory badge
+                const badge = document.getElementById('memoryBadge');
+                const count = data.memoryCount || 0;
+                badge.textContent = `${count} memories`;
             } catch (err) {
                 console.error('Status check failed:', err);
                 document.getElementById('statusDot').classList.remove('connected');
@@ -505,12 +904,19 @@
                 const data = await response.json();
 
                 document.getElementById('totalCount').textContent = data.total;
-                document.getElementById('decisionCount').textContent = data.byType.decision || 0;
-                document.getElementById('mistakeCount').textContent = data.byType.mistake || 0;
-                document.getElementById('unusedCount').textContent = data.unused;
+                document.getElementById('avgImportance').textContent = data.avgImportance || '0';
+                document.getElementById('totalHits').textContent = data.totalHitCount || '0';
+                document.getElementById('mostActiveRepo').textContent = data.mostActiveRepo || '-';
+                document.getElementById('expiringSoon').textContent = data.expiringSoon || '0';
+                document.getElementById('decisionCount').textContent = data.byType?.decision || 0;
+                document.getElementById('mistakeCount').textContent = data.byType?.mistake || 0;
+                document.getElementById('unusedCount').textContent = data.unused || 0;
 
                 // Update charts
                 updateTypeChart(data.byType);
+                updateImportanceChart(data.importanceDist || [0,0,0,0,0]);
+                updateTimeSeriesChart(data.timeSeries || {});
+                updateScatterChart(data.scatterData || []);
                 updateTopMemoriesChart(data.topMemories);
             } catch (err) {
                 console.error('Failed to load stats:', err);
@@ -594,6 +1000,115 @@
             });
         }
 
+        // Update importance distribution chart (histogram)
+        function updateImportanceChart(importanceDist) {
+            const ctx = document.getElementById('importanceChart');
+            
+            if (!window.Chart) return;
+            
+            if (charts.importanceChart) {
+                charts.importanceChart.destroy();
+            }
+
+            charts.importanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['1', '2', '3', '4', '5'],
+                    datasets: [{
+                        label: 'Count',
+                        data: importanceDist,
+                        backgroundColor: '#ff9800'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update time series chart (30 days)
+        function updateTimeSeriesChart(timeSeries) {
+            const ctx = document.getElementById('timeSeriesChart');
+            
+            if (!window.Chart) return;
+            
+            if (charts.timeSeriesChart) {
+                charts.timeSeriesChart.destroy();
+            }
+
+            const labels = Object.keys(timeSeries).slice(-14);
+            const data = Object.values(timeSeries).slice(-14);
+
+            charts.timeSeriesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Memories Created',
+                        data,
+                        borderColor: '#4caf50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update scatter chart (importance vs hit_count)
+        function updateScatterChart(scatterData) {
+            const ctx = document.getElementById('scatterChart');
+            
+            if (!window.Chart) return;
+            
+            if (charts.scatterChart) {
+                charts.scatterChart.destroy();
+            }
+
+            charts.scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Memories',
+                        data: scatterData,
+                        backgroundColor: '#9c27b0'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Importance' },
+                            min: 0,
+                            max: 6
+                        },
+                        y: {
+                            title: { display: true, text: 'Hit Count' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
         // Load memories table
         async function loadMemories() {
             if (!currentRepo) {
@@ -625,31 +1140,71 @@
         function renderTable(memories) {
             const container = document.getElementById('tableContainer');
             
-            if (memories.length === 0) {
-                container.innerHTML = '<div class="empty-state">No memories found for this repository</div>';
+            // Apply client-side filters
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const typeFilter = document.getElementById('typeFilter').value;
+            const minImportance = parseInt(document.getElementById('minImportanceFilter').value) || 0;
+            const maxImportance = parseInt(document.getElementById('maxImportanceFilter').value) || 5;
+
+            let filtered = memories;
+            
+            if (searchQuery) {
+                filtered = filtered.filter(m => 
+                    m.content.toLowerCase().includes(searchQuery) ||
+                    m.type.toLowerCase().includes(searchQuery)
+                );
+            }
+            
+            if (typeFilter) {
+                filtered = filtered.filter(m => m.type === typeFilter);
+            }
+            
+            if (minImportance > 0) {
+                filtered = filtered.filter(m => m.importance >= minImportance);
+            }
+            
+            if (maxImportance < 5) {
+                filtered = filtered.filter(m => m.importance <= maxImportance);
+            }
+
+            // Apply pagination
+            updatePaginationControls(filtered.length);
+            const start = (currentPage - 1) * pageSize;
+            const paginated = filtered.slice(start, start + pageSize);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state">No memories found matching your filters</div>';
                 return;
             }
 
             const table = document.createElement('table');
+            
+            // Highlight function
+            function highlightText(text, query) {
+                if (!query) return escapeHtml(text);
+                const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return escapeHtml(text).replace(regex, '<mark>$1</mark>');
+            }
+
             table.innerHTML = `
                 <thead>
                     <tr>
-                        <th onclick="sortTable('id')">ID</th>
-                        <th onclick="sortTable('type')">Type</th>
+                        <th onclick="sortTable('id')" data-sort="id">ID <span class="sort-icon"></span></th>
+                        <th onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
                         <th>Content Preview</th>
-                        <th onclick="sortTable('importance')">Importance</th>
-                        <th onclick="sortTable('hit_count')">Hit Count</th>
-                        <th onclick="sortTable('recall_rate')">Recall Rate</th>
-                        <th onclick="sortTable('created_at')">Created</th>
+                        <th onclick="sortTable('importance')" data-sort="importance">Importance <span class="sort-icon"></span></th>
+                        <th onclick="sortTable('hit_count')" data-sort="hit_count">Hit Count <span class="sort-icon"></span></th>
+                        <th onclick="sortTable('recall_rate')" data-sort="recall_rate">Recall Rate <span class="sort-icon"></span></th>
+                        <th onclick="sortTable('created_at')" data-sort="created_at">Created <span class="sort-icon"></span></th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${memories.map(m => `
+                    ${paginated.map(m => `
                         <tr>
                             <td><span class="id-display">${m.id.substring(0, 8)}</span></td>
                             <td><span class="type-badge type-${m.type}">${m.type.replace('_', ' ')}</span></td>
-                            <td><div class="content-preview">${escapeHtml(m.content)}</div></td>
+                            <td><div class="content-preview">${highlightText(m.content, searchQuery)}</div></td>
                             <td>${m.importance}</td>
                             <td>${m.hit_count || 0}</td>
                             <td>${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
@@ -666,6 +1221,51 @@
             container.appendChild(table);
         }
 
+        // Setup search debounce
+        let searchDebounce = null;
+        document.getElementById('searchInput').addEventListener('input', () => {
+            if (searchDebounce) clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                renderTable(currentMemories);
+            }, 100);
+        });
+
+        // Setup filter listeners
+        ['typeFilter', 'minImportanceFilter', 'maxImportanceFilter'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                currentPage = 1;
+                renderTable(currentMemories);
+            });
+        });
+
+        // Pagination functions
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            currentPage = 1;
+            renderTable(currentMemories);
+        }
+
+        function goToPage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderTable(currentMemories);
+        }
+
+        function updatePaginationControls(totalItems) {
+            totalPages = Math.ceil(totalItems / pageSize) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            
+            document.getElementById('firstPageBtn').disabled = currentPage <= 1;
+            document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+            document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+            document.getElementById('lastPageBtn').disabled = currentPage >= totalPages;
+            
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalItems);
+            document.getElementById('paginationInfo').textContent = 
+                totalItems > 0 ? `Showing ${start}-${end} of ${totalItems}` : 'No results';
+        }
+
         // Sort table
         let sortColumn = 'hit_count';
         let sortOrder = 'desc';
@@ -677,6 +1277,14 @@
                 sortColumn = column;
                 sortOrder = 'desc';
             }
+
+            // Update sort indicators
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                th.classList.remove('sorted-asc', 'sorted-desc');
+                if (th.dataset.sort === column) {
+                    th.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                }
+            });
 
             currentMemories.sort((a, b) => {
                 let aVal = a[column];
@@ -807,12 +1415,10 @@
             
             modal.innerHTML = `
                 <div class="delete-confirmation">
-                    <strong>⚠️ Warning: This memory will no longer be used by agents</strong>
-                    <p>Type <strong>DELETE</strong> to confirm:</p>
-                    <input type="text" id="deleteConfirmInput" style="width: 100%; margin-top: 0.5rem;">
+                    <p>Are you sure you want to delete this memory? This action cannot be undone.</p>
                 </div>
                 <div class="actions" style="justify-content: space-between; margin-top: 1rem;">
-                    <button class="btn-danger" onclick="deleteMemory('${id}')">Confirm Delete</button>
+                    <button class="btn-danger" onclick="deleteMemory('${id}')">Delete</button>
                     <button class="btn-secondary" onclick="viewMemory('${id}')">Cancel</button>
                 </div>
             `;
@@ -820,13 +1426,6 @@
 
         // Delete memory
         async function deleteMemory(id) {
-            const confirmInput = document.getElementById('deleteConfirmInput').value;
-            
-            if (confirmInput !== 'DELETE') {
-                alert('Please type DELETE to confirm');
-                return;
-            }
-
             try {
                 const response = await fetch(`/api/memories/${id}`, {
                     method: 'DELETE'
@@ -851,9 +1450,90 @@
 
         // Load all data
         async function loadData() {
+            lastSyncTime = Date.now();
+            countdownSeconds = 30;
             await checkStatus();
             await loadStats();
             await loadMemories();
+        }
+
+        // Export data
+        function exportData(format) {
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const typeFilter = document.getElementById('typeFilter').value;
+            const minImportance = parseInt(document.getElementById('minImportanceFilter').value) || 0;
+            const maxImportance = parseInt(document.getElementById('maxImportanceFilter').value) || 5;
+
+            let filtered = currentMemories;
+            
+            if (searchQuery) {
+                filtered = filtered.filter(m => 
+                    m.content.toLowerCase().includes(searchQuery) ||
+                    m.type.toLowerCase().includes(searchQuery)
+                );
+            }
+            
+            if (typeFilter) {
+                filtered = filtered.filter(m => m.type === typeFilter);
+            }
+            
+            if (minImportance > 0) {
+                filtered = filtered.filter(m => m.importance >= minImportance);
+            }
+            
+            if (maxImportance < 5) {
+                filtered = filtered.filter(m => m.importance <= maxImportance);
+            }
+
+            const repo = currentRepo || 'all';
+            const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+            let content, filename, mimeType;
+
+            if (format === 'json') {
+                content = JSON.stringify(filtered, null, 2);
+                filename = `memories-${repo}-${date}.json`;
+                mimeType = 'application/json';
+            } else {
+                const headers = ['id', 'type', 'content', 'importance', 'hit_count', 'created_at'];
+                const csvRows = [headers.join(',')];
+                for (const m of filtered) {
+                    const row = [
+                        m.id,
+                        m.type,
+                        `"${m.content.replace(/"/g, '""')}"`,
+                        m.importance,
+                        m.hit_count || 0,
+                        m.created_at
+                    ];
+                    csvRows.push(row.join(','));
+                }
+                content = csvRows.join('\n');
+                filename = `memories-${repo}-${date}.csv`;
+                mimeType = 'text/csv';
+            }
+
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast(`Exported ${filtered.length} memories to ${format.toUpperCase()}`, 'success');
+        }
+
+        // Archive expired memories
+        async function archiveExpired() {
+            try {
+                const response = await fetch('/api/memories/archive', { method: 'POST' });
+                const data = await response.json();
+                showToast(`Archived ${data.archived || 0} expired memories`, 'success');
+                await loadData();
+            } catch (err) {
+                console.error('Archive failed:', err);
+                showToast('Failed to archive memories', 'error');
+            }
         }
 
         // Helper functions
@@ -872,34 +1552,27 @@
             if (days === 0) return 'Today';
             if (days === 1) return 'Yesterday';
             if (days < 7) return `${days} days ago`;
-            if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
-            if (days < 365) return `${Math.floor(days / 30)} months ago`;
-            return `${Math.floor(days / 365)} years ago`;
+            return date.toLocaleDateString();
         }
 
-        // Event listeners
-        document.getElementById('repoSelect').addEventListener('change', (e) => {
-            currentRepo = e.target.value;
-            if (currentRepo) {
-                loadData();
-            }
-        });
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('removing');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
-        document.getElementById('typeFilter').addEventListener('change', () => {
-            loadMemories();
-        });
-
-        // Close modal on outside click
-        document.getElementById('memoryModal').addEventListener('click', (e) => {
-            if (e.target.id === 'memoryModal') {
-                closeModal();
-            }
-        });
-
-        // Initialize
         (async function init() {
+            initTheme();
             await loadRepos();
             await loadData();
+            startCountdown();
             
             // Refresh status every 5 seconds
             setInterval(checkStatus, 5000);

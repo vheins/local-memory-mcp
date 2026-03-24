@@ -20,8 +20,15 @@ export function listResources() {
 }
 
 export function readResource(uri: string, db: SQLiteStore) {
-  if (uri === "memory://index") {
-    const entries = db.listRecent(20);
+  if (uri === "memory://index" || uri.startsWith("memory://index?")) {
+    // Parse query params using URL constructor
+    const parsed = new URL(uri.replace("memory://", "http://memory/"));
+    const repo = parsed.searchParams.get("repo");
+
+    const entries = repo
+      ? db.searchByRepo(repo, { limit: 20 })
+      : db.listRecent(20);
+
     return {
       contents: [
         {

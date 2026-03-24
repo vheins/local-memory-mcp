@@ -15,7 +15,8 @@ export const MemoryStoreSchema = z.object({
   type: MemoryTypeSchema,
   content: z.string().min(10),
   importance: z.number().min(1).max(5),
-  scope: MemoryScopeSchema
+  scope: MemoryScopeSchema,
+  ttlDays: z.number().min(1).optional()
 });
 
 export const MemoryUpdateSchema = z.object({
@@ -32,7 +33,14 @@ export const MemorySearchSchema = z.object({
   repo: z.string().min(1),
   types: z.array(MemoryTypeSchema).optional(),
   minImportance: z.number().min(1).max(5).optional(),
-  limit: z.number().min(1).max(10).default(5)
+  limit: z.number().min(1).max(10).default(5),
+  includeRecap: z.boolean().default(false)
+});
+
+export const MemoryRecapSchema = z.object({
+  repo: z.string().min(1),
+  limit: z.number().min(1).max(50).default(20),
+  offset: z.number().min(0).default(0)
 });
 
 export const MemorySummarizeSchema = z.object({
@@ -85,6 +93,11 @@ export const TOOL_DEFINITIONS = [
             }
           },
           required: ["repo"]
+        },
+        ttlDays: {
+          type: "number",
+          minimum: 1,
+          description: "Time-to-live in days. Memory will expire after this many days (optional)"
         }
       },
       required: ["type", "content", "importance", "scope"]
@@ -151,6 +164,11 @@ export const TOOL_DEFINITIONS = [
           maximum: 10,
           default: 5,
           description: "Maximum number of results"
+        },
+        includeRecap: {
+          type: "boolean",
+          default: false,
+          description: "Include recent memories recap context in the response (optional, default false)"
         }
       },
       required: ["query", "repo"]
@@ -210,6 +228,12 @@ export const TOOL_DEFINITIONS = [
           maximum: 50,
           default: 20,
           description: "Maximum number of memories to retrieve"
+        },
+        offset: {
+          type: "number",
+          minimum: 0,
+          default: 0,
+          description: "Number of memories to skip for pagination (optional, default 0)"
         }
       },
       required: ["repo"]

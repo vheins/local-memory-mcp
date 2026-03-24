@@ -1,11 +1,11 @@
 import { MemoryUpdateSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { StubVectorStore } from "../storage/vectors.stub.js";
+import { VectorStore } from "../types.js";
 
 export async function handleMemoryUpdate(
   params: any,
   db: SQLiteStore,
-  vectors: StubVectorStore
+  vectors: VectorStore
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemoryUpdateSchema.parse(params);

@@ -1,10 +1,5 @@
-import { z } from "zod";
+import { MemoryRecapSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
-
-export const MemoryRecapSchema = z.object({
-  repo: z.string().min(1),
-  limit: z.number().min(1).max(50).default(20)
-});
 
 export async function handleMemoryRecap(
   params: any,
@@ -13,17 +8,11 @@ export async function handleMemoryRecap(
   // Validate input
   const validated = MemoryRecapSchema.parse(params);
 
-  // Get recent memories from the specified repo
-  let query = `
-    SELECT id, type, content, importance, created_at, updated_at
-    FROM memories
-    WHERE repo = ?
-    ORDER BY created_at DESC
-    LIMIT ?
-  `;
+  // Get total count for pagination metadata
+  const total = db.getTotalCount(validated.repo);
 
-  const stmt = (db as any).db.prepare(query);
-  const rows = stmt.all(validated.repo, validated.limit) as any[];
+  // Get recent memories using public API (no type-unsafe cast)
+  const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset);
 
   if (rows.length === 0) {
     return {
@@ -33,6 +22,8 @@ export async function handleMemoryRecap(
           text: JSON.stringify({
             repo: validated.repo,
             count: 0,
+            total,
+            offset: validated.offset,
             memories: [],
             message: `No memories found for repo: ${validated.repo}`
           })
@@ -43,7 +34,7 @@ export async function handleMemoryRecap(
 
   // Format memories for recap
   const formattedMemories = rows.map((row, index) => ({
-    number: index + 1,
+    number: validated.offset + index + 1,
     id: row.id,
     type: row.type,
     importance: row.importance,
@@ -66,6 +57,8 @@ export async function handleMemoryRecap(
         text: JSON.stringify({
           repo: validated.repo,
           count: rows.length,
+          total,
+          offset: validated.offset,
           memories: formattedMemories,
           summary: `Recent ${rows.length} memories:\n\n${summary}`
         })

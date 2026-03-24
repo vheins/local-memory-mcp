@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { StubVectorStore } from "../storage/vectors.stub.js";
+import { VectorStore } from "../types.js";
 
 export const MemoryDeleteSchema = z.object({
   id: z.string().uuid()
@@ -9,7 +9,7 @@ export const MemoryDeleteSchema = z.object({
 export async function handleMemoryDelete(
   params: any,
   db: SQLiteStore,
-  vectors: StubVectorStore
+  vectors: VectorStore
 ): Promise<{ content: Array<{ type: string; text: string }> }> {
   // Validate input
   const validated = MemoryDeleteSchema.parse(params);

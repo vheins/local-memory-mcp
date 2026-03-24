@@ -1,7 +1,28 @@
 #!/usr/bin/env node
 import readline from "node:readline";
-import { handleMethod } from "./router.js";
+import { createRouter } from "./router.js";
+import { SQLiteStore } from "./storage/sqlite.js";
+import { StubVectorStore } from "./storage/vectors.stub.js";
 import { CAPABILITIES } from "./capabilities.js";
+import { logger } from "./utils/logger.js";
+
+// Create storage instances
+const db = new SQLiteStore();
+const vectors = new StubVectorStore(db);
+
+// Wire router with injected storage
+const handleMethod = createRouter(db, vectors);
+
+// Cleanup on exit
+process.on("SIGINT", () => {
+  db.close();
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  db.close();
+  process.exit(0);
+});
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -65,6 +86,7 @@ rl.on("line", async (line) => {
       result
     });
   } catch (err: any) {
+    logger.error("Method handler error", { method, id, message: err.message });
     reply({
       jsonrpc: "2.0",
       id,
