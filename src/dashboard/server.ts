@@ -70,6 +70,20 @@ app.get("/api/repos", async (req, res) => {
   }
 });
 
+// Get recent actions
+app.get("/api/recent-actions", async (req, res) => {
+  try {
+    const repo = req.query.repo as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const actions = db.getRecentActions(repo, limit);
+    res.json({ actions });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("Error getting recent actions", { error: message });
+    res.status(500).json({ error: message, actions: [] });
+  }
+});
+
 // Get statistics
 app.get("/api/stats", async (req, res) => {
   try {

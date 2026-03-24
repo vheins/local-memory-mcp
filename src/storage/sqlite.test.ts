@@ -328,3 +328,104 @@ describe("Property 18: listRepos() mengembalikan daftar unik dan terurut", () =>
     );
   });
 });
+
+// Property 19: Action Log functionality
+describe("Property 19: Action Log stores and retrieves recent actions", () => {
+  it("logAction stores action with correct metadata", () => {
+    const store = freshStore();
+    
+    store.logAction('search', "test-repo", { query: "test query", resultCount: 5 });
+    
+    const actions = store.getRecentActions("test-repo", 10);
+    
+    expect(actions).toHaveLength(1);
+    expect(actions[0].action).toBe("search");
+    expect(actions[0].query).toBe("test query");
+  });
+
+  it("getRecentActions returns actions in descending order by created_at", () => {
+    const store = freshStore();
+    
+    store.logAction('search', "test-repo", { query: "first query", resultCount: 3 });
+    store.logAction('read', "test-repo", { memoryId: "id-1", resultCount: 2 });
+    store.logAction('write', "test-repo", { query: "third query", resultCount: 1 });
+    
+    const actions = store.getRecentActions("test-repo", 10);
+    
+    expect(actions[0].action).toBe("write");
+    expect(actions[1].action).toBe("read");
+    expect(actions[2].action).toBe("search");
+  });
+
+  it("getRecentActions limits results correctly", () => {
+    const store = freshStore();
+    
+    for (let i = 0; i < 25; i++) {
+      store.logAction('search', "test-repo", { query: `query-${i}`, resultCount: i });
+    }
+    
+    const actions = store.getRecentActions("test-repo", 10);
+    
+    expect(actions).toHaveLength(10);
+  });
+
+  it("getRecentActions filters by repo correctly", () => {
+    const store = freshStore();
+    
+    store.logAction('search', "repo1", { query: "repo1 query", resultCount: 1 });
+    store.logAction('search', "repo2", { query: "repo2 query", resultCount: 1 });
+    store.logAction('read', "repo1", { memoryId: "id-1", resultCount: 1 });
+    
+    const repo1Actions = store.getRecentActions("repo1", 10);
+    const repo2Actions = store.getRecentActions("repo2", 10);
+    
+    expect(repo1Actions).toHaveLength(2);
+    expect(repo2Actions).toHaveLength(1);
+  });
+
+  it("getRecentActions returns empty array when no actions exist", () => {
+    const store = freshStore();
+    
+    const actions = store.getRecentActions("nonexistent-repo", 10);
+    
+    expect(actions).toHaveLength(0);
+  });
+
+  it("getRecentActions without repo parameter returns all actions", () => {
+    const store = freshStore();
+    
+    store.logAction('search', "repo1", { query: "query1", resultCount: 1 });
+    store.logAction('read', "repo2", { memoryId: "id-1", resultCount: 1 });
+    
+    const allActions = store.getRecentActions(undefined, 10);
+    
+    expect(allActions).toHaveLength(2);
+  });
+
+  it("logAction stores result_count correctly", () => {
+    const store = freshStore();
+    
+    store.logAction('search', "test-repo", { query: "high results", resultCount: 100 });
+    store.logAction('search', "test-repo", { query: "low results", resultCount: 1 });
+    
+    const actions = store.getRecentActions("test-repo", 10);
+    
+    expect(actions[0].result_count).toBe(1);
+    expect(actions[1].result_count).toBe(100);
+  });
+
+  it("different action types are logged correctly", () => {
+    const store = freshStore();
+    
+    store.logAction('search', "test-repo", { query: "search query", resultCount: 5 });
+    store.logAction('read', "test-repo", { memoryId: "mem-1", resultCount: 1 });
+    store.logAction('write', "test-repo", { query: "new memory", resultCount: 1 });
+    store.logAction('update', "test-repo", { memoryId: "mem-2", resultCount: 1 });
+    store.logAction('delete', "test-repo", { memoryId: "mem-3", resultCount: 1 });
+    
+    const actions = store.getRecentActions("test-repo", 10);
+    
+    expect(actions).toHaveLength(5);
+    expect(actions.map(a => a.action)).toEqual(['delete', 'update', 'write', 'read', 'search']);
+  });
+});

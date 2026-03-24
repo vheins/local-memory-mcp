@@ -4,6 +4,8 @@ import { VectorStore, MemoryEntry } from "../types.js";
 import { normalize } from "../utils/normalize.js";
 import { handleMemoryRecap } from "./memory.recap.js";
 import { logger } from "../utils/logger.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { expandQuery } from "../utils/query-expander.js";
 
 // Hybrid search configuration — weights when vector store is active
 const HYBRID_WEIGHTS_VECTOR = {
@@ -30,7 +32,7 @@ export async function handleMemorySearch(
   params: any,
   db: SQLiteStore,
   vectors: VectorStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemorySearchSchema.parse(params);
 
@@ -43,11 +45,17 @@ export async function handleMemorySearch(
         db
       );
 
-      const recapContent = recapResult.content[0]?.text;
-      if (recapContent) {
-        const recapData = JSON.parse(recapContent);
-        if (recapData.summary) {
-          recapContext = recapData.summary;
+      // Find text content that contains JSON data
+      const textContent = recapResult.content.find((c) => c.type === "text" && c.text);
+      if (textContent && textContent.type === "text") {
+        try {
+          const recapData = JSON.parse(textContent.text) as { summary?: string };
+          if (recapData.summary) {
+            recapContext = recapData.summary;
+          }
+        } catch {
+          // Not JSON, might be plain text summary
+          recapContext = textContent.text;
         }
       }
     } catch (error) {
@@ -56,9 +64,12 @@ export async function handleMemorySearch(
     }
   }
 
+  // Expand query using prompt intent
+  const searchQuery = expandQuery(validated.query, validated.prompt);
+
   // STEP 1: Repo filter (HARD) + Lightweight similarity scoring
   const similarityResults = db.searchBySimilarity(
-    validated.query,
+    searchQuery,
     validated.repo,
     validated.limit * 3 // Get more candidates for vector re-ranking
   );
@@ -91,7 +102,7 @@ export async function handleMemorySearch(
       limit: validated.limit * 3
     });
 
-    const normalized = normalize(validated.query);
+    const normalized = normalize(searchQuery);
     const queryWords = normalized.split(/\s+/).filter(w => w.length > 2);
 
     const filtered = allResults.filter((entry) => {
@@ -112,7 +123,7 @@ export async function handleMemorySearch(
 
   try {
     // Attempt vector search on candidates (if available)
-    const vectorResults = await vectors.search(validated.query, candidates.length);
+    const vectorResults = await vectors.search(searchQuery, candidates.length);
 
     if (vectorResults.length > 0) {
       // Create a map of memory ID to vector score
@@ -190,15 +201,35 @@ export async function handleMemorySearch(
     db.incrementHitCount(memory.id);
   }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({
-          results,
-          recapContext: recapContext ? `Recent memories context:\n${recapContext}` : undefined
-        }, null, 2)
-      }
-    ]
+  // STEP 5: Log the query for recent queries feature
+  db.logAction('search', validated.repo, { query: validated.query, resultCount: results.length });
+
+  const resultData = {
+    query: validated.query,
+    prompt: validated.prompt || null,
+    results,
+    matchReason: validated.prompt 
+      ? `Results ranked by relevance to "${validated.query}" with context: ${validated.prompt}`
+      : `Results ranked by relevance to "${validated.query}"`,
+    recapContext: recapContext ? `Recent memories context:\n${recapContext}` : undefined
   };
+
+  const firstResult = results[0];
+  const resultName = firstResult?.title 
+    ? `${firstResult.type} - ${firstResult.title}` 
+    : (firstResult ? `${firstResult.type} - ${firstResult.content.substring(0, 40)}...` : `Found ${results.length} results`);
+    
+  return createMcpResponse(
+    resultData,
+    `Found ${results.length} memories matching "${validated.query}"`,
+    { 
+      query: validated.query,
+      results: results.map(r => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        content: r.content
+      }))
+    }
+  );
 }

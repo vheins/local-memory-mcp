@@ -1,12 +1,13 @@
 import { MemoryUpdateSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 export async function handleMemoryUpdate(
   params: any,
   db: SQLiteStore,
   vectors: VectorStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemoryUpdateSchema.parse(params);
 
@@ -32,12 +33,11 @@ export async function handleMemoryUpdate(
     await vectors.upsert(validated.id, validated.content);
   }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ success: true })
-      }
-    ]
-  };
+  // Log the update action
+  db.logAction('update', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
+
+  return createMcpResponse(
+    { success: true },
+    `Updated memory ${validated.id.slice(0, 8)}...`
+  );
 }

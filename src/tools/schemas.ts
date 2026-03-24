@@ -13,6 +13,7 @@ export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pat
 // Tool schemas
 export const MemoryStoreSchema = z.object({
   type: MemoryTypeSchema,
+  title: z.string().min(3).max(100),
   content: z.string().min(10),
   importance: z.number().min(1).max(5),
   scope: MemoryScopeSchema,
@@ -21,15 +22,17 @@ export const MemoryStoreSchema = z.object({
 
 export const MemoryUpdateSchema = z.object({
   id: z.string().uuid(),
+  title: z.string().min(3).max(100).optional(),
   content: z.string().min(10).optional(),
   importance: z.number().min(1).max(5).optional()
 }).refine(
-  (data) => data.content !== undefined || data.importance !== undefined,
-  { message: "At least one of content or importance must be provided" }
+  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined,
+  { message: "At least one of title, content or importance must be provided" }
 );
 
 export const MemorySearchSchema = z.object({
   query: z.string().min(3),
+  prompt: z.string().optional(),
   repo: z.string().min(1),
   types: z.array(MemoryTypeSchema).optional(),
   minImportance: z.number().min(1).max(5).optional(),
@@ -60,6 +63,12 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           enum: ["code_fact", "decision", "mistake", "pattern"],
           description: "Type of memory being stored"
+        },
+        title: {
+          type: "string",
+          minLength: 3,
+          maxLength: 100,
+          description: "Short title for the memory (required)"
         },
         content: {
           type: "string",
@@ -100,7 +109,7 @@ export const TOOL_DEFINITIONS = [
           description: "Time-to-live in days. Memory will expire after this many days (optional)"
         }
       },
-      required: ["type", "content", "importance", "scope"]
+      required: ["type", "title", "content", "importance", "scope"]
     }
   },
   {
@@ -113,6 +122,12 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           format: "uuid",
           description: "Memory entry ID"
+        },
+        title: {
+          type: "string",
+          minLength: 3,
+          maxLength: 100,
+          description: "Updated title (optional)"
         },
         content: {
           type: "string",
@@ -139,6 +154,10 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           minLength: 3,
           description: "Search query"
+        },
+        prompt: {
+          type: "string",
+          description: "Context/prompt to help determine relevance. Use this to specify what kind of information you're looking for (optional)"
         },
         repo: {
           type: "string",

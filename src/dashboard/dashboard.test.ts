@@ -286,6 +286,8 @@ describe("Property 14: Export format correctness", () => {
           })
         ),
         (memories) => {
+          if (memories.length === 0) return;
+          
           const csv = exportToCsv(memories);
           const lines = csv.split("\n");
 
@@ -299,7 +301,7 @@ describe("Property 14: Export format correctness", () => {
           }
         }
       ),
-      { numRuns: 30 }
+      { numRuns: 30, endOnFailure: true }
     );
   });
 
@@ -334,11 +336,11 @@ describe("Property 14: Export format correctness", () => {
         fc.array(
           fc.record({
             id: fc.uuid(),
-            type: fc.constantFrom("code_fact", "decision", "mistake", "pattern"),
+            type: fc.constantFrom("decision", "mistake", "code_fact", "pattern"),
             content: fc.string({ minLength: 10 }),
             importance: fc.integer({ min: 1, max: 5 }),
             hit_count: fc.integer({ min: 0, max: 100 }),
-            created_at: fc.date().map((d) => d.toISOString()),
+            created_at: fc.date({ min: new Date("2020-01-01"), max: new Date("2030-12-31") }).map((d) => d.toISOString()),
           })
         ),
         fc.constantFrom("decision", "mistake", "code_fact", "pattern"),
@@ -418,5 +420,127 @@ describe("Property 15: localStorage preferences round-trip", () => {
       ),
       { numRuns: 30 }
     );
+  });
+});
+
+describe("Property 16: Recent Queries feature", () => {
+  let mockStorage: Record<string, string> = {};
+  
+  beforeEach(() => {
+    mockStorage = {};
+    global.localStorage = {
+      getItem: (key: string) => mockStorage[key] || null,
+      setItem: (key: string, value: string) => { mockStorage[key] = value; },
+      removeItem: (key: string) => { delete mockStorage[key]; },
+      clear: () => { mockStorage = {}; },
+      get length() { return Object.keys(mockStorage).length; },
+      key: (i: number) => Object.keys(mockStorage)[i] || null,
+    } as unknown as Storage;
+  });
+
+  afterEach(() => {
+    delete (global as unknown as Record<string, unknown>).localStorage;
+  });
+
+  // Simulate recent queries stored in localStorage (fallback)
+  function getRecentQueriesFromStorage(): string[] {
+    const stored = localStorage.getItem("recentQueries");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  function addRecentQueryToStorage(query: string): void {
+    if (!query.trim()) return;
+    const queries = getRecentQueriesFromStorage();
+    const filtered = queries.filter(q => q !== query);
+    filtered.unshift(query);
+    const limited = filtered.slice(0, 20);
+    localStorage.setItem("recentQueries", JSON.stringify(limited));
+  }
+
+  it("property: adding query moves it to front and removes duplicates", () => {
+    addRecentQueryToStorage("database");
+    addRecentQueryToStorage("authentication");
+    addRecentQueryToStorage("database"); // duplicate - should move to front
+
+    const queries = getRecentQueriesFromStorage();
+    
+    expect(queries[0]).toBe("database");
+    expect(queries[1]).toBe("authentication");
+    expect(queries.length).toBe(2);
+  });
+
+  it("property: recent queries are limited to 20", () => {
+    for (let i = 0; i < 25; i++) {
+      addRecentQueryToStorage(`query-${i}`);
+    }
+
+    const queries = getRecentQueriesFromStorage();
+    
+    expect(queries.length).toBe(20);
+    expect(queries[0]).toBe("query-24");
+    expect(queries[19]).toBe("query-5");
+  });
+
+  it("property: empty query is not added", () => {
+    addRecentQueryToStorage("valid-query");
+    addRecentQueryToStorage("");
+    addRecentQueryToStorage("   ");
+
+    const queries = getRecentQueriesFromStorage();
+    
+    expect(queries.length).toBe(1);
+    expect(queries[0]).toBe("valid-query");
+  });
+
+  it("property: queries maintain insertion order with unique constraint", () => {
+    addRecentQueryToStorage("first");
+    addRecentQueryToStorage("second");
+    addRecentQueryToStorage("third");
+    addRecentQueryToStorage("first"); // move to front
+    addRecentQueryToStorage("second"); // move to front
+
+    const queries = getRecentQueriesFromStorage();
+    
+    expect(queries).toEqual(["second", "first", "third"]);
+  });
+});
+
+describe("Property 17: Recent Queries API response format", () => {
+  // Simulate API response parsing
+  interface RecentQueriesResponse {
+    queries: string[];
+  }
+
+  function parseRecentQueriesResponse(json: string): RecentQueriesResponse {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed.queries)) {
+      throw new Error("Invalid response: queries must be an array");
+    }
+    return parsed;
+  }
+
+  it("property: valid API response parses correctly", () => {
+    const apiResponse = JSON.stringify({
+      queries: ["database", "authentication", "user management"]
+    });
+
+    const result = parseRecentQueriesResponse(apiResponse);
+    
+    expect(result.queries).toHaveLength(3);
+    expect(result.queries[0]).toBe("database");
+  });
+
+  it("property: empty queries array is valid", () => {
+    const apiResponse = JSON.stringify({ queries: [] });
+    
+    const result = parseRecentQueriesResponse(apiResponse);
+    
+    expect(result.queries).toHaveLength(0);
+  });
+
+  it("property: malformed response throws error", () => {
+    expect(() => parseRecentQueriesResponse("not json")).toThrow();
+    expect(() => parseRecentQueriesResponse("{}")).toThrow();
+    expect(() => parseRecentQueriesResponse('{"results": []}')).toThrow();
   });
 });

@@ -12,6 +12,7 @@ export type MemoryScope = {
 export type MemoryEntry = {
   id: string;
   type: MemoryType;
+  title?: string;
   content: string;
   importance: number;
   scope: MemoryScope;

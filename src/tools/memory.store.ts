@@ -3,12 +3,13 @@ import { MemoryStoreSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore, MemoryEntry } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 export async function handleMemoryStore(
   params: any,
   db: SQLiteStore,
   vectors: VectorStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemoryStoreSchema.parse(params);
 
@@ -45,12 +46,11 @@ export async function handleMemoryStore(
     // Continue anyway - vectors are optional for search fallback
   }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ success: true, id: entry.id })
-      }
-    ]
-  };
+  // Log the write action
+  db.logAction('write', validated.scope.repo, { memoryId: entry.id, resultCount: 1 });
+
+  return createMcpResponse(
+    { success: true, id: entry.id },
+    `Stored memory ${entry.id.slice(0, 8)}...`
+  );
 }

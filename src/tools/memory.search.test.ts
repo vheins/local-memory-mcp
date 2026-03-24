@@ -149,3 +149,128 @@ describe("Property 3: Total bobot Hybrid Score selalu = 1.0", () => {
     expect(weights.similarity + weights.importance).toBe(1.0);
   });
 });
+
+// ─── Prompt parameter tests ─────────────────────────────────────────────────
+
+describe("Property: prompt parameter in memory-search", () => {
+  it("prompt is optional - search works without prompt", () => {
+    const params = {
+      query: "database orm",
+      repo: "test-repo",
+      limit: 5
+    };
+    
+    // If prompt is not provided, searchQuery should equal query
+    const hasPrompt = 'prompt' in params && params.prompt;
+    const searchQuery = hasPrompt
+      ? `${params.query} ${params.prompt}`
+      : params.query;
+    
+    expect(searchQuery).toBe("database orm");
+  });
+
+  it("prompt is combined with query when provided", () => {
+    const params = {
+      query: "database orm",
+      prompt: "I need user authentication",
+      repo: "test-repo",
+      limit: 5
+    };
+    
+    const searchQuery = params.prompt
+      ? `${params.query} ${params.prompt}`
+      : params.query;
+    
+    expect(searchQuery).toBe("database orm I need user authentication");
+  });
+
+  it("prompt can be empty string - treated as no prompt (empty string is falsy)", () => {
+    const params = {
+      query: "database orm",
+      prompt: "",
+      repo: "test-repo",
+      limit: 5
+    };
+    
+    // Empty string is falsy in JS, so it uses just query
+    const searchQuery = params.prompt
+      ? `${params.query} ${params.prompt}`
+      : params.query;
+    
+    expect(searchQuery).toBe("database orm");
+  });
+
+  it("matchReason includes prompt when provided", () => {
+    const query = "database orm";
+    const prompt = "user authentication context";
+    
+    const matchReason = prompt 
+      ? `Results ranked by relevance to "${query}" with context: ${prompt}`
+      : `Results ranked by relevance to "${query}"`;
+    
+    expect(matchReason).toContain("database orm");
+    expect(matchReason).toContain("user authentication context");
+    expect(matchReason).toContain("with context:");
+  });
+
+  it("matchReason does not include prompt when not provided", () => {
+    const query = "database orm";
+    const prompt = undefined;
+    
+    const matchReason = prompt 
+      ? `Results ranked by relevance to "${query}" with context: ${prompt}`
+      : `Results ranked by relevance to "${query}"`;
+    
+    expect(matchReason).toBe(`Results ranked by relevance to "${query}"`);
+    expect(matchReason).not.toContain("with context:");
+  });
+
+  it("property: searchQuery combines query and prompt consistently", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 3, maxLength: 50 }),
+        fc.string({ minLength: 1, maxLength: 100 }),
+        (query, prompt) => {
+          const searchQuery = `${query} ${prompt}`;
+          
+          // Search query should always start with the original query
+          expect(searchQuery.startsWith(query)).toBe(true);
+          
+          // Search query should contain the prompt
+          expect(searchQuery.includes(prompt)).toBe(true);
+          
+          // There should be exactly one space between query and prompt
+          expect(searchQuery).toBe(`${query} ${prompt}`);
+        }
+      ),
+      { numRuns: 50 }
+    );
+  });
+
+  it("property: matchReason format is correct with and without prompt", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 30 }),
+        fc.option(fc.string({ minLength: 1, maxLength: 50 })),
+        (query, prompt) => {
+          const matchReason = prompt 
+            ? `Results ranked by relevance to "${query}" with context: ${prompt}`
+            : `Results ranked by relevance to "${query}"`;
+          
+          // Should always contain the query
+          expect(matchReason).toContain(query);
+          
+          if (prompt) {
+            // Should contain "with context:" when prompt exists
+            expect(matchReason).toContain("with context:");
+            expect(matchReason).toContain(prompt);
+          } else {
+            // Should NOT contain "with context:" when prompt is absent
+            expect(matchReason).not.toContain("with context:");
+          }
+        }
+      ),
+      { numRuns: 50 }
+    );
+  });
+});

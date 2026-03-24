@@ -1,10 +1,11 @@
 import { MemoryRecapSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 export async function handleMemoryRecap(
   params: any,
   db: SQLiteStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemoryRecapSchema.parse(params);
 
@@ -15,21 +16,17 @@ export async function handleMemoryRecap(
   const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset);
 
   if (rows.length === 0) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            repo: validated.repo,
-            count: 0,
-            total,
-            offset: validated.offset,
-            memories: [],
-            message: `No memories found for repo: ${validated.repo}`
-          })
-        }
-      ]
-    };
+    return createMcpResponse(
+      {
+        repo: validated.repo,
+        count: 0,
+        total,
+        offset: validated.offset,
+        memories: [],
+        message: `No memories found for repo: ${validated.repo}`
+      },
+      `No memories for repo "${validated.repo}"`
+    );
   }
 
   // Format memories for recap
@@ -50,19 +47,15 @@ export async function handleMemoryRecap(
     )
     .join("\n");
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({
-          repo: validated.repo,
-          count: rows.length,
-          total,
-          offset: validated.offset,
-          memories: formattedMemories,
-          summary: `Recent ${rows.length} memories:\n\n${summary}`
-        })
-      }
-    ]
-  };
+  return createMcpResponse(
+    {
+      repo: validated.repo,
+      count: rows.length,
+      total,
+      offset: validated.offset,
+      memories: formattedMemories,
+      summary: `Recent ${rows.length} memories:\n\n${summary}`
+    },
+    `Retrieved ${rows.length} memories for repo "${validated.repo}"`
+  );
 }

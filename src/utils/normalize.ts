@@ -29,7 +29,7 @@ export const STOPWORDS: ReadonlySet<string> = new Set([
   "sehingga", "namun", "tetapi", "tapi", "atau", "maupun", "bahwa",
   "oleh", "seperti", "antara", "setelah", "sebelum", "ketika", "saat",
   "semua", "setiap", "beberapa", "banyak", "sedikit", "lain", "lainnya",
-  "tersebut", "tersebut", "nya", "pun", "lah", "kah", "dah",
+  "tersebut", "nya", "pun", "lah", "kah", "dah",
   "agar", "supaya", "maka", "meski", "walaupun", "meskipun",
   "selain", "selama", "sejak", "hingga", "sampai", "tentang",
   "terhadap", "melalui", "tanpa", "bagi", "atas", "bawah",

@@ -34,6 +34,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       upsertVectorEmbedding: vi.fn(),
       getVectorEmbedding: vi.fn().mockReturnValue(null),
       archiveExpiredMemories: vi.fn().mockReturnValue(0),
+      logQuery: vi.fn(),
+      getRecentQueries: vi.fn().mockReturnValue([]),
       close: vi.fn(),
     } as unknown as SQLiteStore;
   }

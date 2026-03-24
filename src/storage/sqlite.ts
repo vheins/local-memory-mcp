@@ -27,6 +27,7 @@ export class SQLiteStore {
           'mistake',
           'pattern'
         )),
+        title TEXT,
         content TEXT NOT NULL,
         importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5),
         folder TEXT,
@@ -55,7 +56,16 @@ export class SQLiteStore {
         updated_at TEXT NOT NULL,
         FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
       );
+    `);
 
+    // Add title column if it doesn't exist (for existing databases)
+    try {
+      this.db.exec(`ALTER TABLE memories ADD COLUMN title TEXT`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
+
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories_archive (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -72,6 +82,19 @@ export class SQLiteStore {
         expires_at TEXT,
         archived_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS action_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL CHECK (action IN ('search', 'read', 'write', 'update', 'delete')),
+        query TEXT,
+        memory_id TEXT,
+        repo TEXT NOT NULL,
+        result_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_action_log_repo ON action_log(repo);
+      CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
     `);
 
     // Sub-task 2.1: Use PRAGMA table_info to safely add columns
@@ -94,17 +117,22 @@ export class SQLiteStore {
   }
 
   insert(entry: MemoryEntry): void {
+    if (!entry.title) {
+      throw new Error("Title is required for memory entry");
+    }
+    
     const stmt = this.db.prepare(`
       INSERT INTO memories (
-        id, repo, type, content, importance, folder, language,
+        id, repo, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?)
     `);
 
     stmt.run(
       entry.id,
       entry.scope.repo,
       entry.type,
+      entry.title,
       entry.content,
       entry.importance,
       entry.scope.folder || null,
@@ -115,9 +143,17 @@ export class SQLiteStore {
     );
   }
 
-  update(id: string, updates: { content?: string; importance?: number }): void {
+  update(id: string, updates: { title?: string; content?: string; importance?: number }): void {
     const fields: string[] = [];
     const values: unknown[] = [];
+
+    if (updates.title !== undefined) {
+      if (updates.title.length < 3) {
+        throw new Error("Title must be at least 3 characters");
+      }
+      fields.push("title = ?");
+      values.push(updates.title);
+    }
 
     if (updates.content !== undefined) {
       fields.push("content = ?");
@@ -127,6 +163,10 @@ export class SQLiteStore {
     if (updates.importance !== undefined) {
       fields.push("importance = ?");
       values.push(updates.importance);
+    }
+
+    if (fields.length === 0) {
+      return; // Nothing to update
     }
 
     fields.push("updated_at = ?");
@@ -455,6 +495,7 @@ export class SQLiteStore {
     return {
       id: row.id,
       type: row.type,
+      title: row.title || undefined,
       content: row.content,
       importance: row.importance,
       scope: {
@@ -469,5 +510,37 @@ export class SQLiteStore {
       last_used_at: row.last_used_at ?? null,
       expires_at: row.expires_at ?? null,
     };
+  }
+
+  logAction(action: 'search' | 'read' | 'write' | 'update' | 'delete', repo: string, options?: { query?: string; memoryId?: string; resultCount?: number }) {
+    const stmt = this.db.prepare(`
+      INSERT INTO action_log (action, query, memory_id, repo, result_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      action,
+      options?.query || null,
+      options?.memoryId || null,
+      repo,
+      options?.resultCount || 0,
+      new Date().toISOString()
+    );
+  }
+
+  getRecentActions(repo?: string, limit = 20): Array<{ action: string; query?: string; memory_id?: string; result_count?: number; created_at: string }> {
+    let sql = `SELECT action, query, memory_id, created_at FROM action_log`;
+    const params: string[] = [];
+    
+    if (repo) {
+      sql += ` WHERE repo = ?`;
+      params.push(repo);
+    }
+    
+    sql += ` ORDER BY created_at DESC LIMIT ?`;
+    params.push(String(limit));
+    
+    const stmt = this.db.prepare(sql);
+    const rows = repo ? stmt.all(repo, String(limit)) : stmt.all(String(limit));
+    return rows as Array<{ action: string; query?: string; memory_id?: string; created_at: string }>;
   }
 }

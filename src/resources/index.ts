@@ -14,6 +14,18 @@ export function listResources() {
         name: "Project Summary",
         description: "Antigravity summary for a repository",
         mimeType: "text/plain"
+      },
+      {
+        uri: "memory://{id}",
+        name: "Memory by ID",
+        description: "View a specific memory by UUID",
+        mimeType: "application/json"
+      },
+      {
+        uri: "memory://{base64_query}",
+        name: "Search Memories",
+        description: "Search memories by query (base64 encoded)",
+        mimeType: "application/json"
       }
     ]
   };
@@ -21,7 +33,6 @@ export function listResources() {
 
 export function readResource(uri: string, db: SQLiteStore) {
   if (uri === "memory://index" || uri.startsWith("memory://index?")) {
-    // Parse query params using URL constructor
     const parsed = new URL(uri.replace("memory://", "http://memory/"));
     const repo = parsed.searchParams.get("repo");
 
@@ -55,10 +66,12 @@ export function readResource(uri: string, db: SQLiteStore) {
     };
   }
 
-  if (uri.startsWith("memory://")) {
-    const id = uri.replace("memory://", "");
+  // View memory by ID: memory://{uuid}
+  const idMatch = uri.match(/^memory:\/\/([0-9a-f-]{36})$/i);
+  if (idMatch) {
+    const id = idMatch[1];
     const entry = db.getById(id);
-
+    
     if (!entry) {
       throw new Error(`Memory not found: ${id}`);
     }
@@ -68,7 +81,29 @@ export function readResource(uri: string, db: SQLiteStore) {
         {
           uri,
           mimeType: "application/json",
-          text: JSON.stringify(entry, null, 2)
+          text: JSON.stringify(entry)
+        }
+      ]
+    };
+  }
+
+  // Search by query: memory://{base64_query}
+  if (uri.startsWith("memory://") && !uri.startsWith("memory://index") && !uri.startsWith("memory://summary")) {
+    const searchId = uri.replace("memory://", "");
+    const query = Buffer.from(searchId, 'base64').toString('utf-8');
+    const parsed = new URL(uri.replace("memory://", "http://memory/"));
+    const repo = parsed.searchParams.get("repo") || undefined;
+    
+    const results = repo 
+      ? db.searchBySimilarity(query, repo, 10)
+      : db.searchBySimilarity(query, "", 10);
+    
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ query, repo, results })
         }
       ]
     };

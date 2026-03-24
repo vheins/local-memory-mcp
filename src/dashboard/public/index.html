@@ -5,814 +5,190 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCP Memory Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" onerror="window.Chart = null;"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        decision: { bg: '#e3f2fd', text: '#1976d2', dark: '#1a3a5c', 'dark-text': '#64b5f6' },
+                        mistake: { bg: '#ffebee', text: '#d32f2f', dark: '#5c1a1a', 'dark-text': '#ef9a9a' },
+                        code_fact: { bg: '#f3e5f5', text: '#7b1fa2', dark: '#3a1a4c', 'dark-text': '#ce93d8' },
+                        pattern: { bg: '#e8f5e9', text: '#388e3c', dark: '#1a3a1a', 'dark-text': '#a5d6a7' },
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        :root {
-            --bg-primary: #f5f5f5;
-            --bg-secondary: #fff;
-            --text-primary: #333;
-            --text-secondary: #666;
-            --border-color: #e0e0e0;
-            --border-light: #f0f0f0;
-            --shadow: rgba(0,0,0,0.1);
-            --type-decision-bg: #e3f2fd;
-            --type-decision-text: #1976d2;
-            --type-mistake-bg: #ffebee;
-            --type-mistake-text: #d32f2f;
-            --type-code_fact-bg: #f3e5f5;
-            --type-code_fact-text: #7b1fa2;
-            --type-pattern-bg: #e8f5e9;
-            --type-pattern-text: #388e3c;
-            --header-bg: #fff;
-            --hover-bg: #fafafa;
-            --th-bg: #f9f9f9;
-            --th-hover: #f0f0f0;
-        }
-
-        [data-theme="dark"] {
-            --bg-primary: #1a1a1a;
-            --bg-secondary: #2d2d2d;
-            --text-primary: #e0e0e0;
-            --text-secondary: #aaa;
-            --border-color: #444;
-            --border-light: #3d3d3d;
-            --shadow: rgba(0,0,0,0.3);
-            --type-decision-bg: #1a3a5c;
-            --type-decision-text: #64b5f6;
-            --type-mistake-bg: #5c1a1a;
-            --type-mistake-text: #ef9a9a;
-            --type-code_fact-bg: #3a1a4c;
-            --type-code_fact-text: #ce93d8;
-            --type-pattern-bg: #1a3a1a;
-            --type-pattern-text: #a5d6a7;
-            --header-bg: #2d2d2d;
-            --hover-bg: #3a3a3a;
-            --th-bg: #333;
-            --th-hover: #444;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background 0.3s, color 0.3s;
-        }
-
-        .header {
-            background: var(--header-bg);
-            border-bottom: 2px solid var(--border-color);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header h1 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .header-controls {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .header-stats {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }
-
-        .memory-badge {
-            background: var(--type-decision-bg);
-            color: var(--type-decision-text);
-            padding: 0.25rem 0.5rem;
-            border-radius: 12px;
-            font-weight: 600;
-        }
-
-        .sync-timer {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .countdown-bar {
-            width: 60px;
-            height: 4px;
-            background: var(--border-light);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .countdown-fill {
-            height: 100%;
-            background: #2196f3;
-            transition: width 1s linear;
-        }
-
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #ccc;
-        }
-
-        .status-dot.connected {
-            background: #4caf50;
-        }
-
-        select, input {
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 0.9rem;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .charts-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .chart-card {
-            background: var(--bg-secondary);
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px var(--shadow);
-            transition: background 0.3s;
-        }
-
-        .chart-card canvas {
-            max-height: 250px;
-            width: 100% !important;
-            height: auto !important;
-        }
-
-        .card {
-            background: var(--bg-secondary);
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px var(--shadow);
-            transition: background 0.3s;
-        }
-
-        .card-title {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-        }
-
-        .card-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .chart-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: var(--text-primary);
-        }
-
-        .table-section {
-            background: var(--bg-secondary);
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px var(--shadow);
-            transition: background 0.3s;
-        }
-
-        .pagination {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border-light);
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .pagination-controls {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-        }
-
-        .pagination-controls button {
-            padding: 0.5rem 0.75rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            cursor: pointer;
-            color: var(--text-primary);
-        }
-
-        .pagination-controls button:hover:not(:disabled) {
-            background: var(--th-hover);
-        }
-
-        .pagination-controls button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .pagination-info {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-
-        .page-size-selector select {
-            padding: 0.25rem;
-        }
-
-        mark {
-            background: #ffeb3b;
-            color: #333;
-            padding: 0 2px;
-            border-radius: 2px;
-        }
-
-        [data-theme="dark"] mark {
-            background: #ffc107;
-            color: #000;
-        }
-
-        /* Inline expand & edit */
-        tr.expanded {
-            background: var(--th-bg);
-        }
-
-        tr.expanded td {
-            border-bottom: none;
-        }
-
-        .expanded-content {
-            padding: 1rem;
-            background: var(--bg-primary);
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .expanded-content h4 {
-            margin: 0 0 0.5rem 0;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-
-        .inline-edit-row {
-            display: flex;
-            gap: 1rem;
-            align-items: flex-start;
-        }
-
-        .inline-edit-row textarea {
-            flex: 1;
-            min-height: 80px;
-        }
-
-        .inline-edit-row select {
-            width: 80px;
-        }
-
-        .inline-edit-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-
-        /* Bulk actions */
-        .bulk-action-bar {
-            display: none;
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--bg-secondary);
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px var(--shadow);
-            z-index: 1000;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .bulk-action-bar.active {
-            display: flex;
-        }
-
-        .bulk-action-bar .selected-count {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .bulk-action-bar select {
-            width: 100px;
-        }
-
-        /* Column visibility toggle */
-        .column-visibility-toggle {
-            position: relative;
-            display: inline-block;
-        }
-
-        .column-visibility-menu {
-            display: none;
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            box-shadow: 0 4px 12px var(--shadow);
-            z-index: 100;
-            min-width: 150px;
-            padding: 0.5rem;
-        }
-
-        .column-visibility-menu.show {
-            display: block;
-        }
-
-        .column-visibility-menu label {
-            display: block;
-            padding: 0.5rem;
-            cursor: pointer;
-        }
-
-        .column-visibility-menu label:hover {
-            background: var(--th-hover);
-        }
-
-        .resize-handle {
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 5px;
-            cursor: col-resize;
-            background: transparent;
-        }
-
-        .resize-handle:hover {
-            background: var(--type-decision-bg);
-        }
-
-        .table-controls {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            text-align: left;
-            padding: 0.75rem;
-            background: var(--th-bg);
-            border-bottom: 2px solid var(--border-color);
-            font-weight: 600;
-            cursor: pointer;
-            user-select: none;
-            color: var(--text-primary);
-            white-space: nowrap;
-        }
-
-        th:hover {
-            background: var(--th-hover);
-        }
-
-        .sort-icon {
-            margin-left: 0.25rem;
-            opacity: 0.3;
-        }
-
-        th.sorted-asc .sort-icon::after {
-            content: '↑';
-            opacity: 1;
-        }
-
-        th.sorted-desc .sort-icon::after {
-            content: '↓';
-            opacity: 1;
-        }
-
-        td {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border-light);
-            color: var(--text-primary);
-        }
-
-        tr:hover {
-            background: var(--hover-bg);
-        }
-
-        .content-preview {
-            max-width: 400px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .type-badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .type-decision {
-            background: var(--type-decision-bg);
-            color: var(--type-decision-text);
-        }
-
-        .type-mistake {
-            background: var(--type-mistake-bg);
-            color: var(--type-mistake-text);
-        }
-
-        .type-code_fact {
-            background: var(--type-code_fact-bg);
-            color: var(--type-code_fact-text);
-        }
-
-        .type-pattern {
-            background: var(--type-pattern-bg);
-            color: var(--type-pattern-text);
-        }
-
-        .actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        button {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .btn-primary {
-            background: #2196f3;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1976d2;
-        }
-
-        .btn-danger {
-            background: #f44336;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #d32f2f;
-        }
-
-        .btn-secondary {
-            background: #757575;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #616161;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-
-        .modal.active {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .toast-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .toast {
-            padding: 1rem 1.5rem;
-            border-radius: 4px;
-            color: white;
-            font-weight: 500;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            animation: slideIn 0.3s ease;
-            max-width: 300px;
-        }
-
-        .toast.success { background: #4caf50; }
-        .toast.error { background: #f44336; }
-        .toast.info { background: #2196f3; }
+        .dark [data-theme="light"] { display: none; }
+        :not(.dark) [data-theme="dark"] { display: none; }
+        
+        .type-decision { background: #e3f2fd; color: #1976d2; }
+        .type-mistake { background: #ffebee; color: #d32f2f; }
+        .type-code_fact { background: #f3e5f5; color: #7b1fa2; }
+        .type-pattern { background: #e8f5e9; color: #388e3c; }
+        
+        .dark .type-decision { background: #1a3a5c; color: #64b5f6; }
+        .dark .type-mistake { background: #5c1a1a; color: #ef9a9a; }
+        .dark .type-code_fact { background: #3a1a4c; color: #ce93d8; }
+        .dark .type-pattern { background: #1a3a1a; color: #a5d6a7; }
+
+        .countdown-fill { transition: width 1s linear; }
+        
+        tr.expanded { background: #f9f9f9; }
+        .dark tr.expanded { background: #333; }
+        
+        tr.expanded td { border-bottom: none; }
+        
+        mark { background: #ffeb3b; color: #333; padding: 0 2px; border-radius: 2px; }
+        .dark mark { background: #ffc107; color: #000; }
 
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-
         @keyframes slideOut {
             from { transform: translateX(0); opacity: 1; }
             to { transform: translateX(100%); opacity: 0; }
         }
-
-        .toast.removing {
-            animation: slideOut 0.3s ease forwards;
-        }
-
-        .modal-content {
-            background: var(--bg-secondary);
-            padding: 2rem;
-            border-radius: 8px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            color: var(--text-primary);
-        }
-
-        input, textarea, select {
-            padding: 0.5rem;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 0.9rem;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-        }
-
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #2196f3;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 100px;
-            font-family: inherit;
-        }
-
-        select {
-            padding: 0.5rem;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 0.9rem;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .modal-title {
-            font-size: 1.3rem;
-            font-weight: 600;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #666;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-        }
-
-        .form-group textarea {
-            width: 100%;
-            min-height: 150px;
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: inherit;
-            resize: vertical;
-        }
-
-        .form-group input[type="number"] {
-            width: 100px;
-        }
-
-        .readonly {
-            background: #f5f5f5;
-            color: #666;
-        }
-
-        .error {
-            color: #d32f2f;
-            padding: 1rem;
-            background: #ffebee;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #999;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #666;
-        }
-
-        .delete-confirmation {
-            padding: 1rem;
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 4px;
-            margin-bottom: 1rem;
-        }
-
-        .delete-confirmation strong {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #856404;
-        }
-
-        .id-display {
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: #666;
-        }
-
-        .relative-time {
-            font-size: 0.85rem;
-            color: #666;
-        }
+        .toast.removing { animation: slideOut 0.3s ease forwards; }
+        .toast { animation: slideIn 0.3s ease; }
     </style>
 </head>
-<body>
-    <div class="header">
-        <h1>MCP Memory Dashboard</h1>
-        <div class="header-controls">
-            <div class="header-stats">
-                <span class="memory-badge" id="memoryBadge">0 memories</span>
-            </div>
-            <label>
-                Repo:
-                <select id="repoSelect">
-                    <option value="">Loading...</option>
-                </select>
-            </label>
-            <div class="sync-timer">
-                <span id="syncStatus">Synced 0s ago</span>
-                <div class="countdown-bar">
-                    <div class="countdown-fill" id="countdownFill"></div>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+    <!-- Sticky Header -->
+    <header class="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 px-4 md:px-8 py-4 shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <h1 class="text-xl md:text-2xl font-semibold">MCP Memory Dashboard</h1>
+            
+            <div class="flex flex-wrap items-center gap-3 md:gap-4">
+                <div class="flex items-center gap-2">
+                    <span id="memoryBadge" class="px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">0 memories</span>
                 </div>
-            </div>
-            <div class="status-indicator">
-                Status: 
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">Checking...</span>
-            </div>
-            <button id="themeToggle" class="btn-secondary" title="Toggle dark mode">🌙</button>
-        </div>
-    </div>
-
-    <div class="container">
-        <!-- Summary Cards -->
-        <div class="summary-cards">
-            <div class="card">
-                <div class="card-title">Total Memories</div>
-                <div class="card-value" id="totalCount">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Avg Importance</div>
-                <div class="card-value" id="avgImportance">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Total Hits</div>
-                <div class="card-value" id="totalHits">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Most Active Repo</div>
-                <div class="card-value" id="mostActiveRepo" style="font-size: 1rem;">-</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Expiring Soon</div>
-                <div class="card-value" id="expiringSoon">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Decisions</div>
-                <div class="card-value" id="decisionCount">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Mistakes</div>
-                <div class="card-value" id="mistakeCount">0</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Unused Memories</div>
-                <div class="card-value" id="unusedCount">0</div>
+                
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 dark:text-gray-400">Repo:</label>
+                    <select id="repoSelect" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span id="syncStatus" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Synced 0s ago</span>
+                    <div class="w-14 h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div id="countdownFill" class="h-full bg-blue-500 rounded-full" style="width: 100%"></div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Status:</span>
+                    <div id="statusDot" class="w-3 h-3 rounded-full bg-gray-400"></div>
+                    <span id="statusText" class="text-sm">Checking...</span>
+                </div>
+                
+                <button id="themeToggle" class="p-2 rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="Toggle dark mode">🌙</button>
             </div>
         </div>
+    </header>
 
-        <!-- Charts -->
-        <div class="charts-section">
-            <div class="chart-card">
-                <div class="chart-title">Memory by Type</div>
+    <main class="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        <!-- Summary Cards + Charts + Recent Queries (2/3 + 1/3) -->
+        <div class="grid lg:grid-cols-3 gap-6 mb-6" style="min-height: 60vh;">
+            <!-- Main Content: 2/3 -->
+            <div class="lg:col-span-2 flex flex-col">
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Memories</div>
+                <div id="totalCount" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avg Importance</div>
+                <div id="avgImportance" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Hits</div>
+                <div id="totalHits" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Expiring Soon</div>
+                <div id="expiringSoon" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Code Facts</div>
+                <div id="codeFactCount" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Decisions</div>
+                <div id="decisionCount" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mistakes</div>
+                <div id="mistakeCount" class="text-2xl font-bold">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Patterns</div>
+                <div id="patternCount" class="text-2xl font-bold">0</div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1: 2 columns -->
+        <div class="grid md:grid-cols-2 gap-4 mb-4 flex-1">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="font-semibold mb-2">Memory by Type</div>
                 <canvas id="typeChart"></canvas>
             </div>
-            <div class="chart-card">
-                <div class="chart-title">Importance Distribution</div>
-                <canvas id="importanceChart"></canvas>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title">Memories Over Time (30 days)</div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="font-semibold mb-2">Memories Over Time (30 days)</div>
                 <canvas id="timeSeriesChart"></canvas>
             </div>
-            <div class="chart-card">
-                <div class="chart-title">Importance vs Hit Count</div>
+        </div>
+
+        <!-- Charts Row 2: 2 columns -->
+        <div class="grid md:grid-cols-2 gap-4 flex-1">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="font-semibold mb-2">Importance vs Hit Count</div>
                 <canvas id="scatterChart"></canvas>
             </div>
-            <div class="chart-card">
-                <div class="chart-title">Top 10 Memories by Importance</div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="font-semibold mb-2">Top 10 Memories by Importance</div>
                 <canvas id="topMemoriesChart"></canvas>
             </div>
         </div>
+            </div>
 
-        <!-- Memory Table -->
-        <div class="table-section">
-            <div class="table-controls">
-                <input type="text" id="searchInput" placeholder="Search memories..." style="width: 200px;">
-                <label>
-                    Type:
-                    <select id="typeFilter">
+            <!-- Sidebar: 1/3 - Recent Queries (Full Height) -->
+            <div class="lg:col-span-1 flex flex-col">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex-1 overflow-hidden flex flex-col">
+                    <h3 class="font-semibold mb-4 text-lg">Recent Actions</h3>
+                    <div id="recentQueries" class="flex-1 overflow-y-auto space-y-2">
+                        <div class="text-gray-500 text-sm">No recent queries</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory Table Full Width -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 md:p-6 mb-6">
+            <div class="flex flex-wrap gap-3 mb-4">
+                <input type="text" id="searchInput" placeholder="Search memories..." class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm w-48">
+                
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 dark:text-gray-400">Type:</label>
+                    <select id="typeFilter" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
                         <option value="">All Types</option>
                         <option value="decision">Decision</option>
                         <option value="mistake">Mistake</option>
                         <option value="code_fact">Code Fact</option>
                         <option value="pattern">Pattern</option>
                     </select>
-                </label>
-                <label>
-                    Min Importance:
-                    <select id="minImportanceFilter">
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 dark:text-gray-400">Min Importance:</label>
+                    <select id="minImportanceFilter" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
                         <option value="">Any</option>
                         <option value="1">1+</option>
                         <option value="2">2+</option>
@@ -820,10 +196,11 @@
                         <option value="4">4+</option>
                         <option value="5">5</option>
                     </select>
-                </label>
-                <label>
-                    Max Importance:
-                    <select id="maxImportanceFilter">
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 dark:text-gray-400">Max Importance:</label>
+                    <select id="maxImportanceFilter" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
                         <option value="">Any</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -831,69 +208,67 @@
                         <option value="4">4</option>
                         <option value="5">5 or less</option>
                     </select>
-                </label>
-                <button class="btn-secondary" onclick="loadData()">Refresh</button>
-                <button class="btn-secondary" onclick="exportData('json')">Export JSON</button>
-                <button class="btn-secondary" onclick="exportData('csv')">Export CSV</button>
-                <button class="btn-secondary" onclick="archiveExpired()">Archive Expired</button>
+                </div>
+                
+                <button onclick="loadData()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Refresh</button>
+                <button onclick="exportData('json')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Export JSON</button>
+                <button onclick="exportData('csv')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Export CSV</button>
+                <button onclick="archiveExpired()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Archive Expired</button>
             </div>
 
             <div id="errorMessage"></div>
-            <div id="tableContainer">
-                <div class="loading">Loading memories...</div>
-            </div>
+            <div id="tableContainer" class="text-center py-8 text-gray-500">Loading memories...</div>
             
             <!-- Pagination -->
-            <div class="pagination" id="paginationControls">
-                <div class="pagination-info" id="paginationInfo"></div>
-                <div class="pagination-controls">
-                    <button id="firstPageBtn" onclick="goToPage(1)">First</button>
-                    <button id="prevPageBtn" onclick="goToPage(currentPage - 1)">Prev</button>
+            <div class="flex flex-wrap justify-between items-center mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 gap-4">
+                <div id="paginationInfo" class="text-sm text-gray-600 dark:text-gray-400"></div>
+                <div class="flex items-center gap-2">
+                    <button id="firstPageBtn" onclick="goToPage(1)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">First</button>
+                    <button id="prevPageBtn" onclick="goToPage(currentPage - 1)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Prev</button>
                     <span id="pageNumbers"></span>
-                    <button id="nextPageBtn" onclick="goToPage(currentPage + 1)">Next</button>
-                    <button id="lastPageBtn" onclick="goToPage(totalPages)">Last</button>
+                    <button id="nextPageBtn" onclick="goToPage(currentPage + 1)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Next</button>
+                    <button id="lastPageBtn" onclick="goToPage(totalPages)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Last</button>
                 </div>
-                <div class="page-size-selector">
-                    <label>Per page:
-                        <select id="pageSizeSelect" onchange="changePageSize()">
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                    </label>
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600 dark:text-gray-400">Per page:</label>
+                    <select id="pageSizeSelect" onchange="changePageSize()" class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <!-- Memory Detail Modal -->
-    <div class="modal" id="memoryModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">Memory Detail</div>
-                <button class="close-btn" onclick="closeModal()">&times;</button>
+    <div id="memoryModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Memory Detail</h2>
+                <button onclick="closeModal()" class="text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
             </div>
             <div id="modalBody"></div>
         </div>
     </div>
 
     <!-- Toast Container -->
-    <div class="toast-container" id="toastContainer"></div>
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
 
     <!-- Bulk Action Bar -->
-    <div class="bulk-action-bar" id="bulkActionBar">
-        <span class="selected-count" id="selectedCount">0 selected</span>
-        <select id="bulkImportanceSelect">
+    <div id="bulkActionBar" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 px-6 py-4 rounded-lg shadow-xl z-[90] gap-4 items-center">
+        <span id="selectedCount" class="font-semibold">0 selected</span>
+        <select id="bulkImportanceSelect" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700">
             <option value="1">Importance 1</option>
             <option value="2">Importance 2</option>
             <option value="3" selected>Importance 3</option>
             <option value="4">Importance 4</option>
             <option value="5">Importance 5</option>
         </select>
-        <button class="btn-primary" onclick="bulkUpdateImportance()">Update</button>
-        <button class="btn-danger" onclick="showBulkDeleteConfirm()">Delete</button>
-        <button class="btn-secondary" onclick="clearSelection()">Clear</button>
+        <button onclick="bulkUpdateImportance()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">Update</button>
+        <button onclick="showBulkDeleteConfirm()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors">Delete</button>
+        <button onclick="clearSelection()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">Clear</button>
     </div>
 
     <script>
@@ -908,11 +283,84 @@
         let lastSyncTime = Date.now();
         let countdownSeconds = 30;
         let countdownInterval = null;
+        let recentActions = [];
 
-        // Dark mode toggle
+        async function loadRecentActions() {
+            try {
+                const url = currentRepo 
+                    ? `/api/recent-actions?repo=${encodeURIComponent(currentRepo)}&limit=20`
+                    : '/api/recent-actions?limit=20';
+                const response = await fetch(url);
+                const data = await response.json();
+                recentActions = data.actions || [];
+                renderRecentActions();
+            } catch (err) {
+                console.error('Failed to load recent actions:', err);
+            }
+        }
+
+        function formatActionDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            if (diff < 60) return `${diff}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        function getActionIcon(action) {
+            const icons = {
+                search: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>',
+                read: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>',
+                write: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>',
+                update: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>',
+                delete: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>'
+            };
+            return icons[action] || icons.search;
+        }
+
+        function getActionColor(action) {
+            const colors = {
+                search: 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400',
+                read: 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400',
+                write: 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400',
+                update: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400',
+                delete: 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400'
+            };
+            return colors[action] || colors.search;
+        }
+
+        function renderRecentActions() {
+            const container = document.getElementById('recentQueries');
+            if (recentActions.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-sm">No recent actions</div>';
+                return;
+            }
+            container.innerHTML = recentActions.map((action) => `
+                <div class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <div class="w-8 h-8 rounded-full ${getActionColor(action.action)} flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            ${getActionIcon(action.action)}
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-800 dark:text-gray-200 capitalize">${action.action}</p>
+                        <p class="text-xs text-gray-500 truncate">${action.query || (action.memory_id ? 'Memory: ' + action.memory_id.substring(0, 8) : '-')}</p>
+                        <p class="text-xs text-gray-400">${formatActionDate(action.created_at)}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function searchFromRecent(query) {
+            document.getElementById('searchInput').value = query;
+            renderTable(currentMemories);
+        }
+
         function initTheme() {
             const saved = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', saved);
+            document.documentElement.classList.toggle('dark', saved === 'dark');
             document.getElementById('themeToggle').textContent = saved === 'dark' ? '☀️' : '🌙';
         }
 
@@ -938,40 +386,30 @@
             fill.style.width = percent + '%';
             
             if (countdownSeconds <= 5) {
-                fill.style.background = '#f44336';
+                fill.style.background = '#ef4444';
             } else if (countdownSeconds <= 10) {
-                fill.style.background = '#ff9800';
+                fill.style.background = '#f97316';
             } else {
-                fill.style.background = '#2196f3';
+                fill.style.background = '#3b82f6';
             }
             
             status.textContent = `Synced ${countdownSeconds}s ago`;
         }
 
         document.getElementById('themeToggle').addEventListener('click', () => {
-            const current = document.documentElement.getAttribute('data-theme');
-            const next = current === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('theme', next);
-            document.getElementById('themeToggle').textContent = next === 'dark' ? '☀️' : '🌙';
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
         });
 
-        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-                return;
-            }
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
-            if (e.key === 'Escape') {
-                closeModal();
-            } else if (e.key === 'r' || e.key === 'R') {
-                loadData();
-            } else if (e.key === '/') {
+            if (e.key === 'Escape') closeModal();
+            else if (e.key === 'r' || e.key === 'R') loadData();
+            else if (e.key === '/') {
                 e.preventDefault();
-                const searchInput = document.getElementById('searchInput');
-                if (searchInput) {
-                    searchInput.focus();
-                }
+                document.getElementById('searchInput')?.focus();
             }
         });
 
@@ -983,25 +421,26 @@
                 const text = document.getElementById('statusText');
                 
                 if (data.connected) {
-                    dot.classList.add('connected');
+                    dot.classList.remove('bg-gray-400');
+                    dot.classList.add('bg-green-500');
                     text.textContent = 'Connected';
                 } else {
-                    dot.classList.remove('connected');
+                    dot.classList.remove('bg-green-500');
+                    dot.classList.add('bg-gray-400');
                     text.textContent = 'Disconnected';
                 }
 
-                // Update memory badge
                 const badge = document.getElementById('memoryBadge');
-                const count = data.memoryCount || 0;
-                badge.textContent = `${count} memories`;
+                badge.textContent = `${data.memoryCount || 0} memories`;
             } catch (err) {
                 console.error('Status check failed:', err);
-                document.getElementById('statusDot').classList.remove('connected');
+                const dot = document.getElementById('statusDot');
+                dot.classList.remove('bg-green-500');
+                dot.classList.add('bg-gray-400');
                 document.getElementById('statusText').textContent = 'Error';
             }
         }
 
-        // Load repositories
         async function loadRepos() {
             try {
                 const response = await fetch('/api/repos');
@@ -1017,22 +456,24 @@
                         option.textContent = repo;
                         select.appendChild(option);
                     });
-
-                    // Set first repo as default
-                    currentRepo = data.repos[0];
+                    const savedRepo = localStorage.getItem('selectedRepo');
+                    if (savedRepo && data.repos.includes(savedRepo)) {
+                        currentRepo = savedRepo;
+                    } else if (!currentRepo) {
+                        currentRepo = data.repos[0];
+                    }
                     select.value = currentRepo;
+                    localStorage.setItem('selectedRepo', currentRepo);
                 } else {
                     select.innerHTML = '<option value="">No repositories found</option>';
                     currentRepo = null;
                 }
             } catch (err) {
                 console.error('Failed to load repos:', err);
-                const select = document.getElementById('repoSelect');
-                select.innerHTML = '<option value="">Error loading repos</option>';
+                document.getElementById('repoSelect').innerHTML = '<option value="">Error loading repos</option>';
             }
         }
 
-        // Load statistics
         async function loadStats() {
             try {
                 const url = currentRepo ? `/api/stats?repo=${encodeURIComponent(currentRepo)}` : '/api/stats';
@@ -1042,15 +483,13 @@
                 document.getElementById('totalCount').textContent = data.total;
                 document.getElementById('avgImportance').textContent = data.avgImportance || '0';
                 document.getElementById('totalHits').textContent = data.totalHitCount || '0';
-                document.getElementById('mostActiveRepo').textContent = data.mostActiveRepo || '-';
                 document.getElementById('expiringSoon').textContent = data.expiringSoon || '0';
+                document.getElementById('codeFactCount').textContent = data.byType?.code_fact || 0;
                 document.getElementById('decisionCount').textContent = data.byType?.decision || 0;
                 document.getElementById('mistakeCount').textContent = data.byType?.mistake || 0;
-                document.getElementById('unusedCount').textContent = data.unused || 0;
+                document.getElementById('patternCount').textContent = data.byType?.pattern || 0;
 
-                // Update charts
                 updateTypeChart(data.byType);
-                updateImportanceChart(data.importanceDist || [0,0,0,0,0]);
                 updateTimeSeriesChart(data.timeSeries || {});
                 updateScatterChart(data.scatterData || []);
                 updateTopMemoriesChart(data.topMemories);
@@ -1059,125 +498,49 @@
             }
         }
 
-        // Update type chart
         function updateTypeChart(byType) {
             const ctx = document.getElementById('typeChart');
-            
-            // Check if Chart.js is available
             if (!window.Chart) {
-                ctx.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #666;">Chart.js not available. Install locally for visualizations.</div>';
+                ctx.parentElement.innerHTML = '<div class="p-8 text-center text-gray-500">Chart.js not available</div>';
                 return;
             }
-            
-            if (charts.typeChart) {
-                charts.typeChart.destroy();
-            }
+            if (charts.typeChart) charts.typeChart.destroy();
 
-            const types = Object.keys(byType);
-            const counts = Object.values(byType);
+            const types = Object.keys(byType || {});
+            const counts = Object.values(byType || {});
 
             charts.typeChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: types.map(t => t.replace('_', ' ')),
-                    datasets: [{
-                        data: counts,
-                        backgroundColor: [
-                            '#1976d2',
-                            '#d32f2f',
-                            '#7b1fa2',
-                            '#388e3c'
-                        ]
-                    }]
+                    datasets: [{ data: counts, backgroundColor: ['#1976d2', '#d32f2f', '#7b1fa2', '#388e3c'] }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true
-                }
+                options: { responsive: true, maintainAspectRatio: true }
             });
         }
 
-        // Update top memories chart
-        function updateTopMemoriesChart(memories) {
+        function updateTopMemoriesChart(memories = []) {
             const ctx = document.getElementById('topMemoriesChart');
-            
-            // Check if Chart.js is available
             if (!window.Chart) {
-                ctx.parentElement.innerHTML = '<div style="padding: 2rem; text-align: center; color: #666;">Chart.js not available. Install locally for visualizations.</div>';
+                ctx.parentElement.innerHTML = '<div class="p-8 text-center text-gray-500">Chart.js not available</div>';
                 return;
             }
-            
-            if (charts.topMemoriesChart) {
-                charts.topMemoriesChart.destroy();
-            }
-
-            const labels = memories.map((m, i) => `#${i + 1}`);
-            const data = memories.map(m => m.hit_count || m.importance);
+            if (charts.topMemoriesChart) charts.topMemoriesChart.destroy();
 
             charts.topMemoriesChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels,
-                    datasets: [{
-                        label: 'Hit Count',
-                        data,
-                        backgroundColor: '#2196f3'
-                    }]
+                    labels: memories.map((m, i) => `#${i + 1}`),
+                    datasets: [{ label: 'Hit Count', data: memories.map(m => m.hit_count || m.importance), backgroundColor: '#3b82f6' }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
             });
         }
 
-        // Update importance distribution chart (histogram)
-        function updateImportanceChart(importanceDist) {
-            const ctx = document.getElementById('importanceChart');
-            
-            if (!window.Chart) return;
-            
-            if (charts.importanceChart) {
-                charts.importanceChart.destroy();
-            }
-
-            charts.importanceChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['1', '2', '3', '4', '5'],
-                    datasets: [{
-                        label: 'Count',
-                        data: importanceDist,
-                        backgroundColor: '#ff9800'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { stepSize: 1 }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Update time series chart (30 days)
         function updateTimeSeriesChart(timeSeries) {
             const ctx = document.getElementById('timeSeriesChart');
-            
             if (!window.Chart) return;
-            
-            if (charts.timeSeriesChart) {
-                charts.timeSeriesChart.destroy();
-            }
+            if (charts.timeSeriesChart) charts.timeSeriesChart.destroy();
 
             const labels = Object.keys(timeSeries).slice(-14);
             const data = Object.values(timeSeries).slice(-14);
@@ -1186,97 +549,65 @@
                 type: 'line',
                 data: {
                     labels,
-                    datasets: [{
-                        label: 'Memories Created',
-                        data,
-                        borderColor: '#4caf50',
-                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                        fill: true,
-                        tension: 0.3
-                    }]
+                    datasets: [{ label: 'Memories Created', data, borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { stepSize: 1 }
-                        }
-                    }
-                }
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
             });
         }
 
-        // Update scatter chart (importance vs hit_count)
         function updateScatterChart(scatterData) {
             const ctx = document.getElementById('scatterChart');
-            
             if (!window.Chart) return;
-            
-            if (charts.scatterChart) {
-                charts.scatterChart.destroy();
-            }
+            if (charts.scatterChart) charts.scatterChart.destroy();
 
             charts.scatterChart = new Chart(ctx, {
                 type: 'scatter',
                 data: {
-                    datasets: [{
-                        label: 'Memories',
-                        data: scatterData,
-                        backgroundColor: '#9c27b0'
-                    }]
+                    datasets: [{ label: 'Memories', data: scatterData, backgroundColor: '#9333ea' }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        x: {
-                            title: { display: true, text: 'Importance' },
-                            min: 0,
-                            max: 6
-                        },
-                        y: {
-                            title: { display: true, text: 'Hit Count' },
-                            beginAtZero: true
-                        }
-                    }
-                }
+                options: { responsive: true, maintainAspectRatio: true, scales: { x: { title: { display: true, text: 'Importance' }, min: 0, max: 6 }, y: { title: { display: true, text: 'Hit Count' }, beginAtZero: true } } }
             });
         }
 
-        // Load memories table
         async function loadMemories() {
             if (!currentRepo) {
-                document.getElementById('tableContainer').innerHTML = '<div class="empty-state">Please select a repository</div>';
+                document.getElementById('tableContainer').innerHTML = '<div class="text-gray-500 py-12">Please select a repository</div>';
                 return;
             }
 
             try {
                 const typeFilter = document.getElementById('typeFilter').value;
                 let url = `/api/memories?repo=${encodeURIComponent(currentRepo)}`;
-                
-                if (typeFilter) {
-                    url += `&type=${typeFilter}`;
-                }
+                if (typeFilter) url += `&type=${typeFilter}`;
 
                 const response = await fetch(url);
                 const data = await response.json();
                 currentMemories = data.memories;
-
                 renderTable(currentMemories);
             } catch (err) {
                 console.error('Failed to load memories:', err);
-                document.getElementById('errorMessage').innerHTML = 
-                    `<div class="error">Failed to load memories: ${err.message}</div>`;
+                document.getElementById('errorMessage').innerHTML = `<div class="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded mb-4">Failed to load memories: ${err.message}</div>`;
             }
         }
 
-        // Render table
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            if (diff < 60) return `${diff}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
         function renderTable(memories) {
             const container = document.getElementById('tableContainer');
-            
-            // Apply client-side filters
             const searchQuery = document.getElementById('searchInput').value.toLowerCase();
             const typeFilter = document.getElementById('typeFilter').value;
             const minImportance = parseInt(document.getElementById('minImportanceFilter').value) || 0;
@@ -1285,96 +616,69 @@
             let filtered = memories;
             
             if (searchQuery) {
-                filtered = filtered.filter(m => 
-                    m.content.toLowerCase().includes(searchQuery) ||
-                    m.type.toLowerCase().includes(searchQuery)
-                );
+                filtered = filtered.filter(m => m.content.toLowerCase().includes(searchQuery) || m.type.toLowerCase().includes(searchQuery));
             }
-            
-            if (typeFilter) {
-                filtered = filtered.filter(m => m.type === typeFilter);
-            }
-            
-            if (minImportance > 0) {
-                filtered = filtered.filter(m => m.importance >= minImportance);
-            }
-            
-            if (maxImportance < 5) {
-                filtered = filtered.filter(m => m.importance <= maxImportance);
-            }
+            if (typeFilter) filtered = filtered.filter(m => m.type === typeFilter);
+            if (minImportance > 0) filtered = filtered.filter(m => m.importance >= minImportance);
+            if (maxImportance < 5) filtered = filtered.filter(m => m.importance <= maxImportance);
 
-            // Apply pagination
             updatePaginationControls(filtered.length);
             const start = (currentPage - 1) * pageSize;
             currentPaginatedData = filtered.slice(start, start + pageSize);
             const paginated = currentPaginatedData;
 
             if (filtered.length === 0) {
-                container.innerHTML = '<div class="empty-state">No memories found matching your filters</div>';
+                container.innerHTML = '<div class="text-gray-500 py-12">No memories found matching your filters</div>';
                 return;
             }
 
-            const table = document.createElement('table');
-            
-            // Highlight function
             function highlightText(text, query) {
                 if (!query) return escapeHtml(text);
                 const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
                 return escapeHtml(text).replace(regex, '<mark>$1</mark>');
             }
 
+            const table = document.createElement('div');
+            table.className = 'overflow-x-auto';
             table.innerHTML = `
-                <thead>
-                    <tr>
-                        <th data-col="select" style="width: 30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-                        <th data-col="id" onclick="sortTable('id')" data-sort="id">ID <span class="sort-icon"></span></th>
-                        <th data-col="type" onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
-                        <th data-col="content">Content Preview</th>
-                        <th data-col="importance" onclick="sortTable('importance')" data-sort="importance">Importance <span class="sort-icon"></span></th>
-                        <th data-col="hit_count" onclick="sortTable('hit_count')" data-sort="hit_count">Hit Count <span class="sort-icon"></span></th>
-                        <th data-col="recall_rate" onclick="sortTable('recall_rate')" data-sort="recall_rate">Recall Rate <span class="sort-icon"></span></th>
-                        <th data-col="created_at" onclick="sortTable('created_at')" data-sort="created_at">Created <span class="sort-icon"></span></th>
-                        <th data-col="actions">
-                            <div class="column-visibility-toggle">
-                                <button class="btn-secondary" onclick="toggleColumnMenu(event)" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">⚙️</button>
-                                <div class="column-visibility-menu" id="columnMenu">
-                                    <label><input type="checkbox" checked data-column="select" onchange="toggleColumn(this)"> Select</label>
-                                    <label><input type="checkbox" checked data-column="id" onchange="toggleColumn(this)"> ID</label>
-                                    <label><input type="checkbox" checked data-column="type" onchange="toggleColumn(this)"> Type</label>
-                                    <label><input type="checkbox" checked data-column="content" onchange="toggleColumn(this)"> Content</label>
-                                    <label><input type="checkbox" checked data-column="importance" onchange="toggleColumn(this)"> Importance</label>
-                                    <label><input type="checkbox" checked data-column="hit_count" onchange="toggleColumn(this)"> Hit Count</label>
-                                    <label><input type="checkbox" checked data-column="recall_rate" onchange="toggleColumn(this)"> Recall Rate</label>
-                                    <label><input type="checkbox" checked data-column="created_at" onchange="toggleColumn(this)"> Created</label>
-                                    <label><input type="checkbox" checked data-column="actions" onchange="toggleColumn(this)"> Actions</label>
-                                </div>
-                            </div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${paginated.map(m => `
-                        <tr id="row-${m.id}">
-                            <td data-col="select"><input type="checkbox" class="row-checkbox" value="${m.id}" ${selectedIds.has(m.id) ? 'checked' : ''} onchange="toggleSelect('${m.id}')"></td>
-                            <td data-col="id"><span class="id-display">${m.id.substring(0, 8)}</span></td>
-                            <td data-col="type"><span class="type-badge type-${m.type}">${m.type.replace('_', ' ')}</span></td>
-                            <td data-col="content"><div class="content-preview">${highlightText(m.content, searchQuery)}</div></td>
-                            <td data-col="importance">${m.importance}</td>
-                            <td data-col="hit_count">${m.hit_count || 0}</td>
-                            <td data-col="recall_rate">${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
-                            <td data-col="created_at"><span class="relative-time">${formatDate(m.created_at)}</span></td>
-                            <td data-col="actions" class="actions">
-                                <button class="btn-secondary" onclick="toggleExpand('${m.id}')" title="Expand">▼</button>
-                                <button class="btn-primary" onclick="viewMemory('${m.id}')">View</button>
-                                <button class="btn-secondary" onclick="startInlineEdit('${m.id}')" title="Edit">✏️</button>
-                            </td>
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="border-b-2 border-gray-200 dark:border-gray-700">
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('id')" data-sort="id">ID <span class="sort-icon"></span></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Content Preview</th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('importance')" data-sort="importance">Importance <span class="sort-icon"></span></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('hit_count')" data-sort="hit_count">Hit Count <span class="sort-icon"></span></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('recall_rate')" data-sort="recall_rate">Recall Rate <span class="sort-icon"></span></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('created_at')" data-sort="created_at">Created <span class="sort-icon"></span></th>
+                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Actions</th>
                         </tr>
-                        <tr id="expand-${m.id}" class="expanded-row" style="display: none;">
-                            <td colspan="8">
-                                <div class="expanded-content">
-                                    <h4>Full Content:</h4>
-                                    <p style="white-space: pre-wrap; margin-bottom: 1rem;">${escapeHtml(m.content)}</p>
-                                    <h4>Metadata:</h4>
+                    </thead>
+                    <tbody>
+                        ${paginated.map(m => `
+                            <tr id="row-${m.id}" class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="p-3"><input type="checkbox" class="row-checkbox" value="${m.id}" ${selectedIds.has(m.id) ? 'checked' : ''} onchange="toggleSelect('${m.id}')"></td>
+                                <td class="p-3 font-mono text-sm">${m.id.substring(0, 8)}</td>
+                                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-medium type-${m.type}">${m.type.replace('_', ' ')}</span></td>
+                                <td class="p-3 max-w-xs truncate">${highlightText(m.content, searchQuery)}</td>
+                                <td class="p-3">${m.importance}</td>
+                                <td class="p-3">${m.hit_count || 0}</td>
+                                <td class="p-3">${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
+                                <td class="p-3 text-sm text-gray-500">${formatDate(m.created_at)}</td>
+                                <td class="p-3">
+                                    <div class="flex gap-1">
+                                        <button onclick="toggleExpand('${m.id}')" class="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 text-xs" title="Expand">▼</button>
+                                        <button onclick="viewMemory('${m.id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">View</button>
+                                        <button onclick="startInlineEdit('${m.id}')" class="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 text-xs" title="Edit">✏️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="expand-${m.id}" class="expanded-row hidden">
+                                <td colspan="9" class="p-4 bg-gray-50 dark:bg-gray-700/50 border-b-2 border-gray-200 dark:border-gray-600">
+                                    <h4 class="font-semibold mb-2">Full Content:</h4>
+                                    <pre class="whitespace-pre-wrap mb-4">${escapeHtml(m.content)}</pre>
+                                    <h4 class="font-semibold mb-2">Metadata:</h4>
                                     <p><strong>ID:</strong> ${m.id}</p>
                                     <p><strong>Scope:</strong> ${m.scope?.repo || 'N/A'}</p>
                                     <p><strong>Created:</strong> ${new Date(m.created_at).toLocaleString()}</p>
@@ -1382,27 +686,25 @@
                                     <p><strong>Hit Count:</strong> ${m.hit_count || 0}</p>
                                     <p><strong>Recall Count:</strong> ${m.recall_count || 0}</p>
                                     <p><strong>Expires:</strong> ${m.expires_at ? new Date(m.expires_at).toLocaleString() : 'Never'}</p>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             `;
 
             container.innerHTML = '';
             container.appendChild(table);
         }
 
-        // Setup search debounce
         let searchDebounce = null;
         document.getElementById('searchInput').addEventListener('input', () => {
             if (searchDebounce) clearTimeout(searchDebounce);
             searchDebounce = setTimeout(() => {
                 renderTable(currentMemories);
-            }, 100);
+            }, 300);
         });
 
-        // Setup filter listeners
         ['typeFilter', 'minImportanceFilter', 'maxImportanceFilter'].forEach(id => {
             document.getElementById(id).addEventListener('change', () => {
                 currentPage = 1;
@@ -1410,7 +712,6 @@
             });
         });
 
-        // Pagination functions
         function changePageSize() {
             pageSize = parseInt(document.getElementById('pageSizeSelect').value);
             currentPage = 1;
@@ -1434,11 +735,9 @@
             
             const start = (currentPage - 1) * pageSize + 1;
             const end = Math.min(currentPage * pageSize, totalItems);
-            document.getElementById('paginationInfo').textContent = 
-                totalItems > 0 ? `Showing ${start}-${end} of ${totalItems}` : 'No results';
+            document.getElementById('paginationInfo').textContent = totalItems > 0 ? `Showing ${start}-${end} of ${totalItems}` : 'No results';
         }
 
-        // Sort table
         let sortColumn = 'hit_count';
         let sortOrder = 'desc';
 
@@ -1450,7 +749,6 @@
                 sortOrder = 'desc';
             }
 
-            // Update sort indicators
             document.querySelectorAll('th[data-sort]').forEach(th => {
                 th.classList.remove('sorted-asc', 'sorted-desc');
                 if (th.dataset.sort === column) {
@@ -1470,583 +768,263 @@
                     bVal = bVal || 0;
                 }
 
-                if (sortOrder === 'asc') {
-                    return aVal > bVal ? 1 : -1;
-                } else {
-                    return aVal < bVal ? 1 : -1;
-                }
+                if (sortOrder === 'asc') return aVal > bVal ? 1 : -1;
+                return aVal < bVal ? 1 : -1;
             });
 
             renderTable(currentMemories);
         }
 
-        // View memory detail
-        async function viewMemory(id) {
-            try {
-                const response = await fetch(`/api/memories/${id}`);
-                const memory = await response.json();
-
-                const modal = document.getElementById('memoryModal');
-                const body = document.getElementById('modalBody');
-
-                const hitCount = memory.hit_count || 0;
-                const recallCount = memory.recall_count || 0;
-                const recallRate = hitCount > 0 ? ((recallCount / hitCount) * 100).toFixed(1) : 'N/A';
-
-                body.innerHTML = `
-                    <div class="form-group">
-                        <label>ID</label>
-                        <input type="text" value="${memory.id}" class="readonly" readonly style="width: 100%;">
-                    </div>
-                    <div class="form-group">
-                        <label>Type</label>
-                        <input type="text" value="${memory.type}" class="readonly" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Repository</label>
-                        <input type="text" value="${memory.scope.repo}" class="readonly" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Content</label>
-                        <textarea id="editContent">${escapeHtml(memory.content)}</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Importance (1-5)</label>
-                        <input type="number" id="editImportance" min="1" max="5" value="${memory.importance}">
-                    </div>
-                    <div class="form-group">
-                        <label>Usage Statistics</label>
-                        <div style="background: #f9f9f9; padding: 0.75rem; border-radius: 4px;">
-                            <div><strong>Hit Count:</strong> ${hitCount} (times returned in search)</div>
-                            <div><strong>Recall Count:</strong> ${recallCount} (times actually used)</div>
-                            <div><strong>Recall Rate:</strong> ${recallRate}${recallRate !== 'N/A' ? '%' : ''}</div>
-                            <div><strong>Last Used:</strong> ${memory.last_used_at ? formatDate(memory.last_used_at) : 'Never'}</div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Created</label>
-                        <input type="text" value="${formatDate(memory.created_at)}" class="readonly" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Last Updated</label>
-                        <input type="text" value="${formatDate(memory.updated_at)}" class="readonly" readonly>
-                    </div>
-                    <div class="actions" style="justify-content: space-between; margin-top: 1.5rem;">
-                        <button class="btn-primary" onclick="saveMemory('${id}')">Save Changes</button>
-                        <button class="btn-danger" onclick="confirmDelete('${id}')">Delete Memory</button>
-                    </div>
-                `;
-
-                modal.classList.add('active');
-            } catch (err) {
-                alert('Failed to load memory: ' + err.message);
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            if (th.dataset.sort === sortColumn) {
+                th.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
             }
-        }
-
-        // Save memory
-        async function saveMemory(id) {
-            const content = document.getElementById('editContent').value;
-            const importance = parseInt(document.getElementById('editImportance').value);
-
-            if (content.length < 10) {
-                alert('Content must be at least 10 characters');
-                return;
-            }
-
-            if (importance < 1 || importance > 5) {
-                alert('Importance must be between 1 and 5');
-                return;
-            }
-
-            if (!confirm('Are you sure you want to update this memory?')) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/memories/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content, importance })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to update memory');
-                }
-
-                alert('Memory updated successfully');
-                closeModal();
-                loadData();
-            } catch (err) {
-                alert('Failed to update memory: ' + err.message);
-            }
-        }
-
-        // Confirm delete
-        function confirmDelete(id) {
-            const modal = document.getElementById('modalBody');
-            
-            modal.innerHTML = `
-                <div class="delete-confirmation">
-                    <p>Are you sure you want to delete this memory? This action cannot be undone.</p>
-                </div>
-                <div class="actions" style="justify-content: space-between; margin-top: 1rem;">
-                    <button class="btn-danger" onclick="deleteMemory('${id}')">Delete</button>
-                    <button class="btn-secondary" onclick="viewMemory('${id}')">Cancel</button>
-                </div>
-            `;
-        }
-
-        // Delete memory
-        async function deleteMemory(id) {
-            try {
-                const response = await fetch(`/api/memories/${id}`, {
-                    method: 'DELETE'
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to delete memory');
-                }
-
-                alert('Memory deleted successfully');
-                closeModal();
-                loadData();
-            } catch (err) {
-                alert('Failed to delete memory: ' + err.message);
-            }
-        }
-
-        // Close modal
-        function closeModal() {
-            document.getElementById('memoryModal').classList.remove('active');
-        }
-
-        // Load all data
-        async function loadData() {
-            lastSyncTime = Date.now();
-            countdownSeconds = 30;
-            await checkStatus();
-            await loadStats();
-            await loadMemories();
-        }
-
-        // Toggle row expansion
-        function toggleExpand(id) {
-            const expandRow = document.getElementById(`expand-${id}`);
-            const row = document.getElementById(`row-${id}`);
-            
-            if (expandRow.style.display === 'none') {
-                expandRow.style.display = 'table-row';
-                row.classList.add('expanded');
-            } else {
-                expandRow.style.display = 'none';
-                row.classList.remove('expanded');
-            }
-        }
-
-        // Start inline edit
-        let editingId = null;
-        let originalContent = '';
-        let originalImportance = 0;
-
-        function startInlineEdit(id) {
-            // Cancel any existing edit
-            if (editingId) {
-                cancelInlineEdit();
-            }
-
-            const memory = currentMemories.find(m => m.id === id);
-            if (!memory) return;
-
-            editingId = id;
-            originalContent = memory.content;
-            originalImportance = memory.importance;
-
-            const row = document.getElementById(`row-${id}`);
-            const cells = row.querySelectorAll('td');
-
-            // Make content cell editable
-            const contentCell = cells[2];
-            contentCell.innerHTML = `
-                <div class="inline-edit-row">
-                    <textarea id="edit-content" style="width: 100%;">${escapeHtml(memory.content)}</textarea>
-                </div>
-            `;
-
-            // Make importance cell editable
-            const importanceCell = cells[3];
-            importanceCell.innerHTML = `
-                <select id="edit-importance">
-                    ${[1,2,3,4,5].map(i => `<option value="${i}" ${i === memory.importance ? 'selected' : ''}>${i}</option>`).join('')}
-                </select>
-            `;
-
-            // Update actions
-            const actionsCell = cells[7];
-            actionsCell.innerHTML = `
-                <button class="btn-primary" onclick="saveInlineEdit('${id}')">Save</button>
-                <button class="btn-secondary" onclick="cancelInlineEdit()">Cancel</button>
-            `;
-        }
-
-        // Save inline edit
-        async function saveInlineEdit(id) {
-            const content = document.getElementById('edit-content').value;
-            const importance = parseInt(document.getElementById('edit-importance').value);
-
-            if (content.length < 10) {
-                showToast('Content must be at least 10 characters', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/memories/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content, importance })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to update memory');
-                }
-
-                showToast('Memory updated successfully', 'success');
-                
-                // Update local data
-                const idx = currentMemories.findIndex(m => m.id === id);
-                if (idx >= 0) {
-                    currentMemories[idx].content = content;
-                    currentMemories[idx].importance = importance;
-                }
-
-                editingId = null;
-                renderTable(currentMemories);
-            } catch (err) {
-                console.error('Update failed:', err);
-                showToast('Failed to update memory', 'error');
-            }
-        }
-
-        // Cancel inline edit
-        function cancelInlineEdit() {
-            if (!editingId) return;
-
-            const memory = currentMemories.find(m => m.id === editingId);
-            if (!memory) return;
-
-            const row = document.getElementById(`row-${editingId}`);
-            const cells = row.querySelectorAll('td');
-
-            // Restore content
-            cells[2].innerHTML = `<div class="content-preview">${escapeHtml(memory.content)}</div>`;
-            
-            // Restore importance
-            cells[3].textContent = memory.importance;
-
-            // Restore actions
-            cells[7].innerHTML = `
-                <button class="btn-secondary" onclick="toggleExpand('${editingId}')" title="Expand">▼</button>
-                <button class="btn-primary" onclick="viewMemory('${editingId}')">View</button>
-                <button class="btn-secondary" onclick="startInlineEdit('${editingId}')" title="Edit">✏️</button>
-            `;
-
-            editingId = null;
-        }
-
-        // Column visibility and resize
-        let columnVisibility = JSON.parse(localStorage.getItem('columnVisibility')) || {
-            select: true, id: true, type: true, content: true,
-            importance: true, hit_count: true, recall_rate: true, created_at: true, actions: true
-        };
-        let columnWidths = JSON.parse(localStorage.getItem('columnWidths')) || {};
-
-        function initColumnVisibility() {
-            document.querySelectorAll('.column-visibility-menu input').forEach(input => {
-                const col = input.dataset.column;
-                input.checked = columnVisibility[col] !== false;
-            });
-            applyColumnVisibility();
-        }
-
-        function toggleColumnMenu(event) {
-            event.stopPropagation();
-            document.getElementById('columnMenu').classList.toggle('show');
-        }
-
-        document.addEventListener('click', () => {
-            document.getElementById('columnMenu').classList.remove('show');
         });
 
-        function toggleColumn(input) {
-            const col = input.dataset.column;
-            columnVisibility[col] = input.checked;
-            localStorage.setItem('columnVisibility', JSON.stringify(columnVisibility));
-            applyColumnVisibility();
-        }
-
-        function applyColumnVisibility() {
-            document.querySelectorAll('th[data-col], td[data-col]').forEach(el => {
-                const col = el.dataset.col || el.closest('td')?.dataset.col;
-                if (col && columnVisibility[col] === false) {
-                    el.style.display = 'none';
-                } else {
-                    el.style.display = '';
-                }
-            });
-            
-            // Also handle by column index for simple implementation
-            const colMap = { select: 0, id: 1, type: 2, content: 3, importance: 4, hit_count: 5, recall_rate: 6, created_at: 7, actions: 8 };
-            document.querySelectorAll('thead th').forEach((th, idx) => {
-                const colName = Object.keys(colMap).find(k => colMap[k] === idx);
-                if (colName && columnVisibility[colName] === false) {
-                    th.style.display = 'none';
-                } else {
-                    th.style.display = '';
-                }
-            });
-            
-            document.querySelectorAll('tbody td').forEach((td, idx) => {
-                const colIdx = idx % 9;
-                const colName = Object.keys(colMap).find(k => colMap[k] === colIdx);
-                if (colName && columnVisibility[colName] === false) {
-                    td.style.display = 'none';
-                } else {
-                    td.style.display = '';
-                }
-            });
-        }
-
-        function saveColumnWidth(col, width) {
-            columnWidths[col] = width;
-            localStorage.setItem('columnWidths', JSON.stringify(columnWidths));
-        }
-
-        // Bulk selection functions
-        function toggleSelect(id) {
-            if (selectedIds.has(id)) {
-                selectedIds.delete(id);
-            } else {
-                selectedIds.add(id);
-            }
-            updateBulkActionBar();
-        }
-
         function toggleSelectAll() {
-            const selectAll = document.getElementById('selectAll');
-            const checkboxes = document.querySelectorAll('.row-checkbox');
-            
-            if (selectAll.checked) {
-                paginated.forEach(m => selectedIds.add(m.id));
+            const checked = document.getElementById('selectAll').checked;
+            currentPaginatedData.forEach(m => {
+                if (checked) selectedIds.add(m.id);
+                else selectedIds.delete(m.id);
+            });
+            updateBulkBar();
+            renderTable(currentMemories);
+        }
+
+        function toggleSelect(id) {
+            if (selectedIds.has(id)) selectedIds.delete(id);
+            else selectedIds.add(id);
+            updateBulkBar();
+        }
+
+        function updateBulkBar() {
+            const bar = document.getElementById('bulkActionBar');
+            if (selectedIds.size > 0) {
+                bar.classList.remove('hidden');
+                document.getElementById('selectedCount').textContent = `${selectedIds.size} selected`;
             } else {
-                checkboxes.forEach(cb => selectedIds.delete(cb.value));
+                bar.classList.add('hidden');
             }
-            
-            checkboxes.forEach(cb => cb.checked = selectAll.checked);
-            updateBulkActionBar();
         }
 
         function clearSelection() {
             selectedIds.clear();
-            document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('selectAll').checked = false;
-            updateBulkActionBar();
+            updateBulkBar();
+            renderTable(currentMemories);
         }
 
-        function updateBulkActionBar() {
-            const bar = document.getElementById('bulkActionBar');
-            const count = document.getElementById('selectedCount');
-            
-            count.textContent = `${selectedIds.size} selected`;
-            
-            if (selectedIds.size > 0) {
-                bar.classList.add('active');
-            } else {
-                bar.classList.remove('active');
-            }
+        function toggleExpand(id) {
+            const row = document.getElementById(`expand-${id}`);
+            row.classList.toggle('hidden');
         }
 
-        async function bulkUpdateImportance() {
-            const importance = parseInt(document.getElementById('bulkImportanceSelect')?.value || '3');
-            
-            if (selectedIds.size === 0) return;
-
+        async function viewMemory(id) {
             try {
-                let success = 0;
-                for (const id of selectedIds) {
-                    const response = await fetch(`/api/memories/${id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ importance })
-                    });
-                    if (response.ok) success++;
-                }
-
-                showToast(`Updated ${success} memories`, 'success');
-                clearSelection();
-                await loadData();
+                const response = await fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`);
+                const data = await response.json();
+                const modal = document.getElementById('memoryModal');
+                const body = document.getElementById('modalBody');
+                
+                const title = data.content.substring(0, 50) + (data.content.length > 50 ? '...' : '');
+                body.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="text-lg font-semibold border-b pb-2 mb-4">${escapeHtml(title)}</div>
+                        <div><span class="px-2 py-1 rounded text-sm font-medium type-${data.type}">${data.type.replace('_', ' ')}</span></div>
+                        <div><strong>ID:</strong> <span class="font-mono text-sm">${data.id}</span></div>
+                        <div><strong>Content:</strong><pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded whitespace-pre-wrap">${escapeHtml(data.content)}</pre></div>
+                        <div><strong>Importance:</strong> ${data.importance}</div>
+                        <div><strong>Hit Count:</strong> ${data.hit_count || 0}</div>
+                        <div><strong>Recall Rate:</strong> ${data.recall_rate ? (data.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</div>
+                        <div><strong>Created:</strong> ${new Date(data.created_at).toLocaleString()}</div>
+                        <div><strong>Updated:</strong> ${data.updated_at ? new Date(data.updated_at).toLocaleString() : 'N/A'}</div>
+                        <div><strong>Expires:</strong> ${data.expires_at ? new Date(data.expires_at).toLocaleString() : 'Never'}</div>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
             } catch (err) {
-                console.error('Bulk update failed:', err);
-                showToast('Failed to update memories', 'error');
+                showToast('Failed to load memory: ' + err.message, 'error');
             }
         }
 
-        function showBulkDeleteConfirm() {
-            const modal = document.getElementById('modalBody');
-            const count = selectedIds.size;
+        function closeModal() {
+            document.getElementById('memoryModal').classList.add('hidden');
+        }
+
+        async function startInlineEdit(id) {
+            const memory = currentMemories.find(m => m.id === id);
+            if (!memory) return;
+
+            const row = document.getElementById(`expand-${id}`);
+            row.classList.remove('hidden');
             
-            modal.innerHTML = `
-                <div class="delete-confirmation">
-                    <p>Are you sure you want to delete <strong>${count}</strong> memories? This action cannot be undone.</p>
+            const content = `
+                <div class="inline-edit-row mt-4">
+                    <textarea id="edit-content-${id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700" rows="4">${escapeHtml(memory.content)}</textarea>
+                    <select id="edit-type-${id}" class="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700">
+                        <option value="decision" ${memory.type === 'decision' ? 'selected' : ''}>Decision</option>
+                        <option value="mistake" ${memory.type === 'mistake' ? 'selected' : ''}>Mistake</option>
+                        <option value="code_fact" ${memory.type === 'code_fact' ? 'selected' : ''}>Code Fact</option>
+                        <option value="pattern" ${memory.type === 'pattern' ? 'selected' : ''}>Pattern</option>
+                    </select>
+                    <input type="number" id="edit-importance-${id}" value="${memory.importance}" min="1" max="5" class="w-16 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700">
                 </div>
-                <div class="actions" style="justify-content: space-between; margin-top: 1rem;">
-                    <button class="btn-danger" onclick="bulkDelete()">Delete ${count} Memories</button>
-                    <button class="btn-secondary" onclick="closeModal(); clearSelection();">Cancel</button>
+                <div class="inline-edit-actions mt-2 flex gap-2">
+                    <button onclick="saveInlineEdit('${id}')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Save</button>
+                    <button onclick="cancelInlineEdit('${id}')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button>
                 </div>
             `;
             
-            document.getElementById('memoryModal').classList.add('active');
+            const existingEdit = document.getElementById(`inline-edit-${id}`);
+            if (existingEdit) existingEdit.remove();
+            
+            const editDiv = document.createElement('div');
+            editDiv.id = `inline-edit-${id}`;
+            editDiv.innerHTML = content;
+            
+            const td = row.querySelector('td');
+            td.appendChild(editDiv);
         }
 
-        async function bulkDelete() {
-            try {
-                let success = 0;
-                for (const id of selectedIds) {
-                    const response = await fetch(`/api/memories/${id}`, {
-                        method: 'DELETE'
-                    });
-                    if (response.ok) success++;
-                }
+        async function saveInlineEdit(id) {
+            const content = document.getElementById(`edit-content-${id}`).value;
+            const type = document.getElementById(`edit-type-${id}`).value;
+            const importance = parseInt(document.getElementById(`edit-importance-${id}`).value);
 
-                showToast(`Deleted ${success} memories`, 'success');
-                closeModal();
+            try {
+                const response = await fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, type, importance })
+                });
+                
+                if (!response.ok) throw new Error('Failed to update');
+                
+                showToast('Memory updated successfully', 'success');
+                loadData();
+            } catch (err) {
+                showToast('Failed to update: ' + err.message, 'error');
+            }
+        }
+
+        function cancelInlineEdit(id) {
+            const editDiv = document.getElementById(`inline-edit-${id}`);
+            if (editDiv) editDiv.remove();
+        }
+
+        async function bulkUpdateImportance() {
+            const importance = parseInt(document.getElementById('bulkImportanceSelect').value);
+            const ids = Array.from(selectedIds);
+
+            try {
+                await Promise.all(ids.map(id => 
+                    fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ importance })
+                    })
+                ));
+                
+                showToast(`Updated ${ids.length} memories`, 'success');
                 clearSelection();
-                await loadData();
+                loadData();
             } catch (err) {
-                console.error('Bulk delete failed:', err);
-                showToast('Failed to delete memories', 'error');
+                showToast('Bulk update failed: ' + err.message, 'error');
             }
         }
 
-        // Export data
-        function exportData(format) {
-            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
-            const typeFilter = document.getElementById('typeFilter').value;
-            const minImportance = parseInt(document.getElementById('minImportanceFilter').value) || 0;
-            const maxImportance = parseInt(document.getElementById('maxImportanceFilter').value) || 5;
-
-            let filtered = currentMemories;
+        async function showBulkDeleteConfirm() {
+            if (!confirm(`Delete ${selectedIds.size} selected memories? This cannot be undone.`)) return;
             
-            if (searchQuery) {
-                filtered = filtered.filter(m => 
-                    m.content.toLowerCase().includes(searchQuery) ||
-                    m.type.toLowerCase().includes(searchQuery)
-                );
-            }
-            
-            if (typeFilter) {
-                filtered = filtered.filter(m => m.type === typeFilter);
-            }
-            
-            if (minImportance > 0) {
-                filtered = filtered.filter(m => m.importance >= minImportance);
-            }
-            
-            if (maxImportance < 5) {
-                filtered = filtered.filter(m => m.importance <= maxImportance);
-            }
-
-            const repo = currentRepo || 'all';
-            const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
-            let content, filename, mimeType;
-
-            if (format === 'json') {
-                content = JSON.stringify(filtered, null, 2);
-                filename = `memories-${repo}-${date}.json`;
-                mimeType = 'application/json';
-            } else {
-                const headers = ['id', 'type', 'content', 'importance', 'hit_count', 'created_at'];
-                const csvRows = [headers.join(',')];
-                for (const m of filtered) {
-                    const row = [
-                        m.id,
-                        m.type,
-                        `"${m.content.replace(/"/g, '""')}"`,
-                        m.importance,
-                        m.hit_count || 0,
-                        m.created_at
-                    ];
-                    csvRows.push(row.join(','));
-                }
-                content = csvRows.join('\n');
-                filename = `memories-${repo}-${date}.csv`;
-                mimeType = 'text/csv';
-            }
-
-            const blob = new Blob([content], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-            
-            showToast(`Exported ${filtered.length} memories to ${format.toUpperCase()}`, 'success');
-        }
-
-        // Archive expired memories
-        async function archiveExpired() {
+            const ids = Array.from(selectedIds);
             try {
-                const response = await fetch('/api/memories/archive', { method: 'POST' });
-                const data = await response.json();
-                showToast(`Archived ${data.archived || 0} expired memories`, 'success');
-                await loadData();
+                await Promise.all(ids.map(id => 
+                    fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`, { method: 'DELETE' })
+                ));
+                
+                showToast(`Deleted ${ids.length} memories`, 'success');
+                clearSelection();
+                loadData();
             } catch (err) {
-                console.error('Archive failed:', err);
-                showToast('Failed to archive memories', 'error');
+                showToast('Bulk delete failed: ' + err.message, 'error');
             }
-        }
-
-        // Helper functions
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function formatDate(dateStr) {
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diff = now.getTime() - date.getTime();
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            
-            if (days === 0) return 'Today';
-            if (days === 1) return 'Yesterday';
-            if (days < 7) return `${days} days ago`;
-            return date.toLocaleDateString();
         }
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
+            const colors = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-blue-600' };
+            toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg max-w-xs`;
             toast.textContent = message;
             container.appendChild(toast);
-            
+
             setTimeout(() => {
                 toast.classList.add('removing');
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
 
-        (async function init() {
-            initTheme();
-            initColumnVisibility();
+        function exportData(format) {
+            const data = currentMemories.map(m => ({
+                id: m.id,
+                type: m.type,
+                content: m.content,
+                importance: m.importance,
+                hit_count: m.hit_count,
+                created_at: m.created_at
+            }));
+
+            let content, filename, type;
+            if (format === 'json') {
+                content = JSON.stringify(data, null, 2);
+                filename = 'memories.json';
+                type = 'application/json';
+            } else {
+                const headers = ['id', 'type', 'content', 'importance', 'hit_count', 'created_at'];
+                content = [headers.join(','), ...data.map(m => headers.map(h => `"${(m[h] || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n');
+                filename = 'memories.csv';
+                type = 'text/csv';
+            }
+
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Exported as ${format.toUpperCase()}`, 'success');
+        }
+
+        async function archiveExpired() {
+            try {
+                const response = await fetch('/api/archive-expired', { method: 'POST' });
+                const data = await response.json();
+                showToast(`Archived ${data.archived || 0} expired memories`, 'success');
+                loadData();
+            } catch (err) {
+                showToast('Archive failed: ' + err.message, 'error');
+            }
+        }
+
+        async function loadData() {
             await loadRepos();
-            await loadData();
-            startCountdown();
-            
-            // Refresh status every 5 seconds
-            setInterval(checkStatus, 5000);
-        })();
+            await loadStats();
+            await loadMemories();
+            await checkStatus();
+            await loadRecentActions();
+        }
+
+        document.getElementById('repoSelect').addEventListener('change', (e) => {
+            currentRepo = e.target.value;
+            localStorage.setItem('selectedRepo', currentRepo);
+            loadData();
+        });
+
+        initTheme();
+        renderRecentActions();
+        loadData();
+        startCountdown();
+        setInterval(checkStatus, 30000);
     </script>
 </body>
 </html>

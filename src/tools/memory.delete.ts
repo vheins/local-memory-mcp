@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 export const MemoryDeleteSchema = z.object({
   id: z.string().uuid()
@@ -10,7 +11,7 @@ export async function handleMemoryDelete(
   params: any,
   db: SQLiteStore,
   vectors: VectorStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemoryDeleteSchema.parse(params);
 
@@ -26,12 +27,11 @@ export async function handleMemoryDelete(
   // Delete from vector store
   await vectors.remove(validated.id);
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ success: true })
-      }
-    ]
-  };
+  // Log the delete action
+  db.logAction('delete', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
+
+  return createMcpResponse(
+    { success: true },
+    `Deleted memory ${validated.id.slice(0, 8)}...`
+  );
 }
