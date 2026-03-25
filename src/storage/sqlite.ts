@@ -43,6 +43,11 @@ export class SQLiteStore {
       CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
       CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance);
       CREATE INDEX IF NOT EXISTS idx_memories_hit_count ON memories(hit_count);
+      CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
+      CREATE INDEX IF NOT EXISTS idx_memories_updated_at ON memories(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_memories_repo_created_at ON memories(repo, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_memories_repo_hit_count ON memories(repo, hit_count DESC);
+      CREATE INDEX IF NOT EXISTS idx_memories_title ON memories(title);
 
       CREATE TABLE IF NOT EXISTS memory_summary (
         repo TEXT PRIMARY KEY,
@@ -227,6 +232,22 @@ export class SQLiteStore {
     return this.rowToMemoryEntry(row);
   }
 
+  getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
+    const stmt = this.db.prepare(`
+      SELECT *,
+        CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories
+      WHERE id = ?
+    `);
+    const row = stmt.get(id) as any;
+    if (!row) return null;
+
+    return {
+      ...this.rowToMemoryEntry(row),
+      recall_rate: row.recall_rate ?? 0,
+    };
+  }
+
   listRecent(limit: number = 10): Array<{ id: string; type: string; repo: string }> {
     const stmt = this.db.prepare(`
       SELECT id, type, repo
@@ -263,6 +284,20 @@ export class SQLiteStore {
     const stmt = this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo");
     const rows = stmt.all() as any[];
     return rows.map((row) => row.repo);
+  }
+
+  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
+    const stmt = this.db.prepare(`
+      SELECT
+        repo,
+        COUNT(*) AS memory_count,
+        MAX(COALESCE(updated_at, created_at)) AS last_updated_at
+      FROM memories
+      GROUP BY repo
+      ORDER BY last_updated_at DESC, repo ASC
+    `);
+
+    return stmt.all() as Array<{ repo: string; memory_count: number; last_updated_at: string | null }>;
   }
 
   incrementHitCount(id: string): void {
@@ -449,6 +484,95 @@ export class SQLiteStore {
     }));
   }
 
+  listMemoriesForDashboard(options: {
+    repo: string;
+    type?: string;
+    search?: string;
+    minImportance?: number;
+    maxImportance?: number;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  }): {
+    items: Array<
+      MemoryEntry & {
+        hit_count: number;
+        recall_count: number;
+        recall_rate: number;
+        last_used_at: string | null;
+      }
+    >;
+    total: number;
+  } {
+    const where: string[] = ["repo = ?"];
+    const params: unknown[] = [options.repo];
+
+    if (options.type) {
+      where.push("type = ?");
+      params.push(options.type);
+    }
+
+    if (options.search) {
+      where.push("(LOWER(COALESCE(title, '')) LIKE ? OR LOWER(content) LIKE ? OR LOWER(id) LIKE ?)");
+      const term = `%${options.search.toLowerCase()}%`;
+      params.push(term, term, term);
+    }
+
+    if (options.minImportance !== undefined) {
+      where.push("importance >= ?");
+      params.push(options.minImportance);
+    }
+
+    if (options.maxImportance !== undefined) {
+      where.push("importance <= ?");
+      params.push(options.maxImportance);
+    }
+
+    const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sortableColumns: Record<string, string> = {
+      id: "id",
+      title: "COALESCE(title, content)",
+      type: "type",
+      importance: "importance",
+      hit_count: "hit_count",
+      recall_rate: "recall_rate",
+      created_at: "created_at",
+      updated_at: "updated_at",
+    };
+
+    const sortBy = sortableColumns[options.sortBy ?? "hit_count"] ?? sortableColumns.hit_count;
+    const sortOrder = options.sortOrder === "asc" ? "ASC" : "DESC";
+    const limit = options.limit ?? 25;
+    const offset = options.offset ?? 0;
+
+    const countStmt = this.db.prepare(`SELECT COUNT(*) AS count FROM memories ${whereSql}`);
+    const total = (countStmt.get(...params) as { count: number } | undefined)?.count ?? 0;
+
+    const listStmt = this.db.prepare(`
+      SELECT *,
+        CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories
+      ${whereSql}
+      ORDER BY ${sortBy} ${sortOrder}, created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+
+    const rows = listStmt.all(...params, limit, offset) as any[];
+
+    return {
+      items: rows.map((row) => ({
+        ...this.rowToMemoryEntry(row),
+        hit_count: row.hit_count || 0,
+        recall_count: row.recall_count || 0,
+        recall_rate: row.recall_rate ?? 0,
+        last_used_at: row.last_used_at ?? null,
+      })),
+      total,
+    };
+  }
+
   upsertVectorEmbedding(memoryId: string, vector: number[] | string[]): void {
     const stmt = this.db.prepare(`
       INSERT INTO memory_vectors (memory_id, vector, updated_at)
@@ -546,7 +670,7 @@ export class SQLiteStore {
   }
 
   getRecentActions(repo?: string, limit = 20): Array<{ action: string; query?: string; memory_id?: string; result_count?: number; created_at: string }> {
-    let sql = `SELECT action, query, memory_id, created_at FROM action_log`;
+    let sql = `SELECT action, query, memory_id, result_count, created_at FROM action_log`;
     const params: string[] = [];
     
     if (repo) {
@@ -554,7 +678,7 @@ export class SQLiteStore {
       params.push(repo);
     }
     
-    sql += ` ORDER BY created_at DESC LIMIT ?`;
+    sql += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
     params.push(String(limit));
     
     const stmt = this.db.prepare(sql);

@@ -18,7 +18,10 @@ export async function handleMemoryUpdate(
   }
 
   // Update in SQLite
-  const updates: { content?: string; importance?: number } = {};
+  const updates: { title?: string; content?: string; importance?: number } = {};
+  if (validated.title !== undefined) {
+    updates.title = validated.title;
+  }
   if (validated.content !== undefined) {
     updates.content = validated.content;
   }

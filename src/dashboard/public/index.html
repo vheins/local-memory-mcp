@@ -22,6 +22,190 @@
         }
     </script>
     <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.58);
+            --glass-bg-strong: rgba(255, 255, 255, 0.76);
+            --glass-border: rgba(255, 255, 255, 0.34);
+            --glass-shadow: 0 28px 90px rgba(15, 23, 42, 0.14);
+            --glow-blue: rgba(56, 189, 248, 0.24);
+            --glow-cyan: rgba(34, 211, 238, 0.18);
+            --glow-violet: rgba(129, 140, 248, 0.14);
+            --panel-dark: rgba(7, 15, 28, 0.72);
+            --panel-dark-strong: rgba(6, 12, 24, 0.9);
+            --panel-dark-border: rgba(148, 163, 184, 0.12);
+            --panel-dark-highlight: rgba(125, 211, 252, 0.16);
+        }
+
+        html {
+            background:
+                radial-gradient(circle at 14% 16%, rgba(125, 211, 252, 0.4), transparent 0 24rem),
+                radial-gradient(circle at 88% 12%, rgba(59, 130, 246, 0.2), transparent 0 18rem),
+                radial-gradient(circle at 82% 82%, rgba(99, 102, 241, 0.14), transparent 0 20rem),
+                linear-gradient(180deg, #f4fbff 0%, #eef5ff 38%, #f7faff 100%);
+        }
+
+        body {
+            position: relative;
+            min-height: 100vh;
+            background: transparent !important;
+            color: #0f172a;
+        }
+
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            inset: auto;
+            pointer-events: none;
+            z-index: 0;
+            border-radius: 9999px;
+            filter: blur(70px);
+            opacity: 0.55;
+        }
+
+        body::before {
+            width: 28rem;
+            height: 28rem;
+            top: 3rem;
+            left: -7rem;
+            background: rgba(56, 189, 248, 0.16);
+        }
+
+        body::after {
+            width: 26rem;
+            height: 26rem;
+            right: -5rem;
+            bottom: 2rem;
+            background: rgba(99, 102, 241, 0.12);
+        }
+
+        .dark html {
+            background:
+                radial-gradient(circle at 14% 18%, rgba(34, 211, 238, 0.16), transparent 0 18rem),
+                radial-gradient(circle at 85% 12%, rgba(59, 130, 246, 0.14), transparent 0 18rem),
+                radial-gradient(circle at 78% 84%, rgba(99, 102, 241, 0.14), transparent 0 20rem),
+                linear-gradient(180deg, #020617 0%, #081120 34%, #0b1324 100%);
+        }
+
+        .dark body {
+            color: #e2e8f0;
+        }
+
+        .dark body::before {
+            background: rgba(34, 211, 238, 0.14);
+            opacity: 0.65;
+        }
+
+        .dark body::after {
+            background: rgba(99, 102, 241, 0.16);
+            opacity: 0.55;
+        }
+
+        header,
+        main .rounded-lg,
+        #bulkActionBar,
+        #memoryDrawer aside {
+            position: relative;
+            background: var(--glass-bg) !important;
+            border: 1px solid var(--glass-border) !important;
+            box-shadow: var(--glass-shadow);
+            backdrop-filter: blur(24px) saturate(1.15);
+            -webkit-backdrop-filter: blur(24px) saturate(1.15);
+        }
+
+        .dark header,
+        .dark main .rounded-lg,
+        .dark #bulkActionBar,
+        .dark #memoryDrawer aside {
+            background: var(--panel-dark) !important;
+            border-color: var(--panel-dark-border) !important;
+            box-shadow:
+                0 28px 90px rgba(2, 6, 23, 0.55),
+                inset 0 1px 0 rgba(148, 163, 184, 0.05);
+        }
+
+        header {
+            background: var(--glass-bg-strong) !important;
+        }
+
+        .dark header {
+            background: var(--panel-dark-strong) !important;
+        }
+
+        main,
+        header {
+            z-index: 1;
+        }
+
+        canvas {
+            filter: saturate(1.08);
+        }
+
+        input,
+        select,
+        textarea {
+            background: rgba(255, 255, 255, 0.68) !important;
+            border-color: rgba(148, 163, 184, 0.24) !important;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+        }
+
+        .dark input,
+        .dark select,
+        .dark textarea {
+            background: rgba(9, 17, 31, 0.86) !important;
+            border-color: rgba(125, 211, 252, 0.12) !important;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                0 0 0 1px rgba(2, 132, 199, 0.06);
+        }
+
+        button {
+            transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+        }
+
+        .dark button:hover {
+            box-shadow: 0 16px 36px rgba(2, 6, 23, 0.4);
+        }
+
+        button[class*="bg-blue-600"],
+        button[class*="bg-gray-600"],
+        button[class*="bg-red-600"] {
+            border: 1px solid rgba(255, 255, 255, 0.16);
+        }
+
+        table {
+            border-spacing: 0 0.35rem;
+            border-collapse: separate;
+        }
+
+        tbody tr {
+            background: rgba(255, 255, 255, 0.52);
+        }
+
+        .dark tbody tr {
+            background: rgba(8, 15, 28, 0.8);
+            box-shadow: inset 0 1px 0 rgba(125, 211, 252, 0.04);
+        }
+
+        thead th {
+            background: rgba(255, 255, 255, 0.72) !important;
+            backdrop-filter: blur(18px) saturate(1.1);
+            -webkit-backdrop-filter: blur(18px) saturate(1.1);
+        }
+
+        .dark thead th {
+            background: rgba(5, 11, 22, 0.92) !important;
+            color: #cbd5e1;
+            border-bottom-color: rgba(125, 211, 252, 0.12);
+        }
+
         .dark [data-theme="light"] { display: none; }
         :not(.dark) [data-theme="dark"] { display: none; }
         
@@ -55,6 +239,463 @@
         }
         .toast.removing { animation: slideOut 0.3s ease forwards; }
         .toast { animation: slideIn 0.3s ease; }
+        .memory-preview {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .table-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 9999px;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .metric-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2rem;
+            border-radius: 9999px;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .sticky-table-header thead th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        .sticky-actions {
+            position: sticky;
+            right: 0;
+            z-index: 4;
+            background: rgba(255, 255, 255, 0.78);
+        }
+        .dark .sticky-actions {
+            background: rgba(5, 11, 22, 0.94);
+        }
+        .app-shell {
+            position: relative;
+            z-index: 1;
+        }
+        .app-layout {
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+            gap: 1.5rem;
+            align-items: start;
+        }
+        .app-layout.repo-sidebar-collapsed {
+            grid-template-columns: 88px minmax(0, 1fr);
+        }
+        .repo-sidebar {
+            position: sticky;
+            top: 6.5rem;
+            max-height: calc(100vh - 8rem);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            transition: width 180ms ease, padding 180ms ease, transform 180ms ease;
+        }
+        .repo-sidebar-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 0.35rem;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(56, 189, 248, 0.65) rgba(255, 255, 255, 0.08);
+        }
+        .repo-sidebar-list::-webkit-scrollbar {
+            width: 12px;
+        }
+        .repo-sidebar-list::-webkit-scrollbar-track {
+            background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04));
+            border-radius: 9999px;
+            border: 1px solid rgba(255,255,255,0.18);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+        }
+        .repo-sidebar-list::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(34,211,238,0.92), rgba(59,130,246,0.78));
+            border-radius: 9999px;
+            border: 2px solid rgba(245, 250, 255, 0.72);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.42),
+                0 6px 18px rgba(56, 189, 248, 0.28);
+        }
+        .repo-sidebar-list::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(103,232,249,0.96), rgba(37,99,235,0.86));
+        }
+        .repo-sidebar-list::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+        .dark .repo-sidebar-list {
+            scrollbar-color: rgba(34, 211, 238, 0.72) rgba(15, 23, 42, 0.24);
+        }
+        .dark .repo-sidebar-list::-webkit-scrollbar-track {
+            background: linear-gradient(180deg, rgba(15,23,42,0.72), rgba(8,15,28,0.42));
+            border-radius: 9999px;
+            border: 1px solid rgba(125, 211, 252, 0.08);
+            box-shadow:
+                inset 0 0 0 1px rgba(125, 211, 252, 0.04),
+                inset 0 10px 24px rgba(2, 6, 23, 0.24);
+        }
+        .dark .repo-sidebar-list::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(34,211,238,0.86), rgba(79,70,229,0.72));
+            border: 2px solid rgba(8, 15, 28, 0.86);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.14),
+                0 8px 22px rgba(34, 211, 238, 0.18);
+        }
+        .dark .repo-sidebar-list::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(103,232,249,0.92), rgba(99,102,241,0.82));
+        }
+        .repo-collapse-trigger {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(255,255,255,0.42);
+        }
+        .dark .repo-collapse-trigger {
+            background: rgba(8, 15, 28, 0.76);
+            border-color: rgba(125, 211, 252, 0.12);
+        }
+        .repo-collapsed-summary {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.85rem;
+        }
+        .repo-collapsed-summary-button {
+            position: relative;
+            width: 3rem;
+            height: 3rem;
+            border-radius: 1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            background: linear-gradient(135deg, rgba(34,211,238,0.96), rgba(59,130,246,0.78));
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.32),
+                0 18px 32px rgba(56, 189, 248, 0.2);
+        }
+        .repo-collapsed-summary-count {
+            position: absolute;
+            right: -0.15rem;
+            bottom: -0.15rem;
+            min-width: 1.15rem;
+            height: 1.15rem;
+            padding: 0 0.22rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 800;
+            color: #0f172a;
+            background: rgba(255,255,255,0.9);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+        }
+        .repo-sidebar-mobile {
+            display: none;
+        }
+        .repo-item {
+            position: relative;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            padding: 0.85rem 0.95rem;
+            border-radius: 1rem;
+            border: 1px solid transparent;
+            background: rgba(255,255,255,0.3);
+            text-align: left;
+        }
+        .repo-item:hover {
+            transform: translateY(0);
+            border-color: rgba(125, 211, 252, 0.28);
+            background: rgba(255,255,255,0.46);
+        }
+        .repo-item.active {
+            border-color: rgba(56, 189, 248, 0.34);
+            background: linear-gradient(135deg, rgba(56,189,248,0.16), rgba(99,102,241,0.12));
+            box-shadow: 0 18px 42px rgba(56, 189, 248, 0.16);
+        }
+        .repo-item.pinned-item {
+            cursor: grab;
+        }
+        .repo-item.dragging {
+            opacity: 0.58;
+            transform: scale(0.985);
+        }
+        .repo-item.drag-target {
+            border-color: rgba(14, 165, 233, 0.42);
+            box-shadow:
+                inset 0 0 0 1px rgba(56, 189, 248, 0.22),
+                0 18px 38px rgba(56, 189, 248, 0.12);
+        }
+        .repo-drag-handle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(100, 116, 139, 0.9);
+            cursor: grab;
+            flex-shrink: 0;
+        }
+        .dark .repo-drag-handle {
+            color: rgba(148, 163, 184, 0.82);
+        }
+        .repo-item-pin {
+            position: absolute;
+            top: 0.55rem;
+            right: 0.55rem;
+            width: 1.7rem;
+            height: 1.7rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(71, 85, 105, 0.82);
+            background: rgba(255,255,255,0.68);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            opacity: 0;
+            transition: opacity 160ms ease, transform 160ms ease, color 160ms ease, background 160ms ease;
+        }
+        .repo-item:hover .repo-item-pin,
+        .repo-item-pin.pinned {
+            opacity: 1;
+        }
+        .repo-item-pin:hover {
+            transform: scale(1.05);
+            color: #0f172a;
+            background: rgba(255,255,255,0.92);
+        }
+        .repo-item-pin.pinned {
+            color: #f59e0b;
+            background: rgba(255,255,255,0.94);
+            box-shadow: 0 10px 22px rgba(245, 158, 11, 0.18);
+        }
+        .dark .repo-item {
+            background: rgba(8, 15, 28, 0.72);
+        }
+        .dark .repo-item:hover {
+            background: rgba(10, 18, 32, 0.82);
+            border-color: rgba(125, 211, 252, 0.16);
+        }
+        .dark .repo-item-pin {
+            color: rgba(148, 163, 184, 0.92);
+            background: rgba(8, 15, 28, 0.88);
+            border-color: rgba(125, 211, 252, 0.08);
+        }
+        .dark .repo-item-pin:hover {
+            color: #e2e8f0;
+            background: rgba(15, 23, 42, 0.95);
+        }
+        .dark .repo-item-pin.pinned {
+            color: #fbbf24;
+            background: rgba(15, 23, 42, 0.96);
+            box-shadow: 0 10px 20px rgba(245, 158, 11, 0.12);
+        }
+        .dark .repo-item.active {
+            background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(79,70,229,0.18));
+            border-color: rgba(125, 211, 252, 0.2);
+            box-shadow: 0 20px 44px rgba(2, 132, 199, 0.2);
+        }
+        .repo-avatar {
+            width: 2.35rem;
+            height: 2.35rem;
+            border-radius: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: white;
+            background: linear-gradient(135deg, rgba(34,211,238,0.94), rgba(59,130,246,0.76));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.34);
+        }
+        .repo-active-dot {
+            position: absolute;
+            right: 0.72rem;
+            top: 50%;
+            width: 0.55rem;
+            height: 0.55rem;
+            border-radius: 9999px;
+            background: #22c55e;
+            box-shadow:
+                0 0 0 3px rgba(255,255,255,0.86),
+                0 0 18px rgba(34, 197, 94, 0.45);
+            transform: translateY(-50%);
+        }
+        .dark .repo-active-dot {
+            box-shadow:
+                0 0 0 3px rgba(8,15,28,0.92),
+                0 0 18px rgba(74, 222, 128, 0.36);
+        }
+        .app-layout.repo-sidebar-collapsed .repo-sidebar {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-sidebar-header-copy,
+        .app-layout.repo-sidebar-collapsed #repoSearchInput,
+        .app-layout.repo-sidebar-collapsed #repoCountBadge {
+            display: none;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-sidebar-header {
+            justify-content: center;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-collapsed-summary {
+            display: flex;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-item {
+            justify-content: center;
+            padding: 0.7rem 0.4rem;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-item .repo-item-copy {
+            display: none;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-item .repo-drag-handle {
+            display: none;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-item .repo-item-pin {
+            display: none;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-item .repo-active-dot {
+            right: 0.4rem;
+            top: auto;
+            bottom: 0.4rem;
+            transform: none;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-avatar {
+            width: 2.6rem;
+            height: 2.6rem;
+            border-radius: 0.95rem;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-sidebar-list {
+            padding-right: 0;
+            scrollbar-width: none;
+        }
+        .app-layout.repo-sidebar-collapsed .repo-sidebar-list::-webkit-scrollbar {
+            width: 0;
+        }
+        .repo-group + .repo-group {
+            margin-top: 1rem;
+        }
+        .repo-group-label {
+            margin-bottom: 0.45rem;
+            padding: 0 0.35rem;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: rgb(100 116 139);
+        }
+        .dark .repo-group-label {
+            color: rgb(148 163 184);
+        }
+        .repo-pinned-mark {
+            position: absolute;
+            left: -0.1rem;
+            top: -0.08rem;
+            width: 0.95rem;
+            height: 0.95rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.52rem;
+            color: #0f172a;
+            background: rgba(255,255,255,0.92);
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+        }
+        @media (max-width: 1023px) {
+            .app-layout {
+                grid-template-columns: 1fr;
+            }
+            .repo-sidebar-desktop {
+                display: none;
+            }
+            .repo-sidebar-mobile {
+                display: block;
+            }
+        }
+        .drawer-open {
+            overflow: hidden;
+        }
+        .glass-panel {
+            animation: panelFadeIn 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .table-animate tbody tr {
+            animation: rowRise 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+            animation-fill-mode: both;
+        }
+        .table-animate tbody tr:nth-child(1) { animation-delay: 30ms; }
+        .table-animate tbody tr:nth-child(2) { animation-delay: 60ms; }
+        .table-animate tbody tr:nth-child(3) { animation-delay: 90ms; }
+        .table-animate tbody tr:nth-child(4) { animation-delay: 120ms; }
+        .table-animate tbody tr:nth-child(5) { animation-delay: 150ms; }
+        .table-animate tbody tr:nth-child(6) { animation-delay: 180ms; }
+        .recent-action-item {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.22);
+            background: rgba(255,255,255,0.44);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+        .dark .recent-action-item {
+            background: linear-gradient(180deg, rgba(7, 15, 28, 0.84), rgba(10, 18, 32, 0.78));
+            border-color: rgba(125, 211, 252, 0.08);
+            box-shadow: inset 0 1px 0 rgba(125, 211, 252, 0.04);
+        }
+        .recent-action-item::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 3px;
+            background: linear-gradient(180deg, rgba(34,211,238,0.95), rgba(56,189,248,0.25));
+        }
+        @keyframes panelFadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes rowRise {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .skeleton {
+            position: relative;
+            overflow: hidden;
+            background: rgb(229 231 235);
+            border-radius: 0.5rem;
+        }
+        .dark .skeleton {
+            background: rgb(55 65 81);
+        }
+        .skeleton::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            transform: translateX(-100%);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+            animation: shimmer 1.4s infinite;
+        }
+        @keyframes shimmer {
+            100% { transform: translateX(100%); }
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
@@ -64,16 +705,14 @@
             <h1 class="text-xl md:text-2xl font-semibold">MCP Memory Dashboard</h1>
             
             <div class="flex flex-wrap items-center gap-3 md:gap-4">
-                <div class="flex items-center gap-2">
-                    <span id="memoryBadge" class="px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">0 memories</span>
+                <div class="flex items-center gap-2 px-3 py-2 rounded-full bg-white/35 dark:bg-slate-900/40 border border-white/30 dark:border-slate-700/60">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Repo:</span>
+                    <span id="currentRepoLabel" class="text-sm font-semibold text-gray-900 dark:text-gray-100">Loading...</span>
                 </div>
-                
-                <div class="flex items-center gap-2">
-                    <label class="text-sm text-gray-600 dark:text-gray-400">Repo:</label>
-                    <select id="repoSelect" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
-                        <option value="">Loading...</option>
-                    </select>
-                </div>
+
+                <button id="repoNavToggle" class="repo-sidebar-mobile px-3 py-2 rounded-full bg-white/35 dark:bg-slate-900/40 border border-white/30 dark:border-slate-700/60 text-sm font-medium">
+                    Repositories
+                </button>
                 
                 <div class="flex items-center gap-2">
                     <span id="syncStatus" class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Synced 0s ago</span>
@@ -93,7 +732,37 @@
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 md:px-8 py-6">
+    <main class="app-shell max-w-[1600px] mx-auto px-4 md:px-8 py-6">
+        <div id="appLayout" class="app-layout">
+            <aside class="repo-sidebar repo-sidebar-desktop rounded-2xl p-4 glass-panel">
+                <div class="repo-sidebar-header flex items-center justify-between mb-4 gap-3">
+                    <div class="repo-sidebar-header-copy min-w-0">
+                        <div class="text-xs uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Repositories</div>
+                        <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">Context Switcher</div>
+                        <div id="memorySummaryLabel" class="mt-1 text-xs text-gray-500 dark:text-gray-400">0 memories indexed</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="repoCountBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">0</span>
+                        <button id="repoSidebarCollapseToggle" class="repo-collapse-trigger" title="Collapse repositories" aria-label="Collapse repositories">
+                            <svg id="repoSidebarCollapseIcon" class="w-4 h-4 text-gray-700 dark:text-gray-200 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="repoCollapsedSummary" class="repo-collapsed-summary">
+                    <button id="repoCollapsedSummaryButton" class="repo-collapsed-summary-button" title="Active repository">
+                        <span id="repoCollapsedSummaryInitials">RP</span>
+                        <span id="repoCollapsedSummaryCount" class="repo-collapsed-summary-count">0</span>
+                    </button>
+                </div>
+                <input id="repoSearchInput" type="text" placeholder="Search repositories..." class="w-full px-3 py-2.5 rounded-xl text-sm mb-4">
+                <div id="repoSidebarList" class="repo-sidebar-list space-y-2">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 px-3 py-4">Loading repositories...</div>
+                </div>
+            </aside>
+
+            <div class="min-w-0">
         <!-- Summary Cards + Charts + Recent Queries (2/3 + 1/3) -->
         <div class="grid lg:grid-cols-3 gap-6 mb-6" style="min-height: 60vh;">
             <!-- Main Content: 2/3 -->
@@ -173,7 +842,7 @@
         <!-- Memory Table Full Width -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 md:p-6 mb-6">
             <div class="flex flex-wrap gap-3 mb-4">
-                <input type="text" id="searchInput" placeholder="Search memories..." class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm w-48">
+                <input type="text" id="searchInput" placeholder="Search title, content, or ID..." class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm w-60">
                 
                 <div class="flex items-center gap-2">
                     <label class="text-sm text-gray-600 dark:text-gray-400">Type:</label>
@@ -240,17 +909,39 @@
                 </div>
             </div>
         </div>
+            </div>
+        </div>
     </main>
 
-    <!-- Memory Detail Modal -->
-    <div id="memoryModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold">Memory Detail</h2>
-                <button onclick="closeModal()" class="text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+    <div id="memoryDrawer" class="hidden fixed inset-0 z-40">
+        <div class="absolute inset-0 bg-black/40" onclick="closeDrawer()"></div>
+        <aside class="absolute right-0 top-0 h-full w-full max-w-xl bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
+            <div class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Memory Details</div>
+                    <h2 id="drawerTitle" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Loading...</h2>
+                </div>
+                <button onclick="closeDrawer()" class="text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
             </div>
-            <div id="modalBody"></div>
-        </div>
+            <div id="drawerBody" class="p-6"></div>
+        </aside>
+    </div>
+
+    <div id="repoSidebarDrawer" class="hidden fixed inset-0 z-40 repo-sidebar-mobile">
+        <div class="absolute inset-0 bg-black/40" onclick="closeRepoSidebarDrawer()"></div>
+        <aside class="absolute left-0 top-0 h-full w-full max-w-sm bg-white dark:bg-gray-900 shadow-2xl border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
+            <div class="sticky top-0 z-10 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 px-5 py-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Repositories</div>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">Context Switcher</div>
+                </div>
+                <button onclick="closeRepoSidebarDrawer()" class="text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+            </div>
+            <div class="p-4">
+                <input id="repoSearchInputMobile" type="text" placeholder="Search repositories..." class="w-full px-3 py-2.5 rounded-xl text-sm mb-4">
+                <div id="repoSidebarListMobile" class="repo-sidebar-list space-y-2"></div>
+            </div>
+        </aside>
     </div>
 
     <!-- Toast Container -->
@@ -271,760 +962,6 @@
         <button onclick="clearSelection()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">Clear</button>
     </div>
 
-    <script>
-        let currentRepo = null;
-        let currentMemories = [];
-        let currentPage = 1;
-        let pageSize = 10;
-        let totalPages = 1;
-        let selectedIds = new Set();
-        let currentPaginatedData = [];
-        let charts = {};
-        let lastSyncTime = Date.now();
-        let countdownSeconds = 30;
-        let countdownInterval = null;
-        let recentActions = [];
-
-        async function loadRecentActions() {
-            try {
-                const url = currentRepo 
-                    ? `/api/recent-actions?repo=${encodeURIComponent(currentRepo)}&limit=20`
-                    : '/api/recent-actions?limit=20';
-                const response = await fetch(url);
-                const data = await response.json();
-                recentActions = data.actions || [];
-                renderRecentActions();
-            } catch (err) {
-                console.error('Failed to load recent actions:', err);
-            }
-        }
-
-        function formatActionDate(dateStr) {
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diff = Math.floor((now - date) / 1000);
-            if (diff < 60) return `${diff}s ago`;
-            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-            return date.toLocaleDateString();
-        }
-
-        function getActionIcon(action) {
-            const icons = {
-                search: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>',
-                read: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>',
-                write: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>',
-                update: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>',
-                delete: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>'
-            };
-            return icons[action] || icons.search;
-        }
-
-        function getActionColor(action) {
-            const colors = {
-                search: 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400',
-                read: 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400',
-                write: 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400',
-                update: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400',
-                delete: 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400'
-            };
-            return colors[action] || colors.search;
-        }
-
-        function renderRecentActions() {
-            const container = document.getElementById('recentQueries');
-            if (recentActions.length === 0) {
-                container.innerHTML = '<div class="text-gray-500 text-sm">No recent actions</div>';
-                return;
-            }
-            container.innerHTML = recentActions.map((action) => `
-                <div class="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    <div class="w-8 h-8 rounded-full ${getActionColor(action.action)} flex items-center justify-center flex-shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            ${getActionIcon(action.action)}
-                        </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-gray-800 dark:text-gray-200 capitalize">${action.action}</p>
-                        <p class="text-xs text-gray-500 truncate">${action.query || (action.memory_id ? 'Memory: ' + action.memory_id.substring(0, 8) : '-')}</p>
-                        <p class="text-xs text-gray-400">${formatActionDate(action.created_at)}</p>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function searchFromRecent(query) {
-            document.getElementById('searchInput').value = query;
-            renderTable(currentMemories);
-        }
-
-        function initTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
-            document.documentElement.classList.toggle('dark', saved === 'dark');
-            document.getElementById('themeToggle').textContent = saved === 'dark' ? '☀️' : '🌙';
-        }
-
-        function startCountdown() {
-            if (countdownInterval) clearInterval(countdownInterval);
-            countdownSeconds = 30;
-            updateCountdown();
-            
-            countdownInterval = setInterval(() => {
-                countdownSeconds--;
-                if (countdownSeconds <= 0) {
-                    countdownSeconds = 30;
-                    loadData();
-                }
-                updateCountdown();
-            }, 1000);
-        }
-
-        function updateCountdown() {
-            const fill = document.getElementById('countdownFill');
-            const status = document.getElementById('syncStatus');
-            const percent = (countdownSeconds / 30) * 100;
-            fill.style.width = percent + '%';
-            
-            if (countdownSeconds <= 5) {
-                fill.style.background = '#ef4444';
-            } else if (countdownSeconds <= 10) {
-                fill.style.background = '#f97316';
-            } else {
-                fill.style.background = '#3b82f6';
-            }
-            
-            status.textContent = `Synced ${countdownSeconds}s ago`;
-        }
-
-        document.getElementById('themeToggle').addEventListener('click', () => {
-            const isDark = document.documentElement.classList.toggle('dark');
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-
-            if (e.key === 'Escape') closeModal();
-            else if (e.key === 'r' || e.key === 'R') loadData();
-            else if (e.key === '/') {
-                e.preventDefault();
-                document.getElementById('searchInput')?.focus();
-            }
-        });
-
-        async function checkStatus() {
-            try {
-                const response = await fetch('/api/health');
-                const data = await response.json();
-                const dot = document.getElementById('statusDot');
-                const text = document.getElementById('statusText');
-                
-                if (data.connected) {
-                    dot.classList.remove('bg-gray-400');
-                    dot.classList.add('bg-green-500');
-                    text.textContent = 'Connected';
-                } else {
-                    dot.classList.remove('bg-green-500');
-                    dot.classList.add('bg-gray-400');
-                    text.textContent = 'Disconnected';
-                }
-
-                const badge = document.getElementById('memoryBadge');
-                badge.textContent = `${data.memoryCount || 0} memories`;
-            } catch (err) {
-                console.error('Status check failed:', err);
-                const dot = document.getElementById('statusDot');
-                dot.classList.remove('bg-green-500');
-                dot.classList.add('bg-gray-400');
-                document.getElementById('statusText').textContent = 'Error';
-            }
-        }
-
-        async function loadRepos() {
-            try {
-                const response = await fetch('/api/repos');
-                const data = await response.json();
-                const select = document.getElementById('repoSelect');
-                
-                select.innerHTML = '';
-                
-                if (data.repos && data.repos.length > 0) {
-                    data.repos.forEach(repo => {
-                        const option = document.createElement('option');
-                        option.value = repo;
-                        option.textContent = repo;
-                        select.appendChild(option);
-                    });
-                    const savedRepo = localStorage.getItem('selectedRepo');
-                    if (savedRepo && data.repos.includes(savedRepo)) {
-                        currentRepo = savedRepo;
-                    } else if (!currentRepo) {
-                        currentRepo = data.repos[0];
-                    }
-                    select.value = currentRepo;
-                    localStorage.setItem('selectedRepo', currentRepo);
-                } else {
-                    select.innerHTML = '<option value="">No repositories found</option>';
-                    currentRepo = null;
-                }
-            } catch (err) {
-                console.error('Failed to load repos:', err);
-                document.getElementById('repoSelect').innerHTML = '<option value="">Error loading repos</option>';
-            }
-        }
-
-        async function loadStats() {
-            try {
-                const url = currentRepo ? `/api/stats?repo=${encodeURIComponent(currentRepo)}` : '/api/stats';
-                const response = await fetch(url);
-                const data = await response.json();
-
-                document.getElementById('totalCount').textContent = data.total;
-                document.getElementById('avgImportance').textContent = data.avgImportance || '0';
-                document.getElementById('totalHits').textContent = data.totalHitCount || '0';
-                document.getElementById('expiringSoon').textContent = data.expiringSoon || '0';
-                document.getElementById('codeFactCount').textContent = data.byType?.code_fact || 0;
-                document.getElementById('decisionCount').textContent = data.byType?.decision || 0;
-                document.getElementById('mistakeCount').textContent = data.byType?.mistake || 0;
-                document.getElementById('patternCount').textContent = data.byType?.pattern || 0;
-
-                updateTypeChart(data.byType);
-                updateTimeSeriesChart(data.timeSeries || {});
-                updateScatterChart(data.scatterData || []);
-                updateTopMemoriesChart(data.topMemories);
-            } catch (err) {
-                console.error('Failed to load stats:', err);
-            }
-        }
-
-        function updateTypeChart(byType) {
-            const ctx = document.getElementById('typeChart');
-            if (!window.Chart) {
-                ctx.parentElement.innerHTML = '<div class="p-8 text-center text-gray-500">Chart.js not available</div>';
-                return;
-            }
-            if (charts.typeChart) charts.typeChart.destroy();
-
-            const types = Object.keys(byType || {});
-            const counts = Object.values(byType || {});
-
-            charts.typeChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: types.map(t => t.replace('_', ' ')),
-                    datasets: [{ data: counts, backgroundColor: ['#1976d2', '#d32f2f', '#7b1fa2', '#388e3c'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
-
-        function updateTopMemoriesChart(memories = []) {
-            const ctx = document.getElementById('topMemoriesChart');
-            if (!window.Chart) {
-                ctx.parentElement.innerHTML = '<div class="p-8 text-center text-gray-500">Chart.js not available</div>';
-                return;
-            }
-            if (charts.topMemoriesChart) charts.topMemoriesChart.destroy();
-
-            charts.topMemoriesChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: memories.map((m, i) => `#${i + 1}`),
-                    datasets: [{ label: 'Hit Count', data: memories.map(m => m.hit_count || m.importance), backgroundColor: '#3b82f6' }]
-                },
-                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
-            });
-        }
-
-        function updateTimeSeriesChart(timeSeries) {
-            const ctx = document.getElementById('timeSeriesChart');
-            if (!window.Chart) return;
-            if (charts.timeSeriesChart) charts.timeSeriesChart.destroy();
-
-            const labels = Object.keys(timeSeries).slice(-14);
-            const data = Object.values(timeSeries).slice(-14);
-
-            charts.timeSeriesChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{ label: 'Memories Created', data, borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }]
-                },
-                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
-            });
-        }
-
-        function updateScatterChart(scatterData) {
-            const ctx = document.getElementById('scatterChart');
-            if (!window.Chart) return;
-            if (charts.scatterChart) charts.scatterChart.destroy();
-
-            charts.scatterChart = new Chart(ctx, {
-                type: 'scatter',
-                data: {
-                    datasets: [{ label: 'Memories', data: scatterData, backgroundColor: '#9333ea' }]
-                },
-                options: { responsive: true, maintainAspectRatio: true, scales: { x: { title: { display: true, text: 'Importance' }, min: 0, max: 6 }, y: { title: { display: true, text: 'Hit Count' }, beginAtZero: true } } }
-            });
-        }
-
-        async function loadMemories() {
-            if (!currentRepo) {
-                document.getElementById('tableContainer').innerHTML = '<div class="text-gray-500 py-12">Please select a repository</div>';
-                return;
-            }
-
-            try {
-                const typeFilter = document.getElementById('typeFilter').value;
-                let url = `/api/memories?repo=${encodeURIComponent(currentRepo)}`;
-                if (typeFilter) url += `&type=${typeFilter}`;
-
-                const response = await fetch(url);
-                const data = await response.json();
-                currentMemories = data.memories;
-                renderTable(currentMemories);
-            } catch (err) {
-                console.error('Failed to load memories:', err);
-                document.getElementById('errorMessage').innerHTML = `<div class="p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded mb-4">Failed to load memories: ${err.message}</div>`;
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function formatDate(dateStr) {
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diff = Math.floor((now - date) / 1000);
-            if (diff < 60) return `${diff}s ago`;
-            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-            return `${Math.floor(diff / 86400)}d ago`;
-        }
-
-        function renderTable(memories) {
-            const container = document.getElementById('tableContainer');
-            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
-            const typeFilter = document.getElementById('typeFilter').value;
-            const minImportance = parseInt(document.getElementById('minImportanceFilter').value) || 0;
-            const maxImportance = parseInt(document.getElementById('maxImportanceFilter').value) || 5;
-
-            let filtered = memories;
-            
-            if (searchQuery) {
-                filtered = filtered.filter(m => m.content.toLowerCase().includes(searchQuery) || m.type.toLowerCase().includes(searchQuery));
-            }
-            if (typeFilter) filtered = filtered.filter(m => m.type === typeFilter);
-            if (minImportance > 0) filtered = filtered.filter(m => m.importance >= minImportance);
-            if (maxImportance < 5) filtered = filtered.filter(m => m.importance <= maxImportance);
-
-            updatePaginationControls(filtered.length);
-            const start = (currentPage - 1) * pageSize;
-            currentPaginatedData = filtered.slice(start, start + pageSize);
-            const paginated = currentPaginatedData;
-
-            if (filtered.length === 0) {
-                container.innerHTML = '<div class="text-gray-500 py-12">No memories found matching your filters</div>';
-                return;
-            }
-
-            function highlightText(text, query) {
-                if (!query) return escapeHtml(text);
-                const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-                return escapeHtml(text).replace(regex, '<mark>$1</mark>');
-            }
-
-            const table = document.createElement('div');
-            table.className = 'overflow-x-auto';
-            table.innerHTML = `
-                <table class="w-full border-collapse">
-                    <thead>
-                        <tr class="border-b-2 border-gray-200 dark:border-gray-700">
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('id')" data-sort="id">ID <span class="sort-icon"></span></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Content Preview</th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('importance')" data-sort="importance">Importance <span class="sort-icon"></span></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('hit_count')" data-sort="hit_count">Hit Count <span class="sort-icon"></span></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('recall_rate')" data-sort="recall_rate">Recall Rate <span class="sort-icon"></span></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('created_at')" data-sort="created_at">Created <span class="sort-icon"></span></th>
-                            <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${paginated.map(m => `
-                            <tr id="row-${m.id}" class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                <td class="p-3"><input type="checkbox" class="row-checkbox" value="${m.id}" ${selectedIds.has(m.id) ? 'checked' : ''} onchange="toggleSelect('${m.id}')"></td>
-                                <td class="p-3 font-mono text-sm">${m.id.substring(0, 8)}</td>
-                                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-medium type-${m.type}">${m.type.replace('_', ' ')}</span></td>
-                                <td class="p-3 max-w-xs truncate">${highlightText(m.content, searchQuery)}</td>
-                                <td class="p-3">${m.importance}</td>
-                                <td class="p-3">${m.hit_count || 0}</td>
-                                <td class="p-3">${m.recall_rate ? (m.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</td>
-                                <td class="p-3 text-sm text-gray-500">${formatDate(m.created_at)}</td>
-                                <td class="p-3">
-                                    <div class="flex gap-1">
-                                        <button onclick="toggleExpand('${m.id}')" class="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 text-xs" title="Expand">▼</button>
-                                        <button onclick="viewMemory('${m.id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">View</button>
-                                        <button onclick="startInlineEdit('${m.id}')" class="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300 dark:hover:bg-gray-500 text-xs" title="Edit">✏️</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr id="expand-${m.id}" class="expanded-row hidden">
-                                <td colspan="9" class="p-4 bg-gray-50 dark:bg-gray-700/50 border-b-2 border-gray-200 dark:border-gray-600">
-                                    <h4 class="font-semibold mb-2">Full Content:</h4>
-                                    <pre class="whitespace-pre-wrap mb-4">${escapeHtml(m.content)}</pre>
-                                    <h4 class="font-semibold mb-2">Metadata:</h4>
-                                    <p><strong>ID:</strong> ${m.id}</p>
-                                    <p><strong>Scope:</strong> ${m.scope?.repo || 'N/A'}</p>
-                                    <p><strong>Created:</strong> ${new Date(m.created_at).toLocaleString()}</p>
-                                    <p><strong>Updated:</strong> ${m.updated_at ? new Date(m.updated_at).toLocaleString() : 'N/A'}</p>
-                                    <p><strong>Hit Count:</strong> ${m.hit_count || 0}</p>
-                                    <p><strong>Recall Count:</strong> ${m.recall_count || 0}</p>
-                                    <p><strong>Expires:</strong> ${m.expires_at ? new Date(m.expires_at).toLocaleString() : 'Never'}</p>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = '';
-            container.appendChild(table);
-        }
-
-        let searchDebounce = null;
-        document.getElementById('searchInput').addEventListener('input', () => {
-            if (searchDebounce) clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(() => {
-                renderTable(currentMemories);
-            }, 300);
-        });
-
-        ['typeFilter', 'minImportanceFilter', 'maxImportanceFilter'].forEach(id => {
-            document.getElementById(id).addEventListener('change', () => {
-                currentPage = 1;
-                renderTable(currentMemories);
-            });
-        });
-
-        function changePageSize() {
-            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
-            currentPage = 1;
-            renderTable(currentMemories);
-        }
-
-        function goToPage(page) {
-            if (page < 1 || page > totalPages) return;
-            currentPage = page;
-            renderTable(currentMemories);
-        }
-
-        function updatePaginationControls(totalItems) {
-            totalPages = Math.ceil(totalItems / pageSize) || 1;
-            if (currentPage > totalPages) currentPage = totalPages;
-            
-            document.getElementById('firstPageBtn').disabled = currentPage <= 1;
-            document.getElementById('prevPageBtn').disabled = currentPage <= 1;
-            document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
-            document.getElementById('lastPageBtn').disabled = currentPage >= totalPages;
-            
-            const start = (currentPage - 1) * pageSize + 1;
-            const end = Math.min(currentPage * pageSize, totalItems);
-            document.getElementById('paginationInfo').textContent = totalItems > 0 ? `Showing ${start}-${end} of ${totalItems}` : 'No results';
-        }
-
-        let sortColumn = 'hit_count';
-        let sortOrder = 'desc';
-
-        function sortTable(column) {
-            if (sortColumn === column) {
-                sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-            } else {
-                sortColumn = column;
-                sortOrder = 'desc';
-            }
-
-            document.querySelectorAll('th[data-sort]').forEach(th => {
-                th.classList.remove('sorted-asc', 'sorted-desc');
-                if (th.dataset.sort === column) {
-                    th.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
-                }
-            });
-
-            currentMemories.sort((a, b) => {
-                let aVal = a[column];
-                let bVal = b[column];
-
-                if (column === 'created_at' || column === 'updated_at') {
-                    aVal = new Date(aVal).getTime();
-                    bVal = new Date(bVal).getTime();
-                } else if (column === 'hit_count' || column === 'recall_count' || column === 'recall_rate') {
-                    aVal = aVal || 0;
-                    bVal = bVal || 0;
-                }
-
-                if (sortOrder === 'asc') return aVal > bVal ? 1 : -1;
-                return aVal < bVal ? 1 : -1;
-            });
-
-            renderTable(currentMemories);
-        }
-
-        document.querySelectorAll('th[data-sort]').forEach(th => {
-            if (th.dataset.sort === sortColumn) {
-                th.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
-            }
-        });
-
-        function toggleSelectAll() {
-            const checked = document.getElementById('selectAll').checked;
-            currentPaginatedData.forEach(m => {
-                if (checked) selectedIds.add(m.id);
-                else selectedIds.delete(m.id);
-            });
-            updateBulkBar();
-            renderTable(currentMemories);
-        }
-
-        function toggleSelect(id) {
-            if (selectedIds.has(id)) selectedIds.delete(id);
-            else selectedIds.add(id);
-            updateBulkBar();
-        }
-
-        function updateBulkBar() {
-            const bar = document.getElementById('bulkActionBar');
-            if (selectedIds.size > 0) {
-                bar.classList.remove('hidden');
-                document.getElementById('selectedCount').textContent = `${selectedIds.size} selected`;
-            } else {
-                bar.classList.add('hidden');
-            }
-        }
-
-        function clearSelection() {
-            selectedIds.clear();
-            updateBulkBar();
-            renderTable(currentMemories);
-        }
-
-        function toggleExpand(id) {
-            const row = document.getElementById(`expand-${id}`);
-            row.classList.toggle('hidden');
-        }
-
-        async function viewMemory(id) {
-            try {
-                const response = await fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`);
-                const data = await response.json();
-                const modal = document.getElementById('memoryModal');
-                const body = document.getElementById('modalBody');
-                
-                const title = data.content.substring(0, 50) + (data.content.length > 50 ? '...' : '');
-                body.innerHTML = `
-                    <div class="space-y-3">
-                        <div class="text-lg font-semibold border-b pb-2 mb-4">${escapeHtml(title)}</div>
-                        <div><span class="px-2 py-1 rounded text-sm font-medium type-${data.type}">${data.type.replace('_', ' ')}</span></div>
-                        <div><strong>ID:</strong> <span class="font-mono text-sm">${data.id}</span></div>
-                        <div><strong>Content:</strong><pre class="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded whitespace-pre-wrap">${escapeHtml(data.content)}</pre></div>
-                        <div><strong>Importance:</strong> ${data.importance}</div>
-                        <div><strong>Hit Count:</strong> ${data.hit_count || 0}</div>
-                        <div><strong>Recall Rate:</strong> ${data.recall_rate ? (data.recall_rate * 100).toFixed(1) + '%' : 'N/A'}</div>
-                        <div><strong>Created:</strong> ${new Date(data.created_at).toLocaleString()}</div>
-                        <div><strong>Updated:</strong> ${data.updated_at ? new Date(data.updated_at).toLocaleString() : 'N/A'}</div>
-                        <div><strong>Expires:</strong> ${data.expires_at ? new Date(data.expires_at).toLocaleString() : 'Never'}</div>
-                    </div>
-                `;
-                modal.classList.remove('hidden');
-            } catch (err) {
-                showToast('Failed to load memory: ' + err.message, 'error');
-            }
-        }
-
-        function closeModal() {
-            document.getElementById('memoryModal').classList.add('hidden');
-        }
-
-        async function startInlineEdit(id) {
-            const memory = currentMemories.find(m => m.id === id);
-            if (!memory) return;
-
-            const row = document.getElementById(`expand-${id}`);
-            row.classList.remove('hidden');
-            
-            const content = `
-                <div class="inline-edit-row mt-4">
-                    <textarea id="edit-content-${id}" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700" rows="4">${escapeHtml(memory.content)}</textarea>
-                    <select id="edit-type-${id}" class="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700">
-                        <option value="decision" ${memory.type === 'decision' ? 'selected' : ''}>Decision</option>
-                        <option value="mistake" ${memory.type === 'mistake' ? 'selected' : ''}>Mistake</option>
-                        <option value="code_fact" ${memory.type === 'code_fact' ? 'selected' : ''}>Code Fact</option>
-                        <option value="pattern" ${memory.type === 'pattern' ? 'selected' : ''}>Pattern</option>
-                    </select>
-                    <input type="number" id="edit-importance-${id}" value="${memory.importance}" min="1" max="5" class="w-16 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700">
-                </div>
-                <div class="inline-edit-actions mt-2 flex gap-2">
-                    <button onclick="saveInlineEdit('${id}')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Save</button>
-                    <button onclick="cancelInlineEdit('${id}')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded">Cancel</button>
-                </div>
-            `;
-            
-            const existingEdit = document.getElementById(`inline-edit-${id}`);
-            if (existingEdit) existingEdit.remove();
-            
-            const editDiv = document.createElement('div');
-            editDiv.id = `inline-edit-${id}`;
-            editDiv.innerHTML = content;
-            
-            const td = row.querySelector('td');
-            td.appendChild(editDiv);
-        }
-
-        async function saveInlineEdit(id) {
-            const content = document.getElementById(`edit-content-${id}`).value;
-            const type = document.getElementById(`edit-type-${id}`).value;
-            const importance = parseInt(document.getElementById(`edit-importance-${id}`).value);
-
-            try {
-                const response = await fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content, type, importance })
-                });
-                
-                if (!response.ok) throw new Error('Failed to update');
-                
-                showToast('Memory updated successfully', 'success');
-                loadData();
-            } catch (err) {
-                showToast('Failed to update: ' + err.message, 'error');
-            }
-        }
-
-        function cancelInlineEdit(id) {
-            const editDiv = document.getElementById(`inline-edit-${id}`);
-            if (editDiv) editDiv.remove();
-        }
-
-        async function bulkUpdateImportance() {
-            const importance = parseInt(document.getElementById('bulkImportanceSelect').value);
-            const ids = Array.from(selectedIds);
-
-            try {
-                await Promise.all(ids.map(id => 
-                    fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ importance })
-                    })
-                ));
-                
-                showToast(`Updated ${ids.length} memories`, 'success');
-                clearSelection();
-                loadData();
-            } catch (err) {
-                showToast('Bulk update failed: ' + err.message, 'error');
-            }
-        }
-
-        async function showBulkDeleteConfirm() {
-            if (!confirm(`Delete ${selectedIds.size} selected memories? This cannot be undone.`)) return;
-            
-            const ids = Array.from(selectedIds);
-            try {
-                await Promise.all(ids.map(id => 
-                    fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`, { method: 'DELETE' })
-                ));
-                
-                showToast(`Deleted ${ids.length} memories`, 'success');
-                clearSelection();
-                loadData();
-            } catch (err) {
-                showToast('Bulk delete failed: ' + err.message, 'error');
-            }
-        }
-
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            const colors = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-blue-600' };
-            toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg max-w-xs`;
-            toast.textContent = message;
-            container.appendChild(toast);
-
-            setTimeout(() => {
-                toast.classList.add('removing');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        function exportData(format) {
-            const data = currentMemories.map(m => ({
-                id: m.id,
-                type: m.type,
-                content: m.content,
-                importance: m.importance,
-                hit_count: m.hit_count,
-                created_at: m.created_at
-            }));
-
-            let content, filename, type;
-            if (format === 'json') {
-                content = JSON.stringify(data, null, 2);
-                filename = 'memories.json';
-                type = 'application/json';
-            } else {
-                const headers = ['id', 'type', 'content', 'importance', 'hit_count', 'created_at'];
-                content = [headers.join(','), ...data.map(m => headers.map(h => `"${(m[h] || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n');
-                filename = 'memories.csv';
-                type = 'text/csv';
-            }
-
-            const blob = new Blob([content], { type });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast(`Exported as ${format.toUpperCase()}`, 'success');
-        }
-
-        async function archiveExpired() {
-            try {
-                const response = await fetch('/api/archive-expired', { method: 'POST' });
-                const data = await response.json();
-                showToast(`Archived ${data.archived || 0} expired memories`, 'success');
-                loadData();
-            } catch (err) {
-                showToast('Archive failed: ' + err.message, 'error');
-            }
-        }
-
-        async function loadData() {
-            await loadRepos();
-            await loadStats();
-            await loadMemories();
-            await checkStatus();
-            await loadRecentActions();
-        }
-
-        document.getElementById('repoSelect').addEventListener('change', (e) => {
-            currentRepo = e.target.value;
-            localStorage.setItem('selectedRepo', currentRepo);
-            loadData();
-        });
-
-        initTheme();
-        renderRecentActions();
-        loadData();
-        startCountdown();
-        setInterval(checkStatus, 30000);
-    </script>
+        <script src="/app.js"></script>
 </body>
 </html>

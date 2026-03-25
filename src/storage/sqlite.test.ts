@@ -14,6 +14,7 @@ function makeEntry(overrides: Partial<{
   id: string;
   repo: string;
   type: MemoryType;
+  title: string;
   content: string;
   importance: number;
   created_at: string;
@@ -23,6 +24,7 @@ function makeEntry(overrides: Partial<{
   return {
     id: overrides.id ?? `id-${Math.random().toString(36).slice(2)}`,
     type: overrides.type ?? "code_fact",
+    title: overrides.title ?? "Test Memory Title",
     content: overrides.content ?? "sample content for testing purposes",
     importance: overrides.importance ?? 3,
     scope: { repo: overrides.repo ?? "test-repo" },
@@ -427,5 +429,76 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
     
     expect(actions).toHaveLength(5);
     expect(actions.map(a => a.action)).toEqual(['delete', 'update', 'write', 'read', 'search']);
+  });
+});
+
+describe("Dashboard memory queries", () => {
+  it("listMemoriesForDashboard paginates, searches, and sorts server-side", () => {
+    const store = freshStore();
+
+    store.insert(makeEntry({
+      id: "dash-1",
+      repo: "repo-dashboard",
+      title: "Alpha Memory",
+      content: "alpha content",
+      importance: 5,
+    }));
+    store.insert(makeEntry({
+      id: "dash-2",
+      repo: "repo-dashboard",
+      title: "Beta Memory",
+      content: "beta content",
+      importance: 3,
+    }));
+    store.insert(makeEntry({
+      id: "dash-3",
+      repo: "repo-dashboard",
+      title: "Gamma Memory",
+      content: "gamma content",
+      importance: 4,
+    }));
+
+    store.incrementHitCount("dash-2");
+    store.incrementHitCount("dash-2");
+    store.incrementRecallCount("dash-2");
+
+    const result = store.listMemoriesForDashboard({
+      repo: "repo-dashboard",
+      search: "memory",
+      sortBy: "title",
+      sortOrder: "asc",
+      limit: 2,
+      offset: 0,
+    });
+
+    expect(result.total).toBe(3);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].title).toBe("Alpha Memory");
+    expect(result.items[1].title).toBe("Beta Memory");
+
+    store.close();
+  });
+
+  it("getByIdWithStats returns recall_rate for detail views", () => {
+    const store = freshStore();
+
+    store.insert(makeEntry({
+      id: "detail-1",
+      repo: "repo-detail",
+      title: "Detail Memory",
+      content: "detail content",
+    }));
+
+    store.incrementHitCount("detail-1");
+    store.incrementHitCount("detail-1");
+    store.incrementRecallCount("detail-1");
+
+    const memory = store.getByIdWithStats("detail-1");
+
+    expect(memory).not.toBeNull();
+    expect(memory?.title).toBe("Detail Memory");
+    expect(memory?.recall_rate).toBe(0.5);
+
+    store.close();
   });
 });

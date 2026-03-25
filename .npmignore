@@ -1,0 +1,14 @@
+src/
+docs/
+scripts/
+*.test.ts
+*.test.js
+vitest.config.ts
+tsconfig.json
+.DS_Store
+.gitignore
+test.sh
+seed-data.mjs
+*.md
+!README.md
+storage/

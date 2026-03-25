@@ -14,6 +14,18 @@ const startTime = Date.now();
 
 const db = new SQLiteStore();
 
+type RecentAction = {
+  action: string;
+  query?: string;
+  memory_id?: string;
+  result_count?: number;
+  created_at: string;
+};
+
+type CondensedRecentAction = RecentAction & {
+  burstCount: number;
+};
+
 app.use(express.json());
 
 // Timing middleware - must be before routes
@@ -61,7 +73,7 @@ app.get("/api/health", (req, res) => {
 // List all repositories
 app.get("/api/repos", async (req, res) => {
   try {
-    const repos = db.listRepos();
+    const repos = db.listRepoNavigation();
     res.json({ repos });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -75,7 +87,8 @@ app.get("/api/recent-actions", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
     const limit = parseInt(req.query.limit as string) || 20;
-    const actions = db.getRecentActions(repo, limit);
+    const rawActions = db.getRecentActions(repo, Math.max(limit * 4, 50));
+    const actions = condenseRecentActions(rawActions, limit);
     res.json({ actions });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -184,36 +197,40 @@ app.get("/api/memories", async (req, res) => {
   try {
     const repo = req.query.repo as string;
     const type = req.query.type as string | undefined;
+    const search = req.query.search as string | undefined;
+    const minImportance = req.query.minImportance ? parseInt(req.query.minImportance as string, 10) : undefined;
+    const maxImportance = req.query.maxImportance ? parseInt(req.query.maxImportance as string, 10) : undefined;
     const sortBy = req.query.sortBy as string || "hit_count";
     const sortOrder = req.query.sortOrder as string || "desc";
+    const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || "25", 10)));
 
     if (!repo) {
       return res.status(400).json({ error: "repo parameter is required" });
     }
 
-    let memories = db.getAllMemoriesWithStats(repo);
-
-    if (type) {
-      memories = memories.filter(m => m.type === type);
-    }
-
-    memories.sort((a: any, b: any) => {
-      let comparison = 0;
-
-      if (sortBy === "importance") {
-        comparison = b.importance - a.importance;
-      } else if (sortBy === "hit_count") {
-        comparison = b.hit_count - a.hit_count;
-      } else if (sortBy === "recall_rate") {
-        comparison = b.recall_rate - a.recall_rate;
-      } else if (sortBy === "created_at" || sortBy === "updated_at") {
-        comparison = new Date(b[sortBy]).getTime() - new Date(a[sortBy]).getTime();
-      }
-
-      return sortOrder === "asc" ? -comparison : comparison;
+    const offset = (page - 1) * pageSize;
+    const result = db.listMemoriesForDashboard({
+      repo,
+      type,
+      search,
+      minImportance,
+      maxImportance,
+      sortBy,
+      sortOrder: sortOrder === "asc" ? "asc" : "desc",
+      limit: pageSize,
+      offset,
     });
 
-    res.json({ memories });
+    res.json({
+      memories: result.items,
+      pagination: {
+        page,
+        pageSize,
+        totalItems: result.total,
+        totalPages: Math.max(1, Math.ceil(result.total / pageSize)),
+      }
+    });
   } catch (err: any) {
     logger.error("Error listing memories", { error: err.message });
     res.status(500).json({ error: err.message });
@@ -223,12 +240,12 @@ app.get("/api/memories", async (req, res) => {
 // Get memory by ID
 app.get("/api/memories/:id", async (req, res) => {
   try {
-    const result = await mcpClient.readResource(`memory://${req.params.id}`) as { contents?: { text: string }[] };
-    const memoryJson = result.contents?.[0]?.text;
-    if (!memoryJson) {
+    const memory = db.getByIdWithStats(req.params.id);
+    if (!memory) {
       throw new Error("Memory not found");
     }
-    const memory = JSON.parse(memoryJson);
+
+    db.logAction("read", memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
     res.json(memory);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -239,10 +256,11 @@ app.get("/api/memories/:id", async (req, res) => {
 // Update memory
 app.put("/api/memories/:id", async (req, res) => {
   try {
-    const { content, importance } = req.body;
+    const { title, content, importance } = req.body;
 
     const result = await mcpClient.callTool("memory.update", {
       id: req.params.id,
+      title,
       content,
       importance
     });
@@ -285,6 +303,35 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   logger.info("MCP Memory Dashboard started", { port: PORT });
 });
+
+function condenseRecentActions(actions: RecentAction[], limit: number): CondensedRecentAction[] {
+  const condensed: CondensedRecentAction[] = [];
+
+  for (const action of actions) {
+    const previous = condensed[condensed.length - 1];
+    const sameKind = previous
+      && previous.action === action.action
+      && previous.query === action.query
+      && previous.memory_id === action.memory_id;
+
+    const currentTime = new Date(action.created_at).getTime();
+    const previousTime = previous ? new Date(previous.created_at).getTime() : 0;
+    const withinBurstWindow = previous && Math.abs(previousTime - currentTime) <= 10 * 60 * 1000;
+
+    if (sameKind && withinBurstWindow) {
+      previous.burstCount += 1;
+      previous.created_at = action.created_at;
+      continue;
+    }
+
+    condensed.push({
+      ...action,
+      burstCount: 1,
+    });
+  }
+
+  return condensed.slice(0, limit);
+}
 
 // Cleanup on exit
 process.on("SIGINT", () => {

@@ -9,6 +9,7 @@ function makeEntry(id: string, repo: string): MemoryEntry {
   return {
     id,
     type: "code_fact",
+    title: `Memory ${id}`,
     content: `Content for memory ${id} in repo ${repo}`,
     importance: 3,
     scope: { repo },

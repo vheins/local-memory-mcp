@@ -15,12 +15,148 @@ This project implements a local memory service using Node.js and SQLite with vec
 - **MCP Protocol**: Full implementation of MCP resources, tools, and prompts
 - **Web Dashboard**: Browser-based UI for visualizing and managing memories
 
+## Quick Start (npx)
+
+The easiest way to use this MCP server is via npx - no installation required:
+
+```bash
+npx @vheins/local-memory-mcp
+```
+
 ## Installation
+
+### Local Development
 
 ```bash
 npm install
 npm run build
 ```
+
+### Global Install
+
+```bash
+npm install -g @vheins/local-memory-mcp
+mcp-memory-local
+```
+
+## MCP Client Configuration
+
+This server works with any MCP-compatible client. Add it to your configuration:
+
+### OpenCode
+
+```json
+{
+  "mcpServers": {
+    "local-memory": {
+      "command": "npx",
+      "args": ["@vheins/local-memory-mcp"]
+    }
+  }
+}
+```
+
+### Claude Desktop (claude.ai)
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "local-memory": {
+      "command": "npx",
+      "args": ["@vheins/local-memory-mcp"]
+    }
+  }
+}
+```
+
+### Cursor
+
+Settings → Features → Models → "Edit JSON"
+
+```json
+{
+  "mcpServers": {
+    "local-memory": {
+      "command": "npx",
+      "args": ["@vheins/local-memory-mcp"]
+    }
+  }
+}
+```
+
+### Kiro Antigravity
+
+Add to your MCP configuration file:
+
+```json
+{
+  "servers": {
+    "local-memory": {
+      "command": "npx",
+      "args": ["@vheins/local-memory-mcp"]
+    }
+  }
+}
+```
+
+### Trae
+
+Settings → Integrations → MCP → Add Server
+
+```json
+{
+  "command": "npx",
+  "args": ["@vheins/local-memory-mcp"]
+}
+```
+
+### Gemini CLI
+
+```bash
+gemini mcp add local-memory -- npx @vheins/local-memory-mcp
+```
+
+### Codex
+
+```json
+{
+  "mcp_servers": {
+    "local-memory": {
+      "command": "npx",
+      "args": ["@vheins/local-memory-mcp"]
+    }
+  }
+}
+```
+
+### VS Code (with MCP extension)
+
+```json
+{
+  "mcpServers": {
+    "local-memory": {
+      "command": "npx",
+      "args": ["@vheins/local-memory-mcp"]
+    }
+  }
+}
+```
+
+### Other MCP Clients
+
+For any other MCP-compatible client, use:
+
+- **Command**: `npx`
+- **Args**: `["@vheins/local-memory-mcp"]`
+
+Or build from source:
+
+- **Command**: `node`
+- **Args**: `["/path/to/dist/server.js"]`
 
 ## Usage
 
