@@ -1,19 +1,27 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.1.3",
+	"version": "0.1.9",
 	"description": "MCP Local Memory Service for coding copilot agents",
+	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
 	"main": "dist/server.js",
 	"bin": {
 		"local-memory-mcp": "dist/server.js",
+		"@vheins/local-memory-mcp": "dist/server.js",
 		"mcp-memory-dashboard": "dist/dashboard/server.js"
 	},
+	"files": [
+		"dist",
+		"storage/.gitkeep"
+	],
 	"author": "Muhammad Rheza Alfin <m.rheza.alfin@gmail.com>",
 	"license": "MIT",
 	"scripts": {
-		"build": "tsc && mkdir -p dist/dashboard/public && rsync -a --delete src/dashboard/public/ dist/dashboard/public/",
+		"build": "tsc && mkdir -p dist/dashboard/public && rsync -a --delete src/dashboard/public/ dist/dashboard/public/ && shx chmod +x dist/server.js dist/dashboard/server.js",
+		"prepare": "npm run build",
 		"dev": "tsc --watch",
 		"start": "node dist/server.js",
+		"start:mcp": "node dist/server.js",
 		"dashboard": "node dist/dashboard/server.js",
 		"both": "npm run start & npm run dashboard",
 		"test": "vitest --run",
@@ -31,6 +39,7 @@
 		"@types/express": "^5.0.6",
 		"@types/node": "^22.19.7",
 		"fast-check": "^4.6.0",
+		"shx": "^0.4.0",
 		"typescript": "^5.7.3",
 		"vitest": "^4.1.1"
 	}

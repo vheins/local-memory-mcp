@@ -1,17 +1,44 @@
 import Database from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { MemoryEntry, MemoryScope } from "../types.js";
 import { tokenize } from "../utils/normalize.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, "../../storage/memory.db");
+
+// Resolve database path:
+// 1. MEMORY_DB_PATH env var
+// 2. Local storage/ folder in CWD (for npx/global usage)
+// 3. Project root storage/ folder
+function resolveDbPath(): string {
+  if (process.env.MEMORY_DB_PATH) {
+    return process.env.MEMORY_DB_PATH;
+  }
+
+  const cwdStorage = path.join(process.cwd(), "storage");
+  if (fs.existsSync(cwdStorage)) {
+    return path.join(cwdStorage, "memory.db");
+  }
+
+  const projectRootStorage = path.join(__dirname, "../../storage");
+  return path.join(projectRootStorage, "memory.db");
+}
+
+const DB_PATH = resolveDbPath();
 
 export class SQLiteStore {
   private db: Database.Database;
 
   constructor(dbPath?: string) {
-    this.db = new Database(dbPath ?? DB_PATH);
+    const finalPath = dbPath ?? DB_PATH;
+    const dbDir = path.dirname(finalPath);
+    
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    this.db = new Database(finalPath);
     this.migrate();
   }
 
