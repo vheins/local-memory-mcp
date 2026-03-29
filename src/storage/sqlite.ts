@@ -704,6 +704,18 @@ export class SQLiteStore {
     );
   }
 
+  getLastActionId(): number {
+    const row = this.db.prepare(`SELECT MAX(id) as max_id FROM action_log`).get() as { max_id: number | null };
+    return row?.max_id ?? 0;
+  }
+
+  getActionsAfter(afterId: number): Array<{ id: number; action: string; query?: string; memory_id?: string; repo: string; result_count?: number; created_at: string }> {
+    const rows = this.db.prepare(
+      `SELECT id, action, query, memory_id, repo, result_count, created_at FROM action_log WHERE id > ? ORDER BY id ASC`
+    ).all(afterId);
+    return rows as Array<{ id: number; action: string; query?: string; memory_id?: string; repo: string; result_count?: number; created_at: string }>;
+  }
+
   getRecentActions(repo?: string, limit = 20): Array<{ action: string; query?: string; memory_id?: string; result_count?: number; created_at: string }> {
     let sql = `SELECT action, query, memory_id, result_count, created_at FROM action_log`;
     const params: string[] = [];

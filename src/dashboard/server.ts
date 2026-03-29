@@ -60,6 +60,34 @@ mcpClient.start().catch((err) => {
   logger.error("Failed to start MCP client", { error: err.message });
 });
 
+// Watch action_log for new entries from any MCP process and print to terminal
+let lastSeenActionId = db.getLastActionId();
+const ACTION_ICONS: Record<string, string> = {
+  search: "🔍",
+  read:   "👁 ",
+  write:  "✏️ ",
+  update: "🔄",
+  delete: "🗑 ",
+};
+setInterval(() => {
+  try {
+    const newActions = db.getActionsAfter(lastSeenActionId);
+    for (const action of newActions) {
+      const icon = ACTION_ICONS[action.action] ?? "•";
+      const detail = action.query
+        ? `query="${action.query}"`
+        : action.memory_id
+        ? `id=${action.memory_id.substring(0, 8)}`
+        : "";
+      const hits = action.result_count != null ? ` hits=${action.result_count}` : "";
+      console.log(`${icon} [MCP] ${action.action.padEnd(6)} repo=${action.repo}${detail ? " " + detail : ""}${hits}`);
+      lastSeenActionId = action.id;
+    }
+  } catch {
+    // DB may be briefly locked — skip this tick
+  }
+}, 1000);
+
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   const stats = db.getStats();
