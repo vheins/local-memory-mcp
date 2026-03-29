@@ -1,25 +1,28 @@
 # Contributing Guidelines
 
-Terima kasih telah tertarik untuk berkontribusi pada MCP Local Memory Service! 
+Thank you for your interest in contributing to the MCP Local Memory Service!
 
-## Cara Melaporkan Isu
-Jika Anda menemukan bug atau memiliki ide fitur:
-1. Periksa apakah isu serupa sudah dilaporkan di [GitHub Issues](https://github.com/vheins/local-memory-mcp/issues).
-2. Jika belum, buat issue baru dengan label `bug` atau `enhancement`.
-3. Sertakan detail OS, versi Node.js, dan langkah-langkah untuk mereproduksi bug.
+## Reporting Issues
+If you find a bug or have a feature idea:
+1. Check if a similar issue has already been reported on [GitHub Issues](https://github.com/vheins/local-memory-mcp/issues).
+2. If not, create a new issue with the label `bug` or `enhancement`.
+3. Include details about your OS, Node.js version, and steps to reproduce the bug.
 
-## Alur Kontribusi Kode
-1. Fork repositori ini.
-2. Buat branch baru (`feat/nama-fitur` atau `fix/deskripsi-bug`).
-3. Pastikan kode Anda mengikuti standar TypeScript proyek ini.
-4. **Wajib:** Tambahkan unit test di `src/` atau update `src/e2e.test.ts` jika menambahkan fitur baru.
-5. Jalankan tes: `npm run test`.
-6. Kirim Pull Request (PR) ke branch `main`.
+## Code Contribution Workflow
+1. Fork this repository.
+2. Create a new branch (`feat/feature-name` or `fix/bug-description`).
+3. Ensure your code follows the project's TypeScript standards.
+4. **Mandatory:** Add unit tests in `src/` or update `src/e2e.test.ts` if adding new features.
+5. Run tests: `npm run test`.
+6. Submit a Pull Request (PR) to the `main` branch.
 
-## Standar Kualitas (Strict Rules)
-- **Local-First:** Jangan tambahkan dependensi cloud atau API eksternal tanpa diskusi mendalam.
-- **SQLite Only:** Seluruh persistensi data harus menggunakan SQLite.
-- **Strict Anti-Hallucination:** Jangan menurunkan threshold pencarian semantik di bawah standar keamanan proyek.
+## Quality Standards (Strict Rules)
+- **Local-First:** Do not add cloud dependencies or external APIs without deep discussion.
+- **SQLite Only:** All data persistence must use SQLite.
+- **Strict Anti-Hallucination:** Do not lower the semantic search thresholds below the project's security standards.
 
-## Lisensi
-Dengan berkontribusi, Anda menyetujui bahwa kontribusi Anda akan dilisensikan di bawah Lisensi MIT proyek ini.
+## ⚠️ No Warranty & Liability
+By contributing, you acknowledge that this project is provided **"AS IS"** without any warranty. You agree that the authors and maintainers are not liable for any damages arising from the use of this software.
+
+## License
+By contributing, you agree that your contributions will be licensed under the project's MIT License.

@@ -1,47 +1,52 @@
 # MCP Protocol Reference
 
-Dokumen ini merinci interface teknis yang diekspos oleh server ini untuk Agen AI.
+This document details the technical interface exposed by this server for AI Agents.
 
-## Tools (Fungsi Agen)
+## Tools (Agent Functions)
 
 ### `memory-store`
-Menyimpan memori baru.
+Stores a new memory.
 - **Input:** `type`, `title`, `content`, `importance` (1-5), `scope`, `tags`, `is_global`, `supersedes` (optional).
-- **Behavior:** Melakukan deteksi konflik otomatis sebelum menyimpan.
+- **Behavior:** Performs automatic conflict detection before saving.
 
 ### `memory-search`
-Mencari memori yang relevan.
+Searches for relevant memories.
 - **Input:** `query`, `repo`, `current_file_path`, `current_tags`, `include_archived`.
-- **Output:** Hasil yang diurutkan berdasarkan relevansi semantik dan kedekatan workspace.
+- **Output:** Results sorted by semantic relevance and workspace proximity.
 
 ### `memory-acknowledge`
-Mencatat penggunaan memori. **WAJIB** dipanggil oleh agen setelah menggunakan memori untuk menulis kode.
+Logs the usage of a memory. **MANDATORY** for the agent after using a memory to write code.
 - **Input:** `memory_id`, `status` (`used` | `irrelevant` | `contradictory`).
 
 ### `memory-update` / `memory-delete`
-Manajemen siklus hidup memori.
+Memory lifecycle management tools.
 
 ---
 
-## Resources (Data Introspeksi)
+## Resources (Introspection Data)
 
 ### `memory://index?repo={repo}`
-Melihat daftar memori aktif dalam format JSON untuk repositori tertentu.
+Lists all active memory entries in JSON format for a specific repository.
 
 ### `memory://tags/{tag}`
-Melihat memori berdasarkan teknologi tertentu lintas proyek.
+Displays memories filtered by a specific technology tag across all projects.
 
 ### `memory://summary/{repo}`
-Snapshot ringkas (high-level) dari seluruh keputusan arsitektur proyek.
+A concise, high-level snapshot of all major architectural decisions for a project.
 
 ### `memory://{id}`
-Detail lengkap satu entri memori beserta statistik penggunaannya.
+Full details of a single memory entry, including its usage statistics.
 
 ---
 
-## Prompts (Instruksi Agen)
+## Prompts (Agent Instructions)
 
-Server ini menyediakan template instruksi untuk memastikan Agen berperilaku disiplin:
-- **`memory-agent-core`:** Aturan perilaku dasar Agen yang sadar memori.
-- **`memory-index-policy`:** Kebijakan tentang apa yang boleh dan tidak boleh disimpan.
-- **`tool-usage-guidelines`:** Panduan teknis penggunaan tool MCP.
+The server provides instruction templates to ensure the Agent maintains memory discipline:
+- **`memory-agent-core`:** Basic behavioral contract for memory-aware agents.
+- **`memory-index-policy`:** Policy on what knowledge should and should not be stored.
+- **`tool-usage-guidelines`:** Technical guidelines for using MCP tools effectively.
+
+---
+
+## ⚠️ No Warranty
+The MCP interface and responses are provided **"AS IS"** without any warranty.

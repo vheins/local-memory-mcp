@@ -1,28 +1,28 @@
 # Getting Started
 
-Panduan ini membantu Anda menginstal dan mengkonfigurasi MCP Local Memory Service di mesin lokal Anda.
+This guide will help you install and configure the MCP Local Memory Service on your local machine.
 
-## Prasyarat
-- **Node.js:** Versi 18 atau lebih tinggi.
-- **MCP Client:** Satu atau lebih klien MCP terpasang (misal: Claude Desktop, Cursor, Windsurf).
+## Prerequisites
+- **Node.js:** Version 18 or higher.
+- **MCP Client:** One or more MCP-compatible clients installed (e.g., Claude Desktop, Cursor, Windsurf).
 
-## Instalasi
+## Installation
 
-### Menggunakan NPM (Rekomendasi)
-Anda dapat menginstal secara global untuk penggunaan yang lebih mudah:
+### Using NPM (Recommended)
+You can install the package globally for easier command-line access:
 ```bash
 npm install -g @vheins/local-memory-mcp
 ```
 
-Atau gunakan langsung via `npx` tanpa instalasi permanen:
+Or run it directly using `npx` without permanent installation:
 ```bash
 npx @vheins/local-memory-mcp
 ```
 
-## Konfigurasi Klien
+## Client Configuration
 
 ### Claude Desktop
-Tambahkan entri berikut ke file konfigurasi Anda (biasanya di `~/Library/Application Support/Claude/claude_desktop_config.json` atau `%APPDATA%\Claude\claude_desktop_config.json`):
+Add the following entry to your configuration file (usually located at `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
 ```json
 {
@@ -36,21 +36,24 @@ Tambahkan entri berikut ke file konfigurasi Anda (biasanya di `~/Library/Applica
 ```
 
 ### Cursor / VS Code Extensions
-Jika menggunakan ekstensi MCP di Cursor, tambahkan server dengan perintah:
+If using an MCP extension in Cursor or VS Code, add the server with these settings:
 - **Command:** `npx`
 - **Arguments:** `-y @vheins/local-memory-mcp`
 
-## Lokasi Data
-Secara default, database memori Anda disimpan di:
+## Data Location
+By default, your memory database is stored at:
 - **Linux/macOS:** `~/.config/local-memory-mcp/memory.db`
 - **Windows:** `%USERPROFILE%\.config\local-memory-mcp\memory.db`
 
-Anda dapat mengubah lokasi ini dengan menyetel variabel lingkungan `MEMORY_DB_PATH`.
+You can customize this location by setting the `MEMORY_DB_PATH` environment variable.
 
-## Menjalankan Web Dashboard
-Server memori dilengkapi dengan dashboard visual untuk mengelola ingatan agen Anda.
+## Running the Web Dashboard
+The memory server includes a visual dashboard to manage your agent's memories.
 ```bash
-# Menjalankan dashboard (default port 3456)
+# Start the dashboard (default port 3456)
 npx @vheins/local-memory-mcp-dashboard
 ```
-Buka browser Anda di `http://localhost:3456`.
+Open your browser and navigate to `http://localhost:3456`.
+
+## ⚠️ No Warranty
+This software is provided "as is" and without any warranty. Use at your own risk.

@@ -1,26 +1,29 @@
 # Dashboard & Debugging
 
-MCP Local Memory Service menyediakan alat visual untuk memastikan Anda memiliki kontrol penuh atas apa yang diingat oleh Agen AI Anda.
+The MCP Local Memory Service provides visual tools to ensure you have full control over what your AI Agent remembers.
 
 ## Web Dashboard
-Dashboard dapat diakses untuk melakukan inspeksi manual:
-- **Visualisasi Memori:** Melihat, mengedit, dan menghapus memori per repository.
-- **Audit Log:** Melihat histori pencarian Agen (apa yang dicari, hasil apa yang ditemukan, dan skor kemiripannya).
-- **Statistik:** Melihat memori mana yang paling sering membantu Agen (Recall Rate).
+The dashboard can be accessed for manual inspection:
+- **Memory Visualization:** View, edit, and delete memories per repository.
+- **Audit Log:** View Agent search history (queries, results found, and similarity scores).
+- **Statistics:** See which memories are helping your Agent most often (Recall Rate).
 
-### Cara Menjalankan
+### How to Run
 ```bash
 npx @vheins/local-memory-mcp-dashboard
 ```
 
-## Debugging MCP Server
-Jika Agen Anda tidak menemukan memori yang diharapkan:
+## Debugging the MCP Server
+If your Agent is not finding the expected memories:
 
-1.  **Cek Log:** Server mencatat setiap aksi ke `stdout` (JSON-RPC) dan log internal. Gunakan [MCP Inspector](https://github.com/modelcontextprotocol/inspector) untuk melihat interaksi secara real-time.
-2.  **Verifikasi Threshold:** Jika skor kemiripan semantik memori di bawah `0.50`, server akan mengembalikan hasil kosong. Anda bisa menurunkan threshold ini di konfigurasi jika dirasa terlalu ketat (namun risiko halusinasi meningkat).
-3.  **Tags & Repo:** Pastikan Agen mengirimkan `repo` yang benar dan `current_tags` jika ingin menarik memori dari stack teknologi lain.
+1.  **Check Logs:** The server logs every action to `stdout` (JSON-RPC) and internal logs. Use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to view interactions in real-time.
+2.  **Verify Threshold:** If a memory's semantic similarity score is below `0.50`, the server will return empty results. You can adjust this threshold in the configuration if it feels too strict (though the risk of hallucination increases).
+3.  **Tags & Repo:** Ensure the Agent is sending the correct `repo` and `current_tags` if you want to pull memories from other tech stacks.
 
-## Troubleshooting Database
-Jika database `memory.db` korup atau ingin direset:
-1. Lokasi file default: `~/.config/local-memory-mcp/memory.db`.
-2. Anda bisa membuka file ini dengan alat SQLite manapun (misal: DB Browser for SQLite) untuk melakukan perbaikan manual.
+## Database Troubleshooting
+If the `memory.db` file is corrupted or you want to reset it:
+1. Default file location: `~/.config/local-memory-mcp/memory.db`.
+2. You can open this file with any SQLite tool (e.g., DB Browser for SQLite) for manual repair.
+
+## ⚠️ No Warranty
+All diagnostic tools and the dashboard are provided **"AS IS"** without any warranty of any kind.

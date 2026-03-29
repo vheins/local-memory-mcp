@@ -1,28 +1,31 @@
 # Core Features & V2 Enhancements
 
-Proyek ini bukan sekadar penyimpanan teks, melainkan sistem "otak" untuk agen AI yang dirancang untuk stabilitas jangka panjang.
+This project is more than just text storage; it is a "brain" system for AI agents designed for long-term stability and project consistency.
 
 ## 🧠 Hybrid Semantic Search
-Sistem menggunakan pendekatan hibrida untuk menemukan memori yang paling relevan:
-1.  **Keyword Matching (TF-IDF):** Mencari kata kunci yang persis sama di SQLite.
-2.  **Semantic Vector Search:** Menggunakan model AI `Transformers.js` secara lokal untuk memahami makna dibalik query.
-3.  **Workspace Boost:** Memberikan skor tambahan pada memori yang secara geografis berada di folder yang sama dengan file yang sedang Anda kerjakan.
+The system uses a hybrid approach to find the most relevant memories:
+1.  **Keyword Matching (TF-IDF):** Finds exact keyword matches in SQLite.
+2.  **Semantic Vector Search:** Uses the `Transformers.js` AI model locally to understand the meaning behind the query.
+3.  **Workspace Boost:** Provides additional ranking scores to memories located in the same folder as the file you are currently working on.
 
 ## 🔄 Tech-Stack Affinity
-Kasus: Anda memiliki pengetahuan tentang **Filament** di Proyek A. Saat Anda membuat Proyek B (juga menggunakan Filament), Agen Anda secara otomatis dapat menarik best-practices tersebut jika Anda memberikan tag `filament` pada memori tersebut.
-- Memori dapat bersifat **Lokal** (per repo), **Affinity** (per teknologi), atau **Global** (seluruh sistem).
+**Case:** You have knowledge about **Filament** in Project A. When you start Project B (also using Filament), your Agent can automatically pull those best practices if you tag that memory with `filament`.
+- Memories can be **Local** (per repo), **Affinity-based** (per technology), or **Global** (universal rules).
 
 ## 🛡️ Anti-Hallucination Guard
-Salah satu masalah utama Agen AI adalah "mencocok-cocokkan" informasi yang tidak relevan.
-- **Strict Threshold (0.50):** Jika kemiripan semantik di bawah ambang batas, sistem dengan tegas mengembalikan hasil kosong, mencegah Agen berhalusinasi dari data yang salah.
-- **Conflict Rejection:** Jika Agen mencoba menyimpan keputusan yang bertentangan dengan memori lama, sistem akan menolak dan memaksa Agen untuk melakukan `update` atau `supersede`.
+One of the main issues with AI Agents is "matching" irrelevant information.
+- **Strict Threshold (0.50):** If semantic similarity is below the threshold, the system strictly returns empty results, preventing the Agent from hallucinating based on wrong data.
+- **Conflict Rejection:** If an Agent tries to store a decision that contradicts an existing one, the system rejects it and forces the Agent to use `update` or `supersede`.
 
 ## 📈 Memory Recall Tracking
-Setiap kali Agen menggunakan memori, Agen diwajibkan memberikan feedback melalui tool `acknowledge`.
-- Kita dapat melacak **Utility Rate** (seberapa sering memori ini benar-benar berguna).
-- Memori dengan utility rendah akan perlahan "terlupakan" melalui sistem decay.
+Every time an Agent uses a memory, it is required to provide feedback via the `acknowledge` tool.
+- We track the **Utility Rate** (how often a memory was actually helpful).
+- Memories with low utility will gradually be "forgotten" through the decay system.
 
 ## 📉 Automatic Archiving (Natural Forgetting)
-Sama seperti manusia, tidak semua hal perlu diingat selamanya.
-- **Expired Memories:** Memori dengan TTL (Time-To-Live) akan diarsipkan otomatis.
-- **Decay System:** Memori yang tidak pernah digunakan dalam 90 hari dan memiliki tingkat kepentingan rendah akan dipindahkan ke arsip agar tidak membanjiri konteks Agen.
+Just like humans, not everything needs to be remembered forever.
+- **Expired Memories:** Memories with a TTL (Time-To-Live) are automatically archived.
+- **Decay System:** Memories unused for 90 days with low importance are moved to the archive to keep the Agent's context clean.
+
+## ⚠️ Disclaimer
+All features are provided **"AS IS"** without any warranty of performance or accuracy.
