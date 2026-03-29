@@ -3,6 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/@vheins/local-memory-mcp.svg)](https://www.npmjs.com/package/@vheins/local-memory-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![Dashboard Preview](docs/dashboard-preview.png)
+
 A Model Context Protocol (MCP) server that provides **persistent, long-term memory** for AI coding agents. It helps agents remember architectural decisions, project-specific patterns, past mistakes, and codebase facts across different chat sessions.
 
 Includes a **Web Dashboard** for easy management and visualization of stored memories.
