@@ -15,27 +15,22 @@ npm install -g @vheins/local-memory-mcp
 ```
 
 ### 2. Configuration (User Level)
-Register the server in your preferred AI tool. Below are the most common setups:
+Register the server in your preferred AI tool. Below are the standard configurations:
 
 #### 🏠 Claude Desktop
-- **File:** `claude_desktop_config.json`
-- **Location:** 
-  - macOS: `~/Library/Application Support/Claude/`
-  - Windows: `%APPDATA%\Claude\`
-- **JSON Snippet:** Add the `local-memory` object under `mcpServers`.
+- **File Path:** 
+  - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+  - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- **JSON:** Standard `mcpServers` format.
 
-#### 🛸 Cursor & Windsurf
-- **Cursor:** Edit `~/.cursor/mcp.json`.
-- **Windsurf:** Edit `~/.codeium/windsurf/mcp_config.json`.
-- Both use the standard MCP JSON format.
+#### 🛸 Cursor & 🌊 Windsurf
+- **Cursor File:** `~/.cursor/mcp.json`
+- **Windsurf File:** `~/.codeium/windsurf/mcp_config.json`
+- Both use the standard `mcpServers` JSON object.
 
-#### 📝 VS Code Extensions (Cline, Roo Code, etc.)
-Popular VS Code "Agentic" extensions support MCP natively:
-- **Cline (formerly Claude Dev):** Open settings -> MCP Servers -> Add Server.
-- **Roo Code:** Open settings -> MCP Config -> Edit User Config.
-- **Note on GitHub Copilot:** Native MCP support is still evolving. Use wrapper extensions or the official MCP extension to bridge the connection.
-
-**The Standard Configuration (JSON):**
+#### ♊ Gemini CLI & 🪐 Antigravity
+- **File:** `~/.gemini/settings.json` (or `.gemini/settings.json` in project root)
+- **JSON Snippet:**
 ```json
 {
   "mcpServers": {
@@ -47,11 +42,27 @@ Popular VS Code "Agentic" extensions support MCP natively:
 }
 ```
 
-### 3. Verification
-Run the following command to ensure the database is initialized correctly:
-```bash
-npx @vheins/local-memory-mcp --help
+#### ⚡ Trae & 👻 Kiro AI
+- **Trae:** Go to **Settings > MCP > Add Manually**.
+- **Kiro AI:** Click the MCP icon in the sidebar and add to `mcp-servers.json`.
+- Both support the standard JSON server definition.
+
+#### 📐 Zed Editor
+- **File Path:** `~/.config/zed/settings.json`
+- **Configuration:**
+```json
+"context_servers": {
+  "local-memory": {
+    "command": {
+      "path": "npx",
+      "args": ["-y", "@vheins/local-memory-mcp"]
+    }
+  }
+}
 ```
+
+#### 🔓 OpenCode
+- Add the server via the OpenCode extension settings using the standard `npx` command and arguments.
 
 ---
 
