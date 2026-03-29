@@ -1,2 +1,2 @@
 #!/usr/bin/env node
-import '../dist/dashboard/server.js';
+import "../dist/dashboard/server.js";
