@@ -2,6 +2,7 @@ import { MemoryUpdateSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { logger } from "../utils/logger.js";
 
 export async function handleMemoryUpdate(
   params: any,
@@ -38,6 +39,7 @@ export async function handleMemoryUpdate(
 
   // Log the update action
   db.logAction('update', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
+  logger.info("[MCP] memory.update", { repo: existing.scope.repo, id: validated.id, fields: Object.keys(updates) });
 
   return createMcpResponse(
     { success: true },

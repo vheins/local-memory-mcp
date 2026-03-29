@@ -204,6 +204,7 @@ export async function handleMemorySearch(
 
   // STEP 5: Log the query for recent queries feature
   db.logAction('search', validated.repo, { query: validated.query, resultCount: results.length });
+  logger.info("[MCP] memory.search", { repo: validated.repo, query: validated.query, results: results.length });
 
   const resultData = {
     query: validated.query,

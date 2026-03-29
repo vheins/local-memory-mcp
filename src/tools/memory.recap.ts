@@ -1,6 +1,7 @@
 import { MemoryRecapSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { logger } from "../utils/logger.js";
 
 export async function handleMemoryRecap(
   params: any,
@@ -8,6 +9,8 @@ export async function handleMemoryRecap(
 ): Promise<McpResponse> {
   // Validate input
   const validated = MemoryRecapSchema.parse(params);
+
+  logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 
   // Get total count for pagination metadata
   const total = db.getTotalCount(validated.repo);

@@ -1,4 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite.js";
+import { logger } from "../utils/logger.js";
 
 export function listResources() {
   return {
@@ -32,6 +33,8 @@ export function listResources() {
 }
 
 export function readResource(uri: string, db: SQLiteStore) {
+  logger.info("[MCP] resource.read", { uri });
+
   if (uri === "memory://index" || uri.startsWith("memory://index?")) {
     const parsed = new URL(uri.replace("memory://", "http://memory/"));
     const repo = parsed.searchParams.get("repo");

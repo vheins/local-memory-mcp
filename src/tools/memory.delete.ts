@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { logger } from "../utils/logger.js";
 
 export const MemoryDeleteSchema = z.object({
   id: z.string().uuid()
@@ -29,6 +30,7 @@ export async function handleMemoryDelete(
 
   // Log the delete action
   db.logAction('delete', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
+  logger.info("[MCP] memory.delete", { repo: existing.scope.repo, id: validated.id, title: existing.title });
 
   return createMcpResponse(
     { success: true },
