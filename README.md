@@ -51,7 +51,7 @@ Add this to your `mcpServers` configuration:
 
 ### Gemini CLI
 ```bash
-gemini mcp add local-memory -- npx -y @vheins/local-memory-mcp
+gemini mcp add local-memory npx -y @vheins/local-memory-mcp
 ```
 
 ## 🧠 Instructions for AI Agents (The "Rules")
