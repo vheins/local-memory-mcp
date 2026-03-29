@@ -1,6 +1,6 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.1.27",
+	"version": "0.1.28",
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
@@ -26,7 +26,7 @@
 	"author": "Muhammad Rheza Alfin <m.rheza.alfin@gmail.com>",
 	"license": "MIT",
 	"scripts": {
-		"build": "tsc && mkdir -p dist/dashboard/public && rsync -a --delete src/dashboard/public/ dist/dashboard/public/ && mkdir -p bin && printf \"#!/usr/bin/env node\\nimport '../dist/server.js';\\n\" > bin/mcp-memory-server.js && printf \"#!/usr/bin/env node\\nimport '../dist/dashboard/server.js';\\n\" > bin/mcp-memory-dashboard.js && shx chmod +x dist/server.js dist/dashboard/server.js bin/mcp-memory-server.js bin/mcp-memory-dashboard.js",
+		"build": "tsc && mkdir -p dist/dashboard/public && rsync -a --delete src/dashboard/public/ dist/dashboard/public/ && mkdir -p bin && printf \"#!/usr/bin/env node\\nimport '../dist/dashboard/server.js';\\n\" > bin/mcp-memory-dashboard.js && shx chmod +x dist/server.js dist/dashboard/server.js bin/mcp-memory-server.js bin/mcp-memory-dashboard.js",
 		"prepare": "npm run build",
 		"dev": "tsc --watch",
 		"start": "node dist/server.js",

@@ -97,9 +97,16 @@ The service includes a built-in dashboard to help you manage your memories visua
 
 1. Run the dashboard:
    ```bash
-   npx @vheins/local-memory-mcp dashboard
+   # If installed globally:
+   mcp-memory-dashboard
+
+   # Via npx (one-time or without global install):
+   npx -y @vheins/local-memory-mcp dashboard
    ```
 2. Open `http://localhost:3456` in your browser.
+
+> **Note:** The `dashboard` subcommand was added in v0.1.28. For older versions use:
+> `npx --package=@vheins/local-memory-mcp -- mcp-memory-dashboard`
 
 ### 🛠 Automating the Dashboard (IDE Integration)
 
@@ -114,7 +121,7 @@ Create or open `.vscode/tasks.json` in your project and add the following:
     {
       "label": "Launch Memory Dashboard",
       "type": "shell",
-      "command": "npx @vheins/local-memory-mcp dashboard",
+      "command": "npx -y @vheins/local-memory-mcp dashboard",
       "isBackground": true,
       "problemMatcher": {
         "pattern": {
@@ -125,8 +132,8 @@ Create or open `.vscode/tasks.json` in your project and add the following:
         },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "^.*Starting dashboard.*$",
-          "endsPattern": "^.*Dashboard listening.*$"
+          "beginsPattern": "^.*DASHBOARD_STARTING.*$",
+          "endsPattern": "^.*MCP Memory Dashboard started.*$"
         }
       },
       "presentation": {
