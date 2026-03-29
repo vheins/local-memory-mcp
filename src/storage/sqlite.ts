@@ -1,19 +1,29 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { fileURLToPath } from "url";
 import { MemoryEntry, MemoryScope } from "../types.js";
 import { tokenize } from "../utils/normalize.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Resolve database path:
-// 1. MEMORY_DB_PATH env var
-// 2. Local storage/ folder in CWD (for npx/global usage)
-// 3. Project root storage/ folder
+/**
+ * Resolve database path with following priority:
+ * 1. MEMORY_DB_PATH env var
+ * 2. ~/.config/local-memory-mcp/memory.db (standard user config)
+ * 3. Local storage/ folder in CWD (for npx/global usage)
+ * 4. Project root storage/ folder
+ */
 function resolveDbPath(): string {
   if (process.env.MEMORY_DB_PATH) {
     return process.env.MEMORY_DB_PATH;
+  }
+
+  // Check ~/.config/local-memory-mcp/memory.db
+  const homeConfig = path.join(os.homedir(), ".config", "local-memory-mcp", "memory.db");
+  if (fs.existsSync(homeConfig)) {
+    return homeConfig;
   }
 
   const cwdStorage = path.join(process.cwd(), "storage");
@@ -22,7 +32,16 @@ function resolveDbPath(): string {
   }
 
   const projectRootStorage = path.join(__dirname, "../../storage");
-  return path.join(projectRootStorage, "memory.db");
+  
+  // If we are in a production/installed environment and none of the above exist,
+  // we SHOULD use the ~/.config path as the default location to create new DBs,
+  // instead of potentially writing into a read-only node_modules/dist folder.
+  // But for backward compatibility with existing project-root storage, we check it last.
+  if (fs.existsSync(projectRootStorage)) {
+     return path.join(projectRootStorage, "memory.db");
+  }
+
+  return homeConfig;
 }
 
 const DB_PATH = resolveDbPath();
@@ -40,6 +59,10 @@ export class SQLiteStore {
 
     this.db = new Database(finalPath);
     this.migrate();
+  }
+
+  public getDbPath(): string {
+    return DB_PATH;
   }
 
   private migrate() {

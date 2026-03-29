@@ -400,6 +400,12 @@ async function checkStatus() {
             text.textContent = 'Disconnected';
         }
 
+        const dbPathLabel = document.getElementById('dbPathLabel');
+        if (dbPathLabel && data.dbPath) {
+            dbPathLabel.textContent = data.dbPath;
+            dbPathLabel.title = data.dbPath;
+        }
+
         const summary = document.getElementById('memorySummaryLabel');
         if (summary) {
             summary.textContent = `${data.memoryCount || 0} memories indexed`;

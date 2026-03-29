@@ -705,6 +705,11 @@
             <h1 class="text-xl md:text-2xl font-semibold">MCP Memory Dashboard</h1>
             
             <div class="flex flex-wrap items-center gap-3 md:gap-4">
+                <div class="flex items-center gap-2 px-3 py-2 rounded-full bg-white/35 dark:bg-slate-900/40 border border-white/30 dark:border-slate-700/60" title="Database location">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">DB:</span>
+                    <span id="dbPathLabel" class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[200px] md:max-w-xs">Loading...</span>
+                </div>
+
                 <div class="flex items-center gap-2 px-3 py-2 rounded-full bg-white/35 dark:bg-slate-900/40 border border-white/30 dark:border-slate-700/60">
                     <span class="text-sm text-gray-600 dark:text-gray-400">Repo:</span>
                     <span id="currentRepoLabel" class="text-sm font-semibold text-gray-900 dark:text-gray-100">Loading...</span>

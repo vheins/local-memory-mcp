@@ -66,7 +66,8 @@ app.get("/api/health", (req, res) => {
     connected: mcpClient.isConnected(),
     uptime: Math.floor((Date.now() - startTime) / 1000),
     memoryCount: stats.total,
-    pendingRequests: mcpClient.getPendingCount()
+    pendingRequests: mcpClient.getPendingCount(),
+    dbPath: db.getDbPath()
   });
 });
 
