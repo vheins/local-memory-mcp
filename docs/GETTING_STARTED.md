@@ -15,11 +15,25 @@ npm install -g @vheins/local-memory-mcp
 ```
 
 ### 2. Configuration (User Level)
-Add the server to your favorite tool's global configuration file.
+Register the server in your preferred AI tool. Below are the most common setups:
 
-*   **Claude Desktop:** Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`).
-*   **Cursor:** Edit `~/.cursor/mcp.json`.
-*   **Windsurf:** Edit `~/.codeium/windsurf/mcp_config.json`.
+#### 🏠 Claude Desktop
+- **File:** `claude_desktop_config.json`
+- **Location:** 
+  - macOS: `~/Library/Application Support/Claude/`
+  - Windows: `%APPDATA%\Claude\`
+- **JSON Snippet:** Add the `local-memory` object under `mcpServers`.
+
+#### 🛸 Cursor & Windsurf
+- **Cursor:** Edit `~/.cursor/mcp.json`.
+- **Windsurf:** Edit `~/.codeium/windsurf/mcp_config.json`.
+- Both use the standard MCP JSON format.
+
+#### 📝 VS Code Extensions (Cline, Roo Code, etc.)
+Popular VS Code "Agentic" extensions support MCP natively:
+- **Cline (formerly Claude Dev):** Open settings -> MCP Servers -> Add Server.
+- **Roo Code:** Open settings -> MCP Config -> Edit User Config.
+- **Note on GitHub Copilot:** Native MCP support is still evolving. Use wrapper extensions or the official MCP extension to bridge the connection.
 
 **The Standard Configuration (JSON):**
 ```json
@@ -54,11 +68,11 @@ When you start a new session, I automatically perform a "handshake" with the MCP
 ### 2. Context Activation
 I don't just "sit there." I actively look for your project's context:
 *   I resolve your current **Git Repository** name to isolate memories.
-*   I detect your **Tech Stack** (e.g., React, Python) to pull relevant memories from other projects via affinity tags.
+*   I detect your **Tech Stack** (e.g., React, Python, Filament) to pull relevant memories from other projects via affinity tags.
 
 ### 3. Validation Ritual
 To ensure I am connected correctly, you can ask me:
-> *"What do you remember about this project?"* or *"Check your local memory for any Filament coding standards."*
+> *"What do you remember about this project?"* or *"Check your local memory for any coding standards related to this tech stack."*
 
 If I respond with a list of facts or a "No memories found yet" message (instead of an error), it means I am successfully integrated and ready to work.
 
