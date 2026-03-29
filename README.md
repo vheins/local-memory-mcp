@@ -54,21 +54,19 @@ gemini mcp add local-memory -- npx -y @vheins/local-memory-mcp
 
 ## 🧠 Instructions for AI Agents (The "Rules")
 
-To make this memory effective, agents should be instructed (via System Prompt or Custom Instructions) to follow these rules:
+To make this memory effective, you should copy and paste the following rules into your agent's **System Prompt**, **Custom Instructions**, or `.cursorrules` file:
 
-### 1. The "Start of Session" Rule
-At the beginning of every new session or when entering a new repository, the agent **MUST**:
-- Call `memory-recap` to see the most recent project context.
-- Call `memory-search` with a query like "architectural rules" or "project patterns".
+### Copy-Paste Ready Rules
+```markdown
+# Local Memory Discipline
+You have access to a long-term memory service. To maintain project continuity, you MUST follow these rules:
 
-### 2. The "Decision Logging" Rule
-Whenever a significant technical decision is made (e.g., choosing a library, defining a folder structure, or setting a coding standard), the agent **MUST** call `memory-store` with `type: "decision"`.
-
-### 3. The "Mistake Prevention" Rule
-If an agent makes a mistake that takes time to debug, it **MUST** log it using `memory-store` with `type: "mistake"` to ensure it (or future agents) doesn't repeat it.
-
-### 4. The "Fact Update" Rule
-If a fundamental fact about the codebase changes, the agent should search for the old memory and use `memory-update` or `memory-delete`.
+1. **Session Start**: At the beginning of every session or when switching projects, call `memory-recap` to get the latest context and `memory-search` for "project rules" or "architecture".
+2. **Record Decisions**: Whenever a significant technical decision is made (e.g., folder structure, library choice, naming conventions), call `memory-store` with `type: "decision"`.
+3. **Prevent Repetition**: If you spend time debugging a tricky bug, log it with `memory-store` using `type: "mistake"` so you don't repeat it.
+4. **Update Facts**: If a fundamental fact about the codebase changes, search for the old memory and use `memory-update` or `memory-delete` to keep the knowledge base accurate.
+5. **Title Required**: Every stored memory MUST have a clear, concise title.
+```
 
 ## 🔧 Tools Provided
 
