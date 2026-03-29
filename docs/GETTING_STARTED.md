@@ -1,31 +1,27 @@
 # Getting Started & Setup
 
-This guide provides step-by-step instructions to install and configure the MCP Local Memory Service globally on your machine for various AI Agents and IDEs.
+This guide provides instructions for bringing the MCP Local Memory Service to life from two critical perspectives.
 
-## 1. Installation
+---
 
-Install the package globally using NPM to make it available to all your MCP clients:
+## 🧑‍💻 As a Developer: "I am setting up the infrastructure."
 
+As a developer, your job is to install the binary and register the server within your environment.
+
+### 1. Installation
+Install the service globally on your machine:
 ```bash
 npm install -g @vheins/local-memory-mcp
 ```
 
-*Verification:* Run `npx @vheins/local-memory-mcp --help` to ensure the server is accessible.
+### 2. Configuration (User Level)
+Add the server to your favorite tool's global configuration file.
 
----
+*   **Claude Desktop:** Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`).
+*   **Cursor:** Edit `~/.cursor/mcp.json`.
+*   **Windsurf:** Edit `~/.codeium/windsurf/mcp_config.json`.
 
-## 2. Global Configuration (User Level)
-
-To enable the memory service in your favorite tools, add it to their respective global configuration files.
-
-### 🏠 Claude Desktop
-Claude Desktop uses a central JSON file to manage MCP servers.
-
-- **File Path:**
-  - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-  - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-- **Configuration:**
+**The Standard Configuration (JSON):**
 ```json
 {
   "mcpServers": {
@@ -37,93 +33,36 @@ Claude Desktop uses a central JSON file to manage MCP servers.
 }
 ```
 
-### 🛸 Cursor
-Cursor looks for a global MCP configuration in your home directory.
-
-- **File Path:** `~/.cursor/mcp.json` (Create it if it doesn't exist)
-
-- **Configuration:**
-```json
-{
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"]
-    }
-  }
-}
-```
-
-### 🌊 Windsurf (Codeium)
-Windsurf stores its configuration within the Codeium folder.
-
-- **File Path:** `~/.codeium/windsurf/mcp_config.json`
-
-- **Configuration:**
-```json
-{
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"]
-    }
-  }
-}
-```
-
-### 📝 VS Code (via Roo Code / Cline)
-Extensions like **Roo Code** or **Cline** allow you to configure MCP servers.
-
-- **Setup:** Open the extension settings or Command Palette and find "Open User Configuration".
-- **Configuration Key:** Use `mcpServers` or `servers` depending on the extension.
-```json
-{
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"]
-    }
-  }
-}
-```
-
-### 🪿 Goose (Block)
-Goose uses a YAML configuration file for its extensions.
-
-- **File Path:** `~/.config/goose/config.yaml`
-
-- **Configuration:**
-```yaml
-extensions:
-  local-memory:
-    name: local-memory
-    cmd: npx
-    args:
-      - -y
-      - "@vheins/local-memory-mcp"
-    enabled: true
-    type: stdio
+### 3. Verification
+Run the following command to ensure the database is initialized correctly:
+```bash
+npx @vheins/local-memory-mcp --help
 ```
 
 ---
 
-## 3. Environment Variables (Optional)
+## 🤖 As an AI Agent: "I am discovering my new memory."
 
-You can customize the server behavior by setting these variables in your OS or within the `env` section of your JSON config:
+Once the developer has registered the server, I (the Agent) take over the integration process.
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `MEMORY_DB_PATH` | Custom path for the SQLite database | `~/.config/local-memory-mcp/memory.db` |
-| `ENABLE_AUTO_ARCHIVE` | Enable automatic decay of old memories | `false` |
-| `LOG_LEVEL` | Logging verbosity (`info`, `debug`, `warn`, `error`) | `info` |
+### 1. Handshake & Discovery
+When you start a new session, I automatically perform a "handshake" with the MCP server. I discover the following capabilities:
+*   **Tools:** I see `memory-store`, `memory-search`, etc.
+*   **Resources:** I find the `memory://index` URI to browse existing knowledge.
+*   **Prompts:** I read the `memory-agent-core` prompt to understand my new behavioral contract.
+
+### 2. Context Activation
+I don't just "sit there." I actively look for your project's context:
+*   I resolve your current **Git Repository** name to isolate memories.
+*   I detect your **Tech Stack** (e.g., React, Python) to pull relevant memories from other projects via affinity tags.
+
+### 3. Validation Ritual
+To ensure I am connected correctly, you can ask me:
+> *"What do you remember about this project?"* or *"Check your local memory for any Filament coding standards."*
+
+If I respond with a list of facts or a "No memories found yet" message (instead of an error), it means I am successfully integrated and ready to work.
 
 ---
-
-## 4. Troubleshooting
-
-1. **Server not found:** Ensure `npx` is in your system PATH.
-2. **Permission denied:** On Linux/macOS, ensure the configuration folder is writable by your user.
-3. **Logs:** Check the Agent's output console or the server logs for detailed error messages.
 
 ## ⚠️ Disclaimer
-**THE SOFTWARE IS PROVIDED "AS IS"**, without warranty of any kind. Installation and configuration are performed at the user's own risk.
+**THE SOFTWARE IS PROVIDED "AS IS"**, without warranty of any kind. Both developer and agent must collaborate to ensure the quality and accuracy of stored data.
