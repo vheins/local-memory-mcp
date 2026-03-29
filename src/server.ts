@@ -10,6 +10,17 @@ import { logger } from "./utils/logger.js";
 const db = new SQLiteStore();
 const vectors = new StubVectorStore(db);
 
+// Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
+process.stdout.on('error', (err: any) => {
+  if (err.code === 'EPIPE') return;
+  logger.error("stdout error", { error: String(err) });
+});
+
+process.stderr.on('error', (err: any) => {
+  if (err.code === 'EPIPE') return;
+  logger.error("stderr error", { error: String(err) });
+});
+
 // Wire router with injected storage
 const handleMethod = createRouter(db, vectors);
 
@@ -34,10 +45,8 @@ function reply(payload: unknown) {
   try {
     process.stdout.write(JSON.stringify(payload) + "\n");
   } catch (err: any) {
-    // Ignore EPIPE errors (broken pipe when client disconnects)
-    if (err.code !== "EPIPE") {
-      throw err;
-    }
+    // Other errors still logged
+    logger.error("Reply error", { error: String(err) });
   }
 }
 

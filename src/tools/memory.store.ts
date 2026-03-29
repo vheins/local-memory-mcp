@@ -24,6 +24,7 @@ export async function handleMemoryStore(
   const entry: MemoryEntry = {
     id: randomUUID(),
     type: validated.type,
+    title: validated.title,
     content: validated.content,
     importance: validated.importance,
     scope: validated.scope,

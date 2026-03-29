@@ -24,7 +24,7 @@ echo ""
 echo "Test 3: Store and retrieve memory"
 cat << 'EOF' | node dist/server.js > /tmp/test-output.txt
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","content":"Test decision for validation","importance":5,"scope":{"repo":"test-repo"}}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","title":"Test decision","content":"Test decision for validation","importance":5,"scope":{"repo":"test-repo"}}}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"memory.search","arguments":{"query":"decision","repo":"test-repo","limit":5}}}
 EOF
 
@@ -35,8 +35,8 @@ echo ""
 echo "Test 4: Cross-repo isolation"
 cat << 'EOF' | node dist/server.js > /tmp/test-cross-repo.txt
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","content":"Decision for repo A","importance":5,"scope":{"repo":"repo-a"}}}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","content":"Decision for repo B","importance":5,"scope":{"repo":"repo-b"}}}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","title":"Decision A","content":"Decision for repo A","importance":5,"scope":{"repo":"repo-a"}}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"memory.store","arguments":{"type":"decision","title":"Decision B","content":"Decision for repo B","importance":5,"scope":{"repo":"repo-b"}}}}
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"memory.search","arguments":{"query":"decision","repo":"repo-a","limit":5}}}
 {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"memory.search","arguments":{"query":"decision","repo":"repo-b","limit":5}}}
 EOF

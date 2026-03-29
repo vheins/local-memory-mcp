@@ -427,22 +427,7 @@ export class SQLiteStore {
       const memoryVector = this.computeVector(memory.content);
       const similarity = this.cosineSimilarity(queryVector, memoryVector);
       return { 
-        id: row.id,
-        type: row.type,
-        title: row.title || undefined,
-        content: row.content,
-        importance: row.importance,
-        scope: {
-          repo: row.repo,
-          folder: row.folder || undefined,
-          language: row.language || undefined,
-        },
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        hit_count: row.hit_count ?? 0,
-        recall_count: row.recall_count ?? 0,
-        last_used_at: row.last_used_at ?? null,
-        expires_at: row.expires_at ?? null,
+        ...memory,
         similarity
       };
     });
@@ -664,7 +649,7 @@ export class SQLiteStore {
     return {
       id: row.id,
       type: row.type,
-      title: row.title || undefined,
+      title: row.title || "Untitled Memory",
       content: row.content,
       importance: row.importance,
       scope: {
@@ -678,7 +663,7 @@ export class SQLiteStore {
       recall_count: row.recall_count ?? 0,
       last_used_at: row.last_used_at ?? null,
       expires_at: row.expires_at ?? null,
-    };
+    } as MemoryEntry;
   }
 
   logAction(action: 'search' | 'read' | 'write' | 'update' | 'delete', repo: string, options?: { query?: string; memoryId?: string; resultCount?: number }) {
