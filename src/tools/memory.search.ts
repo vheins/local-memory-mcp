@@ -42,7 +42,8 @@ export async function handleMemorySearch(
     searchQuery,
     validated.repo,
     validated.limit * 3,
-    validated.include_archived
+    validated.include_archived,
+    validated.current_tags ?? []
   );
 
   let candidates = similarityResults.map(r => ({

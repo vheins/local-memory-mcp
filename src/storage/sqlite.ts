@@ -159,6 +159,8 @@ export class SQLiteStore {
       { name: "expires_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
       { name: "supersedes", table: "memories", definition: "ALTER TABLE memories ADD COLUMN supersedes TEXT" },
       { name: "status", table: "memories", definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'" },
+      { name: "is_global", table: "memories", definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0" },
+      { name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
       { name: "vector_version", table: "memory_vectors", definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1" },
     ];
 
@@ -175,6 +177,7 @@ export class SQLiteStore {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
       CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
+      CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
     `);
   }
 
@@ -183,8 +186,8 @@ export class SQLiteStore {
       INSERT INTO memories (
         id, repo, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
-        supersedes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?)
+        supersedes, status, is_global, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -200,7 +203,9 @@ export class SQLiteStore {
       entry.updated_at,
       entry.expires_at ?? null,
       entry.supersedes ?? null,
-      entry.status || "active"
+      entry.status || "active",
+      entry.is_global ? 1 : 0,
+      entry.tags ? JSON.stringify(entry.tags) : null
     );
   }
 
@@ -210,8 +215,16 @@ export class SQLiteStore {
 
     Object.keys(updates).forEach(key => {
       if (updates[key] !== undefined) {
-        fields.push(`${key} = ?`);
-        values.push(updates[key]);
+        if (key === 'tags') {
+          fields.push(`tags = ?`);
+          values.push(JSON.stringify(updates[key]));
+        } else if (key === 'is_global') {
+          fields.push(`is_global = ?`);
+          values.push(updates[key] ? 1 : 0);
+        } else {
+          fields.push(`${key} = ?`);
+          values.push(updates[key]);
+        }
       }
     });
 
@@ -239,8 +252,16 @@ export class SQLiteStore {
   }
 
   searchByRepo(repo: string, options: any = {}): MemoryEntry[] {
-    let query = `SELECT * FROM memories WHERE repo = ? AND (expires_at IS NULL OR expires_at > datetime('now'))`;
+    let where = ["(repo = ? OR is_global = 1)"];
     const params: any[] = [repo];
+
+    if (options.tags?.length) {
+      const tagConditions = options.tags.map(() => "tags LIKE ?").join(" OR ");
+      where.push(`(${tagConditions})`);
+      options.tags.forEach((tag: string) => params.push(`%${tag}%`));
+    }
+
+    let query = `SELECT * FROM memories WHERE ${where.join(" AND ")} AND (expires_at IS NULL OR expires_at > datetime('now'))`;
 
     if (!options.includeArchived) query += " AND status = 'active'";
     if (options.types?.length) {
@@ -252,7 +273,9 @@ export class SQLiteStore {
       params.push(options.minImportance);
     }
 
-    query += " ORDER BY importance DESC, created_at DESC";
+    query += " ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC";
+    params.push(repo);
+
     if (options.limit) {
       query += " LIMIT ?";
       params.push(options.limit);
@@ -262,19 +285,28 @@ export class SQLiteStore {
     return rows.map(r => this.rowToMemoryEntry(r));
   }
 
-  searchBySimilarity(query: string, repo: string, limit: number = 10, includeArchived: boolean = false): any[] {
+  searchBySimilarity(query: string, repo: string, limit: number = 10, includeArchived: boolean = false, currentTags: string[] = []): any[] {
     const queryVector = this.computeVector(query);
     const now = new Date().toISOString();
 
-    let sql = `SELECT * FROM memories WHERE repo = ? AND (expires_at IS NULL OR expires_at > ?)`;
+    let where = ["(repo = ? OR is_global = 1)"];
+    const params: any[] = [repo];
+
+    if (currentTags.length > 0) {
+      const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
+      where.push(`(${tagConditions})`);
+      currentTags.forEach(tag => params.push(`%${tag}%`));
+    }
+
+    let sql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND (expires_at IS NULL OR expires_at > ?)`;
     if (!includeArchived) sql += " AND status = 'active'";
-    sql += ` ORDER BY importance DESC, created_at DESC LIMIT 100`;
+    sql += ` ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
     
-    let candidates = this.db.prepare(sql).all(repo, now) as any[];
+    let candidates = this.db.prepare(sql).all(...params, now, repo) as any[];
 
     // Ensure we have at least some candidates for re-ranking
     if (candidates.length < 5) {
-      const recent = this.db.prepare(`SELECT * FROM memories WHERE repo = ? AND status = 'active' ORDER BY created_at DESC LIMIT 10`).all(repo) as any[];
+      const recent = this.db.prepare(`SELECT * FROM memories WHERE (repo = ? OR is_global = 1) AND status = 'active' ORDER BY created_at DESC LIMIT 10`).all(repo) as any[];
       for (const r of recent) {
         if (!candidates.find(c => c.id === r.id)) candidates.push(r);
       }
@@ -284,7 +316,11 @@ export class SQLiteStore {
       const memory = this.rowToMemoryEntry(row);
       const similarity = this.cosineSimilarity(queryVector, this.computeVector(memory.content));
       // Give a slightly higher baseline if it's a direct fallback to ensure it passes small-db threshold (0.15)
-      return { ...memory, similarity: similarity || 0.16 };
+      // Boost if same repo
+      let score = similarity || 0.16;
+      if (row.repo === repo) score += 0.1;
+      
+      return { ...memory, similarity: score };
     }).sort((a, b) => b.similarity - a.similarity).slice(0, limit);
   }
 
@@ -413,11 +449,17 @@ export class SQLiteStore {
   }
 
   private rowToMemoryEntry(row: any): MemoryEntry {
+    let tags: string[] = [];
+    try {
+      if (row.tags) tags = JSON.parse(row.tags);
+    } catch (e) {}
+
     return {
       id: row.id, type: row.type, title: row.title || "Untitled", content: row.content, importance: row.importance,
       scope: { repo: row.repo, folder: row.folder || undefined, language: row.language || undefined },
       created_at: row.created_at, updated_at: row.updated_at, hit_count: row.hit_count ?? 0, recall_count: row.recall_count ?? 0,
       last_used_at: row.last_used_at ?? null, expires_at: row.expires_at ?? null, supersedes: row.supersedes ?? null, status: row.status || "active",
+      is_global: row.is_global === 1, tags
     };
   }
 

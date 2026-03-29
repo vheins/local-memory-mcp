@@ -18,7 +18,9 @@ export const MemoryStoreSchema = z.object({
   importance: z.number().min(1).max(5),
   scope: MemoryScopeSchema,
   ttlDays: z.number().min(1).optional(),
-  supersedes: z.string().uuid().optional()
+  supersedes: z.string().uuid().optional(),
+  tags: z.array(z.string()).optional(),
+  is_global: z.boolean().default(false)
 });
 
 export const MemoryUpdateSchema = z.object({
@@ -27,10 +29,12 @@ export const MemoryUpdateSchema = z.object({
   content: z.string().min(10).optional(),
   importance: z.number().min(1).max(5).optional(),
   status: z.enum(["active", "archived"]).optional(),
-  supersedes: z.string().uuid().optional()
+  supersedes: z.string().uuid().optional(),
+  tags: z.array(z.string()).optional(),
+  is_global: z.boolean().optional()
 }).refine(
-  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined,
-  { message: "At least one of title, content, importance, status or supersedes must be provided" }
+  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined || data.tags !== undefined || data.is_global !== undefined,
+  { message: "At least one field must be provided for update" }
 );
 
 export const MemorySearchSchema = z.object({
@@ -42,7 +46,8 @@ export const MemorySearchSchema = z.object({
   limit: z.number().min(1).max(10).default(5),
   includeRecap: z.boolean().default(false),
   current_file_path: z.string().optional(),
-  include_archived: z.boolean().default(false)
+  include_archived: z.boolean().default(false),
+  current_tags: z.array(z.string()).optional()
 });
 
 export const MemoryAcknowledgeSchema = z.object({
@@ -66,7 +71,7 @@ export const MemorySummarizeSchema = z.object({
 export const TOOL_DEFINITIONS = [
   {
     name: "memory-store",
-    description: "Store a new memory entry that affects future behavior. Use 'supersedes' if this replaces an older decision.",
+    description: "Store a new memory entry. Use 'tags' for tech-stack (e.g., ['filament', 'vue']) and 'is_global' for universal rules.",
     inputSchema: {
       type: "object",
       properties: {
@@ -79,12 +84,12 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           minLength: 3,
           maxLength: 100,
-          description: "Short title for the memory (required)"
+          description: "Short title for the memory"
         },
         content: {
           type: "string",
           minLength: 10,
-          description: "The memory content (must be durable knowledge)"
+          description: "The memory content"
         },
         importance: {
           type: "number",
@@ -95,35 +100,24 @@ export const TOOL_DEFINITIONS = [
         scope: {
           type: "object",
           properties: {
-            repo: {
-              type: "string",
-              description: "Repository name (required)"
-            },
-            branch: {
-              type: "string",
-              description: "Git branch (optional)"
-            },
-            folder: {
-              type: "string",
-              description: "Specific folder path (optional)"
-            },
-            language: {
-              type: "string",
-              description: "Programming language (optional)"
-            }
+            repo: { type: "string", description: "Repository name" },
+            branch: { type: "string" },
+            folder: { type: "string" },
+            language: { type: "string" }
           },
           required: ["repo"]
         },
-        ttlDays: {
-          type: "number",
-          minimum: 1,
-          description: "Time-to-live in days. Memory will expire after this many days (optional)"
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Technology stack tags (e.g., ['filament', 'laravel'])"
         },
-        supersedes: {
-          type: "string",
-          format: "uuid",
-          description: "ID of an older memory that this entry replaces (optional)"
-        }
+        is_global: {
+          type: "boolean",
+          description: "If true, this memory is shared across all repositories"
+        },
+        ttlDays: { type: "number", minimum: 1 },
+        supersedes: { type: "string", format: "uuid" }
       },
       required: ["type", "title", "content", "importance", "scope"]
     }
@@ -134,21 +128,9 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        memory_id: {
-          type: "string",
-          format: "uuid",
-          description: "Memory entry ID"
-        },
-        status: {
-          type: "string",
-          enum: ["used", "irrelevant", "contradictory"],
-          description: "Status of memory usage"
-        },
-        application_context: {
-          type: "string",
-          minLength: 10,
-          description: "Contextual info on how it was applied or why it failed (optional)"
-        }
+        memory_id: { type: "string", format: "uuid" },
+        status: { type: "string", enum: ["used", "irrelevant", "contradictory"] },
+        application_context: { type: "string", minLength: 10 }
       },
       required: ["memory_id", "status"]
     }
@@ -159,96 +141,41 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        id: {
-          type: "string",
-          format: "uuid",
-          description: "Memory entry ID"
-        },
-        title: {
-          type: "string",
-          minLength: 3,
-          maxLength: 100,
-          description: "Updated title (optional)"
-        },
-        content: {
-          type: "string",
-          minLength: 10,
-          description: "Updated content (optional)"
-        },
-        importance: {
-          type: "number",
-          minimum: 1,
-          maximum: 5,
-          description: "Updated importance (optional)"
-        },
-        status: {
-          type: "string",
-          enum: ["active", "archived"],
-          description: "Update memory status (optional)"
-        },
-        supersedes: {
-          type: "string",
-          format: "uuid",
-          description: "Set or update superseded memory ID (optional)"
-        }
+        id: { type: "string", format: "uuid" },
+        title: { type: "string", minLength: 3, maxLength: 100 },
+        content: { type: "string", minLength: 10 },
+        importance: { type: "number", minimum: 1, maximum: 5 },
+        status: { type: "string", enum: ["active", "archived"] },
+        supersedes: { type: "string", format: "uuid" },
+        tags: { type: "array", items: { type: "string" } },
+        is_global: { type: "boolean" }
       },
       required: ["id"]
     }
   },
   {
     name: "memory-search",
-    description: "Search for relevant memories. Always provide current_file_path for accurate results.",
+    description: "Search for relevant memories. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
     inputSchema: {
       type: "object",
       properties: {
-        query: {
-          type: "string",
-          minLength: 3,
-          description: "Search query"
-        },
-        prompt: {
-          type: "string",
-          description: "Context/prompt to help determine relevance (optional)"
-        },
-        repo: {
-          type: "string",
-          description: "Repository name (required)"
+        query: { type: "string", minLength: 3 },
+        prompt: { type: "string" },
+        repo: { type: "string" },
+        current_tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Active tech stack tags (e.g., ['filament', 'react'])"
         },
         types: {
           type: "array",
-          items: {
-            type: "string",
-            enum: ["code_fact", "decision", "mistake", "pattern"]
-          },
-          description: "Filter by memory types (optional)"
+          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern"] }
         },
-        minImportance: {
-          type: "number",
-          minimum: 1,
-          maximum: 5,
-          description: "Minimum importance score (optional)"
-        },
-        limit: {
-          type: "number",
-          minimum: 1,
-          maximum: 10,
-          default: 5,
-          description: "Maximum number of results"
-        },
-        includeRecap: {
-          type: "boolean",
-          default: false,
-          description: "Include recent memories recap context (optional)"
-        },
-        current_file_path: {
-          type: "string",
-          description: "Full or relative path to the file you are currently working on (required for ranking boost)"
-        },
-        include_archived: {
-          type: "boolean",
-          default: false,
-          description: "Include archived memories in search (optional)"
-        }
+        minImportance: { type: "number", minimum: 1, maximum: 5 },
+        limit: { type: "number", minimum: 1, maximum: 10, default: 5 },
+        includeRecap: { type: "boolean", default: false },
+        current_file_path: { type: "string" },
+        include_archived: { type: "boolean", default: false }
       },
       required: ["query", "repo"]
     }
@@ -259,16 +186,10 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        repo: {
-          type: "string",
-          description: "Repository name"
-        },
+        repo: { type: "string", description: "Repository name" },
         signals: {
           type: "array",
-          items: {
-            type: "string",
-            maxLength: 200
-          },
+          items: { type: "string", maxLength: 200 },
           minItems: 1,
           description: "High-level signals to include in summary"
         }
@@ -282,11 +203,7 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        id: {
-          type: "string",
-          format: "uuid",
-          description: "Memory entry ID to delete"
-        }
+        id: { type: "string", format: "uuid", description: "Memory entry ID to delete" }
       },
       required: ["id"]
     }
@@ -297,10 +214,7 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        repo: {
-          type: "string",
-          description: "Repository name (required)"
-        },
+        repo: { type: "string", description: "Repository name (required)" },
         limit: {
           type: "number",
           minimum: 1,

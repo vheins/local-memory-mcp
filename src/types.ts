@@ -24,6 +24,8 @@ export type MemoryEntry = {
   expires_at: string | null;
   supersedes: string | null;
   status: "active" | "archived";
+  tags: string[];
+  is_global: boolean;
 };
 
 export type VectorResult = {

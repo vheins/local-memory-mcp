@@ -224,4 +224,37 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
     expect(duplicateRes.content[0].text).toContain("conflict");
     expect(db.getTotalCount(REPO)).toBe(1); // Should still be 1
   });
+
+  /**
+   * SCENARIO 6: Cross-Project Knowledge Sharing (Tech-Stack Affinity)
+   * Repository A has Filament knowledge. Repository B (new) should access it via tags.
+   */
+  it("should share knowledge across projects using tech-stack affinity tags", async () => {
+    // 1. Store Filament best practice in Repo A
+    await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "pattern",
+        title: "Filament Custom Action",
+        content: "Always use ->requiresConfirmation() for destructive actions in Filament.",
+        importance: 5,
+        scope: { repo: "project-a" },
+        tags: ["filament", "laravel"]
+      }
+    });
+
+    // 2. Search in Repo B (which is empty) with "filament" tag
+    const searchRes = await router("tools/call", {
+      name: "memory-search",
+      arguments: {
+        query: "how to make safe actions?",
+        repo: "project-b",
+        current_tags: ["filament"]
+      }
+    });
+
+    // EXPECT: Should find the "Filament Custom Action" from Project A
+    expect(searchRes.content[0].text).toContain("Filament Custom Action");
+    expect(searchRes.data.results[0].scope.repo).toBe("project-a");
+  });
 });

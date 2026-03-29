@@ -59,23 +59,37 @@
   - `system_threshold_applied`.
 - Data ini diekspos di Dashboard dalam bentuk **Decision Tree** untuk audit manual oleh developer.
 
+## 7. Tech-Stack Affinity & Cross-Project Knowledge
+**Problem:** User sering berpindah proyek dengan stack yang sama (misal: Filament, Vue, NestJS) dan tidak ingin kehilangan best practices yang sudah disimpan di proyek lama.
+**Requirement:**
+- Mendukung sharing memori lintas proyek berdasarkan tag teknologi.
+- Menghindari context leakage (jangan munculkan tips Python saat sedang di proyek React).
+**Design:**
+- **New Metadata:** `tags: string[]` dan `is_global: boolean`.
+- **Search Logic:**
+  - `Query Scope = (memory.repo == current_repo) OR (memory.is_global == true) OR (intersection(memory.tags, current_tags) is not empty)`.
+- **Ranking Weights (Multi-Project):**
+  - `Local Match Boost`: +0.35 (Prioritas utama).
+  - `Tag Affinity Boost`: +0.15 (Sangat relevan karena tech stack sama).
+  - `Global Boost`: +0.05 (Aturan umum).
+- **Auto-Discovery:** Agen disarankan mengirimkan `current_tags` (didapat dari analisis package.json/composer.json) ke `memory-search`.
+
 ---
 
-## Technical Tasks (Phase 1: Strict Foundation)
+## Technical Tasks (Phase 4: Multi-Project Sharing)
 
-### 1.1 Schema Update (SQLite)
-- [ ] Add `supersedes` column to `memories` (Self-referencing ID).
-- [ ] Add `status` (active/archived) index.
-- [ ] Add `vector_version` to `memory_vectors` (untuk tracking migrasi model embedding).
+### 4.1 Schema Update
+- [ ] Add `is_global` (INTEGER 0/1) to `memories`.
+- [ ] Add `tags` (TEXT - JSON Array) to `memories`.
+- [ ] Indexing on `is_global`.
 
-### 1.2 Tool Schema Enforcement (Zod)
-- [ ] Update `MemorySearchSchema`: add `current_file_path` (string), `include_archived` (boolean).
-- [ ] Create `MemoryAcknowledgeSchema`.
-- [ ] Update `MemoryStoreSchema`: add `supersedes` (optional UUID).
+### 4.2 Tool Update
+- [ ] `memory-store`: add `tags` and `is_global` parameters.
+- [ ] `memory-search`: add `current_tags` parameter.
 
-### 1.3 Conflict Detection Logic
-- [ ] Implement `checkConflicts(content, repo)` helper.
-- [ ] Integrate conflict check into `handleMemoryStore`.
+### 4.3 Ranking Engine Update
+- [ ] Implement intersection logic for tags in `handleMemorySearch`.
+- [ ] Apply multi-dimensional ranking weights.
 
 ---
 

@@ -66,7 +66,9 @@ export async function handleMemoryStore(
     last_used_at: null,
     expires_at,
     supersedes: validated.supersedes ?? null,
-    status: "active"
+    status: "active",
+    tags: validated.tags ?? [],
+    is_global: validated.is_global
   };
 
   // Store in SQLite
