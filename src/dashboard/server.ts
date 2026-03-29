@@ -302,6 +302,7 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
+  console.log("DASHBOARD_STARTING");
   logger.info("MCP Memory Dashboard started", { port: PORT });
 });
 
