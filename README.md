@@ -39,6 +39,7 @@ Add the following to your MCP settings file:
 ## 📖 Documentation
 
 - [Getting Started & Setup](docs/GETTING_STARTED.md)
+- [Perspectives: Why use Local Memory?](docs/PERSPECTIVES.md)
 - [Features & How it Works](docs/FEATURES.md)
 - [MCP Protocol Reference (Tools & Resources)](docs/MCP_PROTOCOL.md)
 - [Dashboard & Debugging](docs/DASHBOARD_DEBUGGING.md)
