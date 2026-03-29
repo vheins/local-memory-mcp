@@ -8,6 +8,7 @@ import { SQLiteStore } from "../storage/sqlite.js";
 import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"));
 const app = express();
 const PORT = process.env.PORT || 3456;
 const startTime = Date.now();
@@ -302,8 +303,8 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("DASHBOARD_STARTING");
-  logger.info("MCP Memory Dashboard started", { port: PORT });
+  console.log(`DASHBOARD_STARTING v${pkg.version}`);
+  logger.info("MCP Memory Dashboard started", { port: PORT, version: pkg.version });
 });
 
 function condenseRecentActions(actions: RecentAction[], limit: number): CondensedRecentAction[] {
