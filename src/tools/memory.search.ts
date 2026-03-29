@@ -78,8 +78,10 @@ export async function handleMemorySearch(
   let candidates: Array<{ memory: MemoryEntry; similarityScore: number }>;
 
   if (similarityResults.length > 0) {
-    // Filter by strict threshold (0.72)
-    const filteredResults = similarityResults.filter(r => r.similarity >= 0.72);
+    // Filter by strict threshold (0.70) or take all if very few results (help new projects)
+    const filteredResults = similarityResults.length <= 3 
+      ? similarityResults 
+      : similarityResults.filter(r => r.similarity >= 0.70);
     
     candidates = filteredResults.map((result) => ({
       memory: result,
@@ -211,7 +213,7 @@ export async function handleMemorySearch(
   // Apply another round of filtering to ensure results are strictly above threshold
   // This is the final guard against hallucination
   const finalCandidates = scoredMemories
-    .filter(sm => sm.finalScore >= 0.72)
+    .filter(sm => sm.finalScore >= 0.70)
     .slice(0, validated.limit)
     .map(sm => sm.memory);
 

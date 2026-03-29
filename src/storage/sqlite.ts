@@ -305,9 +305,137 @@ export class SQLiteStore {
     return rows.map((row) => this.rowToMemoryEntry(row));
   }
 
-  // ... (getById methods)
+  getById(id: string): MemoryEntry | null {
+    const stmt = this.db.prepare("SELECT * FROM memories WHERE id = ?");
+    const row = stmt.get(id) as any;
+    if (!row) return null;
+    return this.rowToMemoryEntry(row);
+  }
 
-  // Sub-task 2.2: Public method for Memory_Recap
+  getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
+    const stmt = this.db.prepare(`
+      SELECT *,
+        CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories
+      WHERE id = ?
+    `);
+    const row = stmt.get(id) as any;
+    if (!row) return null;
+
+    return {
+      ...this.rowToMemoryEntry(row),
+      recall_rate: row.recall_rate ?? 0,
+    };
+  }
+
+  listRecent(limit: number = 10): Array<{ id: string; type: string; repo: string }> {
+    const stmt = this.db.prepare(`
+      SELECT id, type, repo
+      FROM memories
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit) as any[];
+  }
+
+  getSummary(repo: string): { summary: string; updated_at: string } | null {
+    const stmt = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?");
+    return stmt.get(repo) as any;
+  }
+
+  upsertSummary(repo: string, summary: string): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO memory_summary (repo, summary, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(repo) DO UPDATE SET
+        summary = excluded.summary,
+        updated_at = excluded.updated_at
+    `);
+    stmt.run(repo, summary, new Date().toISOString());
+  }
+
+  delete(id: string): void {
+    const stmt = this.db.prepare("DELETE FROM memories WHERE id = ?");
+    stmt.run(id);
+  }
+
+  // Sub-task 2.5: Renamed from listAllRepos to listRepos
+  listRepos(): string[] {
+    const stmt = this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo");
+    const rows = stmt.all() as any[];
+    return rows.map((row) => row.repo);
+  }
+
+  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
+    const stmt = this.db.prepare(`
+      SELECT
+        repo,
+        COUNT(*) AS memory_count,
+        MAX(COALESCE(updated_at, created_at)) AS last_updated_at
+      FROM memories
+      GROUP BY repo
+      ORDER BY last_updated_at DESC, repo ASC
+    `);
+
+    return stmt.all() as Array<{ repo: string; memory_count: number; last_updated_at: string | null }>;
+  }
+
+  incrementHitCount(id: string): void {
+    const stmt = this.db.prepare(`
+      UPDATE memories
+      SET hit_count = hit_count + 1,
+          last_used_at = ?
+      WHERE id = ?
+    `);
+    stmt.run(new Date().toISOString(), id);
+  }
+
+  incrementRecallCount(id: string): void {
+    const stmt = this.db.prepare(`
+      UPDATE memories
+      SET recall_count = recall_count + 1,
+          last_used_at = ?
+      WHERE id = ?
+    `);
+    stmt.run(new Date().toISOString(), id);
+  }
+
+  getStats(repo?: string): {
+    total: number;
+    byType: Record<string, number>;
+    unused: number;
+  } {
+    let query = "SELECT type, COUNT(*) as count FROM memories";
+    const params: unknown[] = [];
+
+    if (repo) {
+      query += " WHERE repo = ?";
+      params.push(repo);
+    }
+
+    query += " GROUP BY type";
+
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(...params) as any[];
+
+    const byType: Record<string, number> = {};
+    let total = 0;
+
+    for (const row of rows) {
+      byType[row.type] = row.count;
+      total += row.count;
+    }
+
+    let unusedQuery = "SELECT COUNT(*) as count FROM memories WHERE hit_count = 0";
+    if (repo) {
+      unusedQuery += " AND repo = ?";
+    }
+    const unusedStmt = this.db.prepare(unusedQuery);
+    const unusedRow = (repo ? unusedStmt.get(repo) : unusedStmt.get()) as any;
+    const unused = unusedRow?.count || 0;
+
+    return { total, byType, unused };
+  }
   getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false): MemoryEntry[] {
     let query = "SELECT * FROM memories WHERE repo = ?";
     if (!includeArchived) {
@@ -355,7 +483,7 @@ export class SQLiteStore {
     sql += ` ORDER BY importance DESC, created_at DESC LIMIT ?`;
     
     const stmt = this.db.prepare(sql);
-    const candidates = stmt.all(repo, now, limit * 10) as any[];
+    const candidates = stmt.all(repo, now, Math.max(limit * 10, 100)) as any[];
 
     const withSimilarity = candidates.map((row) => {
       const memory = this.rowToMemoryEntry(row);
