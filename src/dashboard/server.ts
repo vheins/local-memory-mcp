@@ -88,10 +88,25 @@ app.get("/api/repos", async (req, res) => {
 app.get("/api/recent-actions", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const rawActions = db.getRecentActions(repo, Math.max(limit * 4, 50));
-    const actions = condenseRecentActions(rawActions, limit);
-    res.json({ actions });
+    const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 10));
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    // Fetch enough raw rows to condense into pageSize items per page
+    const fetchLimit = Math.max(pageSize * page * 4, 100);
+    const rawActions = db.getRecentActions(repo, fetchLimit);
+    const allCondensed = condenseRecentActions(rawActions, fetchLimit);
+    const totalItems = allCondensed.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const offset = (page - 1) * pageSize;
+    const actions = allCondensed.slice(offset, offset + pageSize);
+    res.json({
+      actions,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error("Error getting recent actions", { error: message });

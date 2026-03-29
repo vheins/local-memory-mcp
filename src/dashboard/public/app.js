@@ -11,6 +11,10 @@ let lastSyncTime = Date.now();
 let countdownSeconds = 30;
 let countdownInterval = null;
 let recentActions = [];
+let recentActionsPage = 1;
+let recentActionsPageSize = 10;
+let recentActionsTotalPages = 1;
+let recentActionsTotalItems = 0;
 let activeEditMemoryId = null;
 let currentDrawerMemoryId = null;
 let availableRepos = [];
@@ -18,18 +22,26 @@ let isRepoSidebarCollapsed = false;
 let pinnedRepoOrder = [];
 let draggedPinnedRepo = null;
 
-async function loadRecentActions() {
+async function loadRecentActions(page = recentActionsPage) {
     try {
-        const url = currentRepo 
-            ? `/api/recent-actions?repo=${encodeURIComponent(currentRepo)}&limit=50`
-            : '/api/recent-actions?limit=50';
+        let url = `/api/recent-actions?page=${page}&pageSize=${recentActionsPageSize}`;
+        if (currentRepo) url += `&repo=${encodeURIComponent(currentRepo)}`;
         const response = await fetch(url);
         const data = await response.json();
         recentActions = data.actions || [];
+        recentActionsPage = data.pagination?.page ?? page;
+        recentActionsTotalPages = data.pagination?.totalPages ?? 1;
+        recentActionsTotalItems = data.pagination?.totalItems ?? recentActions.length;
         renderRecentActions();
     } catch (err) {
         console.error('Failed to load recent actions:', err);
     }
+}
+
+function goToRecentActionsPage(page) {
+    if (page < 1 || page > recentActionsTotalPages) return;
+    recentActionsPage = page;
+    loadRecentActions(page);
 }
 
 function formatActionDate(dateStr) {
@@ -66,10 +78,14 @@ function getActionColor(action) {
 
 function renderRecentActions() {
     const container = document.getElementById('recentQueries');
-    if (recentActions.length === 0) {
+    const paginationEl = document.getElementById('recentActionsPagination');
+
+    if (recentActions.length === 0 && recentActionsPage === 1) {
         container.innerHTML = '<div class="text-gray-500 text-sm">No recent actions</div>';
+        if (paginationEl) paginationEl.innerHTML = '';
         return;
     }
+
     container.innerHTML = recentActions.map((action) => `
         <div class="recent-action-item flex items-start gap-3 p-3 rounded-xl transition-colors">
             <div class="w-8 h-8 rounded-full ${getActionColor(action.action)} flex items-center justify-center flex-shrink-0">
@@ -87,6 +103,28 @@ function renderRecentActions() {
             </div>
         </div>
     `).join('');
+
+    if (paginationEl) {
+        if (recentActionsTotalPages <= 1) {
+            paginationEl.innerHTML = '';
+        } else {
+            const prevDisabled = recentActionsPage <= 1;
+            const nextDisabled = recentActionsPage >= recentActionsTotalPages;
+            paginationEl.innerHTML = `
+                <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <span class="text-xs text-gray-500">${recentActionsPage} / ${recentActionsTotalPages}</span>
+                    <div class="flex gap-1">
+                        <button onclick="goToRecentActionsPage(${recentActionsPage - 1})"
+                            class="px-2 py-1 rounded text-xs font-medium ${prevDisabled ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                            ${prevDisabled ? 'disabled' : ''}>&#8592;</button>
+                        <button onclick="goToRecentActionsPage(${recentActionsPage + 1})"
+                            class="px-2 py-1 rounded text-xs font-medium ${nextDisabled ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                            ${nextDisabled ? 'disabled' : ''}>&#8594;</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
 }
 
 function searchFromRecent(query) {
@@ -300,6 +338,7 @@ async function setCurrentRepo(repo) {
     if (!repo || repo === currentRepo) return;
     currentRepo = repo;
     currentPage = 1;
+    recentActionsPage = 1;
     selectedIds.clear();
     localStorage.setItem('selectedRepo', currentRepo);
     renderRepoSidebar();
