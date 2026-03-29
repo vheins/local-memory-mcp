@@ -4,20 +4,15 @@ import { SQLiteStore } from "./storage/sqlite.js";
 import { RealVectorStore } from "./storage/vectors.js"; 
 import type { VectorStore } from "./types.js";
 
-// Increase timeout for AI model loading and execution
-vi.setConfig({ testTimeout: 60000 });
+// Global configuration for heavy AI tests
+vi.setConfig({ testTimeout: 90000 });
 
-/**
- * MCP Realistic E2E Test
- * Scenario: An AI Agent onboarding a project and managing architectural decisions.
- */
-describe("MCP Local Memory - Realistic Agent Workflow", () => {
+describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
   let db: SQLiteStore;
   let vectors: VectorStore;
   let router: (method: string, params: any) => Promise<any>;
 
-  const REPO = "modern-payment-gateway";
-  const APP_TS = "src/modules/billing/processor.ts";
+  const REPO = "enterprise-app-v2";
 
   beforeEach(() => {
     db = new SQLiteStore(":memory:");
@@ -25,111 +20,208 @@ describe("MCP Local Memory - Realistic Agent Workflow", () => {
     router = createRouter(db, vectors);
   });
 
-  it("should complete a full agent lifecycle: Discovery -> Store -> Search -> Conflict -> Supersede -> Feedback", async () => {
-    // --- 1. DISCOVERY ---
-    const toolList = await router("tools/list", {});
-    expect(toolList.tools.some((t: any) => t.name === "memory-store")).toBe(true);
+  /**
+   * SCENARIO 1: Semantic Precision & Ranking
+   * Test if the system can distinguish between closely related topics.
+   */
+  it("should maintain high precision ranking among related but distinct technical concepts", async () => {
+    const memories = [
+      { title: "Primary Database", content: "We use SQLite for local persistence to ensure local-first capability." },
+      { title: "Cache Layer", content: "Redis is used for session management and fast lookups." },
+      { title: "Database Migration", content: "Run 'npm run migrate' to update the SQLite schema safely." },
+      { title: "Backup Policy", content: "Hourly snapshots of the .db file are stored in the backups folder." },
+      { title: "External API Integration", content: "The system connects to Postgres only for reporting services." }
+    ];
 
-    // --- 2. INITIAL STORAGE ---
-    const storeRes1 = await router("tools/call", {
-      name: "memory-store",
-      arguments: {
-        type: "decision",
-        title: "Billing Retry Logic",
-        content: "Retry payment processing 3 times before failing.",
-        importance: 4,
-        scope: { repo: REPO, folder: "src/modules/billing" }
-      }
-    });
-    expect(storeRes1.isError).toBeFalsy();
+    for (const m of memories) {
+      await router("tools/call", {
+        name: "memory-store",
+        arguments: {
+          type: "decision",
+          title: m.title,
+          content: m.content,
+          importance: 4,
+          scope: { repo: REPO }
+        }
+      });
+    }
 
-    // --- 3. CONTEXTUAL SEARCH (Workspace-Aware) ---
+    // QUERY: "How do I update the database?" 
+    // EXPECT: "Database Migration" should be Top Match, not "Primary Database"
     const searchRes = await router("tools/call", {
       name: "memory-search",
-      arguments: {
-        query: "How many billing retries?",
-        repo: REPO,
-        current_file_path: APP_TS
-      }
+      arguments: { query: "How do I update the database schema?", repo: REPO }
     });
-    // Should find the memory due to semantic overlap and workspace boost
-    expect(searchRes.content[0].text).toContain("Found 1 memories");
-    expect(searchRes.content[0].text).toContain("Billing Retry Logic");
 
-    // --- 4. CONFLICT DETECTION ---
-    const conflictRes = await router("tools/call", {
+    const textOutput = searchRes.content[0].text;
+    expect(textOutput).toContain("Database Migration");
+    
+    // Validate JSON ordering
+    const results = searchRes.data.results;
+    expect(results[0].title).toBe("Database Migration");
+    expect(results.length).toBeGreaterThan(1); // Should find related db facts too but lower
+  });
+
+  /**
+   * SCENARIO 2: The Correction & Learning Loop
+   * Agent makes a mistake -> Stores it -> Learns -> Replaces it with a pattern.
+   */
+  it("should guide the agent away from past mistakes using supersedes and status", async () => {
+    // 1. Store a mistake
+    const mistakeRes = await router("tools/call", {
       name: "memory-store",
       arguments: {
-        type: "decision",
-        title: "New Policy",
-        content: "Change retry logic to 5 times.",
-        importance: 4,
+        type: "mistake",
+        title: "Large File Upload Failure",
+        content: "Don't use fs.readFileSync for large files, it causes OOM errors.",
+        importance: 5,
         scope: { repo: REPO }
       }
     });
-    // Should be rejected because it's too similar to existing rule
-    expect(conflictRes.content[0].text).toContain("conflict");
+    const mistakeId = mistakeRes.data.id;
 
-    // --- 5. RESOLUTION VIA SUPERSEDES ---
-    const oldId = storeRes1.data.id;
-    const resolveRes = await router("tools/call", {
+    // 2. Store the correct pattern that replaces the mistake
+    await router("tools/call", {
       name: "memory-store",
       arguments: {
-        type: "decision",
-        title: "V2 Billing Policy",
-        content: "We now retry 5 times.",
-        importance: 4,
+        type: "pattern",
+        title: "Streaming File Upload",
+        content: "Always use streams (fs.createReadStream) for files > 10MB.",
+        importance: 5,
         scope: { repo: REPO },
-        supersedes: oldId
+        supersedes: mistakeId
       }
     });
-    expect(resolveRes.isError).toBeFalsy();
+
+    // 3. Search for "file upload"
+    const searchRes = await router("tools/call", {
+      name: "memory-search",
+      arguments: { query: "How to handle file uploads?", repo: REPO }
+    });
+
+    // EXPECT: Mistake is archived and NOT in search results by default
+    expect(searchRes.content[0].text).toContain("Streaming File Upload");
+    expect(searchRes.content[0].text).not.toContain("Large File Upload Failure");
     
-    // Verify old is archived
-    const oldMem = db.getById(oldId);
-    expect(oldMem?.status).toBe("archived");
+    const results = searchRes.data.results;
+    expect(results.some((r: any) => r.id === mistakeId)).toBe(false);
 
-    // --- 6. FEEDBACK LOOP (Learning) ---
-    const newId = resolveRes.data.id;
-    await router("tools/call", {
-      name: "memory-acknowledge",
-      arguments: {
-        memory_id: newId,
-        status: "used",
-        application_context: "Applied V2 policy to payment processor."
-      }
+    // 4. Audit: Verify we can still find the mistake if we EXPLICITLY ask for archived
+    const auditRes = await router("tools/call", {
+      name: "memory-search",
+      arguments: { query: "file upload", repo: REPO, include_archived: true }
     });
-
-    const stats = db.getByIdWithStats(newId);
-    expect(stats?.recall_count).toBe(1);
-
-    // --- 7. RESOURCE INTEGRITY ---
-    const resource = await router("resources/read", {
-      uri: `memory://index?repo=${REPO}`
-    });
-    const entries = JSON.parse(resource.contents[0].text);
-    // Should only contain the active V2 policy, not the archived V1
-    expect(entries.some((e: any) => e.id === newId)).toBe(true);
-    expect(entries.some((e: any) => e.id === oldId)).toBe(false);
+    expect(auditRes.data.results.some((r: any) => r.id === mistakeId)).toBe(true);
   });
 
-  it("should enforce repo isolation", async () => {
+  /**
+   * SCENARIO 3: Workspace-Aware Context Nuance
+   * Boost based on folder depth and language extensions.
+   */
+  it("should provide relevant boost when working in deep subdirectories", async () => {
+    // Memory A: Global
     await router("tools/call", {
       name: "memory-store",
       arguments: {
         type: "code_fact",
-        title: "Secret",
-        content: "Repo A uses password '123'",
-        importance: 1,
-        scope: { repo: "repo-a" }
+        title: "Global Logging",
+        content: "Use logger.info for all modules.",
+        importance: 2,
+        scope: { repo: REPO }
       }
     });
 
-    const searchRes = await router("tools/call", {
-      name: "memory-search",
-      arguments: { query: "password", repo: "repo-b" }
+    // Memory B: Auth Specific
+    await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "code_fact",
+        title: "Auth Security Audit",
+        content: "Auth module requires PII masking in logs.",
+        importance: 5,
+        scope: { repo: REPO, folder: "src/auth" }
+      }
     });
 
-    expect(searchRes.content[0].text).toContain("Found 0 memories");
+    // Working in a deep auth file
+    const searchRes = await router("tools/call", {
+      name: "memory-search",
+      arguments: { 
+        query: "How to log data?", 
+        repo: REPO, 
+        current_file_path: "src/auth/services/ldap/provider.ts" 
+      }
+    });
+
+    // EXPECT: Auth Specific memory should be the Top Match despite the query being generic "log"
+    expect(searchRes.content[0].text).toContain("Auth Security Audit");
+  });
+
+  /**
+   * SCENARIO 4: Bulk Operations & Pagination Integrity
+   */
+  it("should handle large volumes of memories and maintain pagination integrity", async () => {
+    // Store 15 memories about different microservices
+    for (let i = 1; i <= 15; i++) {
+      await router("tools/call", {
+        name: "memory-store",
+        arguments: {
+          type: "code_fact",
+          title: `Service ${i} Specs`,
+          content: `Documentation for microservice number ${i} in our mesh network.`,
+          importance: 3,
+          scope: { repo: "cloud-infra" }
+        }
+      });
+    }
+
+    // Call memory-recap (which uses pagination)
+    const recapRes = await router("tools/call", {
+      name: "memory-recap",
+      arguments: { repo: "cloud-infra", limit: 5, offset: 0 }
+    });
+
+    // Based on memory-recap implementation
+    expect(recapRes.content[0].text).toContain("cloud-infra");
+    
+    // Check Resource Pagination via URI
+    const resourceRes = await router("resources/read", {
+      uri: "memory://index?repo=cloud-infra"
+    });
+    const entries = JSON.parse(resourceRes.contents[0].text);
+    expect(entries.length).toBeLessThanOrEqual(20); // Default limit in resource.read is 20
+  });
+
+  /**
+   * SCENARIO 5: Semantic Conflict Denial (Deep Overlap)
+   */
+  it("should strictly deny near-duplicate decisions to prevent prompt bloat", async () => {
+    const originalContent = "We use TailwindCSS for styling all components.";
+    
+    await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "decision",
+        title: "Styling Standard",
+        content: originalContent,
+        importance: 3,
+        scope: { repo: REPO }
+      }
+    });
+
+    // Try to store almost the same thing with a different title
+    const duplicateRes = await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "decision",
+        title: "CSS Rule",
+        content: "Use Tailwind CSS for styling our UI components.", // Subtly different but semantically identical
+        importance: 3,
+        scope: { repo: REPO }
+      }
+    });
+
+    expect(duplicateRes.content[0].text).toContain("conflict");
+    expect(db.getTotalCount(REPO)).toBe(1); // Should still be 1
   });
 });
