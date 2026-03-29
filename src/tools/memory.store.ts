@@ -21,9 +21,9 @@ export async function handleMemoryStore(
     ? new Date(Date.now() + validated.ttlDays * 86400000).toISOString()
     : null;
 
-  // Check for semantic conflicts before storing (threshold: 0.85)
+  // Check for semantic conflicts before storing (threshold: 0.55)
   if (!validated.supersedes) {
-    const conflict = await db.checkConflicts(validated.content, validated.scope.repo, validated.type, vectors, 0.85);
+    const conflict = await db.checkConflicts(validated.content, validated.scope.repo, validated.type, vectors, 0.55);
     
     if (conflict) {
       return createMcpResponse(

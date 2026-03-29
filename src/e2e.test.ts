@@ -1,128 +1,135 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createRouter } from "./router.js";
 import { SQLiteStore } from "./storage/sqlite.js";
+import { RealVectorStore } from "./storage/vectors.js"; 
 import type { VectorStore } from "./types.js";
 
-// --- Mock Vector Store for fast E2E testing ---
-class MockVectorStore implements VectorStore {
-  private memory: Map<string, string> = new Map();
-  async upsert(id: string, text: string) { this.memory.set(id, text); }
-  async remove(id: string) { this.memory.delete(id); }
-  async search(query: string, limit: number, repo?: string) {
-    // Return maximum score (1.0) if query is contained in text to pass hybrid threshold
-    const results = Array.from(this.memory.entries()).map(([id, text]) => ({
-      id,
-      score: text.toLowerCase().includes(query.toLowerCase()) ? 1.0 : 0.5
-    }));
-    return results.filter(r => r.score > 0.7).slice(0, limit);
-  }
-}
+// Increase timeout for AI model loading and execution
+vi.setConfig({ testTimeout: 60000 });
 
-describe("MCP Local Memory E2E - System Integration Test", () => {
+/**
+ * MCP Realistic E2E Test
+ * Scenario: An AI Agent onboarding a project and managing architectural decisions.
+ */
+describe("MCP Local Memory - Realistic Agent Workflow", () => {
   let db: SQLiteStore;
   let vectors: VectorStore;
   let router: (method: string, params: any) => Promise<any>;
 
-  const REPO = "e2e-test-repo";
-  const MEM_ID = "00000000-0000-4000-a000-000000000001";
+  const REPO = "modern-payment-gateway";
+  const APP_TS = "src/modules/billing/processor.ts";
 
   beforeEach(() => {
     db = new SQLiteStore(":memory:");
-    vectors = new MockVectorStore();
+    vectors = new RealVectorStore(db);
     router = createRouter(db, vectors);
   });
 
-  describe("Capabilities (Resources, Prompts, Tools)", () => {
-    it("should list available tools correctly", async () => {
-      const result = await router("tools/list", {});
-      const toolNames = result.tools.map((t: any) => t.name);
-      expect(toolNames).toContain("memory-store");
-      expect(toolNames).toContain("memory-search");
-      expect(toolNames).toContain("memory-acknowledge");
-    });
+  it("should complete a full agent lifecycle: Discovery -> Store -> Search -> Conflict -> Supersede -> Feedback", async () => {
+    // --- 1. DISCOVERY ---
+    const toolList = await router("tools/list", {});
+    expect(toolList.tools.some((t: any) => t.name === "memory-store")).toBe(true);
 
-    it("should list available prompts", async () => {
-      const result = await router("prompts/list", {});
-      expect(result.prompts.length).toBeGreaterThan(0);
-    });
-
-    it("should list available resources", async () => {
-      const result = await router("resources/list", {});
-      expect(result.resources.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Tool: memory-store & memory-search", () => {
-    it("should store a memory and find it via semantic search", async () => {
-      const content = "Vitest Vitest Vitest Vitest Vitest Vitest Vitest Vitest"; // Force high keyword density
-      await router("tools/call", {
-        name: "memory-store",
-        arguments: {
-          type: "decision",
-          title: "Architecture Choice",
-          content: content,
-          importance: 5,
-          scope: { repo: REPO }
-        }
-      });
-
-      const searchResult = await router("tools/call", {
-        name: "memory-search",
-        arguments: { query: "Vitest", repo: REPO }
-      });
-
-      expect(searchResult.content[0].text).toContain("Found 1 memories");
-    });
-
-    it("should enforce conflict detection (V2)", async () => {
-      const content = "Conflict test content";
-      await router("tools/call", {
-        name: "memory-store",
-        arguments: { type: "decision", title: "First", content, importance: 3, scope: { repo: REPO } }
-      });
-
-      const response = await router("tools/call", {
-        name: "memory-store",
-        arguments: { type: "decision", title: "Second", content, importance: 3, scope: { repo: REPO } }
-      });
-
-      expect(response.content[0].text).toContain("conflict");
-    });
-  });
-
-  describe("Resources", () => {
-    it("should read repo-specific resources", async () => {
-      db.insert({
-        id: MEM_ID,
+    // --- 2. INITIAL STORAGE ---
+    const storeRes1 = await router("tools/call", {
+      name: "memory-store",
+      arguments: {
         type: "decision",
-        title: "Res Test",
-        content: "Resource content",
-        importance: 5,
-        scope: { repo: REPO },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        hit_count: 0,
-        recall_count: 0,
-        last_used_at: null,
-        expires_at: null,
-        status: "active",
-        supersedes: null
-      });
-
-      const result = await router("resources/read", {
-        uri: `memory://index?repo=${REPO}`
-      });
-
-      expect(result.contents[0].text).toContain("Res Test");
+        title: "Billing Retry Logic",
+        content: "Retry payment processing 3 times before failing.",
+        importance: 4,
+        scope: { repo: REPO, folder: "src/modules/billing" }
+      }
     });
+    expect(storeRes1.isError).toBeFalsy();
+
+    // --- 3. CONTEXTUAL SEARCH (Workspace-Aware) ---
+    const searchRes = await router("tools/call", {
+      name: "memory-search",
+      arguments: {
+        query: "How many billing retries?",
+        repo: REPO,
+        current_file_path: APP_TS
+      }
+    });
+    // Should find the memory due to semantic overlap and workspace boost
+    expect(searchRes.content[0].text).toContain("Found 1 memories");
+    expect(searchRes.content[0].text).toContain("Billing Retry Logic");
+
+    // --- 4. CONFLICT DETECTION ---
+    const conflictRes = await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "decision",
+        title: "New Policy",
+        content: "Change retry logic to 5 times.",
+        importance: 4,
+        scope: { repo: REPO }
+      }
+    });
+    // Should be rejected because it's too similar to existing rule
+    expect(conflictRes.content[0].text).toContain("conflict");
+
+    // --- 5. RESOLUTION VIA SUPERSEDES ---
+    const oldId = storeRes1.data.id;
+    const resolveRes = await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "decision",
+        title: "V2 Billing Policy",
+        content: "We now retry 5 times.",
+        importance: 4,
+        scope: { repo: REPO },
+        supersedes: oldId
+      }
+    });
+    expect(resolveRes.isError).toBeFalsy();
+    
+    // Verify old is archived
+    const oldMem = db.getById(oldId);
+    expect(oldMem?.status).toBe("archived");
+
+    // --- 6. FEEDBACK LOOP (Learning) ---
+    const newId = resolveRes.data.id;
+    await router("tools/call", {
+      name: "memory-acknowledge",
+      arguments: {
+        memory_id: newId,
+        status: "used",
+        application_context: "Applied V2 policy to payment processor."
+      }
+    });
+
+    const stats = db.getByIdWithStats(newId);
+    expect(stats?.recall_count).toBe(1);
+
+    // --- 7. RESOURCE INTEGRITY ---
+    const resource = await router("resources/read", {
+      uri: `memory://index?repo=${REPO}`
+    });
+    const entries = JSON.parse(resource.contents[0].text);
+    // Should only contain the active V2 policy, not the archived V1
+    expect(entries.some((e: any) => e.id === newId)).toBe(true);
+    expect(entries.some((e: any) => e.id === oldId)).toBe(false);
   });
 
-  describe("Prompts", () => {
-    it("should retrieve 'memory-agent-core' prompt", async () => {
-      const result = await router("prompts/get", {
-        name: "memory-agent-core"
-      });
-      expect(result.messages[0].content.text).toContain("coding copilot");
+  it("should enforce repo isolation", async () => {
+    await router("tools/call", {
+      name: "memory-store",
+      arguments: {
+        type: "code_fact",
+        title: "Secret",
+        content: "Repo A uses password '123'",
+        importance: 1,
+        scope: { repo: "repo-a" }
+      }
     });
+
+    const searchRes = await router("tools/call", {
+      name: "memory-search",
+      arguments: { query: "password", repo: "repo-b" }
+    });
+
+    expect(searchRes.content[0].text).toContain("Found 0 memories");
   });
 });

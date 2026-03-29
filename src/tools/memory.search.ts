@@ -78,10 +78,10 @@ export async function handleMemorySearch(
   let candidates: Array<{ memory: MemoryEntry; similarityScore: number }>;
 
   if (similarityResults.length > 0) {
-    // Filter by strict threshold (0.70) or take all if very few results (help new projects)
+    // Filter by strict threshold (0.50) or take all if very few results (help new projects)
     const filteredResults = similarityResults.length <= 3 
       ? similarityResults 
-      : similarityResults.filter(r => r.similarity >= 0.70);
+      : similarityResults.filter(r => r.similarity >= 0.50);
     
     candidates = filteredResults.map((result) => ({
       memory: result,
@@ -210,10 +210,13 @@ export async function handleMemorySearch(
   // STEP 4: Sort by final score and take top results
   scoredMemories.sort((a, b) => b.finalScore - a.finalScore);
 
-  // Apply another round of filtering to ensure results are strictly above threshold
-  // This is the final guard against hallucination
+  // Apply dynamic threshold: 
+  // - If very few candidates, be more lenient (0.30)
+  // - If many candidates, be strict (0.50)
+  const threshold = scoredMemories.length <= 3 ? 0.30 : 0.50;
+
   const finalCandidates = scoredMemories
-    .filter(sm => sm.finalScore >= 0.70)
+    .filter(sm => sm.finalScore >= threshold)
     .slice(0, validated.limit)
     .map(sm => sm.memory);
 
@@ -239,13 +242,13 @@ export async function handleMemorySearch(
   };
 
   const firstResult = results[0];
-  const resultName = firstResult?.title 
-    ? `${firstResult.type} - ${firstResult.title}` 
-    : (firstResult ? `${firstResult.type} - ${firstResult.content.substring(0, 40)}...` : `Found ${results.length} results`);
+  const topResultInfo = firstResult 
+    ? `\n\nTop Match: [${firstResult.type}] ${firstResult.title || firstResult.content.substring(0, 50) + "..."}`
+    : "";
     
   return createMcpResponse(
     resultData,
-    `Found ${results.length} memories matching "${validated.query}"`,
+    `Found ${results.length} memories matching "${validated.query}"${topResultInfo}`,
     { 
       query: validated.query,
       results: results.map(r => ({

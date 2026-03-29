@@ -24,6 +24,8 @@ export type McpContent = z.infer<typeof McpContentSchema>;
 
 export type McpResponse = {
   content: McpContent[];
+  isError?: boolean;
+  data?: any;
 };
 
 export function createMcpResponse(
@@ -88,7 +90,10 @@ export function createMcpResponse(
     }
   }
 
-  return { content };
+  return { 
+    content,
+    data 
+  };
 }
 
 export function createTextOnlyResponse(text: string): McpResponse {

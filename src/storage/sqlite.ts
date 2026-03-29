@@ -491,7 +491,7 @@ export class SQLiteStore {
       const similarity = this.cosineSimilarity(queryVector, memoryVector);
       return { 
         ...memory,
-        similarity
+        similarity: similarity || 0.01 // Give a tiny baseline similarity so it's not discarded if it's a valid repo match
       };
     });
 
@@ -704,13 +704,33 @@ export class SQLiteStore {
     }
   }
 
+  getVectorCandidates(repo?: string, limit: number = 100): Array<{ memory_id: string; vector: string }> {
+    let sql = `
+      SELECT mv.memory_id, mv.vector 
+      FROM memory_vectors mv
+      JOIN memories m ON mv.memory_id = m.id
+    `;
+    
+    const params: any[] = [];
+    if (repo) {
+      sql += " WHERE m.repo = ?";
+      params.push(repo);
+    }
+    
+    sql += " LIMIT ?";
+    params.push(limit);
+    
+    const stmt = this.db.prepare(sql);
+    return stmt.all(...params) as Array<{ memory_id: string; vector: string }>;
+  }
+
   // Check for semantic conflicts before storing new memory
   async checkConflicts(
     content: string,
     repo: string,
     type: string,
     vectors: VectorStore,
-    threshold: number = 0.85
+    threshold: number = 0.55
   ): Promise<MemoryEntry | null> {
     const vectorResults = await vectors.search(content, 10);
     

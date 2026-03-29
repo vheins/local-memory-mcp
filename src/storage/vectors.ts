@@ -57,23 +57,8 @@ export class RealVectorStore implements VectorStore {
       const output = await extractor(query, { pooling: "mean", normalize: true });
       const queryVector = Array.from(output.data as Float32Array);
 
-      // Fetch candidates from SQLite linked with memories to filter by repo
-      let sql = `
-        SELECT mv.memory_id, mv.vector 
-        FROM memory_vectors mv
-        JOIN memories m ON mv.memory_id = m.id
-      `;
-      
-      const params: any[] = [];
-      if (repo) {
-        sql += " WHERE m.repo = ?";
-        params.push(repo);
-      }
-      
-      sql += " LIMIT 100"; // Fetch up to 100 candidates for re-ranking
-      
-      const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...params) as any[];
+      // Fetch candidates from SQLite using the new public method
+      const rows = this.db.getVectorCandidates(repo, 100);
 
       const results: VectorResult[] = rows.map((row) => {
         const memoryVector = JSON.parse(row.vector) as number[];
