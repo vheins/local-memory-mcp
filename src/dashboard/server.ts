@@ -19,6 +19,8 @@ type RecentAction = {
   action: string;
   query?: string;
   memory_id?: string;
+  memory_title?: string;
+  memory_type?: string;
   result_count?: number;
   created_at: string;
 };

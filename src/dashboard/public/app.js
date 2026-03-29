@@ -76,33 +76,101 @@ function getActionColor(action) {
     return colors[action] || colors.search;
 }
 
+function getBubbleStyle(action) {
+    const styles = {
+        search: {
+            bubble: 'bg-blue-500 dark:bg-blue-600 text-white',
+            label: 'text-blue-100',
+            meta:  'text-blue-200',
+            align: 'items-start',
+            tail:  'left-2 -bottom-1.5 border-r-blue-500 dark:border-r-blue-600',
+        },
+        read: {
+            bubble: 'bg-emerald-500 dark:bg-emerald-600 text-white',
+            label: 'text-emerald-100',
+            meta:  'text-emerald-200',
+            align: 'items-start',
+            tail:  'left-2 -bottom-1.5 border-r-emerald-500 dark:border-r-emerald-600',
+        },
+        write: {
+            bubble: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100',
+            label: 'text-gray-500 dark:text-gray-400',
+            meta:  'text-gray-400 dark:text-gray-500',
+            align: 'items-end',
+            tail:  'right-2 -bottom-1.5 border-l-gray-100 dark:border-l-gray-700',
+        },
+        update: {
+            bubble: 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+            label: 'text-amber-600 dark:text-amber-400',
+            meta:  'text-amber-500 dark:text-amber-500',
+            align: 'items-end',
+            tail:  'right-2 -bottom-1.5 border-l-amber-100 dark:border-l-amber-900',
+        },
+        delete: {
+            bubble: 'bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100',
+            label: 'text-red-500 dark:text-red-400',
+            meta:  'text-red-400',
+            align: 'items-end',
+            tail:  'right-2 -bottom-1.5 border-l-red-100 dark:border-l-red-900',
+        },
+    };
+    return styles[action] || styles.search;
+}
+
+function renderActionBubble(action) {
+    const s = getBubbleStyle(action.action);
+    const isRight = s.align === 'items-end';
+
+    // Main content line
+    let mainText = '';
+    let subText = '';
+
+    if (action.action === 'search') {
+        mainText = `"${action.query || ''}"`;
+        subText = action.result_count != null ? `${action.result_count} result${action.result_count !== 1 ? 's' : ''} found` : '';
+    } else {
+        mainText = action.memory_title
+            ? action.memory_title
+            : action.memory_id ? action.memory_id.substring(0, 8) + '…' : '—';
+        const typeLabel = action.memory_type ? `[${action.memory_type}]` : '';
+        const verb = { write: 'Stored', update: 'Updated', delete: 'Deleted', read: 'Read' }[action.action] || action.action;
+        subText = [verb, typeLabel].filter(Boolean).join(' ');
+    }
+
+    const burst = action.burstCount > 1
+        ? `<span class="ml-1 px-1.5 py-0.5 rounded-full bg-white/20 text-xs font-bold">×${action.burstCount}</span>`
+        : '';
+
+    return `
+        <div class="flex flex-col ${s.align} mb-4">
+            <div class="flex items-center gap-1.5 mb-1 px-1 ${isRight ? 'flex-row-reverse' : ''}">
+                <div class="w-5 h-5 rounded-full ${s.align === 'items-start' ? s.bubble : 'bg-gray-300 dark:bg-gray-600'} flex items-center justify-center flex-shrink-0">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">${getActionIcon(action.action)}</svg>
+                </div>
+                <span class="text-xs font-semibold capitalize ${s.label.replace('text-', 'text-').replace('100','500').replace('200','500')}">${action.action}${burst}</span>
+            </div>
+            <div class="relative max-w-[85%]">
+                <div class="${s.bubble} rounded-2xl ${isRight ? 'rounded-br-sm' : 'rounded-bl-sm'} px-3 py-2 shadow-sm">
+                    <p class="text-sm font-medium leading-snug break-words">${mainText}</p>
+                    ${subText ? `<p class="text-xs mt-0.5 ${s.meta}">${subText}</p>` : ''}
+                </div>
+            </div>
+            <span class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 px-1">${formatActionDate(action.created_at)}</span>
+        </div>
+    `;
+}
+
 function renderRecentActions() {
     const container = document.getElementById('recentQueries');
     const paginationEl = document.getElementById('recentActionsPagination');
 
     if (recentActions.length === 0 && recentActionsPage === 1) {
-        container.innerHTML = '<div class="text-gray-500 text-sm">No recent actions</div>';
+        container.innerHTML = '<div class="text-gray-400 text-sm text-center py-6">No recent actions</div>';
         if (paginationEl) paginationEl.innerHTML = '';
         return;
     }
 
-    container.innerHTML = recentActions.map((action) => `
-        <div class="recent-action-item flex items-start gap-3 p-3 rounded-xl transition-colors">
-            <div class="w-8 h-8 rounded-full ${getActionColor(action.action)} flex items-center justify-center flex-shrink-0">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    ${getActionIcon(action.action)}
-                </svg>
-            </div>
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 capitalize">${action.action}</p>
-                    ${action.burstCount > 1 ? `<span class="px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-xs font-semibold text-gray-700 dark:text-gray-200">×${action.burstCount}</span>` : ''}
-                </div>
-                <p class="text-xs text-gray-500 truncate">${action.query || (action.memory_id ? 'Memory: ' + action.memory_id.substring(0, 8) : '-')}</p>
-                <p class="text-xs text-gray-400">${formatActionDate(action.created_at)}</p>
-            </div>
-        </div>
-    `).join('');
+    container.innerHTML = recentActions.map(renderActionBubble).join('');
 
     if (paginationEl) {
         if (recentActionsTotalPages <= 1) {

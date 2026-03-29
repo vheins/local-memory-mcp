@@ -716,20 +716,24 @@ export class SQLiteStore {
     return rows as Array<{ id: number; action: string; query?: string; memory_id?: string; repo: string; result_count?: number; created_at: string }>;
   }
 
-  getRecentActions(repo?: string, limit = 20): Array<{ action: string; query?: string; memory_id?: string; result_count?: number; created_at: string }> {
-    let sql = `SELECT action, query, memory_id, result_count, created_at FROM action_log`;
-    const params: string[] = [];
-    
+  getRecentActions(repo?: string, limit = 20): Array<{ action: string; query?: string; memory_id?: string; memory_title?: string; memory_type?: string; result_count?: number; created_at: string }> {
+    let sql = `
+      SELECT a.action, a.query, a.memory_id, a.result_count, a.created_at,
+             m.title as memory_title, m.type as memory_type
+      FROM action_log a
+      LEFT JOIN memories m ON a.memory_id = m.id
+    `;
+    const params: (string | number)[] = [];
+
     if (repo) {
-      sql += ` WHERE repo = ?`;
+      sql += ` WHERE a.repo = ?`;
       params.push(repo);
     }
-    
-    sql += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
-    params.push(String(limit));
-    
-    const stmt = this.db.prepare(sql);
-    const rows = repo ? stmt.all(repo, String(limit)) : stmt.all(String(limit));
-    return rows as Array<{ action: string; query?: string; memory_id?: string; created_at: string }>;
+
+    sql += ` ORDER BY a.created_at DESC, a.id DESC LIMIT ?`;
+    params.push(limit);
+
+    const rows = this.db.prepare(sql).all(...params);
+    return rows as Array<{ action: string; query?: string; memory_id?: string; memory_title?: string; memory_type?: string; result_count?: number; created_at: string }>;
   }
 }
