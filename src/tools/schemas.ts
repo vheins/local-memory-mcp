@@ -17,17 +17,20 @@ export const MemoryStoreSchema = z.object({
   content: z.string().min(10),
   importance: z.number().min(1).max(5),
   scope: MemoryScopeSchema,
-  ttlDays: z.number().min(1).optional()
+  ttlDays: z.number().min(1).optional(),
+  supersedes: z.string().uuid().optional()
 });
 
 export const MemoryUpdateSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(3).max(100).optional(),
   content: z.string().min(10).optional(),
-  importance: z.number().min(1).max(5).optional()
+  importance: z.number().min(1).max(5).optional(),
+  status: z.enum(["active", "archived"]).optional(),
+  supersedes: z.string().uuid().optional()
 }).refine(
-  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined,
-  { message: "At least one of title, content or importance must be provided" }
+  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined,
+  { message: "At least one of title, content, importance, status or supersedes must be provided" }
 );
 
 export const MemorySearchSchema = z.object({
@@ -37,7 +40,15 @@ export const MemorySearchSchema = z.object({
   types: z.array(MemoryTypeSchema).optional(),
   minImportance: z.number().min(1).max(5).optional(),
   limit: z.number().min(1).max(10).default(5),
-  includeRecap: z.boolean().default(false)
+  includeRecap: z.boolean().default(false),
+  current_file_path: z.string().optional(),
+  include_archived: z.boolean().default(false)
+});
+
+export const MemoryAcknowledgeSchema = z.object({
+  memory_id: z.string().uuid(),
+  status: z.enum(["used", "irrelevant", "contradictory"]),
+  application_context: z.string().min(10).optional()
 });
 
 export const MemoryRecapSchema = z.object({
@@ -55,7 +66,7 @@ export const MemorySummarizeSchema = z.object({
 export const TOOL_DEFINITIONS = [
   {
     name: "memory-store",
-    description: "Store a new memory entry that affects future behavior",
+    description: "Store a new memory entry that affects future behavior. Use 'supersedes' if this replaces an older decision.",
     inputSchema: {
       type: "object",
       properties: {
@@ -107,9 +118,39 @@ export const TOOL_DEFINITIONS = [
           type: "number",
           minimum: 1,
           description: "Time-to-live in days. Memory will expire after this many days (optional)"
+        },
+        supersedes: {
+          type: "string",
+          format: "uuid",
+          description: "ID of an older memory that this entry replaces (optional)"
         }
       },
       required: ["type", "title", "content", "importance", "scope"]
+    }
+  },
+  {
+    name: "memory-acknowledge",
+    description: "Acknowledge the use of a memory or report its irrelevance/contradiction. Mandatory after using memory to generate code.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        memory_id: {
+          type: "string",
+          format: "uuid",
+          description: "Memory entry ID"
+        },
+        status: {
+          type: "string",
+          enum: ["used", "irrelevant", "contradictory"],
+          description: "Status of memory usage"
+        },
+        application_context: {
+          type: "string",
+          minLength: 10,
+          description: "Contextual info on how it was applied or why it failed (optional)"
+        }
+      },
+      required: ["memory_id", "status"]
     }
   },
   {
@@ -139,6 +180,16 @@ export const TOOL_DEFINITIONS = [
           minimum: 1,
           maximum: 5,
           description: "Updated importance (optional)"
+        },
+        status: {
+          type: "string",
+          enum: ["active", "archived"],
+          description: "Update memory status (optional)"
+        },
+        supersedes: {
+          type: "string",
+          format: "uuid",
+          description: "Set or update superseded memory ID (optional)"
         }
       },
       required: ["id"]
@@ -146,7 +197,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "memory-search",
-    description: "Search for relevant memories in the current repository",
+    description: "Search for relevant memories. Always provide current_file_path for accurate results.",
     inputSchema: {
       type: "object",
       properties: {
@@ -157,7 +208,7 @@ export const TOOL_DEFINITIONS = [
         },
         prompt: {
           type: "string",
-          description: "Context/prompt to help determine relevance. Use this to specify what kind of information you're looking for (optional)"
+          description: "Context/prompt to help determine relevance (optional)"
         },
         repo: {
           type: "string",
@@ -187,7 +238,16 @@ export const TOOL_DEFINITIONS = [
         includeRecap: {
           type: "boolean",
           default: false,
-          description: "Include recent memories recap context in the response (optional, default false)"
+          description: "Include recent memories recap context (optional)"
+        },
+        current_file_path: {
+          type: "string",
+          description: "Full or relative path to the file you are currently working on (required for ranking boost)"
+        },
+        include_archived: {
+          type: "boolean",
+          default: false,
+          description: "Include archived memories in search (optional)"
         }
       },
       required: ["query", "repo"]

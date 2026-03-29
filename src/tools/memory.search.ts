@@ -71,28 +71,18 @@ export async function handleMemorySearch(
   const similarityResults = db.searchBySimilarity(
     searchQuery,
     validated.repo,
-    validated.limit * 3 // Get more candidates for vector re-ranking
+    validated.limit * 3, // Get more candidates for vector re-ranking
+    validated.include_archived
   );
 
   let candidates: Array<{ memory: MemoryEntry; similarityScore: number }>;
 
-  if (similarityResults.length > 0 && similarityResults[0].similarity > 0.1) {
-    // Use similarity results as candidates
-    candidates = similarityResults.map((result) => ({
-      memory: {
-        id: result.id,
-        type: result.type,
-        title: result.title,
-        content: result.content,
-        importance: result.importance,
-        scope: result.scope,
-        created_at: result.created_at,
-        updated_at: result.updated_at,
-        hit_count: result.hit_count,
-        recall_count: result.recall_count,
-        last_used_at: result.last_used_at,
-        expires_at: result.expires_at,
-      },
+  if (similarityResults.length > 0) {
+    // Filter by strict threshold (0.72)
+    const filteredResults = similarityResults.filter(r => r.similarity >= 0.72);
+    
+    candidates = filteredResults.map((result) => ({
+      memory: result,
       similarityScore: result.similarity
     }));
   } else {
@@ -100,7 +90,8 @@ export async function handleMemorySearch(
     const allResults = db.searchByRepo(validated.repo, {
       types: validated.types,
       minImportance: validated.minImportance,
-      limit: validated.limit * 3
+      limit: validated.limit * 3,
+      includeArchived: validated.include_archived
     });
 
     const normalized = normalize(searchQuery);
@@ -111,20 +102,44 @@ export async function handleMemorySearch(
       return queryWords.some(word => normalizedContent.includes(word));
     });
 
-    const memoriesToUse = filtered.length > 0 ? filtered : allResults;
-
-    candidates = memoriesToUse.map(memory => ({
+    // For keyword results, we don't have a semantic score, so we use a safe mid-range
+    // But keyword search is inherently less "strict", so we only use it if similarity fails
+    candidates = filtered.map(memory => ({
       memory,
-      similarityScore: 0.5 // Default similarity for keyword matches
+      similarityScore: 0.75 // Just above threshold to be included
     }));
   }
 
-  // STEP 2: OPTIONAL vector similarity re-rank (only on top candidates)
+  // STEP 2: Workspace Context Boost
+  if (validated.current_file_path) {
+    const currentPath = validated.current_file_path.toLowerCase();
+    candidates = candidates.map(c => {
+      let boost = 0;
+      
+      // Folder boost (+0.15)
+      if (c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) {
+        boost += 0.15;
+      }
+      
+      // Language boost (+0.1)
+      const extension = currentPath.split('.').pop();
+      if (extension && c.memory.scope.language && extension.includes(c.memory.scope.language.toLowerCase())) {
+        boost += 0.1;
+      }
+
+      return {
+        ...c,
+        similarityScore: Math.min(1.0, c.similarityScore + boost)
+      };
+    });
+  }
+
+  // STEP 3: OPTIONAL vector similarity re-rank (only on top candidates)
   let scoredMemories: ScoredMemory[];
 
   try {
     // Attempt vector search on candidates (if available)
-    const vectorResults = await vectors.search(searchQuery, candidates.length);
+    const vectorResults = await vectors.search(searchQuery, candidates.length, validated.repo);
 
     if (vectorResults.length > 0) {
       // Create a map of memory ID to vector score
@@ -190,14 +205,19 @@ export async function handleMemorySearch(
     });
   }
 
-  // STEP 3: Sort by final score and take top results
+  // STEP 4: Sort by final score and take top results
   scoredMemories.sort((a, b) => b.finalScore - a.finalScore);
 
-  const results = scoredMemories
+  // Apply another round of filtering to ensure results are strictly above threshold
+  // This is the final guard against hallucination
+  const finalCandidates = scoredMemories
+    .filter(sm => sm.finalScore >= 0.72)
     .slice(0, validated.limit)
     .map(sm => sm.memory);
 
-  // STEP 4: Increment hit_count for returned memories
+  const results = finalCandidates;
+
+  // STEP 5: Increment hit_count for returned memories
   for (const memory of results) {
     db.incrementHitCount(memory.id);
   }

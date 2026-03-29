@@ -2,13 +2,22 @@
 import readline from "node:readline";
 import { createRouter } from "./router.js";
 import { SQLiteStore } from "./storage/sqlite.js";
-import { StubVectorStore } from "./storage/vectors.stub.js";
+import { RealVectorStore } from "./storage/vectors.js";
 import { CAPABILITIES } from "./capabilities.js";
 import { logger } from "./utils/logger.js";
 
 // Create storage instances
 const db = new SQLiteStore();
-const vectors = new StubVectorStore(db);
+const vectors = new RealVectorStore(db);
+
+// Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
+const expiredArchived = db.archiveExpiredMemories();
+const lowScoreArchived = db.archiveLowScoreMemories();
+const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);
+
+if (totalArchived > 0) {
+  logger.info(`[Server] Archived ${totalArchived} memories (expired: ${expiredArchived}, low-score: ${lowScoreArchived}) on startup.`);
+}
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
 process.stdout.on('error', (err: any) => {

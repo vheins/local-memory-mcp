@@ -21,6 +21,37 @@ export async function handleMemoryStore(
     ? new Date(Date.now() + validated.ttlDays * 86400000).toISOString()
     : null;
 
+  // Check for semantic conflicts before storing (threshold: 0.85)
+  if (!validated.supersedes) {
+    const conflict = await db.checkConflicts(validated.content, validated.scope.repo, validated.type, vectors, 0.85);
+    
+    if (conflict) {
+      return createMcpResponse(
+        { 
+          success: false, 
+          error: "MEMORY_CONFLICT", 
+          message: `This memory content overlaps significantly (>85%) with an existing memory (ID: ${conflict.id}).`,
+          conflicting_memory: {
+            id: conflict.id,
+            title: conflict.title,
+            content: conflict.content
+          },
+          instruction: "You must use 'memory-update' on the existing ID, or provide 'supersedes' if this new memory replaces it."
+        },
+        `Rejected due to conflict with ${conflict.id}`
+      );
+    }
+  }
+
+  // If this memory supersedes an old one, archive the old one
+  if (validated.supersedes) {
+    const oldMemory = db.getById(validated.supersedes);
+    if (oldMemory) {
+      db.update(oldMemory.id, { status: "archived" });
+      logger.info("[MCP] memory.store - archived superseded memory", { oldId: oldMemory.id, newId: validated.supersedes });
+    }
+  }
+
   const entry: MemoryEntry = {
     id: randomUUID(),
     type: validated.type,
@@ -34,6 +65,8 @@ export async function handleMemoryStore(
     recall_count: 0,
     last_used_at: null,
     expires_at,
+    supersedes: validated.supersedes ?? null,
+    status: "active"
   };
 
   // Store in SQLite

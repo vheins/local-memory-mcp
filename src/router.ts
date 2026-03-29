@@ -9,6 +9,7 @@ import { handleMemorySearch } from "./tools/memory.search.js";
 import { handleMemorySummarize } from "./tools/memory.summarize.js";
 import { handleMemoryDelete } from "./tools/memory.delete.js";
 import { handleMemoryRecap } from "./tools/memory.recap.js";
+import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
 
 export function createRouter(
   db: SQLiteStore,
@@ -55,6 +56,9 @@ export function createRouter(
     switch (toolName) {
       case "memory-store":
         return await handleMemoryStore(args, db, vectors);
+
+      case "memory-acknowledge":
+        return await handleMemoryAcknowledge(args, db);
 
       case "memory-update":
         return await handleMemoryUpdate(args, db, vectors);

@@ -157,18 +157,30 @@ export class SQLiteStore {
       this.db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>
     ).map((col) => col.name);
 
-    const columnsToAdd: Array<{ name: string; definition: string }> = [
-      { name: "hit_count", definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0" },
-      { name: "recall_count", definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0" },
-      { name: "last_used_at", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
-      { name: "expires_at", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
+    const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
+      { name: "hit_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0" },
+      { name: "recall_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0" },
+      { name: "last_used_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
+      { name: "expires_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
+      { name: "supersedes", table: "memories", definition: "ALTER TABLE memories ADD COLUMN supersedes TEXT" },
+      { name: "status", table: "memories", definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'" },
+      { name: "vector_version", table: "memory_vectors", definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1" },
     ];
 
     for (const col of columnsToAdd) {
-      if (!existingColumns.includes(col.name)) {
+      const existingTableColumns = (
+        this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>
+      ).map((c) => c.name);
+
+      if (!existingTableColumns.includes(col.name)) {
         this.db.exec(col.definition);
       }
     }
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
+      CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
+    `);
   }
 
   insert(entry: MemoryEntry): void {
@@ -179,8 +191,9 @@ export class SQLiteStore {
     const stmt = this.db.prepare(`
       INSERT INTO memories (
         id, repo, type, title, content, importance, folder, language,
-        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?)
+        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+        supersedes, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?)
     `);
 
     stmt.run(
@@ -194,11 +207,13 @@ export class SQLiteStore {
       entry.scope.language || null,
       entry.created_at,
       entry.updated_at,
-      entry.expires_at ?? null
+      entry.expires_at ?? null,
+      entry.supersedes ?? null,
+      entry.status || "active"
     );
   }
 
-  update(id: string, updates: { title?: string; content?: string; importance?: number }): void {
+  update(id: string, updates: { title?: string; content?: string; importance?: number; status?: "active" | "archived"; supersedes?: string }): void {
     const fields: string[] = [];
     const values: unknown[] = [];
 
@@ -218,6 +233,16 @@ export class SQLiteStore {
     if (updates.importance !== undefined) {
       fields.push("importance = ?");
       values.push(updates.importance);
+    }
+
+    if (updates.status !== undefined) {
+      fields.push("status = ?");
+      values.push(updates.status);
+    }
+
+    if (updates.supersedes !== undefined) {
+      fields.push("supersedes = ?");
+      values.push(updates.supersedes);
     }
 
     if (fields.length === 0) {
@@ -245,11 +270,16 @@ export class SQLiteStore {
       types?: string[];
       minImportance?: number;
       limit?: number;
+      includeArchived?: boolean;
     } = {}
   ): MemoryEntry[] {
     let query = `SELECT * FROM memories WHERE repo = ?
       AND (expires_at IS NULL OR expires_at > datetime('now'))`;
     const params: unknown[] = [repo];
+
+    if (!options.includeArchived) {
+      query += " AND status = 'active'";
+    }
 
     if (options.types && options.types.length > 0) {
       const placeholders = options.types.map(() => "?").join(", ");
@@ -275,153 +305,28 @@ export class SQLiteStore {
     return rows.map((row) => this.rowToMemoryEntry(row));
   }
 
-  getById(id: string): MemoryEntry | null {
-    const stmt = this.db.prepare("SELECT * FROM memories WHERE id = ?");
-    const row = stmt.get(id) as any;
-    if (!row) return null;
-    return this.rowToMemoryEntry(row);
-  }
-
-  getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
-    const stmt = this.db.prepare(`
-      SELECT *,
-        CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
-      FROM memories
-      WHERE id = ?
-    `);
-    const row = stmt.get(id) as any;
-    if (!row) return null;
-
-    return {
-      ...this.rowToMemoryEntry(row),
-      recall_rate: row.recall_rate ?? 0,
-    };
-  }
-
-  listRecent(limit: number = 10): Array<{ id: string; type: string; repo: string }> {
-    const stmt = this.db.prepare(`
-      SELECT id, type, repo
-      FROM memories
-      ORDER BY created_at DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit) as any[];
-  }
-
-  getSummary(repo: string): { summary: string; updated_at: string } | null {
-    const stmt = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?");
-    return stmt.get(repo) as any;
-  }
-
-  upsertSummary(repo: string, summary: string): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO memory_summary (repo, summary, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(repo) DO UPDATE SET
-        summary = excluded.summary,
-        updated_at = excluded.updated_at
-    `);
-    stmt.run(repo, summary, new Date().toISOString());
-  }
-
-  delete(id: string): void {
-    const stmt = this.db.prepare("DELETE FROM memories WHERE id = ?");
-    stmt.run(id);
-  }
-
-  // Sub-task 2.5: Renamed from listAllRepos to listRepos
-  listRepos(): string[] {
-    const stmt = this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo");
-    const rows = stmt.all() as any[];
-    return rows.map((row) => row.repo);
-  }
-
-  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
-    const stmt = this.db.prepare(`
-      SELECT
-        repo,
-        COUNT(*) AS memory_count,
-        MAX(COALESCE(updated_at, created_at)) AS last_updated_at
-      FROM memories
-      GROUP BY repo
-      ORDER BY last_updated_at DESC, repo ASC
-    `);
-
-    return stmt.all() as Array<{ repo: string; memory_count: number; last_updated_at: string | null }>;
-  }
-
-  incrementHitCount(id: string): void {
-    const stmt = this.db.prepare(`
-      UPDATE memories
-      SET hit_count = hit_count + 1,
-          last_used_at = ?
-      WHERE id = ?
-    `);
-    stmt.run(new Date().toISOString(), id);
-  }
-
-  incrementRecallCount(id: string): void {
-    const stmt = this.db.prepare(`
-      UPDATE memories
-      SET recall_count = recall_count + 1,
-          last_used_at = ?
-      WHERE id = ?
-    `);
-    stmt.run(new Date().toISOString(), id);
-  }
-
-  getStats(repo?: string): {
-    total: number;
-    byType: Record<string, number>;
-    unused: number;
-  } {
-    let query = "SELECT type, COUNT(*) as count FROM memories";
-    const params: unknown[] = [];
-
-    if (repo) {
-      query += " WHERE repo = ?";
-      params.push(repo);
-    }
-
-    query += " GROUP BY type";
-
-    const stmt = this.db.prepare(query);
-    const rows = stmt.all(...params) as any[];
-
-    const byType: Record<string, number> = {};
-    let total = 0;
-
-    for (const row of rows) {
-      byType[row.type] = row.count;
-      total += row.count;
-    }
-
-    let unusedQuery = "SELECT COUNT(*) as count FROM memories WHERE hit_count = 0";
-    if (repo) {
-      unusedQuery += " AND repo = ?";
-    }
-    const unusedStmt = this.db.prepare(unusedQuery);
-    const unusedRow = (repo ? unusedStmt.get(repo) : unusedStmt.get()) as any;
-    const unused = unusedRow?.count || 0;
-
-    return { total, byType, unused };
-  }
+  // ... (getById methods)
 
   // Sub-task 2.2: Public method for Memory_Recap
-  getRecentMemories(repo: string, limit: number, offset: number = 0): MemoryEntry[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM memories
-      WHERE repo = ?
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `);
+  getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false): MemoryEntry[] {
+    let query = "SELECT * FROM memories WHERE repo = ?";
+    if (!includeArchived) {
+      query += " AND status = 'active'";
+    }
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    
+    const stmt = this.db.prepare(query);
     const rows = stmt.all(repo, limit, offset) as any[];
     return rows.map((row) => this.rowToMemoryEntry(row));
   }
 
   // Sub-task 2.2: Public method for total count
-  getTotalCount(repo: string): number {
-    const stmt = this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?");
+  getTotalCount(repo: string, includeArchived: boolean = false): number {
+    let query = "SELECT COUNT(*) as count FROM memories WHERE repo = ?";
+    if (!includeArchived) {
+      query += " AND status = 'active'";
+    }
+    const stmt = this.db.prepare(query);
     const row = stmt.get(repo) as any;
     return row?.count ?? 0;
   }
@@ -430,19 +335,26 @@ export class SQLiteStore {
   searchBySimilarity(
     query: string,
     repo: string,
-    limit: number = 10
+    limit: number = 10,
+    includeArchived: boolean = false
   ): Array<MemoryEntry & { similarity: number }> {
     const queryVector = this.computeVector(query);
     const now = new Date().toISOString();
 
     // Pre-filter: fetch at most limit*10 candidates, exclude expired
-    const stmt = this.db.prepare(`
+    let sql = `
       SELECT * FROM memories
       WHERE repo = ?
         AND (expires_at IS NULL OR expires_at > ?)
-      ORDER BY importance DESC, created_at DESC
-      LIMIT ?
-    `);
+    `;
+    
+    if (!includeArchived) {
+      sql += " AND status = 'active'";
+    }
+
+    sql += ` ORDER BY importance DESC, created_at DESC LIMIT ?`;
+    
+    const stmt = this.db.prepare(sql);
     const candidates = stmt.all(repo, now, limit * 10) as any[];
 
     const withSimilarity = candidates.map((row) => {
@@ -462,6 +374,12 @@ export class SQLiteStore {
 
   // Sub-task 2.5: Archive expired memories
   archiveExpiredMemories(): number {
+    const isAutoArchiveEnabled = process.env.ENABLE_AUTO_ARCHIVE === "true";
+    if (!isAutoArchiveEnabled) {
+      logger.info("[SQLite] Auto-archive is disabled. Skipping expired memory cleanup.");
+      return 0;
+    }
+
     const now = new Date().toISOString();
 
     const insertArchive = this.db.prepare(`
@@ -486,6 +404,34 @@ export class SQLiteStore {
     });
 
     return archive() as number;
+  }
+
+  // Archive memories that have low utility score (Decay)
+  archiveLowScoreMemories(): number {
+    const isAutoArchiveEnabled = process.env.ENABLE_AUTO_ARCHIVE === "true";
+    if (!isAutoArchiveEnabled) {
+      return 0;
+    }
+
+    const now = new Date().toISOString();
+    
+    // Formula: Score = (Importance * 2) + (LastUsedRecency) - (AgeFactor)
+    // For simplicity in SQL, we'll archive memories that are:
+    // 1. Not used in 90 days AND Importance < 3
+    // 2. Used many times (high hit_count) but never acknowledged as 'used' (recall_count = 0)
+    const stmt = this.db.prepare(`
+      UPDATE memories
+      SET status = 'archived',
+          updated_at = ?
+      WHERE status = 'active'
+        AND (
+          (julianday('now') - julianday(COALESCE(last_used_at, created_at)) > 90 AND importance < 3)
+          OR (hit_count > 10 AND recall_count = 0)
+        )
+    `);
+
+    const result = stmt.run(now);
+    return result.changes;
   }
 
   // Get all memories with stats (for dashboard)
@@ -630,6 +576,28 @@ export class SQLiteStore {
     }
   }
 
+  // Check for semantic conflicts before storing new memory
+  async checkConflicts(
+    content: string,
+    repo: string,
+    type: string,
+    vectors: VectorStore,
+    threshold: number = 0.85
+  ): Promise<MemoryEntry | null> {
+    const vectorResults = await vectors.search(content, 10);
+    
+    for (const vr of vectorResults) {
+      if (vr.score > threshold) {
+        const memory = this.getById(vr.id);
+        if (memory && memory.scope.repo === repo && memory.type === type && memory.status === 'active') {
+          return memory;
+        }
+      }
+    }
+    
+    return null;
+  }
+
   close(): void {
     this.db.close();
   }
@@ -686,6 +654,8 @@ export class SQLiteStore {
       recall_count: row.recall_count ?? 0,
       last_used_at: row.last_used_at ?? null,
       expires_at: row.expires_at ?? null,
+      supersedes: row.supersedes ?? null,
+      status: row.status || "active",
     } as MemoryEntry;
   }
 
