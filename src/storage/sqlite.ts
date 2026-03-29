@@ -346,6 +346,79 @@ export class SQLiteStore {
     return result.changes;
   }
 
+  listRecent(limit: number = 10): Array<{ id: string; type: string; repo: string }> {
+    const stmt = this.db.prepare("SELECT id, type, repo FROM memories ORDER BY created_at DESC LIMIT ?");
+    return stmt.all(limit) as any[];
+  }
+
+  getStats(repo?: string): { total: number; byType: Record<string, number>; unused: number } {
+    let query = "SELECT type, COUNT(*) as count FROM memories";
+    const params: any[] = [];
+    if (repo) { query += " WHERE repo = ?"; params.push(repo); }
+    query += " GROUP BY type";
+    
+    const rows = this.db.prepare(query).all(...params) as any[];
+    const byType: Record<string, number> = {};
+    let total = 0;
+    for (const row of rows) { byType[row.type] = row.count; total += row.count; }
+
+    const unusedStmt = repo 
+      ? this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE hit_count = 0 AND repo = ?")
+      : this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE hit_count = 0");
+    const unused = (repo ? unusedStmt.get(repo) : unusedStmt.get()) as any;
+
+    return { total, byType, unused: unused?.count || 0 };
+  }
+
+  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
+    return this.db.prepare(`
+      SELECT repo, COUNT(*) AS memory_count, MAX(COALESCE(updated_at, created_at)) AS last_updated_at
+      FROM memories GROUP BY repo ORDER BY last_updated_at DESC, repo ASC
+    `).all() as any[];
+  }
+
+  getAllMemoriesWithStats(repo?: string): any[] {
+    let sql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories`;
+    if (repo) return this.db.prepare(sql + " WHERE repo = ?").all(repo);
+    return this.db.prepare(sql).all();
+  }
+
+  getLastActionId(): number {
+    const row = this.db.prepare("SELECT MAX(id) as id FROM action_log").get() as any;
+    return row?.id || 0;
+  }
+
+  getActionsAfter(id: number): any[] {
+    return this.db.prepare(`
+      SELECT a.*, m.title as memory_title, m.type as memory_type 
+      FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
+      WHERE a.id > ? ORDER BY a.created_at ASC
+    `).all(id);
+  }
+
+  listMemoriesForDashboard(options: any): any {
+    const { repo, type, minImportance, search, offset = 0, limit = 50, sortBy = 'created_at', sortOrder = 'DESC' } = options;
+    let where = ["1=1"];
+    const params: any[] = [];
+
+    if (repo) { where.push("repo = ?"); params.push(repo); }
+    if (type) { where.push("type = ?"); params.push(type); }
+    if (minImportance) { where.push("importance >= ?"); params.push(minImportance); }
+    if (search) { where.push("(title LIKE ? OR content LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+
+    const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`);
+    const total = (countStmt.get(...params) as any).count;
+
+    const dataStmt = this.db.prepare(`
+      SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories WHERE ${where.join(" AND ")}
+      ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?
+    `);
+    const memories = dataStmt.all(...params, limit, offset);
+
+    return { memories, total, limit, offset };
+  }
+
   getSummary(repo: string): any {
     return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo);
   }

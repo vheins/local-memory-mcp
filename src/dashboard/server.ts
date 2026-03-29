@@ -153,7 +153,7 @@ app.get("/api/stats", async (req, res) => {
 
     const allMemories = db.getAllMemoriesWithStats(repo);
     const topMemories = allMemories
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
         if (a.importance !== b.importance) {
           return b.importance - a.importance;
         }
@@ -161,15 +161,15 @@ app.get("/api/stats", async (req, res) => {
       })
       .slice(0, 10);
 
-    const totalHitCount = allMemories.reduce((sum, m) => sum + (m.hit_count || 0), 0);
+    const totalHitCount = allMemories.reduce((sum: number, m: any) => sum + (m.hit_count || 0), 0);
     
     const avgImportance = allMemories.length > 0
-      ? allMemories.reduce((sum, m) => sum + m.importance, 0) / allMemories.length
+      ? allMemories.reduce((sum: number, m: any) => sum + m.importance, 0) / allMemories.length
       : 0;
 
     const now = new Date();
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const expiringSoon = allMemories.filter(m => 
+    const expiringSoon = allMemories.filter((m: any) => 
       m.expires_at && new Date(m.expires_at) <= sevenDaysFromNow
     ).length;
 

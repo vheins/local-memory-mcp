@@ -30,6 +30,8 @@ function makeEntry(overrides: any): MemoryEntry {
     expires_at: null,
     supersedes: overrides.supersedes || null,
     status: overrides.status || "active",
+    tags: overrides.tags || [],
+    is_global: overrides.is_global || false,
   };
 }
 
@@ -51,7 +53,7 @@ describe("V2 Enhanced Memory Features", () => {
       };
 
       const response = await handleMemoryStore(params, db, mockVectors);
-      expect(response.content[0].text).toContain("conflict");
+      expect((response.content[0] as any).text).toContain("conflict");
       db.close();
     });
 
@@ -92,7 +94,7 @@ describe("V2 Enhanced Memory Features", () => {
       const params = { query: "Target", repo };
       const response = await handleMemorySearch(params, db, mockVectors);
       
-      const text = response.content[0].text;
+      const text = (response.content[0] as any).text;
       expect(text).toContain("Found 1 memories");
       db.close();
     });

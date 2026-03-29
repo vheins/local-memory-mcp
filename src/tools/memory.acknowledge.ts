@@ -1,7 +1,7 @@
 import { MemoryAcknowledgeSchema } from "./schemas.js";
-import { SQLiteStore } from "../storage/sqlite.ts";
-import { logger } from "../utils/logger.ts";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.ts";
+import { SQLiteStore } from "../storage/sqlite.js";
+import { logger } from "../utils/logger.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 export async function handleMemoryAcknowledge(
   params: any,
