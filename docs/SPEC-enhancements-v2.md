@@ -1,97 +1,82 @@
-# Specification: Enhanced Local Memory System (V2)
+# Strict Specification: Enhanced Local Memory System (V2)
 
-Dokumen ini merinci persyaratan, desain arsitektur, dan daftar tugas untuk peningkatan fungsionalitas MCP Local Memory Server.
+## 1. Recall & Utility Tracking (Anti-Hallucination Loop)
+**Problem:** Agent seringkali "berasumsi" memori yang diberikan sudah cukup atau benar tanpa memberikan feedback.
+**Strict Protocol:**
+- **New Tool:** `memory-acknowledge`
+  - `memory_id` (UUID): Harus ada di hasil `memory-search` sebelumnya.
+  - `status` (enum): `used` | `irrelevant` | `contradictory`.
+  - `application_context` (string): Bagaimana memori ini digunakan dalam kode.
+- **Scoring Logic:** 
+  - `UtilityRate = (UsedCount / HitCount)`.
+  - Jika `UsedCount` rendah tapi `HitCount` tinggi, memori tersebut akan diberi **penalty score** (-0.2) dalam ranking pencarian untuk mencegah Agent terus-menerus disuapi informasi yang tidak relevan.
+- **Agent Instruction:** "Jika Anda menggunakan fakta dari memori untuk menghasilkan kode, Anda WAJIB memanggil `memory-acknowledge` dengan status `used` segera setelah output selesai."
 
----
+## 2. Local Semantic Engine (Transformers.js)
+**Problem:** Pencarian kata kunci (keyword) rentan terhadap sinonim yang meleset, menyebabkan Agent merasa "tidak ada memori" padahal ada.
+**Technical Constraints:**
+- **Model:** `Xenova/all-MiniLM-L6-v2` (Quantized ONNX, <30MB).
+- **Processing Pipeline:**
+  1. `SQL FTS5` mencari Top 50 kandidat (Recall phase).
+  2. `Transformers.js` menghitung Cosine Similarity pada Top 50 tersebut (Re-ranking phase).
+- **Strict Threshold:** `SimilarityScore < 0.72` dianggap **No Match**. Sistem dilarang mengembalikan hasil di bawah threshold ini untuk mencegah Agent mencoba "mencocok-cocokkan" informasi yang tidak relevan (hallucination trigger).
 
-## 1. Recall Tracking (Feedback Loop)
-**Requirement:**
-- Mengetahui memori mana yang benar-benar bermanfaat bagi Agent.
-- Menyediakan metrik "Utility Rate" (Recall Count / Hit Count).
+## 3. Shadow Conflict Detection (Strict Consistency)
+**Problem:** Menyimpan dua keputusan yang bertentangan (misal: "Gunakan Tab" dan "Gunakan Spasi") akan merusak logika Agent.
+**Validation Rules:**
+- Saat `memory-store` dipanggil:
+  1. Lakukan `Vector Search` terhadap konten baru.
+  2. Jika ditemukan memori dengan `Similarity > 0.85` pada repo yang sama:
+     - Jika `type` sama tapi isi berbeda secara substansial: **REJECT** dengan Error `MEMORY_CONFLICT`.
+     - Agent harus memanggil `memory-update` pada ID lama atau secara eksplisit menyatakan `supersedes: [ID_LAMA]`.
+- **Constraint:** Tidak boleh ada dua memori dengan `type: "decision"` yang memiliki semantic overlap > 85% tanpa link `supersedes`.
 
-**Design:**
-- **Tool Baru:** `memory-acknowledge(id: string, feedback?: string)`.
-- **Database:** Memperbarui kolom `recall_count` di tabel `memories`.
-- **Dashboard:** Menampilkan badge "High Utility" pada memori dengan recall rate > 50%.
+## 4. Time-Based Decay & Archiving
+**Problem:** Memori usang dari fase awal proyek (misal: "Kita pakai boilerplate X") mengganggu saat proyek sudah bermigrasi ke "Boilerplate Y".
+**Math Formula:**
+- `Score = (Importance * 2) + (LastUsedRecency) - (AgeFactor)`.
+- `LastUsedRecency = 1 / (DaysSinceLastUsed + 1)`.
+- **Archive Trigger:** Jika `Score < 1.5` dan memori sudah berumur > 90 hari:
+  - Pindahkan ke `memories_archive`.
+  - **Dilarang** muncul di `memory-search` default.
+  - Hanya bisa diakses via `memory-search` dengan flag `include_archived: true`.
 
----
+## 5. Workspace Context Enforcement
+**Problem:** Agent sering mengambil memori dari modul "Auth" saat sedang mengerjakan modul "Payment".
+**Strict Filtering:**
+- **Tool Parameter:** `current_file_path` (Required in `memory-search`).
+- **Logic:**
+  - Jika `memory.scope.folder` adalah prefix dari `current_file_path`, berikan **Ranking Boost (+0.15)**.
+  - Jika ekstensi file (`.ts`, `.py`) cocok dengan `memory.scope.language`, berikan **Ranking Boost (+0.1)**.
+- Ini memaksa hasil pencarian menjadi sangat spesifik terhadap lokasi kerja Agent.
 
-## 2. Time-Based Memory Decay (Natural Forgetting)
-**Requirement:**
-- Membersihkan memori usang secara otomatis agar konteks tetap bersih.
-- Menghindari penghapusan permanen dengan mekanisme *archiving*.
-
-**Design:**
-- **Algoritma Decay:** `Score = Importance / (Days Since Last Used + 1)`.
-- **Background Task:** Fungsi `archiveLowScoreMemories()` yang berjalan saat server dimulai.
-- **Database:** Memindahkan data dari `memories` ke `memories_archive`.
-
----
-
-## 3. Timeline & Audit Trail (Dashboard)
-**Requirement:**
-- Developer dapat melihat histori interaksi Agent dengan memori.
-- Transparansi mengenai apa yang dicari dan ditemukan Agent.
-
-**Design:**
-- **UI Component:** Tab "Timeline" di Dashboard.
-- **Data Source:** Tabel `action_log`.
-- **Visualisasi:** List kronologis berisi: `Action (Search/Store)`, `Query`, `Result Count`, dan `Timestamp`.
-
----
-
-## 4. Semantic Search via Transformers.js (Local-First)
-**Requirement:**
-- Pencarian semantik sejati tanpa dependensi eksternal (Ollama/OpenAI).
-- Mendukung variasi kata dan sinonim.
-
-**Design:**
-- **Library:** `@xenova/transformers`.
-- **Model:** `Xenova/all-MiniLM-L6-v2` (ringan dan cepat).
-- **Storage:** Simpan vektor (float array) di tabel `memory_vectors`.
-- **Search:** Ganti `vectors.stub.ts` dengan implementasi pencarian vektor berbasis *dot product* atau *cosine similarity*.
-
----
-
-## 5. Workspace-Aware Context
-**Requirement:**
-- Memprioritaskan memori yang relevan dengan file/folder yang sedang dikerjakan.
-
-**Design:**
-- **Schema Update:** Menambahkan parameter opsional `currentFile` dan `currentLanguage` pada `memory-search`.
-- **Scoring Boost:** Memberikan bobot tambahan (+20%) jika `scope.folder` atau `scope.language` cocok dengan konteks saat ini.
+## 6. Audit Trail & Log Integrity
+**Problem:** Tidak ada bukti mengapa Agent memilih memori tertentu.
+**Logging Requirement:**
+- Setiap `memory-search` harus mencatat:
+  - `query_vector_hash`.
+  - `top_3_match_ids`.
+  - `system_threshold_applied`.
+- Data ini diekspos di Dashboard dalam bentuk **Decision Tree** untuk audit manual oleh developer.
 
 ---
 
-## 6. Shadow Conflict Detection
-**Requirement:**
-- Mencegah Agent menyimpan informasi yang bertentangan dengan keputusan lama.
+## Technical Tasks (Phase 1: Strict Foundation)
 
-**Design:**
-- **Logic:** Saat `memory-store` dipanggil, lakukan pencarian semantik terhadap `content` baru.
-- **Threshold:** Jika skor kemiripan > 0.8 tapi ada indikasi negasi (misal: "Use" vs "Don't use"), berikan respon peringatan (Warning) kepada Agent.
+### 1.1 Schema Update (SQLite)
+- [ ] Add `supersedes` column to `memories` (Self-referencing ID).
+- [ ] Add `status` (active/archived) index.
+- [ ] Add `vector_version` to `memory_vectors` (untuk tracking migrasi model embedding).
 
----
+### 1.2 Tool Schema Enforcement (Zod)
+- [ ] Update `MemorySearchSchema`: add `current_file_path` (string), `include_archived` (boolean).
+- [ ] Create `MemoryAcknowledgeSchema`.
+- [ ] Update `MemoryStoreSchema`: add `supersedes` (optional UUID).
 
-## implementation Roadmap & Tasks
-
-### Phase 1: Foundation & Tracking (Fitur 1 & 3)
-- [ ] Implementasi tool `memory-acknowledge`.
-- [ ] Update `SQLiteStore.incrementRecallCount`.
-- [ ] Tambahkan tab "Timeline" di Dashboard UI.
-- [ ] Ekspos API `/api/actions` untuk dashboard.
-
-### Phase 2: Intelligence & Semantics (Fitur 4 & 6)
-- [ ] Instalasi `@xenova/transformers`.
-- [ ] Implementasi `VectorStore` sungguhan di `src/storage/vectors.ts`.
-- [ ] Integrasi embedding ke `memory-store`.
-- [ ] Logika deteksi konflik pada `handleMemoryStore`.
-
-### Phase 3: Optimization & Context (Fitur 2 & 5)
-- [ ] Implementasi filter `folder` dan `language` di `memory-search`.
-- [ ] Implementasi *background archiver* untuk memori usang.
-- [ ] Update Dashboard untuk menampilkan memori yang di-archive.
+### 1.3 Conflict Detection Logic
+- [ ] Implement `checkConflicts(content, repo)` helper.
+- [ ] Integrate conflict check into `handleMemoryStore`.
 
 ---
 
-**Prinsip Utama:** Tetap Local-First, Zero-Config, dan Ringan.
+**Anti-Hallucination Guarantee:** Dengan sistem ini, jika Agent tidak menemukan data dengan skor kemiripan tinggi, sistem akan mengembalikan `null` atau `empty` secara tegas, alih-alih memberikan "kemiripan terdekat" yang menyesatkan.
