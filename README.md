@@ -101,10 +101,48 @@ The service includes a built-in dashboard to help you manage your memories visua
    ```
 2. Open `http://localhost:3456` in your browser.
 
-Features:
-- Filter memories by repository.
-- Visualize memory distribution (Types & Importance).
-- Quick search and edit functionality.
+### 🛠 Automating the Dashboard (IDE Integration)
+
+If you use **VS Code**, **Cursor**, **Trae**, **Kiro**, or any VS Code-based IDE, you can create a task to launch the dashboard with a single command or shortcut.
+
+Create or open `.vscode/tasks.json` in your project and add the following:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch Memory Dashboard",
+      "type": "shell",
+      "command": "npx @vheins/local-memory-mcp dashboard",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Starting dashboard.*$",
+          "endsPattern": "^.*Dashboard listening.*$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "memory"
+      }
+    }
+  ]
+}
+```
+
+**How to use:**
+1. Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux).
+2. Type **"Run Task"** and select **"Launch Memory Dashboard"**.
+3. The dashboard will start in a background terminal.
 
 ## ⚙️ Environment Variables
 
