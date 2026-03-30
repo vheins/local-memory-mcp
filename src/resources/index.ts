@@ -6,26 +6,32 @@ export function listResources() {
     resources: [
       {
         uri: "memory://index",
-        name: "Memory Index",
-        description: "Recent memory entries (metadata only)",
+        name: "Active Memory Index",
+        description: "List of all active memory entries across projects",
+        mimeType: "application/json"
+      },
+      {
+        uri: "memory://index?repo={repo}",
+        name: "Project Memory Index",
+        description: "Metadata for all active memories in a specific project",
+        mimeType: "application/json"
+      },
+      {
+        uri: "memory://tags/{tag}",
+        name: "Memories by Tech Stack",
+        description: "Retrieve best practices and decisions by technology tag (e.g., filament, react)",
         mimeType: "application/json"
       },
       {
         uri: "memory://summary/{repo}",
         name: "Project Summary",
-        description: "Antigravity summary for a repository",
+        description: "High-level summary of architectural decisions for a repository",
         mimeType: "text/plain"
       },
       {
         uri: "memory://{id}",
-        name: "Memory by ID",
-        description: "View a specific memory by UUID",
-        mimeType: "application/json"
-      },
-      {
-        uri: "memory://{base64_query}",
-        name: "Search Memories",
-        description: "Search memories by query (base64 encoded)",
+        name: "Memory Detail",
+        description: "Full content and statistics for a specific memory UUID",
         mimeType: "application/json"
       }
     ]
@@ -35,13 +41,15 @@ export function listResources() {
 export function readResource(uri: string, db: SQLiteStore) {
   logger.info("[MCP] resource.read", { uri });
 
+  // 1. Index Resource (Repo specific or Global)
   if (uri === "memory://index" || uri.startsWith("memory://index?")) {
     const parsed = new URL(uri.replace("memory://", "http://memory/"));
     const repo = parsed.searchParams.get("repo");
+    const includeArchived = parsed.searchParams.get("archived") === "true";
 
     const entries = repo
-      ? db.searchByRepo(repo, { limit: 20 })
-      : db.listRecent(20);
+      ? db.searchByRepo(repo, { limit: 50, includeArchived })
+      : db.listRecent(50); // Fallback to global recent
 
     return {
       contents: [
@@ -54,6 +62,28 @@ export function readResource(uri: string, db: SQLiteStore) {
     };
   }
 
+  // 2. Tag Affinity Resource: memory://tags/{tag}
+  if (uri.startsWith("memory://tags/")) {
+    const tag = uri.replace("memory://tags/", "");
+    // Search across all repos for this specific technology tag
+    const entries = db.searchByRepo("", { 
+      tags: [tag], 
+      limit: 50,
+      includeArchived: false 
+    });
+
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ tag, count: entries.length, entries }, null, 2)
+        }
+      ]
+    };
+  }
+
+  // 3. Project Summary: memory://summary/{repo}
   if (uri.startsWith("memory://summary/")) {
     const repo = uri.replace("memory://summary/", "");
     const summary = db.getSummary(repo);
@@ -63,20 +93,20 @@ export function readResource(uri: string, db: SQLiteStore) {
         {
           uri,
           mimeType: "text/plain",
-          text: summary?.summary || "No summary available for this repository"
+          text: summary?.summary || `No summary available for repository: ${repo}`
         }
       ]
     };
   }
 
-  // View memory by ID: memory://{uuid}
+  // 4. View memory by ID: memory://{uuid}
   const idMatch = uri.match(/^memory:\/\/([0-9a-f-]{36})$/i);
   if (idMatch) {
     const id = idMatch[1];
-    const entry = db.getById(id);
+    const entry = db.getByIdWithStats(id); // Use version with stats for full detail
     
     if (!entry) {
-      throw new Error(`Memory not found: ${id}`);
+      throw new Error(`Memory with ID ${id} not found.`);
     }
 
     return {
@@ -84,29 +114,29 @@ export function readResource(uri: string, db: SQLiteStore) {
         {
           uri,
           mimeType: "application/json",
-          text: JSON.stringify(entry)
+          text: JSON.stringify(entry, null, 2)
         }
       ]
     };
   }
 
-  // Search by query: memory://{base64_query}
-  if (uri.startsWith("memory://") && !uri.startsWith("memory://index") && !uri.startsWith("memory://summary")) {
-    const searchId = uri.replace("memory://", "");
-    const query = Buffer.from(searchId, 'base64').toString('utf-8');
-    const parsed = new URL(uri.replace("memory://", "http://memory/"));
-    const repo = parsed.searchParams.get("repo") || undefined;
+  // 5. Semantic Search via URI: memory://search/{base64_query}?repo={repo}
+  if (uri.startsWith("memory://search/")) {
+    const parts = uri.replace("memory://search/", "").split('?');
+    const encodedQuery = parts[0];
+    const query = Buffer.from(encodedQuery, 'base64').toString('utf-8');
     
-    const results = repo 
-      ? db.searchBySimilarity(query, repo, 10)
-      : db.searchBySimilarity(query, "", 10);
+    const parsed = new URL("http://memory/" + (parts[1] || ""));
+    const repo = parsed.searchParams.get("repo") || "";
+    
+    const results = db.searchBySimilarity(query, repo, 10);
     
     return {
       contents: [
         {
           uri,
           mimeType: "application/json",
-          text: JSON.stringify({ query, repo, results })
+          text: JSON.stringify({ query, repo, results }, null, 2)
         }
       ]
     };

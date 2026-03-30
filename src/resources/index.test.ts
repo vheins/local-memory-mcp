@@ -19,6 +19,10 @@ function makeEntry(id: string, repo: string): MemoryEntry {
     recall_count: 0,
     last_used_at: null,
     expires_at: null,
+    supersedes: null,
+    status: "active",
+    tags: [],
+    is_global: false,
   };
 }
 

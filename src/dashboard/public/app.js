@@ -21,6 +21,7 @@ let availableRepos = [];
 let isRepoSidebarCollapsed = false;
 let pinnedRepoOrder = [];
 let draggedPinnedRepo = null;
+let isGlobalFilterActive = false;
 
 async function loadRecentActions(page = recentActionsPage) {
     try {
@@ -791,10 +792,17 @@ function renderTable(memories) {
             </thead>
             <tbody>
                 ${paginated.map(m => `
-                    <tr id="row-${m.id}" class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <tr id="row-${m.id}" class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${m.status === 'archived' ? 'opacity-60 grayscale-[0.5]' : ''}">
                         <td class="p-3"><input type="checkbox" class="row-checkbox" value="${m.id}" ${selectedIds.has(m.id) ? 'checked' : ''} onchange="toggleSelect('${m.id}')"></td>
                         <td class="p-3 min-w-[18rem]">
-                            <button onclick="openDrawer('${m.id}')" class="text-left font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">${highlightText(getDisplayTitle(m), searchQuery)}</button>
+                            <div class="flex items-center gap-2">
+                                <button onclick="openDrawer('${m.id}')" class="text-left font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">${highlightText(getDisplayTitle(m), searchQuery)}</button>
+                                ${m.is_global ? '<span class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">Global</span>' : ''}
+                                ${m.status === 'archived' ? '<span class="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-[10px] font-bold text-gray-500 uppercase">Archived</span>' : ''}
+                            </div>
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                ${m.tags ? m.tags.map(tag => `<span class="text-[9px] px-1 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded border border-gray-200 dark:border-gray-700">#${tag}</span>`).join('') : ''}
+                            </div>
                             <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 <span class="font-mono">${m.id.substring(0, 8)}</span>
                                 <span class="mx-1">•</span>
@@ -992,6 +1000,7 @@ function renderDetailPanel(data) {
                         <div><strong>ID:</strong> <span class="font-mono">${data.id}</span></div>
                         <div><strong>Repo:</strong> ${escapeHtml(data.scope?.repo || 'N/A')}</div>
                         <div><strong>Priority:</strong> ${data.importance}/5 (${getImportanceLabel(data.importance)})</div>
+                        <div><strong>Status:</strong> <span class="capitalize px-1.5 py-0.5 rounded ${data.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'}">${data.status}</span></div>
                     </div>
                 </div>
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -1004,6 +1013,15 @@ function renderDetailPanel(data) {
                     </div>
                 </div>
             </div>
+            ${data.supersedes ? `
+                <div class="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 p-4">
+                    <div class="text-xs uppercase tracking-wide text-blue-500 dark:text-blue-400 mb-2">Supersedes</div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                        <button onclick="openDrawer('${data.supersedes}')" class="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline">Replaced memory ${data.supersedes.substring(0, 8)}…</button>
+                    </div>
+                </div>
+            ` : ''}
             <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Timeline</div>
                 <div class="space-y-2 text-sm">
@@ -1230,6 +1248,14 @@ async function archiveExpired() {
     } catch (err) {
         showToast('Archive failed: ' + err.message, 'error');
     }
+}
+
+function exportHandbook() {
+    if (!currentRepo) {
+        showToast('Please select a repository first', 'info');
+        return;
+    }
+    window.location.href = `/api/export/handbook/${encodeURIComponent(currentRepo)}`;
 }
 
 async function loadData() {

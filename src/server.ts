@@ -2,13 +2,52 @@
 import readline from "node:readline";
 import { createRouter } from "./router.js";
 import { SQLiteStore } from "./storage/sqlite.js";
-import { StubVectorStore } from "./storage/vectors.stub.js";
+import { RealVectorStore } from "./storage/vectors.js";
 import { CAPABILITIES } from "./capabilities.js";
 import { logger } from "./utils/logger.js";
+import fs from "fs";
+import path from "path";
+
+// --- CLI Doctor Mode ---
+if (process.argv.includes("doctor")) {
+  console.log("\n🏥 MCP Local Memory - System Diagnosis\n");
+  
+  const db = new SQLiteStore();
+  const dbPath = db.getDbPath();
+  
+  console.log(`📂 Database Path: ${dbPath}`);
+  console.log(`📄 Database Status: ${fs.existsSync(dbPath) ? "✅ Exists" : "❌ Not Found"}`);
+  
+  try {
+    const stats = db.getStats();
+    console.log(`📊 Memory Count: ${stats.total} entries`);
+    console.log(`✅ SQLite Connection: Functional`);
+  } catch (err) {
+    console.log(`❌ SQLite Connection: Failed (${String(err)})`);
+  }
+
+  console.log(`🤖 AI Model: Xenova/all-MiniLM-L6-v2`);
+  console.log(`⚙️  Mode: Local-First (ONNX Runtime)`);
+  
+  const isAutoArchive = process.env.ENABLE_AUTO_ARCHIVE === "true";
+  console.log(`📉 Auto-Archive: ${isAutoArchive ? "Enabled" : "Disabled (Default)"}`);
+  
+  console.log("\n✨ Diagnosis complete.\n");
+  process.exit(0);
+}
 
 // Create storage instances
 const db = new SQLiteStore();
-const vectors = new StubVectorStore(db);
+const vectors = new RealVectorStore(db);
+
+// Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
+const expiredArchived = db.archiveExpiredMemories();
+const lowScoreArchived = db.archiveLowScoreMemories();
+const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);
+
+if (totalArchived > 0) {
+  logger.info(`[Server] Archived ${totalArchived} memories (expired: ${expiredArchived}, low-score: ${lowScoreArchived}) on startup.`);
+}
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
 process.stdout.on('error', (err: any) => {

@@ -5,6 +5,7 @@ import os from "os";
 import { fileURLToPath } from "url";
 import { MemoryEntry, MemoryScope } from "../types.js";
 import { tokenize } from "../utils/normalize.js";
+import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,10 +34,6 @@ function resolveDbPath(): string {
 
   const projectRootStorage = path.join(__dirname, "../../storage");
   
-  // If we are in a production/installed environment and none of the above exist,
-  // we SHOULD use the ~/.config path as the default location to create new DBs,
-  // instead of potentially writing into a read-only node_modules/dist folder.
-  // But for backward compatibility with existing project-root storage, we check it last.
   if (fs.existsSync(projectRootStorage)) {
      return path.join(projectRootStorage, "memory.db");
   }
@@ -58,6 +55,9 @@ export class SQLiteStore {
     }
 
     this.db = new Database(finalPath);
+    this.db.pragma("journal_mode = WAL");
+    this.db.pragma("synchronous = NORMAL");
+    this.db.pragma("busy_timeout = 5000");
     this.migrate();
   }
 
@@ -116,9 +116,7 @@ export class SQLiteStore {
     // Add title column if it doesn't exist (for existing databases)
     try {
       this.db.exec(`ALTER TABLE memories ADD COLUMN title TEXT`);
-    } catch (e) {
-      // Column already exists, ignore
-    }
+    } catch (e) {}
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories_archive (
@@ -152,588 +150,414 @@ export class SQLiteStore {
       CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
     `);
 
-    // Sub-task 2.1: Use PRAGMA table_info to safely add columns
+    // Add missing columns safely
     const existingColumns = (
       this.db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>
     ).map((col) => col.name);
 
-    const columnsToAdd: Array<{ name: string; definition: string }> = [
-      { name: "hit_count", definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0" },
-      { name: "recall_count", definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0" },
-      { name: "last_used_at", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
-      { name: "expires_at", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
+    const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
+      { name: "hit_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0" },
+      { name: "recall_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0" },
+      { name: "last_used_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
+      { name: "expires_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
+      { name: "supersedes", table: "memories", definition: "ALTER TABLE memories ADD COLUMN supersedes TEXT" },
+      { name: "status", table: "memories", definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'" },
+      { name: "is_global", table: "memories", definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0" },
+      { name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
+      { name: "vector_version", table: "memory_vectors", definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1" },
     ];
 
     for (const col of columnsToAdd) {
-      if (!existingColumns.includes(col.name)) {
+      const existingTableColumns = (
+        this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>
+      ).map((c) => c.name);
+
+      if (!existingTableColumns.includes(col.name)) {
         this.db.exec(col.definition);
       }
     }
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
+      CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
+      CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
+    `);
   }
 
   insert(entry: MemoryEntry): void {
-    if (!entry.title) {
-      throw new Error("Title is required for memory entry");
-    }
-    
     const stmt = this.db.prepare(`
       INSERT INTO memories (
         id, repo, type, title, content, importance, folder, language,
-        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?)
+        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+        supersedes, status, is_global, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       entry.id,
       entry.scope.repo,
       entry.type,
-      entry.title,
+      entry.title || null,
       entry.content,
       entry.importance,
       entry.scope.folder || null,
       entry.scope.language || null,
       entry.created_at,
       entry.updated_at,
-      entry.expires_at ?? null
+      entry.expires_at ?? null,
+      entry.supersedes ?? null,
+      entry.status || "active",
+      entry.is_global ? 1 : 0,
+      entry.tags ? JSON.stringify(entry.tags) : null
     );
   }
 
-  update(id: string, updates: { title?: string; content?: string; importance?: number }): void {
+  update(id: string, updates: any): void {
     const fields: string[] = [];
     const values: unknown[] = [];
 
-    if (updates.title !== undefined) {
-      if (updates.title.length < 3) {
-        throw new Error("Title must be at least 3 characters");
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        if (key === 'tags') {
+          fields.push(`tags = ?`);
+          values.push(JSON.stringify(updates[key]));
+        } else if (key === 'is_global') {
+          fields.push(`is_global = ?`);
+          values.push(updates[key] ? 1 : 0);
+        } else {
+          fields.push(`${key} = ?`);
+          values.push(updates[key]);
+        }
       }
-      fields.push("title = ?");
-      values.push(updates.title);
-    }
+    });
 
-    if (updates.content !== undefined) {
-      fields.push("content = ?");
-      values.push(updates.content);
-    }
-
-    if (updates.importance !== undefined) {
-      fields.push("importance = ?");
-      values.push(updates.importance);
-    }
-
-    if (fields.length === 0) {
-      return; // Nothing to update
-    }
+    if (fields.length === 0) return;
 
     fields.push("updated_at = ?");
     values.push(new Date().toISOString());
-
     values.push(id);
 
-    const stmt = this.db.prepare(`
-      UPDATE memories
-      SET ${fields.join(", ")}
-      WHERE id = ?
-    `);
-
+    const stmt = this.db.prepare(`UPDATE memories SET ${fields.join(", ")} WHERE id = ?`);
     stmt.run(...values);
   }
 
-  // Sub-task 2.4: Exclude expired memories from searchByRepo
-  searchByRepo(
-    repo: string,
-    options: {
-      types?: string[];
-      minImportance?: number;
-      limit?: number;
-    } = {}
-  ): MemoryEntry[] {
-    let query = `SELECT * FROM memories WHERE repo = ?
-      AND (expires_at IS NULL OR expires_at > datetime('now'))`;
-    const params: unknown[] = [repo];
+  getById(id: string): MemoryEntry | null {
+    const row = this.db.prepare("SELECT * FROM memories WHERE id = ?").get(id) as any;
+    return row ? this.rowToMemoryEntry(row) : null;
+  }
 
-    if (options.types && options.types.length > 0) {
-      const placeholders = options.types.map(() => "?").join(", ");
-      query += ` AND type IN (${placeholders})`;
-      params.push(...options.types);
+  getByIdWithStats(id: string): any | null {
+    const row = this.db.prepare(`
+      SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories WHERE id = ?
+    `).get(id) as any;
+    return row ? { ...this.rowToMemoryEntry(row), recall_rate: row.recall_rate ?? 0 } : null;
+  }
+
+  searchByRepo(repo: string, options: any = {}): MemoryEntry[] {
+    let where = ["(repo = ? OR is_global = 1)"];
+    const params: any[] = [repo];
+
+    if (options.tags?.length) {
+      const tagConditions = options.tags.map(() => "tags LIKE ?").join(" OR ");
+      where.push(`(${tagConditions})`);
+      options.tags.forEach((tag: string) => params.push(`%${tag}%`));
     }
 
-    if (options.minImportance !== undefined) {
+    let query = `SELECT * FROM memories WHERE ${where.join(" AND ")} AND (expires_at IS NULL OR expires_at > datetime('now'))`;
+
+    if (!options.includeArchived) query += " AND status = 'active'";
+    if (options.types?.length) {
+      query += ` AND type IN (${options.types.map(() => "?").join(",")})`;
+      params.push(...options.types);
+    }
+    if (options.minImportance) {
       query += " AND importance >= ?";
       params.push(options.minImportance);
     }
 
-    query += " ORDER BY importance DESC, created_at DESC";
+    query += " ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC";
+    params.push(repo);
 
-    if (options.limit !== undefined) {
+    if (options.limit) {
       query += " LIMIT ?";
       params.push(options.limit);
     }
 
-    const stmt = this.db.prepare(query);
-    const rows = stmt.all(...params) as any[];
-
-    return rows.map((row) => this.rowToMemoryEntry(row));
+    const rows = this.db.prepare(query).all(...params) as any[];
+    return rows.map(r => this.rowToMemoryEntry(r));
   }
 
-  getById(id: string): MemoryEntry | null {
-    const stmt = this.db.prepare("SELECT * FROM memories WHERE id = ?");
-    const row = stmt.get(id) as any;
-    if (!row) return null;
-    return this.rowToMemoryEntry(row);
-  }
-
-  getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
-    const stmt = this.db.prepare(`
-      SELECT *,
-        CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
-      FROM memories
-      WHERE id = ?
-    `);
-    const row = stmt.get(id) as any;
-    if (!row) return null;
-
-    return {
-      ...this.rowToMemoryEntry(row),
-      recall_rate: row.recall_rate ?? 0,
-    };
-  }
-
-  listRecent(limit: number = 10): Array<{ id: string; type: string; repo: string }> {
-    const stmt = this.db.prepare(`
-      SELECT id, type, repo
-      FROM memories
-      ORDER BY created_at DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit) as any[];
-  }
-
-  getSummary(repo: string): { summary: string; updated_at: string } | null {
-    const stmt = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?");
-    return stmt.get(repo) as any;
-  }
-
-  upsertSummary(repo: string, summary: string): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO memory_summary (repo, summary, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(repo) DO UPDATE SET
-        summary = excluded.summary,
-        updated_at = excluded.updated_at
-    `);
-    stmt.run(repo, summary, new Date().toISOString());
-  }
-
-  delete(id: string): void {
-    const stmt = this.db.prepare("DELETE FROM memories WHERE id = ?");
-    stmt.run(id);
-  }
-
-  // Sub-task 2.5: Renamed from listAllRepos to listRepos
-  listRepos(): string[] {
-    const stmt = this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo");
-    const rows = stmt.all() as any[];
-    return rows.map((row) => row.repo);
-  }
-
-  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
-    const stmt = this.db.prepare(`
-      SELECT
-        repo,
-        COUNT(*) AS memory_count,
-        MAX(COALESCE(updated_at, created_at)) AS last_updated_at
-      FROM memories
-      GROUP BY repo
-      ORDER BY last_updated_at DESC, repo ASC
-    `);
-
-    return stmt.all() as Array<{ repo: string; memory_count: number; last_updated_at: string | null }>;
-  }
-
-  incrementHitCount(id: string): void {
-    const stmt = this.db.prepare(`
-      UPDATE memories
-      SET hit_count = hit_count + 1,
-          last_used_at = ?
-      WHERE id = ?
-    `);
-    stmt.run(new Date().toISOString(), id);
-  }
-
-  incrementRecallCount(id: string): void {
-    const stmt = this.db.prepare(`
-      UPDATE memories
-      SET recall_count = recall_count + 1,
-          last_used_at = ?
-      WHERE id = ?
-    `);
-    stmt.run(new Date().toISOString(), id);
-  }
-
-  getStats(repo?: string): {
-    total: number;
-    byType: Record<string, number>;
-    unused: number;
-  } {
-    let query = "SELECT type, COUNT(*) as count FROM memories";
-    const params: unknown[] = [];
-
-    if (repo) {
-      query += " WHERE repo = ?";
-      params.push(repo);
-    }
-
-    query += " GROUP BY type";
-
-    const stmt = this.db.prepare(query);
-    const rows = stmt.all(...params) as any[];
-
-    const byType: Record<string, number> = {};
-    let total = 0;
-
-    for (const row of rows) {
-      byType[row.type] = row.count;
-      total += row.count;
-    }
-
-    let unusedQuery = "SELECT COUNT(*) as count FROM memories WHERE hit_count = 0";
-    if (repo) {
-      unusedQuery += " AND repo = ?";
-    }
-    const unusedStmt = this.db.prepare(unusedQuery);
-    const unusedRow = (repo ? unusedStmt.get(repo) : unusedStmt.get()) as any;
-    const unused = unusedRow?.count || 0;
-
-    return { total, byType, unused };
-  }
-
-  // Sub-task 2.2: Public method for Memory_Recap
-  getRecentMemories(repo: string, limit: number, offset: number = 0): MemoryEntry[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM memories
-      WHERE repo = ?
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `);
-    const rows = stmt.all(repo, limit, offset) as any[];
-    return rows.map((row) => this.rowToMemoryEntry(row));
-  }
-
-  // Sub-task 2.2: Public method for total count
-  getTotalCount(repo: string): number {
-    const stmt = this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?");
-    const row = stmt.get(repo) as any;
-    return row?.count ?? 0;
-  }
-
-  // Sub-task 2.3: searchBySimilarity with pre-filter SQL + exclude expired
-  searchBySimilarity(
-    query: string,
-    repo: string,
-    limit: number = 10
-  ): Array<MemoryEntry & { similarity: number }> {
+  searchBySimilarity(query: string, repo: string, limit: number = 10, includeArchived: boolean = false, currentTags: string[] = []): any[] {
     const queryVector = this.computeVector(query);
     const now = new Date().toISOString();
 
-    // Pre-filter: fetch at most limit*10 candidates, exclude expired
-    const stmt = this.db.prepare(`
-      SELECT * FROM memories
-      WHERE repo = ?
-        AND (expires_at IS NULL OR expires_at > ?)
-      ORDER BY importance DESC, created_at DESC
-      LIMIT ?
-    `);
-    const candidates = stmt.all(repo, now, limit * 10) as any[];
+    let where = ["(repo = ? OR is_global = 1)"];
+    const params: any[] = [repo];
 
-    const withSimilarity = candidates.map((row) => {
+    if (currentTags.length > 0) {
+      const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
+      where.push(`(${tagConditions})`);
+      currentTags.forEach(tag => params.push(`%${tag}%`));
+    }
+
+    let sql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND (expires_at IS NULL OR expires_at > ?)`;
+    if (!includeArchived) sql += " AND status = 'active'";
+    sql += ` ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
+    
+    let candidates = this.db.prepare(sql).all(...params, now, repo) as any[];
+
+    // Ensure we have at least some candidates for re-ranking
+    if (candidates.length < 5) {
+      const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
+      const recent = this.db.prepare(recentSql).all(...params, now) as any[];
+      for (const r of recent) {
+        if (!candidates.find(c => c.id === r.id)) candidates.push(r);
+      }
+    }
+
+    return candidates.map(row => {
       const memory = this.rowToMemoryEntry(row);
-      const memoryVector = this.computeVector(memory.content);
-      const similarity = this.cosineSimilarity(queryVector, memoryVector);
-      return { 
-        ...memory,
-        similarity
-      };
-    });
+      
+      // Strict validity check
+      const isExpired = row.expires_at && new Date(row.expires_at) <= now;
+      const isArchived = row.status === 'archived' && !includeArchived;
+      
+      if (isExpired || isArchived) {
+        return { ...memory, similarity: 0 };
+      }
 
-    return withSimilarity
+      const similarity = this.cosineSimilarity(queryVector, this.computeVector(memory.content));
+      
+      let score = similarity;
+      if (!score) {
+        score = 0.16; // Baseline for active candidates
+      }
+      
+      if (row.repo === repo) score += 0.1;
+      
+      return { ...memory, similarity: score };
+    }).filter(r => r.similarity > 0)
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit);
   }
 
-  // Sub-task 2.5: Archive expired memories
-  archiveExpiredMemories(): number {
+  archiveExpiredMemories(force: boolean = false): number {
+    if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
     const now = new Date().toISOString();
-
-    const insertArchive = this.db.prepare(`
-      INSERT OR IGNORE INTO memories_archive
-        (id, repo, type, content, importance, folder, language,
-         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at, archived_at)
-      SELECT id, repo, type, content, importance, folder, language,
-             created_at, updated_at, hit_count, recall_count, last_used_at, expires_at, ?
-      FROM memories
-      WHERE expires_at IS NOT NULL AND expires_at <= ?
-    `);
-
-    const deleteExpired = this.db.prepare(`
-      DELETE FROM memories
-      WHERE expires_at IS NOT NULL AND expires_at <= ?
-    `);
-
-    const archive = this.db.transaction(() => {
-      insertArchive.run(now, now);
-      const result = deleteExpired.run(now);
-      return result.changes;
-    });
-
-    return archive() as number;
+    const result = this.db.prepare(`
+      UPDATE memories SET status = 'archived', updated_at = ? 
+      WHERE expires_at IS NOT NULL AND expires_at <= ? AND status = 'active'
+    `).run(now, now);
+    return result.changes;
   }
 
-  // Get all memories with stats (for dashboard)
-  getAllMemoriesWithStats(repo?: string): Array<
-    MemoryEntry & {
-      hit_count: number;
-      recall_count: number;
-      recall_rate: number;
-      last_used_at: string | null;
-    }
-  > {
-    let query = "SELECT * FROM memories";
-    const params: unknown[] = [];
-
-    if (repo) {
-      query += " WHERE repo = ?";
-      params.push(repo);
-    }
-
-    query += " ORDER BY hit_count DESC, importance DESC, created_at DESC";
-
-    const stmt = this.db.prepare(query);
-    const rows = stmt.all(...params) as any[];
-
-    return rows.map((row) => ({
-      ...this.rowToMemoryEntry(row),
-      hit_count: row.hit_count || 0,
-      recall_count: row.recall_count || 0,
-      recall_rate: row.hit_count > 0 ? row.recall_count / row.hit_count : 0,
-      last_used_at: row.last_used_at ?? null,
-    }));
+  archiveLowScoreMemories(force: boolean = false): number {
+    if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
+    const result = this.db.prepare(`
+      UPDATE memories SET status = 'archived', updated_at = ? 
+      WHERE status = 'active' AND (
+        (julianday('now') - julianday(COALESCE(last_used_at, created_at)) > 90 AND importance < 3)
+        OR (hit_count > 10 AND recall_count = 0)
+      )
+    `).run(new Date().toISOString());
+    return result.changes;
   }
 
-  listMemoriesForDashboard(options: {
-    repo: string;
-    type?: string;
-    search?: string;
-    minImportance?: number;
-    maxImportance?: number;
-    sortBy?: string;
-    sortOrder?: "asc" | "desc";
-    limit?: number;
-    offset?: number;
-  }): {
-    items: Array<
-      MemoryEntry & {
-        hit_count: number;
-        recall_count: number;
-        recall_rate: number;
-        last_used_at: string | null;
-      }
-    >;
-    total: number;
-  } {
-    const where: string[] = ["repo = ?"];
-    const params: unknown[] = [options.repo];
-
-    if (options.type) {
-      where.push("type = ?");
-      params.push(options.type);
-    }
-
-    if (options.search) {
-      where.push("(LOWER(COALESCE(title, '')) LIKE ? OR LOWER(content) LIKE ? OR LOWER(id) LIKE ?)");
-      const term = `%${options.search.toLowerCase()}%`;
-      params.push(term, term, term);
-    }
-
-    if (options.minImportance !== undefined) {
-      where.push("importance >= ?");
-      params.push(options.minImportance);
-    }
-
-    if (options.maxImportance !== undefined) {
-      where.push("importance <= ?");
-      params.push(options.maxImportance);
-    }
-
-    const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
-
-    const sortableColumns: Record<string, string> = {
-      id: "id",
-      title: "COALESCE(title, content)",
-      type: "type",
-      importance: "importance",
-      hit_count: "hit_count",
-      recall_rate: "recall_rate",
-      created_at: "created_at",
-      updated_at: "updated_at",
-    };
-
-    const sortBy = sortableColumns[options.sortBy ?? "hit_count"] ?? sortableColumns.hit_count;
-    const sortOrder = options.sortOrder === "asc" ? "ASC" : "DESC";
-    const limit = options.limit ?? 25;
-    const offset = options.offset ?? 0;
-
-    const countStmt = this.db.prepare(`SELECT COUNT(*) AS count FROM memories ${whereSql}`);
-    const total = (countStmt.get(...params) as { count: number } | undefined)?.count ?? 0;
-
-    const listStmt = this.db.prepare(`
-      SELECT *,
-        CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
-      FROM memories
-      ${whereSql}
-      ORDER BY ${sortBy} ${sortOrder}, created_at DESC
-      LIMIT ? OFFSET ?
-    `);
-
-    const rows = listStmt.all(...params, limit, offset) as any[];
-
-    return {
-      items: rows.map((row) => ({
-        ...this.rowToMemoryEntry(row),
-        hit_count: row.hit_count || 0,
-        recall_count: row.recall_count || 0,
-        recall_rate: row.recall_rate ?? 0,
-        last_used_at: row.last_used_at ?? null,
-      })),
-      total,
-    };
+  listRecent(limit: number = 10): Array<{ id: string; type: string; repo: string }> {
+    const stmt = this.db.prepare("SELECT id, type, repo FROM memories ORDER BY created_at DESC LIMIT ?");
+    return stmt.all(limit) as any[];
   }
 
-  upsertVectorEmbedding(memoryId: string, vector: number[] | string[]): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO memory_vectors (memory_id, vector, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(memory_id) DO UPDATE SET
-        vector = excluded.vector,
-        updated_at = excluded.updated_at
-    `);
-    stmt.run(memoryId, JSON.stringify(vector), new Date().toISOString());
+  getStats(repo?: string): { total: number; byType: Record<string, number>; unused: number } {
+    let query = "SELECT type, COUNT(*) as count FROM memories";
+    const params: any[] = [];
+    if (repo) { query += " WHERE repo = ?"; params.push(repo); }
+    query += " GROUP BY type";
+    
+    const rows = this.db.prepare(query).all(...params) as any[];
+    const byType: Record<string, number> = {};
+    let total = 0;
+    for (const row of rows) { byType[row.type] = row.count; total += row.count; }
+
+    const unusedStmt = repo 
+      ? this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE hit_count = 0 AND repo = ?")
+      : this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE hit_count = 0");
+    const unused = (repo ? unusedStmt.get(repo) : unusedStmt.get()) as any;
+
+    return { total, byType, unused: unused?.count || 0 };
   }
 
-  getVectorEmbedding(memoryId: string): number[] | string[] | null {
-    const stmt = this.db.prepare("SELECT vector FROM memory_vectors WHERE memory_id = ?");
-    const row = stmt.get(memoryId) as any;
-    if (!row) return null;
-    try {
-      return JSON.parse(row.vector);
-    } catch {
-      return null;
-    }
+  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
+    return this.db.prepare(`
+      SELECT repo, COUNT(*) AS memory_count, MAX(COALESCE(updated_at, created_at)) AS last_updated_at
+      FROM memories GROUP BY repo ORDER BY last_updated_at DESC, repo ASC
+    `).all() as any[];
   }
 
-  close(): void {
-    this.db.close();
-  }
-
-  // Sub-task 2.3: Use tokenize() from normalize.ts (single source of truth)
-  private computeVector(text: string): Record<string, number> {
-    const tokens = tokenize(text);
-    const vector: Record<string, number> = {};
-    for (const token of tokens) {
-      vector[token] = (vector[token] || 0) + 1;
-    }
-    return vector;
-  }
-
-  private cosineSimilarity(
-    v1: Record<string, number>,
-    v2: Record<string, number>
-  ): number {
-    const keys1 = Object.keys(v1);
-    const keys2 = Object.keys(v2);
-
-    if (keys1.length === 0 || keys2.length === 0) return 0;
-
-    let dotProduct = 0;
-    for (const key of keys1) {
-      if (v2[key]) {
-        dotProduct += v1[key] * v2[key];
-      }
-    }
-
-    const mag1 = Math.sqrt(keys1.reduce((sum, key) => sum + v1[key] * v1[key], 0));
-    const mag2 = Math.sqrt(keys2.reduce((sum, key) => sum + v2[key] * v2[key], 0));
-
-    if (mag1 === 0 || mag2 === 0) return 0;
-
-    return dotProduct / (mag1 * mag2);
-  }
-
-  private rowToMemoryEntry(row: any): MemoryEntry {
-    return {
-      id: row.id,
-      type: row.type,
-      title: row.title || "Untitled Memory",
-      content: row.content,
-      importance: row.importance,
-      scope: {
-        repo: row.repo,
-        folder: row.folder || undefined,
-        language: row.language || undefined,
-      },
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      hit_count: row.hit_count ?? 0,
-      recall_count: row.recall_count ?? 0,
-      last_used_at: row.last_used_at ?? null,
-      expires_at: row.expires_at ?? null,
-    } as MemoryEntry;
-  }
-
-  logAction(action: 'search' | 'read' | 'write' | 'update' | 'delete', repo: string, options?: { query?: string; memoryId?: string; resultCount?: number }) {
-    const stmt = this.db.prepare(`
-      INSERT INTO action_log (action, query, memory_id, repo, result_count, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(
-      action,
-      options?.query || null,
-      options?.memoryId || null,
-      repo,
-      options?.resultCount || 0,
-      new Date().toISOString()
-    );
+  getAllMemoriesWithStats(repo?: string): any[] {
+    let sql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories`;
+    if (repo) return this.db.prepare(sql + " WHERE repo = ?").all(repo);
+    return this.db.prepare(sql).all();
   }
 
   getLastActionId(): number {
-    const row = this.db.prepare(`SELECT MAX(id) as max_id FROM action_log`).get() as { max_id: number | null };
-    return row?.max_id ?? 0;
+    const row = this.db.prepare("SELECT MAX(id) as id FROM action_log").get() as any;
+    return row?.id || 0;
   }
 
-  getActionsAfter(afterId: number): Array<{ id: number; action: string; query?: string; memory_id?: string; repo: string; result_count?: number; created_at: string }> {
-    const rows = this.db.prepare(
-      `SELECT id, action, query, memory_id, repo, result_count, created_at FROM action_log WHERE id > ? ORDER BY id ASC`
-    ).all(afterId);
-    return rows as Array<{ id: number; action: string; query?: string; memory_id?: string; repo: string; result_count?: number; created_at: string }>;
+  getActionsAfter(id: number): any[] {
+    return this.db.prepare(`
+      SELECT a.*, m.title as memory_title, m.type as memory_type 
+      FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
+      WHERE a.id > ? ORDER BY a.created_at ASC
+    `).all(id);
   }
 
-  getRecentActions(repo?: string, limit = 20): Array<{ action: string; query?: string; memory_id?: string; memory_title?: string; memory_type?: string; result_count?: number; created_at: string }> {
-    let sql = `
-      SELECT a.action, a.query, a.memory_id, a.result_count, a.created_at,
-             m.title as memory_title, m.type as memory_type
-      FROM action_log a
-      LEFT JOIN memories m ON a.memory_id = m.id
-    `;
-    const params: (string | number)[] = [];
+  listMemoriesForDashboard(options: any): any {
+    const { repo, type, tag, isGlobal, minImportance, search, offset = 0, limit = 50, sortBy = 'created_at', sortOrder = 'DESC' } = options;
+    let where = ["1=1"];
+    const params: any[] = [];
 
-    if (repo) {
-      sql += ` WHERE a.repo = ?`;
-      params.push(repo);
+    if (repo) { where.push("repo = ?"); params.push(repo); }
+    if (type) { where.push("type = ?"); params.push(type); }
+    if (tag) { where.push("tags LIKE ?"); params.push(`%${tag}%`); }
+    if (isGlobal !== undefined) { where.push("is_global = ?"); params.push(isGlobal ? 1 : 0); }
+    if (minImportance) { where.push("importance >= ?"); params.push(minImportance); }
+    if (search) { 
+      where.push("(title LIKE ? OR content LIKE ? OR tags LIKE ?)"); 
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`); 
     }
 
-    sql += ` ORDER BY a.created_at DESC, a.id DESC LIMIT ?`;
-    params.push(limit);
+    const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`);
+    const total = (countStmt.get(...params) as any).count;
 
-    const rows = this.db.prepare(sql).all(...params);
-    return rows as Array<{ action: string; query?: string; memory_id?: string; memory_title?: string; memory_type?: string; result_count?: number; created_at: string }>;
+    const dataStmt = this.db.prepare(`
+      SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories WHERE ${where.join(" AND ")}
+      ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?
+    `);
+    const items = dataStmt.all(...params, limit, offset);
+
+    return { items, memories: items, total, limit, offset };
   }
+
+  getSummary(repo: string): any {
+    return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo);
+  }
+
+  upsertSummary(repo: string, summary: string): void {
+    this.db.prepare(`
+      INSERT INTO memory_summary (repo, summary, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at
+    `).run(repo, summary, new Date().toISOString());
+  }
+
+  delete(id: string): void {
+    this.db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+  }
+
+  listRepos(): string[] {
+    return (this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo").all() as any[]).map(r => r.repo);
+  }
+
+  incrementHitCount(id: string): void {
+    this.db.prepare("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+  }
+
+  incrementRecallCount(id: string): void {
+    this.db.prepare("UPDATE memories SET recall_count = recall_count + 1, last_used_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+  }
+
+  getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false): MemoryEntry[] {
+    let query = "SELECT * FROM memories WHERE repo = ?";
+    if (!includeArchived) {
+      query += " AND status = 'active'";
+    }
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(repo, limit, offset) as any[];
+    return rows.map((row) => this.rowToMemoryEntry(row));
+  }
+
+  getTotalCount(repo: string, includeArchived = false): number {
+    let sql = "SELECT COUNT(*) as count FROM memories WHERE repo = ?";
+    if (!includeArchived) sql += " AND status = 'active'";
+    return (this.db.prepare(sql).get(repo) as any).count;
+  }
+
+  getVectorCandidates(repo?: string, limit = 100): any[] {
+    let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN memories m ON mv.memory_id = m.id`;
+    const params: any[] = [];
+    if (repo) { sql += " WHERE m.repo = ?"; params.push(repo); }
+    sql += " LIMIT ?"; params.push(limit);
+    return this.db.prepare(sql).all(...params) as any[];
+  }
+
+  upsertVectorEmbedding(memoryId: string, vector: any[]): void {
+    this.db.prepare(`
+      INSERT INTO memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at
+    `).run(memoryId, JSON.stringify(vector), new Date().toISOString());
+  }
+
+  async checkConflicts(content: string, repo: string, type: string, vectors: any, threshold = 0.55): Promise<any> {
+    const vectorResults = await vectors.search(content, 10, repo);
+    for (const vr of vectorResults) {
+      if (vr.score > threshold) {
+        const memory = this.getById(vr.id);
+        if (memory && memory.type === type && memory.status === 'active') return memory;
+      }
+    }
+    return null;
+  }
+
+  logAction(action: string, repo: string, options: any = {}) {
+    this.db.prepare(`INSERT INTO action_log (action, query, memory_id, repo, result_count, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(
+      action, options.query || null, options.memoryId || null, repo, options.resultCount || 0, new Date().toISOString()
+    );
+  }
+
+  getRecentActions(repo?: string, limit = 20): any[] {
+    let sql = `SELECT a.*, m.title as memory_title, m.type as memory_type FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id`;
+    const params: any[] = [];
+    if (repo) { sql += ` WHERE a.repo = ?`; params.push(repo); }
+    sql += ` ORDER BY a.created_at DESC, a.id DESC LIMIT ?`; params.push(limit);
+    return this.db.prepare(sql).all(...params);
+  }
+
+  private computeVector(text: string): Record<string, number> {
+    const tokens = tokenize(text);
+    const vector: Record<string, number> = {};
+    for (const token of tokens) vector[token] = (vector[token] || 0) + 1;
+    return vector;
+  }
+
+  private cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
+    const keys1 = Object.keys(v1);
+    if (!keys1.length || !Object.keys(v2).length) return 0;
+    let dotProduct = 0;
+    for (const key of keys1) if (v2[key]) dotProduct += v1[key] * v2[key];
+    const mag1 = Math.sqrt(keys1.reduce((sum, k) => sum + v1[k] * v1[k], 0));
+    const mag2 = Math.sqrt(Object.keys(v2).reduce((sum, k) => sum + v2[k] * v2[k], 0));
+    return (mag1 && mag2) ? dotProduct / (mag1 * mag2) : 0;
+  }
+
+  private rowToMemoryEntry(row: any): MemoryEntry {
+    let tags: string[] = [];
+    try {
+      if (row.tags) tags = JSON.parse(row.tags);
+    } catch (e) {}
+
+    return {
+      id: row.id, type: row.type, title: row.title || "Untitled", content: row.content, importance: row.importance,
+      scope: { repo: row.repo, folder: row.folder || undefined, language: row.language || undefined },
+      created_at: row.created_at, updated_at: row.updated_at, hit_count: row.hit_count ?? 0, recall_count: row.recall_count ?? 0,
+      last_used_at: row.last_used_at ?? null, expires_at: row.expires_at ?? null, supersedes: row.supersedes ?? null, status: row.status || "active",
+      is_global: row.is_global === 1, tags
+    };
+  }
+
+  close(): void { this.db.close(); }
 }

@@ -36,6 +36,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       archiveExpiredMemories: vi.fn().mockReturnValue(0),
       logQuery: vi.fn(),
       getRecentQueries: vi.fn().mockReturnValue([]),
+      logAction: vi.fn(),
+      checkConflicts: vi.fn().mockResolvedValue(null),
       close: vi.fn(),
     } as unknown as SQLiteStore;
   }
@@ -110,15 +112,16 @@ describe("createRouter() — Property 11: uses provided storage", () => {
           content: fc.string({ minLength: 10, maxLength: 200 }),
           importance: fc.integer({ min: 1, max: 5 }),
           type: fc.constantFrom("code_fact", "decision", "mistake", "pattern"),
+          title: fc.string({ minLength: 3, maxLength: 50 }),
         }),
-        async ({ repo, content, importance, type }: { repo: string; content: string; importance: number; type: string }) => {
+        async ({ repo, content, importance, type, title }: { repo: string; content: string; importance: number; type: string; title: string }) => {
           const mockDb = makeMockDb();
           const mockVectors = makeMockVectors();
           const router = createRouter(mockDb, mockVectors);
 
           await router("tools/call", {
             name: "memory-store",
-            arguments: { type, content, importance, scope: { repo } },
+            arguments: { type, content, importance, title, scope: { repo } },
           });
 
           expect(mockDb.insert).toHaveBeenCalled();

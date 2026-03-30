@@ -22,6 +22,10 @@ export type MemoryEntry = {
   recall_count: number;
   last_used_at: string | null;
   expires_at: string | null;
+  supersedes: string | null;
+  status: "active" | "archived";
+  tags: string[];
+  is_global: boolean;
 };
 
 export type VectorResult = {
@@ -32,5 +36,5 @@ export type VectorResult = {
 export interface VectorStore {
   upsert(id: string, text: string): Promise<void>;
   remove(id: string): Promise<void>;
-  search(query: string, limit: number): Promise<VectorResult[]>;
+  search(query: string, limit: number, repo?: string): Promise<VectorResult[]>;
 }

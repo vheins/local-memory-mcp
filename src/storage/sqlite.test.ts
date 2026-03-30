@@ -34,6 +34,10 @@ function makeEntry(overrides: Partial<{
     recall_count: 0,
     last_used_at: null,
     expires_at: overrides.expires_at !== undefined ? overrides.expires_at : null,
+    supersedes: null,
+    status: "active",
+    tags: [],
+    is_global: false,
   };
 }
 
@@ -277,8 +281,8 @@ describe("Property 10: archiveExpiredMemories() idempoten", () => {
             }));
           }
 
-          const first = store.archiveExpiredMemories();
-          const second = store.archiveExpiredMemories();
+          const first = store.archiveExpiredMemories(true);
+          const second = store.archiveExpiredMemories(true);
           store.close();
 
           return first === n && second === 0;
