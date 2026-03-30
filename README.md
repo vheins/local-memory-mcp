@@ -17,24 +17,72 @@ Built with a **Local-First** philosophy, this service stores architectural decis
 - 📉 **Automatic Memory Decay:** Automatically archives obsolete memories to keep the context clean and relevant.
 - 📊 **Glassy Dashboard:** Visualize memories, usage statistics, and audit interaction logs through a modern web interface.
 
-## 🛠️ Quick Start
+## 🔌 MCP Usage & Configuration
 
-### Installation
-```bash
-npm install -g @vheins/local-memory-mcp
-```
+Add this service to your AI Agent (Claude Desktop, Cursor, Windsurf, etc.) using one of the methods below.
 
-### MCP Client Configuration (e.g., Claude Desktop)
-Add the following to your MCP settings file:
+> 💡 **Recommendation:** If your MCP runs frequently (agents, CI, automation), avoid `npx` and use a global or local install instead. It reduces unnecessary NPM downloads and speeds up Agent startup.
+
+### 🚀 Quick Start (Zero Setup)
+Best for **first-time users** or **quick testing**. This uses `npx` to run the server without any permanent setup.
 
 ```json
+"local-memory": {
+  "command": "npx",
+  "args": ["-y", "@vheins/local-memory-mcp"],
+  "type": "stdio"
+}
+```
+* **Uses `npx`**: Automatically handles the execution.
+* **Tradeoff**: May re-download the package in some environments and is not optimal for frequent execution.
+
+### ⚡ Recommended for Production / Frequent Usage
+This method ensures the fastest startup times and maximum reliability for daily use.
+
+1. **Install globally:**
+   ```bash
+   npm install -g @vheins/local-memory-mcp
+   ```
+
+2. **Add to your configuration:**
+   ```json
+   "local-memory": {
+     "command": "local-memory-mcp",
+     "type": "stdio"
+   }
+   ```
+* **Faster startup**: No network checks required on every start.
+* **No repeated downloads**: Saves bandwidth and avoids NPM registry dependency.
+* **Better for automation**: More stable for heavy-duty Agent workflows.
+
+### 🧠 How It Works (Important Insight)
+* **npx usage**: When you use `npx`, it often performs a network request to check for the latest version or re-downloads the package if it's not in the cache. Since MCP clients start and stop tools frequently, this can lead to hundreds of unnecessary downloads.
+* **Installed binary**: By installing the package, you keep a permanent copy on your disk. The Agent reuses this local version instantly, providing a much smoother experience.
+
+## 📊 Glassy Dashboard
+
+Visualize and manage your Agent's memory through a modern web interface.
+
+### How to Run
+```bash
+local-memory-mcp dashboard
+```
+*If not installed globally, use:* `npx @vheins/local-memory-mcp dashboard`
+
+### Auto-launch in VS Code
+Add this to your `.vscode/tasks.json` to have the dashboard start automatically:
+```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch Memory Dashboard",
+      "type": "shell",
+      "command": "npx -y @vheins/local-memory-mcp dashboard",
+      "isBackground": true,
+      "runOptions": { "runOn": "folderOpen" }
     }
-  }
+  ]
 }
 ```
 
