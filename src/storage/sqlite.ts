@@ -55,6 +55,9 @@ export class SQLiteStore {
     }
 
     this.db = new Database(finalPath);
+    this.db.pragma("journal_mode = WAL");
+    this.db.pragma("synchronous = NORMAL");
+    this.db.pragma("busy_timeout = 5000");
     this.migrate();
   }
 
@@ -397,14 +400,19 @@ export class SQLiteStore {
   }
 
   listMemoriesForDashboard(options: any): any {
-    const { repo, type, minImportance, search, offset = 0, limit = 50, sortBy = 'created_at', sortOrder = 'DESC' } = options;
+    const { repo, type, tag, isGlobal, minImportance, search, offset = 0, limit = 50, sortBy = 'created_at', sortOrder = 'DESC' } = options;
     let where = ["1=1"];
     const params: any[] = [];
 
     if (repo) { where.push("repo = ?"); params.push(repo); }
     if (type) { where.push("type = ?"); params.push(type); }
+    if (tag) { where.push("tags LIKE ?"); params.push(`%${tag}%`); }
+    if (isGlobal !== undefined) { where.push("is_global = ?"); params.push(isGlobal ? 1 : 0); }
     if (minImportance) { where.push("importance >= ?"); params.push(minImportance); }
-    if (search) { where.push("(title LIKE ? OR content LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+    if (search) { 
+      where.push("(title LIKE ? OR content LIKE ? OR tags LIKE ?)"); 
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`); 
+    }
 
     const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`);
     const total = (countStmt.get(...params) as any).count;

@@ -51,16 +51,31 @@ export async function handleMemorySearch(
     similarityScore: (r as any).similarity as number
   }));
 
-  // 2. Workspace Context Boost
-  if (validated.current_file_path && candidates.length > 0) {
-    const currentPath = validated.current_file_path.toLowerCase();
+  // 2. Workspace & Tag Affinity Boost
+  if (candidates.length > 0) {
+    const currentPath = validated.current_file_path?.toLowerCase();
+    const currentTags = (validated.current_tags || []).map(t => t.toLowerCase());
+
     candidates = candidates.map(c => {
       let boost = 0;
-      if (c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) boost += 0.15;
-      if (c.memory.scope.language) {
+      
+      // Folder boost (+0.15)
+      if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) {
+        boost += 0.15;
+      }
+      
+      // Language boost (+0.1)
+      if (currentPath && c.memory.scope.language) {
         const ext = currentPath.split('.').pop();
         if (ext && ext.includes(c.memory.scope.language.toLowerCase())) boost += 0.1;
       }
+
+      // TAG AFFINITY BOOST (+0.2)
+      // If the memory has tags that match the current workspace tech-stack
+      if (currentTags.length > 0 && c.memory.tags.some(t => currentTags.includes(t.toLowerCase()))) {
+        boost += 0.2;
+      }
+
       return { ...c, similarityScore: Math.min(1.0, c.similarityScore + boost) };
     });
   }

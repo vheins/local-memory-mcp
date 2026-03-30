@@ -21,6 +21,7 @@ let availableRepos = [];
 let isRepoSidebarCollapsed = false;
 let pinnedRepoOrder = [];
 let draggedPinnedRepo = null;
+let isGlobalFilterActive = false;
 
 async function loadRecentActions(page = recentActionsPage) {
     try {
@@ -796,7 +797,11 @@ function renderTable(memories) {
                         <td class="p-3 min-w-[18rem]">
                             <div class="flex items-center gap-2">
                                 <button onclick="openDrawer('${m.id}')" class="text-left font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">${highlightText(getDisplayTitle(m), searchQuery)}</button>
+                                ${m.is_global ? '<span class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase">Global</span>' : ''}
                                 ${m.status === 'archived' ? '<span class="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-[10px] font-bold text-gray-500 uppercase">Archived</span>' : ''}
+                            </div>
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                ${m.tags ? m.tags.map(tag => `<span class="text-[9px] px-1 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded border border-gray-200 dark:border-gray-700">#${tag}</span>`).join('') : ''}
                             </div>
                             <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 <span class="font-mono">${m.id.substring(0, 8)}</span>

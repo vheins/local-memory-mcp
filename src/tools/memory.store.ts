@@ -52,6 +52,12 @@ export async function handleMemoryStore(
     }
   }
 
+  // Auto-tagging based on language scope
+  const tags = validated.tags ?? [];
+  if (validated.scope.language && !tags.includes(validated.scope.language.toLowerCase())) {
+    tags.push(validated.scope.language.toLowerCase());
+  }
+
   const entry: MemoryEntry = {
     id: randomUUID(),
     type: validated.type,
@@ -67,7 +73,7 @@ export async function handleMemoryStore(
     expires_at,
     supersedes: validated.supersedes ?? null,
     status: "active",
-    tags: validated.tags ?? [],
+    tags,
     is_global: validated.is_global
   };
 
