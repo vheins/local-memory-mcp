@@ -40,7 +40,10 @@ If your Agent is not finding the expected memories:
 
 ## Database Troubleshooting
 If the `memory.db` file is corrupted or you want to reset it:
-1. Default file location: `~/.config/local-memory-mcp/memory.db`.
+1. Default file location:
+   - **Linux:** `~/.config/local-memory-mcp/memory.db`
+   - **macOS:** `~/Library/Application Support/local-memory-mcp/memory.db`
+   - **Windows:** `%USERPROFILE%\.local-memory-mcp\memory.db`
 2. You can open this file with any SQLite tool (e.g., DB Browser for SQLite) for manual repair.
 
 ## ⚠️ No Warranty

@@ -21,24 +21,46 @@ function resolveDbPath(): string {
     return process.env.MEMORY_DB_PATH;
   }
 
-  // Check ~/.config/local-memory-mcp/memory.db
-  const homeConfig = path.join(os.homedir(), ".config", "local-memory-mcp", "memory.db");
-  if (fs.existsSync(homeConfig)) {
-    return homeConfig;
+  // Define platform-specific standard paths
+  let standardConfigDir: string;
+  if (process.platform === "win32") {
+    // Windows: Use %USERPROFILE%\.local-memory-mcp (common for CLI tools)
+    standardConfigDir = path.join(os.homedir(), ".local-memory-mcp");
+  } else if (process.platform === "darwin") {
+    // macOS: Use ~/Library/Application Support/local-memory-mcp
+    standardConfigDir = path.join(os.homedir(), "Library", "Application Support", "local-memory-mcp");
+  } else {
+    // Linux/Others: Use ~/.config/local-memory-mcp
+    standardConfigDir = path.join(os.homedir(), ".config", "local-memory-mcp");
   }
 
+  const standardPath = path.join(standardConfigDir, "memory.db");
+
+  // Priority 1: Check if the standard path already exists
+  if (fs.existsSync(standardPath)) {
+    return standardPath;
+  }
+
+  // Priority 2: Check legacy ~/.config/local-memory-mcp/memory.db (for cross-platform compatibility with older versions)
+  const legacyHomeConfig = path.join(os.homedir(), ".config", "local-memory-mcp", "memory.db");
+  if (fs.existsSync(legacyHomeConfig)) {
+    return legacyHomeConfig;
+  }
+
+  // Priority 3: Check local storage/ folder in CWD (useful for development)
   const cwdStorage = path.join(process.cwd(), "storage");
-  if (fs.existsSync(cwdStorage)) {
+  if (fs.existsSync(cwdStorage) && fs.existsSync(path.join(cwdStorage, "memory.db"))) {
     return path.join(cwdStorage, "memory.db");
   }
 
+  // Priority 4: Check project root storage/ folder (useful for repo-local usage)
   const projectRootStorage = path.join(__dirname, "../../storage");
-  
-  if (fs.existsSync(projectRootStorage)) {
+  if (fs.existsSync(projectRootStorage) && fs.existsSync(path.join(projectRootStorage, "memory.db"))) {
      return path.join(projectRootStorage, "memory.db");
   }
 
-  return homeConfig;
+  // Default: Return the standard platform-specific path (it will be created by the constructor)
+  return standardPath;
 }
 
 const DB_PATH = resolveDbPath();
