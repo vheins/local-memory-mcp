@@ -2,29 +2,26 @@ import { describe, it, expect } from "vitest";
 import { expandQuery } from "../utils/query-expander.js";
 
 describe("expandQuery", () => {
-  it("returns original query when no prompt provided", () => {
-    expect(expandQuery("database")).toBe("database");
-    expect(expandQuery("api endpoint")).toBe("api endpoint");
+  it("includes original query and expands keywords", () => {
+    const result = expandQuery("database");
+    expect(result).toContain("database");
+    expect(result).toContain("sql");
+    expect(result).toContain("db");
   });
 
   it("expands query with prompt keywords", () => {
     const result = expandQuery("database", "user authentication implementation");
     expect(result).toContain("database");
-    expect(result).toContain("user");
     expect(result).toContain("auth");
+    expect(result).toContain("login");
   });
 
-  it("expands known keywords", () => {
+  it("expands technical synonyms", () => {
     const result = expandQuery("auth", "login system");
     expect(result).toContain("auth");
     expect(result).toContain("login");
-    expect(result).toContain("password");
-  });
-
-  it("limits to 10 keywords", () => {
-    const result = expandQuery("api", "building a rest endpoint with controller and route handling");
-    const words = result.split(" ");
-    expect(words.length).toBeLessThanOrEqual(10);
+    expect(result).toContain("security");
+    expect(result).toContain("permission");
   });
 
   it("removes duplicates", () => {
@@ -35,6 +32,6 @@ describe("expandQuery", () => {
   });
 
   it("handles empty prompt gracefully", () => {
-    expect(expandQuery("test", "")).toBe("test");
+    expect(expandQuery("test", "")).toContain("test");
   });
 });

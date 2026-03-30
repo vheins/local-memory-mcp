@@ -5,7 +5,9 @@
 const TECH_SYNONYMS: Record<string, string[]> = {
   "update": ["migrate", "change", "alter", "modify", "patch", "upgrade"],
   "database": ["db", "sql", "schema", "persistence", "storage", "sqlite", "postgres"],
-  "auth": ["login", "security", "token", "session", "permission", "authorization"],
+  "auth": ["login", "security", "token", "session", "permission", "authorization", "authentication", "system"],
+  "authentication": ["auth", "login", "security", "token", "session", "permission"],
+  "system": ["architecture", "structure", "design", "security"],
   "error": ["bug", "issue", "failure", "mistake", "fix", "exception"],
   "ui": ["frontend", "component", "styling", "css", "layout", "view"],
   "deploy": ["publish", "release", "ci", "cd", "pipeline"]

@@ -281,8 +281,8 @@ describe("Property 10: archiveExpiredMemories() idempoten", () => {
             }));
           }
 
-          const first = store.archiveExpiredMemories();
-          const second = store.archiveExpiredMemories();
+          const first = store.archiveExpiredMemories(true);
+          const second = store.archiveExpiredMemories(true);
           store.close();
 
           return first === n && second === 0;

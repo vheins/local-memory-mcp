@@ -309,7 +309,8 @@ export class SQLiteStore {
 
     // Ensure we have at least some candidates for re-ranking
     if (candidates.length < 5) {
-      const recent = this.db.prepare(`SELECT * FROM memories WHERE (repo = ? OR is_global = 1) AND status = 'active' ORDER BY created_at DESC LIMIT 10`).all(repo) as any[];
+      const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
+      const recent = this.db.prepare(recentSql).all(...params, now) as any[];
       for (const r of recent) {
         if (!candidates.find(c => c.id === r.id)) candidates.push(r);
       }
@@ -317,18 +318,32 @@ export class SQLiteStore {
 
     return candidates.map(row => {
       const memory = this.rowToMemoryEntry(row);
+      
+      // Strict validity check
+      const isExpired = row.expires_at && new Date(row.expires_at) <= now;
+      const isArchived = row.status === 'archived' && !includeArchived;
+      
+      if (isExpired || isArchived) {
+        return { ...memory, similarity: 0 };
+      }
+
       const similarity = this.cosineSimilarity(queryVector, this.computeVector(memory.content));
-      // Give a slightly higher baseline if it's a direct fallback to ensure it passes small-db threshold (0.15)
-      // Boost if same repo
-      let score = similarity || 0.16;
+      
+      let score = similarity;
+      if (!score) {
+        score = 0.16; // Baseline for active candidates
+      }
+      
       if (row.repo === repo) score += 0.1;
       
       return { ...memory, similarity: score };
-    }).sort((a, b) => b.similarity - a.similarity).slice(0, limit);
+    }).filter(r => r.similarity > 0)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
   }
 
-  archiveExpiredMemories(): number {
-    if (process.env.ENABLE_AUTO_ARCHIVE !== "true") return 0;
+  archiveExpiredMemories(force: boolean = false): number {
+    if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
     const now = new Date().toISOString();
     const result = this.db.prepare(`
       UPDATE memories SET status = 'archived', updated_at = ? 
@@ -337,8 +352,8 @@ export class SQLiteStore {
     return result.changes;
   }
 
-  archiveLowScoreMemories(): number {
-    if (process.env.ENABLE_AUTO_ARCHIVE !== "true") return 0;
+  archiveLowScoreMemories(force: boolean = false): number {
+    if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
     const result = this.db.prepare(`
       UPDATE memories SET status = 'archived', updated_at = ? 
       WHERE status = 'active' AND (
@@ -422,9 +437,9 @@ export class SQLiteStore {
       FROM memories WHERE ${where.join(" AND ")}
       ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?
     `);
-    const memories = dataStmt.all(...params, limit, offset);
+    const items = dataStmt.all(...params, limit, offset);
 
-    return { memories, total, limit, offset };
+    return { items, memories: items, total, limit, offset };
   }
 
   getSummary(repo: string): any {
@@ -508,7 +523,7 @@ export class SQLiteStore {
     let sql = `SELECT a.*, m.title as memory_title, m.type as memory_type FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id`;
     const params: any[] = [];
     if (repo) { sql += ` WHERE a.repo = ?`; params.push(repo); }
-    sql += ` ORDER BY a.created_at DESC LIMIT ?`; params.push(limit);
+    sql += ` ORDER BY a.created_at DESC, a.id DESC LIMIT ?`; params.push(limit);
     return this.db.prepare(sql).all(...params);
   }
 

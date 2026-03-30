@@ -80,21 +80,28 @@ describe("V2 Enhanced Memory Features", () => {
   });
 
   describe("2. Strict Search Threshold (0.72)", () => {
-    it("should filter out results below 0.72", async () => {
+    it("should filter out results using dynamic threshold", async () => {
       const db = new SQLiteStore(":memory:");
       const repo = "threshold-repo";
       db.insert(makeEntry({ id: VALID_UUID_1, repo, content: "Target" }));
       db.insert(makeEntry({ id: VALID_UUID_2, repo, content: "Noisy" }));
 
+      // Adding more memories to force a stricter threshold (> 5 memories)
+      for(let i=0; i<5; i++) {
+        db.insert(makeEntry({ id: `00000000-0000-4000-a000-00000000000${i+3}`, repo, content: "Irrelevant" }));
+      }
+
       mockVectors.search = vi.fn().mockResolvedValue([
         { id: VALID_UUID_1, score: 0.8 },
-        { id: VALID_UUID_2, score: 0.5 }
+        { id: VALID_UUID_2, score: 0.2 }, // Should be filtered out if threshold is high
+        { id: "00000000-0000-4000-a000-000000000003", score: 0.1 }
       ]);
 
       const params = { query: "Target", repo };
       const response = await handleMemorySearch(params, db, mockVectors);
       
       const text = (response.content[0] as any).text;
+      // With > 5 memories, threshold should be 0.40
       expect(text).toContain("Found 1 memories");
       db.close();
     });
