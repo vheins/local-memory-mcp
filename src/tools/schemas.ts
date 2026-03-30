@@ -47,7 +47,8 @@ export const MemorySearchSchema = z.object({
   includeRecap: z.boolean().default(false),
   current_file_path: z.string().optional(),
   include_archived: z.boolean().default(false),
-  current_tags: z.array(z.string()).optional()
+  current_tags: z.array(z.string()).optional(),
+  scope: MemoryScopeSchema.partial().optional()
 });
 
 export const MemoryAcknowledgeSchema = z.object({

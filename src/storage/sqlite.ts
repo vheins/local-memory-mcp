@@ -290,7 +290,7 @@ export class SQLiteStore {
 
   searchBySimilarity(query: string, repo: string, limit: number = 10, includeArchived: boolean = false, currentTags: string[] = []): any[] {
     const queryVector = this.computeVector(query);
-    const now = new Date().toISOString();
+    const now = new Date();
 
     let where = ["(repo = ? OR is_global = 1)"];
     const params: any[] = [repo];
@@ -305,12 +305,12 @@ export class SQLiteStore {
     if (!includeArchived) sql += " AND status = 'active'";
     sql += ` ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
     
-    let candidates = this.db.prepare(sql).all(...params, now, repo) as any[];
+    let candidates = this.db.prepare(sql).all(...params, now.toISOString(), repo) as any[];
 
     // Ensure we have at least some candidates for re-ranking
     if (candidates.length < 5) {
       const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
-      const recent = this.db.prepare(recentSql).all(...params, now) as any[];
+      const recent = this.db.prepare(recentSql).all(...params, now.toISOString()) as any[];
       for (const r of recent) {
         if (!candidates.find(c => c.id === r.id)) candidates.push(r);
       }
