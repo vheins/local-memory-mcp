@@ -15,9 +15,35 @@ The **MCP Local Memory Dashboard** provides a modern, visual interface to inspec
 ### Starting the Dashboard
 Run the following command from your terminal:
 ```bash
-npx @vheins/local-memory-mcp-dashboard
+npx @vheins/local-memory-mcp dashboard
 ```
 Then open **http://localhost:3456** in your browser.
+
+### Auto-launch in VS Code
+You can configure VS Code to automatically launch the dashboard when you open your project folder. Create or update `.vscode/tasks.json` with:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch Memory Dashboard",
+      "type": "shell",
+      "command": "npx -y @vheins/local-memory-mcp dashboard",
+      "isBackground": true,
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "memory"
+      }
+    }
+  ]
+}
+```
 
 ### Managing Memories
 1. **Browse:** Use the search bar to find specific decisions or patterns.

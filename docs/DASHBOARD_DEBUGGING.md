@@ -10,7 +10,25 @@ The dashboard can be accessed for manual inspection:
 
 ### How to Run
 ```bash
-npx @vheins/local-memory-mcp-dashboard
+npx @vheins/local-memory-mcp dashboard
+```
+
+### Auto-launch in VS Code
+To automatically start the dashboard when opening a project in VS Code, add a task to `.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch Memory Dashboard",
+      "type": "shell",
+      "command": "npx -y @vheins/local-memory-mcp dashboard",
+      "isBackground": true,
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}
 ```
 
 ## Debugging the MCP Server
