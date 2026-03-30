@@ -434,7 +434,6 @@ function closeRepoSidebarDrawer() {
 function initTheme() {
     const saved = localStorage.getItem('theme') || 'light';
     document.documentElement.classList.toggle('dark', saved === 'dark');
-    document.getElementById('themeToggle').textContent = saved === 'dark' ? '☀️' : '🌙';
 }
 
 function initRepoSidebarState() {
@@ -474,10 +473,14 @@ function updateCountdown() {
     status.textContent = `Synced ${countdownSeconds}s ago`;
 }
 
-document.getElementById('themeToggle').addEventListener('click', () => {
-    const isDark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
+['themeToggle', 'themeToggleMobile'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) {
+        btn.addEventListener('click', () => {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+    }
 });
 
 document.addEventListener('keydown', (e) => {
@@ -510,7 +513,7 @@ async function checkStatus() {
 
         const dbPathLabel = document.getElementById('dbPathLabel');
         if (dbPathLabel && data.dbPath) {
-            dbPathLabel.textContent = data.dbPath;
+            dbPathLabel.textContent = data.dbPath.split(/[/\\]/).pop() || data.dbPath;
             dbPathLabel.title = data.dbPath;
         }
 
@@ -1324,3 +1327,11 @@ renderRecentActions();
 loadData();
 startCountdown();
 setInterval(checkStatus, 30000);
+
+async function openDbFolder() {
+    try {
+        await fetch('/api/open-db-folder', { method: 'POST' });
+    } catch (err) {
+        console.error('Failed to open DB folder:', err);
+    }
+}
