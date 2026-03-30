@@ -1328,10 +1328,4 @@ loadData();
 startCountdown();
 setInterval(checkStatus, 30000);
 
-async function openDbFolder() {
-    try {
-        await fetch('/api/open-db-folder', { method: 'POST' });
-    } catch (err) {
-        console.error('Failed to open DB folder:', err);
-    }
-}
+

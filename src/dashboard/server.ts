@@ -104,26 +104,15 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Open DB folder
-app.post("/api/open-db-folder", (req, res) => {
+// Download DB file
+app.get("/api/download-db", (req, res) => {
   try {
     const dbPath = db.getDbPath();
-    const dir = path.dirname(dbPath);
-    
-    let command = '';
-    switch (os.platform()) {
-      case 'darwin': command = `open "${dir}"`; break;
-      case 'win32': command = `start "" "${dir}"`; break;
-      default: command = `xdg-open "${dir}"`; break;
+    if (fs.existsSync(dbPath)) {
+      res.download(dbPath, "memory.db");
+    } else {
+      res.status(404).json({ error: "Database file not found" });
     }
-    
-    exec(command, (error) => {
-      if (error) {
-        logger.error("Failed to open DB folder", { error: error.message });
-        return res.status(500).json({ error: error.message });
-      }
-      res.json({ success: true });
-    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
