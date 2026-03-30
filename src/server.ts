@@ -5,6 +5,36 @@ import { SQLiteStore } from "./storage/sqlite.js";
 import { RealVectorStore } from "./storage/vectors.js";
 import { CAPABILITIES } from "./capabilities.js";
 import { logger } from "./utils/logger.js";
+import fs from "fs";
+import path from "path";
+
+// --- CLI Doctor Mode ---
+if (process.argv.includes("doctor")) {
+  console.log("\n🏥 MCP Local Memory - System Diagnosis\n");
+  
+  const db = new SQLiteStore();
+  const dbPath = db.getDbPath();
+  
+  console.log(`📂 Database Path: ${dbPath}`);
+  console.log(`📄 Database Status: ${fs.existsSync(dbPath) ? "✅ Exists" : "❌ Not Found"}`);
+  
+  try {
+    const stats = db.getStats();
+    console.log(`📊 Memory Count: ${stats.total} entries`);
+    console.log(`✅ SQLite Connection: Functional`);
+  } catch (err) {
+    console.log(`❌ SQLite Connection: Failed (${String(err)})`);
+  }
+
+  console.log(`🤖 AI Model: Xenova/all-MiniLM-L6-v2`);
+  console.log(`⚙️  Mode: Local-First (ONNX Runtime)`);
+  
+  const isAutoArchive = process.env.ENABLE_AUTO_ARCHIVE === "true";
+  console.log(`📉 Auto-Archive: ${isAutoArchive ? "Enabled" : "Disabled (Default)"}`);
+  
+  console.log("\n✨ Diagnosis complete.\n");
+  process.exit(0);
+}
 
 // Create storage instances
 const db = new SQLiteStore();

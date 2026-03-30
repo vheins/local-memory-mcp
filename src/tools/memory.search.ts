@@ -55,9 +55,17 @@ export async function handleMemorySearch(
   if (candidates.length > 0) {
     const currentPath = validated.current_file_path?.toLowerCase();
     const currentTags = (validated.current_tags || []).map(t => t.toLowerCase());
+    
+    // Attempt to resolve current branch if not provided (optional)
+    const currentBranch = validated.scope?.branch;
 
     candidates = candidates.map(c => {
       let boost = 0;
+      
+      // Branch boost (+0.1) - High relevance if on same branch
+      if (currentBranch && c.memory.scope.branch === currentBranch) {
+        boost += 0.1;
+      }
       
       // Folder boost (+0.15)
       if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) {

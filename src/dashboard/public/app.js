@@ -1250,6 +1250,14 @@ async function archiveExpired() {
     }
 }
 
+function exportHandbook() {
+    if (!currentRepo) {
+        showToast('Please select a repository first', 'info');
+        return;
+    }
+    window.location.href = `/api/export/handbook/${encodeURIComponent(currentRepo)}`;
+}
+
 async function loadData() {
     await loadRepos();
     await Promise.all([
