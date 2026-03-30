@@ -21,45 +21,39 @@ function resolveDbPath(): string {
     return process.env.MEMORY_DB_PATH;
   }
 
-  // Define platform-specific standard paths
-  let standardConfigDir: string;
-  if (process.platform === "win32") {
-    // Windows: Use %USERPROFILE%\.local-memory-mcp (common for CLI tools)
-    standardConfigDir = path.join(os.homedir(), ".local-memory-mcp");
-  } else if (process.platform === "darwin") {
-    // macOS: Use ~/Library/Application Support/local-memory-mcp
-    standardConfigDir = path.join(os.homedir(), "Library", "Application Support", "local-memory-mcp");
-  } else {
-    // Linux/Others: Use ~/.config/local-memory-mcp
-    standardConfigDir = path.join(os.homedir(), ".config", "local-memory-mcp");
-  }
+  // 1. Define the standard global path for this platform
+  const standardConfigDir = process.platform === "win32"
+    ? path.join(os.homedir(), ".local-memory-mcp")
+    : process.platform === "darwin"
+      ? path.join(os.homedir(), "Library", "Application Support", "local-memory-mcp")
+      : path.join(os.homedir(), ".config", "local-memory-mcp");
 
   const standardPath = path.join(standardConfigDir, "memory.db");
 
-  // Priority 1: Check if the standard path already exists
+  // 2. If the global database already exists, ALWAYS use it to ensure consistency
   if (fs.existsSync(standardPath)) {
     return standardPath;
   }
 
-  // Priority 2: Check legacy ~/.config/local-memory-mcp/memory.db (for cross-platform compatibility with older versions)
-  const legacyHomeConfig = path.join(os.homedir(), ".config", "local-memory-mcp", "memory.db");
-  if (fs.existsSync(legacyHomeConfig)) {
-    return legacyHomeConfig;
+  // 3. Migration/Legacy check: ~/.config/local-memory-mcp/memory.db
+  const legacyPath = path.join(os.homedir(), ".config", "local-memory-mcp", "memory.db");
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
   }
 
-  // Priority 3: Check local storage/ folder in CWD (useful for development)
-  const cwdStorage = path.join(process.cwd(), "storage");
-  if (fs.existsSync(cwdStorage) && fs.existsSync(path.join(cwdStorage, "memory.db"))) {
-    return path.join(cwdStorage, "memory.db");
+  // 4. Development/Portable check: ONLY use local storage if the FILE actually exists.
+  // This prevents divergence when one process sees a 'storage/' folder and another doesn't.
+  const localCwdFile = path.join(process.cwd(), "storage", "memory.db");
+  if (fs.existsSync(localCwdFile)) {
+    return localCwdFile;
   }
 
-  // Priority 4: Check project root storage/ folder (useful for repo-local usage)
-  const projectRootStorage = path.join(__dirname, "../../storage");
-  if (fs.existsSync(projectRootStorage) && fs.existsSync(path.join(projectRootStorage, "memory.db"))) {
-     return path.join(projectRootStorage, "memory.db");
+  const localProjFile = path.join(__dirname, "../../storage", "memory.db");
+  if (fs.existsSync(localProjFile)) {
+     return localProjFile;
   }
 
-  // Default: Return the standard platform-specific path (it will be created by the constructor)
+  // 5. Default: Return the standard global path (it will be created by the constructor)
   return standardPath;
 }
 
