@@ -459,7 +459,11 @@ export class SQLiteStore {
       FROM memories WHERE ${where.join(" AND ")}
       ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?
     `);
-    const items = dataStmt.all(...params, limit, offset);
+    const rows = dataStmt.all(...params, limit, offset) as any[];
+    const items = rows.map(row => ({
+      ...this.rowToMemoryEntry(row),
+      recall_rate: row.recall_rate ?? 0
+    }));
 
     return { items, memories: items, total, limit, offset };
   }

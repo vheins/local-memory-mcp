@@ -804,9 +804,8 @@ function renderTable(memories) {
                                 ${m.status === 'archived' ? '<span class="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-[10px] font-bold text-gray-500 uppercase">Archived</span>' : ''}
                             </div>
                             <div class="mt-1 flex flex-wrap gap-1">
-                                ${m.tags ? m.tags.map(tag => `<span class="text-[9px] px-1 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded border border-gray-200 dark:border-gray-700">#${tag}</span>`).join('') : ''}
-                            </div>
-                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                ${m.tags && Array.isArray(m.tags) ? m.tags.map(tag => `<span class="text-[9px] px-1 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded border border-gray-200 dark:border-gray-700">#${tag}</span>`).join('') : ''}
+                            </div>                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 <span class="font-mono">${m.id.substring(0, 8)}</span>
                                 <span class="mx-1">•</span>
                                 <span>${m.scope?.repo || 'Unknown repo'}</span>
