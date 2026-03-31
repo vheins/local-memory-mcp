@@ -41,7 +41,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
           title: m.title,
           content: m.content,
           importance: 4,
-          scope: { repo: REPO }
+          scope: { repo: REPO },
+          agent: "test-agent",
+          model: "test-model"
         }
       });
     }
@@ -75,7 +77,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         title: "Large File Upload Failure",
         content: "Don't use fs.readFileSync for large files, it causes OOM errors.",
         importance: 5,
-        scope: { repo: REPO }
+        scope: { repo: REPO },
+        agent: "test-agent",
+        model: "test-model"
       }
     });
     const mistakeId = mistakeRes.data.id;
@@ -89,6 +93,8 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         content: "Always use streams (fs.createReadStream) for files > 10MB.",
         importance: 5,
         scope: { repo: REPO },
+        agent: "test-agent",
+        model: "test-model",
         supersedes: mistakeId
       }
     });
@@ -127,7 +133,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         title: "Global Logging",
         content: "Use logger.info for all modules.",
         importance: 2,
-        scope: { repo: REPO }
+        scope: { repo: REPO },
+        agent: "test-agent",
+        model: "test-model"
       }
     });
 
@@ -139,7 +147,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         title: "Auth Security Audit",
         content: "Auth module requires PII masking in logs.",
         importance: 5,
-        scope: { repo: REPO, folder: "src/auth" }
+        scope: { repo: REPO, folder: "src/auth" },
+        agent: "test-agent",
+        model: "test-model"
       }
     });
 
@@ -170,7 +180,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
           title: `Service ${i} Specs`,
           content: `Documentation for microservice number ${i} in our mesh network.`,
           importance: 3,
-          scope: { repo: "cloud-infra" }
+          scope: { repo: "cloud-infra" },
+          agent: "test-agent",
+          model: "test-model"
         }
       });
     }
@@ -205,7 +217,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         title: "Styling Standard",
         content: originalContent,
         importance: 3,
-        scope: { repo: REPO }
+        scope: { repo: REPO },
+        agent: "test-agent",
+        model: "test-model"
       }
     });
 
@@ -217,7 +231,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         title: "CSS Rule",
         content: "Use Tailwind CSS for styling our UI components.", // Subtly different but semantically identical
         importance: 3,
-        scope: { repo: REPO }
+        scope: { repo: REPO },
+        agent: "test-agent",
+        model: "test-model"
       }
     });
 
@@ -239,6 +255,8 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
         content: "Always use ->requiresConfirmation() for destructive actions in Filament.",
         importance: 5,
         scope: { repo: "project-a" },
+        agent: "test-agent",
+        model: "test-model",
         tags: ["filament", "laravel"]
       }
     });

@@ -16,6 +16,8 @@ export const MemoryStoreSchema = z.object({
   title: z.string().min(3).max(100),
   content: z.string().min(10),
   importance: z.number().min(1).max(5),
+  agent: z.string().min(1),
+  model: z.string().min(1),
   scope: MemoryScopeSchema,
   ttlDays: z.number().min(1).optional(),
   supersedes: z.string().uuid().optional(),
@@ -68,6 +70,31 @@ export const MemorySummarizeSchema = z.object({
   signals: z.array(z.string().max(200)).min(1)
 });
 
+export const TaskStatusSchema = z.enum(["pending", "in_progress", "completed", "canceled", "blocked"]);
+export const TaskPrioritySchema = z.number().min(1).max(5);
+
+export const TaskManageSchema = z.object({
+  action: z.enum(["create", "update", "list", "delete"]),
+  repo: z.string().min(1),
+  id: z.string().uuid().optional(),
+  task_code: z.string().optional(),
+  phase: z.string().optional(),
+  title: z.string().min(3).max(100).optional(),
+  description: z.string().optional(),
+  status: TaskStatusSchema.optional(),
+  priority: TaskPrioritySchema.optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  parent_id: z.string().uuid().optional(),
+  depends_on: z.string().uuid().optional()
+});
+
+export const TaskListSchema = z.object({
+  repo: z.string().min(1),
+  status: TaskStatusSchema.optional(),
+  phase: z.string().optional()
+});
+
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
   {
@@ -98,6 +125,14 @@ export const TOOL_DEFINITIONS = [
           maximum: 5,
           description: "Importance score (1-5)"
         },
+        agent: {
+          type: "string",
+          description: "Name of the agent creating this memory"
+        },
+        model: {
+          type: "string",
+          description: "AI model used by the agent"
+        },
         scope: {
           type: "object",
           properties: {
@@ -120,7 +155,7 @@ export const TOOL_DEFINITIONS = [
         ttlDays: { type: "number", minimum: 1 },
         supersedes: { type: "string", format: "uuid" }
       },
-      required: ["type", "title", "content", "importance", "scope"]
+      required: ["type", "title", "content", "importance", "scope", "agent", "model"]
     }
   },
   {
@@ -228,6 +263,101 @@ export const TOOL_DEFINITIONS = [
           minimum: 0,
           default: 0,
           description: "Number of memories to skip for pagination (optional, default 0)"
+        }
+      },
+      required: ["repo"]
+    }
+  },
+  {
+    name: "task-manage",
+    description: "Manage tasks within a repository. Use this to track progress, plan implementation, and document technical debt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["create", "update", "list", "delete"],
+          description: "Action to perform on the task"
+        },
+        repo: {
+          type: "string",
+          description: "Repository name"
+        },
+        id: {
+          type: "string",
+          format: "uuid",
+          description: "Task ID (required for update and delete)"
+        },
+        task_code: {
+          type: "string",
+          description: "Human readable task code (e.g. TASK-001). If not provided, it will be generated."
+        },
+        phase: {
+          type: "string",
+          description: "Project phase (e.g., 'research', 'implementation', 'validation')"
+        },
+        title: {
+          type: "string",
+          minLength: 3,
+          maxLength: 100,
+          description: "Task title"
+        },
+        description: {
+          type: "string",
+          description: "Detailed description of the task"
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed", "canceled", "blocked"],
+          description: "Current task status"
+        },
+        priority: {
+          type: "number",
+          minimum: 1,
+          maximum: 5,
+          description: "Task priority (1-5, default 3)"
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional tags for categorization"
+        },
+        metadata: {
+          type: "object",
+          description: "Arbitrary metadata for the task"
+        },
+        parent_id: {
+          type: "string",
+          format: "uuid",
+          description: "Parent task ID for hierarchical tasks"
+        },
+        depends_on: {
+          type: "string",
+          format: "uuid",
+          description: "Task ID that this task depends on"
+        }
+      },
+      required: ["action", "repo"]
+    }
+  },
+  {
+    name: "task-list",
+    description: "List tasks for a repository to understand current progress and next steps. MANDATORY: Always call this at the start of a session to sync with other agents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository name"
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed", "canceled", "blocked"],
+          description: "Filter by status"
+        },
+        phase: {
+          type: "string",
+          description: "Filter by phase"
         }
       },
       required: ["repo"]

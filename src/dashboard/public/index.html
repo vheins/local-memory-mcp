@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCP Memory Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" onerror="window.Chart = null;"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -34,6 +35,11 @@
             --panel-dark-strong: rgba(6, 12, 24, 0.9);
             --panel-dark-border: rgba(148, 163, 184, 0.12);
             --panel-dark-highlight: rgba(125, 211, 252, 0.16);
+            --dashboard-header-offset: 0px;
+            --dashboard-tab-offset: 0px;
+            --dashboard-main-offset: 280px;
+            --dashboard-main-gutter: 16px;
+            --dashboard-left-seam: 0px;
         }
 
         html {
@@ -41,14 +47,31 @@
                 radial-gradient(circle at 14% 16%, rgba(125, 211, 252, 0.4), transparent 0 24rem),
                 radial-gradient(circle at 88% 12%, rgba(59, 130, 246, 0.2), transparent 0 18rem),
                 radial-gradient(circle at 82% 82%, rgba(99, 102, 241, 0.14), transparent 0 20rem),
-                linear-gradient(180deg, #f4fbff 0%, #eef5ff 38%, #f7faff 100%);
+                linear-gradient(180deg, #f4fbff 0%, #eef5ff 38%, #f7faff 100%) fixed;
+            transition: background 0.5s ease;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        html.dark {
+            background:
+                radial-gradient(circle at 14% 16%, rgba(14, 165, 233, 0.12), transparent 0 24rem),
+                radial-gradient(circle at 88% 12%, rgba(30, 58, 138, 0.1), transparent 0 18rem),
+                radial-gradient(circle at 82% 82%, rgba(67, 56, 202, 0.08), transparent 0 20rem),
+                linear-gradient(180deg, #020617 0%, #070a18 38%, #020617 100%) fixed;
         }
 
         body {
             position: relative;
             min-height: 100vh;
-            background: transparent !important;
+            background: transparent;
             color: #0f172a;
+            transition: color 0.3s ease;
+            overflow-x: hidden;
+        }
+
+        html.dark body {
+            color: #f8fafc;
         }
 
         body::before,
@@ -79,32 +102,19 @@
             background: rgba(99, 102, 241, 0.12);
         }
 
-        .dark html {
-            background:
-                radial-gradient(circle at 14% 18%, rgba(34, 211, 238, 0.16), transparent 0 18rem),
-                radial-gradient(circle at 85% 12%, rgba(59, 130, 246, 0.14), transparent 0 18rem),
-                radial-gradient(circle at 78% 84%, rgba(99, 102, 241, 0.14), transparent 0 20rem),
-                linear-gradient(180deg, #020617 0%, #081120 34%, #0b1324 100%);
-        }
-
-        .dark body {
-            color: #e2e8f0;
-        }
-
-        .dark body::before {
+        html.dark body::before {
             background: rgba(34, 211, 238, 0.14);
             opacity: 0.65;
         }
 
-        .dark body::after {
+        html.dark body::after {
             background: rgba(99, 102, 241, 0.16);
             opacity: 0.55;
         }
 
         header,
         main .rounded-lg,
-        #bulkActionBar,
-        #memoryDrawer aside {
+        #bulkActionBar {
             position: relative;
             background: var(--glass-bg) !important;
             border: 1px solid var(--glass-border) !important;
@@ -113,10 +123,9 @@
             -webkit-backdrop-filter: blur(24px) saturate(1.15);
         }
 
-        .dark header,
-        .dark main .rounded-lg,
-        .dark #bulkActionBar,
-        .dark #memoryDrawer aside {
+        html.dark header,
+        html.dark main .rounded-lg,
+        html.dark #bulkActionBar {
             background: var(--panel-dark) !important;
             border-color: var(--panel-dark-border) !important;
             box-shadow:
@@ -124,814 +133,946 @@
                 inset 0 1px 0 rgba(148, 163, 184, 0.05);
         }
 
+        /* Drawer: always pure white in light, dark in dark — no glass */
+        #memoryDrawer aside {
+            background: #ffffff !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            border-color: #e2e8f0 !important;
+            box-shadow: -20px 0 50px rgba(0,0,0,0.12) !important;
+        }
+        html.dark #memoryDrawer aside {
+            background: #0f172a !important;
+            border-color: rgba(255,255,255,0.06) !important;
+        }
+        /* Reset glass glass on all cards/elements inside the drawer */
+        #memoryDrawer aside .rounded-lg,
+        #memoryDrawer aside .rounded-xl {
+            background: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: none !important;
+        }
+        /* drawerBody itself: white bg to prevent glass bleed-through */
+        #drawerBody {
+            background: #ffffff !important;
+        }
+        html.dark #drawerBody {
+            background: #0f172a !important;
+        }
+
         header {
             background: var(--glass-bg-strong) !important;
         }
 
-        .dark header {
+        html.dark header {
             background: var(--panel-dark-strong) !important;
         }
 
-        main,
-        header {
-            z-index: 1;
+        .sticky-table-header th {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: rgba(248, 250, 252, 0.82) !important;
         }
 
-        canvas {
-            filter: saturate(1.08);
+        html.dark .sticky-table-header th {
+            background: rgba(15, 23, 42, 0.88) !important;
+            border-color: rgba(148, 163, 184, 0.1);
         }
 
-        input,
-        select,
-        textarea {
-            background: rgba(255, 255, 255, 0.68) !important;
-            border-color: rgba(148, 163, 184, 0.24) !important;
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+        .table-animate tr {
+            transition: all 0.2s ease;
         }
 
-        .dark input,
-        .dark select,
-        .dark textarea {
-            background: rgba(9, 17, 31, 0.86) !important;
-            border-color: rgba(125, 211, 252, 0.12) !important;
-            box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.03),
-                0 0 0 1px rgba(2, 132, 199, 0.06);
+        .table-animate tr:hover {
+            background: rgba(241, 245, 249, 0.5) !important;
+            transform: scale(1.002);
         }
 
-        button {
-            transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+        html.dark .table-animate tr:hover {
+            background: rgba(30, 41, 59, 0.4) !important;
         }
 
-        button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
-        }
-
-        .dark button:hover {
-            box-shadow: 0 16px 36px rgba(2, 6, 23, 0.4);
-        }
-
-        button[class*="bg-blue-600"],
-        button[class*="bg-gray-600"],
-        button[class*="bg-red-600"] {
-            border: 1px solid rgba(255, 255, 255, 0.16);
-        }
-
-        table {
-            border-spacing: 0 0.35rem;
-            border-collapse: separate;
-        }
-
-        tbody tr {
-            background: rgba(255, 255, 255, 0.52);
-        }
-
-        .dark tbody tr {
-            background: rgba(8, 15, 28, 0.8);
-            box-shadow: inset 0 1px 0 rgba(125, 211, 252, 0.04);
-        }
-
-        thead th {
-            background: rgba(255, 255, 255, 0.72) !important;
-            backdrop-filter: blur(18px) saturate(1.1);
-            -webkit-backdrop-filter: blur(18px) saturate(1.1);
-        }
-
-        .dark thead th {
-            background: rgba(5, 11, 22, 0.92) !important;
-            color: #cbd5e1;
-            border-bottom-color: rgba(125, 211, 252, 0.12);
-        }
-
-        .dark [data-theme="light"] { display: none; }
-        :not(.dark) [data-theme="dark"] { display: none; }
-        
-        .type-decision { background: #e3f2fd; color: #1976d2; }
-        .type-mistake { background: #ffebee; color: #d32f2f; }
-        .type-code_fact { background: #f3e5f5; color: #7b1fa2; }
-        .type-pattern { background: #e8f5e9; color: #388e3c; }
-        
-        .dark .type-decision { background: #1a3a5c; color: #64b5f6; }
-        .dark .type-mistake { background: #5c1a1a; color: #ef9a9a; }
-        .dark .type-code_fact { background: #3a1a4c; color: #ce93d8; }
-        .dark .type-pattern { background: #1a3a1a; color: #a5d6a7; }
-
-        .countdown-fill { transition: width 1s linear; }
-        
-        tr.expanded { background: #f9f9f9; }
-        .dark tr.expanded { background: #333; }
-        
-        tr.expanded td { border-bottom: none; }
-        
-        mark { background: #ffeb3b; color: #333; padding: 0 2px; border-radius: 2px; }
-        .dark mark { background: #ffc107; color: #000; }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-        .toast.removing { animation: slideOut 0.3s ease forwards; }
-        .toast { animation: slideIn 0.3s ease; }
-        .memory-preview {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
+        /* Glassy Futuristic Type Chips */
         .table-chip {
             display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
+            padding: 0.2rem 0.65rem;
             border-radius: 9999px;
-            padding: 0.2rem 0.6rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            line-height: 1;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 8px rgba(0,0,0,0.06);
         }
+        .table-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .type-decision {
+            background: linear-gradient(135deg, rgba(33,150,243,0.12), rgba(25,118,210,0.08));
+            color: #1565c0;
+            border-color: rgba(33,150,243,0.28);
+            text-shadow: 0 0 12px rgba(33,150,243,0.3);
+        }
+        .type-mistake {
+            background: linear-gradient(135deg, rgba(244,67,54,0.12), rgba(211,47,47,0.08));
+            color: #c62828;
+            border-color: rgba(244,67,54,0.28);
+            text-shadow: 0 0 12px rgba(244,67,54,0.3);
+        }
+        .type-code_fact {
+            background: linear-gradient(135deg, rgba(156,39,176,0.12), rgba(123,31,162,0.08));
+            color: #6a1b9a;
+            border-color: rgba(156,39,176,0.28);
+            text-shadow: 0 0 12px rgba(156,39,176,0.3);
+        }
+        .type-pattern {
+            background: linear-gradient(135deg, rgba(56,142,60,0.12), rgba(27,94,32,0.08));
+            color: #1b5e20;
+            border-color: rgba(56,142,60,0.28);
+            text-shadow: 0 0 12px rgba(76,175,80,0.3);
+        }
+
+        html.dark .type-decision {
+            background: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(14,165,233,0.08));
+            color: #7dd3fc;
+            border-color: rgba(56,189,248,0.3);
+            text-shadow: 0 0 14px rgba(56,189,248,0.5);
+        }
+        html.dark .type-mistake {
+            background: linear-gradient(135deg, rgba(251,113,133,0.18), rgba(244,63,94,0.08));
+            color: #fda4af;
+            border-color: rgba(251,113,133,0.3);
+            text-shadow: 0 0 14px rgba(251,113,133,0.5);
+        }
+        html.dark .type-code_fact {
+            background: linear-gradient(135deg, rgba(192,132,252,0.18), rgba(167,139,250,0.08));
+            color: #d8b4fe;
+            border-color: rgba(192,132,252,0.3);
+            text-shadow: 0 0 14px rgba(192,132,252,0.5);
+        }
+        html.dark .type-pattern {
+            background: linear-gradient(135deg, rgba(52,211,153,0.18), rgba(16,185,129,0.08));
+            color: #6ee7b7;
+            border-color: rgba(52,211,153,0.3);
+            text-shadow: 0 0 14px rgba(52,211,153,0.5);
+        }
+
+        /* Importance/Metric Badge */
         .metric-badge {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 2rem;
-            border-radius: 9999px;
-            padding: 0.2rem 0.55rem;
-            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 8px;
+            font-size: 0.72rem;
             font-weight: 700;
-        }
-        .sticky-table-header thead th {
-            position: sticky;
-            top: 0;
-            z-index: 5;
-        }
-        .sticky-actions {
-            position: sticky;
-            right: 0;
-            z-index: 4;
-            background: rgba(255, 255, 255, 0.78);
-        }
-        .dark .sticky-actions {
-            background: rgba(5, 11, 22, 0.94);
-        }
-        .app-shell {
-            position: relative;
-            z-index: 1;
-        }
-        .app-layout {
-            display: grid;
-            grid-template-columns: 280px minmax(0, 1fr);
-            gap: 1.5rem;
-            align-items: start;
-        }
-        .app-layout.repo-sidebar-collapsed {
-            grid-template-columns: 88px minmax(0, 1fr);
-        }
-        .repo-sidebar {
-            position: sticky;
-            top: 6.5rem;
-            max-height: calc(100vh - 8rem);
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            transition: width 180ms ease, padding 180ms ease, transform 180ms ease;
-        }
-        .repo-sidebar-list {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow-y: auto;
-            padding-right: 0.35rem;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(56, 189, 248, 0.65) rgba(255, 255, 255, 0.08);
-        }
-        .repo-sidebar-list::-webkit-scrollbar {
-            width: 12px;
-        }
-        .repo-sidebar-list::-webkit-scrollbar-track {
-            background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.04));
-            border-radius: 9999px;
-            border: 1px solid rgba(255,255,255,0.18);
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
-        }
-        .repo-sidebar-list::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, rgba(34,211,238,0.92), rgba(59,130,246,0.78));
-            border-radius: 9999px;
-            border: 2px solid rgba(245, 250, 255, 0.72);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.42),
-                0 6px 18px rgba(56, 189, 248, 0.28);
-        }
-        .repo-sidebar-list::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, rgba(103,232,249,0.96), rgba(37,99,235,0.86));
-        }
-        .repo-sidebar-list::-webkit-scrollbar-corner {
-            background: transparent;
-        }
-        .dark .repo-sidebar-list {
-            scrollbar-color: rgba(34, 211, 238, 0.72) rgba(15, 23, 42, 0.24);
-        }
-        .dark .repo-sidebar-list::-webkit-scrollbar-track {
-            background: linear-gradient(180deg, rgba(15,23,42,0.72), rgba(8,15,28,0.42));
-            border-radius: 9999px;
-            border: 1px solid rgba(125, 211, 252, 0.08);
-            box-shadow:
-                inset 0 0 0 1px rgba(125, 211, 252, 0.04),
-                inset 0 10px 24px rgba(2, 6, 23, 0.24);
-        }
-        .dark .repo-sidebar-list::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, rgba(34,211,238,0.86), rgba(79,70,229,0.72));
-            border: 2px solid rgba(8, 15, 28, 0.86);
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.14),
-                0 8px 22px rgba(34, 211, 238, 0.18);
-        }
-        .dark .repo-sidebar-list::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, rgba(103,232,249,0.92), rgba(99,102,241,0.82));
-        }
-        .repo-collapse-trigger {
-            width: 2rem;
-            height: 2rem;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            background: rgba(255,255,255,0.42);
-        }
-        .dark .repo-collapse-trigger {
-            background: rgba(8, 15, 28, 0.76);
-            border-color: rgba(125, 211, 252, 0.12);
-        }
-        .repo-collapsed-summary {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 0.85rem;
-        }
-        .repo-collapsed-summary-button {
-            position: relative;
-            width: 3rem;
-            height: 3rem;
-            border-radius: 1rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 0.9rem;
-            font-weight: 800;
-            letter-spacing: 0.05em;
-            background: linear-gradient(135deg, rgba(34,211,238,0.96), rgba(59,130,246,0.78));
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.32),
-                0 18px 32px rgba(56, 189, 248, 0.2);
-        }
-        .repo-collapsed-summary-count {
-            position: absolute;
-            right: -0.15rem;
-            bottom: -0.15rem;
-            min-width: 1.15rem;
-            height: 1.15rem;
-            padding: 0 0.22rem;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6rem;
-            font-weight: 800;
-            color: #0f172a;
-            background: rgba(255,255,255,0.9);
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
-        }
-        .repo-sidebar-mobile {
-            display: none;
-        }
-        .repo-item {
-            position: relative;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            gap: 0.85rem;
-            padding: 0.85rem 0.95rem;
-            border-radius: 1rem;
+            letter-spacing: 0.02em;
+            backdrop-filter: blur(6px);
             border: 1px solid transparent;
-            background: rgba(255,255,255,0.3);
-            text-align: left;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 6px rgba(0,0,0,0.06);
+            transition: transform 0.15s ease;
         }
-        .repo-item:hover {
-            transform: translateY(0);
-            border-color: rgba(125, 211, 252, 0.28);
-            background: rgba(255,255,255,0.46);
+
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
         }
-        .repo-item.active {
-            border-color: rgba(56, 189, 248, 0.34);
-            background: linear-gradient(135deg, rgba(56,189,248,0.16), rgba(99,102,241,0.12));
-            box-shadow: 0 18px 42px rgba(56, 189, 248, 0.16);
+
+        html.dark .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
         }
-        .repo-item.pinned-item {
-            cursor: grab;
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
-        .repo-item.dragging {
-            opacity: 0.58;
-            transform: scale(0.985);
-        }
-        .repo-item.drag-target {
-            border-color: rgba(14, 165, 233, 0.42);
-            box-shadow:
-                inset 0 0 0 1px rgba(56, 189, 248, 0.22),
-                0 18px 38px rgba(56, 189, 248, 0.12);
-        }
-        .repo-drag-handle {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: rgba(100, 116, 139, 0.9);
-            cursor: grab;
-            flex-shrink: 0;
-        }
-        .dark .repo-drag-handle {
-            color: rgba(148, 163, 184, 0.82);
-        }
-        .repo-item-pin {
-            position: absolute;
-            top: 0.55rem;
-            right: 0.55rem;
-            width: 1.7rem;
-            height: 1.7rem;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: rgba(71, 85, 105, 0.82);
-            background: rgba(255,255,255,0.68);
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            opacity: 0;
-            transition: opacity 160ms ease, transform 160ms ease, color 160ms ease, background 160ms ease;
-        }
-        .repo-item:hover .repo-item-pin,
-        .repo-item-pin.pinned {
-            opacity: 1;
-        }
-        .repo-item-pin:hover {
-            transform: scale(1.05);
-            color: #0f172a;
-            background: rgba(255,255,255,0.92);
-        }
-        .repo-item-pin.pinned {
-            color: #f59e0b;
-            background: rgba(255,255,255,0.94);
-            box-shadow: 0 10px 22px rgba(245, 158, 11, 0.18);
-        }
-        .dark .repo-item {
-            background: rgba(8, 15, 28, 0.72);
-        }
-        .dark .repo-item:hover {
-            background: rgba(10, 18, 32, 0.82);
-            border-color: rgba(125, 211, 252, 0.16);
-        }
-        .dark .repo-item-pin {
-            color: rgba(148, 163, 184, 0.92);
-            background: rgba(8, 15, 28, 0.88);
-            border-color: rgba(125, 211, 252, 0.08);
-        }
-        .dark .repo-item-pin:hover {
-            color: #e2e8f0;
-            background: rgba(15, 23, 42, 0.95);
-        }
-        .dark .repo-item-pin.pinned {
-            color: #fbbf24;
-            background: rgba(15, 23, 42, 0.96);
-            box-shadow: 0 10px 20px rgba(245, 158, 11, 0.12);
-        }
-        .dark .repo-item.active {
-            background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(79,70,229,0.18));
-            border-color: rgba(125, 211, 252, 0.2);
-            box-shadow: 0 20px 44px rgba(2, 132, 199, 0.2);
-        }
-        .repo-avatar {
-            width: 2.35rem;
-            height: 2.35rem;
-            border-radius: 0.85rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            font-size: 0.78rem;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            color: white;
-            background: linear-gradient(135deg, rgba(34,211,238,0.94), rgba(59,130,246,0.76));
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.34);
-        }
-        .repo-active-dot {
-            position: absolute;
-            right: 0.72rem;
-            top: 50%;
-            width: 0.55rem;
-            height: 0.55rem;
-            border-radius: 9999px;
-            background: #22c55e;
-            box-shadow:
-                0 0 0 3px rgba(255,255,255,0.86),
-                0 0 18px rgba(34, 197, 94, 0.45);
-            transform: translateY(-50%);
-        }
-        .dark .repo-active-dot {
-            box-shadow:
-                0 0 0 3px rgba(8,15,28,0.92),
-                0 0 18px rgba(74, 222, 128, 0.36);
-        }
-        .app-layout.repo-sidebar-collapsed .repo-sidebar {
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-sidebar-header-copy,
-        .app-layout.repo-sidebar-collapsed #repoSearchInput,
-        .app-layout.repo-sidebar-collapsed #repoCountBadge {
-            display: none;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-sidebar-header {
-            justify-content: center;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-collapsed-summary {
-            display: flex;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-item {
-            justify-content: center;
-            padding: 0.7rem 0.4rem;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-item .repo-item-copy {
-            display: none;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-item .repo-drag-handle {
-            display: none;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-item .repo-item-pin {
-            display: none;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-item .repo-active-dot {
-            right: 0.4rem;
-            top: auto;
-            bottom: 0.4rem;
-            transform: none;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-avatar {
-            width: 2.6rem;
-            height: 2.6rem;
-            border-radius: 0.95rem;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-sidebar-list {
-            padding-right: 0;
-            scrollbar-width: none;
-        }
-        .app-layout.repo-sidebar-collapsed .repo-sidebar-list::-webkit-scrollbar {
-            width: 0;
-        }
-        .repo-group + .repo-group {
-            margin-top: 1rem;
-        }
-        .repo-group-label {
-            margin-bottom: 0.45rem;
-            padding: 0 0.35rem;
-            font-size: 0.68rem;
-            font-weight: 800;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            color: rgb(100 116 139);
-        }
-        .dark .repo-group-label {
-            color: rgb(148 163 184);
-        }
-        .repo-pinned-mark {
-            position: absolute;
-            left: -0.1rem;
-            top: -0.08rem;
-            width: 0.95rem;
-            height: 0.95rem;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.52rem;
-            color: #0f172a;
-            background: rgba(255,255,255,0.92);
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
-        }
-        @media (max-width: 1023px) {
-            .app-layout {
-                grid-template-columns: 1fr;
-            }
-            .repo-sidebar-desktop {
-                display: none;
-            }
-            .repo-sidebar-mobile {
-                display: block;
-            }
-        }
-        .drawer-open {
-            overflow: hidden;
-        }
-        .glass-panel {
-            animation: panelFadeIn 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-        .table-animate tbody tr {
-            animation: rowRise 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
-            animation-fill-mode: both;
-        }
-        .table-animate tbody tr:nth-child(1) { animation-delay: 30ms; }
-        .table-animate tbody tr:nth-child(2) { animation-delay: 60ms; }
-        .table-animate tbody tr:nth-child(3) { animation-delay: 90ms; }
-        .table-animate tbody tr:nth-child(4) { animation-delay: 120ms; }
-        .table-animate tbody tr:nth-child(5) { animation-delay: 150ms; }
-        .table-animate tbody tr:nth-child(6) { animation-delay: 180ms; }
-        .recent-action-item {
-            position: relative;
-            overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.22);
-            background: rgba(255,255,255,0.44);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-        }
-        .dark .recent-action-item {
-            background: linear-gradient(180deg, rgba(7, 15, 28, 0.84), rgba(10, 18, 32, 0.78));
-            border-color: rgba(125, 211, 252, 0.08);
-            box-shadow: inset 0 1px 0 rgba(125, 211, 252, 0.04);
-        }
-        .recent-action-item::before {
-            content: "";
-            position: absolute;
-            inset: 0 auto 0 0;
-            width: 3px;
-            background: linear-gradient(180deg, rgba(34,211,238,0.95), rgba(56,189,248,0.25));
-        }
-        @keyframes panelFadeIn {
+
+        #memoryDrawer.hidden { display: none; }
+        body.drawer-open { overflow: hidden; }
+
+        @keyframes fade-in {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes rowRise {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
+        .animate-fade-in { animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+
+        /* btn-open and btn-edit-light overrides for glass context */
+        .btn-open { background: #2563eb !important; color: #ffffff !important; }
+        html.dark .btn-open { background: rgba(56,189,248,0.15) !important; color: #7dd3fc !important; }
+        .btn-open:hover { background: #1d4ed8 !important; }
+        html.dark .btn-open:hover { background: rgba(56,189,248,0.25) !important; }
+
+        .btn-edit-light { background: #fef3c7 !important; color: #92400e !important; }
+        html.dark .btn-edit-light { background: rgba(245,158,11,0.18) !important; color: #fcd34d !important; }
+        .btn-edit-light:hover { background: #fde68a !important; }
+        html.dark .btn-edit-light:hover { background: rgba(245,158,11,0.28) !important; }
+
+        /* Add Task / Refresh Tasks buttons */
+        .btn-add-task {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.45rem 1rem;
+            background: #6366f1 !important;
+            color: #ffffff !important;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid #4f46e5;
+            box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+            transition: all 0.2s ease;
         }
-        .skeleton {
+        .btn-add-task:hover {
+            background: #4f46e5 !important;
+            box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+            transform: translateY(-1px);
+        }
+        html.dark .btn-add-task {
+            background: rgba(99,102,241,0.2) !important;
+            color: #a5b4fc !important;
+            border-color: rgba(99,102,241,0.4);
+            box-shadow: 0 4px 14px rgba(99,102,241,0.2);
+        }
+        html.dark .btn-add-task:hover {
+            background: rgba(99,102,241,0.32) !important;
+            color: #c7d2fe !important;
+        }
+        .btn-refresh {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.45rem 1rem;
+            background: #0ea5e9 !important;
+            color: #ffffff !important;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid #0284c7;
+            box-shadow: 0 4px 14px rgba(14,165,233,0.3);
+            transition: all 0.2s ease;
+        }
+        .btn-refresh:hover {
+            background: #0284c7 !important;
+            transform: translateY(-1px);
+        }
+        html.dark .btn-refresh {
+            background: rgba(14,165,233,0.15) !important;
+            color: #7dd3fc !important;
+            border-color: rgba(14,165,233,0.35);
+        }
+        html.dark .btn-refresh:hover {
+            background: rgba(14,165,233,0.28) !important;
+            color: #bae6fd !important;
+        }
+
+        /* Add Memory button */
+        .btn-add-memory {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.45rem 0.85rem;
+            background: #0ea5e9 !important;
+            color: #ffffff !important;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            border: 1px solid #0284c7;
+            box-shadow: 0 4px 14px rgba(14,165,233,0.35);
+            transition: all 0.2s ease;
+        }
+        .btn-add-memory:hover {
+            background: #0284c7 !important;
+            box-shadow: 0 6px 20px rgba(14,165,233,0.45);
+            transform: translateY(-1px);
+        }
+        html.dark .btn-add-memory {
+            background: rgba(14,165,233,0.2) !important;
+            color: #7dd3fc !important;
+            border-color: rgba(14,165,233,0.4);
+            box-shadow: 0 4px 14px rgba(14,165,233,0.2);
+        }
+        html.dark .btn-add-memory:hover {
+            background: rgba(14,165,233,0.32) !important;
+            color: #bae6fd !important;
+        }
+
+
+        /* Markdown body styles for Full Content section */
+        .markdown-body {
+            font-size: 0.875rem;
+            line-height: 1.75;
+            color: #374151;
+            word-break: break-word;
+        }
+        html.dark .markdown-body { color: #d1d5db; }
+
+        .markdown-body h1, .markdown-body h2, .markdown-body h3,
+        .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+            font-weight: 700;
+            line-height: 1.3;
+            margin: 1.2em 0 0.5em;
+            color: #111827;
+        }
+        html.dark .markdown-body h1, html.dark .markdown-body h2,
+        html.dark .markdown-body h3, html.dark .markdown-body h4 { color: #f9fafb; }
+
+        .markdown-body h1 { font-size: 1.25rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.4rem; }
+        .markdown-body h2 { font-size: 1.1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3rem; }
+        html.dark .markdown-body h1, html.dark .markdown-body h2 { border-color: #374151; }
+        .markdown-body h3 { font-size: 0.95rem; }
+
+        .markdown-body p { margin: 0.6em 0; }
+        .markdown-body ul, .markdown-body ol {
+            padding-left: 1.5rem;
+            margin: 0.5em 0;
+        }
+        .markdown-body ul { list-style-type: disc; }
+        .markdown-body ol { list-style-type: decimal; }
+        .markdown-body li { margin: 0.25em 0; }
+
+        .markdown-body code {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+            background: #f3f4f6;
+            color: #6d28d9;
+            padding: 0.15em 0.4em;
+            border-radius: 5px;
+            border: 1px solid #e5e7eb;
+        }
+        html.dark .markdown-body code {
+            background: rgba(139,92,246,0.12);
+            color: #c4b5fd;
+            border-color: rgba(139,92,246,0.2);
+        }
+        .markdown-body pre {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 1rem;
+            overflow-x: auto;
+            margin: 0.75em 0;
+        }
+        html.dark .markdown-body pre {
+            background: #0f172a;
+            border-color: #334155;
+        }
+        .markdown-body pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            color: inherit;
+            font-size: 0.82rem;
+        }
+        .markdown-body blockquote {
+            border-left: 3px solid #0ea5e9;
+            margin: 0.75em 0;
+            padding: 0.5rem 1rem;
+            background: rgba(14,165,233,0.05);
+            border-radius: 0 8px 8px 0;
+            color: #4b5563;
+            font-style: italic;
+        }
+        html.dark .markdown-body blockquote {
+            color: #9ca3af;
+            background: rgba(14,165,233,0.08);
+        }
+        .markdown-body a {
+            color: #0ea5e9;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+        .markdown-body a:hover { color: #0284c7; }
+        html.dark .markdown-body a { color: #38bdf8; }
+
+        .markdown-body strong { font-weight: 700; color: #111827; }
+        html.dark .markdown-body strong { color: #f9fafb; }
+        .markdown-body em { font-style: italic; }
+
+        .markdown-body hr {
+            border: none;
+            border-top: 1px solid #e5e7eb;
+            margin: 1rem 0;
+        }
+        html.dark .markdown-body hr { border-color: #374151; }
+
+        .markdown-body table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            margin: 0.75em 0;
+        }
+        .markdown-body th {
+            background: #f1f5f9;
+            font-weight: 700;
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e5e7eb;
+        }
+        html.dark .markdown-body th { background: #1e293b; border-color: #334155; }
+        .markdown-body td {
+            padding: 0.4rem 0.75rem;
+            border: 1px solid #e5e7eb;
+        }
+        html.dark .markdown-body td { border-color: #334155; }
+        .markdown-body tr:nth-child(even) { background: #f8fafc; }
+        html.dark .markdown-body tr:nth-child(even) { background: rgba(30,41,59,0.4); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.2);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.4);
+        }
+        html.dark ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.4);
+        }
+
+        /* Repo Sidebar */
+        #repoSidebar {
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 280px;
+        }
+        .repo-sidebar-collapsed #repoSidebar {
+            width: 80px;
+        }
+        .repo-sidebar-collapsed .repo-item-copy,
+        .repo-sidebar-collapsed .repo-group-label,
+        .repo-sidebar-collapsed .repo-sidebar-header-text,
+        .repo-sidebar-collapsed .repo-search-container,
+        .repo-sidebar-collapsed .repo-item-pin {
+            display: none;
+        }
+        .repo-sidebar-collapsed .repo-item {
+            justify-content: center;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        .repo-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
             position: relative;
-            overflow: hidden;
-            background: rgb(229 231 235);
-            border-radius: 0.5rem;
+            border: 1px solid transparent;
         }
-        .dark .skeleton {
-            background: rgb(55 65 81);
+        .repo-item:hover {
+            background: rgba(241, 245, 249, 0.8);
         }
-        .skeleton::after {
-            content: "";
+        html.dark .repo-item:hover {
+            background: rgba(30, 41, 59, 0.6);
+        }
+        .repo-item.active {
+            background: white;
+            border-color: rgba(14, 165, 233, 0.2);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+        }
+        html.dark .repo-item.active {
+            background: rgba(30, 41, 59, 0.8);
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .repo-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(14, 165, 233, 0.2);
+        }
+        .repo-group-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            margin: 20px 0 8px 14px;
+        }
+        .repo-active-dot {
             position: absolute;
-            inset: 0;
-            transform: translateX(-100%);
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
-            animation: shimmer 1.4s infinite;
+            left: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 16px;
+            background: #0ea5e9;
+            border-radius: 0 4px 4px 0;
         }
-        @keyframes shimmer {
-            100% { transform: translateX(100%); }
+        
+        .repo-item-pin {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            color: #94a3b8;
+        }
+        .repo-item:hover .repo-item-pin, .repo-item-pin.pinned {
+            opacity: 1;
+        }
+        .repo-item-pin.pinned {
+            color: #0ea5e9;
+        }
+        .repo-item.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        .repo-item.drag-target {
+            border-top: 2px solid #0ea5e9;
+        }
+        
+        .repo-drag-handle {
+            cursor: grab;
+            color: #cbd5e1;
+            padding: 4px;
+        }
+        html.dark .repo-drag-handle {
+            color: #475569;
+        }
+
+        #appLayout {
+            min-height: 100vh;
+        }
+        #appLayout.repo-sidebar-collapsed {
+            --dashboard-main-offset: 80px;
+        }
+        #mainContent {
+            min-width: 0;
+            margin-left: 280px;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #appLayout.repo-sidebar-collapsed {
+        }
+        #appLayout.repo-sidebar-collapsed #mainContent {
+            margin-left: 80px;
+        }
+        #repoSidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0;
+            height: 100dvh;
+            max-height: 100dvh;
+            overflow: hidden !important;
+        }
+        #mainTopBar {
+            position: fixed !important;
+            top: 0;
+            left: calc(var(--dashboard-main-offset) + var(--dashboard-left-seam));
+            right: 0;
+            margin-bottom: 0 !important;
+        }
+        #dashboardShell {
+            padding-top: calc(var(--dashboard-header-offset) + 0.2rem);
+        }
+        
+        @media (max-width: 1024px) {
+            #appLayout {
+                --dashboard-main-offset: 0px;
+                --dashboard-left-seam: var(--dashboard-main-gutter);
+            }
+            #repoSidebar {
+                display: none;
+            }
+            #mainContent {
+                margin-left: 0;
+            }
+        }
+        @media (min-width: 768px) {
+            :root {
+                --dashboard-main-gutter: 32px;
+            }
+        }
+        @media (min-width: 1024px) {
+            :root {
+                --dashboard-main-gutter: 48px;
+            }
+        }
+
+        /* Sticky Tab Navigation */
+        .sticky-tab-nav {
+            position: relative;
+            top: auto;
+            left: auto;
+            right: auto;
+            z-index: 30;
+            padding-top: 0.15rem;
+            padding-bottom: 0.55rem;
+            margin-left: 0;
+            margin-right: 0;
+            padding-left: 0;
+            padding-right: 0;
+            background: linear-gradient(180deg, rgba(244,251,255,0.97) 70%, transparent 100%);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+        html.dark .sticky-tab-nav {
+            background: linear-gradient(180deg, rgba(2,6,23,0.97) 70%, transparent 100%);
+        }
+
+        /* Chart containers - precise height control */
+        .chart-donut-wrap {
+            position: relative;
+            width: 100%;
+            height: 220px;
+        }
+        .chart-line-wrap {
+            position: relative;
+            width: 100%;
+            height: 200px;
+        }
+        .chart-bar-wrap {
+            position: relative;
+            width: 100%;
+            height: 180px;
+        }
+        .chart-scatter-wrap {
+            position: relative;
+            width: 100%;
+            height: 180px;
+        }
+
+        /* Edit button - fixed contrast for dark/light */
+        .btn-edit-light {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+            transition: all 0.2s;
+        }
+        .btn-edit-light:hover {
+            background: #fde68a;
+            color: #78350f;
+        }
+        html.dark .btn-edit-light {
+            background: rgba(245,158,11,0.18);
+            color: #fcd34d;
+            border-color: rgba(245,158,11,0.35);
+        }
+        html.dark .btn-edit-light:hover {
+            background: rgba(245,158,11,0.28);
+            color: #fef08a;
+        }
+        .btn-open {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: #2563eb;
+            color: #ffffff;
+            border: 1px solid #1d4ed8;
+            transition: all 0.2s;
+        }
+        .btn-open:hover {
+            background: #1d4ed8;
+        }
+        html.dark .btn-open {
+            background: rgba(56,189,248,0.15);
+            color: #7dd3fc;
+            border-color: rgba(56,189,248,0.3);
+        }
+        html.dark .btn-open:hover {
+            background: rgba(56,189,248,0.25);
+            color: #bae6fd;
         }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
-    <!-- Sticky Header -->
-    <header class="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 px-4 md:px-8 py-3 shadow-sm">
-        <div class="max-w-[1600px] mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            
-            <!-- Left: Title & Main Context -->
-            <div class="flex items-center justify-between lg:justify-start flex-wrap gap-4 lg:gap-6">
-                <h1 class="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-indigo-600 dark:from-sky-400 dark:to-indigo-400 drop-shadow-sm">MCP Memory</h1>
-                
-                <div class="flex items-center gap-2">
-                    <button id="repoNavToggle" class="lg:hidden px-3 py-1.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-sm font-medium hover:bg-sky-500/20 transition-all">
-                        Repositories
-                    </button>
-                    <!-- Mobile theme toggle -->
-                    <button id="themeToggleMobile" class="lg:hidden p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform" title="Toggle dark mode">
-                        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                        <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                    </button>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-500 font-sans selection:bg-sky-500/30">
+    <div id="appLayout" class="relative">
+        <!-- Sidebar -->
+        <aside id="repoSidebar" class="h-screen overflow-y-auto bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800 z-20 flex flex-col" style="position: sticky; top: 0;">
+            <div class="p-6 flex items-center justify-between repo-sidebar-header">
+                <div class="flex items-center gap-3 repo-sidebar-header-text">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                    <span class="font-bold text-lg tracking-tight">Contexts</span>
+                    <span id="repoCountBadge" class="ml-auto px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">0</span>
                 </div>
-                
-                <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50 shadow-inner backdrop-blur-sm">
-                    <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                    <span id="currentRepoLabel" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Loading...</span>
-                </div>
+                <button id="repoSidebarCollapseToggle" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Collapse repositories">
+                    <svg id="repoSidebarCollapseIcon" class="w-5 h-5 text-slate-500 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+                </button>
+            </div>
 
-                <a href="/api/download-db" target="_blank" download="memory.db" class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100/60 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50 shadow-inner backdrop-blur-sm cursor-pointer group hover:bg-white/80 dark:hover:bg-slate-700/80 hover:-translate-y-0.5 transition-all outline-none focus:ring-2 focus:ring-sky-500/50" title="Click to download database file">
-                    <svg class="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    <span id="dbPathLabel" class="text-xs font-medium text-slate-500 dark:text-slate-300 truncate max-w-[120px] lg:max-w-[200px]">Loading...</span>
-                </a>
+            <!-- Collapsed Summary -->
+            <div id="repoCollapsedSummary" class="hidden flex-col items-center py-4 gap-4">
+                <button id="repoCollapsedSummaryButton" class="w-12 h-12 rounded-xl bg-sky-500/10 border border-sky-500/20 flex flex-col items-center justify-center gap-0.5 hover:bg-sky-500/20 transition-all group">
+                    <span id="repoCollapsedSummaryInitials" class="text-xs font-bold text-sky-600 dark:text-sky-400">RP</span>
+                    <span id="repoCollapsedSummaryCount" class="text-[10px] font-medium text-sky-500/70">0</span>
+                </button>
+            </div>
+
+            <div class="px-4 mb-6 repo-search-container">
+                <div class="relative group">
+                    <input type="text" id="repoSearchInput" placeholder="Search repositories..." class="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl text-sm focus:ring-2 focus:ring-sky-500/50 transition-all outline-none">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3 group-focus-within:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+            <div id="repoSidebarList" class="flex-1 overflow-y-auto px-3 space-y-1 pb-20">
+                <div class="text-sm text-gray-500 dark:text-gray-400 px-3 py-4 text-center">
+                    <div class="skeleton h-8 w-full mb-2 rounded-lg"></div>
+                    <div class="skeleton h-8 w-full mb-2 rounded-lg"></div>
+                    <div class="skeleton h-8 w-full mb-2 rounded-lg"></div>
+                </div>
             </div>
             
-            <!-- Right: Status & Actions -->
-            <div class="flex items-center justify-between lg:justify-end flex-wrap gap-3 md:gap-4">
-                
-                <div class="flex flex-1 lg:flex-none items-center justify-between lg:justify-start gap-4 px-4 py-2 lg:px-3 lg:py-1.5 rounded-full bg-white/60 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-sm shadow-sm">
-                    <div class="flex items-center gap-2">
-                        <span id="syncStatus" class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Synced 0s ago</span>
-                        <div class="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
-                            <div id="countdownFill" class="h-full bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full" style="width: 100%"></div>
-                        </div>
-                    </div>
-                    <div class="w-px h-4 bg-slate-300 dark:bg-slate-600 hidden lg:block"></div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-slate-500 dark:text-slate-400 lg:hidden">Status:</span>
-                        <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.6)]"></div>
-                        <span id="statusText" class="text-xs font-medium text-slate-600 dark:text-slate-300">Checking...</span>
+            <div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md repo-sidebar-footer">
+                <div class="flex items-center gap-3 px-2">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Store</p>
+                        <p id="dbPathLabel" class="text-xs font-medium truncate text-slate-600 dark:text-slate-300">memory.db</p>
                     </div>
                 </div>
+            </div>
+        </aside>
 
-                <div class="hidden lg:flex items-center gap-3">
-                    <button onclick="exportHandbook()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 text-white font-medium text-sm shadow-[0_4px_12px_rgba(56,189,248,0.3)] hover:shadow-[0_6px_16px_rgba(56,189,248,0.4)] hover:-translate-y-0.5 transition-all">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        Handbook
+        <!-- Main Content -->
+        <main id="mainContent" class="flex-1 p-4 md:p-8 lg:p-12 relative z-10">
+            <!-- Header/Navbar substitute (Sticky) -->
+            <div id="mainTopBar" class="z-40 flex flex-col md:flex-row md:items-center justify-between gap-6 py-6 px-4 md:px-8 lg:px-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5 shadow-sm">
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 mb-2">MCP Memory Dashboard</h1>
+                    <div class="flex items-center gap-3">
+                        <span id="currentRepoLabel" class="px-3 py-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-bold border border-sky-500/20">No repository</span>
+                        <span id="memorySummaryLabel" class="text-slate-500 dark:text-slate-400 text-xs font-medium">0 memories indexed</span>
+                        <span id="appVersion" class="text-[10px] font-bold text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800/50 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700/50">...</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <button id="repoNavToggle" class="md:hidden p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95" title="View repositories">
+                        <svg class="w-5 h-5 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                     </button>
                     
-                    <button id="themeToggle" class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform" title="Toggle dark mode">
-                        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                        <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    <div class="hidden md:flex items-center gap-2 px-4 py-2 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                        <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-400 shadow-[0_0_8px_rgba(156,163,175,0.5)]"></div>
+                        <span id="statusText" class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Checking...</span>
+                    </div>
+                    
+                    <div class="h-10 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block"></div>
+                    
+                    <button id="themeToggle" class="p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-95 group" title="Toggle dark mode">
+                        <svg class="w-5 h-5 text-slate-600 dark:text-slate-300 group-hover:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path class="dark:hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            <path class="hidden dark:block" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z"></path>
+                        </svg>
                     </button>
                 </div>
             </div>
+
+            <div id="dashboardShell" class="min-w-0">
+        <!-- Sticky Tab Navigation Wrapper -->
+        <div class="sticky-tab-nav">
+        <!-- Futuristic Agentic Tab Switcher -->
+        <div class="relative mb-0 p-1.5 bg-gray-200/30 dark:bg-gray-800/30 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-white/5 shadow-2xl flex w-fit min-w-[450px] overflow-hidden group">
+            <!-- Active Indicator Slide Background -->
+            <div id="tabIndicator" class="absolute top-1.5 bottom-1.5 left-1.5 w-[calc(33.33%-4px)] bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-[0_0_20px_rgba(14,165,233,0.4)] z-0"></div>
+            
+            <button onclick="switchTab('dashboard')" id="dashboardTabBtn" 
+                class="relative z-10 flex-1 px-6 py-3.5 font-bold text-xs tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 text-white">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                Dashboard
+            </button>
+            <button onclick="switchTab('memories')" id="memoriesTabBtn" 
+                class="relative z-10 flex-1 px-6 py-3.5 font-bold text-xs tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 hover:text-sky-600 dark:hover:text-sky-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                Memories
+            </button>
+            <button onclick="switchTab('tasks')" id="tasksTabBtn" 
+                class="relative z-10 flex-1 px-6 py-3.5 font-bold text-xs tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 hover:text-sky-600 dark:hover:text-sky-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                Tasks
+            </button>
         </div>
-    </header>
+        </div><!-- end sticky-tab-nav -->
 
-    <main class="app-shell max-w-[1600px] mx-auto px-4 md:px-8 py-6">
-        <div id="appLayout" class="app-layout">
-            <aside class="repo-sidebar repo-sidebar-desktop rounded-2xl p-4 glass-panel">
-                <div class="repo-sidebar-header flex items-center justify-between mb-4 gap-3">
-                    <div class="repo-sidebar-header-copy min-w-0">
-                        <div class="text-xs uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Repositories</div>
-                        <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">Context Switcher</div>
-                        <div id="memorySummaryLabel" class="mt-1 text-xs text-gray-500 dark:text-gray-400">0 memories indexed</div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span id="repoCountBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">0</span>
-                        <button id="repoSidebarCollapseToggle" class="repo-collapse-trigger" title="Collapse repositories" aria-label="Collapse repositories">
-                            <svg id="repoSidebarCollapseIcon" class="w-4 h-4 text-gray-700 dark:text-gray-200 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <div id="repoCollapsedSummary" class="repo-collapsed-summary">
-                    <button id="repoCollapsedSummaryButton" class="repo-collapsed-summary-button" title="Active repository">
-                        <span id="repoCollapsedSummaryInitials">RP</span>
-                        <span id="repoCollapsedSummaryCount" class="repo-collapsed-summary-count">0</span>
-                    </button>
-                </div>
-                <input id="repoSearchInput" type="text" placeholder="Search repositories..." class="w-full px-3 py-2.5 rounded-xl text-sm mb-4">
-                <div id="repoSidebarList" class="repo-sidebar-list space-y-2">
-                    <div class="text-sm text-gray-500 dark:text-gray-400 px-3 py-4">Loading repositories...</div>
-                </div>
-            </aside>
-
-            <div class="min-w-0">
+        <div id="dashboardContent" class="animate-fade-in mt-5">
         <!-- Summary Cards + Charts + Recent Queries (2/3 + 1/3) -->
         <div class="grid lg:grid-cols-3 gap-6 mb-6" style="min-height: 60vh;">
             <!-- Main Content: 2/3 -->
             <div class="lg:col-span-2 flex flex-col">
                 <!-- Summary Cards -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Memories</div>
-                <div id="totalCount" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avg Importance</div>
-                <div id="avgImportance" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Hits</div>
-                <div id="totalHits" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Expiring Soon</div>
-                <div id="expiringSoon" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Code Facts</div>
-                <div id="codeFactCount" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Decisions</div>
-                <div id="decisionCount" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Mistakes</div>
-                <div id="mistakeCount" class="text-2xl font-bold">0</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Patterns</div>
-                <div id="patternCount" class="text-2xl font-bold">0</div>
-            </div>
-        </div>
-
-        <!-- Charts Row 1: 2 columns -->
-        <div class="grid md:grid-cols-2 gap-4 mb-4 flex-1">
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="font-semibold mb-2">Memory by Type</div>
-                <canvas id="typeChart"></canvas>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="font-semibold mb-2">Memories Over Time (30 days)</div>
-                <canvas id="timeSeriesChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Charts Row 2: 2 columns -->
-        <div class="grid md:grid-cols-2 gap-4 flex-1">
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="font-semibold mb-2">Importance vs Hit Count</div>
-                <canvas id="scatterChart"></canvas>
-            </div>
-            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-                <div class="font-semibold mb-2">Top 10 Memories by Importance</div>
-                <canvas id="topMemoriesChart"></canvas>
-            </div>
-        </div>
-            </div>
-
-            <!-- Sidebar: 1/3 - Recent Queries (Full Height) -->
-            <div class="lg:col-span-1 flex flex-col">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 flex-1 overflow-hidden flex flex-col">
-                    <h3 class="font-semibold mb-4 text-lg">Recent Actions</h3>
-                    <div id="recentQueries" class="flex-1 space-y-2 overflow-y-auto">
-                        <div class="text-gray-500 text-sm">No recent queries</div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Total Memories</div>
+                        <div id="totalCount" class="text-2xl font-bold">0</div>
                     </div>
-                    <div id="recentActionsPagination"></div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Avg Importance</div>
+                        <div id="avgImportance" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Total Hits</div>
+                        <div id="totalHits" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Expiring Soon</div>
+                        <div id="expiringSoon" class="text-2xl font-bold text-orange-500">0</div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid md:grid-cols-2 gap-6 flex-1">
+                    <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Memory by Type</h3>
+                        <div class="chart-donut-wrap">
+                            <canvas id="typeChart"></canvas>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1.5 mt-3 text-[10px]">
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Decision:</span> <span id="decisionCount" class="font-bold">0</span></div>
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Mistake:</span> <span id="mistakeCount" class="font-bold">0</span></div>
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Code Fact:</span> <span id="codeFactCount" class="font-bold">0</span></div>
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Pattern:</span> <span id="patternCount" class="font-bold">0</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Activity Over Time (30 days)</h3>
+                        <div class="chart-line-wrap">
+                            <canvas id="timeSeriesChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Importance vs Hit Count</h3>
+                        <div class="chart-scatter-wrap">
+                            <canvas id="scatterChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Top 10 by Hit Count</h3>
+                        <div class="chart-bar-wrap">
+                            <canvas id="topMemoriesChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Recent Actions Sidebar: 1/3 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col max-h-[85vh]">
+                <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Recent Actions</h3>
+                    <div class="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                <div id="recentQueries" class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                    <div class="text-gray-400 text-sm text-center py-6">Loading actions...</div>
+                </div>
+                <div id="recentActionsPagination" class="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-b-lg"></div>
+            </div>
+        </div>
         </div>
 
-        <!-- Memory Table Full Width -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 md:p-6 mb-6">
-            <div class="flex flex-wrap gap-3 mb-4">
-                <input type="text" id="searchInput" placeholder="Search title, content, or ID..." class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm w-60">
-                
-                <div class="flex items-center gap-2">
-                    <label class="text-sm text-gray-600 dark:text-gray-400">Type:</label>
-                    <select id="typeFilter" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
-                        <option value="">All Types</option>
-                        <option value="decision">Decision</option>
-                        <option value="mistake">Mistake</option>
-                        <option value="code_fact">Code Fact</option>
-                        <option value="pattern">Pattern</option>
-                    </select>
+        <div id="memoriesContent" class="hidden animate-fade-in mt-5">
+        <!-- Filters and Table Full Width -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-6 relative overflow-hidden">
+            <div id="syncProgress" class="absolute top-0 left-0 h-0.5 bg-sky-500 transition-all duration-300 z-50" style="width: 0%"></div>
+            
+            <div class="p-4 md:p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex-1 max-w-xl">
+                        <div class="relative group">
+                            <input type="text" id="searchInput" placeholder="Search title, content, or ID..." class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-sky-500/50 transition-all outline-none">
+                            <svg class="w-4 h-4 text-gray-400 absolute left-3.5 top-3 group-focus-within:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Type:</span>
+                            <select id="typeFilter" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs p-2 outline-none focus:ring-2 focus:ring-sky-500/50">
+                                <option value="">All Types</option>
+                                <option value="decision">Decision</option>
+                                <option value="mistake">Mistake</option>
+                                <option value="code_fact">Code Fact</option>
+                                <option value="pattern">Pattern</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Min Importance:</span>
+                            <select id="minImportanceFilter" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs p-2 outline-none focus:ring-2 focus:ring-sky-500/50">
+                                <option value="">Any</option>
+                                <option value="1">1+</option>
+                                <option value="2">2+</option>
+                                <option value="3">3+</option>
+                                <option value="4">4+</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Max Importance:</span>
+                            <select id="maxImportanceFilter" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs p-2 outline-none focus:ring-2 focus:ring-sky-500/50">
+                                <option value="">Any</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5 or less</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 ml-2">
+                            <button onclick="showAddMemoryModal()" class="btn-add-memory" title="Add memory manually">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                                <span>Add Memory</span>
+                            </button>
+                            <button onclick="loadData()" class="p-2 text-gray-500 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all" title="Refresh data">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            </button>
+                            <button onclick="exportData('json')" class="text-[10px] font-bold uppercase tracking-widest px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">Export JSON</button>
+                            <button onclick="exportData('csv')" class="text-[10px] font-bold uppercase tracking-widest px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">Export CSV</button>
+                            <button onclick="archiveExpired()" class="text-[10px] font-bold uppercase tracking-widest px-3 py-2 bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-all">Archive Expired</button>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="flex items-center gap-2">
-                    <label class="text-sm text-gray-600 dark:text-gray-400">Min Importance:</label>
-                    <select id="minImportanceFilter" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
-                        <option value="">Any</option>
-                        <option value="1">1+</option>
-                        <option value="2">2+</option>
-                        <option value="3">3+</option>
-                        <option value="4">4+</option>
-                        <option value="5">5</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-center gap-2">
-                    <label class="text-sm text-gray-600 dark:text-gray-400">Max Importance:</label>
-                    <select id="maxImportanceFilter" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm">
-                        <option value="">Any</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5 or less</option>
-                    </select>
-                </div>
-                
-                <button onclick="loadData()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Refresh</button>
-                <button onclick="exportData('json')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Export JSON</button>
-                <button onclick="exportData('csv')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Export CSV</button>
-                <button onclick="archiveExpired()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors">Archive Expired</button>
             </div>
 
             <div id="errorMessage"></div>
-            <div id="tableContainer" class="text-center py-8 text-gray-500">Loading memories...</div>
-            
-            <!-- Pagination -->
-            <div class="flex flex-wrap justify-between items-center mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 gap-4">
-                <div id="paginationInfo" class="text-sm text-gray-600 dark:text-gray-400"></div>
+            <div id="tableContainer" class="p-0">
+                <div class="text-gray-500 py-12 text-center">Loading memories...</div>
+            </div>
+
+            <!-- Footer / Pagination -->
+            <div class="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/10 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div id="paginationInfo" class="text-xs font-medium text-gray-500 dark:text-gray-400">Showing 0-0 of 0</div>
                 <div class="flex items-center gap-2">
-                    <button id="firstPageBtn" onclick="goToPage(1)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">First</button>
-                    <button id="prevPageBtn" onclick="goToPage(currentPage - 1)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Prev</button>
-                    <span id="pageNumbers"></span>
-                    <button id="nextPageBtn" onclick="goToPage(currentPage + 1)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Next</button>
-                    <button id="lastPageBtn" onclick="goToPage(totalPages)" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Last</button>
+                    <button id="firstPageBtn" onclick="goToPage(1)" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-all">First</button>
+                    <button id="prevPageBtn" onclick="goToPage(currentPage-1)" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-all">Prev</button>
+                    <div id="pageIndicator" class="flex items-center gap-1">
+                        <!-- Dynamic page buttons -->
+                    </div>
+                    <button id="nextPageBtn" onclick="goToPage(currentPage+1)" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-all">Next</button>
+                    <button id="lastPageBtn" onclick="goToPage(totalPages)" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-all">Last</button>
                 </div>
                 <div class="flex items-center gap-2">
-                    <label class="text-sm text-gray-600 dark:text-gray-400">Per page:</label>
-                    <select id="pageSizeSelect" onchange="changePageSize()" class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Per page:</span>
+                    <select id="pageSizeSelect" onchange="changePageSize()" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs p-1.5 outline-none focus:ring-2 focus:ring-sky-500/50">
                         <option value="10">10</option>
                         <option value="25">25</option>
                         <option value="50">50</option>
@@ -940,59 +1081,270 @@
                 </div>
             </div>
         </div>
+        </div>
+
+        <div id="tasksContent" class="hidden animate-fade-in mt-5">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 md:p-6 mb-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-indigo-600 dark:from-sky-400 dark:to-indigo-400">Project Tasks</h2>
+                    <div class="flex items-center gap-2">
+                        <button onclick="showAddTaskModal()" class="btn-add-task">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Add Task
+                        </button>
+                        <button onclick="loadTasks()" class="btn-refresh">Refresh Tasks</button>
+                    </div>
+                </div>
+                <div id="taskBoard" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Column: Todo -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between px-2">
+                            <h3 class="font-bold text-gray-500 uppercase tracking-wider text-xs">To Do</h3>
+                            <span id="todoCount" class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
+                        </div>
+                        <div id="todoTasks" class="space-y-4 min-h-[200px]"></div>
+                    </div>
+                    <!-- Column: In Progress -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between px-2">
+                            <h3 class="font-bold text-sky-500 uppercase tracking-wider text-xs">In Progress</h3>
+                            <span id="inProgressCount" class="bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
+                        </div>
+                        <div id="inProgressTasks" class="space-y-4 min-h-[200px]"></div>
+                    </div>
+                    <!-- Column: Completed -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between px-2">
+                            <h3 class="font-bold text-emerald-500 uppercase tracking-wider text-xs">Completed</h3>
+                            <span id="completedCount" class="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
+                        </div>
+                        <div id="completedTasks" class="space-y-4 min-h-[200px]"></div>
+                    </div>
+                </div>
             </div>
         </div>
-    </main>
-
-    <div id="memoryDrawer" class="hidden fixed inset-0 z-40">
-        <div class="absolute inset-0 bg-black/40" onclick="closeDrawer()"></div>
-        <aside class="absolute right-0 top-0 h-full w-full max-w-xl bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
-            <div class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-                <div>
-                    <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Memory Details</div>
-                    <h2 id="drawerTitle" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Loading...</h2>
-                </div>
-                <button onclick="closeDrawer()" class="text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
             </div>
-            <div id="drawerBody" class="p-6"></div>
-        </aside>
+        </main>
     </div>
 
-    <div id="repoSidebarDrawer" class="hidden fixed inset-0 z-40 repo-sidebar-mobile">
-        <div class="absolute inset-0 bg-black/40" onclick="closeRepoSidebarDrawer()"></div>
-        <aside class="absolute left-0 top-0 h-full w-full max-w-sm bg-white dark:bg-gray-900 shadow-2xl border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
-            <div class="sticky top-0 z-10 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 px-5 py-4 flex items-center justify-between">
-                <div>
-                    <div class="text-xs uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Repositories</div>
-                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">Context Switcher</div>
-                </div>
-                <button onclick="closeRepoSidebarDrawer()" class="text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">&times;</button>
+    <!-- Floating Selection Bar -->
+    <div id="bulkActionBar" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 bg-slate-900/90 dark:bg-white/90 backdrop-blur-md text-white dark:text-slate-900 px-6 py-4 rounded-2xl shadow-2xl border border-white/10 dark:border-slate-200 hidden flex items-center gap-6 animate-fade-in">
+        <div class="flex flex-col">
+            <span id="selectedCount" class="text-sm font-bold">0 selected</span>
+            <span class="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500">Bulk Actions</span>
+        </div>
+        <div class="h-8 w-[1px] bg-white/10 dark:bg-slate-200"></div>
+        <div class="flex items-center gap-3">
+            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Set Priority:</span>
+            <select id="bulkImportanceSelect" class="bg-white/10 dark:bg-slate-100 border border-white/20 dark:border-slate-300 rounded-lg text-xs p-1.5 outline-none focus:ring-2 focus:ring-sky-500/50">
+                <option value="1">1 (Minor)</option>
+                <option value="2">2 (Low)</option>
+                <option value="3">3 (Medium)</option>
+                <option value="4">4 (High)</option>
+                <option value="5">5 (Critical)</option>
+            </select>
+            <button onclick="bulkUpdateImportance()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-bold transition-all shadow-lg shadow-sky-500/20">Apply</button>
+        </div>
+        <div class="h-8 w-[1px] bg-white/10 dark:bg-slate-200"></div>
+        <button onclick="showBulkDeleteConfirm()" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-xs font-bold transition-all shadow-lg shadow-rose-500/20">Delete</button>
+        <button onclick="clearSelection()" class="px-4 py-2 bg-white/10 dark:bg-slate-200 hover:bg-white/20 dark:hover:bg-slate-300 text-white dark:text-slate-900 rounded-lg text-xs font-bold transition-all">Clear</button>
+    </div>
+
+    <!-- Sync Indicator -->
+    <div class="fixed bottom-6 right-6 z-30">
+        <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2 min-w-[160px]">
+            <div class="flex items-center justify-between">
+                <span id="syncStatus" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synced 0s ago</span>
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
             </div>
-            <div class="p-4">
-                <input id="repoSearchInputMobile" type="text" placeholder="Search repositories..." class="w-full px-3 py-2.5 rounded-xl text-sm mb-4">
-                <div id="repoSidebarListMobile" class="repo-sidebar-list space-y-2"></div>
+            <div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div id="countdownFill" class="h-full bg-sky-500 transition-all duration-1000 ease-linear" style="width: 100%"></div>
             </div>
-        </aside>
+        </div>
     </div>
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2"></div>
+    <div id="toastContainer" class="fixed top-24 right-6 z-[60] flex flex-col gap-3 pointer-events-none"></div>
 
-    <!-- Bulk Action Bar -->
-    <div id="bulkActionBar" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 px-6 py-4 rounded-lg shadow-xl z-[90] gap-4 items-center">
-        <span id="selectedCount" class="font-semibold">0 selected</span>
-        <select id="bulkImportanceSelect" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700">
-            <option value="1">Importance 1</option>
-            <option value="2">Importance 2</option>
-            <option value="3" selected>Importance 3</option>
-            <option value="4">Importance 4</option>
-            <option value="5">Importance 5</option>
-        </select>
-        <button onclick="bulkUpdateImportance()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">Update</button>
-        <button onclick="showBulkDeleteConfirm()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors">Delete</button>
-        <button onclick="clearSelection()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors">Clear</button>
+    <!-- Mobile Repo Sidebar Drawer -->
+    <div id="repoSidebarDrawer" class="hidden fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onclick="closeRepoSidebarDrawer()"></div>
+        <aside class="absolute left-0 top-0 h-full w-full max-w-[280px] bg-white dark:bg-slate-900 shadow-2xl border-r border-slate-200 dark:border-slate-800 flex flex-col transform transition-transform duration-300">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                    <span class="font-bold text-lg">Contexts</span>
+                </div>
+                <button onclick="closeRepoSidebarDrawer()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="px-4 py-4">
+                <div class="relative group">
+                    <input type="text" id="repoSearchInputMobile" placeholder="Search repositories..." class="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl text-sm focus:ring-2 focus:ring-sky-500/50 transition-all outline-none">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3 group-focus-within:text-sky-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+            <div id="repoSidebarListMobile" class="flex-1 overflow-y-auto px-3 space-y-1 pb-10">
+                <!-- Mobile repo list items -->
+            </div>
+        </aside>
     </div>
 
-        <script src="/app.js"></script>
+    <!-- Detail Drawer -->
+    <div id="memoryDrawer" class="hidden fixed inset-0 z-50 overflow-hidden">
+        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onclick="closeDrawer()"></div>
+        <aside class="absolute right-0 top-0 h-full w-full lg:w-1/2 bg-white dark:bg-slate-900 shadow-[-20px_0_50px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-white/5 flex flex-col transform transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] translate-x-full" id="drawerAside">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
+                <div class="flex items-center gap-4">
+                    <button onclick="closeDrawer()" class="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                    <h2 id="drawerTitle" class="text-2xl font-black tracking-tight truncate max-w-md bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Memory Detail</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="exportHandbook()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold uppercase tracking-widest rounded-lg transition-all shadow-lg shadow-sky-500/20 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Handbook
+                    </button>
+                </div>
+            </div>
+            <div id="drawerBody" class="flex-1 overflow-y-auto p-8 lg:p-12 custom-scrollbar">
+                <!-- Content injected via JS -->
+            </div>
+        </aside>
+    </div>
+
+    <!-- Add Memory Modal -->
+    <div id="addMemoryModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onclick="hideAddMemoryModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 class="text-xl font-bold">Add New Memory</h3>
+                <button onclick="hideAddMemoryModal()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="addMemoryForm" onsubmit="handleMemorySubmit(event)" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Type</label>
+                        <select name="type" required class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                            <option value="code_fact">Code Fact</option>
+                            <option value="decision">Decision</option>
+                            <option value="mistake">Mistake</option>
+                            <option value="pattern">Pattern</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Importance</label>
+                        <select name="importance" required class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                            <option value="1">1 (Minor)</option>
+                            <option value="2">2 (Low)</option>
+                            <option value="3" selected>3 (Medium)</option>
+                            <option value="4">4 (High)</option>
+                            <option value="5">5 (Critical)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Agent</label>
+                        <input type="text" name="agent" required placeholder="e.g. Gemini CLI" value="Manual User" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Model</label>
+                        <input type="text" name="model" required placeholder="e.g. gemini-2.0-flash" value="Human" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Title</label>
+                    <input type="text" name="title" placeholder="Short descriptive title" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Content</label>
+                    <textarea name="content" required rows="4" placeholder="What should be remembered?" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Tags (comma separated)</label>
+                    <input type="text" name="tags" placeholder="react, hooks, performance" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_global" id="is_global_check" class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                    <label for="is_global_check" class="text-sm text-slate-600 dark:text-slate-400">Mark as global (available in all repos)</label>
+                </div>
+                <div class="pt-4 flex gap-3">
+                    <button type="button" onclick="hideAddMemoryModal()" class="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Cancel</button>
+                    <button type="submit" class="flex-1 px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 transition-all">Save Memory</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Task Modal -->
+    <div id="addTaskModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onclick="hideAddTaskModal()"></div>
+        <div class="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-fade-in">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 class="text-xl font-bold">Create New Task</h3>
+                <button onclick="hideAddTaskModal()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="addTaskForm" onsubmit="handleTaskSubmit(event)" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Task Code</label>
+                        <input type="text" name="task_code" required placeholder="e.g. TASK-001" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Phase</label>
+                        <input type="text" name="phase" required placeholder="e.g. implementation" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Title</label>
+                    <input type="text" name="title" required placeholder="Task headline" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Description</label>
+                    <textarea name="description" rows="3" placeholder="Detailed objective..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Priority</label>
+                        <select name="priority" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                            <option value="1">1 (Minor)</option>
+                            <option value="2">2 (Low)</option>
+                            <option value="3" selected>3 (Medium)</option>
+                            <option value="4">4 (High)</option>
+                            <option value="5">5 (Critical)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Status</label>
+                        <select name="status" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                            <option value="pending" selected>To Do</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="blocked">Blocked</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Depends On (ID)</label>
+                    <input type="text" name="depends_on" placeholder="Optional parent task ID" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                </div>
+                <div class="pt-4 flex gap-3">
+                    <button type="button" onclick="hideAddTaskModal()" class="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Cancel</button>
+                    <button type="submit" class="flex-1 px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
 </body>
 </html>

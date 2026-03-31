@@ -82,7 +82,7 @@ export class SQLiteStore {
   }
 
   private migrate() {
-    // Create base tables
+    // 1. Create base tables first
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
@@ -102,7 +102,9 @@ export class SQLiteStore {
         updated_at TEXT NOT NULL,
         hit_count INTEGER NOT NULL DEFAULT 0,
         recall_count INTEGER NOT NULL DEFAULT 0,
-        last_used_at TEXT
+        last_used_at TEXT,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown'
       );
 
       CREATE INDEX IF NOT EXISTS idx_memories_repo ON memories(repo);
@@ -127,14 +129,35 @@ export class SQLiteStore {
         updated_at TEXT NOT NULL,
         FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
       );
-    `);
 
-    // Add title column if it doesn't exist (for existing databases)
-    try {
-      this.db.exec(`ALTER TABLE memories ADD COLUMN title TEXT`);
-    } catch (e) {}
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        task_code TEXT NOT NULL,
+        phase TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'canceled', 'blocked')),
+        priority INTEGER NOT NULL DEFAULT 3,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        finished_at TEXT,
+        canceled_at TEXT,
+        tags TEXT,
+        metadata TEXT,
+        parent_id TEXT,
+        depends_on TEXT,
+        FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
+        FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
+      );
 
-    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo);
+      CREATE INDEX IF NOT EXISTS idx_tasks_code ON tasks(task_code);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_phase ON tasks(phase);
+      CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+      CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+
       CREATE TABLE IF NOT EXISTS memories_archive (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -149,14 +172,17 @@ export class SQLiteStore {
         recall_count INTEGER NOT NULL DEFAULT 0,
         last_used_at TEXT,
         expires_at TEXT,
-        archived_at TEXT NOT NULL
+        archived_at TEXT NOT NULL,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown'
       );
 
       CREATE TABLE IF NOT EXISTS action_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        action TEXT NOT NULL CHECK (action IN ('search', 'read', 'write', 'update', 'delete')),
+        action TEXT NOT NULL,
         query TEXT,
         memory_id TEXT,
+        task_id TEXT,
         repo TEXT NOT NULL,
         result_count INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
@@ -166,12 +192,9 @@ export class SQLiteStore {
       CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
     `);
 
-    // Add missing columns safely
-    const existingColumns = (
-      this.db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>
-    ).map((col) => col.name);
-
+    // 2. Safely add missing columns for existing tables
     const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
+      { name: "title", table: "memories", definition: "ALTER TABLE memories ADD COLUMN title TEXT" },
       { name: "hit_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0" },
       { name: "recall_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0" },
       { name: "last_used_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
@@ -181,15 +204,24 @@ export class SQLiteStore {
       { name: "is_global", table: "memories", definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0" },
       { name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
       { name: "vector_version", table: "memory_vectors", definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1" },
+      { name: "depends_on", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN depends_on TEXT" },
+      { name: "task_code", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN task_code TEXT" },
+      { name: "task_id", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN task_id TEXT" },
+      { name: "agent", table: "memories", definition: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
+      { name: "model", table: "memories", definition: "ALTER TABLE memories ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'" },
     ];
 
     for (const col of columnsToAdd) {
-      const existingTableColumns = (
-        this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>
-      ).map((c) => c.name);
+      try {
+        const tableInfo = this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>;
+        const existingTableColumns = tableInfo.map((c) => c.name);
 
-      if (!existingTableColumns.includes(col.name)) {
-        this.db.exec(col.definition);
+        // Only run ALTER TABLE if table exists and column doesn't
+        if (tableInfo.length > 0 && !existingTableColumns.includes(col.name)) {
+          this.db.exec(col.definition);
+        }
+      } catch (e) {
+        // Skip safely
       }
     }
 
@@ -198,6 +230,11 @@ export class SQLiteStore {
       CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
       CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
     `);
+
+    // Backfill task_code if it was added via migration
+    try {
+      this.db.exec("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL");
+    } catch (e) {}
   }
 
   insert(entry: MemoryEntry): void {
@@ -205,8 +242,8 @@ export class SQLiteStore {
       INSERT INTO memories (
         id, repo, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
-        supersedes, status, is_global, tags
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?)
+        supersedes, status, is_global, tags, agent, model
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -224,7 +261,9 @@ export class SQLiteStore {
       entry.supersedes ?? null,
       entry.status || "active",
       entry.is_global ? 1 : 0,
-      entry.tags ? JSON.stringify(entry.tags) : null
+      entry.tags ? JSON.stringify(entry.tags) : null,
+      entry.agent || 'unknown',
+      entry.model || 'unknown'
     );
   }
 
@@ -430,6 +469,24 @@ export class SQLiteStore {
     `).all(id);
   }
 
+  getActionStatsByDate(repo?: string, days: number = 30): any[] {
+    let sql = `
+      SELECT 
+        strftime('%Y-%m-%d', created_at) as date,
+        action,
+        COUNT(*) as count
+      FROM action_log
+      WHERE created_at >= date('now', '-' || ? || ' days')
+    `;
+    const params: any[] = [days];
+    if (repo) {
+      sql += " AND repo = ?";
+      params.push(repo);
+    }
+    sql += " GROUP BY date, action ORDER BY date ASC";
+    return this.db.prepare(sql).all(...params);
+  }
+
   listMemoriesForDashboard(options: any): any {
     const { repo, type, tag, isGlobal, minImportance, search, offset = 0, limit = 50, sortBy = 'created_at', sortOrder = 'DESC' } = options;
     let where = ["1=1"];
@@ -489,6 +546,94 @@ export class SQLiteStore {
     this.db.prepare("UPDATE memories SET recall_count = recall_count + 1, last_used_at = ? WHERE id = ?").run(new Date().toISOString(), id);
   }
 
+  insertTask(task: any): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO tasks (
+        id, repo, task_code, phase, title, description, status, priority,
+        created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      task.id,
+      task.repo,
+      task.task_code,
+      task.phase || null,
+      task.title,
+      task.description || null,
+      task.status || "pending",
+      task.priority || 3,
+      task.created_at,
+      task.updated_at,
+      task.finished_at || null,
+      task.canceled_at || null,
+      task.tags ? JSON.stringify(task.tags) : null,
+      task.metadata ? JSON.stringify(task.metadata) : null,
+      task.parent_id || null,
+      task.depends_on || null
+    );
+  }
+
+  updateTask(id: string, updates: any): void {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        if (key === 'tags' || key === 'metadata') {
+          fields.push(`${key} = ?`);
+          values.push(JSON.stringify(updates[key]));
+        } else {
+          fields.push(`${key} = ?`);
+          values.push(updates[key]);
+        }
+      }
+    });
+
+    if (fields.length === 0) return;
+
+    fields.push("updated_at = ?");
+    values.push(new Date().toISOString());
+    values.push(id);
+
+    const stmt = this.db.prepare(`UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`);
+    stmt.run(...values);
+  }
+
+  getTasksByRepo(repo: string, status?: string): any[] {
+    let query = "SELECT * FROM tasks WHERE repo = ?";
+    const params: any[] = [repo];
+
+    if (status) {
+      query += " AND status = ?";
+      params.push(status);
+    }
+
+    query += " ORDER BY priority DESC, created_at ASC";
+    
+    const rows = this.db.prepare(query).all(...params) as any[];
+    return rows.map(r => this.rowToTask(r));
+  }
+
+  deleteTask(id: string): void {
+    this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+  }
+
+  private rowToTask(row: any): any {
+    let tags: string[] = [];
+    let metadata: any = {};
+    try {
+      if (row.tags) tags = JSON.parse(row.tags);
+      if (row.metadata) metadata = JSON.parse(row.metadata);
+    } catch (e) {}
+
+    return {
+      ...row,
+      tags,
+      metadata
+    };
+  }
+
   getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false): MemoryEntry[] {
     let query = "SELECT * FROM memories WHERE repo = ?";
     if (!includeArchived) {
@@ -534,13 +679,23 @@ export class SQLiteStore {
   }
 
   logAction(action: string, repo: string, options: any = {}) {
-    this.db.prepare(`INSERT INTO action_log (action, query, memory_id, repo, result_count, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(
-      action, options.query || null, options.memoryId || null, repo, options.resultCount || 0, new Date().toISOString()
+    this.db.prepare(`INSERT INTO action_log (action, query, memory_id, task_id, repo, result_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+      action, options.query || null, options.memoryId || null, options.taskId || null, repo, options.resultCount || 0, new Date().toISOString()
     );
   }
 
   getRecentActions(repo?: string, limit = 20): any[] {
-    let sql = `SELECT a.*, m.title as memory_title, m.type as memory_type FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id`;
+    let sql = `
+      SELECT 
+        a.*, 
+        m.title as memory_title, 
+        m.type as memory_type,
+        t.title as task_title,
+        t.task_code as task_code
+      FROM action_log a 
+      LEFT JOIN memories m ON a.memory_id = m.id
+      LEFT JOIN tasks t ON a.task_id = t.id
+    `;
     const params: any[] = [];
     if (repo) { sql += ` WHERE a.repo = ?`; params.push(repo); }
     sql += ` ORDER BY a.created_at DESC, a.id DESC LIMIT ?`; params.push(limit);
@@ -572,6 +727,8 @@ export class SQLiteStore {
 
     return {
       id: row.id, type: row.type, title: row.title || "Untitled", content: row.content, importance: row.importance,
+      agent: row.agent || 'unknown',
+      model: row.model || 'unknown',
       scope: { repo: row.repo, folder: row.folder || undefined, language: row.language || undefined },
       created_at: row.created_at, updated_at: row.updated_at, hit_count: row.hit_count ?? 0, recall_count: row.recall_count ?? 0,
       last_used_at: row.last_used_at ?? null, expires_at: row.expires_at ?? null, supersedes: row.supersedes ?? null, status: row.status || "active",

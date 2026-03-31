@@ -10,6 +10,7 @@ import { handleMemorySummarize } from "./tools/memory.summarize.js";
 import { handleMemoryDelete } from "./tools/memory.delete.js";
 import { handleMemoryRecap } from "./tools/memory.recap.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
+import { handleTaskManage, handleTaskList } from "./tools/task.manage.js";
 
 export function createRouter(
   db: SQLiteStore,
@@ -74,6 +75,12 @@ export function createRouter(
 
       case "memory-delete":
         return await handleMemoryDelete(args, db, vectors);
+
+      case "task-manage":
+        return await handleTaskManage(args, db);
+
+      case "task-list":
+        return await handleTaskList(args, db);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

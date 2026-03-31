@@ -12,6 +12,8 @@ function makeEntry(id: string, repo: string): MemoryEntry {
     title: `Memory ${id}`,
     content: `Content for memory ${id} in repo ${repo}`,
     importance: 3,
+    agent: "test-agent",
+    model: "test-model",
     scope: { repo },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

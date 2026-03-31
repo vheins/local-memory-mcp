@@ -121,7 +121,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
           await router("tools/call", {
             name: "memory-store",
-            arguments: { type, content, importance, title, scope: { repo } },
+            arguments: { type, content, importance, title, scope: { repo }, agent: "test-agent", model: "test-model" },
           });
 
           expect(mockDb.insert).toHaveBeenCalled();

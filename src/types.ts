@@ -15,6 +15,8 @@ export type MemoryEntry = {
   title: string;
   content: string;
   importance: number;
+  agent: string;
+  model: string;
   scope: MemoryScope;
   created_at: string;
   updated_at: string;
@@ -32,6 +34,28 @@ export type VectorResult = {
   id: string;
   score: number;
 };
+
+export type TaskStatus = "pending" | "in_progress" | "completed" | "canceled" | "blocked";
+export type TaskPriority = 1 | 2 | 3 | 4 | 5; // 5 is highest
+
+export interface Task {
+  id: string;
+  repo: string;
+  task_code: string;
+  phase: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+  canceled_at: string | null;
+  tags: string[];
+  metadata: Record<string, any>;
+  parent_id: string | null;
+  depends_on: string | null;
+}
 
 export interface VectorStore {
   upsert(id: string, text: string): Promise<void>;

@@ -249,10 +249,12 @@ describe("Property 14: Export format correctness", () => {
     importance: number;
     hit_count: number;
     created_at: string;
+    agent: string;
+    model: string;
   }
 
   function exportToCsv(memories: Memory[]): string {
-    const headers = ["id", "type", "content", "importance", "hit_count", "created_at"];
+    const headers = ["id", "type", "content", "importance", "hit_count", "created_at", "agent", "model"];
     const csvRows = [headers.join(",")];
     for (const m of memories) {
       const row = [
@@ -262,6 +264,8 @@ describe("Property 14: Export format correctness", () => {
         m.importance,
         m.hit_count,
         m.created_at,
+        m.agent || 'unknown',
+        m.model || 'unknown'
       ];
       csvRows.push(row.join(","));
     }
@@ -282,7 +286,9 @@ describe("Property 14: Export format correctness", () => {
             content: fc.string({ minLength: 5, maxLength: 50 }),
             importance: fc.integer({ min: 1, max: 5 }),
             hit_count: fc.integer({ min: 0, max: 20 }),
-            created_at: fc.date({ min: new Date("2020-01-01"), max: new Date("2030-12-31") }).map((d) => d.toISOString()),
+            created_at: fc.date().map((d) => d.toISOString()),
+            agent: fc.string({ minLength: 3 }),
+            model: fc.string({ minLength: 3 }),
           })
         ),
         (memories) => {
@@ -316,6 +322,8 @@ describe("Property 14: Export format correctness", () => {
             importance: fc.integer({ min: 1, max: 5 }),
             hit_count: fc.integer({ min: 0, max: 10 }),
             created_at: fc.string(),
+            agent: fc.string({ minLength: 3 }),
+            model: fc.string({ minLength: 3 }),
           })
         ),
         (memories) => {
@@ -340,7 +348,9 @@ describe("Property 14: Export format correctness", () => {
             content: fc.string({ minLength: 10 }),
             importance: fc.integer({ min: 1, max: 5 }),
             hit_count: fc.integer({ min: 0, max: 100 }),
-            created_at: fc.date({ min: new Date("2020-01-01"), max: new Date("2030-12-31") }).map((d) => d.toISOString()),
+            created_at: fc.date().map((d) => d.toISOString()),
+            agent: fc.string({ minLength: 3 }),
+            model: fc.string({ minLength: 3 }),
           })
         ),
         fc.constantFrom("decision", "mistake", "code_fact", "pattern"),

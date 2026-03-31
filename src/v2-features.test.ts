@@ -21,6 +21,8 @@ function makeEntry(overrides: any): MemoryEntry {
     title: overrides.title || "Test Title",
     content: overrides.content || "Test content for memory",
     importance: overrides.importance || 3,
+    agent: overrides.agent || "test-agent",
+    model: overrides.model || "test-model",
     scope: { repo: overrides.repo || "test-repo" },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -49,7 +51,9 @@ describe("V2 Enhanced Memory Features", () => {
         title: "Conflict Test",
         content: "React frontend again",
         importance: 5,
-        scope: { repo }
+        scope: { repo },
+        agent: "test-agent",
+        model: "test-model"
       };
 
       const response = await handleMemoryStore(params, db, mockVectors);
@@ -68,6 +72,8 @@ describe("V2 Enhanced Memory Features", () => {
         content: "Better content",
         importance: 5,
         scope: { repo },
+        agent: "test-agent",
+        model: "test-model",
         supersedes: VALID_UUID_1
       };
 

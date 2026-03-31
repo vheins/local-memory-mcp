@@ -23,6 +23,18 @@ let pinnedRepoOrder = [];
 let draggedPinnedRepo = null;
 let isGlobalFilterActive = false;
 
+function syncStickyOffsets() {
+    const topBar = document.getElementById('mainTopBar');
+    const tabNav = document.querySelector('.sticky-tab-nav');
+    if (!topBar) return;
+
+    const topBarHeight = Math.ceil(topBar.getBoundingClientRect().height);
+    const tabNavHeight = tabNav ? Math.ceil(tabNav.getBoundingClientRect().height) : 0;
+
+    document.documentElement.style.setProperty('--dashboard-header-offset', `${topBarHeight}px`);
+    document.documentElement.style.setProperty('--dashboard-tab-offset', `${tabNavHeight}px`);
+}
+
 async function loadRecentActions(page = recentActionsPage) {
     try {
         let url = `/api/recent-actions?page=${page}&pageSize=${recentActionsPageSize}`;
@@ -97,22 +109,22 @@ function getBubbleStyle(action) {
             bubble: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100',
             label: 'text-gray-500 dark:text-gray-400',
             meta:  'text-gray-400 dark:text-gray-500',
-            align: 'items-end',
-            tail:  'right-2 -bottom-1.5 border-l-gray-100 dark:border-l-gray-700',
+            align: 'items-start',
+            tail:  'left-2 -bottom-1.5 border-r-gray-100 dark:border-r-gray-700',
         },
         update: {
             bubble: 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
             label: 'text-amber-600 dark:text-amber-400',
             meta:  'text-amber-500 dark:text-amber-500',
-            align: 'items-end',
-            tail:  'right-2 -bottom-1.5 border-l-amber-100 dark:border-l-amber-900',
+            align: 'items-start',
+            tail:  'left-2 -bottom-1.5 border-r-amber-100 dark:border-r-amber-900',
         },
         delete: {
             bubble: 'bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100',
             label: 'text-red-500 dark:text-red-400',
             meta:  'text-red-400',
-            align: 'items-end',
-            tail:  'right-2 -bottom-1.5 border-l-red-100 dark:border-l-red-900',
+            align: 'items-start',
+            tail:  'left-2 -bottom-1.5 border-r-red-100 dark:border-r-red-900',
         },
     };
     return styles[action] || styles.search;
@@ -120,22 +132,28 @@ function getBubbleStyle(action) {
 
 function renderActionBubble(action) {
     const s = getBubbleStyle(action.action);
-    const isRight = s.align === 'items-end';
+    const isRight = false; // Force left alignment
 
     // Main content line
     let mainText = '';
     let subText = '';
 
     if (action.action === 'search') {
-        mainText = `"${action.query || ''}"`;
+        mainText = `🔍 "${action.query || ''}"`;
         subText = action.result_count != null ? `${action.result_count} result${action.result_count !== 1 ? 's' : ''} found` : '';
     } else {
-        mainText = action.memory_title
-            ? action.memory_title
-            : action.memory_id ? action.memory_id.substring(0, 8) + '…' : '—';
-        const typeLabel = action.memory_type ? `[${action.memory_type}]` : '';
-        const verb = { write: 'Stored', update: 'Updated', delete: 'Deleted', read: 'Read' }[action.action] || action.action;
-        subText = [verb, typeLabel].filter(Boolean).join(' ');
+        if (action.task_id) {
+            mainText = action.task_title || action.task_code || action.task_id.substring(0, 8);
+            const verb = { write: '💾 Created Task', update: '🔄 Updated Task', delete: '🗑️ Deleted Task' }[action.action] || action.action;
+            subText = action.task_code ? `${verb} [${action.task_code}]` : verb;
+        } else {
+            mainText = action.memory_title
+                ? action.memory_title
+                : action.memory_id ? action.memory_id.substring(0, 8) + '…' : '—';
+            const typeLabel = action.memory_type ? `[${action.memory_type}]` : '';
+            const verb = { write: '💾 Stored', update: '🔄 Updated', delete: '🗑️ Deleted', read: '📖 Read' }[action.action] || action.action;
+            subText = [verb, typeLabel].filter(Boolean).join(' ');
+        }
     }
 
     const burst = action.burstCount > 1
@@ -144,14 +162,14 @@ function renderActionBubble(action) {
 
     return `
         <div class="flex flex-col ${s.align} mb-4">
-            <div class="flex items-center gap-1.5 mb-1 px-1 ${isRight ? 'flex-row-reverse' : ''}">
-                <div class="w-5 h-5 rounded-full ${s.align === 'items-start' ? s.bubble : 'bg-gray-300 dark:bg-gray-600'} flex items-center justify-center flex-shrink-0">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">${getActionIcon(action.action)}</svg>
+            <div class="flex items-center gap-1.5 mb-1 px-1">
+                <div class="w-5 h-5 rounded-full ${s.bubble} flex items-center justify-center flex-shrink-0">
+                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">${getActionIcon(action.action)}</svg>
                 </div>
                 <span class="text-xs font-semibold capitalize ${s.label.replace('text-', 'text-').replace('100','500').replace('200','500')}">${action.action}${burst}</span>
             </div>
-            <div class="relative max-w-[85%]">
-                <div class="${s.bubble} rounded-2xl ${isRight ? 'rounded-br-sm' : 'rounded-bl-sm'} px-3 py-2 shadow-sm">
+            <div class="relative max-w-[95%]">
+                <div class="${s.bubble} rounded-2xl rounded-bl-sm px-3 py-2 shadow-sm">
                     <p class="text-sm font-medium leading-snug break-words">${mainText}</p>
                     ${subText ? `<p class="text-xs mt-0.5 ${s.meta}">${subText}</p>` : ''}
                 </div>
@@ -401,6 +419,7 @@ function renderRepoSidebar() {
     document.getElementById('repoSidebarList').innerHTML = renderGroups();
     const mobile = document.getElementById('repoSidebarListMobile');
     if (mobile) mobile.innerHTML = renderGroups();
+    syncStickyOffsets();
 }
 
 async function setCurrentRepo(repo) {
@@ -417,6 +436,7 @@ async function setCurrentRepo(repo) {
         loadMemories(),
         loadRecentActions(),
     ]);
+    syncStickyOffsets();
 }
 
 function openRepoSidebarDrawer() {
@@ -517,6 +537,11 @@ async function checkStatus() {
             dbPathLabel.title = data.dbPath;
         }
 
+        const appVersion = document.getElementById('appVersion');
+        if (appVersion && data.version) {
+            appVersion.textContent = `v${data.version}`;
+        }
+
         const summary = document.getElementById('memorySummaryLabel');
         if (summary) {
             summary.textContent = `${data.memoryCount || 0} memories indexed`;
@@ -561,6 +586,9 @@ async function loadStats() {
     try {
         const url = currentRepo ? `/api/stats?repo=${encodeURIComponent(currentRepo)}` : '/api/stats';
         const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Stats request failed with ${response.status}`);
+        }
         const data = await response.json();
 
         document.getElementById('totalCount').textContent = data.total;
@@ -576,6 +604,7 @@ async function loadStats() {
         updateTimeSeriesChart(data.timeSeries || {});
         updateScatterChart(data.scatterData || []);
         updateTopMemoriesChart(data.topMemories);
+        syncStickyOffsets();
     } catch (err) {
         console.error('Failed to load stats:', err);
     }
@@ -583,38 +612,58 @@ async function loadStats() {
 
 function updateTypeChart(byType) {
     const ctx = document.getElementById('typeChart');
-    if (!window.Chart) {
-        ctx.parentElement.innerHTML = '<div class="p-8 text-center text-gray-500">Chart.js not available</div>';
-        return;
-    }
+    if (!window.Chart || !ctx) return;
     if (charts.typeChart) charts.typeChart.destroy();
 
-    const types = Object.keys(byType || {});
-    const counts = Object.values(byType || {});
+    const isDark = document.documentElement.classList.contains('dark');
+    const counts = [
+        byType?.decision || 0,
+        byType?.mistake || 0,
+        byType?.code_fact || 0,
+        byType?.pattern || 0
+    ];
 
     charts.typeChart = new Chart(ctx, {
-        type: 'pie',
+        type: 'doughnut',
         data: {
-            labels: types.map(t => t.replace('_', ' ')),
+            labels: ['Decision', 'Mistake', 'Code Fact', 'Pattern'],
             datasets: [{
                 data: counts,
-                backgroundColor: ['#38bdf8', '#fb7185', '#a78bfa', '#34d399'],
-                borderColor: 'rgba(255,255,255,0.72)',
-                borderWidth: 2
+                backgroundColor: ['#fb7185', '#c084fc', '#38bdf8', '#34d399'],
+                borderWidth: 2,
+                borderColor: isDark ? '#1e293b' : '#ffffff',
+                hoverOffset: 12
             }]
         },
-        options: { responsive: true, maintainAspectRatio: true }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                    titleColor: isDark ? '#f8fafc' : '#1e293b',
+                    bodyColor: isDark ? '#94a3b8' : '#64748b',
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 10
+                }
+            }
+        }
     });
 }
 
 function updateTopMemoriesChart(memories = []) {
     const ctx = document.getElementById('topMemoriesChart');
     if (!window.Chart) {
-        ctx.parentElement.innerHTML = '<div class="p-8 text-center text-gray-500">Chart.js not available</div>';
+        ctx.parentElement.innerHTML = '<div class="p-4 text-center text-gray-500 text-xs">Chart.js not available</div>';
         return;
     }
     if (charts.topMemoriesChart) charts.topMemoriesChart.destroy();
 
+    const isDark = document.documentElement.classList.contains('dark');
     charts.topMemoriesChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -622,59 +671,263 @@ function updateTopMemoriesChart(memories = []) {
             datasets: [{
                 label: 'Hit Count',
                 data: memories.map(m => m.hit_count || m.importance),
-                backgroundColor: ['#38bdf8', '#60a5fa', '#22d3ee', '#7dd3fc', '#93c5fd', '#67e8f9', '#38bdf8', '#60a5fa', '#22d3ee', '#7dd3fc'],
-                borderRadius: 10
+                backgroundColor: isDark
+                    ? 'rgba(56,189,248,0.45)'
+                    : 'rgba(37,99,235,0.55)',
+                borderColor: isDark ? '#38bdf8' : '#2563eb',
+                borderWidth: 1,
+                borderRadius: 6,
+                borderSkipped: false
             }]
         },
-        options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                    titleColor: isDark ? '#f8fafc' : '#1e293b',
+                    bodyColor: isDark ? '#94a3b8' : '#64748b',
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 8,
+                    cornerRadius: 8
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)', drawBorder: false },
+                    ticks: { color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 } }
+                }
+            }
+        }
     });
 }
 
 function updateTimeSeriesChart(timeSeries) {
     const ctx = document.getElementById('timeSeriesChart');
-    if (!window.Chart) return;
+    if (!window.Chart || !ctx) return;
     if (charts.timeSeriesChart) charts.timeSeriesChart.destroy();
 
-    const labels = Object.keys(timeSeries).slice(-14);
-    const data = Object.values(timeSeries).slice(-14);
+    const labels = Object.keys(timeSeries);
+    const creationData = labels.map(k => (typeof timeSeries[k] === 'object' ? timeSeries[k].write : timeSeries[k]) || 0);
+    const readData = labels.map(k => (typeof timeSeries[k] === 'object' ? timeSeries[k].read : 0) || 0);
+    const searchData = labels.map(k => (typeof timeSeries[k] === 'object' ? timeSeries[k].search : 0) || 0);
+
+    const isDark = document.documentElement.classList.contains('dark');
 
     charts.timeSeriesChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels,
-            datasets: [{
-                label: 'Memories Created',
-                data,
-                borderColor: '#22d3ee',
-                backgroundColor: 'rgba(34, 211, 238, 0.16)',
-                pointBackgroundColor: '#7dd3fc',
-                pointBorderColor: '#e0f2fe',
-                fill: true,
-                tension: 0.35
-            }]
+            labels: labels.map(l => l.split('-').slice(1).join('/')),
+            datasets: [
+                {
+                    label: 'Created',
+                    data: creationData,
+                    borderColor: '#22d3ee',
+                    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Read',
+                    data: readData,
+                    borderColor: '#10b981',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.4,
+                    borderDash: [5, 5]
+                },
+                {
+                    label: 'Search',
+                    data: searchData,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.4,
+                    borderDash: [2, 2]
+                }
+            ]
         },
-        options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    align: 'end',
+                    labels: { 
+                        color: isDark ? '#94a3b8' : '#64748b', 
+                        usePointStyle: true, 
+                        boxWidth: 6,
+                        font: { size: 10, weight: 'bold' }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', drawBorder: false },
+                    ticks: { color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 }, stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 }, maxRotation: 0 }
+                }
+            }
+        }
     });
 }
+
+function showAddMemoryModal() {
+    if (!currentRepo) {
+        showToast('Please select a repository first', 'error');
+        return;
+    }
+    document.getElementById('addMemoryModal').classList.remove('hidden');
+    document.body.classList.add('drawer-open');
+}
+
+function hideAddMemoryModal() {
+    document.getElementById('addMemoryModal').classList.add('hidden');
+    document.body.classList.remove('drawer-open');
+    document.getElementById('addMemoryForm').reset();
+}
+
+function showAddTaskModal() {
+    if (!currentRepo) {
+        showToast('Please select a repository first', 'error');
+        return;
+    }
+    document.getElementById('addTaskModal').classList.remove('hidden');
+    document.body.classList.add('drawer-open');
+}
+
+function hideAddTaskModal() {
+    document.getElementById('addTaskModal').classList.add('hidden');
+    document.body.classList.remove('drawer-open');
+    document.getElementById('addTaskForm').reset();
+}
+
+async function handleMemorySubmit(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const data = Object.fromEntries(formData.entries());
+    data.repo = currentRepo;
+    data.is_global = event.target.is_global.checked;
+    // agent and model are already in data from FormData entries
+
+    try {
+        const res = await fetch('/api/memories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            showToast('Memory added successfully', 'success');
+            hideAddMemoryModal();
+            loadData();
+        } else {
+            const err = await res.json();
+            showToast(err.error || 'Failed to add memory', 'error');
+        }
+    } catch (err) {
+        showToast('Network error', 'error');
+    }
+}
+
+async function handleTaskSubmit(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const data = Object.fromEntries(formData.entries());
+    data.repo = currentRepo;
+
+    try {
+        const res = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (res.ok) {
+            showToast('Task created successfully', 'success');
+            hideAddTaskModal();
+            loadTasks();
+            loadRecentActions();
+        } else {
+            const err = await res.json();
+            showToast(err.error || 'Failed to create task', 'error');
+        }
+    } catch (err) {
+        showToast('Network error', 'error');
+    }
+}
+
+window.showAddMemoryModal = showAddMemoryModal;
+window.hideAddMemoryModal = hideAddMemoryModal;
+window.showAddTaskModal = showAddTaskModal;
+window.hideAddTaskModal = hideAddTaskModal;
+window.handleMemorySubmit = handleMemorySubmit;
+window.handleTaskSubmit = handleTaskSubmit;
 
 function updateScatterChart(scatterData) {
     const ctx = document.getElementById('scatterChart');
     if (!window.Chart) return;
     if (charts.scatterChart) charts.scatterChart.destroy();
 
+    const isDark = document.documentElement.classList.contains('dark');
     charts.scatterChart = new Chart(ctx, {
         type: 'scatter',
         data: {
             datasets: [{
                 label: 'Memories',
                 data: scatterData,
-                backgroundColor: 'rgba(96, 165, 250, 0.85)',
-                borderColor: '#a78bfa',
-                pointRadius: 4.5,
-                pointHoverRadius: 6
+                backgroundColor: isDark ? 'rgba(129,140,248,0.55)' : 'rgba(96,165,250,0.7)',
+                borderColor: isDark ? '#818cf8' : '#6366f1',
+                borderWidth: 1,
+                pointRadius: 5,
+                pointHoverRadius: 7
             }]
         },
-        options: { responsive: true, maintainAspectRatio: true, scales: { x: { title: { display: true, text: 'Importance' }, min: 0, max: 6 }, y: { title: { display: true, text: 'Hit Count' }, beginAtZero: true } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                    titleColor: isDark ? '#f8fafc' : '#1e293b',
+                    bodyColor: isDark ? '#94a3b8' : '#64748b',
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 8,
+                    cornerRadius: 8
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Importance', color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 } },
+                    min: 0, max: 6,
+                    grid: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' },
+                    ticks: { color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 } }
+                },
+                y: {
+                    title: { display: true, text: 'Hit Count', color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 } },
+                    beginAtZero: true,
+                    grid: { color: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' },
+                    ticks: { color: isDark ? '#64748b' : '#94a3b8', font: { size: 10 } }
+                }
+            }
+        }
     });
 }
 
@@ -721,6 +974,7 @@ function renderTableSkeleton() {
                     <tr class="border-b-2 border-gray-200 dark:border-gray-700">
                         <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold"></th>
                         <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Memory</th>
+                        <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Source</th>
                         <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Type</th>
                         <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Priority</th>
                         <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold">Usage</th>
@@ -733,6 +987,7 @@ function renderTableSkeleton() {
                         <tr class="border-b border-gray-100 dark:border-gray-700">
                             <td class="p-3"><div class="skeleton h-4 w-4"></div></td>
                             <td class="p-3"><div class="skeleton h-4 w-52 mb-2"></div><div class="skeleton h-3 w-36"></div></td>
+                            <td class="p-3"><div class="skeleton h-4 w-20 mb-2"></div><div class="skeleton h-3 w-16"></div></td>
                             <td class="p-3"><div class="skeleton h-6 w-20"></div></td>
                             <td class="p-3"><div class="skeleton h-6 w-12 mb-2"></div><div class="skeleton h-3 w-12"></div></td>
                             <td class="p-3"><div class="skeleton h-4 w-16 mb-2"></div><div class="skeleton h-3 w-14"></div></td>
@@ -750,6 +1005,24 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function renderMarkdown(text) {
+    if (!text) return '';
+    if (typeof marked === 'undefined') {
+        // Fallback if marked.js didn't load
+        const div = document.createElement('div');
+        div.textContent = text;
+        return `<pre style="white-space:pre-wrap;font-size:0.85rem;line-height:1.7">${div.innerHTML}</pre>`;
+    }
+    try {
+        marked.setOptions({ breaks: true, gfm: true });
+        return marked.parse(text);
+    } catch (e) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return `<pre style="white-space:pre-wrap">${div.innerHTML}</pre>`;
+    }
 }
 
 function formatDate(dateStr) {
@@ -786,7 +1059,9 @@ function renderTable(memories) {
                 <tr class="border-b-2 border-gray-200 dark:border-gray-700">
                     <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                     <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('title')" data-sort="title">Memory <span class="sort-icon"></span></th>
+                    <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('agent')" data-sort="agent">Source <span class="sort-icon"></span></th>
                     <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('type')" data-sort="type">Type <span class="sort-icon"></span></th>
+
                     <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('importance')" data-sort="importance">Priority <span class="sort-icon"></span></th>
                     <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('hit_count')" data-sort="hit_count">Usage <span class="sort-icon"></span></th>
                     <th class="text-left p-3 bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer" onclick="sortTable('created_at')" data-sort="created_at">Freshness <span class="sort-icon"></span></th>
@@ -811,6 +1086,12 @@ function renderTable(memories) {
                                 <span>${m.scope?.repo || 'Unknown repo'}</span>
                             </div>
                         </td>
+                        <td class="p-3">
+                            <div class="flex flex-col">
+                                <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 truncate max-w-[100px]" title="${m.agent || 'unknown'}">${m.agent || 'unknown'}</span>
+                                <span class="text-[9px] text-gray-400 dark:text-gray-500 truncate max-w-[100px]" title="${m.model || 'unknown'}">${m.model || 'unknown'}</span>
+                            </div>
+                        </td>
                         <td class="p-3"><span class="table-chip type-${m.type}">${formatTypeLabel(m.type)}</span></td>
                         <td class="p-3">
                             <div class="metric-badge ${getImportanceBadgeClass(m.importance)}">${m.importance}/5</div>
@@ -825,9 +1106,9 @@ function renderTable(memories) {
                             <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">Updated ${formatDate(m.updated_at)}</div>
                         </td>
                         <td class="p-3 sticky-actions">
-                            <div class="flex flex-wrap gap-2">
-                                <button onclick="openDrawer('${m.id}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium">Open</button>
-                                <button onclick="startInlineEdit('${m.id}')" class="px-3 py-1.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded hover:bg-amber-200 dark:hover:bg-amber-900/60 text-xs font-medium">Edit</button>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button onclick="openDrawer('${m.id}')" class="btn-open">Open</button>
+                                <button onclick="startInlineEdit('${m.id}')" class="btn-edit-light">Edit</button>
                             </div>
                         </td>
                     </tr>
@@ -910,11 +1191,11 @@ function getImportanceLabel(importance) {
 }
 
 function getImportanceBadgeClass(importance) {
-    if (importance >= 5) return 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200';
-    if (importance >= 4) return 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200';
-    if (importance >= 3) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200';
-    if (importance >= 2) return 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-200';
-    return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+    if (importance >= 5) return 'bg-gradient-to-r from-red-500/10 to-rose-500/10 text-red-700 dark:text-red-300 border-red-400/30';
+    if (importance >= 4) return 'bg-gradient-to-r from-orange-500/10 to-amber-500/10 text-orange-700 dark:text-orange-300 border-orange-400/30';
+    if (importance >= 3) return 'bg-gradient-to-r from-amber-400/10 to-yellow-400/10 text-amber-700 dark:text-amber-300 border-amber-400/30';
+    if (importance >= 2) return 'bg-gradient-to-r from-sky-400/10 to-blue-400/10 text-sky-700 dark:text-sky-300 border-sky-400/30';
+    return 'bg-gradient-to-r from-slate-300/10 to-gray-300/10 text-slate-600 dark:text-slate-400 border-slate-300/30';
 }
 
 function formatUsageCount(hitCount) {
@@ -994,27 +1275,34 @@ function renderDetailPanel(data) {
                 <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Summary</div>
                 <p class="text-sm leading-6 text-gray-700 dark:text-gray-300">${escapeHtml(getContentPreview(data))}</p>
             </div>
-            <div class="grid gap-4 md:grid-cols-2">
+            <div class="grid gap-4 md:grid-cols-3">
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Memory Info</div>
                     <div class="space-y-2 text-sm">
                         <div><strong>Type:</strong> ${formatTypeLabel(data.type)}</div>
-                        <div><strong>ID:</strong> <span class="font-mono">${data.id}</span></div>
-                        <div><strong>Repo:</strong> ${escapeHtml(data.scope?.repo || 'N/A')}</div>
-                        <div><strong>Priority:</strong> ${data.importance}/5 (${getImportanceLabel(data.importance)})</div>
+                        <div><strong>ID:</strong> <span class="font-mono text-[10px]">${data.id}</span></div>
+                        <div><strong>Priority:</strong> ${data.importance}/5</div>
                         <div><strong>Status:</strong> <span class="capitalize px-1.5 py-0.5 rounded ${data.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'}">${data.status}</span></div>
+                    </div>
+                </div>
+                <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Source Info</div>
+                    <div class="space-y-2 text-sm">
+                        <div><strong>Agent:</strong> ${escapeHtml(data.agent || 'unknown')}</div>
+                        <div><strong>Model:</strong> ${escapeHtml(data.model || 'unknown')}</div>
+                        <div><strong>Repo:</strong> ${escapeHtml(data.scope?.repo || 'N/A')}</div>
                     </div>
                 </div>
                 <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Usage</div>
                     <div class="space-y-2 text-sm">
                         <div><strong>Hit Count:</strong> ${data.hit_count || 0}</div>
-                        <div><strong>Recall Count:</strong> ${data.recall_count || 0}</div>
                         <div><strong>Recall Rate:</strong> ${formatRecallRate(data.recall_rate)}</div>
-                        <div><strong>Last Used:</strong> ${data.last_used_at ? new Date(data.last_used_at).toLocaleString() : 'Never'}</div>
+                        <div><strong>Last Used:</strong> ${data.last_used_at ? new Date(data.last_used_at).toLocaleDateString() : 'Never'}</div>
                     </div>
                 </div>
             </div>
+
             ${data.supersedes ? `
                 <div class="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 p-4">
                     <div class="text-xs uppercase tracking-wide text-blue-500 dark:text-blue-400 mb-2">Supersedes</div>
@@ -1032,9 +1320,15 @@ function renderDetailPanel(data) {
                     <div><strong>Expires:</strong> ${data.expires_at ? new Date(data.expires_at).toLocaleString() : 'Never'}</div>
                 </div>
             </div>
-            <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Full Content</div>
-                <pre class="whitespace-pre-wrap text-sm leading-6">${escapeHtml(data.content)}</pre>
+            <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700">
+                    <div class="text-xs uppercase tracking-wide font-bold text-gray-500 dark:text-gray-400">Full Content</div>
+                    <span class="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                        Markdown
+                    </span>
+                </div>
+                <div class="p-4 md:p-5 markdown-body">${renderMarkdown(data.content)}</div>
             </div>
             <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div class="flex items-center justify-between mb-3">
@@ -1083,6 +1377,16 @@ async function openDrawer(id) {
         `;
         document.getElementById('memoryDrawer').classList.remove('hidden');
         document.body.classList.add('drawer-open');
+        
+        // Trigger slide-in animation
+        setTimeout(() => {
+            const aside = document.getElementById('drawerAside');
+            if (aside) {
+                aside.classList.remove('translate-x-full');
+                aside.classList.add('translate-x-0');
+            }
+        }, 10);
+
         const response = await fetch(`/api/memories/${id}?repo=${encodeURIComponent(currentRepo)}`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to load memory');
@@ -1095,10 +1399,20 @@ async function openDrawer(id) {
 }
 
 function closeDrawer() {
-    document.getElementById('memoryDrawer').classList.add('hidden');
-    if (!document.getElementById('repoSidebarDrawer') || document.getElementById('repoSidebarDrawer').classList.contains('hidden')) {
-        document.body.classList.remove('drawer-open');
+    const aside = document.getElementById('drawerAside');
+    if (aside) {
+        aside.classList.remove('translate-x-0');
+        aside.classList.add('translate-x-full');
     }
+
+    // Delay hiding the container until animation completes
+    setTimeout(() => {
+        document.getElementById('memoryDrawer').classList.add('hidden');
+        if (!document.getElementById('repoSidebarDrawer') || document.getElementById('repoSidebarDrawer').classList.contains('hidden')) {
+            document.body.classList.remove('drawer-open');
+        }
+    }, 500);
+
     activeEditMemoryId = null;
     currentDrawerMemoryId = null;
 }
@@ -1265,25 +1579,157 @@ async function loadData() {
     await Promise.all([
         loadStats(),
         loadMemories(),
+        loadTasks(),
         checkStatus(),
         loadRecentActions(),
     ]);
 }
 
-document.getElementById('repoSearchInput').addEventListener('input', () => {
+let currentTasks = [];
+
+async function loadTasks() {
+    if (!currentRepo) return;
+    try {
+        const response = await fetch(`/api/tasks?repo=${encodeURIComponent(currentRepo)}`);
+        const data = await response.json();
+        currentTasks = data.tasks || [];
+        renderTasks();
+    } catch (err) {
+        console.error('Failed to load tasks:', err);
+    }
+}
+
+function renderTasks() {
+    if (!document.getElementById('todoTasks')) return;
+    
+    const todoTasks = currentTasks.filter(t => t.status === 'pending' || t.status === 'blocked');
+    const inProgressTasks = currentTasks.filter(t => t.status === 'in_progress');
+    const completedTasks = currentTasks.filter(t => t.status === 'completed');
+
+    document.getElementById('todoCount').textContent = todoTasks.length;
+    document.getElementById('inProgressCount').textContent = inProgressTasks.length;
+    document.getElementById('completedCount').textContent = completedTasks.length;
+
+    renderTaskColumn('todoTasks', todoTasks);
+    renderTaskColumn('inProgressTasks', inProgressTasks);
+    renderTaskColumn('completedTasks', completedTasks);
+}
+
+function renderTaskColumn(id, tasks) {
+    const container = document.getElementById(id);
+    if (!container) return;
+    
+    if (!tasks || tasks.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-gray-400 text-xs italic bg-gray-50/50 dark:bg-gray-900/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">No tasks</div>';
+        return;
+    }
+
+    container.innerHTML = tasks.map(t => `
+        <div class="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:shadow-md transition-all group">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-600 dark:text-gray-400 font-mono border border-gray-200 dark:border-gray-700">${t.task_code}</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">${t.phase}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    ${t.priority >= 4 ? '<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>' : ''}
+                    <span class="text-[10px] font-bold ${getPriorityColor(t.priority)}">P${t.priority}</span>
+                </div>
+            </div>
+            <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 mb-1">${escapeHtml(t.title)}</h4>
+            <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">${escapeHtml(t.description || '')}</p>
+            ${t.depends_on ? `
+                <div class="mt-2 pt-2 border-t border-gray-50 dark:border-gray-600 flex items-center gap-1.5">
+                    <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                    <span class="text-[10px] font-medium text-amber-600 dark:text-amber-400">Depends on: ${t.depends_on.substring(0, 8)}</span>
+                </div>
+            ` : ''}
+            <div class="mt-3 flex items-center justify-between">
+                <span class="text-[10px] font-mono text-gray-400">${t.id.substring(0, 8)}</span>
+                <span class="text-[10px] text-gray-400">${formatDate(t.created_at)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getPriorityColor(p) {
+    if (p >= 5) return 'text-red-600 dark:text-red-400';
+    if (p >= 4) return 'text-orange-600 dark:text-orange-400';
+    if (p >= 3) return 'text-amber-600 dark:text-amber-400';
+    return 'text-gray-500 dark:text-gray-400';
+}
+
+let currentTab = localStorage.getItem('activeTab') || 'dashboard';
+
+function switchTab(tab) {
+    const dashTab = document.getElementById('dashboardTabBtn');
+    const memTab = document.getElementById('memoriesTabBtn');
+    const taskTab = document.getElementById('tasksTabBtn');
+    const indicator = document.getElementById('tabIndicator');
+    
+    const dashContent = document.getElementById('dashboardContent');
+    const memContent = document.getElementById('memoriesContent');
+    const taskContent = document.getElementById('tasksContent');
+
+    currentTab = tab;
+    localStorage.setItem('activeTab', tab);
+
+    const tabs = [dashTab, memTab, taskTab];
+    const contents = [dashContent, memContent, taskContent];
+    const targetId = tab + 'TabBtn';
+    const targetContentId = tab + 'Content';
+
+    // Update indicator
+    if (indicator) {
+        if (tab === 'dashboard') indicator.style.transform = 'translateX(0)';
+        else if (tab === 'memories') indicator.style.transform = 'translateX(100%)';
+        else if (tab === 'tasks') indicator.style.transform = 'translateX(200%)';
+    }
+
+    // Update button states
+    tabs.forEach(t => {
+        if (t) {
+            if (t.id === targetId) {
+                t.classList.add('text-white');
+                t.classList.remove('text-gray-500', 'dark:text-gray-400');
+            } else {
+                t.classList.remove('text-white');
+                t.classList.add('text-gray-500', 'dark:text-gray-400');
+            }
+        }
+    });
+
+    // Update content visibility
+    contents.forEach(c => {
+        if (c) {
+            if (c.id === targetContentId) {
+                c.classList.remove('hidden');
+            } else {
+                c.classList.add('hidden');
+            }
+        }
+    });
+
+    // Trigger data loads if needed
+    if (tab === 'tasks') loadTasks();
+    if (tab === 'dashboard') loadStats();
+    if (tab === 'memories') loadMemories();
+}
+
+window.loadTasks = loadTasks;
+window.switchTab = switchTab;
+window.charts = charts;
+
+const safeAddEventListener = (id, event, handler) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(event, handler);
+};
+
+safeAddEventListener('repoSearchInput', 'input', () => {
     renderRepoSidebar();
 });
 
-window.setCurrentRepo = setCurrentRepo;
-window.closeRepoSidebarDrawer = closeRepoSidebarDrawer;
-window.togglePinnedRepo = togglePinnedRepo;
-window.startPinnedRepoDrag = startPinnedRepoDrag;
-window.overPinnedRepoDrag = overPinnedRepoDrag;
-window.leavePinnedRepoDrag = leavePinnedRepoDrag;
-window.dropPinnedRepo = dropPinnedRepo;
-window.endPinnedRepoDrag = endPinnedRepoDrag;
-
-document.getElementById('repoSearchInput').addEventListener('keydown', (e) => {
+safeAddEventListener('repoSearchInput', 'keydown', (e) => {
     if (e.key === 'Enter') {
         const firstMatch = availableRepos.find((item) => item.repo.toLowerCase().includes(e.target.value.trim().toLowerCase()));
         if (firstMatch) {
@@ -1292,11 +1738,11 @@ document.getElementById('repoSearchInput').addEventListener('keydown', (e) => {
     }
 });
 
-document.getElementById('repoSearchInputMobile').addEventListener('input', () => {
+safeAddEventListener('repoSearchInputMobile', 'input', () => {
     renderRepoSidebar();
 });
 
-document.getElementById('repoSearchInputMobile').addEventListener('keydown', (e) => {
+safeAddEventListener('repoSearchInputMobile', 'keydown', (e) => {
     if (e.key === 'Enter') {
         const firstMatch = availableRepos.find((item) => item.repo.toLowerCase().includes(e.target.value.trim().toLowerCase()));
         if (firstMatch) {
@@ -1305,26 +1751,28 @@ document.getElementById('repoSearchInputMobile').addEventListener('keydown', (e)
     }
 });
 
-document.getElementById('repoNavToggle').addEventListener('click', () => {
+safeAddEventListener('repoNavToggle', 'click', () => {
     openRepoSidebarDrawer();
 });
 
-document.getElementById('repoSidebarCollapseToggle').addEventListener('click', () => {
+safeAddEventListener('repoSidebarCollapseToggle', 'click', () => {
     toggleRepoSidebarCollapse();
 });
 
-document.getElementById('repoCollapsedSummaryButton').addEventListener('click', () => {
+safeAddEventListener('repoCollapsedSummaryButton', 'click', () => {
     if (isRepoSidebarCollapsed) {
         toggleRepoSidebarCollapse();
     }
 });
+
+window.addEventListener('resize', syncStickyOffsets);
 
 initTheme();
 initRepoSidebarState();
 initPinnedRepos();
 renderRecentActions();
 loadData();
+switchTab(currentTab);
+syncStickyOffsets();
 startCountdown();
 setInterval(checkStatus, 30000);
-
-

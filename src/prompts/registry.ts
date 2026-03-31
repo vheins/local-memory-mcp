@@ -97,5 +97,36 @@ Memory is a permanent record, categorize it properly with tags.`
         }
       }
     ]
+  },
+  "task-management-guidelines": {
+    name: "task-management-guidelines",
+    description: "Best practices for task tracking and progress management",
+    arguments: [],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Guidelines for Task Management:
+
+1. task-manage:
+   - Use 'create' to break down complex user requests into actionable steps at the start of a session.
+   - Use 'phase' to group tasks (e.g., 'research', 'implementation', 'testing').
+   - Use 'priority' (1-5) to highlight critical path items.
+   - Use 'update' to mark progress (in_progress, completed, blocked).
+   - Use 'metadata' to store technical debt notes or implementation details.
+
+2. Resource & Tool Usage:
+   - MANDATORY: Always call 'task-list' at the very start of a new session to understand current progress and avoid duplicating work.
+   - Resource: You can also read 'tasks://current?repo={repo}' for a filtered view of active tasks.
+   - Coordinate: If a task is already 'in_progress', do not attempt to work on it unless specifically asked to collaborate.
+
+3. Workflow Integration:
+   - Plan first: Create tasks for the entire lifecycle (Research -> Strategy -> Execution -> Validation).
+   - Atomic Updates: Update the task status to 'in_progress' immediately BEFORE calling implementation tools.
+   - Finalize: Only mark a task as 'completed' after successful validation (tests passed). If validation fails, mark as 'blocked' or 'pending' with notes in metadata.`
+        }
+      }
+    ]
   }
 };

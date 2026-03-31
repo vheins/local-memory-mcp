@@ -24,17 +24,50 @@ function parseLevel(raw: string | undefined): LogLevel {
 
 const configuredLevel: LogLevel = parseLevel(process.env.LOG_LEVEL?.toLowerCase());
 
+function formatContext(context?: Record<string, unknown>): string {
+  if (!context || Object.keys(context).length === 0) return "";
+  return Object.entries(context)
+    .map(([key, value]) => {
+      if (value === null || value === undefined) return `${key}=null`;
+      const valStr = typeof value === "string" && (value.includes(" ") || value.includes("\"")) 
+        ? JSON.stringify(value) 
+        : String(value);
+      return `${key}=${valStr}`;
+    })
+    .join(" ");
+}
+
+function getMcpIcon(message: string): string {
+  if (message.includes("search")) return "🔍";
+  if (message.includes("store") || message.includes("write")) return "💾";
+  if (message.includes("read") || message.includes("resource")) return "📖";
+  if (message.includes("delete")) return "🗑️";
+  if (message.includes("update")) return "🔄";
+  if (message.includes("acknowledge")) return "✅";
+  if (message.includes("recap")) return "📋";
+  if (message.includes("task")) return "⚡";
+  return "🤖";
+}
+
 function log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
   if (LEVELS[level] < LEVELS[configuredLevel]) return;
 
-  const entry: LogEntry = {
-    level,
-    timestamp: new Date().toISOString(),
-    message,
-    ...(context !== undefined ? { context } : {}),
-  };
-
-  process.stderr.write(JSON.stringify(entry) + "\n");
+  const timestamp = new Date().toISOString();
+  
+  if (message.startsWith("[MCP]")) {
+    const icon = getMcpIcon(message);
+    const action = message.replace("[MCP] ", "").trim();
+    const ctxStr = formatContext(context);
+    
+    // Example: 2026-03-31T07:14:38.745Z 🔍 [MCP] search repo=agentic-dashboard hits=1
+    process.stderr.write(`${timestamp} ${icon} [MCP] ${action.padEnd(7)} ${ctxStr}\n`);
+  } else {
+    const levelStr = level.toUpperCase().padEnd(5);
+    const ctxStr = context ? ` ${JSON.stringify(context)}` : "";
+    
+    // Example: 2026-03-31T07:14:38.745Z [INFO ] Model loaded successfully.
+    process.stderr.write(`${timestamp} [${levelStr}] ${message}${ctxStr}\n`);
+  }
 }
 
 export const logger = {

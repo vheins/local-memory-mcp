@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
+import { randomUUID } from "crypto";
 import os from "os";
 import { MCPClient } from "../mcp/client.js";
 import { SQLiteStore } from "../storage/sqlite.js";
@@ -68,10 +69,10 @@ mcpClient.start().catch((err) => {
 let lastSeenActionId = db.getLastActionId();
 const ACTION_ICONS: Record<string, string> = {
   search: "🔍",
-  read:   "👁 ",
-  write:  "✏️ ",
+  read:   "📖",
+  write:  "💾",
   update: "🔄",
-  delete: "🗑 ",
+  delete: "🗑️ ",
 };
 setInterval(() => {
   try {
@@ -84,7 +85,7 @@ setInterval(() => {
         ? `id=${action.memory_id.substring(0, 8)}`
         : "";
       const hits = action.result_count != null ? ` hits=${action.result_count}` : "";
-      console.log(`${icon} [MCP] ${action.action.padEnd(6)} repo=${action.repo}${detail ? " " + detail : ""}${hits}`);
+      console.log(`${new Date().toISOString()} ${icon} [MCP] ${action.action.padEnd(6)} repo=${action.repo}${detail ? " " + detail : ""}${hits}`);
       lastSeenActionId = action.id;
     }
   } catch {
@@ -95,9 +96,21 @@ setInterval(() => {
 // Health check endpoint
 app.get("/api/health", (req, res) => {
   const stats = db.getStats();
+  
+  // Read version from package.json
+  let version = "0.0.0";
+  try {
+    const pkgPath = path.join(process.cwd(), "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    version = pkg.version;
+  } catch (e) {
+    logger.warn("Could not read version from package.json");
+  }
+
   res.json({
     connected: mcpClient.isConnected(),
     uptime: Math.floor((Date.now() - startTime) / 1000),
+    version,
     memoryCount: stats.total,
     pendingRequests: mcpClient.getPendingCount(),
     dbPath: db.getDbPath()
@@ -159,11 +172,71 @@ app.get("/api/recent-actions", async (req, res) => {
     res.status(500).json({ error: message, actions: [] });
   }
 });
+// Add memory manually
+app.post("/api/memories", async (req, res) => {
+  try {
+    const { repo, type, title, content, importance, tags, is_global, agent, model } = req.body;
+    if (!repo || !type || !content) {
+      return res.status(400).json({ error: "repo, type, and content are required" });
+    }
+    const entry = {
+      id: randomUUID(),
+      repo,
+      type,
+      title: title || "",
+      content,
+      importance: parseInt(importance) || 3,
+      agent: agent || 'manual-user',
+      model: model || 'human',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map((t: string) => t.trim()) : []),
+      is_global: !!is_global,
+      scope: { repo } 
+    };
+    db.insert(entry as any);
+    db.logAction("write", repo, { memoryId: entry.id });
+    res.json({ success: true, id: entry.id });
+  } catch (err: any) {
+    logger.error("Error creating memory", { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add task manually
+app.post("/api/tasks", async (req, res) => {
+  try {
+    const { repo, task_code, phase, title, description, status, priority, depends_on } = req.body;
+    if (!repo || !task_code || !title) {
+      return res.status(400).json({ error: "repo, task_code, and title are required" });
+    }
+    const task = {
+      id: randomUUID(),
+      repo,
+      task_code,
+      phase: phase || "manual",
+      title,
+      description: description || "",
+      status: status || "pending",
+      priority: parseInt(priority) || 3,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      depends_on: depends_on || null
+    };
+    db.insertTask(task);
+    db.logAction("write", repo, { taskId: task.id });
+    res.json({ success: true, id: task.id });
+  } catch (err: any) {
+    logger.error("Error creating task", { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Get statistics
 app.get("/api/stats", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
+    const getMemoryRepo = (memory: any): string | null => memory?.scope?.repo ?? memory?.repo ?? null;
 
     const stats = db.getStats(repo);
 
@@ -193,7 +266,10 @@ app.get("/api/stats", async (req, res) => {
     if (!repo) {
       const repoCounts: Record<string, number> = {};
       for (const memory of allMemories) {
-        const r = memory.scope.repo;
+        const r = getMemoryRepo(memory);
+        if (!r) {
+          continue;
+        }
         repoCounts[r] = (repoCounts[r] || 0) + (memory.hit_count || 0);
       }
       let maxHits = 0;
@@ -213,21 +289,21 @@ app.get("/api/stats", async (req, res) => {
       }
     }
 
-    // Time series - memories per day for last 30 days
+    // Time series - actions per day for last 30 days
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const timeSeries: Record<string, number> = {};
+    const timeSeries: Record<string, any> = {};
     for (let i = 0; i < 30; i++) {
-      const date = new Date(thirtyDaysAgo.getTime() + i * 24 * 60 * 60 * 1000);
+      const date = new Date(thirtyDaysAgo.getTime() + (i + 1) * 24 * 60 * 60 * 1000);
       const key = date.toISOString().split('T')[0];
-      timeSeries[key] = 0;
+      timeSeries[key] = { write: 0, read: 0, search: 0 };
     }
-    for (const m of allMemories) {
-      const created = new Date(m.created_at);
-      if (created >= thirtyDaysAgo) {
-        const key = created.toISOString().split('T')[0];
-        if (timeSeries[key] !== undefined) {
-          timeSeries[key]++;
-        }
+
+    const actionStats = db.getActionStatsByDate(repo, 30);
+    for (const row of actionStats) {
+      if (timeSeries[row.date]) {
+        if (row.action === 'write') timeSeries[row.date].write = row.count;
+        if (row.action === 'read') timeSeries[row.date].read = row.count;
+        if (row.action === 'search') timeSeries[row.date].search = row.count;
       }
     }
 
@@ -364,7 +440,7 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`DASHBOARD_STARTING v${pkg.version}`);
+  console.log(`${new Date().toISOString()} DASHBOARD_STARTING v${pkg.version}`);
   logger.info("MCP Memory Dashboard started", { port: PORT, version: pkg.version });
 });
 
@@ -396,6 +472,24 @@ function condenseRecentActions(actions: RecentAction[], limit: number): Condense
 
   return condensed.slice(0, limit);
 }
+
+// List tasks for a repo
+app.get("/api/tasks", async (req, res) => {
+  try {
+    const repo = req.query.repo as string;
+    const status = req.query.status as string | undefined;
+
+    if (!repo) {
+      return res.status(400).json({ error: "repo parameter is required" });
+    }
+
+    const tasks = db.getTasksByRepo(repo, status);
+    res.json({ tasks });
+  } catch (err: any) {
+    logger.error("Error listing tasks", { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Export project handbook as Markdown
 app.get("/api/export/handbook/:repo", (req, res) => {

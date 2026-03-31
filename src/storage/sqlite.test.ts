@@ -17,6 +17,8 @@ function makeEntry(overrides: Partial<{
   title: string;
   content: string;
   importance: number;
+  agent: string;
+  model: string;
   created_at: string;
   expires_at: string | null;
 }>): MemoryEntry {
@@ -27,6 +29,8 @@ function makeEntry(overrides: Partial<{
     title: overrides.title ?? "Test Memory Title",
     content: overrides.content ?? "sample content for testing purposes",
     importance: overrides.importance ?? 3,
+    agent: overrides.agent ?? "test-agent",
+    model: overrides.model ?? "test-model",
     scope: { repo: overrides.repo ?? "test-repo" },
     created_at: overrides.created_at ?? now,
     updated_at: now,

@@ -64,6 +64,8 @@ export async function handleMemoryStore(
     title: validated.title,
     content: validated.content,
     importance: validated.importance,
+    agent: validated.agent,
+    model: validated.model,
     scope: validated.scope,
     created_at: now,
     updated_at: now,

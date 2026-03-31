@@ -33,6 +33,12 @@ export function listResources() {
         name: "Memory Detail",
         description: "Full content and statistics for a specific memory UUID",
         mimeType: "application/json"
+      },
+      {
+        uri: "tasks://current?repo={repo}",
+        name: "Current Tasks",
+        description: "List of all active tasks (pending, in_progress, blocked) for a specific project",
+        mimeType: "application/json"
       }
     ]
   };
@@ -40,6 +46,25 @@ export function listResources() {
 
 export function readResource(uri: string, db: SQLiteStore) {
   logger.info("[MCP] resource.read", { uri });
+
+  // 6. Current Tasks: tasks://current?repo={repo}
+  if (uri.startsWith("tasks://current?")) {
+    const parsed = new URL(uri.replace("tasks://", "http://tasks/"));
+    const repo = parsed.searchParams.get("repo");
+    if (!repo) throw new Error("Repo parameter is required for tasks://current");
+
+    const tasks = db.getTasksByRepo(repo).filter(t => ["pending", "in_progress", "blocked"].includes(t.status));
+
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify(tasks, null, 2)
+        }
+      ]
+    };
+  }
 
   // 1. Index Resource (Repo specific or Global)
   if (uri === "memory://index" || uri.startsWith("memory://index?")) {
