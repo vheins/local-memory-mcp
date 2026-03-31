@@ -12,6 +12,14 @@ export class RealVectorStore implements VectorStore {
     this.db = db;
   }
 
+  /**
+   * Triggers background loading of the vector model.
+   * Useful for avoiding timeouts on the first search/upsert request.
+   */
+  async initialize(): Promise<void> {
+    await this.getExtractor();
+  }
+
   private async getExtractor(): Promise<FeatureExtractionPipeline> {
     if (!this.extractor) {
       logger.info(`[Vectors] Loading model: ${this.modelName}...`);

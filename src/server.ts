@@ -40,7 +40,13 @@ if (process.argv.includes("doctor")) {
 const db = new SQLiteStore();
 const vectors = new RealVectorStore(db);
 
+// Pre-load vector model in background to avoid initial request timeout
+vectors.initialize().catch(err => {
+  logger.warn("[Server] Initial vector model loading failed. Will retry on first use.", { error: String(err) });
+});
+
 // Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
+// ... (rest of cleanup code) ...
 const expiredArchived = db.archiveExpiredMemories();
 const lowScoreArchived = db.archiveLowScoreMemories();
 const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);
@@ -100,9 +106,10 @@ rl.on("line", async (line) => {
   }
 
   const { id, method, params } = msg;
+  const isNotification = id === undefined || id === null;
 
-  // --- initialize ---
-  if (method === "initialize") {
+  // --- initialize (Request) ---
+  if (method === "initialize" && !isNotification) {
     reply({
       jsonrpc: "2.0",
       id,
@@ -112,19 +119,21 @@ rl.on("line", async (line) => {
         capabilities: CAPABILITIES.capabilities
       }
     });
-
-    reply({
-      jsonrpc: "2.0",
-      method: "notifications/initialized",
-      params: {}
-    });
     return;
   }
 
-  // --- ignore notification ---
-  if (method === "notifications/initialized") return;
+  // --- notifications ---
+  if (isNotification) {
+    // We ignore all notifications by default, especially standard ones
+    if (method === "notifications/initialized") {
+        logger.debug("[Server] Client initialized");
+    } else if (method === "notifications/cancelled") {
+        logger.debug("[Server] Request cancelled by client", { params });
+    }
+    return;
+  }
 
-  // --- route method ---
+  // --- route request ---
   try {
     const result = await handleMethod(method, params);
 
