@@ -1862,14 +1862,18 @@ async function loadCapabilities() {
         const response = await fetch('/api/capabilities');
         const data = await response.json();
         
-        toolsList.innerHTML = data.tools.map(t => `
+        const tools = Array.isArray(data.tools) ? data.tools : [];
+        const resources = Array.isArray(data.resources) ? data.resources : [];
+        const prompts = Array.isArray(data.prompts) ? data.prompts : [];
+
+        toolsList.innerHTML = tools.map(t => `
             <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
                 <div class="font-bold text-xs text-sky-600 dark:text-sky-400 mb-1">${escapeHtml(t.name)}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(t.description)}</p>
             </div>
         `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No tools available</div>';
         
-        resourcesList.innerHTML = data.resources.map(r => `
+        resourcesList.innerHTML = resources.map(r => `
             <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
                 <div class="font-bold text-xs text-indigo-600 dark:text-indigo-400 mb-1">${escapeHtml(r.name)}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(r.description || 'No description')}</p>
@@ -1877,7 +1881,7 @@ async function loadCapabilities() {
             </div>
         `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No resources available</div>';
         
-        promptsList.innerHTML = data.prompts.map(p => `
+        promptsList.innerHTML = prompts.map(p => `
             <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
                 <div class="font-bold text-xs text-emerald-600 dark:text-emerald-400 mb-1">${escapeHtml(p.name)}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(p.description || 'No description')}</p>
@@ -1886,6 +1890,7 @@ async function loadCapabilities() {
         
     } catch (err) {
         console.error('Failed to load capabilities:', err);
+        toolsList.innerHTML = `<div class="text-center py-4 text-red-400 text-xs">Error: ${err.message}</div>`;
     }
 }
 

@@ -9,7 +9,9 @@ import os from "os";
 import { MCPClient } from "../mcp/client.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { logger } from "../utils/logger.js";
-import { CAPABILITIES } from "../capabilities.js";
+import { TOOL_DEFINITIONS } from "../tools/schemas.js";
+import { PROMPTS } from "../prompts/registry.js";
+import { listResources } from "../resources/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"));
@@ -509,10 +511,11 @@ app.get("/api/tasks", async (req, res) => {
 // Get MCP Capabilities (Tools, Resources, Prompts)
 app.get("/api/capabilities", (req, res) => {
   try {
+    const resources = listResources();
     res.json({
-      tools: CAPABILITIES.capabilities.tools?.list || [],
-      resources: CAPABILITIES.capabilities.resources?.list || [],
-      prompts: CAPABILITIES.capabilities.prompts?.list || []
+      tools: TOOL_DEFINITIONS || [],
+      resources: resources.resources || [],
+      prompts: Object.values(PROMPTS) || []
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
