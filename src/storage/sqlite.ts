@@ -621,7 +621,7 @@ export class SQLiteStore {
     stmt.run(...values);
   }
 
-  getTasksByRepo(repo: string, status?: string): any[] {
+  getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number): any[] {
     let query = "SELECT * FROM tasks WHERE repo = ?";
     const params: any[] = [repo];
 
@@ -635,6 +635,15 @@ export class SQLiteStore {
     // 2. Priority for others
     // 3. Created date
     query += " ORDER BY status DESC, priority DESC, created_at ASC";
+    
+    if (limit !== undefined) {
+      query += " LIMIT ?";
+      params.push(limit);
+      if (offset !== undefined) {
+        query += " OFFSET ?";
+        params.push(offset);
+      }
+    }
     
     const rows = this.db.prepare(query).all(...params) as any[];
     return rows.map(r => this.rowToTask(r));

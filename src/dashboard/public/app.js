@@ -6,6 +6,11 @@ let totalPages = 1;
 let totalItems = 0;
 let selectedIds = new Set();
 let currentPaginatedData = [];
+let taskPagination = {
+    todo: { page: 1, pageSize: 20, hasMore: true, loading: false },
+    in_progress: { page: 1, pageSize: 20, hasMore: true, loading: false },
+    completed: { page: 1, pageSize: 20, hasMore: true, loading: false }
+};
 let charts = {};
 let lastSyncTime = Date.now();
 let countdownSeconds = 30;
@@ -1650,50 +1655,94 @@ let currentTasks = [];
 
 async function loadTasks() {
     if (!currentRepo) return;
+    
+    // Reset pagination
+    taskPagination.todo = { page: 1, pageSize: 20, hasMore: true, loading: false };
+    taskPagination.in_progress = { page: 1, pageSize: 20, hasMore: true, loading: false };
+    taskPagination.completed = { page: 1, pageSize: 20, hasMore: true, loading: false };
+
+    // Clear containers
+    document.getElementById('todoTasks').innerHTML = '';
+    document.getElementById('inProgressTasks').innerHTML = '';
+    document.getElementById('completedTasks').innerHTML = '';
+
+    await Promise.all([
+        loadTaskCategory('pending'),
+        loadTaskCategory('in_progress'),
+        loadTaskCategory('completed')
+    ]);
+    
+    setupTaskScrollListeners();
+}
+
+async function loadTaskCategory(status) {
+    const category = status === 'pending' || status === 'blocked' ? 'todo' : status;
+    const pag = taskPagination[category];
+    
+    if (!pag.hasMore || pag.loading) return;
+    
+    pag.loading = true;
+    const containerId = { todo: 'todoTasks', in_progress: 'inProgressTasks', completed: 'completedTasks' }[category];
+    const container = document.getElementById(containerId);
+    
+    // Show loading indicator
+    const loadingId = `loading-${category}`;
+    if (!document.getElementById(loadingId)) {
+        const loader = document.createElement('div');
+        loader.id = loadingId;
+        loader.className = 'py-4 text-center text-gray-400 text-[10px] animate-pulse w-full';
+        loader.textContent = 'Loading more...';
+        container.appendChild(loader);
+    }
+
     try {
-        const response = await fetch(`/api/tasks?repo=${encodeURIComponent(currentRepo)}`);
+        const response = await fetch(`/api/tasks?repo=${encodeURIComponent(currentRepo)}&status=${status}&page=${pag.page}&pageSize=${pag.pageSize}`);
         const data = await response.json();
-        currentTasks = data.tasks || [];
-        renderTasks();
+        
+        const tasks = data.tasks || [];
+        
+        // Remove loader
+        const loader = document.getElementById(loadingId);
+        if (loader) loader.remove();
+
+        if (tasks.length < pag.pageSize) {
+            pag.hasMore = false;
+        }
+
+        renderTaskCards(containerId, tasks, pag.page === 1);
+        pag.page++;
     } catch (err) {
-        console.error('Failed to load tasks:', err);
+        console.error(`Failed to load ${category} tasks:`, err);
+    } finally {
+        pag.loading = false;
     }
 }
 
-function renderTasks() {
-    if (!document.getElementById('todoTasks')) return;
-    
-    const todoTasks = currentTasks
-        .filter(t => t.status === 'pending' || t.status === 'blocked')
-        .sort((a, b) => (b.priority - a.priority) || new Date(a.created_at) - new Date(b.created_at));
+function setupTaskScrollListeners() {
+    ['todoTasks', 'inProgressTasks', 'completedTasks'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
         
-    const inProgressTasks = currentTasks
-        .filter(t => t.status === 'in_progress')
-        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        
-    const completedTasks = currentTasks
-        .filter(t => t.status === 'completed')
-        .sort((a, b) => new Date(b.finished_at || b.updated_at) - new Date(a.finished_at || a.updated_at));
-
-    document.getElementById('todoCount').textContent = todoTasks.length;
-    document.getElementById('inProgressCount').textContent = inProgressTasks.length;
-    document.getElementById('completedCount').textContent = completedTasks.length;
-
-    renderTaskColumn('todoTasks', todoTasks);
-    renderTaskColumn('inProgressTasks', inProgressTasks);
-    renderTaskColumn('completedTasks', completedTasks);
+        el.onscroll = () => {
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
+                const category = id === 'todoTasks' ? 'todo' : (id === 'inProgressTasks' ? 'in_progress' : 'completed');
+                const status = category === 'todo' ? 'pending' : (category === 'in_progress' ? 'in_progress' : 'completed');
+                loadTaskCategory(status);
+            }
+        };
+    });
 }
 
-function renderTaskColumn(id, tasks) {
-    const container = document.getElementById(id);
+function renderTaskCards(containerId, tasks, clear = false) {
+    const container = document.getElementById(containerId);
     if (!container) return;
-    
-    if (!tasks || tasks.length === 0) {
+
+    if (clear && (!tasks || tasks.length === 0)) {
         container.innerHTML = '<div class="text-center py-8 text-gray-400 text-xs italic bg-gray-50/50 dark:bg-gray-900/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">No tasks</div>';
         return;
     }
 
-    container.innerHTML = tasks.map(t => `
+    const html = tasks.map(t => `
         <div class="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:shadow-md transition-all group">
             <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
@@ -1728,6 +1777,12 @@ function renderTaskColumn(id, tasks) {
             </div>
         </div>
     `).join('');
+
+    if (clear) {
+        container.innerHTML = html;
+    } else {
+        container.insertAdjacentHTML('beforeend', html);
+    }
 }
 
 function getPriorityColor(p) {
