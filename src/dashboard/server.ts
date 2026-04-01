@@ -210,7 +210,7 @@ app.post("/api/memories", async (req, res) => {
 // Add task manually
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { repo, task_code, phase, title, description, status, priority, agent, role, depends_on } = req.body;
+    const { repo, task_code, phase, title, description, status, priority, agent, role, doc_path, depends_on } = req.body;
     if (!repo || !task_code || !title) {
       return res.status(400).json({ error: "repo, task_code, and title are required" });
     }
@@ -225,6 +225,7 @@ app.post("/api/tasks", async (req, res) => {
       priority: parseInt(priority) || 3,
       agent: agent || 'manual-user',
       role: role || 'user',
+      doc_path: doc_path || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       depends_on: depends_on || null
@@ -574,6 +575,7 @@ app.post("/api/tasks/import-csv", async (req, res) => {
         if (header === 'status') task.status = values[index] || 'pending';
         if (header === 'agent') task.agent = values[index] || 'csv-import';
         if (header === 'role') task.role = values[index] || 'system';
+        if (header === 'doc_path') task.doc_path = values[index] || null;
       });
 
       if (task.title && task.task_code) {

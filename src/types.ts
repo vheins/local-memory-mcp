@@ -51,6 +51,7 @@ export interface Task {
   priority: TaskPriority;
   agent: string;
   role: string;
+  doc_path: string | null;
   created_at: string;
   updated_at: string;
   finished_at: string | null;

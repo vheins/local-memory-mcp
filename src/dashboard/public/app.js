@@ -1759,6 +1759,15 @@ function renderTaskCards(containerId, tasks, clear = false) {
             <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 mb-1">${escapeHtml(t.title)}</h4>
             <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">${escapeHtml(t.description || '')}</p>
             
+            ${t.doc_path ? `
+                <div class="mb-3">
+                    <a href="${t.doc_path.startsWith('http') ? t.doc_path : '#'}" target="_blank" class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-500 dark:text-gray-400 hover:text-sky-600 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                        <span class="truncate max-w-[150px]">${escapeHtml(t.doc_path)}</span>
+                    </a>
+                </div>
+            ` : ''}
+
             <div class="flex items-center gap-2 mb-3">
                 <div class="px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800 flex items-center gap-1">
                     <span class="text-[9px] font-bold text-sky-600 dark:text-sky-400">${escapeHtml(t.agent || 'unknown')}</span>
@@ -1983,8 +1992,8 @@ async function handleCsvImport(event) {
 }
 
 function downloadCsvTemplate() {
-    const headers = "task_code,phase,title,description,priority,status,agent,role";
-    const example = "TASK-001,research,Integrate CSV,Add import feature to dashboard,4,pending,Gemini CLI,expert";
+    const headers = "task_code,phase,title,description,priority,status,agent,role,doc_path";
+    const example = "TASK-001,research,Integrate CSV,Add import feature to dashboard,4,pending,Gemini CLI,expert,docs/tasks.md";
     const csv = `${headers}\n${example}`;
     
     const blob = new Blob([csv], { type: 'text/csv' });

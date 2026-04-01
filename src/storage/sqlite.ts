@@ -143,6 +143,7 @@ export class SQLiteStore {
         priority INTEGER NOT NULL DEFAULT 3,
         agent TEXT NOT NULL DEFAULT 'unknown',
         role TEXT NOT NULL DEFAULT 'unknown',
+        doc_path TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         finished_at TEXT,
@@ -219,6 +220,7 @@ export class SQLiteStore {
       { name: "completed_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN completed_at TEXT" },
       { name: "agent", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
       { name: "role", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
+      { name: "doc_path", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN doc_path TEXT" },
     ];
 
     for (const col of columnsToAdd) {
@@ -569,8 +571,8 @@ export class SQLiteStore {
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
         id, repo, task_code, phase, title, description, status, priority,
-        agent, role, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -584,6 +586,7 @@ export class SQLiteStore {
       task.priority || 3,
       task.agent || 'unknown',
       task.role || 'unknown',
+      task.doc_path || null,
       task.created_at,
       task.updated_at,
       task.finished_at || null,
@@ -686,6 +689,7 @@ export class SQLiteStore {
       ...row,
       agent: row.agent || 'unknown',
       role: row.role || 'unknown',
+      doc_path: row.doc_path || null,
       tags,
       metadata
     };

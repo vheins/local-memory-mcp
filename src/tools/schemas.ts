@@ -89,6 +89,7 @@ export const TaskManageSchema = z.object({
   priority: TaskPrioritySchema.optional(),
   agent: z.string().optional(),
   role: z.string().optional(),
+  doc_path: z.string().optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   parent_id: z.string().uuid().optional(),
@@ -330,6 +331,10 @@ export const TOOL_DEFINITIONS = [
         role: {
           type: "string",
           description: "Role of the agent"
+        },
+        doc_path: {
+          type: "string",
+          description: "Path or URL to the relevant documentation for this task"
         },
         tags: {
           type: "array",
