@@ -649,6 +649,27 @@ export class SQLiteStore {
     return rows.map(r => this.rowToTask(r));
   }
 
+  getTasksByMultipleStatuses(repo: string, statuses: string[], limit?: number, offset?: number): any[] {
+    if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset);
+    
+    let query = `SELECT * FROM tasks WHERE repo = ? AND status IN (${statuses.map(() => '?').join(',')})`;
+    const params: any[] = [repo, ...statuses];
+
+    query += " ORDER BY priority DESC, created_at ASC";
+    
+    if (limit !== undefined) {
+      query += " LIMIT ?";
+      params.push(limit);
+      if (offset !== undefined) {
+        query += " OFFSET ?";
+        params.push(offset);
+      }
+    }
+    
+    const rows = this.db.prepare(query).all(...params) as any[];
+    return rows.map(r => this.rowToTask(r));
+  }
+
   deleteTask(id: string): void {
     this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
   }

@@ -494,7 +494,7 @@ function condenseRecentActions(actions: RecentAction[], limit: number): Condense
 app.get("/api/tasks", async (req, res) => {
   try {
     const repo = req.query.repo as string;
-    const status = req.query.status as string | undefined;
+    const statusQuery = req.query.status as string | undefined;
     const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || "20", 10)));
 
@@ -503,7 +503,16 @@ app.get("/api/tasks", async (req, res) => {
     }
 
     const offset = (page - 1) * pageSize;
-    const tasks = db.getTasksByRepo(repo, status, pageSize, offset);
+    
+    // Support multiple statuses separated by comma
+    let tasks;
+    if (statusQuery && statusQuery.includes(',')) {
+      const statuses = statusQuery.split(',').map(s => s.trim());
+      tasks = db.getTasksByMultipleStatuses(repo, statuses, pageSize, offset);
+    } else {
+      tasks = db.getTasksByRepo(repo, statusQuery, pageSize, offset);
+    }
+    
     res.json({ tasks, page, pageSize });
   } catch (err: any) {
     logger.error("Error listing tasks", { error: err.message });

@@ -8,7 +8,12 @@ export async function handleTaskList(
   storage: SQLiteStore
 ) {
   const { repo, status, phase } = TaskListSchema.parse(args);
-  const tasks = storage.getTasksByRepo(repo, status);
+  
+  // Fetch tasks. If no status filter provided, exclude 'completed' by default to keep context clean for agents.
+  let tasks = storage.getTasksByRepo(repo, status);
+  if (!status) {
+    tasks = tasks.filter((t: any) => t.status !== 'completed');
+  }
   
   const filteredTasks = phase 
     ? tasks.filter((t: any) => t.phase.toLowerCase() === phase.toLowerCase()) 

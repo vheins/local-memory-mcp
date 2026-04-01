@@ -1667,7 +1667,7 @@ async function loadTasks() {
     document.getElementById('completedTasks').innerHTML = '';
 
     await Promise.all([
-        loadTaskCategory('pending'),
+        loadTaskCategory('pending,blocked,canceled'),
         loadTaskCategory('in_progress'),
         loadTaskCategory('completed')
     ]);
@@ -1676,7 +1676,7 @@ async function loadTasks() {
 }
 
 async function loadTaskCategory(status) {
-    const category = status === 'pending' || status === 'blocked' ? 'todo' : status;
+    const category = (status.includes('pending') || status.includes('blocked') || status.includes('canceled')) ? 'todo' : (status === 'in_progress' ? 'in_progress' : 'completed');
     const pag = taskPagination[category];
     
     if (!pag.hasMore || pag.loading) return;
@@ -1726,7 +1726,7 @@ function setupTaskScrollListeners() {
         el.onscroll = () => {
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
                 const category = id === 'todoTasks' ? 'todo' : (id === 'inProgressTasks' ? 'in_progress' : 'completed');
-                const status = category === 'todo' ? 'pending' : (category === 'in_progress' ? 'in_progress' : 'completed');
+                const status = category === 'todo' ? 'pending,blocked,canceled' : (category === 'in_progress' ? 'in_progress' : 'completed');
                 loadTaskCategory(status);
             }
         };
@@ -1748,6 +1748,8 @@ function renderTaskCards(containerId, tasks, clear = false) {
                 <div class="flex items-center gap-2">
                     <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-600 dark:text-gray-400 font-mono border border-gray-200 dark:border-gray-700">${t.task_code}</span>
                     <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400">${t.phase}</span>
+                    ${t.status === 'blocked' ? '<span class="px-1 py-0.5 rounded bg-red-500 text-white text-[8px] font-bold uppercase">Blocked</span>' : ''}
+                    ${t.status === 'canceled' ? '<span class="px-1 py-0.5 rounded bg-slate-500 text-white text-[8px] font-bold uppercase">Canceled</span>' : ''}
                 </div>
                 <div class="flex items-center gap-1">
                     ${t.priority >= 4 ? '<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>' : ''}
