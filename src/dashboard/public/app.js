@@ -1743,25 +1743,27 @@ function switchTab(tab) {
     const dashTab = document.getElementById('dashboardTabBtn');
     const memTab = document.getElementById('memoriesTabBtn');
     const taskTab = document.getElementById('tasksTabBtn');
+    const refTab = document.getElementById('referenceTabBtn');
     const indicator = document.getElementById('tabIndicator');
-    
+
     const dashContent = document.getElementById('dashboardContent');
     const memContent = document.getElementById('memoriesContent');
     const taskContent = document.getElementById('tasksContent');
+    const refContent = document.getElementById('referenceContent');
 
     currentTab = tab;
     localStorage.setItem('activeTab', tab);
 
-    const tabs = [dashTab, memTab, taskTab];
-    const contents = [dashContent, memContent, taskContent];
-    const targetId = tab + 'TabBtn';
+    const tabs = [dashTab, memTab, taskTab, refTab];
+    const contents = [dashContent, memContent, taskContent, refContent];    const targetId = tab + 'TabBtn';
     const targetContentId = tab + 'Content';
 
     // Update indicator
     if (indicator) {
         if (tab === 'dashboard') indicator.style.transform = 'translateX(0)';
-        else if (tab === 'memories') indicator.style.transform = 'translateX(100%)';
-        else if (tab === 'tasks') indicator.style.transform = 'translateX(200%)';
+        if (tab === 'memories') indicator.style.transform = 'translateX(100%)';
+        if (tab === 'tasks') indicator.style.transform = 'translateX(200%)';
+        if (tab === 'reference') indicator.style.transform = 'translateX(300%)';
     }
 
     // Update button states
@@ -1792,6 +1794,8 @@ function switchTab(tab) {
     if (tab === 'tasks') loadTasks();
     if (tab === 'dashboard') loadStats();
     if (tab === 'memories') loadMemories();
+    if (tab === 'reference') loadCapabilities();
+    syncStickyOffsets();
 }
 
 window.loadTasks = loadTasks;
@@ -1844,6 +1848,95 @@ safeAddEventListener('repoCollapsedSummaryButton', 'click', () => {
 });
 
 window.addEventListener('resize', syncStickyOffsets);
+
+async function loadCapabilities() {
+    const toolsList = document.getElementById('toolsList');
+    const resourcesList = document.getElementById('resourcesList');
+    const promptsList = document.getElementById('promptsList');
+    
+    if (!toolsList) return;
+    
+    toolsList.innerHTML = '<div class="text-center py-4 text-gray-400 text-xs">Loading capabilities...</div>';
+    
+    try {
+        const response = await fetch('/api/capabilities');
+        const data = await response.json();
+        
+        toolsList.innerHTML = data.tools.map(t => `
+            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
+                <div class="font-bold text-xs text-sky-600 dark:text-sky-400 mb-1">${escapeHtml(t.name)}</div>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(t.description)}</p>
+            </div>
+        `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No tools available</div>';
+        
+        resourcesList.innerHTML = data.resources.map(r => `
+            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
+                <div class="font-bold text-xs text-indigo-600 dark:text-indigo-400 mb-1">${escapeHtml(r.name)}</div>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(r.description || 'No description')}</p>
+                <div class="text-[8px] font-mono text-gray-400 mt-1 truncate">${escapeHtml(r.uri)}</div>
+            </div>
+        `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No resources available</div>';
+        
+        promptsList.innerHTML = data.prompts.map(p => `
+            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
+                <div class="font-bold text-xs text-emerald-600 dark:text-emerald-400 mb-1">${escapeHtml(p.name)}</div>
+                <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(p.description || 'No description')}</p>
+            </div>
+        `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No prompts available</div>';
+        
+    } catch (err) {
+        console.error('Failed to load capabilities:', err);
+    }
+}
+
+async function handleCsvImport(event) {
+    const file = event.target.files[0];
+    if (!file || !currentRepo) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const csvData = e.target.result;
+        try {
+            const response = await fetch('/api/tasks/import-csv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repo: currentRepo, csvData })
+            });
+            const result = await response.json();
+            if (result.success) {
+                showToast(`Successfully imported ${result.count} tasks`, 'success');
+                loadTasks();
+                loadStats();
+            } else {
+                showToast(result.error || 'Failed to import CSV', 'error');
+            }
+        } catch (err) {
+            showToast('Import failed: ' + err.message, 'error');
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; 
+}
+
+function downloadCsvTemplate() {
+    const headers = "task_code,phase,title,description,priority,status,agent,role";
+    const example = "TASK-001,research,Integrate CSV,Add import feature to dashboard,4,pending,Gemini CLI,expert";
+    const csv = `${headers}\n${example}`;
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', 'task_template.csv');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+window.handleCsvImport = handleCsvImport;
+window.downloadCsvTemplate = downloadCsvTemplate;
+window.loadCapabilities = loadCapabilities;
 
 initTheme();
 initRepoSidebarState();

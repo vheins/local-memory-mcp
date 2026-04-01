@@ -9,6 +9,7 @@ import os from "os";
 import { MCPClient } from "../mcp/client.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { logger } from "../utils/logger.js";
+import { CAPABILITIES } from "../capabilities.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"));
@@ -501,6 +502,75 @@ app.get("/api/tasks", async (req, res) => {
     res.json({ tasks });
   } catch (err: any) {
     logger.error("Error listing tasks", { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get MCP Capabilities (Tools, Resources, Prompts)
+app.get("/api/capabilities", (req, res) => {
+  try {
+    res.json({
+      tools: CAPABILITIES.capabilities.tools?.list || [],
+      resources: CAPABILITIES.capabilities.resources?.list || [],
+      prompts: CAPABILITIES.capabilities.prompts?.list || []
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import tasks from CSV
+app.post("/api/tasks/import-csv", async (req, res) => {
+  try {
+    const { repo, csvData } = req.body;
+    if (!repo || !csvData) {
+      return res.status(400).json({ error: "repo and csvData are required" });
+    }
+
+    const lines = csvData.split('\n');
+    if (lines.length < 2) return res.json({ success: true, count: 0 });
+
+    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
+    const tasks = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      // Simple CSV split (doesn't handle quotes with commas, but good enough for this)
+      const values = lines[i].split(',').map((v: string) => v.trim());
+      const task: any = {
+        id: randomUUID(),
+        repo,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'pending',
+        priority: 3,
+        agent: 'csv-import',
+        role: 'system'
+      };
+
+      headers.forEach((header: string, index: number) => {
+        if (values[index] === undefined) return;
+        if (header === 'task_code') task.task_code = values[index];
+        if (header === 'phase') task.phase = values[index];
+        if (header === 'title') task.title = values[index];
+        if (header === 'description') task.description = values[index];
+        if (header === 'priority') task.priority = parseInt(values[index]) || 3;
+        if (header === 'status') task.status = values[index] || 'pending';
+        if (header === 'agent') task.agent = values[index] || 'csv-import';
+        if (header === 'role') task.role = values[index] || 'system';
+      });
+
+      if (task.title && task.task_code) {
+        db.insertTask(task);
+        tasks.push(task);
+      }
+    }
+
+    db.logAction("write", repo, { resultCount: tasks.length, query: "CSV Import" });
+    res.json({ success: true, count: tasks.length });
+  } catch (err: any) {
+    logger.error("Error importing tasks", { error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
