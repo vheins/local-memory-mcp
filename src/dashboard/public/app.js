@@ -1849,6 +1849,8 @@ safeAddEventListener('repoCollapsedSummaryButton', 'click', () => {
 
 window.addEventListener('resize', syncStickyOffsets);
 
+let currentCapabilities = { tools: [], resources: [], prompts: [] };
+
 async function loadCapabilities() {
     const toolsList = document.getElementById('toolsList');
     const resourcesList = document.getElementById('resourcesList');
@@ -1862,28 +1864,28 @@ async function loadCapabilities() {
         const response = await fetch('/api/capabilities');
         const data = await response.json();
         
-        const tools = Array.isArray(data.tools) ? data.tools : [];
-        const resources = Array.isArray(data.resources) ? data.resources : [];
-        const prompts = Array.isArray(data.prompts) ? data.prompts : [];
+        currentCapabilities.tools = Array.isArray(data.tools) ? data.tools : [];
+        currentCapabilities.resources = Array.isArray(data.resources) ? data.resources : [];
+        currentCapabilities.prompts = Array.isArray(data.prompts) ? data.prompts : [];
 
-        toolsList.innerHTML = tools.map(t => `
-            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
-                <div class="font-bold text-xs text-sky-600 dark:text-sky-400 mb-1">${escapeHtml(t.name)}</div>
+        toolsList.innerHTML = currentCapabilities.tools.map(t => `
+            <div onclick="showCapabilityDetail('tools', '${t.name}')" class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg cursor-pointer hover:border-sky-500/50 transition-all group">
+                <div class="font-bold text-xs text-sky-600 dark:text-sky-400 mb-1 group-hover:text-sky-500">${escapeHtml(t.name)}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(t.description)}</p>
             </div>
         `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No tools available</div>';
         
-        resourcesList.innerHTML = resources.map(r => `
-            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
-                <div class="font-bold text-xs text-indigo-600 dark:text-indigo-400 mb-1">${escapeHtml(r.name)}</div>
+        resourcesList.innerHTML = currentCapabilities.resources.map(r => `
+            <div onclick="showCapabilityDetail('resources', '${r.name}')" class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-all group">
+                <div class="font-bold text-xs text-indigo-600 dark:text-indigo-400 mb-1 group-hover:text-indigo-500">${escapeHtml(r.name)}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(r.description || 'No description')}</p>
                 <div class="text-[8px] font-mono text-gray-400 mt-1 truncate">${escapeHtml(r.uri)}</div>
             </div>
         `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No resources available</div>';
         
-        promptsList.innerHTML = prompts.map(p => `
-            <div class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg">
-                <div class="font-bold text-xs text-emerald-600 dark:text-emerald-400 mb-1">${escapeHtml(p.name)}</div>
+        promptsList.innerHTML = currentCapabilities.prompts.map(p => `
+            <div onclick="showCapabilityDetail('prompts', '${p.name}')" class="p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-lg cursor-pointer hover:border-emerald-500/50 transition-all group">
+                <div class="font-bold text-xs text-emerald-600 dark:text-emerald-400 mb-1 group-hover:text-emerald-500">${escapeHtml(p.name)}</div>
                 <p class="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2">${escapeHtml(p.description || 'No description')}</p>
             </div>
         `).join('') || '<div class="text-center py-4 text-gray-400 text-xs">No prompts available</div>';
@@ -1939,9 +1941,70 @@ function downloadCsvTemplate() {
     document.body.removeChild(a);
 }
 
+function showCapabilityDetail(type, name) {
+    const item = currentCapabilities[type].find(i => i.name === name);
+    if (!item) return;
+
+    const drawer = document.getElementById('memoryDrawer');
+    const title = document.getElementById('drawerTitle');
+    const body = document.getElementById('drawerBody');
+
+    title.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)}: ${name}`;
+    
+    let contentHtml = `
+        <div class="space-y-6">
+            <div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">Description</h4>
+                <p class="text-sm text-slate-600 dark:text-slate-300">${escapeHtml(item.description || 'No description')}</p>
+            </div>
+    `;
+
+    if (type === 'tools' && item.inputSchema) {
+        contentHtml += `
+            <div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">Input Schema</h4>
+                <pre class="text-[10px] font-mono text-sky-600 dark:text-sky-400 overflow-x-auto">${JSON.stringify(item.inputSchema, null, 2)}</pre>
+            </div>
+        `;
+    }
+
+    if (type === 'resources' && item.uri) {
+        contentHtml += `
+            <div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">URI</h4>
+                <code class="text-xs font-mono text-indigo-600 dark:text-indigo-400">${escapeHtml(item.uri)}</code>
+            </div>
+        `;
+    }
+
+    if (type === 'prompts' && item.arguments) {
+        contentHtml += `
+            <div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">Arguments</h4>
+                <div class="space-y-3">
+                    ${item.arguments.map(arg => `
+                        <div class="border-l-2 border-emerald-500 pl-3 py-1">
+                            <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400">${escapeHtml(arg.name)} ${arg.required ? '<span class="text-[8px] bg-emerald-500 text-white px-1 rounded">REQUIRED</span>' : ''}</div>
+                            <div class="text-[10px] text-gray-500 dark:text-gray-400">${escapeHtml(arg.description || '')}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    contentHtml += `</div>`;
+    body.innerHTML = contentHtml;
+    
+    drawer.classList.remove('hidden');
+    document.body.classList.add('drawer-open');
+    setTimeout(() => document.getElementById('drawerAside').classList.remove('translate-x-full'), 10);
+}
+
 window.handleCsvImport = handleCsvImport;
 window.downloadCsvTemplate = downloadCsvTemplate;
 window.loadCapabilities = loadCapabilities;
+window.showCapabilityDetail = showCapabilityDetail;
 
 initTheme();
 initRepoSidebarState();
