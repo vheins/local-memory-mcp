@@ -22,9 +22,7 @@ export class RealVectorStore implements VectorStore {
 
   private async getExtractor(): Promise<FeatureExtractionPipeline> {
     if (!this.extractor) {
-      logger.info(`[Vectors] Loading model: ${this.modelName}...`);
       this.extractor = await pipeline("feature-extraction", this.modelName);
-      logger.info(`[Vectors] Model loaded successfully.`);
     }
     return this.extractor;
   }

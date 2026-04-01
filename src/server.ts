@@ -10,29 +10,29 @@ import path from "path";
 
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
-  console.log("\n🏥 MCP Local Memory - System Diagnosis\n");
+  process.stderr.write("\n🏥 MCP Local Memory - System Diagnosis\n\n");
   
   const db = new SQLiteStore();
   const dbPath = db.getDbPath();
   
-  console.log(`📂 Database Path: ${dbPath}`);
-  console.log(`📄 Database Status: ${fs.existsSync(dbPath) ? "✅ Exists" : "❌ Not Found"}`);
+  process.stderr.write(`📂 Database Path: ${dbPath}\n`);
+  process.stderr.write(`📄 Database Status: ${fs.existsSync(dbPath) ? "✅ Exists" : "❌ Not Found"}\n`);
   
   try {
     const stats = db.getStats();
-    console.log(`📊 Memory Count: ${stats.total} entries`);
-    console.log(`✅ SQLite Connection: Functional`);
+    process.stderr.write(`📊 Memory Count: ${stats.total} entries\n`);
+    process.stderr.write(`✅ SQLite Connection: Functional\n`);
   } catch (err) {
-    console.log(`❌ SQLite Connection: Failed (${String(err)})`);
+    process.stderr.write(`❌ SQLite Connection: Failed (${String(err)})\n`);
   }
 
-  console.log(`🤖 AI Model: Xenova/all-MiniLM-L6-v2`);
-  console.log(`⚙️  Mode: Local-First (ONNX Runtime)`);
+  process.stderr.write(`🤖 AI Model: Xenova/all-MiniLM-L6-v2\n`);
+  process.stderr.write(`⚙️  Mode: Local-First (ONNX Runtime)\n`);
   
   const isAutoArchive = process.env.ENABLE_AUTO_ARCHIVE === "true";
-  console.log(`📉 Auto-Archive: ${isAutoArchive ? "Enabled" : "Disabled (Default)"}`);
+  process.stderr.write(`📉 Auto-Archive: ${isAutoArchive ? "Enabled" : "Disabled (Default)"}\n`);
   
-  console.log("\n✨ Diagnosis complete.\n");
+  process.stderr.write("\n✨ Diagnosis complete.\n\n");
   process.exit(0);
 }
 
