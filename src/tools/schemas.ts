@@ -17,6 +17,7 @@ export const MemoryStoreSchema = z.object({
   content: z.string().min(10),
   importance: z.number().min(1).max(5),
   agent: z.string().min(1),
+  role: z.string().optional().default("unknown"),
   model: z.string().min(1),
   scope: MemoryScopeSchema,
   ttlDays: z.number().min(1).optional(),
@@ -30,12 +31,15 @@ export const MemoryUpdateSchema = z.object({
   title: z.string().min(3).max(100).optional(),
   content: z.string().min(10).optional(),
   importance: z.number().min(1).max(5).optional(),
+  agent: z.string().optional(),
+  role: z.string().optional(),
   status: z.enum(["active", "archived"]).optional(),
   supersedes: z.string().uuid().optional(),
   tags: z.array(z.string()).optional(),
-  is_global: z.boolean().optional()
+  is_global: z.boolean().optional(),
+  completed_at: z.string().optional()
 }).refine(
-  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined || data.tags !== undefined || data.is_global !== undefined,
+  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined || data.tags !== undefined || data.is_global !== undefined || data.agent !== undefined || data.role !== undefined || data.completed_at !== undefined,
   { message: "At least one field must be provided for update" }
 );
 
@@ -83,6 +87,8 @@ export const TaskManageSchema = z.object({
   description: z.string().optional(),
   status: TaskStatusSchema.optional(),
   priority: TaskPrioritySchema.optional(),
+  agent: z.string().optional(),
+  role: z.string().optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   parent_id: z.string().uuid().optional(),
@@ -316,6 +322,14 @@ export const TOOL_DEFINITIONS = [
           minimum: 1,
           maximum: 5,
           description: "Task priority (1-5, default 3)"
+        },
+        agent: {
+          type: "string",
+          description: "Agent who created/is working on the task"
+        },
+        role: {
+          type: "string",
+          description: "Role of the agent"
         },
         tags: {
           type: "array",

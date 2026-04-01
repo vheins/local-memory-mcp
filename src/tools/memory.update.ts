@@ -23,10 +23,13 @@ export async function handleMemoryUpdate(
   if (validated.title !== undefined) updates.title = validated.title;
   if (validated.content !== undefined) updates.content = validated.content;
   if (validated.importance !== undefined) updates.importance = validated.importance;
+  if (validated.agent !== undefined) updates.agent = validated.agent;
+  if (validated.role !== undefined) updates.role = validated.role;
   if (validated.status !== undefined) updates.status = validated.status;
   if (validated.supersedes !== undefined) updates.supersedes = validated.supersedes;
   if (validated.tags !== undefined) updates.tags = validated.tags;
   if (validated.is_global !== undefined) updates.is_global = validated.is_global;
+  if (validated.completed_at !== undefined) updates.completed_at = validated.completed_at;
 
   db.update(validated.id, updates);
 

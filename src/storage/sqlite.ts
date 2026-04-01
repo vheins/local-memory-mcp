@@ -104,7 +104,9 @@ export class SQLiteStore {
         recall_count INTEGER NOT NULL DEFAULT 0,
         last_used_at TEXT,
         agent TEXT NOT NULL DEFAULT 'unknown',
-        model TEXT NOT NULL DEFAULT 'unknown'
+        role TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown',
+        completed_at TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_memories_repo ON memories(repo);
@@ -139,6 +141,8 @@ export class SQLiteStore {
         description TEXT,
         status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'canceled', 'blocked')),
         priority INTEGER NOT NULL DEFAULT 3,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        role TEXT NOT NULL DEFAULT 'unknown',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         finished_at TEXT,
@@ -174,7 +178,9 @@ export class SQLiteStore {
         expires_at TEXT,
         archived_at TEXT NOT NULL,
         agent TEXT NOT NULL DEFAULT 'unknown',
-        model TEXT NOT NULL DEFAULT 'unknown'
+        role TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown',
+        completed_at TEXT
       );
 
       CREATE TABLE IF NOT EXISTS action_log (
@@ -208,7 +214,11 @@ export class SQLiteStore {
       { name: "task_code", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN task_code TEXT" },
       { name: "task_id", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN task_id TEXT" },
       { name: "agent", table: "memories", definition: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
+      { name: "role", table: "memories", definition: "ALTER TABLE memories ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
       { name: "model", table: "memories", definition: "ALTER TABLE memories ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'" },
+      { name: "completed_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN completed_at TEXT" },
+      { name: "agent", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
+      { name: "role", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
     ];
 
     for (const col of columnsToAdd) {
@@ -242,8 +252,8 @@ export class SQLiteStore {
       INSERT INTO memories (
         id, repo, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
-        supersedes, status, is_global, tags, agent, model
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?)
+        supersedes, status, is_global, tags, agent, role, model, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -263,7 +273,9 @@ export class SQLiteStore {
       entry.is_global ? 1 : 0,
       entry.tags ? JSON.stringify(entry.tags) : null,
       entry.agent || 'unknown',
-      entry.model || 'unknown'
+      entry.role || 'unknown',
+      entry.model || 'unknown',
+      entry.completed_at || null
     );
   }
 
@@ -505,10 +517,17 @@ export class SQLiteStore {
     const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`);
     const total = (countStmt.get(...params) as any).count;
 
+    let orderBy = "";
+    if (sortBy && sortOrder) {
+      orderBy = `ORDER BY ${sortBy} ${sortOrder}`;
+    } else {
+      orderBy = `ORDER BY importance DESC, created_at ASC`;
+    }
+
     const dataStmt = this.db.prepare(`
       SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
       FROM memories WHERE ${where.join(" AND ")}
-      ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?
+      ${orderBy} LIMIT ? OFFSET ?
     `);
     const rows = dataStmt.all(...params, limit, offset) as any[];
     const items = rows.map(row => ({
@@ -550,8 +569,8 @@ export class SQLiteStore {
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
         id, repo, task_code, phase, title, description, status, priority,
-        created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        agent, role, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -563,6 +582,8 @@ export class SQLiteStore {
       task.description || null,
       task.status || "pending",
       task.priority || 3,
+      task.agent || 'unknown',
+      task.role || 'unknown',
       task.created_at,
       task.updated_at,
       task.finished_at || null,
@@ -609,7 +630,11 @@ export class SQLiteStore {
       params.push(status);
     }
 
-    query += " ORDER BY priority DESC, created_at ASC";
+    // Default sorting logic for the unified list:
+    // 1. Completed tasks at the bottom (or top if specified)
+    // 2. Priority for others
+    // 3. Created date
+    query += " ORDER BY status DESC, priority DESC, created_at ASC";
     
     const rows = this.db.prepare(query).all(...params) as any[];
     return rows.map(r => this.rowToTask(r));
@@ -629,6 +654,8 @@ export class SQLiteStore {
 
     return {
       ...row,
+      agent: row.agent || 'unknown',
+      role: row.role || 'unknown',
       tags,
       metadata
     };
@@ -728,9 +755,12 @@ export class SQLiteStore {
     return {
       id: row.id, type: row.type, title: row.title || "Untitled", content: row.content, importance: row.importance,
       agent: row.agent || 'unknown',
+      role: row.role || 'unknown',
       model: row.model || 'unknown',
       scope: { repo: row.repo, folder: row.folder || undefined, language: row.language || undefined },
-      created_at: row.created_at, updated_at: row.updated_at, hit_count: row.hit_count ?? 0, recall_count: row.recall_count ?? 0,
+      created_at: row.created_at, updated_at: row.updated_at, 
+      completed_at: row.completed_at || null,
+      hit_count: row.hit_count ?? 0, recall_count: row.recall_count ?? 0,
       last_used_at: row.last_used_at ?? null, expires_at: row.expires_at ?? null, supersedes: row.supersedes ?? null, status: row.status || "active",
       is_global: row.is_global === 1, tags
     };

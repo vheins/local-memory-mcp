@@ -175,7 +175,7 @@ app.get("/api/recent-actions", async (req, res) => {
 // Add memory manually
 app.post("/api/memories", async (req, res) => {
   try {
-    const { repo, type, title, content, importance, tags, is_global, agent, model } = req.body;
+    const { repo, type, title, content, importance, tags, is_global, agent, role, model } = req.body;
     if (!repo || !type || !content) {
       return res.status(400).json({ error: "repo, type, and content are required" });
     }
@@ -187,6 +187,7 @@ app.post("/api/memories", async (req, res) => {
       content,
       importance: parseInt(importance) || 3,
       agent: agent || 'manual-user',
+      role: role || 'user',
       model: model || 'human',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -206,7 +207,7 @@ app.post("/api/memories", async (req, res) => {
 // Add task manually
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { repo, task_code, phase, title, description, status, priority, depends_on } = req.body;
+    const { repo, task_code, phase, title, description, status, priority, agent, role, depends_on } = req.body;
     if (!repo || !task_code || !title) {
       return res.status(400).json({ error: "repo, task_code, and title are required" });
     }
@@ -219,6 +220,8 @@ app.post("/api/tasks", async (req, res) => {
       description: description || "",
       status: status || "pending",
       priority: parseInt(priority) || 3,
+      agent: agent || 'manual-user',
+      role: role || 'user',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       depends_on: depends_on || null
@@ -261,6 +264,16 @@ app.get("/api/stats", async (req, res) => {
     const expiringSoon = allMemories.filter((m: any) => 
       m.expires_at && new Date(m.expires_at) <= sevenDaysFromNow
     ).length;
+
+    // Task statistics
+    const allTasks = db.getTasksByRepo(repo || "");
+    const taskStats = {
+      total: allTasks.length,
+      todo: allTasks.filter((t: any) => t.status === 'pending').length,
+      blocked: allTasks.filter((t: any) => t.status === 'blocked').length,
+      inProgress: allTasks.filter((t: any) => t.status === 'in_progress').length,
+      completed: allTasks.filter((t: any) => t.status === 'completed').length,
+    };
 
     let mostActiveRepo: string | null = null;
     if (!repo) {
@@ -316,6 +329,7 @@ app.get("/api/stats", async (req, res) => {
     res.json({
       ...stats,
       topMemories,
+      taskStats,
       totalHitCount: Math.round(totalHitCount),
       avgImportance: Math.round(avgImportance * 10) / 10,
       mostActiveRepo,

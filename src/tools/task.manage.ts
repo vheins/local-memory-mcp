@@ -28,7 +28,7 @@ export async function handleTaskManage(
   storage: SQLiteStore
 ) {
   const parsed = TaskManageSchema.parse(args);
-  const { action, repo, id, task_code, phase, title, description, status, priority, tags, metadata, parent_id, depends_on } = parsed;
+  const { action, repo, id, task_code, phase, title, description, status, priority, agent, role, tags, metadata, parent_id, depends_on } = parsed;
 
   switch (action) {
     case "create": {
@@ -48,6 +48,8 @@ export async function handleTaskManage(
         description: description,
         status: (status as TaskStatus),
         priority: (priority as TaskPriority) || 3,
+        agent: agent || 'unknown',
+        role: role || 'unknown',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         finished_at: null,
@@ -76,6 +78,8 @@ export async function handleTaskManage(
       if (description !== undefined) updates.description = description;
       if (status !== undefined) updates.status = status;
       if (priority !== undefined) updates.priority = (priority as TaskPriority);
+      if (agent !== undefined) updates.agent = agent;
+      if (role !== undefined) updates.role = role;
       if (tags !== undefined) updates.tags = tags;
       if (metadata !== undefined) updates.metadata = metadata;
       if (parent_id !== undefined) updates.parent_id = parent_id;

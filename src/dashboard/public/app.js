@@ -600,6 +600,21 @@ async function loadStats() {
         document.getElementById('mistakeCount').textContent = data.byType?.mistake || 0;
         document.getElementById('patternCount').textContent = data.byType?.pattern || 0;
 
+        // Fill Task stats
+        if (data.taskStats) {
+            document.getElementById('totalTasks').textContent = data.taskStats.total || 0;
+            document.getElementById('todoTasksCount').textContent = data.taskStats.todo || 0;
+            document.getElementById('inProgressTasksCount').textContent = data.taskStats.inProgress || 0;
+            document.getElementById('completedTasksCount').textContent = data.taskStats.completed || 0;
+            
+            document.getElementById('todoStatCount').textContent = data.taskStats.todo || 0;
+            document.getElementById('inProgressStatCount').textContent = data.taskStats.inProgress || 0;
+            document.getElementById('completedStatCount').textContent = data.taskStats.completed || 0;
+            document.getElementById('blockedStatCount').textContent = data.taskStats.blocked || 0;
+            
+            updateTaskStatusChart(data.taskStats);
+        }
+
         updateTypeChart(data.byType);
         updateTimeSeriesChart(data.timeSeries || {});
         updateScatterChart(data.scatterData || []);
@@ -630,6 +645,51 @@ function updateTypeChart(byType) {
             datasets: [{
                 data: counts,
                 backgroundColor: ['#fb7185', '#c084fc', '#38bdf8', '#34d399'],
+                borderWidth: 2,
+                borderColor: isDark ? '#1e293b' : '#ffffff',
+                hoverOffset: 12
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                    titleColor: isDark ? '#f8fafc' : '#1e293b',
+                    bodyColor: isDark ? '#94a3b8' : '#64748b',
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 10
+                }
+            }
+        }
+    });
+}
+
+function updateTaskStatusChart(taskStats) {
+    const ctx = document.getElementById('taskStatusChart');
+    if (!window.Chart || !ctx) return;
+    if (charts.taskStatusChart) charts.taskStatusChart.destroy();
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const counts = [
+        taskStats?.todo || 0,
+        taskStats?.inProgress || 0,
+        taskStats?.completed || 0,
+        taskStats?.blocked || 0
+    ];
+
+    charts.taskStatusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['To Do', 'In Progress', 'Completed', 'Blocked'],
+            datasets: [{
+                data: counts,
+                backgroundColor: ['#94a3b8', '#38bdf8', '#10b981', '#fb7185'],
                 borderWidth: 2,
                 borderColor: isDark ? '#1e293b' : '#ffffff',
                 hoverOffset: 12
@@ -1089,6 +1149,7 @@ function renderTable(memories) {
                         <td class="p-3">
                             <div class="flex flex-col">
                                 <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 truncate max-w-[100px]" title="${m.agent || 'unknown'}">${m.agent || 'unknown'}</span>
+                                <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[100px]" title="${m.role || 'unknown'}">${m.role || 'unknown'}</span>
                                 <span class="text-[9px] text-gray-400 dark:text-gray-500 truncate max-w-[100px]" title="${m.model || 'unknown'}">${m.model || 'unknown'}</span>
                             </div>
                         </td>
@@ -1602,9 +1663,17 @@ async function loadTasks() {
 function renderTasks() {
     if (!document.getElementById('todoTasks')) return;
     
-    const todoTasks = currentTasks.filter(t => t.status === 'pending' || t.status === 'blocked');
-    const inProgressTasks = currentTasks.filter(t => t.status === 'in_progress');
-    const completedTasks = currentTasks.filter(t => t.status === 'completed');
+    const todoTasks = currentTasks
+        .filter(t => t.status === 'pending' || t.status === 'blocked')
+        .sort((a, b) => (b.priority - a.priority) || new Date(a.created_at) - new Date(b.created_at));
+        
+    const inProgressTasks = currentTasks
+        .filter(t => t.status === 'in_progress')
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        
+    const completedTasks = currentTasks
+        .filter(t => t.status === 'completed')
+        .sort((a, b) => new Date(b.finished_at || b.updated_at) - new Date(a.finished_at || a.updated_at));
 
     document.getElementById('todoCount').textContent = todoTasks.length;
     document.getElementById('inProgressCount').textContent = inProgressTasks.length;
@@ -1637,7 +1706,16 @@ function renderTaskColumn(id, tasks) {
                 </div>
             </div>
             <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 mb-1">${escapeHtml(t.title)}</h4>
-            <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">${escapeHtml(t.description || '')}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">${escapeHtml(t.description || '')}</p>
+            
+            <div class="flex items-center gap-2 mb-3">
+                <div class="px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800 flex items-center gap-1">
+                    <span class="text-[9px] font-bold text-sky-600 dark:text-sky-400">${escapeHtml(t.agent || 'unknown')}</span>
+                    <span class="text-[8px] text-sky-400 dark:text-sky-600">|</span>
+                    <span class="text-[9px] font-medium text-sky-500 dark:text-sky-500">${escapeHtml(t.role || 'unknown')}</span>
+                </div>
+            </div>
+
             ${t.depends_on ? `
                 <div class="mt-2 pt-2 border-t border-gray-50 dark:border-gray-600 flex items-center gap-1.5">
                     <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
@@ -1646,7 +1724,7 @@ function renderTaskColumn(id, tasks) {
             ` : ''}
             <div class="mt-3 flex items-center justify-between">
                 <span class="text-[10px] font-mono text-gray-400">${t.id.substring(0, 8)}</span>
-                <span class="text-[10px] text-gray-400">${formatDate(t.created_at)}</span>
+                <span class="text-[10px] text-gray-400">${t.status === 'completed' && t.finished_at ? 'Done ' + formatDate(t.finished_at) : formatDate(t.created_at)}</span>
             </div>
         </div>
     `).join('');

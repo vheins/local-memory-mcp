@@ -936,6 +936,26 @@
                     </div>
                 </div>
 
+                <!-- Task Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/30">
+                        <div class="text-xs text-indigo-500 dark:text-indigo-400 uppercase font-bold tracking-wider mb-1">Total Tasks</div>
+                        <div id="totalTasks" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Task To Do</div>
+                        <div id="todoTasksCount" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-sky-100 dark:border-sky-900/30">
+                        <div class="text-xs text-sky-500 dark:text-sky-400 uppercase font-bold tracking-wider mb-1">In Progress</div>
+                        <div id="inProgressTasksCount" class="text-2xl font-bold text-sky-600">0</div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-emerald-100 dark:border-emerald-900/30">
+                        <div class="text-xs text-emerald-500 dark:text-emerald-400 uppercase font-bold tracking-wider mb-1">Completed</div>
+                        <div id="completedTasksCount" class="text-2xl font-bold text-emerald-600">0</div>
+                    </div>
+                </div>
+
                 <!-- Charts Section -->
                 <div class="grid md:grid-cols-2 gap-6 flex-1">
                     <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -948,6 +968,18 @@
                             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Mistake:</span> <span id="mistakeCount" class="font-bold">0</span></div>
                             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Code Fact:</span> <span id="codeFactCount" class="font-bold">0</span></div>
                             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Pattern:</span> <span id="patternCount" class="font-bold">0</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Task Status Overview</h3>
+                        <div class="chart-donut-wrap">
+                            <canvas id="taskStatusChart"></canvas>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1.5 mt-3 text-[10px]">
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">To Do:</span> <span id="todoStatCount" class="font-bold">0</span></div>
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">In Progress:</span> <span id="inProgressStatCount" class="font-bold">0</span></div>
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Completed:</span> <span id="completedStatCount" class="font-bold">0</span></div>
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Blocked:</span> <span id="blockedStatCount" class="font-bold">0</span></div>
                         </div>
                     </div>
                     <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -1249,10 +1281,14 @@
                         </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Agent</label>
                         <input type="text" name="agent" required placeholder="e.g. Gemini CLI" value="Manual User" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Role</label>
+                        <input type="text" name="role" required placeholder="e.g. architect" value="user" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Model</label>
@@ -1302,6 +1338,16 @@
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Phase</label>
                         <input type="text" name="phase" required placeholder="e.g. implementation" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Agent</label>
+                        <input type="text" name="agent" required placeholder="e.g. GitHub Copilot" value="Gemini CLI" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Role</label>
+                        <input type="text" name="role" required placeholder="e.g. fullstack" value="expert" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
                     </div>
                 </div>
                 <div>

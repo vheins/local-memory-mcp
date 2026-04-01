@@ -16,10 +16,12 @@ export type MemoryEntry = {
   content: string;
   importance: number;
   agent: string;
+  role: string;
   model: string;
   scope: MemoryScope;
   created_at: string;
   updated_at: string;
+  completed_at: string | null;
   hit_count: number;
   recall_count: number;
   last_used_at: string | null;
@@ -47,6 +49,8 @@ export interface Task {
   description: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  agent: string;
+  role: string;
   created_at: string;
   updated_at: string;
   finished_at: string | null;
