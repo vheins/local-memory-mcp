@@ -323,6 +323,16 @@ export class SQLiteStore {
     return row ? { ...this.rowToMemoryEntry(row), recall_rate: row.recall_rate ?? 0 } : null;
   }
 
+  getByIds(ids: string[]): MemoryEntry[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(",");
+    const rows = this.db.prepare(`
+      SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
+      FROM memories WHERE id IN (${placeholders})
+    `).all(...ids) as any[];
+    return rows.map(r => ({ ...this.rowToMemoryEntry(r), recall_rate: r.recall_rate ?? 0 }));
+  }
+
   searchByRepo(repo: string, options: any = {}): MemoryEntry[] {
     let where = ["(repo = ? OR is_global = 1)"];
     const params: any[] = [repo];
@@ -730,10 +740,20 @@ export class SQLiteStore {
 
   async checkConflicts(content: string, repo: string, type: string, vectors: any, threshold = 0.55): Promise<any> {
     const vectorResults = await vectors.search(content, 10, repo);
+    const candidateIds = vectorResults
+      .filter((vr: any) => vr.score > threshold)
+      .map((vr: any) => vr.id);
+
+    if (candidateIds.length === 0) return null;
+
+    const memories = this.getByIds(candidateIds);
+    const memoryMap = new Map(memories.map(m => [m.id, m]));
+
+    // Iterate through original vector results to maintain score priority
     for (const vr of vectorResults) {
       if (vr.score > threshold) {
-        const memory = this.getById(vr.id);
-        if (memory && memory.type === type && memory.status === 'active') return memory;
+        const memory = memoryMap.get(vr.id);
+        if (memory && memory.type === type && memory.status === "active") return memory;
       }
     }
     return null;
