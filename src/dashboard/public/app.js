@@ -2055,14 +2055,18 @@ function showCapabilityDetail(type, name) {
             <div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
                 <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">Instructions</h4>
                 <div class="space-y-4">
-                    ${item.messages.map(msg => `
-                        <div class="space-y-1">
-                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${escapeHtml(msg.role)}</div>
-                            <div class="p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-mono">
-                                ${escapeHtml(typeof msg.content === 'string' ? msg.content : (msg.content?.text || ''))}
+                    ${item.messages.map(msg => {
+                        const rawContent = typeof msg.content === 'string' ? msg.content : (msg.content?.text || '');
+                        const renderedMarkdown = window.marked ? window.marked.parse(rawContent) : escapeHtml(rawContent);
+                        return `
+                            <div class="space-y-1">
+                                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${escapeHtml(msg.role)}</div>
+                                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg text-sm markdown-body">
+                                    ${renderedMarkdown}
+                                </div>
                             </div>
-                        </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
