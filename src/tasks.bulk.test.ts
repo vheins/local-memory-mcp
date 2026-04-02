@@ -154,4 +154,36 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     });
     await expect(singlePromise).rejects.toThrow("already exists");
   });
+
+  it("should bulk delete tasks", async () => {
+    // Create 3 tasks
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          { task_code: "DEL-1", title: "Task 1", description: "Desc 1", phase: "p", status: "pending" },
+          { task_code: "DEL-2", title: "Task 2", description: "Desc 2", phase: "p", status: "pending" },
+          { task_code: "DEL-3", title: "Task 3", description: "Desc 3", phase: "p", status: "pending" }
+        ]
+      }
+    });
+
+    const tasks = db.getTasksByRepo(REPO);
+    const idsToDelete = [tasks[0].id, tasks[1].id];
+
+    const delRes = await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_delete",
+        repo: REPO,
+        ids: idsToDelete
+      }
+    });
+
+    expect(delRes.content[0].text).toContain("Successfully deleted 2 tasks");
+    const remainingTasks = db.getTasksByRepo(REPO);
+    expect(remainingTasks.length).toBe(1);
+  });
 });

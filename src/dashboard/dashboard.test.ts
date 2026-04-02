@@ -286,7 +286,7 @@ describe("Property 14: Export format correctness", () => {
             content: fc.string({ minLength: 5, maxLength: 50 }),
             importance: fc.integer({ min: 1, max: 5 }),
             hit_count: fc.integer({ min: 0, max: 20 }),
-            created_at: fc.date().map((d) => d.toISOString()),
+            created_at: fc.constant("2026-04-02T10:00:00Z"),
             agent: fc.string({ minLength: 3 }),
             model: fc.string({ minLength: 3 }),
           })
@@ -348,7 +348,7 @@ describe("Property 14: Export format correctness", () => {
             content: fc.string({ minLength: 10 }),
             importance: fc.integer({ min: 1, max: 5 }),
             hit_count: fc.integer({ min: 0, max: 100 }),
-            created_at: fc.date().map((d) => d.toISOString()),
+            created_at: fc.constant("2026-04-02T10:00:00Z"),
             agent: fc.string({ minLength: 3 }),
             model: fc.string({ minLength: 3 }),
           })

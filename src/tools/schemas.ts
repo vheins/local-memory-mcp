@@ -69,6 +69,11 @@ export const MemoryRecapSchema = z.object({
   offset: z.number().min(0).default(0)
 });
 
+export const MemoryBulkDeleteSchema = z.object({
+  repo: z.string().min(1),
+  ids: z.array(z.string().uuid()).min(1)
+});
+
 export const MemorySummarizeSchema = z.object({
   repo: z.string().min(1),
   signals: z.array(z.string().max(200)).min(1)
@@ -124,7 +129,7 @@ export const TaskListSchema = z.object({
 });
 
 export const TaskBulkManageSchema = z.object({
-  action: z.enum(["bulk_create"]),
+  action: z.enum(["bulk_create", "bulk_delete"]),
   repo: z.string().min(1),
   tasks: z.array(z.object({
     task_code: z.string().min(1),
@@ -140,8 +145,12 @@ export const TaskBulkManageSchema = z.object({
     metadata: z.record(z.string(), z.any()).optional(),
     parent_id: z.string().uuid().optional(),
     depends_on: z.string().uuid().optional()
-  })).min(1)
-});
+  })).min(1).optional(),
+  ids: z.array(z.string().uuid()).min(1).optional()
+}).refine(
+  (data) => (data.action === "bulk_create" && data.tasks) || (data.action === "bulk_delete" && data.ids),
+  { message: "tasks is required for bulk_create, ids is required for bulk_delete" }
+);
 
 export const TaskDeleteSchema = z.object({
   repo: z.string().min(1),
@@ -298,6 +307,18 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
+    name: "memory-bulk-delete",
+    description: "Delete multiple memory entries at once.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository name" },
+        ids: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, description: "Array of memory IDs to delete" }
+      },
+      required: ["repo", "ids"]
+    }
+  },
+  {
     name: "memory-recap",
     description: "Get the last 20 memories from a repository for context",
     inputSchema: {
@@ -420,13 +441,13 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "task-bulk-manage",
-    description: "Perform bulk operations on tasks (e.g., bulk creation). Use this to initialize multiple tasks at once.",
+    description: "Perform bulk operations on tasks (e.g., bulk creation, bulk deletion).",
     inputSchema: {
       type: "object",
       properties: {
         action: {
           type: "string",
-          enum: ["bulk_create"],
+          enum: ["bulk_create", "bulk_delete"],
           description: "Action to perform in bulk"
         },
         repo: {
@@ -455,9 +476,15 @@ export const TOOL_DEFINITIONS = [
             required: ["task_code", "title", "phase", "description", "status"]
           },
           minItems: 1
+        },
+        ids: {
+          type: "array",
+          items: { type: "string", format: "uuid" },
+          minItems: 1,
+          description: "Task IDs to delete (for bulk_delete)"
         }
       },
-      required: ["action", "repo", "tasks"]
+      required: ["action", "repo"]
     }
   }
 ];

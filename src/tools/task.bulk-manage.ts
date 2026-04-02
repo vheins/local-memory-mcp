@@ -8,10 +8,11 @@ export async function handleTaskBulkManage(
   storage: SQLiteStore
 ) {
   const parsed = TaskBulkManageSchema.parse(args);
-  const { action, repo, tasks } = parsed;
+  const { action, repo, tasks, ids } = parsed;
 
   switch (action) {
     case "bulk_create": {
+      if (!tasks) throw new Error("tasks array is required for bulk_create");
       const createdTasks: string[] = [];
       const now = new Date().toISOString();
       const codesInRequest = new Set<string>();
@@ -57,6 +58,23 @@ export async function handleTaskBulkManage(
         content: [{ 
           type: "text", 
           text: `Successfully created ${tasks.length} tasks: ${createdTasks.join(', ')}` 
+        }],
+        isError: false
+      };
+    }
+    case "bulk_delete": {
+      if (!ids) throw new Error("ids array is required for bulk_delete");
+      
+      for (const id of ids) {
+        storage.deleteTask(id);
+      }
+
+      storage.logAction("delete", repo, { resultCount: ids.length, query: "Bulk Delete" });
+
+      return { 
+        content: [{ 
+          type: "text", 
+          text: `Successfully deleted ${ids.length} tasks.` 
         }],
         isError: false
       };
