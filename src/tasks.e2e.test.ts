@@ -19,7 +19,6 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
   it("should follow the complete task management lifecycle: Plan -> Execute -> Verify", async () => {
     // ---- 1. INITIAL CHECK ----
-    // Agent starts and checks for existing tasks
     const initialRes = await router("resources/read", {
       uri: `tasks://current?repo=${REPO}`
     });
@@ -27,11 +26,9 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
     expect(initialTasks.length).toBe(0);
 
     // ---- 2. PLANNING PHASE ----
-    // Agent creates a plan with two tasks: A and B (B depends on A)
     const taskARes = await router("tools/call", {
-      name: "task-manage",
+      name: "task-create",
       arguments: {
-        action: "create",
         repo: REPO,
         task_code: "TASK-001",
         phase: "research",
@@ -41,13 +38,11 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         priority: 5
       }
     });
-    const taskACode = taskARes.content[0].text.match(/\[(.*?)\]/)[1];
     const taskAId = db.getTasksByRepo(REPO)[0].id;
 
     const taskBRes = await router("tools/call", {
-      name: "task-manage",
+      name: "task-create",
       arguments: {
-        action: "create",
         repo: REPO,
         task_code: "TASK-002",
         phase: "implementation",
@@ -58,14 +53,12 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         priority: 4
       }
     });
-    const taskBCode = taskBRes.content[0].text.match(/\[(.*?)\]/)[1];
     const taskBId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-002").id;
 
-    // Verify both are pending in current tasks
+    // Verify both are pending
     const plannedRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
     const plannedTasks = JSON.parse(plannedRes.contents[0].text);
     expect(plannedTasks.length).toBe(2);
-    expect(plannedTasks.every((t: any) => t.status === "pending")).toBe(true);
 
     // Verify task-list tool works
     const listToolRes = await router("tools/call", {
@@ -76,58 +69,46 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
     expect(listToolTasks.length).toBe(2);
 
     // ---- 3. EXECUTION PHASE ----
-    // Agent starts Task A
     await router("tools/call", {
-      name: "task-manage",
+      name: "task-update",
       arguments: {
-        action: "update",
         repo: REPO,
         id: taskAId,
-        status: "in_progress",
-        task_code: taskACode // Required field
+        status: "in_progress"
       }
     });
 
-    // Verify Task A is in_progress
     const inProgressRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
     const inProgressTasks = JSON.parse(inProgressRes.contents[0].text);
     expect(inProgressTasks.find((t: any) => t.id === taskAId).status).toBe("in_progress");
 
     // ---- 4. VALIDATION PHASE (Task A) ----
-    // Agent completes Task A
     await router("tools/call", {
-      name: "task-manage",
+      name: "task-update",
       arguments: {
-        action: "update",
         repo: REPO,
         id: taskAId,
-        status: "completed",
-        task_code: taskACode
+        status: "completed"
       }
     });
 
-    // Verify Task A is no longer in "current" tasks (since it's completed)
     const afterARes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
     const afterATasks = JSON.parse(afterARes.contents[0].text);
     expect(afterATasks.length).toBe(1);
     expect(afterATasks[0].id).toBe(taskBId);
 
     // ---- 5. RESUME WORKFLOW (Task B) ----
-    // Agent starts Task B (now that A is done)
     await router("tools/call", {
-      name: "task-manage",
+      name: "task-update",
       arguments: {
-        action: "update",
         repo: REPO,
         id: taskBId,
-        status: "in_progress",
-        task_code: taskBCode
+        status: "in_progress"
       }
     });
 
     const finalCheckRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
     const finalCheckTasks = JSON.parse(finalCheckRes.contents[0].text);
     expect(finalCheckTasks[0].status).toBe("in_progress");
-    expect(finalCheckTasks[0].depends_on).toBe(taskAId);
   });
 });

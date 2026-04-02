@@ -77,10 +77,26 @@ export const MemorySummarizeSchema = z.object({
 export const TaskStatusSchema = z.enum(["pending", "in_progress", "completed", "canceled", "blocked"]);
 export const TaskPrioritySchema = z.number().min(1).max(5);
 
-export const TaskManageSchema = z.object({
-  action: z.enum(["create", "update", "list", "delete"]),
+export const TaskCreateSchema = z.object({
   repo: z.string().min(1),
-  id: z.string().uuid().optional(),
+  task_code: z.string().min(1),
+  phase: z.string().min(1),
+  title: z.string().min(3).max(100),
+  description: z.string().min(1),
+  status: TaskStatusSchema.default("pending"),
+  priority: TaskPrioritySchema.default(3),
+  agent: z.string().optional(),
+  role: z.string().optional(),
+  doc_path: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  parent_id: z.string().uuid().optional(),
+  depends_on: z.string().uuid().optional()
+});
+
+export const TaskUpdateSchema = z.object({
+  repo: z.string().min(1),
+  id: z.string().uuid(),
   task_code: z.string().optional(),
   phase: z.string().optional(),
   title: z.string().min(3).max(100).optional(),
@@ -94,7 +110,10 @@ export const TaskManageSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   parent_id: z.string().uuid().optional(),
   depends_on: z.string().uuid().optional()
-});
+}).refine(
+  (data) => Object.keys(data).length > 2,
+  { message: "At least one field besides repo and id must be provided for update" }
+);
 
 export const TaskListSchema = z.object({
   repo: z.string().min(1),
@@ -122,6 +141,11 @@ export const TaskBulkManageSchema = z.object({
     parent_id: z.string().uuid().optional(),
     depends_on: z.string().uuid().optional()
   })).min(1)
+});
+
+export const TaskDeleteSchema = z.object({
+  repo: z.string().min(1),
+  id: z.string().uuid()
 });
 
 // Tool definitions for MCP
@@ -298,87 +322,64 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
-    name: "task-manage",
-    description: "Manage tasks within a repository. Use this to track progress, plan implementation, and document technical debt.",
+    name: "task-create",
+    description: "Create a new task in a repository. task_code must be unique within the repository.",
     inputSchema: {
       type: "object",
       properties: {
-        action: {
-          type: "string",
-          enum: ["create", "update", "list", "delete"],
-          description: "Action to perform on the task"
-        },
-        repo: {
-          type: "string",
-          description: "Repository name"
-        },
-        id: {
-          type: "string",
-          format: "uuid",
-          description: "Task ID (required for update and delete)"
-        },
-        task_code: {
-          type: "string",
-          description: "Human readable task code (e.g. TASK-001). If not provided, it will be generated."
-        },
-        phase: {
-          type: "string",
-          description: "Project phase (e.g., 'research', 'implementation', 'validation')"
-        },
-        title: {
-          type: "string",
-          minLength: 3,
-          maxLength: 100,
-          description: "Task title"
-        },
-        description: {
-          type: "string",
-          description: "Detailed description of the task"
-        },
-        status: {
-          type: "string",
-          enum: ["pending", "in_progress", "completed", "canceled", "blocked"],
-          description: "Current task status"
-        },
-        priority: {
-          type: "number",
-          minimum: 1,
-          maximum: 5,
-          description: "Task priority (1-5, default 3)"
-        },
-        agent: {
-          type: "string",
-          description: "Agent who created/is working on the task"
-        },
-        role: {
-          type: "string",
-          description: "Role of the agent"
-        },
-        doc_path: {
-          type: "string",
-          description: "Path or URL to the relevant documentation for this task"
-        },
-        tags: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional tags for categorization"
-        },
-        metadata: {
-          type: "object",
-          description: "Arbitrary metadata for the task"
-        },
-        parent_id: {
-          type: "string",
-          format: "uuid",
-          description: "Parent task ID for hierarchical tasks"
-        },
-        depends_on: {
-          type: "string",
-          format: "uuid",
-          description: "Task ID that this task depends on"
-        }
+        repo: { type: "string", description: "Repository name" },
+        task_code: { type: "string", description: "Unique task code (e.g. TASK-001)" },
+        phase: { type: "string", description: "Project phase" },
+        title: { type: "string", minLength: 3, maxLength: 100 },
+        description: { type: "string" },
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"] },
+        priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+        agent: { type: "string" },
+        role: { type: "string" },
+        doc_path: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        metadata: { type: "object" },
+        parent_id: { type: "string", format: "uuid" },
+        depends_on: { type: "string", format: "uuid" }
       },
-      required: ["action", "repo"]
+      required: ["repo", "task_code", "phase", "title", "description", "status"]
+    }
+  },
+  {
+    name: "task-update",
+    description: "Update an existing task. Provide only the fields that need to be changed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository name" },
+        id: { type: "string", format: "uuid", description: "Task ID" },
+        task_code: { type: "string" },
+        phase: { type: "string" },
+        title: { type: "string", minLength: 3, maxLength: 100 },
+        description: { type: "string" },
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"] },
+        priority: { type: "number", minimum: 1, maximum: 5 },
+        agent: { type: "string" },
+        role: { type: "string" },
+        doc_path: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        metadata: { type: "object" },
+        parent_id: { type: "string", format: "uuid" },
+        depends_on: { type: "string", format: "uuid" }
+      },
+      required: ["repo", "id"]
+    }
+  },
+  {
+    name: "task-delete",
+    description: "Delete a task from a repository.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository name" },
+        id: { type: "string", format: "uuid", description: "Task ID" }
+      },
+      required: ["repo", "id"]
     }
   },
   {

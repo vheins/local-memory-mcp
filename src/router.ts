@@ -10,7 +10,7 @@ import { handleMemorySummarize } from "./tools/memory.summarize.js";
 import { handleMemoryDelete } from "./tools/memory.delete.js";
 import { handleMemoryRecap } from "./tools/memory.recap.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
-import { handleTaskManage, handleTaskList } from "./tools/task.manage.js";
+import { handleTaskList, handleTaskCreate, handleTaskUpdate, handleTaskDelete } from "./tools/task.manage.js";
 import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 
 export function createRouter(
@@ -75,10 +75,16 @@ export function createRouter(
         return await handleMemorySummarize(args, db);
 
       case "memory-delete":
-        return await handleMemoryDelete(args, db, vectors);
+        return await handleMemoryDelete(args, db);
 
-      case "task-manage":
-        return await handleTaskManage(args, db);
+      case "task-create":
+        return await handleTaskCreate(args, db);
+
+      case "task-update":
+        return await handleTaskUpdate(args, db);
+
+      case "task-delete":
+        return await handleTaskDelete(args, db);
 
       case "task-list":
         return await handleTaskList(args, db);

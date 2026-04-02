@@ -116,9 +116,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
   it("should prevent duplicate task_codes against existing tasks", async () => {
     // Create first task
     await router("tools/call", {
-      name: "task-manage",
+      name: "task-create",
       arguments: {
-        action: "create",
         repo: REPO,
         task_code: "EXISTING-001",
         title: "Initial",
@@ -143,9 +142,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
     // Try via single create
     const singlePromise = router("tools/call", {
-      name: "task-manage",
+      name: "task-create",
       arguments: {
-        action: "create",
         repo: REPO,
         task_code: "EXISTING-001",
         title: "Duplicate",
