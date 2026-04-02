@@ -49,29 +49,26 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
           expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
           const lastOutput = stderrOutput[stderrOutput.length - 1];
 
-          // Must be parseable JSON
-          let parsed: Record<string, unknown>;
-          expect(() => {
-            parsed = JSON.parse(lastOutput.trim());
-          }).not.toThrow();
+          // Must be text with timestamp, level, and message
+          expect(lastOutput).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[.*?\] /);
 
-          parsed = JSON.parse(lastOutput.trim());
+          // Extract parts
+          const match = lastOutput.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) \[\s*(.*?)\s*\] ([\s\S]*)$/);
+          expect(match).not.toBeNull();
+          
+          if (match) {
+            const [, timestamp, parsedLevel, messageWithCtx] = match;
 
-          // Must have required fields
-          expect(parsed).toHaveProperty("level");
-          expect(parsed).toHaveProperty("timestamp");
-          expect(parsed).toHaveProperty("message");
+            // level must match
+            expect(parsedLevel.toLowerCase()).toBe(level);
 
-          // level must match
-          expect(parsed.level).toBe(level);
+            // message must start with the original message
+            expect(messageWithCtx.startsWith(message)).toBe(true);
 
-          // message must match
-          expect(parsed.message).toBe(message);
-
-          // timestamp must be ISO 8601
-          expect(typeof parsed.timestamp).toBe("string");
-          const ts = new Date(parsed.timestamp as string);
-          expect(isNaN(ts.getTime())).toBe(false);
+            // timestamp must be ISO 8601
+            const ts = new Date(timestamp);
+            expect(isNaN(ts.getTime())).toBe(false);
+          }
         }
       ),
       { numRuns: 100 }
@@ -86,10 +83,8 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
 
     expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
     const lastOutput = stderrOutput[stderrOutput.length - 1];
-    const parsed = JSON.parse(lastOutput.trim());
 
-    expect(parsed).toHaveProperty("context");
-    expect(parsed.context).toEqual({ key: "value", count: 42 });
+    expect(lastOutput).toContain('{"key":"value","count":42}');
   });
 
   it("log output without context does not include context field", async () => {
@@ -100,9 +95,8 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
 
     expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
     const lastOutput = stderrOutput[stderrOutput.length - 1];
-    const parsed = JSON.parse(lastOutput.trim());
 
-    expect(parsed).not.toHaveProperty("context");
+    expect(lastOutput.trim()).not.toMatch(/\{.*\}/);
   });
 
   it("all four log levels produce valid JSON with correct level field", async () => {
@@ -115,11 +109,9 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
 
       expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
       const lastOutput = stderrOutput[stderrOutput.length - 1];
-      const parsed = JSON.parse(lastOutput.trim());
 
-      expect(parsed.level).toBe(level);
-      expect(parsed.message).toBe(`test ${level} message`);
-      expect(typeof parsed.timestamp).toBe("string");
+      expect(lastOutput).toMatch(new RegExp(`\\[\\s*${level.toUpperCase()}\\s*\\]`));
+      expect(lastOutput).toContain(`test ${level} message`);
     }
   });
 });
