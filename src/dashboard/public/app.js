@@ -510,6 +510,7 @@ function updateCountdown() {
         btn.addEventListener('click', () => {
             const isDark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            scheduleTabIndicatorPosition(currentTab);
         });
     }
 });
@@ -622,6 +623,15 @@ async function loadStats() {
             document.getElementById('inProgressStatCount').textContent = data.taskStats.inProgress || 0;
             document.getElementById('completedStatCount').textContent = data.taskStats.completed || 0;
             document.getElementById('blockedStatCount').textContent = data.taskStats.blocked || 0;
+
+            // Also update column headers
+            const todoCountEl = document.getElementById('todoCount');
+            const inProgressCountEl = document.getElementById('inProgressCount');
+            const completedCountEl = document.getElementById('completedCount');
+            
+            if (todoCountEl) todoCountEl.textContent = data.taskStats.todo || 0;
+            if (inProgressCountEl) inProgressCountEl.textContent = data.taskStats.inProgress || 0;
+            if (completedCountEl) completedCountEl.textContent = data.taskStats.completed || 0;
             
             updateTaskStatusChart(data.taskStats);
         }
@@ -1655,6 +1665,7 @@ async function loadData() {
         checkStatus(),
         loadRecentActions(),
     ]);
+    scheduleTabIndicatorPosition(currentTab);
 }
 
 let currentTasks = [];
@@ -1787,7 +1798,7 @@ function renderTaskCards(containerId, tasks, clear = false) {
             ${t.depends_on ? `
                 <div class="mt-2 pt-2 border-t border-gray-50 dark:border-gray-600 flex items-center gap-1.5">
                     <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
-                    <span class="text-[10px] font-medium text-amber-600 dark:text-amber-400">Depends on: ${t.depends_on.substring(0, 8)}</span>
+                    <span class="text-[10px] font-medium text-amber-600 dark:text-amber-400">Depends on: ${t.depends_on_code || t.depends_on.substring(0, 8)}</span>
                 </div>
             ` : ''}
             <div class="mt-3 flex items-center justify-between">
@@ -1855,6 +1866,13 @@ async function showTaskDetail(id) {
                             <span class="px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20">P${task.priority}</span>
                             <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold border border-slate-200 dark:border-slate-700 uppercase">${task.phase}</span>
                         </div>
+                        ${task.depends_on ? `
+                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Depends on:</div>
+                                <span class="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">${task.depends_on_code || task.depends_on.substring(0, 8)}</span>
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="p-4 bg-white dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
                         <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Owner</div>
@@ -1876,6 +1894,8 @@ async function showTaskDetail(id) {
                         ${task.description ? renderMarkdown(task.description) : '<span class="italic opacity-50">No description provided</span>'}
                     </div>
                 </div>
+
+                ${renderTaskComments(task.comments)}
 
                 ${task.doc_path ? `
                     <div class="p-4 bg-sky-500/5 dark:bg-sky-500/10 rounded-xl border border-sky-500/20">
@@ -1912,14 +1932,128 @@ function getPriorityColor(p) {
     return 'text-gray-500 dark:text-gray-400';
 }
 
+function formatTaskStatusLabel(status) {
+    return String(status || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function renderTaskComments(comments) {
+    if (!comments || comments.length === 0) {
+        return `
+            <div class="p-5 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">History</div>
+                <div class="text-sm italic text-slate-400">No historical comments yet</div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="p-5 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">History</div>
+                <div class="text-[10px] text-slate-400">${comments.length} comment${comments.length === 1 ? '' : 's'}</div>
+            </div>
+            <div class="space-y-4">
+                ${comments.map((item) => `
+                    <div class="relative pl-5">
+                        <div class="absolute left-0 top-1.5 h-full w-px bg-slate-200 dark:bg-slate-700"></div>
+                        <div class="absolute left-[-4px] top-1.5 w-2.5 h-2.5 rounded-full bg-sky-500 shadow-[0_0_0_4px_rgba(14,165,233,0.12)]"></div>
+                        <div class="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4">
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100">${escapeHtml(item.agent || 'unknown')}</span>
+                                <span class="text-[10px] text-slate-400">•</span>
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(item.model || 'unknown')}</span>
+                                <span class="ml-auto text-[10px] text-slate-400">${new Date(item.created_at).toLocaleString()}</span>
+                            </div>
+                            ${(item.previous_status || item.next_status) ? `
+                                <div class="flex flex-wrap items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-wide">
+                                    <span class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${escapeHtml(formatTaskStatusLabel(item.previous_status || 'note'))}</span>
+                                    <span class="text-slate-400">→</span>
+                                    <span class="px-2 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">${escapeHtml(formatTaskStatusLabel(item.next_status || 'note'))}</span>
+                                </div>
+                            ` : ''}
+                            <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed markdown-body">
+                                ${renderMarkdown(item.comment)}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
 let currentTab = localStorage.getItem('activeTab') || 'dashboard';
+
+function syncTabIndicatorTheme(indicator) {
+    const isDark = document.documentElement.classList.contains('dark');
+    indicator.style.background = isDark
+        ? 'linear-gradient(135deg, rgba(14,165,233,0.95) 0%, rgba(79,70,229,0.92) 100%)'
+        : 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)';
+    indicator.style.border = isDark
+        ? '1px solid rgba(59, 130, 246, 0.32)'
+        : '1px solid rgba(37, 99, 235, 0.18)';
+    indicator.style.boxShadow = isDark
+        ? '0 12px 28px rgba(14,165,233,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+        : '0 10px 24px rgba(37,99,235,0.24), inset 0 1px 0 rgba(255,255,255,0.28)';
+}
+
+function syncActiveTabButtonTheme(button, isActive) {
+    if (!button) return;
+
+    const isDark = document.documentElement.classList.contains('dark');
+
+    if (!isActive) {
+        button.style.color = '';
+        button.style.background = '';
+        button.style.border = '';
+        button.style.boxShadow = '';
+        return;
+    }
+
+    button.style.color = isDark ? '#ffffff' : '#0f172a';
+    button.style.background = isDark
+        ? 'linear-gradient(135deg, rgba(14,165,233,0.95) 0%, rgba(79,70,229,0.92) 100%)'
+        : 'rgba(255,255,255,0.96)';
+    button.style.border = isDark
+        ? '1px solid rgba(59, 130, 246, 0.32)'
+        : '1px solid rgba(148, 163, 184, 0.22)';
+    button.style.boxShadow = isDark
+        ? '0 12px 28px rgba(14,165,233,0.2), inset 0 1px 0 rgba(255,255,255,0.12)'
+        : '0 10px 24px rgba(148,163,184,0.16), inset 0 -3px 0 rgba(37,99,235,0.9)';
+}
+
+function positionTabIndicator(tab) {
+    const indicator = document.getElementById('tabIndicator');
+    const rail = document.getElementById('tabRail');
+    const targetButton = document.getElementById(`${tab}TabBtn`);
+
+    if (!indicator || !rail || !targetButton) return;
+    syncTabIndicatorTheme(indicator);
+
+    const railRect = rail.getBoundingClientRect();
+    const buttonRect = targetButton.getBoundingClientRect();
+    const left = buttonRect.left - railRect.left;
+
+    indicator.style.left = `${left}px`;
+    indicator.style.width = `${buttonRect.width}px`;
+    indicator.style.transform = 'none';
+}
+
+function scheduleTabIndicatorPosition(tab = currentTab) {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            positionTabIndicator(tab);
+        });
+    });
+}
 
 function switchTab(tab) {
     const dashTab = document.getElementById('dashboardTabBtn');
     const memTab = document.getElementById('memoriesTabBtn');
     const taskTab = document.getElementById('tasksTabBtn');
     const refTab = document.getElementById('referenceTabBtn');
-    const indicator = document.getElementById('tabIndicator');
 
     const dashContent = document.getElementById('dashboardContent');
     const memContent = document.getElementById('memoriesContent');
@@ -1933,23 +2067,21 @@ function switchTab(tab) {
     const contents = [dashContent, memContent, taskContent, refContent];    const targetId = tab + 'TabBtn';
     const targetContentId = tab + 'Content';
 
-    // Update indicator
-    if (indicator) {
-        if (tab === 'dashboard') indicator.style.transform = 'translateX(0)';
-        if (tab === 'memories') indicator.style.transform = 'translateX(100%)';
-        if (tab === 'tasks') indicator.style.transform = 'translateX(200%)';
-        if (tab === 'reference') indicator.style.transform = 'translateX(300%)';
-    }
+    scheduleTabIndicatorPosition(tab);
 
     // Update button states
     tabs.forEach(t => {
         if (t) {
             if (t.id === targetId) {
+                t.classList.add('tab-active');
                 t.classList.add('text-white');
                 t.classList.remove('text-gray-500', 'dark:text-gray-400');
+                syncActiveTabButtonTheme(t, true);
             } else {
+                t.classList.remove('tab-active');
                 t.classList.remove('text-white');
                 t.classList.add('text-gray-500', 'dark:text-gray-400');
+                syncActiveTabButtonTheme(t, false);
             }
         }
     });
@@ -1971,6 +2103,19 @@ function switchTab(tab) {
     if (tab === 'memories') loadMemories();
     if (tab === 'reference') loadCapabilities();
     syncStickyOffsets();
+}
+
+window.addEventListener('resize', () => {
+    scheduleTabIndicatorPosition(currentTab);
+});
+
+if (typeof ResizeObserver !== 'undefined') {
+    const rail = document.getElementById('tabRail');
+    if (rail) {
+        new ResizeObserver(() => {
+            scheduleTabIndicatorPosition(currentTab);
+        }).observe(rail);
+    }
 }
 
 window.loadTasks = loadTasks;
@@ -2219,3 +2364,70 @@ switchTab(currentTab);
 syncStickyOffsets();
 startCountdown();
 setInterval(checkStatus, 30000);
+
+// Memories Filter & Popover logic
+function toggleFilterPopover() {
+    const popover = document.getElementById('filterPopover');
+    popover.classList.toggle('hidden');
+    updateActiveFilterCount();
+}
+
+function toggleExportPopover() {
+    const popover = document.getElementById('exportPopover');
+    popover.classList.toggle('hidden');
+}
+
+function updateActiveFilterCount() {
+    const type = document.getElementById('typeFilter').value;
+    const minImp = document.getElementById('minImportanceFilter').value;
+    const maxImp = document.getElementById('maxImportanceFilter').value;
+    let count = 0;
+    if (type) count++;
+    if (minImp) count++;
+    if (maxImp) count++;
+    
+    const badge = document.getElementById('activeFilterCount');
+    if (badge) {
+        if (count > 0) {
+            badge.innerText = count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+}
+
+function resetFilters() {
+    document.getElementById('typeFilter').value = '';
+    document.getElementById('minImportanceFilter').value = '';
+    document.getElementById('maxImportanceFilter').value = '';
+    updateActiveFilterCount();
+    currentPage = 1;
+    loadMemories();
+}
+
+document.addEventListener('click', (e) => {
+    const filterPopover = document.getElementById('filterPopover');
+    const filterBtn = document.getElementById('filterPopoverBtn');
+    const exportPopover = document.getElementById('exportPopover');
+    const exportBtn = document.getElementById('exportPopoverBtn');
+
+    if (filterPopover && !filterPopover.contains(e.target) && !filterBtn.contains(e.target)) {
+        filterPopover.classList.add('hidden');
+    }
+    if (exportPopover && !exportPopover.contains(e.target) && !exportBtn.contains(e.target)) {
+        exportPopover.classList.add('hidden');
+    }
+});
+
+window.toggleFilterPopover = toggleFilterPopover;
+window.toggleExportPopover = toggleExportPopover;
+window.resetFilters = resetFilters;
+
+// Auto-hide popovers on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.getElementById('filterPopover')?.classList.add('hidden');
+        document.getElementById('exportPopover')?.classList.add('hidden');
+    }
+});

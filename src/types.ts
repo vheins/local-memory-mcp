@@ -40,6 +40,15 @@ export type VectorResult = {
 export type TaskStatus = "pending" | "in_progress" | "completed" | "canceled" | "blocked";
 export type TaskPriority = 1 | 2 | 3 | 4 | 5; // 5 is highest
 
+export interface TaskStats {
+  total: number;
+  todo: number;
+  inProgress: number;
+  completed: number;
+  blocked: number;
+  canceled: number;
+}
+
 export interface Task {
   id: string;
   repo: string;
@@ -60,6 +69,20 @@ export interface Task {
   metadata: Record<string, any>;
   parent_id: string | null;
   depends_on: string | null;
+  comments?: TaskComment[];
+}
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  repo: string;
+  comment: string;
+  agent: string;
+  role: string;
+  model: string;
+  previous_status: TaskStatus | null;
+  next_status: TaskStatus | null;
+  created_at: string;
 }
 
 export interface VectorStore {

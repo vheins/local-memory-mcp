@@ -110,6 +110,8 @@ export const TaskUpdateSchema = z.object({
   priority: TaskPrioritySchema.optional(),
   agent: z.string().optional(),
   role: z.string().optional(),
+  model: z.string().optional(),
+  comment: z.string().min(1).optional(),
   doc_path: z.string().optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
@@ -118,7 +120,15 @@ export const TaskUpdateSchema = z.object({
 }).refine(
   (data) => Object.keys(data).length > 2,
   { message: "At least one field besides repo and id must be provided for update" }
-);
+).superRefine((data, ctx) => {
+  if (data.status !== undefined && data.comment === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "comment is required when updating task status",
+      path: ["comment"]
+    });
+  }
+});
 
 export const TaskListSchema = z.object({
   repo: z.string().min(1),
@@ -382,6 +392,8 @@ export const TOOL_DEFINITIONS = [
         priority: { type: "number", minimum: 1, maximum: 5 },
         agent: { type: "string" },
         role: { type: "string" },
+        model: { type: "string" },
+        comment: { type: "string", description: "Required when changing task status. Stored in task_comments history." },
         doc_path: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
         metadata: { type: "object" },

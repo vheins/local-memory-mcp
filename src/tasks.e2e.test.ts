@@ -74,7 +74,10 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       arguments: {
         repo: REPO,
         id: taskAId,
-        status: "in_progress"
+        status: "in_progress",
+        comment: "Started architecture review",
+        agent: "Agent A",
+        model: "gpt-5.4"
       }
     });
 
@@ -88,7 +91,10 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       arguments: {
         repo: REPO,
         id: taskAId,
-        status: "completed"
+        status: "completed",
+        comment: "Architecture review finished and documented",
+        agent: "Agent A",
+        model: "gpt-5.4"
       }
     });
 
@@ -103,12 +109,87 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       arguments: {
         repo: REPO,
         id: taskBId,
-        status: "in_progress"
+        status: "in_progress",
+        comment: "Implementation started after dependency was cleared",
+        agent: "Agent B",
+        model: "gpt-5.4-mini"
       }
     });
 
     const finalCheckRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
     const finalCheckTasks = JSON.parse(finalCheckRes.contents[0].text);
     expect(finalCheckTasks[0].status).toBe("in_progress");
+
+    const updatedTask = db.getTaskById(taskBId);
+    expect(updatedTask.comments).toHaveLength(1);
+    expect(updatedTask.comments[0].comment).toContain("Implementation started");
+    expect(updatedTask.comments[0].agent).toBe("Agent B");
+    expect(updatedTask.comments[0].model).toBe("gpt-5.4-mini");
+    expect(updatedTask.comments[0].previous_status).toBe("pending");
+    expect(updatedTask.comments[0].next_status).toBe("in_progress");
+  });
+
+  it("requires comment when status changes", async () => {
+    await router("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: REPO,
+        task_code: "TASK-003",
+        phase: "implementation",
+        title: "Comment enforcement",
+        description: "Task used to verify status change comment enforcement",
+        status: "pending",
+        priority: 3
+      }
+    });
+
+    const taskId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-003")?.id;
+    expect(taskId).toBeDefined();
+
+    await expect(router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: taskId,
+        status: "in_progress"
+      }
+    })).rejects.toThrow("comment is required when updating task status");
+  });
+
+  it("stores standalone comments without mutating description", async () => {
+    await router("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: REPO,
+        task_code: "TASK-004",
+        phase: "implementation",
+        title: "Standalone comments",
+        description: "Original description",
+        status: "pending",
+        priority: 3,
+        agent: "Seeder",
+        role: "user"
+      }
+    });
+
+    const taskId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-004")?.id;
+    expect(taskId).toBeDefined();
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: taskId,
+        comment: "Investigated root cause and prepared next steps",
+        agent: "Agent C",
+        model: "gpt-5.4"
+      }
+    });
+
+    const task = db.getTaskById(taskId);
+    expect(task.description).toBe("Original description");
+    expect(task.comments).toHaveLength(1);
+    expect(task.comments[0].previous_status).toBeNull();
+    expect(task.comments[0].next_status).toBeNull();
   });
 });

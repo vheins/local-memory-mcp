@@ -163,6 +163,24 @@ export class SQLiteStore {
       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
       CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
 
+      CREATE TABLE IF NOT EXISTS task_comments (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        comment TEXT NOT NULL,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        role TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown',
+        previous_status TEXT,
+        next_status TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_comments_task_id ON task_comments(task_id);
+      CREATE INDEX IF NOT EXISTS idx_task_comments_repo ON task_comments(repo);
+      CREATE INDEX IF NOT EXISTS idx_task_comments_created_at ON task_comments(created_at DESC);
+
       CREATE TABLE IF NOT EXISTS memories_archive (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -476,6 +494,67 @@ export class SQLiteStore {
     return { total, byType, unused: unused?.count || 0 };
   }
 
+  getTaskStats(repo?: string): any {
+    let query = "SELECT status, COUNT(*) as count FROM tasks";
+    const params: any[] = [];
+    if (repo) {
+      query += " WHERE repo = ?";
+      params.push(repo);
+    }
+    query += " GROUP BY status";
+
+    const rows = this.db.prepare(query).all(...params) as any[];
+    const stats = {
+      total: 0,
+      todo: 0,
+      inProgress: 0,
+      completed: 0,
+      blocked: 0,
+      canceled: 0
+    };
+
+    for (const row of rows) {
+      stats.total += row.count;
+      if (row.status === "pending") stats.todo = row.count;
+      else if (row.status === "in_progress") stats.inProgress = row.count;
+      else if (row.status === "completed") stats.completed = row.count;
+      else if (row.status === "blocked") stats.blocked = row.count;
+      else if (row.status === "canceled") stats.canceled = row.count;
+    }
+
+    return stats;
+  }
+
+  getDashboardStats(repo?: string): any {
+    const memoryStats = this.getStats(repo);
+    const taskStats = this.getTaskStats(repo);
+
+    // Additional stats for dashboard
+    let importanceSql = "SELECT AVG(importance) as avg FROM memories";
+    let hitsSql = "SELECT SUM(hit_count) as totalHits FROM memories";
+    let expiringSql = "SELECT COUNT(*) as count FROM memories WHERE expires_at IS NOT NULL AND expires_at < date('now', '+7 days')";
+    
+    const params: any[] = [];
+    if (repo) {
+      importanceSql += " WHERE repo = ?";
+      hitsSql += " WHERE repo = ?";
+      expiringSql += " AND repo = ?";
+      params.push(repo);
+    }
+
+    const avgImportance = (this.db.prepare(importanceSql).get(...params) as any)?.avg || 0;
+    const totalHitCount = (this.db.prepare(hitsSql).get(...params) as any)?.totalHits || 0;
+    const expiringSoon = (this.db.prepare(expiringSql).get(...params) as any)?.count || 0;
+
+    return {
+      ...memoryStats,
+      avgImportance: avgImportance.toFixed(1),
+      totalHitCount,
+      expiringSoon,
+      taskStats
+    };
+  }
+
   listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
     return this.db.prepare(`
       SELECT repo, COUNT(*) AS memory_count, MAX(COALESCE(updated_at, created_at)) AS last_updated_at
@@ -622,7 +701,7 @@ export class SQLiteStore {
     const values: unknown[] = [];
 
     Object.keys(updates).forEach(key => {
-      if (updates[key] !== undefined) {
+      if (key !== "comment" && key !== "model" && updates[key] !== undefined) {
         if (key === 'tags' || key === 'metadata') {
           fields.push(`${key} = ?`);
           values.push(JSON.stringify(updates[key]));
@@ -644,16 +723,21 @@ export class SQLiteStore {
   }
 
   getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): any[] {
-    let query = "SELECT * FROM tasks WHERE repo = ?";
+    let query = `
+      SELECT t.*, d.task_code as depends_on_code 
+      FROM tasks t 
+      LEFT JOIN tasks d ON t.depends_on = d.id 
+      WHERE t.repo = ?
+    `;
     const params: any[] = [repo];
 
     if (status) {
-      query += " AND status = ?";
+      query += " AND t.status = ?";
       params.push(status);
     }
 
     if (search) {
-      query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+      query += " AND (t.title LIKE ? OR t.description LIKE ? OR t.task_code LIKE ?)";
       const searchPattern = `%${search}%`;
       params.push(searchPattern, searchPattern, searchPattern);
     }
@@ -662,7 +746,7 @@ export class SQLiteStore {
     // 1. Completed tasks at the bottom (or top if specified)
     // 2. Priority for others
     // 3. Created date
-    query += " ORDER BY status DESC, priority DESC, created_at ASC";
+    query += " ORDER BY t.status DESC, t.priority DESC, t.created_at ASC";
     
     if (limit !== undefined) {
       query += " LIMIT ?";
@@ -680,16 +764,21 @@ export class SQLiteStore {
   getTasksByMultipleStatuses(repo: string, statuses: string[], limit?: number, offset?: number, search?: string): any[] {
     if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset, search);
     
-    let query = `SELECT * FROM tasks WHERE repo = ? AND status IN (${statuses.map(() => '?').join(',')})`;
+    let query = `
+      SELECT t.*, d.task_code as depends_on_code 
+      FROM tasks t 
+      LEFT JOIN tasks d ON t.depends_on = d.id 
+      WHERE t.repo = ? AND t.status IN (${statuses.map(() => '?').join(',')})
+    `;
     const params: any[] = [repo, ...statuses];
 
     if (search) {
-      query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+      query += " AND (t.title LIKE ? OR t.description LIKE ? OR t.task_code LIKE ?)";
       const searchPattern = `%${search}%`;
       params.push(searchPattern, searchPattern, searchPattern);
     }
 
-    query += " ORDER BY priority DESC, created_at ASC";
+    query += " ORDER BY t.priority DESC, t.created_at ASC";
     
     if (limit !== undefined) {
       query += " LIMIT ?";
@@ -705,12 +794,18 @@ export class SQLiteStore {
   }
 
   deleteTask(id: string): void {
+    this.db.prepare("DELETE FROM task_comments WHERE task_id = ?").run(id);
     this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
   }
 
   getTaskById(id: string): any | null {
-    const row = this.db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as any;
-    return row ? this.rowToTask(row) : null;
+    const row = this.db.prepare(`
+      SELECT t.*, d.task_code as depends_on_code 
+      FROM tasks t 
+      LEFT JOIN tasks d ON t.depends_on = d.id 
+      WHERE t.id = ?
+    `).get(id) as any;
+    return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(id) } : null;
   }
 
   isTaskCodeDuplicate(repo: string, task_code: string, excludeId?: string): boolean {
@@ -742,6 +837,33 @@ export class SQLiteStore {
       tags,
       metadata
     };
+  }
+
+  insertTaskComment(comment: any): void {
+    this.db.prepare(`
+      INSERT INTO task_comments (
+        id, task_id, repo, comment, agent, role, model, previous_status, next_status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      comment.id,
+      comment.task_id,
+      comment.repo,
+      comment.comment,
+      comment.agent || "unknown",
+      comment.role || "unknown",
+      comment.model || "unknown",
+      comment.previous_status || null,
+      comment.next_status || null,
+      comment.created_at
+    );
+  }
+
+  getTaskCommentsByTaskId(taskId: string): any[] {
+    return this.db.prepare(`
+      SELECT * FROM task_comments
+      WHERE task_id = ?
+      ORDER BY created_at DESC, id DESC
+    `).all(taskId) as any[];
   }
 
   getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false): MemoryEntry[] {

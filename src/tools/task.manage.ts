@@ -83,7 +83,12 @@ export async function handleTaskUpdate(
   storage: SQLiteStore
 ) {
   const updateData = TaskUpdateSchema.parse(args);
-  const { repo, id, ...updates } = updateData;
+  const { repo, id, comment, ...updates } = updateData;
+  const existingTask = storage.getTaskById(id);
+
+  if (!existingTask) {
+    throw new Error(`Task not found: ${id}`);
+  }
 
   // Check for task_code uniqueness if being updated
   if (updates.task_code) {
@@ -101,6 +106,22 @@ export async function handleTaskUpdate(
   }
 
   storage.updateTask(id, finalUpdates);
+
+  if (comment !== undefined) {
+    storage.insertTaskComment({
+      id: randomUUID(),
+      task_id: id,
+      repo,
+      comment,
+      agent: updates.agent || existingTask.agent || "unknown",
+      role: updates.role || existingTask.role || "unknown",
+      model: updates.model || "unknown",
+      previous_status: updates.status ? existingTask.status : null,
+      next_status: updates.status || null,
+      created_at: new Date().toISOString()
+    });
+  }
+
   storage.logAction("update", repo, { taskId: id });
 
   return { 

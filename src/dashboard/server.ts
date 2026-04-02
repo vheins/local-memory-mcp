@@ -83,6 +83,17 @@ app.get("/api/repos", async (req, res) => {
   }
 });
 
+// Get global or repo stats
+app.get("/api/stats", async (req, res) => {
+  try {
+    const repo = req.query.repo as string | undefined;
+    const stats = db.getDashboardStats(repo);
+    res.json(stats);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get recent actions
 app.get("/api/recent-actions", async (req, res) => {
   try {
@@ -232,7 +243,11 @@ function condenseRecentActions(actions: RecentAction[], limit: number): Condense
 }
 
 // --- Start Server ---
-mcpClient.start().catch(e => logger.error("MCP Client failed", { error: e.message }));
+// The dashboard reads directly from SQLite for its own views, so it should stay
+// usable even when the MCP child process is unavailable.
+if (process.env.DASHBOARD_ENABLE_MCP === "true") {
+  mcpClient.start().catch(e => logger.error("MCP Client failed", { error: e.message }));
+}
 
 app.listen(PORT, () => {
   console.log(`${new Date().toISOString()} DASHBOARD_STARTING v${pkg.version} on port ${PORT}`);
