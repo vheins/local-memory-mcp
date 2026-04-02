@@ -14,7 +14,15 @@ import { PROMPTS } from "../prompts/registry.js";
 import { listResources } from "../resources/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"));
+let pkg = { version: "0.0.0" };
+try {
+  const pkgPath = path.join(__dirname, "../../package.json");
+  if (fs.existsSync(pkgPath)) {
+    pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  }
+} catch (e) {
+  // Silent fallback
+}
 const app = express();
 const PORT = process.env.PORT || 3456;
 const startTime = Date.now();
@@ -100,15 +108,8 @@ setInterval(() => {
 app.get("/api/health", (req, res) => {
   const stats = db.getStats();
   
-  // Read version from package.json
-  let version = "0.0.0";
-  try {
-    const pkgPath = path.join(process.cwd(), "package.json");
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    version = pkg.version;
-  } catch (e) {
-    logger.warn("Could not read version from package.json");
-  }
+  // Use version from package.json (already loaded at top level)
+  const version = pkg.version || "0.0.0";
 
   res.json({
     connected: mcpClient.isConnected(),
