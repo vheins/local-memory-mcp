@@ -458,16 +458,6 @@ app.post("/api/memories/archive", async (req, res) => {
   }
 });
 
-// Serve the dashboard HTML
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.listen(PORT, () => {
-  console.log(`${new Date().toISOString()} DASHBOARD_STARTING v${pkg.version}`);
-  logger.info("MCP Memory Dashboard started", { port: PORT, version: pkg.version });
-});
-
 function condenseRecentActions(actions: RecentAction[], limit: number): CondensedRecentAction[] {
   const condensed: CondensedRecentAction[] = [];
 
@@ -648,6 +638,16 @@ app.get("/api/export/handbook/:repo", (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Serve the dashboard HTML
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.listen(PORT, () => {
+  console.log(`${new Date().toISOString()} DASHBOARD_STARTING v${pkg.version}`);
+  logger.info("MCP Memory Dashboard started", { port: PORT, version: pkg.version });
 });
 
 // Cleanup on exit
