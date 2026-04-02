@@ -75,7 +75,7 @@ export function createRouter(
         return await handleMemorySummarize(args, db);
 
       case "memory-delete":
-        return await handleMemoryDelete(args, db);
+        return await handleMemoryDelete(args, db, vectors);
 
       case "task-create":
         return await handleTaskCreate(args, db);
