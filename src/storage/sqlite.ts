@@ -323,14 +323,23 @@ export class SQLiteStore {
     return row ? { ...this.rowToMemoryEntry(row), recall_rate: row.recall_rate ?? 0 } : null;
   }
 
-  getByIds(ids: string[]): MemoryEntry[] {
+  getByIds(ids: string[], filters?: { type?: string; status?: string }): MemoryEntry[] {
     if (ids.length === 0) return [];
-    const placeholders = ids.map(() => "?").join(",");
-    const rows = this.db.prepare(`
-      SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
-      FROM memories WHERE id IN (${placeholders})
-    `).all(...ids) as any[];
-    return rows.map(r => ({ ...this.rowToMemoryEntry(r), recall_rate: r.recall_rate ?? 0 }));
+    
+    let query = "SELECT * FROM memories WHERE id IN (" + ids.map(() => "?").join(",") + ")";
+    const params: any[] = [...ids];
+
+    if (filters?.type) {
+      query += " AND type = ?";
+      params.push(filters.type);
+    }
+    if (filters?.status) {
+      query += " AND status = ?";
+      params.push(filters.status);
+    }
+
+    const rows = this.db.prepare(query).all(...params) as any[];
+    return rows.map(r => this.rowToMemoryEntry(r));
   }
 
   searchByRepo(repo: string, options: any = {}): MemoryEntry[] {
@@ -746,14 +755,14 @@ export class SQLiteStore {
 
     if (candidateIds.length === 0) return null;
 
-    const memories = this.getByIds(candidateIds);
+    const memories = this.getByIds(candidateIds, { type, status: "active" });
     const memoryMap = new Map(memories.map(m => [m.id, m]));
 
     // Iterate through original vector results to maintain score priority
     for (const vr of vectorResults) {
       if (vr.score > threshold) {
         const memory = memoryMap.get(vr.id);
-        if (memory && memory.type === type && memory.status === "active") return memory;
+        if (memory) return memory;
       }
     }
     return null;
