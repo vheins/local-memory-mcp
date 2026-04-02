@@ -91,7 +91,9 @@ export class SQLiteStore {
           'code_fact',
           'decision',
           'mistake',
-          'pattern'
+          'pattern',
+          'agent_handoff',
+          'agent_registered'
         )),
         title TEXT,
         content TEXT NOT NULL,
@@ -206,6 +208,7 @@ export class SQLiteStore {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         action TEXT NOT NULL,
         query TEXT,
+        response TEXT,
         memory_id TEXT,
         task_id TEXT,
         repo TEXT NOT NULL,
@@ -239,6 +242,7 @@ export class SQLiteStore {
       { name: "agent", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
       { name: "role", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
       { name: "doc_path", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN doc_path TEXT" },
+      { name: "response", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN response TEXT" },
     ];
 
     for (const col of columnsToAdd) {
@@ -921,8 +925,15 @@ export class SQLiteStore {
   }
 
   logAction(action: string, repo: string, options: any = {}) {
-    this.db.prepare(`INSERT INTO action_log (action, query, memory_id, task_id, repo, result_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-      action, options.query || null, options.memoryId || null, options.taskId || null, repo, options.resultCount || 0, new Date().toISOString()
+    this.db.prepare(`INSERT INTO action_log (action, query, response, memory_id, task_id, repo, result_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      action, 
+      options.query || null, 
+      options.response ? (typeof options.response === 'string' ? options.response : JSON.stringify(options.response)) : null,
+      options.memoryId || null, 
+      options.taskId || null, 
+      repo, 
+      options.resultCount || 0, 
+      new Date().toISOString()
     );
   }
 

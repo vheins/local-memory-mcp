@@ -31,11 +31,16 @@ const db = new SQLiteStore();
 const mcpClient = new MCPClient();
 
 type RecentAction = {
+  id: number;
   action: string;
   query?: string;
+  response?: string;
   memory_id?: string;
   memory_title?: string;
   memory_type?: string;
+  task_id?: string;
+  task_title?: string;
+  task_code?: string;
   result_count?: number;
   created_at: string;
 };

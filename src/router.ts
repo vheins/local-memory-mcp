@@ -1,4 +1,5 @@
 import { listResources, readResource } from "./resources/index.js";
+import { logger } from "./utils/logger.js";
 import { PROMPTS } from "./prompts/registry.js";
 import { TOOL_DEFINITIONS } from "./tools/schemas.js";
 import { SQLiteStore } from "./storage/sqlite.js";
@@ -56,49 +57,83 @@ export function createRouter(
     // Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
     const toolName = String(name).replace(/\./g, "-");
 
+    let result: any;
+    let repo = args?.repo || args?.scope?.repo || "unknown";
+
     switch (toolName) {
       case "memory-store":
-        return await handleMemoryStore(args, db, vectors);
+        result = await handleMemoryStore(args, db, vectors);
+        break;
 
       case "memory-acknowledge":
-        return await handleMemoryAcknowledge(args, db);
+        result = await handleMemoryAcknowledge(args, db);
+        break;
 
       case "memory-update":
-        return await handleMemoryUpdate(args, db, vectors);
+        result = await handleMemoryUpdate(args, db, vectors);
+        break;
 
       case "memory-recap":
-        return await handleMemoryRecap(args, db);
+        result = await handleMemoryRecap(args, db);
+        break;
 
       case "memory-search":
-        return await handleMemorySearch(args, db, vectors);
+        result = await handleMemorySearch(args, db, vectors);
+        break;
 
       case "memory-summarize":
-        return await handleMemorySummarize(args, db);
+        result = await handleMemorySummarize(args, db);
+        break;
 
       case "memory-delete":
-        return await handleMemoryDelete(args, db, vectors);
+        result = await handleMemoryDelete(args, db, vectors);
+        break;
 
       case "memory-bulk-delete":
-        return await handleMemoryBulkDelete(args, db, vectors);
+        result = await handleMemoryBulkDelete(args, db, vectors);
+        break;
 
       case "task-create":
-        return await handleTaskCreate(args, db);
+        result = await handleTaskCreate(args, db);
+        break;
 
       case "task-update":
-        return await handleTaskUpdate(args, db);
+        result = await handleTaskUpdate(args, db);
+        break;
 
       case "task-delete":
-        return await handleTaskDelete(args, db);
+        result = await handleTaskDelete(args, db);
+        break;
 
       case "task-list":
-        return await handleTaskList(args, db);
+        result = await handleTaskList(args, db);
+        break;
 
       case "task-bulk-manage":
-        return await handleTaskBulkManage(args, db);
+        result = await handleTaskBulkManage(args, db);
+        break;
 
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+
+    // Log the action
+    try {
+      const actionType = toolName.split("-")[1] || toolName;
+      const options: any = {
+        query: args?.query || args?.title || args?.task_code || (toolName === 'memory-recap' ? `Offset: ${args?.offset || 0}` : undefined),
+        response: result,
+        memoryId: args?.id || args?.memory_id || (result?.data?.id),
+        taskId: args?.id || args?.task_id || (result?.data?.id),
+        resultCount: Array.isArray(result?.data?.results) ? result.data.results.length : (result?.data?.count || 0)
+      };
+      
+      db.logAction(actionType, repo, options);
+    } catch (e) {
+      logger.error("Failed to log action", { toolName, error: String(e) });
+    }
+
+    return result;
   }
 
   return handleMethod;

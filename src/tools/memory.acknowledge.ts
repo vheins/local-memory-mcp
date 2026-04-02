@@ -27,9 +27,6 @@ export async function handleMemoryAcknowledge(
     logger.info("[MCP] memory.acknowledge - irrelevant", { id: memory.id, context: validated.application_context });
   }
 
-  // Log the action for audit trail
-  db.logAction('read', memory.scope.repo, { memoryId: memory.id, query: `Status: ${validated.status}` });
-
   return createMcpResponse(
     { 
       success: true, 

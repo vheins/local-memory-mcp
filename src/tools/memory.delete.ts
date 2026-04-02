@@ -28,8 +28,6 @@ export async function handleMemoryDelete(
   // Delete from vector store
   await vectors.remove(validated.id);
 
-  // Log the delete action
-  db.logAction('delete', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
   logger.info("[MCP] memory.delete", { repo: existing.scope.repo, id: validated.id, title: existing.title });
 
   return createMcpResponse(

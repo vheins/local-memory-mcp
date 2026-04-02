@@ -92,8 +92,6 @@ export async function handleMemoryStore(
     // Continue anyway - vectors are optional for search fallback
   }
 
-  // Log the write action
-  db.logAction('write', validated.scope.repo, { memoryId: entry.id, resultCount: 1 });
   logger.info("[MCP] memory.store", { repo: validated.scope.repo, id: entry.id, title: entry.title, type: entry.type, importance: entry.importance });
 
   return createMcpResponse(

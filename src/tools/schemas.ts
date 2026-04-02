@@ -8,7 +8,7 @@ export const MemoryScopeSchema = z.object({
   language: z.string().optional()
 });
 
-export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern"]);
+export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered"]);
 
 // Tool schemas
 export const MemoryStoreSchema = z.object({
@@ -108,8 +108,8 @@ export const TaskUpdateSchema = z.object({
   description: z.string().optional(),
   status: TaskStatusSchema.optional(),
   priority: TaskPrioritySchema.optional(),
-  agent: z.string().optional(),
-  role: z.string().optional(),
+  agent: z.string().min(1, "agent name is required"),
+  role: z.string().min(1, "agent role is required"),
   model: z.string().optional(),
   comment: z.string().min(1).optional(),
   doc_path: z.string().optional(),

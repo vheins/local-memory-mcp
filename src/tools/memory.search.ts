@@ -142,7 +142,6 @@ export async function handleMemorySearch(
 
   // 5. Post-processing
   for (const m of results) db.incrementHitCount(m.id);
-  db.logAction('search', validated.repo, { query: validated.query, resultCount: results.length });
   logger.info("[MCP] memory.search", { repo: validated.repo, query: validated.query, results: results.length });
 
   const topMatch = results[0] ? `\n\nTop Match: [${results[0].type}] ${results[0].title || results[0].content.substring(0, 50)}` : "";

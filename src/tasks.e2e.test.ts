@@ -77,6 +77,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         status: "in_progress",
         comment: "Started architecture review",
         agent: "Agent A",
+        role: "backend",
         model: "gpt-5.4"
       }
     });
@@ -94,6 +95,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         status: "completed",
         comment: "Architecture review finished and documented",
         agent: "Agent A",
+        role: "backend",
         model: "gpt-5.4"
       }
     });
@@ -112,6 +114,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         status: "in_progress",
         comment: "Implementation started after dependency was cleared",
         agent: "Agent B",
+        role: "frontend",
         model: "gpt-5.4-mini"
       }
     });
@@ -151,7 +154,9 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       arguments: {
         repo: REPO,
         id: taskId,
-        status: "in_progress"
+        status: "in_progress",
+        agent: "TestAgent",
+        role: "testing"
       }
     })).rejects.toThrow("comment is required when updating task status");
   });
@@ -182,6 +187,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         id: taskId,
         comment: "Investigated root cause and prepared next steps",
         agent: "Agent C",
+        role: "security",
         model: "gpt-5.4"
       }
     });

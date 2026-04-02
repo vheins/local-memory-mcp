@@ -94,94 +94,95 @@ function getActionColor(action) {
     return colors[action] || colors.search;
 }
 
-function getBubbleStyle(action) {
-    const styles = {
-        search: {
-            bubble: 'bg-blue-500 dark:bg-blue-600 text-white',
-            label: 'text-blue-100',
-            meta:  'text-blue-200',
-            align: 'items-start',
-            tail:  'left-2 -bottom-1.5 border-r-blue-500 dark:border-r-blue-600',
-        },
-        read: {
-            bubble: 'bg-emerald-500 dark:bg-emerald-600 text-white',
-            label: 'text-emerald-100',
-            meta:  'text-emerald-200',
-            align: 'items-start',
-            tail:  'left-2 -bottom-1.5 border-r-emerald-500 dark:border-r-emerald-600',
-        },
-        write: {
-            bubble: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100',
-            label: 'text-gray-500 dark:text-gray-400',
-            meta:  'text-gray-400 dark:text-gray-500',
-            align: 'items-start',
-            tail:  'left-2 -bottom-1.5 border-r-gray-100 dark:border-r-gray-700',
-        },
-        update: {
-            bubble: 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-            label: 'text-amber-600 dark:text-amber-400',
-            meta:  'text-amber-500 dark:text-amber-500',
-            align: 'items-start',
-            tail:  'left-2 -bottom-1.5 border-r-amber-100 dark:border-r-amber-900',
-        },
-        delete: {
-            bubble: 'bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100',
-            label: 'text-red-500 dark:text-red-400',
-            meta:  'text-red-400',
-            align: 'items-start',
-            tail:  'left-2 -bottom-1.5 border-r-red-100 dark:border-r-red-900',
-        },
+function getActionBubbleColor(action) {
+    const colors = {
+        search: 'from-blue-500 to-blue-600',
+        read: 'from-emerald-500 to-emerald-600',
+        write: 'from-indigo-500 to-indigo-600',
+        update: 'from-amber-500 to-amber-600',
+        delete: 'from-rose-500 to-rose-600'
     };
-    return styles[action] || styles.search;
+    return colors[action] || 'from-slate-500 to-slate-600';
 }
 
 function renderActionBubble(action) {
-    const s = getBubbleStyle(action.action);
-    const isRight = false; // Force left alignment
-
-    // Main content line
+    // Agent Request Bubble
     let mainText = '';
     let subText = '';
 
     if (action.action === 'search') {
         mainText = `🔍 "${action.query || ''}"`;
         subText = action.result_count != null ? `${action.result_count} result${action.result_count !== 1 ? 's' : ''} found` : '';
+    } else if (action.task_id) {
+        mainText = action.task_title || action.task_code || action.task_id.substring(0, 8);
+        const verb = { write: '💾 Created Task', update: '🔄 Updated Task', delete: '🗑️ Deleted Task' }[action.action] || action.action;
+        subText = action.task_code ? `${verb} [${action.task_code}]` : verb;
     } else {
-        if (action.task_id) {
-            mainText = action.task_title || action.task_code || action.task_id.substring(0, 8);
-            const verb = { write: '💾 Created Task', update: '🔄 Updated Task', delete: '🗑️ Deleted Task' }[action.action] || action.action;
-            subText = action.task_code ? `${verb} [${action.task_code}]` : verb;
-        } else {
-            mainText = action.memory_title
-                ? action.memory_title
-                : action.memory_id ? action.memory_id.substring(0, 8) + '…' : '—';
-            const typeLabel = action.memory_type ? `[${action.memory_type}]` : '';
-            const verb = { write: '💾 Stored', update: '🔄 Updated', delete: '🗑️ Deleted', read: '📖 Read' }[action.action] || action.action;
-            subText = [verb, typeLabel].filter(Boolean).join(' ');
-        }
+        mainText = action.memory_title || (action.memory_id ? action.memory_id.substring(0, 8) + '…' : '—');
+        const typeLabel = action.memory_type ? `[${action.memory_type}]` : '';
+        const verbs = { 
+            write: '💾 Stored', 
+            update: '🔄 Updated', 
+            delete: '🗑️ Deleted', 
+            read: '📖 Read',
+            agent_handoff: '🤝 Handoff',
+            agent_registered: '📝 Registration'
+        };
+        const verb = verbs[action.action] || verbs[action.memory_type] || action.action;
+        subText = [verb, typeLabel].filter(Boolean).join(' ');
     }
 
-    const burst = action.burstCount > 1
-        ? `<span class="ml-1 px-1.5 py-0.5 rounded-full bg-white/20 text-xs font-bold">×${action.burstCount}</span>`
-        : '';
-
-    return `
-        <div class="flex flex-col ${s.align} mb-4">
-            <div class="flex items-center gap-1.5 mb-1 px-1">
-                <div class="w-5 h-5 rounded-full ${s.bubble} flex items-center justify-center flex-shrink-0">
+    const colorGradient = getActionBubbleColor(action.action);
+    const agentBubble = `
+        <div class="flex flex-col agent-align">
+            <div class="chat-bubble chat-bubble-agent bg-gradient-to-br ${colorGradient}">
+                <div class="flex items-center gap-1.5 mb-1 opacity-80">
                     <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">${getActionIcon(action.action)}</svg>
+                    <span class="text-[10px] font-bold uppercase tracking-wider">${action.action}</span>
                 </div>
-                <span class="text-xs font-semibold capitalize ${s.label.replace('text-', 'text-').replace('100','500').replace('200','500')}">${action.action}${burst}</span>
+                <p class="text-sm font-medium leading-snug break-words">${mainText}</p>
+                ${subText ? `<p class="text-[10px] mt-1 opacity-70 font-semibold uppercase tracking-tight">${subText}</p>` : ''}
             </div>
-            <div class="relative max-w-[95%]">
-                <div class="${s.bubble} rounded-2xl rounded-bl-sm px-3 py-2 shadow-sm">
-                    <p class="text-sm font-medium leading-snug break-words">${mainText}</p>
-                    ${subText ? `<p class="text-xs mt-0.5 ${s.meta}">${subText}</p>` : ''}
-                </div>
-            </div>
-            <span class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 px-1">${formatActionDate(action.created_at)}</span>
+            <span class="chat-timestamp">${formatActionDate(action.created_at)}</span>
         </div>
     `;
+
+    // MCP Response Bubble (if exists)
+    let mcpBubble = '';
+    if (action.response) {
+        let responseContent = '';
+        try {
+            const resp = typeof action.response === 'string' ? JSON.parse(action.response) : action.response;
+            if (resp.content && Array.isArray(resp.content)) {
+                responseContent = resp.content
+                    .filter(c => c.type === 'text')
+                    .map(c => c.text)
+                    .join('\n');
+            } else if (resp.message) {
+                responseContent = resp.message;
+            } else {
+                responseContent = JSON.stringify(resp, null, 2);
+            }
+        } catch (e) {
+            responseContent = action.response;
+        }
+
+        mcpBubble = `
+            <div class="flex flex-col mcp-align">
+                <div class="chat-bubble chat-bubble-mcp">
+                    <div class="flex items-center gap-1.5 mb-1 opacity-60">
+                        <div class="w-2 h-2 rounded-full bg-sky-500"></div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider">MCP REPLY</span>
+                    </div>
+                    <div class="markdown-body text-xs prose-sm prose-slate dark:prose-invert">
+                        ${renderMarkdown(responseContent)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    return agentBubble + mcpBubble;
 }
 
 function renderRecentActions() {
@@ -611,6 +612,10 @@ async function loadStats() {
         document.getElementById('decisionCount').textContent = data.byType?.decision || 0;
         document.getElementById('mistakeCount').textContent = data.byType?.mistake || 0;
         document.getElementById('patternCount').textContent = data.byType?.pattern || 0;
+        const handoffCountEl = document.getElementById('handoffCount');
+        const registeredCountEl = document.getElementById('registeredCount');
+        if (handoffCountEl) handoffCountEl.textContent = data.byType?.agent_handoff || 0;
+        if (registeredCountEl) registeredCountEl.textContent = data.byType?.agent_registered || 0;
 
         // Fill Task stats
         if (data.taskStats) {
@@ -656,16 +661,18 @@ function updateTypeChart(byType) {
         byType?.decision || 0,
         byType?.mistake || 0,
         byType?.code_fact || 0,
-        byType?.pattern || 0
+        byType?.pattern || 0,
+        byType?.agent_handoff || 0,
+        byType?.agent_registered || 0
     ];
 
     charts.typeChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Decision', 'Mistake', 'Code Fact', 'Pattern'],
+            labels: ['Decision', 'Mistake', 'Code Fact', 'Pattern', 'Handoff', 'Registration'],
             datasets: [{
                 data: counts,
-                backgroundColor: ['#fb7185', '#c084fc', '#38bdf8', '#34d399'],
+                backgroundColor: ['#fb7185', '#c084fc', '#38bdf8', '#34d399', '#fb923c', '#a3e635'],
                 borderWidth: 2,
                 borderColor: isDark ? '#1e293b' : '#ffffff',
                 hoverOffset: 12
@@ -1371,6 +1378,7 @@ function renderDetailPanel(data) {
                     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Source Info</div>
                     <div class="space-y-2 text-sm">
                         <div><strong>Agent:</strong> ${escapeHtml(data.agent || 'unknown')}</div>
+                        <div><strong>Role:</strong> ${escapeHtml(data.role || 'unknown')}</div>
                         <div><strong>Model:</strong> ${escapeHtml(data.model || 'unknown')}</div>
                         <div><strong>Repo:</strong> ${escapeHtml(data.scope?.repo || 'N/A')}</div>
                     </div>
@@ -1384,6 +1392,27 @@ function renderDetailPanel(data) {
                     </div>
                 </div>
             </div>
+
+            ${data.type === 'agent_registered' ? `
+                <div class="rounded-xl border border-lime-200 dark:border-lime-900 bg-lime-50 dark:bg-lime-900/20 p-4">
+                    <div class="text-xs uppercase tracking-wide text-lime-600 dark:text-lime-400 mb-2">Agent Status</div>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-bold uppercase ${data.status === 'active' ? 'bg-lime-500 text-white' : 'bg-gray-400 text-white'}">
+                            ${escapeHtml(data.status)}
+                        </span>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${data.type === 'agent_handoff' ? `
+                <div class="rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-900/20 p-4">
+                    <div class="text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 mb-2">Handoff Details</div>
+                    <div class="space-y-2 text-sm">
+                        <div><strong>Completed at:</strong> ${data.completed_at ? new Date(data.completed_at).toLocaleString() : 'Pending'}</div>
+                        <div><strong>Task Status:</strong> <span class="capitalize px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">${data.status}</span></div>
+                    </div>
+                </div>
+            ` : ''}
 
             ${data.supersedes ? `
                 <div class="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 p-4">

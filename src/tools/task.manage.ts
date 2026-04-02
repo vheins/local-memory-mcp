@@ -67,7 +67,6 @@ export async function handleTaskCreate(
   };
 
   storage.insertTask(task);
-  storage.logAction("write", repo, { taskId: task.id });
 
   return { 
     content: [{ 
@@ -122,8 +121,6 @@ export async function handleTaskUpdate(
     });
   }
 
-  storage.logAction("update", repo, { taskId: id });
-
   return { 
     content: [{ 
       type: "text", 
@@ -139,7 +136,6 @@ export async function handleTaskDelete(
 ) {
   const { repo, id } = TaskDeleteSchema.parse(args);
   storage.deleteTask(id);
-  storage.logAction("delete", repo, { taskId: id });
 
   return { 
     content: [{ 

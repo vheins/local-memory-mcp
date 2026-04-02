@@ -52,8 +52,6 @@ export async function handleTaskBulkManage(
         createdTasks.push(task.task_code);
       }
 
-      storage.logAction("write", repo, { resultCount: tasks.length, query: "Bulk Create" });
-      
       return { 
         content: [{ 
           type: "text", 
@@ -68,8 +66,6 @@ export async function handleTaskBulkManage(
       for (const id of ids) {
         storage.deleteTask(id);
       }
-
-      storage.logAction("delete", repo, { resultCount: ids.length, query: "Bulk Delete" });
 
       return { 
         content: [{ 
