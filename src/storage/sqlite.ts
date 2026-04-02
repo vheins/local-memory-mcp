@@ -713,6 +713,19 @@ export class SQLiteStore {
     return row ? this.rowToTask(row) : null;
   }
 
+  isTaskCodeDuplicate(repo: string, task_code: string, excludeId?: string): boolean {
+    let query = "SELECT COUNT(*) as count FROM tasks WHERE repo = ? AND task_code = ?";
+    const params = [repo, task_code];
+    
+    if (excludeId) {
+      query += " AND id != ?";
+      params.push(excludeId);
+    }
+    
+    const row = this.db.prepare(query).get(...params) as any;
+    return row.count > 0;
+  }
+
   private rowToTask(row: any): any {
     let tags: string[] = [];
     let metadata: any = {};

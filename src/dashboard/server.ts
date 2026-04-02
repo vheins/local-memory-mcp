@@ -215,6 +215,11 @@ app.post("/api/tasks", async (req, res) => {
     if (!repo || !task_code || !title) {
       return res.status(400).json({ error: "repo, task_code, and title are required" });
     }
+
+    if (db.isTaskCodeDuplicate(repo, task_code)) {
+      return res.status(400).json({ error: `Duplicate task_code: '${task_code}' already exists in repository '${repo}'` });
+    }
+
     const task = {
       id: randomUUID(),
       repo,

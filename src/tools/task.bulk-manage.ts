@@ -14,8 +14,17 @@ export async function handleTaskBulkManage(
     case "bulk_create": {
       const createdTasks: string[] = [];
       const now = new Date().toISOString();
+      const codesInRequest = new Set<string>();
 
       for (const taskData of tasks) {
+        if (codesInRequest.has(taskData.task_code)) {
+          throw new Error(`Duplicate task_code in request: '${taskData.task_code}'`);
+        }
+        if (storage.isTaskCodeDuplicate(repo, taskData.task_code)) {
+          throw new Error(`Duplicate task_code: '${taskData.task_code}' already exists in repository '${repo}'`);
+        }
+        codesInRequest.add(taskData.task_code);
+
         const taskId = randomUUID();
         const task: Task = {
           id: taskId,

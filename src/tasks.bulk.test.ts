@@ -96,4 +96,64 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     const offsetTasks = JSON.parse(offsetRes.content[0].text);
     expect(offsetTasks.length).toBe(5); // 20 total - 15 offset = 5 remaining
   });
+
+  it("should prevent duplicate task_codes in the same request", async () => {
+    const promise = router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          { task_code: "DUP-001", title: "Task 1", description: "D", phase: "p", status: "pending" },
+          { task_code: "DUP-001", title: "Task 2", description: "D", phase: "p", status: "pending" }
+        ]
+      }
+    });
+
+    await expect(promise).rejects.toThrow("Duplicate task_code in request");
+  });
+
+  it("should prevent duplicate task_codes against existing tasks", async () => {
+    // Create first task
+    await router("tools/call", {
+      name: "task-manage",
+      arguments: {
+        action: "create",
+        repo: REPO,
+        task_code: "EXISTING-001",
+        title: "Initial",
+        description: "D",
+        phase: "p",
+        status: "pending"
+      }
+    });
+
+    // Try to create another one with same code (via bulk)
+    const bulkPromise = router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          { task_code: "EXISTING-001", title: "Duplicate", description: "D", phase: "p", status: "pending" }
+        ]
+      }
+    });
+    await expect(bulkPromise).rejects.toThrow("already exists");
+
+    // Try via single create
+    const singlePromise = router("tools/call", {
+      name: "task-manage",
+      arguments: {
+        action: "create",
+        repo: REPO,
+        task_code: "EXISTING-001",
+        title: "Duplicate",
+        description: "D",
+        phase: "p",
+        status: "pending"
+      }
+    });
+    await expect(singlePromise).rejects.toThrow("already exists");
+  });
 });

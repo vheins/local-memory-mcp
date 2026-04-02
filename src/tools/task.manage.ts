@@ -47,6 +47,10 @@ export async function handleTaskManage(
       if (!description) throw new Error("description is required for task creation");
       if (!status) throw new Error("status is required for task creation");
       
+      if (storage.isTaskCodeDuplicate(repo, task_code)) {
+        throw new Error(`Duplicate task_code: '${task_code}' already exists in repository '${repo}'`);
+      }
+      
       const taskId = id || randomUUID();
       const task: Task = {
         id: taskId,
@@ -82,7 +86,12 @@ export async function handleTaskManage(
     case "update": {
       if (!id) throw new Error("ID is required for task update");
       const updates: any = {};
-      if (task_code !== undefined) updates.task_code = task_code;
+      if (task_code !== undefined) {
+        if (storage.isTaskCodeDuplicate(repo, task_code, id)) {
+          throw new Error(`Duplicate task_code: '${task_code}' already exists in repository '${repo}'`);
+        }
+        updates.task_code = task_code;
+      }
       if (phase !== undefined) updates.phase = phase;
       if (title !== undefined) updates.title = title;
       if (description !== undefined) updates.description = description;
