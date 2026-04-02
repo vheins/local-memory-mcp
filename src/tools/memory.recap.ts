@@ -18,7 +18,26 @@ export async function handleMemoryRecap(
   // Get recent memories using public API (no type-unsafe cast)
   const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset);
 
-  if (rows.length === 0) {
+  // Get active tasks for recap (In Progress, Pending, Blocked, Canceled)
+  const activeStatuses = ["in_progress", "pending", "blocked", "canceled"];
+  const tasks = db.getTasksByMultipleStatuses(validated.repo, activeStatuses, 50);
+  
+  // Sort tasks: in_progress first, then by priority
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (a.status === "in_progress" && b.status !== "in_progress") return -1;
+    if (a.status !== "in_progress" && b.status === "in_progress") return 1;
+    return (b.priority || 0) - (a.priority || 0);
+  });
+
+  const formattedTasks = sortedTasks.map(t => ({
+    id: t.id,
+    task_code: t.task_code,
+    title: t.title,
+    status: t.status,
+    priority: t.priority
+  }));
+
+  if (rows.length === 0 && tasks.length === 0) {
     return createMcpResponse(
       {
         repo: validated.repo,
@@ -26,9 +45,10 @@ export async function handleMemoryRecap(
         total,
         offset: validated.offset,
         memories: [],
-        message: `No memories found for repo: ${validated.repo}`
+        tasks: [],
+        message: `No memories or tasks found for repo: ${validated.repo}`
       },
-      `No memories for repo "${validated.repo}"`
+      `No memories or tasks for repo "${validated.repo}"`
     );
   }
 
@@ -43,10 +63,17 @@ export async function handleMemoryRecap(
   }));
 
   // Create summary text
-  const summary = formattedMemories
+  const memorySummary = formattedMemories
     .map(
       (m) =>
         `${m.number}. [${m.type.toUpperCase()}] (importance: ${m.importance}) ${m.preview}`
+    )
+    .join("\n");
+
+  const taskSummary = formattedTasks
+    .map(
+      (t) =>
+        `- [${t.status.toUpperCase()}] [${t.task_code}] ${t.title} (P${t.priority})`
     )
     .join("\n");
 
@@ -57,8 +84,9 @@ export async function handleMemoryRecap(
       total,
       offset: validated.offset,
       memories: formattedMemories,
-      summary: `Recent ${rows.length} memories:\n\n${summary}`
+      tasks: formattedTasks,
+      summary: `Recent ${rows.length} memories:\n\n${memorySummary}\n\nActive Tasks:\n\n${taskSummary || "No active tasks"}`
     },
-    `Retrieved ${rows.length} memories for repo "${validated.repo}"`
+    `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}"`
   );
 }

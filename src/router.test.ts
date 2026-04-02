@@ -38,6 +38,12 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       getRecentQueries: vi.fn().mockReturnValue([]),
       logAction: vi.fn(),
       checkConflicts: vi.fn().mockResolvedValue(null),
+      getTasksByRepo: vi.fn().mockReturnValue([]),
+      getTasksByMultipleStatuses: vi.fn().mockReturnValue([]),
+      insertTask: vi.fn(),
+      updateTask: vi.fn(),
+      deleteTask: vi.fn(),
+      getTaskById: vi.fn().mockReturnValue(null),
       close: vi.fn(),
     } as unknown as SQLiteStore;
   }
