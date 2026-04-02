@@ -120,15 +120,7 @@ export const TaskUpdateSchema = z.object({
 }).refine(
   (data) => Object.keys(data).length > 2,
   { message: "At least one field besides repo and id must be provided for update" }
-).superRefine((data, ctx) => {
-  if (data.status !== undefined && data.comment === undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "comment is required when updating task status",
-      path: ["comment"]
-    });
-  }
-});
+);
 
 export const TaskListSchema = z.object({
   repo: z.string().min(1),
@@ -177,7 +169,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         type: {
           type: "string",
-          enum: ["code_fact", "decision", "mistake", "pattern"],
+          enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered"],
           description: "Type of memory being stored"
         },
         title: {
@@ -277,7 +269,7 @@ export const TOOL_DEFINITIONS = [
         },
         types: {
           type: "array",
-          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern"] }
+          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered"] }
         },
         minImportance: { type: "number", minimum: 1, maximum: 5 },
         limit: { type: "number", minimum: 1, maximum: 10, default: 5 },

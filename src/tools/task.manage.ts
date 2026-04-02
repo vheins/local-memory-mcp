@@ -89,6 +89,13 @@ export async function handleTaskUpdate(
     throw new Error(`Task not found: ${id}`);
   }
 
+  // Enforce mandatory comment if status is changing
+  if (updates.status !== undefined && updates.status !== existingTask.status) {
+    if (comment === undefined || comment.trim() === "") {
+      throw new Error("comment is required when changing task status");
+    }
+  }
+
   // Check for task_code uniqueness if being updated
   if (updates.task_code) {
     if (storage.isTaskCodeDuplicate(repo, updates.task_code, id)) {
@@ -107,6 +114,7 @@ export async function handleTaskUpdate(
   storage.updateTask(id, finalUpdates);
 
   if (comment !== undefined) {
+    const isStatusChanging = updates.status !== undefined && updates.status !== existingTask.status;
     storage.insertTaskComment({
       id: randomUUID(),
       task_id: id,
@@ -115,8 +123,8 @@ export async function handleTaskUpdate(
       agent: updates.agent || existingTask.agent || "unknown",
       role: updates.role || existingTask.role || "unknown",
       model: updates.model || "unknown",
-      previous_status: updates.status ? existingTask.status : null,
-      next_status: updates.status || null,
+      previous_status: isStatusChanging ? existingTask.status : null,
+      next_status: isStatusChanging ? updates.status : null,
       created_at: new Date().toISOString()
     });
   }

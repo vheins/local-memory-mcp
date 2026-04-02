@@ -158,7 +158,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         agent: "TestAgent",
         role: "testing"
       }
-    })).rejects.toThrow("comment is required when updating task status");
+    })).rejects.toThrow("comment is required when changing task status");
   });
 
   it("stores standalone comments without mutating description", async () => {
