@@ -52,4 +52,48 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     expect(tasks.find(t => t.task_code === "BULK-001")).toBeDefined();
     expect(tasks.find(t => t.task_code === "BULK-002")).toBeDefined();
   });
+
+  it("should enforce default limit of 15 and support pagination", async () => {
+    // Create 20 tasks
+    const manyTasks = Array.from({ length: 20 }, (_, i) => ({
+      task_code: `LIMIT-${i.toString().padStart(3, '0')}`,
+      title: `Task ${i}`,
+      description: `Description ${i}`,
+      phase: "research",
+      status: "pending"
+    }));
+
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: manyTasks
+      }
+    });
+
+    // Test default limit (15)
+    const defaultRes = await router("tools/call", {
+      name: "task-list",
+      arguments: { repo: REPO }
+    });
+    const defaultTasks = JSON.parse(defaultRes.content[0].text);
+    expect(defaultTasks.length).toBe(15);
+
+    // Test explicit limit
+    const limitRes = await router("tools/call", {
+      name: "task-list",
+      arguments: { repo: REPO, limit: 5 }
+    });
+    const limitedTasks = JSON.parse(limitRes.content[0].text);
+    expect(limitedTasks.length).toBe(5);
+
+    // Test offset (last page)
+    const offsetRes = await router("tools/call", {
+      name: "task-list",
+      arguments: { repo: REPO, limit: 15, offset: 15 }
+    });
+    const offsetTasks = JSON.parse(offsetRes.content[0].text);
+    expect(offsetTasks.length).toBe(5); // 20 total - 15 offset = 5 remaining
+  });
 });

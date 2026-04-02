@@ -99,7 +99,9 @@ export const TaskManageSchema = z.object({
 export const TaskListSchema = z.object({
   repo: z.string().min(1),
   status: TaskStatusSchema.optional(),
-  phase: z.string().optional()
+  phase: z.string().optional(),
+  limit: z.number().min(1).max(100).default(15),
+  offset: z.number().min(0).default(0)
 });
 
 export const TaskBulkManageSchema = z.object({
@@ -397,6 +399,19 @@ export const TOOL_DEFINITIONS = [
         phase: {
           type: "string",
           description: "Filter by phase"
+        },
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 100,
+          default: 15,
+          description: "Maximum number of tasks to return (default 15)"
+        },
+        offset: {
+          type: "number",
+          minimum: 0,
+          default: 0,
+          description: "Offset for pagination"
         }
       },
       required: ["repo"]
