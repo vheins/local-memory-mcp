@@ -531,8 +531,11 @@ app.get("/api/tasks", async (req, res) => {
 // Get task by ID
 app.get("/api/tasks/:id", async (req, res) => {
   try {
-    const task = db.getTaskById(req.params.id);
+    const taskId = req.params.id;
+    logger.info("Fetching task by ID", { taskId });
+    const task = db.getTaskById(taskId);
     if (!task) {
+      logger.warn("Task not found", { taskId });
       throw new Error("Task not found");
     }
 
