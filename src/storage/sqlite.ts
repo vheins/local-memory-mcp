@@ -643,13 +643,19 @@ export class SQLiteStore {
     stmt.run(...values);
   }
 
-  getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number): any[] {
+  getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): any[] {
     let query = "SELECT * FROM tasks WHERE repo = ?";
     const params: any[] = [repo];
 
     if (status) {
       query += " AND status = ?";
       params.push(status);
+    }
+
+    if (search) {
+      query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
     }
 
     // Default sorting logic for the unified list:
@@ -671,11 +677,17 @@ export class SQLiteStore {
     return rows.map(r => this.rowToTask(r));
   }
 
-  getTasksByMultipleStatuses(repo: string, statuses: string[], limit?: number, offset?: number): any[] {
-    if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset);
+  getTasksByMultipleStatuses(repo: string, statuses: string[], limit?: number, offset?: number, search?: string): any[] {
+    if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset, search);
     
     let query = `SELECT * FROM tasks WHERE repo = ? AND status IN (${statuses.map(() => '?').join(',')})`;
     const params: any[] = [repo, ...statuses];
+
+    if (search) {
+      query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
 
     query += " ORDER BY priority DESC, created_at ASC";
     
@@ -694,6 +706,11 @@ export class SQLiteStore {
 
   deleteTask(id: string): void {
     this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+  }
+
+  getTaskById(id: string): any | null {
+    const row = this.db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as any;
+    return row ? this.rowToTask(row) : null;
   }
 
   private rowToTask(row: any): any {

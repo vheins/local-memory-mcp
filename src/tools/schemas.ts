@@ -102,6 +102,26 @@ export const TaskListSchema = z.object({
   phase: z.string().optional()
 });
 
+export const TaskBulkManageSchema = z.object({
+  action: z.enum(["bulk_create"]),
+  repo: z.string().min(1),
+  tasks: z.array(z.object({
+    task_code: z.string().min(1),
+    phase: z.string().min(1),
+    title: z.string().min(3).max(100),
+    description: z.string().min(1),
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema.optional(),
+    agent: z.string().optional(),
+    role: z.string().optional(),
+    doc_path: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
+    parent_id: z.string().uuid().optional(),
+    depends_on: z.string().uuid().optional()
+  })).min(1)
+});
+
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
   {
@@ -380,6 +400,48 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["repo"]
+    }
+  },
+  {
+    name: "task-bulk-manage",
+    description: "Perform bulk operations on tasks (e.g., bulk creation). Use this to initialize multiple tasks at once.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["bulk_create"],
+          description: "Action to perform in bulk"
+        },
+        repo: {
+          type: "string",
+          description: "Repository name"
+        },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              task_code: { type: "string" },
+              phase: { type: "string" },
+              title: { type: "string", minLength: 3, maxLength: 100 },
+              description: { type: "string" },
+              status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"] },
+              priority: { type: "number", minimum: 1, maximum: 5 },
+              agent: { type: "string" },
+              role: { type: "string" },
+              doc_path: { type: "string" },
+              tags: { type: "array", items: { type: "string" } },
+              metadata: { type: "object" },
+              parent_id: { type: "string", format: "uuid" },
+              depends_on: { type: "string", format: "uuid" }
+            },
+            required: ["task_code", "title", "phase", "description", "status"]
+          },
+          minItems: 1
+        }
+      },
+      required: ["action", "repo", "tasks"]
     }
   }
 ];

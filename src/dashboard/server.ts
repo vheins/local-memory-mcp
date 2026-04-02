@@ -497,6 +497,7 @@ app.get("/api/tasks", async (req, res) => {
   try {
     const repo = req.query.repo as string;
     const statusQuery = req.query.status as string | undefined;
+    const search = req.query.search as string | undefined;
     const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || "20", 10)));
 
@@ -510,15 +511,31 @@ app.get("/api/tasks", async (req, res) => {
     let tasks;
     if (statusQuery && statusQuery.includes(',')) {
       const statuses = statusQuery.split(',').map(s => s.trim());
-      tasks = db.getTasksByMultipleStatuses(repo, statuses, pageSize, offset);
+      tasks = db.getTasksByMultipleStatuses(repo, statuses, pageSize, offset, search);
     } else {
-      tasks = db.getTasksByRepo(repo, statusQuery, pageSize, offset);
+      tasks = db.getTasksByRepo(repo, statusQuery, pageSize, offset, search);
     }
     
     res.json({ tasks, page, pageSize });
   } catch (err: any) {
     logger.error("Error listing tasks", { error: err.message });
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get task by ID
+app.get("/api/tasks/:id", async (req, res) => {
+  try {
+    const task = db.getTaskById(req.params.id);
+    if (!task) {
+      throw new Error("Task not found");
+    }
+
+    db.logAction("read", task.repo, { taskId: task.id });
+    res.json(task);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(404).json({ error: message });
   }
 });
 

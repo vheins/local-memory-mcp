@@ -11,6 +11,7 @@ import { handleMemoryDelete } from "./tools/memory.delete.js";
 import { handleMemoryRecap } from "./tools/memory.recap.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
 import { handleTaskManage, handleTaskList } from "./tools/task.manage.js";
+import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 
 export function createRouter(
   db: SQLiteStore,
@@ -81,6 +82,9 @@ export function createRouter(
 
       case "task-list":
         return await handleTaskList(args, db);
+
+      case "task-bulk-manage":
+        return await handleTaskBulkManage(args, db);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

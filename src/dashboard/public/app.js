@@ -433,6 +433,11 @@ async function setCurrentRepo(repo) {
     currentPage = 1;
     recentActionsPage = 1;
     selectedIds.clear();
+    
+    // Clear search input on repo change
+    const taskSearch = document.getElementById('taskSearchInput');
+    if (taskSearch) taskSearch.value = '';
+
     localStorage.setItem('selectedRepo', currentRepo);
     renderRepoSidebar();
     closeRepoSidebarDrawer();
@@ -440,6 +445,7 @@ async function setCurrentRepo(repo) {
         loadStats(),
         loadMemories(),
         loadRecentActions(),
+        loadTasks()
     ]);
     syncStickyOffsets();
 }
@@ -1696,7 +1702,9 @@ async function loadTaskCategory(status) {
     }
 
     try {
-        const response = await fetch(`/api/tasks?repo=${encodeURIComponent(currentRepo)}&status=${status}&page=${pag.page}&pageSize=${pag.pageSize}`);
+        const searchInput = document.getElementById('taskSearchInput');
+        const searchTerm = searchInput ? encodeURIComponent(searchInput.value.trim()) : '';
+        const response = await fetch(`/api/tasks?repo=${encodeURIComponent(currentRepo)}&status=${status}&page=${pag.page}&pageSize=${pag.pageSize}&search=${searchTerm}`);
         const data = await response.json();
         
         const tasks = data.tasks || [];
@@ -1743,7 +1751,7 @@ function renderTaskCards(containerId, tasks, clear = false) {
     }
 
     const html = tasks.map(t => `
-        <div class="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:shadow-md transition-all group">
+        <div onclick="showTaskDetail('${t.id}')" class="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 hover:shadow-md transition-all group cursor-pointer">
             <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
                     <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-600 dark:text-gray-400 font-mono border border-gray-200 dark:border-gray-700">${t.task_code}</span>
@@ -1760,7 +1768,7 @@ function renderTaskCards(containerId, tasks, clear = false) {
             <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">${escapeHtml(t.description || '')}</p>
             
             ${t.doc_path ? `
-                <div class="mb-3">
+                <div class="mb-3" onclick="event.stopPropagation()">
                     <a href="${t.doc_path.startsWith('http') ? t.doc_path : '#'}" target="_blank" class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-500 dark:text-gray-400 hover:text-sky-600 transition-colors">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                         <span class="truncate max-w-[150px]">${escapeHtml(t.doc_path)}</span>
@@ -1793,6 +1801,107 @@ function renderTaskCards(containerId, tasks, clear = false) {
         container.innerHTML = html;
     } else {
         container.insertAdjacentHTML('beforeend', html);
+    }
+}
+
+async function showTaskDetail(id) {
+    const drawer = document.getElementById('memoryDrawer');
+    const title = document.getElementById('drawerTitle');
+    const body = document.getElementById('drawerBody');
+
+    title.textContent = 'Loading Task...';
+    body.innerHTML = `
+        <div class="space-y-4">
+            <div class="skeleton h-20 w-full"></div>
+            <div class="grid gap-4 md:grid-cols-2">
+                <div class="skeleton h-36 w-full"></div>
+                <div class="skeleton h-36 w-full"></div>
+            </div>
+            <div class="skeleton h-64 w-full"></div>
+        </div>
+    `;
+    
+    drawer.classList.remove('hidden');
+    document.body.classList.add('drawer-open');
+    
+    // Trigger slide-in animation
+    setTimeout(() => {
+        const aside = document.getElementById('drawerAside');
+        if (aside) {
+            aside.classList.remove('translate-x-full');
+            aside.classList.add('translate-x-0');
+        }
+    }, 10);
+
+    try {
+        const response = await fetch(`/api/tasks/${id}?repo=${encodeURIComponent(currentRepo)}`);
+        const task = await response.json();
+        if (!response.ok) throw new Error(task.error || 'Failed to load task');
+
+        title.textContent = `Task: ${task.task_code}`;
+        
+        body.innerHTML = `
+            <div class="space-y-6">
+                <div class="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Title</div>
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-white leading-tight">${escapeHtml(task.title)}</h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 bg-white dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Status & Priority</div>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-2 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 text-xs font-bold border border-sky-500/20 capitalize">${task.status}</span>
+                            <span class="px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold border border-indigo-500/20">P${task.priority}</span>
+                            <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold border border-slate-200 dark:border-slate-700 uppercase">${task.phase}</span>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-white dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase mb-2">Owner</div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold">
+                                ${getRepoInitials(task.agent || 'UK')}
+                            </div>
+                            <div>
+                                <div class="text-xs font-bold">${escapeHtml(task.agent || 'unknown')}</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">${escapeHtml(task.role || 'unknown')}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Description</div>
+                    <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed markdown-body">
+                        ${task.description ? renderMarkdown(task.description) : '<span class="italic opacity-50">No description provided</span>'}
+                    </div>
+                </div>
+
+                ${task.doc_path ? `
+                    <div class="p-4 bg-sky-500/5 dark:bg-sky-500/10 rounded-xl border border-sky-500/20">
+                        <div class="text-[10px] font-bold text-sky-600/60 dark:text-sky-400/60 uppercase mb-2">Documentation</div>
+                        <a href="${task.doc_path.startsWith('http') ? task.doc_path : '#'}" target="_blank" class="flex items-center gap-2 text-sky-600 dark:text-sky-400 hover:underline" onclick="event.stopPropagation()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            <span class="text-sm font-medium truncate">${escapeHtml(task.doc_path)}</span>
+                        </a>
+                    </div>
+                ` : ''}
+
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-[9px] font-bold text-slate-400 uppercase">Created</div>
+                        <div class="text-[11px] text-slate-500">${new Date(task.created_at).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div class="text-[9px] font-bold text-slate-400 uppercase">Updated</div>
+                        <div class="text-[11px] text-slate-500">${new Date(task.updated_at).toLocaleString()}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        showToast('Failed to load task: ' + err.message, 'error');
+        closeDrawer();
     }
 }
 
@@ -1911,6 +2020,13 @@ safeAddEventListener('repoCollapsedSummaryButton', 'click', () => {
     if (isRepoSidebarCollapsed) {
         toggleRepoSidebarCollapse();
     }
+});
+
+safeAddEventListener('taskSearchInput', 'input', () => {
+    if (window.taskSearchDebounce) clearTimeout(window.taskSearchDebounce);
+    window.taskSearchDebounce = setTimeout(() => {
+        loadTasks();
+    }, 300);
 });
 
 window.addEventListener('resize', syncStickyOffsets);
