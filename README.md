@@ -63,15 +63,13 @@ This method ensures the fastest startup times and maximum reliability for daily 
 
 Visualize and manage your Agent's memory through a modern web interface.
 
-````carousel
-![Dashboard Overview](docs/screenshots/dashboard.png)
-<!-- slide -->
-![Memories Management](docs/screenshots/memories.png)
-<!-- slide -->
-![Task Tracking](docs/screenshots/tasks.png)
-<!-- slide -->
-![Available Tools & Reference](docs/screenshots/reference.png)
-````
+| Dashboard Overview | Memories Management |
+|:---:|:---:|
+| ![Dashboard Overview](docs/screenshots/dashboard.png) | ![Memories Management](docs/screenshots/memories.png) |
+
+| Task Tracking | Available Tools & Reference |
+|:---:|:---:|
+| ![Task Tracking](docs/screenshots/tasks.png) | ![Available Tools & Reference](docs/screenshots/reference.png) |
 
 ### How to Run
 ```bash
