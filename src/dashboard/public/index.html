@@ -1010,8 +1010,18 @@
                     </button>
                     
                     <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-                        <div id="statusDot" class="w-2 h-2 rounded-full bg-gray-400 shadow-[0_0_8px_rgba(156,163,175,0.5)]"></div>
-                        <span id="statusText" class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Checking...</span>
+                        <div id="statusDot" class="w-1.5 h-1.5 rounded-full bg-gray-400 shadow-[0_0_8px_rgba(156,163,175,0.5)]"></div>
+                        <span id="statusText" class="text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Checking...</span>
+                    </div>
+
+                    <div class="hidden md:flex flex-col gap-1 px-3 py-1.5 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm min-w-[120px]">
+                        <div class="flex items-center justify-between gap-3">
+                            <span id="syncStatus" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Synced 0s ago</span>
+                            <div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                        </div>
+                        <div class="w-full h-0.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div id="countdownFill" class="h-full bg-sky-500 transition-all duration-1000 ease-linear" style="width: 100%"></div>
+                        </div>
                     </div>
                     
                     <div class="h-8 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block"></div>
@@ -1434,18 +1444,6 @@
         <button onclick="clearSelection()" class="px-4 py-2 bg-white/10 dark:bg-slate-200 hover:bg-white/20 dark:hover:bg-slate-300 text-white dark:text-slate-900 rounded-lg text-xs font-bold transition-all">Clear</button>
     </div>
 
-    <!-- Sync Indicator -->
-    <div class="fixed bottom-6 right-6 z-30">
-        <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2 min-w-[160px]">
-            <div class="flex items-center justify-between">
-                <span id="syncStatus" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Synced 0s ago</span>
-                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-            </div>
-            <div class="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div id="countdownFill" class="h-full bg-sky-500 transition-all duration-1000 ease-linear" style="width: 100%"></div>
-            </div>
-        </div>
-    </div>
 
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed top-24 right-6 z-[60] flex flex-col gap-3 pointer-events-none"></div>
