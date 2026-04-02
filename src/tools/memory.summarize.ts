@@ -1,10 +1,11 @@
 import { MemorySummarizeSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 export async function handleMemorySummarize(
   params: any,
   db: SQLiteStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemorySummarizeSchema.parse(params);
 
@@ -15,12 +16,8 @@ export async function handleMemorySummarize(
   // Store summary
   db.upsertSummary(validated.repo, fullSummary);
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ success: true })
-      }
-    ]
-  };
+  return createMcpResponse(
+    { success: true },
+    `Updated summary for repo "${validated.repo}"`
+  );
 }

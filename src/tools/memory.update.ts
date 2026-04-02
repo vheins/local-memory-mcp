@@ -1,12 +1,14 @@
 import { MemoryUpdateSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { StubVectorStore } from "../storage/vectors.stub.js";
+import { VectorStore } from "../types.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { logger } from "../utils/logger.js";
 
 export async function handleMemoryUpdate(
   params: any,
   db: SQLiteStore,
-  vectors: StubVectorStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+  vectors: VectorStore
+): Promise<McpResponse> {
   // Validate input
   const validated = MemoryUpdateSchema.parse(params);
 
@@ -17,13 +19,17 @@ export async function handleMemoryUpdate(
   }
 
   // Update in SQLite
-  const updates: { content?: string; importance?: number } = {};
-  if (validated.content !== undefined) {
-    updates.content = validated.content;
-  }
-  if (validated.importance !== undefined) {
-    updates.importance = validated.importance;
-  }
+  const updates: any = {};
+  if (validated.title !== undefined) updates.title = validated.title;
+  if (validated.content !== undefined) updates.content = validated.content;
+  if (validated.importance !== undefined) updates.importance = validated.importance;
+  if (validated.agent !== undefined) updates.agent = validated.agent;
+  if (validated.role !== undefined) updates.role = validated.role;
+  if (validated.status !== undefined) updates.status = validated.status;
+  if (validated.supersedes !== undefined) updates.supersedes = validated.supersedes;
+  if (validated.tags !== undefined) updates.tags = validated.tags;
+  if (validated.is_global !== undefined) updates.is_global = validated.is_global;
+  if (validated.completed_at !== undefined) updates.completed_at = validated.completed_at;
 
   db.update(validated.id, updates);
 
@@ -32,12 +38,12 @@ export async function handleMemoryUpdate(
     await vectors.upsert(validated.id, validated.content);
   }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ success: true })
-      }
-    ]
-  };
+  // Log the update action
+  db.logAction('update', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
+  logger.info("[MCP] memory.update", { repo: existing.scope.repo, id: validated.id, fields: Object.keys(updates) });
+
+  return createMcpResponse(
+    { success: true },
+    `Updated memory ${validated.id.slice(0, 8)}...`
+  );
 }

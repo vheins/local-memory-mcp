@@ -1,129 +1,60 @@
-# MCP Memory Dashboard
+# Web Dashboard: Visual Memory Management
 
-A web-based dashboard for managing and visualizing MCP Local Memory data.
+The **MCP Local Memory Dashboard** provides a modern, visual interface to inspect, audit, and manage what your AI Agent learns. It transforms raw database entries into actionable insights.
 
-## Features
+## ✨ Key Features
 
-- **Live Connection Status**: Real-time monitoring of MCP server connection
-- **Repository Scoping**: View memories filtered by repository
-- **Summary Statistics**: Quick overview of total memories, by type, and unused entries
-- **Visual Charts**: 
-  - Memory distribution by type (pie chart)
-  - Top 10 memories by importance (bar chart)
-- **Memory Management**:
-  - Browse all memories with sortable columns
-  - Filter by type (decision, mistake, code_fact, pattern)
-  - View detailed memory information
-  - Edit memory content and importance
-  - Delete memories with confirmation
-- **Operations-First Design**: Clear, data-dense interface optimized for daily use
+- **Project Timeline:** View a chronological log of every search, storage, and update action performed by your Agent.
+- **Repository Exploration:** Browse memories filtered by project, technology tags, or importance levels.
+- **Memory Auditing:** Inspect usage statistics like `hit_count` and `recall_rate` to see which memories are actually helping your Agent.
+- **Version Control:** Visually track memory evolution via the `supersedes` links (seeing how one decision replaced another).
+- **Interactive Editing:** Quickly correct, archive, or delete memories through a data-dense, "Glassy Futuristic" interface.
 
-## Quick Start
+## 🚀 How to Use
 
-1. **Build the project**:
-   ```bash
-   npm run build
-   ```
+### Starting the Dashboard
+Run the following command from your terminal:
+```bash
+npx @vheins/local-memory-mcp dashboard
+```
+Then open **http://localhost:3456** in your browser.
 
-2. **Start the dashboard**:
-   ```bash
-   npm run dashboard
-   ```
+### Auto-launch in VS Code
+You can configure VS Code to automatically launch the dashboard when you open your project folder. Create or update `.vscode/tasks.json` with:
 
-3. **Access the dashboard**:
-   Open your browser to `http://localhost:3456`
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch Memory Dashboard",
+      "type": "shell",
+      "command": "npx -y @vheins/local-memory-mcp dashboard",
+      "isBackground": true,
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "memory"
+      }
+    }
+  ]
+}
+```
 
-## Architecture
+### Managing Memories
+1. **Browse:** Use the search bar to find specific decisions or patterns.
+2. **Audit:** Click on a memory to see its full content, scope, and utility stats.
+3. **Archive:** Use the "Archive" action for old memories you want to keep for history but hide from the Agent's active context.
+4. **Delete:** Permanently remove entries that are no longer accurate or relevant.
 
-The dashboard is a thin presentation layer that:
+## 📊 Visual Insights
+The dashboard provides real-time charts showing:
+- **Knowledge Distribution:** A breakdown of memories by type (`decision`, `code_fact`, `mistake`, `pattern`).
+- **Memory Density:** Identifying which projects or tech stacks have the most documented knowledge.
 
-- Spawns the MCP server as a subprocess
-- Communicates via JSON-RPC (stdin/stdout)
-- Uses MCP tools exclusively (no direct database access):
-  - `memory.search` - List and filter memories
-  - `memory.update` - Edit memories
-  - `memory.delete` - Remove memories
-  - Resources API - Read individual memory details
-
-## Safety Features
-
-- **Confirmation Required**: All destructive actions require explicit confirmation
-- **Type "DELETE" Verification**: Memory deletion requires typing "DELETE" to proceed
-- **Read-Only Fields**: Repository scope and type cannot be changed
-- **Connection Monitoring**: Dashboard disables actions when MCP is offline
-
-## API Endpoints
-
-The dashboard server exposes these REST endpoints:
-
-- `GET /api/health` - Check MCP connection status
-- `GET /api/repos` - List all repositories
-- `GET /api/stats` - Get statistics (total, by type, top memories)
-- `GET /api/memories` - List memories with filtering and sorting
-- `GET /api/memories/:id` - Get memory detail
-- `PUT /api/memories/:id` - Update memory (content, importance)
-- `DELETE /api/memories/:id` - Delete memory
-
-## Configuration
-
-- **Port**: Set `PORT` environment variable (default: 3456)
-- **MCP Server**: Automatically spawned from `dist/server.js`
-
-## Known Limitations
-
-1. ~~**Memory Search Constraints**~~: RESOLVED - Dashboard now uses direct database access for listing all memories, bypassing the MCP search limitation.
-
-2. ~~**Unused Memory Tracking**~~: RESOLVED - The SQLite schema now includes `hit_count`, `recall_count`, and `last_used_at` columns for full usage tracking.
-
-3. **Chart.js CDN**: Charts use Chart.js from CDN, which may be blocked in some environments. The dashboard shows a graceful fallback message when unavailable: "Chart.js not available. Install locally for visualizations."
-
-## Similarity Search
-
-The system now uses **ultra-lightweight text-based similarity** instead of heavy ML models:
-- Normalized token vectors with term frequency
-- Cosine similarity for matching
-- No GPU dependencies or model servers required
-- Zero startup cost and minimal memory overhead
-- Query latency < 20ms for typical memory counts
-
-This approach provides:
-- Typo tolerance through normalized text
-- Basic semantic grouping
-- Deterministic and predictable behavior
-- Perfect for 100-2,000 memories
-
-## Acceptance Criteria Compliance
-
-This dashboard satisfies all acceptance criteria:
-
-✅ **AC-A1-A2**: MCP connection status and handling  
-✅ **AC-B1-B3**: Memory listing with repo scoping and sorting  
-✅ **AC-C1-C2**: Detail view with read-only fields  
-✅ **AC-D1-D3**: Memory editing with constraints and feedback  
-✅ **AC-E1-E3**: Soft delete with confirmation  
-✅ **AC-F1-F2**: Accurate statistics and unused detection  
-✅ **AC-G1-G2**: Chart rendering and consistency  
-✅ **AC-H1-H2**: No direct DB access, explicit mutations  
-✅ **AC-I1-I2**: No accidental actions, clear errors  
-✅ **AC-J1**: Fast load time for reasonable memory counts  
-
-## Development
-
-The dashboard consists of:
-
-- **Backend**: Express server (`src/dashboard/server.ts`)
-  - MCP client implementation
-  - REST API endpoints
-  - Static file serving
-  
-- **Frontend**: Single-page app (`src/dashboard/public/index.html`)
-  - Vanilla JavaScript (no framework overhead)
-  - Chart.js for visualizations
-  - Operations-focused UX
-
-## Notes
-
-- This dashboard does NOT modify MCP schemas or storage
-- All data operations go through official MCP tools
-- The MCP server is a subprocess, not a library import
-- If MCP server stops, dashboard enters degraded state
+## ⚠️ Disclaimer
+**THE DASHBOARD IS PROVIDED "AS IS"**, without warranty of any kind. It is intended for manual inspection and management of local data.

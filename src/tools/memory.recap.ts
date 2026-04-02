@@ -1,49 +1,40 @@
-import { z } from "zod";
+import { MemoryRecapSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
-
-export const MemoryRecapSchema = z.object({
-  repo: z.string().min(1),
-  limit: z.number().min(1).max(50).default(20)
-});
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { logger } from "../utils/logger.js";
 
 export async function handleMemoryRecap(
   params: any,
   db: SQLiteStore
-): Promise<{ content: Array<{ type: string; text: string }> }> {
+): Promise<McpResponse> {
   // Validate input
   const validated = MemoryRecapSchema.parse(params);
 
-  // Get recent memories from the specified repo
-  let query = `
-    SELECT id, type, content, importance, created_at, updated_at
-    FROM memories
-    WHERE repo = ?
-    ORDER BY created_at DESC
-    LIMIT ?
-  `;
+  logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 
-  const stmt = (db as any).db.prepare(query);
-  const rows = stmt.all(validated.repo, validated.limit) as any[];
+  // Get total count for pagination metadata
+  const total = db.getTotalCount(validated.repo);
+
+  // Get recent memories using public API (no type-unsafe cast)
+  const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset);
 
   if (rows.length === 0) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            repo: validated.repo,
-            count: 0,
-            memories: [],
-            message: `No memories found for repo: ${validated.repo}`
-          })
-        }
-      ]
-    };
+    return createMcpResponse(
+      {
+        repo: validated.repo,
+        count: 0,
+        total,
+        offset: validated.offset,
+        memories: [],
+        message: `No memories found for repo: ${validated.repo}`
+      },
+      `No memories for repo "${validated.repo}"`
+    );
   }
 
   // Format memories for recap
   const formattedMemories = rows.map((row, index) => ({
-    number: index + 1,
+    number: validated.offset + index + 1,
     id: row.id,
     type: row.type,
     importance: row.importance,
@@ -59,17 +50,15 @@ export async function handleMemoryRecap(
     )
     .join("\n");
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({
-          repo: validated.repo,
-          count: rows.length,
-          memories: formattedMemories,
-          summary: `Recent ${rows.length} memories:\n\n${summary}`
-        })
-      }
-    ]
-  };
+  return createMcpResponse(
+    {
+      repo: validated.repo,
+      count: rows.length,
+      total,
+      offset: validated.offset,
+      memories: formattedMemories,
+      summary: `Recent ${rows.length} memories:\n\n${summary}`
+    },
+    `Retrieved ${rows.length} memories for repo "${validated.repo}"`
+  );
 }

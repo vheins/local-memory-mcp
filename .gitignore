@@ -3,7 +3,6 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 yarn-debug.log*
-package-lock.json
 pnpm-lock.yaml
 
 # Build output
@@ -34,3 +33,4 @@ Thumbs.db
 # Database
 storage/*.db
 storage/*.db-*
+.kiro

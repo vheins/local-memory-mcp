@@ -1,175 +1,104 @@
-# MCP Local Memory Service
+# @vheins/local-memory-mcp
 
-An MCP (Model Context Protocol) service that provides long-term memory for AI coding agents, with a web-based dashboard for visualization and management.
+[![npm version](https://img.shields.io/npm/v/@vheins/local-memory-mcp.svg)](https://www.npmjs.com/package/@vheins/local-memory-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/@vheins/local-memory-mcp.svg)](https://www.npmjs.com/package/@vheins/local-memory-mcp)
+[![npm total downloads](https://img.shields.io/npm/dt/@vheins/local-memory-mcp.svg)](https://www.npmjs.com/package/@vheins/local-memory-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+**MCP Local Memory Service** is a high-performance [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that provides long-term, high-signal memory for AI Agents (such as Claude Desktop, Cursor, or Windsurf).
 
-This project implements a local memory service using Node.js and SQLite with vector similarity search capabilities. It solves the context loss problem in coding assistants by storing code facts, decisions, mistakes, and patterns.
+Built with a **Local-First** philosophy, this service stores architectural decisions, code patterns, and critical facts locally on your machine using SQLite and AI-powered Semantic Search.
 
-## Features
+## 🚀 Key Features
 
-- **Long-term Memory Storage**: Store decisions, code facts, mistakes, and patterns
-- **Semantic Search**: Vector-based similarity search (with keyword fallback)
-- **Git Scope Isolation**: Memories are scoped per repository to prevent cross-project contamination
-- **Antigravity Summaries**: High-level project summaries to guide agent behavior
-- **MCP Protocol**: Full implementation of MCP resources, tools, and prompts
-- **Web Dashboard**: Browser-based UI for visualizing and managing memories
+- 🧠 **Semantic Search (V2):** Find memories based on meaning, not just keywords, using the `all-MiniLM-L6-v2` model locally.
+- 🔄 **Tech-Stack Affinity:** Share knowledge across repositories intelligently based on technology tags (e.g., Filament memories in Repo A are accessible in Repo B).
+- 🛡️ **Anti-Hallucination Guard:** Prevents Agents from hallucinating with strict similarity thresholds and decision conflict detection.
+- 📉 **Automatic Memory Decay:** Automatically archives obsolete memories to keep the context clean and relevant.
+- 📊 **Glassy Dashboard:** Visualize memories, usage statistics, and audit interaction logs through a modern web interface.
 
-## Installation
+## 🔌 MCP Usage & Configuration
 
-```bash
-npm install
-npm run build
-```
+Add this service to your AI Agent (Claude Desktop, Cursor, Windsurf, etc.) using one of the methods below.
 
-## Usage
+> 💡 **Recommendation:** If your MCP runs frequently (agents, CI, automation), avoid `npx` and use a global or local install instead. It reduces unnecessary NPM downloads and speeds up Agent startup.
 
-### MCP Server
-
-The server runs as an MCP JSON-RPC server over stdin/stdout:
-
-```bash
-node dist/server.js
-```
-
-### Web Dashboard
-
-Start the web dashboard for managing memories:
-
-```bash
-npm run dashboard
-```
-
-Then open your browser to `http://localhost:3456`
-
-The dashboard provides:
-- Live memory visualization by repository
-- Summary statistics and charts
-- Memory browsing with sorting and filtering
-- Edit and delete operations with confirmation
-- Real-time MCP connection status
-
-See [DASHBOARD.md](DASHBOARD.md) for detailed dashboard documentation.
-
-### MCP Tools
-
-#### memory.store
-Store a new memory entry that affects future behavior.
+### 🚀 Quick Start (Zero Setup)
+Best for **first-time users** or **quick testing**. This uses `npx` to run the server without any permanent setup.
 
 ```json
-{
-  "type": "decision",
-  "content": "Do not use ORM; use raw SQL only for database access",
-  "importance": 5,
-  "scope": {
-    "repo": "backend-api",
-    "language": "typescript"
-  }
+"local-memory": {
+  "command": "npx",
+  "args": ["-y", "@vheins/local-memory-mcp"],
+  "type": "stdio"
 }
 ```
+* **Uses `npx`**: Automatically handles the execution.
+* **Tradeoff**: May re-download the package in some environments and is not optimal for frequent execution.
 
-#### memory.search
-Search for relevant memories in the current repository.
+### ⚡ Recommended for Production / Frequent Usage
+This method ensures the fastest startup times and maximum reliability for daily use.
 
-```json
-{
-  "query": "database orm",
-  "repo": "backend-api",
-  "limit": 5
-}
+1. **Install globally:**
+   ```bash
+   npm install -g @vheins/local-memory-mcp
+   ```
+
+2. **Add to your configuration:**
+   ```json
+   "local-memory": {
+     "command": "local-memory-mcp",
+     "type": "stdio"
+   }
+   ```
+* **Faster startup**: No network checks required on every start.
+* **No repeated downloads**: Saves bandwidth and avoids NPM registry dependency.
+* **Better for automation**: More stable for heavy-duty Agent workflows.
+
+### 🧠 How It Works (Important Insight)
+* **npx usage**: When you use `npx`, it often performs a network request to check for the latest version or re-downloads the package if it's not in the cache. Since MCP clients start and stop tools frequently, this can lead to hundreds of unnecessary downloads.
+* **Installed binary**: By installing the package, you keep a permanent copy on your disk. The Agent reuses this local version instantly, providing a much smoother experience.
+
+## 📊 Glassy Dashboard
+
+Visualize and manage your Agent's memory through a modern web interface.
+
+### How to Run
+```bash
+local-memory-mcp dashboard
 ```
+*If not installed globally, use:* `npx @vheins/local-memory-mcp dashboard`
 
-#### memory.update
-Update an existing memory entry.
-
+### Auto-launch in VS Code
+Add this to your `.vscode/tasks.json` to have the dashboard start automatically:
 ```json
 {
-  "id": "uuid",
-  "content": "Updated content",
-  "importance": 4
-}
-```
-
-#### memory.summarize
-Update the antigravity summary for a repository.
-
-```json
-{
-  "repo": "backend-api",
-  "signals": [
-    "Uses raw SQL (no ORM)",
-    "Explicit DTO validation required"
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch Memory Dashboard",
+      "type": "shell",
+      "command": "npx -y @vheins/local-memory-mcp dashboard",
+      "isBackground": true,
+      "runOptions": { "runOn": "folderOpen" }
+    }
   ]
 }
 ```
 
-#### memory.delete
-Delete a memory entry (soft delete - removes from active use).
+## 📖 Documentation
 
-```json
-{
-  "id": "uuid"
-}
-```
+- [Getting Started & Setup](docs/GETTING_STARTED.md)
+- [Perspectives: Why use Local Memory?](docs/PERSPECTIVES.md)
+- [Features & How it Works](docs/FEATURES.md)
+- [MCP Protocol Reference (Tools & Resources)](docs/MCP_PROTOCOL.md)
+- [Dashboard & Debugging](docs/DASHBOARD_DEBUGGING.md)
+- [Contribution Guidelines](docs/CONTRIBUTING.md)
 
-### MCP Resources
+## ⚠️ Disclaimer
 
-- `memory://index` - Recent memory entries (metadata only)
-- `memory://{id}` - Read individual memory entry
-- `memory://summary/{repo}` - Project summary
+**THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND**, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
 
-### MCP Prompts
+## ⚖️ License
 
-- `memory-agent-core` - Core behavioral contract for memory-aware agents
-- `memory-index-policy` - Enforce strict memory discipline
-- `tool-usage-guidelines` - Prevent tool abuse
-
-## Testing
-
-Run the test suite:
-
-```bash
-./test.sh
-```
-
-## Architecture
-
-The implementation follows the documented specifications in the `docs/` folder:
-
-- **MCP Server Loop**: JSON-RPC protocol handler
-- **Git Scope Resolver**: Determines active repository
-- **SQLite Storage**: Primary data store with indexes
-- **Vector Search Stub**: Semantic similarity (ready for embedding integration)
-- **Tool Validation**: Strict schema validation with Zod
-
-## Storage
-
-Memory is stored in `storage/memory.db` using SQLite with the following schema:
-
-- `memories` table: All memory entries with repo scoping
-- `memory_summary` table: Antigravity summaries per repo
-- Indexes on repo, type, and importance for fast queries
-
-## Memory Types
-
-1. **code_fact**: Stable facts about the codebase
-2. **decision**: Design or architectural decisions
-3. **mistake**: Errors that should not be repeated
-4. **pattern**: Recurring implementation patterns
-
-## Documentation
-
-- [Product Requirements Document (PRD)](docs/PRD.md)
-- [Auto-Memory Heuristics & Scoping](docs/SPEC-heuristics.md)
-- [Server Skeleton & Contract](docs/SPEC-server.md)
-- [Implementation Skeleton (Node.js)](docs/SPEC-skeleton.md)
-- [Git / Project Scope Resolver](docs/SPEC-git-scope.md)
-- [MCP Tool Schema & Validation](docs/SPEC-tool-schema.md)
-- [SQLite Schema & Migration](docs/SPEC-sqlite-schema.md)
-- [Vector Search Stub & Similarity Layer](docs/SPEC-vector-search.md)
-- [Test Scenarios (Behavioral Contract)](docs/TEST-scenarios.md)
-- [Agent System Prompt](docs/PROMPT-agent.md)
-
-## License
-
-MIT
+MIT © Muhammad Rheza Alfin
