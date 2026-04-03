@@ -116,7 +116,8 @@ export const TaskUpdateSchema = z.object({
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   parent_id: z.string().uuid().optional(),
-  depends_on: z.string().uuid().optional()
+  depends_on: z.string().uuid().optional(),
+  est_tokens: z.number().int().min(0).optional()
 }).refine(
   (data) => Object.keys(data).length > 2,
   { message: "At least one field besides repo and id must be provided for update" }
@@ -390,7 +391,8 @@ export const TOOL_DEFINITIONS = [
         tags: { type: "array", items: { type: "string" } },
         metadata: { type: "object" },
         parent_id: { type: "string", format: "uuid" },
-        depends_on: { type: "string", format: "uuid" }
+        depends_on: { type: "string", format: "uuid" },
+        est_tokens: { type: "number", minimum: 0, description: "Estimated tokens used for this task" }
       },
       required: ["repo", "id"]
     }

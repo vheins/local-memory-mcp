@@ -568,6 +568,12 @@ export class SQLiteStore {
     const todayCompleted = (this.db.prepare(todayCompletedSql).get(...todayParams) as any)?.count || 0;
     const todayProcessed = (this.db.prepare(todayProcessedSql).get(...todayParams) as any)?.count || 0;
 
+    let todayTokensSql = "SELECT SUM(est_tokens) as total FROM tasks WHERE date(updated_at) = ?";
+    if (repo) {
+      todayTokensSql += " AND repo = ?";
+    }
+    const todayTokens = (this.db.prepare(todayTokensSql).get(...todayParams) as any)?.total || 0;
+
     return {
       ...memoryStats,
       avgImportance: avgImportance.toFixed(1),
@@ -576,6 +582,7 @@ export class SQLiteStore {
       todayAdded,
       todayCompleted,
       todayProcessed,
+      todayTokens,
       taskStats
     };
   }
@@ -694,8 +701,8 @@ export class SQLiteStore {
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
         id, repo, task_code, phase, title, description, status, priority,
-        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -717,7 +724,8 @@ export class SQLiteStore {
       task.tags ? JSON.stringify(task.tags) : null,
       task.metadata ? JSON.stringify(task.metadata) : null,
       task.parent_id || null,
-      task.depends_on || null
+      task.depends_on || null,
+      task.est_tokens || 0
     );
   }
 
@@ -868,7 +876,8 @@ export class SQLiteStore {
       role: row.role || 'unknown',
       doc_path: row.doc_path || null,
       tags,
-      metadata
+      metadata,
+      est_tokens: row.est_tokens || 0
     };
   }
 

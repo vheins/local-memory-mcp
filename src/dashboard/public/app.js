@@ -634,6 +634,9 @@ async function loadStats() {
             if (document.getElementById('todayProcessed')) {
                 document.getElementById('todayProcessed').textContent = data.todayProcessed || 0;
             }
+            if (document.getElementById('todayTokens')) {
+                document.getElementById('todayTokens').textContent = data.todayTokens || 0;
+            }
 
             // Today's Stats (Tasks tab)
             if (document.getElementById('todayCompletedTasksCount')) {
@@ -644,6 +647,9 @@ async function loadStats() {
             }
             if (document.getElementById('todayProcessedTasksCount')) {
                 document.getElementById('todayProcessedTasksCount').textContent = data.todayProcessed || 0;
+            }
+            if (document.getElementById('todayTokensTasksCount')) {
+                document.getElementById('todayTokensTasksCount').textContent = data.todayTokens || 0;
             }
 
             document.getElementById('todoStatCount').textContent = data.taskStats.todo || 0;

@@ -320,7 +320,7 @@ Please follow this strict execution flow:
    - **Start**: Call 'task-update' to set status='in_progress' and agent/role information.
    - **Execute**: Perform the work described in the task title and description.
    - **Validate**: Ensure the work is correct and follows project standards.
-   - **Complete**: Call 'task-update' to set status='completed' with a summary of what was done in the 'comment' field.
+   - **Complete**: Call 'task-update' to set status='completed' with a summary of what was done in the 'comment' field AND include an estimate of total tokens used for this task in the 'est_tokens' field.
    - **Handoff**: If the task was complex, use 'memory-store' (type='agent_handoff') to record technical details.
 4. **Report**: After processing all tasks, provide a summary of your progress.
 
