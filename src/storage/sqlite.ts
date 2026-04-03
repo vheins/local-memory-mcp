@@ -749,8 +749,13 @@ export class SQLiteStore {
     // Default sorting logic for the unified list:
     // 1. Completed tasks at the bottom (or top if specified)
     // 2. Priority for others
-    // 3. Created date
-    query += " ORDER BY t.status DESC, t.priority DESC, t.created_at ASC";
+    // 3. Updated date (newest first for completed)
+    query += ` ORDER BY 
+      CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
+      CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
+      t.status DESC, 
+      t.priority DESC, 
+      t.created_at ASC`;
     
     if (limit !== undefined) {
       query += " LIMIT ?";
@@ -782,7 +787,10 @@ export class SQLiteStore {
       params.push(searchPattern, searchPattern, searchPattern);
     }
 
-    query += " ORDER BY t.priority DESC, t.created_at ASC";
+    query += ` ORDER BY 
+      CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
+      t.priority DESC, 
+      t.created_at ASC`;
     
     if (limit !== undefined) {
       query += " LIMIT ?";
