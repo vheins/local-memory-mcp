@@ -35,7 +35,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         title: "Research Architecture",
         description: "Analyze the current system architecture and propose changes",
         status: "pending",
-        priority: 5
+        priority: 5,
+        est_tokens: 120
       }
     });
     const taskAId = db.getTasksByRepo(REPO)[0].id;
@@ -50,7 +51,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         description: "Write the core implementation based on research",
         status: "pending",
         depends_on: taskAId,
-        priority: 4
+        priority: 4,
+        est_tokens: 240
       }
     });
     const taskBId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-002").id;
@@ -78,7 +80,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         comment: "Started architecture review",
         agent: "Agent A",
         role: "backend",
-        model: "gpt-5.4"
+        model: "gpt-5.4",
+        est_tokens: 180
       }
     });
 
@@ -96,7 +99,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         comment: "Architecture review finished and documented",
         agent: "Agent A",
         role: "backend",
-        model: "gpt-5.4"
+        model: "gpt-5.4",
+        est_tokens: 180
       }
     });
 
@@ -115,7 +119,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         comment: "Implementation started after dependency was cleared",
         agent: "Agent B",
         role: "frontend",
-        model: "gpt-5.4-mini"
+        model: "gpt-5.4-mini",
+        est_tokens: 320
       }
     });
 
@@ -142,7 +147,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         title: "Comment enforcement",
         description: "Task used to verify status change comment enforcement",
         status: "pending",
-        priority: 3
+        priority: 3,
+        est_tokens: 90
       }
     });
 
@@ -156,9 +162,59 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         id: taskId,
         status: "in_progress",
         agent: "TestAgent",
-        role: "testing"
+        role: "testing",
+        est_tokens: 50
       }
     })).rejects.toThrow("comment is required when changing task status");
+  });
+
+  it("allows task-create without est_tokens", async () => {
+    await router("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: REPO,
+        task_code: "TASK-003A",
+        phase: "implementation",
+        title: "Create without token estimate",
+        description: "Should still be accepted during planning",
+        status: "pending",
+        priority: 3
+      }
+    });
+
+    const task = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-003A");
+    expect(task).toBeDefined();
+    expect(task?.est_tokens).toBe(0);
+  });
+
+  it("requires est_tokens when changing task status to completed", async () => {
+    await router("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: REPO,
+        task_code: "TASK-003B",
+        phase: "implementation",
+        title: "Completion requires token estimate",
+        description: "Used to verify completed status analytics requirement",
+        status: "in_progress",
+        priority: 3
+      }
+    });
+
+    const taskId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-003B")?.id;
+    expect(taskId).toBeDefined();
+
+    await expect(router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: taskId,
+        status: "completed",
+        comment: "Finished work but forgot token estimate",
+        agent: "Agent E",
+        role: "backend"
+      }
+    })).rejects.toThrow("est_tokens is required when changing task status to completed");
   });
 
   it("stores standalone comments without mutating description", async () => {
@@ -172,6 +228,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         description: "Original description",
         status: "pending",
         priority: 3,
+        est_tokens: 90,
         agent: "Seeder",
         role: "user"
       }
@@ -188,7 +245,8 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         comment: "Investigated root cause and prepared next steps",
         agent: "Agent C",
         role: "security",
-        model: "gpt-5.4"
+        model: "gpt-5.4",
+        est_tokens: 75,
       }
     });
 
@@ -197,5 +255,42 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
     expect(task.comments).toHaveLength(1);
     expect(task.comments[0].previous_status).toBeNull();
     expect(task.comments[0].next_status).toBeNull();
+  });
+
+  it("auto-populates timestamps from status so agents do not need to send them manually", async () => {
+    await router("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: REPO,
+        task_code: "TASK-005",
+        phase: "implementation",
+        title: "Auto timestamp on create",
+        description: "Created directly as in progress",
+        status: "in_progress",
+        priority: 3,
+        est_tokens: 110
+      }
+    });
+
+    const createdTask = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-005");
+    expect(createdTask?.in_progress_at).toBeTruthy();
+    expect(createdTask?.finished_at).toBeNull();
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: createdTask.id,
+        status: "completed",
+        comment: "Done without providing timestamps manually",
+        agent: "Agent D",
+        role: "backend",
+        est_tokens: 210
+      }
+    });
+
+    const completedTask = db.getTaskById(createdTask.id);
+    expect(completedTask.in_progress_at).toBeTruthy();
+    expect(completedTask.finished_at).toBeTruthy();
   });
 });

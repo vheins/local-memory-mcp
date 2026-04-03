@@ -8,7 +8,7 @@ import type { MemoryEntry } from "../types.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-type MemoryType = "code_fact" | "decision" | "mistake" | "pattern";
+type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "file_claim";
 
 function makeEntry(overrides: Partial<{
   id: string;
@@ -43,6 +43,7 @@ function makeEntry(overrides: Partial<{
     supersedes: null,
     status: "active",
     tags: [],
+    metadata: {},
     is_global: false,
   };
 }

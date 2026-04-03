@@ -26,6 +26,7 @@ function makeEntry(id: string, repo: string): MemoryEntry {
     supersedes: null,
     status: "active",
     tags: [],
+    metadata: {},
     is_global: false,
   };
 }

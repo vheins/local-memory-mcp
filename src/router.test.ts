@@ -117,7 +117,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
           repo: fc.string({ minLength: 1, maxLength: 30 }).filter((s: string) => s.trim().length > 0),
           content: fc.string({ minLength: 10, maxLength: 200 }),
           importance: fc.integer({ min: 1, max: 5 }),
-          type: fc.constantFrom("code_fact", "decision", "mistake", "pattern"),
+          type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
           title: fc.string({ minLength: 3, maxLength: 50 }),
         }),
         async ({ repo, content, importance, type, title }: { repo: string; content: string; importance: number; type: string; title: string }) => {

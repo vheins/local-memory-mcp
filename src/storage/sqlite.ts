@@ -93,7 +93,8 @@ export class SQLiteStore {
           'mistake',
           'pattern',
           'agent_handoff',
-          'agent_registered'
+          'agent_registered',
+          'file_claim'
         )),
         title TEXT,
         content TEXT NOT NULL,
@@ -154,6 +155,8 @@ export class SQLiteStore {
         metadata TEXT,
         parent_id TEXT,
         depends_on TEXT,
+        est_tokens INTEGER NOT NULL DEFAULT 0,
+        in_progress_at TEXT,
         FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
         FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
       );
@@ -231,8 +234,11 @@ export class SQLiteStore {
       { name: "status", table: "memories", definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'" },
       { name: "is_global", table: "memories", definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0" },
       { name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
+      { name: "metadata", table: "memories", definition: "ALTER TABLE memories ADD COLUMN metadata TEXT" },
       { name: "vector_version", table: "memory_vectors", definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1" },
       { name: "depends_on", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN depends_on TEXT" },
+      { name: "est_tokens", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN est_tokens INTEGER NOT NULL DEFAULT 0" },
+      { name: "in_progress_at", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN in_progress_at TEXT" },
       { name: "task_code", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN task_code TEXT" },
       { name: "task_id", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN task_id TEXT" },
       { name: "agent", table: "memories", definition: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
@@ -259,6 +265,8 @@ export class SQLiteStore {
       }
     }
 
+    this.ensureMemoryTypeConstraint();
+
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
       CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
@@ -276,8 +284,8 @@ export class SQLiteStore {
       INSERT INTO memories (
         id, repo, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
-        supersedes, status, is_global, tags, agent, role, model, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -296,6 +304,7 @@ export class SQLiteStore {
       entry.status || "active",
       entry.is_global ? 1 : 0,
       entry.tags ? JSON.stringify(entry.tags) : null,
+      entry.metadata ? JSON.stringify(entry.metadata) : null,
       entry.agent || 'unknown',
       entry.role || 'unknown',
       entry.model || 'unknown',
@@ -311,6 +320,9 @@ export class SQLiteStore {
       if (updates[key] !== undefined) {
         if (key === 'tags') {
           fields.push(`tags = ?`);
+          values.push(JSON.stringify(updates[key]));
+        } else if (key === 'metadata') {
+          fields.push(`metadata = ?`);
           values.push(JSON.stringify(updates[key]));
         } else if (key === 'is_global') {
           fields.push(`is_global = ?`);
@@ -330,6 +342,70 @@ export class SQLiteStore {
 
     const stmt = this.db.prepare(`UPDATE memories SET ${fields.join(", ")} WHERE id = ?`);
     stmt.run(...values);
+  }
+
+  private ensureMemoryTypeConstraint(): void {
+    const tableSql = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
+      .get() as { sql?: string } | undefined;
+
+    if (!tableSql?.sql || tableSql.sql.includes("'file_claim'")) {
+      return;
+    }
+
+    this.db.exec(`
+      BEGIN TRANSACTION;
+
+      CREATE TABLE memories__migrated (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN (
+          'code_fact',
+          'decision',
+          'mistake',
+          'pattern',
+          'agent_handoff',
+          'agent_registered',
+          'file_claim'
+        )),
+        title TEXT,
+        content TEXT NOT NULL,
+        importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5),
+        folder TEXT,
+        language TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        hit_count INTEGER NOT NULL DEFAULT 0,
+        recall_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at TEXT,
+        expires_at TEXT,
+        supersedes TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        is_global INTEGER NOT NULL DEFAULT 0,
+        tags TEXT,
+        metadata TEXT,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        role TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown',
+        completed_at TEXT
+      );
+
+      INSERT INTO memories__migrated (
+        id, repo, type, title, content, importance, folder, language,
+        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+        supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+      )
+      SELECT
+        id, repo, type, title, content, importance, folder, language,
+        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+        supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+      FROM memories;
+
+      DROP TABLE memories;
+      ALTER TABLE memories__migrated RENAME TO memories;
+
+      COMMIT;
+    `);
   }
 
   getById(id: string): MemoryEntry | null {
@@ -1030,8 +1106,10 @@ export class SQLiteStore {
 
   private rowToMemoryEntry(row: any): MemoryEntry {
     let tags: string[] = [];
+    let metadata: Record<string, any> = {};
     try {
       if (row.tags) tags = JSON.parse(row.tags);
+      if (row.metadata) metadata = JSON.parse(row.metadata);
     } catch (e) {}
 
     return {
@@ -1044,7 +1122,7 @@ export class SQLiteStore {
       completed_at: row.completed_at || null,
       hit_count: row.hit_count ?? 0, recall_count: row.recall_count ?? 0,
       last_used_at: row.last_used_at ?? null, expires_at: row.expires_at ?? null, supersedes: row.supersedes ?? null, status: row.status || "active",
-      is_global: row.is_global === 1, tags
+      is_global: row.is_global === 1, tags, metadata
     };
   }
 

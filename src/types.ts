@@ -1,6 +1,6 @@
 // Shared types for MCP Local Memory
 
-export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "agent_handoff" | "agent_registered";
+export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "agent_handoff" | "agent_registered" | "file_claim";
 
 export type MemoryScope = {
   repo: string;
@@ -29,6 +29,7 @@ export type MemoryEntry = {
   supersedes: string | null;
   status: "active" | "archived";
   tags: string[];
+  metadata: Record<string, any>;
   is_global: boolean;
 };
 
@@ -63,8 +64,10 @@ export interface Task {
   doc_path: string | null;
   created_at: string;
   updated_at: string;
+  in_progress_at: string | null;
   finished_at: string | null;
   canceled_at: string | null;
+  est_tokens: number;
   tags: string[];
   metadata: Record<string, any>;
   parent_id: string | null;

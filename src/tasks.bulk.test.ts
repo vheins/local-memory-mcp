@@ -30,7 +30,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
             description: "Description 1",
             phase: "research",
             status: "pending",
-            priority: 1
+            priority: 1,
+            est_tokens: 50
           },
           {
             task_code: "BULK-002",
@@ -38,7 +39,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
             description: "Description 2",
             phase: "implementation",
             status: "pending",
-            priority: 2
+            priority: 2,
+            est_tokens: 75
           }
         ]
       }
@@ -53,6 +55,29 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     expect(tasks.find(t => t.task_code === "BULK-002")).toBeDefined();
   });
 
+  it("should allow bulk create without est_tokens", async () => {
+    const res = await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          {
+            task_code: "BULK-NO-TOKENS",
+            title: "Bulk task without estimate",
+            description: "Accepted during planning",
+            phase: "research",
+            status: "pending"
+          }
+        ]
+      }
+    });
+
+    expect(res.isError).toBe(false);
+    const task = db.getTasksByRepo(REPO).find(t => t.task_code === "BULK-NO-TOKENS");
+    expect(task?.est_tokens).toBe(0);
+  });
+
   it("should enforce default limit of 15 and support pagination", async () => {
     // Create 20 tasks
     const manyTasks = Array.from({ length: 20 }, (_, i) => ({
@@ -60,7 +85,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       title: `Task ${i}`,
       description: `Description ${i}`,
       phase: "research",
-      status: "pending"
+      status: "pending",
+      est_tokens: 20 + i
     }));
 
     await router("tools/call", {
@@ -104,8 +130,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
         action: "bulk_create",
         repo: REPO,
         tasks: [
-          { task_code: "DUP-001", title: "Task 1", description: "D", phase: "p", status: "pending" },
-          { task_code: "DUP-001", title: "Task 2", description: "D", phase: "p", status: "pending" }
+          { task_code: "DUP-001", title: "Task 1", description: "D", phase: "p", status: "pending", est_tokens: 10 },
+          { task_code: "DUP-001", title: "Task 2", description: "D", phase: "p", status: "pending", est_tokens: 12 }
         ]
       }
     });
@@ -123,7 +149,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
         title: "Initial",
         description: "D",
         phase: "p",
-        status: "pending"
+        status: "pending",
+        est_tokens: 25
       }
     });
 
@@ -134,7 +161,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
         action: "bulk_create",
         repo: REPO,
         tasks: [
-          { task_code: "EXISTING-001", title: "Duplicate", description: "D", phase: "p", status: "pending" }
+          { task_code: "EXISTING-001", title: "Duplicate", description: "D", phase: "p", status: "pending", est_tokens: 30 }
         ]
       }
     });
@@ -149,7 +176,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
         title: "Duplicate",
         description: "D",
         phase: "p",
-        status: "pending"
+        status: "pending",
+        est_tokens: 30
       }
     });
     await expect(singlePromise).rejects.toThrow("already exists");
@@ -163,9 +191,9 @@ describe("MCP Local Memory - Bulk Task Management", () => {
         action: "bulk_create",
         repo: REPO,
         tasks: [
-          { task_code: "DEL-1", title: "Task 1", description: "Desc 1", phase: "p", status: "pending" },
-          { task_code: "DEL-2", title: "Task 2", description: "Desc 2", phase: "p", status: "pending" },
-          { task_code: "DEL-3", title: "Task 3", description: "Desc 3", phase: "p", status: "pending" }
+          { task_code: "DEL-1", title: "Task 1", description: "Desc 1", phase: "p", status: "pending", est_tokens: 15 },
+          { task_code: "DEL-2", title: "Task 2", description: "Desc 2", phase: "p", status: "pending", est_tokens: 16 },
+          { task_code: "DEL-3", title: "Task 3", description: "Desc 3", phase: "p", status: "pending", est_tokens: 17 }
         ]
       }
     });
@@ -185,5 +213,26 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     expect(delRes.content[0].text).toContain("Successfully deleted 2 tasks");
     const remainingTasks = db.getTasksByRepo(REPO);
     expect(remainingTasks.length).toBe(1);
+  });
+
+  it("should auto-populate timestamps during bulk create based on status", async () => {
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          { task_code: "TS-1", title: "Started", description: "Desc", phase: "p", status: "in_progress", est_tokens: 40 },
+          { task_code: "TS-2", title: "Done", description: "Desc", phase: "p", status: "completed", est_tokens: 60 }
+        ]
+      }
+    });
+
+    const started = db.getTasksByRepo(REPO).find(t => t.task_code === "TS-1");
+    const done = db.getTasksByRepo(REPO).find(t => t.task_code === "TS-2");
+
+    expect(started?.in_progress_at).toBeTruthy();
+    expect(started?.finished_at).toBeNull();
+    expect(done?.finished_at).toBeTruthy();
   });
 });

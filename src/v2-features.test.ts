@@ -3,6 +3,7 @@ import { SQLiteStore } from "./storage/sqlite.js";
 import { handleMemoryStore } from "./tools/memory.store.js";
 import { handleMemorySearch } from "./tools/memory.search.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
+import { handleMemoryUpdate } from "./tools/memory.update.js";
 import type { MemoryEntry, VectorStore } from "./types.js";
 
 const VALID_UUID_1 = "11111111-1111-4111-a111-111111111111";
@@ -35,12 +36,78 @@ function makeEntry(overrides: any): MemoryEntry {
     supersedes: overrides.supersedes || null,
     status: overrides.status || "active",
     tags: overrides.tags || [],
+    metadata: overrides.metadata || {},
     is_global: overrides.is_global || false,
   };
 }
 
 describe("V2 Enhanced Memory Features", () => {
   describe("1. Conflict Detection & Supersedes", () => {
+    it("should store memories with the file_claim type", async () => {
+      const db = new SQLiteStore(":memory:");
+      const repo = "file-claim-repo";
+
+      const response = await handleMemoryStore({
+        type: "file_claim",
+        title: "Claim ownership of migration file",
+        content: "Agent A is working on src/storage/sqlite.ts migration changes.",
+        importance: 4,
+        scope: { repo },
+        agent: "test-agent",
+        model: "test-model"
+      }, db, mockVectors);
+
+      const stored = db.getById(response.data.id);
+      expect(stored?.type).toBe("file_claim");
+      db.close();
+    });
+
+    it("should store structured metadata on memories", async () => {
+      const db = new SQLiteStore(":memory:");
+      const repo = "metadata-repo";
+
+      const response = await handleMemoryStore({
+        type: "decision",
+        title: "JSON:API response standard restored",
+        content: "Responses must use the JSON:API envelope for consistency.",
+        importance: 4,
+        scope: { repo },
+        agent: "codex",
+        role: "rules-optimizer",
+        model: "gpt-5.4",
+        metadata: {
+          source_agent: "codex",
+          source_role: "rules-optimizer",
+          source_timestamp: "2026-04-03T00:00:00.000Z"
+        }
+      }, db, mockVectors);
+
+      const stored = db.getById(response.data.id);
+      expect(stored?.metadata).toEqual({
+        source_agent: "codex",
+        source_role: "rules-optimizer",
+        source_timestamp: "2026-04-03T00:00:00.000Z"
+      });
+      db.close();
+    });
+
+    it("should reject titles that look like embedded metadata", async () => {
+      const db = new SQLiteStore(":memory:");
+
+      await expect(handleMemoryStore({
+        type: "decision",
+        title: "[agent: codex | role: rules-optimizer | 2026-04-03] JSON:API response standard restored",
+        content: "Responses must use the JSON:API envelope for consistency.",
+        importance: 4,
+        scope: { repo: "metadata-guard-repo" },
+        agent: "codex",
+        role: "rules-optimizer",
+        model: "gpt-5.4"
+      }, db, mockVectors)).rejects.toThrow("Title appears to contain metadata");
+
+      db.close();
+    });
+
     it("should reject a new memory if a similar one exists (>0.85) and no supersedes is provided", async () => {
       const db = new SQLiteStore(":memory:");
       const repo = "conflict-repo";
@@ -116,6 +183,52 @@ describe("V2 Enhanced Memory Features", () => {
   });
 
   describe("3. Feedback Loop", () => {
+    it("should allow updating memory type to file_claim", async () => {
+      const db = new SQLiteStore(":memory:");
+      db.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
+
+      await handleMemoryUpdate({
+        id: VALID_UUID_1,
+        type: "file_claim"
+      }, db, mockVectors);
+
+      const updated = db.getById(VALID_UUID_1);
+      expect(updated?.type).toBe("file_claim");
+      db.close();
+    });
+
+    it("should allow updating memory metadata", async () => {
+      const db = new SQLiteStore(":memory:");
+      db.insert(makeEntry({ id: VALID_UUID_1, metadata: { source_agent: "old-agent" } }));
+
+      await handleMemoryUpdate({
+        id: VALID_UUID_1,
+        metadata: {
+          source_agent: "codex",
+          source_role: "rules-optimizer"
+        }
+      }, db, mockVectors);
+
+      const updated = db.getById(VALID_UUID_1);
+      expect(updated?.metadata).toEqual({
+        source_agent: "codex",
+        source_role: "rules-optimizer"
+      });
+      db.close();
+    });
+
+    it("should reject metadata-like titles on update", async () => {
+      const db = new SQLiteStore(":memory:");
+      db.insert(makeEntry({ id: VALID_UUID_1, title: "Clean title" }));
+
+      await expect(handleMemoryUpdate({
+        id: VALID_UUID_1,
+        title: "[agent: codex | role: rules-optimizer | 2026-04-03] Noisy title"
+      }, db, mockVectors)).rejects.toThrow("Title appears to contain metadata");
+
+      db.close();
+    });
+
     it("should increment recall_count on 'used'", async () => {
       const db = new SQLiteStore(":memory:");
       db.insert(makeEntry({ id: VALID_UUID_1 }));

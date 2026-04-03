@@ -3,6 +3,14 @@ import { SQLiteStore } from "../storage/sqlite.js";
 import { Task, TaskStatus, TaskPriority } from "../types.js";
 import { TaskBulkManageSchema } from "./schemas.js";
 
+function deriveTaskStatusTimestamps(status: TaskStatus, now: string) {
+  return {
+    in_progress_at: status === "in_progress" ? now : null,
+    finished_at: status === "completed" ? now : null,
+    canceled_at: status === "canceled" ? now : null
+  };
+}
+
 export async function handleTaskBulkManage(
   args: any,
   storage: SQLiteStore
@@ -27,6 +35,8 @@ export async function handleTaskBulkManage(
         codesInRequest.add(taskData.task_code);
 
         const taskId = randomUUID();
+        const normalizedStatus = (taskData.status as TaskStatus) || "pending";
+        const statusTimestamps = deriveTaskStatusTimestamps(normalizedStatus, now);
         const task: Task = {
           id: taskId,
           repo,
@@ -34,15 +44,17 @@ export async function handleTaskBulkManage(
           phase: taskData.phase || 'implementation',
           title: taskData.title,
           description: taskData.description || "",
-          status: (taskData.status as TaskStatus) || "pending",
+          status: normalizedStatus,
           priority: (taskData.priority as TaskPriority) || 3,
           agent: taskData.agent || 'unknown',
           role: taskData.role || 'unknown',
           doc_path: taskData.doc_path || null,
           created_at: now,
           updated_at: now,
-          finished_at: null,
-          canceled_at: null,
+          in_progress_at: statusTimestamps.in_progress_at,
+          finished_at: statusTimestamps.finished_at,
+          canceled_at: statusTimestamps.canceled_at,
+          est_tokens: taskData.est_tokens ?? 0,
           tags: taskData.tags || [],
           metadata: taskData.metadata || {},
           parent_id: taskData.parent_id || null,

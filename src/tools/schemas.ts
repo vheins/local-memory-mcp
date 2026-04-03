@@ -8,7 +8,7 @@ export const MemoryScopeSchema = z.object({
   language: z.string().optional()
 });
 
-export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered"]);
+export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"]);
 
 // Tool schemas
 export const MemoryStoreSchema = z.object({
@@ -23,11 +23,13 @@ export const MemoryStoreSchema = z.object({
   ttlDays: z.number().min(1).optional(),
   supersedes: z.string().uuid().optional(),
   tags: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   is_global: z.boolean().default(false)
 });
 
 export const MemoryUpdateSchema = z.object({
   id: z.string().uuid(),
+  type: MemoryTypeSchema.optional(),
   title: z.string().min(3).max(100).optional(),
   content: z.string().min(10).optional(),
   importance: z.number().min(1).max(5).optional(),
@@ -36,10 +38,11 @@ export const MemoryUpdateSchema = z.object({
   status: z.enum(["active", "archived"]).optional(),
   supersedes: z.string().uuid().optional(),
   tags: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   is_global: z.boolean().optional(),
   completed_at: z.string().optional()
 }).refine(
-  (data) => data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined || data.tags !== undefined || data.is_global !== undefined || data.agent !== undefined || data.role !== undefined || data.completed_at !== undefined,
+  (data) => data.type !== undefined || data.content !== undefined || data.title !== undefined || data.importance !== undefined || data.status !== undefined || data.supersedes !== undefined || data.tags !== undefined || data.metadata !== undefined || data.is_global !== undefined || data.agent !== undefined || data.role !== undefined || data.completed_at !== undefined,
   { message: "At least one field must be provided for update" }
 );
 
@@ -96,7 +99,8 @@ export const TaskCreateSchema = z.object({
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   parent_id: z.string().uuid().optional(),
-  depends_on: z.string().uuid().optional()
+  depends_on: z.string().uuid().optional(),
+  est_tokens: z.number().int().min(0).optional()
 });
 
 export const TaskUpdateSchema = z.object({
@@ -147,7 +151,8 @@ export const TaskBulkManageSchema = z.object({
     tags: z.array(z.string()).optional(),
     metadata: z.record(z.string(), z.any()).optional(),
     parent_id: z.string().uuid().optional(),
-    depends_on: z.string().uuid().optional()
+    depends_on: z.string().uuid().optional(),
+    est_tokens: z.number().int().min(0).optional()
   })).min(1).optional(),
   ids: z.array(z.string().uuid()).min(1).optional()
 }).refine(
@@ -164,20 +169,20 @@ export const TaskDeleteSchema = z.object({
 export const TOOL_DEFINITIONS = [
   {
     name: "memory-store",
-    description: "Store a new memory entry. Use 'tags' for tech-stack (e.g., ['filament', 'vue']) and 'is_global' for universal rules.",
+    description: "Store a new memory entry. Keep 'title' concise and human-readable; do not embed agent/role/date metadata in the title. Put auxiliary context into 'metadata'. Use 'tags' for tech-stack and 'is_global' for universal rules.",
     inputSchema: {
       type: "object",
       properties: {
         type: {
           type: "string",
-          enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered"],
+          enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"],
           description: "Type of memory being stored"
         },
         title: {
           type: "string",
           minLength: 3,
           maxLength: 100,
-          description: "Short title for the memory"
+          description: "Short human-readable title for the memory. Do not embed bracketed metadata like agent/role/date prefixes here."
         },
         content: {
           type: "string",
@@ -213,6 +218,10 @@ export const TOOL_DEFINITIONS = [
           items: { type: "string" },
           description: "Technology stack tags (e.g., ['filament', 'laravel'])"
         },
+        metadata: {
+          type: "object",
+          description: "Structured metadata for non-title context such as source agent, claim fields, or timestamps"
+        },
         is_global: {
           type: "boolean",
           description: "If true, this memory is shared across all repositories"
@@ -238,17 +247,19 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "memory-update",
-    description: "Update an existing memory entry",
+    description: "Update an existing memory entry. Keep 'title' concise and move agent/role/date or claim context into 'metadata' instead of the title.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", format: "uuid" },
+        type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"] },
         title: { type: "string", minLength: 3, maxLength: 100 },
         content: { type: "string", minLength: 10 },
         importance: { type: "number", minimum: 1, maximum: 5 },
         status: { type: "string", enum: ["active", "archived"] },
         supersedes: { type: "string", format: "uuid" },
         tags: { type: "array", items: { type: "string" } },
+        metadata: { type: "object" },
         is_global: { type: "boolean" }
       },
       required: ["id"]
@@ -270,7 +281,7 @@ export const TOOL_DEFINITIONS = [
         },
         types: {
           type: "array",
-          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered"] }
+          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"] }
         },
         minImportance: { type: "number", minimum: 1, maximum: 5 },
         limit: { type: "number", minimum: 1, maximum: 10, default: 5 },
@@ -347,7 +358,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "task-create",
-    description: "Create a new task in a repository. task_code must be unique within the repository.",
+    description: "Create a new task in a repository. task_code must be unique within the repository. 'est_tokens' is optional during planning/creation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -364,14 +375,15 @@ export const TOOL_DEFINITIONS = [
         tags: { type: "array", items: { type: "string" } },
         metadata: { type: "object" },
         parent_id: { type: "string", format: "uuid" },
-        depends_on: { type: "string", format: "uuid" }
+        depends_on: { type: "string", format: "uuid" },
+        est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" }
       },
       required: ["repo", "task_code", "phase", "title", "description", "status"]
     }
   },
   {
     name: "task-update",
-    description: "Update an existing task. Provide only the fields that need to be changed.",
+    description: "Update an existing task. Provide only the fields that need to be changed. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
     inputSchema: {
       type: "object",
       properties: {
@@ -392,7 +404,7 @@ export const TOOL_DEFINITIONS = [
         metadata: { type: "object" },
         parent_id: { type: "string", format: "uuid" },
         depends_on: { type: "string", format: "uuid" },
-        est_tokens: { type: "number", minimum: 0, description: "Estimated tokens used for this task" }
+        est_tokens: { type: "number", minimum: 0, description: "Estimated total tokens actually used for this task. Required when status changes to 'completed'." }
       },
       required: ["repo", "id"]
     }
@@ -447,7 +459,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "task-bulk-manage",
-    description: "Perform bulk operations on tasks (e.g., bulk creation, bulk deletion).",
+    description: "Perform bulk operations on tasks (e.g., bulk creation, bulk deletion). For bulk_create, 'est_tokens' is optional and can be filled later when the task is completed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -477,7 +489,8 @@ export const TOOL_DEFINITIONS = [
               tags: { type: "array", items: { type: "string" } },
               metadata: { type: "object" },
               parent_id: { type: "string", format: "uuid" },
-              depends_on: { type: "string", format: "uuid" }
+              depends_on: { type: "string", format: "uuid" },
+              est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" }
             },
             required: ["task_code", "title", "phase", "description", "status"]
           },

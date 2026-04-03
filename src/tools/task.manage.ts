@@ -3,6 +3,32 @@ import { SQLiteStore } from "../storage/sqlite.js";
 import { Task, TaskStatus, TaskPriority } from "../types.js";
 import { TaskListSchema, TaskCreateSchema, TaskUpdateSchema, TaskDeleteSchema } from "./schemas.js";
 
+function deriveTaskStatusTimestamps(
+  status: TaskStatus,
+  now: string,
+  existingTask?: { status: TaskStatus }
+) {
+  const timestamps = {
+    in_progress_at: null as string | null,
+    finished_at: null as string | null,
+    canceled_at: null as string | null
+  };
+
+  if (status === "in_progress" && existingTask?.status !== "in_progress") {
+    timestamps.in_progress_at = now;
+  }
+
+  if (status === "completed") {
+    timestamps.finished_at = now;
+  }
+
+  if (status === "canceled") {
+    timestamps.canceled_at = now;
+  }
+
+  return timestamps;
+}
+
 export async function handleTaskList(
   args: any,
   storage: SQLiteStore
@@ -43,13 +69,15 @@ export async function handleTaskCreate(
   storage: SQLiteStore
 ) {
   const taskData = TaskCreateSchema.parse(args);
-  const { repo, task_code, phase, title, description, status, priority, agent, role, doc_path, tags, metadata, parent_id, depends_on } = taskData;
+  const { repo, task_code, phase, title, description, status, priority, agent, role, doc_path, tags, metadata, parent_id, depends_on, est_tokens } = taskData;
 
   if (storage.isTaskCodeDuplicate(repo, task_code)) {
     throw new Error(`Duplicate task_code: '${task_code}' already exists in repository '${repo}'`);
   }
 
   const taskId = randomUUID();
+  const now = new Date().toISOString();
+  const statusTimestamps = deriveTaskStatusTimestamps(status as TaskStatus, now);
   const task: Task = {
     id: taskId,
     repo,
@@ -62,10 +90,12 @@ export async function handleTaskCreate(
     agent: agent || 'unknown',
     role: role || 'unknown',
     doc_path: doc_path || null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    finished_at: null,
-    canceled_at: null,
+    created_at: now,
+    updated_at: now,
+    in_progress_at: statusTimestamps.in_progress_at,
+    finished_at: statusTimestamps.finished_at,
+    canceled_at: statusTimestamps.canceled_at,
+    est_tokens: est_tokens ?? 0,
     tags: tags || [],
     metadata: metadata || {},
     parent_id: parent_id || null,
@@ -102,6 +132,10 @@ export async function handleTaskUpdate(
     }
   }
 
+  if (updates.status === "completed" && updates.status !== existingTask.status && updates.est_tokens === undefined) {
+    throw new Error("est_tokens is required when changing task status to completed");
+  }
+
   // Check for task_code uniqueness if being updated
   if (updates.task_code) {
     if (storage.isTaskCodeDuplicate(repo, updates.task_code, id)) {
@@ -111,12 +145,13 @@ export async function handleTaskUpdate(
 
   // Handle auto-timestamps for status changes
   const finalUpdates: any = { ...updates };
+  const now = new Date().toISOString();
   if (updates.status === "completed") {
-    finalUpdates.finished_at = new Date().toISOString();
+    finalUpdates.finished_at = now;
   } else if (updates.status === "canceled") {
-    finalUpdates.canceled_at = new Date().toISOString();
+    finalUpdates.canceled_at = now;
   } else if (updates.status === "in_progress" && existingTask.status !== "in_progress") {
-    finalUpdates.in_progress_at = new Date().toISOString();
+    finalUpdates.in_progress_at = now;
   }
 
   storage.updateTask(id, finalUpdates);

@@ -5,6 +5,11 @@ import { VectorStore, MemoryEntry } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
+function hasMetadataLikeTitle(title: string): boolean {
+  const normalized = title.trim();
+  return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
+}
+
 export async function handleMemoryStore(
   params: any,
   db: SQLiteStore,
@@ -12,6 +17,10 @@ export async function handleMemoryStore(
 ): Promise<McpResponse> {
   // Validate input
   const validated = MemoryStoreSchema.parse(params);
+
+  if (hasMetadataLikeTitle(validated.title)) {
+    throw new Error("Title appears to contain metadata. Keep title concise and move agent/role/date details into metadata or dedicated fields.");
+  }
 
   // Create memory entry
   const now = new Date().toISOString();
@@ -78,6 +87,7 @@ export async function handleMemoryStore(
     supersedes: validated.supersedes ?? null,
     status: "active",
     tags,
+    metadata: validated.metadata ?? {},
     is_global: validated.is_global
   };
 
