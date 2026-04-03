@@ -300,5 +300,33 @@ Steps:
         }
       }
     ]
+  },
+  "task-executor": {
+    name: "task-executor",
+    description: "Execute all pending tasks from the local tracker sequentially",
+    arguments: [],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are tasked with executing all available tasks for the current repository.
+
+Please follow this strict execution flow:
+
+1. **Identify Repository**: Determine the current repository name (e.g., from git config or workspace context).
+2. **Fetch Tasks**: Call 'task-list' for the identified repository with status='pending'.
+3. **Process Sequentially**: For each task found:
+   - **Start**: Call 'task-update' to set status='in_progress' and agent/role information.
+   - **Execute**: Perform the work described in the task title and description.
+   - **Validate**: Ensure the work is correct and follows project standards.
+   - **Complete**: Call 'task-update' to set status='completed' with a summary of what was done in the 'comment' field.
+   - **Handoff**: If the task was complex, use 'memory-store' (type='agent_handoff') to record technical details.
+4. **Report**: After processing all tasks, provide a summary of your progress.
+
+If a task becomes blocked, update its status to 'blocked' with a clear reason and move to the next task.`
+        }
+      }
+    ]
   }
 };
