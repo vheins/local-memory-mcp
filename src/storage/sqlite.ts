@@ -550,11 +550,32 @@ export class SQLiteStore {
     const totalHitCount = (this.db.prepare(hitsSql).get(...params) as any)?.totalHits || 0;
     const expiringSoon = (this.db.prepare(expiringSql).get(...params) as any)?.count || 0;
 
+    // Today's stats
+    const today = new Date().toISOString().split('T')[0];
+    let todayAddedSql = "SELECT COUNT(*) as count FROM tasks WHERE date(created_at) = ?";
+    let todayCompletedSql = "SELECT COUNT(*) as count FROM tasks WHERE status = 'completed' AND date(updated_at) = ?";
+    let todayProcessedSql = "SELECT COUNT(*) as count FROM task_comments WHERE date(created_at) = ?";
+    
+    const todayParams = [today];
+    if (repo) {
+      todayAddedSql += " AND repo = ?";
+      todayCompletedSql += " AND repo = ?";
+      todayProcessedSql += " AND repo = ?";
+      todayParams.push(repo);
+    }
+
+    const todayAdded = (this.db.prepare(todayAddedSql).get(...todayParams) as any)?.count || 0;
+    const todayCompleted = (this.db.prepare(todayCompletedSql).get(...todayParams) as any)?.count || 0;
+    const todayProcessed = (this.db.prepare(todayProcessedSql).get(...todayParams) as any)?.count || 0;
+
     return {
       ...memoryStats,
       avgImportance: avgImportance.toFixed(1),
       totalHitCount,
       expiringSoon,
+      todayAdded,
+      todayCompleted,
+      todayProcessed,
       taskStats
     };
   }

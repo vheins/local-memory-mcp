@@ -1126,6 +1126,31 @@
                     </div>
                 </div>
 
+                <!-- Today's Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/10 dark:to-gray-800 p-4 rounded-lg shadow-sm border border-emerald-100 dark:border-emerald-900/30">
+                        <div class="flex items-center justify-between">
+                            <div class="text-xs text-emerald-600 dark:text-emerald-400 uppercase font-bold tracking-wider">Today Completed</div>
+                            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <div id="todayCompleted" class="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">0</div>
+                    </div>
+                    <div class="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/10 dark:to-gray-800 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/30">
+                        <div class="flex items-center justify-between">
+                            <div class="text-xs text-indigo-600 dark:text-indigo-400 uppercase font-bold tracking-wider">Today Added</div>
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        </div>
+                        <div id="todayAdded" class="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">0</div>
+                    </div>
+                    <div class="bg-gradient-to-br from-sky-50 to-white dark:from-sky-900/10 dark:to-gray-800 p-4 rounded-lg shadow-sm border border-sky-100 dark:border-sky-900/30">
+                        <div class="flex items-center justify-between">
+                            <div class="text-xs text-sky-600 dark:text-sky-400 uppercase font-bold tracking-wider">Today Processed</div>
+                            <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        </div>
+                        <div id="todayProcessed" class="text-3xl font-black text-sky-600 dark:text-sky-400 mt-1">0</div>
+                    </div>
+                </div>
+
                 <!-- Charts Section -->
                 <div class="grid md:grid-cols-2 gap-6 flex-1">
                     <div class="bg-white dark:bg-gray-800 p-4 md:p-5 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -1352,6 +1377,38 @@
                         <button onclick="loadTasks()" class="btn-refresh">Refresh Tasks</button>
                     </div>
                 </div>
+
+                <!-- Task Context Today's Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Completed</div>
+                            <div id="todayCompletedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Added</div>
+                            <div id="todayAddedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Processed</div>
+                            <div id="todayProcessedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="taskBoard" class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <!-- Column: Todo -->
                     <div class="flex flex-col gap-4">

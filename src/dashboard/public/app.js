@@ -623,7 +623,29 @@ async function loadStats() {
             document.getElementById('todoTasksCount').textContent = data.taskStats.todo || 0;
             document.getElementById('inProgressTasksCount').textContent = data.taskStats.inProgress || 0;
             document.getElementById('completedTasksCount').textContent = data.taskStats.completed || 0;
-            
+
+            // Today's Stats (Dashboard tab)
+            if (document.getElementById('todayCompleted')) {
+                document.getElementById('todayCompleted').textContent = data.todayCompleted || 0;
+            }
+            if (document.getElementById('todayAdded')) {
+                document.getElementById('todayAdded').textContent = data.todayAdded || 0;
+            }
+            if (document.getElementById('todayProcessed')) {
+                document.getElementById('todayProcessed').textContent = data.todayProcessed || 0;
+            }
+
+            // Today's Stats (Tasks tab)
+            if (document.getElementById('todayCompletedTasksCount')) {
+                document.getElementById('todayCompletedTasksCount').textContent = data.todayCompleted || 0;
+            }
+            if (document.getElementById('todayAddedTasksCount')) {
+                document.getElementById('todayAddedTasksCount').textContent = data.todayAdded || 0;
+            }
+            if (document.getElementById('todayProcessedTasksCount')) {
+                document.getElementById('todayProcessedTasksCount').textContent = data.todayProcessed || 0;
+            }
+
             document.getElementById('todoStatCount').textContent = data.taskStats.todo || 0;
             document.getElementById('inProgressStatCount').textContent = data.taskStats.inProgress || 0;
             document.getElementById('completedStatCount').textContent = data.taskStats.completed || 0;
@@ -633,14 +655,13 @@ async function loadStats() {
             const todoCountEl = document.getElementById('todoCount');
             const inProgressCountEl = document.getElementById('inProgressCount');
             const completedCountEl = document.getElementById('completedCount');
-            
+
             if (todoCountEl) todoCountEl.textContent = data.taskStats.todo || 0;
             if (inProgressCountEl) inProgressCountEl.textContent = data.taskStats.inProgress || 0;
             if (completedCountEl) completedCountEl.textContent = data.taskStats.completed || 0;
-            
+
             updateTaskStatusChart(data.taskStats);
         }
-
         updateTypeChart(data.byType);
         updateTimeSeriesChart(data.timeSeries || {});
         updateScatterChart(data.scatterData || []);
