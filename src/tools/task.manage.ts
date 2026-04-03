@@ -115,6 +115,8 @@ export async function handleTaskUpdate(
     finalUpdates.finished_at = new Date().toISOString();
   } else if (updates.status === "canceled") {
     finalUpdates.canceled_at = new Date().toISOString();
+  } else if (updates.status === "in_progress" && existingTask.status !== "in_progress") {
+    finalUpdates.in_progress_at = new Date().toISOString();
   }
 
   storage.updateTask(id, finalUpdates);

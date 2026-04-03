@@ -574,6 +574,21 @@ export class SQLiteStore {
     }
     const todayTokens = (this.db.prepare(todayTokensSql).get(...todayParams) as any)?.total || 0;
 
+    let avgDurationSql = `
+      SELECT AVG(
+        (julianday(finished_at) - julianday(in_progress_at)) * 86400.0
+      ) as avg_seconds 
+      FROM tasks 
+      WHERE status = 'completed' 
+      AND in_progress_at IS NOT NULL 
+      AND finished_at IS NOT NULL
+      AND date(finished_at) = ?
+    `;
+    if (repo) {
+      avgDurationSql += " AND repo = ?";
+    }
+    const avgDurationSeconds = (this.db.prepare(avgDurationSql).get(...todayParams) as any)?.avg_seconds || 0;
+
     return {
       ...memoryStats,
       avgImportance: avgImportance.toFixed(1),
@@ -583,6 +598,7 @@ export class SQLiteStore {
       todayCompleted,
       todayProcessed,
       todayTokens,
+      todayAvgDuration: avgDurationSeconds,
       taskStats
     };
   }
@@ -701,8 +717,8 @@ export class SQLiteStore {
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
         id, repo, task_code, phase, title, description, status, priority,
-        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -725,7 +741,8 @@ export class SQLiteStore {
       task.metadata ? JSON.stringify(task.metadata) : null,
       task.parent_id || null,
       task.depends_on || null,
-      task.est_tokens || 0
+      task.est_tokens || 0,
+      task.in_progress_at || null
     );
   }
 
@@ -877,7 +894,8 @@ export class SQLiteStore {
       doc_path: row.doc_path || null,
       tags,
       metadata,
-      est_tokens: row.est_tokens || 0
+      est_tokens: row.est_tokens || 0,
+      in_progress_at: row.in_progress_at || null
     };
   }
 

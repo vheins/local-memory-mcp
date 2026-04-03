@@ -595,6 +595,23 @@ async function loadRepos() {
     }
 }
 
+function formatTokens(num) {
+    if (!num) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+    return num.toString();
+}
+
+function formatDuration(seconds) {
+    if (!seconds || seconds <= 0) return '0m';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const minutes = seconds / 60;
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const hours = minutes / 60;
+    if (hours < 24) return `${Math.round(hours)}h`;
+    return `${Math.round(hours / 24)}d`;
+}
+
 async function loadStats() {
     try {
         const url = currentRepo ? `/api/stats?repo=${encodeURIComponent(currentRepo)}` : '/api/stats';
@@ -635,7 +652,10 @@ async function loadStats() {
                 document.getElementById('todayProcessed').textContent = data.todayProcessed || 0;
             }
             if (document.getElementById('todayTokens')) {
-                document.getElementById('todayTokens').textContent = data.todayTokens || 0;
+                document.getElementById('todayTokens').textContent = formatTokens(data.todayTokens);
+            }
+            if (document.getElementById('todayAvgTime')) {
+                document.getElementById('todayAvgTime').textContent = formatDuration(data.todayAvgDuration);
             }
 
             // Today's Stats (Tasks tab)
@@ -649,7 +669,10 @@ async function loadStats() {
                 document.getElementById('todayProcessedTasksCount').textContent = data.todayProcessed || 0;
             }
             if (document.getElementById('todayTokensTasksCount')) {
-                document.getElementById('todayTokensTasksCount').textContent = data.todayTokens || 0;
+                document.getElementById('todayTokensTasksCount').textContent = formatTokens(data.todayTokens);
+            }
+            if (document.getElementById('todayAvgTimeTasksCount')) {
+                document.getElementById('todayAvgTimeTasksCount').textContent = formatDuration(data.todayAvgDuration);
             }
 
             document.getElementById('todoStatCount').textContent = data.taskStats.todo || 0;
