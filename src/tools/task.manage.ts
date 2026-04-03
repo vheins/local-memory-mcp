@@ -23,10 +23,16 @@ export async function handleTaskList(
     ? tasks.filter((t: any) => t.phase.toLowerCase() === phase.toLowerCase()) 
     : tasks;
 
+  // Enhance tasks with their comments/history
+  const tasksWithHistory = filteredTasks.map((task: any) => ({
+    ...task,
+    comments: storage.getTaskCommentsByTaskId(task.id)
+  }));
+
   return { 
     content: [{ 
       type: "text", 
-      text: JSON.stringify(filteredTasks, null, 2) 
+      text: JSON.stringify(tasksWithHistory, null, 2) 
     }],
     isError: false
   };
