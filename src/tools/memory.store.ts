@@ -39,15 +39,15 @@ export async function handleMemoryStore(
         { 
           success: false, 
           error: "MEMORY_CONFLICT", 
-          message: `This memory content overlaps significantly (>85%) with an existing memory (ID: ${conflict.id}).`,
+          message: `This memory content overlaps significantly with an existing memory (ID: ${conflict.id}).`,
           conflicting_memory: {
             id: conflict.id,
             title: conflict.title,
             content: conflict.content
           },
-          instruction: "You must use 'memory-update' on the existing ID, or provide 'supersedes' if this new memory replaces it."
+          instruction: "Use 'memory-update' on the existing ID, or provide 'supersedes' if this new memory replaces it. If the old memory is no longer relevant, you can delete it first."
         },
-        `Rejected due to conflict with ${conflict.id}`
+        `Rejected due to conflict with ${conflict.id}. Hint: Use 'supersedes' if this replaces the old memory, or 'memory-update' if you're updating it. If the old memory is no longer relevant, delete it first using 'memory-delete'.`
       );
     }
   }

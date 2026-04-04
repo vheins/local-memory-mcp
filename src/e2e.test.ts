@@ -238,6 +238,8 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
     });
 
     expect(duplicateRes.content[0].text).toContain("conflict");
+    expect(duplicateRes.content[0].text).toContain("Hint:");
+    expect(duplicateRes.content[0].text).toContain("memory-delete");
     expect(db.getTotalCount(REPO)).toBe(1); // Should still be 1
   });
 

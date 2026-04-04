@@ -130,6 +130,15 @@ export async function handleTaskUpdate(
     if (comment === undefined || comment.trim() === "") {
       throw new Error("comment is required when changing task status");
     }
+
+    // Workflow transition validation
+    if (existingTask.status === "pending" && updates.status === "completed") {
+      throw new Error("Cannot transition directly from 'pending' to 'completed'. Task must be 'in_progress' first.");
+    }
+    
+    if (existingTask.status === "blocked" && updates.status === "completed") {
+      throw new Error("Cannot transition directly from 'blocked' to 'completed'. Task must be 'in_progress' first.");
+    }
   }
 
   if (updates.status === "completed" && updates.status !== existingTask.status && updates.est_tokens === undefined) {

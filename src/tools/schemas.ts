@@ -383,7 +383,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "task-update",
-    description: "Update an existing task. Provide only the fields that need to be changed. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
+    description: "Update an existing task. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
     inputSchema: {
       type: "object",
       properties: {
@@ -393,12 +393,12 @@ export const TOOL_DEFINITIONS = [
         phase: { type: "string" },
         title: { type: "string", minLength: 3, maxLength: 100 },
         description: { type: "string" },
-        status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"] },
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"], description: "New status. Transitions from 'pending' or 'blocked' to 'completed' are NOT allowed." },
         priority: { type: "number", minimum: 1, maximum: 5 },
         agent: { type: "string" },
         role: { type: "string" },
         model: { type: "string" },
-        comment: { type: "string", description: "Required when changing task status. Stored in task_comments history." },
+        comment: { type: "string", description: "REQUIRED when changing task status. Explain WHY the status is changing (e.g., 'Starting implementation', 'Blocked by missing API docs', 'Verified fix')." },
         doc_path: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
         metadata: { type: "object" },
