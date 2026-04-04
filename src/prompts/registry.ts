@@ -301,9 +301,9 @@ Steps:
       }
     ]
   },
-  "task-executor": {
-    name: "task-executor",
-    description: "Execute all pending tasks from the local tracker sequentially",
+  "task-memory-executor": {
+    name: "task-memory-executor",
+    description: "Execute all pending tasks for the current repository, updating status and storing handoffs in memory",
     arguments: [],
     messages: [
       {
@@ -315,16 +315,18 @@ Steps:
 Please follow this strict execution flow:
 
 1. **Identify Repository**: Determine the current repository name (e.g., from git config or workspace context).
-2. **Fetch Tasks**: Call 'task-list' for the identified repository with status='pending'.
-3. **Process Sequentially**: For each task found:
-   - **Start**: Call 'task-update' to set status='in_progress' and agent/role information.
-   - **Execute**: Perform the work described in the task title and description.
-   - **Validate**: Ensure the work is correct and follows project standards.
-   - **Complete**: Call 'task-update' to set status='completed' with a summary of what was done in the 'comment' field AND include an estimate of total tokens used for this task in the 'est_tokens' field.
-   - **Handoff**: If the task was complex, use 'memory-store' (type='agent_handoff') to record technical details.
-4. **Report**: After processing all tasks, provide a summary of your progress.
+2. **Fetch Tasks**: Call 'task-list' for the identified repository for statuses 'pending' and 'in_progress'.
+3. **Filter Stale**: Identify 'in_progress' tasks that are **stale** (stale is defined as > 30 Minutes without update, often because an agent stopped or crashed).
+4. **Process Sequentially**: For each task (all 'pending' + all 'stale in_progress') found:
+    - **Start**: Call 'task-update' to set status='in_progress' and provide current agent/role information.
+    - **Execute**: Perform the work described in the task title and description.
+    - **Validate**: Ensure the work is correct and follows project standards.
+    - **Complete**: Call 'task-update' to set status='completed' with a summary of accomplishment in the 'comment' field.
+    - **Commit**: Perform an atomic git commit and push for the changes made in the task.
+    - **Handoff**: Always use 'memory-store' (type='agent_handoff') to document **detailed fix steps** and project-specific knowledge gained during execution. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as `parent_id`).
+5. **Report**: After processing all tasks, provide a summary of your progress.
 
-If a task becomes blocked, update its status to 'blocked' with a clear reason and move to the next task.`
+If a task becomes blocked, update its status to 'blocked' with a **clear reason and recommended next steps for resolution** in the 'comment' field, then move to the next task.`
         }
       }
     ]
