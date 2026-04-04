@@ -52,7 +52,7 @@ export const MemorySearchSchema = z.object({
   repo: z.string().min(1),
   types: z.array(MemoryTypeSchema).optional(),
   minImportance: z.number().min(1).max(5).optional(),
-  limit: z.number().min(1).max(10).default(5),
+  limit: z.number().min(1).max(100).default(5),
   includeRecap: z.boolean().default(false),
   current_file_path: z.string().optional(),
   include_archived: z.boolean().default(false),
@@ -284,7 +284,7 @@ export const TOOL_DEFINITIONS = [
           items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"] }
         },
         minImportance: { type: "number", minimum: 1, maximum: 5 },
-        limit: { type: "number", minimum: 1, maximum: 10, default: 5 },
+        limit: { type: "number", minimum: 1, maximum: 100, default: 5 },
         includeRecap: { type: "boolean", default: false },
         current_file_path: { type: "string" },
         include_archived: { type: "boolean", default: false }
