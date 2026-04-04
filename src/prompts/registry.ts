@@ -323,7 +323,7 @@ Please follow this strict execution flow:
     - **Validate**: Ensure the work is correct and follows project standards.
     - **Complete**: Call 'task-update' to set status='completed' with a summary of accomplishment in the 'comment' field.
     - **Commit**: Perform an atomic git commit and push for the changes made in the task.
-    - **Handoff**: Always use 'memory-store' (type='agent_handoff') to document **detailed fix steps** and project-specific knowledge gained during execution. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as `parent_id`).
+    - **Handoff**: Always use 'memory-store' (type='agent_handoff') to document **detailed fix steps** and project-specific knowledge gained during execution. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as \`parent_id\`).
 5. **Report**: After processing all tasks, provide a summary of your progress.
 
 If a task becomes blocked, update its status to 'blocked' with a **clear reason and recommended next steps for resolution** in the 'comment' field, then move to the next task.`
