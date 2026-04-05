@@ -118,7 +118,7 @@ Memory is a permanent record, categorize it properly with tags.`
 
 2. Resource & Tool Usage:
    - MANDATORY: Always call 'task-list' at the very start of a new session to understand current progress and avoid duplicating work.
-   - Resource: You can also read 'tasks://current?repo={repo}' for a filtered view of active tasks.
+   - Resource: You can also read 'tasks://current' for a filtered view of active tasks for the current repository.
    - Coordinate: If a task is already 'in_progress', do not attempt to work on it unless specifically asked to collaborate.
 
 3. Workflow Integration:
@@ -131,25 +131,19 @@ Memory is a permanent record, categorize it properly with tags.`
   },
   "import-github-issues": {
     name: "import-github-issues",
-    description: "Guide for importing GitHub Issues as local tasks",
-    arguments: [
-      {
-        name: "repo",
-        description: "GitHub repository in 'owner/repo' format",
-        required: true
-      }
-    ],
+    description: "Guide for importing GitHub Issues from the current repository as local tasks",
+    arguments: [],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `You are tasked with importing GitHub Issues from the repository {{repo}} into our local task management system.
+          text: `You are tasked with importing GitHub Issues from the current repository into our local task management system.
 
 Please follow these steps:
 
-1. **Access Issues**: Use available GitHub MCP tools to list open issues for the repository {{repo}}.
-2. **Review Existing Tasks**: Call 'task-list' for the current local repository to identify tasks already imported.
+1. **Access Issues**: Use available GitHub MCP tools to list open issues for the current repository.
+2. **Review Existing Tasks**: Call 'task-list' for the current repository to identify tasks already imported.
 3. **Map and Create**: For each relevant issue that hasn't been imported yet:
    - Use 'task-manage' with action='create'.
    - Set 'task_code' to 'GH-{{issue_number}}' (e.g., GH-123).
@@ -167,18 +161,16 @@ Please follow these steps:
   "project-briefing": {
     name: "project-briefing",
     description: "Onboard the agent to the current repository state",
-    arguments: [
-      { name: "repo", description: "The current repository name", required: true }
-    ],
+    arguments: [],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `I am starting a new session in repository: {{repo}}.
+          text: `I am starting a new session in the current repository.
 
 Please perform a briefing to catch up on the project:
-1. **Recent Knowledge**: Call 'memory-recap' to see the latest decisions, patterns, and mistakes recorded for this repo.
+1. **Recent Knowledge**: Call 'memory-recap' for the current repo to see the latest decisions, patterns, and mistakes recorded.
 2. **Current Tasks**: Call 'task-list' to understand what is currently pending or in-progress.
 3. **Context Check**: Summarize the top 3 most important architectural decisions you found.
 4. **Readiness**: Tell me what you are ready to help with based on the current backlog.`
@@ -188,9 +180,8 @@ Please perform a briefing to catch up on the project:
   },
   "learning-retrospective": {
     name: "learning-retrospective",
-    description: "Extract durable knowledge from recent work",
+    description: "Extract durable knowledge from recent work in the current repository",
     arguments: [
-      { name: "repo", description: "The current repository name", required: true },
       { name: "task_id", description: "Optional ID of the task just completed", required: false }
     ],
     messages: [
@@ -198,7 +189,7 @@ Please perform a briefing to catch up on the project:
         role: "user",
         content: {
           type: "text",
-          text: `We have just finished some work in {{repo}} related to task {{task_id}}. 
+          text: `We have just finished some work in the current repository related to task {{task_id}}. 
 
 Please reflect on the changes and identify knowledge worth keeping:
 1. **Mistakes**: Did we encounter any bugs that were hard to find or caused by specific environment quirks? (Store as 'mistake')
@@ -212,20 +203,19 @@ Use 'memory-store' to record any high-value findings. Be concise and use appropr
   },
   "memory-guided-review": {
     name: "memory-guided-review",
-    description: "Review code for compliance with stored project decisions",
+    description: "Review code for compliance with stored project decisions in the current repository",
     arguments: [
-      { name: "file_path", description: "Path to the file to review", required: true },
-      { name: "repo", description: "The current repository name", required: true }
+      { name: "file_path", description: "Path to the file to review", required: true }
     ],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `Please review the code in '{{file_path}}' for repository '{{repo}}'.
+          text: `Please review the code in '{{file_path}}'.
 
-Your goal is to ensure compliance with our stored project knowledge:
-1. **Search Constraints**: Use 'memory-search' with current_file_path='{{file_path}}' to find relevant decisions and patterns.
+Your goal is to ensure compliance with our stored project knowledge for the current repository:
+1. **Search Constraints**: Use 'memory-search' with current_file_path='{{file_path}}' and the current repo context to find relevant decisions and patterns.
 2. **Evaluate Compliance**: Does the code follow established patterns? Does it repeat any known mistakes?
 3. **Feedback**: Provide specific suggestions for improvement if you find violations of stored decisions.`
         }
@@ -234,21 +224,20 @@ Your goal is to ensure compliance with our stored project knowledge:
   },
   "session-planner": {
     name: "session-planner",
-    description: "Break down a complex objective into atomic tasks",
+    description: "Break down a complex objective into atomic tasks for the current repository",
     arguments: [
-      { name: "objective", description: "The high-level goal for this session", required: true },
-      { name: "repo", description: "The current repository name", required: true }
+      { name: "objective", description: "The high-level goal for this session", required: true }
     ],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `Our objective for today in {{repo}} is: '{{objective}}'.
+          text: `Our objective for today in the current repository is: '{{objective}}'.
 
 Please act as a project manager and plan the execution:
 1. **Analyze**: Break this objective down into 3-7 small, atomic, and verifiable tasks.
-2. **Execute**: Use 'task-manage' with action='create' to add these to the local tracker.
+2. **Execute**: Use 'task-manage' with action='create' to add these to the local tracker for the current repo.
 3. **Hierarchy**: Use 'parent_id' or 'depends_on' if there is a clear order of operations.
 4. **Phases**: Group tasks into phases like 'research', 'implementation', and 'validation'.
 
@@ -259,17 +248,16 @@ Display the created plan to the user when done.`
   },
   "tech-affinity-scout": {
     name: "tech-affinity-scout",
-    description: "Find relevant best practices from other projects with similar tech",
+    description: "Find relevant best practices from other projects with similar tech for the current repository",
     arguments: [
-      { name: "tags", description: "Comma-separated tech tags (e.g., 'react, tailwind')", required: true },
-      { name: "repo", description: "The current repository name", required: true }
+      { name: "tags", description: "Comma-separated tech tags (e.g., 'react, tailwind')", required: true }
     ],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `I am working on {{repo}} using [{{tags}}].
+          text: `I am working on the current repository using [{{tags}}].
 
 Please scout for relevant knowledge from other projects:
 1. **Search**: Use 'memory-search' with current_tags=[{{tags}}] and include_archived=false.
@@ -281,20 +269,18 @@ Please scout for relevant knowledge from other projects:
   },
   "documentation-sync": {
     name: "documentation-sync",
-    description: "Reconcile memory decisions with local markdown files",
-    arguments: [
-      { name: "repo", description: "The current repository name", required: true }
-    ],
+    description: "Reconcile memory decisions with local markdown files in the current repository",
+    arguments: [],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `Please verify if our local documentation (README.md, docs/*.md) is in sync with our stored memories for {{repo}}.
+          text: `Please verify if our local documentation (README.md, docs/*.md, .agents/documents/**/*.md, .kiro/**/*.md) is in sync with our stored memories for the current repository.
 
 Steps:
 1. **Fetch Decisions**: Use 'memory-search' to find all 'decision' type memories for this repo.
-2. **Read Docs**: Read the primary project documentation files.
+2. **Read Docs**: Read the primary project documentation files including those in .agents/documents and .kiro.
 3. **Identify Gaps**: Is there any durable knowledge in the memory that is MISSING from the docs? Is there any documentation that is OUTDATED based on recent decisions?
 4. **Propose Updates**: Suggest specific changes to the documentation to reflect the current source of truth.`
         }
@@ -327,6 +313,183 @@ Please follow this strict execution flow:
 5. **Report**: After processing all tasks, provide a summary of your progress.
 
 If a task becomes blocked, update its status to 'blocked' with a **clear reason and recommended next steps for resolution** in the 'comment' field, then move to the next task.`
+        }
+      }
+    ]
+  },
+  "senior-code-review": {
+    name: "senior-code-review",
+    description: "Performs a comprehensive production-readiness evaluation for the current repository context",
+    arguments: [
+      { name: "tech_stack", description: "Target tech stack (e.g., 'Node.js + Express')", required: true },
+      { name: "context", description: "Production context (traffic, data sensitivity, SLA, conventions)", required: false }
+    ],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Act as a principal software engineer performing a production-readiness review for the current repository.
+
+Stack: {{tech_stack}}
+Context: {{context}}
+
+Please review the current code/changes against these 6 dimensions:
+1. **Error Handling Completeness**
+2. **Security** (Injection, Input validation, PII/Secrets)
+3. **Performance** (Time/Memory complexity, DB queries)
+4. **Observability** (Logging, Metrics, Tracing)
+5. **Test Coverage**
+6. **Documentation**
+
+For each finding, provide:
+- **Severity**: P0-P3
+- **Dimension**: One of the above
+- **Location**: Specific function/line
+- **Problem**: What is wrong and why it matters
+- **Fix**: Actionable recommendation
+
+Produce a **Production Readiness Verdict**: READY | READY WITH MINOR FIXES | NOT READY`
+        }
+      }
+    ]
+  },
+  "fix-suggestion": {
+    name: "fix-suggestion",
+    description: "Provide a targeted, minimal fix for an identified bug with before/after code and a test case",
+    arguments: [
+      { name: "tech_stack", description: "Target technology stack", required: true },
+      { name: "bug_description", description: "Description of the bug behavior", required: true },
+      { name: "root_cause", description: "The identified root cause", required: true }
+    ],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are a senior software engineer generating a precise, minimal fix for a confirmed bug in the current repository.
+
+Tech stack: {{tech_stack}}
+Bug description: {{bug_description}}
+Root cause: {{root_cause}}
+
+Please provide:
+1. **Fix Explanation**: Why the bug occurs and how the fix resolves it.
+2. **Before Code**: Show original buggy code.
+3. **After Code**: Show fixed code with explanatory comments.
+4. **Fix Checklist**: Additional changes (config, migrations, etc.)
+5. **Test Case**: A regression test case to verify the fix.`
+        }
+      }
+    ]
+  },
+  "root-cause-analysis": {
+    name: "root-cause-analysis",
+    description: "Apply structured 5-Why analysis to trace bugs to their origin",
+    arguments: [
+      { name: "tech_stack", description: "Target technology stack", required: true },
+      { name: "bug_description", description: "Observable symptom or bug behavior", required: true },
+      { name: "symptoms", description: "Additional errors, logs, metrics", required: false }
+    ],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are a senior software engineer conducting a root cause analysis for a bug in the current repository.
+
+Tech stack: {{tech_stack}}
+Bug description: {{bug_description}}
+Symptoms: {{symptoms}}
+
+Apply a full **5-Why analysis**:
+1. **Symptom Statement**: Technically restate the problem.
+2. **5-Why Causal Chain**: Trace from symptom to the core process/design/environmental failure.
+3. **Root Cause Statement**: "The root cause is [X] because [Y], which allowed [Z] to occur."
+4. **Fix Recommendation**: Address the root cause, not just the symptom.
+5. **Recurrence Prevention**: Suggest a monitoring or testing measure.`
+        }
+      }
+    ]
+  },
+  "technical-planning": {
+    name: "technical-planning",
+    description: "Define the technical blueprint for a new feature or product",
+    arguments: [
+      { name: "objective", description: "The high-level goal for the plan", required: true }
+    ],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `You are tasked with creating a technical blueprint for the following objective in the current repository: '{{objective}}'.
+
+Please cover:
+1. **Tech Stack**: Confirm or select the stack.
+2. **Architecture**: Component layout and data flow.
+3. **Domain Model**: Entities, value objects, and events.
+4. **Database Schema**: Normalized tables and relationships.
+5. **API Contracts**: Endpoint definitions (request/response/errors).
+6. **Roadmap & Sprints**: Phased delivery plan.
+
+Present a cohesive technical design and obtain feedback before proceeding to implementation.`
+        }
+      }
+    ]
+  },
+  "security-triage": {
+    name: "security-triage",
+    description: "Assess security vulnerability reports for exploitability and prioritize remediation",
+    arguments: [
+      { name: "tech_stack", description: "Application stack", required: true },
+      { name: "vulnerability_report", description: "Report details (CVE, SAST, etc.)", required: true },
+      { name: "codebase_context", description: "Component usage context", required: false }
+    ],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Act as a senior application security engineer triaging a vulnerability for the current repository.
+
+Stack: {{tech_stack}}
+Report: {{vulnerability_report}}
+Codebase context: {{codebase_context}}
+
+Please provide:
+1. **Vulnerability Classification**: Type, CVE, CVSS, and attack vector.
+2. **Exploitability Assessment**: Contextual reachability and realistic scenarios.
+3. **Impact Assessment**: Impact on Confidentiality, Integrity, and Availability.
+4. **Remediation Priority & Fix**: Concrete priority (P0-P3) and fix steps.
+5. **Verification**: How to test and verify the fix.`
+        }
+      }
+    ]
+  },
+  "architecture-design": {
+    name: "architecture-design",
+    description: "Plan system architecture, component layout, and data flow",
+    arguments: [
+      { name: "tech_stack", description: "Technology stack", required: true },
+      { name: "requirements", description: "Key functional and non-functional requirements", required: true }
+    ],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Design the architecture for a system in the current repository.
+
+Stack: {{tech_stack}}
+Requirements: {{requirements}}
+
+Produce a comprehensive architecture overview:
+1. **Component Diagram**: Major blocks and their responsibilities.
+2. **Data Flow**: How information moves through the system.
+3. **Key Technical Decisions**: Rationale for chosen patterns.
+4. **Scalability & Reliability**: How the design handles growth and failure.
+5. **Security Considerations**: Identity, data protection, and boundaries.`
         }
       }
     ]

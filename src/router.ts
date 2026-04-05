@@ -44,7 +44,25 @@ export function createRouter(
         if (!prompt) {
           throw new Error(`Unknown prompt: ${params?.name}`);
         }
-        return prompt;
+
+        // Clone to avoid modifying the original registry
+        const result = JSON.parse(JSON.stringify(prompt));
+        const args = params?.arguments || {};
+
+        // Simple template substitution
+        result.messages = result.messages.map((msg: any) => {
+          if (msg.content && msg.content.type === "text") {
+            let text = msg.content.text;
+            for (const [key, value] of Object.entries(args)) {
+              const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, "g");
+              text = text.replace(placeholder, String(value));
+            }
+            return { ...msg, content: { ...msg.content, text } };
+          }
+          return msg;
+        });
+
+        return result;
       }
 
       default:

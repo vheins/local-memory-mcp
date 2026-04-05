@@ -272,7 +272,6 @@ export const TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         query: { type: "string", minLength: 3 },
-        prompt: { type: "string" },
         repo: { type: "string" },
         current_tags: {
           type: "array",
