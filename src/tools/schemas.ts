@@ -129,8 +129,17 @@ export const TaskUpdateSchema = z.object({
 
 export const TaskListSchema = z.object({
   repo: z.string().min(1),
-  status: TaskStatusSchema.optional(),
+  status: z.string().optional(),
   phase: z.string().optional(),
+  search: z.string().optional(),
+  limit: z.number().min(1).max(100).default(15),
+  offset: z.number().min(0).default(0)
+});
+
+export const TaskSearchSchema = z.object({
+  repo: z.string().min(1),
+  query: z.string().min(1),
+  status: z.string().optional(),
   limit: z.number().min(1).max(100).default(15),
   offset: z.number().min(0).default(0)
 });
@@ -422,7 +431,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "task-list",
-    description: "List tasks for a repository to understand current progress and next steps. MANDATORY: Always call this at the start of a session to sync with other agents.",
+    description: "List or search tasks for a repository. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks.",
     inputSchema: {
       type: "object",
       properties: {
@@ -432,12 +441,15 @@ export const TOOL_DEFINITIONS = [
         },
         status: {
           type: "string",
-          enum: ["pending", "in_progress", "completed", "canceled", "blocked"],
-          description: "Filter by status"
+          description: "Filter by status (e.g. 'pending,in_progress' or 'completed'). Defaults to active tasks if omitted."
         },
         phase: {
           type: "string",
           description: "Filter by phase"
+        },
+        search: {
+          type: "string",
+          description: "Search query to filter by task code, title, or description"
         },
         limit: {
           type: "number",
@@ -454,6 +466,41 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["repo"]
+    }
+  },
+  {
+    name: "task-search",
+    description: "Search for tasks by code, title, or description across any status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository name"
+        },
+        query: {
+          type: "string",
+          description: "Search query"
+        },
+        status: {
+          type: "string",
+          description: "Optional status filter (comma-separated). Defaults to 'all' if omitted."
+        },
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 100,
+          default: 15,
+          description: "Maximum number of tasks to return"
+        },
+        offset: {
+          type: "number",
+          minimum: 0,
+          default: 0,
+          description: "Offset for pagination"
+        }
+      },
+      required: ["repo", "query"]
     }
   },
   {

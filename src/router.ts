@@ -127,6 +127,13 @@ export function createRouter(
         result = await handleTaskList(args, db);
         break;
 
+      case "task-search":
+        // Map 'query' to 'search' and set default status if not provided
+        const searchArgs = { ...args, search: args.query };
+        if (!searchArgs.status) searchArgs.status = "all";
+        result = await handleTaskList(searchArgs, db);
+        break;
+
       case "task-bulk-manage":
         result = await handleTaskBulkManage(args, db, vectors);
         break;

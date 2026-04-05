@@ -89,16 +89,18 @@ export async function handleTaskList(
   args: any,
   storage: SQLiteStore
 ) {
-  const { repo, status, phase, limit, offset } = TaskListSchema.parse(args);
+  const { repo, status, phase, search, limit, offset } = TaskListSchema.parse(args);
   
   let tasks;
-  if (status) {
+  if (status === 'all') {
+    tasks = storage.getTasksByMultipleStatuses(repo, [], limit, offset, search);
+  } else if (status) {
     const statuses = status.split(',').map(s => s.trim());
-    tasks = storage.getTasksByMultipleStatuses(repo, statuses, limit, offset);
+    tasks = storage.getTasksByMultipleStatuses(repo, statuses, limit, offset, search);
   } else {
     // If no status specified, exclude 'completed' by default to keep context clean.
     const activeStatuses = ['backlog', 'pending', 'in_progress', 'blocked', 'canceled'];
-    tasks = storage.getTasksByMultipleStatuses(repo, activeStatuses, limit, offset);
+    tasks = storage.getTasksByMultipleStatuses(repo, activeStatuses, limit, offset, search);
   }
   
   const filteredTasks = phase 
