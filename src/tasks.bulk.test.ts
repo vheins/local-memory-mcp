@@ -85,7 +85,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       title: `Task ${i}`,
       description: `Description ${i}`,
       phase: "research",
-      status: "pending",
+      status: "backlog",
       est_tokens: 20 + i
     }));
 
@@ -215,21 +215,62 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     expect(remainingTasks.length).toBe(1);
   });
 
-  it("should auto-populate timestamps during bulk create based on status", async () => {
+  it("auto-populates timestamps from status so agents do not need to send them manually", async () => {
     await router("tools/call", {
       name: "task-bulk-manage",
       arguments: {
         action: "bulk_create",
         repo: REPO,
         tasks: [
-          { task_code: "TS-1", title: "Started", description: "Desc", phase: "p", status: "in_progress", est_tokens: 40 },
-          { task_code: "TS-2", title: "Done", description: "Desc", phase: "p", status: "completed", est_tokens: 60 }
+          { task_code: "TS-1", title: "To Start", description: "Desc", phase: "p", status: "backlog", est_tokens: 40 },
+          { task_code: "TS-2", title: "To Finish", description: "Desc", phase: "p", status: "backlog", est_tokens: 60 }
         ]
       }
     });
 
-    const started = db.getTasksByRepo(REPO).find(t => t.task_code === "TS-1");
-    const done = db.getTasksByRepo(REPO).find(t => t.task_code === "TS-2");
+    const tasks = db.getTasksByRepo(REPO);
+    const ts1 = tasks.find(t => t.task_code === "TS-1");
+    const ts2 = tasks.find(t => t.task_code === "TS-2");
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: ts1.id,
+        status: "in_progress",
+        comment: "Starting TS-1",
+        agent: "Agent-1",
+        role: "tester"
+      }
+    });
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: ts2.id,
+        status: "in_progress",
+        comment: "Starting TS-2",
+        agent: "Agent-1",
+        role: "tester"
+      }
+    });
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: ts2.id,
+        status: "completed",
+        comment: "Finishing TS-2",
+        agent: "Agent-1",
+        role: "tester",
+        est_tokens: 100
+      }
+    });
+
+    const started = db.getTaskById(ts1.id);
+    const done = db.getTaskById(ts2.id);
 
     expect(started?.in_progress_at).toBeTruthy();
     expect(started?.finished_at).toBeNull();

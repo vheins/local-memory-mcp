@@ -52,8 +52,9 @@ export function readResource(uri: string, db: SQLiteStore) {
     const parsed = new URL(uri.replace("tasks://", "http://tasks/"));
     const repo = parsed.searchParams.get("repo");
     if (!repo) throw new Error("Repo parameter is required for tasks://current");
-
-    const tasks = db.getTasksByRepo(repo).filter(t => ["pending", "in_progress", "blocked"].includes(t.status));
+    
+    // Include backlog, pending, in_progress, and blocked by default for 'current' view
+    const tasks = db.getTasksByRepo(repo).filter(t => ["backlog", "pending", "in_progress", "blocked"].includes(t.status));
 
     return {
       contents: [

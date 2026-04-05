@@ -87,16 +87,7 @@ export class SQLiteStore {
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
-        type TEXT NOT NULL CHECK (type IN (
-          'code_fact',
-          'decision',
-          'mistake',
-          'pattern',
-          'agent_handoff',
-          'agent_registered',
-          'file_claim',
-          'task_archive'
-        )),
+        type TEXT NOT NULL,
         title TEXT,
         content TEXT NOT NULL,
         importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5),
@@ -143,7 +134,7 @@ export class SQLiteStore {
         phase TEXT,
         title TEXT NOT NULL,
         description TEXT,
-        status TEXT NOT NULL DEFAULT 'backlog' CHECK (status IN ('backlog', 'pending', 'in_progress', 'completed', 'canceled', 'blocked')),
+        status TEXT NOT NULL DEFAULT 'backlog',
         priority INTEGER NOT NULL DEFAULT 3,
         agent TEXT NOT NULL DEFAULT 'unknown',
         role TEXT NOT NULL DEFAULT 'unknown',
@@ -267,6 +258,8 @@ export class SQLiteStore {
     }
 
     this.ensureMemoryTypeConstraint();
+    this.ensureTaskStatusConstraintRemoved();
+    this.ensureMemoryStatusConstraintRemoved();
 
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
@@ -349,7 +342,7 @@ export class SQLiteStore {
     const tableSql = this.db
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
       .get() as { sql?: string } | undefined;
-    if (!tableSql?.sql || tableSql.sql.includes("'task_archive'")) {
+    if (!tableSql?.sql || !tableSql.sql.includes("CHECK (type IN")) {
       return;
     }
 
@@ -359,16 +352,7 @@ export class SQLiteStore {
       CREATE TABLE memories__migrated (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
-        type TEXT NOT NULL CHECK (type IN (
-          'code_fact',
-          'decision',
-          'mistake',
-          'pattern',
-          'agent_handoff',
-          'agent_registered',
-          'file_claim',
-          'task_archive'
-        )),
+        type TEXT NOT NULL,
         title TEXT,
         content TEXT NOT NULL,
         importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5),
@@ -407,6 +391,84 @@ export class SQLiteStore {
 
       COMMIT;
     `);
+  }
+
+  private ensureTaskStatusConstraintRemoved(): void {
+    const tableSql = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'")
+      .get() as { sql?: string } | undefined;
+    
+    // Check if status column has the old restrictive CHECK constraint or old default 'pending'
+    if (!tableSql?.sql || (!tableSql.sql.includes("CHECK (status IN") && !tableSql.sql.includes("DEFAULT 'pending'"))) {
+      return;
+    }
+
+    this.db.exec(`
+      BEGIN TRANSACTION;
+
+      CREATE TABLE tasks__migrated (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        task_code TEXT NOT NULL,
+        phase TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'backlog',
+        priority INTEGER NOT NULL DEFAULT 3,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        role TEXT NOT NULL DEFAULT 'unknown',
+        doc_path TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        finished_at TEXT,
+        canceled_at TEXT,
+        tags TEXT,
+        metadata TEXT,
+        parent_id TEXT,
+        depends_on TEXT,
+        est_tokens INTEGER NOT NULL DEFAULT 0,
+        in_progress_at TEXT,
+        FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
+        FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
+      );
+
+      INSERT INTO tasks__migrated (
+        id, repo, task_code, phase, title, description, status, priority,
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+      )
+      SELECT
+        id, repo, task_code, phase, title, description, status, priority,
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+      FROM tasks;
+
+      DROP TABLE tasks;
+      ALTER TABLE tasks__migrated RENAME TO tasks;
+
+      COMMIT;
+    `);
+  }
+
+  private ensureMemoryStatusConstraintRemoved(): void {
+    const tableSql = this.db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
+      .get() as { sql?: string } | undefined;
+    
+    // Check if status column has any check constraint
+    if (!tableSql?.sql || !tableSql.sql.includes("status TEXT NOT NULL DEFAULT 'active' CHECK")) {
+      if (!tableSql?.sql?.includes("status TEXT NOT NULL DEFAULT 'active'")) {
+         // If it doesn't even have the status column, it will be added by the general migration loop anyway
+      } else if (!tableSql.sql.includes("CHECK")) {
+         // Already removed or not present
+         return;
+      }
+    } else {
+        // Continue to migration
+    }
+
+    // Re-use ensureMemoryTypeConstraint logic or specifically target status if needed.
+    // Since ensureMemoryTypeConstraint already rebuilds the table without checks on type, 
+    // we just need to make sure it also doesn't have checks on status in its target schema.
+    // The ensureMemoryTypeConstraint target schema (memories__migrated) already has no status check.
   }
 
   getById(id: string): MemoryEntry | null {
@@ -807,7 +869,7 @@ export class SQLiteStore {
       task.phase || null,
       task.title,
       task.description || null,
-      task.status || "pending",
+      task.status || "backlog",
       task.priority || 3,
       task.agent || 'unknown',
       task.role || 'unknown',

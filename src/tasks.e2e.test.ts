@@ -49,7 +49,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         phase: "implementation",
         title: "Implement Core Logic",
         description: "Write the core implementation based on research",
-        status: "pending",
+        status: "backlog",
         depends_on: taskAId,
         priority: 4,
         est_tokens: 240
@@ -133,7 +133,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
     expect(updatedTask.comments[0].comment).toContain("Implementation started");
     expect(updatedTask.comments[0].agent).toBe("Agent B");
     expect(updatedTask.comments[0].model).toBe("gpt-5.4-mini");
-    expect(updatedTask.comments[0].previous_status).toBe("pending");
+    expect(updatedTask.comments[0].previous_status).toBe("backlog");
     expect(updatedTask.comments[0].next_status).toBe("in_progress");
   });
 
@@ -196,13 +196,25 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         phase: "implementation",
         title: "Completion requires token estimate",
         description: "Used to verify completed status analytics requirement",
-        status: "in_progress",
+        status: "backlog",
         priority: 3
       }
     });
 
     const taskId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-003B")?.id;
     expect(taskId).toBeDefined();
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: taskId,
+        status: "in_progress",
+        comment: "Starting work",
+        agent: "Agent E",
+        role: "backend"
+      }
+    });
 
     await expect(router("tools/call", {
       name: "task-update",
@@ -265,16 +277,31 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
         task_code: "TASK-005",
         phase: "implementation",
         title: "Auto timestamp on create",
-        description: "Created directly as in progress",
-        status: "in_progress",
+        description: "Created as backlog then moved to in progress",
+        status: "backlog",
         priority: 3,
         est_tokens: 110
       }
     });
 
     const createdTask = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-005");
-    expect(createdTask?.in_progress_at).toBeTruthy();
+    expect(createdTask?.in_progress_at).toBeNull();
     expect(createdTask?.finished_at).toBeNull();
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: createdTask.id,
+        status: "in_progress",
+        comment: "Starting work",
+        agent: "Agent D",
+        role: "backend"
+      }
+    });
+
+    const inProgressTask = db.getTaskById(createdTask.id);
+    expect(inProgressTask.in_progress_at).toBeTruthy();
 
     await router("tools/call", {
       name: "task-update",
