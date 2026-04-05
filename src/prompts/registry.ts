@@ -308,6 +308,7 @@ Please follow this strict execution flow:
     - **Execute**: Perform the work described in the task title and description.
     - **Validate**: Ensure the work is correct and follows project standards.
     - **Complete**: Call 'task-update' to set status='completed' with a summary of accomplishment in the 'comment' field.
+    - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using 'memory-store' to preserve important context while reducing token usage. Clear transient working memory that is no longer needed.
     - **Commit**: Perform an atomic git commit and push for the changes made in the task.
     - **Handoff**: Always use 'memory-store' (type='agent_handoff') to document **detailed fix steps** and project-specific knowledge gained during execution. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as \`parent_id\`).
 5. **Report**: After processing all tasks, provide a summary of your progress.
