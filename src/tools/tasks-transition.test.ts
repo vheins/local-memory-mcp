@@ -1,13 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { handleTaskUpdate, handleTaskCreate } from "./task.manage.js";
 import { SQLiteStore } from "../storage/sqlite.js";
+import { VectorStore } from "../types.js";
 
 describe("Task Status Transitions", () => {
   let db: SQLiteStore;
+  let mockVectors: VectorStore;
   const REPO = "test-repo";
 
   beforeEach(() => {
     db = new SQLiteStore(":memory:");
+    mockVectors = {
+      upsert: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+      search: vi.fn().mockResolvedValue([])
+    };
   });
 
   async function createTask(taskCode: string, status: string) {
@@ -35,7 +42,7 @@ describe("Task Status Transitions", () => {
       est_tokens: 100,
       agent: "test-agent",
       role: "test-role"
-    }, db)).rejects.toThrow("Cannot transition directly from 'pending' to 'completed'. Task must be 'in_progress' first.");
+    }, db, mockVectors)).rejects.toThrow("Cannot transition directly from 'pending' to 'completed'. Task must be 'in_progress' first.");
   });
 
   it("should allow transition from pending to in_progress", async () => {
@@ -49,7 +56,7 @@ describe("Task Status Transitions", () => {
       comment: "starting",
       agent: "test-agent",
       role: "test-role"
-    }, db);
+    }, db, mockVectors);
 
     const updatedTask = db.getTaskById(task.id);
     expect(updatedTask.status).toBe("in_progress");
@@ -67,7 +74,7 @@ describe("Task Status Transitions", () => {
       est_tokens: 100,
       agent: "test-agent",
       role: "test-role"
-    }, db);
+    }, db, mockVectors);
 
     const updatedTask = db.getTaskById(task.id);
     expect(updatedTask.status).toBe("completed");
@@ -85,7 +92,7 @@ describe("Task Status Transitions", () => {
       comment: "waiting for feedback",
       agent: "test-agent",
       role: "test-role"
-    }, db);
+    }, db, mockVectors);
     expect(db.getTaskById(task.id).status).toBe("blocked");
 
     // back to in_progress
@@ -96,7 +103,7 @@ describe("Task Status Transitions", () => {
       comment: "feedback received",
       agent: "test-agent",
       role: "test-role"
-    }, db);
+    }, db, mockVectors);
     expect(db.getTaskById(task.id).status).toBe("in_progress");
 
     // to blocked from pending
@@ -109,7 +116,7 @@ describe("Task Status Transitions", () => {
       comment: "blocked early",
       agent: "test-agent",
       role: "test-role"
-    }, db);
+    }, db, mockVectors);
     expect(db.getTaskById(task2.id).status).toBe("blocked");
   });
 
@@ -125,6 +132,6 @@ describe("Task Status Transitions", () => {
       est_tokens: 100,
       agent: "test-agent",
       role: "test-role"
-    }, db)).rejects.toThrow("Cannot transition directly from 'blocked' to 'completed'. Task must be 'in_progress' first.");
+    }, db, mockVectors)).rejects.toThrow("Cannot transition directly from 'blocked' to 'completed'. Task must be 'in_progress' first.");
   });
 });

@@ -1,6 +1,6 @@
 // Shared types for MCP Local Memory
 
-export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "agent_handoff" | "agent_registered" | "file_claim";
+export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "agent_handoff" | "agent_registered" | "file_claim" | "task_archive";
 
 export type MemoryScope = {
   repo: string;

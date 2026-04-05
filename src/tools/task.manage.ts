@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { Task, TaskStatus, TaskPriority } from "../types.js";
+import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
 import { TaskListSchema, TaskCreateSchema, TaskUpdateSchema, TaskDeleteSchema } from "./schemas.js";
+import { handleMemoryStore } from "./memory.store.js";
 
 function deriveTaskStatusTimestamps(
   status: TaskStatus,
@@ -28,6 +29,61 @@ function deriveTaskStatusTimestamps(
 
   return timestamps;
 }
+
+export async function archiveTaskToMemory(
+  taskId: string,
+  repo: string,
+  storage: SQLiteStore,
+  vectors: VectorStore
+) {
+  const task = storage.getTaskById(taskId);
+  if (!task) return;
+
+  const comments = storage.getTaskCommentsByTaskId(taskId);
+  
+  let content = `Task: [${task.task_code}] ${task.title}\n`;
+  content += `Phase: ${task.phase}\n`;
+  content += `Description: ${task.description || "No description"}\n`;
+  
+  if (comments && comments.length > 0) {
+    content += `\nComments & History:\n`;
+    // Reverse comments to show in chronological order for the archive
+    const chronComments = [...comments].reverse();
+    for (const c of chronComments) {
+      const statusInfo = c.next_status ? ` (Status: ${c.previous_status} -> ${c.next_status})` : "";
+      content += `- [${c.created_at}] ${c.agent}${statusInfo}: ${c.comment}\n`;
+    }
+  }
+
+  // Use the task metadata if available
+  const metadata = {
+    task_id: taskId,
+    task_code: task.task_code,
+    original_metadata: task.metadata
+  };
+
+  const title = `Completed Task: ${task.title}`;
+  const truncatedTitle = title.length > 100 ? title.substring(0, 97) + "..." : title;
+
+  try {
+    await handleMemoryStore({
+      type: "task_archive",
+      title: truncatedTitle,
+      content: content,
+      importance: Math.min(5, task.priority + 1), // Slightly higher importance for archived tasks
+      agent: task.agent || "system",
+      role: task.role || "unknown",
+      model: "system",
+      scope: { repo: repo },
+      tags: ["task-archive", ...task.tags],
+      metadata: metadata
+    }, storage, vectors);
+  } catch (error) {
+    // console.error is fine here, or use logger if available
+    console.error("Failed to archive task to memory", error);
+  }
+}
+
 
 export async function handleTaskList(
   args: any,
@@ -115,7 +171,8 @@ export async function handleTaskCreate(
 
 export async function handleTaskUpdate(
   args: any,
-  storage: SQLiteStore
+  storage: SQLiteStore,
+  vectors: VectorStore
 ) {
   const updateData = TaskUpdateSchema.parse(args);
   const { repo, id, comment, ...updates } = updateData;
@@ -181,10 +238,15 @@ export async function handleTaskUpdate(
     });
   }
 
+  // Archive to memory if completed
+  if (updates.status === "completed" && existingTask.status !== "completed") {
+    await archiveTaskToMemory(id, repo, storage, vectors);
+  }
+
   return { 
     content: [{ 
       type: "text", 
-      text: `Task updated: ${id}` 
+      text: `Task updated: ${id}${updates.status === "completed" ? " and archived to memory" : ""}` 
     }],
     isError: false
   };

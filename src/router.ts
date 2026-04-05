@@ -116,7 +116,7 @@ export function createRouter(
         break;
 
       case "task-update":
-        result = await handleTaskUpdate(args, db);
+        result = await handleTaskUpdate(args, db, vectors);
         break;
 
       case "task-delete":
@@ -128,7 +128,7 @@ export function createRouter(
         break;
 
       case "task-bulk-manage":
-        result = await handleTaskBulkManage(args, db);
+        result = await handleTaskBulkManage(args, db, vectors);
         break;
 
       default:

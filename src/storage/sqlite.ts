@@ -94,7 +94,8 @@ export class SQLiteStore {
           'pattern',
           'agent_handoff',
           'agent_registered',
-          'file_claim'
+          'file_claim',
+          'task_archive'
         )),
         title TEXT,
         content TEXT NOT NULL,
@@ -348,8 +349,7 @@ export class SQLiteStore {
     const tableSql = this.db
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
       .get() as { sql?: string } | undefined;
-
-    if (!tableSql?.sql || tableSql.sql.includes("'file_claim'")) {
+    if (!tableSql?.sql || tableSql.sql.includes("'task_archive'")) {
       return;
     }
 
@@ -366,7 +366,8 @@ export class SQLiteStore {
           'pattern',
           'agent_handoff',
           'agent_registered',
-          'file_claim'
+          'file_claim',
+          'task_archive'
         )),
         title TEXT,
         content TEXT NOT NULL,

@@ -8,7 +8,7 @@ export const MemoryScopeSchema = z.object({
   language: z.string().optional()
 });
 
-export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"]);
+export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim", "task_archive"]);
 
 // Tool schemas
 export const MemoryStoreSchema = z.object({
@@ -175,7 +175,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         type: {
           type: "string",
-          enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"],
+          enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim", "task_archive"],
           description: "Type of memory being stored"
         },
         title: {
@@ -252,7 +252,7 @@ export const TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         id: { type: "string", format: "uuid" },
-        type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"] },
+        type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim", "task_archive"] },
         title: { type: "string", minLength: 3, maxLength: 100 },
         content: { type: "string", minLength: 10 },
         importance: { type: "number", minimum: 1, maximum: 5 },
@@ -280,7 +280,7 @@ export const TOOL_DEFINITIONS = [
         },
         types: {
           type: "array",
-          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim"] }
+          items: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "agent_handoff", "agent_registered", "file_claim", "task_archive"] }
         },
         minImportance: { type: "number", minimum: 1, maximum: 5 },
         limit: { type: "number", minimum: 1, maximum: 100, default: 5 },

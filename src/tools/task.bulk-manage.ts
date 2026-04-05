@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { Task, TaskStatus, TaskPriority } from "../types.js";
+import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
 import { TaskBulkManageSchema } from "./schemas.js";
+import { archiveTaskToMemory } from "./task.manage.js";
 
 function deriveTaskStatusTimestamps(status: TaskStatus, now: string) {
   return {
@@ -13,7 +14,8 @@ function deriveTaskStatusTimestamps(status: TaskStatus, now: string) {
 
 export async function handleTaskBulkManage(
   args: any,
-  storage: SQLiteStore
+  storage: SQLiteStore,
+  vectors: VectorStore
 ) {
   const parsed = TaskBulkManageSchema.parse(args);
   const { action, repo, tasks, ids } = parsed;
@@ -62,6 +64,11 @@ export async function handleTaskBulkManage(
         };
         storage.insertTask(task);
         createdTasks.push(task.task_code);
+
+        // Archive if created as completed
+        if (task.status === "completed") {
+          await archiveTaskToMemory(task.id, repo, storage, vectors);
+        }
       }
 
       return { 
