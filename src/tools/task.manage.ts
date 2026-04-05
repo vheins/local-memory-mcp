@@ -97,7 +97,7 @@ export async function handleTaskList(
     tasks = storage.getTasksByMultipleStatuses(repo, statuses, limit, offset);
   } else {
     // If no status specified, exclude 'completed' by default to keep context clean.
-    const activeStatuses = ['pending', 'in_progress', 'blocked', 'canceled'];
+    const activeStatuses = ['backlog', 'pending', 'in_progress', 'blocked', 'canceled'];
     tasks = storage.getTasksByMultipleStatuses(repo, activeStatuses, limit, offset);
   }
   
@@ -129,6 +129,19 @@ export async function handleTaskCreate(
 
   if (storage.isTaskCodeDuplicate(repo, task_code)) {
     throw new Error(`Duplicate task_code: '${task_code}' already exists in repository '${repo}'`);
+  }
+
+  // New tasks MUST be backlog or pending
+  if (status !== "backlog" && status !== "pending") {
+    throw new Error("New tasks must be created with status 'backlog' or 'pending'.");
+  }
+
+  // Max 10 pending tasks validation
+  if (status === "pending") {
+    const stats = storage.getTaskStats(repo);
+    if (stats.todo >= 10) {
+      throw new Error(`Cannot create task as 'pending'. Maximum of 10 pending tasks reached in repository '${repo}'. Please use 'backlog' instead.`);
+    }
   }
 
   const taskId = randomUUID();
@@ -189,10 +202,14 @@ export async function handleTaskUpdate(
     }
 
     // Workflow transition validation
+    if (existingTask.status === "backlog" && updates.status === "completed") {
+      throw new Error("Cannot transition directly from 'backlog' to 'completed'. Task must be 'in_progress' first.");
+    }
+
     if (existingTask.status === "pending" && updates.status === "completed") {
       throw new Error("Cannot transition directly from 'pending' to 'completed'. Task must be 'in_progress' first.");
     }
-    
+
     if (existingTask.status === "blocked" && updates.status === "completed") {
       throw new Error("Cannot transition directly from 'blocked' to 'completed'. Task must be 'in_progress' first.");
     }

@@ -38,11 +38,12 @@ export type VectorResult = {
   score: number;
 };
 
-export type TaskStatus = "pending" | "in_progress" | "completed" | "canceled" | "blocked";
+export type TaskStatus = "backlog" | "pending" | "in_progress" | "completed" | "canceled" | "blocked";
 export type TaskPriority = 1 | 2 | 3 | 4 | 5; // 5 is highest
 
 export interface TaskStats {
   total: number;
+  backlog: number;
   todo: number;
   inProgress: number;
   completed: number;

@@ -37,7 +37,23 @@ export async function handleTaskBulkManage(
         codesInRequest.add(taskData.task_code);
 
         const taskId = randomUUID();
-        const normalizedStatus = (taskData.status as TaskStatus) || "pending";
+        const normalizedStatus = (taskData.status as TaskStatus) || "backlog";
+
+        // New tasks MUST be backlog or pending
+        if (normalizedStatus !== "backlog" && normalizedStatus !== "pending") {
+          throw new Error(`New tasks must be created with status 'backlog' or 'pending'. Task '${taskData.task_code}' has status '${normalizedStatus}'.`);
+        }
+
+        // Max 10 pending tasks validation
+        if (normalizedStatus === "pending") {
+          const stats = storage.getTaskStats(repo);
+          // Count pending tasks in current request that are already processed
+          const pendingInRequest = tasks.slice(0, createdTasks.length).filter(t => (t.status || "backlog") === "pending").length;
+          if (stats.todo + pendingInRequest >= 10) {
+            throw new Error(`Cannot create task '${taskData.task_code}' as 'pending'. Maximum of 10 pending tasks reached in repository '${repo}'. Please use 'backlog' instead.`);
+          }
+        }
+
         const statusTimestamps = deriveTaskStatusTimestamps(normalizedStatus, now);
         const task: Task = {
           id: taskId,

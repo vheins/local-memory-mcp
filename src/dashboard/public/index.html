@@ -1107,10 +1107,14 @@
                 </div>
 
                 <!-- Task Summary Cards -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                     <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/30">
                         <div class="text-xs text-indigo-500 dark:text-indigo-400 uppercase font-bold tracking-wider mb-1">Total Tasks</div>
                         <div id="totalTasks" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Backlog</div>
+                        <div id="backlogTasksCount" class="text-2xl font-bold text-gray-500">0</div>
                     </div>
                     <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
                         <div class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider mb-1">Task To Do</div>
@@ -1187,6 +1191,7 @@
                             <canvas id="taskStatusChart"></canvas>
                         </div>
                         <div class="grid grid-cols-2 gap-1.5 mt-3 text-[10px]">
+                            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Backlog:</span> <span id="backlogStatCount" class="font-bold">0</span></div>
                             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">To Do:</span> <span id="todoStatCount" class="font-bold">0</span></div>
                             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">In Progress:</span> <span id="inProgressStatCount" class="font-bold">0</span></div>
                             <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span> <span class="text-gray-500 dark:text-gray-400">Completed:</span> <span id="completedStatCount" class="font-bold">0</span></div>
@@ -1441,7 +1446,15 @@
                     </div>
                 </div>
 
-                <div id="taskBoard" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div id="taskBoard" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <!-- Column: Backlog -->
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between px-2">
+                            <h3 class="font-bold text-slate-400 uppercase tracking-wider text-xs">Backlog</h3>
+                            <span id="backlogCount" class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
+                        </div>
+                        <div id="backlogTasks" class="space-y-4 min-h-[200px] max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar"></div>
+                    </div>
                     <!-- Column: Todo -->
                     <div class="flex flex-col gap-4">
                         <div class="flex items-center justify-between px-2">
@@ -1715,10 +1728,8 @@
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Status</label>
                         <select name="status" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500/50">
-                            <option value="pending" selected>To Do</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                            <option value="blocked">Blocked</option>
+                            <option value="backlog" selected>Backlog</option>
+                            <option value="pending">To Do</option>
                         </select>
                     </div>
                 </div>

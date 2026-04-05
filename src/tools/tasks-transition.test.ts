@@ -30,6 +30,38 @@ describe("Task Status Transitions", () => {
     }, db);
   }
 
+  it("should block transition from backlog to completed", async () => {
+    await createTask("TASK-001", "backlog");
+    const task = db.getTasksByRepo(REPO)[0];
+
+    await expect(handleTaskUpdate({
+      repo: REPO,
+      id: task.id,
+      status: "completed",
+      comment: "finishing",
+      est_tokens: 100,
+      agent: "test-agent",
+      role: "test-role"
+    }, db, mockVectors)).rejects.toThrow("Cannot transition directly from 'backlog' to 'completed'. Task must be 'in_progress' first.");
+  });
+
+  it("should allow transition from backlog to pending", async () => {
+    await createTask("TASK-001", "backlog");
+    const task = db.getTasksByRepo(REPO)[0];
+
+    await handleTaskUpdate({
+      repo: REPO,
+      id: task.id,
+      status: "pending",
+      comment: "ready for execution",
+      agent: "test-agent",
+      role: "test-role"
+    }, db, mockVectors);
+
+    const updatedTask = db.getTaskById(task.id);
+    expect(updatedTask.status).toBe("pending");
+  });
+
   it("should block transition from pending to completed", async () => {
     await createTask("TASK-001", "pending");
     const task = db.getTasksByRepo(REPO)[0];
@@ -63,8 +95,18 @@ describe("Task Status Transitions", () => {
   });
 
   it("should allow transition from in_progress to completed", async () => {
-    await createTask("TASK-001", "in_progress");
+    await createTask("TASK-001", "pending");
     const task = db.getTasksByRepo(REPO)[0];
+
+    // to in_progress first
+    await handleTaskUpdate({
+      repo: REPO,
+      id: task.id,
+      status: "in_progress",
+      comment: "starting",
+      agent: "test-agent",
+      role: "test-role"
+    }, db, mockVectors);
 
     await handleTaskUpdate({
       repo: REPO,
@@ -81,8 +123,18 @@ describe("Task Status Transitions", () => {
   });
 
   it("should allow transition to blocked and back", async () => {
-    await createTask("TASK-001", "in_progress");
+    await createTask("TASK-001", "pending");
     const task = db.getTasksByRepo(REPO)[0];
+
+    // to in_progress first
+    await handleTaskUpdate({
+      repo: REPO,
+      id: task.id,
+      status: "in_progress",
+      comment: "starting",
+      agent: "test-agent",
+      role: "test-role"
+    }, db, mockVectors);
 
     // to blocked
     await handleTaskUpdate({
@@ -121,8 +173,18 @@ describe("Task Status Transitions", () => {
   });
 
   it("should block transition from blocked to completed", async () => {
-    await createTask("TASK-001", "blocked");
+    await createTask("TASK-001", "pending");
     const task = db.getTasksByRepo(REPO)[0];
+
+    // to blocked
+    await handleTaskUpdate({
+      repo: REPO,
+      id: task.id,
+      status: "blocked",
+      comment: "blocked",
+      agent: "test-agent",
+      role: "test-role"
+    }, db, mockVectors);
 
     await expect(handleTaskUpdate({
       repo: REPO,

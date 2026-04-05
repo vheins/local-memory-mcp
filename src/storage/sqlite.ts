@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { fileURLToPath } from "url";
-import { MemoryEntry, MemoryScope } from "../types.js";
+import { MemoryEntry, MemoryScope, Task, TaskStats, TaskStatus } from "../types.js";
 import { tokenize } from "../utils/normalize.js";
 import { logger } from "../utils/logger.js";
 
@@ -143,7 +143,7 @@ export class SQLiteStore {
         phase TEXT,
         title TEXT NOT NULL,
         description TEXT,
-        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'canceled', 'blocked')),
+        status TEXT NOT NULL DEFAULT 'backlog' CHECK (status IN ('backlog', 'pending', 'in_progress', 'completed', 'canceled', 'blocked')),
         priority INTEGER NOT NULL DEFAULT 3,
         agent TEXT NOT NULL DEFAULT 'unknown',
         role TEXT NOT NULL DEFAULT 'unknown',
@@ -585,8 +585,9 @@ export class SQLiteStore {
     query += " GROUP BY status";
 
     const rows = this.db.prepare(query).all(...params) as any[];
-    const stats = {
+    const stats: TaskStats = {
       total: 0,
+      backlog: 0,
       todo: 0,
       inProgress: 0,
       completed: 0,
@@ -596,7 +597,8 @@ export class SQLiteStore {
 
     for (const row of rows) {
       stats.total += row.count;
-      if (row.status === "pending") stats.todo = row.count;
+      if (row.status === "backlog") stats.backlog = row.count;
+      else if (row.status === "pending") stats.todo = row.count;
       else if (row.status === "in_progress") stats.inProgress = row.count;
       else if (row.status === "completed") stats.completed = row.count;
       else if (row.status === "blocked") stats.blocked = row.count;
@@ -876,7 +878,12 @@ export class SQLiteStore {
     query += ` ORDER BY 
       CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
       CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
-      t.status DESC, 
+      CASE WHEN t.status = 'in_progress' THEN 0
+           WHEN t.status = 'pending' THEN 1
+           WHEN t.status = 'backlog' THEN 2
+           WHEN t.status = 'blocked' THEN 3
+           WHEN t.status = 'canceled' THEN 4
+           ELSE 5 END ASC,
       t.priority DESC, 
       t.created_at ASC`;
     
@@ -911,7 +918,14 @@ export class SQLiteStore {
     }
 
     query += ` ORDER BY 
+      CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
       CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
+      CASE WHEN t.status = 'in_progress' THEN 0
+           WHEN t.status = 'pending' THEN 1
+           WHEN t.status = 'backlog' THEN 2
+           WHEN t.status = 'blocked' THEN 3
+           WHEN t.status = 'canceled' THEN 4
+           ELSE 5 END ASC,
       t.priority DESC, 
       t.created_at ASC`;
     

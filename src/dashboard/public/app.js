@@ -7,6 +7,7 @@ let totalItems = 0;
 let selectedIds = new Set();
 let currentPaginatedData = [];
 let taskPagination = {
+    backlog: { page: 1, pageSize: 20, hasMore: true, loading: false },
     todo: { page: 1, pageSize: 20, hasMore: true, loading: false },
     in_progress: { page: 1, pageSize: 20, hasMore: true, loading: false },
     completed: { page: 1, pageSize: 20, hasMore: true, loading: false }
@@ -637,6 +638,7 @@ async function loadStats() {
         // Fill Task stats
         if (data.taskStats) {
             document.getElementById('totalTasks').textContent = data.taskStats.total || 0;
+            document.getElementById('backlogTasksCount').textContent = data.taskStats.backlog || 0;
             document.getElementById('todoTasksCount').textContent = data.taskStats.todo || 0;
             document.getElementById('inProgressTasksCount').textContent = data.taskStats.inProgress || 0;
             document.getElementById('completedTasksCount').textContent = data.taskStats.completed || 0;
@@ -675,16 +677,19 @@ async function loadStats() {
                 document.getElementById('todayAvgTimeTasksCount').textContent = formatDuration(data.todayAvgDuration);
             }
 
+            document.getElementById('backlogStatCount').textContent = data.taskStats.backlog || 0;
             document.getElementById('todoStatCount').textContent = data.taskStats.todo || 0;
             document.getElementById('inProgressStatCount').textContent = data.taskStats.inProgress || 0;
             document.getElementById('completedStatCount').textContent = data.taskStats.completed || 0;
             document.getElementById('blockedStatCount').textContent = data.taskStats.blocked || 0;
 
             // Also update column headers
+            const backlogCountEl = document.getElementById('backlogCount');
             const todoCountEl = document.getElementById('todoCount');
             const inProgressCountEl = document.getElementById('inProgressCount');
             const completedCountEl = document.getElementById('completedCount');
 
+            if (backlogCountEl) backlogCountEl.textContent = data.taskStats.backlog || 0;
             if (todoCountEl) todoCountEl.textContent = data.taskStats.todo || 0;
             if (inProgressCountEl) inProgressCountEl.textContent = data.taskStats.inProgress || 0;
             if (completedCountEl) completedCountEl.textContent = data.taskStats.completed || 0;
@@ -755,6 +760,7 @@ function updateTaskStatusChart(taskStats) {
 
     const isDark = document.documentElement.classList.contains('dark');
     const counts = [
+        taskStats?.backlog || 0,
         taskStats?.todo || 0,
         taskStats?.inProgress || 0,
         taskStats?.completed || 0,
@@ -764,10 +770,10 @@ function updateTaskStatusChart(taskStats) {
     charts.taskStatusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['To Do', 'In Progress', 'Completed', 'Blocked'],
+            labels: ['Backlog', 'To Do', 'In Progress', 'Completed', 'Blocked'],
             datasets: [{
                 data: counts,
-                backgroundColor: ['#94a3b8', '#38bdf8', '#10b981', '#fb7185'],
+                backgroundColor: ['#64748b', '#94a3b8', '#38bdf8', '#10b981', '#fb7185'],
                 borderWidth: 2,
                 borderColor: isDark ? '#1e293b' : '#ffffff',
                 hoverOffset: 12
@@ -1753,16 +1759,19 @@ async function loadTasks() {
     if (!currentRepo) return;
     
     // Reset pagination
+    taskPagination.backlog = { page: 1, pageSize: 20, hasMore: true, loading: false };
     taskPagination.todo = { page: 1, pageSize: 20, hasMore: true, loading: false };
     taskPagination.in_progress = { page: 1, pageSize: 20, hasMore: true, loading: false };
     taskPagination.completed = { page: 1, pageSize: 20, hasMore: true, loading: false };
 
     // Clear containers
+    document.getElementById('backlogTasks').innerHTML = '';
     document.getElementById('todoTasks').innerHTML = '';
     document.getElementById('inProgressTasks').innerHTML = '';
     document.getElementById('completedTasks').innerHTML = '';
 
     await Promise.all([
+        loadTaskCategory('backlog'),
         loadTaskCategory('pending,blocked,canceled'),
         loadTaskCategory('in_progress'),
         loadTaskCategory('completed')
@@ -1772,13 +1781,13 @@ async function loadTasks() {
 }
 
 async function loadTaskCategory(status) {
-    const category = (status.includes('pending') || status.includes('blocked') || status.includes('canceled')) ? 'todo' : (status === 'in_progress' ? 'in_progress' : 'completed');
+    const category = status === 'backlog' ? 'backlog' : ((status.includes('pending') || status.includes('blocked') || status.includes('canceled')) ? 'todo' : (status === 'in_progress' ? 'in_progress' : 'completed'));
     const pag = taskPagination[category];
     
     if (!pag.hasMore || pag.loading) return;
     
     pag.loading = true;
-    const containerId = { todo: 'todoTasks', in_progress: 'inProgressTasks', completed: 'completedTasks' }[category];
+    const containerId = { backlog: 'backlogTasks', todo: 'todoTasks', in_progress: 'inProgressTasks', completed: 'completedTasks' }[category];
     const container = document.getElementById(containerId);
     
     // Show loading indicator
@@ -1817,14 +1826,14 @@ async function loadTaskCategory(status) {
 }
 
 function setupTaskScrollListeners() {
-    ['todoTasks', 'inProgressTasks', 'completedTasks'].forEach(id => {
+    ['backlogTasks', 'todoTasks', 'inProgressTasks', 'completedTasks'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         
         el.onscroll = () => {
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
-                const category = id === 'todoTasks' ? 'todo' : (id === 'inProgressTasks' ? 'in_progress' : 'completed');
-                const status = category === 'todo' ? 'pending,blocked,canceled' : (category === 'in_progress' ? 'in_progress' : 'completed');
+                const category = id === 'backlogTasks' ? 'backlog' : (id === 'todoTasks' ? 'todo' : (id === 'inProgressTasks' ? 'in_progress' : 'completed'));
+                const status = category === 'backlog' ? 'backlog' : (category === 'todo' ? 'pending,blocked,canceled' : (category === 'in_progress' ? 'in_progress' : 'completed'));
                 loadTaskCategory(status);
             }
         };

@@ -82,7 +82,7 @@ export const MemorySummarizeSchema = z.object({
   signals: z.array(z.string().max(200)).min(1)
 });
 
-export const TaskStatusSchema = z.enum(["pending", "in_progress", "completed", "canceled", "blocked"]);
+export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
 export const TaskPrioritySchema = z.number().min(1).max(5);
 
 export const TaskCreateSchema = z.object({
@@ -91,7 +91,7 @@ export const TaskCreateSchema = z.object({
   phase: z.string().min(1),
   title: z.string().min(3).max(100),
   description: z.string().min(1),
-  status: TaskStatusSchema.default("pending"),
+  status: TaskStatusSchema.default("backlog"),
   priority: TaskPrioritySchema.default(3),
   agent: z.string().optional(),
   role: z.string().optional(),
@@ -143,7 +143,7 @@ export const TaskBulkManageSchema = z.object({
     phase: z.string().min(1),
     title: z.string().min(3).max(100),
     description: z.string().min(1),
-    status: TaskStatusSchema,
+    status: TaskStatusSchema.default("backlog"),
     priority: TaskPrioritySchema.optional(),
     agent: z.string().optional(),
     role: z.string().optional(),
@@ -366,7 +366,7 @@ export const TOOL_DEFINITIONS = [
         phase: { type: "string", description: "Project phase" },
         title: { type: "string", minLength: 3, maxLength: 100 },
         description: { type: "string" },
-        status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"] },
+        status: { type: "string", enum: ["backlog", "pending"], description: "New tasks MUST start in 'backlog' if there are already 10 pending tasks. Otherwise can start in 'pending'." },
         priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
         agent: { type: "string" },
         role: { type: "string" },
@@ -392,7 +392,7 @@ export const TOOL_DEFINITIONS = [
         phase: { type: "string" },
         title: { type: "string", minLength: 3, maxLength: 100 },
         description: { type: "string" },
-        status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"], description: "New status. Transitions from 'pending' or 'blocked' to 'completed' are NOT allowed." },
+        status: { type: "string", enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"], description: "New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed." },
         priority: { type: "number", minimum: 1, maximum: 5 },
         agent: { type: "string" },
         role: { type: "string" },
@@ -480,7 +480,7 @@ export const TOOL_DEFINITIONS = [
               phase: { type: "string" },
               title: { type: "string", minLength: 3, maxLength: 100 },
               description: { type: "string" },
-              status: { type: "string", enum: ["pending", "in_progress", "completed", "canceled", "blocked"] },
+              status: { type: "string", enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"] },
               priority: { type: "number", minimum: 1, maximum: 5 },
               agent: { type: "string" },
               role: { type: "string" },
