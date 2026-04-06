@@ -54,7 +54,26 @@ export async function handleMemoryUpdate(
   logger.info("[MCP] memory.update", { repo: existing.scope.repo, id: validated.id, fields: Object.keys(updates) });
 
   return createMcpResponse(
-    { success: true },
-    `Updated memory ${validated.id.slice(0, 8)}...`
+    {
+      success: true,
+      id: validated.id,
+      repo: existing.scope.repo,
+      updatedFields: Object.keys(updates),
+    },
+    `Updated memory ${validated.id.slice(0, 8)}...`,
+    {
+      resourceLinks: [
+        {
+          uri: `memory://${validated.id}`,
+          name: existing.title || validated.id,
+          description: `Updated memory in repo ${existing.scope.repo}`,
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.9,
+          },
+        },
+      ],
+    }
   );
 }

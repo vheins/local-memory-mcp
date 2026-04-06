@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
+import { createMcpResponse } from "../utils/mcp-response.js";
 import { MemoryBulkDeleteSchema } from "./schemas.js";
 
 export async function handleMemoryBulkDelete(
@@ -28,11 +29,27 @@ export async function handleMemoryBulkDelete(
 
   storage.logAction("delete", repo, { resultCount: ids.length, query: "Bulk Delete" });
 
-  return { 
-    content: [{ 
-      type: "text", 
-      text: `Successfully deleted ${ids.length} memories.` 
-    }],
-    isError: false
-  };
+  return createMcpResponse(
+    {
+      success: true,
+      repo,
+      deletedCount: ids.length,
+      ids,
+    },
+    `Successfully deleted ${ids.length} memories.`,
+    {
+      resourceLinks: [
+        {
+          uri: `memory://index?repo=${encodeURIComponent(repo)}`,
+          name: `Memory Index (${repo})`,
+          description: "Repository memory index after bulk deletion",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.5,
+          },
+        },
+      ],
+    }
+  );
 }

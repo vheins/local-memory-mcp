@@ -17,7 +17,26 @@ export async function handleMemorySummarize(
   db.upsertSummary(validated.repo, fullSummary);
 
   return createMcpResponse(
-    { success: true },
-    `Updated summary for repo "${validated.repo}"`
+    {
+      success: true,
+      repo: validated.repo,
+      summary: fullSummary,
+      signalCount: validated.signals.length,
+    },
+    `Updated summary for repo "${validated.repo}"`,
+    {
+      resourceLinks: [
+        {
+          uri: `memory://summary/${validated.repo}`,
+          name: `Memory Summary (${validated.repo})`,
+          description: "Repository summary resource",
+          mimeType: "text/plain",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.9,
+          },
+        },
+      ],
+    }
   );
 }

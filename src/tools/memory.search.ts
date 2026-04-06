@@ -149,6 +149,21 @@ export async function handleMemorySearch(
   return createMcpResponse(
     { query: validated.query, results, recapContext },
     `Found ${results.length} memories matching "${validated.query}"${topMatch}`,
-    { query: validated.query, results: results as any }
+    {
+      query: validated.query,
+      results: results as any,
+      resourceLinks: [
+        {
+          uri: `memory://index?repo=${encodeURIComponent(validated.repo)}`,
+          name: `Memory Index (${validated.repo})`,
+          description: "Repository memory index",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.7,
+          },
+        },
+      ],
+    }
   );
 }

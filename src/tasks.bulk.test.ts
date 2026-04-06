@@ -4,6 +4,11 @@ import { SQLiteStore } from "./storage/sqlite.js";
 import { StubVectorStore } from "./storage/vectors.stub.js";
 import type { VectorStore } from "./types.js";
 
+function getTextContent(result: any) {
+  const entry = result.content[0];
+  return entry?.type === "text" ? entry.text : "";
+}
+
 describe("MCP Local Memory - Bulk Task Management", () => {
   let db: SQLiteStore;
   let vectors: VectorStore;
@@ -47,7 +52,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     });
 
     expect(res.isError).toBe(false);
-    expect(res.content[0].text).toContain("Successfully created 2 tasks");
+    expect(getTextContent(res)).toContain("Successfully created 2 tasks");
 
     const tasks = db.getTasksByRepo(REPO);
     expect(tasks.length).toBe(2);
@@ -103,7 +108,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       name: "task-list",
       arguments: { repo: REPO }
     });
-    const defaultTasks = JSON.parse(defaultRes.content[0].text);
+    const defaultTasks = JSON.parse(getTextContent(defaultRes));
     expect(defaultTasks.length).toBe(15);
 
     // Test explicit limit
@@ -111,7 +116,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       name: "task-list",
       arguments: { repo: REPO, limit: 5 }
     });
-    const limitedTasks = JSON.parse(limitRes.content[0].text);
+    const limitedTasks = JSON.parse(getTextContent(limitRes));
     expect(limitedTasks.length).toBe(5);
 
     // Test offset (last page)
@@ -119,7 +124,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       name: "task-list",
       arguments: { repo: REPO, limit: 15, offset: 15 }
     });
-    const offsetTasks = JSON.parse(offsetRes.content[0].text);
+    const offsetTasks = JSON.parse(getTextContent(offsetRes));
     expect(offsetTasks.length).toBe(5); // 20 total - 15 offset = 5 remaining
   });
 
@@ -210,7 +215,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       }
     });
 
-    expect(delRes.content[0].text).toContain("Successfully deleted 2 tasks");
+    expect(getTextContent(delRes)).toContain("Successfully deleted 2 tasks");
     const remainingTasks = db.getTasksByRepo(REPO);
     expect(remainingTasks.length).toBe(1);
   });

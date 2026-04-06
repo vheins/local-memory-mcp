@@ -167,6 +167,40 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(templates).toContain("tasks://current?repo={repo}");
   });
 
+  it("supports tools/list pagination with nextCursor", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    session.supportsSampling = true;
+    session.supportsElicitationForm = true;
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+    });
+
+    const firstPage = await router("tools/list", { limit: 2 });
+    const secondPage = await router("tools/list", { limit: 2, cursor: firstPage.nextCursor });
+
+    expect(firstPage.tools).toHaveLength(2);
+    expect(firstPage.nextCursor).toBeTruthy();
+    expect(secondPage.tools).toHaveLength(2);
+    expect(secondPage.tools[0].name).not.toBe(firstPage.tools[0].name);
+  });
+
+  it("filters session-dependent tools from tools/list when the client lacks required capabilities", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+    });
+
+    const result = await router("tools/list", {});
+    const toolNames = result.tools.map((tool: any) => tool.name);
+
+    expect(toolNames).not.toContain("memory-synthesize");
+    expect(toolNames).not.toContain("task-create-interactive");
+  });
+
   it("rejects absolute tool paths outside active roots", async () => {
     const mockDb = makeMockDb();
     const mockVectors = makeMockVectors();
@@ -383,5 +417,38 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(mockDb.insertTask).toHaveBeenCalledTimes(1);
     expect(result.data.repo).toBe("interactive-repo");
     expect(result.data.task_code).toBe("TASK-101");
+  });
+
+  it("returns resource links in memory-search results", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    (mockDb.searchBySimilarity as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        type: "decision",
+        title: "Use SQLite for local memory",
+        content: "SQLite keeps the server self-contained.",
+        importance: 4,
+        scope: { repo: "test-repo" },
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        hit_count: 0,
+        recall_count: 0,
+        last_used_at: null,
+        expires_at: null,
+        tags: [],
+      },
+    ]);
+    (mockVectors.search as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const router = createRouter(mockDb, mockVectors);
+
+    const result = await router("tools/call", {
+      name: "memory-search",
+      arguments: { query: "sqlite", repo: "test-repo", limit: 5 },
+    });
+
+    const resourceLinks = result.content.filter((entry: any) => entry.type === "resource_link");
+    expect(resourceLinks.some((entry: any) => entry.uri === "memory://index?repo=test-repo")).toBe(true);
+    expect(resourceLinks.some((entry: any) => entry.uri === "memory://123e4567-e89b-12d3-a456-426614174000")).toBe(true);
   });
 });

@@ -31,7 +31,25 @@ export async function handleMemoryDelete(
   logger.info("[MCP] memory.delete", { repo: existing.scope.repo, id: validated.id, title: existing.title });
 
   return createMcpResponse(
-    { success: true },
-    `Deleted memory ${validated.id.slice(0, 8)}...`
+    {
+      success: true,
+      id: validated.id,
+      repo: existing.scope.repo,
+    },
+    `Deleted memory ${validated.id.slice(0, 8)}...`,
+    {
+      resourceLinks: [
+        {
+          uri: `memory://index?repo=${encodeURIComponent(existing.scope.repo)}`,
+          name: `Memory Index (${existing.scope.repo})`,
+          description: "Repository memory index after deletion",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.5,
+          },
+        },
+      ],
+    }
   );
 }

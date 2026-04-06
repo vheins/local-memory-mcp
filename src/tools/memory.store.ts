@@ -105,7 +105,38 @@ export async function handleMemoryStore(
   logger.info("[MCP] memory.store", { repo: validated.scope.repo, id: entry.id, title: entry.title, type: entry.type, importance: entry.importance });
 
   return createMcpResponse(
-    { success: true, id: entry.id },
-    `Stored memory ${entry.id.slice(0, 8)}...`
+    {
+      success: true,
+      id: entry.id,
+      repo: entry.scope.repo,
+      type: entry.type,
+      title: entry.title,
+    },
+    `Stored memory ${entry.id.slice(0, 8)}...`,
+    {
+      resourceLinks: [
+        {
+          uri: `memory://${entry.id}`,
+          name: entry.title,
+          description: `Stored memory in repo ${entry.scope.repo}`,
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.9,
+            lastModified: entry.updated_at,
+          },
+        },
+        {
+          uri: `memory://index?repo=${encodeURIComponent(entry.scope.repo)}`,
+          name: `Memory Index (${entry.scope.repo})`,
+          description: "Repository memory index",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.6,
+          },
+        },
+      ],
+    }
   );
 }

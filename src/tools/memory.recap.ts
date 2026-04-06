@@ -87,6 +87,30 @@ export async function handleMemoryRecap(
       tasks: formattedTasks,
       summary: `Recent ${rows.length} memories:\n\n${memorySummary}\n\nActive Tasks:\n\n${taskSummary || "No active tasks"}`
     },
-    `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}"`
+    `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}"`,
+    {
+      resourceLinks: [
+        {
+          uri: `memory://summary/${validated.repo}`,
+          name: `Memory Summary (${validated.repo})`,
+          description: "Repository summary resource",
+          mimeType: "text/plain",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.8,
+          },
+        },
+        {
+          uri: `tasks://current?repo=${encodeURIComponent(validated.repo)}`,
+          name: `Current Tasks (${validated.repo})`,
+          description: "Current task snapshot for the repository",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.7,
+          },
+        },
+      ],
+    }
   );
 }

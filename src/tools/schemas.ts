@@ -193,11 +193,15 @@ export const TaskDeleteSchema = z.object({
 export const TOOL_DEFINITIONS = [
   {
     name: "memory-synthesize",
+    title: "Memory Synthesize",
     description: "Use client sampling to synthesize a grounded answer from local memory and tasks. Best for project briefings, tradeoff summaries, and context-aware answers.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
       openWorldHint: false
+    },
+    execution: {
+      taskSupport: "optional"
     },
     inputSchema: {
       type: "object",
@@ -229,6 +233,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "task-create-interactive",
+    title: "Interactive Task Create",
     description: "Create a task with MCP elicitation fallback for any missing required fields. Best when an agent knows a task is needed but still needs user confirmation for repo, title, or phase.",
     annotations: {
       readOnlyHint: false,
@@ -266,6 +271,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "memory-store",
+    title: "Memory Store",
     description: "Store a new memory entry. Keep 'title' concise and human-readable; do not embed agent/role/date metadata in the title. Put auxiliary context into 'metadata'. Use 'tags' for tech-stack and 'is_global' for universal rules.",
     annotations: {
       readOnlyHint: false,
@@ -333,10 +339,24 @@ export const TOOL_DEFINITIONS = [
         supersedes: { type: "string", format: "uuid" }
       },
       required: ["type", "title", "content", "importance", "scope", "agent", "model"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        repo: { type: "string" },
+        type: { type: "string" },
+        title: { type: "string" },
+        error: { type: "string" },
+        message: { type: "string" }
+      },
+      required: ["success"]
     }
   },
   {
     name: "memory-acknowledge",
+    title: "Memory Acknowledge",
     description: "Acknowledge the use of a memory or report its irrelevance/contradiction. Mandatory after using memory to generate code.",
     annotations: {
       readOnlyHint: false,
@@ -351,10 +371,20 @@ export const TOOL_DEFINITIONS = [
         application_context: { type: "string", minLength: 10 }
       },
       required: ["memory_id", "status"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        status: { type: "string" }
+      },
+      required: ["success", "id", "status"]
     }
   },
   {
     name: "memory-update",
+    title: "Memory Update",
     description: "Update an existing memory entry. Keep 'title' concise and move agent/role/date or claim context into 'metadata' instead of the title.",
     annotations: {
       readOnlyHint: false,
@@ -377,10 +407,24 @@ export const TOOL_DEFINITIONS = [
         is_global: { type: "boolean" }
       },
       required: ["id"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        repo: { type: "string" },
+        updatedFields: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["success", "id", "repo", "updatedFields"]
     }
   },
   {
     name: "memory-search",
+    title: "Memory Search",
     description: "Search for relevant memories. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
     annotations: {
       readOnlyHint: true,
@@ -408,10 +452,33 @@ export const TOOL_DEFINITIONS = [
         include_archived: { type: "boolean", default: false }
       },
       required: ["query", "repo"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        recapContext: { type: "string" },
+        results: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              type: { type: "string" },
+              title: { type: "string" },
+              content: { type: "string" },
+              importance: { type: "number" }
+            },
+            required: ["id", "type", "content", "importance"]
+          }
+        }
+      },
+      required: ["query", "results"]
     }
   },
   {
     name: "memory-summarize",
+    title: "Memory Summarize",
     description: "Update the summary for a repository",
     annotations: {
       readOnlyHint: false,
@@ -430,10 +497,21 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["repo", "signals"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        repo: { type: "string" },
+        summary: { type: "string" },
+        signalCount: { type: "number" }
+      },
+      required: ["success", "repo", "summary", "signalCount"]
     }
   },
   {
     name: "memory-delete",
+    title: "Memory Delete",
     description: "Soft-delete a memory entry (remove from active use)",
     annotations: {
       readOnlyHint: false,
@@ -447,10 +525,20 @@ export const TOOL_DEFINITIONS = [
         id: { type: "string", format: "uuid", description: "Memory entry ID to delete" }
       },
       required: ["id"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        repo: { type: "string" }
+      },
+      required: ["success", "id", "repo"]
     }
   },
   {
     name: "memory-bulk-delete",
+    title: "Memory Bulk Delete",
     description: "Delete multiple memory entries at once.",
     annotations: {
       readOnlyHint: false,
@@ -465,10 +553,24 @@ export const TOOL_DEFINITIONS = [
         ids: { type: "array", items: { type: "string", format: "uuid" }, minItems: 1, description: "Array of memory IDs to delete" }
       },
       required: ["repo", "ids"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        repo: { type: "string" },
+        deletedCount: { type: "number" },
+        ids: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["success", "repo", "deletedCount", "ids"]
     }
   },
   {
     name: "memory-recap",
+    title: "Memory Recap",
     description: "Get the last 20 memories from a repository for context",
     annotations: {
       readOnlyHint: true,
@@ -494,10 +596,51 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["repo"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        count: { type: "number" },
+        total: { type: "number" },
+        offset: { type: "number" },
+        summary: { type: "string" },
+        memories: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              number: { type: "number" },
+              id: { type: "string" },
+              type: { type: "string" },
+              importance: { type: "number" },
+              preview: { type: "string" },
+              created_at: { type: "string" }
+            },
+            required: ["number", "id", "type", "importance", "preview", "created_at"]
+          }
+        },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              task_code: { type: "string" },
+              title: { type: "string" },
+              status: { type: "string" },
+              priority: { type: "number" }
+            },
+            required: ["id", "task_code", "title", "status", "priority"]
+          }
+        }
+      },
+      required: ["repo", "count", "total", "offset", "memories", "tasks", "summary"]
     }
   },
   {
     name: "task-create",
+    title: "Task Create",
     description: "Create a new task in a repository. task_code must be unique within the repository. 'est_tokens' is optional during planning/creation.",
     annotations: {
       readOnlyHint: false,
@@ -524,10 +667,25 @@ export const TOOL_DEFINITIONS = [
         est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" }
       },
       required: ["repo", "task_code", "phase", "title", "description", "status"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        repo: { type: "string" },
+        task_code: { type: "string" },
+        phase: { type: "string" },
+        title: { type: "string" },
+        status: { type: "string" },
+        priority: { type: "number" }
+      },
+      required: ["success", "id", "repo", "task_code", "phase", "title", "status", "priority"]
     }
   },
   {
     name: "task-update",
+    title: "Task Update",
     description: "Update an existing task. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
     annotations: {
       readOnlyHint: false,
@@ -557,10 +715,26 @@ export const TOOL_DEFINITIONS = [
         est_tokens: { type: "number", minimum: 0, description: "Estimated total tokens actually used for this task. Required when status changes to 'completed'." }
       },
       required: ["repo", "id"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        repo: { type: "string" },
+        status: { type: "string" },
+        archivedToMemory: { type: "boolean" },
+        updatedFields: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["success", "id", "repo", "status", "archivedToMemory", "updatedFields"]
     }
   },
   {
     name: "task-delete",
+    title: "Task Delete",
     description: "Delete a task from a repository.",
     annotations: {
       readOnlyHint: false,
@@ -575,10 +749,20 @@ export const TOOL_DEFINITIONS = [
         id: { type: "string", format: "uuid", description: "Task ID" }
       },
       required: ["repo", "id"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        id: { type: "string" },
+        repo: { type: "string" }
+      },
+      required: ["success", "id", "repo"]
     }
   },
   {
     name: "task-list",
+    title: "Task List",
     description: "List or search tasks for a repository. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks.",
     annotations: {
       readOnlyHint: true,
@@ -619,10 +803,38 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["repo"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        count: { type: "number" },
+        offset: { type: "number" },
+        limit: { type: "number" },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              repo: { type: "string" },
+              task_code: { type: "string" },
+              phase: { type: "string" },
+              title: { type: "string" },
+              description: { type: "string" },
+              status: { type: "string" },
+              priority: { type: "number" }
+            },
+            required: ["id", "repo", "task_code", "phase", "title", "description", "status", "priority"]
+          }
+        }
+      },
+      required: ["repo", "count", "offset", "limit", "tasks"]
     }
   },
   {
     name: "task-search",
+    title: "Task Search",
     description: "Search for tasks by code, title, or description across any status.",
     annotations: {
       readOnlyHint: true,
@@ -659,10 +871,38 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["repo", "query"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        count: { type: "number" },
+        offset: { type: "number" },
+        limit: { type: "number" },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              repo: { type: "string" },
+              task_code: { type: "string" },
+              phase: { type: "string" },
+              title: { type: "string" },
+              description: { type: "string" },
+              status: { type: "string" },
+              priority: { type: "number" }
+            },
+            required: ["id", "repo", "task_code", "phase", "title", "description", "status", "priority"]
+          }
+        }
+      },
+      required: ["repo", "count", "offset", "limit", "tasks"]
     }
   },
   {
     name: "task-bulk-manage",
+    title: "Task Bulk Manage",
     description: "Perform bulk operations on tasks (e.g., bulk creation, bulk deletion). For bulk_create, 'est_tokens' is optional and can be filled later when the task is completed.",
     annotations: {
       readOnlyHint: false,
@@ -714,6 +954,25 @@ export const TOOL_DEFINITIONS = [
         }
       },
       required: ["action", "repo"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        action: { type: "string" },
+        repo: { type: "string" },
+        createdCount: { type: "number" },
+        deletedCount: { type: "number" },
+        taskCodes: {
+          type: "array",
+          items: { type: "string" }
+        },
+        ids: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["success", "action", "repo"]
     }
   }
 ];

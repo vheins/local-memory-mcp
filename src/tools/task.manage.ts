@@ -125,13 +125,30 @@ export async function handleTaskList(
     comments: storage.getTaskCommentsByTaskId(task.id)
   }));
 
-  return { 
-    content: [{ 
-      type: "text", 
-      text: JSON.stringify(tasksWithHistory, null, 2) 
-    }],
-    isError: false
-  };
+  return createMcpResponse(
+    {
+      repo,
+      count: tasksWithHistory.length,
+      offset,
+      limit,
+      tasks: tasksWithHistory,
+    },
+    JSON.stringify(tasksWithHistory, null, 2),
+    {
+      resourceLinks: [
+        {
+          uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
+          name: `Current Tasks (${repo})`,
+          description: "Current task snapshot for the repository",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.9,
+          },
+        },
+      ],
+    }
+  );
 }
 
 export async function handleTaskCreate(
@@ -187,13 +204,34 @@ export async function handleTaskCreate(
 
   storage.insertTask(task);
 
-  return { 
-    content: [{ 
-      type: "text", 
-      text: `Task created: [${task.task_code}] ${task.title}${depends_on ? ` (depends on ${depends_on})` : ""}` 
-    }],
-    isError: false
-  };
+  return createMcpResponse(
+    {
+      success: true,
+      id: task.id,
+      repo: task.repo,
+      task_code: task.task_code,
+      phase: task.phase,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      depends_on: task.depends_on,
+    },
+    `Task created: [${task.task_code}] ${task.title}${depends_on ? ` (depends on ${depends_on})` : ""}`,
+    {
+      resourceLinks: [
+        {
+          uri: `tasks://current?repo=${encodeURIComponent(task.repo)}`,
+          name: `Current Tasks (${task.repo})`,
+          description: "Current task snapshot for the repository",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.8,
+          },
+        },
+      ],
+    }
+  );
 }
 
 type TaskCreateInteractiveOptions = {
@@ -413,13 +451,31 @@ export async function handleTaskUpdate(
     await archiveTaskToMemory(id, repo, storage, vectors);
   }
 
-  return { 
-    content: [{ 
-      type: "text", 
-      text: `Task updated: ${id}${updates.status === "completed" ? " and archived to memory" : ""}` 
-    }],
-    isError: false
-  };
+  return createMcpResponse(
+    {
+      success: true,
+      id,
+      repo,
+      status: updates.status ?? existingTask.status,
+      archivedToMemory: updates.status === "completed" && existingTask.status !== "completed",
+      updatedFields: Object.keys(finalUpdates),
+    },
+    `Task updated: ${id}${updates.status === "completed" ? " and archived to memory" : ""}`,
+    {
+      resourceLinks: [
+        {
+          uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
+          name: `Current Tasks (${repo})`,
+          description: "Current task snapshot for the repository",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.8,
+          },
+        },
+      ],
+    }
+  );
 }
 
 export async function handleTaskDelete(
@@ -429,11 +485,26 @@ export async function handleTaskDelete(
   const { repo, id } = TaskDeleteSchema.parse(args);
   storage.deleteTask(id);
 
-  return { 
-    content: [{ 
-      type: "text", 
-      text: `Task deleted: ${id}` 
-    }],
-    isError: false
-  };
+  return createMcpResponse(
+    {
+      success: true,
+      id,
+      repo,
+    },
+    `Task deleted: ${id}`,
+    {
+      resourceLinks: [
+        {
+          uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
+          name: `Current Tasks (${repo})`,
+          description: "Current task snapshot for the repository after deletion",
+          mimeType: "application/json",
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.6,
+          },
+        },
+      ],
+    }
+  );
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
+import { createMcpResponse } from "../utils/mcp-response.js";
 import { TaskBulkManageSchema } from "./schemas.js";
 import { archiveTaskToMemory } from "./task.manage.js";
 
@@ -101,13 +102,30 @@ export async function handleTaskBulkManage(
         onProgress(progress, total);
       }
 
-      return { 
-        content: [{ 
-          type: "text", 
-          text: `Successfully created ${tasks.length} tasks: ${createdTasks.join(', ')}` 
-        }],
-        isError: false
-      };
+      return createMcpResponse(
+        {
+          success: true,
+          action,
+          repo,
+          createdCount: tasks.length,
+          taskCodes: createdTasks,
+        },
+        `Successfully created ${tasks.length} tasks: ${createdTasks.join(", ")}`,
+        {
+          resourceLinks: [
+            {
+              uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
+              name: `Current Tasks (${repo})`,
+              description: "Current task snapshot for the repository",
+              mimeType: "application/json",
+              annotations: {
+                audience: ["assistant"],
+                priority: 0.8,
+              },
+            },
+          ],
+        }
+      );
     }
     case "bulk_delete": {
       if (!ids) throw new Error("ids array is required for bulk_delete");
@@ -127,13 +145,30 @@ export async function handleTaskBulkManage(
         onProgress(progress, total);
       }
 
-      return { 
-        content: [{ 
-          type: "text", 
-          text: `Successfully deleted ${ids.length} tasks.` 
-        }],
-        isError: false
-      };
+      return createMcpResponse(
+        {
+          success: true,
+          action,
+          repo,
+          deletedCount: ids.length,
+          ids,
+        },
+        `Successfully deleted ${ids.length} tasks.`,
+        {
+          resourceLinks: [
+            {
+              uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
+              name: `Current Tasks (${repo})`,
+              description: "Current task snapshot for the repository after bulk deletion",
+              mimeType: "application/json",
+              annotations: {
+                audience: ["assistant"],
+                priority: 0.6,
+              },
+            },
+          ],
+        }
+      );
     }
     default:
       throw new Error(`Unsupported bulk action: ${action}`);

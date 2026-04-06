@@ -45,7 +45,7 @@ export function createRouter(
     switch (method) {
       // ---- tools ----
       case "tools/list":
-        return { tools: TOOL_DEFINITIONS };
+        return listTools(getSessionContext?.(), params);
 
       case "tools/call":
         return await handleToolCall(params, signal, onProgress);
@@ -199,6 +199,33 @@ export function createRouter(
   return handleMethod;
 }
 
+function listTools(session: SessionContext | undefined, params: any) {
+  const tools = getAvailableToolDefinitions(session);
+  const limit = normalizePageLimit(params?.limit, tools.length || 1);
+  const start = decodeCursor(params?.cursor);
+  const page = tools.slice(start, start + limit);
+  const nextCursor = start + limit < tools.length ? encodeCursor(start + limit) : undefined;
+
+  return {
+    tools: page,
+    nextCursor,
+  };
+}
+
+function getAvailableToolDefinitions(session?: SessionContext) {
+  return TOOL_DEFINITIONS.filter((tool) => {
+    if (tool.name === "memory-synthesize" && !session?.supportsSampling) {
+      return false;
+    }
+
+    if (tool.name === "task-create-interactive" && !session?.supportsElicitationForm) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 function collectAffectedResourceUris(toolName: string, args: any, result: any): string[] {
   const repo = args?.repo || args?.scope?.repo || result?.data?.repo;
   const uris = new Set<string>();
@@ -274,5 +301,28 @@ function validateRootBoundPath(value: unknown, field: string, session?: SessionC
 
   if (!isPathWithinRoots(value, session)) {
     throw new Error(`${field} must stay within the active MCP roots`);
+  }
+}
+
+function normalizePageLimit(value: unknown, fallback: number) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    return Math.max(1, fallback);
+  }
+
+  return Math.min(value, 100);
+}
+
+function encodeCursor(offset: number) {
+  return Buffer.from(String(offset), "utf8").toString("base64");
+}
+
+function decodeCursor(cursor: unknown) {
+  if (typeof cursor !== "string" || !cursor) return 0;
+
+  try {
+    const decoded = Number(Buffer.from(cursor, "base64").toString("utf8"));
+    return Number.isInteger(decoded) && decoded >= 0 ? decoded : 0;
+  } catch {
+    return 0;
   }
 }

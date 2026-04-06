@@ -1,14 +1,30 @@
 import { z } from "zod";
 
+const McpAnnotationsSchema = z.object({
+  audience: z.array(z.enum(["user", "assistant"])).optional(),
+  priority: z.number().min(0).max(1).optional(),
+  lastModified: z.string().optional(),
+}).strict().optional();
+
 export const McpContentSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("text"),
     text: z.string(),
+    annotations: McpAnnotationsSchema,
   }),
   z.object({
     type: z.literal("image"),
     data: z.string(),
     mimeType: z.string(),
+    annotations: McpAnnotationsSchema,
+  }),
+  z.object({
+    type: z.literal("resource_link"),
+    uri: z.string(),
+    name: z.string(),
+    description: z.string().optional(),
+    mimeType: z.string().optional(),
+    annotations: McpAnnotationsSchema,
   }),
   z.object({
     type: z.literal("resource"),
@@ -16,6 +32,7 @@ export const McpContentSchema = z.discriminatedUnion("type", [
       uri: z.string(),
       mimeType: z.string().optional(),
       text: z.string().optional(),
+      annotations: McpAnnotationsSchema,
     }),
   }),
 ]);
@@ -47,30 +64,68 @@ export function createMcpResponse(
       recall_count?: number;
       last_used_at?: string | null;
       expires_at?: string | null;
-    }> 
+    }>;
+    resourceLinks?: Array<{
+      uri: string;
+      name: string;
+      description?: string;
+      mimeType?: string;
+      annotations?: {
+        audience?: Array<"user" | "assistant">;
+        priority?: number;
+        lastModified?: string;
+      };
+    }>;
   }
 ): McpResponse {
-  const { query, results } = options || {};
+  const { query, results, resourceLinks } = options || {};
   
   const content: McpContent[] = [
     {
       type: "text",
       text: summary,
+      annotations: {
+        audience: ["user", "assistant"],
+        priority: 1,
+      },
     },
   ];
 
-  // Add resource for each result with embedded content
+  for (const link of resourceLinks || []) {
+    content.push({
+      type: "resource_link",
+      uri: link.uri,
+      name: link.name,
+      description: link.description,
+      mimeType: link.mimeType,
+      annotations: link.annotations,
+    });
+  }
+
+  // Add resource link and embedded content for each result
   if (results && results.length > 0) {
     for (const result of results) {
-      const resultId = Buffer.from(result.id).toString('base64').substring(0, 8);
-      
       // Generate title from content if not present
-      const title = result.title || (result.content.length > 50 ? result.content.substring(0, 50) + '...' : result.content);
+      const title = result.title || (result.content.length > 50 ? result.content.substring(0, 50) + "..." : result.content);
+      const annotations = {
+        audience: ["assistant" as const],
+        priority: 0.8,
+        lastModified: result.updated_at || result.created_at,
+      };
+
+      content.push({
+        type: "resource_link",
+        uri: `memory://${result.id}`,
+        name: title,
+        description: `Memory ${result.type} in repo ${result.scope?.repo ?? "unknown"}`,
+        mimeType: "application/json",
+        annotations,
+      });
       
       content.push({
         type: "resource",
         resource: {
-          uri: `memory://${resultId}`,
+          uri: `memory://${result.id}`,
           mimeType: "application/json",
           text: JSON.stringify({
             id: result.id,
@@ -85,7 +140,8 @@ export function createMcpResponse(
             recall_count: result.recall_count,
             last_used_at: result.last_used_at,
             expires_at: result.expires_at
-          })
+          }),
+          annotations,
         }
       });
     }
@@ -94,7 +150,8 @@ export function createMcpResponse(
   return { 
     content,
     data,
-    structuredContent: data
+    structuredContent: data,
+    isError: false,
   };
 }
 
@@ -107,6 +164,7 @@ export function createTextOnlyResponse(text: string): McpResponse {
       },
     ],
     structuredContent: { text },
+    isError: false,
   };
 }
 
