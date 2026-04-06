@@ -196,6 +196,53 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(result.supportedLevels).toContain("info");
   });
 
+  it("supports prompt list pagination with nextCursor", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    const firstPage = await router("prompts/list", { limit: 2 });
+    const secondPage = await router("prompts/list", { limit: 2, cursor: firstPage.nextCursor });
+
+    expect(firstPage.prompts).toHaveLength(2);
+    expect(firstPage.nextCursor).toBeTruthy();
+    expect(secondPage.prompts).toHaveLength(2);
+    expect(secondPage.prompts[0].name).not.toBe(firstPage.prompts[0].name);
+  });
+
+  it("validates required prompt arguments with MCP invalid params error", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    await expect(router("prompts/get", {
+      name: "memory-guided-review",
+      arguments: {},
+    })).rejects.toMatchObject({
+      code: -32602,
+    });
+  });
+
+  it("returns a dynamic prompt with embedded resource messages", async () => {
+    const mockDb = makeMockDb();
+    (mockDb.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["repo-alpha"]);
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    const result = await router("prompts/get", {
+      name: "workspace-briefing-rich",
+      arguments: {},
+    });
+
+    const resourceUris = result.messages
+      .filter((message: any) => message.content?.type === "resource")
+      .map((message: any) => message.content.resource.uri);
+
+    expect(resourceUris).toContain("session://roots");
+    expect(resourceUris).toContain("memory://summary/repo-alpha");
+    expect(resourceUris).toContain("tasks://current?repo=repo-alpha");
+  });
+
   it("memory-synthesize uses sampling when the client supports it", async () => {
     const mockDb = makeMockDb();
     const mockVectors = makeMockVectors();

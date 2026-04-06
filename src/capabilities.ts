@@ -33,7 +33,7 @@ export const CAPABILITIES = {
       listChanged: false
     },
     prompts: {
-      listChanged: false
+      listChanged: true
     }
   }
 };

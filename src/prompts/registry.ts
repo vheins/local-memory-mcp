@@ -1,3 +1,6 @@
+import { SQLiteStore } from "../storage/sqlite.js";
+import { SessionContext, inferRepoFromSession } from "../mcp/session.js";
+
 export const PROMPTS = {
   "memory-agent-core": {
     name: "memory-agent-core",
@@ -662,3 +665,334 @@ If this check fails → ABORT OUTPUT.`
     ]
   }
 };
+
+export type PromptArgument = {
+  name: string;
+  title?: string;
+  description?: string;
+  required?: boolean;
+};
+
+export type PromptMessage = {
+  role: string;
+  content: any;
+};
+
+export type PromptDefinition = {
+  name: string;
+  title?: string;
+  description: string;
+  arguments: PromptArgument[];
+  messages: PromptMessage[];
+  icons?: Array<{ src: string; mimeType?: string }>;
+};
+
+type PromptCatalogEntry = Omit<PromptDefinition, "messages">;
+
+const DYNAMIC_PROMPTS: Record<string, Omit<PromptCatalogEntry, "name">> = {
+  "workspace-briefing-rich": {
+    title: "Workspace Briefing Rich",
+    description: "Brief the model with active roots, project summary, task backlog, and memory index for the current repository.",
+    arguments: [
+      {
+        name: "repo",
+        title: "Repository",
+        description: "Repository name. Optional when it can be inferred from roots or the existing local memory store.",
+        required: false,
+      },
+      {
+        name: "focus",
+        title: "Focus",
+        description: "Optional focus area for the briefing, such as architecture, tasks, or onboarding.",
+        required: false,
+      },
+    ],
+  },
+  "repo-architecture-context": {
+    title: "Repo Architecture Context",
+    description: "Ground a model with summary and recent memory resources before architecture work or review.",
+    arguments: [
+      {
+        name: "repo",
+        title: "Repository",
+        description: "Repository name. Optional when it can be inferred from roots or the local memory store.",
+        required: false,
+      },
+    ],
+  },
+  "active-tasks-review-rich": {
+    title: "Active Tasks Review Rich",
+    description: "Review the current task queue and memory context for a repository using embedded MCP resources.",
+    arguments: [
+      {
+        name: "repo",
+        title: "Repository",
+        description: "Repository name. Optional when it can be inferred from roots or the local memory store.",
+        required: false,
+      },
+      {
+        name: "objective",
+        title: "Objective",
+        description: "Optional review objective, such as triage, execution planning, or blocker analysis.",
+        required: false,
+      },
+    ],
+  },
+};
+
+export function listPrompts(
+  db: SQLiteStore,
+  session?: SessionContext,
+  params?: { cursor?: string; limit?: number },
+) {
+  const allPrompts = getPromptCatalog(db, session);
+  const limit = normalizeLimit(params?.limit);
+  const offset = decodeCursor(params?.cursor);
+  const prompts = allPrompts.slice(offset, offset + limit);
+  const nextOffset = offset + prompts.length;
+
+  return {
+    prompts,
+    nextCursor: nextOffset < allPrompts.length ? encodeCursor(nextOffset) : undefined,
+  };
+}
+
+export function getPrompt(
+  name: string,
+  args: Record<string, unknown> | undefined,
+  db: SQLiteStore,
+  session?: SessionContext,
+): PromptDefinition {
+  const promptName = String(name || "");
+  const promptArgs = args ?? {};
+
+  if (promptName in DYNAMIC_PROMPTS) {
+    return buildDynamicPrompt(promptName, promptArgs, db, session);
+  }
+
+  const prompt = PROMPTS[promptName as keyof typeof PROMPTS];
+  if (!prompt) {
+    throw invalidPromptParams(`Unknown prompt: ${promptName}`);
+  }
+
+  validatePromptArguments(promptName, prompt.arguments ?? [], promptArgs);
+
+  const result = JSON.parse(JSON.stringify(prompt)) as PromptDefinition;
+  result.title = result.title || humanizePromptName(result.name);
+  result.messages = result.messages.map((message) => substitutePromptMessage(message, promptArgs));
+  return result;
+}
+
+function getPromptCatalog(db: SQLiteStore, session?: SessionContext): PromptCatalogEntry[] {
+  const staticPrompts = Object.values(PROMPTS).map((prompt) => ({
+    name: prompt.name,
+    title: humanizePromptName(prompt.name),
+    description: prompt.description,
+    arguments: prompt.arguments ?? [],
+  }));
+
+  const dynamicPrompts = Object.entries(DYNAMIC_PROMPTS).map(([name, prompt]) => ({
+    name,
+    ...prompt,
+  }));
+
+  return [...staticPrompts, ...dynamicPrompts];
+}
+
+function buildDynamicPrompt(
+  name: string,
+  args: Record<string, unknown>,
+  db: SQLiteStore,
+  session?: SessionContext,
+): PromptDefinition {
+  validatePromptArguments(name, DYNAMIC_PROMPTS[name].arguments, args);
+
+  const repo = resolvePromptRepo(args, db, session);
+  const focus = typeof args.focus === "string" && args.focus.trim() ? args.focus.trim() : undefined;
+  const objective = typeof args.objective === "string" && args.objective.trim() ? args.objective.trim() : undefined;
+
+  switch (name) {
+    case "workspace-briefing-rich":
+      return {
+        name,
+        title: DYNAMIC_PROMPTS[name].title,
+        description: DYNAMIC_PROMPTS[name].description,
+        arguments: DYNAMIC_PROMPTS[name].arguments,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: [
+                `Create a grounded workspace briefing${repo ? ` for repository "${repo}"` : ""}.`,
+                focus ? `Prioritize focus area: ${focus}.` : "Prioritize architecture decisions, active tasks, and current workspace boundaries.",
+                "Use the attached MCP resources as primary evidence before using tools.",
+              ].join(" "),
+            },
+          },
+          createResourceMessage("session://roots", "application/json"),
+          ...(repo ? [
+            createResourceMessage(`memory://summary/${repo}`, "text/plain"),
+            createResourceMessage(`tasks://current?repo=${encodeURIComponent(repo)}`, "application/json"),
+            createResourceMessage(`memory://index?repo=${encodeURIComponent(repo)}`, "application/json"),
+          ] : []),
+        ],
+      };
+
+    case "repo-architecture-context":
+      return {
+        name,
+        title: DYNAMIC_PROMPTS[name].title,
+        description: DYNAMIC_PROMPTS[name].description,
+        arguments: DYNAMIC_PROMPTS[name].arguments,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: repo
+                ? `Review the attached summary and memory index for repository "${repo}" before proposing any architectural changes.`
+                : "Review the attached workspace roots and available repository context before proposing any architectural changes.",
+            },
+          },
+          createResourceMessage("session://roots", "application/json"),
+          ...(repo ? [
+            createResourceMessage(`memory://summary/${repo}`, "text/plain"),
+            createResourceMessage(`memory://index?repo=${encodeURIComponent(repo)}`, "application/json"),
+          ] : []),
+        ],
+      };
+
+    case "active-tasks-review-rich":
+      return {
+        name,
+        title: DYNAMIC_PROMPTS[name].title,
+        description: DYNAMIC_PROMPTS[name].description,
+        arguments: DYNAMIC_PROMPTS[name].arguments,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: [
+                `Review the active task queue${repo ? ` for repository "${repo}"` : ""}.`,
+                objective ? `Goal: ${objective}.` : "Identify the most important next actions, blockers, and stale work.",
+                "Base the review on the attached MCP resources.",
+              ].join(" "),
+            },
+          },
+          ...(repo ? [
+            createResourceMessage(`tasks://current?repo=${encodeURIComponent(repo)}`, "application/json"),
+            createResourceMessage(`memory://summary/${repo}`, "text/plain"),
+          ] : [createResourceMessage("session://roots", "application/json")]),
+        ],
+      };
+
+    default:
+      throw invalidPromptParams(`Unknown prompt: ${name}`);
+  }
+}
+
+function createResourceMessage(uri: string, mimeType?: string): PromptMessage {
+  return {
+    role: "user",
+    content: {
+      type: "resource",
+      resource: {
+        uri,
+        mimeType,
+      },
+    },
+  };
+}
+
+function validatePromptArguments(
+  promptName: string,
+  definitions: PromptArgument[],
+  args: Record<string, unknown>,
+) {
+  const missing = definitions
+    .filter((entry) => entry.required)
+    .filter((entry) => {
+      const value = args[entry.name];
+      return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+    })
+    .map((entry) => entry.name);
+
+  if (missing.length > 0) {
+    throw invalidPromptParams(`Missing required prompt arguments for "${promptName}": ${missing.join(", ")}`);
+  }
+}
+
+function substitutePromptMessage(message: PromptMessage, args: Record<string, unknown>): PromptMessage {
+  if (!message.content || message.content.type !== "text" || typeof message.content.text !== "string") {
+    return message;
+  }
+
+  let text = message.content.text;
+  for (const [key, value] of Object.entries(args)) {
+    const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, "g");
+    text = text.replace(placeholder, String(value));
+  }
+
+  return {
+    ...message,
+    content: {
+      ...message.content,
+      text,
+    },
+  };
+}
+
+function resolvePromptRepo(
+  args: Record<string, unknown>,
+  db: SQLiteStore,
+  session?: SessionContext,
+) {
+  const argRepo = typeof args.repo === "string" && args.repo.trim() ? args.repo.trim() : undefined;
+  if (argRepo) return argRepo;
+
+  const inferredRepo = inferRepoFromSession(session);
+  if (inferredRepo) return inferredRepo;
+
+  const repos = typeof db.listRepos === "function" ? db.listRepos() : [];
+  return repos[0];
+}
+
+function humanizePromptName(name: string) {
+  return name
+    .split("-")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function normalizeLimit(limit: unknown) {
+  if (typeof limit !== "number" || !Number.isFinite(limit)) {
+    return 25;
+  }
+  return Math.min(100, Math.max(1, Math.trunc(limit)));
+}
+
+function encodeCursor(offset: number) {
+  return Buffer.from(String(offset), "utf8").toString("base64");
+}
+
+function decodeCursor(cursor: unknown) {
+  if (typeof cursor !== "string" || cursor.trim() === "") {
+    return 0;
+  }
+
+  try {
+    const decoded = Buffer.from(cursor, "base64").toString("utf8");
+    const offset = Number.parseInt(decoded, 10);
+    return Number.isFinite(offset) && offset >= 0 ? offset : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function invalidPromptParams(message: string) {
+  const error = new Error(message) as Error & { code: number };
+  error.code = -32602;
+  return error;
+}

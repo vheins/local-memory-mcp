@@ -2,7 +2,7 @@ import path from "node:path";
 import { listResources, listResourceTemplates, readResource } from "./resources/index.js";
 import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./mcp/session.js";
 import { logger } from "./utils/logger.js";
-import { PROMPTS } from "./prompts/registry.js";
+import { getPrompt, listPrompts } from "./prompts/registry.js";
 import { TOOL_DEFINITIONS } from "./tools/schemas.js";
 import { SQLiteStore } from "./storage/sqlite.js";
 import { VectorStore } from "./types.js";
@@ -59,7 +59,7 @@ export function createRouter(
 
       // ---- prompts ----
       case "prompts/list":
-        return { prompts: Object.values(PROMPTS) };
+        return listPrompts(db, getSessionContext?.(), params);
 
       case "logging/setLevel": {
         const requestedLevel = typeof params?.level === "string" ? params.level : "";
@@ -73,29 +73,7 @@ export function createRouter(
       }
 
       case "prompts/get": {
-        const prompt = PROMPTS[params?.name as keyof typeof PROMPTS];
-        if (!prompt) {
-          throw new Error(`Unknown prompt: ${params?.name}`);
-        }
-
-        // Clone to avoid modifying the original registry
-        const result = JSON.parse(JSON.stringify(prompt));
-        const args = params?.arguments || {};
-
-        // Simple template substitution
-        result.messages = result.messages.map((msg: any) => {
-          if (msg.content && msg.content.type === "text") {
-            let text = msg.content.text;
-            for (const [key, value] of Object.entries(args)) {
-              const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, "g");
-              text = text.replace(placeholder, String(value));
-            }
-            return { ...msg, content: { ...msg.content, text } };
-          }
-          return msg;
-        });
-
-        return result;
+        return getPrompt(params?.name, params?.arguments || {}, db, getSessionContext?.());
       }
 
       default:

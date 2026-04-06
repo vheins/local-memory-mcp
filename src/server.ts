@@ -155,6 +155,10 @@ async function refreshRoots(trigger: string) {
         jsonrpc: "2.0",
         method: "notifications/resources/list_changed",
       });
+      reply({
+        jsonrpc: "2.0",
+        method: "notifications/prompts/list_changed",
+      });
     }
   } catch (error) {
     logger.warn("[Server] Failed to refresh client roots", {
@@ -284,7 +288,7 @@ rl.on("line", async (line) => {
         jsonrpc: "2.0",
         id,
         error: {
-          code: -32603,
+          code: typeof err?.code === "number" ? err.code : -32603,
           message: err.message || "Internal error"
         }
       });
