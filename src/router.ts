@@ -18,15 +18,15 @@ import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 export function createRouter(
   db: SQLiteStore,
   vectors: VectorStore
-): (method: string, params: any) => Promise<any> {
-  async function handleMethod(method: string, params: any): Promise<any> {
+): (method: string, params: any, signal?: AbortSignal) => Promise<any> {
+  async function handleMethod(method: string, params: any, signal?: AbortSignal): Promise<any> {
     switch (method) {
       // ---- tools ----
       case "tools/list":
         return { tools: TOOL_DEFINITIONS };
 
       case "tools/call":
-        return await handleToolCall(params);
+        return await handleToolCall(params, signal);
 
       // ---- resources ----
       case "resources/list":
@@ -70,7 +70,7 @@ export function createRouter(
     }
   }
 
-  async function handleToolCall(params: any): Promise<any> {
+  async function handleToolCall(params: any, signal?: AbortSignal): Promise<any> {
     const { name, arguments: args } = params;
     // Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
     const toolName = String(name).replace(/\./g, "-");

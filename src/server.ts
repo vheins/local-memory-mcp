@@ -96,6 +96,7 @@ function reply(payload: unknown) {
 }
 
 let isInitialized = false;
+const activeRequests = new Map<string | number, AbortController>();
 
 rl.on("line", async (line) => {
   if (!line.trim()) return;
@@ -131,7 +132,14 @@ rl.on("line", async (line) => {
         isInitialized = true;
         logger.debug("[Server] Client initialized");
     } else if (method === "notifications/cancelled") {
-        logger.debug("[Server] Request cancelled by client", { params });
+        const requestId = params?.requestId;
+        if (requestId !== undefined && activeRequests.has(requestId)) {
+            activeRequests.get(requestId)!.abort();
+            activeRequests.delete(requestId);
+            logger.debug(`[Server] Request ${requestId} cancelled`);
+        } else {
+            logger.debug(`[Server] Cancelled notification for unknown or completed request ${requestId}`);
+        }
     }
     return;
   }
@@ -159,24 +167,33 @@ rl.on("line", async (line) => {
     return;
   }
 
+  const abortController = new AbortController();
+  activeRequests.set(id, abortController);
+
   // --- route request ---
   try {
-    const result = await handleMethod(method, params);
+    const result = await handleMethod(method, params, abortController.signal);
 
-    reply({
-      jsonrpc: "2.0",
-      id,
-      result
-    });
+    if (!abortController.signal.aborted) {
+      reply({
+        jsonrpc: "2.0",
+        id,
+        result
+      });
+    }
   } catch (err: any) {
-    logger.error("Method handler error", { method, id, message: err.message });
-    reply({
-      jsonrpc: "2.0",
-      id,
-      error: {
-        code: -32603,
-        message: err.message || "Internal error"
-      }
-    });
+    if (!abortController.signal.aborted) {
+      logger.error("Method handler error", { method, id, message: err.message });
+      reply({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: -32603,
+          message: err.message || "Internal error"
+        }
+      });
+    }
+  } finally {
+    activeRequests.delete(id);
   }
 });
