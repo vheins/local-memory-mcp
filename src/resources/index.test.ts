@@ -162,6 +162,28 @@ describe("MCP resource templates and session resources", () => {
     expect(secondTemplates.length).toBeGreaterThan(0);
   });
 
+  it("rejects invalid cursors for resources/list with MCP invalid params error", () => {
+    const session = createSessionContext();
+
+    expect(() => listResources(session, { cursor: "%%%not-base64%%%" })).toThrowError(/Invalid cursor/);
+
+    try {
+      listResources(session, { cursor: "%%%not-base64%%%" });
+    } catch (error: any) {
+      expect(error.code).toBe(-32602);
+    }
+  });
+
+  it("rejects invalid cursors for resources/templates/list with MCP invalid params error", () => {
+    expect(() => listResourceTemplates({ cursor: "%%%not-base64%%%" })).toThrowError(/Invalid cursor/);
+
+    try {
+      listResourceTemplates({ cursor: "%%%not-base64%%%" });
+    } catch (error: any) {
+      expect(error.code).toBe(-32602);
+    }
+  });
+
   it("lists parameterized resources via resources/templates/list", () => {
     const result = listResourceTemplates();
     const templates = (result.resourceTemplates as Array<{ uriTemplate: string }>).map((entry) => entry.uriTemplate);

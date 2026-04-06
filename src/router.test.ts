@@ -187,6 +187,16 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(secondPage.tools[0].name).not.toBe(firstPage.tools[0].name);
   });
 
+  it("rejects invalid cursors for tools/list with MCP invalid params error", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    await expect(router("tools/list", { cursor: "%%%not-base64%%%" })).rejects.toMatchObject({
+      code: -32602,
+    });
+  });
+
   it("supports completion for resource template repo arguments", async () => {
     const mockDb = makeMockDb();
     (mockDb.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["alpha-repo", "beta-repo"]);
@@ -329,6 +339,16 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(firstPage.nextCursor).toBeTruthy();
     expect(secondPage.prompts).toHaveLength(2);
     expect(secondPage.prompts[0].name).not.toBe(firstPage.prompts[0].name);
+  });
+
+  it("rejects invalid cursors for prompts/list with MCP invalid params error", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    await expect(router("prompts/list", { cursor: "%%%not-base64%%%" })).rejects.toMatchObject({
+      code: -32602,
+    });
   });
 
   it("validates required prompt arguments with MCP invalid params error", async () => {

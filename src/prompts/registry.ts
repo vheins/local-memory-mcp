@@ -1,6 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite.js";
 import { SessionContext, inferRepoFromSession } from "../mcp/session.js";
 import { rankCompletionValues } from "../utils/completion.js";
+import { decodeCursor, encodeCursor } from "../utils/pagination.js";
 
 export const PROMPTS = {
   "memory-agent-core": {
@@ -1031,24 +1032,6 @@ function normalizeLimit(limit: unknown) {
     return 25;
   }
   return Math.min(100, Math.max(1, Math.trunc(limit)));
-}
-
-function encodeCursor(offset: number) {
-  return Buffer.from(String(offset), "utf8").toString("base64");
-}
-
-function decodeCursor(cursor: unknown) {
-  if (typeof cursor !== "string" || cursor.trim() === "") {
-    return 0;
-  }
-
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString("utf8");
-    const offset = Number.parseInt(decoded, 10);
-    return Number.isFinite(offset) && offset >= 0 ? offset : 0;
-  } catch {
-    return 0;
-  }
 }
 
 function invalidPromptParams(message: string) {

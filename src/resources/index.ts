@@ -2,6 +2,7 @@ import { SQLiteStore } from "../storage/sqlite.js";
 import { SessionContext } from "../mcp/session.js";
 import { logger } from "../utils/logger.js";
 import { rankCompletionValues } from "../utils/completion.js";
+import { decodeCursor, encodeCursor } from "../utils/pagination.js";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -347,24 +348,6 @@ function normalizeLimit(limit: unknown) {
   }
 
   return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(limit)));
-}
-
-function encodeCursor(offset: number) {
-  return Buffer.from(String(offset), "utf8").toString("base64");
-}
-
-function decodeCursor(cursor: unknown) {
-  if (typeof cursor !== "string" || cursor.trim() === "") {
-    return 0;
-  }
-
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString("utf8");
-    const offset = Number.parseInt(decoded, 10);
-    return Number.isFinite(offset) && offset >= 0 ? offset : 0;
-  } catch {
-    return 0;
-  }
 }
 
 function deriveLastModifiedFromCollection(values: Array<string | undefined | null>) {

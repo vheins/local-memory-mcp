@@ -27,6 +27,7 @@ import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 import { SamplingRequestHandler } from "./mcp/sampling.js";
 import { ElicitationRequestHandler } from "./mcp/elicitation.js";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger.js";
+import { decodeCursor, encodeCursor } from "./utils/pagination.js";
 
 type RouterOptions = {
   getSessionContext?: () => SessionContext;
@@ -314,19 +315,4 @@ function normalizePageLimit(value: unknown, fallback: number) {
   }
 
   return Math.min(value, 100);
-}
-
-function encodeCursor(offset: number) {
-  return Buffer.from(String(offset), "utf8").toString("base64");
-}
-
-function decodeCursor(cursor: unknown) {
-  if (typeof cursor !== "string" || !cursor) return 0;
-
-  try {
-    const decoded = Number(Buffer.from(cursor, "base64").toString("utf8"));
-    return Number.isInteger(decoded) && decoded >= 0 ? decoded : 0;
-  } catch {
-    return 0;
-  }
 }
