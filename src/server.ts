@@ -10,7 +10,7 @@ import {
   updateSessionFromInitialize,
   updateSessionRoots,
 } from "./mcp/session.js";
-import { logger } from "./utils/logger.js";
+import { addLogSink, logger } from "./utils/logger.js";
 import fs from "fs";
 import path from "path";
 
@@ -75,11 +75,24 @@ process.stderr.on('error', (err: any) => {
 // Wire router with injected storage
 const session = createSessionContext();
 const resourceSubscriptions = new Set<string>();
+let logNotificationsEnabled = false;
 const handleMethod = createRouter(db, vectors, {
   getSessionContext: () => session,
   sampleMessage: (params) => requestClient("sampling/createMessage", params) as Promise<any>,
   elicit: (params) => requestClient("elicitation/create", params) as Promise<any>,
   onResourcesMutated: (uris) => notifyUpdatedResources(uris),
+});
+
+addLogSink((payload) => {
+  if (!logNotificationsEnabled) {
+    return;
+  }
+
+  reply({
+    jsonrpc: "2.0",
+    method: "notifications/message",
+    params: payload,
+  });
 });
 
 // Cleanup on exit
@@ -233,6 +246,7 @@ rl.on("line", async (line) => {
     // We ignore all notifications by default, especially standard ones
     if (method === "notifications/initialized") {
         isInitialized = true;
+        logNotificationsEnabled = true;
         logger.debug("[Server] Client initialized");
         void refreshRoots("initialized");
     } else if (method === "notifications/roots/list_changed") {

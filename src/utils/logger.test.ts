@@ -8,7 +8,7 @@ import * as fc from "fast-check";
 // ─── Property 20: StructuredLogger output adalah JSON valid dengan field wajib ─
 // Feature: memory-mcp-optimization, Property 20: StructuredLogger output JSON valid
 
-type LogLevel = "debug" | "info" | "warn" | "error";
+type LogLevel = "debug" | "info" | "warning" | "error";
 
 describe("Property 20: StructuredLogger output adalah JSON valid dengan field wajib", () => {
   let stderrOutput: string[] = [];
@@ -38,7 +38,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
         fc.oneof(
           fc.constant<LogLevel>("debug"),
           fc.constant<LogLevel>("info"),
-          fc.constant<LogLevel>("warn"),
+          fc.constant<LogLevel>("warning"),
           fc.constant<LogLevel>("error")
         ),
         fc.string({ minLength: 1, maxLength: 100 }),
@@ -102,10 +102,14 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
   it("all four log levels produce valid JSON with correct level field", async () => {
     const { logger } = await import("./logger.js?t=" + Date.now() + "levels");
 
-    const levels: LogLevel[] = ["debug", "info", "warn", "error"];
+    const levels: LogLevel[] = ["debug", "info", "warning", "error"];
     for (const level of levels) {
       stderrOutput = [];
-      logger[level](`test ${level} message`);
+      if (level === "warning") {
+        logger.warning(`test ${level} message`);
+      } else {
+        logger[level](`test ${level} message`);
+      }
 
       expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
       const lastOutput = stderrOutput[stderrOutput.length - 1];
@@ -113,5 +117,35 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
       expect(lastOutput).toMatch(new RegExp(`\\[\\s*${level.toUpperCase()}\\s*\\]`));
       expect(lastOutput).toContain(`test ${level} message`);
     }
+  });
+
+  it("warn alias normalizes to warning", async () => {
+    const { logger } = await import("./logger.js?t=" + Date.now() + "warnalias");
+
+    stderrOutput = [];
+    logger.warn("legacy warning");
+
+    expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
+    const lastOutput = stderrOutput[stderrOutput.length - 1];
+    expect(lastOutput).toMatch(/\[\s*WARNING\s*\]/);
+  });
+
+  it("emits structured payloads to registered log sinks", async () => {
+    const module = await import("./logger.js?t=" + Date.now() + "sink");
+    const sink = vi.fn();
+    module.addLogSink(sink);
+
+    module.logger.notice("[Server] Configuration updated", { source: "test" });
+
+    expect(sink).toHaveBeenCalledWith({
+      level: "notice",
+      logger: "server",
+      data: {
+        message: "[Server] Configuration updated",
+        source: "test",
+      },
+    });
+
+    module.clearLogSinks();
   });
 });

@@ -307,6 +307,16 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(result.supportedLevels).toContain("info");
   });
 
+  it("rejects invalid logging/setLevel values with MCP invalid params error", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    await expect(router("logging/setLevel", { level: "verbose" })).rejects.toMatchObject({
+      code: -32602,
+    });
+  });
+
   it("supports prompt list pagination with nextCursor", async () => {
     const mockDb = makeMockDb();
     const mockVectors = makeMockVectors();

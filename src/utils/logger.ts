@@ -1,40 +1,55 @@
-// Structured logger — outputs JSON to stderr
-// Requirements: 21.1, 21.2
+type LogLevel =
+  | "debug"
+  | "info"
+  | "notice"
+  | "warning"
+  | "error"
+  | "critical"
+  | "alert"
+  | "emergency";
 
-type LogLevel = "debug" | "info" | "warn" | "error";
+type LogMethodLevel = LogLevel | "warn";
 
-interface LogEntry {
+type LogSinkPayload = {
   level: LogLevel;
-  timestamp: string; // ISO 8601
-  message: string;
-  context?: Record<string, unknown>;
-}
+  logger?: string;
+  data: Record<string, unknown>;
+};
+
+type LogSink = (payload: LogSinkPayload) => void;
 
 const LEVELS: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
-  warn: 2,
-  error: 3,
+  notice: 2,
+  warning: 3,
+  error: 4,
+  critical: 5,
+  alert: 6,
+  emergency: 7,
 };
 
+const LEVEL_ALIASES: Record<string, LogLevel> = {
+  warn: "warning",
+};
+
+let currentLevel: LogLevel = parseLevel(process.env.LOG_LEVEL?.toLowerCase());
+const sinks = new Set<LogSink>();
+
 function parseLevel(raw: string | undefined): LogLevel {
-  if (raw && raw in LEVELS) return raw as LogLevel;
+  if (!raw) return "info";
+  const normalized = LEVEL_ALIASES[raw] || raw;
+  if (normalized in LEVELS) return normalized as LogLevel;
   return "info";
 }
 
-let currentLevel: LogLevel = parseLevel(process.env.LOG_LEVEL?.toLowerCase());
+function normalizeMethodLevel(level: LogMethodLevel): LogLevel {
+  return level === "warn" ? "warning" : level;
+}
 
-function formatContext(context?: Record<string, unknown>): string {
+function formatContextForStderr(context?: Record<string, unknown>): string {
   if (!context || Object.keys(context).length === 0) return "";
-  return Object.entries(context)
-    .map(([key, value]) => {
-      if (value === null || value === undefined) return `${key}=null`;
-      const valStr = typeof value === "string" && (value.includes(" ") || value.includes("\"")) 
-        ? JSON.stringify(value) 
-        : String(value);
-      return `${key}=${valStr}`;
-    })
-    .join(" ");
+  return ` ${JSON.stringify(context)}`;
 }
 
 function getMcpIcon(message: string): string {
@@ -49,25 +64,57 @@ function getMcpIcon(message: string): string {
   return "🤖";
 }
 
-function log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
-  if (LEVELS[level] < LEVELS[currentLevel]) return;
+function deriveLoggerName(message: string): string | undefined {
+  if (message.startsWith("[Server]")) return "server";
+  if (message.startsWith("[Vectors]")) return "vectors";
+  if (message.startsWith("[MCP]")) return "mcp";
+  if (message.startsWith("[Dashboard]")) return "dashboard";
+  return "app";
+}
 
+function emitToStderr(level: LogLevel, message: string, context?: Record<string, unknown>) {
   const timestamp = new Date().toISOString();
-  
+
   if (message.startsWith("[MCP]")) {
     const icon = getMcpIcon(message);
     const action = message.replace("[MCP] ", "").trim();
-    const ctxStr = formatContext(context);
-    
-    // Example: 2026-03-31T07:14:38.745Z 🔍 [MCP] search repo=agentic-dashboard hits=1
-    process.stderr.write(`${timestamp} ${icon} [MCP] ${action.padEnd(7)} ${ctxStr}\n`);
-  } else {
-    const levelStr = level.toUpperCase().padEnd(5);
-    const ctxStr = context ? ` ${JSON.stringify(context)}` : "";
-    
-    // Example: 2026-03-31T07:14:38.745Z [INFO ] Model loaded successfully.
-    process.stderr.write(`${timestamp} [${levelStr}] ${message}${ctxStr}\n`);
+    process.stderr.write(`${timestamp} ${icon} [MCP] ${action.padEnd(7)}${formatContextForStderr(context)}\n`);
+    return;
   }
+
+  const levelStr = level.toUpperCase().padEnd(9);
+  process.stderr.write(`${timestamp} [${levelStr}] ${message}${formatContextForStderr(context)}\n`);
+}
+
+function sanitizeLogData(message: string, context?: Record<string, unknown>) {
+  return {
+    message,
+    ...(context ?? {}),
+  };
+}
+
+function emitToSinks(level: LogLevel, message: string, context?: Record<string, unknown>) {
+  const payload: LogSinkPayload = {
+    level,
+    logger: deriveLoggerName(message),
+    data: sanitizeLogData(message, context),
+  };
+
+  for (const sink of sinks) {
+    try {
+      sink(payload);
+    } catch {
+      // Sinks must never break the main logger path.
+    }
+  }
+}
+
+function log(level: LogMethodLevel, message: string, context?: Record<string, unknown>): void {
+  const normalizedLevel = normalizeMethodLevel(level);
+  if (LEVELS[normalizedLevel] < LEVELS[currentLevel]) return;
+
+  emitToStderr(normalizedLevel, message, context);
+  emitToSinks(normalizedLevel, message, context);
 }
 
 export const logger = {
@@ -77,21 +124,52 @@ export const logger = {
   info(message: string, context?: Record<string, unknown>): void {
     log("info", message, context);
   },
+  notice(message: string, context?: Record<string, unknown>): void {
+    log("notice", message, context);
+  },
   warn(message: string, context?: Record<string, unknown>): void {
     log("warn", message, context);
+  },
+  warning(message: string, context?: Record<string, unknown>): void {
+    log("warning", message, context);
   },
   error(message: string, context?: Record<string, unknown>): void {
     log("error", message, context);
   },
+  critical(message: string, context?: Record<string, unknown>): void {
+    log("critical", message, context);
+  },
+  alert(message: string, context?: Record<string, unknown>): void {
+    log("alert", message, context);
+  },
+  emergency(message: string, context?: Record<string, unknown>): void {
+    log("emergency", message, context);
+  },
 };
 
 export function setLogLevel(level: string): LogLevel {
-  currentLevel = parseLevel(level.toLowerCase());
+  const raw = level.toLowerCase();
+  const normalized = LEVEL_ALIASES[raw] || raw;
+  if (!(normalized in LEVELS)) {
+    const error = new Error(`Invalid log level: ${level}`) as Error & { code?: number };
+    error.code = -32602;
+    throw error;
+  }
+  currentLevel = normalized;
   return currentLevel;
 }
 
 export function getLogLevel(): LogLevel {
   return currentLevel;
+}
+
+export function addLogSink(sink: LogSink) {
+  sinks.add(sink);
+  return () => sinks.delete(sink);
+}
+
+export function clearLogSinks() {
+  sinks.clear();
 }
 
 export const LOG_LEVEL_VALUES = Object.keys(LEVELS) as LogLevel[];
