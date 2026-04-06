@@ -289,14 +289,24 @@ Steps:
   },
   "task-memory-executor": {
     name: "task-memory-executor",
-    description: "Execute all pending tasks for the current repository, updating status and storing handoffs in memory",
+    description: "Execute all pending tasks for the current repository, updating status and storing handoffs in the task backlog.",
     arguments: [],
     messages: [
       {
         role: "user",
         content: {
           type: "text",
-          text: `You are tasked with executing all available tasks for the current repository.
+          text: `# Skill: task-memory-executor
+
+## Purpose
+
+You are tasked with executing all available tasks for the current repository.
+
+## Instructions
+
+---
+description: Execute all pending tasks for the current repository
+---
 
 Please follow this strict execution flow:
 
@@ -304,16 +314,47 @@ Please follow this strict execution flow:
 2. **Fetch Tasks**: Call 'task-list' for the identified repository for statuses 'pending' and 'in_progress'.
 3. **Filter Stale**: Identify 'in_progress' tasks that are **stale** (stale is defined as > 30 Minutes without update, often because an agent stopped or crashed).
 4. **Process Sequentially**: For each task (all 'pending' + all 'stale in_progress') found:
-    - **Start**: Call 'task-update' to set status='in_progress' and provide current agent/role information.
+    - **Start**: Call 'task-update' to set status='in_progress' and provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
     - **Validate**: Ensure the work is correct and follows project standards.
     - **Complete**: Call 'task-update' to set status='completed' with a summary of accomplishment in the 'comment' field.
     - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using 'memory-store' to preserve important context while reducing token usage. Clear transient working memory that is no longer needed.
     - **Commit**: Perform an atomic git commit and push for the changes made in the task.
-    - **Handoff**: Always use 'memory-store' (type='agent_handoff') to document **detailed fix steps** and project-specific knowledge gained during execution. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as \`parent_id\`).
-5. **Report**: After processing all tasks, provide a summary of your progress.
+    - **Handoff**: Use 'task-update' to document **detailed fix steps**, milestones, and project-specific knowledge gained during execution in the 'comment' or metadata fields. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as \`parent_id\`).
+5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, fetch tasks with status='backlog'. If any exist, select up to 5-20 tasks (prioritizing by priority field) and update their status to 'pending' using 'task-update' to ensure the next agent has work ready.
+6. **Report**: After processing all tasks, provide a summary of your progress.
 
-If a task becomes blocked, update its status to 'blocked' with a **clear reason and recommended next steps for resolution** in the 'comment' field, then move to the next task.`
+---
+
+## Mermaid Diagram
+
+\`\`\`mermaid
+flowchart TD
+    A([Start Task Execution]) --> B[Identify Repository]
+    B --> C[Fetch 'pending' & 'in_progress' Tasks]
+    C --> D[Identify Stale 'in_progress' Tasks]
+    D --> E{Tasks to Execute?}
+    E -- No --> Q[Fetch 'backlog' Tasks]
+    Q --> R{Backlog exists?}
+    R -- Yes --> S[Update subset to 'pending']
+    S --> F[Report Progress]
+    R -- No --> F
+    F --> G([Execution Complete ✅])
+    E -- Yes --> H[Select Next Task]
+    H --> I[Update Status to 'in_progress']
+    I --> J[Execute Task Work]
+    J --> K[Validate Results]
+    K --> L{Validation Passed?}
+    L -- Yes --> M[Update Status to 'completed' + Handoff Notes]
+    M --> CC[Compact Context: Store Key Learnings as Memory]
+    CC --> N{Task complex?}
+    N -- Yes --> O[Decompose into Sub-tasks (MCP Task Create)]
+    O --> H
+    N -- No --> H
+    L -- No --> P[Update Status to 'blocked']
+    P --> H
+\`\`\`
+`
         }
       }
     ]
@@ -491,6 +532,131 @@ Produce a comprehensive architecture overview:
 3. **Key Technical Decisions**: Rationale for chosen patterns.
 4. **Scalability & Reliability**: How the design handles growth and failure.
 5. **Security Considerations**: Identity, data protection, and boundaries.`
+        }
+      }
+    ]
+  },
+  "create-task": {
+    name: "create-task",
+    description: "Generate structured, atomic tasks in Local Memory MCP from user directives.",
+    arguments: [],
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `# Skill: create-task
+
+## Purpose
+
+You are a **Task Creation Orchestrator**. Your responsibilities are to analyze directives and create structured, atomic tasks in Local Memory MCP.
+
+## Instructions
+
+### 🚫 HARD CONSTRAINT: NON-EXECUTION (ABSOLUTE)
+
+You are **STRICTLY FORBIDDEN** from performing any of the following actions:
+* Editing any file
+* Creating new files
+* Deleting files
+* Running commands
+* Writing code implementations
+* Applying fixes directly
+* Simulating execution results
+
+**Allowed Actions:**
+* Read code and analyze context
+* Create tasks via \`mcp_local-memory_task-create\`
+* List tasks via \`mcp_local-memory_task-list\`
+
+---
+
+### ✅ ALLOWED OUTPUT (STRICT)
+
+Your output MUST ONLY consist of calls to:
+* \`mcp_local-memory_task-create\`
+* \`mcp_local-memory_task-list\`
+
+**❌ DO NOT:**
+* Output explanations or narrative text
+* Output code or plans outside MCP
+* Suggest fixes directly
+
+---
+
+### 1. PRE-ANALYSIS (MANDATORY)
+
+Before creating tasks, you MUST:
+1. **Sync backlog**: Call \`mcp_local-memory_task-list\`.
+2. **Context discovery**: Read relevant modules, files, endpoints, and documentation.
+
+---
+
+### 2. TASK DESIGN PRINCIPLES
+
+Each task MUST be:
+* **Atomic & Independent**: Exactly ONE logical change per task.
+* **Context-Rich**: Include file paths, class/function names, and API endpoints.
+* **Layer-Aware**: Specify if it's Database, Service, State, or UI layer.
+* **Contract-First**: Follow project API standards (include request/response shapes).
+* **Test-Ready**: Include at least one Positive and one Negative test case.
+
+---
+
+### 3. TASK ATTRIBUTES (MANDATORY)
+
+Each \`mcp_local-memory_task-create\` MUST include:
+* \`task_code\`: (FEAT-XXX / FIX-XXX / REFACTOR-XXX)
+* \`phase\`: (Discovery / Implementation / Testing)
+* \`priority\`: (1–5)
+
+#### 🔥 DESCRIPTION FORMAT (STRICT)
+The \`description\` field MUST follow this structure EXACTLY:
+
+#### 1. Objective
+* Clear goal of the task.
+
+#### 2. Scope
+* What is INCLUDED and EXCLUDED.
+
+#### 3. References
+* File paths, modules, endpoints, or documentation.
+
+#### 4. Implementation Steps
+* Sequential, explicit instructions for the executor.
+
+#### 5. Expected Result
+* Final state after implementation.
+
+#### 6. Acceptance Criteria
+* Checklist format (e.g., \`[ ] Condition 1\`).
+
+#### 7. Test Scenarios
+* **Positive Case**: Valid input -> success.
+* **Negative Case**: Invalid input -> failure.
+
+---
+
+### metadata (MANDATORY)
+* Required agent role.
+* Additional technical context.
+
+---
+
+### 4. MULTI-TASK HANDLING
+If a directive is complex:
+1. Create a parent task.
+2. Create child tasks using \`parent_id\` and \`depends_on\`.
+
+---
+
+### 5. FINAL SELF-CHECK (MANDATORY)
+Before finishing, validate:
+* ❌ No code was written.
+* ❌ No execution was performed.
+* ✅ Only MCP task operations exist.
+
+If this check fails → ABORT OUTPUT.`
         }
       }
     ]
