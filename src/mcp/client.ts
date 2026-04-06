@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import path from "path";
 import { fileURLToPath } from "url";
+import { MCP_PROTOCOL_VERSION } from "../capabilities.js";
 import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -87,10 +88,17 @@ export class MCPClient {
     });
 
     await this.callWithRetry("initialize", {
-      protocolVersion: "2024-11-05",
+      protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: { name: "mcp-client", version: "1.0.0" },
     });
+
+    if (this.process?.stdin) {
+      this.process.stdin.write(JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+      }) + "\n");
+    }
 
     this.isInitialized = true;
   }

@@ -22,7 +22,7 @@ function parseLevel(raw: string | undefined): LogLevel {
   return "info";
 }
 
-const configuredLevel: LogLevel = parseLevel(process.env.LOG_LEVEL?.toLowerCase());
+let currentLevel: LogLevel = parseLevel(process.env.LOG_LEVEL?.toLowerCase());
 
 function formatContext(context?: Record<string, unknown>): string {
   if (!context || Object.keys(context).length === 0) return "";
@@ -50,7 +50,7 @@ function getMcpIcon(message: string): string {
 }
 
 function log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
-  if (LEVELS[level] < LEVELS[configuredLevel]) return;
+  if (LEVELS[level] < LEVELS[currentLevel]) return;
 
   const timestamp = new Date().toISOString();
   
@@ -84,3 +84,14 @@ export const logger = {
     log("error", message, context);
   },
 };
+
+export function setLogLevel(level: string): LogLevel {
+  currentLevel = parseLevel(level.toLowerCase());
+  return currentLevel;
+}
+
+export function getLogLevel(): LogLevel {
+  return currentLevel;
+}
+
+export const LOG_LEVEL_VALUES = Object.keys(LEVELS) as LogLevel[];

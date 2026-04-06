@@ -1,7 +1,8 @@
 import { SQLiteStore } from "../storage/sqlite.js";
+import { SessionContext } from "../mcp/session.js";
 import { logger } from "../utils/logger.js";
 
-export function listResources() {
+export function listResources(session?: SessionContext) {
   return {
     resources: [
       {
@@ -11,41 +12,74 @@ export function listResources() {
         mimeType: "application/json"
       },
       {
-        uri: "memory://index?repo={repo}",
-        name: "Project Memory Index",
-        description: "Metadata for all active memories in a specific project",
-        mimeType: "application/json"
-      },
-      {
-        uri: "memory://tags/{tag}",
-        name: "Memories by Tech Stack",
-        description: "Retrieve best practices and decisions by technology tag (e.g., filament, react)",
-        mimeType: "application/json"
-      },
-      {
-        uri: "memory://summary/{repo}",
-        name: "Project Summary",
-        description: "High-level summary of architectural decisions for a repository",
-        mimeType: "text/plain"
-      },
-      {
         uri: "memory://{id}",
         name: "Memory Detail",
         description: "Full content and statistics for a specific memory UUID",
         mimeType: "application/json"
       },
       {
-        uri: "tasks://current?repo={repo}",
-        name: "Current Tasks",
-        description: "List of all active tasks (pending, in_progress, blocked) for a specific project",
+        uri: "session://roots",
+        name: "Session Roots",
+        description: session?.roots.length
+          ? "Active workspace roots provided by the MCP client"
+          : "No active workspace roots were provided by the MCP client",
         mimeType: "application/json"
       }
     ]
   };
 }
 
-export function readResource(uri: string, db: SQLiteStore) {
+export function listResourceTemplates() {
+  return {
+    resourceTemplates: [
+      {
+        uriTemplate: "memory://index?repo={repo}",
+        name: "Project Memory Index",
+        description: "Metadata for all active memories in a specific project",
+        mimeType: "application/json"
+      },
+      {
+        uriTemplate: "memory://tags/{tag}",
+        name: "Memories by Tech Stack",
+        description: "Retrieve best practices and decisions by technology tag (e.g., filament, react)",
+        mimeType: "application/json"
+      },
+      {
+        uriTemplate: "memory://summary/{repo}",
+        name: "Project Summary",
+        description: "High-level summary of architectural decisions for a repository",
+        mimeType: "text/plain"
+      },
+      {
+        uriTemplate: "tasks://current?repo={repo}",
+        name: "Current Tasks",
+        description: "List of all active tasks (pending, in_progress, blocked) for a specific project",
+        mimeType: "application/json"
+      },
+      {
+        uriTemplate: "memory://search/{base64_query}?repo={repo}",
+        name: "Semantic Memory Search",
+        description: "Run a semantic search over memories using a base64-encoded query",
+        mimeType: "application/json"
+      }
+    ]
+  };
+}
+
+export function readResource(uri: string, db: SQLiteStore, session?: SessionContext) {
   logger.info("[MCP] resource.read", { uri });
+
+  if (uri === "session://roots") {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ roots: session?.roots ?? [] }, null, 2)
+        }
+      ]
+    };
+  }
 
   // 6. Current Tasks: tasks://current?repo={repo}
   if (uri.startsWith("tasks://current?")) {

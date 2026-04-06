@@ -1,4 +1,6 @@
-import { listResources, readResource } from "./resources/index.js";
+import path from "node:path";
+import { listResources, listResourceTemplates, readResource } from "./resources/index.js";
+import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./mcp/session.js";
 import { logger } from "./utils/logger.js";
 import { PROMPTS } from "./prompts/registry.js";
 import { TOOL_DEFINITIONS } from "./tools/schemas.js";
@@ -8,17 +10,34 @@ import { handleMemoryStore } from "./tools/memory.store.js";
 import { handleMemoryUpdate } from "./tools/memory.update.js";
 import { handleMemorySearch } from "./tools/memory.search.js";
 import { handleMemorySummarize } from "./tools/memory.summarize.js";
+import { handleMemorySynthesize } from "./tools/memory.synthesize.js";
 import { handleMemoryDelete } from "./tools/memory.delete.js";
 import { handleMemoryBulkDelete } from "./tools/memory.bulk-delete.js";
 import { handleMemoryRecap } from "./tools/memory.recap.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
-import { handleTaskList, handleTaskCreate, handleTaskUpdate, handleTaskDelete } from "./tools/task.manage.js";
+import {
+  handleTaskList,
+  handleTaskCreate,
+  handleTaskCreateInteractive,
+  handleTaskUpdate,
+  handleTaskDelete,
+} from "./tools/task.manage.js";
 import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
+import { SamplingRequestHandler } from "./mcp/sampling.js";
+import { ElicitationRequestHandler } from "./mcp/elicitation.js";
+import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger.js";
 
 export function createRouter(
   db: SQLiteStore,
-  vectors: VectorStore
+  vectors: VectorStore,
+  options?: {
+    getSessionContext?: () => SessionContext;
+    sampleMessage?: SamplingRequestHandler;
+    elicit?: ElicitationRequestHandler;
+  }
 ): (method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void) => Promise<any> {
+  const getSessionContext = options?.getSessionContext;
+
   async function handleMethod(method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void): Promise<any> {
     switch (method) {
       // ---- tools ----
@@ -30,14 +49,28 @@ export function createRouter(
 
       // ---- resources ----
       case "resources/list":
-        return listResources();
+        return listResources(getSessionContext?.());
+
+      case "resources/templates/list":
+        return listResourceTemplates();
 
       case "resources/read":
-        return readResource(params?.uri, db);
+        return readResource(params?.uri, db, getSessionContext?.());
 
       // ---- prompts ----
       case "prompts/list":
         return { prompts: Object.values(PROMPTS) };
+
+      case "logging/setLevel": {
+        const requestedLevel = typeof params?.level === "string" ? params.level : "";
+        const previousLevel = getLogLevel();
+        const level = setLogLevel(requestedLevel);
+        return {
+          level,
+          supportedLevels: LOG_LEVEL_VALUES,
+          previousLevel,
+        };
+      }
 
       case "prompts/get": {
         const prompt = PROMPTS[params?.name as keyof typeof PROMPTS];
@@ -71,7 +104,8 @@ export function createRouter(
   }
 
   async function handleToolCall(params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void): Promise<any> {
-    const { name, arguments: args } = params;
+    const { name } = params;
+    const args = normalizeToolArguments(params?.arguments, getSessionContext?.());
     // Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
     const toolName = String(name).replace(/\./g, "-");
 
@@ -103,6 +137,14 @@ export function createRouter(
         result = await handleMemorySummarize(args, db);
         break;
 
+      case "memory-synthesize":
+        result = await handleMemorySynthesize(args, db, vectors, {
+          session: getSessionContext?.(),
+          sampleMessage: options?.sampleMessage,
+          elicit: options?.elicit,
+        });
+        break;
+
       case "memory-delete":
         result = await handleMemoryDelete(args, db, vectors);
         break;
@@ -113,6 +155,13 @@ export function createRouter(
 
       case "task-create":
         result = await handleTaskCreate(args, db);
+        break;
+
+      case "task-create-interactive":
+        result = await handleTaskCreateInteractive(args, db, {
+          session: getSessionContext?.(),
+          elicit: options?.elicit,
+        });
         break;
 
       case "task-update":
@@ -162,4 +211,52 @@ export function createRouter(
   }
 
   return handleMethod;
+}
+
+function normalizeToolArguments(args: any, session?: SessionContext): any {
+  if (!args || typeof args !== "object") {
+    return args;
+  }
+
+  const nextArgs = {
+    ...args,
+    scope: args.scope ? { ...args.scope } : undefined,
+  };
+
+  validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
+  validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
+
+  if (!nextArgs.repo) {
+    nextArgs.repo = inferRepoFromSession(session);
+  }
+
+  if (nextArgs.scope && !nextArgs.scope.repo) {
+    nextArgs.scope.repo = nextArgs.repo ?? inferRepoFromSession(session);
+  }
+
+  if (typeof nextArgs.current_file_path === "string" && nextArgs.scope) {
+    const containingRoot = path.isAbsolute(nextArgs.current_file_path)
+      ? findContainingRoot(nextArgs.current_file_path, session)
+      : null;
+
+    if (containingRoot) {
+      const relativePath = path.relative(containingRoot, path.resolve(nextArgs.current_file_path));
+      const relativeFolder = path.dirname(relativePath);
+      if (relativeFolder && relativeFolder !== "." && !nextArgs.scope.folder) {
+        nextArgs.scope.folder = relativeFolder;
+      }
+    }
+  }
+
+  return nextArgs;
+}
+
+function validateRootBoundPath(value: unknown, field: string, session?: SessionContext): void {
+  if (typeof value !== "string" || !path.isAbsolute(value)) {
+    return;
+  }
+
+  if (!isPathWithinRoots(value, session)) {
+    throw new Error(`${field} must stay within the active MCP roots`);
+  }
 }

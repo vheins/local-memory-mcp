@@ -16,24 +16,24 @@ try {
 }
 
 // MCP Server Capabilities
+export const MCP_PROTOCOL_VERSION = "2025-11-25";
+
 export const CAPABILITIES = {
   serverInfo: {
     name: "mcp-memory-local",
     version: pkgVersion
   },
   capabilities: {
+    logging: {},
     resources: {
-      list: true,
-      read: true,
-      templates: true
+      subscribe: false,
+      listChanged: true
     },
     tools: {
-      list: true,
-      call: true
+      listChanged: false
     },
     prompts: {
-      list: true,
-      get: true
+      listChanged: false
     }
   }
 };

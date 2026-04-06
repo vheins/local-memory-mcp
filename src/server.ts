@@ -3,7 +3,13 @@ import readline from "node:readline";
 import { createRouter } from "./router.js";
 import { SQLiteStore } from "./storage/sqlite.js";
 import { RealVectorStore } from "./storage/vectors.js";
-import { CAPABILITIES } from "./capabilities.js";
+import { CAPABILITIES, MCP_PROTOCOL_VERSION } from "./capabilities.js";
+import {
+  createSessionContext,
+  extractRootsFromResult,
+  updateSessionFromInitialize,
+  updateSessionRoots,
+} from "./mcp/session.js";
 import { logger } from "./utils/logger.js";
 import fs from "fs";
 import path from "path";
@@ -67,15 +73,28 @@ process.stderr.on('error', (err: any) => {
 });
 
 // Wire router with injected storage
-const handleMethod = createRouter(db, vectors);
+const session = createSessionContext();
+const handleMethod = createRouter(db, vectors, {
+  getSessionContext: () => session,
+  sampleMessage: (params) => requestClient("sampling/createMessage", params) as Promise<any>,
+  elicit: (params) => requestClient("elicitation/create", params) as Promise<any>,
+});
 
 // Cleanup on exit
 process.on("SIGINT", () => {
+  for (const pending of pendingClientRequests.values()) {
+    pending.reject(new Error("Server stopped"));
+  }
+  pendingClientRequests.clear();
   db.close();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
+  for (const pending of pendingClientRequests.values()) {
+    pending.reject(new Error("Server stopped"));
+  }
+  pendingClientRequests.clear();
   db.close();
   process.exit(0);
 });
@@ -97,6 +116,53 @@ function reply(payload: unknown) {
 
 let isInitialized = false;
 const activeRequests = new Map<string | number, AbortController>();
+const pendingClientRequests = new Map<string | number, {
+  method: string;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}>();
+let outgoingRequestId = 0;
+
+function requestClient(method: string, params: unknown = {}) {
+  const id = `server:${++outgoingRequestId}`;
+
+  reply({
+    jsonrpc: "2.0",
+    id,
+    method,
+    params,
+  });
+
+  return new Promise((resolve, reject) => {
+    pendingClientRequests.set(id, { method, resolve, reject });
+  });
+}
+
+async function refreshRoots(trigger: string) {
+  if (!session.supportsRoots) return;
+
+  try {
+    const result = await requestClient("roots/list");
+    const changed = updateSessionRoots(session, extractRootsFromResult(result));
+    logger.info("[Server] Refreshed client roots", {
+      trigger,
+      count: session.roots.length,
+      changed,
+    });
+
+    if (changed) {
+      reply({
+        jsonrpc: "2.0",
+        method: "notifications/resources/list_changed",
+      });
+    }
+  } catch (error) {
+    logger.warn("[Server] Failed to refresh client roots", {
+      trigger,
+      error: String(error),
+    });
+  }
+}
 
 rl.on("line", async (line) => {
   if (!line.trim()) return;
@@ -111,13 +177,26 @@ rl.on("line", async (line) => {
   const { id, method, params } = msg;
   const isNotification = id === undefined || id === null;
 
+  if ((method === undefined || method === null) && id !== undefined && pendingClientRequests.has(id)) {
+    const pending = pendingClientRequests.get(id)!;
+    pendingClientRequests.delete(id);
+
+    if (msg.error) {
+      pending.reject(new Error(msg.error.message || `Client request failed: ${pending.method}`));
+    } else {
+      pending.resolve(msg.result);
+    }
+    return;
+  }
+
   // --- initialize (Request) ---
   if (method === "initialize" && !isNotification) {
+    updateSessionFromInitialize(session, params);
     reply({
       jsonrpc: "2.0",
       id,
       result: {
-        protocolVersion: "2024-11-05",
+        protocolVersion: MCP_PROTOCOL_VERSION,
         serverInfo: CAPABILITIES.serverInfo,
         capabilities: CAPABILITIES.capabilities
       }
@@ -131,6 +210,10 @@ rl.on("line", async (line) => {
     if (method === "notifications/initialized") {
         isInitialized = true;
         logger.debug("[Server] Client initialized");
+        void refreshRoots("initialized");
+    } else if (method === "notifications/roots/list_changed") {
+        logger.debug("[Server] Client roots changed");
+        void refreshRoots("roots/list_changed");
     } else if (method === "notifications/cancelled") {
         const requestId = params?.requestId;
         if (requestId !== undefined && activeRequests.has(requestId)) {
@@ -170,9 +253,22 @@ rl.on("line", async (line) => {
   const abortController = new AbortController();
   activeRequests.set(id, abortController);
 
+  const progressToken = params?._meta?.progressToken;
+  const onProgress = progressToken !== undefined ? (progress: number, total?: number) => {
+    reply({
+      jsonrpc: "2.0",
+      method: "notifications/progress",
+      params: {
+        progressToken,
+        progress,
+        total
+      }
+    });
+  } : undefined;
+
   // --- route request ---
   try {
-    const result = await handleMethod(method, params, abortController.signal);
+    const result = await handleMethod(method, params, abortController.signal, onProgress);
 
     if (!abortController.signal.aborted) {
       reply({

@@ -26,6 +26,7 @@ export type McpResponse = {
   content: McpContent[];
   isError?: boolean;
   data?: any;
+  structuredContent?: unknown;
 };
 
 export function createMcpResponse(
@@ -92,7 +93,8 @@ export function createMcpResponse(
 
   return { 
     content,
-    data 
+    data,
+    structuredContent: data
   };
 }
 
@@ -104,6 +106,7 @@ export function createTextOnlyResponse(text: string): McpResponse {
         text,
       },
     ],
+    structuredContent: { text },
   };
 }
 

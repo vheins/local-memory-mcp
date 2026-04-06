@@ -1,7 +1,19 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
-import { TaskListSchema, TaskCreateSchema, TaskUpdateSchema, TaskDeleteSchema } from "./schemas.js";
+import { inferRepoFromSession, SessionContext } from "../mcp/session.js";
+import {
+  ElicitationRequestHandler,
+  extractAcceptedElicitationContent,
+} from "../mcp/elicitation.js";
+import { createMcpResponse } from "../utils/mcp-response.js";
+import {
+  TaskListSchema,
+  TaskCreateSchema,
+  TaskCreateInteractiveSchema,
+  TaskUpdateSchema,
+  TaskDeleteSchema,
+} from "./schemas.js";
 import { handleMemoryStore } from "./memory.store.js";
 
 function deriveTaskStatusTimestamps(
@@ -182,6 +194,145 @@ export async function handleTaskCreate(
     }],
     isError: false
   };
+}
+
+type TaskCreateInteractiveOptions = {
+  session?: SessionContext;
+  elicit?: ElicitationRequestHandler;
+};
+
+export async function handleTaskCreateInteractive(
+  args: any,
+  storage: SQLiteStore,
+  options: TaskCreateInteractiveOptions = {},
+) {
+  const partialTaskData = TaskCreateInteractiveSchema.parse(args ?? {});
+  const inferredRepo = partialTaskData.repo ?? inferRepoFromSession(options.session);
+  const draft = {
+    ...partialTaskData,
+    repo: inferredRepo,
+  };
+
+  const requestedSchema = buildMissingTaskSchema(draft);
+  let completedDraft = draft;
+
+  if (Object.keys(requestedSchema.properties).length > 0) {
+    if (!options.session?.supportsElicitationForm || !options.elicit) {
+      throw new Error("Client does not advertise MCP elicitation form support");
+    }
+
+    const elicited = extractAcceptedElicitationContent(await options.elicit({
+      mode: "form",
+      message: "Lengkapi data task yang belum ada untuk membuat task baru.",
+      requestedSchema,
+    }));
+
+    completedDraft = {
+      ...draft,
+      ...elicited,
+    };
+  }
+
+  const result = await handleTaskCreate({
+    ...completedDraft,
+    status: completedDraft.status ?? "backlog",
+    priority: completedDraft.priority ?? 3,
+  }, storage);
+
+  const parsedTask = TaskCreateSchema.parse({
+    ...completedDraft,
+    status: completedDraft.status ?? "backlog",
+    priority: completedDraft.priority ?? 3,
+  });
+
+  return createMcpResponse(
+    {
+      repo: parsedTask.repo,
+      task_code: parsedTask.task_code,
+      phase: parsedTask.phase,
+      title: parsedTask.title,
+      status: parsedTask.status,
+      priority: parsedTask.priority,
+    },
+    result.content[0]?.type === "text" ? result.content[0].text : `Task created: [${parsedTask.task_code}] ${parsedTask.title}`,
+  );
+}
+
+function buildMissingTaskSchema(task: Record<string, any>) {
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+
+  addRequiredStringField(properties, required, task, "repo", {
+    title: "Repository",
+    description: "Nama repository untuk task ini.",
+    minLength: 1,
+  });
+  addRequiredStringField(properties, required, task, "task_code", {
+    title: "Task Code",
+    description: "Kode task yang unik di repository ini.",
+    minLength: 1,
+  });
+  addRequiredStringField(properties, required, task, "phase", {
+    title: "Phase",
+    description: "Fase kerja atau milestone task.",
+    minLength: 1,
+  });
+  addRequiredStringField(properties, required, task, "title", {
+    title: "Title",
+    description: "Judul singkat task.",
+    minLength: 3,
+    maxLength: 100,
+  });
+  addRequiredStringField(properties, required, task, "description", {
+    title: "Description",
+    description: "Deskripsi task yang cukup jelas untuk dikerjakan.",
+    minLength: 1,
+  });
+
+  if (!task.status) {
+    properties.status = {
+      type: "string",
+      title: "Status",
+      description: "Status awal task.",
+      enum: ["backlog", "pending"],
+      default: "backlog",
+    };
+  }
+
+  if (task.priority === undefined) {
+    properties.priority = {
+      type: "integer",
+      title: "Priority",
+      description: "Prioritas task dari 1 sampai 5.",
+      minimum: 1,
+      maximum: 5,
+      default: 3,
+    };
+  }
+
+  return {
+    type: "object" as const,
+    properties,
+    required,
+  };
+}
+
+function addRequiredStringField(
+  properties: Record<string, unknown>,
+  required: string[],
+  task: Record<string, any>,
+  field: string,
+  schema: Record<string, unknown>,
+) {
+  if (typeof task[field] === "string" && task[field].trim()) {
+    return;
+  }
+
+  properties[field] = {
+    type: "string",
+    ...schema,
+  };
+  required.push(field);
 }
 
 export async function handleTaskUpdate(

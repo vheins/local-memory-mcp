@@ -2,8 +2,9 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { readResource } from "./index.js";
+import { readResource, listResourceTemplates } from "./index.js";
 import { MemoryEntry } from "../types.js";
+import { createSessionContext, updateSessionRoots } from "../mcp/session.js";
 
 function makeEntry(id: string, repo: string): MemoryEntry {
   return {
@@ -137,5 +138,32 @@ describe("readResource memory://index", () => {
       ),
       { numRuns: 100 }
     );
+  });
+});
+
+describe("MCP resource templates and session resources", () => {
+  it("lists parameterized resources via resources/templates/list", () => {
+    const result = listResourceTemplates();
+    const templates = result.resourceTemplates.map((entry) => entry.uriTemplate);
+
+    expect(templates).toContain("memory://index?repo={repo}");
+    expect(templates).toContain("tasks://current?repo={repo}");
+    expect(templates).toContain("memory://search/{base64_query}?repo={repo}");
+  });
+
+  it("returns active session roots as a concrete resource", () => {
+    const db = new SQLiteStore(":memory:");
+    const session = createSessionContext();
+    updateSessionRoots(session, [
+      { uri: "file:///workspace/project-a", name: "project-a" },
+      { uri: "file:///workspace/project-b" },
+    ]);
+
+    const result = readResource("session://roots", db, session);
+    const payload = JSON.parse(result.contents[0].text);
+
+    expect(payload.roots).toHaveLength(2);
+    expect(payload.roots[0].name).toBe("project-a");
+    db.close();
   });
 });

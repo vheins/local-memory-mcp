@@ -82,6 +82,17 @@ export const MemorySummarizeSchema = z.object({
   signals: z.array(z.string().max(200)).min(1)
 });
 
+export const MemorySynthesizeSchema = z.object({
+  repo: z.string().min(1).optional(),
+  objective: z.string().min(5),
+  current_file_path: z.string().optional(),
+  include_summary: z.boolean().default(true),
+  include_tasks: z.boolean().default(true),
+  use_tools: z.boolean().default(true),
+  max_iterations: z.number().int().min(1).max(5).default(3),
+  max_tokens: z.number().int().min(128).max(4000).default(1200)
+});
+
 export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
 export const TaskPrioritySchema = z.number().min(1).max(5);
 
@@ -101,6 +112,10 @@ export const TaskCreateSchema = z.object({
   parent_id: z.string().uuid().optional(),
   depends_on: z.string().uuid().optional(),
   est_tokens: z.number().int().min(0).optional()
+});
+
+export const TaskCreateInteractiveSchema = TaskCreateSchema.partial().extend({
+  repo: z.string().min(1).optional(),
 });
 
 export const TaskUpdateSchema = z.object({
@@ -177,8 +192,87 @@ export const TaskDeleteSchema = z.object({
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
   {
+    name: "memory-synthesize",
+    description: "Use client sampling to synthesize a grounded answer from local memory and tasks. Best for project briefings, tradeoff summaries, and context-aware answers.",
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository name. Optional when a single MCP root is active." },
+        objective: { type: "string", minLength: 5, description: "Question or synthesis objective." },
+        current_file_path: { type: "string", description: "Optional absolute file path for workspace-local grounding." },
+        include_summary: { type: "boolean", default: true },
+        include_tasks: { type: "boolean", default: true },
+        use_tools: { type: "boolean", default: true, description: "Allow the sampled model to call local memory/task tools during synthesis when the client supports sampling.tools." },
+        max_iterations: { type: "number", minimum: 1, maximum: 5, default: 3 },
+        max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 }
+      },
+      required: ["objective"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        objective: { type: "string" },
+        answer: { type: "string" },
+        model: { type: "string" },
+        stopReason: { type: "string" },
+        iterations: { type: "number" },
+        toolCalls: { type: "number" }
+      },
+      required: ["repo", "objective", "answer", "iterations", "toolCalls"]
+    }
+  },
+  {
+    name: "task-create-interactive",
+    description: "Create a task with MCP elicitation fallback for any missing required fields. Best when an agent knows a task is needed but still needs user confirmation for repo, title, or phase.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository name. Optional when it can be inferred from MCP roots or elicited from the user." },
+        task_code: { type: "string" },
+        phase: { type: "string" },
+        title: { type: "string", minLength: 3, maxLength: 100 },
+        description: { type: "string", minLength: 1 },
+        status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
+        priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+        agent: { type: "string" },
+        role: { type: "string" },
+        doc_path: { type: "string" }
+      }
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        task_code: { type: "string" },
+        phase: { type: "string" },
+        title: { type: "string" },
+        status: { type: "string" },
+        priority: { type: "number" }
+      },
+      required: ["repo", "task_code", "phase", "title", "status", "priority"]
+    }
+  },
+  {
     name: "memory-store",
     description: "Store a new memory entry. Keep 'title' concise and human-readable; do not embed agent/role/date metadata in the title. Put auxiliary context into 'metadata'. Use 'tags' for tech-stack and 'is_global' for universal rules.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -244,6 +338,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-acknowledge",
     description: "Acknowledge the use of a memory or report its irrelevance/contradiction. Mandatory after using memory to generate code.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -257,6 +356,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-update",
     description: "Update an existing memory entry. Keep 'title' concise and move agent/role/date or claim context into 'metadata' instead of the title.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -277,6 +382,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-search",
     description: "Search for relevant memories. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -303,6 +413,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-summarize",
     description: "Update the summary for a repository",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -320,6 +435,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-delete",
     description: "Soft-delete a memory entry (remove from active use)",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -331,6 +452,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-bulk-delete",
     description: "Delete multiple memory entries at once.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -343,6 +470,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-recap",
     description: "Get the last 20 memories from a repository for context",
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -367,6 +499,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-create",
     description: "Create a new task in a repository. task_code must be unique within the repository. 'est_tokens' is optional during planning/creation.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -392,6 +529,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-update",
     description: "Update an existing task. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -420,6 +562,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-delete",
     description: "Delete a task from a repository.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -432,6 +580,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-list",
     description: "List or search tasks for a repository. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks.",
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -471,6 +624,11 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-search",
     description: "Search for tasks by code, title, or description across any status.",
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -506,6 +664,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-bulk-manage",
     description: "Perform bulk operations on tasks (e.g., bulk creation, bulk deletion). For bulk_create, 'est_tokens' is optional and can be filled later when the task is completed.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+      destructiveHint: false,
+      openWorldHint: false
+    },
     inputSchema: {
       type: "object",
       properties: {

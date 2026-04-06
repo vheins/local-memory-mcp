@@ -4,6 +4,7 @@ import * as fc from "fast-check";
 import { createRouter } from "./router.js";
 import { SQLiteStore } from "./storage/sqlite.js";
 import { VectorStore } from "./types.js";
+import { createSessionContext, updateSessionRoots } from "./mcp/session.js";
 
 /**
  * Property 11: createRouter() menggunakan storage yang diberikan
@@ -40,6 +41,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       checkConflicts: vi.fn().mockResolvedValue(null),
       getTasksByRepo: vi.fn().mockReturnValue([]),
       getTasksByMultipleStatuses: vi.fn().mockReturnValue([]),
+      getTaskStats: vi.fn().mockReturnValue({ todo: 0 }),
+      isTaskCodeDuplicate: vi.fn().mockReturnValue(false),
       insertTask: vi.fn(),
       updateTask: vi.fn(),
       deleteTask: vi.fn(),
@@ -150,5 +153,188 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
     // Each router closes over its own db
     // (verified by the property tests above that each mock is called independently)
+  });
+
+  it("supports resources/templates/list", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    const result = await router("resources/templates/list", {});
+    const templates = result.resourceTemplates.map((entry: any) => entry.uriTemplate);
+
+    expect(templates).toContain("memory://index?repo={repo}");
+    expect(templates).toContain("tasks://current?repo={repo}");
+  });
+
+  it("rejects absolute tool paths outside active roots", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    updateSessionRoots(session, [{ uri: "file:///workspace/repo" }]);
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+    });
+
+    await expect(router("tools/call", {
+      name: "memory-search",
+      arguments: {
+        query: "test query",
+        repo: "test-repo",
+        current_file_path: "/tmp/outside.ts",
+      },
+    })).rejects.toThrow("current_file_path must stay within the active MCP roots");
+  });
+
+  it("supports logging/setLevel utility", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    const result = await router("logging/setLevel", { level: "debug" });
+    expect(result.level).toBe("debug");
+    expect(result.supportedLevels).toContain("info");
+  });
+
+  it("memory-synthesize uses sampling when the client supports it", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    session.supportsSampling = true;
+    const sampleMessage = vi.fn().mockResolvedValue({
+      role: "assistant",
+      content: { type: "text", text: "Grounded answer from sampling." },
+      model: "test-model",
+      stopReason: "endTurn",
+    });
+
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+      sampleMessage,
+    });
+
+    const result = await router("tools/call", {
+      name: "memory-synthesize",
+      arguments: { repo: "test-repo", objective: "Summarize the project state" },
+    });
+
+    expect(sampleMessage).toHaveBeenCalledTimes(1);
+    expect(result.data.answer).toContain("Grounded answer");
+    expect(result.structuredContent.answer).toContain("Grounded answer");
+  });
+
+  it("memory-synthesize supports a multi-turn sampling tool loop", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    session.supportsSampling = true;
+    session.supportsSamplingTools = true;
+
+    const sampleMessage = vi.fn()
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: [{
+          type: "tool_use",
+          id: "call_1",
+          name: "memory_recap",
+          input: { repo: "test-repo", limit: 3 },
+        }],
+        stopReason: "toolUse",
+      })
+      .mockResolvedValueOnce({
+        role: "assistant",
+        content: { type: "text", text: "Final grounded answer after tool use." },
+        model: "test-model",
+        stopReason: "endTurn",
+      });
+
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+      sampleMessage,
+    });
+
+    const result = await router("tools/call", {
+      name: "memory-synthesize",
+      arguments: {
+        repo: "test-repo",
+        objective: "Explain the latest architecture decisions",
+        max_iterations: 3,
+      },
+    });
+
+    expect(sampleMessage).toHaveBeenCalledTimes(2);
+    expect(result.data.toolCalls).toBe(1);
+    expect(result.data.iterations).toBe(2);
+  });
+
+  it("memory-synthesize elicits the repo when roots cannot infer it", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    session.supportsSampling = true;
+    session.supportsElicitation = true;
+    session.supportsElicitationForm = true;
+
+    const sampleMessage = vi.fn().mockResolvedValue({
+      role: "assistant",
+      content: { type: "text", text: "Synthesized after repo elicitation." },
+      model: "test-model",
+      stopReason: "endTurn",
+    });
+    const elicit = vi.fn().mockResolvedValue({
+      action: "accept",
+      content: { repo: "elicited-repo" },
+    });
+
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+      sampleMessage,
+      elicit,
+    });
+
+    const result = await router("tools/call", {
+      name: "memory-synthesize",
+      arguments: { objective: "Summarize the repo using elicitation" },
+    });
+
+    expect(elicit).toHaveBeenCalledTimes(1);
+    expect(sampleMessage).toHaveBeenCalledTimes(1);
+    expect(result.data.repo).toBe("elicited-repo");
+  });
+
+  it("task-create-interactive elicits missing task fields and creates the task", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    session.supportsElicitation = true;
+    session.supportsElicitationForm = true;
+
+    const elicit = vi.fn().mockResolvedValue({
+      action: "accept",
+      content: {
+        repo: "interactive-repo",
+        task_code: "TASK-101",
+        phase: "implementation",
+        title: "Implement elicitation flow",
+        description: "Add elicitation-backed task creation flow",
+        status: "pending",
+        priority: 4,
+      },
+    });
+
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+      elicit,
+    });
+
+    const result = await router("tools/call", {
+      name: "task-create-interactive",
+      arguments: {},
+    });
+
+    expect(elicit).toHaveBeenCalledTimes(1);
+    expect(mockDb.insertTask).toHaveBeenCalledTimes(1);
+    expect(result.data.repo).toBe("interactive-repo");
+    expect(result.data.task_code).toBe("TASK-101");
   });
 });
