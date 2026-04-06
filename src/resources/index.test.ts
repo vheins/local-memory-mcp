@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { readResource, listResourceTemplates } from "./index.js";
+import { readResource, listResourceTemplates, listResources } from "./index.js";
 import { MemoryEntry } from "../types.js";
 import { createSessionContext, updateSessionRoots } from "../mcp/session.js";
 
@@ -142,9 +142,29 @@ describe("readResource memory://index", () => {
 });
 
 describe("MCP resource templates and session resources", () => {
+  it("supports resource list pagination with nextCursor", () => {
+    const session = createSessionContext();
+    const firstPage = listResources(session, { limit: 2 });
+    const secondPage = listResources(session, { limit: 2, cursor: firstPage.nextCursor });
+
+    expect(firstPage.resources).toHaveLength(2);
+    expect(firstPage.nextCursor).toBeTruthy();
+    expect(secondPage.resources).toHaveLength(1);
+  });
+
+  it("supports resource template pagination with nextCursor", () => {
+    const firstPage = listResourceTemplates({ limit: 2 });
+    const secondPage = listResourceTemplates({ limit: 2, cursor: firstPage.nextCursor });
+    const secondTemplates = secondPage.resourceTemplates as Array<{ uriTemplate: string }>;
+
+    expect(firstPage.resourceTemplates).toHaveLength(2);
+    expect(firstPage.nextCursor).toBeTruthy();
+    expect(secondTemplates.length).toBeGreaterThan(0);
+  });
+
   it("lists parameterized resources via resources/templates/list", () => {
     const result = listResourceTemplates();
-    const templates = result.resourceTemplates.map((entry) => entry.uriTemplate);
+    const templates = (result.resourceTemplates as Array<{ uriTemplate: string }>).map((entry) => entry.uriTemplate);
 
     expect(templates).toContain("memory://index?repo={repo}");
     expect(templates).toContain("tasks://current?repo={repo}");
@@ -165,5 +185,30 @@ describe("MCP resource templates and session resources", () => {
     expect(payload.roots).toHaveLength(2);
     expect(payload.roots[0].name).toBe("project-a");
     db.close();
+  });
+
+  it("adds annotations and size metadata to concrete resource content", () => {
+    const db = new SQLiteStore(":memory:");
+    const result = readResource("memory://summary/repo-a", db);
+    const content = result.contents[0];
+
+    expect(content.annotations.priority).toBeGreaterThan(0.5);
+    expect(content.size).toBeGreaterThan(0);
+    db.close();
+  });
+
+  it("throws MCP resource not found error code for unknown resources", () => {
+    const db = new SQLiteStore(":memory:");
+
+    expect(() => readResource("memory://missing/resource", db)).toThrowError(/Unknown resource URI/);
+
+    try {
+      readResource("memory://missing/resource", db);
+    } catch (error: any) {
+      expect(error.code).toBe(-32002);
+      expect(error.data.uri).toBe("memory://missing/resource");
+    } finally {
+      db.close();
+    }
   });
 });

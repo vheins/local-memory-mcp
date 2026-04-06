@@ -27,14 +27,17 @@ import { SamplingRequestHandler } from "./mcp/sampling.js";
 import { ElicitationRequestHandler } from "./mcp/elicitation.js";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger.js";
 
+type RouterOptions = {
+  getSessionContext?: () => SessionContext;
+  sampleMessage?: SamplingRequestHandler;
+  elicit?: ElicitationRequestHandler;
+  onResourcesMutated?: (uris: string[]) => void;
+};
+
 export function createRouter(
   db: SQLiteStore,
   vectors: VectorStore,
-  options?: {
-    getSessionContext?: () => SessionContext;
-    sampleMessage?: SamplingRequestHandler;
-    elicit?: ElicitationRequestHandler;
-  }
+  options?: RouterOptions
 ): (method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void) => Promise<any> {
   const getSessionContext = options?.getSessionContext;
 
@@ -49,10 +52,10 @@ export function createRouter(
 
       // ---- resources ----
       case "resources/list":
-        return listResources(getSessionContext?.());
+        return listResources(getSessionContext?.(), params);
 
       case "resources/templates/list":
-        return listResourceTemplates();
+        return listResourceTemplates(params);
 
       case "resources/read":
         return readResource(params?.uri, db, getSessionContext?.());
@@ -185,10 +188,45 @@ export function createRouter(
       logger.error("Failed to log action", { toolName, error: String(e) });
     }
 
+    const affectedResources = collectAffectedResourceUris(toolName, args, result);
+    if (affectedResources.length > 0) {
+      options?.onResourcesMutated?.(affectedResources);
+    }
+
     return result;
   }
 
   return handleMethod;
+}
+
+function collectAffectedResourceUris(toolName: string, args: any, result: any): string[] {
+  const repo = args?.repo || args?.scope?.repo || result?.data?.repo;
+  const uris = new Set<string>();
+
+  const touchesMemory = toolName.startsWith("memory-")
+    || toolName === "task-update"
+    || toolName === "task-bulk-manage"
+    || toolName === "task-delete";
+  const touchesTasks = toolName.startsWith("task-");
+
+  if (touchesMemory) {
+    uris.add("memory://index");
+    if (repo) {
+      uris.add(`memory://index?repo=${encodeURIComponent(repo)}`);
+      uris.add(`memory://summary/${repo}`);
+    }
+  }
+
+  if (touchesTasks && repo) {
+    uris.add(`tasks://current?repo=${encodeURIComponent(repo)}`);
+  }
+
+  const memoryId = args?.id || args?.memory_id || result?.data?.id;
+  if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
+    uris.add(`memory://${memoryId}`);
+  }
+
+  return [...uris];
 }
 
 function normalizeToolArguments(args: any, session?: SessionContext): any {

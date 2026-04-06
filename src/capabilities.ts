@@ -26,7 +26,7 @@ export const CAPABILITIES = {
   capabilities: {
     logging: {},
     resources: {
-      subscribe: false,
+      subscribe: true,
       listChanged: true
     },
     tools: {

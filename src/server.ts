@@ -74,10 +74,12 @@ process.stderr.on('error', (err: any) => {
 
 // Wire router with injected storage
 const session = createSessionContext();
+const resourceSubscriptions = new Set<string>();
 const handleMethod = createRouter(db, vectors, {
   getSessionContext: () => session,
   sampleMessage: (params) => requestClient("sampling/createMessage", params) as Promise<any>,
   elicit: (params) => requestClient("elicitation/create", params) as Promise<any>,
+  onResourcesMutated: (uris) => notifyUpdatedResources(uris),
 });
 
 // Cleanup on exit
@@ -168,6 +170,24 @@ async function refreshRoots(trigger: string) {
   }
 }
 
+function notifyUpdatedResources(uris: string[]) {
+  const seen = new Set<string>();
+  for (const uri of uris) {
+    if (seen.has(uri)) continue;
+    seen.add(uri);
+
+    if (!resourceSubscriptions.has(uri)) {
+      continue;
+    }
+
+    reply({
+      jsonrpc: "2.0",
+      method: "notifications/resources/updated",
+      params: { uri },
+    });
+  }
+}
+
 rl.on("line", async (line) => {
   if (!line.trim()) return;
 
@@ -237,6 +257,52 @@ rl.on("line", async (line) => {
       jsonrpc: "2.0",
       id,
       result: {}
+    });
+    return;
+  }
+
+  if (method === "resources/subscribe") {
+    const uri = typeof params?.uri === "string" ? params.uri : "";
+    if (!uri) {
+      reply({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: -32602,
+          message: "resources/subscribe requires a uri",
+        }
+      });
+      return;
+    }
+
+    resourceSubscriptions.add(uri);
+    reply({
+      jsonrpc: "2.0",
+      id,
+      result: {},
+    });
+    return;
+  }
+
+  if (method === "resources/unsubscribe") {
+    const uri = typeof params?.uri === "string" ? params.uri : "";
+    if (!uri) {
+      reply({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: -32602,
+          message: "resources/unsubscribe requires a uri",
+        }
+      });
+      return;
+    }
+
+    resourceSubscriptions.delete(uri);
+    reply({
+      jsonrpc: "2.0",
+      id,
+      result: {},
     });
     return;
   }
