@@ -18,15 +18,15 @@ import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 export function createRouter(
   db: SQLiteStore,
   vectors: VectorStore
-): (method: string, params: any, signal?: AbortSignal) => Promise<any> {
-  async function handleMethod(method: string, params: any, signal?: AbortSignal): Promise<any> {
+): (method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void) => Promise<any> {
+  async function handleMethod(method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void): Promise<any> {
     switch (method) {
       // ---- tools ----
       case "tools/list":
         return { tools: TOOL_DEFINITIONS };
 
       case "tools/call":
-        return await handleToolCall(params, signal);
+        return await handleToolCall(params, signal, onProgress);
 
       // ---- resources ----
       case "resources/list":
@@ -70,7 +70,7 @@ export function createRouter(
     }
   }
 
-  async function handleToolCall(params: any, signal?: AbortSignal): Promise<any> {
+  async function handleToolCall(params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void): Promise<any> {
     const { name, arguments: args } = params;
     // Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
     const toolName = String(name).replace(/\./g, "-");
@@ -108,7 +108,7 @@ export function createRouter(
         break;
 
       case "memory-bulk-delete":
-        result = await handleMemoryBulkDelete(args, db, vectors);
+        result = await handleMemoryBulkDelete(args, db, vectors, onProgress);
         break;
 
       case "task-create":
@@ -135,7 +135,7 @@ export function createRouter(
         break;
 
       case "task-bulk-manage":
-        result = await handleTaskBulkManage(args, db, vectors);
+        result = await handleTaskBulkManage(args, db, vectors, onProgress);
         break;
 
       default:

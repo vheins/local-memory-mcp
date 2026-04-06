@@ -15,7 +15,8 @@ function deriveTaskStatusTimestamps(status: TaskStatus, now: string) {
 export async function handleTaskBulkManage(
   args: any,
   storage: SQLiteStore,
-  vectors: VectorStore
+  vectors: VectorStore,
+  onProgress?: (progress: number, total?: number) => void
 ) {
   const parsed = TaskBulkManageSchema.parse(args);
   const { action, repo, tasks, ids } = parsed;
@@ -27,7 +28,14 @@ export async function handleTaskBulkManage(
       const now = new Date().toISOString();
       const codesInRequest = new Set<string>();
 
+      const total = tasks.length;
+      let progress = 0;
+
       for (const taskData of tasks) {
+        if (onProgress) {
+          onProgress(progress, total);
+        }
+        
         if (codesInRequest.has(taskData.task_code)) {
           throw new Error(`Duplicate task_code in request: '${taskData.task_code}'`);
         }
@@ -85,6 +93,12 @@ export async function handleTaskBulkManage(
         if (task.status === "completed") {
           await archiveTaskToMemory(task.id, repo, storage, vectors);
         }
+        
+        progress++;
+      }
+      
+      if (onProgress) {
+        onProgress(progress, total);
       }
 
       return { 
@@ -98,8 +112,19 @@ export async function handleTaskBulkManage(
     case "bulk_delete": {
       if (!ids) throw new Error("ids array is required for bulk_delete");
       
+      const total = ids.length;
+      let progress = 0;
+      
       for (const id of ids) {
+        if (onProgress) {
+          onProgress(progress, total);
+        }
         storage.deleteTask(id);
+        progress++;
+      }
+      
+      if (onProgress) {
+        onProgress(progress, total);
       }
 
       return { 
