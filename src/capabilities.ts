@@ -24,6 +24,7 @@ export const CAPABILITIES = {
     version: pkgVersion
   },
   capabilities: {
+    completions: {},
     logging: {},
     resources: {
       subscribe: true,

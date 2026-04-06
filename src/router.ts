@@ -4,6 +4,7 @@ import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinR
 import { logger } from "./utils/logger.js";
 import { getPrompt, listPrompts } from "./prompts/registry.js";
 import { TOOL_DEFINITIONS } from "./tools/schemas.js";
+import { complete } from "./completion.js";
 import { SQLiteStore } from "./storage/sqlite.js";
 import { VectorStore } from "./types.js";
 import { handleMemoryStore } from "./tools/memory.store.js";
@@ -78,6 +79,9 @@ export function createRouter(
       case "prompts/get": {
         return getPrompt(params?.name, params?.arguments || {}, db, getSessionContext?.());
       }
+
+      case "completion/complete":
+        return complete(params, db, getSessionContext?.());
 
       default:
         throw new Error(`Unsupported method: ${method}`);

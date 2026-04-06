@@ -5,6 +5,7 @@ import { createRouter } from "./router.js";
 import { SQLiteStore } from "./storage/sqlite.js";
 import { VectorStore } from "./types.js";
 import { createSessionContext, updateSessionRoots } from "./mcp/session.js";
+import path from "node:path";
 
 /**
  * Property 11: createRouter() menggunakan storage yang diberikan
@@ -184,6 +185,82 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     expect(firstPage.nextCursor).toBeTruthy();
     expect(secondPage.tools).toHaveLength(2);
     expect(secondPage.tools[0].name).not.toBe(firstPage.tools[0].name);
+  });
+
+  it("supports completion for resource template repo arguments", async () => {
+    const mockDb = makeMockDb();
+    (mockDb.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["alpha-repo", "beta-repo"]);
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    const result = await router("completion/complete", {
+      ref: {
+        type: "ref/resource",
+        uri: "memory://index?repo={repo}",
+      },
+      argument: {
+        name: "repo",
+        value: "alp",
+      },
+    });
+
+    expect(result.completion.values).toContain("alpha-repo");
+    expect(result.completion.values).not.toContain("beta-repo");
+  });
+
+  it("supports completion for prompt file_path arguments within active roots", async () => {
+    const mockDb = makeMockDb();
+    const mockVectors = makeMockVectors();
+    const session = createSessionContext();
+    updateSessionRoots(session, [{ uri: `file://${path.resolve(process.cwd())}` }]);
+    const router = createRouter(mockDb, mockVectors, {
+      getSessionContext: () => session,
+    });
+
+    const result = await router("completion/complete", {
+      ref: {
+        type: "ref/prompt",
+        name: "memory-guided-review",
+      },
+      argument: {
+        name: "file_path",
+        value: "src/router",
+      },
+    });
+
+    expect(result.completion.values.some((value: string) => value.includes("src/router.ts"))).toBe(true);
+  });
+
+  it("supports completion for prompt task_id arguments using repo context", async () => {
+    const mockDb = makeMockDb();
+    (mockDb.getTasksByRepo as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        id: "123e4567-e89b-12d3-a456-426614174001",
+        task_code: "TASK-123",
+        title: "Review architecture",
+      },
+    ]);
+    const mockVectors = makeMockVectors();
+    const router = createRouter(mockDb, mockVectors);
+
+    const result = await router("completion/complete", {
+      ref: {
+        type: "ref/prompt",
+        name: "learning-retrospective",
+      },
+      argument: {
+        name: "task_id",
+        value: "123e4567",
+      },
+      context: {
+        arguments: {
+          repo: "test-repo",
+        },
+      },
+    });
+
+    expect(mockDb.getTasksByRepo).toHaveBeenCalledWith("test-repo", undefined, 100);
+    expect(result.completion.values).toContain("123e4567-e89b-12d3-a456-426614174001");
   });
 
   it("filters session-dependent tools from tools/list when the client lacks required capabilities", async () => {

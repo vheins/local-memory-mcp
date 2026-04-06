@@ -1,6 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite.js";
 import { SessionContext } from "../mcp/session.js";
 import { logger } from "../utils/logger.js";
+import { rankCompletionValues } from "../utils/completion.js";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -111,6 +112,37 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
   ];
 
   return paginateEntries("resourceTemplates", templates, params);
+}
+
+export function completeResourceArgument(
+  resourceUri: string,
+  argumentName: string,
+  argumentValue: string,
+  _contextArguments: Record<string, unknown>,
+  dataSources: {
+    repos: string[];
+    tags: string[];
+  },
+) {
+  if (
+    resourceUri === "memory://index?repo={repo}"
+    || resourceUri === "memory://summary/{repo}"
+    || resourceUri === "tasks://current?repo={repo}"
+  ) {
+    if (argumentName !== "repo") {
+      throw invalidCompletionParams(`Unknown resource argument "${argumentName}" for "${resourceUri}"`);
+    }
+    return rankCompletionValues(dataSources.repos, argumentValue);
+  }
+
+  if (resourceUri === "memory://tags/{tag}") {
+    if (argumentName !== "tag") {
+      throw invalidCompletionParams(`Unknown resource argument "${argumentName}" for "${resourceUri}"`);
+    }
+    return rankCompletionValues(dataSources.tags, argumentValue);
+  }
+
+  throw invalidCompletionParams(`Unknown resource template: ${resourceUri}`);
 }
 
 export function readResource(uri: string, db: SQLiteStore, session?: SessionContext) {
@@ -344,5 +376,11 @@ function resourceNotFound(message: string, uri: string) {
   const error = new Error(message) as Error & { code: number; data?: Record<string, unknown> };
   error.code = -32002;
   error.data = { uri };
+  return error;
+}
+
+function invalidCompletionParams(message: string) {
+  const error = new Error(message) as Error & { code: number };
+  error.code = -32602;
   return error;
 }

@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite.js";
 import { SessionContext, inferRepoFromSession } from "../mcp/session.js";
+import { rankCompletionValues } from "../utils/completion.js";
 
 export const PROMPTS = {
   "memory-agent-core": {
@@ -781,6 +782,65 @@ export function getPrompt(
   result.title = result.title || humanizePromptName(result.name);
   result.messages = result.messages.map((message) => substitutePromptMessage(message, promptArgs));
   return result;
+}
+
+export function completePromptArgument(
+  promptName: string,
+  argumentName: string,
+  argumentValue: string,
+  contextArguments: Record<string, unknown>,
+  dataSources: {
+    repos: string[];
+    tags: string[];
+    filePaths: string[];
+    tasks: Array<{ id: string; task_code: string; title: string }>;
+  },
+) {
+  const prompt = promptName in DYNAMIC_PROMPTS
+    ? {
+        name: promptName,
+        arguments: DYNAMIC_PROMPTS[promptName].arguments,
+      }
+    : PROMPTS[promptName as keyof typeof PROMPTS];
+
+  if (!prompt) {
+    throw invalidPromptParams(`Unknown prompt: ${promptName}`);
+  }
+
+  const declaredArgument = (prompt.arguments ?? []).find((entry) => entry.name === argumentName);
+  if (!declaredArgument) {
+    throw invalidPromptParams(`Unknown prompt argument "${argumentName}" for prompt "${promptName}"`);
+  }
+
+  if (argumentName === "repo") {
+    return rankCompletionValues(dataSources.repos, argumentValue);
+  }
+
+  if (argumentName === "file_path") {
+    return rankCompletionValues(dataSources.filePaths, argumentValue);
+  }
+
+  if (argumentName === "task_id") {
+    return rankCompletionValues(dataSources.tasks.map((task) => task.id), argumentValue);
+  }
+
+  if (argumentName === "tech_stack") {
+    return rankCompletionValues(dataSources.tags, argumentValue);
+  }
+
+  if (argumentName === "tags") {
+    const parts = argumentValue.split(",");
+    const activePart = parts[parts.length - 1]?.trim() ?? "";
+    const suggestions = rankCompletionValues(dataSources.tags, activePart);
+    if (parts.length <= 1) {
+      return suggestions;
+    }
+
+    const prefix = parts.slice(0, -1).map((part) => part.trim()).filter(Boolean).join(", ");
+    return suggestions.map((value) => `${prefix}, ${value}`);
+  }
+
+  return rankCompletionValues([], argumentValue);
 }
 
 function getPromptCatalog(db: SQLiteStore, session?: SessionContext): PromptCatalogEntry[] {
