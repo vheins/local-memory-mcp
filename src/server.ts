@@ -95,6 +95,8 @@ function reply(payload: unknown) {
   }
 }
 
+let isInitialized = false;
+
 rl.on("line", async (line) => {
   if (!line.trim()) return;
 
@@ -126,10 +128,34 @@ rl.on("line", async (line) => {
   if (isNotification) {
     // We ignore all notifications by default, especially standard ones
     if (method === "notifications/initialized") {
+        isInitialized = true;
         logger.debug("[Server] Client initialized");
     } else if (method === "notifications/cancelled") {
         logger.debug("[Server] Request cancelled by client", { params });
     }
+    return;
+  }
+
+  // --- ping (Request) ---
+  if (method === "ping") {
+    reply({
+      jsonrpc: "2.0",
+      id,
+      result: {}
+    });
+    return;
+  }
+
+  // --- Ensure initialized before processing other requests ---
+  if (!isInitialized) {
+    reply({
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: -32002,
+        message: "Server is not fully initialized yet. Please send notifications/initialized."
+      }
+    });
     return;
   }
 
