@@ -163,9 +163,22 @@
             </div>
             <div class="min-w-0 flex-1">
               <div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{item.repo}</div>
-              <div class="truncate" style="font-size:0.7rem;color:var(--color-text-muted);">
+              <div class="truncate" style="font-size:0.7rem;color:var(--color-text-muted);margin-bottom:2px;">
                 {item.memory_count} memories
               </div>
+              {#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) > 0}
+                <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
+                  {#if item.in_progress_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(168,85,247,0.12);color:#a855f7;border:1px solid rgba(168,85,247,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">▶ {item.in_progress_count} active</span>
+                  {/if}
+                  {#if item.pending_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(14,165,233,0.12);color:#0ea5e9;border:1px solid rgba(14,165,233,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">● {item.pending_count} todo</span>
+                  {/if}
+                  {#if item.blocked_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">⚠ {item.blocked_count} blocked</span>
+                  {/if}
+                </div>
+              {/if}
             </div>
             <button
               class="btn-ghost btn-icon btn-sm"
@@ -202,9 +215,22 @@
             <div class="repo-avatar">{getRepoInitials(item.repo)}</div>
             <div class="min-w-0 flex-1">
               <div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{item.repo}</div>
-              <div class="truncate" style="font-size:0.7rem;color:var(--color-text-muted);">
+              <div class="truncate" style="font-size:0.7rem;color:var(--color-text-muted);margin-bottom:2px;">
                 {item.memory_count} memories
               </div>
+              {#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) > 0}
+                <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
+                  {#if item.in_progress_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(168,85,247,0.12);color:#a855f7;border:1px solid rgba(168,85,247,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">▶ {item.in_progress_count} active</span>
+                  {/if}
+                  {#if item.pending_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(14,165,233,0.12);color:#0ea5e9;border:1px solid rgba(14,165,233,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">● {item.pending_count} todo</span>
+                  {/if}
+                  {#if item.blocked_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">⚠ {item.blocked_count} blocked</span>
+                  {/if}
+                </div>
+              {/if}
             </div>
             <button
               class="pin-btn"

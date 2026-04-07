@@ -6,6 +6,9 @@ export interface RepoMeta {
   repo: string;
   memory_count: number;
   task_count?: number;
+  pending_count?: number;
+  in_progress_count?: number;
+  blocked_count?: number;
   last_updated_at?: string;
 }
 

@@ -744,10 +744,19 @@ export class SQLiteStore {
     };
   }
 
-  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
+  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null; pending_count: number; in_progress_count: number; blocked_count: number }> {
     return this.db.prepare(`
-      SELECT repo, COUNT(*) AS memory_count, MAX(COALESCE(updated_at, created_at)) AS last_updated_at
-      FROM memories GROUP BY repo ORDER BY last_updated_at DESC, repo ASC
+      SELECT
+        m.repo,
+        COUNT(DISTINCT m.id) AS memory_count,
+        MAX(COALESCE(m.updated_at, m.created_at)) AS last_updated_at,
+        COALESCE(SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
+        COALESCE(SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END), 0) AS in_progress_count,
+        COALESCE(SUM(CASE WHEN t.status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_count
+      FROM memories m
+      LEFT JOIN tasks t ON t.repo = m.repo
+      GROUP BY m.repo
+      ORDER BY last_updated_at DESC, m.repo ASC
     `).all() as any[];
   }
 
