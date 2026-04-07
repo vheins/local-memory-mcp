@@ -1203,5 +1203,65 @@ export class SQLiteStore {
     };
   }
 
+  getTaskTimeStats(repo: string, period: 'daily' | 'weekly' | 'monthly' | 'overall'): any {
+    let dateFilter = "";
+    if (period === 'daily') dateFilter = "AND date(finished_at) = date('now')";
+    else if (period === 'weekly') dateFilter = "AND date(finished_at) >= date('now', '-7 days')";
+    else if (period === 'monthly') dateFilter = "AND date(finished_at) >= date('now', '-30 days')";
+    
+    const stats = this.db.prepare(`
+      SELECT 
+        COUNT(*) as completed_count,
+        SUM(est_tokens) as total_tokens,
+        AVG((julianday(finished_at) - julianday(in_progress_at)) * 86400.0) as avg_duration_seconds
+      FROM tasks 
+      WHERE repo = ? 
+      AND status = 'completed' 
+      AND in_progress_at IS NOT NULL 
+      AND finished_at IS NOT NULL
+      ${dateFilter}
+    `).get(repo) as any;
+
+    const added = this.db.prepare(`
+      SELECT COUNT(*) as count FROM tasks 
+      WHERE repo = ? 
+      ${period !== 'overall' ? `AND date(created_at) >= ${period === 'daily' ? "date('now')" : period === 'weekly' ? "date('now', '-7 days')" : "date('now', '-30 days')"}` : ""}
+    `).get(repo) as any;
+
+    return {
+      completed: stats?.completed_count || 0,
+      tokens: stats?.total_tokens || 0,
+      avgDuration: stats?.avg_duration_seconds || 0,
+      added: added?.count || 0
+    };
+  }
+
+  updateTaskComment(id: string, updates: any): void {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(updates[key]);
+      }
+    });
+
+    if (fields.length === 0) return;
+
+    values.push(id);
+
+    const stmt = this.db.prepare(`UPDATE task_comments SET ${fields.join(", ")} WHERE id = ?`);
+    stmt.run(...values);
+  }
+
+  deleteTaskComment(id: string): void {
+    this.db.prepare("DELETE FROM task_comments WHERE id = ?").run(id);
+  }
+
+  getTaskCommentById(id: string): any | null {
+    return this.db.prepare("SELECT * FROM task_comments WHERE id = ?").get(id);
+  }
+
   close(): void { this.db.close(); }
 }

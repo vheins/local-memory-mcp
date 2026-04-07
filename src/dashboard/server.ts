@@ -208,6 +208,72 @@ app.get("/api/tasks/:id", async (req, res) => {
   }
 });
 
+app.put("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const existingTask = db.getTaskById(id);
+    if (!existingTask) return res.status(404).json({ error: "Task not found" });
+
+    db.updateTask(id, updates);
+
+    if (updates.status && updates.status !== existingTask.status) {
+      db.logAction("update", existingTask.repo, { taskId: id, query: `Status changed to ${updates.status}` });
+      db.insertTaskComment({
+        id: randomUUID(),
+        task_id: id,
+        repo: existingTask.repo,
+        comment: updates.comment || `Status updated via dashboard`,
+        agent: "dashboard",
+        role: "user",
+        model: "web-ui",
+        previous_status: existingTask.status,
+        next_status: updates.status,
+        created_at: new Date().toISOString()
+      });
+    } else if (updates.comment) {
+        db.insertTaskComment({
+            id: randomUUID(),
+            task_id: id,
+            repo: existingTask.repo,
+            comment: updates.comment,
+            agent: "dashboard",
+            role: "user",
+            model: "web-ui",
+            created_at: new Date().toISOString()
+        });
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/task-comments/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { comment } = req.body;
+        const existingComment = db.getTaskCommentById(id);
+        if (!existingComment) return res.status(404).json({ error: "Comment not found" });
+        
+        db.updateTaskComment(id, { comment });
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete("/api/task-comments/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        db.deleteTaskComment(id);
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post("/api/tasks", async (req, res) => {
   try {
     const { repo, task_code, title } = req.body;
@@ -222,8 +288,50 @@ app.post("/api/tasks", async (req, res) => {
   }
 });
 
+app.get("/api/tasks/stats/time", async (req, res) => {
+    try {
+        const { repo } = req.query;
+        if (!repo) return res.status(400).json({ error: "repo is required" });
+        
+        const stats = {
+            daily: db.getTaskTimeStats(repo as string, 'daily'),
+            weekly: db.getTaskTimeStats(repo as string, 'weekly'),
+            monthly: db.getTaskTimeStats(repo as string, 'monthly'),
+            overall: db.getTaskTimeStats(repo as string, 'overall')
+        };
+        
+        res.json(stats);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get("/api/capabilities", (req, res) => {
   res.json({ tools: TOOL_DEFINITIONS || [], resources: listResources().resources || [], prompts: Object.values(PROMPTS) || [] });
+});
+
+app.get("/api/export", async (req, res) => {
+    try {
+        const { repo } = req.query;
+        if (!repo) return res.status(400).json({ error: "repo is required" });
+        
+        const memories = db.getAllMemoriesWithStats(repo as string);
+        const tasks = db.getTasksByRepo(repo as string);
+        
+        const tasksWithComments = tasks.map(t => ({
+            ...t,
+            comments: db.getTaskCommentsByTaskId(t.id)
+        }));
+        
+        res.json({
+            repo,
+            exported_at: new Date().toISOString(),
+            memories,
+            tasks: tasksWithComments
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // --- Static Serving & Final Routes ---

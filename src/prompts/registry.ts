@@ -321,44 +321,33 @@ Please follow this strict execution flow:
 4. **Process Sequentially**: For each task (all 'pending' + all 'stale in_progress') found:
     - **Start**: Call 'task-update' to set status='in_progress' and provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
-    - **Validate**: Ensure the work is correct and follows project standards.
-    - **Complete**: Call 'task-update' to set status='completed' with a summary of accomplishment in the 'comment' field.
+    - **Inspect Codebase Logic First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Do not infer correctness from file presence alone.
+    - **Validate Behavior (MANDATORY)**: Ensure the implementation logic satisfies the task intent and follows project standards. Validation must focus on behavior, control flow, data flow, and integration points, not just whether a file/class/function exists.
+    - **Complete Only With Evidence**: Call 'task-update' to set status='completed' only after recording concrete evidence in the 'comment' field. The comment must include: files inspected, logic verified, checks/tests run (or why they could not run), and the exact reason the task is considered complete.
     - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using 'memory-store' to preserve important context while reducing token usage. Clear transient working memory that is no longer needed.
     - **Commit**: Perform an atomic git commit and push for the changes made in the task.
-    - **Handoff**: Use 'task-update' to document **detailed fix steps**, milestones, and project-specific knowledge gained during execution in the 'comment' or metadata fields. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as \`parent_id\`).
-5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, fetch tasks with status='backlog'. If any exist, select up to 5-20 tasks (prioritizing by priority field) and update their status to 'pending' using 'task-update' to ensure the next agent has work ready.
+    - **Handoff**: Use 'task-update' to document **detailed fix steps**, milestones, project-specific knowledge gained during execution, and the validation evidence in the 'comment' or metadata fields. If the task was complex, decompose it into smaller sub-tasks and store them using 'task-create' (referencing the current task's ID as \`parent_id\`).
+5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, fetch tasks with status='backlog'. If any exist, select up to 20 tasks (prioritizing by priority field) and update their status to 'pending' using 'task-update' to ensure the next agent has work ready.
 6. **Report**: After processing all tasks, provide a summary of your progress.
 
----
+## Mandatory Validation Rules
 
-## Mermaid Diagram
+Before a task can be marked \`completed\`, the agent **must** satisfy all applicable rules below:
 
-\`\`\`mermaid
-flowchart TD
-    A([Start Task Execution]) --> B[Identify Repository]
-    B --> C[Fetch 'pending' & 'in_progress' Tasks]
-    C --> D[Identify Stale 'in_progress' Tasks]
-    D --> E{Tasks to Execute?}
-    E -- No --> Q[Fetch 'backlog' Tasks]
-    Q --> R{Backlog exists?}
-    R -- Yes --> S[Update subset to 'pending']
-    S --> F[Report Progress]
-    R -- No --> F
-    F --> G([Execution Complete ✅])
-    E -- Yes --> H[Select Next Task]
-    H --> I[Update Status to 'in_progress']
-    I --> J[Execute Task Work]
-    J --> K[Validate Results]
-    K --> L{Validation Passed?}
-    L -- Yes --> M[Update Status to 'completed' + Handoff Notes]
-    M --> CC[Compact Context: Store Key Learnings as Memory]
-    CC --> N{Task complex?}
-    N -- Yes --> O[Decompose into Sub-tasks (MCP Task Create)]
-    O --> H
-    N -- No --> H
-    L -- No --> P[Update Status to 'blocked']
-    P --> H
-\`\`\`
+1. **Read the implementation, not just the filesystem**
+   - Inspect the actual source files related to the task.
+   - Trace the relevant logic path end-to-end using code search and file reads.
+   - Verify how the changed code is invoked, not just that it exists.
+
+2. **Confirm behavior against task intent**
+   - Compare the implementation against the task title, description, acceptance criteria, or bug report.
+   - Check that the business logic is actually implemented and wired correctly.
+   - If the task affects existing behavior, inspect adjacent modules and integration points for regressions.
+
+3. **Use concrete verification**
+   - Run targeted tests, linters, type checks, or validation scripts if available.
+   - If automated tests cannot be run, perform a manual logic audit of all affected paths.
+   - Document the specific verification method used in the task completion comment.
 `
         }
       }

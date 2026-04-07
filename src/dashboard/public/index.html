@@ -443,6 +443,30 @@
 
 
         /* Markdown body styles for Full Content section */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .snap-x {
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .snap-center {
+            scroll-snap-align: center;
+        }
+
+        /* Responsive Kanban Board */
+        @media (max-width: 768px) {
+            #taskBoard {
+                margin-left: -1rem;
+                margin-right: -1rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+
         .markdown-body {
             font-size: 0.875rem;
             line-height: 1.75;
@@ -1381,6 +1405,10 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
+                        <button onclick="exportAllData()" class="btn-refresh bg-amber-500! border-amber-600! shadow-amber-500/20!">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            Export All
+                        </button>
                         <button onclick="showAddTaskModal()" class="btn-add-task">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                             Add Task
@@ -1397,58 +1425,58 @@
                     </div>
                 </div>
 
-                <!-- Task Context Today's Stats -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Completed</div>
-                            <div id="todayCompletedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
-                        </div>
+                <!-- Task Context Stats with Tabs -->
+                <div class="mb-8">
+                    <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl w-fit mb-4">
+                        <button onclick="updateTimeStats('daily')" id="dailyStatsBtn" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white dark:bg-slate-800 shadow-sm text-sky-600 dark:text-sky-400">Daily</button>
+                        <button onclick="updateTimeStats('weekly')" id="weeklyStatsBtn" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Weekly</button>
+                        <button onclick="updateTimeStats('monthly')" id="monthlyStatsBtn" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Monthly</button>
+                        <button onclick="updateTimeStats('overall')" id="overallStatsBtn" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Overall</button>
                     </div>
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-600">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                            <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <div>
+                                <div id="statsPeriodLabel1" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Completed</div>
+                                <div id="todayCompletedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                            </div>
                         </div>
-                        <div>
-                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Added</div>
-                            <div id="todayAddedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                            <div class="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </div>
+                            <div>
+                                <div id="statsPeriodLabel2" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Added</div>
+                                <div id="todayAddedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-600">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                            <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            </div>
+                            <div>
+                                <div id="statsPeriodLabel3" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Tokens</div>
+                                <div id="todayTokensTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
+                            </div>
                         </div>
-                        <div>
-                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Processed</div>
-                            <div id="todayProcessedTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
-                        </div>
-                    </div>
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Tokens</div>
-                            <div id="todayTokensTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0</div>
-                        </div>
-                    </div>
-                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-600">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Avg Time</div>
-                            <div id="todayAvgTimeTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0m</div>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 shadow-sm">
+                            <div class="w-10 h-10 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <div>
+                                <div id="statsPeriodLabel4" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Today Avg Time</div>
+                                <div id="todayAvgTimeTasksCount" class="text-xl font-black text-slate-700 dark:text-slate-200">0m</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="taskBoard" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div id="taskBoard" class="flex overflow-x-auto pb-6 md:grid md:grid-cols-4 gap-6 snap-x custom-scrollbar">
                     <!-- Column: Backlog -->
-                    <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-4 flex-shrink-0 w-[85vw] md:w-auto snap-center">
                         <div class="flex items-center justify-between px-2">
                             <h3 class="font-bold text-slate-400 uppercase tracking-wider text-xs">Backlog</h3>
                             <span id="backlogCount" class="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
@@ -1456,7 +1484,7 @@
                         <div id="backlogTasks" class="space-y-4 min-h-[200px] max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar"></div>
                     </div>
                     <!-- Column: Todo -->
-                    <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-4 flex-shrink-0 w-[85vw] md:w-auto snap-center">
                         <div class="flex items-center justify-between px-2">
                             <h3 class="font-bold text-gray-500 uppercase tracking-wider text-xs">To Do</h3>
                             <span id="todoCount" class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
@@ -1464,7 +1492,7 @@
                         <div id="todoTasks" class="space-y-4 min-h-[200px] max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar"></div>
                     </div>
                     <!-- Column: In Progress -->
-                    <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-4 flex-shrink-0 w-[85vw] md:w-auto snap-center">
                         <div class="flex items-center justify-between px-2">
                             <h3 class="font-bold text-sky-500 uppercase tracking-wider text-xs">In Progress</h3>
                             <span id="inProgressCount" class="bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
@@ -1472,7 +1500,7 @@
                         <div id="inProgressTasks" class="space-y-4 min-h-[200px] max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar"></div>
                     </div>
                     <!-- Column: Completed -->
-                    <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-4 flex-shrink-0 w-[85vw] md:w-auto snap-center">
                         <div class="flex items-center justify-between px-2">
                             <h3 class="font-bold text-emerald-500 uppercase tracking-wider text-xs">Completed</h3>
                             <span id="completedCount" class="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>

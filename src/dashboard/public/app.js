@@ -1757,7 +1757,10 @@ let currentTasks = [];
 
 async function loadTasks() {
     if (!currentRepo) return;
-    
+
+    taskTimeStats = null; // Force reload
+    updateTimeStats('daily');
+
     // Reset pagination
     taskPagination.backlog = { page: 1, pageSize: 20, hasMore: true, loading: false };
     taskPagination.todo = { page: 1, pageSize: 20, hasMore: true, loading: false };
@@ -1903,6 +1906,222 @@ function renderTaskCards(containerId, tasks, clear = false) {
     }
 }
 
+let taskTimeStats = null;
+
+async function updateTimeStats(period) {
+    const btns = ['daily', 'weekly', 'monthly', 'overall'];
+    btns.forEach(p => {
+        const btn = document.getElementById(`${p}StatsBtn`);
+        if (btn) {
+            if (p === period) {
+                btn.classList.add('bg-white', 'dark:bg-slate-800', 'shadow-sm', 'text-sky-600', 'dark:text-sky-400');
+                btn.classList.remove('text-slate-500', 'hover:text-slate-700', 'dark:hover:text-slate-300');
+            } else {
+                btn.classList.remove('bg-white', 'dark:bg-slate-800', 'shadow-sm', 'text-sky-600', 'dark:text-sky-400');
+                btn.classList.add('text-slate-500', 'hover:text-slate-700', 'dark:hover:text-slate-300');
+            }
+        }
+    });
+
+    const labels = {
+        daily: 'Today',
+        weekly: 'This Week',
+        monthly: 'This Month',
+        overall: 'Overall'
+    };
+
+    for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`statsPeriodLabel${i}`);
+        if (el) {
+            const currentText = el.textContent;
+            const type = currentText.split(' ').slice(1).join(' ');
+            el.textContent = `${labels[period]} ${type}`;
+        }
+    }
+
+    try {
+        if (!taskTimeStats) {
+            const resp = await fetch(`/api/tasks/stats/time?repo=${encodeURIComponent(currentRepo)}`);
+            taskTimeStats = await resp.json();
+        }
+
+        const stats = taskTimeStats[period];
+        document.getElementById('todayCompletedTasksCount').textContent = stats.completed;
+        document.getElementById('todayAddedTasksCount').textContent = stats.added;
+        document.getElementById('todayTokensTasksCount').textContent = stats.tokens.toLocaleString();
+        
+        const mins = Math.round(stats.avgDuration / 60);
+        document.getElementById('todayAvgTimeTasksCount').textContent = `${mins}m`;
+    } catch (err) {
+        console.error('Failed to load time stats:', err);
+    }
+}
+
+async function exportAllData() {
+    try {
+        const resp = await fetch(`/api/export?repo=${encodeURIComponent(currentRepo)}`);
+        const data = await resp.json();
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mcp-export-${currentRepo.replace(/\//g, '-')}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast('Export successful', 'success');
+    } catch (err) {
+        showToast('Export failed: ' + err.message, 'error');
+    }
+}
+
+async function updateTaskStatus(id, newStatus, comment = '') {
+    try {
+        const resp = await fetch(`/api/tasks/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus, comment })
+        });
+        
+        if (resp.ok) {
+            showToast(`Task moved to ${newStatus}`, 'success');
+            loadTasks();
+            showTaskDetail(id); // Refresh detail view
+        } else {
+            const err = await resp.json();
+            throw new Error(err.error || 'Update failed');
+        }
+    } catch (err) {
+        showToast('Failed to update task: ' + err.message, 'error');
+    }
+}
+
+let isEditingTask = false;
+async function toggleTaskEdit(id) {
+    if (isEditingTask) {
+        await saveTaskEdits(id);
+    } else {
+        enterTaskEditMode();
+    }
+}
+
+function enterTaskEditMode() {
+    isEditingTask = true;
+    const titleEl = document.getElementById('taskDetailTitle');
+    const descEl = document.getElementById('taskDetailDesc');
+    const editBtn = document.getElementById('taskEditBtn');
+    
+    if (titleEl) {
+        const titleText = titleEl.textContent;
+        titleEl.innerHTML = `<input type="text" id="editTaskTitle" class="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-lg font-bold" value="${escapeHtml(titleText)}">`;
+    }
+    
+    if (descEl) {
+        const descText = descEl.dataset.raw || '';
+        descEl.innerHTML = `<textarea id="editTaskDesc" class="w-full p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm min-h-[150px] font-mono">${escapeHtml(descText)}</textarea>`;
+    }
+    
+    if (editBtn) {
+        editBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Save`;
+        editBtn.classList.add('bg-emerald-500', 'text-white');
+        editBtn.classList.remove('bg-white', 'dark:bg-slate-800');
+    }
+}
+
+async function saveTaskEdits(id) {
+    const newTitle = document.getElementById('editTaskTitle').value;
+    const newDesc = document.getElementById('editTaskDesc').value;
+    
+    try {
+        const resp = await fetch(`/api/tasks/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newTitle, description: newDesc })
+        });
+        
+        if (resp.ok) {
+            showToast('Task updated', 'success');
+            isEditingTask = false;
+            loadTasks();
+            showTaskDetail(id);
+        } else {
+            const err = await resp.json();
+            throw new Error(err.error || 'Update failed');
+        }
+    } catch (err) {
+        showToast('Failed to save changes: ' + err.message, 'error');
+    }
+}
+
+async function addTaskComment(taskId) {
+    const commentInput = document.getElementById('newTaskComment');
+    const comment = commentInput.value.trim();
+    if (!comment) return;
+    
+    try {
+        const resp = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment })
+        });
+        
+        if (resp.ok) {
+            commentInput.value = '';
+            showTaskDetail(taskId);
+        } else {
+            const err = await resp.json();
+            throw new Error(err.error || 'Failed to add comment');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function editTaskComment(commentId, taskId) {
+    const commentEl = document.getElementById(`comment-body-${commentId}`);
+    const currentText = commentEl.dataset.raw || '';
+    
+    const newText = prompt('Edit comment:', currentText);
+    if (newText === null || newText === currentText) return;
+    
+    try {
+        const resp = await fetch(`/api/task-comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment: newText })
+        });
+        
+        if (resp.ok) {
+            showTaskDetail(taskId);
+        } else {
+            throw new Error('Failed to update comment');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteTaskComment(commentId, taskId) {
+    if (!confirm('Are you sure you want to delete this comment?')) return;
+    
+    try {
+        const resp = await fetch(`/api/task-comments/${commentId}`, {
+            method: 'DELETE'
+        });
+        
+        if (resp.ok) {
+            showTaskDetail(taskId);
+        } else {
+            throw new Error('Failed to delete comment');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 async function showTaskDetail(id) {
     const drawer = document.getElementById('memoryDrawer');
     const title = document.getElementById('drawerTitle');
@@ -1919,11 +2138,10 @@ async function showTaskDetail(id) {
             <div class="skeleton h-64 w-full"></div>
         </div>
     `;
-    
+
     drawer.classList.remove('hidden');
     document.body.classList.add('drawer-open');
-    
-    // Trigger slide-in animation
+
     setTimeout(() => {
         const aside = document.getElementById('drawerAside');
         if (aside) {
@@ -1938,12 +2156,37 @@ async function showTaskDetail(id) {
         if (!response.ok) throw new Error(task.error || 'Failed to load task');
 
         title.textContent = `Task: ${task.task_code}`;
-        
+        isEditingTask = false;
+
+        const statusButtons = {
+            backlog: ['pending', 'blocked'],
+            pending: ['in_progress', 'backlog', 'blocked'],
+            in_progress: ['pending', 'backlog', 'blocked'],
+            blocked: ['pending', 'backlog'],
+            completed: ['pending']
+        };
+
+        const currentButtons = statusButtons[task.status] || [];
+        const actionButtonsHtml = currentButtons.map(s => `
+            <button onclick="updateTaskStatus('${task.id}', '${s}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
+                Set to ${formatTaskStatusLabel(s)}
+            </button>
+        `).join('');
+
         body.innerHTML = `
             <div class="space-y-6">
-                <div class="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Title</div>
-                    <h3 class="text-xl font-bold text-slate-900 dark:text-white leading-tight">${escapeHtml(task.title)}</h3>
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex-1 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Title</div>
+                        <h3 id="taskDetailTitle" class="text-xl font-bold text-slate-900 dark:text-white leading-tight">${escapeHtml(task.title)}</h3>
+                    </div>
+                    <button id="taskEditBtn" onclick="toggleTaskEdit('${task.id}')" class="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm hover:shadow-md transition-all group">
+                        <svg class="w-5 h-5 text-slate-400 group-hover:text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </button>
+                </div>
+
+                <div class="flex flex-wrap gap-2 px-1">
+                    ${actionButtonsHtml}
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1978,12 +2221,12 @@ async function showTaskDetail(id) {
 
                 <div class="p-5 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
                     <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Description</div>
-                    <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed markdown-body">
+                    <div id="taskDetailDesc" data-raw="${escapeHtml(task.description || '')}" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed markdown-body">
                         ${task.description ? renderMarkdown(task.description) : '<span class="italic opacity-50">No description provided</span>'}
                     </div>
                 </div>
 
-                ${renderTaskComments(task.comments)}
+                ${renderTaskComments(task.comments, task.id)}
 
                 ${task.doc_path ? `
                     <div class="p-4 bg-sky-500/5 dark:bg-sky-500/10 rounded-xl border border-sky-500/20">
@@ -2026,52 +2269,67 @@ function formatTaskStatusLabel(status) {
         .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function renderTaskComments(comments) {
-    if (!comments || comments.length === 0) {
-        return `
-            <div class="p-5 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
-                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">History</div>
-                <div class="text-sm italic text-slate-400">No historical comments yet</div>
-            </div>
-        `;
-    }
+function renderTaskComments(comments, taskId) {
+    const commentsList = (!comments || comments.length === 0) ? `
+        <div class="text-sm italic text-slate-400 py-4">No historical comments yet</div>
+    ` : `
+        <div class="space-y-4 mt-4">
+            ${comments.map((item) => `
+                <div class="relative pl-5">
+                    <div class="absolute left-0 top-1.5 h-full w-px bg-slate-200 dark:bg-slate-700"></div>
+                    <div class="absolute left-[-4px] top-1.5 w-2.5 h-2.5 rounded-full bg-sky-500 shadow-[0_0_0_4px_rgba(14,165,233,0.12)]"></div>
+                    <div class="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4 group/comment">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-100">${escapeHtml(item.agent || 'unknown')}</span>
+                            <span class="text-[10px] text-slate-400">•</span>
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(item.model || 'unknown')}</span>
+                            <span class="ml-auto text-[10px] text-slate-400">${new Date(item.created_at).toLocaleString()}</span>
+
+                            <div class="hidden group-hover/comment:flex items-center gap-1 ml-2">
+                                <button onclick="editTaskComment('${item.id}', '${taskId}')" class="p-1 text-slate-400 hover:text-sky-500 transition-colors" title="Edit comment">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                </button>
+                                <button onclick="deleteTaskComment('${item.id}', '${taskId}')" class="p-1 text-slate-400 hover:text-rose-500 transition-colors" title="Delete comment">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        ${(item.previous_status || item.next_status) ? `
+                            <div class="flex flex-wrap items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-wide">
+                                <span class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${escapeHtml(formatTaskStatusLabel(item.previous_status || 'note'))}</span>
+                                <span class="text-slate-400">→</span>
+                                <span class="px-2 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">${escapeHtml(formatTaskStatusLabel(item.next_status || 'note'))}</span>
+                            </div>
+                        ` : ''}
+                        <div id="comment-body-${item.id}" data-raw="${escapeHtml(item.comment)}" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed markdown-body">
+                            ${renderMarkdown(item.comment)}
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
 
     return `
         <div class="p-5 bg-white dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
             <div class="flex items-center justify-between gap-3 mb-4">
-                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">History</div>
-                <div class="text-[10px] text-slate-400">${comments.length} comment${comments.length === 1 ? '' : 's'}</div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Discussion & History</div>
+                <div class="text-[10px] text-slate-400">${comments ? comments.length : 0} item${comments && comments.length === 1 ? '' : 's'}</div>
             </div>
-            <div class="space-y-4">
-                ${comments.map((item) => `
-                    <div class="relative pl-5">
-                        <div class="absolute left-0 top-1.5 h-full w-px bg-slate-200 dark:bg-slate-700"></div>
-                        <div class="absolute left-[-4px] top-1.5 w-2.5 h-2.5 rounded-full bg-sky-500 shadow-[0_0_0_4px_rgba(14,165,233,0.12)]"></div>
-                        <div class="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4">
-                            <div class="flex flex-wrap items-center gap-2 mb-2">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100">${escapeHtml(item.agent || 'unknown')}</span>
-                                <span class="text-[10px] text-slate-400">•</span>
-                                <span class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(item.model || 'unknown')}</span>
-                                <span class="ml-auto text-[10px] text-slate-400">${new Date(item.created_at).toLocaleString()}</span>
-                            </div>
-                            ${(item.previous_status || item.next_status) ? `
-                                <div class="flex flex-wrap items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-wide">
-                                    <span class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${escapeHtml(formatTaskStatusLabel(item.previous_status || 'note'))}</span>
-                                    <span class="text-slate-400">→</span>
-                                    <span class="px-2 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">${escapeHtml(formatTaskStatusLabel(item.next_status || 'note'))}</span>
-                                </div>
-                            ` : ''}
-                            <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed markdown-body">
-                                ${renderMarkdown(item.comment)}
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
+
+            <div class="mb-6">
+                <textarea id="newTaskComment" placeholder="Add a comment (Markdown supported)..." class="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-sky-500/50 outline-none transition-all min-h-[80px]"></textarea>
+                <div class="flex justify-end mt-2">
+                    <button onclick="addTaskComment('${taskId}')" class="px-4 py-1.5 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg transition-all shadow-sm shadow-sky-500/20">Post Comment</button>
+                </div>
+            </div>
+
+            <div class="border-t border-slate-100 dark:border-slate-700/50 pt-2">
+                ${commentsList}
             </div>
         </div>
     `;
 }
-
 let currentTab = localStorage.getItem('activeTab') || 'dashboard';
 
 function syncTabIndicatorTheme(indicator) {
