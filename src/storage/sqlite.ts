@@ -1223,27 +1223,36 @@ export class SQLiteStore {
 
   getTaskTimeStats(repo: string, period: 'daily' | 'weekly' | 'monthly' | 'overall'): any {
     let dateFilter = "";
-    if (period === 'daily') dateFilter = "AND date(finished_at) = date('now')";
-    else if (period === 'weekly') dateFilter = "AND date(finished_at) >= date('now', '-7 days')";
-    else if (period === 'monthly') dateFilter = "AND date(finished_at) >= date('now', '-30 days')";
+    if (period === 'daily') dateFilter = "AND date(COALESCE(finished_at, updated_at)) = date('now')";
+    else if (period === 'weekly') dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-7 days')";
+    else if (period === 'monthly') dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-30 days')";
     
     const stats = this.db.prepare(`
       SELECT 
         COUNT(*) as completed_count,
         SUM(est_tokens) as total_tokens,
-        AVG((julianday(finished_at) - julianday(in_progress_at)) * 86400.0) as avg_duration_seconds
+        AVG(
+          CASE 
+            WHEN in_progress_at IS NOT NULL AND finished_at IS NOT NULL 
+            THEN (julianday(finished_at) - julianday(in_progress_at)) * 86400.0 
+            ELSE NULL 
+          END
+        ) as avg_duration_seconds
       FROM tasks 
       WHERE repo = ? 
       AND status = 'completed' 
-      AND in_progress_at IS NOT NULL 
-      AND finished_at IS NOT NULL
       ${dateFilter}
     `).get(repo) as any;
+
+    let addedDateFilter = "";
+    if (period === 'daily') addedDateFilter = "AND date(created_at) = date('now')";
+    else if (period === 'weekly') addedDateFilter = "AND date(created_at) >= date('now', '-7 days')";
+    else if (period === 'monthly') addedDateFilter = "AND date(created_at) >= date('now', '-30 days')";
 
     const added = this.db.prepare(`
       SELECT COUNT(*) as count FROM tasks 
       WHERE repo = ? 
-      ${period !== 'overall' ? `AND date(created_at) >= ${period === 'daily' ? "date('now')" : period === 'weekly' ? "date('now', '-7 days')" : "date('now', '-30 days')"}` : ""}
+      ${addedDateFilter}
     `).get(repo) as any;
 
     return {

@@ -93,7 +93,7 @@
       await api.updateTask(task.id, { comment: newComment.trim() });
       const refreshed = await api.taskById(task.id);
       task = refreshed;
-      onTaskUpdated(task);
+      onTaskUpdated(task!);
       newComment = '';
     } catch (e) {
       console.error('Failed to post comment:', e);
@@ -111,7 +111,7 @@
       if (task) {
         const refreshed = await api.taskById(task.id);
         task = refreshed;
-        onTaskUpdated(task);
+        onTaskUpdated(task!);
       }
       editingCommentId = null;
     } catch (e) {
@@ -127,8 +127,10 @@
       await api.deleteTaskComment(commentId);
       if (task) {
         const refreshed = await api.taskById(task.id);
-        task = refreshed;
-        onTaskUpdated(task);
+        if (refreshed) {
+          task = refreshed;
+          onTaskUpdated(task);
+        }
       }
     } catch (e) {
       console.error('Failed to delete comment:', e);
@@ -147,11 +149,11 @@
 </script>
 
 {#if open && mode}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <div class="drawer-overlay" on:click={handleOverlayClick}></div>
+  <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+  <div class="drawer-overlay" on:click={handleOverlayClick} role="button" tabindex="0"></div>
 
   <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <div class="drawer-panel animate-fade-in" on:click={handlePanelClick} role="dialog" aria-modal="true">
+  <div class="drawer-panel animate-fade-in" on:click={handlePanelClick} role="dialog" aria-modal="true" tabindex="-1">
 
     <!-- ─── HEADER ─────────────────────────────────────────────────────────── -->
     <div class="drawer-header">
@@ -180,8 +182,8 @@
               <button class="btn btn-ghost" style="padding:4px 10px;font-size:0.75rem;" on:click={() => editingTitle = false}>✕</button>
             </div>
           {:else}
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <div class="drawer-title editable-title" on:click={() => { editingTitle = true; editTitle = task?.title || ''; }} title="Click to edit title">
+            <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+            <div class="drawer-title editable-title" on:click={() => { editingTitle = true; editTitle = task?.title || ''; }} title="Click to edit title" role="button" tabindex="0">
               {task.title}
               <span class="edit-hint">✏️</span>
             </div>
@@ -264,16 +266,26 @@
         <!-- Status dropdown -->
         <div style="margin-bottom:16px;">
           <div class="section-label">Status</div>
-          <select
-            class="form-select"
-            style="font-size:0.82rem;"
-            value={task.status}
-            on:change={e => saveField('status', (e.target as HTMLSelectElement).value)}
-          >
-            {#each ['backlog','pending','in_progress','completed','blocked','canceled'] as s}
-              <option value={s}>{getStatusLabel(s)}</option>
-            {/each}
-          </select>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+             <span class="status-chip {getStatusColor(task?.status || 'pending')}" style="font-size:0.85rem; padding: 4px 10px;">{getStatusLabel(task?.status || '')}</span>
+             
+             <button class="btn btn-ghost" style="color: #ef4444;" on:click={async () => {
+                if (!task) return;
+                if (confirm('Are you sure you want to delete this task?')) {
+                  try {
+                    await api.deleteTask(task.id);
+                    onClose();
+                  } catch (e: any) {
+                    alert('Error deleting task: ' + e.message);
+                  }
+                }
+             }}>
+               <svg style="margin-right:4px;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                 <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+               </svg>
+               Delete Task
+             </button>
+          </div>
         </div>
 
         <!-- Meta grid -->

@@ -18,6 +18,7 @@
   import MemoryList from './components/MemoryList.svelte';
   import RecentActions from './components/RecentActions.svelte';
   import DetailDrawer from './components/DetailDrawer.svelte';
+  import ReferenceDrawer from './components/ReferenceDrawer.svelte';
   import Icon from './lib/Icon.svelte';
 
   // Component refs
@@ -32,6 +33,14 @@
   let selectedTask: Task | null = null;
   let drawerOpen = false;
 
+  let selectedReference: any = null;
+  let referenceDrawerOpen = false;
+
+  function openReferenceDrawer(itemType: string, data: any) {
+    selectedReference = { type: itemType, data };
+    referenceDrawerOpen = true;
+  }
+
   // Add task modal
   let addTaskModalOpen = false;
   let newTask = { task_code: '', title: '', phase: '', description: '', status: 'pending', priority: 3 };
@@ -41,7 +50,7 @@
 
   // Reference Tab state
   let referenceSearch = '';
-  let referenceFilter: 'all' | 'tools' | 'prompts' = 'all';
+  let referenceFilter: 'all' | 'tools' | 'prompts' | 'resources' = 'all';
 
   $: filteredTools = (capabilities?.tools || []).filter((t: any) =>
     (referenceFilter === 'all' || referenceFilter === 'tools') &&
@@ -50,6 +59,10 @@
   $: filteredPrompts = (capabilities?.prompts || []).filter((p: any) =>
     (referenceFilter === 'all' || referenceFilter === 'prompts') &&
     (!referenceSearch || p.name.toLowerCase().includes(referenceSearch.toLowerCase()) || (p.description || '').toLowerCase().includes(referenceSearch.toLowerCase()))
+  );
+  $: filteredResources = (capabilities?.resources || []).filter((r: any) =>
+    (referenceFilter === 'all' || referenceFilter === 'resources') &&
+    (!referenceSearch || r.name.toLowerCase().includes(referenceSearch.toLowerCase()) || (r.description || '').toLowerCase().includes(referenceSearch.toLowerCase()))
   );
 
   // ─── Init ──────────────────────────────────────────────────────────────────
@@ -107,11 +120,12 @@
     } catch {}
   }
 
-  async function loadRecentActions(page: number = $recentActionsPage) {
+  async function loadRecentActions(page?: number) {
+    const p = page ?? $recentActionsPage;
     try {
-      const data = await api.recentActions($currentRepo, page, $recentActionsPageSize);
+      const data = await api.recentActions($currentRepo, p, $recentActionsPageSize);
       recentActions.set(data.actions || []);
-      recentActionsPage.set(data.pagination?.page ?? page);
+      recentActionsPage.set(data.pagination?.page ?? p);
       recentActionsTotalItems.set(data.pagination?.totalItems ?? 0);
     } catch (e) {
       console.error('Failed to load recent actions:', e);
@@ -368,9 +382,10 @@
               <div class="glass ref-sidebar">
                 <div class="ref-sidebar-label">Category</div>
                 {#each [
-                  { id: 'all',     icon: 'layers',  label: 'All',     count: (capabilities?.tools?.length || 0) + (capabilities?.prompts?.length || 0) },
+                  { id: 'all',     icon: 'layers',  label: 'All',     count: (capabilities?.tools?.length || 0) + (capabilities?.prompts?.length || 0) + (capabilities?.resources?.length || 0) },
                   { id: 'tools',   icon: 'tool',    label: 'Tools',   count: capabilities?.tools?.length || 0 },
                   { id: 'prompts', icon: 'sparkle', label: 'Prompts', count: capabilities?.prompts?.length || 0 },
+                  { id: 'resources', icon: 'database', label: 'Resources', count: capabilities?.resources?.length || 0 },
                 ] as cat}
                   <button
                     class="ref-cat-btn"
@@ -402,7 +417,8 @@
                     </div>
                     <div class="ref-grid">
                       {#each filteredTools as tool}
-                        <div class="ref-card ref-card-tool animate-fade-in">
+                        <!-- svelte-ignore a11y-click-events-have-key-events -->
+                        <div class="ref-card ref-card-tool animate-fade-in" on:click={() => openReferenceDrawer('tool', tool)}>
                           <div class="ref-card-top">
                             <span class="ref-type-badge ref-type-tool">
                               <Icon name="tool" size={10} strokeWidth={2} />
@@ -437,7 +453,8 @@
                     </div>
                     <div class="ref-grid">
                       {#each filteredPrompts as prompt}
-                        <div class="ref-card ref-card-prompt animate-fade-in">
+                        <!-- svelte-ignore a11y-click-events-have-key-events -->
+                        <div class="ref-card ref-card-prompt animate-fade-in" on:click={() => openReferenceDrawer('prompt', prompt)}>
                           <div class="ref-card-top">
                             <span class="ref-type-badge ref-type-prompt">
                               <Icon name="sparkle" size={10} strokeWidth={2} />
@@ -453,7 +470,38 @@
                     </div>
                   {/if}
 
-                  {#if filteredTools.length === 0 && filteredPrompts.length === 0}
+                  <!-- Resources section -->
+                  {#if filteredResources.length > 0}
+                    <div class="ref-section-header" style="margin-top:{(filteredTools.length > 0 || filteredPrompts.length > 0) ? '20px' : '0'}">
+                      <Icon name="database" size={13} strokeWidth={1.75} />
+                      <span>Resources</span>
+                      <span class="ref-section-count">{filteredResources.length}</span>
+                    </div>
+                    <div class="ref-grid">
+                      {#each filteredResources as resource}
+                        <!-- svelte-ignore a11y-click-events-have-key-events -->
+                        <div class="ref-card ref-card-resource animate-fade-in" on:click={() => openReferenceDrawer('resource', resource)}>
+                          <div class="ref-card-top">
+                            <span class="ref-type-badge ref-type-resource">
+                              <Icon name="database" size={10} strokeWidth={2} />
+                              Resource
+                            </span>
+                          </div>
+                          <div class="ref-card-name">{resource.name}</div>
+                          {#if resource.description}
+                            <div class="ref-card-desc">{resource.description}</div>
+                          {/if}
+                          {#if resource.uri}
+                            <div class="ref-params">
+                              <code class="ref-param-tag" style="background:var(--color-bg);border:1px solid var(--color-border);">{resource.uri}</code>
+                            </div>
+                          {/if}
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+
+                  {#if filteredTools.length === 0 && filteredPrompts.length === 0 && filteredResources.length === 0}
                     <div style="text-align:center;padding:48px 16px;color:var(--color-text-muted);">
                       <Icon name="search" size={28} strokeWidth={1.25} />
                       <div style="font-size:0.82rem;margin-top:10px;">No results for "{referenceSearch}"</div>
@@ -476,6 +524,12 @@
   open={drawerOpen}
   onClose={closeDrawer}
   onTaskUpdated={handleTaskUpdated}
+/>
+
+<ReferenceDrawer
+  item={selectedReference}
+  open={referenceDrawerOpen}
+  onClose={() => referenceDrawerOpen = false}
 />
 
 <!-- ════ Add Task Modal ════ -->
@@ -713,33 +767,48 @@
   }
 
   .ref-card {
-    padding: 12px 14px;
-    border-radius: 14px;
-    border: 1px solid var(--color-border);
-    background: rgba(241, 245, 249, 0.45);
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    padding: 18px 20px;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ref-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: transparent;
+    transition: all 0.2s ease;
   }
 
   .ref-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.1);
-    border-color: rgba(14, 165, 233, 0.3);
+    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.08), 0 8px 12px -6px rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
   }
 
   :global(html.dark) .ref-card {
-    background: rgba(10, 18, 38, 0.5);
+    background: rgba(10, 18, 38, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   :global(html.dark) .ref-card:hover {
-    border-color: rgba(56, 189, 248, 0.3);
-    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
-  .ref-card-tool:hover { border-color: rgba(99, 102, 241, 0.3); }
-  .ref-card-prompt:hover { border-color: rgba(168, 85, 247, 0.3); }
+  .ref-card-tool:hover::before { background: linear-gradient(90deg, #6366f1, #a855f7); }
+  .ref-card-prompt:hover::before { background: linear-gradient(90deg, #a855f7, #ec4899); }
+  .ref-card-resource:hover::before { background: linear-gradient(90deg, #10b981, #3b82f6); }
 
   .ref-card-top {
     display: flex;
