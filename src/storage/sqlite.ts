@@ -752,7 +752,8 @@ export class SQLiteStore {
         MAX(COALESCE(m.updated_at, m.created_at)) AS last_updated_at,
         COALESCE(SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
         COALESCE(SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END), 0) AS in_progress_count,
-        COALESCE(SUM(CASE WHEN t.status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_count
+        COALESCE(SUM(CASE WHEN t.status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_count,
+        COALESCE(SUM(CASE WHEN t.status = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog_count
       FROM memories m
       LEFT JOIN tasks t ON t.repo = m.repo
       GROUP BY m.repo

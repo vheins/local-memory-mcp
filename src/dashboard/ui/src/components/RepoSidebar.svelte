@@ -166,7 +166,7 @@
               <div class="truncate" style="font-size:0.7rem;color:var(--color-text-muted);margin-bottom:2px;">
                 {item.memory_count} memories
               </div>
-              {#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) > 0}
+              {#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) + (item.backlog_count || 0) > 0}
                 <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
                   {#if item.in_progress_count}
                     <span style="font-size:0.6rem;font-weight:700;background:rgba(168,85,247,0.12);color:#a855f7;border:1px solid rgba(168,85,247,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">▶ {item.in_progress_count} active</span>
@@ -176,6 +176,9 @@
                   {/if}
                   {#if item.blocked_count}
                     <span style="font-size:0.6rem;font-weight:700;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">⚠ {item.blocked_count} blocked</span>
+                  {/if}
+                  {#if item.backlog_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(100,116,139,0.12);color:#64748b;border:1px solid rgba(100,116,139,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">☕ {item.backlog_count} backlog</span>
                   {/if}
                 </div>
               {/if}
@@ -218,7 +221,7 @@
               <div class="truncate" style="font-size:0.7rem;color:var(--color-text-muted);margin-bottom:2px;">
                 {item.memory_count} memories
               </div>
-              {#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) > 0}
+              {#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) + (item.backlog_count || 0) > 0}
                 <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
                   {#if item.in_progress_count}
                     <span style="font-size:0.6rem;font-weight:700;background:rgba(168,85,247,0.12);color:#a855f7;border:1px solid rgba(168,85,247,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">▶ {item.in_progress_count} active</span>
@@ -228,6 +231,9 @@
                   {/if}
                   {#if item.blocked_count}
                     <span style="font-size:0.6rem;font-weight:700;background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">⚠ {item.blocked_count} blocked</span>
+                  {/if}
+                  {#if item.backlog_count}
+                    <span style="font-size:0.6rem;font-weight:700;background:rgba(100,116,139,0.12);color:#64748b;border:1px solid rgba(100,116,139,0.25);padding:1px 5px;border-radius:9999px;white-space:nowrap;">☕ {item.backlog_count} backlog</span>
                   {/if}
                 </div>
               {/if}

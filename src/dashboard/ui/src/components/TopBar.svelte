@@ -80,9 +80,9 @@
       <!-- Connection status -->
       {#if $healthData}
         <div class="flex items-center gap-2">
-          <div style="width:8px;height:8px;border-radius:9999px;background:{$healthData.connected ? '#10b981' : '#94a3b8'};box-shadow:{$healthData.connected ? '0 0 0 3px rgba(16,185,129,0.2)' : 'none'};"></div>
+          <div style="width:8px;height:8px;border-radius:9999px;background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,0.2);"></div>
           <span style="font-size:0.72rem;font-weight:600;color:var(--color-text-muted);">
-            {$healthData.connected ? 'Connected' : 'Disconnected'}
+            Online
           </span>
           <span style="font-size:0.65rem;color:var(--color-text-muted);background:rgba(100,116,139,0.1);padding:1px 6px;border-radius:9999px;">
             v{$healthData.version}

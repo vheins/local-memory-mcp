@@ -9,6 +9,7 @@ export interface RepoMeta {
   pending_count?: number;
   in_progress_count?: number;
   blocked_count?: number;
+  backlog_count?: number;
   last_updated_at?: string;
 }
 

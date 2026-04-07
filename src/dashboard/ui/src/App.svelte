@@ -205,7 +205,7 @@
     {/if}
 
     <!-- Content Shell -->
-    <div id="dashboardShell" style="padding: 20px; padding-top: 80px; min-height: 100vh;">
+    <div id="dashboardShell" style="padding: 20px; min-height: 100vh;">
 
       {#if !$currentRepo}
         <div style="text-align:center;padding:80px 20px;">

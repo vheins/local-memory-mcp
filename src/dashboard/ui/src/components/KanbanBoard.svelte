@@ -68,18 +68,6 @@
     await loadColumn($currentRepo, status);
   }
 
-  $: taskStats = $dashboardStats?.taskStats;
-
-  function countForStatus(status: string): number | string {
-    const map: Record<string, string> = {
-      backlog: 'backlog',
-      pending: 'todo',
-      in_progress: 'inProgress',
-      completed: 'completed',
-    };
-    const key = map[status];
-    return key ? (taskStats as any)?.[key] ?? '—' : '—';
-  }
 </script>
 
 <div>
@@ -112,7 +100,7 @@
           <div style="width:10px;height:10px;border-radius:9999px;background:{col.dot};"></div>
           <span style="font-size:0.78rem;font-weight:700;color:var(--color-text);">{col.label}</span>
           <span style="margin-left:auto;font-size:0.7rem;font-weight:700;background:rgba(148,163,184,0.15);color:var(--color-text-muted);padding:1px 8px;border-radius:9999px;">
-            {countForStatus(col.status)}
+            {columnTasks[col.status]?.length || 0}{pagination[col.status]?.hasMore ? '+' : ''}
           </span>
         </div>
 
