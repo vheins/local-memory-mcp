@@ -85,6 +85,9 @@ export const api = {
   createTask: (body: any) =>
     apiFetch<any>('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
 
+  deleteTask: (id: string) =>
+    apiFetch<any>(`/api/tasks/${id}`, { method: 'DELETE' }),
+
   updateTaskComment: (id: string, comment: string) =>
     apiFetch<any>(`/api/task-comments/${id}`, {
       method: 'PUT',

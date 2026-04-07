@@ -748,14 +748,22 @@ export class SQLiteStore {
     return this.db.prepare(`
       SELECT
         m.repo,
-        COUNT(DISTINCT m.id) AS memory_count,
+        COUNT(m.id) AS memory_count,
         MAX(COALESCE(m.updated_at, m.created_at)) AS last_updated_at,
-        COALESCE(SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
-        COALESCE(SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END), 0) AS in_progress_count,
-        COALESCE(SUM(CASE WHEN t.status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_count,
-        COALESCE(SUM(CASE WHEN t.status = 'backlog' THEN 1 ELSE 0 END), 0) AS backlog_count
+        COALESCE(t.pending_count, 0) AS pending_count,
+        COALESCE(t.in_progress_count, 0) AS in_progress_count,
+        COALESCE(t.blocked_count, 0) AS blocked_count,
+        COALESCE(t.backlog_count, 0) AS backlog_count
       FROM memories m
-      LEFT JOIN tasks t ON t.repo = m.repo
+      LEFT JOIN (
+        SELECT repo,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_count,
+          SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) AS blocked_count,
+          SUM(CASE WHEN status = 'backlog' THEN 1 ELSE 0 END) AS backlog_count
+        FROM tasks
+        GROUP BY repo
+      ) t ON t.repo = m.repo
       GROUP BY m.repo
       ORDER BY last_updated_at DESC, m.repo ASC
     `).all() as any[];

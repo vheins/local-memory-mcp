@@ -150,10 +150,18 @@
     drawerOpen = true;
   }
 
-  function openTaskDrawer(task: Task) {
+  async function openTaskDrawer(task: Task) {
     selectedTask = task;
     selectedMemory = null;
     drawerOpen = true;
+    try {
+      const fullTask = await api.taskById(task.id);
+      if (selectedTask?.id === fullTask.id) {
+        selectedTask = fullTask;
+      }
+    } catch (err) {
+      console.error('Failed to fetch full task details:', err);
+    }
   }
 
   function closeDrawer() {

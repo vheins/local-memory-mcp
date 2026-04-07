@@ -120,7 +120,7 @@
             {/if}
           {:else}
             {#each columnTasks[col.status] as task (task.id)}
-              <TaskCard {task} onClick={() => onTaskClick(task)} />
+              <TaskCard {task} on:click={() => onTaskClick(task)} />
             {/each}
 
             <!-- Load more -->

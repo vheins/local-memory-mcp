@@ -4,7 +4,6 @@
   import Icon from '../lib/Icon.svelte';
 
   export let task: Task;
-  export let onClick: () => void = () => {};
 
   const priorityColors: Record<number, string> = {
     1: '#94a3b8', 2: '#3b82f6', 3: '#f59e0b', 4: '#f97316', 5: '#ef4444'
@@ -19,45 +18,69 @@
     'canceled': 'circle-pause-alt',
   };
 
+  const statusColors: Record<string, string> = {
+    'backlog':     '#64748b',
+    'pending':     '#0ea5e9',
+    'in_progress': '#a855f7',
+    'completed':   '#10b981',
+    'blocked':     '#ef4444',
+    'canceled':    '#f59e0b',
+  };
+
+  function cleanDesc(md: string | undefined): string {
+    if (!md) return '';
+    return md
+      .replace(/<[^>]*>/g, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[([^\]]+)\]\(.*?\)/g, '$1')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[#*~_-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   $: priorityColor = priorityColors[task.priority] || '#94a3b8';
   $: statusIcon = statusIconMap[task.status] || 'circle-dot';
+  $: statusColor = statusColors[task.status] || '#94a3b8';
+  $: descPreview = cleanDesc(task.description);
 </script>
 
 <div
   class="task-card animate-fade-in"
   role="button"
   tabindex="0"
-  on:click={onClick}
-  on:keydown={e => e.key === 'Enter' && onClick()}
+  on:click
+  on:keydown
 >
-  <!-- Priority indicator bar -->
+  <!-- Priority top bar -->
   <div class="priority-bar" style="background:{priorityColor};"></div>
 
-  <!-- Header: priority dot + code + phase -->
-  <div class="flex items-center justify-between mb-2">
-    <div class="flex items-center gap-2">
-      <div class="priority-dot" style="background:{priorityColor};{task.priority >= 4 ? 'box-shadow: 0 0 6px ' + priorityColor + '88;' : ''}"></div>
-      <span style="font-size:0.65rem;font-weight:700;color:var(--color-text-muted);font-family:'JetBrains Mono',monospace;">{task.task_code}</span>
+  <!-- Header row: status icon + code + phase chip -->
+  <div class="card-header">
+    <div class="code-row">
+      <span class="status-icon-dot" style="color:{statusColor};">
+        <Icon name={statusIcon} size={11} strokeWidth={2.5} />
+      </span>
+      <span class="task-code-text">{task.task_code}</span>
     </div>
     {#if task.phase}
       <span class="phase-chip">{task.phase}</span>
     {/if}
   </div>
 
-  <!-- Title -->
+  <!-- Title — always visible, max 2 lines -->
   <div class="task-title">{task.title}</div>
 
-  <!-- Description preview -->
-  {#if task.description}
-    <div class="task-desc">
-      {task.description.replace(/[#*`\[\]]/g, '').substring(0, 100)}…
-    </div>
+  <!-- Description preview — max 2 lines, stripped -->
+  {#if descPreview}
+    <div class="task-desc">{descPreview}</div>
   {/if}
 
   <!-- Footer: agent + time -->
-  <div class="flex items-center justify-between" style="margin-top:8px;">
+  <div class="card-footer">
     {#if task.agent}
-      <div class="flex items-center gap-1">
+      <div class="agent-row">
         <div class="agent-avatar">
           <Icon name="bot" size={9} strokeWidth={2} />
         </div>
@@ -66,15 +89,15 @@
     {:else}
       <span></span>
     {/if}
-    <div class="flex items-center gap-1" style="color:var(--color-text-faint);">
+    <div class="time-row">
       <Icon name="clock" size={10} strokeWidth={2} />
-      <span style="font-size:0.62rem;">{formatDate(task.updated_at)}</span>
+      <span>{formatDate(task.updated_at)}</span>
     </div>
   </div>
 
   <!-- Token badge -->
   {#if task.est_tokens && task.est_tokens > 0}
-    <div style="margin-top:6px;">
+    <div class="token-row">
       <span class="token-badge">
         <Icon name="cpu" size={9} strokeWidth={2} />
         ~{task.est_tokens >= 1000 ? (task.est_tokens/1000).toFixed(1)+'k' : task.est_tokens} tokens
@@ -99,41 +122,99 @@
     opacity: 1;
   }
 
+  /* ── Header ── */
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 7px;
+  }
+
+  .code-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .status-icon-dot {
+    display: inline-flex;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  .task-code-text {
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+  }
+
+  /* ── Title ── */
   .task-title {
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--color-text);
-    margin-bottom: 6px;
     line-height: 1.35;
-    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
+  /* ── Description ── */
   .task-desc {
     font-size: 0.72rem;
     color: var(--color-text-muted);
-    line-height: 1.55;
-    overflow: hidden;
+    line-height: 1.4;
+    margin-bottom: 12px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
-    margin-bottom: 4px;
+    overflow: hidden;
   }
 
+  /* ── Phase chip ── */
   .phase-chip {
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     background: rgba(99, 102, 241, 0.1);
     color: #6366f1;
-    padding: 2px 7px;
+    padding: 2px 6px;
     border-radius: 9999px;
     font-weight: 700;
     border: 1px solid rgba(99, 102, 241, 0.2);
     letter-spacing: 0.02em;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   :global(html.dark) .phase-chip {
     background: rgba(129, 140, 248, 0.15);
     color: #a5b4fc;
     border-color: rgba(129, 140, 248, 0.25);
+  }
+
+  /* ── Footer ── */
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+
+  .agent-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .agent-avatar {
@@ -149,12 +230,25 @@
   }
 
   .agent-name {
-    font-size: 0.65rem;
+    font-size: 0.64rem;
     color: var(--color-text-muted);
-    max-width: 90px;
+    max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .time-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--color-text-faint);
+    font-size: 0.62rem;
+  }
+
+  /* ── Token badge ── */
+  .token-row {
+    margin-top: 6px;
   }
 
   .token-badge {

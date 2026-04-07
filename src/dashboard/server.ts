@@ -250,6 +250,20 @@ app.put("/api/tasks/:id", async (req, res) => {
   }
 });
 
+app.delete("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = db.getTaskById(id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    
+    db.deleteTask(id);
+    db.logAction("delete", task.repo, { taskId: id });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put("/api/task-comments/:id", async (req, res) => {
     try {
         const { id } = req.params;

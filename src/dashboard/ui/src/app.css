@@ -668,6 +668,7 @@ a:hover { color: var(--color-primary-dark); }
   transition: all var(--duration-base) var(--ease-smooth);
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .task-card::before {
