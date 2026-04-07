@@ -2,16 +2,17 @@
   import { tasks, currentRepo, taskSearch, dashboardStats } from '../lib/stores';
   import { api } from '../lib/api';
   import TaskCard from './TaskCard.svelte';
+  import Icon from '../lib/Icon.svelte';
   import type { Task } from '../lib/stores';
 
   export let onTaskClick: (task: Task) => void = () => {};
   export let onAddTask: () => void = () => {};
 
-  const COLUMNS: { status: string; label: string; color: string; dot: string }[] = [
-    { status: 'backlog',     label: 'Backlog',      color: 'rgba(100,116,139,0.1)', dot: '#64748b' },
-    { status: 'pending',     label: 'To Do',        color: 'rgba(56,189,248,0.08)', dot: '#0ea5e9' },
-    { status: 'in_progress', label: 'In Progress',  color: 'rgba(99,102,241,0.08)', dot: '#6366f1' },
-    { status: 'completed',   label: 'Completed',    color: 'rgba(16,185,129,0.08)', dot: '#10b981' },
+  const COLUMNS: { status: string; label: string; bg: string; border: string; icon: string; color: string }[] = [
+    { status: 'backlog',     label: 'Backlog',      bg: 'rgba(100,116,139,0.07)', border: 'rgba(100,116,139,0.18)', icon: 'archive',      color: '#64748b' },
+    { status: 'pending',     label: 'To Do',        bg: 'rgba(14,165,233,0.06)',  border: 'rgba(14,165,233,0.18)',  icon: 'circle-dot',   color: '#0ea5e9' },
+    { status: 'in_progress', label: 'In Progress',  bg: 'rgba(168,85,247,0.07)', border: 'rgba(168,85,247,0.18)', icon: 'zap',           color: '#a855f7' },
+    { status: 'completed',   label: 'Completed',    bg: 'rgba(16,185,129,0.06)', border: 'rgba(16,185,129,0.18)', icon: 'circle-check',  color: '#10b981' },
   ];
 
   let loadingCols = new Set<string>();
@@ -25,7 +26,6 @@
 
   export async function loadTasks(repo: string) {
     if (!repo) return;
-    // Reset
     COLUMNS.forEach(c => {
       pagination[c.status] = { page: 1, pageSize: 20, hasMore: true };
       columnTasks[c.status] = [];
@@ -67,39 +67,41 @@
     pagination[status].page++;
     await loadColumn($currentRepo, status);
   }
-
 </script>
 
 <div>
   <!-- Toolbar -->
   <div class="flex items-center justify-between mb-4">
-    <div class="flex items-center gap-2">
+    <div class="search-wrap">
+      <span class="search-icon-inner">
+        <Icon name="search" size={13} strokeWidth={2} />
+      </span>
       <input
         class="form-input"
-        style="width:200px;font-size:0.8rem;"
+        style="padding-left:32px;width:220px;font-size:0.8rem;"
         type="text"
-        placeholder="Search tasks..."
+        placeholder="Search tasks…"
         bind:value={$taskSearch}
         on:input={() => $currentRepo && loadTasks($currentRepo)}
       />
     </div>
-    <div class="flex gap-2">
-      <button class="btn btn-accent btn-sm" on:click={onAddTask}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-        Add Task
-      </button>
-    </div>
+    <button class="btn btn-accent btn-sm" on:click={onAddTask}>
+      <Icon name="plus" size={14} strokeWidth={2.5} />
+      Add Task
+    </button>
   </div>
 
-  <!-- Kanban -->
+  <!-- Kanban Board -->
   <div class="kanban-board" style="padding-bottom:16px;">
     {#each COLUMNS as col}
-      <div class="kanban-col glass" style="background:{col.color};border:1px solid var(--color-border);padding:12px;">
+      <div class="kanban-col" style="background:{col.bg};border:1px solid {col.border};padding:12px;border-radius:16px;">
         <!-- Column header -->
         <div class="flex items-center gap-2 mb-3">
-          <div style="width:10px;height:10px;border-radius:9999px;background:{col.dot};"></div>
+          <span style="color:{col.color};display:flex;flex-shrink:0;">
+            <Icon name={col.icon} size={13} strokeWidth={2} />
+          </span>
           <span style="font-size:0.78rem;font-weight:700;color:var(--color-text);">{col.label}</span>
-          <span style="margin-left:auto;font-size:0.7rem;font-weight:700;background:rgba(148,163,184,0.15);color:var(--color-text-muted);padding:1px 8px;border-radius:9999px;">
+          <span class="col-count" style="margin-left:auto;background:{col.bg};color:{col.color};border:1px solid {col.border};">
             {columnTasks[col.status]?.length || 0}{pagination[col.status]?.hasMore ? '+' : ''}
           </span>
         </div>
@@ -111,9 +113,9 @@
               <div class="skeleton" style="height:80px;border-radius:12px;"></div>
               <div class="skeleton" style="height:60px;border-radius:12px;"></div>
             {:else}
-              <div style="text-align:center;padding:24px 8px;color:var(--color-text-muted);font-size:0.75rem;">
-                <div style="font-size:1.5rem;margin-bottom:6px;">📭</div>
-                No tasks
+              <div class="empty-col">
+                <span style="color:{col.color};opacity:0.5;"><Icon name={col.icon} size={22} strokeWidth={1.25} /></span>
+                <div style="font-size:0.75rem;color:var(--color-text-muted);margin-top:6px;">No tasks</div>
               </div>
             {/if}
           {:else}
@@ -125,10 +127,15 @@
             {#if pagination[col.status]?.hasMore}
               <button
                 class="btn btn-ghost btn-sm w-full"
-                style="margin-top:4px;"
+                style="margin-top:4px;justify-content:center;"
                 on:click={() => loadMore(col.status)}
                 disabled={loadingCols.has(col.status)}
               >
+                {#if loadingCols.has(col.status)}
+                  <span class="animate-spin"><Icon name="refresh-cw" size={12} strokeWidth={2} /></span>
+                {:else}
+                  <Icon name="chevron-down" size={12} strokeWidth={2} />
+                {/if}
                 {loadingCols.has(col.status) ? 'Loading…' : 'Load more'}
               </button>
             {/if}
@@ -138,3 +145,34 @@
     {/each}
   </div>
 </div>
+
+<style>
+  .search-wrap {
+    position: relative;
+  }
+
+  .search-icon-inner {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    display: flex;
+    pointer-events: none;
+  }
+
+  .col-count {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 9999px;
+  }
+
+  .empty-col {
+    text-align: center;
+    padding: 28px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+</style>
