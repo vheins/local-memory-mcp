@@ -77,6 +77,27 @@ local-memory-mcp dashboard
 ```
 *If not installed globally, use:* `npx @vheins/local-memory-mcp dashboard`
 
+### Developer Workflow (Dashboard UI)
+
+The dashboard UI is built with **Svelte 5 + Vite**. Source files live in `src/dashboard/ui/`.
+
+```bash
+# Start the API server (port 3456)
+npm run dashboard
+
+# In a separate terminal, start the Svelte dev server (port 5173)
+npm run dashboard:dev
+# → Open http://localhost:5173 (proxies /api to :3456)
+
+# Build Svelte UI for production (output → dist/dashboard/public/)
+npm run dashboard:build
+
+# Full production build (Svelte + TypeScript)
+npm run build
+```
+
+> The server serves the compiled Svelte build from `dist/dashboard/public/` in production.
+
 ### Auto-launch in VS Code
 Add this to your `.vscode/tasks.json` to have the dashboard start automatically:
 ```json
