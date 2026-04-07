@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { normalize, tokenize, STOPWORDS } from "./normalize.js";
+import { normalize, tokenize, STOPWORDS } from "../utils/normalize.js";
 
 // ─── Unit Tests: normalize() ─────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "./task.manage.js";
+import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 
 function getTextContent(result: Awaited<ReturnType<typeof handleTaskList>>) {

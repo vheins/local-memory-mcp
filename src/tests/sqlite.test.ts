@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { SQLiteStore } from "./sqlite.js";
+import { SQLiteStore } from "../storage/sqlite.js";
 import type { MemoryEntry } from "../types.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

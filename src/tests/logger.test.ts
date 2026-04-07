@@ -31,7 +31,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
 
   it("each log call produces valid JSON output with required fields", async () => {
     // Re-import logger after setting LOG_LEVEL
-    const { logger } = await import("./logger.js?t=" + Date.now());
+    const { logger } = await import("../utils/logger.js?t=" + Date.now());
 
     fc.assert(
       fc.property(
@@ -76,7 +76,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
   });
 
   it("log output with context includes context field", async () => {
-    const { logger } = await import("./logger.js?t=" + Date.now() + "ctx");
+    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "ctx");
 
     stderrOutput = [];
     logger.info("test message", { key: "value", count: 42 });
@@ -88,7 +88,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
   });
 
   it("log output without context does not include context field", async () => {
-    const { logger } = await import("./logger.js?t=" + Date.now() + "noctx");
+    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "noctx");
 
     stderrOutput = [];
     logger.info("no context message");
@@ -100,7 +100,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
   });
 
   it("all four log levels produce valid JSON with correct level field", async () => {
-    const { logger } = await import("./logger.js?t=" + Date.now() + "levels");
+    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "levels");
 
     const levels: LogLevel[] = ["debug", "info", "warning", "error"];
     for (const level of levels) {
@@ -120,7 +120,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
   });
 
   it("warn alias normalizes to warning", async () => {
-    const { logger } = await import("./logger.js?t=" + Date.now() + "warnalias");
+    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "warnalias");
 
     stderrOutput = [];
     logger.warn("legacy warning");
@@ -131,7 +131,7 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
   });
 
   it("emits structured payloads to registered log sinks", async () => {
-    const module = await import("./logger.js?t=" + Date.now() + "sink");
+    const module = await import("../utils/logger.js?t=" + Date.now() + "sink");
     const sink = vi.fn();
     module.addLogSink(sink);
 

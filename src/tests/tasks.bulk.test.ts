@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createRouter } from "./router.js";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { StubVectorStore } from "./storage/vectors.stub.js";
-import type { VectorStore } from "./types.js";
+import { createRouter } from "../router.js";
+import { SQLiteStore } from "../storage/sqlite.js";
+import { StubVectorStore } from "../storage/vectors.stub.js";
+import type { VectorStore } from "../types.js";
 
 function getTextContent(result: any) {
   const entry = result.content[0];

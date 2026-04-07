@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { handleMemoryStore } from "./tools/memory.store.js";
-import { handleMemorySearch } from "./tools/memory.search.js";
-import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
-import { handleMemoryUpdate } from "./tools/memory.update.js";
-import type { MemoryEntry, VectorStore } from "./types.js";
+import { SQLiteStore } from "../storage/sqlite.js";
+import { handleMemoryStore } from "../tools/memory.store.js";
+import { handleMemorySearch } from "../tools/memory.search.js";
+import { handleMemoryAcknowledge } from "../tools/memory.acknowledge.js";
+import { handleMemoryUpdate } from "../tools/memory.update.js";
+import type { MemoryEntry, VectorStore } from "../types.js";
 
 const VALID_UUID_1 = "11111111-1111-4111-a111-111111111111";
 const VALID_UUID_2 = "22222222-2222-4222-a222-222222222222";

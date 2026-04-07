@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createRouter } from "./router.js";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { StubVectorStore } from "./storage/vectors.stub.js";
-import type { VectorStore } from "./types.js";
+import { createRouter } from "../router.js";
+import { SQLiteStore } from "../storage/sqlite.js";
+import { StubVectorStore } from "../storage/vectors.stub.js";
+import type { VectorStore } from "../types.js";
 
 describe("MCP Local Memory - Task Management Workflow E2E", () => {
   let db: SQLiteStore;

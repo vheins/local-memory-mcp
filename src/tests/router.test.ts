@@ -1,10 +1,10 @@
 // Feature: memory-mcp-optimization, Property 11: createRouter() uses provided storage
 import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
-import { createRouter } from "./router.js";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { VectorStore } from "./types.js";
-import { createSessionContext, updateSessionRoots } from "./mcp/session.js";
+import { createRouter } from "../router.js";
+import { SQLiteStore } from "../storage/sqlite.js";
+import { VectorStore } from "../types.js";
+import { createSessionContext, updateSessionRoots } from "../mcp/session.js";
 import path from "node:path";
 
 /**

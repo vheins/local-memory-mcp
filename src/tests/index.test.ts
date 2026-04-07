@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { SQLiteStore } from "../storage/sqlite.js";
-import { readResource, listResourceTemplates, listResources } from "./index.js";
+import { readResource, listResourceTemplates, listResources } from "../resources/index.js";
 import { MemoryEntry } from "../types.js";
 import { createSessionContext, updateSessionRoots } from "../mcp/session.js";
 

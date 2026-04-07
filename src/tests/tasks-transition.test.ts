@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { handleTaskUpdate, handleTaskCreate } from "./task.manage.js";
+import { handleTaskUpdate, handleTaskCreate } from "../tools/task.manage.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
 

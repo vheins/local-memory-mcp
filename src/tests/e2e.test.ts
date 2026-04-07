@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createRouter } from "./router.js";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { RealVectorStore } from "./storage/vectors.js"; 
-import type { VectorStore } from "./types.js";
+import { createRouter } from "../router.js";
+import { SQLiteStore } from "../storage/sqlite.js";
+import { RealVectorStore } from "../storage/vectors.js"; 
+import type { VectorStore } from "../types.js";
 
 // Global configuration for heavy AI tests
 vi.setConfig({ testTimeout: 90000 });
