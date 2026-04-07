@@ -17,6 +17,7 @@ import {
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 import { logger } from "../utils/logger.js";
 import { MemorySynthesizeSchema } from "./schemas.js";
+import { normalizeRepo } from "../utils/normalize.js";
 import { handleMemoryRecap } from "./memory.recap.js";
 import { handleMemorySearch } from "./memory.search.js";
 import { handleTaskList } from "./task.manage.js";
@@ -161,10 +162,10 @@ async function resolveRepository(
   session: SessionContext | undefined,
   elicit: ElicitationRequestHandler | undefined,
 ) {
-  if (repo) return repo;
+  if (repo) return normalizeRepo(repo);
 
   const inferredRepo = inferRepoFromSession(session);
-  if (inferredRepo) return inferredRepo;
+  if (inferredRepo) return normalizeRepo(inferredRepo);
 
   if (!session?.supportsElicitationForm || !elicit) {
     return undefined;
@@ -188,7 +189,7 @@ async function resolveRepository(
   }));
 
   return typeof elicited.repo === "string" && elicited.repo.trim()
-    ? elicited.repo.trim()
+    ? normalizeRepo(elicited.repo.trim())
     : undefined;
 }
 

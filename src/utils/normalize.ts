@@ -46,6 +46,17 @@ export function normalize(text: string): string {
     .trim();
 }
 
+/**
+ * Normalizes a repository name by removing common owner/ prefixes (e.g. 'vheins/repo' -> 'repo').
+ * This prevents agents from accidentally using full GitHub paths as repo IDs.
+ */
+export function normalizeRepo(repo: string): string {
+  if (!repo) return "";
+  const parts = repo.split("/");
+  // Return the last part (the repository name itself)
+  return parts[parts.length - 1].trim();
+}
+
 export function tokenize(text: string): string[] {
   return normalize(text)
     .split(" ")

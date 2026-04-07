@@ -4,7 +4,35 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { normalize, tokenize, STOPWORDS } from "../utils/normalize.js";
+import { normalize, tokenize, STOPWORDS, normalizeRepo } from "../utils/normalize.js";
+
+// ─── Unit Tests: normalizeRepo() ─────────────────────────────────────────────
+
+describe("normalizeRepo() — unit tests", () => {
+  it("strips owner/ prefix from repository names", () => {
+    expect(normalizeRepo("vheins/local-memory-mcp")).toBe("local-memory-mcp");
+    expect(normalizeRepo("google/gemini-cli")).toBe("gemini-cli");
+  });
+
+  it("handles deep paths by taking the last segment", () => {
+    expect(normalizeRepo("github.com/vheins/local-memory-mcp")).toBe("local-memory-mcp");
+    expect(normalizeRepo("org/team/project/repo")).toBe("repo");
+  });
+
+  it("preserves name if no prefix is present", () => {
+    expect(normalizeRepo("local-memory-mcp")).toBe("local-memory-mcp");
+  });
+
+  it("trims whitespace", () => {
+    expect(normalizeRepo("  vheins/repo  ")).toBe("repo");
+    expect(normalizeRepo("  just-repo  ")).toBe("just-repo");
+  });
+
+  it("handles empty or null input", () => {
+    expect(normalizeRepo("")).toBe("");
+    expect(normalizeRepo(null as any)).toBe("");
+  });
+});
 
 // ─── Unit Tests: normalize() ─────────────────────────────────────────────────
 

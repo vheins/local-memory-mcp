@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { normalizeRepo } from "../utils/normalize.js";
 
 // Shared schema components
 export const MemoryScopeSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   branch: z.string().optional(),
   folder: z.string().optional(),
   language: z.string().optional()
@@ -49,7 +50,7 @@ export const MemoryUpdateSchema = z.object({
 export const MemorySearchSchema = z.object({
   query: z.string().min(3),
   prompt: z.string().optional(),
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   types: z.array(MemoryTypeSchema).optional(),
   minImportance: z.number().min(1).max(5).optional(),
   limit: z.number().min(1).max(100).default(5),
@@ -67,23 +68,23 @@ export const MemoryAcknowledgeSchema = z.object({
 });
 
 export const MemoryRecapSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   limit: z.number().min(1).max(50).default(20),
   offset: z.number().min(0).default(0)
 });
 
 export const MemoryBulkDeleteSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   ids: z.array(z.string().uuid()).min(1)
 });
 
 export const MemorySummarizeSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   signals: z.array(z.string().max(200)).min(1)
 });
 
 export const MemorySynthesizeSchema = z.object({
-  repo: z.string().min(1).optional(),
+  repo: z.string().min(1).transform(normalizeRepo).optional(),
   objective: z.string().min(5),
   current_file_path: z.string().optional(),
   include_summary: z.boolean().default(true),
@@ -97,7 +98,7 @@ export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "co
 export const TaskPrioritySchema = z.number().min(1).max(5);
 
 export const TaskCreateSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   task_code: z.string().min(1),
   phase: z.string().min(1),
   title: z.string().min(3).max(100),
@@ -115,11 +116,11 @@ export const TaskCreateSchema = z.object({
 });
 
 export const TaskCreateInteractiveSchema = TaskCreateSchema.partial().extend({
-  repo: z.string().min(1).optional(),
+  repo: z.string().min(1).transform(normalizeRepo).optional(),
 });
 
 export const TaskUpdateSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   id: z.string().uuid(),
   task_code: z.string().optional(),
   phase: z.string().optional(),
@@ -143,7 +144,7 @@ export const TaskUpdateSchema = z.object({
 );
 
 export const TaskListSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   status: z.string().optional(),
   phase: z.string().optional(),
   search: z.string().optional(),
@@ -152,7 +153,7 @@ export const TaskListSchema = z.object({
 });
 
 export const TaskSearchSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   query: z.string().min(1),
   status: z.string().optional(),
   limit: z.number().min(1).max(100).default(15),
@@ -161,7 +162,7 @@ export const TaskSearchSchema = z.object({
 
 export const TaskBulkManageSchema = z.object({
   action: z.enum(["bulk_create", "bulk_delete"]),
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   tasks: z.array(z.object({
     task_code: z.string().min(1),
     phase: z.string().min(1),
@@ -185,7 +186,7 @@ export const TaskBulkManageSchema = z.object({
 );
 
 export const TaskDeleteSchema = z.object({
-  repo: z.string().min(1),
+  repo: z.string().min(1).transform(normalizeRepo),
   id: z.string().uuid()
 });
 
