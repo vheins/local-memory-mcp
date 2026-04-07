@@ -233,8 +233,8 @@
 
     <!-- Mobile overlay -->
     {#if mobileMenuOpen}
-      <!-- svelte-ignore a11y-click-events-have-key-events -->
-      <div class="drawer-overlay" style="z-index:38;" on:click={() => mobileMenuOpen = false}></div>
+      <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+      <div class="drawer-overlay" style="z-index:38;" on:click={() => mobileMenuOpen = false} role="button" tabindex="0"></div>
       <div style="position:fixed;top:0;left:0;width:280px;height:100dvh;z-index:39;display:flex;flex-direction:column;">
         <RepoSidebar onRepoSelect={onRepoSelect} />
       </div>
@@ -417,8 +417,8 @@
                     </div>
                     <div class="ref-grid">
                       {#each filteredTools as tool}
-                        <!-- svelte-ignore a11y-click-events-have-key-events -->
-                        <div class="ref-card ref-card-tool animate-fade-in" on:click={() => openReferenceDrawer('tool', tool)}>
+                        <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+                        <div class="ref-card ref-card-tool animate-fade-in" on:click={() => openReferenceDrawer('tool', tool)} role="button" tabindex="0">
                           <div class="ref-card-top">
                             <span class="ref-type-badge ref-type-tool">
                               <Icon name="tool" size={10} strokeWidth={2} />
@@ -453,8 +453,8 @@
                     </div>
                     <div class="ref-grid">
                       {#each filteredPrompts as prompt}
-                        <!-- svelte-ignore a11y-click-events-have-key-events -->
-                        <div class="ref-card ref-card-prompt animate-fade-in" on:click={() => openReferenceDrawer('prompt', prompt)}>
+                        <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+                        <div class="ref-card ref-card-prompt animate-fade-in" on:click={() => openReferenceDrawer('prompt', prompt)} role="button" tabindex="0">
                           <div class="ref-card-top">
                             <span class="ref-type-badge ref-type-prompt">
                               <Icon name="sparkle" size={10} strokeWidth={2} />
@@ -479,8 +479,8 @@
                     </div>
                     <div class="ref-grid">
                       {#each filteredResources as resource}
-                        <!-- svelte-ignore a11y-click-events-have-key-events -->
-                        <div class="ref-card ref-card-resource animate-fade-in" on:click={() => openReferenceDrawer('resource', resource)}>
+                        <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+                        <div class="ref-card ref-card-resource animate-fade-in" on:click={() => openReferenceDrawer('resource', resource)} role="button" tabindex="0">
                           <div class="ref-card-top">
                             <span class="ref-type-badge ref-type-resource">
                               <Icon name="database" size={10} strokeWidth={2} />
@@ -534,14 +534,16 @@
 
 <!-- ════ Add Task Modal ════ -->
 {#if addTaskModalOpen}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <div class="drawer-overlay" style="display:flex;align-items:center;justify-content:center;z-index:60;" on:click={() => addTaskModalOpen = false}>
+  <!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
+  <div class="drawer-overlay" style="display:flex;align-items:center;justify-content:center;z-index:60;" on:click={() => addTaskModalOpen = false} role="button" tabindex="0">
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
     <div
       class="glass card animate-fade-in"
       style="width:500px;max-width:95vw;border:1px solid var(--color-border);"
       on:click|stopPropagation
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
     >
       <div class="flex items-center gap-2" style="margin-bottom:16px;">
         <Icon name="plus" size={16} strokeWidth={2} />
@@ -550,34 +552,34 @@
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Task Code *</label>
-            <input class="form-input" bind:value={newTask.task_code} placeholder="TASK-001" />
+            <label for="new_task_code" style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Task Code *</label>
+            <input id="new_task_code" class="form-input" bind:value={newTask.task_code} placeholder="TASK-001" />
           </div>
           <div>
-            <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Phase</label>
-            <input class="form-input" bind:value={newTask.phase} placeholder="Implementation" />
+            <label for="new_task_phase" style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Phase</label>
+            <input id="new_task_phase" class="form-input" bind:value={newTask.phase} placeholder="Implementation" />
           </div>
         </div>
         <div>
-          <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Title *</label>
-          <input class="form-input" bind:value={newTask.title} placeholder="Task title" />
+          <label for="new_task_title" style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Title *</label>
+          <input id="new_task_title" class="form-input" bind:value={newTask.title} placeholder="Task title" />
         </div>
         <div>
-          <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Description</label>
-          <textarea class="form-textarea" bind:value={newTask.description} placeholder="Task description..." rows="4"></textarea>
+          <label for="new_task_description" style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Description</label>
+          <textarea id="new_task_description" class="form-textarea" bind:value={newTask.description} placeholder="Task description..." rows="4"></textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Status</label>
-            <select class="form-select" bind:value={newTask.status}>
+            <label for="new_task_status" style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Status</label>
+            <select id="new_task_status" class="form-select" bind:value={newTask.status}>
               {#each ['backlog','pending','in_progress'] as s}
                 <option value={s}>{getStatusLabel(s)}</option>
               {/each}
             </select>
           </div>
           <div>
-            <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Priority</label>
-            <select class="form-select" bind:value={newTask.priority}>
+            <label for="new_task_priority" style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Priority</label>
+            <select id="new_task_priority" class="form-select" bind:value={newTask.priority}>
               {#each [1,2,3,4,5] as p}
                 <option value={p}>{getPriorityLabel(p)}</option>
               {/each}

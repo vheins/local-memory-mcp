@@ -129,7 +129,7 @@
         const refreshed = await api.taskById(task.id);
         if (refreshed) {
           task = refreshed;
-          onTaskUpdated(task);
+          onTaskUpdated(task!);
         }
       }
     } catch (e) {
