@@ -321,7 +321,7 @@ Please follow this strict execution flow:
 4. **Single-Task Execution Loop (STRICT)**: You MUST process tasks EXACTLY ONE AT A TIME. DO NOT update multiple tasks to 'in_progress' simultaneously. For the SINGLE task you select:
     - **Start**: Call 'task-update' to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
-    - **Inspect Codebase Logic First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Do not infer correctness from file presence alone.
+    - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.
     - **Validate Behavior (MANDATORY)**: Ensure the implementation logic satisfies the task intent and follows project standards. Validation must focus on behavior, control flow, data flow, and integration points, not just whether a file/class/function exists.
     - **Complete Only With Evidence**: Call 'task-update' to set status='completed' only after recording concrete evidence in the 'comment' field. The comment must include: files inspected, logic verified, checks/tests run (or why they could not run), and the exact reason the task is considered complete.
     - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using 'memory-store'.
@@ -534,7 +534,9 @@ Produce a comprehensive architecture overview:
   "create-task": {
     name: "create-task",
     description: "Generate structured, atomic tasks in Local Memory MCP from user directives.",
-    arguments: [],
+    arguments: [
+      { name: "instruction", description: "The user instruction or directive to analyze and break down into tasks", required: true }
+    ],
     messages: [
       {
         role: "user",
@@ -612,7 +614,7 @@ The \`description\` field MUST follow this structure EXACTLY:
 * Clear and actionable instructions for improvement or implementation.
 
 #### 2. Scope
-* What is INCLUDED.
+* What is INCLUDED and RELATED.
 
 #### 3. References
 * File paths, modules, endpoints, or documentation.
@@ -651,7 +653,9 @@ Before finishing, validate:
 * ❌ No execution was performed.
 * ✅ Only MCP task operations exist.
 
-If this check fails → ABORT OUTPUT.`
+If this check fails → ABORT OUTPUT.
+
+Analyze and create task for this instruction : {{instruction}}`
         }
       }
     ]
