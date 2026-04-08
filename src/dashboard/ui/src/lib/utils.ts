@@ -1,5 +1,8 @@
 // ─── Formatting utilities ─────────────────────────────────────────────────────
 
+import { marked } from 'marked';
+
+
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -79,10 +82,11 @@ export function getPriorityColor(priority: number): string {
 }
 
 export function renderMarkdown(text: string): string {
-  if (typeof window !== 'undefined' && (window as any).marked) {
-    return (window as any).marked.parse(text || '');
+  try {
+    return marked.parse(text || '') as string;
+  } catch (err) {
+    return text || '';
   }
-  return text || '';
 }
 
 export function exportToJSON(data: any, filename: string) {
