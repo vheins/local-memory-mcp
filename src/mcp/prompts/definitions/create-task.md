@@ -52,7 +52,7 @@ Your output MUST ONLY consist of calls to:
 
 Before creating tasks, you MUST:
 1. **Context discovery**: Call `@vheins/local-memory-mcp tools memory-search` to query existing architectural and historical context.
-2. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list` to check existing tasks.
+2. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list` to check existing tasks. **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
 
 ---
 
