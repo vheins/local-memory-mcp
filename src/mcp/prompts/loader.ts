@@ -19,7 +19,8 @@ export function listPromptFiles(): string[] {
   if (!fs.existsSync(PROMPT_DIR)) return [];
   return fs.readdirSync(PROMPT_DIR)
     .filter(file => file.endsWith(".md"))
-    .map(file => file.replace(/\.md$/, ""));
+    .map(file => file.replace(/\.md$/, ""))
+    .sort();
 }
 
 export function loadPromptFromMarkdown(name: string): LoadedPrompt {
