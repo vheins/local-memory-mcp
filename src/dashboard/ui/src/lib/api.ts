@@ -55,6 +55,12 @@ export const api = {
   createMemory: (body: any) =>
     apiFetch<any>('/api/memories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
 
+  updateMemory: (id: string, updates: any) =>
+    apiFetch<any>(`/api/memories/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }),
+
+  deleteMemory: (id: string) =>
+    apiFetch<any>(`/api/memories/${id}`, { method: 'DELETE' }),
+
   tasks: (params: {
     repo: string;
     status?: string;

@@ -19,6 +19,7 @@
   import RecentActions from './components/RecentActions.svelte';
   import DetailDrawer from './components/DetailDrawer.svelte';
   import ReferenceDrawer from './components/ReferenceDrawer.svelte';
+  import MemoryDrawer from './components/MemoryDrawer.svelte';
   import Icon from './lib/Icon.svelte';
 
   // Component refs
@@ -35,6 +36,10 @@
 
   let selectedReference: any = null;
   let referenceDrawerOpen = false;
+
+  // Memory Drawer
+  let memoryDrawerOpen = false;
+  let memoryDrawerItem: import('./lib/stores').Memory | null = null;  // null = create mode
 
   function openReferenceDrawer(itemType: string, data: any) {
     selectedReference = { type: itemType, data };
@@ -159,9 +164,22 @@
   }
 
   function openMemoryDrawer(mem: Memory) {
-    selectedMemory = mem;
-    selectedTask = null;
-    drawerOpen = true;
+    // Open the new MemoryDrawer (edit/view mode)
+    memoryDrawerItem = mem;
+    memoryDrawerOpen = true;
+  }
+
+  function openNewMemoryDrawer() {
+    memoryDrawerItem = null;
+    memoryDrawerOpen = true;
+  }
+
+  function handleMemorySaved(_mem: Memory) {
+    memoryList?.refresh();
+  }
+
+  function handleMemoryDeleted(_id: string) {
+    memoryList?.refresh();
   }
 
   async function openTaskDrawer(task: Task) {
@@ -324,7 +342,7 @@
               <Icon name="brain" size={14} strokeWidth={1.75} />
               <div class="section-label">Memory Explorer</div>
             </div>
-            <MemoryList bind:this={memoryList} onMemoryClick={openMemoryDrawer} />
+            <MemoryList bind:this={memoryList} onMemoryClick={openMemoryDrawer} onNewMemory={openNewMemoryDrawer} />
           </div>
         {/if}
 
@@ -530,6 +548,14 @@
   item={selectedReference}
   open={referenceDrawerOpen}
   onClose={() => referenceDrawerOpen = false}
+/>
+
+<MemoryDrawer
+  memory={memoryDrawerItem}
+  open={memoryDrawerOpen}
+  onClose={() => memoryDrawerOpen = false}
+  onSaved={handleMemorySaved}
+  onDeleted={handleMemoryDeleted}
 />
 
 <!-- ════ Add Task Modal ════ -->

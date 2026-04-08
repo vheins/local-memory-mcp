@@ -912,6 +912,37 @@ a:hover { color: var(--color-primary-dark); }
   box-shadow: -20px 0 60px rgba(0,0,0,0.5), -1px 0 0 rgba(56, 189, 248, 0.12);
 }
 
+/* ─── Table Dark Mode Optimization ──────────────────────────────────────── */
+.dark table thead tr {
+  background: rgba(10, 18, 38, 0.9) !important;
+}
+
+.dark table th {
+  color: var(--color-text-muted);
+  border-bottom-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+.dark table td {
+  border-bottom-color: rgba(148, 163, 184, 0.07) !important;
+  color: var(--color-text);
+}
+
+.dark table tbody tr:hover td {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.dark table tbody tr:nth-child(even) td {
+  background: rgba(8, 15, 32, 0.35);
+}
+
+.dark table tbody tr:nth-child(even):hover td {
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.dark table input[type="checkbox"] {
+  accent-color: #0ea5e9;
+}
+
 /* ─── Dropdown/Badge ───────────────────────────────────────────────────────── */
 .badge {
   display: inline-flex;

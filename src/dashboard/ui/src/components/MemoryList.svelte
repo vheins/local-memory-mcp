@@ -9,8 +9,11 @@
   import { api } from '../lib/api';
   import { formatDate, debounce, exportToJSON, exportToCSV } from '../lib/utils';
   import type { Memory } from '../lib/stores';
+  import Icon from '../lib/Icon.svelte';
 
   export let onMemoryClick: (mem: Memory) => void = () => {};
+  /** Called when user wants to create a new memory */
+  export let onNewMemory: () => void = () => {};
 
   let loading = false;
 
@@ -103,6 +106,17 @@
     else exportToCSV(data.memories || [], filename + '.csv');
   }
 
+  async function handleDeleteRow(mem: Memory, e: MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Delete memory "${mem.title}"?`)) return;
+    try {
+      await api.deleteMemory(mem.id);
+      loadMemories();
+    } catch (err: any) {
+      alert('Failed to delete: ' + err.message);
+    }
+  }
+
   $: allSelected = $memories.length > 0 && $selectedMemoryIds.size === $memories.length;
 
   const importanceBg: Record<number, string> = {
@@ -165,6 +179,12 @@
         CSV
       </button>
     </div>
+
+    <!-- New Memory CTA -->
+    <button class="btn btn-accent btn-sm" on:click={onNewMemory} id="newMemoryBtn" style="margin-left:auto;">
+      <Icon name="plus" size={13} strokeWidth={2.5} />
+      New Memory
+    </button>
   </div>
 
   <!-- Count -->
@@ -174,47 +194,39 @@
   </div>
 
   <!-- Table -->
-  <div style="overflow-x:auto;border-radius:14px;border:1px solid var(--color-border);">
-    <table style="width:100%;border-collapse:collapse;min-width:600px;">
+  <div class="mem-table-wrap">
+    <table class="mem-table">
       <thead>
-        <tr style="border-bottom:1px solid var(--color-border);background:rgba(248,250,252,0.8);">
-          <th style="padding:10px 12px;text-align:left;width:36px;">
+        <tr class="mem-thead-row">
+          <th class="mem-th" style="width:36px;">
             <input type="checkbox" checked={allSelected} on:change={toggleSelectAll} aria-label="Select all" />
           </th>
-          <th
-            style="padding:10px 12px;text-align:left;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);cursor:pointer;white-space:nowrap;"
-            on:click={() => toggleSort('title')}
-          >
+          <th class="mem-th sortable" on:click={() => toggleSort('title')}>
             Title {$memoriesSortBy === 'title' ? ($memoriesSortOrder === 'desc' ? '↓' : '↑') : ''}
           </th>
-          <th style="padding:10px 12px;text-align:left;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);">Type</th>
-          <th
-            style="padding:10px 12px;text-align:center;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);cursor:pointer;"
-            on:click={() => toggleSort('importance')}
-          >
+          <th class="mem-th">Type</th>
+          <th class="mem-th" style="text-align:center;cursor:pointer;" on:click={() => toggleSort('importance')}>
             Imp. {$memoriesSortBy === 'importance' ? ($memoriesSortOrder === 'desc' ? '↓' : '↑') : ''}
           </th>
-          <th
-            style="padding:10px 12px;text-align:left;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);cursor:pointer;"
-            on:click={() => toggleSort('updated_at')}
-          >
+          <th class="mem-th sortable" on:click={() => toggleSort('updated_at')}>
             Updated {$memoriesSortBy === 'updated_at' ? ($memoriesSortOrder === 'desc' ? '↓' : '↑') : ''}
           </th>
-          <th style="padding:10px 12px;text-align:center;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-muted);">Hits</th>
+          <th class="mem-th" style="text-align:center;">Hits</th>
+          <th class="mem-th" style="width:80px;"></th>
         </tr>
       </thead>
       <tbody>
         {#if loading}
           {#each Array(5) as _}
             <tr>
-              <td colspan="6" style="padding:10px 12px;">
+              <td colspan="7" class="mem-td">
                 <div class="skeleton" style="height:20px;border-radius:6px;"></div>
               </td>
             </tr>
           {/each}
         {:else if $memories.length === 0}
           <tr>
-            <td colspan="6" style="padding:40px;text-align:center;color:var(--color-text-muted);">
+            <td colspan="7" class="mem-td" style="padding:40px;text-align:center;color:var(--color-text-muted);">
               <div style="font-size:2rem;margin-bottom:8px;">🔍</div>
               No memories found
             </td>
@@ -222,14 +234,14 @@
         {:else}
           {#each $memories as mem (mem.id)}
             <tr
-              style="border-bottom:1px solid var(--color-border);cursor:pointer;transition:background 0.15s;"
-              on:click={() => onMemoryClick(mem)}
+              class="mem-row"
               class:selected={$selectedMemoryIds.has(mem.id)}
+              on:click={() => onMemoryClick(mem)}
             >
-              <td style="padding:10px 12px;" on:click|stopPropagation>
+              <td class="mem-td" on:click|stopPropagation>
                 <input type="checkbox" checked={$selectedMemoryIds.has(mem.id)} on:change={() => toggleSelect(mem.id)} />
               </td>
-              <td style="padding:10px 12px;max-width:300px;">
+              <td class="mem-td" style="max-width:300px;">
                 <div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{mem.title}</div>
                 {#if mem.tags?.length}
                   <div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
@@ -239,16 +251,34 @@
                   </div>
                 {/if}
               </td>
-              <td style="padding:10px 12px;">
+              <td class="mem-td">
                 <span class="type-chip type-{mem.type}">{TYPE_LABELS[mem.type] || mem.type}</span>
               </td>
-              <td style="padding:10px 12px;text-align:center;">
+              <td class="mem-td" style="text-align:center;">
                 <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;font-size:0.75rem;font-weight:700;background:{importanceBg[mem.importance] || importanceBg[1]};color:{importanceColor[mem.importance] || importanceColor[1]};">
                   {mem.importance}
                 </span>
               </td>
-              <td style="padding:10px 12px;font-size:0.75rem;color:var(--color-text-muted);white-space:nowrap;">{formatDate(mem.updated_at)}</td>
-              <td style="padding:10px 12px;text-align:center;font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">{mem.hit_count ?? 0}</td>
+              <td class="mem-td" style="font-size:0.75rem;color:var(--color-text-muted);white-space:nowrap;">{formatDate(mem.updated_at)}</td>
+              <td class="mem-td" style="text-align:center;font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">{mem.hit_count ?? 0}</td>
+              <td class="mem-td row-actions" on:click|stopPropagation>
+                <button
+                  class="row-action-btn edit-btn"
+                  on:click={() => onMemoryClick(mem)}
+                  title="Edit / View"
+                  aria-label="Edit memory"
+                >
+                  <Icon name="edit-2" size={13} strokeWidth={2} />
+                </button>
+                <button
+                  class="row-action-btn delete-btn"
+                  on:click={(e) => handleDeleteRow(mem, e)}
+                  title="Delete"
+                  aria-label="Delete memory"
+                >
+                  <Icon name="trash-2" size={13} strokeWidth={2} />
+                </button>
+              </td>
             </tr>
           {/each}
         {/if}
@@ -284,7 +314,123 @@
 </div>
 
 <style>
-  tr:hover { background: rgba(241,245,249,0.5); }
-  :global(.dark) tr:hover { background: rgba(30,41,59,0.4); }
-  tr.selected { background: rgba(14,165,233,0.05); }
+  /* ── Table wrapper ── */
+  .mem-table-wrap {
+    overflow-x: auto;
+    border-radius: 14px;
+    border: 1px solid var(--color-border);
+  }
+
+  .mem-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+  }
+
+  /* ── Head ── */
+  .mem-thead-row {
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(248, 250, 252, 0.9);
+  }
+
+  :global(html.dark) .mem-thead-row {
+    background: rgba(10, 18, 38, 0.85);
+  }
+
+  .mem-th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .mem-th.sortable { cursor: pointer; }
+  .mem-th.sortable:hover { color: var(--color-text); }
+
+  /* ── Rows ── */
+  .mem-td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  :global(html.dark) .mem-td {
+    border-color: rgba(148, 163, 184, 0.08);
+  }
+
+  .mem-row {
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .mem-row:hover {
+    background: rgba(241, 245, 249, 0.7);
+  }
+
+  :global(html.dark) .mem-row:hover {
+    background: rgba(14, 165, 233, 0.05);
+  }
+
+  .mem-row.selected {
+    background: rgba(14, 165, 233, 0.05);
+  }
+
+  :global(html.dark) .mem-row.selected {
+    background: rgba(14, 165, 233, 0.08);
+  }
+
+  /* last row: no bottom border */
+  .mem-row:last-child .mem-td { border-bottom: none; }
+
+  /* ── Row actions ── */
+  .row-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .mem-row:hover .row-actions {
+    opacity: 1;
+  }
+
+  .row-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    transition: background 0.15s ease, color 0.15s ease;
+    color: var(--color-text-muted);
+  }
+
+  .edit-btn:hover {
+    background: rgba(14, 165, 233, 0.1);
+    color: #0ea5e9;
+  }
+
+  :global(html.dark) .edit-btn:hover {
+    background: rgba(14, 165, 233, 0.15);
+    color: #38bdf8;
+  }
+
+  .delete-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+  }
+
+  :global(html.dark) .delete-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+  }
 </style>
