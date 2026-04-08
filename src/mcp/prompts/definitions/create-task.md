@@ -30,6 +30,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 * Read code and analyze context
 * Create tasks via `@vheins/local-memory-mcp tools task-create`
 * List tasks via `@vheins/local-memory-mcp tools task-list`
+* Search memory via `@vheins/local-memory-mcp tools memory-search`
 
 ---
 
@@ -38,6 +39,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 Your output MUST ONLY consist of calls to:
 * `@vheins/local-memory-mcp tools task-create`
 * `@vheins/local-memory-mcp tools task-list`
+* `@vheins/local-memory-mcp tools memory-search`
 
 **❌ DO NOT:**
 * Output explanations or narrative text
@@ -49,8 +51,8 @@ Your output MUST ONLY consist of calls to:
 ### 1. PRE-ANALYSIS (MANDATORY)
 
 Before creating tasks, you MUST:
-1. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list`.
-2. **Context discovery**: Read relevant modules, files, endpoints, and documentation.
+1. **Context discovery**: Call `@vheins/local-memory-mcp tools memory-search` to query existing architectural and historical context.
+2. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list` to check existing tasks.
 
 ---
 
@@ -71,6 +73,8 @@ Each `@vheins/local-memory-mcp tools task-create` MUST include:
 * `task_code`: (FEAT-XXX / FIX-XXX / REFACTOR-XXX)
 * `phase`: (Discovery / Implementation / Testing)
 * `priority`: (1–5)
+* `agent`: Current agent's name/role
+* `model`: Current AI model being used
 
 #### 🔥 DESCRIPTION FORMAT (STRICT)
 The `description` field MUST follow this structure EXACTLY:

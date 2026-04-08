@@ -39,6 +39,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 * Use `chrome-dev-tools` MCP to inspect browser UX
 * Create tasks via `@vheins/local-memory-mcp tools task-create`
 * List tasks via `@vheins/local-memory-mcp tools task-list`
+* Search memory via `@vheins/local-memory-mcp tools memory-search`
 
 ---
 
@@ -46,6 +47,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 If gaps are found, your output MUST ONLY consist of calls to:
 * `@vheins/local-memory-mcp tools task-create`
 * `@vheins/local-memory-mcp tools task-list`
+* `@vheins/local-memory-mcp tools memory-search`
 
 **❌ DO NOT:**
 * Output explanations or narrative text
@@ -56,8 +58,8 @@ If gaps are found, your output MUST ONLY consist of calls to:
 
 ### 3. PRE-ANALYSIS FOR TASK GENERATION (MANDATORY)
 Before creating tasks, you MUST:
-1. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list`.
-2. **Context discovery**: Ensure you have read relevant files.
+1. **Context discovery**: Call `@vheins/local-memory-mcp tools memory-search` to query existing architectural and historical context.
+2. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list` to check existing tasks.
 
 ---
 
@@ -76,6 +78,8 @@ Each `@vheins/local-memory-mcp tools task-create` MUST include:
 * `task_code`: (FEAT-XXX / FIX-XXX / REFACTOR-XXX)
 * `phase`: (Discovery / Implementation / Testing)
 * `priority`: (1–5)
+* `agent`: Current agent's name/role
+* `model`: Current AI model being used
 
 #### 🔥 DESCRIPTION FORMAT (STRICT)
 The `description` field MUST follow this structure EXACTLY:
