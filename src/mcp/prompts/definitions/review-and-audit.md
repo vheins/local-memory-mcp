@@ -75,7 +75,7 @@ Each task MUST be:
 
 ### 5. TASK ATTRIBUTES (MANDATORY)
 Each `@vheins/local-memory-mcp tools task-create` MUST include:
-* `task_code`: (FEAT-XXX / FIX-XXX / REFACTOR-XXX)
+* `task_code`: (e.g., FEAT-123 / FIX-456 / REFACTOR-789)
 * `phase`: (Discovery / Implementation / Testing)
 * `priority`: (1–5)
 * `agent`: Current agent's name/role
