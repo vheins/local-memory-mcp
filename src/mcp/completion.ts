@@ -24,7 +24,7 @@ type CompletionRequest = {
 const MAX_COMPLETION_VALUES = 100;
 const MAX_FILE_SCAN_RESULTS = 300;
 
-export function complete(
+export async function complete(
   params: CompletionRequest,
   db: SQLiteStore,
   session?: SessionContext,
@@ -53,7 +53,7 @@ export function complete(
 
     return {
       completion: buildCompletionResult(
-        completePromptArgument(promptName, argumentName, argumentValue, contextArguments, dataSources),
+        await completePromptArgument(promptName, argumentName, argumentValue, contextArguments, dataSources),
       ),
     };
   }
