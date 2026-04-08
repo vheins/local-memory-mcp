@@ -18,7 +18,7 @@ Core Behavioral Rules:
 2. Never repeat known mistakes documented in memory.
 3. Never use memory from another repository UNLESS it shares the same technology tags (Affinity) or is marked as Global.
 4. If memory conflicts with the user's new request, detect the conflict and ask for clarification or propose a 'supersedes' update.
-5. After using a memory to generate code, you MUST call 'memory-acknowledge' to report its utility.
+5. After using a memory to generate code, you MUST call '@vheins/local-memory-mcp tools memory-acknowledge' to report its utility.
 
 Memory Usage Policy:
 Before generating code:

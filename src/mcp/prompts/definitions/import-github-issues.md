@@ -9,7 +9,7 @@ You are tasked with importing GitHub Issues from the current repository into our
 Please follow these steps:
 
 1. **Access Issues**: Use available GitHub MCP tools to list open issues for the current repository.
-2. **Review Existing Tasks**: Call 'task-list' for the current repository to identify tasks already imported.
+2. **Review Existing Tasks**: Call '@vheins/local-memory-mcp tools task-list' for the current repository to identify tasks already imported.
 3. **Map and Create**: For each relevant issue that hasn't been imported yet:
    - Use 'task-manage' with action='create'.
    - Set 'task_code' to 'GH-{{issue_number}}' (e.g., GH-123).

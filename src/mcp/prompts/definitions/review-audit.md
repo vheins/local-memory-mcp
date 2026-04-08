@@ -37,15 +37,15 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 **Allowed Actions:**
 * Read code and analyze context
 * Use `chrome-dev-tools` MCP to inspect browser UX
-* Create tasks via `mcp_local-memory_task-create`
-* List tasks via `mcp_local-memory_task-list`
+* Create tasks via `@vheins/local-memory-mcp tools task-create`
+* List tasks via `@vheins/local-memory-mcp tools task-list`
 
 ---
 
 ### ✅ ALLOWED OUTPUT (STRICT)
 If gaps are found, your output MUST ONLY consist of calls to:
-* `mcp_local-memory_task-create`
-* `mcp_local-memory_task-list`
+* `@vheins/local-memory-mcp tools task-create`
+* `@vheins/local-memory-mcp tools task-list`
 
 **❌ DO NOT:**
 * Output explanations or narrative text
@@ -56,7 +56,7 @@ If gaps are found, your output MUST ONLY consist of calls to:
 
 ### 3. PRE-ANALYSIS FOR TASK GENERATION (MANDATORY)
 Before creating tasks, you MUST:
-1. **Sync backlog**: Call `mcp_local-memory_task-list`.
+1. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list`.
 2. **Context discovery**: Ensure you have read relevant files.
 
 ---
@@ -72,7 +72,7 @@ Each task MUST be:
 ---
 
 ### 5. TASK ATTRIBUTES (MANDATORY)
-Each `mcp_local-memory_task-create` MUST include:
+Each `@vheins/local-memory-mcp tools task-create` MUST include:
 * `task_code`: (FEAT-XXX / FIX-XXX / REFACTOR-XXX)
 * `phase`: (Discovery / Implementation / Testing)
 * `priority`: (1–5)

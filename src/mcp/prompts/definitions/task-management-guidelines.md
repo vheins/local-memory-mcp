@@ -14,7 +14,7 @@ Guidelines for Task Management:
    - Use 'metadata' to store technical debt notes or implementation details.
 
 2. Resource & Tool Usage:
-   - MANDATORY: Always call 'task-list' at the very start of a new session to understand current progress and avoid duplicating work.
+   - MANDATORY: Always call '@vheins/local-memory-mcp tools task-list' at the very start of a new session to understand current progress and avoid duplicating work.
    - Resource: You can also read 'tasks://current' for a filtered view of active tasks for the current repository.
    - Coordinate: If a task is already 'in_progress', do not attempt to work on it unless specifically asked to collaborate.
 
