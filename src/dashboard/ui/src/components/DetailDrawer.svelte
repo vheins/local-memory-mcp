@@ -489,7 +489,7 @@
     border: 1px solid var(--color-border);
   }
 
-  :global([data-theme="dark"]) .meta-cell {
+  :global(.dark) .meta-cell {
     background: rgba(30, 41, 59, 0.8);
   }
 
@@ -533,7 +533,7 @@
     padding: 16px;
   }
 
-  :global([data-theme="dark"]) .md-card {
+  :global(.dark) .md-card {
     background: rgba(15, 23, 42, 0.8);
   }
 
@@ -548,7 +548,7 @@
     font-family: 'JetBrains Mono', monospace;
   }
 
-  :global([data-theme="dark"]) .json-pre {
+  :global(.dark) .json-pre {
     background: rgba(15, 23, 42, 0.8);
   }
 
@@ -559,7 +559,7 @@
     background: rgba(241, 245, 249, 0.5);
   }
 
-  :global([data-theme="dark"]) .comment-card {
+  :global(.dark) .comment-card {
     background: rgba(30, 41, 59, 0.5);
   }
 
@@ -583,7 +583,7 @@
     border-radius: 10px;
   }
 
-  :global([data-theme="dark"]) .comment-compose {
+  :global(.dark) .comment-compose {
     background: rgba(30, 41, 59, 0.4);
   }
 </style>

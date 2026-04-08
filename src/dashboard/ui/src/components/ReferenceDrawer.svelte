@@ -1,5 +1,7 @@
 <script lang="ts">
   import { renderMarkdown } from '../lib/utils';
+  import { api } from '../lib/api';
+  import { currentRepo } from '../lib/stores';
   
   export let item: any = null; // { type: 'tool' | 'prompt' | 'resource', data: any }
   export let open = false;
@@ -16,6 +18,48 @@
   }
 
   $: typeLabel = item?.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : '';
+
+  let toolArgs: Record<string, string> = {};
+  let toolRunning = false;
+  let toolResult: string | null = null;
+  let toolError: string | null = null;
+
+  $: if (item && open) {
+    toolArgs = {};
+    // Pre-fill repo if it exists in the schema
+    if (item.type === 'tool' && item.data.inputSchema?.properties?.repo && $currentRepo) {
+      toolArgs['repo'] = $currentRepo;
+    }
+    toolResult = null;
+    toolError = null;
+    toolRunning = false;
+  }
+
+  async function runTool() {
+    if (!item || item.type !== 'tool') return;
+    toolRunning = true;
+    toolResult = null;
+    toolError = null;
+    try {
+      const parsedArgs: Record<string, any> = {};
+      if (item.data.inputSchema?.properties) {
+          for (const [k, v] of Object.entries(toolArgs)) {
+            if (v === undefined || v === '') continue;
+            try {
+              parsedArgs[k] = JSON.parse(v);
+            } catch {
+              parsedArgs[k] = v;
+            }
+          }
+      }
+      const result = await api.callTool(item.data.name, parsedArgs);
+      toolResult = JSON.stringify(result, null, 2);
+    } catch (e: any) {
+      toolError = e.message;
+    } finally {
+      toolRunning = false;
+    }
+  }
 </script>
 
 {#if open && item}
@@ -45,25 +89,54 @@
         </div>
       {/if}
 
-      {#if item.type === 'tool' && item.data.inputSchema?.properties}
+      {#if item.type === 'tool'}
         <div class="drawer-section">
-          <div class="section-label">Input Parameters</div>
-          {#each Object.entries(item.data.inputSchema.properties) as [key, param]}
-            <div style="border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; margin-bottom: 8px; background: rgba(0,0,0,0.02);">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 4px;">
-                <strong style="color: var(--color-text); font-family: monospace;">{key}</strong>
-                {#if item.data.inputSchema.required?.includes(key)}
-                  <span style="font-size: 0.7rem; color: #ef4444; font-weight: bold;">REQUIRED</span>
+          {#if item.data.inputSchema?.properties && Object.keys(item.data.inputSchema.properties).length > 0}
+            <div class="section-label">Playground (Input Parameters)</div>
+            {#each Object.entries(item.data.inputSchema.properties) as [key, param]}
+              <div style="border: 1px solid var(--color-border); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; background: rgba(0,0,0,0.01);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                  <span style="color: var(--color-text); font-family: monospace; font-size: 0.8rem; font-weight: 600;">{key}</span>
+                  <div style="display:flex; gap: 8px; align-items: center;">
+                    <span style="font-size: 0.7rem; color: var(--color-text-muted);">{(param as any).type}</span>
+                    {#if item.data.inputSchema.required?.includes(key)}
+                      <span style="font-size: 0.6rem; color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.1); padding: 2px 4px; border-radius: 4px;">REQ</span>
+                    {/if}
+                  </div>
+                </div>
+                {#if (param as any).description}
+                  <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; line-height: 1.2;">{(param as any).description}</div>
                 {/if}
+                <input type="text" class="form-input" style="font-size:0.8rem; padding: 4px 8px; border-radius: 4px; min-height: 28px;" placeholder={`Value for ${key}`} bind:value={toolArgs[key]} />
               </div>
-              {#if (param as any).description}
-                <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 6px;">{(param as any).description}</div>
-              {/if}
-              <div style="font-size: 0.75rem; color: var(--color-text-muted);">
-                Type: <span style="color: #3b82f6;">{(param as any).type}</span>
-              </div>
+            {/each}
+          {:else}
+             <div class="section-label">Playground</div>
+             <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 8px;">No arguments required.</div>
+          {/if}
+
+          <!-- Submit button -->
+          <div style="margin-top: 8px;">
+            <button class="btn btn-accent" style="width:100%" on:click={runTool} disabled={toolRunning}>
+              {toolRunning ? 'Running...' : 'Submit'}
+            </button>
+          </div>
+
+          <!-- Tool result -->
+          {#if toolError}
+            <div style="margin-top: 12px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; padding: 12px; border-radius: 8px; font-size: 0.85rem;">
+              <strong>Error:</strong> {toolError}
             </div>
-          {/each}
+          {/if}
+
+          {#if toolResult}
+            <div style="margin-top: 12px;" class="drawer-section">
+               <div class="section-label">Response</div>
+               <div class="md-card markdown-body" style="padding: 1px 16px;">
+                 {@html renderMarkdown("```json\n" + toolResult + "\n```")}
+               </div>
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -181,7 +254,7 @@
     padding: 16px;
   }
 
-  :global([data-theme="dark"]) .md-card {
+  :global(.dark) .md-card {
     background: rgba(15, 23, 42, 0.8);
   }
 </style>

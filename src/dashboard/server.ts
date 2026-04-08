@@ -444,6 +444,20 @@ app.get("/api/export", async (req, res) => {
     }
 });
 
+app.post("/api/tools/:name/call", async (req, res) => {
+  try {
+    if (!mcpClient.isConnected()) {
+      await mcpClient.start();
+    }
+    const { name } = req.params;
+    const args = req.body;
+    const result = await mcpClient.callTool(name, args);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Static Serving & Final Routes ---
 const staticRoot = fs.existsSync(path.join(__dirname, "public")) ? path.join(__dirname, "public") : path.join(process.cwd(), "src", "dashboard", "public");
 app.use(express.static(staticRoot));

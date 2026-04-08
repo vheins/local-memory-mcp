@@ -117,4 +117,11 @@ export const api = {
     apiFetch<any>(`/api/export?repo=${encodeURIComponent(repo)}`),
 
   capabilities: () => apiFetch<any>('/api/capabilities'),
+
+  callTool: (name: string, args: any) =>
+    apiFetch<any>(`/api/tools/${encodeURIComponent(name)}/call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args)
+    }),
 };
