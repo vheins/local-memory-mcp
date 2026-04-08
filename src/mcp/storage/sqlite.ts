@@ -744,10 +744,28 @@ export class SQLiteStore {
     };
   }
 
-  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null }> {
+  listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null; pending_count: number; in_progress_count: number; blocked_count: number }> {
     return this.db.prepare(`
-      SELECT repo, COUNT(*) AS memory_count, MAX(COALESCE(updated_at, created_at)) AS last_updated_at
-      FROM memories GROUP BY repo ORDER BY last_updated_at DESC, repo ASC
+      SELECT
+        m.repo,
+        COUNT(m.id) AS memory_count,
+        MAX(COALESCE(m.updated_at, m.created_at)) AS last_updated_at,
+        COALESCE(t.pending_count, 0) AS pending_count,
+        COALESCE(t.in_progress_count, 0) AS in_progress_count,
+        COALESCE(t.blocked_count, 0) AS blocked_count,
+        COALESCE(t.backlog_count, 0) AS backlog_count
+      FROM memories m
+      LEFT JOIN (
+        SELECT repo,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_count,
+          SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) AS blocked_count,
+          SUM(CASE WHEN status = 'backlog' THEN 1 ELSE 0 END) AS backlog_count
+        FROM tasks
+        GROUP BY repo
+      ) t ON t.repo = m.repo
+      GROUP BY m.repo
+      ORDER BY last_updated_at DESC, m.repo ASC
     `).all() as any[];
   }
 
@@ -840,6 +858,149 @@ export class SQLiteStore {
 
   delete(id: string): void {
     this.db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+  }
+
+  bulkInsertMemories(entries: MemoryEntry[]): number {
+    const insert = this.db.prepare(`
+      INSERT INTO memories (
+        id, repo, type, title, content, importance, folder, language,
+        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+        supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMany = this.db.transaction((entries: MemoryEntry[]) => {
+      let count = 0;
+      for (const entry of entries) {
+        insert.run(
+          entry.id,
+          entry.scope.repo,
+          entry.type,
+          entry.title || null,
+          entry.content,
+          entry.importance,
+          entry.scope.folder || null,
+          entry.scope.language || null,
+          entry.created_at,
+          entry.updated_at,
+          entry.expires_at ?? null,
+          entry.supersedes ?? null,
+          entry.status || "active",
+          entry.is_global ? 1 : 0,
+          entry.tags ? JSON.stringify(entry.tags) : null,
+          entry.metadata ? JSON.stringify(entry.metadata) : null,
+          entry.agent || 'unknown',
+          entry.role || 'unknown',
+          entry.model || 'unknown',
+          entry.completed_at || null
+        );
+        count++;
+      }
+      return count;
+    });
+
+    return insertMany(entries);
+  }
+
+  bulkInsertTasks(tasks: any[]): number {
+    const insert = this.db.prepare(`
+      INSERT INTO tasks (
+        id, repo, task_code, phase, title, description, status, priority,
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMany = this.db.transaction((tasks: any[]) => {
+      let count = 0;
+      for (const task of tasks) {
+        insert.run(
+          task.id,
+          task.repo,
+          task.task_code,
+          task.phase || null,
+          task.title,
+          task.description || null,
+          task.status || "backlog",
+          task.priority || 3,
+          task.agent || 'unknown',
+          task.role || 'unknown',
+          task.doc_path || null,
+          task.created_at,
+          task.updated_at,
+          task.finished_at || null,
+          task.canceled_at || null,
+          task.tags ? JSON.stringify(task.tags) : null,
+          task.metadata ? JSON.stringify(task.metadata) : null,
+          task.parent_id || null,
+          task.depends_on || null,
+          task.est_tokens || 0,
+          task.in_progress_at || null
+        );
+        count++;
+      }
+      return count;
+    });
+
+    return insertMany(tasks);
+  }
+
+  bulkUpdateMemories(ids: string[], updates: any): number {
+    if (ids.length === 0) return 0;
+    
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        if (key === 'tags' || key === 'metadata') {
+          fields.push(`${key} = ?`);
+          values.push(JSON.stringify(updates[key]));
+        } else if (key === 'is_global') {
+          fields.push(`${key} = ?`);
+          values.push(updates[key] ? 1 : 0);
+        } else {
+          fields.push(`${key} = ?`);
+          values.push(updates[key]);
+        }
+      }
+    });
+
+    if (fields.length === 0) return 0;
+
+    fields.push("updated_at = ?");
+    values.push(new Date().toISOString());
+
+    const updateMany = this.db.transaction((ids: string[], fields: string[], values: unknown[]) => {
+      let count = 0;
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const stmt = this.db.prepare(`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => '?').join(',')})`);
+        const result = stmt.run(...values, ...chunk);
+        count += result.changes;
+      }
+      return count;
+    });
+
+    return updateMany(ids, fields, values);
+  }
+
+  bulkDeleteMemories(ids: string[]): number {
+    if (ids.length === 0) return 0;
+    
+    const deleteMany = this.db.transaction((ids: string[]) => {
+      let count = 0;
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const stmt = this.db.prepare(`DELETE FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`);
+        const result = stmt.run(...chunk);
+        count += result.changes;
+      }
+      return count;
+    });
+
+    return deleteMany(ids);
   }
 
   listRepos(): string[] {
@@ -1205,27 +1366,36 @@ export class SQLiteStore {
 
   getTaskTimeStats(repo: string, period: 'daily' | 'weekly' | 'monthly' | 'overall'): any {
     let dateFilter = "";
-    if (period === 'daily') dateFilter = "AND date(finished_at) = date('now')";
-    else if (period === 'weekly') dateFilter = "AND date(finished_at) >= date('now', '-7 days')";
-    else if (period === 'monthly') dateFilter = "AND date(finished_at) >= date('now', '-30 days')";
+    if (period === 'daily') dateFilter = "AND date(COALESCE(finished_at, updated_at)) = date('now')";
+    else if (period === 'weekly') dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-7 days')";
+    else if (period === 'monthly') dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-30 days')";
     
     const stats = this.db.prepare(`
       SELECT 
         COUNT(*) as completed_count,
         SUM(est_tokens) as total_tokens,
-        AVG((julianday(finished_at) - julianday(in_progress_at)) * 86400.0) as avg_duration_seconds
+        AVG(
+          CASE 
+            WHEN in_progress_at IS NOT NULL AND finished_at IS NOT NULL 
+            THEN (julianday(finished_at) - julianday(in_progress_at)) * 86400.0 
+            ELSE NULL 
+          END
+        ) as avg_duration_seconds
       FROM tasks 
       WHERE repo = ? 
       AND status = 'completed' 
-      AND in_progress_at IS NOT NULL 
-      AND finished_at IS NOT NULL
       ${dateFilter}
     `).get(repo) as any;
+
+    let addedDateFilter = "";
+    if (period === 'daily') addedDateFilter = "AND date(created_at) = date('now')";
+    else if (period === 'weekly') addedDateFilter = "AND date(created_at) >= date('now', '-7 days')";
+    else if (period === 'monthly') addedDateFilter = "AND date(created_at) >= date('now', '-30 days')";
 
     const added = this.db.prepare(`
       SELECT COUNT(*) as count FROM tasks 
       WHERE repo = ? 
-      ${period !== 'overall' ? `AND date(created_at) >= ${period === 'daily' ? "date('now')" : period === 'weekly' ? "date('now', '-7 days')" : "date('now', '-30 days')"}` : ""}
+      ${addedDateFilter}
     `).get(repo) as any;
 
     return {

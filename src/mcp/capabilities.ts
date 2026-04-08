@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pkgPath = path.join(__dirname, "../package.json");
+const pkgPath = path.join(__dirname, "../../package.json");
 let pkgVersion = "0.1.0";
 
 try {

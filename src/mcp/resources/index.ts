@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite.js";
-import { SessionContext } from "../mcp/session.js";
+import { SessionContext } from "../session.js";
 import { logger } from "../utils/logger.js";
 import { rankCompletionValues } from "../utils/completion.js";
 import { decodeCursor, encodeCursor } from "../utils/pagination.js";

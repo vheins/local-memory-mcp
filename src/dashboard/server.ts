@@ -7,11 +7,11 @@ import { exec } from "child_process";
 import { randomUUID } from "crypto";
 import os from "os";
 import { MCPClient } from "../mcp/client.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { logger } from "../utils/logger.js";
-import { TOOL_DEFINITIONS } from "../tools/schemas.js";
-import { PROMPTS } from "../prompts/registry.js";
-import { listResources } from "../resources/index.js";
+import { SQLiteStore } from "../mcp/storage/sqlite.js";
+import { logger } from "../mcp/utils/logger.js";
+import { TOOL_DEFINITIONS } from "../mcp/tools/schemas.js";
+import { PROMPTS } from "../mcp/prompts/registry.js";
+import { listResources } from "../mcp/resources/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkg = { version: "0.0.0" };
@@ -176,6 +176,80 @@ app.post("/api/memories", async (req, res) => {
   }
 });
 
+app.put("/api/memories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = db.getByIdWithStats ? db.getByIdWithStats(id) : db.getById(id);
+    if (!existing) return res.status(404).json({ error: "Memory not found" });
+    const { title, content, type, importance, tags, agent, model, repo } = req.body;
+    const updates = { title, content, type, importance, tags, agent, model, repo, updated_at: new Date().toISOString() };
+    db.update(id, updates);
+    db.logAction("update", existing.repo || req.body.repo || "", { memoryId: id });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/memories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = db.getByIdWithStats ? db.getByIdWithStats(id) : db.getById(id);
+    if (!existing) return res.status(404).json({ error: "Memory not found" });
+    db.delete(id);
+    db.logAction("delete", existing.repo || "", { memoryId: id });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/memories/bulk-import", async (req, res) => {
+  try {
+    const { items, repo } = req.body;
+    if (!Array.isArray(items) || !repo) return res.status(400).json({ error: "Invalid payload: requires 'items' array and 'repo'" });
+    
+    const entries = items.map(item => ({
+      ...item,
+      id: item.id || randomUUID(),
+      scope: { ...item.scope, repo },
+      created_at: item.created_at || new Date().toISOString(),
+      updated_at: item.updated_at || new Date().toISOString()
+    }));
+    
+    const count = db.bulkInsertMemories(entries);
+    db.logAction("write", repo, { query: `Bulk imported ${count} memories` });
+    res.json({ success: true, count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/memories/bulk-action", async (req, res) => {
+  try {
+    const { action, ids, updates } = req.body;
+    if (!Array.isArray(ids) || !action) return res.status(400).json({ error: "Invalid payload: requires 'ids' array and 'action'" });
+    
+    let count = 0;
+    if (action === "delete") {
+      count = db.bulkDeleteMemories(ids);
+    } else if (action === "update" || action === "archive") {
+      count = db.bulkUpdateMemories(ids, updates || { status: action === 'archive' ? 'archived' : 'active' });
+    } else {
+      return res.status(400).json({ error: "Invalid action" });
+    }
+    
+    if (ids.length > 0) {
+       const mem = db.getById(ids[0]);
+       db.logAction(action, mem?.scope?.repo || "unknown", { query: `Bulk ${action} applied to ${count} memories` });
+    }
+    
+    res.json({ success: true, count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Task endpoints
 app.get("/api/tasks", async (req, res) => {
   try {
@@ -245,6 +319,42 @@ app.put("/api/tasks/:id", async (req, res) => {
     }
 
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = db.getTaskById(id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    
+    db.deleteTask(id);
+    db.logAction("delete", task.repo, { taskId: id });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/tasks/bulk-import", async (req, res) => {
+  try {
+    const { items, repo } = req.body;
+    if (!Array.isArray(items) || !repo) return res.status(400).json({ error: "Invalid payload: requires 'items' array and 'repo'" });
+    
+    const tasks = items.map(t => ({
+      ...t,
+      id: t.id || randomUUID(),
+      repo,
+      task_code: t.task_code || randomUUID().substring(0,8),
+      created_at: t.created_at || new Date().toISOString(),
+      updated_at: t.updated_at || new Date().toISOString()
+    }));
+    
+    const count = db.bulkInsertTasks(tasks);
+    db.logAction("write", repo, { query: `Bulk imported ${count} tasks` });
+    res.json({ success: true, count });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
-import { inferRepoFromSession, SessionContext } from "../mcp/session.js";
+import { inferRepoFromSession, SessionContext } from "../session.js";
 import {
   ElicitationRequestHandler,
   extractAcceptedElicitationContent,
-} from "../mcp/elicitation.js";
+} from "../elicitation.js";
 import { createMcpResponse } from "../utils/mcp-response.js";
 import {
   TaskListSchema,

@@ -9,7 +9,7 @@ import {
   extractRootsFromResult,
   updateSessionFromInitialize,
   updateSessionRoots,
-} from "./mcp/session.js";
+} from "./session.js";
 import { addLogSink, logger } from "./utils/logger.js";
 import fs from "fs";
 import path from "path";

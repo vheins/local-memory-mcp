@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { SQLiteStore } from "./storage/sqlite.js";
-import { SessionContext, getFilesystemRoots, inferRepoFromSession } from "./mcp/session.js";
+import { SessionContext, getFilesystemRoots, inferRepoFromSession } from "./session.js";
 import { completePromptArgument } from "./prompts/registry.js";
 import { completeResourceArgument } from "./resources/index.js";
 import { rankCompletionValues } from "./utils/completion.js";
