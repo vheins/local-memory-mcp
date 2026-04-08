@@ -860,6 +860,149 @@ export class SQLiteStore {
     this.db.prepare("DELETE FROM memories WHERE id = ?").run(id);
   }
 
+  bulkInsertMemories(entries: MemoryEntry[]): number {
+    const insert = this.db.prepare(`
+      INSERT INTO memories (
+        id, repo, type, title, content, importance, folder, language,
+        created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+        supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMany = this.db.transaction((entries: MemoryEntry[]) => {
+      let count = 0;
+      for (const entry of entries) {
+        insert.run(
+          entry.id,
+          entry.scope.repo,
+          entry.type,
+          entry.title || null,
+          entry.content,
+          entry.importance,
+          entry.scope.folder || null,
+          entry.scope.language || null,
+          entry.created_at,
+          entry.updated_at,
+          entry.expires_at ?? null,
+          entry.supersedes ?? null,
+          entry.status || "active",
+          entry.is_global ? 1 : 0,
+          entry.tags ? JSON.stringify(entry.tags) : null,
+          entry.metadata ? JSON.stringify(entry.metadata) : null,
+          entry.agent || 'unknown',
+          entry.role || 'unknown',
+          entry.model || 'unknown',
+          entry.completed_at || null
+        );
+        count++;
+      }
+      return count;
+    });
+
+    return insertMany(entries);
+  }
+
+  bulkInsertTasks(tasks: any[]): number {
+    const insert = this.db.prepare(`
+      INSERT INTO tasks (
+        id, repo, task_code, phase, title, description, status, priority,
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMany = this.db.transaction((tasks: any[]) => {
+      let count = 0;
+      for (const task of tasks) {
+        insert.run(
+          task.id,
+          task.repo,
+          task.task_code,
+          task.phase || null,
+          task.title,
+          task.description || null,
+          task.status || "backlog",
+          task.priority || 3,
+          task.agent || 'unknown',
+          task.role || 'unknown',
+          task.doc_path || null,
+          task.created_at,
+          task.updated_at,
+          task.finished_at || null,
+          task.canceled_at || null,
+          task.tags ? JSON.stringify(task.tags) : null,
+          task.metadata ? JSON.stringify(task.metadata) : null,
+          task.parent_id || null,
+          task.depends_on || null,
+          task.est_tokens || 0,
+          task.in_progress_at || null
+        );
+        count++;
+      }
+      return count;
+    });
+
+    return insertMany(tasks);
+  }
+
+  bulkUpdateMemories(ids: string[], updates: any): number {
+    if (ids.length === 0) return 0;
+    
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        if (key === 'tags' || key === 'metadata') {
+          fields.push(`${key} = ?`);
+          values.push(JSON.stringify(updates[key]));
+        } else if (key === 'is_global') {
+          fields.push(`${key} = ?`);
+          values.push(updates[key] ? 1 : 0);
+        } else {
+          fields.push(`${key} = ?`);
+          values.push(updates[key]);
+        }
+      }
+    });
+
+    if (fields.length === 0) return 0;
+
+    fields.push("updated_at = ?");
+    values.push(new Date().toISOString());
+
+    const updateMany = this.db.transaction((ids: string[], fields: string[], values: unknown[]) => {
+      let count = 0;
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const stmt = this.db.prepare(`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => '?').join(',')})`);
+        const result = stmt.run(...values, ...chunk);
+        count += result.changes;
+      }
+      return count;
+    });
+
+    return updateMany(ids, fields, values);
+  }
+
+  bulkDeleteMemories(ids: string[]): number {
+    if (ids.length === 0) return 0;
+    
+    const deleteMany = this.db.transaction((ids: string[]) => {
+      let count = 0;
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const stmt = this.db.prepare(`DELETE FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`);
+        const result = stmt.run(...chunk);
+        count += result.changes;
+      }
+      return count;
+    });
+
+    return deleteMany(ids);
+  }
+
   listRepos(): string[] {
     return (this.db.prepare("SELECT DISTINCT repo FROM memories ORDER BY repo").all() as any[]).map(r => r.repo);
   }

@@ -20,6 +20,7 @@
   import DetailDrawer from './components/DetailDrawer.svelte';
   import ReferenceDrawer from './components/ReferenceDrawer.svelte';
   import MemoryDrawer from './components/MemoryDrawer.svelte';
+  import BulkImportModal from './components/BulkImportModal.svelte';
   import Icon from './lib/Icon.svelte';
 
   // Component refs
@@ -40,6 +41,15 @@
   // Memory Drawer
   let memoryDrawerOpen = false;
   let memoryDrawerItem: import('./lib/stores').Memory | null = null;  // null = create mode
+
+  // Bulk Import
+  let bulkImportOpen = false;
+  let bulkImportTarget: 'memories' | 'tasks' = 'memories';
+
+  function openBulkImport(target: 'memories' | 'tasks') {
+    bulkImportTarget = target;
+    bulkImportOpen = true;
+  }
 
   function openReferenceDrawer(itemType: string, data: any) {
     selectedReference = { type: itemType, data };
@@ -342,7 +352,7 @@
               <Icon name="brain" size={14} strokeWidth={1.75} />
               <div class="section-label">Memory Explorer</div>
             </div>
-            <MemoryList bind:this={memoryList} onMemoryClick={openMemoryDrawer} onNewMemory={openNewMemoryDrawer} />
+            <MemoryList bind:this={memoryList} onMemoryClick={openMemoryDrawer} onNewMemory={openNewMemoryDrawer} onBulkImport={() => openBulkImport('memories')} />
           </div>
         {/if}
 
@@ -358,6 +368,7 @@
                 bind:this={kanbanBoard}
                 onTaskClick={openTaskDrawer}
                 onAddTask={() => addTaskModalOpen = true}
+                onBulkImport={() => openBulkImport('tasks')}
               />
             </div>
           </div>
@@ -620,6 +631,17 @@
     </div>
   </div>
 {/if}
+
+<BulkImportModal 
+  repo={$currentRepo} 
+  importTarget={bulkImportTarget} 
+  isOpen={bulkImportOpen} 
+  on:close={() => bulkImportOpen = false}
+  on:success={() => {
+    if (bulkImportTarget === 'memories') memoryList?.refresh();
+    if (bulkImportTarget === 'tasks' && $currentRepo) kanbanBoard?.loadTasks($currentRepo);
+  }}
+/>
 
 <style>
   @media (max-width: 900px) {

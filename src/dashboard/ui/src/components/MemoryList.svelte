@@ -14,6 +14,7 @@
   export let onMemoryClick: (mem: Memory) => void = () => {};
   /** Called when user wants to create a new memory */
   export let onNewMemory: () => void = () => {};
+  export let onBulkImport: () => void = () => {};
 
   let loading = false;
 
@@ -117,6 +118,29 @@
     }
   }
 
+  async function handleBulkDelete() {
+    if ($selectedMemoryIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${$selectedMemoryIds.size} memories?`)) return;
+    try {
+      await api.bulkMemoryAction('delete', Array.from($selectedMemoryIds));
+      selectedMemoryIds.set(new Set());
+      loadMemories();
+    } catch (err: any) {
+      alert('Failed to delete: ' + err.message);
+    }
+  }
+
+  async function handleBulkArchive() {
+    if ($selectedMemoryIds.size === 0) return;
+    try {
+      await api.bulkMemoryAction('archive', Array.from($selectedMemoryIds));
+      selectedMemoryIds.set(new Set());
+      loadMemories();
+    } catch (err: any) {
+      alert('Failed to archive: ' + err.message);
+    }
+  }
+
   $: allSelected = $memories.length > 0 && $selectedMemoryIds.size === $memories.length;
 
   const importanceBg: Record<number, string> = {
@@ -177,6 +201,11 @@
       <button class="btn btn-ghost btn-sm" on:click={() => handleExport('csv')} title="Export CSV">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         CSV
+      </button>
+      <div style="width:1px;height:14px;background:var(--color-border);margin:auto 4px;"></div>
+      <button class="btn btn-ghost btn-sm" on:click={onBulkImport} title="Bulk Import">
+        <Icon name="upload" size={13} strokeWidth={2} />
+        Import
       </button>
     </div>
 
@@ -311,6 +340,17 @@
       </div>
     </div>
   {/if}
+
+  <!-- Bulk Action Toolbar -->
+  {#if $selectedMemoryIds.size > 0}
+    <div class="bulk-actions-bar">
+      <span><b>{$selectedMemoryIds.size}</b> selected</span>
+      <div style="width:12px;"></div>
+      <button class="btn btn-sm" style="background:rgba(120,120,120,0.2);color:inherit;" on:click={() => selectedMemoryIds.set(new Set())}>Cancel</button>
+      <button class="btn btn-sm" style="background:#52525b;color:white;border:none;" on:click={handleBulkArchive}>Archive</button>
+      <button class="btn btn-sm btn-accent" style="background:#ef4444;color:white;border:none;" on:click={handleBulkDelete}>Delete</button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -432,5 +472,38 @@
   :global(html.dark) .delete-btn:hover {
     background: rgba(239, 68, 68, 0.15);
     color: #fca5a5;
+  }
+
+  /* ── Bulk Actions Bar ── */
+  .bulk-actions-bar {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 9999px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 1000;
+    color: white;
+    font-size: 0.85rem;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  
+  :global(html:not(.dark)) .bulk-actions-bar {
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--color-text);
+    border-color: var(--color-border);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translate(-50%, 20px) scale(0.95); }
+    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
   }
 </style>

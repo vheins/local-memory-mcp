@@ -12,6 +12,7 @@
 
   export let onTaskClick: (task: Task) => void = () => {};
   export let onAddTask: () => void = () => {};
+  export let onBulkImport: () => void = () => {};
 
   const COLUMNS: { status: string; label: string; bg: string; border: string; icon: string; color: string }[] = [
     { status: 'backlog',     label: 'Backlog',      bg: 'rgba(100,116,139,0.07)', border: 'rgba(100,116,139,0.18)', icon: 'archive',      color: '#64748b' },
@@ -145,10 +146,16 @@
         on:input={() => $currentRepo && loadTasks($currentRepo)}
       />
     </div>
-    <button class="btn btn-accent btn-sm" on:click={onAddTask}>
-      <Icon name="plus" size={14} strokeWidth={2.5} />
-      Add Task
-    </button>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost btn-sm" on:click={onBulkImport} title="Bulk Import">
+        <Icon name="upload" size={14} strokeWidth={2.5} />
+        Import
+      </button>
+      <button class="btn btn-accent btn-sm" on:click={onAddTask}>
+        <Icon name="plus" size={14} strokeWidth={2.5} />
+        Add Task
+      </button>
+    </div>
   </div>
 
   <!-- Kanban Board -->

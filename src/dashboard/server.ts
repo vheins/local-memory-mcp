@@ -203,6 +203,52 @@ app.delete("/api/memories/:id", async (req, res) => {
   }
 });
 
+app.post("/api/memories/bulk-import", async (req, res) => {
+  try {
+    const { items, repo } = req.body;
+    if (!Array.isArray(items) || !repo) return res.status(400).json({ error: "Invalid payload: requires 'items' array and 'repo'" });
+    
+    const entries = items.map(item => ({
+      ...item,
+      id: item.id || randomUUID(),
+      scope: { ...item.scope, repo },
+      created_at: item.created_at || new Date().toISOString(),
+      updated_at: item.updated_at || new Date().toISOString()
+    }));
+    
+    const count = db.bulkInsertMemories(entries);
+    db.logAction("write", repo, { query: `Bulk imported ${count} memories` });
+    res.json({ success: true, count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/memories/bulk-action", async (req, res) => {
+  try {
+    const { action, ids, updates } = req.body;
+    if (!Array.isArray(ids) || !action) return res.status(400).json({ error: "Invalid payload: requires 'ids' array and 'action'" });
+    
+    let count = 0;
+    if (action === "delete") {
+      count = db.bulkDeleteMemories(ids);
+    } else if (action === "update" || action === "archive") {
+      count = db.bulkUpdateMemories(ids, updates || { status: action === 'archive' ? 'archived' : 'active' });
+    } else {
+      return res.status(400).json({ error: "Invalid action" });
+    }
+    
+    if (ids.length > 0) {
+       const mem = db.getById(ids[0]);
+       db.logAction(action, mem?.scope?.repo || "unknown", { query: `Bulk ${action} applied to ${count} memories` });
+    }
+    
+    res.json({ success: true, count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Task endpoints
 app.get("/api/tasks", async (req, res) => {
   try {
@@ -286,6 +332,28 @@ app.delete("/api/tasks/:id", async (req, res) => {
     db.deleteTask(id);
     db.logAction("delete", task.repo, { taskId: id });
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/tasks/bulk-import", async (req, res) => {
+  try {
+    const { items, repo } = req.body;
+    if (!Array.isArray(items) || !repo) return res.status(400).json({ error: "Invalid payload: requires 'items' array and 'repo'" });
+    
+    const tasks = items.map(t => ({
+      ...t,
+      id: t.id || randomUUID(),
+      repo,
+      task_code: t.task_code || randomUUID().substring(0,8),
+      created_at: t.created_at || new Date().toISOString(),
+      updated_at: t.updated_at || new Date().toISOString()
+    }));
+    
+    const count = db.bulkInsertTasks(tasks);
+    db.logAction("write", repo, { query: `Bulk imported ${count} tasks` });
+    res.json({ success: true, count });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

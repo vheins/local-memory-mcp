@@ -61,6 +61,12 @@ export const api = {
   deleteMemory: (id: string) =>
     apiFetch<any>(`/api/memories/${id}`, { method: 'DELETE' }),
 
+  bulkImportMemories: (repo: string, items: any[]) =>
+    apiFetch<any>('/api/memories/bulk-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
+
+  bulkMemoryAction: (action: string, ids: string[], updates?: any) =>
+    apiFetch<any>('/api/memories/bulk-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ids, updates }) }),
+
   tasks: (params: {
     repo: string;
     status?: string;
@@ -93,6 +99,9 @@ export const api = {
 
   deleteTask: (id: string) =>
     apiFetch<any>(`/api/tasks/${id}`, { method: 'DELETE' }),
+
+  bulkImportTasks: (repo: string, items: any[]) =>
+    apiFetch<any>('/api/tasks/bulk-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
 
   updateTaskComment: (id: string, comment: string) =>
     apiFetch<any>(`/api/task-comments/${id}`, {
