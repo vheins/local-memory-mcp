@@ -269,6 +269,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center;">
              <span class="status-chip {getStatusColor(task?.status || 'pending')}" style="font-size:0.85rem; padding: 4px 10px;">{getStatusLabel(task?.status || '')}</span>
              
+             {#if task?.status !== 'completed'}
              <button class="btn btn-ghost" style="color: #ef4444;" on:click={async () => {
                 if (!task) return;
                 if (confirm('Are you sure you want to delete this task?')) {
@@ -285,6 +286,7 @@
                </svg>
                Delete Task
              </button>
+             {/if}
           </div>
         </div>
 
@@ -336,6 +338,27 @@
         <!-- ─── Comments / Activity ─────────────────────────────────────────── -->
         <div>
           <div class="section-label">Activity ({task.comments?.length ?? 0})</div>
+
+          <!-- Add comment -->
+          <div class="comment-compose" style="margin-bottom:16px;">
+            <textarea
+              class="form-textarea"
+              placeholder="Add a comment or status note…"
+              bind:value={newComment}
+              rows="2"
+              style="font-size:0.82rem;resize:vertical;"
+              on:keydown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postComment(); }}
+            ></textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+              <span style="font-size:0.65rem;color:var(--color-text-muted);">Ctrl+Enter to submit</span>
+              <button
+                class="btn btn-accent"
+                style="font-size:0.78rem;"
+                disabled={postingComment || !newComment.trim()}
+                on:click={postComment}
+              >{postingComment ? 'Posting…' : 'Post Comment'}</button>
+            </div>
+          </div>
 
           <!-- Comment list -->
           {#if task.comments?.length}
@@ -396,27 +419,6 @@
               {/each}
             </div>
           {/if}
-
-          <!-- Add comment -->
-          <div class="comment-compose">
-            <textarea
-              class="form-textarea"
-              placeholder="Add a comment or status note…"
-              bind:value={newComment}
-              rows="2"
-              style="font-size:0.82rem;resize:vertical;"
-              on:keydown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) postComment(); }}
-            ></textarea>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-              <span style="font-size:0.65rem;color:var(--color-text-muted);">Ctrl+Enter to submit</span>
-              <button
-                class="btn btn-accent"
-                style="font-size:0.78rem;"
-                disabled={postingComment || !newComment.trim()}
-                on:click={postComment}
-              >{postingComment ? 'Posting…' : 'Post Comment'}</button>
-            </div>
-          </div>
         </div>
       {/if}
     </div>

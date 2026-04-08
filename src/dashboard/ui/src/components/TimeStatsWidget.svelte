@@ -42,25 +42,25 @@
     <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#6366f1;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Completed</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.completed_count ?? '—'}
+        {periodData?.completed ?? '—'}
       </div>
     </div>
     <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#10b981;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Added</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.created_count ?? '—'}
+        {periodData?.added ?? '—'}
       </div>
     </div>
     <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#0ea5e9;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Tokens</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.total_tokens ? formatTokens(periodData.total_tokens) : '—'}
+        {periodData?.tokens ? formatTokens(periodData.tokens) : '—'}
       </div>
     </div>
     <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#f59e0b;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Avg Time</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.avg_duration_seconds ? formatDuration(periodData.avg_duration_seconds) : '—'}
+        {periodData?.avgDuration ? formatDuration(periodData.avgDuration) : '—'}
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { healthData, theme, currentRepo, activeTab } from '../lib/stores';
+  import { healthData, theme, currentRepo, activeTab, availableRepos } from '../lib/stores';
   import { getRepoInitials } from '../lib/utils';
   import Icon from '../lib/Icon.svelte';
 
@@ -35,6 +35,7 @@
 
   $: countdownPct = (countdownSeconds / 30) * 100;
   $: countdownColor = countdownSeconds <= 5 ? '#ef4444' : countdownSeconds <= 10 ? '#f97316' : '#0ea5e9';
+  $: currentRepoData = $availableRepos.find(r => r.repo === $currentRepo);
 
   import { onMount, onDestroy } from 'svelte';
   onMount(() => startCountdown());
@@ -65,10 +66,10 @@
             <div class="font-semibold" style="font-size:0.82rem;color:var(--color-text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
               {$currentRepo}
             </div>
-            {#if $healthData}
+            {#if currentRepoData}
               <div class="flex items-center gap-1" style="font-size:0.65rem;color:var(--color-text-muted);">
                 <Icon name="database" size={10} strokeWidth={2} />
-                <span>{$healthData.memoryCount} memories</span>
+                <span>{currentRepoData.memory_count || 0} memories</span>
               </div>
             {/if}
           </div>

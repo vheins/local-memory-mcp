@@ -1,9 +1,14 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { tasks, currentRepo, taskSearch, dashboardStats } from '../lib/stores';
   import { api } from '../lib/api';
   import TaskCard from './TaskCard.svelte';
   import Icon from '../lib/Icon.svelte';
   import type { Task } from '../lib/stores';
+
+  onMount(() => {
+    if ($currentRepo) loadTasks($currentRepo);
+  });
 
   export let onTaskClick: (task: Task) => void = () => {};
   export let onAddTask: () => void = () => {};
@@ -67,6 +72,61 @@
     pagination[status].page++;
     await loadColumn($currentRepo, status);
   }
+
+  let draggedTask: Task | null = null;
+  let sourceCol: string | null = null;
+  let dragOverCol: string | null = null;
+
+  function handleDragStart(e: DragEvent, task: Task, colStatus: string) {
+    draggedTask = task;
+    sourceCol = colStatus;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', task.id);
+    }
+  }
+
+  function handleDragOver(e: DragEvent, colStatus: string) {
+    if (!draggedTask || sourceCol === colStatus) return;
+    e.preventDefault();
+    dragOverCol = colStatus;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  function handleDragLeave(e: DragEvent, colStatus: string) {
+    if (dragOverCol === colStatus) {
+      dragOverCol = null;
+    }
+  }
+
+  async function handleDrop(e: DragEvent, targetCol: string) {
+    e.preventDefault();
+    dragOverCol = null;
+    if (!draggedTask || !sourceCol || sourceCol === targetCol) return;
+
+    const taskToMove = draggedTask;
+    const fromCol = sourceCol;
+    const targetStatus = targetCol;
+
+    draggedTask = null;
+    sourceCol = null;
+
+    columnTasks[fromCol] = columnTasks[fromCol].filter(t => t.id !== taskToMove.id);
+    const updatedTask = { ...taskToMove, status: targetStatus };
+    columnTasks[targetStatus] = [updatedTask, ...(columnTasks[targetStatus] || [])];
+    columnTasks = { ...columnTasks };
+
+    try {
+      await api.updateTask(taskToMove.id, { status: targetStatus });
+    } catch (err) {
+      console.error('Failed to move task:', err);
+      if ($currentRepo) {
+        loadTasks($currentRepo);
+      }
+    }
+  }
 </script>
 
 <div>
@@ -94,7 +154,14 @@
   <!-- Kanban Board -->
   <div class="kanban-board" style="padding-bottom:16px;">
     {#each COLUMNS as col}
-      <div class="kanban-col" style="background:{col.bg};border:1px solid {col.border};padding:12px;border-radius:16px;">
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div 
+        class="kanban-col {dragOverCol === col.status ? 'drag-over' : ''}" 
+        style="background:{col.bg};border:1px solid {col.border};padding:12px;border-radius:16px;transition: border-color 0.2s;"
+        on:dragover={(e) => handleDragOver(e, col.status)}
+        on:dragleave={(e) => handleDragLeave(e, col.status)}
+        on:drop={(e) => handleDrop(e, col.status)}
+      >
         <!-- Column header -->
         <div class="flex items-center gap-2 mb-3">
           <span style="color:{col.color};display:flex;flex-shrink:0;">
@@ -120,7 +187,14 @@
             {/if}
           {:else}
             {#each columnTasks[col.status] as task (task.id)}
-              <TaskCard {task} on:click={() => onTaskClick(task)} />
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <div 
+                draggable="true" 
+                on:dragstart={(e) => handleDragStart(e, task, col.status)}
+                style="cursor: grab;"
+              >
+                <TaskCard {task} on:click={() => onTaskClick(task)} />
+              </div>
             {/each}
 
             <!-- Load more -->
@@ -174,5 +248,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+  }
+
+  .drag-over {
+    border-color: var(--color-accent) !important;
+    background: rgba(99, 102, 241, 0.1) !important;
   }
 </style>
