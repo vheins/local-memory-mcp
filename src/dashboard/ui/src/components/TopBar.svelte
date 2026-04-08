@@ -2,13 +2,42 @@
   import { healthData, theme, currentRepo, activeTab, availableRepos } from '../lib/stores';
   import { getRepoInitials } from '../lib/utils';
   import Icon from '../lib/Icon.svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   export let onRefresh: () => void = () => {};
   export let onToggleMobileMenu: () => void = () => {};
 
+  const GITHUB_URL = 'https://github.com/vheins/local-memory-mcp';
+  const NPM_URL = 'https://www.npmjs.com/package/@vheins/local-memory-mcp';
+  const NPM_PKG = '@vheins/local-memory-mcp';
+
   let countdownSeconds = 30;
   let countdownTimer: ReturnType<typeof setInterval>;
   let refreshing = false;
+
+  // npm downloads
+  let npmDownloads: number | null = null;
+  let npmLoading = true;
+
+  function formatDownloads(n: number): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+    return String(n);
+  }
+
+  async function fetchNpmDownloads() {
+    try {
+      const res = await fetch(`https://api.npmjs.org/downloads/point/last-month/${NPM_PKG}`);
+      if (res.ok) {
+        const data = await res.json();
+        npmDownloads = data.downloads ?? null;
+      }
+    } catch {
+      npmDownloads = null;
+    } finally {
+      npmLoading = false;
+    }
+  }
 
   function toggleTheme() {
     theme.update(t => t === 'dark' ? 'light' : 'dark');
@@ -37,8 +66,10 @@
   $: countdownColor = countdownSeconds <= 5 ? '#ef4444' : countdownSeconds <= 10 ? '#f97316' : '#0ea5e9';
   $: currentRepoData = $availableRepos.find(r => r.repo === $currentRepo);
 
-  import { onMount, onDestroy } from 'svelte';
-  onMount(() => startCountdown());
+  onMount(() => {
+    startCountdown();
+    fetchNpmDownloads();
+  });
   onDestroy(() => clearInterval(countdownTimer));
 </script>
 
@@ -82,8 +113,82 @@
       {/if}
     </div>
 
-    <!-- Right: status, countdown, theme toggle -->
-    <div class="flex items-center gap-3">
+    <!-- Right: external links, status, countdown, theme toggle -->
+    <div class="flex items-center gap-2">
+
+      <!-- ── External Links Group ── -->
+      <div class="ext-links-group">
+        <!-- GitHub link -->
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ext-link-btn"
+          title="View on GitHub"
+          aria-label="GitHub repository"
+          id="githubLink"
+        >
+          <!-- GitHub SVG icon -->
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          <span class="ext-link-label">GitHub</span>
+        </a>
+
+        <!-- Divider -->
+        <div class="ext-link-divider"></div>
+
+        <!-- Star button -->
+        <a
+          href="{GITHUB_URL}/stargazers"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ext-link-btn ext-link-star"
+          title="Star on GitHub"
+          aria-label="Star on GitHub"
+          id="githubStarBtn"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+          <span class="ext-link-label">Star</span>
+        </a>
+
+        <!-- Divider -->
+        <div class="ext-link-divider"></div>
+
+        <!-- npm link + downloads -->
+        <a
+          href={NPM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ext-link-btn ext-link-npm"
+          title="View on npm"
+          aria-label="npm package"
+          id="npmLink"
+        >
+          <!-- npm SVG wordmark -->
+          <svg width="18" height="11" viewBox="0 0 18 7" fill="currentColor" aria-hidden="true">
+            <path d="M0 0h18v6H9V7H5V6H0V0zm1 5h2V1h1v4h1V1h1v5h4V1h1v4h1V1h1v4h1V1h2v5H1V5z"/>
+          </svg>
+          {#if npmLoading}
+            <span class="ext-link-label npm-dl-skeleton"></span>
+          {:else if npmDownloads !== null}
+            <span class="ext-link-label npm-dl-badge">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              </svg>
+              {formatDownloads(npmDownloads)}/mo
+            </span>
+          {:else}
+            <span class="ext-link-label">npm</span>
+          {/if}
+        </a>
+      </div>
+
+      <!-- Separator -->
+      <div style="width:1px;height:20px;background:var(--color-border);opacity:0.6;"></div>
+
       <!-- Connection status -->
       {#if $healthData}
         <div class="flex items-center gap-2">
@@ -148,6 +253,101 @@
     #mobileMenuBtn { display: flex !important; }
   }
 
+  /* ── External Links Group ── */
+  .ext-links-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: rgba(241, 245, 249, 0.75);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+  }
+
+  :global(html.dark) .ext-links-group {
+    background: rgba(15, 23, 42, 0.75);
+    border-color: rgba(148, 163, 184, 0.12);
+  }
+
+  .ext-link-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .ext-link-btn:hover {
+    background: rgba(14, 165, 233, 0.08);
+    color: var(--color-text);
+  }
+
+  :global(html.dark) .ext-link-btn:hover {
+    background: rgba(14, 165, 233, 0.12);
+  }
+
+  .ext-link-star:hover {
+    background: rgba(234, 179, 8, 0.1) !important;
+    color: #ca8a04 !important;
+  }
+
+  :global(html.dark) .ext-link-star:hover {
+    background: rgba(234, 179, 8, 0.12) !important;
+    color: #fbbf24 !important;
+  }
+
+  .ext-link-npm:hover {
+    background: rgba(203, 36, 49, 0.08) !important;
+    color: #cb2431 !important;
+  }
+
+  :global(html.dark) .ext-link-npm:hover {
+    background: rgba(203, 36, 49, 0.12) !important;
+    color: #f87171 !important;
+  }
+
+  .ext-link-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--color-border);
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+
+  .ext-link-label {
+    font-size: 0.7rem;
+  }
+
+  /* npm download badge */
+  .npm-dl-badge {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: inherit;
+  }
+
+  .npm-dl-skeleton {
+    display: inline-block;
+    width: 36px;
+    height: 10px;
+    border-radius: 4px;
+    background: rgba(148, 163, 184, 0.18);
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Countdown ── */
   .countdown-bar {
     display: flex;
     align-items: center;
@@ -187,5 +387,12 @@
 
   .btn.refreshing {
     color: var(--color-primary);
+  }
+
+  /* hide external links on very small screens */
+  @media (max-width: 640px) {
+    .ext-links-group {
+      display: none;
+    }
   }
 </style>
