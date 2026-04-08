@@ -1240,6 +1240,15 @@ export class SQLiteStore {
     `).all(taskId) as any[];
   }
 
+  getAllTaskCommentsByRepo(repo: string): any[] {
+    return this.db.prepare(`
+      SELECT * FROM task_comments
+      WHERE repo = ?
+      ORDER BY created_at DESC, id DESC
+    `).all(repo) as any[];
+  }
+
+
   getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false, excludeTypes: string[] = []): MemoryEntry[] {
     let query = "SELECT * FROM memories WHERE repo = ?";
     const params: any[] = [repo];
