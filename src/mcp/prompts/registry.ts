@@ -608,7 +608,7 @@ Each \`mcp_local-memory_task-create\` MUST include:
 The \`description\` field MUST follow this structure EXACTLY:
 
 #### 1. Objective
-* Clear goal of the task.
+* Clear and actionable instructions for improvement or implementation.
 
 #### 2. Scope
 * What is INCLUDED.
@@ -740,7 +740,7 @@ Each \`mcp_local-memory_task-create\` MUST include:
 The \`description\` field MUST follow this structure EXACTLY:
 
 #### 1. Objective
-* Clear goal of the task.
+* Clear and actionable instructions for improvement or implementation.
 
 #### 2. Scope
 * What is INCLUDED.
