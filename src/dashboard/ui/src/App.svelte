@@ -553,6 +553,7 @@
   open={drawerOpen}
   onClose={closeDrawer}
   onTaskUpdated={handleTaskUpdated}
+  onTaskDeleted={() => { if ($currentRepo) kanbanBoard?.loadTasks($currentRepo); }}
 />
 
 <ReferenceDrawer

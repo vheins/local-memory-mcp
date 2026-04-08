@@ -181,9 +181,10 @@ app.put("/api/memories/:id", async (req, res) => {
     const { id } = req.params;
     const existing = db.getByIdWithStats ? db.getByIdWithStats(id) : db.getById(id);
     if (!existing) return res.status(404).json({ error: "Memory not found" });
-    const updates = { ...req.body, updated_at: new Date().toISOString() };
+    const { title, content, type, importance, tags, agent, model, repo } = req.body;
+    const updates = { title, content, type, importance, tags, agent, model, repo, updated_at: new Date().toISOString() };
     db.update(id, updates);
-    db.logAction("update", existing.scope?.repo || req.body.repo || "", { memoryId: id });
+    db.logAction("update", existing.repo || req.body.repo || "", { memoryId: id });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -196,7 +197,7 @@ app.delete("/api/memories/:id", async (req, res) => {
     const existing = db.getByIdWithStats ? db.getByIdWithStats(id) : db.getById(id);
     if (!existing) return res.status(404).json({ error: "Memory not found" });
     db.delete(id);
-    db.logAction("delete", existing.scope?.repo || "", { memoryId: id });
+    db.logAction("delete", existing.repo || "", { memoryId: id });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

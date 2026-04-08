@@ -12,6 +12,7 @@
   export let open = false;
   export let onClose: () => void = () => {};
   export let onTaskUpdated: (task: Task) => void = () => {};
+  export let onTaskDeleted: (id: string) => void = () => {};
 
   // ─── Modes ───────────────────────────────────────────────────────────────────
   $: mode = task ? 'task' : memory ? 'memory' : null;
@@ -275,6 +276,7 @@
                 if (confirm('Are you sure you want to delete this task?')) {
                   try {
                     await api.deleteTask(task.id);
+                    onTaskDeleted(task.id);
                     onClose();
                   } catch (e: any) {
                     alert('Error deleting task: ' + e.message);

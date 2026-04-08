@@ -1,6 +1,7 @@
 // ─── Formatting utilities ─────────────────────────────────────────────────────
 
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 
 export function formatDate(dateStr: string): string {
@@ -83,7 +84,8 @@ export function getPriorityColor(priority: number): string {
 
 export function renderMarkdown(text: string): string {
   try {
-    return marked.parse(text || '') as string;
+    const html = marked.parse(text || '') as string;
+    return DOMPurify.sanitize(html);
   } catch (err) {
     return text || '';
   }
