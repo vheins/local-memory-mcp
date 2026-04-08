@@ -80,30 +80,17 @@ Each `@vheins/local-memory-mcp tools task-create` MUST include:
 The `description` field MUST follow this structure EXACTLY:
 
 #### 1. Context & Analysis
-* **Original Instruction**: The exact user directive that triggered this task.
+* **Instruction / Trigger**: The user directive or finding that triggered this task.
 * **Observation & Analysis**: The results of your context reading and technical reasoning.
+* **Goal**: A clear, non-redundant statement of what needs to be achieved.
 
-#### 2. Objective
-* Clear and actionable instructions for improvement or implementation.
+#### 2. Target Files & Implementation
+* Group by layer or exact file path. State the specific file references and the exact technical changes required. 
+* **Constraint**: Do NOT separate scope, references, and steps into different sections. Combine them here to avoid redundancy.
 
-#### 3. Scope
-* What is INCLUDED and RELATED.
-
-#### 4. References
-* File paths, modules, endpoints, or documentation.
-
-#### 5. Implementation Steps
-* Sequential, explicit instructions for the executor.
-
-#### 6. Expected Result
-* Final state after implementation.
-
-#### 7. Acceptance Criteria
-* Checklist format (e.g., `[ ] Condition 1`).
-
-#### 8. Test Scenarios
-* **Positive Case**: Valid input -> success.
-* **Negative Case**: Invalid input -> failure.
+#### 3. Acceptance & Verification
+* **Checklist**: Actionable criteria (e.g., `[ ] Condition 1`) that prove the goal is met.
+* **Testing**: Brief Positive/Negative scenarios to confirm success.
 
 ---
 
