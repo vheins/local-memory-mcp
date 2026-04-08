@@ -1,6 +1,6 @@
 import path from "node:path";
 import { listResources, listResourceTemplates, readResource } from "./resources/index.js";
-import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./mcp/session.js";
+import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./session.js";
 import { logger } from "./utils/logger.js";
 import { getPrompt, listPrompts } from "./prompts/registry.js";
 import { TOOL_DEFINITIONS } from "./tools/schemas.js";
@@ -24,8 +24,8 @@ import {
   handleTaskDelete,
 } from "./tools/task.manage.js";
 import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
-import { SamplingRequestHandler } from "./mcp/sampling.js";
-import { ElicitationRequestHandler } from "./mcp/elicitation.js";
+import { SamplingRequestHandler } from "./sampling.js";
+import { ElicitationRequestHandler } from "./elicitation.js";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger.js";
 import { decodeCursor, encodeCursor } from "./utils/pagination.js";
 

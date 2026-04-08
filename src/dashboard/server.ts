@@ -7,11 +7,11 @@ import { exec } from "child_process";
 import { randomUUID } from "crypto";
 import os from "os";
 import { MCPClient } from "../mcp/client.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { logger } from "../utils/logger.js";
-import { TOOL_DEFINITIONS } from "../tools/schemas.js";
-import { PROMPTS } from "../prompts/registry.js";
-import { listResources } from "../resources/index.js";
+import { SQLiteStore } from "../mcp/storage/sqlite.js";
+import { logger } from "../mcp/utils/logger.js";
+import { TOOL_DEFINITIONS } from "../mcp/tools/schemas.js";
+import { PROMPTS } from "../mcp/prompts/registry.js";
+import { listResources } from "../mcp/resources/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkg = { version: "0.0.0" };

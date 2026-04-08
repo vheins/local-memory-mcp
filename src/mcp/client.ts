@@ -2,8 +2,8 @@ import { spawn, ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import path from "path";
 import { fileURLToPath } from "url";
-import { MCP_PROTOCOL_VERSION } from "../capabilities.js";
-import { logger } from "../utils/logger.js";
+import { MCP_PROTOCOL_VERSION } from "./capabilities.js";
+import { logger } from "./utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +32,7 @@ export class MCPClient {
     if (this.process) return;
 
     const serverPath =
-      this.serverPathOverride || path.join(__dirname, "../server.js");
+      this.serverPathOverride || path.join(__dirname, "./server.js");
     this.process = spawn("node", [serverPath], {
       stdio: ["pipe", "pipe", "inherit"],
     });

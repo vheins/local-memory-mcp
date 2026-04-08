@@ -4,7 +4,7 @@ import * as fc from "fast-check";
 import { createRouter } from "../router.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore } from "../types.js";
-import { createSessionContext, updateSessionRoots } from "../mcp/session.js";
+import { createSessionContext, updateSessionRoots } from "../session.js";
 import path from "node:path";
 
 /**
@@ -234,11 +234,11 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       },
       argument: {
         name: "file_path",
-        value: "src/router",
+        value: "src/mcp/router",
       },
     });
 
-    expect(result.completion.values.some((value: string) => value.includes("src/router.ts"))).toBe(true);
+    expect(result.completion.values.some((value: string) => value.includes("src/mcp/router.ts"))).toBe(true);
   });
 
   it("supports completion for prompt task_id arguments using repo context", async () => {

@@ -5,15 +5,15 @@ import {
   SamplingRequestHandler,
   extractTextFromContent,
   extractToolUses,
-} from "../mcp/sampling.js";
+} from "../sampling.js";
 import {
   SessionContext,
   inferRepoFromSession,
-} from "../mcp/session.js";
+} from "../session.js";
 import {
   ElicitationRequestHandler,
   extractAcceptedElicitationContent,
-} from "../mcp/elicitation.js";
+} from "../elicitation.js";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 import { logger } from "../utils/logger.js";
 import { MemorySynthesizeSchema } from "./schemas.js";

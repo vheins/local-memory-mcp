@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fc from "fast-check";
 
-import { MCPClient } from "../mcp/client.js";
+import { MCPClient } from "../client.js";
 
 class TestableMCPClient extends MCPClient {
   get pending(): Map<number, { resolve: (v: unknown) => void; reject: (r: unknown) => void }> {

@@ -4,7 +4,7 @@ import * as fc from "fast-check";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { readResource, listResourceTemplates, listResources } from "../resources/index.js";
 import { MemoryEntry } from "../types.js";
-import { createSessionContext, updateSessionRoots } from "../mcp/session.js";
+import { createSessionContext, updateSessionRoots } from "../session.js";
 
 function makeEntry(id: string, repo: string): MemoryEntry {
   return {
