@@ -13,10 +13,10 @@ export async function handleMemoryRecap(
   logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 
   // Get total count for pagination metadata
-  const total = db.getTotalCount(validated.repo);
+  const total = db.getTotalCount(validated.repo, false, ['task_archive']);
 
   // Get recent memories using public API (no type-unsafe cast)
-  const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset);
+  const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset, false, ['task_archive']);
 
   // Get active tasks for recap (In Progress, Pending, Blocked, Canceled)
   const activeStatuses = ["in_progress", "pending", "blocked", "canceled"];

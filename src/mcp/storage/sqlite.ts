@@ -1240,22 +1240,39 @@ export class SQLiteStore {
     `).all(taskId) as any[];
   }
 
-  getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false): MemoryEntry[] {
+  getRecentMemories(repo: string, limit: number, offset: number = 0, includeArchived: boolean = false, excludeTypes: string[] = []): MemoryEntry[] {
     let query = "SELECT * FROM memories WHERE repo = ?";
+    const params: any[] = [repo];
+
     if (!includeArchived) {
       query += " AND status = 'active'";
     }
+    
+    if (excludeTypes.length > 0) {
+      query += ` AND type NOT IN (${excludeTypes.map(() => '?').join(',')})`;
+      params.push(...excludeTypes);
+    }
+    
     query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    params.push(limit, offset);
     
     const stmt = this.db.prepare(query);
-    const rows = stmt.all(repo, limit, offset) as any[];
+    const rows = stmt.all(...params) as any[];
     return rows.map((row) => this.rowToMemoryEntry(row));
   }
 
-  getTotalCount(repo: string, includeArchived = false): number {
+  getTotalCount(repo: string, includeArchived = false, excludeTypes: string[] = []): number {
     let sql = "SELECT COUNT(*) as count FROM memories WHERE repo = ?";
+    const params: any[] = [repo];
+
     if (!includeArchived) sql += " AND status = 'active'";
-    return (this.db.prepare(sql).get(repo) as any).count;
+
+    if (excludeTypes.length > 0) {
+      sql += ` AND type NOT IN (${excludeTypes.map(() => '?').join(',')})`;
+      params.push(...excludeTypes);
+    }
+
+    return (this.db.prepare(sql).get(...params) as any).count;
   }
 
   getVectorCandidates(repo?: string, limit = 100): any[] {
