@@ -1,3 +1,0 @@
-display_name: "create-task"
-short_description: "Generate structured, atomic tasks in Local Memory MCP from user directives."
-allow_implicit_invocation: true
