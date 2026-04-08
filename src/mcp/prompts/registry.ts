@@ -610,25 +610,29 @@ Each \`mcp_local-memory_task-create\` MUST include:
 #### 🔥 DESCRIPTION FORMAT (STRICT)
 The \`description\` field MUST follow this structure EXACTLY:
 
-#### 1. Objective
+#### 1. Context & Analysis
+* **Original Instruction**: The exact user directive that triggered this task.
+* **Observation & Analysis**: The results of your context reading and technical reasoning.
+
+#### 2. Objective
 * Clear and actionable instructions for improvement or implementation.
 
-#### 2. Scope
+#### 3. Scope
 * What is INCLUDED and RELATED.
 
-#### 3. References
+#### 4. References
 * File paths, modules, endpoints, or documentation.
 
-#### 4. Implementation Steps
+#### 5. Implementation Steps
 * Sequential, explicit instructions for the executor.
 
-#### 5. Expected Result
+#### 6. Expected Result
 * Final state after implementation.
 
-#### 6. Acceptance Criteria
+#### 7. Acceptance Criteria
 * Checklist format (e.g., \`[ ] Condition 1\`).
 
-#### 7. Test Scenarios
+#### 8. Test Scenarios
 * **Positive Case**: Valid input -> success.
 * **Negative Case**: Invalid input -> failure.
 
