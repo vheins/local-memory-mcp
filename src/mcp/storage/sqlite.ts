@@ -1013,11 +1013,16 @@ export class SQLiteStore {
 
   incrementHitCounts(ids: string[]): void {
     if (!ids || ids.length === 0) return;
-    const stmt = this.db.prepare("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?");
     const now = new Date().toISOString();
+    const chunkSize = 500;
+
     const transaction = this.db.transaction((idsToUpdate: string[]) => {
-      for (const id of idsToUpdate) {
-        stmt.run(now, id);
+      for (let i = 0; i < idsToUpdate.length; i += chunkSize) {
+        const chunk = idsToUpdate.slice(i, i + chunkSize);
+        const placeholders = chunk.map(() => '?').join(',');
+        this.db.prepare(
+          `UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`
+        ).run(now, ...chunk);
       }
     });
     transaction(ids);
