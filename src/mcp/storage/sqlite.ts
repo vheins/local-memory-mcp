@@ -1011,6 +1011,18 @@ export class SQLiteStore {
     this.db.prepare("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?").run(new Date().toISOString(), id);
   }
 
+  incrementHitCounts(ids: string[]): void {
+    if (!ids || ids.length === 0) return;
+    const stmt = this.db.prepare("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?");
+    const now = new Date().toISOString();
+    const transaction = this.db.transaction((idsToUpdate: string[]) => {
+      for (const id of idsToUpdate) {
+        stmt.run(now, id);
+      }
+    });
+    transaction(ids);
+  }
+
   incrementRecallCount(id: string): void {
     this.db.prepare("UPDATE memories SET recall_count = recall_count + 1, last_used_at = ? WHERE id = ?").run(new Date().toISOString(), id);
   }

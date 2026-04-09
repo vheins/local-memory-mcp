@@ -145,7 +145,7 @@ export async function handleMemorySearch(
   results = results.slice(0, validated.limit);
 
   // 5. Post-processing
-  for (const m of results) db.incrementHitCount(m.id);
+  db.incrementHitCounts(results.map(m => m.id));
   logger.info("[MCP] memory.search", { repo: validated.repo, query: validated.query, results: results.length });
 
   const topMatch = results[0] ? `\n\nTop Match: [${results[0].type}] ${results[0].title || results[0].content.substring(0, 50)}` : "";

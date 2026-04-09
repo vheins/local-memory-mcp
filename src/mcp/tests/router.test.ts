@@ -30,6 +30,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       listRepos: vi.fn().mockReturnValue([]),
       listRecent: vi.fn().mockReturnValue([]),
       incrementHitCount: vi.fn(),
+      incrementHitCounts: vi.fn(),
       incrementRecallCount: vi.fn(),
       getStats: vi.fn().mockReturnValue({ total: 0, byType: {}, unused: 0 }),
       getAllMemoriesWithStats: vi.fn().mockReturnValue([]),
