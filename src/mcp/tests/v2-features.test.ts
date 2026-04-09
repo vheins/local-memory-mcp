@@ -57,7 +57,7 @@ describe("V2 Enhanced Memory Features", () => {
         model: "test-model"
       }, db, mockVectors);
 
-      const stored = db.getById(response.data.id);
+      const stored = db.getById((response.structuredContent as any).id);
       expect(stored?.type).toBe("file_claim");
       db.close();
     });
@@ -82,7 +82,7 @@ describe("V2 Enhanced Memory Features", () => {
         }
       }, db, mockVectors);
 
-      const stored = db.getById(response.data.id);
+      const stored = db.getById((response.structuredContent as any).id);
       expect(stored?.metadata).toEqual({
         source_agent: "codex",
         source_role: "rules-optimizer",

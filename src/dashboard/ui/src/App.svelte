@@ -135,11 +135,15 @@
     } catch {}
   }
 
-  async function loadRecentActions(page?: number) {
+  async function loadRecentActions(page?: number, append: boolean = false) {
     const p = page ?? $recentActionsPage;
     try {
       const data = await api.recentActions($currentRepo, p, $recentActionsPageSize);
-      recentActions.set(data.actions || []);
+      if (append) {
+        recentActions.update(actions => [...actions, ...(data.actions || [])]);
+      } else {
+        recentActions.set(data.actions || []);
+      }
       recentActionsPage.set(data.pagination?.page ?? p);
       recentActionsTotalItems.set(data.pagination?.totalItems ?? 0);
     } catch (e) {

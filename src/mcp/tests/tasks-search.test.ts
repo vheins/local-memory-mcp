@@ -85,7 +85,7 @@ describe("Task Search and Filtering", () => {
       search: "authentication"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(1);
     expect(tasks[0].task_code).toBe("TASK-001");
   });
@@ -96,7 +96,7 @@ describe("Task Search and Filtering", () => {
       search: "edge cases"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(1);
     expect(tasks[0].task_code).toBe("TASK-002");
   });
@@ -107,7 +107,7 @@ describe("Task Search and Filtering", () => {
       search: "DB-FIX"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(1);
     expect(tasks[0].task_code).toBe("DB-FIX-003");
   });
@@ -118,7 +118,7 @@ describe("Task Search and Filtering", () => {
       status: "in_progress,blocked"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(2);
     const codes = tasks.map((t: any) => t.task_code);
     expect(codes).toContain("TASK-001");
@@ -131,7 +131,7 @@ describe("Task Search and Filtering", () => {
       status: "all"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(3);
   });
 
@@ -142,7 +142,7 @@ describe("Task Search and Filtering", () => {
       status: "pending"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(1);
     expect(tasks[0].task_code).toBe("TASK-002");
   });
@@ -153,7 +153,7 @@ describe("Task Search and Filtering", () => {
       search: "non-existent-task"
     }, db);
     
-    const tasks = JSON.parse(getTextContent(result));
+    const tasks = (result.structuredContent as any).tasks;
     expect(tasks).toHaveLength(0);
   });
 
@@ -167,7 +167,7 @@ describe("Task Search and Filtering", () => {
       if (!searchArgs.status) searchArgs.status = "all";
       
       const result = await handleTaskList(searchArgs, db);
-      const tasks = JSON.parse(getTextContent(result));
+      const tasks = (result.structuredContent as any).tasks;
       expect(tasks).toHaveLength(1);
       expect(tasks[0].task_code).toBe("TASK-001");
     });

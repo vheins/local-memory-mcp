@@ -67,7 +67,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       name: "task-list",
       arguments: { repo: REPO }
     });
-    const listToolTasks = JSON.parse(listToolRes.content[0].text);
+    const listToolTasks = (listToolRes.structuredContent as any).tasks;
     expect(listToolTasks.length).toBe(2);
 
     // ---- 3. EXECUTION PHASE ----

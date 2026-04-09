@@ -108,7 +108,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       name: "task-list",
       arguments: { repo: REPO }
     });
-    const defaultTasks = JSON.parse(getTextContent(defaultRes));
+    const defaultTasks = (defaultRes.structuredContent as any).tasks;
     expect(defaultTasks.length).toBe(15);
 
     // Test explicit limit
@@ -116,7 +116,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       name: "task-list",
       arguments: { repo: REPO, limit: 5 }
     });
-    const limitedTasks = JSON.parse(getTextContent(limitRes));
+    const limitedTasks = (limitRes.structuredContent as any).tasks;
     expect(limitedTasks.length).toBe(5);
 
     // Test offset (last page)
@@ -124,7 +124,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       name: "task-list",
       arguments: { repo: REPO, limit: 15, offset: 15 }
     });
-    const offsetTasks = JSON.parse(getTextContent(offsetRes));
+    const offsetTasks = (offsetRes.structuredContent as any).tasks;
     expect(offsetTasks.length).toBe(5); // 20 total - 15 offset = 5 remaining
   });
 
