@@ -230,6 +230,7 @@
 
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+    { id: 'activity', label: 'Activity', icon: 'activity' },
     { id: 'memories', label: 'Memories', icon: 'brain' },
     { id: 'tasks', label: 'Tasks', icon: 'clipboard-list' },
     { id: 'reference', label: 'Reference', icon: 'book-open' },
@@ -299,8 +300,8 @@
 
         <!-- ════ DASHBOARD TAB ════ -->
         {#if $activeTab === 'dashboard'}
-          <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;" class="dashboard-grid">
-            <!-- Left column -->
+          <div style="display:grid;grid-template-columns:1fr;gap:20px;align-items:start;" class="dashboard-grid">
+            <!-- Left column (now full width) -->
             <div style="display:flex;flex-direction:column;gap:20px;">
               <!-- Stats -->
               <div class="glass card">
@@ -336,10 +337,24 @@
               <!-- Time stats -->
               <TimeStatsWidget />
             </div>
+          </div>
+        {/if}
 
-            <!-- Right column: Recent actions -->
-            <div class="glass card" style="max-height:70vh;overflow-y:auto;">
-              <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-muted);margin-bottom:12px;">Recent Activity</div>
+        <!-- ════ ACTIVITY TAB ════ -->
+        {#if $activeTab === 'activity'}
+          <div class="glass card animate-fade-in" style="height:calc(100vh - 180px);display:flex;flex-direction:column;padding:0;overflow:hidden;border-radius:24px;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--color-border);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);">
+              <div class="flex items-center gap-3">
+                <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--color-primary),var(--color-accent));display:flex;align-items:center;justify-content:center;color:white;box-shadow:0 4px 12px var(--glow-primary);">
+                  <Icon name="activity" size={18} strokeWidth={2.2} />
+                </div>
+                <div>
+                  <div style="font-size:0.95rem;font-weight:800;color:var(--color-text);letter-spacing:-0.01em;">Recent Activity</div>
+                  <div style="font-size:0.68rem;color:var(--color-text-muted);font-weight:600;">{$recentActionsTotalItems} events tracked</div>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:24px 32px;background:rgba(0,0,0,0.02);">
               <RecentActions onLoadPage={loadRecentActions} />
             </div>
           </div>

@@ -148,11 +148,9 @@ export async function handleMemorySearch(
   db.incrementHitCounts(results.map(m => m.id));
   logger.info("[MCP] memory.search", { repo: validated.repo, query: validated.query, results: results.length });
 
-  const topMatch = results[0] ? `\n\nTop Match: [${results[0].type}] ${results[0].title || results[0].content.substring(0, 50)}` : "";
-
   return createMcpResponse(
     { query: validated.query, results, recapContext },
-    `Found ${results.length} memories matching "${validated.query}"${topMatch}`,
+    `Found ${results.length} memories matching "${validated.query}"`,
     {
       query: validated.query,
       results: results as any,

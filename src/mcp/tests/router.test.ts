@@ -422,8 +422,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     });
 
     expect(sampleMessage).toHaveBeenCalledTimes(1);
-    expect(result.data.answer).toContain("Grounded answer");
-    expect(result.structuredContent.answer).toContain("Grounded answer");
+    expect((result as any).structuredContent.answer).toContain("Grounded answer");
   });
 
   it("memory-synthesize supports a multi-turn sampling tool loop", async () => {
@@ -466,8 +465,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     });
 
     expect(sampleMessage).toHaveBeenCalledTimes(2);
-    expect(result.data.toolCalls).toBe(1);
-    expect(result.data.iterations).toBe(2);
+    expect((result as any).structuredContent.toolCalls).toBe(1);
+    expect((result as any).structuredContent.iterations).toBe(2);
   });
 
   it("memory-synthesize elicits the repo when roots cannot infer it", async () => {
@@ -502,7 +501,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
     expect(elicit).toHaveBeenCalledTimes(1);
     expect(sampleMessage).toHaveBeenCalledTimes(1);
-    expect(result.data.repo).toBe("elicited-repo");
+    expect((result as any).structuredContent.repo).toBe("elicited-repo");
   });
 
   it("task-create-interactive elicits missing task fields and creates the task", async () => {
@@ -537,8 +536,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
     expect(elicit).toHaveBeenCalledTimes(1);
     expect(mockDb.insertTask).toHaveBeenCalledTimes(1);
-    expect(result.data.repo).toBe("interactive-repo");
-    expect(result.data.task_code).toBe("TASK-101");
+    expect((result as any).structuredContent.repo).toBe("interactive-repo");
+    expect((result as any).structuredContent.task_code).toBe("TASK-101");
   });
 
   it("returns resource links in memory-search results", async () => {

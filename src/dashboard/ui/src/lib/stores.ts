@@ -153,7 +153,7 @@ export const taskStatusFilter = writable<string>('');
 // Recent actions
 export const recentActions = writable<RecentAction[]>([]);
 export const recentActionsPage = writable<number>(1);
-export const recentActionsPageSize = writable<number>(5);
+export const recentActionsPageSize = writable<number>(20);
 export const recentActionsTotalItems = writable<number>(0);
 
 // Drawer state

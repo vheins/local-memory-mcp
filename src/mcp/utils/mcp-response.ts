@@ -42,29 +42,15 @@ export type McpContent = z.infer<typeof McpContentSchema>;
 export type McpResponse = {
   content: McpContent[];
   isError?: boolean;
-  data?: any;
   structuredContent?: unknown;
 };
 
 export function createMcpResponse(
-  data: unknown,
+  data: any,
   summary: string,
   options?: { 
     query?: string; 
-    results?: Array<{ 
-      id: string; 
-      type: string; 
-      title?: string; 
-      content: string;
-      importance?: number;
-      scope?: { repo: string; folder?: string; language?: string };
-      created_at?: string;
-      updated_at?: string;
-      hit_count?: number;
-      recall_count?: number;
-      last_used_at?: string | null;
-      expires_at?: string | null;
-    }>;
+    results?: any[];
     resourceLinks?: Array<{
       uri: string;
       name: string;
@@ -78,7 +64,7 @@ export function createMcpResponse(
     }>;
   }
 ): McpResponse {
-  const { query, results, resourceLinks } = options || {};
+  const { results, resourceLinks } = options || {};
   
   const content: McpContent[] = [
     {
@@ -91,6 +77,7 @@ export function createMcpResponse(
     },
   ];
 
+  // Add global resource links (like repo index)
   for (const link of resourceLinks || []) {
     content.push({
       type: "resource_link",
@@ -102,57 +89,90 @@ export function createMcpResponse(
     });
   }
 
-  // Add resource link and embedded content for each result
-  if (results && results.length > 0) {
-    for (const result of results) {
-      // Generate title from content if not present
-      const title = result.title || (result.content.length > 50 ? result.content.substring(0, 50) + "..." : result.content);
-      const annotations = {
-        audience: ["assistant" as const],
-        priority: 0.8,
-        lastModified: result.updated_at || result.created_at,
-      };
+  // Pruning logic to save tokens for the agent
+  let finalData = data;
+  if (data && typeof data === 'object') {
+    // Clone to avoid mutation
+    finalData = JSON.parse(JSON.stringify(data));
+    
+    // Prune known memory/task arrays if found in the data structure
+    const arrayKeys = ['results', 'tasks', 'memories', 'items'];
+    let foundArray = false;
+    
+    for (const key of arrayKeys) {
+      if (Array.isArray(finalData[key])) {
+        finalData[key] = finalData[key].map((item: any) => pruneMetadata(item));
+        foundArray = true;
+      }
+    }
+    
+    // If it's a direct array, prune it
+    if (Array.isArray(finalData)) {
+      finalData = finalData.map((item: any) => pruneMetadata(item));
+    } else if (!foundArray) {
+      // If it's just an object (like a single memory), prune it
+      finalData = pruneMetadata(finalData);
+    }
+  }
 
+  // Add resource_links for results if they were provided in options
+  // (We use this for referring to specific items regardless of data pruning)
+  if (Array.isArray(results) && results.length > 0) {
+    for (const result of results) {
+      const title = result.title || (result.content.length > 50 ? result.content.substring(0, 50) + "..." : result.content);
       content.push({
         type: "resource_link",
         uri: `memory://${result.id}`,
         name: title,
         description: `Memory ${result.type} in repo ${result.scope?.repo ?? "unknown"}`,
         mimeType: "application/json",
-        annotations,
-      });
-      
-      content.push({
-        type: "resource",
-        resource: {
-          uri: `memory://${result.id}`,
-          mimeType: "application/json",
-          text: JSON.stringify({
-            id: result.id,
-            type: result.type,
-            title: title,
-            content: result.content,
-            importance: result.importance,
-            scope: result.scope,
-            created_at: result.created_at,
-            updated_at: result.updated_at,
-            hit_count: result.hit_count,
-            recall_count: result.recall_count,
-            last_used_at: result.last_used_at,
-            expires_at: result.expires_at
-          }),
-          annotations,
-        }
+        annotations: {
+          audience: ["assistant"],
+          priority: 0.8,
+          lastModified: result.updated_at || result.created_at,
+        },
       });
     }
   }
 
   return { 
     content,
-    data,
-    structuredContent: data,
+    structuredContent: finalData,
     isError: false,
   };
+}
+
+/**
+ * Prunes redundant or operational metadata from memory/task objects to save tokens.
+ */
+function pruneMetadata(item: any): any {
+  if (!item || typeof item !== 'object') return item;
+
+  // Deep clone to avoid mutating original objects (simple but safe for this context)
+  const pruned = { ...item };
+
+  // Common operational fields to remove from agent context
+  const toRemove = [
+    'hit_count',
+    'recall_count',
+    'last_used_at',
+    'expires_at',
+    'agent',
+    'role',
+    'model',
+    'recall_rate',
+    'vector_version',
+    'similarity' // Similarity is useful but adds noise if many results
+  ];
+
+  for (const field of toRemove) {
+    delete pruned[field];
+  }
+
+  // If it's a memory, prune scope slightly if redundant? 
+  // No, keep scope as it defines the repo/context.
+
+  return pruned;
 }
 
 export function createTextOnlyResponse(text: string): McpResponse {

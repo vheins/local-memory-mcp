@@ -133,8 +133,9 @@ export async function handleTaskList(
       limit,
       tasks: tasksWithHistory,
     },
-    JSON.stringify(tasksWithHistory, null, 2),
+    `Found ${tasksWithHistory.length} tasks in repository "${repo}"`,
     {
+      results: tasksWithHistory,
       resourceLinks: [
         {
           uri: `tasks://current?repo=${encodeURIComponent(repo)}`,

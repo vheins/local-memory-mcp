@@ -180,12 +180,13 @@ export function createRouter(
     // Log the action
     try {
       const actionType = toolName.split("-")[1] || toolName;
+      const sc: any = result?.structuredContent;
       const options: any = {
         query: args?.query || args?.title || args?.task_code || (toolName === 'memory-recap' ? `Offset: ${args?.offset || 0}` : undefined),
         response: result,
-        memoryId: args?.id || args?.memory_id || (result?.data?.id),
-        taskId: args?.id || args?.task_id || (result?.data?.id),
-        resultCount: Array.isArray(result?.data?.results) ? result.data.results.length : (result?.data?.count || 0)
+        memoryId: args?.id || args?.memory_id || (sc?.id),
+        taskId: args?.id || args?.task_id || (sc?.id),
+        resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count || 0)
       };
       
       db.logAction(actionType, repo, options);
