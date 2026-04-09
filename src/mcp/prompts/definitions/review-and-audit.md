@@ -1,5 +1,5 @@
 ---
-name: review-audit
+name: review-and-audit
 description: Audit documentation against implementation and generate Local Memory MCP tasks for gaps.
 arguments:
   - name: target
@@ -117,3 +117,5 @@ Before finishing, validate:
 * ❌ No code was written.
 * ❌ No execution was performed.
 * ✅ Only MCP task operations exist.
+
+extra_context:
