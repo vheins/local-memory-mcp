@@ -126,3 +126,14 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, delay: number
     timer = setTimeout(() => fn(...args), delay);
   }) as T;
 }
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    console.error('Failed to copy text: ', err);
+    return false;
+  }
+}

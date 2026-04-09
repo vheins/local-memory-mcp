@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { renderMarkdown } from '../lib/utils';
+  import { renderMarkdown, copyToClipboard } from '../lib/utils';
   import { api } from '../lib/api';
   import { currentRepo } from '../lib/stores';
+  import Icon from '../lib/Icon.svelte';
   
   export let item: any = null; // { type: 'tool' | 'prompt' | 'resource', data: any }
   export let open = false;
@@ -23,6 +24,7 @@
   let toolRunning = false;
   let toolResult: string | null = null;
   let toolError: string | null = null;
+  let copied = false;
 
   $: if (item && open) {
     toolArgs = {};
@@ -58,6 +60,14 @@
       toolError = e.message;
     } finally {
       toolRunning = false;
+    }
+  }
+
+  async function copyToClipboardWrapper(text: string) {
+    const success = await copyToClipboard(text);
+    if (success) {
+      copied = true;
+      setTimeout(() => copied = false, 2000);
     }
   }
 </script>
@@ -131,7 +141,17 @@
 
           {#if toolResult}
             <div style="margin-top: 12px;" class="drawer-section">
-               <div class="section-label">Response</div>
+               <div class="section-label" style="display:flex; justify-content:space-between; align-items:center;">
+                 <span>Response</span>
+                 <button 
+                   class="btn btn-ghost btn-icon" 
+                   on:click={() => copyToClipboardWrapper(toolResult || '')} 
+                   title="Copy to clipboard" 
+                   style="width:24px; height:24px; padding:0; border:none; background:transparent;"
+                 >
+                   <Icon name={copied ? 'check' : 'copy'} size={14} strokeWidth={2} className={copied ? 'text-success' : ''} />
+                 </button>
+               </div>
                <div class="md-card markdown-body" style="padding: 1px 16px;">
                  {@html renderMarkdown("```json\n" + toolResult + "\n```")}
                </div>

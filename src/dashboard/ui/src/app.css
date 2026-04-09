@@ -1107,3 +1107,14 @@ a:hover { color: var(--color-primary-dark); }
 .dark .hover-glow:hover {
   box-shadow: var(--panel-dark-shadow), 0 0 24px rgba(56, 189, 248, 0.08);
 }
+
+/* Utility Classes */
+.text-success { color: var(--color-success) !important; }
+.text-danger { color: var(--color-danger) !important; }
+.text-primary { color: var(--color-primary) !important; }
+.text-accent { color: var(--color-accent) !important; }
+
+.btn-icon:hover {
+  background: rgba(14, 165, 233, 0.08);
+  transform: scale(1.1);
+}

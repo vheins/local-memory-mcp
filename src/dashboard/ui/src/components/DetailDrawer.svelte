@@ -3,8 +3,9 @@
   import type { Memory, Task } from '../lib/stores';
   import {
     formatDate, getStatusColor, getStatusLabel,
-    getPriorityLabel, renderMarkdown
+    getPriorityLabel, renderMarkdown, copyToClipboard
   } from '../lib/utils';
+  import Icon from '../lib/Icon.svelte';
 
   // ─── Props ───────────────────────────────────────────────────────────────────
   export let memory: Memory | null = null;
@@ -29,6 +30,26 @@
   let editingCommentId: string | null = null;
   let editCommentText = '';
   let savingComment = false;
+
+  // Copy state
+  let contentCopied = false;
+  let descCopied = false;
+
+  async function handleCopyContent(text: string) {
+    const success = await copyToClipboard(text);
+    if (success) {
+      contentCopied = true;
+      setTimeout(() => contentCopied = false, 2000);
+    }
+  }
+
+  async function handleCopyDesc(text: string) {
+    const success = await copyToClipboard(text);
+    if (success) {
+      descCopied = true;
+      setTimeout(() => descCopied = false, 2000);
+    }
+  }
 
   // ─── Reactive resets ─────────────────────────────────────────────────────────
   $: if (task) {
@@ -233,7 +254,17 @@
 
         <!-- Content -->
         <div>
-          <div class="section-label">Content</div>
+          <div class="section-label" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Content</span>
+            <button 
+              class="btn btn-ghost btn-icon" 
+              on:click={() => handleCopyContent(memory?.content || '')} 
+              title="Copy to clipboard" 
+              style="width:20px; height:20px; padding:0; border:none; background:transparent;"
+            >
+              <Icon name={contentCopied ? 'check' : 'copy'} size={12} strokeWidth={2} className={contentCopied ? 'text-success' : ''} />
+            </button>
+          </div>
           <div class="markdown-body md-card">{@html renderMarkdown(memory.content)}</div>
         </div>
 
@@ -309,8 +340,16 @@
 
         <!-- Description -->
         <div style="margin-bottom:16px;">
-          <div class="section-label" style="display:flex;align-items:center;gap:6px;">
-            Description
+          <div class="section-label" style="display:flex;align-items:center;gap:6px;width:100%;">
+            <span style="flex:1;">Description</span>
+            <button 
+              class="btn btn-ghost btn-icon" 
+              on:click={() => handleCopyDesc(task?.description || '')} 
+              title="Copy to clipboard" 
+              style="width:20px; height:20px; padding:0; border:none; background:transparent; margin-right:4px;"
+            >
+              <Icon name={descCopied ? 'check' : 'copy'} size={12} strokeWidth={2} className={descCopied ? 'text-success' : ''} />
+            </button>
             {#if !editingDescription}
               <button
                 class="btn btn-ghost"
