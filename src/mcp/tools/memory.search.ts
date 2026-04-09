@@ -105,15 +105,19 @@ export async function handleMemorySearch(
       });
     } else if (vectorResults.length > 0) {
       // If SQLite found nothing but vectors did (rare due to our fallback)
+      const vectorIds = vectorResults.map(vr => vr.id);
+      const fetchedMemories = db.getByIds(vectorIds);
+      const memoryMap = new Map(fetchedMemories.map(m => [m.id, m]));
+
       for (const vr of vectorResults) {
-        const mem = db.getById(vr.id);
+        const mem = memoryMap.get(vr.id);
         if (mem) {
           const impBoost = mem.importance / 5;
           scoredMemories.push({
             memory: mem,
             similarityScore: 0,
             vectorScore: vr.score,
-            finalScore: (vr.score * 0.8) + (impBoost * 0.2) 
+            finalScore: (vr.score * 0.8) + (impBoost * 0.2)
           });
         }
       }
