@@ -428,9 +428,18 @@ app.get("/api/export", async (req, res) => {
         const memories = db.getAllMemoriesWithStats(repo as string);
         const tasks = db.getTasksByRepo(repo as string);
         
+        const allComments = db.getAllTaskCommentsByRepo(repo as string);
+        const commentsByTaskId = allComments.reduce((acc, comment) => {
+            if (!acc[comment.task_id]) {
+                acc[comment.task_id] = [];
+            }
+            acc[comment.task_id].push(comment);
+            return acc;
+        }, {} as Record<string, any[]>);
+
         const tasksWithComments = tasks.map(t => ({
             ...t,
-            comments: db.getTaskCommentsByTaskId(t.id)
+            comments: commentsByTaskId[t.id] || []
         }));
         
         res.json({
