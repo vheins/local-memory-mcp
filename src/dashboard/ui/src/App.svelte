@@ -304,34 +304,34 @@
 
         <!-- ════ DASHBOARD TAB ════ -->
         {#if $activeTab === 'dashboard'}
-          <div style="display:grid;grid-template-columns:1fr;gap:20px;align-items:start;" class="dashboard-grid">
+          <div style="display:grid;grid-template-columns:1fr;gap:12px;align-items:start;" class="dashboard-grid">
             <!-- Left column (now full width) -->
-            <div style="display:flex;flex-direction:column;gap:20px;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
               <!-- Stats -->
-              <div class="glass card">
-                <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-muted);margin-bottom:12px;">Overview</div>
+              <div class="glass card" style="padding:16px;">
+                <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-muted);margin-bottom:10px;">Overview</div>
                 <StatsWidget />
               </div>
 
               <!-- Task stats grid -->
               {#if $dashboardStats?.taskStats}
                 {@const ts = $dashboardStats.taskStats}
-                <div class="glass card hover-glow">
-                  <div class="section-label" style="margin-bottom:12px;">Task Overview</div>
-                  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
+                <div class="glass card hover-glow" style="padding:16px;">
+                  <div class="section-label" style="margin-bottom:10px;">Task Overview</div>
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(100px, 1fr));gap:10px;max-width:1000px;">
                     {#each [
-                      {label:'Total', val:ts.total, icon:'layers', color:'#6366f1', glow:'rgba(99,102,241,0.18)'},
-                      {label:'Backlog', val:ts.backlog, icon:'inbox', color:'#64748b', glow:'rgba(100,116,139,0.18)'},
-                      {label:'To Do', val:ts.todo, icon:'circle-dot', color:'#0ea5e9', glow:'rgba(14,165,233,0.18)'},
-                      {label:'Active', val:ts.inProgress, icon:'zap', color:'#a855f7', glow:'rgba(168,85,247,0.18)'},
-                      {label:'Done', val:ts.completed, icon:'circle-check', color:'#10b981', glow:'rgba(16,185,129,0.18)'},
+                      {label:'Total', val:ts.total, icon:'layers', color:'#6366f1', glow:'rgba(99,102,241,0.12)'},
+                      {label:'Backlog', val:ts.backlog, icon:'inbox', color:'#64748b', glow:'rgba(100,116,139,0.12)'},
+                      {label:'To Do', val:ts.todo, icon:'circle-dot', color:'#0ea5e9', glow:'rgba(14,165,233,0.12)'},
+                      {label:'Active', val:ts.inProgress, icon:'zap', color:'#a855f7', glow:'rgba(168,85,247,0.12)'},
+                      {label:'Done', val:ts.completed, icon:'circle-check', color:'#10b981', glow:'rgba(16,185,129,0.12)'},
                     ] as s}
-                      <div class="stat-card" style="text-align:center;background:{s.glow};border:1px solid {s.glow};">
-                        <div style="display:flex;justify-content:center;margin-bottom:6px;color:{s.color};opacity:0.8;">
-                          <Icon name={s.icon} size={16} strokeWidth={1.75} />
+                      <div class="stat-card" style="text-align:center;background:{s.glow};border:1px solid {s.glow};padding:10px 8px;">
+                        <div style="display:flex;justify-content:center;margin-bottom:2px;color:{s.color};opacity:0.8;">
+                          <Icon name={s.icon} size={14} strokeWidth={1.75} />
                         </div>
-                        <div style="font-size:1.5rem;font-weight:900;color:{s.color};line-height:1;letter-spacing:-0.03em;">{s.val}</div>
-                        <div style="font-size:0.62rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:4px;">{s.label}</div>
+                        <div style="font-size:1.25rem;font-weight:900;color:{s.color};line-height:1;letter-spacing:-0.03em;">{s.val}</div>
+                        <div style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">{s.label}</div>
                       </div>
                     {/each}
                   </div>

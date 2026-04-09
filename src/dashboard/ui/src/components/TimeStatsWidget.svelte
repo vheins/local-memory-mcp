@@ -14,6 +14,9 @@
     { key: 'monthly', label: 'Month' },
     { key: 'overall', label: 'All' },
   ];
+
+  $: history = (periodData?.history || []) as Array<{ label: string; created: number; completed: number }>;
+  $: maxVal = Math.max(...history.map(h => Math.max(h.created || 0, h.completed || 0, 1)));
 </script>
 
 <div class="glass card animate-fade-in">
@@ -64,4 +67,58 @@
       </div>
     </div>
   </div>
+
+  <!-- Bar Chart Comparison -->
+  {#if periodData?.history && periodData.history.length > 0}
+    <div class="mt-4 pt-4 border-t border-dashed" style="border-color:var(--color-border);">
+      <div class="flex items-center justify-between mb-3">
+        <div style="font-size:0.65rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;">Throughput vs Inflow</div>
+        <div class="flex gap-2">
+          <div class="flex items-center gap-1">
+            <div style="width:8px;height:8px;border-radius:2px;background:#10b981;"></div>
+            <span style="font-size:0.6rem;color:var(--color-text-muted);">Created</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div style="width:8px;height:8px;border-radius:2px;background:#6366f1;"></div>
+            <span style="font-size:0.6rem;color:var(--color-text-muted);">Completed</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:120px;display:flex;align-items:flex-end;gap:4px;padding-bottom:20px;position:relative;">
+        {#each history as h}
+          <div class="flex-1 flex flex-col items-center group relative" style="height:100%;">
+            <div class="flex h-full w-full items-end justify-center gap-[2px]">
+              <!-- Created Bar -->
+              <div 
+                class="bar created-bar" 
+                style="width:35%; height:{( (h.created || 0) / maxVal ) * 100}%; background:#10b981; border-radius:3px 3px 0 0; opacity:0.8; transition: height 0.3s ease;"
+              ></div>
+              <!-- Completed Bar -->
+              <div 
+                class="bar completed-bar" 
+                style="width:35%; height:{( (h.completed || 0) / maxVal ) * 100}%; background:#6366f1; border-radius:3px 3px 0 0; opacity:0.8; transition: height 0.3s ease;"
+              ></div>
+            </div>
+            
+            <!-- Tooltip -->
+            <div class="absolute bottom-full mb-1 bg-slate-800 text-white p-1.5 rounded text-[10px] hidden group-hover:block z-10 whitespace-nowrap shadow-lg">
+              <div class="font-bold border-b border-slate-600 mb-1">{h.label}</div>
+              <div>Added: {h.created}</div>
+              <div>Done: {h.completed}</div>
+            </div>
+
+            <!-- X-Axis Label (Truncated if too many) -->
+            <div class="absolute bottom-0 translate-y-[20px] text-[8px] text-slate-400 whitespace-nowrap overflow-hidden max-w-full">
+              {h.label.includes(':00') ? h.label.split(':')[0] : h.label.replace('2026-', '').replace('2025-', '')}
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {:else}
+     <div class="mt-4 pt-4 border-t border-dashed flex items-center justify-center" style="border-color:var(--color-border);height:140px;color:var(--color-text-muted);font-size:0.75rem;">
+        No trend data available for this period
+     </div>
+  {/if}
 </div>

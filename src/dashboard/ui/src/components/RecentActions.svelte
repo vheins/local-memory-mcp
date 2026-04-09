@@ -8,11 +8,11 @@
   export let onLoadPage: (page: number, append?: boolean) => Promise<void> = async () => {};
 
   let chatContainer: HTMLDivElement | undefined = undefined;
-  let expandedResponses = new Set<string>();
+  let expandedResponses = new Set<number>();
   let isLoadingMore = false;
   let hasReachedStart = false; // Whether we've loaded all history
 
-  function toggleExpand(id: string) {
+  function toggleExpand(id: number) {
     if (expandedResponses.has(id)) {
       expandedResponses.delete(id);
     } else {
@@ -67,23 +67,49 @@
     let text = response;
     try {
       const r = typeof response === 'string' ? JSON.parse(response) : response;
+      
+      // Case 1: Standard MCP Tool Call result (wrapped in content array)
       if (r.content && Array.isArray(r.content)) {
         text = r.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n');
-      } else if (r.message) {
-        text = r.message;
-      } else if (r.tasks && Array.isArray(r.tasks)) {
-        text = `Found ${r.tasks.length} tasks.\n` + r.tasks.slice(0, 3).map((t: any) => `- [${t.task_code}] ${t.title}`).join('\n') + (r.tasks.length > 3 ? `\n... and ${r.tasks.length - 3} more` : '');
+      } 
+      // Case 2: Array of objects (common for list/search results)
+      else if (Array.isArray(r)) {
+        if (r.length === 0) {
+          text = "No items found.";
+        } else {
+          const first = r[0];
+          const isTask = first.task_code || first.task_id;
+          const isMemory = first.memory_id || first.memory_type;
+          const type = isTask ? 'task' : isMemory ? 'memory' : 'item';
+          
+          text = `Found ${r.length} ${type}${r.length > 1 ? 's' : ''}:\n` + 
+                 r.slice(0, 5).map((item: any) => {
+                   const title = item.title || item.task_code || item.name || item.id || 'Untitled';
+                   return `- ${title}`;
+                 }).join('\n') + 
+                 (r.length > 5 ? `\n... and ${r.length - 5} more` : '');
+        }
+      }
+      // Case 3: Structured Content from our standard McpResponse
+      else if (r.tasks && Array.isArray(r.tasks)) {
+        text = `Found ${r.tasks.length} tasks:\n` + r.tasks.slice(0, 5).map((t: any) => `- [${t.task_code}] ${t.title}`).join('\n') + (r.tasks.length > 5 ? `\n... and ${r.tasks.length - 5} more` : '');
       } else if (r.results && Array.isArray(r.results)) {
-         text = `Found ${r.results.length} results.\n` + r.results.slice(0, 3).map((m: any) => `- ${m.title || m.content.substring(0, 40) + '...'}`).join('\n') + (r.results.length > 3 ? `\n... and ${r.results.length - 3} more` : '');
-      } else {
+        text = `Found ${r.results.length} results:\n` + r.results.slice(0, 5).map((m: any) => `- ${m.title || m.content?.substring(0, 40) + '...'}`).join('\n') + (r.results.length > 5 ? `\n... and ${r.results.length - 5} more` : '');
+      } 
+      // Case 4: General object
+      else if (typeof r === 'object' && r !== null) {
         const keys = Object.keys(r);
-        if (keys.length > 4) {
-          text = `{ ${keys.slice(0, 3).map(k => `${k}: …`).join(', ')}, +${keys.length - 3} more }`;
+        if (keys.length > 5) {
+          text = `{ ${keys.slice(0, 4).map(k => `${k}: …`).join(', ')}, +${keys.length - 4} more }`;
         } else {
           text = JSON.stringify(r, null, 2);
         }
+      } else {
+        text = String(r);
       }
-    } catch { text = response; }
+    } catch { 
+      text = response; 
+    }
     
     return {
       text,

@@ -107,11 +107,19 @@ export interface RecentAction {
   burstCount?: number;
 }
 
+export interface TaskTimePeriodStats {
+  completed: number;
+  added: number;
+  tokens: number;
+  avgDuration: number;
+  history: Array<{ label: string; created: number; completed: number }>;
+}
+
 export interface TaskTimeStats {
-  daily: any;
-  weekly: any;
-  monthly: any;
-  overall: any;
+  daily: TaskTimePeriodStats;
+  weekly: TaskTimePeriodStats;
+  monthly: TaskTimePeriodStats;
+  overall: TaskTimePeriodStats;
 }
 
 // ─── Stores ─────────────────────────────────────────────────────────────────

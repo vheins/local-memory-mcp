@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { tasks, currentRepo, taskSearch, dashboardStats } from '../lib/stores';
   import { api } from '../lib/api';
+  import { exportToJSON, exportToCSV } from '../lib/utils';
   import TaskCard from './TaskCard.svelte';
   import Icon from '../lib/Icon.svelte';
   import type { Task } from '../lib/stores';
@@ -128,6 +129,21 @@
       }
     }
   }
+
+  async function handleExport(format: 'json' | 'csv') {
+    if (!$currentRepo) return;
+    try {
+      const data = await api.export($currentRepo);
+      const filename = `${$currentRepo.replace(/\//g, '_')}_tasks_export`;
+      if (format === 'json') {
+        exportToJSON(data.tasks || [], filename + '.json');
+      } else {
+        exportToCSV(data.tasks || [], filename + '.csv');
+      }
+    } catch (err: any) {
+      alert('Export failed: ' + err.message);
+    }
+  }
 </script>
 
 <div>
@@ -147,6 +163,17 @@
       />
     </div>
     <div class="flex gap-2">
+      <div class="flex gap-1 mr-1">
+        <button class="btn btn-ghost btn-sm" on:click={() => handleExport('json')} title="Export JSON">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          JSON
+        </button>
+        <button class="btn btn-ghost btn-sm" on:click={() => handleExport('csv')} title="Export CSV">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          CSV
+        </button>
+      </div>
+      <div style="width:1px;height:24px;background:var(--color-border);margin:0 4px;"></div>
       <button class="btn btn-ghost btn-sm" on:click={onBulkImport} title="Bulk Import">
         <Icon name="upload" size={14} strokeWidth={2.5} />
         Import

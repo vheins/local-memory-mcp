@@ -450,7 +450,7 @@ a:hover { color: var(--color-primary-dark); }
 
 .stat-card {
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 12px 14px;
   transition: transform var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) ease;
 }
 

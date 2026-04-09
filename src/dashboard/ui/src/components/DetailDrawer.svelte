@@ -454,7 +454,9 @@
                       <button class="btn btn-ghost" style="font-size:0.75rem;" on:click={cancelEditComment}>Cancel</button>
                     </div>
                   {:else}
-                    <div style="font-size:0.78rem;color:var(--color-text);line-height:1.5;">{c.comment}</div>
+                    <div class="markdown-body" style="font-size:0.78rem;color:var(--color-text);line-height:1.5;">
+                      {@html renderMarkdown(c.comment)}
+                    </div>
                   {/if}
                 </div>
               {/each}

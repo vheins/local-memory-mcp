@@ -1444,6 +1444,43 @@ export class SQLiteStore {
     };
   }
 
+  getTaskComparisonSeries(repo: string, period: 'daily' | 'weekly' | 'monthly' | 'overall'): any[] {
+    let labelFormat = "";
+    let dateFilter = "";
+
+    if (period === 'daily') {
+      labelFormat = "%H:00";
+      dateFilter = "date(COALESCE(finished_at, created_at)) = date('now')";
+    } else if (period === 'weekly') {
+      labelFormat = "%Y-%m-%d";
+      dateFilter = "date(COALESCE(finished_at, created_at)) >= date('now', '-6 days')";
+    } else if (period === 'monthly') {
+      labelFormat = "W%W";
+      dateFilter = "date(COALESCE(finished_at, created_at)) >= date('now', '-30 days')";
+    } else {
+      labelFormat = "%Y-%m";
+      dateFilter = "1=1";
+    }
+
+    const query = `
+      SELECT label, SUM(created) as created, SUM(completed) as completed
+      FROM (
+        SELECT strftime(?, created_at) as label, 1 as created, 0 as completed 
+        FROM tasks 
+        WHERE repo = ? AND ${dateFilter.replace("COALESCE(finished_at, created_at)", "created_at")}
+        UNION ALL
+        SELECT strftime(?, COALESCE(finished_at, updated_at)) as label, 0 as created, 1 as completed 
+        FROM tasks 
+        WHERE repo = ? AND status = 'completed' AND ${dateFilter.replace("COALESCE(finished_at, created_at)", "COALESCE(finished_at, updated_at)")}
+      )
+      GROUP BY label
+      ORDER BY label ASC
+      LIMIT 100
+    `;
+
+    return this.db.prepare(query).all(labelFormat, repo, labelFormat, repo) as any[];
+  }
+
   updateTaskComment(id: string, updates: any): void {
     const fields: string[] = [];
     const values: unknown[] = [];

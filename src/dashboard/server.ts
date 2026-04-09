@@ -404,10 +404,22 @@ app.get("/api/tasks/stats/time", async (req, res) => {
         if (!repo) return res.status(400).json({ error: "repo is required" });
         
         const stats = {
-            daily: db.getTaskTimeStats(repo as string, 'daily'),
-            weekly: db.getTaskTimeStats(repo as string, 'weekly'),
-            monthly: db.getTaskTimeStats(repo as string, 'monthly'),
-            overall: db.getTaskTimeStats(repo as string, 'overall')
+            daily: { 
+                ...db.getTaskTimeStats(repo as string, 'daily'),
+                history: db.getTaskComparisonSeries(repo as string, 'daily')
+            },
+            weekly: { 
+                ...db.getTaskTimeStats(repo as string, 'weekly'),
+                history: db.getTaskComparisonSeries(repo as string, 'weekly')
+            },
+            monthly: { 
+                ...db.getTaskTimeStats(repo as string, 'monthly'),
+                history: db.getTaskComparisonSeries(repo as string, 'monthly')
+            },
+            overall: { 
+                ...db.getTaskTimeStats(repo as string, 'overall'),
+                history: db.getTaskComparisonSeries(repo as string, 'overall')
+            }
         };
         
         res.json(stats);
