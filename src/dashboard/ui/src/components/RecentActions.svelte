@@ -12,10 +12,9 @@
   let chatContainer: HTMLDivElement | undefined = undefined;
 
   afterUpdate(() => {
-    // Only auto-scroll to bottom on INITIAL load (first page) or when new items are added to bottom
-    // But NOT when loading older history
-    if ($recentActionsPage === 1 && !$handlerState.isLoadingMore) {
-      handler.scrollToBottom(chatContainer);
+    // Only auto-scroll to bottom on INITIAL load (first page)
+    if ($recentActionsPage <= 1 && !$handlerState.isLoadingMore && $recentActions.length > 0) {
+      handler.scrollToBottom(chatContainer, 'instant');
     }
   });
 

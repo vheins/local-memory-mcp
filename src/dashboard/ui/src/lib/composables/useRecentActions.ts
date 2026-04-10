@@ -114,6 +114,9 @@ export function createRecentActionsHandler(onLoadPage: (page: number, append?: b
 
   const groupedActions = derived(recentActions, ($recentActions) => {
     const groups: { date: string; items: RecentAction[] }[] = [];
+    // The store contains [Newest (p1), ..., Oldest (p1), Older (p2), ..., Oldest (p2)]
+    // We reverse it so it becomes [Oldest (p2), ..., Older (p2), Oldest (p1), ..., Newest (p1)]
+    // This gives us Oldest at TOP, Newest at BOTTOM.
     const chronActions = [...$recentActions].reverse();
     
     chronActions.forEach(a => {
