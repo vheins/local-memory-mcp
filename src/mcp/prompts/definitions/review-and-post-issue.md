@@ -42,7 +42,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 **Allowed Actions:**
 * Read code and analyze context
 * Use `chrome-dev-tools` MCP to inspect browser UX
-* Search memory via `@vheins/local-memory-mcp tools memory-search`
+* Search memory via `local-memory-mcp` MCP tools `memory-search`
 * Search GitHub issues via **Github MCP Server Tools (search_issues)**
 * Create GitHub issues via **Github MCP Server Tools (issue_write)** (method: 'create')
 
@@ -52,7 +52,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 If gaps are found, your output MUST ONLY consist of calls to:
 * **Github MCP Server Tools (search_issues)**
 * **Github MCP Server Tools (issue_write)**
-* `@vheins/local-memory-mcp tools memory-search`
+* `local-memory-mcp` MCP tools `memory-search`
 
 **❌ DO NOT:**
 * Output explanations or narrative text
@@ -63,7 +63,7 @@ If gaps are found, your output MUST ONLY consist of calls to:
 
 ### 3. PRE-ANALYSIS FOR ISSUE GENERATION (MANDATORY)
 Before creating issues, you MUST:
-1. **Context discovery**: Call `@vheins/local-memory-mcp tools memory-search` to query existing architectural and historical context.
+1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
 2. **Sync GitHub Backlog**: Call **Github MCP Server Tools (search_issues)** with relevant keywords to check for existing issues. **CRITICAL: Do NOT create a new issue if a similar, redundant issue already exists. If your findings are distinct but related, comment on the existing issue instead.**
 
 ---

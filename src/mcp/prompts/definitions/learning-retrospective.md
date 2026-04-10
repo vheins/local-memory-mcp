@@ -14,4 +14,4 @@ Please reflect on the changes and identify knowledge worth keeping:
 2. **Decisions**: Did we make a choice between multiple options (e.g., library choice, UI pattern)? (Store as 'decision')
 3. **Patterns**: Did we establish a repeatable way of doing things in this codebase? (Store as 'pattern')
 
-Use '@vheins/local-memory-mcp tools memory-store' to record any high-value findings. Be concise and use appropriate technology tags.
+Use `local-memory-mcp` MCP tools `memory-store` to record any high-value findings. Be concise and use appropriate technology tags.

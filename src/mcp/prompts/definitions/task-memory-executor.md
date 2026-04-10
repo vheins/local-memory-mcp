@@ -19,19 +19,19 @@ description: Execute all pending tasks for the current repository
 Please follow this strict execution flow:
 
 1. **Identify Repository**: Determine the current repository name (e.g., from git config or workspace context).
-2. **Fetch Tasks**: Call '@vheins/local-memory-mcp tools task-list' for the identified repository for statuses 'pending' and 'in_progress'.
+2. **Fetch Tasks**: Call `local-memory-mcp` MCP tools `task-list` for the identified repository for statuses 'pending' and 'in_progress'.
 3. **Filter Stale**: Identify 'in_progress' tasks that are **stale** (stale is defined as > 30 Minutes without update, often because an agent stopped or crashed).
 4. **Single-Task Execution Loop (STRICT)**: You MUST process tasks EXACTLY ONE AT A TIME. DO NOT update multiple tasks to 'in_progress' simultaneously. For the SINGLE task you select:
-    - **Start**: Call '@vheins/local-memory-mcp tools task-update' to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
+    - **Start**: Call `local-memory-mcp` MCP tools `task-update` to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
     - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.
     - **Validate Behavior (MANDATORY)**: Ensure the implementation logic satisfies the task intent and follows project standards. Validation must focus on behavior, control flow, data flow, and integration points, not just whether a file/class/function exists.
-    - **Complete Only With Evidence**: Call '@vheins/local-memory-mcp tools task-update' to set status='completed' only after recording concrete evidence in the 'comment' field. The comment must include: files inspected, logic verified, checks/tests run (or why they could not run), and the exact reason the task is considered complete.
-    - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using '@vheins/local-memory-mcp tools memory-store'.
+    - **Complete Only With Evidence**: Call `local-memory-mcp` MCP tools `task-update` to set status='completed' only after recording concrete evidence in the 'comment' field. The comment must include: files inspected, logic verified, checks/tests run (or why they could not run), and the exact reason the task is considered complete.
+    - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using `local-memory-mcp` MCP tools `memory-store`.
     - **Commit**: Perform an atomic git commit and push for the changes made in the task.
-    - **Handoff**: Use '@vheins/local-memory-mcp tools task-update' to document **detailed fix steps**, milestones, project-specific knowledge gained during execution, and validation evidence. If complex, decompose into smaller tasks using '@vheins/local-memory-mcp tools task-create'.
+    - **Handoff**: Use `local-memory-mcp` MCP tools `task-update` to document **detailed fix steps**, milestones, project-specific knowledge gained during execution, and validation evidence. If complex, decompose into smaller tasks using `local-memory-mcp` MCP tools `task-create`.
     - **Next**: Repeat this loop for the next 'pending' or 'stale' task.
-5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, fetch tasks with status='backlog'. If any exist, select up to 20 tasks (prioritizing by priority field) and update their status to 'pending' using '@vheins/local-memory-mcp tools task-update' to ensure the next agent has work ready.
+5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, fetch tasks with status='backlog'. If any exist, select up to 20 tasks (prioritizing by priority field) and update their status to 'pending' using `local-memory-mcp` MCP tools `task-update` to ensure the next agent has work ready.
 6. **Report**: After processing all tasks, provide a summary of your progress.
 
 ## Mandatory Validation Rules

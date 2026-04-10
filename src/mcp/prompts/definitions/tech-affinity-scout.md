@@ -10,6 +10,6 @@ agent: Tech Scout
 I am working on the current repository using [{{tags}}].
 
 Please scout for relevant knowledge from other projects:
-1. **Search**: Use '@vheins/local-memory-mcp tools memory-search' with current_tags=[{{tags}}] and include_archived=false.
+1. **Search**: Use `local-memory-mcp` MCP tools `memory-search` with current_tags=[{{tags}}] and include_archived=false.
 2. **Filter**: Look for 'patterns' or 'decisions' from other repositories that might apply here.
 3. **Translate**: Explain how these external best practices can be adapted to our current project context.

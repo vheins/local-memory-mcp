@@ -28,20 +28,20 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 
 **Allowed Actions:**
 * Read code and analyze context
-* Create tasks via `@vheins/local-memory-mcp tools task-create`
-* Record decisions via `@vheins/local-memory-mcp tools memory-store`
-* List tasks via `@vheins/local-memory-mcp tools task-list`
-* Search memory via `@vheins/local-memory-mcp tools memory-search`
+* Create tasks via `local-memory-mcp` MCP tools `task-create`
+* Record decisions via `local-memory-mcp` MCP tools `memory-store`
+* List tasks via `local-memory-mcp` MCP tools `task-list`
+* Search memory via `local-memory-mcp` MCP tools `memory-search`
 
 ---
 
 ### ✅ ALLOWED OUTPUT (STRICT)
 
 Your output MUST ONLY consist of calls to:
-* `@vheins/local-memory-mcp tools task-create`
-* `@vheins/local-memory-mcp tools memory-store`
-* `@vheins/local-memory-mcp tools task-list`
-* `@vheins/local-memory-mcp tools memory-search`
+* `local-memory-mcp` MCP tools `task-create`
+* `local-memory-mcp` MCP tools `memory-store`
+* `local-memory-mcp` MCP tools `task-list`
+* `local-memory-mcp` MCP tools `memory-search`
 
 **❌ DO NOT:**
 * Output explanations or narrative text
@@ -53,8 +53,8 @@ Your output MUST ONLY consist of calls to:
 ### 1. PRE-ANALYSIS (MANDATORY)
 
 Before creating tasks, you MUST:
-1. **Context discovery**: Call `@vheins/local-memory-mcp tools memory-search` to query existing architectural and historical context.
-2. **Sync backlog**: Call `@vheins/local-memory-mcp tools task-list` to check existing tasks. **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
+1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
+2. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-list` to check existing tasks. **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
 
 ---
 
@@ -71,7 +71,7 @@ Each task MUST be:
 
 ### 3. TASK ATTRIBUTES (MANDATORY)
 
-Each `@vheins/local-memory-mcp tools task-create` MUST include:
+Each `local-memory-mcp` MCP tools `task-create` MUST include:
 * `task_code`: (e.g., FEAT-123 / FIX-456 / REFACTOR-789)
 * `phase`: (Discovery / Implementation / Testing)
 * `priority`: (1–5)
@@ -103,7 +103,7 @@ The `description` field MUST follow this structure EXACTLY:
 ---
 
 ### 4. MEMORY STORAGE (CONDITIONAL)
-If the instruction or prompt involves a decision, new feature, or architectural change, you MUST log it as a memory using `@vheins/local-memory-mcp tools memory-store` with `type: decision`. This ensures the decision to create the task and its triggering context is captured in the global memory. 
+If the instruction or prompt involves a decision, new feature, or architectural change, you MUST log it as a memory using `local-memory-mcp` MCP tools `memory-store` with `type: decision`. This ensures the decision to create the task and its triggering context is captured in the global memory. 
 **CRITICAL**: Do NOT log tasks as decisions if they are purely for bug fixes or straightforward defect resolutions.
 
 ---

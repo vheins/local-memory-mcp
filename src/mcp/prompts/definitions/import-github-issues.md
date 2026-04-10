@@ -10,7 +10,7 @@ Please follow these steps:
 
 1. **Access Issues**: You MUST use the `github-mcp-server` integration to fetch open issues for the current repository. 
    * **Fallback**: If the GitHub MCP integration is unavailable or throws an error, fallback to using the GitHub CLI via terminal (`gh issue list --json number,title,body,labels,url`).
-2. **Review Existing Tasks**: Call '@vheins/local-memory-mcp tools task-list' for the current repository to identify tasks already imported.
+2. **Review Existing Tasks**: Call `local-memory-mcp` MCP tools `task-list` for the current repository to identify tasks already imported.
 3. **Map and Create**: For each relevant issue that hasn't been imported yet:
    - Use 'task-manage' with action='create'.
    - Set 'task_code' to 'GH-{{issue_number}}' (e.g., GH-123).
