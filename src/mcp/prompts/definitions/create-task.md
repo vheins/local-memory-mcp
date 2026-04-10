@@ -102,8 +102,9 @@ The `description` field MUST follow this structure EXACTLY:
 
 ---
 
-### 4. MEMORY STORAGE (MANDATORY)
-Whenever you create a task, you MUST ALSO log it as a memory using `@vheins/local-memory-mcp tools memory-store` with `type: decision`. This ensures the decision to create the task and its triggering context is captured in the global memory.
+### 4. MEMORY STORAGE (CONDITIONAL)
+If the instruction or prompt involves a decision, new feature, or architectural change, you MUST log it as a memory using `@vheins/local-memory-mcp tools memory-store` with `type: decision`. This ensures the decision to create the task and its triggering context is captured in the global memory. 
+**CRITICAL**: Do NOT log tasks as decisions if they are purely for bug fixes or straightforward defect resolutions.
 
 ---
 
