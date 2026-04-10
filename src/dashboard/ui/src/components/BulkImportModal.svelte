@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { fade, scale } from 'svelte/transition';
-  import { api } from '../lib/api';
   import Icon from '../lib/Icon.svelte';
+  import { createBulkImport } from '../lib/composables/useBulkImport';
 
   export let repo: string;
   export let importTarget: 'memories' | 'tasks' = 'memories';
@@ -10,140 +10,49 @@
 
   const dispatch = createEventDispatcher();
 
-  let file: File | null = null;
-  let csvData: any[] = [];
-  let headers: string[] = [];
-  let fileName = '';
-  let errorMsg = '';
-  let isSubmitting = false;
-
-  const templates = {
-    memories: 'title,type,content,importance\nExample Memory,fact,This is an example memory content,3',
-    tasks: 'task_code,title,phase,description,status,priority\nTSK-001,Example Task,Phase 1,Example task description,todo,3'
-  };
-
-  function close() {
-    isOpen = false;
-    file = null;
-    csvData = [];
-    headers = [];
-    fileName = '';
-    errorMsg = '';
-    dispatch('close');
-  }
-
-  function parseCSV(text: string) {
-    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-    if (lines.length === 0) return { headers: [], rows: [] };
-
-    const splitLine = (line: string) => {
-      const result = [];
-      let cur = "";
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-        else if (char === '"') inQuotes = !inQuotes;
-        else if (char === ',' && !inQuotes) { result.push(cur.trim()); cur = ""; }
-        else cur += char;
-      }
-      result.push(cur.trim());
-      return result;
-    };
-
-    const rawHeaders = splitLine(lines[0]);
-    const filteredHeaders = rawHeaders.filter(h => h !== '');
-    
-    const rows = lines.slice(1).map(splitLine).map(row => {
-      const obj: any = {};
-      filteredHeaders.forEach((h, i) => {
-        const key = h.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        obj[key] = row[i];
-      });
-      return obj;
-    });
-
-    return { headers: filteredHeaders, rows };
-  }
-
-  async function handleFileSelect(e: Event) {
-    const target = e.target as HTMLInputElement;
-    const selectedFile = target.files?.[0];
-    if (selectedFile) processFile(selectedFile);
-  }
-
-  function handleFileDrop(e: DragEvent) {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer?.files?.[0];
-    if (droppedFile) processFile(droppedFile);
-  }
-
-  function processFile(selectedFile: File) {
-    errorMsg = '';
-    if (!selectedFile.name.endsWith('.csv')) {
-      errorMsg = 'Please select a valid .csv file.';
-      return;
+  // Initialize composable
+  const {
+    file,
+    csvData,
+    headers,
+    fileName,
+    errorMsg,
+    isSubmitting,
+    isOpen: composableIsOpen,
+    close,
+    handleFileSelect,
+    handleFileDrop,
+    downloadExample,
+    handleImport,
+    setFile,
+    setCsvData
+  } = createBulkImport({
+    repo,
+    importTarget,
+    onSuccess: () => dispatch('success'),
+    onClose: () => {
+      isOpen = false;
+      dispatch('close');
     }
-    
-    file = selectedFile;
-    fileName = selectedFile.name;
-    
-    const reader = new FileReader();
-    reader.onload = (re) => {
-      const text = re.target?.result as string;
-      const parsed = parseCSV(text);
-      headers = parsed.headers;
-      csvData = parsed.rows;
-      if (csvData.length === 0) {
-        errorMsg = 'CSV file appears to be empty or missing headers.';
-      }
-    };
-    reader.readAsText(selectedFile);
+  });
+
+  // Sync prop with composable state
+  $: if (isOpen) {
+    composableIsOpen.set(true);
+  } else {
+    composableIsOpen.set(false);
   }
 
-  function downloadExample() {
-    const csvContent = templates[importTarget];
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `example_${importTarget}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  async function handleImport() {
-    errorMsg = '';
-    if (csvData.length === 0) {
-      errorMsg = 'No data to import.';
-      return;
-    }
-
-    isSubmitting = true;
-    try {
-      let count = 0;
-      if (importTarget === 'memories') {
-        const res = await api.bulkImportMemories(repo, csvData);
-        count = res.count;
-      } else {
-        const res = await api.bulkImportTasks(repo, csvData);
-        count = res.count;
-      }
-      
-      alert(`Imported ${count} ${importTarget} successfully.`);
-      dispatch('success');
-      close();
-    } catch (err: any) {
-      errorMsg = err.message || 'Import failed';
-    } finally {
-      isSubmitting = false;
-    }
-  }
+  // Reactive access to stores for the template
+  $: currentFile = $file;
+  $: currentCsvData = $csvData;
+  $: currentHeaders = $headers;
+  $: currentFileName = $fileName;
+  $: currentErrorMsg = $errorMsg;
+  $: currentIsSubmitting = $isSubmitting;
 </script>
 
-{#if isOpen}
+{#if $composableIsOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="modal-backdrop" transition:fade={{ duration: 200 }} on:click={close}>
@@ -151,8 +60,8 @@
       
       <div class="modal-header">
         <div class="flex items-center gap-2">
-          <div class="header-icon">
-            <Icon name="upload-cloud" size={18} color="#0ea5e9" />
+          <div class="header-icon" style="color: #0ea5e9">
+            <Icon name="upload-cloud" size={18} />
           </div>
           <h3>Bulk Import {importTarget === 'memories' ? 'Memories' : 'Tasks'}</h3>
         </div>
@@ -163,14 +72,16 @@
 
       <div class="modal-body">
         <div class="p-6">
-          {#if !file}
+          {#if !currentFile}
             <div 
               class="drop-zone"
               on:dragover|preventDefault
               on:drop={handleFileDrop}
             >
               <div class="drop-zone-content">
-                <Icon name="file-up" size={48} strokeWidth={1} color="var(--color-text-muted)" />
+                <div style="color: var(--color-text-muted)">
+                  <Icon name="file-up" size={48} strokeWidth={1} />
+                </div>
                 <p>Drag and drop your <strong>.csv</strong> file here</p>
                 <span class="text-xs text-slate-500 mb-4">or click to browse from your computer</span>
                 
@@ -191,13 +102,15 @@
           {:else}
             <div class="file-info flex items-center justify-between p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg mb-4">
               <div class="flex items-center gap-3">
-                <Icon name="file-type-2" size={24} color="#0ea5e9" />
+                <div style="color: #0ea5e9; display: flex;">
+                  <Icon name="file-type-2" size={24} />
+                </div>
                 <div>
-                  <div class="text-sm font-semibold">{fileName}</div>
-                  <div class="text-[0.7rem] text-slate-400">{csvData.length} rows found</div>
+                  <div class="text-sm font-semibold">{currentFileName}</div>
+                  <div class="text-[0.7rem] text-slate-400">{currentCsvData.length} rows found</div>
                 </div>
               </div>
-              <button class="btn btn-ghost btn-sm text-red-500" on:click={() => { file = null; csvData = []; }}>
+              <button class="btn btn-ghost btn-sm text-red-500" on:click={() => { setFile(null); setCsvData([]); }}>
                 Change File
               </button>
             </div>
@@ -210,15 +123,15 @@
                 <table>
                   <thead>
                     <tr>
-                      {#each headers as h}
+                      {#each currentHeaders as h}
                         <th>{h}</th>
                       {/each}
                     </tr>
                   </thead>
                   <tbody>
-                    {#each csvData.slice(0, 5) as row}
+                    {#each currentCsvData.slice(0, 5) as row}
                       <tr>
-                        {#each headers as h}
+                        {#each currentHeaders as h}
                           <td>{row[h.toLowerCase().replace(/[^a-z0-9_]/g, '_')] || ''}</td>
                         {/each}
                       </tr>
@@ -229,19 +142,19 @@
             </div>
           {/if}
 
-          {#if errorMsg}
+          {#if currentErrorMsg}
             <div class="error-msg flex items-center gap-2">
               <Icon name="alert-circle" size={16} />
-              <span>{errorMsg}</span>
+              <span>{currentErrorMsg}</span>
             </div>
           {/if}
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-ghost" on:click={close} disabled={isSubmitting}>Cancel</button>
-        <button class="btn btn-primary" on:click={handleImport} disabled={isSubmitting || csvData.length === 0}>
-          {#if isSubmitting}
+        <button class="btn btn-ghost" on:click={close} disabled={currentIsSubmitting}>Cancel</button>
+        <button class="btn btn-primary" on:click={handleImport} disabled={currentIsSubmitting || currentCsvData.length === 0}>
+          {#if currentIsSubmitting}
             <div class="spinner"></div>
             Importing...
           {:else}

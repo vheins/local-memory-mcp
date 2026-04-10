@@ -2,157 +2,26 @@
   import {
     memories, memoriesTotal, memoriesPage, memoriesPageSize,
     memoriesTotalPages, memoriesSearch, memoriesTypeFilter,
-    memoriesImportanceMin, memoriesImportanceMax,
+    memoriesImportanceMin,
     memoriesSortBy, memoriesSortOrder, selectedMemoryIds,
     currentRepo
   } from '../lib/stores';
-  import { api } from '../lib/api';
-  import { formatDate, debounce, exportToJSON, exportToCSV } from '../lib/utils';
+  import { createMemoryHandler } from '../lib/composables/useMemoryList';
+  import { formatDate } from '../lib/utils';
   import type { Memory } from '../lib/stores';
   import Icon from '../lib/Icon.svelte';
+  import { TYPES, TYPE_LABELS, importanceColor, importanceBg } from '../lib/memoryConfig';
 
   export let onMemoryClick: (mem: Memory) => void = () => {};
   /** Called when user wants to create a new memory */
   export let onNewMemory: () => void = () => {};
   export let onBulkImport: () => void = () => {};
 
-  let loading = false;
+  const memoryHandler = createMemoryHandler();
 
-  const TYPES = [
-    'code_fact', 'decision', 'mistake', 'pattern',
-    'agent_handoff', 'agent_registered', 'file_claim', 'task_archive'
-  ];
-
-  const TYPE_LABELS: Record<string, string> = {
-    code_fact: 'Code Fact', decision: 'Decision', mistake: 'Mistake',
-    pattern: 'Pattern', agent_handoff: 'Handoff', agent_registered: 'Registered',
-    file_claim: 'File Claim', task_archive: 'Task Archive'
-  };
-
-  async function loadMemories() {
-    const repo = $currentRepo;
-    if (!repo) { memories.set([]); return; }
-    loading = true;
-    try {
-      const data = await api.memories({
-        repo,
-        type: $memoriesTypeFilter || undefined,
-        search: $memoriesSearch || undefined,
-        minImportance: $memoriesImportanceMin,
-        maxImportance: $memoriesImportanceMax,
-        sortBy: $memoriesSortBy,
-        sortOrder: $memoriesSortOrder,
-        page: $memoriesPage,
-        pageSize: $memoriesPageSize,
-      });
-      memories.set(data.memories || []);
-      memoriesTotal.set(data.pagination?.totalItems || 0);
-    } catch (e) {
-      console.error('Failed to load memories:', e);
-    }
-    loading = false;
-  }
-
-  export function refresh() { loadMemories(); }
-
-  const debouncedSearch = debounce(() => {
-    memoriesPage.set(1);
-    loadMemories();
-  }, 300);
-
-  function onSearchInput() { debouncedSearch(); }
-
-  function onFilterChange() {
-    memoriesPage.set(1);
-    loadMemories();
-  }
-
-  function goToPage(p: number) {
-    if (p < 1 || p > $memoriesTotalPages) return;
-    memoriesPage.set(p);
-    loadMemories();
-  }
-
-  function toggleSort(col: string) {
-    if ($memoriesSortBy === col) {
-      memoriesSortOrder.update(o => o === 'desc' ? 'asc' : 'desc');
-    } else {
-      memoriesSortBy.set(col);
-      memoriesSortOrder.set('desc');
-    }
-    loadMemories();
-  }
-
-  function toggleSelect(id: string) {
-    selectedMemoryIds.update(ids => {
-      const next = new Set(ids);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    selectedMemoryIds.update(ids => {
-      if (ids.size === $memories.length) return new Set();
-      return new Set($memories.map(m => m.id));
-    });
-  }
-
-  async function handleExport(format: 'json' | 'csv') {
-    if (!$currentRepo) return;
-    const data = await api.export($currentRepo);
-    const filename = `${$currentRepo.replace('/', '_')}_export`;
-    if (format === 'json') exportToJSON(data, filename + '.json');
-    else exportToCSV(data.memories || [], filename + '.csv');
-  }
-
-  async function handleDeleteRow(mem: Memory, e: MouseEvent) {
-    e.stopPropagation();
-    if (!confirm(`Delete memory "${mem.title}"?`)) return;
-    try {
-      await api.deleteMemory(mem.id);
-      loadMemories();
-    } catch (err: any) {
-      alert('Failed to delete: ' + err.message);
-    }
-  }
-
-  async function handleBulkDelete() {
-    if ($selectedMemoryIds.size === 0) return;
-    if (!confirm(`Are you sure you want to delete ${$selectedMemoryIds.size} memories?`)) return;
-    try {
-      await api.bulkMemoryAction('delete', Array.from($selectedMemoryIds));
-      selectedMemoryIds.set(new Set());
-      loadMemories();
-    } catch (err: any) {
-      alert('Failed to delete: ' + err.message);
-    }
-  }
-
-  async function handleBulkArchive() {
-    if ($selectedMemoryIds.size === 0) return;
-    try {
-      await api.bulkMemoryAction('archive', Array.from($selectedMemoryIds));
-      selectedMemoryIds.set(new Set());
-      loadMemories();
-    } catch (err: any) {
-      alert('Failed to archive: ' + err.message);
-    }
-  }
+  export function refresh() { memoryHandler.loadMemories(); }
 
   $: allSelected = $memories.length > 0 && $selectedMemoryIds.size === $memories.length;
-
-  const importanceBg: Record<number, string> = {
-    1: 'rgba(100,116,139,0.15)',
-    2: 'rgba(59,130,246,0.15)',
-    3: 'rgba(245,158,11,0.15)',
-    4: 'rgba(249,115,22,0.15)',
-    5: 'rgba(239,68,68,0.15)',
-  };
-  const importanceColor: Record<number, string> = {
-    1: '#64748b', 2: '#3b82f6', 3: '#f59e0b', 4: '#f97316', 5: '#ef4444'
-  };
 </script>
 
 <div>
@@ -169,36 +38,36 @@
         type="text"
         placeholder="Search memories..."
         bind:value={$memoriesSearch}
-        on:input={onSearchInput}
+        on:input={() => memoryHandler.onSearchInput()}
       />
     </div>
 
-    <select class="form-select" style="width:140px;font-size:0.8rem;" bind:value={$memoriesTypeFilter} on:change={onFilterChange}>
+    <select class="form-select" style="width:140px;font-size:0.8rem;" bind:value={$memoriesTypeFilter} on:change={() => memoryHandler.onFilterChange()}>
       <option value="">All Types</option>
       {#each TYPES as t}
         <option value={t}>{TYPE_LABELS[t]}</option>
       {/each}
     </select>
 
-    <select class="form-select" style="width:100px;font-size:0.8rem;" bind:value={$memoriesImportanceMin} on:change={onFilterChange}>
+    <select class="form-select" style="width:100px;font-size:0.8rem;" bind:value={$memoriesImportanceMin} on:change={() => memoryHandler.onFilterChange()}>
       <option value={null}>Min Imp.</option>
       {#each [1,2,3,4,5] as i}
         <option value={i}>{i}</option>
       {/each}
     </select>
 
-    <select class="form-select" style="width:100px;font-size:0.8rem;" bind:value={$memoriesPageSize} on:change={() => { memoriesPage.set(1); loadMemories(); }}>
+    <select class="form-select" style="width:100px;font-size:0.8rem;" bind:value={$memoriesPageSize} on:change={() => { memoriesPage.set(1); memoryHandler.loadMemories(); }}>
       {#each [10, 25, 50, 100] as n}
         <option value={n}>{n} / page</option>
       {/each}
     </select>
 
     <div class="flex gap-1">
-      <button class="btn btn-ghost btn-sm" on:click={() => handleExport('json')} title="Export JSON">
+      <button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.handleExport('json')} title="Export JSON">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         JSON
       </button>
-      <button class="btn btn-ghost btn-sm" on:click={() => handleExport('csv')} title="Export CSV">
+      <button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.handleExport('csv')} title="Export CSV">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         CSV
       </button>
@@ -228,16 +97,16 @@
       <thead>
         <tr class="mem-thead-row">
           <th class="mem-th" style="width:36px;">
-            <input type="checkbox" checked={allSelected} on:change={toggleSelectAll} aria-label="Select all" />
+            <input type="checkbox" checked={allSelected} on:change={() => memoryHandler.toggleSelectAll()} aria-label="Select all" />
           </th>
-          <th class="mem-th sortable" on:click={() => toggleSort('title')}>
+          <th class="mem-th sortable" on:click={() => memoryHandler.toggleSort('title')}>
             Title {$memoriesSortBy === 'title' ? ($memoriesSortOrder === 'desc' ? '↓' : '↑') : ''}
           </th>
           <th class="mem-th">Type</th>
-          <th class="mem-th" style="text-align:center;cursor:pointer;" on:click={() => toggleSort('importance')}>
+          <th class="mem-th" style="text-align:center;cursor:pointer;" on:click={() => memoryHandler.toggleSort('importance')}>
             Imp. {$memoriesSortBy === 'importance' ? ($memoriesSortOrder === 'desc' ? '↓' : '↑') : ''}
           </th>
-          <th class="mem-th sortable" on:click={() => toggleSort('updated_at')}>
+          <th class="mem-th sortable" on:click={() => memoryHandler.toggleSort('updated_at')}>
             Updated {$memoriesSortBy === 'updated_at' ? ($memoriesSortOrder === 'desc' ? '↓' : '↑') : ''}
           </th>
           <th class="mem-th" style="text-align:center;">Hits</th>
@@ -245,7 +114,7 @@
         </tr>
       </thead>
       <tbody>
-        {#if loading}
+        {#if memoryHandler.loading}
           {#each Array(5) as _}
             <tr>
               <td colspan="7" class="mem-td">
@@ -268,7 +137,7 @@
               on:click={() => onMemoryClick(mem)}
             >
               <td class="mem-td" on:click|stopPropagation>
-                <input type="checkbox" checked={$selectedMemoryIds.has(mem.id)} on:change={() => toggleSelect(mem.id)} />
+                <input type="checkbox" checked={$selectedMemoryIds.has(mem.id)} on:change={() => memoryHandler.toggleSelect(mem.id)} />
               </td>
               <td class="mem-td" style="max-width:300px;">
                 <div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{mem.title}</div>
@@ -301,7 +170,7 @@
                 </button>
                 <button
                   class="row-action-btn delete-btn"
-                  on:click={(e) => handleDeleteRow(mem, e)}
+                  on:click={(e) => memoryHandler.handleDeleteRow(mem, e)}
                   title="Delete"
                   aria-label="Delete memory"
                 >
@@ -322,8 +191,8 @@
         Page {$memoriesPage} of {$memoriesTotalPages}
       </span>
       <div class="flex gap-1">
-        <button class="btn btn-ghost btn-sm" on:click={() => goToPage(1)} disabled={$memoriesPage <= 1}>«</button>
-        <button class="btn btn-ghost btn-sm" on:click={() => goToPage($memoriesPage - 1)} disabled={$memoriesPage <= 1}>‹</button>
+        <button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.goToPage(1)} disabled={$memoriesPage <= 1}>«</button>
+        <button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.goToPage($memoriesPage - 1)} disabled={$memoriesPage <= 1}>‹</button>
         {#each Array.from({length: Math.min(5, $memoriesTotalPages)}, (_, i) => {
           const start = Math.max(1, Math.min($memoriesPage - 2, $memoriesTotalPages - 4));
           return start + i;
@@ -332,11 +201,11 @@
             class="btn btn-sm"
             class:btn-primary={p === $memoriesPage}
             class:btn-ghost={p !== $memoriesPage}
-            on:click={() => goToPage(p)}
+            on:click={() => memoryHandler.goToPage(p)}
           >{p}</button>
         {/each}
-        <button class="btn btn-ghost btn-sm" on:click={() => goToPage($memoriesPage + 1)} disabled={$memoriesPage >= $memoriesTotalPages}>›</button>
-        <button class="btn btn-ghost btn-sm" on:click={() => goToPage($memoriesTotalPages)} disabled={$memoriesPage >= $memoriesTotalPages}>»</button>
+        <button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.goToPage($memoriesPage + 1)} disabled={$memoriesPage >= $memoriesTotalPages}>›</button>
+        <button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.goToPage($memoriesTotalPages)} disabled={$memoriesPage >= $memoriesTotalPages}>»</button>
       </div>
     </div>
   {/if}
@@ -347,8 +216,8 @@
       <span><b>{$selectedMemoryIds.size}</b> selected</span>
       <div style="width:12px;"></div>
       <button class="btn btn-sm" style="background:rgba(120,120,120,0.2);color:inherit;" on:click={() => selectedMemoryIds.set(new Set())}>Cancel</button>
-      <button class="btn btn-sm" style="background:#52525b;color:white;border:none;" on:click={handleBulkArchive}>Archive</button>
-      <button class="btn btn-sm btn-accent" style="background:#ef4444;color:white;border:none;" on:click={handleBulkDelete}>Delete</button>
+      <button class="btn btn-sm" style="background:#52525b;color:white;border:none;" on:click={() => memoryHandler.handleBulkArchive()}>Archive</button>
+      <button class="btn btn-sm btn-accent" style="background:#ef4444;color:white;border:none;" on:click={() => memoryHandler.handleBulkDelete()}>Delete</button>
     </div>
   {/if}
 </div>

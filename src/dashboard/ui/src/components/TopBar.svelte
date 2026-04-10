@@ -1,76 +1,29 @@
 <script lang="ts">
-  import { healthData, theme, currentRepo, activeTab, availableRepos } from '../lib/stores';
-  import { getRepoInitials } from '../lib/utils';
+  import { healthData, currentRepo, availableRepos, theme } from '../lib/stores';
   import Icon from '../lib/Icon.svelte';
   import { onMount, onDestroy } from 'svelte';
+  import { createTopBarHandler, GITHUB_URL, NPM_URL } from '../lib/composables/useTopBar';
 
   export let onRefresh: () => void = () => {};
   export let onToggleMobileMenu: () => void = () => {};
 
-  const GITHUB_URL = 'https://github.com/vheins/local-memory-mcp';
-  const NPM_URL = 'https://www.npmjs.com/package/@vheins/local-memory-mcp';
-  const NPM_PKG = '@vheins/local-memory-mcp';
+  const handler = createTopBarHandler(onRefresh);
+  const { 
+    countdownSeconds, refreshing, npmDownloads, npmLoading, 
+    formatDownloads, fetchNpmDownloads, toggleTheme, 
+    startCountdown, manualRefresh, getRepoInitials, destroy 
+  } = handler;
 
-  let countdownSeconds = 30;
-  let countdownTimer: ReturnType<typeof setInterval>;
-  let refreshing = false;
-
-  // npm downloads
-  let npmDownloads: number | null = null;
-  let npmLoading = true;
-
-  function formatDownloads(n: number): string {
-    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
-    return String(n);
-  }
-
-  async function fetchNpmDownloads() {
-    try {
-      const res = await fetch(`https://api.npmjs.org/downloads/point/last-month/${NPM_PKG}`);
-      if (res.ok) {
-        const data = await res.json();
-        npmDownloads = data.downloads ?? null;
-      }
-    } catch {
-      npmDownloads = null;
-    } finally {
-      npmLoading = false;
-    }
-  }
-
-  function toggleTheme() {
-    theme.update(t => t === 'dark' ? 'light' : 'dark');
-  }
-
-  function startCountdown() {
-    clearInterval(countdownTimer);
-    countdownSeconds = 30;
-    countdownTimer = setInterval(() => {
-      countdownSeconds--;
-      if (countdownSeconds <= 0) {
-        countdownSeconds = 30;
-        onRefresh();
-      }
-    }, 1000);
-  }
-
-  async function manualRefresh() {
-    refreshing = true;
-    onRefresh();
-    startCountdown();
-    setTimeout(() => refreshing = false, 800);
-  }
-
-  $: countdownPct = (countdownSeconds / 30) * 100;
-  $: countdownColor = countdownSeconds <= 5 ? '#ef4444' : countdownSeconds <= 10 ? '#f97316' : '#0ea5e9';
+  $: countdownPct = ($countdownSeconds / 30) * 100;
+  $: countdownColor = $countdownSeconds <= 5 ? '#ef4444' : $countdownSeconds <= 10 ? '#f97316' : '#0ea5e9';
   $: currentRepoData = $availableRepos.find(r => r.repo === $currentRepo);
 
   onMount(() => {
     startCountdown();
     fetchNpmDownloads();
   });
-  onDestroy(() => clearInterval(countdownTimer));
+  
+  onDestroy(() => destroy());
 </script>
 
 <header class="top-bar glass-strong" style="border-bottom: 1px solid var(--color-border); z-index: 30;">
@@ -171,14 +124,14 @@
           <svg width="18" height="11" viewBox="0 0 18 7" fill="currentColor" aria-hidden="true">
             <path d="M0 0h18v6H9V7H5V6H0V0zm1 5h2V1h1v4h1V1h1v5h4V1h1v4h1V1h1v4h1V1h2v5H1V5z"/>
           </svg>
-          {#if npmLoading}
+          {#if $npmLoading}
             <span class="ext-link-label npm-dl-skeleton"></span>
-          {:else if npmDownloads !== null}
+          {:else if $npmDownloads !== null}
             <span class="ext-link-label npm-dl-badge">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
               </svg>
-              {formatDownloads(npmDownloads)}/mo
+              {formatDownloads($npmDownloads)}/mo
             </span>
           {:else}
             <span class="ext-link-label">npm</span>
@@ -208,16 +161,16 @@
           <div class="countdown-track">
             <div class="countdown-fill" style="width:{countdownPct}%;background:{countdownColor};"></div>
           </div>
-          <span class="countdown-label" style="color:{countdownSeconds <= 5 ? '#ef4444' : 'var(--color-text-muted)'};">{countdownSeconds}s</span>
+          <span class="countdown-label" style="color:{$countdownSeconds <= 5 ? '#ef4444' : 'var(--color-text-muted)'};">{$countdownSeconds}s</span>
         </div>
         <button
           class="btn btn-ghost btn-icon btn-sm"
-          class:refreshing
+          class:refreshing={$refreshing}
           on:click={manualRefresh}
           title="Refresh now"
           aria-label="Refresh"
         >
-          <span class:animate-spin={refreshing}>
+          <span class:animate-spin={$refreshing}>
             <Icon name="refresh-cw" size={14} strokeWidth={2.5} />
           </span>
         </button>

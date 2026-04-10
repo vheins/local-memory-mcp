@@ -1,68 +1,13 @@
 <script lang="ts">
   import {
-    availableRepos, currentRepo, pinnedRepos, repoSearchQuery,
-    isRepoSidebarCollapsed, orderedRepos, theme
+    availableRepos, currentRepo, isRepoSidebarCollapsed, orderedRepos, repoSearchQuery
   } from '../lib/stores';
-  import { getRepoInitials, formatDate } from '../lib/utils';
-  import { api } from '../lib/api';
+  import { createRepoSidebarHandler } from '../lib/composables/useRepoSidebar';
   import Icon from '../lib/Icon.svelte';
 
   export let onRepoSelect: (repo: string) => void = () => {};
 
-  let draggedRepo: string | null = null;
-
-  function selectRepo(repo: string) {
-    currentRepo.set(repo);
-    localStorage.setItem('selectedRepo', repo);
-    onRepoSelect(repo);
-  }
-
-  function togglePin(repo: string, e: Event) {
-    e.preventDefault();
-    e.stopPropagation();
-    pinnedRepos.update(pinned => {
-      if (pinned.includes(repo)) return pinned.filter(p => p !== repo);
-      return [...pinned, repo];
-    });
-  }
-
-  function toggleCollapse() {
-    isRepoSidebarCollapsed.update(v => !v);
-  }
-
-  function onDragStart(repo: string, e: DragEvent) {
-    draggedRepo = repo;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', repo);
-    }
-    (e.currentTarget as HTMLElement).classList.add('opacity-50');
-  }
-
-  function onDragOver(target: string, e: DragEvent) {
-    if (!draggedRepo || draggedRepo === target) return;
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  }
-
-  function onDrop(target: string, e: DragEvent) {
-    e.preventDefault();
-    const dragged = draggedRepo || e.dataTransfer?.getData('text/plain');
-    if (!dragged || dragged === target) return;
-    pinnedRepos.update(pinned => {
-      const next = pinned.filter(p => p !== dragged);
-      const idx = next.indexOf(target);
-      next.splice(idx, 0, dragged);
-      return next;
-    });
-    draggedRepo = null;
-  }
-
-  function onDragEnd(e: DragEvent) {
-    draggedRepo = null;
-    (e.currentTarget as HTMLElement).classList.remove('opacity-50');
-    document.querySelectorAll('.repo-item.drag-over').forEach(el => el.classList.remove('drag-over'));
-  }
+  const handler = createRepoSidebarHandler(onRepoSelect);
 
   $: collapsed = $isRepoSidebarCollapsed;
 </script>
@@ -92,7 +37,7 @@
 
     <button
       class="btn btn-ghost btn-icon btn-sm collapse-btn"
-      on:click={toggleCollapse}
+      on:click={handler.toggleCollapse}
       title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       aria-label={collapsed ? 'Expand' : 'Collapse'}
     >
@@ -141,19 +86,19 @@
             role="button"
             tabindex="0"
             draggable="true"
-            on:click={() => selectRepo(item.repo)}
-            on:keydown={e => (e.key === 'Enter' || e.key === ' ') && selectRepo(item.repo)}
-            on:dragstart={e => onDragStart(item.repo, e)}
-            on:dragover={e => onDragOver(item.repo, e)}
-            on:drop={e => onDrop(item.repo, e)}
-            on:dragend={onDragEnd}
+            on:click={() => handler.selectRepo(item.repo)}
+            on:keydown={e => (e.key === 'Enter' || e.key === ' ') && handler.selectRepo(item.repo)}
+            on:dragstart={e => handler.onDragStart(item.repo, e)}
+            on:dragover={e => handler.onDragOver(item.repo, e)}
+            on:drop={e => handler.onDrop(item.repo, e)}
+            on:dragend={handler.onDragEnd}
             title="{item.repo} • {item.memory_count} memories"
           >
             {#if $currentRepo === item.repo}
               <div class="repo-active-indicator"></div>
             {/if}
             <div class="repo-avatar">
-              {getRepoInitials(item.repo)}
+              {handler.getRepoInitials(item.repo)}
               <span class="pin-star">★</span>
             </div>
             <div class="min-w-0 flex-1">
@@ -181,7 +126,7 @@
             </div>
             <button
               class="pin-btn"
-              on:click={e => togglePin(item.repo, e)}
+              on:click={e => handler.togglePin(item.repo, e)}
               title="Unpin"
               aria-label="Unpin repository"
             >
@@ -205,14 +150,14 @@
             class:active={$currentRepo === item.repo}
             role="button"
             tabindex="0"
-            on:click={() => selectRepo(item.repo)}
-            on:keydown={e => (e.key === 'Enter' || e.key === ' ') && selectRepo(item.repo)}
+            on:click={() => handler.selectRepo(item.repo)}
+            on:keydown={e => (e.key === 'Enter' || e.key === ' ') && handler.selectRepo(item.repo)}
             title="{item.repo} • {item.memory_count} memories"
           >
             {#if $currentRepo === item.repo}
               <div class="repo-active-indicator"></div>
             {/if}
-            <div class="repo-avatar">{getRepoInitials(item.repo)}</div>
+            <div class="repo-avatar">{handler.getRepoInitials(item.repo)}</div>
             <div class="min-w-0 flex-1">
               <div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{item.repo}</div>
               <div class="truncate flex items-center gap-1" style="font-size:0.68rem;color:var(--color-text-muted);margin-bottom:2px;">
@@ -238,7 +183,7 @@
             </div>
             <button
               class="pin-btn"
-              on:click={e => togglePin(item.repo, e)}
+              on:click={e => handler.togglePin(item.repo, e)}
               title="Pin"
               aria-label="Pin repository"
             >
@@ -262,14 +207,14 @@
           class:active={$currentRepo === item.repo}
           role="button"
           tabindex="0"
-          on:click={() => selectRepo(item.repo)}
-          on:keydown={e => (e.key === 'Enter' || e.key === ' ') && selectRepo(item.repo)}
+          on:click={() => handler.selectRepo(item.repo)}
+          on:keydown={e => (e.key === 'Enter' || e.key === ' ') && handler.selectRepo(item.repo)}
           title={item.repo}
         >
           {#if $currentRepo === item.repo}
             <div class="repo-active-indicator"></div>
           {/if}
-          <div class="repo-avatar" style="margin:auto;">{getRepoInitials(item.repo)}</div>
+          <div class="repo-avatar" style="margin:auto;">{handler.getRepoInitials(item.repo)}</div>
         </div>
       {/each}
     {/if}

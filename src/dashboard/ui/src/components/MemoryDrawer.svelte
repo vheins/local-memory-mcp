@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { api } from '../lib/api';
   import { currentRepo } from '../lib/stores';
   import type { Memory } from '../lib/stores';
   import { formatDate, renderMarkdown } from '../lib/utils';
   import Icon from '../lib/Icon.svelte';
+  import { createMemoryHandler } from '../lib/composables/useMemory';
+  import { TYPES, TYPE_LABELS, importanceColor, importanceBg } from '../lib/memoryConfig';
 
   // ─── Props ───────────────────────────────────────────────────────────────
   /** null  = create mode, Memory = edit/view mode */
@@ -13,126 +14,18 @@
   export let onSaved: (mem: Memory) => void = () => {};
   export let onDeleted: (id: string) => void = () => {};
 
-  // ─── Internal state ──────────────────────────────────────────────────────
+  // ─── Composable Logic ────────────────────────────────────────────────────
+  const logic = createMemoryHandler({ onSaved, onDeleted, onClose });
+  const { form, editing, saving, deleting, error, previewMode } = logic;
+
+  // Reactivity
   $: isCreate = memory === null;
-  $: isView = !!memory && !editing;
+  $: isView = !!memory && !$editing;
 
-  let editing = false;       // true when editing an existing memory
-  let saving = false;
-  let deleting = false;
-  let error = '';
-  let previewMode = false;   // toggle between edit and markdown preview
-
-  const TYPES = [
-    'code_fact', 'decision', 'mistake', 'pattern',
-    'agent_handoff', 'agent_registered', 'file_claim', 'task_archive'
-  ] as const;
-
-  const TYPE_LABELS: Record<string, string> = {
-    code_fact: 'Code Fact', decision: 'Decision', mistake: 'Mistake',
-    pattern: 'Pattern', agent_handoff: 'Agent Handoff', agent_registered: 'Agent Registered',
-    file_claim: 'File Claim', task_archive: 'Task Archive'
-  };
-
-  // Form fields
-  let form = {
-    title: '',
-    type: 'code_fact' as string,
-    content: '',
-    importance: 3,
-    tags: '',        // comma-separated
-    agent: '',
-    model: '',
-  };
-
-  // Reset form when drawer opens or memory changes
-  $: if (open) {
-    if (memory) {
-      // Pre-fill for edit mode
-      form = {
-        title: memory.title,
-        type: memory.type,
-        content: memory.content,
-        importance: memory.importance,
-        tags: (memory.tags || []).join(', '),
-        agent: (memory as any).agent || '',
-        model: (memory as any).model || '',
-      };
-      editing = false; // enter view mode first
-      previewMode = false;
-    } else {
-      // Create mode — blank form
-      form = { title: '', type: 'code_fact', content: '', importance: 3, tags: '', agent: '', model: '' };
-      editing = true;
-      previewMode = false;
-    }
-    error = '';
+  // Reset logic state when drawer opens or memory change
+  $: if (open || memory !== undefined) {
+    if (open) logic.reset(memory);
   }
-
-  function parseTags(raw: string): string[] {
-    return raw.split(',').map(t => t.trim()).filter(Boolean);
-  }
-
-  async function save() {
-    if (!form.title.trim() || !form.content.trim()) {
-      error = 'Title and Content are required.';
-      return;
-    }
-    saving = true;
-    error = '';
-    try {
-      const payload: any = {
-        title: form.title.trim(),
-        type: form.type,
-        content: form.content.trim(),
-        importance: Number(form.importance),
-        tags: parseTags(form.tags),
-        agent: form.agent.trim() || undefined,
-        model: form.model.trim() || undefined,
-        repo: $currentRepo,
-        scope: { repo: $currentRepo },
-      };
-
-      let result: Memory;
-      if (isCreate) {
-        const res = await api.createMemory(payload);
-        result = { ...payload, id: res.id, hit_count: 0, recall_count: 0,
-          created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Memory;
-      } else {
-        await api.updateMemory(memory!.id, payload);
-        result = { ...memory!, ...payload, updated_at: new Date().toISOString() } as Memory;
-      }
-      onSaved(result);
-      onClose();
-    } catch (e: any) {
-      error = e.message || 'Failed to save memory.';
-    } finally {
-      saving = false;
-    }
-  }
-
-  async function deleteMemory() {
-    if (!memory) return;
-    if (!confirm('Permanently delete this memory? This cannot be undone.')) return;
-    deleting = true;
-    try {
-      await api.deleteMemory(memory.id);
-      onDeleted(memory.id);
-      onClose();
-    } catch (e: any) {
-      error = e.message || 'Failed to delete memory.';
-    } finally {
-      deleting = false;
-    }
-  }
-
-  const importanceColor: Record<number, string> = {
-    1: '#64748b', 2: '#3b82f6', 3: '#f59e0b', 4: '#f97316', 5: '#ef4444'
-  };
-  const importanceBg: Record<number, string> = {
-    1: 'rgba(100,116,139,0.12)', 2: 'rgba(59,130,246,0.12)',
-    3: 'rgba(245,158,11,0.12)', 4: 'rgba(249,115,22,0.12)', 5: 'rgba(239,68,68,0.12)'
-  };
 </script>
 
 {#if open}
@@ -147,14 +40,14 @@
     <!-- ── HEADER ───────────────────────────────────────────────────── -->
     <div class="mem-header">
       <div style="flex:1;min-width:0;">
-        {#if isCreate || editing}
+        {#if isCreate || $editing}
           <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--color-text-muted);margin-bottom:6px;">
             {isCreate ? '✦ New Memory' : '✏️ Edit Memory'}
           </div>
           <input
             class="form-input mem-title-input"
             placeholder="Memory title…"
-            bind:value={form.title}
+            bind:value={$form.title}
           />
         {:else if memory}
           <span class="type-chip type-{memory.type}" style="margin-bottom:8px;display:inline-flex;">{TYPE_LABELS[memory.type] || memory.type}</span>
@@ -162,21 +55,21 @@
         {/if}
       </div>
       <div class="mem-header-actions">
-        {#if memory && !editing}
-          <button class="btn btn-ghost btn-sm" on:click={() => { editing = true; previewMode = false; }} title="Edit memory" aria-label="Edit">
+        {#if memory && !$editing}
+          <button class="btn btn-ghost btn-sm" on:click={logic.startEditing} title="Edit memory" aria-label="Edit">
             <Icon name="edit" size={14} strokeWidth={2} />
             <span>Edit</span>
           </button>
           <button
             class="btn btn-ghost btn-sm"
             style="color:#ef4444;"
-            disabled={deleting}
-            on:click={deleteMemory}
+            disabled={$deleting}
+            on:click={logic.deleteMemory}
             title="Delete memory"
             aria-label="Delete"
           >
             <Icon name="trash-2" size={14} strokeWidth={2} />
-            <span>{deleting ? 'Deleting…' : 'Delete'}</span>
+            <span>{$deleting ? 'Deleting…' : 'Delete'}</span>
           </button>
         {/if}
         <button class="btn btn-ghost btn-icon" on:click={onClose} aria-label="Close">
@@ -188,12 +81,12 @@
     <!-- ── BODY ─────────────────────────────────────────────────────── -->
     <div class="drawer-body">
 
-      {#if error}
-        <div class="mem-error">{error}</div>
+      {#if $error}
+        <div class="mem-error">{$error}</div>
       {/if}
 
       <!-- ══ VIEW MODE ══ -->
-      {#if memory && !editing}
+      {#if memory && !$editing}
         <!-- Meta grid -->
         <div class="meta-grid" style="margin-bottom:16px;">
           {#each [
@@ -243,7 +136,7 @@
           <div class="form-row-2">
             <div>
               <label for="mem_type" class="form-label">Type *</label>
-              <select id="mem_type" class="form-select" bind:value={form.type}>
+              <select id="mem_type" class="form-select" bind:value={$form.type}>
                 {#each TYPES as t}
                   <option value={t}>{TYPE_LABELS[t]}</option>
                 {/each}
@@ -252,21 +145,21 @@
             <div>
               <label for="mem_importance" class="form-label">
                 Importance
-                <span class="importance-badge" style="background:{importanceBg[form.importance]};color:{importanceColor[form.importance]};">
-                  {form.importance}
+                <span class="importance-badge" style="background:{importanceBg[$form.importance]};color:{importanceColor[$form.importance]};">
+                  {$form.importance}
                 </span>
               </label>
               <input
                 id="mem_importance"
                 type="range"
                 min="1" max="5" step="1"
-                bind:value={form.importance}
+                bind:value={$form.importance}
                 class="importance-slider"
-                style="accent-color:{importanceColor[form.importance]};"
+                style="accent-color:{importanceColor[$form.importance]};"
               />
               <div class="importance-ticks">
                 {#each [1,2,3,4,5] as n}
-                  <span class:active={form.importance >= n}>{n}</span>
+                  <span class:active={$form.importance >= n}>{n}</span>
                 {/each}
               </div>
             </div>
@@ -275,18 +168,18 @@
           <!-- Tags -->
           <div>
             <label for="mem_tags" class="form-label">Tags <span style="font-weight:400;font-style:italic;">(comma separated)</span></label>
-            <input id="mem_tags" class="form-input" placeholder="react, typescript, architecture…" bind:value={form.tags} />
+            <input id="mem_tags" class="form-input" placeholder="react, typescript, architecture…" bind:value={$form.tags} />
           </div>
 
           <!-- Agent + Model -->
           <div class="form-row-2">
             <div>
               <label for="mem_agent" class="form-label">Agent</label>
-              <input id="mem_agent" class="form-input" placeholder="e.g. claude-opus" bind:value={form.agent} />
+              <input id="mem_agent" class="form-input" placeholder="e.g. claude-opus" bind:value={$form.agent} />
             </div>
             <div>
               <label for="mem_model" class="form-label">Model</label>
-              <input id="mem_model" class="form-input" placeholder="e.g. claude-3-opus" bind:value={form.model} />
+              <input id="mem_model" class="form-input" placeholder="e.g. claude-3-opus" bind:value={$form.model} />
             </div>
           </div>
 
@@ -297,16 +190,16 @@
               <button
                 type="button"
                 class="btn btn-ghost btn-sm"
-                on:click={() => previewMode = !previewMode}
+                on:click={logic.togglePreview}
               >
-                <Icon name={previewMode ? 'edit' : 'eye'} size={12} strokeWidth={2} />
-                {previewMode ? 'Edit' : 'Preview'}
+                <Icon name={$previewMode ? 'edit' : 'eye'} size={12} strokeWidth={2} />
+                {$previewMode ? 'Edit' : 'Preview'}
               </button>
             </div>
-            {#if previewMode}
+            {#if $previewMode}
               <div class="markdown-body md-card" style="min-height:200px;">
-                {#if form.content.trim()}
-                  {@html renderMarkdown(form.content)}
+                {#if $form.content.trim()}
+                  {@html renderMarkdown($form.content)}
                 {:else}
                   <span style="color:var(--color-text-muted);font-style:italic;">Nothing to preview yet…</span>
                 {/if}
@@ -318,7 +211,7 @@
                 rows="10"
                 style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;resize:vertical;"
                 placeholder="Write memory content in Markdown…"
-                bind:value={form.content}
+                bind:value={$form.content}
               ></textarea>
             {/if}
           </div>
@@ -327,18 +220,18 @@
     </div>
 
     <!-- ── FOOTER (edit/create mode only) ────────────────────────── -->
-    {#if isCreate || editing}
+    {#if isCreate || $editing}
       <div class="mem-footer">
-        <button class="btn btn-ghost" on:click={() => { if (isCreate) onClose(); else editing = false; }}>
+        <button class="btn btn-ghost" on:click={logic.cancelEdit}>
           Cancel
         </button>
         <button
           class="btn btn-accent"
-          disabled={saving}
-          on:click={save}
+          disabled={$saving}
+          on:click={logic.save}
         >
-          <Icon name={saving ? 'loader' : 'save'} size={14} strokeWidth={2} />
-          {saving ? 'Saving…' : isCreate ? 'Create Memory' : 'Save Changes'}
+          <Icon name={$saving ? 'loader' : 'save'} size={14} strokeWidth={2} />
+          {$saving ? 'Saving…' : isCreate ? 'Create Memory' : 'Save Changes'}
         </button>
       </div>
     {/if}

@@ -1,22 +1,9 @@
 <script lang="ts">
-  import { dashboardStats, taskTimeStats } from '../lib/stores';
   import { formatTokens, formatDuration } from '../lib/utils';
+  import { createTimeStatsHandler, TIME_PERIODS } from '../lib/composables/useTimeStats';
 
-  type Period = 'daily' | 'weekly' | 'monthly' | 'overall';
-  let activePeriod: Period = 'daily';
-
-  $: tStats = $taskTimeStats;
-  $: periodData = tStats?.[activePeriod];
-
-  const periods: { key: Period; label: string }[] = [
-    { key: 'daily', label: 'Today' },
-    { key: 'weekly', label: 'Week' },
-    { key: 'monthly', label: 'Month' },
-    { key: 'overall', label: 'All' },
-  ];
-
-  $: history = (periodData?.history || []) as Array<{ label: string; created: number; completed: number }>;
-  $: maxVal = Math.max(...history.map(h => Math.max(h.created || 0, h.completed || 0, 1)));
+  const handler = createTimeStatsHandler();
+  const { activePeriod, periodData, history, maxVal, setActivePeriod } = handler;
 </script>
 
 <div class="glass card animate-fade-in">
@@ -27,11 +14,11 @@
       <div style="font-size:0.75rem;color:var(--color-text-muted);">Performance over time</div>
     </div>
     <div class="flex gap-1" style="background:rgba(241,245,249,0.8);padding:3px;border-radius:10px;">
-      {#each periods as p}
+      {#each TIME_PERIODS as p}
         <button
           class="tab-btn"
-          class:active={activePeriod === p.key}
-          on:click={() => activePeriod = p.key}
+          class:active={$activePeriod === p.key}
+          on:click={() => setActivePeriod(p.key)}
           style="padding:4px 10px;font-size:0.65rem;"
         >
           {p.label}
@@ -45,31 +32,31 @@
     <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#6366f1;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Completed</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.completed ?? '—'}
+        {$periodData?.completed ?? '—'}
       </div>
     </div>
     <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#10b981;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Added</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.added ?? '—'}
+        {$periodData?.added ?? '—'}
       </div>
     </div>
     <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#0ea5e9;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Tokens</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.tokens ? formatTokens(periodData.tokens) : '—'}
+        {$periodData?.tokens ? formatTokens($periodData.tokens) : '—'}
       </div>
     </div>
     <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:12px;">
       <div style="font-size:0.65rem;color:#f59e0b;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Avg Time</div>
       <div style="font-size:1.5rem;font-weight:800;color:var(--color-text);line-height:1;">
-        {periodData?.avgDuration ? formatDuration(periodData.avgDuration) : '—'}
+        {$periodData?.avgDuration ? formatDuration($periodData.avgDuration) : '—'}
       </div>
     </div>
   </div>
 
   <!-- Bar Chart Comparison -->
-  {#if periodData?.history && periodData.history.length > 0}
+  {#if $periodData?.history && $periodData.history.length > 0}
     <div class="mt-4 pt-4 border-t border-dashed" style="border-color:var(--color-border);">
       <div class="flex items-center justify-between mb-3">
         <div style="font-size:0.65rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;">Throughput vs Inflow</div>
@@ -86,18 +73,18 @@
       </div>
 
       <div style="height:120px;display:flex;align-items:flex-end;gap:4px;padding-bottom:20px;position:relative;">
-        {#each history as h}
+        {#each $history as h}
           <div class="flex-1 flex flex-col items-center group relative" style="height:100%;">
             <div class="flex h-full w-full items-end justify-center gap-[2px]">
               <!-- Created Bar -->
               <div 
                 class="bar created-bar" 
-                style="width:35%; height:{( (h.created || 0) / maxVal ) * 100}%; background:#10b981; border-radius:3px 3px 0 0; opacity:0.8; transition: height 0.3s ease;"
+                style="width:35%; height:{( (h.created || 0) / $maxVal ) * 100}%; background:#10b981; border-radius:3px 3px 0 0; opacity:0.8; transition: height 0.3s ease;"
               ></div>
               <!-- Completed Bar -->
               <div 
                 class="bar completed-bar" 
-                style="width:35%; height:{( (h.completed || 0) / maxVal ) * 100}%; background:#6366f1; border-radius:3px 3px 0 0; opacity:0.8; transition: height 0.3s ease;"
+                style="width:35%; height:{( (h.completed || 0) / $maxVal ) * 100}%; background:#6366f1; border-radius:3px 3px 0 0; opacity:0.8; transition: height 0.3s ease;"
               ></div>
             </div>
             
