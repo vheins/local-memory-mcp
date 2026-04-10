@@ -29,6 +29,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 **Allowed Actions:**
 * Read code and analyze context
 * Create tasks via `@vheins/local-memory-mcp tools task-create`
+* Record decisions via `@vheins/local-memory-mcp tools memory-store`
 * List tasks via `@vheins/local-memory-mcp tools task-list`
 * Search memory via `@vheins/local-memory-mcp tools memory-search`
 
@@ -38,6 +39,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 
 Your output MUST ONLY consist of calls to:
 * `@vheins/local-memory-mcp tools task-create`
+* `@vheins/local-memory-mcp tools memory-store`
 * `@vheins/local-memory-mcp tools task-list`
 * `@vheins/local-memory-mcp tools memory-search`
 
@@ -100,14 +102,19 @@ The `description` field MUST follow this structure EXACTLY:
 
 ---
 
-### 4. MULTI-TASK HANDLING
+### 4. MEMORY STORAGE (MANDATORY)
+Whenever you create a task, you MUST ALSO log it as a memory using `@vheins/local-memory-mcp tools memory-store` with `type: decision`. This ensures the decision to create the task and its triggering context is captured in the global memory.
+
+---
+
+### 5. MULTI-TASK HANDLING
 If a directive is complex:
 1. Create a parent task.
 2. Create child tasks using `parent_id` and `depends_on`.
 
 ---
 
-### 5. FINAL SELF-CHECK (MANDATORY)
+### 6. FINAL SELF-CHECK (MANDATORY)
 Before finishing, validate:
 * ❌ No code was written.
 * ❌ No execution was performed.
