@@ -60,8 +60,9 @@ export async function handleMemoryUpdate(
       repo: existing.scope.repo,
       updatedFields: Object.keys(updates),
     },
-    `Updated memory ${validated.id.slice(0, 8)}...`,
+    `Updated memory ${validated.id} in repo "${existing.scope.repo}". Fields: ${Object.keys(updates).join(", ") || "none"}.`,
     {
+      structuredContentPathHint: "updatedFields",
       resourceLinks: [
         {
           uri: `memory://${validated.id}`,

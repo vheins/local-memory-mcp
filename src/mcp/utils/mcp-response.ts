@@ -51,6 +51,9 @@ export function createMcpResponse(
   options?: { 
     query?: string; 
     results?: any[];
+    structuredContentPathHint?: string;
+    contentSummary?: string;
+    includeSerializedStructuredContent?: boolean | "auto";
     resourceLinks?: Array<{
       uri: string;
       name: string;
@@ -64,7 +67,13 @@ export function createMcpResponse(
     }>;
   }
 ): McpResponse {
-  const { results, resourceLinks } = options || {};
+  const {
+    results,
+    resourceLinks,
+    structuredContentPathHint,
+    contentSummary,
+    includeSerializedStructuredContent = "auto",
+  } = options || {};
   
   // Pruning logic to save tokens for the agent
   let finalData = data;
@@ -92,12 +101,37 @@ export function createMcpResponse(
     }
   }
 
-  // Inject summary into structured data
-  if (finalData && typeof finalData === 'object' && !Array.isArray(finalData)) {
-    finalData._summary = summary;
+  const content: McpContent[] = [];
+
+  if (contentSummary?.trim().length) {
+    content.push({
+      type: "text",
+      text: contentSummary.trim(),
+    });
+  } else if (summary.trim().length > 0) {
+    const pointerText = structuredContentPathHint
+      ? ` See structuredContent.${structuredContentPathHint}.`
+      : ` Read structuredContent for the complete machine-readable result.`;
+    content.push({
+      type: "text",
+      text: `${summary}${pointerText}`,
+    });
   }
 
-  const content: McpContent[] = [];
+  const serializedStructuredContent = serializeStructuredContentForText(finalData);
+  const shouldIncludeSerializedContent = includeSerializedStructuredContent === true
+    || (includeSerializedStructuredContent === "auto" && serializedStructuredContent !== null);
+
+  if (shouldIncludeSerializedContent && serializedStructuredContent) {
+    content.push({
+      type: "text",
+      text: serializedStructuredContent,
+      annotations: {
+        audience: ["assistant"],
+        priority: 0.2,
+      },
+    });
+  }
 
   // Add resource_links for results if they were provided in options
   // (We use this for referring to specific items regardless of data pruning)
@@ -136,9 +170,7 @@ export function createMcpResponse(
     isError: false,
   };
 
-  if (content.length > 0) {
-    response.content = content;
-  }
+  response.content = content;
 
   return response;
 }
@@ -178,9 +210,39 @@ function pruneMetadata(item: any): any {
 
 export function createTextOnlyResponse(text: string): McpResponse {
   return {
+    content: [
+      {
+        type: "text",
+        text,
+      },
+    ],
     structuredContent: { text },
     isError: false,
   } as McpResponse;
+}
+
+export function getPrimaryTextContent(response: McpResponse): string {
+  if (!Array.isArray(response.content)) return "";
+  const textItem = response.content.find((item) => item.type === "text");
+  return textItem?.type === "text" ? textItem.text : "";
+}
+
+function serializeStructuredContentForText(data: unknown): string | null {
+  if (data === undefined) return null;
+
+  try {
+    const serialized = JSON.stringify(data);
+    if (!serialized) return null;
+
+    // Keep backwards-compatibility text blocks only for compact payloads.
+    if (serialized.length > 1200) {
+      return null;
+    }
+
+    return serialized;
+  } catch {
+    return null;
+  }
 }
 
 export function isMcpResponse(obj: unknown): obj is McpResponse {

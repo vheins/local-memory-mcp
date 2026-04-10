@@ -4,6 +4,7 @@ import { handleMemoryStore } from "../tools/memory.store.js";
 import { handleMemorySearch } from "../tools/memory.search.js";
 import { handleMemoryAcknowledge } from "../tools/memory.acknowledge.js";
 import { handleMemoryUpdate } from "../tools/memory.update.js";
+import { getPrimaryTextContent } from "../utils/mcp-response.js";
 import type { MemoryEntry, VectorStore } from "../types.js";
 
 const VALID_UUID_1 = "11111111-1111-4111-a111-111111111111";
@@ -126,8 +127,7 @@ describe("V2 Enhanced Memory Features", () => {
       };
 
       const response = await handleMemoryStore(params, db, mockVectors);
-      const sc = response.structuredContent as any;
-      expect(sc._summary).toContain("conflict");
+      expect(getPrimaryTextContent(response)).toContain("conflict");
       db.close();
     });
 
@@ -176,9 +176,8 @@ describe("V2 Enhanced Memory Features", () => {
       const params = { query: "Target", repo };
       const response = await handleMemorySearch(params, db, mockVectors);
       
-      const sc = response.structuredContent as any;
       // With > 5 memories, threshold should be 0.40
-      expect(sc._summary).toContain("Found 1 memories");
+      expect(getPrimaryTextContent(response)).toContain("Found 1 memories");
       db.close();
     });
   });

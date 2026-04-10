@@ -128,8 +128,8 @@ export const TaskUpdateSchema = z.object({
   description: z.string().optional(),
   status: TaskStatusSchema.optional(),
   priority: TaskPrioritySchema.optional(),
-  agent: z.string().min(1, "agent name is required"),
-  role: z.string().min(1, "agent role is required"),
+  agent: z.string().min(1, "agent name is required").optional(),
+  role: z.string().min(1, "agent role is required").optional(),
   model: z.string().optional(),
   comment: z.string().min(1).optional(),
   doc_path: z.string().optional(),
@@ -168,7 +168,7 @@ export const TaskBulkManageSchema = z.object({
     phase: z.string().min(1),
     title: z.string().min(3).max(100),
     description: z.string().min(1),
-    status: TaskStatusSchema.default("backlog"),
+    status: z.enum(["backlog", "pending"]).default("backlog"),
     priority: TaskPrioritySchema.optional(),
     agent: z.string().optional(),
     role: z.string().optional(),
@@ -309,6 +309,10 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           description: "Name of the agent creating this memory"
         },
+        role: {
+          type: "string",
+          description: "Role of the agent creating this memory"
+        },
         model: {
           type: "string",
           description: "AI model used by the agent"
@@ -401,11 +405,14 @@ export const TOOL_DEFINITIONS = [
         title: { type: "string", minLength: 3, maxLength: 100 },
         content: { type: "string", minLength: 10 },
         importance: { type: "number", minimum: 1, maximum: 5 },
+        agent: { type: "string" },
+        role: { type: "string" },
         status: { type: "string", enum: ["active", "archived"] },
         supersedes: { type: "string", format: "uuid" },
         tags: { type: "array", items: { type: "string" } },
         metadata: { type: "object" },
-        is_global: { type: "boolean" }
+        is_global: { type: "boolean" },
+        completed_at: { type: "string" }
       },
       required: ["id"]
     },
@@ -436,6 +443,7 @@ export const TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         query: { type: "string", minLength: 3 },
+        prompt: { type: "string" },
         repo: { type: "string" },
         current_tags: {
           type: "array",
@@ -451,6 +459,16 @@ export const TOOL_DEFINITIONS = [
         includeRecap: { type: "boolean", default: false },
         current_file_path: { type: "string" },
         include_archived: { type: "boolean", default: false }
+        ,
+        scope: {
+          type: "object",
+          properties: {
+            repo: { type: "string" },
+            branch: { type: "string" },
+            folder: { type: "string" },
+            language: { type: "string" }
+          }
+        }
       },
       required: ["query", "repo"]
     },
@@ -932,7 +950,7 @@ export const TOOL_DEFINITIONS = [
               phase: { type: "string" },
               title: { type: "string", minLength: 3, maxLength: 100 },
               description: { type: "string" },
-              status: { type: "string", enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"] },
+              status: { type: "string", enum: ["backlog", "pending"] },
               priority: { type: "number", minimum: 1, maximum: 5 },
               agent: { type: "string" },
               role: { type: "string" },

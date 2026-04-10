@@ -16,6 +16,56 @@ import {
 } from "./schemas.js";
 import { handleMemoryStore } from "./memory.store.js";
 
+function describeTaskListFilter(status?: string) {
+  if (!status) return "active";
+  if (status === "all") return "all";
+
+  const labels = status
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      switch (part) {
+        case "in_progress":
+          return "in progress";
+        default:
+          return part;
+      }
+    });
+
+  if (labels.length === 0) return "active";
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+function buildTaskListSummary(
+  repo: string,
+  count: number,
+  status?: string,
+  phase?: string,
+  search?: string,
+  stats?: { todo?: number; inProgress?: number }
+) {
+  const filterLabel = describeTaskListFilter(status);
+  const taskLabel = count === 1 ? "task" : "tasks";
+  const parts = [`Found ${count} ${filterLabel} ${taskLabel} in repo "${repo}".`];
+
+  if (phase) {
+    parts.push(`Phase filter: ${phase}.`);
+  }
+
+  if (search) {
+    parts.push(`Search filter: "${search}".`);
+  }
+
+  parts.push(`Pending: ${stats?.todo ?? 0}.`);
+  parts.push(`In progress: ${stats?.inProgress ?? 0}.`);
+  parts.push(`See structuredContent.tasks.`);
+
+  return parts.join(" ");
+}
+
 function deriveTaskStatusTimestamps(
   status: TaskStatus,
   now: string,
@@ -125,6 +175,16 @@ export async function handleTaskList(
     comments: storage.getTaskCommentsByTaskId(task.id)
   }));
 
+  const taskStats = storage.getTaskStats(repo);
+  const summary = buildTaskListSummary(
+    repo,
+    tasksWithHistory.length,
+    status,
+    phase,
+    search,
+    taskStats
+  );
+
   return createMcpResponse(
     {
       repo,
@@ -133,8 +193,9 @@ export async function handleTaskList(
       limit,
       tasks: tasksWithHistory,
     },
-    `Found ${tasksWithHistory.length} tasks in repository "${repo}"`,
+    summary,
     {
+      contentSummary: summary,
       results: tasksWithHistory,
       resourceLinks: [
         {
@@ -217,8 +278,9 @@ export async function handleTaskCreate(
       priority: task.priority,
       depends_on: task.depends_on,
     },
-    `Task created: [${task.task_code}] ${task.title}${depends_on ? ` (depends on ${depends_on})` : ""}`,
+    `Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
     {
+      structuredContentPathHint: "task_code",
       resourceLinks: [
         {
           uri: `tasks://current?repo=${encodeURIComponent(task.repo)}`,
@@ -293,7 +355,10 @@ export async function handleTaskCreateInteractive(
       status: parsedTask.status,
       priority: parsedTask.priority,
     },
-    `Task created: [${parsedTask.task_code}] ${parsedTask.title}`,
+    `Created task [${parsedTask.task_code}] ${parsedTask.title} in repo "${parsedTask.repo}" with status "${parsedTask.status}".`,
+    {
+      structuredContentPathHint: "task_code",
+    }
   );
 }
 
@@ -461,8 +526,9 @@ export async function handleTaskUpdate(
       archivedToMemory: updates.status === "completed" && existingTask.status !== "completed",
       updatedFields: Object.keys(finalUpdates),
     },
-    `Task updated: ${id}${updates.status === "completed" ? " and archived to memory" : ""}`,
+    `Updated task ${id} in repo "${repo}" to status "${updates.status ?? existingTask.status}".${updates.status === "completed" ? " Archived to memory." : ""}`,
     {
+      structuredContentPathHint: "updatedFields",
       resourceLinks: [
         {
           uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
@@ -492,8 +558,9 @@ export async function handleTaskDelete(
       id,
       repo,
     },
-    `Task deleted: ${id}`,
+    `Deleted task ${id} from repo "${repo}".`,
     {
+      structuredContentPathHint: "id",
       resourceLinks: [
         {
           uri: `tasks://current?repo=${encodeURIComponent(repo)}`,

@@ -110,8 +110,9 @@ export async function handleTaskBulkManage(
           createdCount: tasks.length,
           taskCodes: createdTasks,
         },
-        `Successfully created ${tasks.length} tasks: ${createdTasks.join(", ")}`,
+        `Created ${tasks.length} tasks in repo "${repo}".`,
         {
+          structuredContentPathHint: "taskCodes",
           resourceLinks: [
             {
               uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
@@ -153,8 +154,9 @@ export async function handleTaskBulkManage(
           deletedCount: ids.length,
           ids,
         },
-        `Successfully deleted ${ids.length} tasks.`,
+        `Deleted ${ids.length} tasks from repo "${repo}".`,
         {
+          structuredContentPathHint: "ids",
           resourceLinks: [
             {
               uri: `tasks://current?repo=${encodeURIComponent(repo)}`,

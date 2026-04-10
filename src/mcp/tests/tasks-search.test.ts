@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage.js";
 import { SQLiteStore } from "../storage/sqlite.js";
+import { getPrimaryTextContent } from "../utils/mcp-response.js";
 
 function getTextContent(result: Awaited<ReturnType<typeof handleTaskList>>) {
-  return (result.structuredContent as any)?._summary || "[]";
+  return getPrimaryTextContent(result) || "[]";
 }
 
 describe("Task Search and Filtering", () => {

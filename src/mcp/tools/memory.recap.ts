@@ -48,7 +48,11 @@ export async function handleMemoryRecap(
         tasks: [],
         message: `No memories or tasks found for repo: ${validated.repo}`
       },
-      `No memories or tasks for repo "${validated.repo}"`
+      `No memories or tasks for repo "${validated.repo}".`,
+      {
+        structuredContentPathHint: "memories",
+        contentSummary: `No memories or tasks for repo "${validated.repo}". See structuredContent.memories and structuredContent.tasks.`,
+      }
     );
   }
 
@@ -87,8 +91,9 @@ export async function handleMemoryRecap(
       tasks: formattedTasks,
       summary: `Recent ${rows.length} memories:\n\n${memorySummary}\n\nActive Tasks:\n\n${taskSummary || "No active tasks"}`
     },
-    `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}"`,
+    `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}".`,
     {
+      contentSummary: `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}". See structuredContent.memories and structuredContent.tasks.`,
       resourceLinks: [
         {
           uri: `memory://summary/${validated.repo}`,

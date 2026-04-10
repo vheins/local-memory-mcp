@@ -3,9 +3,10 @@ import { createRouter } from "../router.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { StubVectorStore } from "../storage/vectors.stub.js";
 import type { VectorStore } from "../types.js";
+import { getPrimaryTextContent } from "../utils/mcp-response.js";
 
 function getTextContent(result: any) {
-  return result.structuredContent?._summary || result.structuredContent?.text || "";
+  return getPrimaryTextContent(result) || result.structuredContent?.text || "";
 }
 
 describe("MCP Local Memory - Bulk Task Management", () => {
@@ -51,7 +52,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     });
 
     expect(res.isError).toBe(false);
-    expect(getTextContent(res)).toContain("Successfully created 2 tasks");
+    expect(getTextContent(res)).toContain(`Created 2 tasks in repo "${REPO}".`);
 
     const tasks = db.getTasksByRepo(REPO);
     expect(tasks.length).toBe(2);
@@ -125,6 +126,94 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     });
     const offsetTasks = (offsetRes.structuredContent as any).tasks;
     expect(offsetTasks.length).toBe(5); // 20 total - 15 offset = 5 remaining
+  });
+
+  it("should summarize filtered task counts with pending and in-progress context", async () => {
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          {
+            task_code: "SUM-001",
+            title: "Completed task",
+            description: "Already finished",
+            phase: "implementation",
+            status: "backlog",
+            est_tokens: 20
+          },
+          {
+            task_code: "SUM-002",
+            title: "Pending task",
+            description: "Waiting to start",
+            phase: "implementation",
+            status: "pending",
+            est_tokens: 20
+          },
+          {
+            task_code: "SUM-003",
+            title: "In progress task",
+            description: "Currently active",
+            phase: "implementation",
+            status: "pending",
+            est_tokens: 20
+          }
+        ]
+      }
+    });
+
+    const completedId = db.getTasksByRepo(REPO).find((task) => task.task_code === "SUM-001")?.id;
+    const inProgressId = db.getTasksByRepo(REPO).find((task) => task.task_code === "SUM-003")?.id;
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: completedId,
+        status: "in_progress",
+        comment: "Starting completion path",
+        agent: "Test Agent",
+        role: "tester",
+        est_tokens: 25
+      }
+    });
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: completedId,
+        status: "completed",
+        comment: "Finished work",
+        agent: "Test Agent",
+        role: "tester",
+        est_tokens: 30
+      }
+    });
+
+    await router("tools/call", {
+      name: "task-update",
+      arguments: {
+        repo: REPO,
+        id: inProgressId,
+        status: "in_progress",
+        comment: "Work started",
+        agent: "Test Agent",
+        role: "tester",
+        est_tokens: 25
+      }
+    });
+
+    const result = await router("tools/call", {
+      name: "task-list",
+      arguments: { repo: REPO, status: "completed" }
+    });
+
+    expect(getTextContent(result)).toContain(`Found 1 completed task in repo "${REPO}".`);
+    expect(getTextContent(result)).toContain("Pending: 1.");
+    expect(getTextContent(result)).toContain("In progress: 1.");
+    expect(getTextContent(result)).toContain("See structuredContent.tasks.");
   });
 
   it("should prevent duplicate task_codes in the same request", async () => {
@@ -214,7 +303,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       }
     });
 
-    expect(getTextContent(delRes)).toContain("Successfully deleted 2 tasks");
+    expect(getTextContent(delRes)).toContain(`Deleted 2 tasks from repo "${REPO}".`);
     const remainingTasks = db.getTasksByRepo(REPO);
     expect(remainingTasks.length).toBe(1);
   });

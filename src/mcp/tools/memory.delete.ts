@@ -36,8 +36,9 @@ export async function handleMemoryDelete(
       id: validated.id,
       repo: existing.scope.repo,
     },
-    `Deleted memory ${validated.id.slice(0, 8)}...`,
+    `Deleted memory ${validated.id} from repo "${existing.scope.repo}".`,
     {
+      structuredContentPathHint: "id",
       resourceLinks: [
         {
           uri: `memory://index?repo=${encodeURIComponent(existing.scope.repo)}`,

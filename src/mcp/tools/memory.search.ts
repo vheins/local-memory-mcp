@@ -4,7 +4,7 @@ import { VectorStore, MemoryEntry } from "../types.js";
 import { normalize } from "../utils/normalize.js";
 import { handleMemoryRecap } from "./memory.recap.js";
 import { logger } from "../utils/logger.js";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response.js";
 import { expandQuery } from "../utils/query-expander.js";
 
 const HYBRID_WEIGHTS_VECTOR = {
@@ -29,7 +29,7 @@ export async function handleMemorySearch(
   if (validated.includeRecap) {
     try {
       const recapRes = await handleMemoryRecap({ repo: validated.repo, limit: 10 }, db);
-      recapContext = (recapRes.structuredContent as any)?._summary;
+      recapContext = getPrimaryTextContent(recapRes);
     } catch (error) {
       logger.error("Failed to get recap context", { error: String(error) });
     }
@@ -150,10 +150,11 @@ export async function handleMemorySearch(
 
   return createMcpResponse(
     { query: validated.query, results, recapContext },
-    `Found ${results.length} memories matching "${validated.query}"`,
+    `Found ${results.length} memories matching "${validated.query}" in repo "${validated.repo}".`,
     {
       query: validated.query,
       results: results as any,
+      structuredContentPathHint: "results",
       resourceLinks: [
         {
           uri: `memory://index?repo=${encodeURIComponent(validated.repo)}`,

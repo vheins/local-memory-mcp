@@ -36,8 +36,9 @@ export async function handleMemoryBulkDelete(
       deletedCount: ids.length,
       ids,
     },
-    `Successfully deleted ${ids.length} memories.`,
+    `Deleted ${ids.length} memories from repo "${repo}".`,
     {
+      structuredContentPathHint: "ids",
       resourceLinks: [
         {
           uri: `memory://index?repo=${encodeURIComponent(repo)}`,

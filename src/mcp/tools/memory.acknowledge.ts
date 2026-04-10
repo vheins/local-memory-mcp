@@ -33,6 +33,9 @@ export async function handleMemoryAcknowledge(
       id: memory.id, 
       status: validated.status 
     },
-    `Acknowledge ${validated.status} for memory ${memory.id.slice(0, 8)}...`
+    `Acknowledged memory ${memory.id} as "${validated.status}".`,
+    {
+      structuredContentPathHint: "status",
+    }
   );
 }

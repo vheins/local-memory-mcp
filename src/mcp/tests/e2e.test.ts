@@ -3,6 +3,7 @@ import { createRouter } from "../router.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { RealVectorStore } from "../storage/vectors.js"; 
 import type { VectorStore } from "../types.js";
+import { getPrimaryTextContent } from "../utils/mcp-response.js";
 
 // Global configuration for heavy AI tests
 vi.setConfig({ testTimeout: 90000 });
@@ -190,7 +191,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
     });
 
     // Based on memory-recap implementation
-    expect((recapRes.structuredContent as any)._summary).toContain("cloud-infra");
+    expect(getPrimaryTextContent(recapRes)).toContain("cloud-infra");
     
     // Check Resource Pagination via URI
     const resourceRes = await router("resources/read", {
@@ -233,10 +234,10 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
       }
     });
 
-    const sc = duplicateRes.structuredContent as any;
-    expect(sc._summary).toContain("conflict");
-    expect(sc._summary).toContain("Hint:");
-    expect(sc._summary).toContain("memory-delete");
+    const summaryText = getPrimaryTextContent(duplicateRes);
+    expect(summaryText).toContain("conflict");
+    expect(summaryText).toContain("Hint:");
+    expect(summaryText).toContain("memory-delete");
     expect(db.getTotalCount(REPO)).toBe(1); // Should still be 1
   });
 

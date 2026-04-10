@@ -47,7 +47,10 @@ export async function handleMemoryStore(
           },
           instruction: "Use 'memory-update' on the existing ID, or provide 'supersedes' if this new memory replaces it. If the old memory is no longer relevant, you can delete it first."
         },
-        `Rejected due to conflict with ${conflict.id}. Hint: Use 'supersedes' if this replaces the old memory, or 'memory-update' if you're updating it. If the old memory is no longer relevant, delete it first using 'memory-delete'.`
+        `Rejected due to conflict with ${conflict.id}. Hint: Use 'supersedes' if this replaces the old memory, or 'memory-update' if you're updating it. If the old memory is no longer relevant, delete it first using 'memory-delete'.`,
+        {
+          structuredContentPathHint: "conflicting_memory",
+        }
       );
     }
   }
@@ -112,8 +115,9 @@ export async function handleMemoryStore(
       type: entry.type,
       title: entry.title,
     },
-    `Stored memory ${entry.id.slice(0, 8)}...`,
+    `Stored memory "${entry.title}" in repo "${entry.scope.repo}".`,
     {
+      structuredContentPathHint: "id",
       resourceLinks: [
         {
           uri: `memory://${entry.id}`,

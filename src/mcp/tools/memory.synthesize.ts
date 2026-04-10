@@ -14,7 +14,7 @@ import {
   ElicitationRequestHandler,
   extractAcceptedElicitationContent,
 } from "../elicitation.js";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response.js";
 import { logger } from "../utils/logger.js";
 import { MemorySynthesizeSchema } from "./schemas.js";
 import { normalizeRepo } from "../utils/normalize.js";
@@ -47,13 +47,13 @@ export async function handleMemorySynthesize(
   }
 
   const recap = await handleMemoryRecap({ repo, limit: 8, offset: 0 }, db);
-  const recapText = (recap.structuredContent as any)?._summary || "";
+  const recapText = getPrimaryTextContent(recap);
   const summary = validated.include_summary ? db.getSummary(repo)?.summary : "";
 
   const taskSnapshot = validated.include_tasks
     ? await handleTaskList({ repo, status: "backlog,pending,in_progress,blocked", limit: 15, offset: 0 }, db)
     : null;
-  const taskText = taskSnapshot ? (taskSnapshot.structuredContent as any)?._summary : "";
+  const taskText = taskSnapshot ? getPrimaryTextContent(taskSnapshot) : "";
 
   const systemPrompt = [
     "You are a repository memory synthesizer.",
@@ -153,7 +153,10 @@ export async function handleMemorySynthesize(
       iterations,
       toolCalls: totalToolCalls,
     },
-    `Synthesized answer for "${validated.objective}" using repository "${repo}"`,
+    `Synthesized answer for "${validated.objective}" using repository "${repo}".`,
+    {
+      structuredContentPathHint: "answer",
+    }
   );
 }
 
@@ -254,7 +257,7 @@ async function executeSamplingTool(
         query: rawInput.query,
         limit: rawInput.limit ?? 5,
       }, db, vectors);
-      return (response.structuredContent as any)?._summary || "";
+      return getPrimaryTextContent(response);
     }
 
     case "memory_recap": {
@@ -263,7 +266,7 @@ async function executeSamplingTool(
         limit: rawInput.limit ?? 8,
         offset: 0,
       }, db);
-      return (response.structuredContent as any)?._summary || "";
+      return getPrimaryTextContent(response);
     }
 
     case "task_list": {
@@ -274,7 +277,7 @@ async function executeSamplingTool(
         limit: rawInput.limit ?? 10,
         offset: 0,
       }, db);
-      return (response.structuredContent as any)?._summary || "";
+      return getPrimaryTextContent(response);
     }
 
     default:

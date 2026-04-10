@@ -3,6 +3,7 @@ import { createRouter } from "../router.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { StubVectorStore } from "../storage/vectors.stub.js";
 import type { VectorStore } from "../types.js";
+import { getPrimaryTextContent } from "../utils/mcp-response.js";
 
 describe("MCP Local Memory - Bulk Memory Management", () => {
   let db: SQLiteStore;
@@ -53,7 +54,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
       }
     });
 
-    expect(delRes.structuredContent._summary).toContain("Successfully deleted 2 memories");
+    expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 memories from repo");
     const remaining = db.getRecentMemories(REPO, 10);
     expect(remaining.length).toBe(0);
   });

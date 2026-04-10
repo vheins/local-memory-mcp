@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { createMcpResponse } from '../utils/mcp-response';
+import { createMcpResponse, getPrimaryTextContent } from '../utils/mcp-response';
 
 describe('MCP Spec Compliance', () => {
-  it('should return structuredContent and not data', () => {
+  it('should return content, structuredContent, and not data', () => {
     const mockData = { id: 'mem_1', title: 'Test' };
     const response = createMcpResponse(mockData, 'Summary');
     
-    expect(response).not.toHaveProperty('content');
+    expect(response).toHaveProperty('content');
+    expect(getPrimaryTextContent(response)).toBe('Summary Read structuredContent for the complete machine-readable result.');
     expect(response).toHaveProperty('structuredContent');
     expect(response).not.toHaveProperty('data');
     expect(response.isError).toBe(false);
@@ -28,6 +29,7 @@ describe('MCP Spec Compliance', () => {
     expect(sc.agent).toBeUndefined();
     expect(sc.model).toBeUndefined();
     expect(sc.hit_count).toBeUndefined();
+    expect(sc._summary).toBeUndefined();
   });
 
   it('should handle nested arrays in structuredContent', () => {
@@ -44,5 +46,27 @@ describe('MCP Spec Compliance', () => {
     expect(sc.results[0].agent).toBeUndefined();
     expect(sc.results[1].id).toBe('2');
     expect(sc.results[1].model).toBeUndefined();
+  });
+
+  it('should include a text content entry for text-only responses', () => {
+    const response = createMcpResponse({ ok: true }, 'Completed');
+
+    expect(getPrimaryTextContent(response)).toBe('Completed Read structuredContent for the complete machine-readable result.');
+  });
+
+  it('should support structured content path hints in summary text', () => {
+    const response = createMcpResponse({ results: [{ id: '1' }] }, 'Found 1 memory.', {
+      structuredContentPathHint: 'results',
+    });
+
+    expect(getPrimaryTextContent(response)).toBe('Found 1 memory. See structuredContent.results.');
+  });
+
+  it('should include serialized structured content only for compact payloads', () => {
+    const response = createMcpResponse({ id: 'mem_1', title: 'Test' }, 'Summary');
+    const textItems = response.content?.filter((item) => item.type === 'text') ?? [];
+
+    expect(textItems).toHaveLength(2);
+    expect((textItems[1] as any).text).toBe('{"id":"mem_1","title":"Test"}');
   });
 });

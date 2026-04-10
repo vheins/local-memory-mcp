@@ -23,8 +23,9 @@ export async function handleMemorySummarize(
       summary: fullSummary,
       signalCount: validated.signals.length,
     },
-    `Updated summary for repo "${validated.repo}"`,
+    `Updated summary for repo "${validated.repo}" with ${validated.signals.length} signals.`,
     {
+      structuredContentPathHint: "summary",
       resourceLinks: [
         {
           uri: `memory://summary/${validated.repo}`,
