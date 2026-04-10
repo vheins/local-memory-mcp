@@ -126,7 +126,8 @@ describe("V2 Enhanced Memory Features", () => {
       };
 
       const response = await handleMemoryStore(params, db, mockVectors);
-      expect((response.content[0] as any).text).toContain("conflict");
+      const sc = response.structuredContent as any;
+      expect(sc._summary).toContain("conflict");
       db.close();
     });
 
@@ -175,9 +176,9 @@ describe("V2 Enhanced Memory Features", () => {
       const params = { query: "Target", repo };
       const response = await handleMemorySearch(params, db, mockVectors);
       
-      const text = (response.content[0] as any).text;
+      const sc = response.structuredContent as any;
       // With > 5 memories, threshold should be 0.40
-      expect(text).toContain("Found 1 memories");
+      expect(sc._summary).toContain("Found 1 memories");
       db.close();
     });
   });

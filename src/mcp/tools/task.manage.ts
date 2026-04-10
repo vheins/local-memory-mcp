@@ -293,7 +293,7 @@ export async function handleTaskCreateInteractive(
       status: parsedTask.status,
       priority: parsedTask.priority,
     },
-    result.content[0]?.type === "text" ? result.content[0].text : `Task created: [${parsedTask.task_code}] ${parsedTask.title}`,
+    `Task created: [${parsedTask.task_code}] ${parsedTask.title}`,
   );
 }
 

@@ -40,7 +40,7 @@ export const McpContentSchema = z.discriminatedUnion("type", [
 export type McpContent = z.infer<typeof McpContentSchema>;
 
 export type McpResponse = {
-  content: McpContent[];
+  content?: McpContent[];
   isError?: boolean;
   structuredContent?: unknown;
 };
@@ -66,29 +66,6 @@ export function createMcpResponse(
 ): McpResponse {
   const { results, resourceLinks } = options || {};
   
-  const content: McpContent[] = [
-    {
-      type: "text",
-      text: summary,
-      annotations: {
-        audience: ["user", "assistant"],
-        priority: 1,
-      },
-    },
-  ];
-
-  // Add global resource links (like repo index)
-  for (const link of resourceLinks || []) {
-    content.push({
-      type: "resource_link",
-      uri: link.uri,
-      name: link.name,
-      description: link.description,
-      mimeType: link.mimeType,
-      annotations: link.annotations,
-    });
-  }
-
   // Pruning logic to save tokens for the agent
   let finalData = data;
   if (data && typeof data === 'object') {
@@ -115,6 +92,13 @@ export function createMcpResponse(
     }
   }
 
+  // Inject summary into structured data
+  if (finalData && typeof finalData === 'object' && !Array.isArray(finalData)) {
+    finalData._summary = summary;
+  }
+
+  const content: McpContent[] = [];
+
   // Add resource_links for results if they were provided in options
   // (We use this for referring to specific items regardless of data pruning)
   if (Array.isArray(results) && results.length > 0) {
@@ -135,11 +119,28 @@ export function createMcpResponse(
     }
   }
 
-  return { 
-    content,
+  // Add global resource links (like repo index)
+  for (const link of resourceLinks || []) {
+    content.push({
+      type: "resource_link",
+      uri: link.uri,
+      name: link.name,
+      description: link.description,
+      mimeType: link.mimeType,
+      annotations: link.annotations,
+    });
+  }
+
+  const response: McpResponse = { 
     structuredContent: finalData,
     isError: false,
   };
+
+  if (content.length > 0) {
+    response.content = content;
+  }
+
+  return response;
 }
 
 /**
@@ -177,15 +178,9 @@ function pruneMetadata(item: any): any {
 
 export function createTextOnlyResponse(text: string): McpResponse {
   return {
-    content: [
-      {
-        type: "text",
-        text,
-      },
-    ],
     structuredContent: { text },
     isError: false,
-  };
+  } as McpResponse;
 }
 
 export function isMcpResponse(obj: unknown): obj is McpResponse {

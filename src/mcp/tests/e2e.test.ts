@@ -190,7 +190,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
     });
 
     // Based on memory-recap implementation
-    expect(recapRes.content[0].text).toContain("cloud-infra");
+    expect((recapRes.structuredContent as any)._summary).toContain("cloud-infra");
     
     // Check Resource Pagination via URI
     const resourceRes = await router("resources/read", {
@@ -233,9 +233,10 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
       }
     });
 
-    expect(duplicateRes.content[0].text).toContain("conflict");
-    expect(duplicateRes.content[0].text).toContain("Hint:");
-    expect(duplicateRes.content[0].text).toContain("memory-delete");
+    const sc = duplicateRes.structuredContent as any;
+    expect(sc._summary).toContain("conflict");
+    expect(sc._summary).toContain("Hint:");
+    expect(sc._summary).toContain("memory-delete");
     expect(db.getTotalCount(REPO)).toBe(1); // Should still be 1
   });
 

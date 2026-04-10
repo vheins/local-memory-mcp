@@ -6,7 +6,7 @@ describe('MCP Spec Compliance', () => {
     const mockData = { id: 'mem_1', title: 'Test' };
     const response = createMcpResponse(mockData, 'Summary');
     
-    expect(response).toHaveProperty('content');
+    expect(response).not.toHaveProperty('content');
     expect(response).toHaveProperty('structuredContent');
     expect(response).not.toHaveProperty('data');
     expect(response.isError).toBe(false);

@@ -53,7 +53,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
       }
     });
 
-    expect(delRes.content[0].text).toContain("Successfully deleted 2 memories");
+    expect(delRes.structuredContent._summary).toContain("Successfully deleted 2 memories");
     const remaining = db.getRecentMemories(REPO, 10);
     expect(remaining.length).toBe(0);
   });

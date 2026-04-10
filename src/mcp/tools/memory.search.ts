@@ -29,7 +29,7 @@ export async function handleMemorySearch(
   if (validated.includeRecap) {
     try {
       const recapRes = await handleMemoryRecap({ repo: validated.repo, limit: 10 }, db);
-      recapContext = recapRes.content[0].type === "text" ? recapRes.content[0].text : undefined;
+      recapContext = (recapRes.structuredContent as any)?._summary;
     } catch (error) {
       logger.error("Failed to get recap context", { error: String(error) });
     }

@@ -3,8 +3,7 @@ import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/tas
 import { SQLiteStore } from "../storage/sqlite.js";
 
 function getTextContent(result: Awaited<ReturnType<typeof handleTaskList>>) {
-  const entry = result.content[0];
-  return entry?.type === "text" ? entry.text : "[]";
+  return (result.structuredContent as any)?._summary || "[]";
 }
 
 describe("Task Search and Filtering", () => {

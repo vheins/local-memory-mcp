@@ -180,7 +180,7 @@ export function createRouter(
     // Log the action
     try {
       const actionType = toolName.split("-")[1] || toolName;
-      const sc: any = result?.structuredContent;
+      const sc: any = result?.structuredData;
       const options: any = {
         query: args?.query || args?.title || args?.task_code || (toolName === 'memory-recap' ? `Offset: ${args?.offset || 0}` : undefined),
         response: result,

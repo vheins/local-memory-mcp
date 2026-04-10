@@ -5,8 +5,7 @@ import { StubVectorStore } from "../storage/vectors.stub.js";
 import type { VectorStore } from "../types.js";
 
 function getTextContent(result: any) {
-  const entry = result.content[0];
-  return entry?.type === "text" ? entry.text : "";
+  return result.structuredContent?._summary || result.structuredContent?.text || "";
 }
 
 describe("MCP Local Memory - Bulk Task Management", () => {

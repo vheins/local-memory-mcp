@@ -47,13 +47,13 @@ export async function handleMemorySynthesize(
   }
 
   const recap = await handleMemoryRecap({ repo, limit: 8, offset: 0 }, db);
-  const recapText = recap.content[0]?.type === "text" ? recap.content[0].text : "";
+  const recapText = (recap.structuredContent as any)?._summary || "";
   const summary = validated.include_summary ? db.getSummary(repo)?.summary : "";
 
   const taskSnapshot = validated.include_tasks
     ? await handleTaskList({ repo, status: "backlog,pending,in_progress,blocked", limit: 15, offset: 0 }, db)
     : null;
-  const taskText = taskSnapshot?.content[0]?.type === "text" ? taskSnapshot.content[0].text : "";
+  const taskText = taskSnapshot ? (taskSnapshot.structuredContent as any)?._summary : "";
 
   const systemPrompt = [
     "You are a repository memory synthesizer.",
@@ -254,7 +254,7 @@ async function executeSamplingTool(
         query: rawInput.query,
         limit: rawInput.limit ?? 5,
       }, db, vectors);
-      return response.content.map(formatContentForToolResult).join("\n");
+      return (response.structuredContent as any)?._summary || "";
     }
 
     case "memory_recap": {
@@ -263,7 +263,7 @@ async function executeSamplingTool(
         limit: rawInput.limit ?? 8,
         offset: 0,
       }, db);
-      return response.content.map(formatContentForToolResult).join("\n");
+      return (response.structuredContent as any)?._summary || "";
     }
 
     case "task_list": {
@@ -274,7 +274,7 @@ async function executeSamplingTool(
         limit: rawInput.limit ?? 10,
         offset: 0,
       }, db);
-      return response.content.map(formatContentForToolResult).join("\n");
+      return (response.structuredContent as any)?._summary || "";
     }
 
     default:
