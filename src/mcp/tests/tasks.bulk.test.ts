@@ -213,7 +213,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     expect(getTextContent(result)).toContain(`Found 1 completed task in repo "${REPO}".`);
     expect(getTextContent(result)).toContain("Pending: 1.");
     expect(getTextContent(result)).toContain("In progress: 1.");
-    expect(getTextContent(result)).toContain("See structuredContent.tasks for Task ID.");
+    expect(getTextContent(result)).toContain("Use task-detail with Task ID or task_code to read full details.");
   });
 
   it("should prevent duplicate task_codes in the same request", async () => {

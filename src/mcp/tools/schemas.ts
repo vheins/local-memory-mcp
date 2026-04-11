@@ -484,7 +484,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-search",
     title: "Memory Search",
-    description: "NAVIGATION LAYER: Returns a pointer table of matching memory IDs only. Returns columns [id, title, type, importance] — NO content. Retrieve full memory via memory://<id>. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
+    description: "NAVIGATION LAYER: Returns a pointer table of matching memory IDs only. Returns columns [id, title, type, importance] — NO content. Retrieve full memory via memory-detail. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -543,7 +543,7 @@ export const TOOL_DEFINITIONS = [
             rows: {
               type: "array",
               items: { type: "array" },
-              description: "Each row: [id, title, type, importance]. Fetch full content via memory://<id>"
+              description: "Each row: [id, title, type, importance]. Fetch full content via memory-detail"
             }
           },
           required: ["columns", "rows"]
@@ -647,7 +647,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-recap",
     title: "Memory Recap",
-    description: "AGGREGATED OVERVIEW LAYER: Returns stats (counts by type) and a pointer table of top memories [id, title, type, importance]. NO content. Use for orientation only — retrieve full memory via memory://<id>.",
+    description: "AGGREGATED OVERVIEW LAYER: Returns stats (counts by type) and a pointer table of top memories [id, title, type, importance]. NO content. Use for orientation only — retrieve full memory via memory-detail.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -703,7 +703,7 @@ export const TOOL_DEFINITIONS = [
             rows: {
               type: "array",
               items: { type: "array" },
-              description: "Each row: [id, title, type, importance]. Fetch full content via memory://<id>"
+              description: "Each row: [id, title, type, importance]. Fetch full content via memory-detail"
             }
           },
           required: ["columns", "rows"]
@@ -837,7 +837,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-active",
     title: "Task Active",
-    description: "PRIMARY task navigation tool. Call this FIRST at session start. Returns a minimal tabular list of active tasks (id, title, status, priority). Default behavior: returns in_progress tasks; falls back to pending if none exist. Use task://<id> to fetch full task details. AGENTS: call this once, pick ONE task, then fetch task://<id> for full context before starting work.",
+    description: "PRIMARY task navigation tool. Call this FIRST at session start. Returns a minimal tabular list of active tasks (id, title, status, priority). Default behavior: returns in_progress tasks; falls back to pending if none exist. Use task-detail to fetch full task details. AGENTS: call this once, pick ONE task, then call task-detail for full context before starting work.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -880,7 +880,7 @@ export const TOOL_DEFINITIONS = [
             rows: {
               type: "array",
               items: { type: "array" },
-              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task://<id> to fetch full task."
+              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task-detail to fetch full task."
             }
           },
           required: ["columns", "rows"]
@@ -893,7 +893,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-list",
     title: "Task List",
-    description: "List or filtered search of tasks for a repository. Returns a compact tabular pointer list. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks. AGENTS: read columns array to interpret rows, then fetch task://<id>.",
+    description: "List or filtered search of tasks for a repository. Returns a compact tabular pointer list. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks. AGENTS: read columns array to interpret rows, then call task-detail.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -949,7 +949,7 @@ export const TOOL_DEFINITIONS = [
             rows: {
               type: "array",
               items: { type: "array" },
-              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task://<id> to fetch full task."
+              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task-detail to fetch full task."
             }
           },
           required: ["columns", "rows"]
@@ -963,7 +963,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "task-search",
     title: "Task Search",
-    description: "Search tasks by code, title, or description and return a compact tabular pointer list. Use task://<id> to fetch full task details after selecting from results. Defaults to searching all statuses. AGENTS: call once, read columns array to interpret rows, then fetch task://<id>.",
+    description: "Search tasks by code, title, or description and return a compact tabular pointer list. Use task-detail to fetch full task details after selecting from results. Defaults to searching all statuses. AGENTS: call once, read columns array to interpret rows, then call task-detail.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -1016,7 +1016,7 @@ export const TOOL_DEFINITIONS = [
             rows: {
               type: "array",
               items: { type: "array" },
-              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task://<id> to fetch full task."
+              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task-detail to fetch full task."
             }
           },
           required: ["columns", "rows"]

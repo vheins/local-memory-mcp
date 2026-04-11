@@ -11,7 +11,7 @@ Guidelines for Task Management:
    - Returns a compact table: columns = [id, title, status, priority]. Rows are pointers — NOT full tasks.
    - Default behavior: returns `in_progress` tasks; auto-falls back to `pending` if none exist.
    - Filter by status via the `status` param: `"in_progress"` or `"pending"` only.
-   - After selecting a task from the table, fetch its full context via `task://<id>`.
+   - After selecting a task from the table, fetch its full context via `task-detail` tool.
    - DO NOT call task-active in a loop. Call it ONCE per session to navigate.
    - DO NOT work on multiple tasks simultaneously.
 

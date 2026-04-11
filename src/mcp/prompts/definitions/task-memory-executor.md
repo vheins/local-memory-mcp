@@ -23,9 +23,9 @@ Please follow this strict execution flow:
    - This returns a compact table: `columns = [id, title, status, priority]`, `rows` = task pointers.
    - Default: returns `in_progress` tasks first; falls back to `pending` if none exist.
    - DO NOT call task-active in a loop. Call it ONCE.
-3. **Filter Stale**: From the in_progress rows, identify tasks that are **stale** (stale = no update for > 30 minutes, often because an agent stopped or crashed). Fetch their full data via `task://<id>` to inspect timestamps.
+3. **Filter Stale**: From the in_progress rows, identify tasks that are **stale** (stale = no update for > 30 minutes, often because an agent stopped or crashed). Fetch their full data via `task-detail` tool to inspect timestamps.
 4. **Task Execution Loop**: You MUST process tasks EXACTLY ONE AT A TIME (STRICT). You are STRICTLY FORBIDDEN from spinning up parallel sub-agents or using parallel execution. For each task you select:
-    - **Hydrate**: Fetch full task context via `task://<id>` resource before starting work.
+    - **Hydrate**: Fetch full task context via `task-detail` tool before starting work.
     - **Start**: Call `local-memory-mcp` MCP tools `task-update` to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
     - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.

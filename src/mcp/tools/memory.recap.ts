@@ -54,7 +54,7 @@ export async function handleMemoryRecap(
   };
 
   const contentSummary = total > 0
-    ? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}. Use memory://<id> to read full content.`
+    ? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}. Use memory-detail to read full content.`
     : `No memories found for repo "${validated.repo}".`;
 
   // Resource links — one per top row so agents can navigate directly
