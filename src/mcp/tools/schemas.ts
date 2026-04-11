@@ -54,6 +54,7 @@ export const MemorySearchSchema = z.object({
   types: z.array(MemoryTypeSchema).optional(),
   minImportance: z.number().min(1).max(5).optional(),
   limit: z.number().min(1).max(100).default(5),
+  offset: z.number().min(0).default(0),
   includeRecap: z.boolean().default(false),
   current_file_path: z.string().optional(),
   include_archived: z.boolean().default(false),
@@ -444,7 +445,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-search",
     title: "Memory Search",
-    description: "Search for relevant memories. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
+    description: "NAVIGATION LAYER: Returns a pointer table of matching memory IDs only. Returns columns [id, title, type, importance] — NO content. Retrieve full memory via memory://<id>. Use 'current_tags' to find tech-stack specific knowledge from other projects.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -467,10 +468,10 @@ export const TOOL_DEFINITIONS = [
         },
         minImportance: { type: "number", minimum: 1, maximum: 5 },
         limit: { type: "number", minimum: 1, maximum: 100, default: 5 },
+        offset: { type: "number", minimum: 0, default: 0 },
         includeRecap: { type: "boolean", default: false },
         current_file_path: { type: "string" },
-        include_archived: { type: "boolean", default: false }
-        ,
+        include_archived: { type: "boolean", default: false },
         scope: {
           type: "object",
           properties: {
@@ -486,24 +487,30 @@ export const TOOL_DEFINITIONS = [
     outputSchema: {
       type: "object",
       properties: {
+        schema: { type: "string", enum: ["memory-search"] },
         query: { type: "string" },
-        recapContext: { type: "string" },
+        count: { type: "number", description: "Number of rows returned" },
+        total: { type: "number", description: "Total matching memories" },
+        offset: { type: "number" },
+        limit: { type: "number" },
         results: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              type: { type: "string" },
-              title: { type: "string" },
-              content: { type: "string" },
-              importance: { type: "number" }
+          type: "object",
+          properties: {
+            columns: {
+              type: "array",
+              items: { type: "string" },
+              description: "Column names: [id, title, type, importance]"
             },
-            required: ["id", "type", "content", "importance"]
-          }
+            rows: {
+              type: "array",
+              items: { type: "array" },
+              description: "Each row: [id, title, type, importance]. Fetch full content via memory://<id>"
+            }
+          },
+          required: ["columns", "rows"]
         }
       },
-      required: ["query", "results"]
+      required: ["schema", "query", "count", "total", "offset", "limit", "results"]
     }
   },
   {
@@ -601,7 +608,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "memory-recap",
     title: "Memory Recap",
-    description: "Get the last 20 memories from a repository for context",
+    description: "AGGREGATED OVERVIEW LAYER: Returns stats (counts by type) and a pointer table of top memories [id, title, type, importance]. NO content. Use for orientation only — retrieve full memory via memory://<id>.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -616,7 +623,7 @@ export const TOOL_DEFINITIONS = [
           minimum: 1,
           maximum: 50,
           default: 20,
-          description: "Maximum number of memories to retrieve"
+          description: "Maximum number of top memories to return in the pointer table"
         },
         offset: {
           type: "number",
@@ -630,42 +637,40 @@ export const TOOL_DEFINITIONS = [
     outputSchema: {
       type: "object",
       properties: {
+        schema: { type: "string", enum: ["memory-recap"] },
         repo: { type: "string" },
-        count: { type: "number" },
-        total: { type: "number" },
+        count: { type: "number", description: "Number of rows in the top pointer table" },
+        total: { type: "number", description: "Total active memories in repo" },
         offset: { type: "number" },
-        summary: { type: "string" },
-        memories: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              number: { type: "number" },
-              id: { type: "string" },
-              type: { type: "string" },
-              importance: { type: "number" },
-              preview: { type: "string" },
-              created_at: { type: "string" }
-            },
-            required: ["number", "id", "type", "importance", "preview", "created_at"]
-          }
+        limit: { type: "number" },
+        stats: {
+          type: "object",
+          properties: {
+            by_type: {
+              type: "object",
+              description: "Count of active memories per type (e.g. { decision: 3, code_fact: 7 })"
+            }
+          },
+          required: ["by_type"]
         },
-        tasks: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              task_code: { type: "string" },
-              title: { type: "string" },
-              status: { type: "string" },
-              priority: { type: "number" }
+        top: {
+          type: "object",
+          properties: {
+            columns: {
+              type: "array",
+              items: { type: "string" },
+              description: "Column names: [id, title, type, importance]"
             },
-            required: ["id", "task_code", "title", "status", "priority"]
-          }
+            rows: {
+              type: "array",
+              items: { type: "array" },
+              description: "Each row: [id, title, type, importance]. Fetch full content via memory://<id>"
+            }
+          },
+          required: ["columns", "rows"]
         }
       },
-      required: ["repo", "count", "total", "offset", "memories", "tasks", "summary"]
+      required: ["schema", "repo", "count", "total", "offset", "limit", "stats", "top"]
     }
   },
   {

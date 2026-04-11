@@ -2,9 +2,8 @@ import { MemorySearchSchema } from "./schemas.js";
 import { SQLiteStore } from "../storage/sqlite.js";
 import { VectorStore, MemoryEntry } from "../types.js";
 import { normalize } from "../utils/normalize.js";
-import { handleMemoryRecap } from "./memory.recap.js";
 import { logger } from "../utils/logger.js";
-import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 import { expandQuery } from "../utils/query-expander.js";
 
 const HYBRID_WEIGHTS_VECTOR = {
@@ -24,24 +23,16 @@ export async function handleMemorySearch(
   vectors: VectorStore
 ): Promise<McpResponse> {
   const validated = MemorySearchSchema.parse(params);
-  
-  let recapContext: string | undefined;
-  if (validated.includeRecap) {
-    try {
-      const recapRes = await handleMemoryRecap({ repo: validated.repo, limit: 10 }, db);
-      recapContext = getPrimaryTextContent(recapRes);
-    } catch (error) {
-      logger.error("Failed to get recap context", { error: String(error) });
-    }
-  }
 
   const searchQuery = expandQuery(validated.query, validated.prompt);
 
   // 1. Get Candidates from SQLite
+  // Fetch more than limit to support offset slicing after scoring
+  const fetchLimit = (validated.offset + validated.limit) * 3;
   const similarityResults = db.searchBySimilarity(
     searchQuery,
     validated.repo,
-    validated.limit * 3,
+    fetchLimit,
     validated.include_archived,
     validated.current_tags ?? []
   );
@@ -55,31 +46,28 @@ export async function handleMemorySearch(
   if (candidates.length > 0) {
     const currentPath = validated.current_file_path?.toLowerCase();
     const currentTags = (validated.current_tags || []).map(t => t.toLowerCase());
-    
-    // Attempt to resolve current branch if not provided (optional)
     const currentBranch = validated.scope?.branch;
 
     candidates = candidates.map(c => {
       let boost = 0;
-      
-      // Branch boost (+0.1) - High relevance if on same branch
+
+      // Branch boost (+0.1)
       if (currentBranch && c.memory.scope.branch === currentBranch) {
         boost += 0.1;
       }
-      
+
       // Folder boost (+0.15)
       if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) {
         boost += 0.15;
       }
-      
+
       // Language boost (+0.1)
       if (currentPath && c.memory.scope.language) {
         const ext = currentPath.split('.').pop();
         if (ext && ext.includes(c.memory.scope.language.toLowerCase())) boost += 0.1;
       }
 
-      // TAG AFFINITY BOOST (+0.2)
-      // If the memory has tags that match the current workspace tech-stack
+      // Tag affinity boost (+0.2)
       if (currentTags.length > 0 && c.memory.tags.some(t => currentTags.includes(t.toLowerCase()))) {
         boost += 0.2;
       }
@@ -104,7 +92,6 @@ export async function handleMemorySearch(
         return { ...c, vectorScore: vScore, finalScore };
       });
     } else if (vectorResults.length > 0) {
-      // If SQLite found nothing but vectors did (rare due to our fallback)
       const vectorIds = vectorResults.map((vr: any) => vr.id);
       const fetchedMemories = db.getByIds(vectorIds);
       const memoryMap = new Map(fetchedMemories.map(m => [m.id, m]));
@@ -133,41 +120,75 @@ export async function handleMemorySearch(
 
   // 4. Threshold & Final Selection
   scoredMemories.sort((a, b) => b.finalScore - a.finalScore);
-  
+
   const threshold = scoredMemories.length <= 5 ? 0.10 : 0.40;
-  let results = scoredMemories.filter(sm => sm.finalScore >= threshold).map(sm => sm.memory);
+  let allMatches = scoredMemories.filter(sm => sm.finalScore >= threshold).map(sm => sm.memory);
 
   // Absolute fallback: if repo has data but search failed threshold, return top 1
-  if (results.length === 0 && scoredMemories.length > 0) {
-    results = [scoredMemories[0].memory];
+  if (allMatches.length === 0 && scoredMemories.length > 0) {
+    allMatches = [scoredMemories[0].memory];
   }
 
-  results = results.slice(0, validated.limit);
+  // Total count of all matches (before pagination)
+  const total = allMatches.length;
 
-  // 5. Post-processing
-  db.incrementHitCounts(results.map(m => m.id));
-  logger.info("[MCP] memory.search", { repo: validated.repo, query: validated.query, results: results.length });
+  // Apply pagination (offset + limit)
+  const paginatedResults = allMatches.slice(validated.offset, validated.offset + validated.limit);
+
+  // 5. Post-processing — increment hit count only for pages actually returned
+  db.incrementHitCounts(paginatedResults.map(m => m.id));
+  logger.info("[MCP] memory.search", {
+    repo: validated.repo,
+    query: validated.query,
+    total,
+    offset: validated.offset,
+    returned: paginatedResults.length
+  });
+
+  // 6. Build pointer table — columns: [id, title, type, importance]
+  const COLUMNS = ["id", "title", "type", "importance"] as const;
+  const rows = paginatedResults.map(m => [
+    m.id,
+    m.title ?? "Untitled",
+    m.type,
+    m.importance,
+  ]);
+
+  const structuredContent = {
+    schema: "memory-search" as const,
+    query: validated.query,
+    count: paginatedResults.length,
+    total,
+    offset: validated.offset,
+    limit: validated.limit,
+    results: {
+      columns: [...COLUMNS],
+      rows,
+    },
+  };
+
+  // Resource links: one per result row so agents can navigate to full content
+  const resourceLinks = paginatedResults.map(m => ({
+    uri: `memory://${m.id}`,
+    name: m.title ?? m.id,
+    mimeType: "application/json",
+    annotations: {
+      audience: ["assistant"] as Array<"assistant">,
+      priority: 0.8,
+    },
+  }));
+
+  const contentSummary = paginatedResults.length > 0
+    ? `Found ${total} memories for "${validated.query}" (showing ${paginatedResults.length} at offset ${validated.offset}). Use memory://<id> to read full content.`
+    : `No memories found for "${validated.query}" in repo "${validated.repo}".`;
 
   return createMcpResponse(
-    { query: validated.query, results, recapContext },
-    `Found ${results.length} memories matching "${validated.query}" in repo "${validated.repo}".`,
+    structuredContent,
+    contentSummary,
     {
-      query: validated.query,
-      results: results as any,
-      contentSummary: `Found ${results.length} memories matching "${validated.query}" in repo "${validated.repo}". See structured to get ID.`,
+      contentSummary,
       includeSerializedStructuredContent: false,
-      structuredContentPathHint: "results",
-      resourceLinks: [
-        {
-          uri: `memory://index?repo=${encodeURIComponent(validated.repo)}`,
-          name: `Memory Index (${validated.repo})`,
-          mimeType: "application/json",
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.7,
-          },
-        },
-      ],
+      resourceLinks,
     }
   );
 }

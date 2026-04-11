@@ -63,7 +63,7 @@ function buildTaskListSummary(
 
   parts.push(`Pending: ${stats?.todo ?? 0}.`);
   parts.push(`In progress: ${stats?.inProgress ?? 0}.`);
-  parts.push(`See structured to get Task ID.`);
+  parts.push(`See structuredContent.tasks for Task ID.`);
 
   return parts.join(" ");
 }

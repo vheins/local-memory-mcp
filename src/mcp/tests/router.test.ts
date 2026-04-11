@@ -567,8 +567,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       arguments: { query: "sqlite", repo: "test-repo", limit: 5 },
     });
 
+    // New pointer-based format: one resource_link per result row (memory://{id}), no repo index link
     const resourceLinks = result.content.filter((entry: any) => entry.type === "resource_link");
-    expect(resourceLinks.some((entry: any) => entry.uri === "memory://index?repo=test-repo")).toBe(true);
     expect(resourceLinks.some((entry: any) => entry.uri === "memory://123e4567-e89b-12d3-a456-426614174000")).toBe(true);
   });
 });

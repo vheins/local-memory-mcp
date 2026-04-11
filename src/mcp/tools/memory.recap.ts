@@ -7,117 +7,74 @@ export async function handleMemoryRecap(
   params: any,
   db: SQLiteStore
 ): Promise<McpResponse> {
-  // Validate input
   const validated = MemoryRecapSchema.parse(params);
 
   logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 
-  // Get total count for pagination metadata
-  const total = db.getTotalCount(validated.repo, false, ['task_archive']);
+  // Fetch aggregate stats (counts by type, total)
+  const stats = db.getStats(validated.repo);
 
-  // Get recent memories using public API (no type-unsafe cast)
-  const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset, false, ['task_archive']);
+  // Total active memories (excluding task_archive)
+  const total = db.getTotalCount(validated.repo, false, ["task_archive"]);
 
-  // Get active tasks for recap (In Progress, Pending, Blocked, Canceled)
-  const activeStatuses = ["in_progress", "pending", "blocked", "canceled"];
-  const tasks = db.getTasksByMultipleStatuses(validated.repo, activeStatuses, 50);
-  
-  // Sort tasks: in_progress first, then by priority
-  const sortedTasks = [...tasks].sort((a, b) => {
-    if (a.status === "in_progress" && b.status !== "in_progress") return -1;
-    if (a.status !== "in_progress" && b.status === "in_progress") return 1;
-    return (b.priority || 0) - (a.priority || 0);
-  });
+  // Fetch top memories ordered by importance DESC, created_at DESC
+  const rows = db.getRecentMemories(validated.repo, validated.limit, validated.offset, false, ["task_archive"]);
 
-  const formattedTasks = sortedTasks.map(t => ({
-    id: t.id,
-    task_code: t.task_code,
-    title: t.title,
-    status: t.status,
-    priority: t.priority
-  }));
+  // Build pointer table — columns: [id, title, type, importance]
+  const COLUMNS = ["id", "title", "type", "importance"] as const;
+  const topRows = rows.map(row => [
+    row.id,
+    row.title ?? "Untitled",
+    row.type,
+    row.importance,
+  ]);
 
-  if (rows.length === 0 && tasks.length === 0) {
-    return createMcpResponse(
-      {
-        repo: validated.repo,
-        count: 0,
-        total,
-        offset: validated.offset,
-        memories: [],
-        tasks: [],
-        message: `No memories or tasks found for repo: ${validated.repo}`
-      },
-      `No memories or tasks for repo "${validated.repo}".`,
-      {
-        structuredContentPathHint: "memories",
-        contentSummary: `No memories or tasks for repo "${validated.repo}". See structured to get ID.`,
-        includeSerializedStructuredContent: false,
-      }
-    );
+  // Build by_type stats, excluding task_archive
+  const byType: Record<string, number> = {};
+  for (const [type, count] of Object.entries(stats.byType)) {
+    if (type !== "task_archive") {
+      byType[type] = count;
+    }
   }
 
-  // Format memories for recap
-  const formattedMemories = rows.map((row, index) => ({
-    number: validated.offset + index + 1,
-    id: row.id,
-    type: row.type,
-    importance: row.importance,
-    preview: row.content.substring(0, 100) + (row.content.length > 100 ? "..." : ""),
-    created_at: row.created_at
+  const structuredContent = {
+    schema: "memory-recap" as const,
+    repo: validated.repo,
+    count: rows.length,
+    total,
+    offset: validated.offset,
+    limit: validated.limit,
+    stats: {
+      by_type: byType,
+    },
+    top: {
+      columns: [...COLUMNS],
+      rows: topRows,
+    },
+  };
+
+  const contentSummary = total > 0
+    ? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}. Use memory://<id> to read full content.`
+    : `No memories found for repo "${validated.repo}".`;
+
+  // Resource links — one per top row so agents can navigate directly
+  const resourceLinks = rows.map(row => ({
+    uri: `memory://${row.id}`,
+    name: row.title ?? row.id,
+    mimeType: "application/json" as const,
+    annotations: {
+      audience: ["assistant"] as Array<"assistant">,
+      priority: 0.8,
+    },
   }));
 
-  // Create summary text
-  const memorySummary = formattedMemories
-    .map(
-      (m) =>
-        `${m.number}. [${m.type.toUpperCase()}] (importance: ${m.importance}) ${m.preview}`
-    )
-    .join("\n");
-
-  const taskSummary = formattedTasks
-    .map(
-      (t) =>
-        `- [${t.status.toUpperCase()}] [${t.task_code}] ${t.title} (P${t.priority})`
-    )
-    .join("\n");
-
   return createMcpResponse(
+    structuredContent,
+    contentSummary,
     {
-      repo: validated.repo,
-      count: rows.length,
-      total,
-      offset: validated.offset,
-      memories: formattedMemories,
-      tasks: formattedTasks,
-      summary: `Recent ${rows.length} memories:\n\n${memorySummary}\n\nActive Tasks:\n\n${taskSummary || "No active tasks"}`
-    },
-    `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}".`,
-    {
-      contentSummary: `Retrieved ${rows.length} memories and ${tasks.length} active tasks for repo "${validated.repo}". See structured to get ID.`,
+      contentSummary,
       includeSerializedStructuredContent: false,
-      resourceLinks: [
-        {
-          uri: `memory://summary/${validated.repo}`,
-          name: `Memory Summary (${validated.repo})`,
-          description: "Repository summary resource",
-          mimeType: "text/plain",
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.8,
-          },
-        },
-        {
-          uri: `tasks://current?repo=${encodeURIComponent(validated.repo)}`,
-          name: `Current Tasks (${validated.repo})`,
-          description: "Current task snapshot for the repository",
-          mimeType: "application/json",
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.7,
-          },
-        },
-      ],
+      resourceLinks,
     }
   );
 }

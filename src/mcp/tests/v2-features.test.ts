@@ -176,8 +176,8 @@ describe("V2 Enhanced Memory Features", () => {
       const params = { query: "Target", repo };
       const response = await handleMemorySearch(params, db, mockVectors);
       
-      // With > 5 memories, threshold should be 0.40
-      expect(getPrimaryTextContent(response)).toContain("Found 1 memories");
+      // New format: "Found N memories for "query" (showing N at offset 0)..."
+      expect(getPrimaryTextContent(response)).toContain("Found 1 memories for");
       db.close();
     });
   });
