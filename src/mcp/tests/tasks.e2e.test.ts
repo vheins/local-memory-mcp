@@ -68,7 +68,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       arguments: { repo: REPO }
     });
     const listToolTasks = (listToolRes.structuredContent as any).tasks;
-    expect(listToolTasks.length).toBe(2);
+    expect(listToolTasks.rows.length).toBe(2);
 
     // ---- 3. EXECUTION PHASE ----
     await router("tools/call", {

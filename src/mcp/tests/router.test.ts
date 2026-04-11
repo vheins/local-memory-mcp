@@ -363,10 +363,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     const mockVectors = makeMockVectors();
     const router = createRouter(mockDb, mockVectors);
 
-    // Cursors are now validated at the router level via pagination
-    const result = await router("prompts/list", { cursor: "%%%not-base64%%%" });
-    // The result should contain prompts - cursor validation may differ
-    expect(result.prompts).toBeDefined();
+    await expect(router("prompts/list", { cursor: "%%%not-base64%%%" })).rejects.toMatchObject({
+      code: -32602,
+    });
   });
 
   it("validates required prompt arguments with MCP invalid params error", async () => {

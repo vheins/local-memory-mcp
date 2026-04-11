@@ -109,7 +109,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       arguments: { repo: REPO }
     });
     const defaultTasks = (defaultRes.structuredContent as any).tasks;
-    expect(defaultTasks.length).toBe(15);
+    expect(defaultTasks.rows.length).toBe(15);
 
     // Test explicit limit
     const limitRes = await router("tools/call", {
@@ -117,7 +117,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       arguments: { repo: REPO, limit: 5 }
     });
     const limitedTasks = (limitRes.structuredContent as any).tasks;
-    expect(limitedTasks.length).toBe(5);
+    expect(limitedTasks.rows.length).toBe(5);
 
     // Test offset (last page)
     const offsetRes = await router("tools/call", {
@@ -125,7 +125,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
       arguments: { repo: REPO, limit: 15, offset: 15 }
     });
     const offsetTasks = (offsetRes.structuredContent as any).tasks;
-    expect(offsetTasks.length).toBe(5); // 20 total - 15 offset = 5 remaining
+    expect(offsetTasks.rows.length).toBe(5); // 20 total - 15 offset = 5 remaining
   });
 
   it("should summarize filtered task counts with pending and in-progress context", async () => {

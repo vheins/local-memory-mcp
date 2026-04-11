@@ -156,7 +156,7 @@ export const TaskSearchSchema = z.object({
   repo: z.string().min(1).transform(normalizeRepo),
   query: z.string().min(1),
   status: z.string().optional(),
-  limit: z.number().min(1).max(100).default(15),
+  limit: z.number().min(1).max(100).default(10),
   offset: z.number().min(0).default(0)
 });
 
@@ -193,6 +193,12 @@ export const TaskBulkManageSchema = z.object({
 export const TaskDeleteSchema = z.object({
   repo: z.string().min(1).transform(normalizeRepo),
   id: z.string().uuid()
+});
+
+export const TaskActiveSchema = z.object({
+  repo: z.string().min(1).transform(normalizeRepo),
+  status: z.enum(["in_progress", "pending"]).optional(),
+  limit: z.number().min(1).max(20).default(5)
 });
 
 // Tool definitions for MCP
@@ -785,9 +791,65 @@ export const TOOL_DEFINITIONS = [
     }
   },
   {
+    name: "task-active",
+    title: "Task Active",
+    description: "PRIMARY task navigation tool. Call this FIRST at session start. Returns a minimal tabular list of active tasks (id, title, status, priority). Default behavior: returns in_progress tasks; falls back to pending if none exist. Use task://<id> to fetch full task details. AGENTS: call this once, pick ONE task, then fetch task://<id> for full context before starting work.",
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository name"
+        },
+        status: {
+          type: "string",
+          enum: ["in_progress", "pending"],
+          description: "Optional status filter. If omitted: returns in_progress tasks, falls back to pending if none."
+        },
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 20,
+          default: 5,
+          description: "Maximum rows to return (default 5)"
+        }
+      },
+      required: ["repo"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        schema: { type: "string", enum: ["task-active"] },
+        tasks: {
+          type: "object",
+          properties: {
+            columns: {
+              type: "array",
+              items: { type: "string" },
+              description: "Column names in order: id, task_code, title, status, priority, comments_count"
+            },
+            rows: {
+              type: "array",
+              items: { type: "array" },
+              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task://<id> to fetch full task."
+            }
+          },
+          required: ["columns", "rows"]
+        },
+        count: { type: "number" }
+      },
+      required: ["schema", "tasks", "count"]
+    }
+  },
+  {
     name: "task-list",
     title: "Task List",
-    description: "List or search tasks for a repository. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks.",
+    description: "List or filtered search of tasks for a repository. Returns a compact tabular pointer list. Use 'search' to filter by code, title, or description. Use 'status' (comma-separated) to filter by status (backlog, pending, in_progress, completed, canceled, blocked). Defaults to active tasks. AGENTS: read columns array to interpret rows, then fetch task://<id>.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -831,35 +893,33 @@ export const TOOL_DEFINITIONS = [
     outputSchema: {
       type: "object",
       properties: {
-        repo: { type: "string" },
-        count: { type: "number" },
-        offset: { type: "number" },
-        limit: { type: "number" },
+        schema: { type: "string", enum: ["task-list"] },
         tasks: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              repo: { type: "string" },
-              task_code: { type: "string" },
-              phase: { type: "string" },
-              title: { type: "string" },
-              description: { type: "string" },
-              status: { type: "string" },
-              priority: { type: "number" }
+          type: "object",
+          properties: {
+            columns: {
+              type: "array",
+              items: { type: "string" },
+              description: "Column names in order: id, task_code, title, status, priority, comments_count"
             },
-            required: ["id", "repo", "task_code", "phase", "title", "description", "status", "priority"]
-          }
-        }
+            rows: {
+              type: "array",
+              items: { type: "array" },
+              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task://<id> to fetch full task."
+            }
+          },
+          required: ["columns", "rows"]
+        },
+        count: { type: "number" },
+        offset: { type: "number" }
       },
-      required: ["repo", "count", "offset", "limit", "tasks"]
+      required: ["schema", "tasks", "count"]
     }
   },
   {
     name: "task-search",
     title: "Task Search",
-    description: "Search for tasks by code, title, or description across any status.",
+    description: "Search tasks by code, title, or description and return a compact tabular pointer list. Use task://<id> to fetch full task details after selecting from results. Defaults to searching all statuses. AGENTS: call once, read columns array to interpret rows, then fetch task://<id>.",
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -874,18 +934,18 @@ export const TOOL_DEFINITIONS = [
         },
         query: {
           type: "string",
-          description: "Search query"
+          description: "Search query (matches task code, title, or description)"
         },
         status: {
           type: "string",
-          description: "Optional status filter (comma-separated). Defaults to 'all' if omitted."
+          description: "Optional status filter (comma-separated, e.g. 'pending,in_progress'). Defaults to all statuses if omitted."
         },
         limit: {
           type: "number",
           minimum: 1,
           maximum: 100,
-          default: 15,
-          description: "Maximum number of tasks to return"
+          default: 10,
+          description: "Maximum rows to return (default 10)"
         },
         offset: {
           type: "number",
@@ -899,29 +959,28 @@ export const TOOL_DEFINITIONS = [
     outputSchema: {
       type: "object",
       properties: {
-        repo: { type: "string" },
-        count: { type: "number" },
-        offset: { type: "number" },
-        limit: { type: "number" },
+        schema: { type: "string", enum: ["task-search"] },
+        query: { type: "string" },
         tasks: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              repo: { type: "string" },
-              task_code: { type: "string" },
-              phase: { type: "string" },
-              title: { type: "string" },
-              description: { type: "string" },
-              status: { type: "string" },
-              priority: { type: "number" }
+          type: "object",
+          properties: {
+            columns: {
+              type: "array",
+              items: { type: "string" },
+              description: "Column names in order: id, task_code, title, status, priority, comments_count"
             },
-            required: ["id", "repo", "task_code", "phase", "title", "description", "status", "priority"]
-          }
-        }
+            rows: {
+              type: "array",
+              items: { type: "array" },
+              description: "Each row: [id, task_code, title, status, priority, comments_count]. Use task://<id> to fetch full task."
+            }
+          },
+          required: ["columns", "rows"]
+        },
+        count: { type: "number" },
+        offset: { type: "number" }
       },
-      required: ["repo", "count", "offset", "limit", "tasks"]
+      required: ["schema", "query", "tasks", "count"]
     }
   },
   {

@@ -86,8 +86,8 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0].task_code).toBe("TASK-001");
+    expect(tasks.rows).toHaveLength(1);
+    expect(tasks.rows[0][1]).toBe("TASK-001");
   });
 
   it("should search tasks by description", async () => {
@@ -97,8 +97,8 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0].task_code).toBe("TASK-002");
+    expect(tasks.rows).toHaveLength(1);
+    expect(tasks.rows[0][1]).toBe("TASK-002");
   });
 
   it("should search tasks by task code", async () => {
@@ -108,8 +108,8 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0].task_code).toBe("DB-FIX-003");
+    expect(tasks.rows).toHaveLength(1);
+    expect(tasks.rows[0][1]).toBe("DB-FIX-003");
   });
 
   it("should filter by multiple statuses", async () => {
@@ -119,8 +119,8 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(2);
-    const codes = tasks.map((t: any) => t.task_code);
+    expect(tasks.rows).toHaveLength(2);
+    const codes = tasks.rows.map((r: any) => r[1]);
     expect(codes).toContain("TASK-001");
     expect(codes).toContain("DB-FIX-003");
   });
@@ -132,7 +132,7 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(3);
+    expect(tasks.rows).toHaveLength(3);
   });
 
   it("should combine search and status filtering", async () => {
@@ -143,8 +143,8 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0].task_code).toBe("TASK-002");
+    expect(tasks.rows).toHaveLength(1);
+    expect(tasks.rows[0][1]).toBe("TASK-002");
   });
 
   it("should return empty list if no matches found", async () => {
@@ -154,7 +154,7 @@ describe("Task Search and Filtering", () => {
     }, db);
     
     const tasks = (result.structuredContent as any).tasks;
-    expect(tasks).toHaveLength(0);
+    expect(tasks.rows).toHaveLength(0);
   });
 
   describe("Router Integration (task-search)", () => {
@@ -168,8 +168,10 @@ describe("Task Search and Filtering", () => {
       
       const result = await handleTaskList(searchArgs, db);
       const tasks = (result.structuredContent as any).tasks;
-      expect(tasks).toHaveLength(1);
-      expect(tasks[0].task_code).toBe("TASK-001");
+      expect(tasks.rows).toHaveLength(1);
+      expect(tasks.rows[0][1]).toBe("TASK-001");
+      // TASK-001 has one comment added in handleTaskUpdate
+      expect(tasks.rows[0][5]).toBe(1);
     });
   });
 });

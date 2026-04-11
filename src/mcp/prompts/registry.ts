@@ -2,6 +2,7 @@ import { SQLiteStore } from "../storage/sqlite.js";
 import { SessionContext, inferRepoFromSession } from "../session.js";
 import { rankCompletionValues } from "../utils/completion.js";
 import { loadPromptFromMarkdown, listPromptFiles, LoadedPrompt } from "./loader.js";
+import { decodeCursor, encodeCursor } from "../utils/pagination.js";
 
 function createPromptDefinition(loaded: LoadedPrompt) {
   return {
@@ -36,14 +37,23 @@ for (const name of promptFiles) {
 /**
  * Handles MCP 'prompts/list'
  */
-export async function listPrompts(db: SQLiteStore, session?: SessionContext, params?: any) {
+export async function listPrompts(db: SQLiteStore, session?: SessionContext, params?: { cursor?: string; limit?: number }) {
+  const allPrompts = Object.values(PROMPTS).map((p) => ({
+    name: p.name,
+    description: p.description,
+    arguments: p.arguments,
+    metadata: p.agent ? { agent: p.agent } : undefined,
+  }));
+
+  const rawLimit = typeof params?.limit === "number" && Number.isInteger(params?.limit) ? params.limit : 25;
+  const limit = Math.max(1, Math.min(100, Math.trunc(rawLimit)));
+  const offset = decodeCursor(params?.cursor);
+  const sliced = allPrompts.slice(offset, offset + limit);
+  const nextOffset = offset + sliced.length;
+
   return {
-    prompts: Object.values(PROMPTS).map((p) => ({
-      name: p.name,
-      description: p.description,
-      arguments: p.arguments,
-      metadata: p.agent ? { agent: p.agent } : undefined,
-    })),
+    prompts: sliced,
+    nextCursor: nextOffset < allPrompts.length ? encodeCursor(nextOffset) : undefined,
   };
 }
 

@@ -22,6 +22,8 @@ import {
   handleTaskCreateInteractive,
   handleTaskUpdate,
   handleTaskDelete,
+  handleTaskActive,
+  handleTaskSearch,
 } from "./tools/task.manage.js";
 import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 import { SamplingRequestHandler } from "./sampling.js";
@@ -158,15 +160,16 @@ export function createRouter(
         result = await handleTaskDelete(args, db);
         break;
 
+      case "task-active":
+        result = await handleTaskActive(args, db);
+        break;
+
       case "task-list":
         result = await handleTaskList(args, db);
         break;
 
       case "task-search":
-        // Map 'query' to 'search' and set default status if not provided
-        const searchArgs = { ...args, search: args.query };
-        if (!searchArgs.status) searchArgs.status = "all";
-        result = await handleTaskList(searchArgs, db);
+        result = await handleTaskSearch(args, db);
         break;
 
       case "task-bulk-manage":
@@ -209,7 +212,14 @@ function listTools(session: SessionContext | undefined, params: any) {
   const tools = getAvailableToolDefinitions(session);
   const limit = normalizePageLimit(params?.limit, tools.length || 1);
   const start = decodeCursor(params?.cursor);
-  const page = tools.slice(start, start + limit);
+  
+  // Strictly conform to MCP Tool spec: remove internal fields like outputSchema, annotations, title
+  const compliantTools = tools.map(tool => {
+    const { name, description, inputSchema } = tool;
+    return { name, description, inputSchema };
+  });
+
+  const page = compliantTools.slice(start, start + limit);
   const nextCursor = start + limit < tools.length ? encodeCursor(start + limit) : undefined;
 
   return {

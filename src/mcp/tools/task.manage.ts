@@ -13,6 +13,8 @@ import {
   TaskCreateInteractiveSchema,
   TaskUpdateSchema,
   TaskDeleteSchema,
+  TaskActiveSchema,
+  TaskSearchSchema,
 } from "./schemas.js";
 import { handleMemoryStore } from "./memory.store.js";
 
@@ -169,16 +171,23 @@ export async function handleTaskList(
     ? tasks.filter((t: any) => t.phase.toLowerCase() === phase.toLowerCase()) 
     : tasks;
 
-  // Enhance tasks with their comments/history
-  const tasksWithHistory = filteredTasks.map((task: any) => ({
-    ...task,
-    comments: storage.getTaskCommentsByTaskId(task.id)
-  }));
+  const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
+  const rows = filteredTasks.map((t: any) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
+
+  const structured = {
+    schema: "task-list" as const,
+    tasks: {
+      columns: [...COLUMNS],
+      rows,
+    },
+    count: rows.length,
+    offset,
+  };
 
   const taskStats = storage.getTaskStats(repo);
   const summary = buildTaskListSummary(
     repo,
-    tasksWithHistory.length,
+    rows.length,
     status,
     phase,
     search,
@@ -186,22 +195,14 @@ export async function handleTaskList(
   );
 
   return createMcpResponse(
-    {
-      repo,
-      count: tasksWithHistory.length,
-      offset,
-      limit,
-      tasks: tasksWithHistory,
-    },
+    structured,
     summary,
     {
       contentSummary: summary,
-      results: tasksWithHistory,
       resourceLinks: [
         {
           uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
           name: `Current Tasks (${repo})`,
-          description: "Current task snapshot for the repository",
           mimeType: "application/json",
           annotations: {
             audience: ["assistant"],
@@ -210,6 +211,95 @@ export async function handleTaskList(
         },
       ],
     }
+  );
+}
+
+export async function handleTaskActive(
+  args: any,
+  storage: SQLiteStore
+) {
+  const { repo, status, limit } = TaskActiveSchema.parse(args);
+
+  let tasks: any[];
+  let resolvedStatus: string;
+
+  if (status) {
+    // Explicit status filter
+    tasks = storage.getTasksByMultipleStatuses(repo, [status], limit, 0);
+    resolvedStatus = status;
+  } else {
+    // Default: in_progress first, fallback to pending
+    tasks = storage.getTasksByMultipleStatuses(repo, ["in_progress"], limit, 0);
+    resolvedStatus = "in_progress";
+    if (tasks.length === 0) {
+      tasks = storage.getTasksByMultipleStatuses(repo, ["pending"], limit, 0);
+      resolvedStatus = "pending";
+    }
+  }
+
+  const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
+  const rows = tasks.map((t: any) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
+
+  const structured = {
+    schema: "task-active" as const,
+    tasks: {
+      columns: [...COLUMNS],
+      rows,
+    },
+    count: rows.length,
+  };
+
+  const filterDesc = status ? `status=${status}` : `active (${resolvedStatus})`;
+  const summary = rows.length > 0
+    ? `${rows.length} task(s) [${filterDesc}] in "${repo}". Use task://<id> for full details. Columns: ${COLUMNS.join(", ")}.`
+    : `No ${filterDesc} tasks in "${repo}". Use task-list for broader search.`;
+
+  return createMcpResponse(
+    structured,
+    summary,
+    { contentSummary: summary }
+  );
+}
+
+export async function handleTaskSearch(
+  args: any,
+  storage: SQLiteStore
+) {
+  const { repo, query, status, limit, offset } = TaskSearchSchema.parse(args);
+
+  // Map status: default to 'all' statuses when not provided
+  let statuses: string[];
+  if (!status) {
+    statuses = []; // empty = all statuses in getTasksByMultipleStatuses
+  } else {
+    statuses = status.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  const tasks = storage.getTasksByMultipleStatuses(repo, statuses, limit, offset, query);
+
+  const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
+  const rows = tasks.map((t: any) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
+
+  const structured = {
+    schema: "task-search" as const,
+    query,
+    tasks: {
+      columns: [...COLUMNS],
+      rows,
+    },
+    count: rows.length,
+    offset,
+  };
+
+  const statusLabel = status || "all";
+  const summary = rows.length > 0
+    ? `${rows.length} task(s) matching "${query}" [status: ${statusLabel}] in "${repo}". Use task://<id> for full details. Columns: ${COLUMNS.join(", ")}.`
+    : `No tasks matching "${query}" [status: ${statusLabel}] in "${repo}".`;
+
+  return createMcpResponse(
+    structured,
+    summary,
+    { contentSummary: summary }
   );
 }
 

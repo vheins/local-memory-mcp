@@ -1101,7 +1101,8 @@ export class SQLiteStore {
 
   getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): any[] {
     let query = `
-      SELECT t.*, d.task_code as depends_on_code 
+      SELECT t.*, d.task_code as depends_on_code,
+             (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
       FROM tasks t 
       LEFT JOIN tasks d ON t.depends_on = d.id 
       WHERE t.repo = ?
@@ -1152,7 +1153,8 @@ export class SQLiteStore {
     if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset, search);
     
     let query = `
-      SELECT t.*, d.task_code as depends_on_code 
+      SELECT t.*, d.task_code as depends_on_code,
+             (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
       FROM tasks t 
       LEFT JOIN tasks d ON t.depends_on = d.id 
       WHERE t.repo = ? AND t.status IN (${statuses.map(() => '?').join(',')})

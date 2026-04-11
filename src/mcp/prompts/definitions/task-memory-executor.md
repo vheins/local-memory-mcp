@@ -19,9 +19,13 @@ description: Execute all pending tasks for the current repository
 Please follow this strict execution flow:
 
 1. **Identify Repository**: Determine the current repository name (e.g., from git config or workspace context).
-2. **Fetch Tasks**: Call `local-memory-mcp` MCP tools `task-list` for the identified repository for statuses 'pending' and 'in_progress'.
-3. **Filter Stale**: Identify 'in_progress' tasks that are **stale** (stale is defined as > 30 Minutes without update, often because an agent stopped or crashed).
+2. **Fetch Active Tasks**: Call `local-memory-mcp` MCP tools `task-active` for the identified repository.
+   - This returns a compact table: `columns = [id, title, status, priority]`, `rows` = task pointers.
+   - Default: returns `in_progress` tasks first; falls back to `pending` if none exist.
+   - DO NOT call task-active in a loop. Call it ONCE.
+3. **Filter Stale**: From the in_progress rows, identify tasks that are **stale** (stale = no update for > 30 minutes, often because an agent stopped or crashed). Fetch their full data via `task://<id>` to inspect timestamps.
 4. **Task Execution Loop**: You MUST process tasks EXACTLY ONE AT A TIME (STRICT). You are STRICTLY FORBIDDEN from spinning up parallel sub-agents or using parallel execution. For each task you select:
+    - **Hydrate**: Fetch full task context via `task://<id>` resource before starting work.
     - **Start**: Call `local-memory-mcp` MCP tools `task-update` to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
     - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.
@@ -31,8 +35,8 @@ Please follow this strict execution flow:
     - **Retrospective**: Invoke the `learning-retrospective` skill. If the skill is unavailable, use the `learning-retrospective` prompt from `local-memory-mcp` to extract and store durable knowledge (mistakes, decisions, patterns) from this task.
     - **Commit**: Perform an atomic git commit and push for the changes made in the task.
     - **Handoff**: Use `local-memory-mcp` MCP tools `task-update` to document **detailed fix steps**, milestones, project-specific knowledge gained during execution, and validation evidence. If complex, decompose into smaller tasks using `local-memory-mcp` MCP tools `task-create`.
-    - **Next**: Repeat this loop for the next 'pending' or 'stale' task.
-5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, fetch tasks with status='backlog'. If any exist, select up to 20 tasks (prioritizing by priority field) and update their status to 'pending' using `local-memory-mcp` MCP tools `task-update` to ensure the next agent has work ready.
+    - **Next**: Call `task-active` once more to get the next actionable task and repeat this loop.
+5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, call `local-memory-mcp` MCP tools `task-list` with status='backlog'. If any exist, select up to 20 tasks (prioritizing by priority field) and update their status to 'pending' using `local-memory-mcp` MCP tools `task-update` to ensure the next agent has work ready.
 6. **Report**: After processing all tasks, provide a summary of your progress.
 
 ## Mandatory Validation Rules
