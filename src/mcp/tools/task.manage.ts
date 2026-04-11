@@ -200,17 +200,6 @@ export async function handleTaskList(
     {
       contentSummary: summary,
       includeSerializedStructuredContent: false,
-      resourceLinks: [
-        {
-          uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
-          name: `Current Tasks (${repo})`,
-          mimeType: "application/json",
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.9,
-          },
-        },
-      ],
     }
   );
 }
@@ -620,18 +609,6 @@ export async function handleTaskUpdate(
     `Updated task ${id} in repo "${repo}" to status "${updates.status ?? existingTask.status}".${updates.status === "completed" ? " Archived to memory." : ""}`,
     {
       structuredContentPathHint: "updatedFields",
-      resourceLinks: [
-        {
-          uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
-          name: `Current Tasks (${repo})`,
-          description: "Current task snapshot for the repository",
-          mimeType: "application/json",
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.8,
-          },
-        },
-      ],
     }
   );
 }
@@ -652,18 +629,6 @@ export async function handleTaskDelete(
     `Deleted task ${id} from repo "${repo}".`,
     {
       structuredContentPathHint: "id",
-      resourceLinks: [
-        {
-          uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
-          name: `Current Tasks (${repo})`,
-          description: "Current task snapshot for the repository after deletion",
-          mimeType: "application/json",
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.6,
-          },
-        },
-      ],
     }
   );
 }

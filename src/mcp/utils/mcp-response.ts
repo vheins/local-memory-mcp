@@ -133,25 +133,6 @@ export function createMcpResponse(
     });
   }
 
-  // Add resource_links for results if they were provided in options
-  // (We use this for referring to specific items regardless of data pruning)
-  if (Array.isArray(results) && results.length > 0) {
-    for (const result of results) {
-      const title = result.title || (result.content.length > 50 ? result.content.substring(0, 50) + "..." : result.content);
-      content.push({
-        type: "resource_link",
-        uri: `memory://${result.id}`,
-        name: title,
-        mimeType: "application/json",
-        annotations: {
-          audience: ["assistant"],
-          priority: 0.8,
-          lastModified: result.updated_at || result.created_at,
-        },
-      });
-    }
-  }
-
   // Add global resource links (like repo index)
   for (const link of resourceLinks || []) {
     content.push({

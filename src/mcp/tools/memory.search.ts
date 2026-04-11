@@ -167,17 +167,6 @@ export async function handleMemorySearch(
     },
   };
 
-  // Resource links: one per result row so agents can navigate to full content
-  const resourceLinks = paginatedResults.map(m => ({
-    uri: `memory://${m.id}`,
-    name: m.title ?? m.id,
-    mimeType: "application/json",
-    annotations: {
-      audience: ["assistant"] as Array<"assistant">,
-      priority: 0.8,
-    },
-  }));
-
   const contentSummary = paginatedResults.length > 0
     ? `Found ${total} memories for "${validated.query}" (showing ${paginatedResults.length} at offset ${validated.offset}). Use memory-detail to read full content.`
     : `No memories found for "${validated.query}" in repo "${validated.repo}".`;
@@ -188,7 +177,6 @@ export async function handleMemorySearch(
     {
       contentSummary,
       includeSerializedStructuredContent: false,
-      resourceLinks,
     }
   );
 }

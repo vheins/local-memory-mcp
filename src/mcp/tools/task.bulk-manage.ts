@@ -113,18 +113,6 @@ export async function handleTaskBulkManage(
         `Created ${tasks.length} tasks in repo "${repo}".`,
         {
           structuredContentPathHint: "taskCodes",
-          resourceLinks: [
-            {
-              uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
-              name: `Current Tasks (${repo})`,
-              description: "Current task snapshot for the repository",
-              mimeType: "application/json",
-              annotations: {
-                audience: ["assistant"],
-                priority: 0.8,
-              },
-            },
-          ],
         }
       );
     }
@@ -157,18 +145,6 @@ export async function handleTaskBulkManage(
         `Deleted ${ids.length} tasks from repo "${repo}".`,
         {
           structuredContentPathHint: "ids",
-          resourceLinks: [
-            {
-              uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
-              name: `Current Tasks (${repo})`,
-              description: "Current task snapshot for the repository after bulk deletion",
-              mimeType: "application/json",
-              annotations: {
-                audience: ["assistant"],
-                priority: 0.6,
-              },
-            },
-          ],
         }
       );
     }
@@ -242,18 +218,6 @@ export async function handleTaskBulkManage(
         `Updated ${updatedCount} tasks in repo "${repo}" to status "${status}".`,
         {
           structuredContentPathHint: "ids",
-          resourceLinks: [
-            {
-              uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
-              name: `Current Tasks (${repo})`,
-              description: "Current task snapshot for the repository after bulk update",
-              mimeType: "application/json",
-              annotations: {
-                audience: ["assistant"],
-                priority: 0.7,
-              },
-            },
-          ],
         }
       );
     }

@@ -57,24 +57,12 @@ export async function handleMemoryRecap(
     ? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}. Use memory-detail to read full content.`
     : `No memories found for repo "${validated.repo}".`;
 
-  // Resource links — one per top row so agents can navigate directly
-  const resourceLinks = rows.map(row => ({
-    uri: `memory://${row.id}`,
-    name: row.title ?? row.id,
-    mimeType: "application/json" as const,
-    annotations: {
-      audience: ["assistant"] as Array<"assistant">,
-      priority: 0.8,
-    },
-  }));
-
   return createMcpResponse(
     structuredContent,
     contentSummary,
     {
       contentSummary,
       includeSerializedStructuredContent: false,
-      resourceLinks,
     }
   );
 }
