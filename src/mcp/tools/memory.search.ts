@@ -167,8 +167,9 @@ export async function handleMemorySearch(
     },
   };
 
+  const memoryList = paginatedResults.map(m => `"${m.title}" (ID: ${m.id})`).join(", ");
   const contentSummary = paginatedResults.length > 0
-    ? `Found ${total} memories for "${validated.query}" (showing ${paginatedResults.length} at offset ${validated.offset}). Use memory-detail to read full content.`
+    ? `Found ${total} memories for "${validated.query}" (showing ${paginatedResults.length} at offset ${validated.offset}): ${memoryList}. Use memory-detail to read full content.`
     : `No memories found for "${validated.query}" in repo "${validated.repo}".`;
 
   return createMcpResponse(
@@ -176,7 +177,7 @@ export async function handleMemorySearch(
     contentSummary,
     {
       contentSummary,
-      includeSerializedStructuredContent: false,
+      includeSerializedStructuredContent: true,
     }
   );
 }

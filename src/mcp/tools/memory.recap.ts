@@ -53,8 +53,9 @@ export async function handleMemoryRecap(
     },
   };
 
+  const memoryList = rows.map(row => `"${row.title}" (ID: ${row.id})`).join(", ");
   const contentSummary = total > 0
-    ? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}. Use memory-detail to read full content.`
+    ? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}: ${memoryList}. Use memory-detail to read full content.`
     : `No memories found for repo "${validated.repo}".`;
 
   return createMcpResponse(
@@ -62,7 +63,7 @@ export async function handleMemoryRecap(
     contentSummary,
     {
       contentSummary,
-      includeSerializedStructuredContent: false,
+      includeSerializedStructuredContent: true,
     }
   );
 }

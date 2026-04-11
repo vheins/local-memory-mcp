@@ -184,8 +184,9 @@ export async function handleTaskList(
     offset,
   };
 
+  const taskList = filteredTasks.map((t: any) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
   const taskStats = storage.getTaskStats(repo);
-  const summary = buildTaskListSummary(
+  let summary = buildTaskListSummary(
     repo,
     rows.length,
     status,
@@ -193,13 +194,16 @@ export async function handleTaskList(
     search,
     taskStats
   );
+  if (rows.length > 0) {
+    summary += ` Tasks: ${taskList}`;
+  }
 
   return createMcpResponse(
     structured,
     summary,
     {
       contentSummary: summary,
-      includeSerializedStructuredContent: false,
+      includeSerializedStructuredContent: true,
     }
   );
 }
@@ -239,15 +243,16 @@ export async function handleTaskActive(
     count: rows.length,
   };
 
+  const taskList = tasks.map(t => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
   const filterDesc = status ? `status=${status}` : `active (${resolvedStatus})`;
   const summary = rows.length > 0
-    ? `${rows.length} task(s) [${filterDesc}] in "${repo}". Use task-detail for full details. See structured to get Task ID. Columns: ${COLUMNS.join(", ")}.`
+    ? `${rows.length} task(s) [${filterDesc}] in "${repo}": ${taskList}. Use task-detail for full details.`
     : `No ${filterDesc} tasks in "${repo}". Use task-list for broader search.`;
 
   return createMcpResponse(
     structured,
     summary,
-    { contentSummary: summary, includeSerializedStructuredContent: false }
+    { contentSummary: summary, includeSerializedStructuredContent: true }
   );
 }
 
@@ -281,15 +286,16 @@ export async function handleTaskSearch(
     offset,
   };
 
+  const taskList = tasks.map((t: any) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
   const statusLabel = status || "all";
   const summary = rows.length > 0
-    ? `${rows.length} task(s) matching "${query}" [status: ${statusLabel}] in "${repo}". Use task-detail for full details. See structured to get Task ID. Columns: ${COLUMNS.join(", ")}.`
+    ? `${rows.length} task(s) matching "${query}" [status: ${statusLabel}] in "${repo}": ${taskList}. Use task-detail for full details.`
     : `No tasks matching "${query}" [status: ${statusLabel}] in "${repo}".`;
 
   return createMcpResponse(
     structured,
     summary,
-    { contentSummary: summary, includeSerializedStructuredContent: false }
+    { contentSummary: summary, includeSerializedStructuredContent: true }
   );
 }
 
