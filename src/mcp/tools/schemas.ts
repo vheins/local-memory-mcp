@@ -196,6 +196,19 @@ export const TaskDeleteSchema = z.object({
   id: z.string().uuid()
 });
 
+export const MemoryGetSchema = z.object({
+  id: z.string().uuid()
+});
+
+export const TaskGetSchema = z.object({
+  repo: z.string().min(1).transform(normalizeRepo),
+  id: z.string().uuid().optional(),
+  task_code: z.string().optional()
+}).refine(
+  (data) => data.id !== undefined || data.task_code !== undefined,
+  { message: "Either id or task_code must be provided" }
+);
+
 export const TaskActiveSchema = z.object({
   repo: z.string().min(1).transform(normalizeRepo),
   status: z.enum(["in_progress", "pending"]).optional(),
@@ -280,6 +293,32 @@ export const TOOL_DEFINITIONS = [
         priority: { type: "number" }
       },
       required: ["repo", "task_code", "phase", "title", "status", "priority"]
+    }
+  },
+  {
+    name: "memory-detail",
+    title: "Memory Detail",
+    description: "Fetch full details of a specific memory by ID. Use this when you have a memory ID (e.g. from search results) and need to read the full content.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", format: "uuid", description: "Memory entry ID" }
+      },
+      required: ["id"]
+    }
+  },
+  {
+    name: "task-detail",
+    title: "Task Detail",
+    description: "Fetch full details of a specific task by ID or task code. Use this when you have a task ID or code and need to read the full description and comments.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "Repository name" },
+        id: { type: "string", format: "uuid", description: "Task ID (optional if task_code is provided)" },
+        task_code: { type: "string", description: "Task code (e.g. TASK-001) (optional if id is provided)" }
+      },
+      required: ["repo"]
     }
   },
   {

@@ -16,6 +16,7 @@ import { handleMemoryDelete } from "./tools/memory.delete.js";
 import { handleMemoryBulkDelete } from "./tools/memory.bulk-delete.js";
 import { handleMemoryRecap } from "./tools/memory.recap.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
+import { handleMemoryGet } from "./tools/memory.get.js";
 import {
   handleTaskList,
   handleTaskCreate,
@@ -25,6 +26,7 @@ import {
   handleTaskActive,
   handleTaskSearch,
 } from "./tools/task.manage.js";
+import { handleTaskGet } from "./tools/task.get.js";
 import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
 import { SamplingRequestHandler } from "./sampling.js";
 import { ElicitationRequestHandler } from "./elicitation.js";
@@ -141,6 +143,10 @@ export function createRouter(
         result = await handleMemoryBulkDelete(args, db, vectors, onProgress);
         break;
 
+      case "memory-detail":
+        result = await handleMemoryGet(args, db);
+        break;
+
       case "task-create":
         result = await handleTaskCreate(args, db);
         break;
@@ -170,6 +176,10 @@ export function createRouter(
 
       case "task-search":
         result = await handleTaskSearch(args, db);
+        break;
+
+      case "task-detail":
+        result = await handleTaskGet(args, db);
         break;
 
       case "task-bulk-manage":

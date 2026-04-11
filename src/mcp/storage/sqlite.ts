@@ -1207,6 +1207,16 @@ export class SQLiteStore {
     return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(id) } : null;
   }
 
+  getTaskByCode(repo: string, taskCode: string): any | null {
+    const row = this.db.prepare(`
+      SELECT t.*, d.task_code as depends_on_code 
+      FROM tasks t 
+      LEFT JOIN tasks d ON t.depends_on = d.id 
+      WHERE t.repo = ? AND t.task_code = ?
+    `).get(repo, taskCode) as any;
+    return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(row.id) } : null;
+  }
+
   isTaskCodeDuplicate(repo: string, task_code: string, excludeId?: string): boolean {
     let query = "SELECT COUNT(*) as count FROM tasks WHERE repo = ? AND task_code = ?";
     const params = [repo, task_code];
