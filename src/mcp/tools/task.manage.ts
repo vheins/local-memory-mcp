@@ -63,7 +63,7 @@ function buildTaskListSummary(
 
   parts.push(`Pending: ${stats?.todo ?? 0}.`);
   parts.push(`In progress: ${stats?.inProgress ?? 0}.`);
-  parts.push(`See structuredContent.tasks.`);
+  parts.push(`See structured to get Task ID.`);
 
   return parts.join(" ");
 }
@@ -199,6 +199,7 @@ export async function handleTaskList(
     summary,
     {
       contentSummary: summary,
+      includeSerializedStructuredContent: false,
       resourceLinks: [
         {
           uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
@@ -251,13 +252,13 @@ export async function handleTaskActive(
 
   const filterDesc = status ? `status=${status}` : `active (${resolvedStatus})`;
   const summary = rows.length > 0
-    ? `${rows.length} task(s) [${filterDesc}] in "${repo}". Use task://<id> for full details. Columns: ${COLUMNS.join(", ")}.`
+    ? `${rows.length} task(s) [${filterDesc}] in "${repo}". Use task://<id> for full details. See structured to get Task ID. Columns: ${COLUMNS.join(", ")}.`
     : `No ${filterDesc} tasks in "${repo}". Use task-list for broader search.`;
 
   return createMcpResponse(
     structured,
     summary,
-    { contentSummary: summary }
+    { contentSummary: summary, includeSerializedStructuredContent: false }
   );
 }
 
@@ -293,13 +294,13 @@ export async function handleTaskSearch(
 
   const statusLabel = status || "all";
   const summary = rows.length > 0
-    ? `${rows.length} task(s) matching "${query}" [status: ${statusLabel}] in "${repo}". Use task://<id> for full details. Columns: ${COLUMNS.join(", ")}.`
+    ? `${rows.length} task(s) matching "${query}" [status: ${statusLabel}] in "${repo}". Use task://<id> for full details. See structured to get Task ID. Columns: ${COLUMNS.join(", ")}.`
     : `No tasks matching "${query}" [status: ${statusLabel}] in "${repo}".`;
 
   return createMcpResponse(
     structured,
     summary,
-    { contentSummary: summary }
+    { contentSummary: summary, includeSerializedStructuredContent: false }
   );
 }
 

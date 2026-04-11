@@ -154,6 +154,8 @@ export async function handleMemorySearch(
     {
       query: validated.query,
       results: results as any,
+      contentSummary: `Found ${results.length} memories matching "${validated.query}" in repo "${validated.repo}". See structured to get ID.`,
+      includeSerializedStructuredContent: false,
       structuredContentPathHint: "results",
       resourceLinks: [
         {
