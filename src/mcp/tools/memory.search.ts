@@ -177,7 +177,7 @@ export async function handleMemorySearch(
     contentSummary,
     {
       contentSummary,
-      includeSerializedStructuredContent: true,
+      includeSerializedStructuredContent: false,
     }
   );
 }

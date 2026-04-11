@@ -203,7 +203,7 @@ export async function handleTaskList(
     summary,
     {
       contentSummary: summary,
-      includeSerializedStructuredContent: true,
+      includeSerializedStructuredContent: false,
     }
   );
 }
@@ -252,7 +252,7 @@ export async function handleTaskActive(
   return createMcpResponse(
     structured,
     summary,
-    { contentSummary: summary, includeSerializedStructuredContent: true }
+    { contentSummary: summary, includeSerializedStructuredContent: false }
   );
 }
 
@@ -295,7 +295,7 @@ export async function handleTaskSearch(
   return createMcpResponse(
     structured,
     summary,
-    { contentSummary: summary, includeSerializedStructuredContent: true }
+    { contentSummary: summary, includeSerializedStructuredContent: false }
   );
 }
 

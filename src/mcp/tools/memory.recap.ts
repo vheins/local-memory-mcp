@@ -63,7 +63,7 @@ export async function handleMemoryRecap(
     contentSummary,
     {
       contentSummary,
-      includeSerializedStructuredContent: true,
+      includeSerializedStructuredContent: false,
     }
   );
 }
