@@ -369,4 +369,90 @@ describe("MCP Local Memory - Bulk Task Management", () => {
     expect(started?.finished_at).toBeNull();
     expect(done?.finished_at).toBeTruthy();
   });
+
+  it("should bulk update tasks from pending to completed", async () => {
+    // Create 3 pending tasks
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          { task_code: "UP-1", title: "Task 1", description: "D", phase: "p", status: "pending", est_tokens: 10 },
+          { task_code: "UP-2", title: "Task 2", description: "D", phase: "p", status: "pending", est_tokens: 10 },
+          { task_code: "UP-3", title: "Task 3", description: "D", phase: "p", status: "pending", est_tokens: 10 }
+        ]
+      }
+    });
+
+    const tasks = db.getTasksByRepo(REPO);
+    const ids = tasks.map(t => t.id);
+
+    // Bulk update to completed
+    const upRes = await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_update",
+        repo: REPO,
+        ids: ids,
+        updates: {
+          status: "completed",
+          comment: "Bulk completion test",
+          est_tokens: 500
+        }
+      }
+    });
+
+    expect(upRes.isError).toBe(false);
+    expect(getTextContent(upRes)).toContain(`Updated 3 tasks in repo "${REPO}" to status "completed".`);
+
+    const updatedTasks = db.getTasksByRepo(REPO);
+    updatedTasks.forEach(t => {
+      expect(t.status).toBe("completed");
+      expect(t.finished_at).toBeTruthy();
+      expect(t.est_tokens).toBe(500);
+    });
+
+    // Verify task archive memory created
+    const memories = db.searchByRepo(REPO);
+    const archMemories = memories.filter(m => m.type === "task_archive");
+    expect(archMemories.length).toBe(3);
+    
+    // Verify comments created
+    const comments = db.getTaskCommentsByTaskId(ids[0]);
+    expect(comments.length).toBe(1);
+    expect(comments[0].comment).toBe("Bulk completion test");
+    expect(comments[0].next_status).toBe("completed");
+  });
+
+  it("should bulk update statuses and record in-progress timestamps", async () => {
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_create",
+        repo: REPO,
+        tasks: [
+          { task_code: "IP-1", title: "Task 1", description: "D", phase: "p", status: "pending" }
+        ]
+      }
+    });
+
+    const taskId = db.getTasksByRepo(REPO)[0].id;
+
+    await router("tools/call", {
+      name: "task-bulk-manage",
+      arguments: {
+        action: "bulk_update",
+        repo: REPO,
+        ids: [taskId],
+        updates: {
+          status: "in_progress"
+        }
+      }
+    });
+
+    const task = db.getTaskById(taskId);
+    expect(task?.status).toBe("in_progress");
+    expect(task?.in_progress_at).toBeTruthy();
+  });
 });

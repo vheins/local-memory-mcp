@@ -161,7 +161,7 @@ export const TaskSearchSchema = z.object({
 });
 
 export const TaskBulkManageSchema = z.object({
-  action: z.enum(["bulk_create", "bulk_delete"]),
+  action: z.enum(["bulk_create", "bulk_delete", "bulk_update"]),
   repo: z.string().min(1).transform(normalizeRepo),
   tasks: z.array(z.object({
     task_code: z.string().min(1),
@@ -179,10 +179,15 @@ export const TaskBulkManageSchema = z.object({
     depends_on: z.string().uuid().optional(),
     est_tokens: z.number().int().min(0).optional()
   })).min(1).optional(),
-  ids: z.array(z.string().uuid()).min(1).optional()
+  ids: z.array(z.string().uuid()).min(1).optional(),
+  updates: z.object({
+    status: TaskStatusSchema.optional(),
+    comment: z.string().optional(),
+    est_tokens: z.number().optional()
+  }).optional()
 }).refine(
-  (data) => (data.action === "bulk_create" && data.tasks) || (data.action === "bulk_delete" && data.ids),
-  { message: "tasks is required for bulk_create, ids is required for bulk_delete" }
+  (data) => (data.action === "bulk_create" && data.tasks) || (data.action === "bulk_delete" && data.ids) || (data.action === "bulk_update" && data.ids && data.updates),
+  { message: "tasks is required for bulk_create, ids is required for bulk_delete or bulk_update, updates is required for bulk_update" }
 );
 
 export const TaskDeleteSchema = z.object({
@@ -934,7 +939,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         action: {
           type: "string",
-          enum: ["bulk_create", "bulk_delete"],
+          enum: ["bulk_create", "bulk_delete", "bulk_update"],
           description: "Action to perform in bulk"
         },
         repo: {
@@ -969,7 +974,15 @@ export const TOOL_DEFINITIONS = [
           type: "array",
           items: { type: "string", format: "uuid" },
           minItems: 1,
-          description: "Task IDs to delete (for bulk_delete)"
+          description: "Task IDs to delete or update"
+        },
+        updates: {
+          type: "object",
+          properties: {
+            status: { type: "string", enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"] },
+            comment: { type: "string" },
+            est_tokens: { type: "number", minimum: 0 }
+          }
         }
       },
       required: ["action", "repo"]
@@ -982,6 +995,7 @@ export const TOOL_DEFINITIONS = [
         repo: { type: "string" },
         createdCount: { type: "number" },
         deletedCount: { type: "number" },
+        updatedCount: { type: "number" },
         taskCodes: {
           type: "array",
           items: { type: "string" }

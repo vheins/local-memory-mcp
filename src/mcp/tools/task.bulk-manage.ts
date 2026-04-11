@@ -172,6 +172,91 @@ export async function handleTaskBulkManage(
         }
       );
     }
+    case "bulk_update": {
+      if (!ids) throw new Error("ids array is required for bulk_update");
+      if (!parsed.updates) throw new Error("updates is required for bulk_update");
+      
+      const { status, comment, est_tokens } = parsed.updates;
+      const total = ids.length;
+      let progress = 0;
+      let updatedCount = 0;
+      const now = new Date().toISOString();
+
+      for (const id of ids) {
+        if (onProgress) {
+          onProgress(progress, total);
+        }
+        
+        const existingTask = storage.getTaskById(id);
+        if (existingTask) {
+          const updates: any = {};
+          if (status) {
+            updates.status = status;
+            if (status === "completed") {
+              updates.finished_at = now;
+              if (est_tokens !== undefined) updates.est_tokens = est_tokens;
+            } else if (status === "canceled") {
+              updates.canceled_at = now;
+            } else if (status === "in_progress" && existingTask.status !== "in_progress") {
+              updates.in_progress_at = now;
+            }
+          }
+
+          storage.updateTask(id, updates);
+
+          if (comment || status) {
+            storage.insertTaskComment({
+              id: randomUUID(),
+              task_id: id,
+              repo,
+              comment: comment || `Bulk status update to ${status}`,
+              agent: "system",
+              role: "system",
+              model: "system",
+              previous_status: status ? existingTask.status : null,
+              next_status: status || null,
+              created_at: now
+            });
+          }
+
+          if (status === "completed" && existingTask.status !== "completed") {
+            await archiveTaskToMemory(id, repo, storage, vectors);
+          }
+          updatedCount++;
+        }
+        progress++;
+      }
+
+      if (onProgress) {
+        onProgress(progress, total);
+      }
+
+      return createMcpResponse(
+        {
+          success: true,
+          action,
+          repo,
+          updatedCount,
+          ids,
+        },
+        `Updated ${updatedCount} tasks in repo "${repo}" to status "${status}".`,
+        {
+          structuredContentPathHint: "ids",
+          resourceLinks: [
+            {
+              uri: `tasks://current?repo=${encodeURIComponent(repo)}`,
+              name: `Current Tasks (${repo})`,
+              description: "Current task snapshot for the repository after bulk update",
+              mimeType: "application/json",
+              annotations: {
+                audience: ["assistant"],
+                priority: 0.7,
+              },
+            },
+          ],
+        }
+      );
+    }
     default:
       throw new Error(`Unsupported bulk action: ${action}`);
   }
