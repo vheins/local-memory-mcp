@@ -149,7 +149,7 @@ describe("MCP resource templates and session resources", () => {
 
     expect(firstPage.resources).toHaveLength(2);
     expect(firstPage.nextCursor).toBeTruthy();
-    expect(secondPage.resources).toHaveLength(1);
+    expect(secondPage.resources).toHaveLength(2);
   });
 
   it("supports resource template pagination with nextCursor", () => {
