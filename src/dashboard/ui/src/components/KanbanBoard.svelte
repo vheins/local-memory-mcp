@@ -11,6 +11,10 @@
 
   const kanban = createKanbanHandler();
   const kanbanState = { subscribe: kanban.subscribe };
+
+  export function loadTasks(repo: string) {
+    kanban.loadTasks(repo, $taskSearch);
+  }
 </script>
 
 <div>

@@ -159,7 +159,6 @@ export async function handleMemorySearch(
         {
           uri: `memory://index?repo=${encodeURIComponent(validated.repo)}`,
           name: `Memory Index (${validated.repo})`,
-          description: "Repository memory index",
           mimeType: "application/json",
           annotations: {
             audience: ["assistant"],

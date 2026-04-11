@@ -142,7 +142,6 @@ export function createMcpResponse(
         type: "resource_link",
         uri: `memory://${result.id}`,
         name: title,
-        description: `Memory ${result.type} in repo ${result.scope?.repo ?? "unknown"}`,
         mimeType: "application/json",
         annotations: {
           audience: ["assistant"],
@@ -159,7 +158,6 @@ export function createMcpResponse(
       type: "resource_link",
       uri: link.uri,
       name: link.name,
-      description: link.description,
       mimeType: link.mimeType,
       annotations: link.annotations,
     });
