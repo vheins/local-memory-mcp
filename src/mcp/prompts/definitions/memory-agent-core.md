@@ -24,7 +24,8 @@ Memory Usage Policy:
 Before generating code:
 1. Search memory using 'current_file_path' and 'current_tags' (e.g., ['filament', 'react']) for maximum relevance.
 2. Evaluate results based on 'type' (decision, pattern, mistake).
-3. Use memory ONLY if clearly relevant. Prefer fewer, stronger memories over many weak ones.
+3. If more context is needed than provided in search results, fetch the full content via `local-memory-mcp` MCP tools `memory-detail`.
+4. Use memory ONLY if clearly relevant. Prefer fewer, stronger memories over many weak ones.
 
 Auto-Memory Creation Policy:
 You MAY store memory ONLY if:

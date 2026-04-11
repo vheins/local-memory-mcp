@@ -20,8 +20,9 @@ Guidelines for Task Management:
    - Do NOT use task-list as a replacement for task-active at session start.
    - Coordinate: If a task is already 'in_progress', do not attempt to work on it unless specifically asked to collaborate.
 
-3. Resource:
-   - You can also read `tasks://current` for a filtered view of active tasks for the current repository.
+3. Detail Tools:
+   - Use `local-memory-mcp` MCP tools `task-detail` to fetch full task details (including comments and history) by ID or task_code.
+   - Use `local-memory-mcp` MCP tools `memory-detail` to fetch full memory content by ID.
 
 4. Workflow Integration:
    - Plan first: Create tasks for the entire lifecycle (Research → Strategy → Execution → Validation).
