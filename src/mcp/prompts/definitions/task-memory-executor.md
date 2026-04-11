@@ -21,7 +21,7 @@ Please follow this strict execution flow:
 1. **Identify Repository**: Determine the current repository name (e.g., from git config or workspace context).
 2. **Fetch Tasks**: Call `local-memory-mcp` MCP tools `task-list` for the identified repository for statuses 'pending' and 'in_progress'.
 3. **Filter Stale**: Identify 'in_progress' tasks that are **stale** (stale is defined as > 30 Minutes without update, often because an agent stopped or crashed).
-4. **Task Execution Loop**: You MUST process tasks EXACTLY ONE AT A TIME (STRICT) unless your agent environment supports sub-agent orchestration and parallel execution. If sub-agent features are unavailable, DO NOT update multiple tasks to 'in_progress' simultaneously. For each task you select:
+4. **Task Execution Loop**: You MUST process tasks EXACTLY ONE AT A TIME (STRICT). You are STRICTLY FORBIDDEN from spinning up parallel sub-agents or using parallel execution. For each task you select:
     - **Start**: Call `local-memory-mcp` MCP tools `task-update` to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
     - **Execute**: Perform the work described in the task title and description.
     - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.
