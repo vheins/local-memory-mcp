@@ -47,6 +47,18 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
         priority: 1,
         lastModified: new Date().toISOString(),
       },
+    },
+    {
+      uri: "task://{id}",
+      name: "Task Detail",
+      title: "Task Detail",
+      description: "Full content and comments for a specific task UUID",
+      mimeType: "application/json",
+      annotations: {
+        audience: ["assistant"],
+        priority: 0.8,
+        lastModified: new Date().toISOString(),
+      },
     }
   ];
 
@@ -321,6 +333,33 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
             audience: ["assistant"],
             priority: 0.65,
             lastModified: deriveLastModifiedFromCollection(results.map((entry: any) => entry.updated_at || entry.created_at)),
+          },
+        }
+      ]
+    };
+  }
+
+  const taskIdMatch = uri.match(/^task:\/\/([0-9a-f-]{36})$/i);
+  if (taskIdMatch) {
+    const id = taskIdMatch[1];
+    const task = db.getTaskById(id);
+    
+    if (!task) {
+      throw resourceNotFound(`Task with ID ${id} not found.`, uri);
+    }
+
+    const payload = JSON.stringify(task, null, 2);
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: "application/json",
+          text: payload,
+          size: Buffer.byteLength(payload, "utf8"),
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.8,
+            lastModified: task.updated_at || task.created_at,
           },
         }
       ]
