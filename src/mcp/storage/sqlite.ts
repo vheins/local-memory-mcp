@@ -746,26 +746,39 @@ export class SQLiteStore {
 
   listRepoNavigation(): Array<{ repo: string; memory_count: number; last_updated_at: string | null; pending_count: number; in_progress_count: number; blocked_count: number }> {
     return this.db.prepare(`
-      SELECT
-        m.repo,
-        COUNT(m.id) AS memory_count,
-        MAX(COALESCE(m.updated_at, m.created_at)) AS last_updated_at,
-        COALESCE(t.pending_count, 0) AS pending_count,
-        COALESCE(t.in_progress_count, 0) AS in_progress_count,
-        COALESCE(t.blocked_count, 0) AS blocked_count,
-        COALESCE(t.backlog_count, 0) AS backlog_count
-      FROM memories m
-      LEFT JOIN (
-        SELECT repo,
-          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
-          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS in_progress_count,
-          SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) AS blocked_count,
-          SUM(CASE WHEN status = 'backlog' THEN 1 ELSE 0 END) AS backlog_count
+      SELECT 
+        repo,
+        SUM(memory_count) as memory_count,
+        MAX(last_updated_at) as last_updated_at,
+        SUM(pending_count) as pending_count,
+        SUM(in_progress_count) as in_progress_count,
+        SUM(blocked_count) as blocked_count,
+        SUM(backlog_count) as backlog_count
+      FROM (
+        SELECT 
+          repo,
+          COUNT(id) as memory_count,
+          MAX(COALESCE(updated_at, created_at)) as last_updated_at,
+          0 as pending_count,
+          0 as in_progress_count,
+          0 as blocked_count,
+          0 as backlog_count
+        FROM memories
+        GROUP BY repo
+        UNION ALL
+        SELECT 
+          repo,
+          0 as memory_count,
+          MAX(COALESCE(updated_at, created_at)) as last_updated_at,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_count,
+          SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) as blocked_count,
+          SUM(CASE WHEN status = 'backlog' THEN 1 ELSE 0 END) as backlog_count
         FROM tasks
         GROUP BY repo
-      ) t ON t.repo = m.repo
-      GROUP BY m.repo
-      ORDER BY last_updated_at DESC, m.repo ASC
+      )
+      GROUP BY repo
+      ORDER BY last_updated_at DESC, repo ASC
     `).all() as any[];
   }
 
