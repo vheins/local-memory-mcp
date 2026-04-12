@@ -2,7 +2,7 @@ import express from "express";
 import { randomUUID } from "crypto";
 import { db } from "../lib/context.js";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
-import type { Task, TaskComment } from "../../mcp/types/index.js";
+import type { Task } from "../../mcp/types/index.js";
 import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
 
 export class TasksController {
@@ -109,6 +109,8 @@ export class TasksController {
 					agent: "dashboard",
 					role: "user",
 					model: "web-ui",
+					previous_status: null,
+					next_status: null,
 					created_at: new Date().toISOString()
 				});
 			}

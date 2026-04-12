@@ -5,6 +5,8 @@ import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 import { getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
 
+import { TaskRow } from "../types/index";
+
 function getTextContent(result: McpResponse) {
 	return getPrimaryTextContent(result) || (result.structuredContent as { text?: string })?.text || "";
 }
@@ -105,7 +107,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO }
 		});
-		const defaultTasks = (defaultRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const defaultTasks = (defaultRes.structuredContent as { tasks: { rows: TaskRow[] } }).tasks;
 		expect(defaultTasks.rows.length).toBe(15);
 
 		// Test explicit limit
@@ -113,7 +115,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, limit: 5 }
 		});
-		const limitedTasks = (limitRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const limitedTasks = (limitRes.structuredContent as { tasks: { rows: TaskRow[] } }).tasks;
 		expect(limitedTasks.rows.length).toBe(5);
 
 		// Test offset (last page)
@@ -121,7 +123,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, limit: 15, offset: 15 }
 		});
-		const offsetTasks = (offsetRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const offsetTasks = (offsetRes.structuredContent as { tasks: { rows: TaskRow[] } }).tasks;
 		expect(offsetTasks.rows.length).toBe(5); // 20 total - 15 offset = 5 remaining
 	});
 

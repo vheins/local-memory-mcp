@@ -76,6 +76,8 @@ export function createMcpResponse(
 		contentSummary,
 		includeSerializedStructuredContent = "auto"
 	} = options || {};
+	// includeSerializedStructuredContent is reserved for future use in protocol negotiation
+	void includeSerializedStructuredContent;
 
 	// Pruning logic to save tokens for the agent
 	let finalData = data;

@@ -2,15 +2,9 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fc from "fast-check";
+import { MockMemory } from "../types/index";
 
 describe("Property 12: Dashboard filter logic correctness", () => {
-	interface MockMemory {
-		id: string;
-		type: string;
-		content: string;
-		importance: number;
-		hit_count?: number;
-	}
 
 	// Filter function (same as in dashboard)
 	function applyFilters(
@@ -55,7 +49,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 					})
 				),
 				fc.string({ minLength: 1, maxLength: 20 }),
-				(memories, query) => {
+				(memories: MockMemory[], query: string) => {
 					if (memories.length === 0) return true;
 
 					const filtered = applyFilters(memories, query, "", 0, 5);
@@ -88,7 +82,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 					})
 				),
 				fc.constantFrom("", "code_fact", "decision", "mistake", "pattern", "file_claim"),
-				(memories, typeFilter) => {
+				(memories: MockMemory[], typeFilter: string) => {
 					const filtered = applyFilters(memories, "", typeFilter, 0, 5);
 
 					if (typeFilter === "") {
@@ -119,7 +113,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 				),
 				fc.integer({ min: 0, max: 5 }),
 				fc.integer({ min: 0, max: 5 }),
-				(memories, minImp, maxImp) => {
+				(memories: MockMemory[], minImp: number, maxImp: number) => {
 					const safeMin = Math.min(minImp, maxImp);
 					const safeMax = Math.max(minImp, maxImp);
 
@@ -150,7 +144,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 				fc.constantFrom("", "code_fact", "decision"),
 				fc.integer({ min: 1, max: 3 }),
 				fc.integer({ min: 3, max: 5 }),
-				(memories, search, type, minImp, maxImp) => {
+				(memories: MockMemory[], search: string, type: string, minImp: number, maxImp: number) => {
 					const safeMin = Math.min(minImp, maxImp);
 					const safeMax = Math.max(minImp, maxImp);
 

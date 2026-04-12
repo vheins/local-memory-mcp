@@ -1,6 +1,7 @@
 import { BaseEntity } from "../storage/base";
 import { MemoryEntry, MemoryRow, MemoryType, VectorStore } from "../types/index";
 import { CountResult, TypeCountResult, MemoryIdVector } from "../types/common";
+import { logger } from "../utils/logger";
 
 /**
  * Handles all memory-related database operations.
@@ -173,7 +174,11 @@ export class MemoryEntity extends BaseEntity {
 				const rows = this.db.prepare(sql).all(...params) as MemoryRow[];
 				return rows.map((row) => this.rowToMemoryEntry(row));
 			} catch (e) {
-				// Fallback to LIKE if FTS5 fails or is not initialized
+				logger.warn("FTS5 similarity search failed, falling back to LIKE", {
+					error: e instanceof Error ? e.message : String(e),
+					repo,
+					query
+				});
 			}
 		}
 

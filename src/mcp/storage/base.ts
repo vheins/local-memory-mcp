@@ -2,10 +2,8 @@ import Database from "better-sqlite3";
 import { tokenize } from "../utils/normalize";
 import {
 	MemoryEntry,
-	MemoryRow,
 	MemoryType,
 	Task,
-	TaskRow,
 	TaskStatus,
 	TaskPriority
 } from "../types/index";
@@ -32,65 +30,65 @@ export abstract class BaseEntity {
 	/**
 	 * Mapping helper for MemoryEntry
 	 */
-	protected rowToMemoryEntry(row: any): MemoryEntry {
-		const r = row as any;
+	protected rowToMemoryEntry(row: unknown): MemoryEntry {
+		const r = row as Record<string, unknown>;
 		return {
-			id: r.id,
+			id: r.id as string,
 			type: r.type as MemoryType,
-			title: r.title || "Untitled",
-			content: r.content,
-			importance: r.importance,
-			agent: r.agent || "unknown",
-			role: r.role || "unknown",
-			model: r.model || "unknown",
+			title: (r.title as string) || "Untitled",
+			content: r.content as string,
+			importance: r.importance as number,
+			agent: (r.agent as string) || "unknown",
+			role: (r.role as string) || "unknown",
+			model: (r.model as string) || "unknown",
 			scope: {
-				repo: r.repo,
-				folder: r.folder || undefined,
-				language: r.language || undefined
+				repo: r.repo as string,
+				folder: (r.folder as string) || undefined,
+				language: (r.language as string) || undefined
 			},
-			created_at: r.created_at,
-			updated_at: r.updated_at,
-			completed_at: r.completed_at || null,
-			hit_count: r.hit_count ?? 0,
-			recall_count: r.recall_count ?? 0,
-			last_used_at: r.last_used_at ?? null,
-			expires_at: r.expires_at ?? null,
-			supersedes: r.supersedes ?? null,
+			created_at: r.created_at as string,
+			updated_at: r.updated_at as string,
+			completed_at: (r.completed_at as string) || null,
+			hit_count: (r.hit_count as number) ?? 0,
+			recall_count: (r.recall_count as number) ?? 0,
+			last_used_at: (r.last_used_at as string) ?? null,
+			expires_at: (r.expires_at as string) ?? null,
+			supersedes: (r.supersedes as string) ?? null,
 			status: (r.status as "active" | "archived") || "active",
 			is_global: r.is_global === 1,
-			tags: this.safeJSONParse<string[]>(r.tags, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata, {})
+			tags: this.safeJSONParse<string[]>(r.tags as string, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {})
 		};
 	}
 
 	/**
 	 * Mapping helper for Task
 	 */
-	protected rowToTask(row: any): Task {
-		const r = row as any;
+	protected rowToTask(row: unknown): Task {
+		const r = row as Record<string, unknown>;
 		return {
-			id: r.id,
-			repo: r.repo,
-			task_code: r.task_code,
-			phase: r.phase || "",
-			title: r.title,
-			description: r.description || null,
+			id: r.id as string,
+			repo: r.repo as string,
+			task_code: r.task_code as string,
+			phase: (r.phase as string) || "",
+			title: r.title as string,
+			description: (r.description as string) || null,
 			status: (r.status as TaskStatus) || "backlog",
 			priority: (r.priority as TaskPriority) || 3,
-			agent: r.agent || "unknown",
-			role: r.role || "unknown",
-			doc_path: r.doc_path || null,
-			created_at: r.created_at,
-			updated_at: r.updated_at,
-			in_progress_at: r.in_progress_at || null,
-			finished_at: r.finished_at || null,
-			canceled_at: r.canceled_at || null,
-			est_tokens: r.est_tokens || 0,
-			tags: this.safeJSONParse<string[]>(r.tags, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata, {}),
-			parent_id: r.parent_id || null,
-			depends_on: r.depends_on || null,
-			comments_count: r.comments_count || 0
+			agent: (r.agent as string) || "unknown",
+			role: (r.role as string) || "unknown",
+			doc_path: (r.doc_path as string) || null,
+			created_at: r.created_at as string,
+			updated_at: r.updated_at as string,
+			in_progress_at: (r.in_progress_at as string) || null,
+			finished_at: (r.finished_at as string) || null,
+			canceled_at: (r.canceled_at as string) || null,
+			est_tokens: (r.est_tokens as number) || 0,
+			tags: this.safeJSONParse<string[]>(r.tags as string, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {}),
+			parent_id: (r.parent_id as string) || null,
+			depends_on: (r.depends_on as string) || null,
+			comments_count: (r.comments_count as number) || 0
 		};
 	}
 
