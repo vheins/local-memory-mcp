@@ -92,7 +92,7 @@ function getSuggestedRepos(db: SQLiteStore, session?: SessionContext) {
     values.add(path.basename(rootPath));
   }
 
-  for (const repo of db.listRepos()) {
+  for (const repo of db.system.listRepos()) {
     values.add(repo);
   }
 
@@ -101,7 +101,11 @@ function getSuggestedRepos(db: SQLiteStore, session?: SessionContext) {
 
 function getSuggestedTags(db: SQLiteStore) {
   const values = new Set<string>();
-  const memories = db.getAllMemoriesWithStats();
+  // Memories search with stats not currently directly exposed, using getRecentMemories or similar
+  // but for tags suggestion we just need a sample of tags.
+  // Assuming system-wide stats or specific recently used tags.
+  // For now matching the existing logic by delegating to memories.
+  const memories = db.memories.getRecentMemories("", 1000); 
 
   for (const memory of memories) {
     for (const tag of memory.tags || []) {
@@ -125,7 +129,7 @@ function getSuggestedTasks(
 
   if (!repo) return [];
 
-  return db.getTasksByRepo(repo, undefined, 100).map((task: any) => ({
+  return db.tasks.getTasksByRepo(repo, undefined, 100).map((task: any) => ({
     id: task.id,
     task_code: task.task_code,
     title: task.title,

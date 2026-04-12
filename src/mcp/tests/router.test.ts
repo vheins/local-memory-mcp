@@ -17,39 +17,48 @@ import path from "node:path";
 describe("createRouter() — Property 11: uses provided storage", () => {
   function makeMockDb(): SQLiteStore {
     return {
-      insert: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      getById: vi.fn().mockReturnValue(null),
-      searchByRepo: vi.fn().mockReturnValue([]),
-      searchBySimilarity: vi.fn().mockReturnValue([]),
-      getRecentMemories: vi.fn().mockReturnValue([]),
-      getTotalCount: vi.fn().mockReturnValue(0),
-      getSummary: vi.fn().mockReturnValue(null),
-      upsertSummary: vi.fn(),
-      listRepos: vi.fn().mockReturnValue([]),
-      listRecent: vi.fn().mockReturnValue([]),
-      incrementHitCount: vi.fn(),
-      incrementHitCounts: vi.fn(),
-      incrementRecallCount: vi.fn(),
-      getStats: vi.fn().mockReturnValue({ total: 0, byType: {}, unused: 0 }),
-      getAllMemoriesWithStats: vi.fn().mockReturnValue([]),
-      upsertVectorEmbedding: vi.fn(),
-      getVectorEmbedding: vi.fn().mockReturnValue(null),
-      archiveExpiredMemories: vi.fn().mockReturnValue(0),
-      logQuery: vi.fn(),
-      getRecentQueries: vi.fn().mockReturnValue([]),
-      logAction: vi.fn(),
-      checkConflicts: vi.fn().mockResolvedValue(null),
-      getTasksByRepo: vi.fn().mockReturnValue([]),
-      getTasksByMultipleStatuses: vi.fn().mockReturnValue([]),
-      getTaskStats: vi.fn().mockReturnValue({ todo: 0 }),
-      isTaskCodeDuplicate: vi.fn().mockReturnValue(false),
-      insertTask: vi.fn(),
-      updateTask: vi.fn(),
-      deleteTask: vi.fn(),
-      getTaskById: vi.fn().mockReturnValue(null),
+      memories: {
+        insert: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+        getById: vi.fn().mockReturnValue(null),
+        searchByRepo: vi.fn().mockReturnValue([]),
+        searchBySimilarity: vi.fn().mockReturnValue([]),
+        getRecentMemories: vi.fn().mockReturnValue([]),
+        getTotalCount: vi.fn().mockReturnValue(0),
+        getSummary: vi.fn().mockReturnValue(null),
+        upsertSummary: vi.fn(),
+        incrementHitCount: vi.fn(),
+        incrementHitCounts: vi.fn(),
+        incrementRecallCount: vi.fn(),
+        archiveExpiredMemories: vi.fn().mockReturnValue(0),
+        upsertVectorEmbedding: vi.fn(),
+        checkConflicts: vi.fn().mockResolvedValue(null),
+        getStats: vi.fn().mockReturnValue({ total: 0, byType: {} }),
+      },
+      tasks: {
+        getTasksByRepo: vi.fn().mockReturnValue([]),
+        getTasksByMultipleStatuses: vi.fn().mockReturnValue([]),
+        getTaskStats: vi.fn().mockReturnValue({ todo: 0 }),
+        isTaskCodeDuplicate: vi.fn().mockReturnValue(false),
+        insertTask: vi.fn(),
+        updateTask: vi.fn(),
+        deleteTask: vi.fn(),
+        getTaskById: vi.fn().mockReturnValue(null),
+      },
+      actions: {
+        logAction: vi.fn(),
+      },
+      system: {
+        listRepos: vi.fn().mockReturnValue([]),
+        getStats: vi.fn().mockReturnValue({ total: 0, byType: {}, unused: 0 }),
+      },
+      summaries: {
+        getSummary: vi.fn().mockReturnValue(null),
+        upsertSummary: vi.fn(),
+      },
       close: vi.fn(),
+      getDbPath: vi.fn().mockReturnValue(":memory:"),
     } as unknown as SQLiteStore;
   }
 
@@ -71,8 +80,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       arguments: { repo: "test-repo", limit: 5 },
     });
 
-    expect(mockDb.getRecentMemories).toHaveBeenCalledWith("test-repo", 5, 0, false, ["task_archive"]);
-    expect(mockDb.getTotalCount).toHaveBeenCalledWith("test-repo", false, ["task_archive"]);
+    expect(mockDb.memories.getRecentMemories).toHaveBeenCalledWith("test-repo", 5, 0, false, ["task_archive"]);
+    expect(mockDb.memories.getTotalCount).toHaveBeenCalledWith("test-repo", false, ["task_archive"]);
   });
 
   it("memory-search calls searchBySimilarity on the provided mock db", async () => {
@@ -85,9 +94,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       arguments: { query: "test query", repo: "test-repo", limit: 5 },
     });
 
-    expect(mockDb.searchBySimilarity).toHaveBeenCalled();
+    expect(mockDb.memories.searchBySimilarity).toHaveBeenCalled();
     // Verify the first argument to searchBySimilarity contains the repo
-    const callArgs = (mockDb.searchBySimilarity as ReturnType<typeof vi.fn>).mock.calls[0];
+    const callArgs = (mockDb.memories.searchBySimilarity as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(callArgs[1]).toBe("test-repo");
   });
 
@@ -107,8 +116,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
           });
 
           // The mock db methods must have been called (not a real DB)
-          expect(mockDb.getRecentMemories).toHaveBeenCalled();
-          expect(mockDb.getTotalCount).toHaveBeenCalled();
+          expect(mockDb.memories.getRecentMemories).toHaveBeenCalled();
+          expect(mockDb.memories.getTotalCount).toHaveBeenCalled();
         }
       ),
       { numRuns: 100 }
@@ -135,7 +144,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
             arguments: { type, content, importance, title, scope: { repo }, agent: "test-agent", model: "test-model" },
           });
 
-          expect(mockDb.insert).toHaveBeenCalled();
+          expect(mockDb.memories.insert).toHaveBeenCalled();
         }
       ),
       { numRuns: 100 }
@@ -200,7 +209,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
   it("supports completion for resource template repo arguments", async () => {
     const mockDb = makeMockDb();
-    (mockDb.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["alpha-repo", "beta-repo"]);
+    (mockDb.system.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["alpha-repo", "beta-repo"]);
     const mockVectors = makeMockVectors();
     const router = createRouter(mockDb, mockVectors);
 
@@ -259,14 +268,14 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
   it("supports completion for prompt task_id arguments using repo context", async () => {
     const mockDb = makeMockDb();
-    (mockDb.getTasksByRepo as ReturnType<typeof vi.fn>).mockReturnValue([
+    const mockVectors = makeMockVectors();
+    (mockDb.tasks.getTasksByRepo as ReturnType<typeof vi.fn>).mockReturnValue([
       {
         id: "123e4567-e89b-12d3-a456-426614174001",
         task_code: "TASK-123",
         title: "Review architecture",
       },
     ]);
-    const mockVectors = makeMockVectors();
     const router = createRouter(mockDb, mockVectors);
 
     const result = await router("completion/complete", {
@@ -285,7 +294,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
       },
     });
 
-    expect(mockDb.getTasksByRepo).toHaveBeenCalledWith("test-repo", undefined, 100);
+    expect(mockDb.tasks.getTasksByRepo).toHaveBeenCalledWith("test-repo", undefined, 100);
     expect(result.completion.values).toContain("123e4567-e89b-12d3-a456-426614174001");
   });
 
@@ -384,7 +393,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
   it("returns a dynamic prompt with embedded resource messages", async () => {
     const mockDb = makeMockDb();
-    (mockDb.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["repo-alpha"]);
+    (mockDb.system.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["repo-alpha"]);
     const mockVectors = makeMockVectors();
     const router = createRouter(mockDb, mockVectors);
 
@@ -534,7 +543,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     });
 
     expect(elicit).toHaveBeenCalledTimes(1);
-    expect(mockDb.insertTask).toHaveBeenCalledTimes(1);
+    expect(mockDb.tasks.insertTask).toHaveBeenCalledTimes(1);
     expect((result as any).structuredContent.repo).toBe("interactive-repo");
     expect((result as any).structuredContent.task_code).toBe("TASK-101");
   });
@@ -542,7 +551,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
   it("returns resource links in memory-search results", async () => {
     const mockDb = makeMockDb();
     const mockVectors = makeMockVectors();
-    (mockDb.searchBySimilarity as ReturnType<typeof vi.fn>).mockReturnValue([
+    (mockDb.memories.searchBySimilarity as ReturnType<typeof vi.fn>).mockReturnValue([
       {
         id: "123e4567-e89b-12d3-a456-426614174000",
         type: "decision",

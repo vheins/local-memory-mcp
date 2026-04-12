@@ -36,7 +36,59 @@ Resources provide read-only access to specialized data views and global knowledg
 - **URI**: `action://{id}`
     - **Description**: Direct access to a specific action audit log entry by its integer ID.
 
-## 2. Prompts
+## 2. Tools (Methods)
+Tools are the primary operational interface for agents, allowing for structured interaction with the memory and task systems.
+
+### Discovery & Control
+- **Method**: `tools/list`
+    - **Description**: Returns all registered tool definitions, including their standard MCP `inputSchema`. Supports pagination via `limit` and `cursor`.
+- **Method**: `tools/call`
+    - **Description**: The core gateway for all modifications and complex queries. It accepts a tool `name` and an `arguments` object.
+- **Method**: `completion/complete`
+    - **Description**: Provides completion suggestions for tool arguments, such as repository names or task codes.
+
+### Knowledge Management (Memory)
+- **Tool**: `memory-synthesize`
+    - **Description**: Advanced reasoning tool that uses client sampling to synthesize a grounded answer from local memory and tasks.
+- **Tool**: `memory-store`
+    - **Description**: Store a new human-auditable knowledge entry. Supported types: `code_fact`, `decision`, `mistake`, `pattern`, `agent_handoff`, `agent_registered`, `file_claim`, `task_archive`.
+- **Tool**: `memory-search`
+    - **Description**: NAVIGATION LAYER: Returns a pointer table of matching memory IDs. Returns `[id, title, type, importance]`.
+- **Tool**: `memory-detail`
+    - **Description**: Fetch full content for a specific memory by its ID.
+- **Tool**: `memory-acknowledge`
+    - **Description**: (MANDATORY) Acknowledge the use of a memory or report its irrelevance/contradiction after generating code.
+- **Tool**: `memory-update`
+    - **Description**: Update an existing memory entry (e.g., status, importance, or metadata).
+- **Tool**: `memory-delete` / `memory-bulk-delete`
+    - **Description**: Soft-delete or remove multiple memory entries from active use.
+- **Tool**: `memory-summarize`
+    - **Description**: Update the high-level global summary for a repository.
+- **Tool**: `memory-recap`
+    - **Description**: AGGREGATED OVERVIEW: Returns stats and a pointer table of the top memories in a repo.
+
+### Task Management
+- **Tool**: `task-active`
+    - **Description**: PRIMARY navigation tool. Returns a minimal tabular list of active (`in_progress`/`pending`) tasks.
+- **Tool**: `task-create` / `task-create-interactive`
+    - **Description**: Register a new task. The interactive version supports MCP elicitation fallbacks for missing required fields.
+- **Tool**: `task-detail`
+    - **Description**: Fetch full description, phase, priority, and all comments for a specific task.
+- **Tool**: `task-list` / `task-search`
+    - **Description**: SEARCH/LIST LAYER: Find tasks by status, phase, code, or keyword search.
+- **Tool**: `task-update`
+    - **Description**: Progress a task through its lifecycle (Backlog → Pending → In Progress → Completed).
+- **Tool**: `task-bulk-manage`
+    - **Description**: Batch management tool for bulk creation, deletion, or status updates of multiple tasks.
+- **Tool**: `task-delete`
+    - **Description**: Hard deletion of a task record from the backlog.
+
+### Internal Handling Logic
+- **Normalization**: Automatically maps dot-notation names (e.g., `memory.store`) to internal hyphenated IDs (`memory-store`).
+- **Audit Logs**: Every successful tool invocation is recorded in the Audit Actions resource for accountability.
+- **Reactivity**: Mutating calls automatically trigger Resource Change notifications for any affected URIs (e.g., `repository://{name}/memories` after a store operation).
+
+## 3. Prompts
 Prompts provide reusable templates that guide agent behavior for specific workflows, integrating tightly with the memory and task systems.
 
 ### Core Lifecycle Prompts
@@ -61,7 +113,7 @@ Prompts provide reusable templates that guide agent behavior for specific workfl
     - **Role**: Debugging template for tracing bugs back to their origin.
     - **Behavior**: Uses memory of past mistakes and patterns to accelerate the identification of causal chains.
 
-## 3. Subscription & Observability
+## 4. Subscription & Observability
 The server supports the `resources/subscribe` capability.
 - When an agent calls a mutating tool (e.g., `memory-store` or `task-update`), the server automatically emits `notifications/resources/list_changed` or `notifications/resources/updated` for the affected URIs.
 - This allows real-time UI updates in the client (IDE) when the background knowledge base changes.
