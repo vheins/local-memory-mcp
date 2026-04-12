@@ -162,7 +162,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 	const filteredTasks = phase ? tasks.filter((t: Task) => t.phase.toLowerCase() === phase.toLowerCase()) : tasks;
 
 	const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
-	const rows = filteredTasks.map((t: any) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
+	const rows = filteredTasks.map((t: Task & { comments_count?: number }) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
 
 	const structured = {
 		schema: "task-list" as const,
@@ -174,7 +174,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 		offset
 	};
 
-	const _taskList = filteredTasks.map((t: any) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
+	const _taskList = filteredTasks.map((t: Task) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
 	const taskStats = storage.tasks.getTaskStats(repo);
 
 	const summary = buildTaskListSummary(repo, rows.length, status, phase, query, taskStats);
@@ -416,11 +416,11 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 function addRequiredStringField(
 	properties: Record<string, unknown>,
 	required: string[],
-	task: Record<string, any>,
+	task: Record<string, unknown>,
 	field: string,
 	schema: Record<string, unknown>
 ) {
-	if (typeof task[field] === "string" && task[field].trim()) {
+	if (typeof task[field] === "string" && (task[field] as string).trim()) {
 		return;
 	}
 

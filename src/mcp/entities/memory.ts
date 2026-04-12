@@ -523,7 +523,4 @@ export class MemoryEntity extends BaseEntity {
 	}
 }
 
-interface MemoryRowWithRate extends MemoryRow {
-	recall_rate: number;
-}
 import { MemoryRow, VectorStore } from "../storage/base.js";

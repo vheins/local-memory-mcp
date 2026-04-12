@@ -261,9 +261,9 @@ function getAvailableToolDefinitions(session?: SessionContext) {
 	});
 }
 
-function collectAffectedResourceUris(toolName: string, args: any, result: unknown): string[] {
-	const res = result as Record<string, any> | undefined;
-	const repo = (args?.repo as string) || (args?.scope as any)?.repo || res?.data?.repo;
+function collectAffectedResourceUris(toolName: string, args: Record<string, unknown>, result: unknown): string[] {
+	const res = result as Record<string, unknown> | undefined;
+	const repo = (args?.repo as string) || (args?.scope as Record<string, unknown>)?.repo as string || (res?.data as Record<string, unknown>)?.repo as string;
 	const uris = new Set<string>();
 
 	const touchesMemory =
@@ -285,12 +285,12 @@ function collectAffectedResourceUris(toolName: string, args: any, result: unknow
 		uris.add("repository://index");
 	}
 
-	const memoryId = (args?.id as string) || (args?.memory_id as string) || res?.data?.id;
+	const memoryId = (args?.id as string) || (args?.memory_id as string) || (res?.data as Record<string, unknown>)?.id as string;
 	if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
 		uris.add(`memory://${memoryId}`);
 	}
 
-	const taskId = (args?.id as string) || (args?.task_id as string) || res?.structuredData?.id;
+	const taskId = (args?.id as string) || (args?.task_id as string) || (res?.structuredData as Record<string, unknown>)?.id as string;
 	if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
 		uris.add(`task://${taskId}`);
 	}
@@ -298,15 +298,15 @@ function collectAffectedResourceUris(toolName: string, args: any, result: unknow
 	return [...uris];
 }
 
-function normalizeToolArguments(args: unknown, session?: SessionContext): any {
+function normalizeToolArguments(args: unknown, session?: SessionContext): Record<string, unknown> | unknown {
 	if (!args || typeof args !== "object") {
 		return args;
 	}
 
-	const anyArgs = args as Record<string, any>;
-	const nextArgs = {
+	const anyArgs = args as Record<string, unknown>;
+	const nextArgs: Record<string, any> = {
 		...anyArgs,
-		scope: anyArgs.scope ? { ...anyArgs.scope } : undefined
+		scope: anyArgs.scope ? { ...(anyArgs.scope as Record<string, unknown>) } : undefined
 	};
 
 	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
