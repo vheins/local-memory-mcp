@@ -56,7 +56,7 @@ export function createMcpResponse(
 		results?: unknown[];
 		structuredContentPathHint?: string;
 		contentSummary?: string;
-		includeSerializedStructuredContent?: boolean | "auto";
+		includeSerializedStructuredContent?: false;
 		resourceLinks?: Array<{
 			uri: string;
 			name: string;
@@ -116,27 +116,11 @@ export function createMcpResponse(
 		});
 	} else if (summary.trim().length > 0) {
 		const pointerText = structuredContentPathHint
-			? ` See structuredContent.${structuredContentPathHint}.`
-			: ` Read structuredContent for the complete machine-readable result.`;
+			? `Read structuredContent.${structuredContentPathHint} for details.`
+			: `Read structuredContent for machine-readable results.`;
 		content.push({
 			type: "text",
-			text: `${summary}${pointerText}`
-		});
-	}
-
-	const serializedStructuredContent = serializeStructuredContentForText(finalData);
-	const shouldIncludeSerializedContent =
-		includeSerializedStructuredContent === true ||
-		(includeSerializedStructuredContent === "auto" && serializedStructuredContent !== null);
-
-	if (shouldIncludeSerializedContent && serializedStructuredContent) {
-		content.push({
-			type: "text",
-			text: serializedStructuredContent,
-			annotations: {
-				audience: ["assistant"],
-				priority: 0.2
-			}
+			text: `${summary.trim()} ${pointerText}`
 		});
 	}
 
@@ -211,24 +195,6 @@ export function getPrimaryTextContent(response: McpResponse): string {
 	if (!Array.isArray(response.content)) return "";
 	const textItem = response.content.find((item) => item.type === "text");
 	return textItem?.type === "text" ? textItem.text : "";
-}
-
-function serializeStructuredContentForText(data: unknown): string | null {
-	if (data === undefined) return null;
-
-	try {
-		const serialized = JSON.stringify(data);
-		if (!serialized) return null;
-
-		// Keep backwards-compatibility text blocks only for compact payloads.
-		if (serialized.length > 1200) {
-			return null;
-		}
-
-		return serialized;
-	} catch {
-		return null;
-	}
 }
 
 export function isMcpResponse(obj: unknown): obj is McpResponse {

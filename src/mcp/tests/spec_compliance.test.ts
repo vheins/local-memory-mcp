@@ -7,9 +7,7 @@ describe("MCP Spec Compliance", () => {
 		const response = createMcpResponse(mockData, "Summary");
 
 		expect(response).toHaveProperty("content");
-		expect(getPrimaryTextContent(response)).toBe(
-			"Summary Read structuredContent for the complete machine-readable result."
-		);
+		expect(getPrimaryTextContent(response)).toBe("Summary Read structuredContent for machine-readable results.");
 		expect(response).toHaveProperty("structuredContent");
 		expect(response).not.toHaveProperty("data");
 		expect(response.isError).toBe(false);
@@ -53,9 +51,7 @@ describe("MCP Spec Compliance", () => {
 	it("should include a text content entry for text-only responses", () => {
 		const response = createMcpResponse({ ok: true }, "Completed");
 
-		expect(getPrimaryTextContent(response)).toBe(
-			"Completed Read structuredContent for the complete machine-readable result."
-		);
+		expect(getPrimaryTextContent(response)).toBe("Completed Read structuredContent for machine-readable results.");
 	});
 
 	it("should support structured content path hints in summary text", () => {
@@ -63,14 +59,17 @@ describe("MCP Spec Compliance", () => {
 			structuredContentPathHint: "results"
 		});
 
-		expect(getPrimaryTextContent(response)).toBe("Found 1 memory. See structuredContent.results.");
+		expect(getPrimaryTextContent(response)).toBe("Found 1 memory. Read structuredContent.results for details.");
 	});
 
-	it("should include serialized structured content only for compact payloads", () => {
+	it("should NOT include redundant JSON string in content - agent must read structuredContent", () => {
 		const response = createMcpResponse({ id: "mem_1", title: "Test" }, "Summary");
 		const textItems = response.content?.filter((item) => item.type === "text") ?? [];
 
-		expect(textItems).toHaveLength(2);
-		expect((textItems[1] as Record<string, unknown>).text).toBe('{"id":"mem_1","title":"Test"}');
+		expect(textItems).toHaveLength(1);
+		expect((textItems[0] as Record<string, unknown>).text).toBe(
+			"Summary Read structuredContent for machine-readable results."
+		);
+		expect(response.structuredContent).toEqual({ id: "mem_1", title: "Test" });
 	});
 });
