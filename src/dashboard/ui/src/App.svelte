@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import "./app.css";
-	import { theme, activeTab, currentRepo, recentActionsTotalItems, initPersistedState } from "./lib/stores";
+	import { activeTab, currentRepo, recentActionsTotalItems, initPersistedState } from "./lib/stores";
 	import { createAppHandler } from "./lib/composables/useApp";
 
 	import RepoSidebar from "./components/RepoSidebar.svelte";

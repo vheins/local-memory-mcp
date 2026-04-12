@@ -12,7 +12,6 @@ import {
 } from "./session.js";
 import { addLogSink, logger } from "./utils/logger.js";
 import fs from "fs";
-import path from "path";
 
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
@@ -53,8 +52,8 @@ vectors.initialize().catch((err) => {
 
 // Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
 // ... (rest of cleanup code) ...
-const expiredArchived = db.archiveExpiredMemories();
-const lowScoreArchived = db.archiveLowScoreMemories();
+const expiredArchived = db.memories.archiveExpiredMemories();
+const lowScoreArchived = db.memories.archiveLowScoreMemories();
 const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);
 
 if (totalArchived > 0) {

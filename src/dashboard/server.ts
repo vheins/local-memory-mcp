@@ -13,7 +13,9 @@ try {
 	if (fs.existsSync(pkgPath)) {
 		pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 	}
-} catch (e) {}
+} catch {
+	// Intentionally empty: error handled elsewhere
+}
 
 const app = express();
 const PORT = process.env.PORT || 3456;

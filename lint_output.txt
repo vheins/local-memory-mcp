@@ -1,0 +1,422 @@
+
+/home/vheins/Projects/local-memory-mcp/seed-data.mjs
+  131:15  error  'result' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/controllers/MemoriesController.ts
+   70:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   94:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   96:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  157:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/controllers/SystemController.ts
+   19:10  error  'e' is defined but never used             @typescript-eslint/no-unused-vars
+   46:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   75:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/controllers/TasksController.ts
+   28:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   97:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  111:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  122:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  164:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/lib/jsonApi.ts
+  3:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  3:69  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  3:82  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  6:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/App.svelte
+  60:57  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/components/AddTaskModal.svelte
+   6:22  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  12:55  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/components/DetailDrawer.svelte
+   28:55  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+   74:60  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+  140:41  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+  257:42  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+  350:12  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/components/MemoryDrawer.svelte
+   31:55  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+  111:41  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+  115:21  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  115:61  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  118:56  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  203:10  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/components/RecentActions.svelte
+  109:11  error  `{@html}` can lead to XSS attack  svelte/no-at-html-tags
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/components/ReferenceDrawer.svelte
+    7:19  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   27:55  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+   52:41  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+   69:87  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   78:24  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   82:22  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  143:9   error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+  186:35  error  `{@html}` can lead to XSS attack               svelte/no-at-html-tags
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/components/ReferenceTab.svelte
+    5:22  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+    6:32  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+    7:37  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+    8:39  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+    9:41  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   86:61  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+  129:61  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+  160:61  error  svelte-ignore comment is used, but not warned  svelte/no-unused-svelte-ignore
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/Icon.svelte
+  89:3  error  `{@html}` can lead to XSS attack  svelte/no-at-html-tags
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/api.ts
+   18:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   23:9   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   26:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   26:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   33:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   34:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   43:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   76:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  140:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  163:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  183:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  184:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/composables/useApp.ts
+   31:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   69:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  169:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  229:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  273:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  283:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  293:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/composables/useDetail.ts
+   51:29  error  'set' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   73:53  error  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  175:16  error  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  207:31  error  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/composables/useKanban.ts
+    2:19  error  'onDestroy' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  210:17  error  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+  224:22  error  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/composables/useMemoryList.ts
+  122:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  147:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/composables/useRecentActions.ts
+    1:39  error  'Writable' is defined but never used. Allowed unused vars must match /^_/u               @typescript-eslint/no-unused-vars
+    2:69  error  'recentActionsPageSize' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  131:7   error  This assigned value is not used in subsequent statements                                 no-useless-assignment
+  137:18  error  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  138:15  error  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  153:20  error  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  165:16  error  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  173:16  error  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/composables/useReference.ts
+   6:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  31:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/stores.ts
+  31:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  91:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  92:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  93:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/dashboard/ui/src/lib/utils.ts
+  106:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/capabilities.ts
+  14:10  error  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/completion.ts
+    7:10  error  'rankCompletionValues' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  129:66  error  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/entities/action.ts
+   80:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/entities/memory.ts
+  526:11  error  'MemoryRowWithRate' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/entities/task.ts
+   46:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   49:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  310:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  312:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  429:93  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/prompts/loader.ts
+  13:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/prompts/registry.ts
+   25:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   81:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/resources/index.ts
+  308:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  320:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  331:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  346:69  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  367:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/router.ts
+   47:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:11  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   58:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:11  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  108:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  114:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  200:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  201:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  229:65  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:75  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  299:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  299:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/server.ts
+   66:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   82:88  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:77  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  371:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/session.ts
+  14:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  36:78  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:64  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  77:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  77:66  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  87:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/storage/vectors.stub.ts
+  228:30  error  'limit' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  228:45  error  'repo' is defined but never used. Allowed unused args must match /^_/u   @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/storage/vectors.ts
+  56:15  error  'id' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/client.test.ts
+  4:36  error  'beforeEach' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  4:48  error  'afterEach' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/dashboard.test.ts
+    3:32  error  'vi' is defined but never used. Allowed unused vars must match /^_/u                @typescript-eslint/no-unused-vars
+    5:10  error  'z' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+    6:10  error  'MemoryTypeSchema' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   10:11  error  'generateMemories' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   10:44  error  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+   25:13  error  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+   30:5   error  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  189:27  error  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  189:67  error  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/detail-tools.test.ts
+  10:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  10:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/e2e.test.ts
+   14:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   14:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   60:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  108:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  111:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:68  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  166:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  279:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/index.test.ts
+  123:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  165:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/memory.bulk.test.ts
+  11:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  11:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/normalize.test.ts
+  33:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/router.test.ts
+  187:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  322:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  447:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  493:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  494:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  529:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  564:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  565:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  597:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/spec_compliance.test.ts
+  27:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  45:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  74:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/tasks-search.test.ts
+    6:10  error  'getTextContent' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   21:8   error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+   41:65  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+   85:65  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  110:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  124:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  138:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  152:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  154:36  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  168:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  182:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  196:46  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+  204:47  error  Unexpected any. Specify a different type                                          @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/tasks.bulk.test.ts
+    8:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   15:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   15:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  111:57  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/tasks.e2e.test.ts
+   1:44  error  'vi' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+  10:39  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  10:55  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  29:9   error  'taskARes' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  44:9   error  'taskBRes' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  72:59  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  92:35  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/tasks.pending-limit-refined.test.ts
+  76:64  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tests/v2-features.test.ts
+  19:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  94:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.acknowledge.ts
+  6:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.bulk-delete.ts
+  7:8  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.delete.ts
+  11:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.get.ts
+  5:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.recap.ts
+  6:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.search.ts
+   4:10  error  'normalize' is defined but never used. Allowed unused vars must match /^_/u                          @typescript-eslint/no-unused-vars
+  15:7   error  'HYBRID_WEIGHTS_NO_VECTOR' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  20:50  error  Unexpected any. Specify a different type                                                             @typescript-eslint/no-explicit-any
+  38:26  error  Unexpected any. Specify a different type                                                             @typescript-eslint/no-explicit-any
+  76:22  error  Unexpected any. Specify a different type                                                             @typescript-eslint/no-explicit-any
+  92:45  error  Unexpected any. Specify a different type                                                             @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.store.ts
+  13:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.summarize.ts
+  5:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.synthesize.ts
+   26:10  error  Unexpected any. Specify a different type                                                      @typescript-eslint/no-explicit-any
+   69:18  error  Unexpected any. Specify a different type                                                      @typescript-eslint/no-explicit-any
+  295:10  error  'formatContentForToolResult' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  295:46  error  Unexpected any. Specify a different type                                                      @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/memory.update.ts
+  12:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  37:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/task.bulk-manage.ts
+   17:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  174:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/task.get.ts
+  5:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/tools/task.manage.ts
+   13:2   error  'TaskSearchSchema' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  142:44  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  163:49  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  166:37  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  178:8   error  'taskList' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  178:41  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  189:46  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  294:8   error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  327:8   error  'result' is assigned a value but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  358:54  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  420:23  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  435:46  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  476:22  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  498:64  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  499:55  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  525:46  error  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/utils/git-scope.ts
+  24:12  error  'err' is defined but never used  @typescript-eslint/no-unused-vars
+  32:11  error  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/vheins/Projects/local-memory-mcp/src/mcp/utils/mcp-response.ts
+   52:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   92:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  163:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  163:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 291 problems (291 errors, 0 warnings)
+

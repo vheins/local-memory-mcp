@@ -9,8 +9,7 @@ import {
 	TaskCreateInteractiveSchema,
 	TaskUpdateSchema,
 	TaskDeleteSchema,
-	TaskListSchema,
-	TaskSearchSchema
+	TaskListSchema
 } from "./schemas.js";
 import { handleMemoryStore } from "./memory.store.js";
 
@@ -139,7 +138,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 	}
 }
 
-export async function handleTaskList(args: any, storage: SQLiteStore) {
+export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 	const {
 		repo,
 		status = "backlog,pending,in_progress,blocked",
@@ -160,7 +159,7 @@ export async function handleTaskList(args: any, storage: SQLiteStore) {
 	// getTasksByMultipleStatuses supports repo, statuses[], limit, offset, and search (query)
 	const tasks = storage.tasks.getTasksByMultipleStatuses(repo, statuses, limit, offset, query);
 
-	const filteredTasks = phase ? tasks.filter((t: any) => t.phase.toLowerCase() === phase.toLowerCase()) : tasks;
+	const filteredTasks = phase ? tasks.filter((t: Task) => t.phase.toLowerCase() === phase.toLowerCase()) : tasks;
 
 	const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
 	const rows = filteredTasks.map((t: any) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
@@ -175,7 +174,7 @@ export async function handleTaskList(args: any, storage: SQLiteStore) {
 		offset
 	};
 
-	const taskList = filteredTasks.map((t: any) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
+	const _taskList = filteredTasks.map((t: any) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
 	const taskStats = storage.tasks.getTaskStats(repo);
 
 	const summary = buildTaskListSummary(repo, rows.length, status, phase, query, taskStats);
@@ -186,7 +185,7 @@ export async function handleTaskList(args: any, storage: SQLiteStore) {
 	});
 }
 
-export async function handleTaskCreate(args: any, storage: SQLiteStore) {
+export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	const taskData = TaskCreateSchema.parse(args);
 	const {
 		repo,
@@ -291,7 +290,7 @@ type TaskCreateInteractiveOptions = {
 };
 
 export async function handleTaskCreateInteractive(
-	args: any,
+	args: unknown,
 	storage: SQLiteStore,
 	options: TaskCreateInteractiveOptions = {}
 ) {
@@ -324,7 +323,7 @@ export async function handleTaskCreateInteractive(
 		};
 	}
 
-	const result = await handleTaskCreate(
+	const _result = await handleTaskCreate(
 		{
 			...completedDraft,
 			status: completedDraft.status ?? "backlog",
@@ -355,7 +354,7 @@ export async function handleTaskCreateInteractive(
 	);
 }
 
-function buildMissingTaskSchema(task: Record<string, any>) {
+function buildMissingTaskSchema(task: Record<string, unknown>) {
 	const properties: Record<string, unknown> = {};
 	const required: string[] = [];
 
@@ -432,7 +431,7 @@ function addRequiredStringField(
 	required.push(field);
 }
 
-export async function handleTaskUpdate(args: any, storage: SQLiteStore, vectors: VectorStore) {
+export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vectors: VectorStore) {
 	const updateData = TaskUpdateSchema.parse(args);
 	const { repo, id, comment, ...updates } = updateData;
 	const existingTask = storage.tasks.getTaskById(id);
@@ -473,7 +472,7 @@ export async function handleTaskUpdate(args: any, storage: SQLiteStore, vectors:
 	}
 
 	// Handle auto-timestamps for status changes
-	const finalUpdates: any = { ...updates };
+	const finalUpdates: Record<string, unknown> = { ...updates };
 	const now = new Date().toISOString();
 	if (updates.status === "completed") {
 		finalUpdates.finished_at = now;
@@ -495,8 +494,8 @@ export async function handleTaskUpdate(args: any, storage: SQLiteStore, vectors:
 			agent: updates.agent || existingTask.agent || "unknown",
 			role: updates.role || existingTask.role || "unknown",
 			model: updates.model || "unknown",
-			previous_status: isStatusChanging ? (existingTask.status as any) : null,
-			next_status: isStatusChanging ? (updates.status as any) : null,
+			previous_status: isStatusChanging ? (existingTask.status as TaskStatus) : null,
+			next_status: isStatusChanging ? (updates.status as TaskStatus) : null,
 			created_at: new Date().toISOString()
 		});
 	}
@@ -522,7 +521,7 @@ export async function handleTaskUpdate(args: any, storage: SQLiteStore, vectors:
 	);
 }
 
-export async function handleTaskDelete(args: any, storage: SQLiteStore) {
+export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	const { repo, id } = TaskDeleteSchema.parse(args);
 	storage.tasks.deleteTask(id);
 

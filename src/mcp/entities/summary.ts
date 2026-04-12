@@ -5,7 +5,7 @@ import { BaseEntity } from "../storage/base.js";
  */
 export class SummaryEntity extends BaseEntity {
 	getSummary(repo: string): { summary: string; updated_at: string } | null {
-		const row = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as any;
+		const row = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as { summary: string; updated_at: string } | undefined;
 		return row || null;
 	}
 

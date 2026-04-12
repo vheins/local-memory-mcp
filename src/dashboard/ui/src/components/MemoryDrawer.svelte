@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { currentRepo } from "../lib/stores";
 	import type { Memory } from "../lib/stores";
 	import { formatDate, renderMarkdown } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";
@@ -20,7 +19,6 @@
 
 	// Reactivity
 	$: isCreate = memory === null;
-	$: isView = !!memory && !$editing;
 
 	// Reset logic state when drawer opens or memory change
 	$: if (open || memory !== undefined) {

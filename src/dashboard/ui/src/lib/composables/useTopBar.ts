@@ -1,5 +1,5 @@
-import { writable, get } from "svelte/store";
-import { theme, healthData, currentRepo, availableRepos } from "../stores";
+import { writable } from "svelte/store";
+import { theme } from "../stores";
 import { getRepoInitials } from "../utils";
 
 export const GITHUB_URL = "https://github.com/vheins/local-memory-mcp";

@@ -25,8 +25,9 @@ export class TasksController {
 				tasks = db.tasks.getTasksByRepo(repo as string, status as string, pageSize, (page - 1) * pageSize, search as string);
 			}
 			res.json(jsonApiRes(tasks, "task", { meta: { page, pageSize } }));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -36,8 +37,9 @@ export class TasksController {
 			if (!task) throw new Error("Task not found");
 			db.actions.logAction("read", task.repo, { taskId: task.id });
 			res.json(jsonApiRes(task, "task"));
-		} catch (err: any) {
-			res.status(404).json(jsonApiError(err.message, 404));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Task not found";
+			res.status(404).json(jsonApiError(message, 404));
 		}
 	}
 
@@ -52,8 +54,9 @@ export class TasksController {
 			db.tasks.insertTask({ ...attributes, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 			db.actions.logAction("write", repo, { taskId: id });
 			res.json(jsonApiRes({ id }, "task"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -94,8 +97,9 @@ export class TasksController {
 			}
 
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -108,8 +112,9 @@ export class TasksController {
 			db.tasks.deleteTask(id);
 			db.actions.logAction("delete", task.repo, { taskId: id });
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -119,7 +124,7 @@ export class TasksController {
 			if (!Array.isArray(items) || !repo)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
 
-			const tasks = items.map((t: any) => ({
+			const tasks = items.map((t: Record<string, any>) => ({
 				...t,
 				id: t.id || randomUUID(),
 				repo,
@@ -131,8 +136,9 @@ export class TasksController {
 			const count = db.tasks.bulkInsertTasks(tasks);
 			db.actions.logAction("write", repo, { query: `Bulk imported ${count} tasks` });
 			res.json(jsonApiRes({ count }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -161,8 +167,9 @@ export class TasksController {
 			};
 
 			res.json(jsonApiRes(stats, "performance-stats"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -175,8 +182,9 @@ export class TasksController {
 
 			db.tasks.updateTaskComment(id, { comment });
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -185,8 +193,9 @@ export class TasksController {
 			const { id } = req.params as { id: string };
 			db.tasks.deleteTaskComment(id);
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 }

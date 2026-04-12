@@ -44,25 +44,25 @@ export function createRouter(
 	options?: RouterOptions
 ): (
 	method: string,
-	params: any,
+	params: Record<string, unknown> | undefined,
 	signal?: AbortSignal,
 	onProgress?: (progress: number, total?: number) => void
-) => Promise<any> {
+) => Promise<unknown> {
 	const getSessionContext = options?.getSessionContext;
 
 	async function handleMethod(
 		method: string,
-		params: any,
+		params: Record<string, unknown> | undefined,
 		signal?: AbortSignal,
 		onProgress?: (progress: number, total?: number) => void
-	): Promise<any> {
+	): Promise<unknown> {
 		switch (method) {
 			// ---- tools ----
 			case "tools/list":
 				return listTools(getSessionContext?.(), params);
 
 			case "tools/call":
-				return await handleToolCall(params, signal, onProgress);
+				return await handleToolCall(params, (params as Record<string, unknown>)?.signal as AbortSignal | undefined, onProgress);
 
 			// ---- resources ----
 			case "resources/list":
@@ -102,17 +102,17 @@ export function createRouter(
 	}
 
 	async function handleToolCall(
-		params: any,
+		params: Record<string, unknown> | undefined,
 		signal?: AbortSignal,
 		onProgress?: (progress: number, total?: number) => void
-	): Promise<any> {
-		const { name } = params;
-		const args = normalizeToolArguments(params?.arguments, getSessionContext?.());
+	): Promise<unknown> {
+		const { name } = params || {};
+		const args = normalizeToolArguments(params?.arguments, getSessionContext?.()) as Record<string, unknown>;
 		// Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
 		const toolName = String(name).replace(/\./g, "-");
 
-		let result: any;
-		const repo = args?.repo || args?.scope?.repo || "unknown";
+		let result: unknown;
+		const repo = (args?.repo as string) || (args?.scope as Record<string, unknown>)?.repo as string || "unknown";
 
 		switch (toolName) {
 			case "memory-store":
@@ -197,20 +197,21 @@ export function createRouter(
 		// Log the action
 		try {
 			const actionType = toolName.split("-")[1] || toolName;
-			const sc: any = result?.structuredData;
-			const options: any = {
+			const res = result as Record<string, unknown> | undefined;
+			const sc = res?.structuredData as Record<string, unknown> | undefined;
+			const logOptions = {
 				query:
-					args?.query ||
-					args?.title ||
-					args?.task_code ||
+					(args?.query as string) ||
+					(args?.title as string) ||
+					(args?.task_code as string) ||
 					(toolName === "memory-recap" ? `Offset: ${args?.offset || 0}` : undefined),
 				response: result,
-				memoryId: args?.id || args?.memory_id || sc?.id,
-				taskId: args?.id || args?.task_id || sc?.id,
-				resultCount: Array.isArray(sc?.results) ? sc.results.length : sc?.count || 0
+				memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
+				taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
+				resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
 			};
 
-			db.actions.logAction(actionType, repo, options);
+			db.actions.logAction(actionType, repo, logOptions);
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });
 		}
@@ -226,10 +227,10 @@ export function createRouter(
 	return handleMethod;
 }
 
-function listTools(session: SessionContext | undefined, params: any) {
+function listTools(session: SessionContext | undefined, params: Record<string, unknown> | undefined) {
 	const tools = getAvailableToolDefinitions(session);
 	const limit = normalizePageLimit(params?.limit, tools.length || 1);
-	const start = decodeCursor(params?.cursor);
+	const start = decodeCursor(params?.cursor as string | undefined);
 
 	// Strictly conform to MCP Tool spec: remove internal fields like outputSchema, annotations, title
 	const compliantTools = tools.map((tool) => {
@@ -260,8 +261,9 @@ function getAvailableToolDefinitions(session?: SessionContext) {
 	});
 }
 
-function collectAffectedResourceUris(toolName: string, args: any, result: any): string[] {
-	const repo = args?.repo || args?.scope?.repo || result?.data?.repo;
+function collectAffectedResourceUris(toolName: string, args: any, result: unknown): string[] {
+	const res = result as Record<string, any> | undefined;
+	const repo = (args?.repo as string) || (args?.scope as any)?.repo || res?.data?.repo;
 	const uris = new Set<string>();
 
 	const touchesMemory =
@@ -283,12 +285,12 @@ function collectAffectedResourceUris(toolName: string, args: any, result: any): 
 		uris.add("repository://index");
 	}
 
-	const memoryId = args?.id || args?.memory_id || result?.data?.id;
+	const memoryId = (args?.id as string) || (args?.memory_id as string) || res?.data?.id;
 	if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
 		uris.add(`memory://${memoryId}`);
 	}
 
-	const taskId = args?.id || args?.task_id || result?.structuredData?.id;
+	const taskId = (args?.id as string) || (args?.task_id as string) || res?.structuredData?.id;
 	if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
 		uris.add(`task://${taskId}`);
 	}
@@ -296,14 +298,15 @@ function collectAffectedResourceUris(toolName: string, args: any, result: any): 
 	return [...uris];
 }
 
-function normalizeToolArguments(args: any, session?: SessionContext): any {
+function normalizeToolArguments(args: unknown, session?: SessionContext): any {
 	if (!args || typeof args !== "object") {
 		return args;
 	}
 
+	const anyArgs = args as Record<string, any>;
 	const nextArgs = {
-		...args,
-		scope: args.scope ? { ...args.scope } : undefined
+		...anyArgs,
+		scope: anyArgs.scope ? { ...anyArgs.scope } : undefined
 	};
 
 	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);

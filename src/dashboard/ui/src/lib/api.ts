@@ -1,3 +1,5 @@
+import type { Memory, Task, RepoMeta, DashboardStats, RecentAction, TaskTimeStats, HealthData } from "./stores";
+
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
@@ -10,15 +12,26 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 	return deserialize(body) as T;
 }
 
-function deserialize(body: any): any {
-	if (!body || !body.data) return body;
-	const { data, meta } = body;
+interface JsonApiItem {
+	id: string;
+	type: string;
+	attributes?: Record<string, any>;
+}
 
-	const processItem = (item: any) => {
+interface JsonApiBody {
+	data: JsonApiItem | JsonApiItem[];
+	meta?: any;
+}
+
+function deserialize(body: JsonApiBody | any): any {
+	if (!body || !body.data) return body;
+	const { data, meta } = body as JsonApiBody;
+
+	const processItem = (item: JsonApiItem) => {
 		const attr = item.attributes || {};
 		// Inject success for status responses
-		if (item.type === "status" && attr.success === undefined) {
-			attr.success = true;
+		if (item.type === "status" && (attr as any).success === undefined) {
+			(attr as any).success = true;
 		}
 		// Return flat object (preserving ID except for generic 'system' IDs)
 		if (item.id === "system") return attr;
@@ -27,7 +40,7 @@ function deserialize(body: any): any {
 
 	if (Array.isArray(data)) {
 		const items = data.map(processItem);
-		const result: any = {};
+		const result: Record<string, any> = {};
 		if (meta) result.pagination = meta;
 
 		const firstType = data[0]?.type;
@@ -42,25 +55,25 @@ function deserialize(body: any): any {
 		return result;
 	}
 
-	return processItem(data);
+	return processItem(data as JsonApiItem);
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const api = {
-	health: () => apiFetch<any>("/api/health"),
+	health: () => apiFetch<HealthData>("/api/health"),
 
-	repos: () => apiFetch<{ repos: any[] }>("/api/repos"),
+	repos: () => apiFetch<{ repos: RepoMeta[] }>("/api/repos"),
 
 	stats: (repo?: string) => {
 		const q = repo ? `?repo=${encodeURIComponent(repo)}` : "";
-		return apiFetch<any>(`/api/stats${q}`);
+		return apiFetch<DashboardStats>(`/api/stats${q}`);
 	},
 
 	recentActions: (repo: string | null, page: number, pageSize: number) => {
 		let url = `/api/recent-actions?page=${page}&pageSize=${pageSize}`;
 		if (repo) url += `&repo=${encodeURIComponent(repo)}`;
-		return apiFetch<any>(url);
+		return apiFetch<{ actions: RecentAction[]; pagination: any }>(url);
 	},
 
 	memories: (params: {
@@ -83,36 +96,36 @@ export const api = {
 		if (params.sortOrder) q.set("sortOrder", params.sortOrder);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<any>(`/api/memories?${q}`);
+		return apiFetch<{ memories: Memory[]; pagination: any }>(`/api/memories?${q}`);
 	},
 
-	memoryById: (id: string) => apiFetch<any>(`/api/memories/${id}`),
+	memoryById: (id: string) => apiFetch<Memory>(`/api/memories/${id}`),
 
-	createMemory: (body: any) =>
-		apiFetch<any>("/api/memories", {
+	createMemory: (body: Partial<Memory>) =>
+		apiFetch<{ id: string }>("/api/memories", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body)
 		}),
 
-	updateMemory: (id: string, updates: any) =>
-		apiFetch<any>(`/api/memories/${id}`, {
+	updateMemory: (id: string, updates: Partial<Memory>) =>
+		apiFetch<{ success: boolean }>(`/api/memories/${id}`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(updates)
 		}),
 
-	deleteMemory: (id: string) => apiFetch<any>(`/api/memories/${id}`, { method: "DELETE" }),
+	deleteMemory: (id: string) => apiFetch<{ success: boolean }>(`/api/memories/${id}`, { method: "DELETE" }),
 
 	bulkImportMemories: (repo: string, items: any[]) =>
-		apiFetch<any>("/api/memories/import", {
+		apiFetch<{ count: number }>("/api/memories/import", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ repo, items })
 		}),
 
 	bulkMemoryAction: (action: string, ids: string[], updates?: any) =>
-		apiFetch<any>("/api/memories/action", {
+		apiFetch<{ count: number }>("/api/memories/action", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action, ids, updates })
@@ -124,51 +137,51 @@ export const api = {
 		if (params.search) q.set("search", params.search);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<any>(`/api/tasks?${q}`);
+		return apiFetch<{ tasks: Task[]; pagination: any }>(`/api/tasks?${q}`);
 	},
 
-	taskById: (id: string) => apiFetch<any>(`/api/tasks/${id}`),
+	taskById: (id: string) => apiFetch<Task>(`/api/tasks/${id}`),
 
-	taskTimeStats: (repo: string) => apiFetch<any>(`/api/tasks/stats/time?repo=${encodeURIComponent(repo)}`),
+	taskTimeStats: (repo: string) => apiFetch<TaskTimeStats>(`/api/tasks/stats/time?repo=${encodeURIComponent(repo)}`),
 
-	updateTask: (id: string, updates: any) =>
-		apiFetch<any>(`/api/tasks/${id}`, {
+	updateTask: (id: string, updates: Partial<Task>) =>
+		apiFetch<{ success: boolean }>(`/api/tasks/${id}`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(updates)
 		}),
 
-	createTask: (body: any) =>
-		apiFetch<any>("/api/tasks", {
+	createTask: (body: Partial<Task>) =>
+		apiFetch<{ id: string }>("/api/tasks", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body)
 		}),
 
-	deleteTask: (id: string) => apiFetch<any>(`/api/tasks/${id}`, { method: "DELETE" }),
+	deleteTask: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
 
 	bulkImportTasks: (repo: string, items: any[]) =>
-		apiFetch<any>("/api/tasks/import", {
+		apiFetch<{ count: number }>("/api/tasks/import", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ repo, items })
 		}),
 
 	updateTaskComment: (id: string, comment: string) =>
-		apiFetch<any>(`/api/tasks/comments/${id}`, {
+		apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ comment })
 		}),
 
-	deleteTaskComment: (id: string) => apiFetch<any>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
+	deleteTaskComment: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
 
-	export: (repo: string) => apiFetch<any>(`/api/export?repo=${encodeURIComponent(repo)}`),
+	export: (repo: string) => apiFetch<{ url: string }>(`/api/export?repo=${encodeURIComponent(repo)}`),
 
-	capabilities: () => apiFetch<any>("/api/capabilities"),
+	capabilities: () => apiFetch<{ capabilities: string[] }>("/api/capabilities"),
 
-	callTool: (name: string, args: any) =>
-		apiFetch<any>(`/api/tools/${encodeURIComponent(name)}/call`, {
+	callTool: (name: string, args: Record<string, any>) =>
+		apiFetch<{ result: any }>(`/api/tools/${encodeURIComponent(name)}/call`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(args)

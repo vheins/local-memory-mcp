@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { api } from "../lib/api";
 	import type { Memory, Task } from "../lib/stores";
 	import { formatDate, getStatusColor, getStatusLabel, getPriorityLabel, renderMarkdown } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";

@@ -28,7 +28,7 @@ export interface AppState {
 	selectedMemory: Memory | null;
 	selectedTask: Task | null;
 	drawerOpen: boolean;
-	selectedReference: any | null;
+	selectedReference: { type: string; data: any } | null;
 	referenceDrawerOpen: boolean;
 	memoryDrawerOpen: boolean;
 	memoryDrawerItem: Memory | null;
@@ -36,12 +36,12 @@ export interface AppState {
 	bulkImportTarget: "memories" | "tasks";
 	addTaskModalOpen: boolean;
 	newTask: { task_code: string; title: string; phase: string; description: string; status: string; priority: number };
-	capabilities: any | null;
+	capabilities: { tools: any[]; prompts: any[]; resources: any[] } | null;
 	referenceSearch: string;
 	referenceFilter: "all" | "tools" | "prompts" | "resources";
 }
 
-export function createAppHandler(refs: { memoryList: any; kanbanBoard: any }) {
+export function createAppHandler(refs: { memoryList: { refresh: () => void } | null; kanbanBoard: { loadTasks: (repo: string) => void } | null }) {
 	const { subscribe, set, update } = writable<AppState>({
 		mobileMenuOpen: false,
 		selectedMemory: null,
@@ -97,7 +97,9 @@ export function createAppHandler(refs: { memoryList: any; kanbanBoard: any }) {
 		try {
 			const data = await api.taskTimeStats(repo);
 			taskTimeStats.set(data);
-		} catch {}
+		} catch (err) {
+			console.error("Failed to load task time stats:", err);
+		}
 	}
 
 	async function loadRecentActions(page?: number, append: boolean = false) {
@@ -153,7 +155,9 @@ export function createAppHandler(refs: { memoryList: any; kanbanBoard: any }) {
 				try {
 					const cap = await api.capabilities();
 					update((curr) => ({ ...curr, capabilities: cap }));
-				} catch {}
+				} catch (err) {
+					console.error("Failed to load capabilities:", err);
+				}
 			}
 		}
 	}
@@ -174,11 +178,11 @@ export function createAppHandler(refs: { memoryList: any; kanbanBoard: any }) {
 		update((s) => ({ ...s, memoryDrawerItem: null, memoryDrawerOpen: true }));
 	}
 
-	function handleMemorySaved(_mem: Memory) {
+	function handleMemorySaved() {
 		refs.memoryList?.refresh();
 	}
 
-	function handleMemoryDeleted(_id: string) {
+	function handleMemoryDeleted() {
 		refs.memoryList?.refresh();
 	}
 

@@ -239,7 +239,7 @@ export function normalize(text: string): string {
 		text
 			.toLowerCase()
 			// Keep alphanumeric, spaces, and tech-friendly symbols (underscore, hyphen, dot)
-			.replace(/[^a-z0-9\s_\-\.]/g, " ")
+			.replace(/[^a-z0-9\s_\-.]/g, " ")
 			.replace(/\s+/g, " ")
 			.trim()
 	);

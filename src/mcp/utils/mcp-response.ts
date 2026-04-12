@@ -71,7 +71,6 @@ export function createMcpResponse(
 	}
 ): McpResponse {
 	const {
-		results,
 		resourceLinks,
 		structuredContentPathHint,
 		contentSummary,

@@ -34,7 +34,7 @@ export function formatDuration(seconds: number | undefined): string {
 export function getRepoInitials(repo: string): string {
 	return (
 		repo
-			.split(/[\/\-_.]/)
+			.split(/[/ \-_.]/)
 			.filter(Boolean)
 			.slice(0, 2)
 			.map((part) => part[0]?.toUpperCase() || "")
@@ -88,11 +88,12 @@ export function renderMarkdown(text: string): string {
 		const html = marked.parse(text || "") as string;
 		return DOMPurify.sanitize(html);
 	} catch (err) {
+		console.error("Markdown render error:", err);
 		return text || "";
 	}
 }
 
-export function exportToJSON(data: any, filename: string) {
+export function exportToJSON(data: unknown, filename: string) {
 	const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement("a");
@@ -102,7 +103,7 @@ export function exportToJSON(data: any, filename: string) {
 	URL.revokeObjectURL(url);
 }
 
-export function exportToCSV(data: any[], filename: string) {
+export function exportToCSV(data: Record<string, any>[], filename: string) {
 	if (!data.length) return;
 	const keys = Object.keys(data[0]);
 	const csv = [keys.join(","), ...data.map((row) => keys.map((k) => JSON.stringify(row[k] ?? "")).join(","))].join(
@@ -117,12 +118,12 @@ export function exportToCSV(data: any[], filename: string) {
 	URL.revokeObjectURL(url);
 }
 
-export function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
+export function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
 	let timer: ReturnType<typeof setTimeout>;
 	return ((...args: any[]) => {
 		clearTimeout(timer);
 		timer = setTimeout(() => fn(...args), delay);
-	}) as T;
+	}) as unknown as T;
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

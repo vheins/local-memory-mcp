@@ -16,7 +16,9 @@ try {
 	if (fs.existsSync(pkgPath)) {
 		pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 	}
-} catch (e) {}
+} catch {
+	// Intentionally empty: package.json might not exist in dev or some environments
+}
 
 export class SystemController {
 	static getHealth(req: express.Request, res: express.Response) {
@@ -41,8 +43,9 @@ export class SystemController {
 					"repository"
 				)
 			);
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -51,8 +54,9 @@ export class SystemController {
 			const repo = req.query.repo as string | undefined;
 			const stats = db.system.getDashboardStats(repo);
 			res.json(jsonApiRes(stats, "system-stats"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -70,8 +74,9 @@ export class SystemController {
 					meta: { page, pageSize, totalItems: allCondensed.length }
 				})
 			);
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -99,7 +104,7 @@ export class SystemController {
 					acc[comment.task_id].push(comment);
 					return acc;
 				},
-				{} as Record<string, any[]>
+				{} as Record<string, unknown[]>
 			);
 
 			const tasksWithComments = tasks.map((t) => ({
@@ -114,8 +119,9 @@ export class SystemController {
 				tasks: tasksWithComments
 			};
 			res.json(jsonApiRes(exportData, "export"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -126,8 +132,9 @@ export class SystemController {
 			const args = getAttributes(req);
 			const result = await mcpClient.callTool(name, args);
 			res.json(jsonApiRes(result, "tool-result"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 }

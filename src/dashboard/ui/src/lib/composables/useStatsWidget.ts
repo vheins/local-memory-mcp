@@ -60,7 +60,7 @@ export function createStatsHandler() {
 	const byTypeStats = derived(dashboardStats, ($stats) => {
 		if (!$stats?.byType) return [];
 		return Object.entries($stats.byType as Record<string, number>)
-			.filter(([_, count]) => count > 0)
+			.filter(([, count]) => count > 0)
 			.map(([type, count]) => ({
 				type,
 				count,

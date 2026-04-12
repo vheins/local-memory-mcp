@@ -13,7 +13,7 @@ export class ActionEntity extends BaseEntity {
 	logAction(
 		action: string,
 		repo: string,
-		optionsOrQuery?: string | any,
+		optionsOrQuery?: string | { query?: string; response?: string | object; memoryId?: string; taskId?: string; resultCount?: number },
 		response?: string,
 		memoryId?: string,
 		taskId?: string,
@@ -27,7 +27,8 @@ export class ActionEntity extends BaseEntity {
 
 		if (optionsOrQuery && typeof optionsOrQuery === "object") {
 			query = optionsOrQuery.query || query;
-			finalResponse = optionsOrQuery.response || finalResponse;
+			const res = optionsOrQuery.response;
+			finalResponse = (typeof res === "object" ? JSON.stringify(res) : res) || finalResponse;
 			finalMemoryId = optionsOrQuery.memoryId || finalMemoryId;
 			finalTaskId = optionsOrQuery.taskId || finalTaskId;
 			finalResultCount = optionsOrQuery.resultCount !== undefined ? optionsOrQuery.resultCount : finalResultCount;
@@ -55,11 +56,11 @@ export class ActionEntity extends BaseEntity {
 	}
 
 	getLastActionId(): number {
-		const row = this.db.prepare("SELECT MAX(id) as id FROM action_log").get() as any;
+		const row = this.db.prepare("SELECT MAX(id) as id FROM action_log").get() as { id: number } | undefined;
 		return row?.id || 0;
 	}
 
-	getActionsAfter(id: number): any[] {
+	getActionsAfter(id: number): (ActionLogRow & { memory_title?: string; memory_type?: string })[] {
 		return this.db
 			.prepare(
 				`
@@ -68,10 +69,10 @@ export class ActionEntity extends BaseEntity {
       WHERE a.id > ? ORDER BY a.created_at ASC
     `
 			)
-			.all(id) as any[];
+			.all(id) as (ActionLogRow & { memory_title?: string; memory_type?: string })[];
 	}
 
-	getRecentActions(repo?: string, limit: number = 10, offset: number = 0): any[] {
+	getRecentActions(repo?: string, limit: number = 10, offset: number = 0): (ActionLogRow & { memory_title?: string; memory_type?: string })[] {
 		let query = `
       SELECT a.*, m.title as memory_title, m.type as memory_type 
       FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id
@@ -86,10 +87,10 @@ export class ActionEntity extends BaseEntity {
 		query += " ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?";
 		params.push(limit, offset);
 
-		return this.db.prepare(query).all(...params) as any[];
+		return this.db.prepare(query).all(...params) as (ActionLogRow & { memory_title?: string; memory_type?: string })[];
 	}
 
-	getActionStatsByDate(repo: string): any[] {
+	getActionStatsByDate(repo: string): { date: string; count: number }[] {
 		return this.db
 			.prepare(
 				`
@@ -100,7 +101,7 @@ export class ActionEntity extends BaseEntity {
       ORDER BY date ASC
     `
 			)
-			.all(repo);
+			.all(repo) as { date: string; count: number }[];
 	}
 
 	getActionDistribution(repo: string): any[] {
@@ -113,10 +114,10 @@ export class ActionEntity extends BaseEntity {
       GROUP BY action
     `
 			)
-			.all(repo);
+			.all(repo) as { action: string; count: number }[];
 	}
 
-	getActionById(id: number): any | undefined {
+	getActionById(id: number): (ActionLogRow & { memory_title?: string; memory_type?: string }) | undefined {
 		return this.db
 			.prepare(
 				`
@@ -125,6 +126,18 @@ export class ActionEntity extends BaseEntity {
       WHERE a.id = ?
     `
 			)
-			.get(id) as any | undefined;
+			.get(id) as (ActionLogRow & { memory_title?: string; memory_type?: string }) | undefined;
 	}
+}
+
+interface ActionLogRow {
+	id: number;
+	repo: string;
+	action: string;
+	query: string | null;
+	response: string | null;
+	memory_id: string | null;
+	task_id: string | null;
+	result_count: number;
+	created_at: string;
 }

@@ -218,7 +218,7 @@ export class MigrationManager {
 					this.db.exec(col.definition);
 				}
 			} catch (e) {
-				// Skip safely
+				logger.error(`Migration step failed for ${col.table}.${col.name}: ${e instanceof Error ? e.message : String(e)}`);
 			}
 		}
 
@@ -235,7 +235,9 @@ export class MigrationManager {
 		// Backfill task_code if it was added via migration
 		try {
 			this.db.exec("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL");
-		} catch (e) {}
+		} catch (e) {
+			logger.error(`Legacy backfill task_code failed: ${e instanceof Error ? e.message : String(e)}`);
+		}
 	}
 
 	private ensureMemoryTypeConstraint(): void {

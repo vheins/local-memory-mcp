@@ -6,7 +6,7 @@ import { api } from "../api";
 export type ImportTarget = "memories" | "tasks";
 
 export interface CSVRow {
-	[key: string]: any;
+	[key: string]: string | number | boolean | null | undefined;
 }
 
 export interface CSVResult {
@@ -85,7 +85,7 @@ export function createBulkImport(options: {
 			.slice(1)
 			.map(splitLine)
 			.map((row) => {
-				const obj: any = {};
+				const obj: CSVRow = {};
 				filteredHeaders.forEach((h, i) => {
 					const key = h.toLowerCase().replace(/[^a-z0-9_]/g, "_");
 					obj[key] = row[i];
@@ -168,8 +168,8 @@ export function createBulkImport(options: {
 			alert(`Imported ${count} ${options.importTarget} successfully.`);
 			if (options.onSuccess) options.onSuccess();
 			close();
-		} catch (err: any) {
-			errorMsg.set(err.message || "Import failed");
+		} catch (err) {
+			errorMsg.set(err instanceof Error ? err.message : "Import failed");
 		} finally {
 			isSubmitting.set(false);
 		}
@@ -192,6 +192,6 @@ export function createBulkImport(options: {
 		downloadExample,
 		handleImport,
 		setFile: (val: File | null) => file.set(val),
-		setCsvData: (val: any[]) => csvData.set(val)
+		setCsvData: (val: CSVRow[]) => csvData.set(val)
 	};
 }

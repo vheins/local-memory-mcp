@@ -21,13 +21,17 @@ export function resolveGitScope(cwd = process.cwd()) {
 			})
 				.toString()
 				.trim();
-		} catch {}
+		} catch (err) {
+			// Ignore error resolving branch
+		}
 
 		return {
 			repo,
 			branch
 		};
-	} catch {}
+	} catch (err) {
+		// Ignore error resolving git root
+	}
 
 	// 2. Fallback: project folder
 	const fallback = path.basename(cwd);

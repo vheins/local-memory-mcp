@@ -12,6 +12,13 @@ export default [
   prettier,
   ...svelte.configs["flat/prettier"],
   {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+      "no-unused-vars": "off"
+    }
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -37,13 +44,5 @@ export default [
       "storage/",
       ".svelte-kit/",
     ],
-  },
-  {
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "off",
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-      "no-undef": "off",
-    },
-  },
+  }
 ];

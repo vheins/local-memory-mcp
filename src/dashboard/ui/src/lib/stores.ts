@@ -1,4 +1,4 @@
-import { writable, derived, get } from "svelte/store";
+import { writable, derived } from "svelte/store";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -29,6 +29,8 @@ export interface Memory {
 	is_global?: boolean;
 	status?: string;
 	metadata?: Record<string, any>;
+	agent?: string;
+	model?: string;
 }
 
 export interface Task {
@@ -160,12 +162,11 @@ export const taskStatusFilter = writable<string>("");
 
 // Recent actions
 export const recentActions = writable<RecentAction[]>([]);
-export const recentActionsPage = writable<number>(1);
-export const recentActionsPageSize = writable<number>(20);
 export const recentActionsTotalItems = writable<number>(0);
+export const recentActionsPage = writable<number>(1);
+export const recentActionsPageSize = writable<number>(25);
 
 // Drawer state
-export const drawerMemoryId = writable<string | null>(null);
 export const drawerTaskId = writable<string | null>(null);
 
 // Connection status

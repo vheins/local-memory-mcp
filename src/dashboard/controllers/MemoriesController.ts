@@ -34,8 +34,9 @@ export class MemoriesController {
 					}
 				})
 			);
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -45,8 +46,9 @@ export class MemoriesController {
 			if (!memory) throw new Error("Memory not found");
 			db.actions.logAction("read", memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
 			res.json(jsonApiRes(memory, "memory"));
-		} catch (err: any) {
-			res.status(404).json(jsonApiError(err.message, 404));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Memory not found";
+			res.status(404).json(jsonApiError(message, 404));
 		}
 	}
 
@@ -65,8 +67,9 @@ export class MemoriesController {
 			});
 			db.actions.logAction("write", repo, { memoryId: id });
 			res.json(jsonApiRes({ id }, "memory"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -89,10 +92,11 @@ export class MemoriesController {
 				updated_at: new Date().toISOString()
 			};
 			db.memories.update(id, updates);
-			db.actions.logAction("update", (existing as any).scope?.repo || attributes.repo || "", { memoryId: id });
+			db.actions.logAction("update", (existing as Record<string, any>).scope?.repo || attributes.repo || "", { memoryId: id });
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -102,10 +106,11 @@ export class MemoriesController {
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
 			db.memories.delete(id);
-			db.actions.logAction("delete", (existing as any).scope?.repo || "", { memoryId: id });
+			db.actions.logAction("delete", (existing as Record<string, any>).scope?.repo || "", { memoryId: id });
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -115,7 +120,7 @@ export class MemoriesController {
 			if (!Array.isArray(items) || !repo)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
 
-			const entries = items.map((item: any) => ({
+			const entries = items.map((item: Record<string, any>) => ({
 				...item,
 				id: item.id || randomUUID(),
 				scope: { ...item.scope, repo },
@@ -126,8 +131,9 @@ export class MemoriesController {
 			const count = db.memories.bulkInsertMemories(entries);
 			db.system.logAction("write", repo, { query: `Bulk imported ${count} memories` });
 			res.json(jsonApiRes({ count }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 
@@ -152,8 +158,9 @@ export class MemoriesController {
 			}
 
 			res.json(jsonApiRes({ count }, "status"));
-		} catch (err: any) {
-			res.status(500).json(jsonApiError(err.message));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 }

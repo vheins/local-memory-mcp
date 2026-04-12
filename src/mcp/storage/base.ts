@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { MemoryEntry, Task } from "../types.js";
 import { tokenize } from "../utils/normalize.js";
+import { MemoryEntry, Task } from "../types.js";
 
 /**
  * Base class for all database entities.
@@ -16,7 +16,7 @@ export abstract class BaseEntity {
 		if (!json) return defaultValue;
 		try {
 			return JSON.parse(json);
-		} catch (e) {
+		} catch {
 			return defaultValue;
 		}
 	}
@@ -24,10 +24,10 @@ export abstract class BaseEntity {
 	/**
 	 * Mapping helper for MemoryEntry
 	 */
-	protected rowToMemoryEntry(row: any): MemoryEntry {
+	protected rowToMemoryEntry(row: MemoryRow): MemoryEntry {
 		return {
 			id: row.id,
-			type: row.type,
+			type: row.type as MemoryType,
 			title: row.title || "Untitled",
 			content: row.content,
 			importance: row.importance,
@@ -47,17 +47,17 @@ export abstract class BaseEntity {
 			last_used_at: row.last_used_at ?? null,
 			expires_at: row.expires_at ?? null,
 			supersedes: row.supersedes ?? null,
-			status: row.status || "active",
+			status: (row.status as "active" | "archived") || "active",
 			is_global: row.is_global === 1,
-			tags: this.safeJSONParse(row.tags, []),
-			metadata: this.safeJSONParse(row.metadata, {})
+			tags: this.safeJSONParse<string[]>(row.tags, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {})
 		};
 	}
 
 	/**
 	 * Mapping helper for Task
 	 */
-	protected rowToTask(row: any): Task {
+	protected rowToTask(row: TaskRow): Task {
 		return {
 			id: row.id,
 			repo: row.repo,
@@ -65,8 +65,8 @@ export abstract class BaseEntity {
 			phase: row.phase || "",
 			title: row.title,
 			description: row.description || null,
-			status: row.status || "backlog",
-			priority: row.priority || 3,
+			status: (row.status as TaskStatus) || "backlog",
+			priority: (row.priority as TaskPriority) || 3,
 			agent: row.agent || "unknown",
 			role: row.role || "unknown",
 			doc_path: row.doc_path || null,
@@ -76,8 +76,8 @@ export abstract class BaseEntity {
 			finished_at: row.finished_at || null,
 			canceled_at: row.canceled_at || null,
 			est_tokens: row.est_tokens || 0,
-			tags: this.safeJSONParse(row.tags, []),
-			metadata: this.safeJSONParse(row.metadata, {}),
+			tags: this.safeJSONParse<string[]>(row.tags, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {}),
 			parent_id: row.parent_id || null,
 			depends_on: row.depends_on || null,
 			comments_count: row.comments_count || 0

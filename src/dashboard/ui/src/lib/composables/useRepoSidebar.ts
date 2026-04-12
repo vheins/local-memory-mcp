@@ -1,13 +1,9 @@
 import {
-	availableRepos,
 	currentRepo,
 	pinnedRepos,
-	repoSearchQuery,
-	isRepoSidebarCollapsed,
-	orderedRepos
+	isRepoSidebarCollapsed
 } from "../stores";
 import { getRepoInitials } from "../utils";
-import { get } from "svelte/store";
 
 export function createRepoSidebarHandler(onRepoSelect?: (repo: string) => void) {
 	let draggedRepo: string | null = null;

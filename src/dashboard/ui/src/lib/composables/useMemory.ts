@@ -47,8 +47,8 @@ export function createMemoryHandler(props: UseMemoryProps) {
 				content: memory.content,
 				importance: memory.importance,
 				tags: (memory.tags || []).join(", "),
-				agent: (memory as any).agent || "",
-				model: (memory as any).model || ""
+				agent: memory.agent || "",
+				model: memory.model || ""
 			});
 			editing.set(false);
 		} else {
@@ -88,7 +88,7 @@ export function createMemoryHandler(props: UseMemoryProps) {
 
 		try {
 			const repo = get(currentRepo);
-			const payload: any = {
+			const payload: Partial<Memory> & { repo: string | null } = {
 				title: currentForm.title.trim(),
 				type: currentForm.type,
 				content: currentForm.content.trim(),
@@ -97,7 +97,7 @@ export function createMemoryHandler(props: UseMemoryProps) {
 				agent: currentForm.agent.trim() || undefined,
 				model: currentForm.model.trim() || undefined,
 				repo: repo,
-				scope: { repo: repo }
+				scope: { repo: repo || "" }
 			};
 
 			let result: Memory;
@@ -122,8 +122,8 @@ export function createMemoryHandler(props: UseMemoryProps) {
 
 			props.onSaved(result);
 			props.onClose();
-		} catch (e: any) {
-			error.set(e.message || "Failed to save memory.");
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : "Failed to save memory.");
 		} finally {
 			saving.set(false);
 		}
@@ -140,8 +140,8 @@ export function createMemoryHandler(props: UseMemoryProps) {
 			await api.deleteMemory(currentMemory.id);
 			props.onDeleted(currentMemory.id);
 			props.onClose();
-		} catch (e: any) {
-			error.set(e.message || "Failed to delete memory.");
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : "Failed to delete memory.");
 		} finally {
 			deleting.set(false);
 		}

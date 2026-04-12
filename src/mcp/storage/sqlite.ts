@@ -2,7 +2,6 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { fileURLToPath } from "url";
 import { logger } from "../utils/logger.js";
 import { MigrationManager } from "./migrations.js";
 import { MemoryEntity } from "../entities/memory.js";
@@ -11,7 +10,6 @@ import { ActionEntity } from "../entities/action.js";
 import { SystemEntity } from "../entities/system.js";
 import { SummaryEntity } from "../entities/summary.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Resolve database path with following priority:

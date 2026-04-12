@@ -10,8 +10,7 @@
 		memoriesImportanceMin,
 		memoriesSortBy,
 		memoriesSortOrder,
-		selectedMemoryIds,
-		currentRepo
+		selectedMemoryIds
 	} from "../lib/stores";
 	import { createMemoryHandler } from "../lib/composables/useMemoryList";
 	import { formatDate } from "../lib/utils";

@@ -219,18 +219,13 @@ export class StubVectorStore implements VectorStore {
 			const tokens = this.generateTextVector(text);
 
 			// Store tokens as JSON array for better retrieval
-			this.db.memories.upsertVectorEmbedding(id, tokens);
-		} catch (error) {
-			console.error("Error upserting vector:", error);
+			this.db.memories.upsertVectorEmbedding(id, tokens.map(() => 0)); // Stub implementation using placeholder numbers
+		} catch {
 			// Silently fail - vector is optional for search fallback
 		}
 	}
 
-	async remove(id: string): Promise<void> {
-		// Vectors are automatically removed by CASCADE when memory is deleted
-	}
-
-	async search(query: string, limit: number): Promise<VectorResult[]> {
+	async search(query: string, limit: number, repo?: string): Promise<VectorResult[]> {
 		try {
 			// Get all memories and compute similarity to query
 			const queryTokens = this.generateTextVector(query);

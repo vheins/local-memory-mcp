@@ -38,18 +38,19 @@ export class TaskEntity extends BaseEntity {
 		);
 	}
 
-	updateTask(id: string, updates: any): void {
+	updateTask(id: string, updates: Partial<Task> & { comment?: string; model?: string }): void {
 		const fields: string[] = [];
 		const values: unknown[] = [];
+		const anyUpdates = updates as Record<string, unknown>;
 
 		Object.keys(updates).forEach((key) => {
-			if (key !== "comment" && key !== "model" && updates[key] !== undefined) {
+			if (key !== "comment" && key !== "model" && anyUpdates[key] !== undefined) {
 				if (key === "tags" || key === "metadata") {
 					fields.push(`${key} = ?`);
-					values.push(JSON.stringify(updates[key]));
+					values.push(JSON.stringify(anyUpdates[key]));
 				} else {
 					fields.push(`${key} = ?`);
-					values.push(updates[key]);
+					values.push(anyUpdates[key]);
 				}
 			}
 		});
@@ -79,8 +80,8 @@ export class TaskEntity extends BaseEntity {
       WHERE t.id = ?
     `
 			)
-			.get(id) as any;
-		return row ? ({ ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(id) } as any) : null;
+			.get(id) as (Task & { depends_on_code?: string }) | undefined;
+		return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(id) } : null;
 	}
 
 	getTaskByCode(repo: string, taskCode: string): Task | null {
@@ -93,8 +94,8 @@ export class TaskEntity extends BaseEntity {
       WHERE t.repo = ? AND t.task_code = ?
     `
 			)
-			.get(repo, taskCode) as any;
-		return row ? ({ ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(row.id) } as any) : null;
+			.get(repo, taskCode) as (Task & { depends_on_code?: string }) | undefined;
+		return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(row.id) } : null;
 	}
 
 	getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): Task[] {
@@ -105,7 +106,7 @@ export class TaskEntity extends BaseEntity {
       LEFT JOIN tasks d ON t.depends_on = d.id 
       WHERE t.repo = ?
     `;
-		const params: any[] = [repo];
+		const params: unknown[] = [repo];
 
 		if (status) {
 			query += " AND t.status = ?";
@@ -139,7 +140,10 @@ export class TaskEntity extends BaseEntity {
 			}
 		}
 
-		const rows = this.db.prepare(query).all(...params) as any[];
+		const rows = this.db.prepare(query).all(...params) as (Task & {
+			depends_on_code?: string;
+			comments_count: number;
+		})[];
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -162,7 +166,10 @@ export class TaskEntity extends BaseEntity {
         t.created_at ASC
       LIMIT ? OFFSET ?
     `;
-		const rows = this.db.prepare(query).all(limit, offset) as any[];
+		const rows = this.db.prepare(query).all(limit, offset) as (Task & {
+			depends_on_code?: string;
+			comments_count: number;
+		})[];
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -182,7 +189,7 @@ export class TaskEntity extends BaseEntity {
       LEFT JOIN tasks d ON t.depends_on = d.id 
       WHERE t.repo = ? AND t.status IN (${statuses.map(() => "?").join(",")})
     `;
-		const params: any[] = [repo, ...statuses];
+		const params: unknown[] = [repo, ...statuses];
 
 		if (search) {
 			query += " AND (t.title LIKE ? OR t.description LIKE ? OR t.task_code LIKE ?)";
@@ -211,7 +218,10 @@ export class TaskEntity extends BaseEntity {
 			}
 		}
 
-		const rows = this.db.prepare(query).all(...params) as any[];
+		const rows = this.db.prepare(query).all(...params) as (Task & {
+			depends_on_code?: string;
+			comments_count: number;
+		})[];
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -224,11 +234,11 @@ export class TaskEntity extends BaseEntity {
 			params.push(excludeId);
 		}
 
-		const row = this.db.prepare(query).get(...params) as any;
+		const row = this.db.prepare(query).get(...params) as { count: number };
 		return row.count > 0;
 	}
 
-	bulkInsertTasks(tasks: any[]): number {
+	bulkInsertTasks(tasks: Task[]): number {
 		const insert = this.db.prepare(`
       INSERT INTO tasks (
         id, repo, task_code, phase, title, description, status, priority,
@@ -236,7 +246,7 @@ export class TaskEntity extends BaseEntity {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-		const insertMany = this.db.transaction((tasks: any[]) => {
+		const insertMany = this.db.transaction((tasks: Task[]) => {
 			let count = 0;
 			for (const task of tasks) {
 				insert.run(
@@ -293,14 +303,15 @@ export class TaskEntity extends BaseEntity {
 			);
 	}
 
-	updateTaskComment(id: string, updates: any): void {
+	updateTaskComment(id: string, updates: Partial<TaskComment>): void {
 		const fields: string[] = [];
 		const values: unknown[] = [];
+		const anyUpdates = updates as Record<string, unknown>;
 
 		Object.keys(updates).forEach((key) => {
-			if (updates[key] !== undefined) {
+			if (anyUpdates[key] !== undefined) {
 				fields.push(`${key} = ?`);
-				values.push(updates[key]);
+				values.push(anyUpdates[key]);
 			}
 		});
 
@@ -317,7 +328,7 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	getTaskCommentById(id: string): TaskComment | null {
-		return this.db.prepare("SELECT * FROM task_comments WHERE id = ?").get(id) as any;
+		return this.db.prepare("SELECT * FROM task_comments WHERE id = ?").get(id) as TaskComment | null;
 	}
 
 	getTaskCommentsByTaskId(taskId: string): TaskComment[] {
@@ -329,7 +340,7 @@ export class TaskEntity extends BaseEntity {
       ORDER BY created_at DESC, id DESC
     `
 			)
-			.all(taskId) as any[];
+			.all(taskId) as TaskComment[];
 	}
 
 	getAllTaskCommentsByRepo(repo: string): TaskComment[] {
@@ -341,13 +352,13 @@ export class TaskEntity extends BaseEntity {
       ORDER BY created_at DESC, id DESC
     `
 			)
-			.all(repo) as any[];
+			.all(repo) as TaskComment[];
 	}
 
 	getTaskStats(repo: string): TaskStats {
 		const rows = this.db
 			.prepare("SELECT status, COUNT(*) as count FROM tasks WHERE repo = ? GROUP BY status")
-			.all(repo) as any[];
+			.all(repo) as { status: string; count: number }[];
 		const stats: TaskStats = { total: 0, backlog: 0, todo: 0, inProgress: 0, completed: 0, blocked: 0, canceled: 0 };
 		rows.forEach((r) => {
 			const count = r.count;
@@ -362,7 +373,7 @@ export class TaskEntity extends BaseEntity {
 		return stats;
 	}
 
-	getTaskTimeStats(repo: string, period: "daily" | "weekly" | "monthly" | "overall"): any {
+	getTaskTimeStats(repo: string, period: "daily" | "weekly" | "monthly" | "overall"): { completed: number; tokens: number; avgDuration: number; added: number } {
 		let dateFilter = "";
 		if (period === "daily") dateFilter = "AND date(COALESCE(finished_at, updated_at)) = date('now')";
 		else if (period === "weekly") dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-7 days')";
@@ -388,7 +399,11 @@ export class TaskEntity extends BaseEntity {
       ${dateFilter}
     `
 			)
-			.get(repo) as any;
+			.get(repo) as {
+			completed_count: number;
+			total_tokens: number;
+			avg_duration_seconds: number;
+		} | undefined;
 
 		let addedDateFilter = "";
 		if (period === "daily") addedDateFilter = "AND date(created_at) = date('now')";
@@ -403,7 +418,7 @@ export class TaskEntity extends BaseEntity {
       ${addedDateFilter}
     `
 			)
-			.get(repo) as any;
+			.get(repo) as { count: number } | undefined;
 
 		return {
 			completed: stats?.completed_count || 0,
@@ -413,9 +428,12 @@ export class TaskEntity extends BaseEntity {
 		};
 	}
 
-	getTaskComparisonSeries(repo: string, period: "daily" | "weekly" | "monthly" | "overall"): any[] {
-		let labelFormat = "";
-		let dateFilter = "";
+	getTaskComparisonSeries(
+		repo: string,
+		period: "daily" | "weekly" | "monthly" | "overall"
+	): { label: string; created: number; completed: number }[] {
+		let labelFormat: string;
+		let dateFilter: string;
 
 		if (period === "daily") {
 			labelFormat = "%H:00";
@@ -447,6 +465,10 @@ export class TaskEntity extends BaseEntity {
       LIMIT 100
     `;
 
-		return this.db.prepare(query).all(labelFormat, repo, labelFormat, repo) as any[];
+		return this.db.prepare(query).all(labelFormat, repo, labelFormat, repo) as {
+			label: string;
+			created: number;
+			completed: number;
+		}[];
 	}
 }

@@ -37,7 +37,7 @@ export type MemoryEntry = {
 	supersedes: string | null;
 	status: "active" | "archived";
 	tags: string[];
-	metadata: Record<string, any>;
+	metadata: Record<string, unknown>;
 	is_global: boolean;
 };
 
@@ -78,7 +78,7 @@ export interface Task {
 	canceled_at: string | null;
 	est_tokens: number;
 	tags: string[];
-	metadata: Record<string, any>;
+	metadata: Record<string, unknown>;
 	parent_id: string | null;
 	depends_on: string | null;
 	comments?: TaskComment[];

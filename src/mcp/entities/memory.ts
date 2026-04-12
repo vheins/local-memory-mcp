@@ -1,6 +1,6 @@
 import { BaseEntity } from "../storage/base.js";
-import { MemoryEntry } from "../types.js";
-import { tokenize } from "../utils/normalize.js";
+import { MemoryEntry, MemoryType } from "../types.js";
+
 
 /**
  * Handles all memory-related database operations.
@@ -44,30 +44,31 @@ export class MemoryEntity extends BaseEntity {
 		const values: unknown[] = [];
 
 		Object.keys(updates).forEach((key) => {
-			// @ts-ignore
-			const val = updates[key];
+			const k = key as keyof MemoryEntry;
+			const val = updates[k];
 			if (val !== undefined) {
-				if (key === "scope") {
-					if (updates.scope?.repo) {
+				if (k === "scope") {
+					const scope = updates.scope;
+					if (scope?.repo) {
 						fields.push("repo = ?");
-						values.push(updates.scope.repo);
+						values.push(scope.repo);
 					}
-					if (updates.scope?.folder !== undefined) {
+					if (scope?.folder !== undefined) {
 						fields.push("folder = ?");
-						values.push(updates.scope.folder);
+						values.push(scope.folder);
 					}
-					if (updates.scope?.language !== undefined) {
+					if (scope?.language !== undefined) {
 						fields.push("language = ?");
-						values.push(updates.scope.language);
+						values.push(scope.language);
 					}
-				} else if (key === "tags" || key === "metadata") {
-					fields.push(`${key} = ?`);
+				} else if (k === "tags" || k === "metadata") {
+					fields.push(`${k} = ?`);
 					values.push(JSON.stringify(val));
-				} else if (key === "is_global") {
-					fields.push(`${key} = ?`);
+				} else if (k === "is_global") {
+					fields.push(`${k} = ?`);
 					values.push(val ? 1 : 0);
-				} else {
-					fields.push(`${key} = ?`);
+				} else if (k !== "id" && k !== "created_at") {
+					fields.push(`${k} = ?`);
 					values.push(val);
 				}
 			}
@@ -88,11 +89,11 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	getById(id: string): MemoryEntry | null {
-		const row = this.db.prepare("SELECT * FROM memories WHERE id = ?").get(id);
+		const row = this.db.prepare("SELECT * FROM memories WHERE id = ?").get(id) as MemoryRow | undefined;
 		return row ? this.rowToMemoryEntry(row) : null;
 	}
 
-	getByIdWithStats(id: string): any | null {
+	getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
 		const row = this.db
 			.prepare(
 				`
@@ -100,7 +101,7 @@ export class MemoryEntity extends BaseEntity {
       FROM memories WHERE id = ?
     `
 			)
-			.get(id) as any;
+			.get(id) as (MemoryRow & { recall_rate: number }) | undefined;
 		if (!row) return null;
 		return {
 			...this.rowToMemoryEntry(row),
@@ -111,7 +112,7 @@ export class MemoryEntity extends BaseEntity {
 	getByIds(ids: string[], options: { type?: string; status?: string } = {}): MemoryEntry[] {
 		if (ids.length === 0) return [];
 		let sql = `SELECT * FROM memories WHERE id IN (${ids.map(() => "?").join(",")})`;
-		const params: any[] = [...ids];
+		const params: (string | number)[] = [...ids];
 
 		if (options.type) {
 			sql += " AND type = ?";
@@ -122,20 +123,20 @@ export class MemoryEntity extends BaseEntity {
 			params.push(options.status);
 		}
 
-		const rows = this.db.prepare(sql).all(...params) as any[];
+		const rows = this.db.prepare(sql).all(...params) as MemoryRow[];
 		return rows.map((row) => this.rowToMemoryEntry(row));
 	}
 
 	getStats(repo?: string): { total: number; byType: Record<string, number> } {
 		let sql = "SELECT type, COUNT(*) as count FROM memories";
-		const params: any[] = [];
+		const params: unknown[] = [];
 		if (repo) {
 			sql += " WHERE repo = ?";
 			params.push(repo);
 		}
 		sql += " GROUP BY type";
 
-		const rows = this.db.prepare(sql).all(...params) as any[];
+		const rows = this.db.prepare(sql).all(...params) as { type: string; count: number }[];
 		const byType: Record<string, number> = {};
 		let total = 0;
 		rows.forEach((row) => {
@@ -150,7 +151,7 @@ export class MemoryEntity extends BaseEntity {
 		const now = new Date().toISOString();
 		let sql =
 			"SELECT * FROM memories WHERE repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)";
-		const params: any[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
+		const params: (string | number)[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
 
 		if (type) {
 			sql += " AND type = ?";
@@ -160,7 +161,7 @@ export class MemoryEntity extends BaseEntity {
 		sql += " ORDER BY importance DESC, created_at DESC LIMIT ?";
 		params.push(limit);
 
-		const rows = this.db.prepare(sql).all(...params) as any[];
+		const rows = this.db.prepare(sql).all(...params) as MemoryRow[];
 		return rows.map((row) => this.rowToMemoryEntry(row));
 	}
 
@@ -206,23 +207,24 @@ export class MemoryEntity extends BaseEntity {
 		return insertMany(entries);
 	}
 
-	bulkUpdateMemories(ids: string[], updates: any): number {
+	bulkUpdateMemories(ids: string[], updates: Partial<MemoryEntry>): number {
 		if (ids.length === 0) return 0;
 
 		const fields: string[] = [];
 		const values: unknown[] = [];
 
-		Object.keys(updates).forEach((key) => {
-			if (updates[key] !== undefined) {
+		(Object.keys(updates) as (keyof MemoryEntry)[]).forEach((key) => {
+			const value = updates[key];
+			if (value !== undefined) {
 				if (key === "tags" || key === "metadata") {
 					fields.push(`${key} = ?`);
-					values.push(JSON.stringify(updates[key]));
+					values.push(JSON.stringify(value));
 				} else if (key === "is_global") {
 					fields.push(`${key} = ?`);
-					values.push(updates[key] ? 1 : 0);
+					values.push(value ? 1 : 0);
 				} else {
 					fields.push(`${key} = ?`);
-					values.push(updates[key]);
+					values.push(value);
 				}
 			}
 		});
@@ -275,7 +277,7 @@ export class MemoryEntity extends BaseEntity {
 		excludeTypes: string[] = []
 	): MemoryEntry[] {
 		let query = "SELECT * FROM memories WHERE repo = ?";
-		const params: any[] = [repo];
+		const params: (string | number)[] = [repo];
 
 		if (!includeArchived) {
 			query += " AND status = 'active'";
@@ -289,13 +291,13 @@ export class MemoryEntity extends BaseEntity {
 		query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
 		params.push(limit, offset);
 
-		const rows = this.db.prepare(query).all(...params) as any[];
+		const rows = this.db.prepare(query).all(...params) as MemoryRow[];
 		return rows.map((row) => this.rowToMemoryEntry(row));
 	}
 
 	getTotalCount(repo: string, includeArchived = false, excludeTypes: string[] = []): number {
 		let sql = "SELECT COUNT(*) as count FROM memories WHERE repo = ?";
-		const params: any[] = [repo];
+		const params: (string | number)[] = [repo];
 
 		if (!includeArchived) sql += " AND status = 'active'";
 
@@ -304,7 +306,8 @@ export class MemoryEntity extends BaseEntity {
 			params.push(...excludeTypes);
 		}
 
-		return (this.db.prepare(sql).get(...params) as any).count;
+		const row = this.db.prepare(sql).get(...params) as { count: number };
+		return row.count;
 	}
 
 	incrementHitCount(id: string): void {
@@ -331,19 +334,19 @@ export class MemoryEntity extends BaseEntity {
 			.run(new Date().toISOString(), id);
 	}
 
-	getVectorCandidates(repo?: string, limit = 100): any[] {
+	getVectorCandidates(repo?: string, limit = 100): { memory_id: string; vector: string }[] {
 		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN memories m ON mv.memory_id = m.id`;
-		const params: any[] = [];
+		const params: (string | number)[] = [];
 		if (repo) {
 			sql += " WHERE m.repo = ?";
 			params.push(repo);
 		}
 		sql += " LIMIT ?";
 		params.push(limit);
-		return this.db.prepare(sql).all(...params) as any[];
+		return this.db.prepare(sql).all(...params) as { memory_id: string; vector: string }[];
 	}
 
-	upsertVectorEmbedding(memoryId: string, vector: any[]): void {
+	upsertVectorEmbedding(memoryId: string, vector: number[]): void {
 		this.db
 			.prepare(
 				`
@@ -354,8 +357,8 @@ export class MemoryEntity extends BaseEntity {
 			.run(memoryId, JSON.stringify(vector), new Date().toISOString());
 	}
 
-	getSummary(repo: string): any {
-		return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo);
+	getSummary(repo: string): { summary: string; updated_at: string } | undefined {
+		return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as { summary: string; updated_at: string } | undefined;
 	}
 
 	upsertSummary(repo: string, summary: string): void {
@@ -369,7 +372,18 @@ export class MemoryEntity extends BaseEntity {
 			.run(repo, summary, new Date().toISOString());
 	}
 
-	listMemoriesForDashboard(options: any): any {
+	listMemoriesForDashboard(options: {
+		repo?: string;
+		type?: MemoryType;
+		tag?: string;
+		isGlobal?: boolean;
+		minImportance?: number;
+		search?: string;
+		offset?: number;
+		limit?: number;
+		sortBy?: string;
+		sortOrder?: "ASC" | "DESC";
+	}): { items: (MemoryEntry & { recall_rate: number })[]; memories: (MemoryEntry & { recall_rate: number })[]; total: number; limit: number; offset: number } {
 		const {
 			repo,
 			type,
@@ -383,52 +397,22 @@ export class MemoryEntity extends BaseEntity {
 			sortOrder = "DESC"
 		} = options;
 		const where = ["1=1"];
-		const params: any[] = [];
+		const params: (string | number)[] = [];
+		if (repo) { where.push("repo = ?"); params.push(repo); }
+		if (type) { where.push("type = ?"); params.push(type); }
+		if (tag) { where.push("tags LIKE ?"); params.push(`%${tag}%`); }
+		if (isGlobal !== undefined) { where.push("is_global = ?"); params.push(isGlobal ? 1 : 0); }
+		if (minImportance !== undefined) { where.push("importance >= ?"); params.push(minImportance); }
+		if (search) { where.push("(title LIKE ? OR content LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
 
-		if (repo) {
-			where.push("repo = ?");
-			params.push(repo);
-		}
-		if (type) {
-			where.push("type = ?");
-			params.push(type);
-		}
-		if (tag) {
-			where.push("tags LIKE ?");
-			params.push(`%${tag}%`);
-		}
-		if (isGlobal !== undefined) {
-			where.push("is_global = ?");
-			params.push(isGlobal ? 1 : 0);
-		}
-		if (minImportance) {
-			where.push("importance >= ?");
-			params.push(minImportance);
-		}
-		if (search) {
-			where.push("(title LIKE ? OR content LIKE ? OR tags LIKE ?)");
-			params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-		}
+		const countSql = `SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`;
+		const total = (this.db.prepare(countSql).get(...params) as { count: number }).count;
 
-		const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`);
-		const total = (countStmt.get(...params) as any).count;
-
-		let orderBy = "";
-		if (sortBy && sortOrder) {
-			orderBy = `ORDER BY ${sortBy} ${sortOrder}`;
-		} else {
-			orderBy = `ORDER BY importance DESC, created_at ASC`;
-		}
-
-		const dataStmt = this.db.prepare(`
-      SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate
-      FROM memories WHERE ${where.join(" AND ")}
-      ${orderBy} LIMIT ? OFFSET ?
-    `);
-		const rows = dataStmt.all(...params, limit, offset) as any[];
+		const dataSql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${where.join(" AND ")} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
+		const rows = this.db.prepare(dataSql).all(...params, limit, offset) as (MemoryRow & { recall_rate: number })[];
 		const items = rows.map((row) => ({
 			...this.rowToMemoryEntry(row),
-			recall_rate: row.recall_rate ?? 0
+			recall_rate: row.recall_rate || 0
 		}));
 
 		return { items, memories: items, total, limit, offset };
@@ -440,12 +424,12 @@ export class MemoryEntity extends BaseEntity {
 		limit: number = 10,
 		includeArchived: boolean = false,
 		currentTags: string[] = []
-	): any[] {
+	): (MemoryEntry & { similarity: number })[] {
 		const queryVector = this.computeVector(query);
 		const now = new Date();
 
 		const where = ["(repo = ? OR is_global = 1)"];
-		const params: any[] = [repo];
+		const params: (string | number)[] = [repo];
 
 		if (currentTags.length > 0) {
 			const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
@@ -453,16 +437,16 @@ export class MemoryEntity extends BaseEntity {
 			currentTags.forEach((tag) => params.push(`%${tag}%`));
 		}
 
-		let sql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND (expires_at IS NULL OR expires_at > ?)`;
+		let sql = `SELECT * FROM memories WHERE (${where.join(" AND ")}) AND (expires_at IS NULL OR expires_at > ?)`;
 		if (!includeArchived) sql += " AND status = 'active'";
 		sql += ` ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
 
-		const candidates = this.db.prepare(sql).all(...params, now.toISOString(), repo) as any[];
+		const candidates = this.db.prepare(sql).all(...params, now.toISOString(), repo) as MemoryRow[];
 
 		// Ensure we have at least some candidates for re-ranking
 		if (candidates.length < 5) {
 			const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
-			const recent = this.db.prepare(recentSql).all(...params, now.toISOString()) as any[];
+			const recent = this.db.prepare(recentSql).all(...params, now.toISOString()) as MemoryRow[];
 			for (const r of recent) {
 				if (!candidates.find((c) => c.id === r.id)) candidates.push(r);
 			}
@@ -479,8 +463,7 @@ export class MemoryEntity extends BaseEntity {
 					return { ...memory, similarity: 0 };
 				}
 
-				const similarity = this.cosineSimilarity(queryVector, this.computeVector(memory.content));
-
+				const similarity = this.cosineSimilarity(queryVector, this.computeVector(memory.content)) || 0;
 				let score = similarity;
 				if (!score) {
 					score = 0.16; // Baseline for active candidates
@@ -498,10 +481,10 @@ export class MemoryEntity extends BaseEntity {
 	async checkConflicts(
 		content: string,
 		repo: string,
-		type: string,
-		vectors: any,
+		_type: string,
+		_vectors: VectorStore,
 		threshold: number = 0.55
-	): Promise<any | null> {
+	): Promise<(MemoryEntry & { similarity: number }) | null> {
 		const results = await this.searchBySimilarity(content, repo, 1, false);
 		if (results.length > 0 && results[0].similarity >= threshold) {
 			return results[0];
@@ -536,5 +519,11 @@ export class MemoryEntity extends BaseEntity {
     `
 			)
 			.run(new Date().toISOString());
+		return result.changes;
 	}
 }
+
+interface MemoryRowWithRate extends MemoryRow {
+	recall_rate: number;
+}
+import { MemoryRow, VectorStore } from "../storage/base.js";

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentRepo, taskSearch } from "../lib/stores";
+	import { taskSearch } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
 	import TaskCard from "./TaskCard.svelte";
 	import type { Task } from "../lib/stores";
