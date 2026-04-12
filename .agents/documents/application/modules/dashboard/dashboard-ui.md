@@ -6,23 +6,27 @@ The Dashboard UI provides a responsive, high-fidelity interface for human intera
 ## Primary Navigation
 The interface is organized into 5 functional tabs:
 1. **Dashboard**: High-level stats, volume trends, and performance metrics.
-2. **Activity**: A chronological audit log of all system actions.
+2. **Activity**: A chronological audit log of all system actions (with burst condensation).
 3. **Memories**: Knowledge search, curation, and bulk import/export.
-4. **Tasks**: A Kanban view of all development initiatives.
+4. **Tasks**: A Kanban view of all development initiatives with drag-and-drop state transitions.
 5. **Reference**: A self-documenting index of MCP capabilities (Tools/Prompts).
+
+## Svelte 5 Patterns
+The UI leverages the latest Svelte 5 "Runes" for predictable state management:
+- **$state**: Used for tracking global repository switching and tab selection.
+- **$derived**: Automates pagination calculations and filtered memory views.
+- **$effect**: Manages synchronization with `localStorage` for visual settings (Theme, PageSize).
 
 ## UI Architecture Components
 - **`App.svelte`**: Tab orchestration and global state context.
-- **Composables**: Logic encapsulation for specific features (e.g., `useKanban`, `useActivity`).
-- **Glass System**: A set of reusable CSS patterns for transparent surfaces and blurs.
-- **Icon Set**: Standardized SVG icons for status and action clarity.
-
-## User Stories (Production)
-- **Activity Auditing**: "As a developer, I want to see the exact input/output of an agent's search query so I can debug why it missed a critical fact."
-- **Bulk Seeding**: "As a developer, I want to upload a JSON list of project rules so the agent is immediately context-aware."
-- **Capability Inspection**: "As a developer, I want to see the JSON schema of the `memory.store` tool to ensure my prompts match the required types."
+- **`Dashboard.svelte`**: Grid of analytics widgets using SVG charts.
+- **`Kanban.svelte`**: Column-based view for task lifecycles (`backlog` -> `pending` -> `in_progress` -> `completed`).
+- **`MemoryExplorer.svelte`**: Hybrid list/card view with semantic search input.
 
 ## Technical Patterns
-- **API Communication**: Centralized via `api.ts` with typed fetch wrappers.
-- **State Management**: Svelte stores for reactive UI updates (Loading states, Toast notifications).
-- **Responsiveness**: Flexbox-first layout with mobile-specific drawer transitions.
+- **API Communication**: Centralized via `api.ts` utilizing `fetch` with standardized error handling for 4xx/5xx responses.
+- **Optimistic Updates**: Immediate UI feedback for task status changes, with rollback on server failure.
+- **Glass Design System**: Custom Vanilla CSS utilities for transparency, backdrop-blurs, and sleek dark-mode aesthetics.
+- **Responsive Adaptive Design**:
+    - **Desktop**: Full grid layout with persistent sidebar.
+    - **Mobile**: Collapsible navigation with bottom-sheet detail views.

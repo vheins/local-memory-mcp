@@ -1,25 +1,32 @@
-# Module Documentation: Intelligent Interaction Layer
+# Module Documentation: Interaction Layer
 
 ## Responsibility
-The Interaction Layer manages the sophisticated communication patterns between the AI Agent and the MCP Client. It provides "Smart Context" by inferring environment details and provides "Self-Correcting UI" through completions and elicitations.
+The Interaction Layer handles the dynamic exchange of information between the agent and the MCP server. It focuses on reducing friction through intelligent suggestions (Completions) and context discovery (Elicitation).
 
 ## 1. Smart Completions
-The server provides real-time suggestions for tool and resource arguments to reduce agent hallucination and improve input accuracy.
+The server provides localized completion suggestions for tool parameters:
+- **`repo` completion**: Lists active repositories based on the established SQLite directory.
+- **`tags` completion**: Suggests existing tags from the global and repo-local namespaces.
+- **`file_path` completion**: Scoped path suggestions based on the current workspace root.
+- **`task_code` completion**: Active tasks from the `tasks` table with a `pending` or `in_progress` status.
 
-### Completion Sources
-- **Repos**: Suggestions extracted from active filesystem roots and the `repositories` table.
-- **Tags**: Unique technology tags (e.g., `react`, `typescript`) found in existing memories.
-- **File Paths**: Scoped file path suggestions (limited to 300 results) based on the active MCP session roots.
-- **Tasks**: Active `task_code` suggestions filtered by the inferred or provided repository.
+## 2. Elicitation Logic (Interactive Feedback)
+When an agent provides incomplete data for a mandatory tool call, the server triggers an `elicitation` flow:
+- **Missing Repo/Title**: If `task-create` is called without a repo name, the server attempts to infer it from the current directory context. If inference fails, it returns a structured prompt for user input.
+- **Validation Gates**: The interaction layer enforces "Definition of Done (DoD)" by verifying that required metadata fields (like `role` and `agent`) are present before committing to the DB.
 
-## 2. Session Intelligence
-The server maintains a stateless (but context-aware) session for every connection.
+## 3. Session Intelligence
+- **Connection Persistence**: The server tracks the lifecycle of the `MCPClient` to ensure shared resources are released on disconnect.
+- **Project Discovery**: Automatically identifies the "Active Project" by comparing the current working directory (CWD) against registered repository paths.
+- **Instruction Context**: Injects the repository's `Project Overview` into every prompt call to ensure the agent is permanently aware of global architectural rules.
+
+## Business Invariants
+- **No-Retry Rule**: For long-running operations like `memory.synthesize`, the interaction layer returns a "Processing" status and prevents duplicate triggers from the same session ID.
+- **Response Format**: All tool results MUST be returned as JSON-serializable strings within the `content` array of the MCP response.
 
 ### Invariant Logic
 - **Root Detection**: Automatically identifies the "active" project root by searching for `.git` or `.gemini` markers upward from the `current_file_path`.
 - **Repo Inference**: If no `repo` is provided in tool arguments, the server infers it from the `basename` of the detected project root.
-- **Path Guarding**: All absolute paths provided to the server are validated against the active MCP roots. The server will reject any path outside these bounds to prevent directory traversal.
-
 ## 3. Sampling & Elicitation
 Advanced patterns for multi-turn or human-in-the-loop interactions.
 

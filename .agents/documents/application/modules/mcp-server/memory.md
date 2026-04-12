@@ -1,27 +1,49 @@
-# Feature Documentation: Memory Management
+# Module Documentation: Memory Partition
 
 ## Responsibility
-The Memory Management module provides the system's "Long-Term Persistence". It allows agents to store architectural decisions, patterns, and facts that persist across sessions.
+The Memory Partition handles the persistence, retrieval, and structural integrity of semantic knowledge and task state. It is built on a "Local-First" principle, ensuring high performance without external dependencies.
 
-## Hybrid Search & Ranking
-The system implements a multi-stage ranking algorithm to ensure high recall and precision:
-1.  **Vector Store (L2 Distance)**: Uses `@xenova/transformers` to provide semantic matching.
-2.  **SQLite FTS5 (BM25)**: Provides exact keyword and token-based matching.
-3.  **Recency & Importance Bias**: Results are weighted towards higher `importance` and more recent `created_at` timestamps.
+## Data Schema (SQLite)
+The system uses the following core tables to maintain state:
 
-## Context Sharing (Affinity Tagging)
-The server can automatically pull relevant memories from *different* repositories using **Affinity Tags**.
-- When an agent provides `current_tags` (e.g., `["react", "filament"]`), the server searches for memories with matching tags in the `global` scope or other projects.
-- This allows for "Global Coding Standards" or "Cross-Project Mistakes" to be shared without manual duplication.
+### 1. `memories`
+The primary store for semantic knowledge.
+- **`id`**: UUID v4 (Primary Key).
+- **`repo`**: Repository name for scoping.
+- **`type`**: Enum (code_fact, decision, mistake, pattern, agent_handoff, agent_registered, file_claim, task_archive).
+- **`title`**: Human-readable title for UI display.
+- **`content`**: The actual knowledge payload.
+- **`importance`**: Integer (1 to 5) used for ranking.
+- **`is_global`**: Boolean (0/1) for cross-repository visibility.
+- **`tags`**: JSON array of tech-stack or logic markers.
+- **`hit_count` / `recall_count`**: Used to calculate "recall rate" and decay.
 
-## Core Tools
-- `memory.store`: Saves a new memory with automatic vectorization.
+### 2. `tasks`
+The state machine for development initiatives.
+- **`status`**: Enum (backlog, pending, in_progress, completed, blocked, canceled).
+- **`task_code`**: Unique human-readable code (e.g., `TASK-001`).
+- **`est_tokens`**: Token budget tracking for cost/performance analysis.
+
+## Search Ranking Algorithm
+Memory search utilizes a hybrid ranking strategy:
+1.  **Semantic Filter**: Broad filtering based on `repo` affinity and `is_global` status.
+2.  **Tag Boost**: Priorities are given to entries matching the `current_tags` of the active environment.
+3.  **Vector Calculation**: Cosine similarity between the query embedding and stored content vectors.
+4.  **Ranking Bias**: 
+    -   `repo_match`: +0.1 similarity boost.
+    -   `importance`: Higher importance values act as tie-breakers.
+
+## Memory Lifecycle & Maintenance
+The system performs automated "Garbage Collection" and curation:
+- **Expiry**: Memories with an `expires_at` timestamp are automatically moved to `memories_archive` or marked as `archived`.
+- **Decay Scoring**: High-volume repositories utilize a decay algorithm where `hit_count` (frequency of access) vs. `recall_count` (relevance of access) is used to demote low-quality memories.
+- **Auto-Archiving**:
+    -   Memories older than 90 days with `importance < 3` are archived.
+    -   Memories with `hit_count > 10` but `recall_count = 0` are flagged for review/archival.
 - `memory.search`: Performs hybrid Vector + FTS5 search (ranked by similarity).
 - `memory.synthesize`: Consolidates multiple memories into a high-level architectural insight.
 - `memory.summarize`: Updates the repository's global summary signal.
 - `memory.recap`: Provides a pointer table of the most important recent memories.
-- `memory.acknowledge`: Mandatory confirmation after an agent uses a memory to generate logic.
-
 ## Business Rules
 | Rule Name | Description |
 |-----------|-------------|

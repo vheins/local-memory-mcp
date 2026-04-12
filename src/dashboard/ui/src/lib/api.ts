@@ -4,9 +4,40 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw new Error(err.error || err.errors?.[0]?.detail || `HTTP ${res.status}`);
   }
-  return res.json();
+  const body = await res.json();
+  return deserialize(body) as T;
+}
+
+function deserialize(body: any): any {
+  if (!body || !body.data) return body;
+  const { data, meta } = body;
+  
+  const processItem = (item: any) => {
+    if (item.id === 'system' && item.type === 'status') return item.attributes;
+    return { id: item.id, ...item.attributes };
+  };
+
+  if (Array.isArray(data)) {
+    const items = data.map(processItem);
+    const result: any = {};
+    if (meta) result.pagination = meta;
+    
+    // Feature-specific hydration for backward compatibility
+    if (data[0]?.type === 'repository') {
+      return { repos: items.map(i => i.name || i.repo || i.id) };
+    }
+    
+    const rootKey = data[0]?.type ? `${data[0].type}s` : 'data';
+    result[rootKey] = items;
+    return result;
+  }
+  
+  const item = processItem(data);
+  // Unify successful responses that were previously { success: true, ... }
+  if (data.type === 'status') return { success: true, ...item };
+  return item;
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────

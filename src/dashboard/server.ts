@@ -68,23 +68,24 @@ app.use((req, res, next) => {
 // Health check
 app.get("/api/health", (req, res) => {
   const stats = db.getStats();
-  res.json({
+  const health = {
     connected: mcpClient.isConnected(),
     uptime: Math.floor((Date.now() - startTime) / 1000),
     version: pkg.version,
     memoryCount: stats.total,
     pendingRequests: mcpClient.getPendingCount(),
     dbPath: db.getDbPath()
-  });
+  };
+  res.json(jsonApiRes(health, "health"));
 });
 
 // List all repositories
 app.get("/api/repos", async (req, res) => {
   try {
     const repos = db.listRepoNavigation();
-    res.json({ repos });
+    res.json(jsonApiRes(repos.map(r => ({ id: r.repo, name: r.repo, ...r })), "repository"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -93,9 +94,9 @@ app.get("/api/stats", async (req, res) => {
   try {
     const repo = req.query.repo as string | undefined;
     const stats = db.getDashboardStats(repo);
-    res.json(stats);
+    res.json(jsonApiRes(stats, "system-stats"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -108,12 +109,12 @@ app.get("/api/recent-actions", async (req, res) => {
     const rawActions = db.getRecentActions(repo, 100);
     const allCondensed = condenseRecentActions(rawActions, 100);
     const offset = (page - 1) * pageSize;
-    res.json({
-      actions: allCondensed.slice(offset, offset + pageSize),
-      pagination: { page, pageSize, totalItems: allCondensed.length }
-    });
+    const items = allCondensed.slice(offset, offset + pageSize);
+    res.json(jsonApiRes(items, "recent-action", {
+      meta: { page, pageSize, totalItems: allCondensed.length }
+    }));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -124,7 +125,7 @@ app.get("/api/memories", async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || "25", 10)));
 
-    if (!repo) return res.status(400).json({ error: "repo is required" });
+    if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
     const result = db.listMemoriesForDashboard({
       repo: repo as string,
@@ -138,17 +139,16 @@ app.get("/api/memories", async (req, res) => {
       offset: (page - 1) * pageSize,
     });
 
-    res.json({
-      memories: result.items,
-      pagination: {
+    res.json(jsonApiRes(result.items, "memory", {
+      meta: {
         page,
         pageSize,
         totalItems: result.total,
         totalPages: Math.ceil(result.total / pageSize)
       }
-    });
+    }));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -157,22 +157,23 @@ app.get("/api/memories/:id", async (req, res) => {
     const memory = db.getByIdWithStats(req.params.id);
     if (!memory) throw new Error("Memory not found");
     db.logAction("read", memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
-    res.json(memory);
+    res.json(jsonApiRes(memory, "memory"));
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(404).json(jsonApiError(err.message, 404));
   }
 });
 
 app.post("/api/memories", async (req, res) => {
   try {
-    const { repo, type, content } = req.body;
-    if (!repo || !type || !content) return res.status(400).json({ error: "Required fields missing" });
+    const attributes = getAttributes(req);
+    const { repo, type, content } = attributes;
+    if (!repo || !type || !content) return res.status(400).json(jsonApiError("Required fields missing", 400));
     const id = randomUUID();
-    db.insert({ ...req.body, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), scope: { repo } });
+    db.insert({ ...attributes, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), scope: { repo } });
     db.logAction("write", repo, { memoryId: id });
-    res.json({ success: true, id });
+    res.json(jsonApiRes({ id }, "memory"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -180,14 +181,15 @@ app.put("/api/memories/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const existing = db.getByIdWithStats ? db.getByIdWithStats(id) : db.getById(id);
-    if (!existing) return res.status(404).json({ error: "Memory not found" });
-    const { title, content, type, importance, tags, agent, model, repo } = req.body;
+    if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
+    const attributes = getAttributes(req);
+    const { title, content, type, importance, tags, agent, model, repo } = attributes;
     const updates = { title, content, type, importance, tags, agent, model, repo, updated_at: new Date().toISOString() };
     db.update(id, updates);
-    db.logAction("update", existing.repo || req.body.repo || "", { memoryId: id });
-    res.json({ success: true });
+    db.logAction("update", existing.repo || attributes.repo || "", { memoryId: id });
+    res.json(jsonApiRes({ message: "Updated" }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -195,19 +197,19 @@ app.delete("/api/memories/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const existing = db.getByIdWithStats ? db.getByIdWithStats(id) : db.getById(id);
-    if (!existing) return res.status(404).json({ error: "Memory not found" });
+    if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
     db.delete(id);
     db.logAction("delete", existing.repo || "", { memoryId: id });
-    res.json({ success: true });
+    res.json(jsonApiRes({ message: "Deleted" }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
 app.post("/api/memories/bulk-import", async (req, res) => {
   try {
-    const { items, repo } = req.body;
-    if (!Array.isArray(items) || !repo) return res.status(400).json({ error: "Invalid payload: requires 'items' array and 'repo'" });
+    const { items, repo } = getAttributes(req);
+    if (!Array.isArray(items) || !repo) return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
     
     const entries = items.map(item => ({
       ...item,
@@ -219,16 +221,16 @@ app.post("/api/memories/bulk-import", async (req, res) => {
     
     const count = db.bulkInsertMemories(entries);
     db.logAction("write", repo, { query: `Bulk imported ${count} memories` });
-    res.json({ success: true, count });
+    res.json(jsonApiRes({ count }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
 app.post("/api/memories/bulk-action", async (req, res) => {
   try {
-    const { action, ids, updates } = req.body;
-    if (!Array.isArray(ids) || !action) return res.status(400).json({ error: "Invalid payload: requires 'ids' array and 'action'" });
+    const { action, ids, updates } = getAttributes(req);
+    if (!Array.isArray(ids) || !action) return res.status(400).json(jsonApiError("Invalid payload: requires 'ids' array and 'action'", 400));
     
     let count = 0;
     if (action === "delete") {
@@ -236,7 +238,7 @@ app.post("/api/memories/bulk-action", async (req, res) => {
     } else if (action === "update" || action === "archive") {
       count = db.bulkUpdateMemories(ids, updates || { status: action === 'archive' ? 'archived' : 'active' });
     } else {
-      return res.status(400).json({ error: "Invalid action" });
+      return res.status(400).json(jsonApiError("Invalid action", 400));
     }
     
     if (ids.length > 0) {
@@ -244,9 +246,9 @@ app.post("/api/memories/bulk-action", async (req, res) => {
        db.logAction(action, mem?.scope?.repo || "unknown", { query: `Bulk ${action} applied to ${count} memories` });
     }
     
-    res.json({ success: true, count });
+    res.json(jsonApiRes({ count }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -257,7 +259,7 @@ app.get("/api/tasks", async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string || "20", 10)));
 
-    if (!repo) return res.status(400).json({ error: "repo is required" });
+    if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
     let tasks;
     if (status && (status as string).includes(',')) {
@@ -265,9 +267,9 @@ app.get("/api/tasks", async (req, res) => {
     } else {
       tasks = db.getTasksByRepo(repo as string, status as string, pageSize, (page - 1) * pageSize, search as string);
     }
-    res.json({ tasks, page, pageSize });
+    res.json(jsonApiRes(tasks, "task", { meta: { page, pageSize } }));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -276,41 +278,41 @@ app.get("/api/tasks/:id", async (req, res) => {
     const task = db.getTaskById(req.params.id);
     if (!task) throw new Error("Task not found");
     db.logAction("read", task.repo, { taskId: task.id });
-    res.json(task);
+    res.json(jsonApiRes(task, "task"));
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(404).json(jsonApiError(err.message, 404));
   }
 });
 
 app.put("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const attributes = getAttributes(req);
     const existingTask = db.getTaskById(id);
-    if (!existingTask) return res.status(404).json({ error: "Task not found" });
+    if (!existingTask) return res.status(404).json(jsonApiError("Task not found", 404));
 
-    db.updateTask(id, updates);
+    db.updateTask(id, attributes);
 
-    if (updates.status && updates.status !== existingTask.status) {
-      db.logAction("update", existingTask.repo, { taskId: id, query: `Status changed to ${updates.status}` });
+    if (attributes.status && attributes.status !== existingTask.status) {
+      db.logAction("update", existingTask.repo, { taskId: id, query: `Status changed to ${attributes.status}` });
       db.insertTaskComment({
         id: randomUUID(),
         task_id: id,
         repo: existingTask.repo,
-        comment: updates.comment || `Status updated via dashboard`,
+        comment: attributes.comment || `Status updated via dashboard`,
         agent: "dashboard",
         role: "user",
         model: "web-ui",
         previous_status: existingTask.status,
-        next_status: updates.status,
+        next_status: attributes.status,
         created_at: new Date().toISOString()
       });
-    } else if (updates.comment) {
+    } else if (attributes.comment) {
         db.insertTaskComment({
             id: randomUUID(),
             task_id: id,
             repo: existingTask.repo,
-            comment: updates.comment,
+            comment: attributes.comment,
             agent: "dashboard",
             role: "user",
             model: "web-ui",
@@ -318,9 +320,9 @@ app.put("/api/tasks/:id", async (req, res) => {
         });
     }
 
-    res.json({ success: true });
+    res.json(jsonApiRes({ message: "Updated" }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -328,20 +330,20 @@ app.delete("/api/tasks/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const task = db.getTaskById(id);
-    if (!task) return res.status(404).json({ error: "Task not found" });
+    if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
     
     db.deleteTask(id);
     db.logAction("delete", task.repo, { taskId: id });
-    res.json({ success: true });
+    res.json(jsonApiRes({ message: "Deleted" }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
 app.post("/api/tasks/bulk-import", async (req, res) => {
   try {
-    const { items, repo } = req.body;
-    if (!Array.isArray(items) || !repo) return res.status(400).json({ error: "Invalid payload: requires 'items' array and 'repo'" });
+    const { items, repo } = getAttributes(req);
+    if (!Array.isArray(items) || !repo) return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
     
     const tasks = items.map(t => ({
       ...t,
@@ -354,23 +356,23 @@ app.post("/api/tasks/bulk-import", async (req, res) => {
     
     const count = db.bulkInsertTasks(tasks);
     db.logAction("write", repo, { query: `Bulk imported ${count} tasks` });
-    res.json({ success: true, count });
+    res.json(jsonApiRes({ count }, "status"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
 app.put("/api/task-comments/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const { comment } = req.body;
+        const { comment } = getAttributes(req);
         const existingComment = db.getTaskCommentById(id);
-        if (!existingComment) return res.status(404).json({ error: "Comment not found" });
+        if (!existingComment) return res.status(404).json(jsonApiError("Comment not found", 404));
         
         db.updateTaskComment(id, { comment });
-        res.json({ success: true });
+        res.json(jsonApiRes({ message: "Updated" }, "status"));
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json(jsonApiError(err.message));
     }
 });
 
@@ -378,30 +380,31 @@ app.delete("/api/task-comments/:id", async (req, res) => {
     try {
         const { id } = req.params;
         db.deleteTaskComment(id);
-        res.json({ success: true });
+        res.json(jsonApiRes({ message: "Deleted" }, "status"));
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json(jsonApiError(err.message));
     }
 });
 
 app.post("/api/tasks", async (req, res) => {
   try {
-    const { repo, task_code, title } = req.body;
-    if (!repo || !task_code || !title) return res.status(400).json({ error: "Required fields missing" });
-    if (db.isTaskCodeDuplicate(repo, task_code)) return res.status(400).json({ error: "Duplicate task_code" });
+    const attributes = getAttributes(req);
+    const { repo, task_code, title } = attributes;
+    if (!repo || !task_code || !title) return res.status(400).json(jsonApiError("Required fields missing", 400));
+    if (db.isTaskCodeDuplicate(repo, task_code)) return res.status(400).json(jsonApiError("Duplicate task_code", 400));
     const id = randomUUID();
-    db.insertTask({ ...req.body, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    db.insertTask({ ...attributes, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     db.logAction("write", repo, { taskId: id });
-    res.json({ success: true, id });
+    res.json(jsonApiRes({ id }, "task"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
 app.get("/api/tasks/stats/time", async (req, res) => {
     try {
         const { repo } = req.query;
-        if (!repo) return res.status(400).json({ error: "repo is required" });
+        if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
         
         const stats = {
             daily: { 
@@ -422,20 +425,21 @@ app.get("/api/tasks/stats/time", async (req, res) => {
             }
         };
         
-        res.json(stats);
+        res.json(jsonApiRes(stats, "performance-stats"));
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json(jsonApiError(err.message));
     }
 });
 
 app.get("/api/capabilities", (req, res) => {
-  res.json({ tools: TOOL_DEFINITIONS || [], resources: listResources().resources || [], prompts: Object.values(PROMPTS) || [] });
+  const caps = { tools: TOOL_DEFINITIONS || [], resources: listResources().resources || [], prompts: Object.values(PROMPTS) || [] };
+  res.json(jsonApiRes(caps, "capability"));
 });
 
 app.get("/api/export", async (req, res) => {
     try {
         const { repo } = req.query;
-        if (!repo) return res.status(400).json({ error: "repo is required" });
+        if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
         
         const memories = db.getAllMemoriesWithStats(repo as string);
         const tasks = db.getTasksByRepo(repo as string);
@@ -454,14 +458,15 @@ app.get("/api/export", async (req, res) => {
             comments: commentsByTaskId[t.id] || []
         }));
         
-        res.json({
+        const exportData = {
             repo,
             exported_at: new Date().toISOString(),
             memories,
             tasks: tasksWithComments
-        });
+        };
+        res.json(jsonApiRes(exportData, "export"));
     } catch (err: any) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json(jsonApiError(err.message));
     }
 });
 
@@ -471,11 +476,11 @@ app.post("/api/tools/:name/call", async (req, res) => {
       await mcpClient.start();
     }
     const { name } = req.params;
-    const args = req.body;
+    const args = getAttributes(req);
     const result = await mcpClient.callTool(name, args);
-    res.json(result);
+    res.json(jsonApiRes(result, "tool-result"));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json(jsonApiError(err.message));
   }
 });
 
@@ -488,6 +493,36 @@ app.get("/", (req, res) => {
 });
 
 // --- Utilities ---
+function jsonApiRes(data: any, type: string, extra: { meta?: any; links?: any } = {}) {
+  const isArray = Array.isArray(data);
+  const dataLayer = isArray 
+    ? data.map((item: any) => {
+        const { id, ...attributes } = item;
+        return { type, id: String(id || 'system'), attributes };
+      })
+    : (() => {
+        const { id, ...attributes } = data;
+        return { type, id: String(id || attributes.id || 'system'), attributes };
+      })();
+  
+  return {
+    jsonapi: { version: "1.1" },
+    data: dataLayer,
+    ...extra
+  };
+}
+
+function jsonApiError(message: string, status: number = 500) {
+  return {
+    jsonapi: { version: "1.1" },
+    errors: [{ status: String(status), detail: message }]
+  };
+}
+
+function getAttributes(req: express.Request) {
+  return req.body.data?.attributes || req.body;
+}
+
 function condenseRecentActions(actions: RecentAction[], limit: number): CondensedRecentAction[] {
   const condensed: CondensedRecentAction[] = [];
   for (const action of actions) {
