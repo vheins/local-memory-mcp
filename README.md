@@ -117,12 +117,15 @@ Add this to your `.vscode/tasks.json` to have the dashboard start automatically:
 
 ## 📖 Documentation
 
-- [Getting Started & Setup](docs/GETTING_STARTED.md)
-- [Perspectives: Why use Local Memory?](docs/PERSPECTIVES.md)
-- [Features & How it Works](docs/FEATURES.md)
-- [MCP Protocol Reference (Tools & Resources)](docs/MCP_PROTOCOL.md)
-- [Dashboard & Debugging](docs/DASHBOARD_DEBUGGING.md)
-- [Contribution Guidelines](docs/CONTRIBUTING.md)
+- [Getting Started & Setup](docs/user/getting-started.md)
+- [How it Works & Features](docs/user/features.md)
+- [Dashboard Guide](docs/user/dashboard-guide.md)
+- [MCP Protocol Reference](docs/user/mcp-concepts.md)
+- [Hybrid Search Logic](docs/user/hybrid-search.md)
+- [Contribution Guidelines](CONTRIBUTING.md)
+- [Developer: Architecture & Design](.agents/documents/design/architecture/architecture.md)
+- [Developer: Implementation Details](.agents/documents/implementation-details.md)
+- [Developer: Debugging Guide](.agents/documents/debugging-guide.md)
 
 ## ⚠️ Disclaimer
 
