@@ -1,47 +1,28 @@
 # Feature Documentation: Dashboard UI
 
-## User Stories
-- **Story 1: Visual Task Audit**
-  - **Given** a developer is running multiple projects,
-  - **When** they open the dashboard and select a repository,
-  - **Then** they should see a Kanban board displaying all tasks grouped by their current status.
-- **Story 2: Context Management**
-  - **Given** an AI agent has stored an irrelevant or incorrect memory,
-  - **When** the developer locates that memory in the Dashboard Memory List and clicks "Delete",
-  - **Then** the record should be permanently removed from the SQLite database.
-- **Story 3: Real-time Stats**
-  - **Given** the dashboard is open,
-  - **When** the underlying MCP server processes a new memory,
-  - **Then** the Dashboard stats widget should reflect the updated count without a full page reload.
+## Responsibility
+The Dashboard UI provides a responsive, high-fidelity interface for human interaction with the local memory system. It serves as both a monitoring tool and a manual administrative console.
 
-## Business Flow
-```mermaid
-sequenceDiagram
-    participant U as Developer (UI)
-    participant S as Svelte App
-    participant B as Express Backend
-    participant D as SQLite DB
+## Primary Navigation
+The interface is organized into 5 functional tabs:
+1. **Dashboard**: High-level stats, volume trends, and performance metrics.
+2. **Activity**: A chronological audit log of all system actions.
+3. **Memories**: Knowledge search, curation, and bulk import/export.
+4. **Tasks**: A Kanban view of all development initiatives.
+5. **Reference**: A self-documenting index of MCP capabilities (Tools/Prompts).
 
-    U->>S: Click Task Card
-    S->>B: GET /api/tasks/:id
-    B->>D: SELECT * FROM tasks WHERE id = :id
-    D-->>B: taskData
-    B-->>S: JSON(taskData)
-    S-->>U: Show Detail Drawer
-```
+## UI Architecture Components
+- **`App.svelte`**: Tab orchestration and global state context.
+- **Composables**: Logic encapsulation for specific features (e.g., `useKanban`, `useActivity`).
+- **Glass System**: A set of reusable CSS patterns for transparent surfaces and blurs.
+- **Icon Set**: Standardized SVG icons for status and action clarity.
 
-## Business Rules
-| Rule Name | Description | Consequence |
-|-----------|-------------|-------------|
-| Local Bind | The dashboard server must only bind to `localhost` / `127.0.0.1`. | Prevents accidental external exposure of sensitive context data. |
-| Read-Mostly | The dashboard is primary for inspection; write operations are restricted to status updates and deletions. | Minimizes structural database corruption risks. |
+## User Stories (Production)
+- **Activity Auditing**: "As a developer, I want to see the exact input/output of an agent's search query so I can debug why it missed a critical fact."
+- **Bulk Seeding**: "As a developer, I want to upload a JSON list of project rules so the agent is immediately context-aware."
+- **Capability Inspection**: "As a developer, I want to see the JSON schema of the `memory.store` tool to ensure my prompts match the required types."
 
-## Compliance Requirements
-- **Responsive Design**: The UI must remain usable on small window sizes (e.g., side-by-side with an IDE).
-- **Accessibility**: All buttons and interactive elements must have proper labels for screen readers.
-
-## Task List
-- [x] Setup Svelte + Vite boilerplate.
-- [x] Implement Repository sidebar with auto-detection.
-- [x] Build Kanban board with status column logic.
-- [x] Create Memory search/filter grid.
+## Technical Patterns
+- **API Communication**: Centralized via `api.ts` with typed fetch wrappers.
+- **State Management**: Svelte stores for reactive UI updates (Loading states, Toast notifications).
+- **Responsiveness**: Flexbox-first layout with mobile-specific drawer transitions.

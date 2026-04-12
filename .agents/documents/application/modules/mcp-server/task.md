@@ -1,63 +1,53 @@
 # Feature Documentation: Task Management
 
-## User Stories
-- **Story 1: Task Tracking**
-  - **Given** an agent is assigned a new goal,
-  - **When** it calls `task-create` with a title and description,
-  - **Then** the system should log the task as `pending` and return its ID.
-- **Story 2: Context Boundary Locking**
-  - **Given** multiple tasks exist in a repository,
-  - **When** the agent marks a specific task as `active` via `task-active`,
-  - **Then** the system should ensure only that task is active, demoting any previously active task.
-- **Story 3: Progress Subscription**
-  - **Given** a client is interested in the current work state,
-  - **When** the client subscribes to `tasks://current`,
-  - **Then** the server should push a notification whenever the active task changes status.
+## Responsibility
+The Task Management module provides a structured, stateful framework for tracking agent goals. It ensures coordination between multiple agents and provides human-readable visibility into the current work-in-progress.
 
-## Business Flow
+## Task Status Sets
+The system enforces a strict 6-stage lifecycle:
+- `backlog`: Tasks that are planned but not yet ready for execution.
+- `pending`: Tasks ready to be picked up by an agent.
+- `in_progress`: The singular active focus of an agent.
+- `completed`: Successfully finalized work.
+- `canceled`: Tasks no longer required.
+- `blocked`: Tasks stuck due to external dependencies or errors.
+
+## Transition Rules
+| Rule | Description |
+|-----------|-------------|
+| **Linear Progression** | A task cannot move from `pending` directly to `completed`. It MUST pass through `in_progress`. |
+| **Token Budgeting** | When moving to `completed`, the agent MUST provide `est_tokens` (actual tokens used). |
+| **Singleton Enforcement** | An agent should ideally have only one task `in_progress` per repository context to prevent context contamination. |
+| **Unique Identifiers** | Each task has a unique `task_code` (e.g., TASK-001) for human referencing. |
+
+## Data Model (tasks table)
+- `id` (UUID, PK)
+- `task_code` (TEXT, Unique)
+- `title` (TEXT)
+- `description` (TEXT)
+- `status` (ENUM)
+- `phase` (TEXT)
+- `priority` (INTEGER)
+- `agent` (TEXT)
+- `role` (TEXT)
+- `est_tokens` (INTEGER)
+- `parent_id` (UUID, FK) - For hierarchical task trees.
+- `created_at` (TIMESTAMP)
+- `finished_at` (TIMESTAMP)
+
+## State Machine
 ```mermaid
-sequenceDiagram
-    participant A as AI Agent
-    participant R as MCP Router
-    participant T as Task Controller
-    participant D as SQLite DB
-    participant N as Resource Notifier
-
-    A->>R: tools/call (task-active)
-    R->>T: setActive(id)
-    T->>D: BEGIN TRANSACTION
-    T->>D: UPDATE tasks SET status='pending' WHERE status='active'
-    T->>D: UPDATE tasks SET status='active' WHERE id=target
-    T->>D: COMMIT
-    D-->>T: success
-    T->>N: notifyChange(tasks://current)
-    N-->>A: notifications/resources/updated
-    T-->>R: success
-    R-->>A: result
+stateDiagram-v2
+    [*] --> backlog
+    backlog --> pending
+    pending --> in_progress
+    in_progress --> completed
+    in_progress --> blocked
+    blocked --> in_progress
+    in_progress --> canceled
+    pending --> canceled
 ```
 
-## Business Rules
-| Rule Name | Description | Consequence |
-|-----------|-------------|-------------|
-| Singleton Active Task | Only one task per repository scope can have the `active` status. | Auto-transition of the old active task back to `pending`. |
-| Status Transition | Tasks can only move to `completed` or `failed` from an `active` or `pending` state. | Rejection if transition is logically impossible. |
-| Repo Scoping | All task operations MUST be scoped to a repository identifier. | Global operations are disallowed to prevent cross-project context leaks. |
-
-## Data Model (ERD)
-- **Table:** `mcp_tasks`
-  - `id` (UUID, PK): Unique task identifier.
-  - `title` (TEXT): Descriptive title.
-  - `description` (TEXT): Detailed requirements.
-  - `status` (TEXT): enum (pending, active, completed, failed).
-  - `repo` (TEXT): Workspace identifier.
-  - `created_at` (INT): Epoch timestamp.
-
-## Compliance Requirements
-- **Transparency**: Every task state change must be observable via the `tasks://current` resource.
-- **User Control**: If the client supports it, interactive task creation via `elicitation` forms is preferred.
-
-## Task List
-- [x] Create SQLite `tasks` table with status indexes.
-- [x] Implement atomic transaction for `task-active` toggle.
-- [x] Map `tasks://current` to the resource router.
-- [x] Integrate `elicitation/create` for guided task entry.
+## Compliance
+- **Auditability**: Every status change must be accompanied by a `comment` explaining the transition.
+- **Observability**: Changes are automatically broadcast to the Dashboard via the `Activity` stream.

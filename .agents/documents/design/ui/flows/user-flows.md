@@ -1,22 +1,32 @@
 # User Flow Descriptions
 
-## Flow 1: Inspecting the Current Active Task
-1. **Entry Point:** User opens the local dashboard URL in the browser (`localhost:3000`).
-2. **Node 1 (Repo Sidebar):** User selects the desired project repository from the sidebar.
-3. **Node 2 (Kanban Board / Task View):** The dashboard loads tasks for the selected repository.
-4. **Decision:** Is there an active task?
-   - **Yes:** The active task is highlighted at the top/center of the screen.
-   - **No:** The system displays a "No Active Task" empty state.
-5. **Node 3 (Task Detail):** User clicks on a task card. A detail drawer slides out to show task description, status, and related memories.
-6. **Exit Point:** User closes the drawer or navigates to the Memory list.
+This document maps the primary user journeys within the Local Memory Dashboard.
 
-## Flow 2: Auditing Contextual Memories
-1. **Entry Point:** User clicks the "Memories" tab in the main navigation.
-2. **Node 1 (Memory List):** System displays a paginated list of all stored memories for the active repository.
-3. **Decision:** User searches for a specific concept.
-   - **Action:** User types into the search bar.
-   - **Result:** The list filters dynamically (or triggers a backend hybrid search if enter is pressed).
-4. **Node 2 (Memory Detail):** User clicks on a memory card. A detail drawer slides out showing full markdown content, embedding status, and usage telemetry.
-5. **Node 3 (Delete Action):** User identifies obsolete memory and clicks "Delete".
-6. **Confirmation:** System prompts for confirmation. Upon confirming, the memory is deleted and the list is refreshed.
-7. **Exit Point:** Memory is removed, user returns to the list view.
+## Flow 1: Contextual Information Audit
+1. **Entry Point:** User opens the dashboard.
+2. **Action:** User selects a repository from the sidebar.
+3. **Observation:** Dashboard widgets update to show the memory count, task status, and recent hits/misses for that specific repo.
+4. **Transition:** User clicks the **Activity** tab to see the latest agent queries and ensure the memory is being retrieved as expected.
+
+## Flow 2: Knowledge Seeding (Bulk Import)
+1. **Entry Point:** User navigates to the **Memories** tab.
+2. **Action:** User clicks the "Bulk Import" button (Icon: upload).
+3. **Modal:** A specialized modal appears requesting a JSON or Markdown file.
+4. **Validation:** System checks file format and provides immediate feedback.
+5. **Execution:** User clicks "Import".
+6. **Result:** The memory list refreshes dynamically without a full page reload, showing the newly seeded knowledge items.
+
+## Flow 3: Inspecting Agent Capabilities
+1. **Entry Point:** User needs to know what tools the agent has available for the current context.
+2. **Action:** User clicks the **Reference** tab.
+3. **Filter:** User types "task" into the Filter bar.
+4. **Inspection:** User clicks on `task-active`.
+5. **Detail:** A drawer opens showing the **JSON Schema** for parameters, the expected output format, and the tool's intended use case (description).
+
+## Flow 4: Task Recovery & Promotion
+1. **Entry Point:** User identifies a "Stalled" task in the Kanban board.
+2. **Action:** User clicks the task card.
+3. **Audit:** User reads the `Action Log` within the task detail to see which agent last interacted with it.
+4. **Correction**: User updates the task status to **In Progress** to resume the work, or **Completed** to finalize it. 
+5. **Promotion**: For best results, user follows the **Gradual Promotion** model (Transitions should pass through `in_progress`).
+6. **Refresh**: The Kanban board updates real-time.

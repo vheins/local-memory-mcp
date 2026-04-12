@@ -1,25 +1,34 @@
 # Module Overview: Dashboard
 
 ## Responsibility
-The `dashboard` module provides a graphical user interface (GUI) for developers to inspect, audit, and manage the contextual memories and tasks stored by the MCP server. It consists of a lightweight Express.js backend that serves a high-performance Svelte-based single-page application (SPA).
+The `dashboard` module is the window into the MCP system. It provides developers and observers with a visually rich interface to audit agent activity, manage task boards, and inspect the semantic knowledge base. It is designed to be lightweight, local-only, and responsive.
 
-## Features
-- **Visual Kanban Board**: A drag-and-drop style interface to manage task statuses across different repositories.
-- **Memory Inspector**: A searchable and filterable list of all semantic memories, allowing for manual curation and deletion.
-- **Repository Scoping**: Seamless switching between different project contexts detected by the server.
-- **System Telemetry**: Real-time display of database health, model loading status, and total memory count.
+## Core Services
+- **Telemetry UI**: Real-time visualization of database volume and embedding performance.
+- **Activity Stream**: A chronological feed of tool calls, inputs, and results.
+- **Task Kanban**: A full-featured task board with swimlanes and detail drawers.
+- **Knowledge Explorer**: Search and curation interface for semantic memories.
+- **Capability Reference**: Visual documentation of the agent's available MCP tools.
 
 ## Architecture
+The dashboard follows a modern Full-Stack Local architecture:
+- **Backend**: Express.js server providing a REST API and serving built static assets.
+- **Frontend**: Svelte 5 / Vite SPA utilizing a "Glass" design system.
+- **Shared Storage**: Direct read/write access to the same SQLite database used by the MCP server.
+
 ```mermaid
-graph TD
-    A[User Browser] <-->|HTTP/JSON| B[Dashboard Express Server]
-    B <-->|Direct FS/SQLite| C[(SQLite DB)]
-    B -.->|Serves Static| D[Svelte SPA]
-    D -->|API Calls| B
+graph LR
+    A[Browser] -- HTTP/API --> B[Express Server]
+    B -- SQL --> C[(Shared SQLite)]
+    B -- Static --> D[Svelte App]
+    
+    subgraph Frontend Logic
+    D -- Composables --> E[useApp]
+    E --> F[useKanban]
+    E --> G[useActivity]
+    end
 ```
 
-## Dependencies
-- `svelte`: For the reactive frontend interface.
-- `express`: To provide the local API and serve the built static assets.
-- `better-sqlite3`: Shared database access with the MCP server module.
-- `vite`: For the rapid development and building of the frontend.
+## UI Themes
+- **Support**: Native Light and Dark mode support.
+- **Aesthetic**: Agentic Glass (v2.0) - focus on transparency, blurs, and micro-animations.

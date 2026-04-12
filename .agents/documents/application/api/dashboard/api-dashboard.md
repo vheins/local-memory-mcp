@@ -2,29 +2,43 @@
 
 This document describes the private HTTP API used by the Svelte frontend to communicate with the `dashboard-server`.
 
-## 1. Endpoints
+## 1. System Endpoints
 
-### 1.1 `GET /api/repos`
-Retrieves a list of all repositories currently present in the database.
-- **Response:** `Array<{ name: string, taskCount: number }>`
+### 1.1 `GET /api/health`
+- **Response:** `{ connected: boolean, uptime: number, version: string, memoryCount: number, dbPath: string }`
 
-### 1.2 `GET /api/memories?repo={repo}`
-Lists memories for a specific repository.
-- **Query Params:** `repo` (string), `limit` (number), `offset` (number).
-- **Response:** `Array<MemoryObject>`
+### 1.2 `GET /api/stats?repo={repo}`
+- **Response:** Returns high-level counters (Memories, Tasks, Activity) for the repo or global context.
 
-### 1.3 `GET /api/tasks?repo={repo}`
-Lists tasks for a specific repository.
-- **Response:** `Array<TaskObject>`
+### 1.3 `GET /api/capabilities`
+- **Response:** Returns a full registry of all registered `tools`, `resources`, and `prompts`.
 
-### 1.4 `POST /api/tasks/:id/status`
-Updates the status of a specific task.
-- **Body:** `{ status: string }`
-- **Response:** `{ success: boolean }`
+## 2. Memory Endpoints
 
-### 1.5 `DELETE /api/memories/:id`
-Deletes a memory entry.
-- **Response:** `{ success: boolean }`
+### 2.1 `GET /api/memories`
+- **Params:** `repo` (required), `type`, `search`, `minImportance`, `page`, `pageSize`.
+- **Response:** `{ memories: Array<Memory>, pagination: { totalItems, totalPages } }`
 
-## 2. Security
-- **Access Control:** Restricted to local loopback interface only. No authentication tokens required for local dev use.
+### 2.2 `POST /api/memories/bulk-import`
+- **Body:** `{ items: Array<PartialMemory>, repo: string }`
+
+### 2.3 `POST /api/memories/bulk-action`
+- **Body:** `{ action: 'delete'|'update'|'archive', ids: Array<string>, updates?: object }`
+
+## 3. Task Endpoints
+
+### 3.1 `GET /api/tasks`
+- **Params:** `repo` (required), `status` (comma-separated), `search`.
+
+### 3.2 `PUT /api/tasks/:id`
+- **Body:** Any field updates + optional `comment`.
+- **Note:** Updates to `status` automatically generate a task comment in the audit trail.
+
+### 3.3 `GET /api/tasks/stats/time?repo={repo}`
+- **Response:** Breakdown of completion times (Daily/Weekly/Monthly) and comparison history.
+
+## 4. MCP Proxy
+
+### 4.1 `POST /api/tools/:name/call`
+- Proxies a tool call directly to the internal `MCPClient`.
+- **Body:** Tool arguments.

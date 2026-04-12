@@ -1,16 +1,28 @@
 # Acceptance Criteria: Task Management
 
-## 1. Create Task (`task-create`)
-- **Happy Path:** When the agent provides a task description, title, and initial status, the system saves it to the SQLite database and returns a generated task ID.
-- **Required Fields:** If the title or description is missing, the tool returns a validation error.
+State management for work-in-progress goals.
 
-## 2. Update Task Status (`task-update`)
-- **Happy Path:** When an agent provides a task ID and changes the status to "completed", the system updates the record and logs the state transition.
-- **Dependencies Check:** If the task depends on incomplete subtasks, the system either flags it or updates it, depending on the workflow policy.
+## 1. Lifecycle Integrity (`task.manage`)
+- **Given** a task is in state `pending` or `backlog`,
+- **When** an agent attempts to change status to `completed`,
+- **Then** the system MUST throw a Validation Error (Must be `in_progress` first).
 
-## 3. List Tasks (`task-list`)
-- **Happy Path:** When requested, the system retrieves tasks filtered by the current repository scope, ordered by priority or creation date.
-- **Archived Tasks:** The system correctly excludes deleted or fully archived tasks unless explicitly requested.
+## 2. Active Focus Enforcement
+- **Given** another task is already `in_progress` in the current repo,
+- **When** a new task is moved to `in_progress`,
+- **Then** the system SHOULD ideally warn or allow context grouping (based on client configuration).
 
-## 4. Mark Task Active (`task-active`)
-- **Happy Path:** When a specific task ID is provided, the system marks this task as active and removes the active flag from the previously active task (ensuring only one task is active at a time for a given session/repo).
+## 3. Transparency & Token Usage
+- **Given** a task is moved to `completed`,
+- **When** the update call is processed,
+- **Then** the system MUST REQUIRE `est_tokens` to be provided in the request body.
+
+## 4. Bulk Transactability (`task.bulk-manage`)
+- **Given** a list of multiple creation/deletion/update operations,
+- **When** any single operation within the list fails validation,
+- **Then** the ENTIRE set of operations MUST be rolled back to maintain database consistency.
+
+## 5. Audit Logging
+- **Given** any task state change (Transition),
+- **When** the operation finishes,
+- **Then** an entry MUST be automatically created in the `activity` log containing the comment and the agent ID.

@@ -1,33 +1,50 @@
-# Design System Specification (Tokens)
+# Agentic Glass Design System v2.0
 
-## Color Palette (Dark Theme First)
-- **Background Base:** `#0f172a` (slate-900)
-- **Background Surface:** `#1e293b` (slate-800)
-- **Primary Accent:** `#3b82f6` (blue-500) - For active states and buttons.
-- **Text Primary:** `#f8fafc` (slate-50)
-- **Text Secondary:** `#94a3b8` (slate-400)
-- **Danger/Error:** `#ef4444` (red-500)
-- **Success:** `#22c55e` (green-500)
+This document defines the visual language and tokens used in the Local Memory Dashboard.
 
-## Typography
-- **Font Family:** Inter, system-ui, sans-serif. Monospace for code snippets (Fira Code).
-- **Base Size:** `14px` (Tailwind text-sm for denser dev UI).
-- **Headers:** `1.25rem` to `1.5rem`, semi-bold.
+## 1. Visual Philosophy
+- **Depth & Transparency**: High usage of backdrop blurs (`28px`) and semi-transparent surfaces to create a "glass" interface.
+- **Micro-Glows**: Subtle shadows use colored glows tied to the context (e.g., `--glow-primary` for action buttons).
+- **Responsive Motion**: Transitions use custom bezier curves (`--ease-spring`) to feel organic and reactive.
 
-## Spacing & Layout
-- **Base Unit:** `4px` (Tailwind spacing scale).
-- **Padding/Margins:** Consistent use of `0.5rem` (8px), `1rem` (16px).
-- **Border Radius:** `0.5rem` (rounded-lg) for cards and inputs.
+---
 
-## CSS Custom Properties (Variables Concept)
+## 2. Core Tokens (CSS Variables)
+
+### A. Surface Architecture
+| Token Name | Value | Purpose |
+| :--- | :--- | :--- |
+| `--glass-bg` | `rgba(255, 255, 255, 0.52)` | Main panel background |
+| `--glass-blur` | `blur(28px) saturate(1.2)` | Primary backdrop filter |
+| `--panel-dark` | `rgba(6, 12, 28, 0.70)` | Dark mode surface |
+| `--radius-2xl` | `24px` | Large container rounding |
+
+### B. Functional Colors
+| Role | Light Value | Dark Value |
+| :--- | :--- | :--- |
+| **Primary** | `#0ea5e9` | `#38bdf8` |
+| **Accent** | `#6366f1` | `#6366f1` (Static) |
+| **Success** | `#10b981` | (Inherited) |
+| **Danger** | `#ef4444` | (Inherited) |
+
+### C. Type System
+- **Family**: Inter (Main UI), JetBrains Mono (Code/Data).
+- **Weights**: 400 (Regular), 600 (Semibold), 800 (Extra Bold).
+
+---
+
+## 3. UI Patterns
+
+### Glass Card
 ```css
-:root {
-  --bg-base: #0f172a;
-  --bg-surface: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #3b82f6;
-  --border-radius: 8px;
-  --spacing-base: 1rem;
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
 }
 ```
+**Etched Effect**: Each glass panel uses a pseudo-element `::before` to create a "top-light" etched border for increased depth.
+
+### Interactive Glows
+Cards and buttons use dynamic box-shadows that expand on hover using the `--glow-*` tokens.
+Example: `box-shadow: 0 4px 14px var(--glow-primary)`

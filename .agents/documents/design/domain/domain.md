@@ -1,17 +1,63 @@
 # Domain Model
 
+This document specifies the core entities and business logic of the MCP Local Memory system.
+
 ## Core Entities
 
-1. **Memory**
-   - Represents a contextual artifact stored by the agent.
-   - **Attributes:** `id` (UUID), `type` (decision, doc, rule, summary), `title`, `content`, `importance` (1-5), `embedding` (Vector array), `tags`, `repo`, `created_at`, `updated_at`.
-   - **Relations:** 1-to-many with Telemetry (usage logs).
+### 1. Memory
+Represents a distilled unit of knowledge or a project artifact captured by an AI agent.
 
-2. **Task**
-   - Represents a piece of work actively tracked by the agent.
-   - **Attributes:** `id` (UUID), `title`, `description`, `status` (pending, active, completed, failed, archived), `repo`, `created_at`, `updated_at`.
-   - **Invariants:** Only one Task per `repo` can have `status = 'active'` at any given time.
+- **Attributes:**
+  - `id`: UUID Primary Key.
+  - `type`: `code_fact`, `decision`, `mistake`, `pattern`, `agent_handoff`, `agent_registered`, `file_claim`, `task_archive`.
+  - `scope`: Geographic constraints (`repo`, `branch`, `folder`, `language`).
+  - `agent`, `role`, `model`: Attribution metadata for the creator.
+  - `importance`: 1 (Low) to 5 (Critical) rating.
+  - `hit_count`, `recall_count`: Utility metrics (automatic tracking).
+  - `status`: Lifecycle state (`active`, `archived`).
+  - `is_global`: 1 if shared across all repositories.
 
-3. **Telemetry (Usage Log)**
-   - Tracks the lifecycle and utility of memories.
-   - **Attributes:** `id` (UUID), `memory_id` (UUID), `action` (used, irrelevant, contradictory), `timestamp`.
+### 2. Task
+Represents an atomic unit of work tracked for multi-agent coordination.
+
+- **Attributes:**
+  - `id`: UUID Primary Key.
+  - `task_code`: Human-readable identifier (e.g., `TASK-123`).
+  - `status`: `backlog`, `pending`, `in_progress`, `completed`, `canceled`, `blocked`.
+  - `priority`: 1 to 5.
+  - `hierarchy`: `parent_id` and `depends_on` (sequencing).
+  - `est_tokens`: Estimated resource consumption (recorded on completion).
+
+### 3. Task Comment
+A chronological audit log for tasks, capturing discussions and status transitions.
+
+- **Attributes:**
+  - `comment`: Text content.
+  - `transition`: Captures `previous_status` and `next_status` for auditability.
+  - `attribution`: Linked to a specific agent and role.
+
+### 4. Action Log
+High-fidelity telemetry capturing every system operation (tool call).
+
+- **Attributes:**
+  - `action`: Name of the tool invoked.
+  - `query`: The primary search or input term.
+  - `result_count`: Quantifiable impact of the action.
+
+---
+
+## Business Rules & Invariants
+
+### 1. Task Workflow
+- **Gradual Promotion**: A task cannot transition directly from `backlog`, `pending`, or `blocked` to `completed`. It must be moved to `in_progress` first to ensure transparency.
+- **Auto-Archiving**: When a `task` status is set to `completed`, the system automatically generates a `task_archive` memory entry containing the task's full history and comments for future lookup.
+
+### 2. Capacity Constraints
+- **Pending Throttle**: A single repository can have at most **10 tasks** in the `pending` state. New tasks exceeding this limit must be placed in the `backlog`.
+
+### 3. Attribution Requirement
+- All mutations (storing memories, creating tasks, adding comments) must include `agent` and `role` metadata to maintain a clear chain of responsibility in multi-agent environments.
+
+### 4. Scope Isolation
+- Memories and tasks are strictly isolated by `repo` unless explicitly marked as `is_global`.
+- Vector search automatically honors repo-scoping during retrieval unless a global search is requested.

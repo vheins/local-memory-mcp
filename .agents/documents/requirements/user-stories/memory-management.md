@@ -1,24 +1,18 @@
 # User Stories: Memory Management
 
-**Feature:** Persistent Memory Management via MCP
+**Feature:** Persistent Knowledge Base utilizing MCP
 
-1. **Store Memory**
-   As an AI agent, I want to store a new contextual memory into an SQLite database, so that I can persist important architectural decisions and context across long sessions.
+### 1. Store Context
+- **As an** AI agent, **I want** to use `memory.store` to persist a contextual fact, **so that** it is indexed and searchable across multiple sessions.
 
-2. **Search Memory**
-   As an AI agent, I want to perform a semantic vector search across stored memories, so that I can quickly retrieve relevant context based on my current query and repository.
+### 2. Hybrid Search
+- **As an** AI agent, **I want** to use `memory.search` to find relevant information by combining semantic vector similarity with keyword matching, **so that** I don't miss any critical details during development.
 
-3. **Update Memory**
-   As an AI agent, I want to update an existing memory, so that its contents accurately reflect changing requirements.
+### 3. Knowledge Synthesis
+- **As an** AI agent, **I want** to use `memory.synthesize` to consolidate multiple disparate memories into a unified architectural decision, **so that** I can present a coherent summary to the user.
 
-4. **Delete Memory**
-   As an AI agent, I want to delete a memory that is no longer relevant, so that the context window remains clean.
+### 4. Relevance Acknowledgement
+- **As an** AI agent, **I want** to use `memory.acknowledge` after utilizing a memory for implementation, **so that** the system can track which memories are actually useful for code generation.
 
-5. **Bulk Manage Memories**
-   As an AI agent, I want to delete multiple obsolete memories in a single operation, so that I can maintain the database efficiently.
-
-6. **Recap and Synthesize**
-   As an AI agent, I want to recap recent memories or synthesize multiple related memories, so that I can get a coherent, high-level summary of past discussions.
-
-7. **Acknowledge Memory Usage**
-   As an AI agent, I want to log when a retrieved memory is used to write code, so that the system tracks the relevance and utility of stored context.
+### 5. Management & Curation
+- **As a** developer using the Dashboard, **I want** to browse and delete inaccurate memories, **so that** my context window remains clean and high-fidelity.

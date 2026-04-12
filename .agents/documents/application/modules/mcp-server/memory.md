@@ -1,61 +1,52 @@
 # Feature Documentation: Memory Management
 
-## User Stories
-- **Story 1: Persist Context**
-  - **Given** an AI agent has discovered a new architectural decision or rule,
-  - **When** it calls the `memory-store` tool with the relevant content and importance,
-  - **Then** the system should store the data in SQLite, generate a vector embedding, and return a unique UUID.
-- **Story 2: Semantic Search**
-  - **Given** an agent is looking for past context regarding a specific topic,
-  - **When** it calls the `memory-search` tool with a natural language query,
-  - **Then** the system should perform a hybrid (Vector + FTS5) search and return relevant memories ranked by similarity.
-- **Story 3: Content Update**
-  - **Given** an existing memory contains outdated information,
-  - **When** the agent calls `memory-update` with the new content,
-  - **Then** the system should update the record and refresh its vector embedding.
+## Responsibility
+The Memory Management module provides the system's "Long-Term Persistence". It allows agents to store architectural decisions, patterns, and facts that persist across sessions.
 
-## Business Flow
-```mermaid
-sequenceDiagram
-    participant A as AI Agent
-    participant R as MCP Router
-    participant M as Memory Controller
-    participant T as Transformers Engine
-    participant D as SQLite DB
-
-    A->>R: tools/call (memory-store)
-    R->>M: storeRequest(data)
-    M->>T: generateEmbedding(content)
-    T-->>M: vectorArray
-    M->>D: INSERT INTO memories
-    D-->>M: success
-    M-->>R: memoryId
-    R-->>A: result (id)
-```
+## Core Tools
+- `memory.store`: Saves a new memory with automatic vectorization.
+- `memory.search`: Performs hybrid Vector + FTS5 search (ranked by similarity).
+- `memory.synthesize`: Consolidates multiple memories into a high-level architectural insight.
+- `memory.summarize`: Updates the repository's global summary signal.
+- `memory.recap`: Provides a pointer table of the most important recent memories.
+- `memory.acknowledge`: Mandatory confirmation after an agent uses a memory to generate logic.
 
 ## Business Rules
-| Rule Name | Description | Consequence |
-|-----------|-------------|-------------|
-| Importance Scale | Importance must be an integer between 1 and 5. | Rejection with `-32602` error. |
-| Duplicate Prevention | The system checks for identical titles within the same repository scope before storing. | Conflict warning or auto-versioning. |
-| Hybrid Ranking | Results are ranked using a combination of cosine similarity and BM25 text score. | Higher precision for developer-specific terminology. |
+| Rule Name | Description |
+|-----------|-------------|
+| **Hybrid Ranking** | Results are ranked using a combination of Cosine Similarity (Vector) and BM25 (Full-Text Search). |
+| **Deduplication** | Identical content within the same repository scope is rejected to prevent noise. |
+| **Importance Bias** | Search results can be prioritized using `minImportance` (1-5). |
+| **Global Scope** | Memories marked as `is_global` are searchable across all repository contexts. |
 
-## Data Model (ERD)
-- **Table:** `mcp_memories`
-  - `id` (UUID, PK): Primary unique identifier.
-  - `type` (TEXT): Categorization (decision, doc, rule).
-  - `title` (TEXT): Short summary of the memory.
-  - `content` (TEXT): Full markdown or text content.
-  - `embedding` (BLOB): 384-dimensional vector (F32).
-  - `repo` (TEXT): Repository scope.
-  - `importance` (INT): 1-5 scale.
+## Data Model (memories table)
+- `id` (UUID, PK)
+- `type` (decision, code_fact, mistake, pattern, agent_handoff)
+- `title` (TEXT)
+- `content` (TEXT)
+- `repo` (TEXT)
+- `importance` (INTEGER, 1-5)
+- `is_global` (BOOLEAN)
+- `metadata` (JSON)
+- `embedding` (F32 Vector)
+- `created_at` (TIMESTAMP)
 
-## Compliance Requirements
-- **Privacy**: No memory data or embedding requests may ever leave the local machine. All processing must be offline.
-- **Protocol**: Response format must strictly follow the `content` array structure defined in MCP 2025-11-25.
+## Business Flow: Storage & Retrieval
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant M as Memory Service
+    participant V as Vector Provider
+    participant D as SQLite
+    
+    A->>M: memory.store(content)
+    M->>V: getEmbedding(content)
+    V-->>M: float32[]
+    M->>D: INSERT INTO memories
+    D-->>M: success
+    M-->>A: Created (ID)
+```
 
-## Task List
-- [x] Implement SQLite FTS5 extension mapping.
-- [x] Configure `@xenova/transformers` for background model loading.
-- [x] Build `memory-search` hybrid query logic.
-- [x] Add telemetry for `memory-acknowledge` tracking.
+## Compliance
+- **Local Privacy**: All embeddings are generated locally. No plain text or vectors are transmitted over the network.
+- **Protocol Strictness**: All responses follow the MCP result schema with `content` arrays.

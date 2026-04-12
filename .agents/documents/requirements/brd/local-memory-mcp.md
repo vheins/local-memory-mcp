@@ -1,23 +1,21 @@
 # Business Requirements Document (BRD)
 
 ## Project Overview
-**Project Name:** `local-memory-mcp`
-**Description:** A Model Context Protocol (MCP) server that provides AI coding assistants with persistent semantic memory and lifecycle task management.
+`local-memory-mcp` aims to solve the problem of "context amnesia" in AI coding assistants by providing a local, high-performance semantic memory and task orchestration server.
 
-## Objectives
-- Allow AI assistants to recall architectural decisions and codebase context across isolated sessions.
-- Reduce the token cost and time wasted on repetitive prompting.
-- Establish clear task boundaries so context is relevant only to the active work stream.
+## Business Objectives
+- **Context Retention**: Increase agent efficiency by 30% by reducing redundant information gathering.
+- **Agent Safety**: Prevent developmental hallucination by enforcing a structured task state machine.
+- **Auditability**: Provide human-readable activity trails for all agent interactions.
+- **Privacy Assurance**: Compliance with high-security environments by enforcing local-only processing.
 
 ## Stakeholders
-- **Primary Users:** Software Engineers, Developers.
-- **Consumers:** AI Coding Assistants (Cursor, VSCode with AI extensions).
+- **AI Agents**: Primary consumers of the memory and task tools.
+- **Software Engineers**: Owners of the local context and primary users of the Dashboard UI.
+- **System Auditors**: Individuals or systems needing to verify the chain of reasoning via the Activity Log.
 
-## Scope & Constraints
-- Must operate entirely locally (zero cloud footprint for data privacy).
-- Embedded within the IDE or local terminal environment.
-- Failsafe fallback if vector embeddings fail to load.
-
-## Metrics for Success
-- Decreased repetitive context inquiries by the AI.
-- Improved agent task completion rate due to stable context boundaries.
+## Scope of Work
+- Implementation of a persistent MCP-compliant server.
+- Web-based Dashboard for visual inspection.
+- Hybrid search engine integration.
+- Automated knowledge synthesis protocols.

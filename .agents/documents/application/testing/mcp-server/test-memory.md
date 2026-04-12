@@ -1,43 +1,30 @@
 # Test Scenarios: Memory Management
 
-Every API endpoint must have at least one positive and one negative scenario.
+Verification scenarios for the semantic knowledge base. All tools must maintain local-first processing integrity.
 
-## 1. `memory-store`
-- **Positive (Happy Path):** Call with `type`, `title`, `content`, `importance`. Returns UUID.
-- **Negative (Validation):** Omit `content`. Expected: Protocol Error `-32602`.
+## 1. `memory.store`
+- **Positive:** Provide `type`, `title`, `content`, and `importance: 5`. Verify UUID returned and FTS5 index populated.
+- **Negative (Type Mismatch):** Provide `importance: "high"`. Expected: Protocol Error `-32602`.
+- **Negative (Validation):** Provide empty `content`. Expected: Validation Error (Zod).
 
-## 2. `memory-search`
-- **Positive:** Provide valid string `query`. Expected: Returns relevant results array.
-- **Negative:** Provide empty `query` string. Expected: Protocol Error `-32602`.
+## 2. `memory.search`
+- **Positive:** Natural language query. Verify results contain both keyword and semantic matches.
+- **Filtering:** Use `minImportance: 4`. Verify results with importance < 4 are excluded.
+- **Negative:** Empty query string. Expected: Validation Error.
 
-## 3. `memory-update`
-- **Positive:** Provide valid `id` and new `content`. Expected: Memory is updated and embedding is recalculated.
-- **Negative:** Provide non-existent `id`. Expected: Protocol Error `-32602` (Not Found).
+## 3. `memory.synthesize`
+- **Requirement:** Agent must have `sampling` capability enabled in the session.
+- **Positive:** Triggers client-side LLM call. Verify new memory of type `decision` is created from the result.
+- **Negative:** sampling disabled. Expected: Protocol Error `-32603`.
 
-## 4. `memory-delete`
-- **Positive:** Provide valid existing `id`. Expected: Memory deleted from SQLite.
-- **Negative:** Provide malformed UUID `id`. Expected: Protocol Error `-32602`.
+## 4. `memory.recap`
+- **Positive:** Request with `limit: 3`. Verify a tabular list of the top 3 high-importance memories is returned.
+- **Negative:** Invalid `limit`. Expected: Type error validation.
 
-## 5. `memory-bulk-delete`
-- **Positive:** Provide array of valid `ids`. Expected: Returns count of deleted memories.
-- **Negative:** Provide empty array `[]`. Expected: Protocol Error `-32602`.
+## 5. `memory.acknowledge`
+- **Positive:** Valid `memory_id` and `status: "used"`. Verify telemetry increments "hit" count for the memory.
+- **Negative:** Non-existent `memory_id`. Expected: Not Found.
 
-## 6. `memory-detail`
-- **Positive:** Provide valid `id`. Expected: Full data model returned including telemetry.
-- **Negative:** Provide non-existent `id`. Expected: Protocol Error `-32602` (Not Found).
-
-## 7. `memory-acknowledge`
-- **Positive:** Provide valid `memory_id` and status `used`. Expected: Telemetry logged.
-- **Negative:** Provide invalid status `invalid_status`. Expected: Protocol Error `-32602`.
-
-## 8. `memory-recap`
-- **Positive:** Call with `limit: 5`. Expected: Returns up to 5 latest memories.
-- **Negative:** Call with `limit: "ten"`. Expected: Protocol Error `-32602` (Type mismatch).
-
-## 9. `memory-summarize`
-- **Positive:** Call for an existing repo. Expected: Summary text returned.
-- **Negative:** Database read lock error. Expected: Server Error `-32603`.
-
-## 10. `memory-synthesize`
-- **Positive:** Client has `sampling` capability. Expected: Triggers client LLM generation and saves new memory.
-- **Negative:** Client lacks `sampling` capability. Expected: Protocol Error `-32603`.
+## 6. `memory.summarize`
+- **Positive:** Provide high-level signals for a repo. Verify the `global_summary` resource is updated.
+- **Negative:** Malformed signals array. Expected: Validation Error.

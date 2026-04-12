@@ -25,7 +25,7 @@ Discovers available executable tools. Supports pagination.
     "result": {
       "tools": [
         {
-          "name": "memory-store",
+          "name": "memory.store",
           "description": "Stores a new memory",
           "inputSchema": {
             "type": "object",

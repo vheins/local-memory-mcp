@@ -1,22 +1,24 @@
 # Product Requirements Document (PRD)
 
 ## Target Audience
-Senior software engineers managing complex codebases who rely on stateless AI coding assistants.
+Senior software engineers managing complex repositories who require persistent, semantic context across their development sessions.
 
 ## Prioritized Features (MoSCoW)
 - **Must Have:**
-  - SQLite persistent storage.
-  - CRUD operations for Memory (store, update, delete, detail).
-  - Semantic/Hybrid Search (`memory-search`).
-  - CRUD operations for Tasks (create, active, list, update).
+  - Hybrid persistence: SQLite for structure, FTS5 for text, and local vector embeddings for semantics.
+  - CRUD operations for Memory (store, fetch, search).
+  - Multi-stage Task Lifecycle (`backlog` to `completed`) with mandatory transition safety.
+  - Automated Activity Logging for every tool interaction.
 - **Should Have:**
-  - UI Dashboard for manual context curation and inspection.
-  - Telemetry to acknowledge memory usage.
+  - Real-time Dashboard UI for knowledge curation.
+  - Knowledge Synthesis using sampling to consolidate disparate facts.
+  - Token Budgeting: Enforced reporting of actual token usage on task completion.
 - **Could Have:**
-  - Automated summary and synthesis using client-side sampling.
-  - Interactive forms via MCP elicitation for task creation.
+  - Capability Reference UI: Auto-generated documentation for all available MCP tools.
+  - Priority-based task sorting and filtering.
 
 ## Non-Functional Requirements (NFRs)
-- **Latency:** Vector search FTS integration should return results in < 200ms.
-- **Privacy:** 100% of data (including embeddings) must stay on the local machine.
-- **Portability:** Self-contained configuration without extensive setup.
+- **Privacy:** 100% Local. No telemetry or PII ever leaves the machine.
+- **Safety:** Transactional integrity for all database writes.
+- **Efficiency:** Low-latency vector generation using offline `@xenova/transformers`.
+- **Traceability:** Every system state change must be attributable to an agent/role.

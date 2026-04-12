@@ -1,39 +1,32 @@
 # Test Scenarios: Task Management
 
-Every API endpoint must have at least one positive and one negative scenario.
+Verification of the stateful task orchestration framework and transition safety.
 
-## 1. `task-create`
-- **Positive:** Provide valid `title` and `description`. Expected: UUID returned, DB row created.
-- **Negative:** Omit `title`. Expected: Protocol Error `-32602`.
+## 1. `task.manage` (Lifecycle Transitions)
+- **State Machine Integrity:**
+  - `backlog` -> `pending` (Allowed)
+  - `pending` -> `in_progress` (Allowed)
+  - `pending` -> `completed` (Blocked - must be `in_progress` first)
+  - `blocked` -> `completed` (Blocked - must be `in_progress` first)
+  - `in_progress` -> `completed` (Allowed IF `est_tokens` provided)
+  - `in_progress` -> `completed` (Blocked IF `est_tokens` missing)
 
-## 2. `task-create-interactive`
-- **Positive:** Client has `elicitation` capability. Expected: Triggers client form, saves task upon submission.
-- **Negative:** Client lacks `elicitation` capability. Expected: Protocol Error `-32603`.
+## 2. `task.manage` (Safety Hooks)
+- **Uniqueness:** Attempt to create task with existing `task_code`. Expected: Constraint Error.
+- **Mandatory Logic:** Moving to `completed` requires a `comment`. Verify rejection if comment is empty.
+- **Agent Context:** Verify `agent` and `role` metadata are successfully persisted per update.
 
-## 3. `task-update`
-- **Positive:** Provide valid `id` and change `status` to `completed`. Expected: DB is updated.
-- **Negative:** Provide non-existent `id`. Expected: Protocol Error `-32602` (Not Found).
+## 3. `task.bulk-manage`
+- **Transactional Integrity:** Provide 1 valid creation and 1 invalid update. Verify that the creation is ROLLED BACK and not visible in storage.
+- **Volume:** Bulk create 10 tasks. Verify all visible in `task.list`.
 
-## 4. `task-active`
-- **Positive:** Provide valid `id` of a pending task. Expected: Task becomes active, previous active task becomes pending.
-- **Negative:** Pass invalid UUID format for `id`. Expected: Protocol Error `-32602`.
+## 4. `task.search`
+- **Hybrid Matching:** Search by `task_code` (unique match) vs search by `description` (semantic match). Verify ranking.
+- **Priority Filter:** Search with `priority >= 4`.
 
-## 5. `task-list`
-- **Positive:** Call with no arguments. Expected: Returns list of non-archived tasks.
-- **Negative:** DB access issue. Expected: Protocol Error `-32603`.
+## 5. `task.get`
+- **Positive:** Provide `task_code`. Verify full model returned.
+- **Negative:** Non-existent ID. Expected: Not Found.
 
-## 6. `task-search`
-- **Positive:** Provide valid `query`. Expected: Returns semantically matched tasks.
-- **Negative:** Omit `query`. Expected: Protocol Error `-32602`.
-
-## 7. `task-detail`
-- **Positive:** Provide valid `id`. Expected: Full task JSON returned.
-- **Negative:** Provide unknown `id`. Expected: Protocol Error `-32602` (Not Found).
-
-## 8. `task-delete`
-- **Positive:** Provide valid `id`. Expected: Task deleted from DB.
-- **Negative:** Provide empty `id`. Expected: Protocol Error `-32602`.
-
-## 9. `task-bulk-manage`
-- **Positive:** Provide valid list of 1 create and 1 delete operation. Expected: Both executed inside a transaction.
-- **Negative:** Pass a create operation without `title`. Expected: Transaction aborts, Error `-32602` returned.
+## 6. Resources (`tasks://current`)
+- **Positive:** Change active task. Verify that the MCP server emits a resource update notification to subscribed clients.

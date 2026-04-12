@@ -1,11 +1,55 @@
 # Architecture Overview
 
-## Components & Data Flow
-The `local-memory-mcp` project follows a local-first, server-client architecture utilizing the Model Context Protocol over standard input/output (stdio) or SSE (when applicable). It comprises two primary services:
-1. **MCP Server (`mcp-memory-server.js`)**: An LLM-facing process. Takes JSON-RPC commands on `stdin`, processes tools/resources/prompts requests, interacts with the SQLite database, generates embeddings via a local ONNX model, and responds over `stdout`.
-2. **Dashboard Server (`mcp-memory-dashboard.js`)**: An Express server running on a designated port serving a Svelte frontend, connecting directly to the same SQLite database for read-only (and some administrative) capabilities for the developer to inspect.
+This document specifies the technical architecture and component interactions of the MCP Local Memory system.
 
-## Key Technical Decisions
-- **Local-First AI**: Leveraging `@xenova/transformers` ensures that all data embedded remains strictly on the user's machine, securing proprietary context.
-- **SQLite**: Single-file relational database that provides an excellent balance between ACID compliance and zero-configuration setups, ideal for an extension plugin.
-- **Stdio Transport**: Standard integration model for Cursor, VSCode, and other AI IDEs.
+## 1. Physical & Process Architecture
+
+The system is designed as a local-first, server-driven developer tool. It operates as two primary processes:
+
+### A. MCP Server (Core Engine)
+- **Path**: `dist/mcp/server.js` (Compiled from `src/mcp/`)
+- **Role**: The primary AI-facing engine.
+- **Communication**: Standard Input/Output (stdio) using JSON-RPC.
+- **Key Responsibilities**:
+  - Semantic Search & Keyword Search (SQLite + ONNX Embeddings).
+  - Task & Memory CRUD Operations.
+  - Multi-agent coordination logic.
+  - Embedding generation using `@xenova/transformers`.
+
+### B. Dashboard Server (Observation & Admin)
+- **Path**: `dist/dashboard/server.js` (Compiled from `src/dashboard/`)
+- **Role**: A web-based inspector for human developers.
+- **Technology**: Express.js server serving a Vite-built Svelte 5 frontend.
+- **Key Responsibilities**:
+  - Visualizing the Kanban task board.
+  - Auditing recent tool activity via the **Activity Log**.
+  - Inspecting MCP capabilities (Tools, Prompts, Resources) via the **Reference Service**.
+  - Bulk data management (Import/Export).
+
+---
+
+## 2. Component Logic & Data Flow
+
+```mermaid
+graph TD
+    Agent[AI Agent / IDE] -- JSON-RPC --> MCPServer[MCP Server]
+    MCPServer -- SQL --> SQLite[(SQLite DB)]
+    MCPServer -- ONNX --> Model[Local Embedding Model]
+    
+    DashboardServer[Dashboard Server] -- Read/Write --> SQLite
+    User[Developer] -- Browser --> DashboardServer
+```
+
+### Data Flow Invariants
+- **Local-First**: No data leaves the machine. Embeddings are generated locally using ONNX.
+- **Unified Storage**: Both the MCP server and Dashboard access the same SQLite file (typically located in `~/.gemini/antigravity/storage/`).
+- **Activity Tracking**: Every tool call handled by the MCP Server is logged asynchronously to the `action_log` table for audit visibility in the dashboard.
+- **Task Lifecycle**: The system supports a **6-stage task state machine**: `backlog` -> `pending` -> `in_progress` -> `completed` (with `canceled` and `blocked` as terminal/exception states). The Dashboard UI optimizes for the primary 4 swimlanes (`backlog`, `pending`, `in_progress`, `completed`).
+
+---
+
+## 3. Technology Rationale
+
+- **Svelte 5 & Vite**: Selected for the dashboard to provide a high-performance, reactive UI with a small footprint.
+- **@xenova/transformers**: Enables production-grade embeddings without API costs or data privacy concerns.
+- **Standard Stdio**: The most resilient transport for integration with Cursor, VS Code, and other MCP-compliant hosts.

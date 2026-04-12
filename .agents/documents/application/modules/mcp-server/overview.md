@@ -1,28 +1,38 @@
 # Module Overview: MCP Server
 
 ## Responsibility
-The `mcp-server` module serves as the primary engine for the Model Context Protocol implementation. It is responsible for handling all incoming JSON-RPC traffic over the STDIO transport, dispatching requests to specialized handlers (Memory and Task), managing the local SQLite persistence layer, and embedding AI model capabilities for semantic operations.
+The `mcp-server` module is the core intelligence engine of the system. It implements the Model Context Protocol (MCP) to provide agents with a stateful, semantic knowledge base and a standardized task orchestration framework. It manages local persistence, embedding generation, and automated audit logging.
+
+## Core Services
+- **Memory Service**: Handles semantic indexing, hybrid search, and knowledge synthesis.
+- **Task Service**: Manages the multi-stage task lifecycle with strict transition safety and token budgeting.
+- **Activity Service**: Automatically logs all tool interactions for auditability.
+- **Reference Service**: Exposes internal MCP schemas (Tools, Prompts, Resources) for self-inspection.
 
 ## Features
-- **Contextual Memory Management**: Tools for storing, updating, searching, and synthesizing semantic memories with automated conflict detection.
-- **Task Lifecycle Tracking**: A robust state machine for managing development tasks, providing explicit context boundaries for the AI agent.
-- **Real-time Resource Subscriptions**: Exposes dynamic URIs for memories and tasks that clients can subscribe to for live updates.
-- **Advanced Protocol Utilities**: Full support for MCP 2025-11-25 utilities including Progress reporting, Request Cancellation, and Elicitation forms.
+- **Contextual Memory**: Hybrid (Vector + FTS5) search across local memories with automated conflict resolution.
+- **Task Orchestration**: Priority-based task management with unique task codes and mandatory workflow transitions.
+- **Self-Inspection**: Resources that allow agents to query their own tool definitions and prompt templates.
+- **Offline Intelligence**: Local-first embedding generation using `@xenova/transformers`.
 
 ## Architecture
 ```mermaid
 graph TD
-    A[AI Client / IDE] <-->|JSON-RPC STDIO| B[MCP Router]
+    A[AI Client / IDE] <-->|JSON-RPC STDIO| B[Router]
     B --> C[Memory Controller]
     B --> D[Task Controller]
-    C --> E[SQLite Persistence]
+    B --> G[Reference Provider]
+    
+    C --> E[(SQLite)]
     D --> E
-    C --> F[Transformers ONNX Engine]
-    B --> G[Resource Notifier]
-    G -.->|notifications/resources/updated| A
+    C --> F[Transformers Engine]
+    
+    B -- Async --> H[Activity Logger]
+    H --> E
 ```
 
 ## Dependencies
-- `@xenova/transformers`: For local vector embedding generation.
-- `better-sqlite3`: For high-performance, synchronous local data storage.
-- `uuid`: For generating unique identifiers for memories and tasks.
+- `@xenova/transformers`: Local vector embedding generation (ONNX).
+- `better-sqlite3`: High-performance local SQL persistence.
+- `uuid`: Unique identifier generation.
+- `zod`: Schema validation for tool parameters and responses.

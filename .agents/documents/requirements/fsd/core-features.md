@@ -1,23 +1,29 @@
 # Functional Specification Document (FSD)
 
-This document encompasses the functional behavior, user stories, acceptance criteria, and edge cases for the core features of `local-memory-mcp`.
+This document specifies the functional behavior of the `local-memory-mcp` application.
 
-## Feature 1: Memory Management
-- **Stories:** As an AI agent, I want to store, search, update, and delete memories to manage context.
-- **Acceptance Criteria:**
-  - `memory-store` saves data and returns an ID.
-  - `memory-search` returns items ordered by semantic relevance.
-  - `memory-synthesize` samples the client LLM and stores the summary.
-- **Edge Cases:**
-  - Conflict on title collision.
-  - Extreme token lengths on FTS5 lookup.
-  - Model load timeouts for vector generation.
+## 1. Memory Management
+- **Description:** Provides storage and retrieval of semantic context snippets.
+- **Key Tools:**
+  - `memory.store`: Logic for persisting text with vector generation.
+  - `memory.search`: Hybrid ranking algorithm (Cosine Similarity + BM25).
+  - `memory.synthesize`: Collaborative consolidation of context using the client's LLM.
+- **Rules:**
+  - Titles must be unique within a repository scope.
+  - Importance must be between 1 (low) and 5 (critical).
 
-## Feature 2: Task Management
-- **Stories:** As an AI agent, I want to create and track task states to maintain boundary limits for my memory queries.
-- **Acceptance Criteria:**
-  - `task-create` successfully logs a new task ID.
-  - `task-active` unsets the previous active task and marks the new one.
-- **Edge Cases:**
-  - Race conditions when toggling active state.
-  - Attempting to close a task with incomplete subtasks.
+## 2. Task Management
+- **Description:** Tracks agent progress and prevents developmental amnesia.
+- **Statuses:** `backlog`, `pending`, `in_progress`, `completed`, `canceled`, `blocked`.
+- **Logic Rules:**
+  - **Single Active Focus:** Ideally only one task per repo should be `in_progress` at any time.
+  - **Transition Gate:** Tasks CANNOT move to `completed` from `pending`. They MUST move through `in_progress`.
+  - **Token Transparency:** Actual token usage must be logged upon task completion.
+
+## 3. Dashboard UI
+- **Tabs:** Dashboard (Stats), Activity (Audit), Memories (Search), Tasks (Kanban), Reference (Capability).
+- **Functionality:** Real-time data fetching without full-page reloads using Svelte 5 logic.
+
+## 4. Activity Audit
+- **Requirement:** Every call to the `local-memory-mcp` tools must generate an entry in the `activity` table.
+- **Content:** Input parameters, execution timestamp, and results summary.

@@ -1,25 +1,37 @@
-# Dashboard Layout Design (Svelte UI)
+# Dashboard Content Layout
 
-## Overall Grid Structure
-- **Container:** Full-screen (`100vw`, `100vh`), flexbox layout.
-- **Sidebar (Left):** Fixed width (`250px`), scrollable Y-axis. Contains the list of available repositories.
-- **Main Content (Right):** Flex-grow (`1`), scrollable Y-axis. Contains the Topbar, Tabs, and the primary data view (Tasks/Memories).
-- **Overlay Layer:** Fixed position (`z-index: 50`) sliding drawer from the right edge for detailed views.
+This document details the specific grid layouts for each primary tab in the dashboard.
 
-## Widgets & Visualizations
-### 1. Stats Widget (Top Bar)
-- **Data:** Total DB size, Model loaded status, active repository.
-- **Layout:** Horizontal flex row, small badges/chips.
+## 1. Dashboard Tab (Overview)
+- **Grid Strategy**: Vertical flow with nested horizontal rows.
+- **Components**:
+  - `StatsWidget`: Full-width row.
+  - `TaskStatsWidget` + `TimeStatsWidget`: Two-column grid (Responsive: Single column on mobile).
 
-### 2. Task Kanban Board (Tab 1)
-- **Data:** Tasks grouped by status (Pending, Active, Completed).
-- **Layout:** Horizontal scrollable row of columns. Each column is a vertical flex list of Task Cards.
+## 2. Activity Tab (Log)
+- **Grid Strategy**: Single column flex-layout.
+- **Container**: `glass card` with internal scrolling to maintain the top-bar visibility.
+- **Scroll Pattern**: "Load More" pagination at the bottom of the feed.
 
-### 3. Memory Feed (Tab 2)
-- **Data:** List of memories ordered by `created_at` or search relevance.
-- **Layout:** CSS Grid (`repeat(auto-fill, minmax(300px, 1fr))`) for cards, or a simple dense list view.
+## 3. Memories Tab (Explorer)
+- **Grid Strategy**: Flex-column with a persistent header (Search + New Memory).
+- **List Pattern**: Scrollable list of memory cards. 
+- **Responsiveness**: Cards take 100% width of the container.
 
-## Empty/Loading States
-- **Loading:** Skeleton screens mimicking card shapes.
-- **Empty Repo:** "Select a repository from the sidebar to view tasks and memories."
-- **Empty Search:** "No memories found matching your query."
+## 4. Tasks Tab (Kanban)
+- **Grid Strategy**: 4-column horizontal scroll group (`min-width: 260px` per column).
+- **Columns**: Backlog, To Do (`pending`), In Progress, Completed.
+- **Mobile Pattern**: Horizontal scroll with snap-points for single-column viewing.
+
+## 5. Reference Tab (Engine)
+- **Grid Strategy**: Master-detail or search-filtered list.
+- **Filter Bar**: Sticky top-mount inside the glass card.
+- **Drawer Trigger**: Item selection persistent across search refreshes.
+
+---
+
+## 6. Responsive Breakpoints
+
+- **Desktop (>1024px)**: Full sidebar, multi-column grids.
+- **Tablet (768px - 1024px)**: Sidebar collapses to icons, main content stays multi-column where possible.
+- **Mobile (<768px)**: Sidebar hidden (Mobile drawer menu available), all grids collapse to single-column, Kanban enables horizontal touch-scrolling.
