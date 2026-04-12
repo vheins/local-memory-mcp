@@ -322,26 +322,126 @@
 - **Error Dictionary:**
   - `-32602`: Missing operations or malformed operation items.
 
-## 2. Resources
+## 2. Resources (Application Control)
 
-### `tasks://current?repo={repo}`
-- **Protocol Method:** `resources/read`
+The server implements the Model Context Protocol `resources` feature to expose task context directly to the client.
+
+### Supported Protocol Methods
+
+#### `resources/list`
+Discovers available static resources.
 - **Example Request:**
   ```json
   {
-    "method": "resources/read",
-    "params": { "uri": "tasks://current?repo=vheins/local-memory-mcp" }
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "resources/list"
   }
   ```
 - **Example Response:**
   ```json
   {
-    "contents": [
-      {
-        "uri": "tasks://current?repo=vheins/local-memory-mcp",
-        "mimeType": "application/json",
-        "text": "{\"id\":\"task-1234-abcd\",\"title\":\"Setup CI\",\"status\":\"active\"}"
-      }
-    ]
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "resources": [
+        {
+          "uri": "task://{id}",
+          "name": "Task Detail",
+          "title": "Task Detail",
+          "description": "Full content and comments for a specific task UUID",
+          "mimeType": "application/json",
+          "annotations": {
+            "audience": ["assistant"],
+            "priority": 0.8
+          }
+        }
+      ]
+    }
+  }
+  ```
+
+#### `resources/templates/list`
+Discovers parameterized resource templates.
+- **Example Request:**
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "resources/templates/list"
+  }
+  ```
+- **Example Response:**
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "resourceTemplates": [
+        {
+          "uriTemplate": "tasks://current?repo={repo}",
+          "name": "Current Tasks",
+          "title": "Current Tasks",
+          "description": "List of all active tasks (pending, in_progress, blocked) for a specific project",
+          "mimeType": "application/json",
+          "annotations": {
+            "audience": ["assistant"],
+            "priority": 0.9
+          }
+        }
+      ]
+    }
+  }
+  ```
+
+#### `resources/read`
+Reads the contents of a resolved resource URI.
+- **Example Request:**
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "resources/read",
+    "params": {
+      "uri": "tasks://current?repo=vheins/local-memory-mcp"
+    }
+  }
+  ```
+- **Example Response:**
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "contents": [
+        {
+          "uri": "tasks://current?repo=vheins/local-memory-mcp",
+          "mimeType": "application/json",
+          "text": "[\n  {\n    \"id\": \"task-1234-abcd\",\n    \"title\": \"Setup CI\",\n    \"status\": \"active\"\n  }\n]"
+        }
+      ]
+    }
+  }
+  ```
+
+#### `resources/subscribe` & `resources/unsubscribe`
+Allows the client to be notified (via `notifications/resources/updated`) when a resource changes.
+- **Example Request:**
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "resources/subscribe",
+    "params": {
+      "uri": "tasks://current?repo=vheins/local-memory-mcp"
+    }
+  }
+  ```
+- **Example Response:**
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {}
   }
   ```

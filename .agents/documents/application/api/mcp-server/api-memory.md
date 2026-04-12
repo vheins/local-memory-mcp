@@ -360,92 +360,150 @@
 - **Error Dictionary:**
   - `-32603`: Client does not support the sampling capability.
 
-## 2. Resources
+## 2. Resources (Application Control)
 
-### `memory://index?repo={repo}`
-- **Protocol Method:** `resources/read`
+The server implements the Model Context Protocol `resources` feature to expose memory context directly to the client.
+
+### Supported Protocol Methods
+
+#### `resources/list`
+Discovers available static resources.
 - **Example Request:**
   ```json
   {
-    "method": "resources/read",
-    "params": { "uri": "memory://index?repo=vheins/local-memory-mcp" }
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "resources/list"
   }
   ```
 - **Example Response:**
   ```json
   {
-    "contents": [
-      {
-        "uri": "memory://index?repo=vheins/local-memory-mcp",
-        "mimeType": "application/json",
-        "text": "[\"id\":\"123e4567...\",\"title\":\"DB Schema\"]"
-      }
-    ]
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "resources": [
+        {
+          "uri": "memory://index",
+          "name": "Active Memory Index",
+          "title": "Active Memory Index",
+          "description": "List of all active memory entries across projects",
+          "mimeType": "application/json",
+          "annotations": {
+            "audience": ["assistant"],
+            "priority": 0.85
+          }
+        },
+        {
+          "uri": "session://roots",
+          "name": "Session Roots",
+          "title": "Session Roots",
+          "description": "Active workspace roots provided by the MCP client",
+          "mimeType": "application/json"
+        }
+      ]
+    }
   }
   ```
 
-### `memory://tags/{tag}`
-- **Protocol Method:** `resources/read`
+#### `resources/templates/list`
+Discovers parameterized resource templates.
 - **Example Request:**
   ```json
   {
-    "method": "resources/read",
-    "params": { "uri": "memory://tags/database" }
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "resources/templates/list"
   }
   ```
 - **Example Response:**
   ```json
   {
-    "contents": [
-      {
-        "uri": "memory://tags/database",
-        "mimeType": "application/json",
-        "text": "[\"id\":\"123e4567...\",\"title\":\"DB Schema\"]"
-      }
-    ]
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "resourceTemplates": [
+        {
+          "uriTemplate": "memory://index?repo={repo}",
+          "name": "Project Memory Index",
+          "title": "Project Memory Index",
+          "description": "Metadata for all active memories in a specific project",
+          "mimeType": "application/json"
+        },
+        {
+          "uriTemplate": "memory://tags/{tag}",
+          "name": "Memories by Tech Stack",
+          "title": "Memories by Tech Stack",
+          "description": "Retrieve best practices and decisions by technology tag",
+          "mimeType": "application/json"
+        },
+        {
+          "uriTemplate": "memory://summary/{repo}",
+          "name": "Project Summary",
+          "title": "Project Summary",
+          "description": "High-level summary of architectural decisions for a repository",
+          "mimeType": "text/plain"
+        },
+        {
+          "uriTemplate": "memory://search/{base64_query}?repo={repo}",
+          "name": "Semantic Memory Search",
+          "title": "Semantic Memory Search",
+          "description": "Run a semantic search over memories using a base64-encoded query",
+          "mimeType": "application/json"
+        }
+      ]
+    }
   }
   ```
 
-### `memory://summary/{repo}`
-- **Protocol Method:** `resources/read`
+#### `resources/read`
+Reads the contents of a resolved resource URI.
 - **Example Request:**
   ```json
   {
+    "jsonrpc": "2.0",
+    "id": 3,
     "method": "resources/read",
-    "params": { "uri": "memory://summary/vheins/local-memory-mcp" }
+    "params": {
+      "uri": "memory://index?repo=vheins/local-memory-mcp"
+    }
   }
   ```
 - **Example Response:**
   ```json
   {
-    "contents": [
-      {
-        "uri": "memory://summary/vheins/local-memory-mcp",
-        "mimeType": "text/markdown",
-        "text": "# Summary\n\nThis project uses SQLite and Transformers..."
-      }
-    ]
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "contents": [
+        {
+          "uri": "memory://index?repo=vheins/local-memory-mcp",
+          "mimeType": "application/json",
+          "text": "[\n  {\n    \"id\": \"123e4567...\",\n    \"title\": \"DB Schema\"\n  }\n]"
+        }
+      ]
+    }
   }
   ```
 
-### `memory://{id}`
-- **Protocol Method:** `resources/read`
+#### `resources/subscribe` & `resources/unsubscribe`
+Allows the client to be notified (via `notifications/resources/updated`) when a resource changes.
 - **Example Request:**
   ```json
   {
-    "method": "resources/read",
-    "params": { "uri": "memory://123e4567-e89b-12d3-a456-426614174000" }
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "resources/subscribe",
+    "params": {
+      "uri": "memory://index?repo=vheins/local-memory-mcp"
+    }
   }
   ```
 - **Example Response:**
   ```json
   {
-    "contents": [
-      {
-        "uri": "memory://123e4567-e89b-12d3-a456-426614174000",
-        "mimeType": "application/json",
-        "text": "{\"id\":\"123e4567...\",\"title\":\"DB Schema\",\"content\":\"Uses SQLite\"}"
-      }
-    ]
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {}
   }
   ```
