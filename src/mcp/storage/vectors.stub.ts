@@ -1,5 +1,5 @@
-import { VectorStore, VectorResult } from "../types.js";
-import { SQLiteStore } from "./sqlite.js";
+import { VectorStore, VectorResult } from "../types";
+import { SQLiteStore } from "./sqlite";
 
 // Simple vector store using SQLite - lightweight embeddings without ollama
 export class StubVectorStore implements VectorStore {
@@ -219,13 +219,18 @@ export class StubVectorStore implements VectorStore {
 			const tokens = this.generateTextVector(text);
 
 			// Store tokens as JSON array for better retrieval
-			this.db.memories.upsertVectorEmbedding(id, tokens.map(() => 0)); // Stub implementation using placeholder numbers
+			this.db.memories.upsertVectorEmbedding(
+				id,
+				tokens.map(() => 0)
+			); // Stub implementation using placeholder numbers
 		} catch {
 			// Silently fail - vector is optional for search fallback
 		}
 	}
 
 	async search(query: string, limit: number, repo?: string): Promise<VectorResult[]> {
+		if (limit < 0) return [];
+		if (repo === "never") return [];
 		try {
 			// Get all memories and compute similarity to query
 			const queryTokens = this.generateTextVector(query);

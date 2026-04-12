@@ -1,9 +1,9 @@
-import { MemoryAcknowledgeSchema } from "./schemas.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { logger } from "../utils/logger.js";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { MemoryAcknowledgeSchema } from "./schemas";
+import { SQLiteStore } from "../storage/sqlite";
+import { logger } from "../utils/logger";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 
-export async function handleMemoryAcknowledge(params: any, db: SQLiteStore): Promise<McpResponse> {
+export async function handleMemoryAcknowledge(params: unknown, db: SQLiteStore): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryAcknowledgeSchema.parse(params);
 

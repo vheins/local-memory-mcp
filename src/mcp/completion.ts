@@ -1,10 +1,10 @@
 import fs from "fs";
 import path from "path";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { SessionContext, getFilesystemRoots, inferRepoFromSession } from "./session.js";
-import { completePromptArgument } from "./prompts/registry.js";
-import { completeResourceArgument } from "./resources/index.js";
-import { rankCompletionValues } from "./utils/completion.js";
+import { SQLiteStore } from "./storage/sqlite";
+import { SessionContext, getFilesystemRoots, inferRepoFromSession } from "./session";
+import { completePromptArgument } from "./prompts/registry";
+import { completeResourceArgument } from "./resources/index";
+import type { Task } from "./types";
 
 type CompletionRequest = {
 	ref?: {
@@ -126,7 +126,7 @@ function getSuggestedTasks(
 
 	if (!repo) return [];
 
-	return db.tasks.getTasksByRepo(repo, undefined, 100).map((task: any) => ({
+	return db.tasks.getTasksByRepo(repo, undefined, 100).map((task: Task) => ({
 		id: task.id,
 		task_code: task.task_code,
 		title: task.title

@@ -1,7 +1,7 @@
 import { pipeline, FeatureExtractionPipeline } from "@xenova/transformers";
-import { VectorStore, VectorResult } from "../types.js";
-import { SQLiteStore } from "./sqlite.js";
-import { logger } from "../utils/logger.js";
+import { VectorStore, VectorResult } from "../types";
+import { SQLiteStore } from "./sqlite";
+import { logger } from "../utils/logger";
 
 export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
@@ -54,6 +54,7 @@ export class RealVectorStore implements VectorStore {
 	}
 
 	async remove(id: string): Promise<void> {
+		if (!id) return;
 		// Handled by SQL CASCADE
 	}
 

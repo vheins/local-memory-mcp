@@ -1,17 +1,17 @@
 import { randomUUID } from "crypto";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
-import { inferRepoFromSession, SessionContext } from "../session.js";
-import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation.js";
-import { createMcpResponse } from "../utils/mcp-response.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { Task, TaskStatus, TaskPriority, VectorStore } from "../types";
+import { inferRepoFromSession, SessionContext } from "../session";
+import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation";
+import { createMcpResponse } from "../utils/mcp-response";
 import {
 	TaskCreateSchema,
 	TaskCreateInteractiveSchema,
 	TaskUpdateSchema,
 	TaskDeleteSchema,
 	TaskListSchema
-} from "./schemas.js";
-import { handleMemoryStore } from "./memory.store.js";
+} from "./schemas";
+import { handleMemoryStore } from "./memory.store";
 
 function describeTaskListFilter(status?: string) {
 	if (!status) return "active";
@@ -162,7 +162,14 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 	const filteredTasks = phase ? tasks.filter((t: Task) => t.phase.toLowerCase() === phase.toLowerCase()) : tasks;
 
 	const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
-	const rows = filteredTasks.map((t: Task & { comments_count?: number }) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
+	const rows = filteredTasks.map((t: Task & { comments_count?: number }) => [
+		t.id,
+		t.task_code,
+		t.title,
+		t.status,
+		t.priority,
+		t.comments_count || 0
+	]);
 
 	const structured = {
 		schema: "task-list" as const,

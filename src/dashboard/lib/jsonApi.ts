@@ -1,14 +1,14 @@
 import express from "express";
 
-export function jsonApiRes(data: any, type: string, extra: { meta?: any; links?: any } = {}) {
+export function jsonApiRes(data: unknown, type: string, extra: { meta?: unknown; links?: unknown } = {}) {
 	const isArray = Array.isArray(data);
 	const dataLayer = isArray
-		? data.map((item: any) => {
+		? (data as Array<Record<string, unknown>>).map((item: Record<string, unknown>) => {
 				const { id, ...attributes } = item;
 				return { type, id: String(id || "system"), attributes };
 			})
 		: (() => {
-				const { id, ...attributes } = data;
+				const { id, ...attributes } = data as Record<string, unknown>;
 				return { type, id: String(id || attributes.id || "system"), attributes };
 			})();
 

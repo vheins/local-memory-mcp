@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { logger } from "../utils/logger.js";
+import { logger } from "../utils/logger";
 
 /**
  * Handles database schema migrations and initial table creation.
@@ -218,7 +218,9 @@ export class MigrationManager {
 					this.db.exec(col.definition);
 				}
 			} catch (e) {
-				logger.error(`Migration step failed for ${col.table}.${col.name}: ${e instanceof Error ? e.message : String(e)}`);
+				logger.error(
+					`Migration step failed for ${col.table}.${col.name}: ${e instanceof Error ? e.message : String(e)}`
+				);
 			}
 		}
 

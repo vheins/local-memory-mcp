@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
-import { MemoryStoreSchema } from "./schemas.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore, MemoryEntry } from "../types.js";
-import { logger } from "../utils/logger.js";
+import { MemoryStoreSchema } from "./schemas";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore, MemoryEntry } from "../types";
+import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 
 function hasMetadataLikeTitle(title: string): boolean {

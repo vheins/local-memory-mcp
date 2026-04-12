@@ -1,8 +1,8 @@
-import { MemoryUpdateSchema } from "./schemas.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore } from "../types.js";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
-import { logger } from "../utils/logger.js";
+import { MemoryUpdateSchema } from "./schemas";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { logger } from "../utils/logger";
 
 function hasMetadataLikeTitle(title: string): boolean {
 	const normalized = title.trim();

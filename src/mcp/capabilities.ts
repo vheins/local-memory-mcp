@@ -11,7 +11,7 @@ try {
 		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 		pkgVersion = pkg.version;
 	}
-} catch (e) {
+} catch {
 	// Fallback to default version if reading fails
 }
 

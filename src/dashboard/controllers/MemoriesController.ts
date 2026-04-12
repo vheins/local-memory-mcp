@@ -1,7 +1,8 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db } from "../lib/context.js";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
+import { db } from "../lib/context";
+import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
+import type { MemoryType, MemoryEntry } from "../../mcp/types";
 
 export class MemoriesController {
 	static list(req: express.Request, res: express.Response) {
@@ -14,12 +15,12 @@ export class MemoriesController {
 
 			const result = db.memories.listMemoriesForDashboard({
 				repo: repo as string,
-				type: type as string,
+				type: type as MemoryType,
 				search: search as string,
 				minImportance: minImportance ? parseInt(minImportance as string) : undefined,
 				maxImportance: maxImportance ? parseInt(maxImportance as string) : undefined,
 				sortBy: sortBy as string,
-				sortOrder: sortOrder === "asc" ? "asc" : "desc",
+				sortOrder: (sortOrder as string)?.toUpperCase() === "ASC" ? "ASC" : "DESC",
 				limit: pageSize,
 				offset: (page - 1) * pageSize
 			});
@@ -91,8 +92,8 @@ export class MemoriesController {
 				repo,
 				updated_at: new Date().toISOString()
 			};
-			db.memories.update(id, updates);
-			db.actions.logAction("update", (existing as Record<string, any>).scope?.repo || attributes.repo || "", { memoryId: id });
+			db.memories.update(id, updates as Partial<MemoryEntry>);
+			db.actions.logAction("update", (existing as MemoryEntry).scope?.repo || attributes.repo || "", { memoryId: id });
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -106,7 +107,7 @@ export class MemoriesController {
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
 			db.memories.delete(id);
-			db.actions.logAction("delete", (existing as Record<string, any>).scope?.repo || "", { memoryId: id });
+			db.actions.logAction("delete", (existing as MemoryEntry).scope?.repo || "", { memoryId: id });
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -120,16 +121,16 @@ export class MemoriesController {
 			if (!Array.isArray(items) || !repo)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
 
-			const entries = items.map((item: Record<string, any>) => ({
+			const entries = items.map((item: Record<string, unknown>) => ({
 				...item,
-				id: item.id || randomUUID(),
-				scope: { ...item.scope, repo },
-				created_at: item.created_at || new Date().toISOString(),
-				updated_at: item.updated_at || new Date().toISOString()
+				id: (item.id as string) || randomUUID(),
+				scope: { ...(item.scope as Record<string, unknown>), repo },
+				created_at: (item.created_at as string) || new Date().toISOString(),
+				updated_at: (item.updated_at as string) || new Date().toISOString()
 			}));
 
-			const count = db.memories.bulkInsertMemories(entries);
-			db.system.logAction("write", repo, { query: `Bulk imported ${count} memories` });
+			const count = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
+			db.actions.logAction("write", repo, { query: `Bulk imported ${count} memories` });
 			res.json(jsonApiRes({ count }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -147,14 +148,19 @@ export class MemoriesController {
 			if (action === "delete") {
 				count = db.memories.bulkDeleteMemories(ids);
 			} else if (action === "update" || action === "archive") {
-				count = db.memories.bulkUpdateMemories(ids, updates || { status: action === "archive" ? "archived" : "active" });
+				count = db.memories.bulkUpdateMemories(
+					ids,
+					updates || { status: action === "archive" ? "archived" : "active" }
+				);
 			} else {
 				return res.status(400).json(jsonApiError("Invalid action", 400));
 			}
 
 			if (ids.length > 0) {
 				const mem = db.memories.getById(ids[0]);
-				db.actions.logAction(action, mem?.scope?.repo || "unknown", { query: `Bulk ${action} applied to ${count} memories` });
+				db.actions.logAction(action, mem?.scope?.repo || "unknown", {
+					query: `Bulk ${action} applied to ${count} memories`
+				});
 			}
 
 			res.json(jsonApiRes({ count }, "status"));

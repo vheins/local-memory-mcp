@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 import readline from "node:readline";
-import { createRouter } from "./router.js";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { RealVectorStore } from "./storage/vectors.js";
-import { CAPABILITIES, MCP_PROTOCOL_VERSION } from "./capabilities.js";
+import { createRouter } from "./router";
+import { SQLiteStore } from "./storage/sqlite";
+import { RealVectorStore } from "./storage/vectors";
+import { CAPABILITIES, MCP_PROTOCOL_VERSION } from "./capabilities";
 import {
 	createSessionContext,
 	extractRootsFromResult,
 	updateSessionFromInitialize,
 	updateSessionRoots
-} from "./session.js";
-import { addLogSink, logger } from "./utils/logger.js";
+} from "./session";
+import { addLogSink, logger } from "./utils/logger";
 import fs from "fs";
 
 // --- CLI Doctor Mode ---
@@ -51,7 +51,6 @@ vectors.initialize().catch((err) => {
 });
 
 // Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
-// ... (rest of cleanup code) ...
 const expiredArchived = db.memories.archiveExpiredMemories();
 const lowScoreArchived = db.memories.archiveLowScoreMemories();
 const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);

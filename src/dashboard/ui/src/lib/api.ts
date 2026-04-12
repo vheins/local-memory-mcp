@@ -15,23 +15,23 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 interface JsonApiItem {
 	id: string;
 	type: string;
-	attributes?: Record<string, any>;
+	attributes?: Record<string, unknown>;
 }
 
 interface JsonApiBody {
 	data: JsonApiItem | JsonApiItem[];
-	meta?: any;
+	meta?: Record<string, unknown>;
 }
 
-function deserialize(body: JsonApiBody | any): any {
-	if (!body || !body.data) return body;
+function deserialize(body: JsonApiBody | unknown): unknown {
+	if (!body || typeof body !== "object" || !("data" in body)) return body;
 	const { data, meta } = body as JsonApiBody;
 
 	const processItem = (item: JsonApiItem) => {
-		const attr = item.attributes || {};
+		const attr = (item.attributes || {}) as Record<string, unknown>;
 		// Inject success for status responses
-		if (item.type === "status" && (attr as any).success === undefined) {
-			(attr as any).success = true;
+		if (item.type === "status" && attr.success === undefined) {
+			attr.success = true;
 		}
 		// Return flat object (preserving ID except for generic 'system' IDs)
 		if (item.id === "system") return attr;
@@ -40,7 +40,7 @@ function deserialize(body: JsonApiBody | any): any {
 
 	if (Array.isArray(data)) {
 		const items = data.map(processItem);
-		const result: Record<string, any> = {};
+		const result: Record<string, unknown> = {};
 		if (meta) result.pagination = meta;
 
 		const firstType = data[0]?.type;
@@ -73,7 +73,7 @@ export const api = {
 	recentActions: (repo: string | null, page: number, pageSize: number) => {
 		let url = `/api/recent-actions?page=${page}&pageSize=${pageSize}`;
 		if (repo) url += `&repo=${encodeURIComponent(repo)}`;
-		return apiFetch<{ actions: RecentAction[]; pagination: any }>(url);
+		return apiFetch<{ actions: RecentAction[]; pagination: Record<string, unknown> }>(url);
 	},
 
 	memories: (params: {
@@ -96,7 +96,7 @@ export const api = {
 		if (params.sortOrder) q.set("sortOrder", params.sortOrder);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<{ memories: Memory[]; pagination: any }>(`/api/memories?${q}`);
+		return apiFetch<{ memories: Memory[]; pagination: Record<string, unknown> }>(`/api/memories?${q}`);
 	},
 
 	memoryById: (id: string) => apiFetch<Memory>(`/api/memories/${id}`),
@@ -117,14 +117,14 @@ export const api = {
 
 	deleteMemory: (id: string) => apiFetch<{ success: boolean }>(`/api/memories/${id}`, { method: "DELETE" }),
 
-	bulkImportMemories: (repo: string, items: any[]) =>
+	bulkImportMemories: (repo: string, items: unknown[]) =>
 		apiFetch<{ count: number }>("/api/memories/import", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ repo, items })
 		}),
 
-	bulkMemoryAction: (action: string, ids: string[], updates?: any) =>
+	bulkMemoryAction: (action: string, ids: string[], updates?: Partial<Memory>) =>
 		apiFetch<{ count: number }>("/api/memories/action", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -137,7 +137,7 @@ export const api = {
 		if (params.search) q.set("search", params.search);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<{ tasks: Task[]; pagination: any }>(`/api/tasks?${q}`);
+		return apiFetch<{ tasks: Task[]; pagination: Record<string, unknown> }>(`/api/tasks?${q}`);
 	},
 
 	taskById: (id: string) => apiFetch<Task>(`/api/tasks/${id}`),
@@ -160,7 +160,7 @@ export const api = {
 
 	deleteTask: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
 
-	bulkImportTasks: (repo: string, items: any[]) =>
+	bulkImportTasks: (repo: string, items: unknown[]) =>
 		apiFetch<{ count: number }>("/api/tasks/import", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -180,8 +180,8 @@ export const api = {
 
 	capabilities: () => apiFetch<{ capabilities: string[] }>("/api/capabilities"),
 
-	callTool: (name: string, args: Record<string, any>) =>
-		apiFetch<{ result: any }>(`/api/tools/${encodeURIComponent(name)}/call`, {
+	callTool: (name: string, args: Record<string, unknown>) =>
+		apiFetch<{ result: unknown }>(`/api/tools/${encodeURIComponent(name)}/call`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(args)

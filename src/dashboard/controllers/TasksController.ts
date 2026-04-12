@@ -1,7 +1,8 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db } from "../lib/context.js";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
+import { db } from "../lib/context";
+import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
+import type { Task } from "../../mcp/types";
 
 export class TasksController {
 	static list(req: express.Request, res: express.Response) {
@@ -22,7 +23,13 @@ export class TasksController {
 					search as string
 				);
 			} else {
-				tasks = db.tasks.getTasksByRepo(repo as string, status as string, pageSize, (page - 1) * pageSize, search as string);
+				tasks = db.tasks.getTasksByRepo(
+					repo as string,
+					status as string,
+					pageSize,
+					(page - 1) * pageSize,
+					search as string
+				);
 			}
 			res.json(jsonApiRes(tasks, "task", { meta: { page, pageSize } }));
 		} catch (err: unknown) {
@@ -51,7 +58,12 @@ export class TasksController {
 			if (db.tasks.isTaskCodeDuplicate(repo, task_code))
 				return res.status(400).json(jsonApiError("Duplicate task_code", 400));
 			const id = randomUUID();
-			db.tasks.insertTask({ ...attributes, id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+			db.tasks.insertTask({
+				...attributes,
+				id,
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString()
+			} as Task);
 			db.actions.logAction("write", repo, { taskId: id });
 			res.json(jsonApiRes({ id }, "task"));
 		} catch (err: unknown) {
@@ -67,10 +79,13 @@ export class TasksController {
 			const existingTask = db.tasks.getTaskById(id);
 			if (!existingTask) return res.status(404).json(jsonApiError("Task not found", 404));
 
-			db.tasks.updateTask(id, attributes);
+			db.tasks.updateTask(id, attributes as Partial<Task>);
 
 			if (attributes.status && attributes.status !== existingTask.status) {
-				db.actions.logAction("update", existingTask.repo, { taskId: id, query: `Status changed to ${attributes.status}` });
+				db.actions.logAction("update", existingTask.repo, {
+					taskId: id,
+					query: `Status changed to ${attributes.status}`
+				});
 				db.tasks.insertTaskComment({
 					id: randomUUID(),
 					task_id: id,
@@ -124,16 +139,16 @@ export class TasksController {
 			if (!Array.isArray(items) || !repo)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
 
-			const tasks = items.map((t: Record<string, any>) => ({
-				...t,
-				id: t.id || randomUUID(),
+			const tasks = items.map((item: Record<string, unknown>) => ({
+				...item,
+				id: (item.id as string) || randomUUID(),
 				repo,
-				task_code: t.task_code || randomUUID().substring(0, 8),
-				created_at: t.created_at || new Date().toISOString(),
-				updated_at: t.updated_at || new Date().toISOString()
+				task_code: (item.task_code as string) || randomUUID().substring(0, 8),
+				created_at: (item.created_at as string) || new Date().toISOString(),
+				updated_at: (item.updated_at as string) || new Date().toISOString()
 			}));
 
-			const count = db.tasks.bulkInsertTasks(tasks);
+			const count = db.tasks.bulkInsertTasks(tasks as Task[]);
 			db.actions.logAction("write", repo, { query: `Bulk imported ${count} tasks` });
 			res.json(jsonApiRes({ count }, "status"));
 		} catch (err: unknown) {

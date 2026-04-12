@@ -2,12 +2,12 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { db, mcpClient, startTime } from "../lib/context.js";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
-import { condenseRecentActions } from "../lib/helpers.js";
-import { TOOL_DEFINITIONS } from "../../mcp/tools/schemas.js";
-import { listResources } from "../../mcp/resources/index.js";
-import { PROMPTS } from "../../mcp/prompts/registry.js";
+import { db, mcpClient, startTime } from "../lib/context";
+import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
+import { condenseRecentActions } from "../lib/helpers";
+import { TOOL_DEFINITIONS } from "../../mcp/tools/schemas";
+import { listResources } from "../../mcp/resources/index";
+import { PROMPTS } from "../../mcp/prompts/registry";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkg = { version: "0.0.0" };

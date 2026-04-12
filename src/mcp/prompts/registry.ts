@@ -1,8 +1,8 @@
-import { SQLiteStore } from "../storage/sqlite.js";
-import { SessionContext, inferRepoFromSession } from "../session.js";
-import { rankCompletionValues } from "../utils/completion.js";
-import { loadPromptFromMarkdown, listPromptFiles, LoadedPrompt } from "./loader.js";
-import { decodeCursor, encodeCursor } from "../utils/pagination.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { SessionContext, inferRepoFromSession } from "../session";
+import { rankCompletionValues } from "../utils/completion";
+import { loadPromptFromMarkdown, listPromptFiles, LoadedPrompt } from "./loader";
+import { decodeCursor, encodeCursor } from "../utils/pagination";
 
 function createPromptDefinition(loaded: LoadedPrompt) {
 	return {

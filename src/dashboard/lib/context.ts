@@ -1,6 +1,6 @@
-import { MCPClient } from "../../mcp/client.js";
-import { SQLiteStore } from "../../mcp/storage/sqlite.js";
-import { logger } from "../../mcp/utils/logger.js";
+import { MCPClient } from "../../mcp/client";
+import { SQLiteStore } from "../../mcp/storage/sqlite";
+import { logger } from "../../mcp/utils/logger";
 
 export const db = new SQLiteStore();
 export const mcpClient = new MCPClient();

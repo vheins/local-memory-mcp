@@ -1,6 +1,6 @@
-import { MemorySummarizeSchema } from "./schemas.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { MemorySummarizeSchema } from "./schemas";
+import { SQLiteStore } from "../storage/sqlite";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 
 export async function handleMemorySummarize(params: any, db: SQLiteStore): Promise<McpResponse> {
 	// Validate input

@@ -1,8 +1,7 @@
-import { MemorySearchSchema } from "./schemas.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore, MemoryEntry } from "../types.js";
-import { normalize } from "../utils/normalize.js";
-import { logger } from "../utils/logger.js";
+import { MemorySearchSchema } from "./schemas";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore, MemoryEntry, VectorResult } from "../types";
+import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
 import { expandQuery } from "../utils/query-expander.js";
 
@@ -12,12 +11,7 @@ const HYBRID_WEIGHTS_VECTOR = {
 	importance: 0.2
 };
 
-const HYBRID_WEIGHTS_NO_VECTOR = {
-	similarity: 0.8,
-	importance: 0.2
-};
-
-export async function handleMemorySearch(params: any, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleMemorySearch(params: unknown, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
 	const validated = MemorySearchSchema.parse(params);
 
 	const searchQuery = expandQuery(validated.query, validated.prompt);
@@ -35,7 +29,7 @@ export async function handleMemorySearch(params: any, db: SQLiteStore, vectors: 
 
 	let candidates = similarityResults.map((r) => ({
 		memory: r as MemoryEntry,
-		similarityScore: (r as any).similarity as number
+		similarityScore: (r as MemoryEntry & { similarity: number }).similarity
 	}));
 
 	// 2. Workspace & Tag Affinity Boost
@@ -73,7 +67,13 @@ export async function handleMemorySearch(params: any, db: SQLiteStore, vectors: 
 	}
 
 	// 3. Vector Re-ranking
-	let scoredMemories: any[] = [];
+	interface ScoredMemory {
+		memory: MemoryEntry;
+		similarityScore: number;
+		vectorScore: number;
+		finalScore: number;
+	}
+	let scoredMemories: ScoredMemory[] = [];
 	try {
 		const vectorResults = await vectors.search(searchQuery, candidates.length || 10, validated.repo);
 		const vectorScoreMap = new Map(vectorResults.map((vr) => [vr.id, vr.score]));
@@ -89,7 +89,7 @@ export async function handleMemorySearch(params: any, db: SQLiteStore, vectors: 
 				return { ...c, vectorScore: vScore, finalScore };
 			});
 		} else if (vectorResults.length > 0) {
-			const vectorIds = vectorResults.map((vr: any) => vr.id);
+			const vectorIds = vectorResults.map((vr: VectorResult) => vr.id);
 			const fetchedMemories = db.memories.getByIds(vectorIds);
 			const memoryMap = new Map(fetchedMemories.map((m) => [m.id, m]));
 

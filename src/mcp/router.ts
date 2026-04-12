@@ -1,35 +1,35 @@
 import path from "node:path";
-import { listResources, listResourceTemplates, readResource } from "./resources/index.js";
-import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./session.js";
-import { logger } from "./utils/logger.js";
-import { getPrompt, listPrompts } from "./prompts/registry.js";
-import { TOOL_DEFINITIONS } from "./tools/schemas.js";
-import { complete } from "./completion.js";
-import { SQLiteStore } from "./storage/sqlite.js";
-import { VectorStore } from "./types.js";
-import { handleMemoryStore } from "./tools/memory.store.js";
-import { handleMemoryUpdate } from "./tools/memory.update.js";
-import { handleMemorySearch } from "./tools/memory.search.js";
-import { handleMemorySummarize } from "./tools/memory.summarize.js";
-import { handleMemorySynthesize } from "./tools/memory.synthesize.js";
-import { handleMemoryDelete } from "./tools/memory.delete.js";
-import { handleMemoryBulkDelete } from "./tools/memory.bulk-delete.js";
-import { handleMemoryRecap } from "./tools/memory.recap.js";
-import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
-import { handleMemoryGet } from "./tools/memory.get.js";
+import { listResources, listResourceTemplates, readResource } from "./resources/index";
+import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./session";
+import { logger } from "./utils/logger";
+import { getPrompt, listPrompts } from "./prompts/registry";
+import { TOOL_DEFINITIONS } from "./tools/schemas";
+import { complete } from "./completion";
+import { SQLiteStore } from "./storage/sqlite";
+import { VectorStore } from "./types";
+import { handleMemoryStore } from "./tools/memory.store";
+import { handleMemoryUpdate } from "./tools/memory.update";
+import { handleMemorySearch } from "./tools/memory.search";
+import { handleMemorySummarize } from "./tools/memory.summarize";
+import { handleMemorySynthesize } from "./tools/memory.synthesize";
+import { handleMemoryDelete } from "./tools/memory.delete";
+import { handleMemoryBulkDelete } from "./tools/memory.bulk-delete";
+import { handleMemoryRecap } from "./tools/memory.recap";
+import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
+import { handleMemoryGet } from "./tools/memory.get";
 import {
 	handleTaskList,
 	handleTaskCreate,
 	handleTaskCreateInteractive,
 	handleTaskUpdate,
 	handleTaskDelete
-} from "./tools/task.manage.js";
-import { handleTaskGet } from "./tools/task.get.js";
-import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
-import { SamplingRequestHandler } from "./sampling.js";
-import { ElicitationRequestHandler } from "./elicitation.js";
-import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger.js";
-import { decodeCursor, encodeCursor } from "./utils/pagination.js";
+} from "./tools/task.manage";
+import { handleTaskGet } from "./tools/task.get";
+import { handleTaskBulkManage } from "./tools/task.bulk-manage";
+import { SamplingRequestHandler } from "./sampling";
+import { ElicitationRequestHandler } from "./elicitation";
+import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
+import { decodeCursor, encodeCursor } from "./utils/pagination";
 
 type RouterOptions = {
 	getSessionContext?: () => SessionContext;
@@ -62,7 +62,11 @@ export function createRouter(
 				return listTools(getSessionContext?.(), params);
 
 			case "tools/call":
-				return await handleToolCall(params, (params as Record<string, unknown>)?.signal as AbortSignal | undefined, onProgress);
+				return await handleToolCall(
+					params,
+					(params as Record<string, unknown>)?.signal as AbortSignal | undefined,
+					onProgress
+				);
 
 			// ---- resources ----
 			case "resources/list":
@@ -112,7 +116,7 @@ export function createRouter(
 		const toolName = String(name).replace(/\./g, "-");
 
 		let result: unknown;
-		const repo = (args?.repo as string) || (args?.scope as Record<string, unknown>)?.repo as string || "unknown";
+		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
 
 		switch (toolName) {
 			case "memory-store":
@@ -263,7 +267,10 @@ function getAvailableToolDefinitions(session?: SessionContext) {
 
 function collectAffectedResourceUris(toolName: string, args: Record<string, unknown>, result: unknown): string[] {
 	const res = result as Record<string, unknown> | undefined;
-	const repo = (args?.repo as string) || (args?.scope as Record<string, unknown>)?.repo as string || (res?.data as Record<string, unknown>)?.repo as string;
+	const repo =
+		(args?.repo as string) ||
+		((args?.scope as Record<string, unknown>)?.repo as string) ||
+		((res?.data as Record<string, unknown>)?.repo as string);
 	const uris = new Set<string>();
 
 	const touchesMemory =
@@ -285,12 +292,16 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 		uris.add("repository://index");
 	}
 
-	const memoryId = (args?.id as string) || (args?.memory_id as string) || (res?.data as Record<string, unknown>)?.id as string;
+	const memoryId =
+		(args?.id as string) || (args?.memory_id as string) || ((res?.data as Record<string, unknown>)?.id as string);
 	if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
 		uris.add(`memory://${memoryId}`);
 	}
 
-	const taskId = (args?.id as string) || (args?.task_id as string) || (res?.structuredData as Record<string, unknown>)?.id as string;
+	const taskId =
+		(args?.id as string) ||
+		(args?.task_id as string) ||
+		((res?.structuredData as Record<string, unknown>)?.id as string);
 	if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
 		uris.add(`task://${taskId}`);
 	}
@@ -304,7 +315,7 @@ function normalizeToolArguments(args: unknown, session?: SessionContext): Record
 	}
 
 	const anyArgs = args as Record<string, unknown>;
-	const nextArgs: Record<string, any> = {
+	const nextArgs: Record<string, unknown> = {
 		...anyArgs,
 		scope: anyArgs.scope ? { ...(anyArgs.scope as Record<string, unknown>) } : undefined
 	};
@@ -316,11 +327,12 @@ function normalizeToolArguments(args: unknown, session?: SessionContext): Record
 		nextArgs.repo = inferRepoFromSession(session);
 	}
 
-	if (nextArgs.scope && !nextArgs.scope.repo) {
-		nextArgs.scope.repo = nextArgs.repo ?? inferRepoFromSession(session);
+	const scope = nextArgs.scope as Record<string, unknown> | undefined;
+	if (scope && !scope.repo) {
+		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
 	}
 
-	if (typeof nextArgs.current_file_path === "string" && nextArgs.scope) {
+	if (typeof nextArgs.current_file_path === "string" && scope) {
 		const containingRoot = path.isAbsolute(nextArgs.current_file_path)
 			? findContainingRoot(nextArgs.current_file_path, session)
 			: null;
@@ -328,8 +340,8 @@ function normalizeToolArguments(args: unknown, session?: SessionContext): Record
 		if (containingRoot) {
 			const relativePath = path.relative(containingRoot, path.resolve(nextArgs.current_file_path));
 			const relativeFolder = path.dirname(relativePath);
-			if (relativeFolder && relativeFolder !== "." && !nextArgs.scope.folder) {
-				nextArgs.scope.folder = relativeFolder;
+			if (relativeFolder && relativeFolder !== "." && !scope.folder) {
+				scope.folder = relativeFolder;
 			}
 		}
 	}

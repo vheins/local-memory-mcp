@@ -1,10 +1,10 @@
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore } from "../types.js";
-import { createMcpResponse } from "../utils/mcp-response.js";
-import { MemoryBulkDeleteSchema } from "./schemas.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
+import { createMcpResponse } from "../utils/mcp-response";
+import { MemoryBulkDeleteSchema } from "./schemas";
 
 export async function handleMemoryBulkDelete(
-	args: any,
+	args: unknown,
 	storage: SQLiteStore,
 	vectors: VectorStore,
 	onProgress?: (progress: number, total?: number) => void

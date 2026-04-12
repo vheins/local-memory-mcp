@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { Task, TaskStatus, TaskPriority, VectorStore } from "../types.js";
-import { createMcpResponse } from "../utils/mcp-response.js";
-import { TaskBulkManageSchema } from "./schemas.js";
-import { archiveTaskToMemory } from "./task.manage.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { Task, TaskStatus, TaskPriority, VectorStore } from "../types";
+import { createMcpResponse } from "../utils/mcp-response";
+import { TaskBulkManageSchema } from "./schemas";
+import { archiveTaskToMemory } from "./task.manage";
 
 function deriveTaskStatusTimestamps(status: TaskStatus, now: string) {
 	return {

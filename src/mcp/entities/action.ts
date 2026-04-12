@@ -77,7 +77,7 @@ export class ActionEntity extends BaseEntity {
       SELECT a.*, m.title as memory_title, m.type as memory_type 
       FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id
     `;
-		const params: any[] = [];
+		const params: unknown[] = [];
 
 		if (repo) {
 			query += " WHERE a.repo = ?";
@@ -104,7 +104,7 @@ export class ActionEntity extends BaseEntity {
 			.all(repo) as { date: string; count: number }[];
 	}
 
-	getActionDistribution(repo: string): any[] {
+	getActionDistribution(repo: string): { action: string; count: number }[] {
 		return this.db
 			.prepare(
 				`

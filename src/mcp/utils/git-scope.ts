@@ -21,7 +21,7 @@ export function resolveGitScope(cwd = process.cwd()) {
 			})
 				.toString()
 				.trim();
-		} catch (err) {
+		} catch {
 			// Ignore error resolving branch
 		}
 
@@ -29,7 +29,7 @@ export function resolveGitScope(cwd = process.cwd()) {
 			repo,
 			branch
 		};
-	} catch (err) {
+	} catch {
 		// Ignore error resolving git root
 	}
 

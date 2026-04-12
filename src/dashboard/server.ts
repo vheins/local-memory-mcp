@@ -3,8 +3,8 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { db, mcpClient, logger } from "./lib/context.js";
-import routes from "./routes/index.js";
+import { db, mcpClient, logger } from "./lib/context";
+import routes from "./routes/index";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkg = { version: "0.0.0" };

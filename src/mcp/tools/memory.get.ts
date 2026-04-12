@@ -1,6 +1,6 @@
-import { SQLiteStore } from "../storage/sqlite.js";
-import { createMcpResponse } from "../utils/mcp-response.js";
-import { MemoryGetSchema } from "./schemas.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { createMcpResponse } from "../utils/mcp-response";
+import { MemoryGetSchema } from "./schemas";
 
 export async function handleMemoryGet(args: any, storage: SQLiteStore) {
 	const { id } = MemoryGetSchema.parse(args);

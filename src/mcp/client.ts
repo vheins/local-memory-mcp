@@ -2,8 +2,8 @@ import { spawn, ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import path from "path";
 import { fileURLToPath } from "url";
-import { MCP_PROTOCOL_VERSION } from "./capabilities.js";
-import { logger } from "./utils/logger.js";
+import { MCP_PROTOCOL_VERSION } from "./capabilities";
+import { logger } from "./utils/logger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

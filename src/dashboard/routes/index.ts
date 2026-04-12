@@ -1,7 +1,7 @@
 import { Router } from "express";
-import systemRoutes from "./system.routes.js";
-import memoryRoutes from "./memory.routes.js";
-import taskRoutes from "./task.routes.js";
+import systemRoutes from "./system.routes";
+import memoryRoutes from "./memory.routes";
+import taskRoutes from "./task.routes";
 
 const router = Router();
 

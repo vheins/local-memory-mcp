@@ -1,20 +1,20 @@
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore } from "../types.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
 import {
 	SamplingCreateMessageResult,
 	SamplingRequestHandler,
 	extractTextFromContent,
 	extractToolUses
-} from "../sampling.js";
-import { SessionContext, inferRepoFromSession } from "../session.js";
-import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation.js";
-import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response.js";
-import { logger } from "../utils/logger.js";
-import { MemorySynthesizeSchema } from "./schemas.js";
-import { normalizeRepo } from "../utils/normalize.js";
-import { handleMemoryRecap } from "./memory.recap.js";
-import { handleMemorySearch } from "./memory.search.js";
-import { handleTaskList } from "./task.manage.js";
+} from "../sampling";
+import { SessionContext, inferRepoFromSession } from "../session";
+import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation";
+import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
+import { logger } from "../utils/logger";
+import { MemorySynthesizeSchema } from "./schemas";
+import { normalizeRepo } from "../utils/normalize";
+import { handleMemoryRecap } from "./memory.recap";
+import { handleMemorySearch } from "./memory.search";
+import { handleTaskList } from "./task.manage";
 
 type SynthesizeOptions = {
 	session?: SessionContext;

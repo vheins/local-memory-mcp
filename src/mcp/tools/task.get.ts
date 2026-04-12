@@ -1,6 +1,6 @@
-import { SQLiteStore } from "../storage/sqlite.js";
-import { createMcpResponse } from "../utils/mcp-response.js";
-import { TaskGetSchema } from "./schemas.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { createMcpResponse } from "../utils/mcp-response";
+import { TaskGetSchema } from "./schemas";
 
 export async function handleTaskGet(args: any, storage: SQLiteStore) {
 	const { repo, id, task_code } = TaskGetSchema.parse(args);
