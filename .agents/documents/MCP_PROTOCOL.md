@@ -29,6 +29,13 @@ In compliance with the [MCP Lifecycle Specification](https://modelcontextprotoco
 - **Disconnection:** On stdio transports, disconnection is handled via process streams. The client gracefully exits by closing the input stream to the server, and the server shuts down gracefully.
 - **Error Handling:** If the protocol version negotiation fails during initialization, the server returns an explicit `-32602` error containing the `supported` and `requested` versions.
 
+## Utilities: Ping
+
+In compliance with the [MCP Ping Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping), the server and client may verify connection liveness:
+- **Request Format:** A standard JSON-RPC request with the method `"ping"` and no parameters.
+- **Response Format:** The receiver MUST promptly return a JSON-RPC response with an empty result object (`"result": {}`).
+- **Timeout & Error Handling:** If a response is not received within a reasonable timeout period, the sender MAY consider the connection stale, log the failure, or reset the connection. Frequent but lightweight pinging is recommended to prevent hung processes without causing excessive network/processing overhead.
+
 ## Utilities: Cancellation
 
 In compliance with the [MCP Cancellation Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/cancellation), the server supports aborting in-flight requests:

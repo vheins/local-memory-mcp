@@ -90,8 +90,10 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 - **Kendala Utama:** Tidak boleh ada _request_ selain `ping` yang dikirim sebelum proses ini berhasil dipertukarkan. Jika ada ketidakcocokan versi, server membalas dengan *Protocol Error* (`-32602`) lalu memutuskan koneksi.
 
 ### B. Liveness (Ping)
-- **Fungsi:** Mengecek status koneksi (`ping`).
-- **Kondisi:** Boleh dikirim oleh klien atau server kapan saja, termasuk saat di pertengahan fase inisialisasi untuk mencegah koneksi hang.
+- **Fungsi:** Mengecek status koneksi secara dua arah (dikirim oleh klien maupun server kapan saja) tanpa menginterupsi jalannya *handshake* atau _request_ utama.
+- **Format Pesan:** *Request* JSON-RPC standar dengan metode `"ping"` tanpa parameter (`"params"` tidak diisi/dikosongkan).
+- **Format Respons:** Pihak yang menerima pesan `ping` WAJIB sesegera mungkin membalas dengan objek JSON-RPC standar yang berisi *result* kosong (`"result": {}`).
+- **Kendala Utama:** Jika respons tidak diterima dalam batas waktu (_timeout_) yang wajar, pengirim BERHAK memutuskan bahwa koneksi telah terputus (stale) dan dapat memutuskan sambungan atau melakukan upaya penyambungan ulang. _Ping_ disarankan rutin namun tidak boleh terlalu sering agar tak membebani komputasi jaringan.
 
 ### C. Pemutusan Koneksi (Disconnection)
 - **Transport Stdio:** Klien harus menutup *input stream* (stdin) dan menunggu server mati dengan mulus sebelum menggunakan instruksi _shutdown_ paksa (seperti SIGTERM/SIGKILL).
