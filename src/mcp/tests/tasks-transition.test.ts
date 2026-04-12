@@ -72,7 +72,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		const updatedTask = db.tasks.getTaskById(task.id);
-		expect(updatedTask.status).toBe("pending");
+		expect(updatedTask?.status).toBe("pending");
 	});
 
 	it("should block transition from pending to completed", async () => {
@@ -114,7 +114,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		const updatedTask = db.tasks.getTaskById(task.id);
-		expect(updatedTask.status).toBe("in_progress");
+		expect(updatedTask?.status).toBe("in_progress");
 	});
 
 	it("should allow transition from in_progress to completed", async () => {
@@ -150,7 +150,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		const updatedTask = db.tasks.getTaskById(task.id);
-		expect(updatedTask.status).toBe("completed");
+		expect(updatedTask?.status).toBe("completed");
 	});
 
 	it("should allow transition to blocked and back", async () => {
@@ -184,7 +184,7 @@ describe("Task Status Transitions", () => {
 			db,
 			mockVectors
 		);
-		expect(db.tasks.getTaskById(task.id).status).toBe("blocked");
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("blocked");
 
 		// back to in_progress
 		await handleTaskUpdate(
@@ -199,11 +199,13 @@ describe("Task Status Transitions", () => {
 			db,
 			mockVectors
 		);
-		expect(db.tasks.getTaskById(task.id).status).toBe("in_progress");
+		expect(db.tasks.getTaskById(task.id)?.status).toBe("in_progress");
 
 		// to blocked from pending
 		await createTask("TASK-002", "pending");
 		const task2 = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-002");
+		if (!task2) throw new Error("Task TASK-002 not found");
+
 		await handleTaskUpdate(
 			{
 				repo: REPO,
@@ -216,7 +218,7 @@ describe("Task Status Transitions", () => {
 			db,
 			mockVectors
 		);
-		expect(db.tasks.getTaskById(task2.id).status).toBe("blocked");
+		expect(db.tasks.getTaskById(task2.id)?.status).toBe("blocked");
 	});
 
 	it("should block transition from blocked to completed", async () => {
