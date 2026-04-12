@@ -99,7 +99,20 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 
 ---
 
-## 4. Ringkasan Kendala Teknis & Keamanan Global
+## 4. Spesifikasi Transport (STDIO)
+
+### Aturan Format & Kanal (I/O)
+- **Format Pesan:** Protokol menggunakan JSON-RPC yang wajib di-_encode_ menggunakan **UTF-8**.
+- **Delimitasi Newline:** Setiap pesan JSON wajib dipisahkan oleh satu karakter *newline* (`\n`). Pesan sama sekali tidak boleh mengandung *newline* di dalam *payload* atau datanya (*embedded newlines*).
+- **Kanal Utama:** Server membaca seluruh instruksi dari `stdin` dan mengirim balik respons/notifikasi hanya melalui `stdout`. Server tidak boleh mengirim apa pun ke `stdout` selain pesan JSON-RPC yang valid menurut MCP.
+
+### Penggunaan Stderr
+- **Logging/Error:** Server dapat menggunakan saluran `stderr` untuk mencetak _string_ UTF-8 yang berisi log diagnostik, informasi, maupun _error_.
+- **Asumsi Klien:** Klien tidak boleh mengasumsikan bahwa keluaran pada saluran `stderr` menandakan kerusakan (crash) atau kegagalan protokol secara absolut.
+
+---
+
+## 5. Ringkasan Kendala Teknis & Keamanan Global
 
 1. **Validasi Ketat:** Semua input (URI, argumen, skema JSON) harus divalidasi oleh kedua belah pihak untuk mencegah eksploitasi (seperti path traversal dan injeksi command).
 2. **Negosiasi Kapabilitas:** Klien dan server harus saling menghormati kapabilitas yang dideklarasikan saat inisialisasi. Tidak boleh mengirim permintaan untuk fitur yang tidak dideklarasikan.

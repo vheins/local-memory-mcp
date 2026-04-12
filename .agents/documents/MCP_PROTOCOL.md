@@ -29,6 +29,14 @@ In compliance with the [MCP Lifecycle Specification](https://modelcontextprotoco
 - **Disconnection:** On stdio transports, disconnection is handled via process streams. The client gracefully exits by closing the input stream to the server, and the server shuts down gracefully.
 - **Error Handling:** If the protocol version negotiation fails during initialization, the server returns an explicit `-32602` error containing the `supported` and `requested` versions.
 
+## STDIO Transport Requirements
+
+In compliance with the [MCP STDIO Transport Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports), the server adheres to the following strict boundaries:
+- **Encoding & Formatting:** All JSON-RPC messages MUST be encoded in **UTF-8**.
+- **Delimiters:** Messages MUST be delimited by a single newline character. Messages MUST NOT contain any embedded newlines within their payload.
+- **I/O Channels:** The server reads requests/notifications from `stdin` and writes its responses/notifications exclusively to `stdout`. The server MUST NOT write anything to `stdout` that is not a valid MCP JSON-RPC message.
+- **Diagnostics & Logging:** The server MAY write UTF-8 encoded strings to `stderr` for informational, debugging, or error logging. Clients SHOULD NOT assume that output on `stderr` inherently indicates a protocol error or critical failure.
+
 ---
 
 ## 1. Tools (Model Control)
