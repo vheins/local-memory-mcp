@@ -30,7 +30,7 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 * Read code and analyze context
 * Create tasks via `local-memory-mcp` MCP tools `task-create`
 * Record decisions via `local-memory-mcp` MCP tools `memory-store`
-* List tasks via `local-memory-mcp` MCP tools `task-active` (navigation) or `task-list` (extended search)
+* List tasks via `local-memory-mcp` MCP tools `task-list` (navigation and search)
 * Search memory via `local-memory-mcp` MCP tools `memory-search`
 
 ---
@@ -40,7 +40,6 @@ You are **STRICTLY FORBIDDEN** from performing any of the following actions:
 Your output MUST ONLY consist of calls to:
 * `local-memory-mcp` MCP tools `task-create`
 * `local-memory-mcp` MCP tools `memory-store`
-* `local-memory-mcp` MCP tools `task-active`
 * `local-memory-mcp` MCP tools `task-list`
 * `local-memory-mcp` MCP tools `memory-search`
 
@@ -55,7 +54,7 @@ Your output MUST ONLY consist of calls to:
 
 Before creating tasks, you MUST:
 1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
-2. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-active` first (returns compact table of active tasks). Then call `task-list` if you need to check backlog or completed tasks. **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
+2. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-list` (defaults to active tasks: in_progress/pending). **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
 
 ---
 

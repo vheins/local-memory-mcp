@@ -18,13 +18,11 @@ import { handleMemoryRecap } from "./tools/memory.recap.js";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge.js";
 import { handleMemoryGet } from "./tools/memory.get.js";
 import {
-  handleTaskList,
-  handleTaskCreate,
-  handleTaskCreateInteractive,
-  handleTaskUpdate,
-  handleTaskDelete,
-  handleTaskActive,
-  handleTaskSearch,
+	handleTaskList,
+	handleTaskCreate,
+	handleTaskCreateInteractive,
+	handleTaskUpdate,
+	handleTaskDelete
 } from "./tools/task.manage.js";
 import { handleTaskGet } from "./tools/task.get.js";
 import { handleTaskBulkManage } from "./tools/task.bulk-manage.js";
@@ -34,311 +32,322 @@ import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger.js";
 import { decodeCursor, encodeCursor } from "./utils/pagination.js";
 
 type RouterOptions = {
-  getSessionContext?: () => SessionContext;
-  sampleMessage?: SamplingRequestHandler;
-  elicit?: ElicitationRequestHandler;
-  onResourcesMutated?: (uris: string[]) => void;
+	getSessionContext?: () => SessionContext;
+	sampleMessage?: SamplingRequestHandler;
+	elicit?: ElicitationRequestHandler;
+	onResourcesMutated?: (uris: string[]) => void;
 };
 
 export function createRouter(
-  db: SQLiteStore,
-  vectors: VectorStore,
-  options?: RouterOptions
-): (method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void) => Promise<any> {
-  const getSessionContext = options?.getSessionContext;
+	db: SQLiteStore,
+	vectors: VectorStore,
+	options?: RouterOptions
+): (
+	method: string,
+	params: any,
+	signal?: AbortSignal,
+	onProgress?: (progress: number, total?: number) => void
+) => Promise<any> {
+	const getSessionContext = options?.getSessionContext;
 
-  async function handleMethod(method: string, params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void): Promise<any> {
-    switch (method) {
-      // ---- tools ----
-      case "tools/list":
-        return listTools(getSessionContext?.(), params);
+	async function handleMethod(
+		method: string,
+		params: any,
+		signal?: AbortSignal,
+		onProgress?: (progress: number, total?: number) => void
+	): Promise<any> {
+		switch (method) {
+			// ---- tools ----
+			case "tools/list":
+				return listTools(getSessionContext?.(), params);
 
-      case "tools/call":
-        return await handleToolCall(params, signal, onProgress);
+			case "tools/call":
+				return await handleToolCall(params, signal, onProgress);
 
-      // ---- resources ----
-      case "resources/list":
-        return listResources(getSessionContext?.(), params);
+			// ---- resources ----
+			case "resources/list":
+				return listResources(getSessionContext?.(), params);
 
-      case "resources/templates/list":
-        return listResourceTemplates(params);
+			case "resources/templates/list":
+				return listResourceTemplates(params);
 
-      case "resources/read":
-        return readResource(params?.uri, db, getSessionContext?.());
+			case "resources/read":
+				return readResource(params?.uri, db, getSessionContext?.());
 
-      // ---- prompts ----
-      case "prompts/list":
-        return listPrompts(db, getSessionContext?.(), params);
+			// ---- prompts ----
+			case "prompts/list":
+				return listPrompts(db, getSessionContext?.(), params);
 
-      case "logging/setLevel": {
-        const requestedLevel = typeof params?.level === "string" ? params.level : "";
-        const previousLevel = getLogLevel();
-        const level = setLogLevel(requestedLevel);
-        return {
-          level,
-          supportedLevels: LOG_LEVEL_VALUES,
-          previousLevel,
-        };
-      }
+			case "logging/setLevel": {
+				const requestedLevel = typeof params?.level === "string" ? params.level : "";
+				const previousLevel = getLogLevel();
+				const level = setLogLevel(requestedLevel);
+				return {
+					level,
+					supportedLevels: LOG_LEVEL_VALUES,
+					previousLevel
+				};
+			}
 
-      case "prompts/get": {
-        return getPrompt(params?.name, params?.arguments || {}, db, getSessionContext?.());
-      }
+			case "prompts/get": {
+				return getPrompt(params?.name, params?.arguments || {}, db, getSessionContext?.());
+			}
 
-      case "completion/complete":
-        return complete(params, db, getSessionContext?.());
+			case "completion/complete":
+				return complete(params, db, getSessionContext?.());
 
-      default:
-        throw new Error(`Unsupported method: ${method}`);
-    }
-  }
+			default:
+				throw new Error(`Unsupported method: ${method}`);
+		}
+	}
 
-  async function handleToolCall(params: any, signal?: AbortSignal, onProgress?: (progress: number, total?: number) => void): Promise<any> {
-    const { name } = params;
-    const args = normalizeToolArguments(params?.arguments, getSessionContext?.());
-    // Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
-    const toolName = String(name).replace(/\./g, "-");
+	async function handleToolCall(
+		params: any,
+		signal?: AbortSignal,
+		onProgress?: (progress: number, total?: number) => void
+	): Promise<any> {
+		const { name } = params;
+		const args = normalizeToolArguments(params?.arguments, getSessionContext?.());
+		// Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
+		const toolName = String(name).replace(/\./g, "-");
 
-    let result: any;
-    let repo = args?.repo || args?.scope?.repo || "unknown";
+		let result: any;
+		const repo = args?.repo || args?.scope?.repo || "unknown";
 
-    switch (toolName) {
-      case "memory-store":
-        result = await handleMemoryStore(args, db, vectors);
-        break;
+		switch (toolName) {
+			case "memory-store":
+				result = await handleMemoryStore(args, db, vectors);
+				break;
 
-      case "memory-acknowledge":
-        result = await handleMemoryAcknowledge(args, db);
-        break;
+			case "memory-acknowledge":
+				result = await handleMemoryAcknowledge(args, db);
+				break;
 
-      case "memory-update":
-        result = await handleMemoryUpdate(args, db, vectors);
-        break;
+			case "memory-update":
+				result = await handleMemoryUpdate(args, db, vectors);
+				break;
 
-      case "memory-recap":
-        result = await handleMemoryRecap(args, db);
-        break;
+			case "memory-recap":
+				result = await handleMemoryRecap(args, db);
+				break;
 
-      case "memory-search":
-        result = await handleMemorySearch(args, db, vectors);
-        break;
+			case "memory-search":
+				result = await handleMemorySearch(args, db, vectors);
+				break;
 
-      case "memory-summarize":
-        result = await handleMemorySummarize(args, db);
-        break;
+			case "memory-summarize":
+				result = await handleMemorySummarize(args, db);
+				break;
 
-      case "memory-synthesize":
-        result = await handleMemorySynthesize(args, db, vectors, {
-          session: getSessionContext?.(),
-          sampleMessage: options?.sampleMessage,
-          elicit: options?.elicit,
-        });
-        break;
+			case "memory-synthesize":
+				result = await handleMemorySynthesize(args, db, vectors, {
+					session: getSessionContext?.(),
+					sampleMessage: options?.sampleMessage,
+					elicit: options?.elicit
+				});
+				break;
 
-      case "memory-delete":
-        result = await handleMemoryDelete(args, db, vectors);
-        break;
+			case "memory-delete":
+				result = await handleMemoryDelete(args, db, vectors);
+				break;
 
-      case "memory-bulk-delete":
-        result = await handleMemoryBulkDelete(args, db, vectors, onProgress);
-        break;
+			case "memory-bulk-delete":
+				result = await handleMemoryBulkDelete(args, db, vectors, onProgress);
+				break;
 
-      case "memory-detail":
-        result = await handleMemoryGet(args, db);
-        break;
+			case "memory-detail":
+				result = await handleMemoryGet(args, db);
+				break;
 
-      case "task-create":
-        result = await handleTaskCreate(args, db);
-        break;
+			case "task-create":
+				result = await handleTaskCreate(args, db);
+				break;
 
-      case "task-create-interactive":
-        result = await handleTaskCreateInteractive(args, db, {
-          session: getSessionContext?.(),
-          elicit: options?.elicit,
-        });
-        break;
+			case "task-create-interactive":
+				result = await handleTaskCreateInteractive(args, db, {
+					session: getSessionContext?.(),
+					elicit: options?.elicit
+				});
+				break;
 
-      case "task-update":
-        result = await handleTaskUpdate(args, db, vectors);
-        break;
+			case "task-update":
+				result = await handleTaskUpdate(args, db, vectors);
+				break;
 
-      case "task-delete":
-        result = await handleTaskDelete(args, db);
-        break;
+			case "task-delete":
+				result = await handleTaskDelete(args, db);
+				break;
 
-      case "task-active":
-        result = await handleTaskActive(args, db);
-        break;
+			case "task-list":
+				result = await handleTaskList(args, db);
+				break;
 
-      case "task-list":
-        result = await handleTaskList(args, db);
-        break;
+			case "task-detail":
+				result = await handleTaskGet(args, db);
+				break;
 
-      case "task-search":
-        result = await handleTaskSearch(args, db);
-        break;
+			case "task-bulk-manage":
+				result = await handleTaskBulkManage(args, db, vectors, onProgress);
+				break;
 
-      case "task-detail":
-        result = await handleTaskGet(args, db);
-        break;
+			default:
+				throw new Error(`Unknown tool: ${name}`);
+		}
 
-      case "task-bulk-manage":
-        result = await handleTaskBulkManage(args, db, vectors, onProgress);
-        break;
+		// Log the action
+		try {
+			const actionType = toolName.split("-")[1] || toolName;
+			const sc: any = result?.structuredData;
+			const options: any = {
+				query:
+					args?.query ||
+					args?.title ||
+					args?.task_code ||
+					(toolName === "memory-recap" ? `Offset: ${args?.offset || 0}` : undefined),
+				response: result,
+				memoryId: args?.id || args?.memory_id || sc?.id,
+				taskId: args?.id || args?.task_id || sc?.id,
+				resultCount: Array.isArray(sc?.results) ? sc.results.length : sc?.count || 0
+			};
 
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
+			db.actions.logAction(actionType, repo, options);
+		} catch (e) {
+			logger.error("Failed to log action", { toolName, error: String(e) });
+		}
 
-    // Log the action
-    try {
-      const actionType = toolName.split("-")[1] || toolName;
-      const sc: any = result?.structuredData;
-      const options: any = {
-        query: args?.query || args?.title || args?.task_code || (toolName === 'memory-recap' ? `Offset: ${args?.offset || 0}` : undefined),
-        response: result,
-        memoryId: args?.id || args?.memory_id || (sc?.id),
-        taskId: args?.id || args?.task_id || (sc?.id),
-        resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count || 0)
-      };
-      
-      db.actions.logAction(actionType, repo, options);
-    } catch (e) {
-      logger.error("Failed to log action", { toolName, error: String(e) });
-    }
+		const affectedResources = collectAffectedResourceUris(toolName, args, result);
+		if (affectedResources.length > 0) {
+			options?.onResourcesMutated?.(affectedResources);
+		}
 
-    const affectedResources = collectAffectedResourceUris(toolName, args, result);
-    if (affectedResources.length > 0) {
-      options?.onResourcesMutated?.(affectedResources);
-    }
+		return result;
+	}
 
-    return result;
-  }
-
-  return handleMethod;
+	return handleMethod;
 }
 
 function listTools(session: SessionContext | undefined, params: any) {
-  const tools = getAvailableToolDefinitions(session);
-  const limit = normalizePageLimit(params?.limit, tools.length || 1);
-  const start = decodeCursor(params?.cursor);
-  
-  // Strictly conform to MCP Tool spec: remove internal fields like outputSchema, annotations, title
-  const compliantTools = tools.map(tool => {
-    const { name, description, inputSchema } = tool;
-    return { name, description, inputSchema };
-  });
+	const tools = getAvailableToolDefinitions(session);
+	const limit = normalizePageLimit(params?.limit, tools.length || 1);
+	const start = decodeCursor(params?.cursor);
 
-  const page = compliantTools.slice(start, start + limit);
-  const nextCursor = start + limit < tools.length ? encodeCursor(start + limit) : undefined;
+	// Strictly conform to MCP Tool spec: remove internal fields like outputSchema, annotations, title
+	const compliantTools = tools.map((tool) => {
+		const { name, description, inputSchema } = tool;
+		return { name, description, inputSchema };
+	});
 
-  return {
-    tools: page,
-    nextCursor,
-  };
+	const page = compliantTools.slice(start, start + limit);
+	const nextCursor = start + limit < tools.length ? encodeCursor(start + limit) : undefined;
+
+	return {
+		tools: page,
+		nextCursor
+	};
 }
 
 function getAvailableToolDefinitions(session?: SessionContext) {
-  return TOOL_DEFINITIONS.filter((tool) => {
-    if (tool.name === "memory-synthesize" && !session?.supportsSampling) {
-      return false;
-    }
+	return TOOL_DEFINITIONS.filter((tool) => {
+		if (tool.name === "memory-synthesize" && !session?.supportsSampling) {
+			return false;
+		}
 
-    if (tool.name === "task-create-interactive" && !session?.supportsElicitationForm) {
-      return false;
-    }
+		if (tool.name === "task-create-interactive" && !session?.supportsElicitationForm) {
+			return false;
+		}
 
-    return true;
-  });
+		return true;
+	});
 }
 
 function collectAffectedResourceUris(toolName: string, args: any, result: any): string[] {
-  const repo = args?.repo || args?.scope?.repo || result?.data?.repo;
-  const uris = new Set<string>();
+	const repo = args?.repo || args?.scope?.repo || result?.data?.repo;
+	const uris = new Set<string>();
 
-  const touchesMemory = toolName.startsWith("memory-")
-    || toolName === "task-update"
-    || toolName === "task-bulk-manage"
-    || toolName === "task-delete";
-  const touchesTasks = toolName.startsWith("task-");
+	const touchesMemory =
+		toolName.startsWith("memory-") ||
+		toolName === "task-update" ||
+		toolName === "task-bulk-manage" ||
+		toolName === "task-delete";
+	const touchesTasks = toolName.startsWith("task-");
 
-  if (touchesMemory && repo) {
-    uris.add(`repository://${encodeURIComponent(repo)}/memories`);
-  }
+	if (touchesMemory && repo) {
+		uris.add(`repository://${encodeURIComponent(repo)}/memories`);
+	}
 
-  if (touchesTasks && repo) {
-    uris.add(`repository://${encodeURIComponent(repo)}/tasks`);
-  }
+	if (touchesTasks && repo) {
+		uris.add(`repository://${encodeURIComponent(repo)}/tasks`);
+	}
 
-  if (repo) {
-    uris.add("repository://index");
-  }
+	if (repo) {
+		uris.add("repository://index");
+	}
 
-  const memoryId = args?.id || args?.memory_id || result?.data?.id;
-  if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
-    uris.add(`memory://${memoryId}`);
-  }
+	const memoryId = args?.id || args?.memory_id || result?.data?.id;
+	if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
+		uris.add(`memory://${memoryId}`);
+	}
 
-  const taskId = args?.id || args?.task_id || result?.structuredData?.id;
-  if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
-    uris.add(`task://${taskId}`);
-  }
+	const taskId = args?.id || args?.task_id || result?.structuredData?.id;
+	if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
+		uris.add(`task://${taskId}`);
+	}
 
-  return [...uris];
+	return [...uris];
 }
 
 function normalizeToolArguments(args: any, session?: SessionContext): any {
-  if (!args || typeof args !== "object") {
-    return args;
-  }
+	if (!args || typeof args !== "object") {
+		return args;
+	}
 
-  const nextArgs = {
-    ...args,
-    scope: args.scope ? { ...args.scope } : undefined,
-  };
+	const nextArgs = {
+		...args,
+		scope: args.scope ? { ...args.scope } : undefined
+	};
 
-  validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
-  validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
+	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
+	validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
 
-  if (!nextArgs.repo) {
-    nextArgs.repo = inferRepoFromSession(session);
-  }
+	if (!nextArgs.repo) {
+		nextArgs.repo = inferRepoFromSession(session);
+	}
 
-  if (nextArgs.scope && !nextArgs.scope.repo) {
-    nextArgs.scope.repo = nextArgs.repo ?? inferRepoFromSession(session);
-  }
+	if (nextArgs.scope && !nextArgs.scope.repo) {
+		nextArgs.scope.repo = nextArgs.repo ?? inferRepoFromSession(session);
+	}
 
-  if (typeof nextArgs.current_file_path === "string" && nextArgs.scope) {
-    const containingRoot = path.isAbsolute(nextArgs.current_file_path)
-      ? findContainingRoot(nextArgs.current_file_path, session)
-      : null;
+	if (typeof nextArgs.current_file_path === "string" && nextArgs.scope) {
+		const containingRoot = path.isAbsolute(nextArgs.current_file_path)
+			? findContainingRoot(nextArgs.current_file_path, session)
+			: null;
 
-    if (containingRoot) {
-      const relativePath = path.relative(containingRoot, path.resolve(nextArgs.current_file_path));
-      const relativeFolder = path.dirname(relativePath);
-      if (relativeFolder && relativeFolder !== "." && !nextArgs.scope.folder) {
-        nextArgs.scope.folder = relativeFolder;
-      }
-    }
-  }
+		if (containingRoot) {
+			const relativePath = path.relative(containingRoot, path.resolve(nextArgs.current_file_path));
+			const relativeFolder = path.dirname(relativePath);
+			if (relativeFolder && relativeFolder !== "." && !nextArgs.scope.folder) {
+				nextArgs.scope.folder = relativeFolder;
+			}
+		}
+	}
 
-  return nextArgs;
+	return nextArgs;
 }
 
 function validateRootBoundPath(value: unknown, field: string, session?: SessionContext): void {
-  if (typeof value !== "string" || !path.isAbsolute(value)) {
-    return;
-  }
+	if (typeof value !== "string" || !path.isAbsolute(value)) {
+		return;
+	}
 
-  if (!isPathWithinRoots(value, session)) {
-    throw new Error(`${field} must stay within the active MCP roots`);
-  }
+	if (!isPathWithinRoots(value, session)) {
+		throw new Error(`${field} must stay within the active MCP roots`);
+	}
 }
 
 function normalizePageLimit(value: unknown, fallback: number) {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    return Math.max(1, fallback);
-  }
+	if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+		return Math.max(1, fallback);
+	}
 
-  return Math.min(value, 100);
+	return Math.min(value, 100);
 }

@@ -1,163 +1,176 @@
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || err.errors?.[0]?.detail || `HTTP ${res.status}`);
-  }
-  const body = await res.json();
-  return deserialize(body) as T;
+	const res = await fetch(url, options);
+	if (!res.ok) {
+		const err = await res.json().catch(() => ({ error: res.statusText }));
+		throw new Error(err.error || err.errors?.[0]?.detail || `HTTP ${res.status}`);
+	}
+	const body = await res.json();
+	return deserialize(body) as T;
 }
 
 function deserialize(body: any): any {
-  if (!body || !body.data) return body;
-  const { data, meta } = body;
-  
-  const processItem = (item: any) => {
-    const attr = item.attributes || {};
-    // Inject success for status responses
-    if (item.type === 'status' && attr.success === undefined) {
-      attr.success = true;
-    }
-    // Return flat object (preserving ID except for generic 'system' IDs)
-    if (item.id === 'system') return attr;
-    return { id: item.id, ...attr };
-  };
+	if (!body || !body.data) return body;
+	const { data, meta } = body;
 
-  if (Array.isArray(data)) {
-    const items = data.map(processItem);
-    const result: any = {};
-    if (meta) result.pagination = meta;
-    
-    const firstType = data[0]?.type;
-    // Map JSON:API types to legacy field names
-    if (firstType === 'repository') return { repos: items };
-    if (firstType === 'recent-action') return { ...result, actions: items };
-    if (firstType === 'memory') return { ...result, memories: items };
-    if (firstType === 'task') return { ...result, tasks: items };
-    
-    const rootKey = firstType ? `${firstType}s` : 'data';
-    result[rootKey] = items;
-    return result;
-  }
-  
-  return processItem(data);
+	const processItem = (item: any) => {
+		const attr = item.attributes || {};
+		// Inject success for status responses
+		if (item.type === "status" && attr.success === undefined) {
+			attr.success = true;
+		}
+		// Return flat object (preserving ID except for generic 'system' IDs)
+		if (item.id === "system") return attr;
+		return { id: item.id, ...attr };
+	};
+
+	if (Array.isArray(data)) {
+		const items = data.map(processItem);
+		const result: any = {};
+		if (meta) result.pagination = meta;
+
+		const firstType = data[0]?.type;
+		// Map JSON:API types to legacy field names
+		if (firstType === "repository") return { repos: items };
+		if (firstType === "recent-action") return { ...result, actions: items };
+		if (firstType === "memory") return { ...result, memories: items };
+		if (firstType === "task") return { ...result, tasks: items };
+
+		const rootKey = firstType ? `${firstType}s` : "data";
+		result[rootKey] = items;
+		return result;
+	}
+
+	return processItem(data);
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const api = {
-  health: () => apiFetch<any>('/api/health'),
+	health: () => apiFetch<any>("/api/health"),
 
-  repos: () => apiFetch<{ repos: any[] }>('/api/repos'),
+	repos: () => apiFetch<{ repos: any[] }>("/api/repos"),
 
-  stats: (repo?: string) => {
-    const q = repo ? `?repo=${encodeURIComponent(repo)}` : '';
-    return apiFetch<any>(`/api/stats${q}`);
-  },
+	stats: (repo?: string) => {
+		const q = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+		return apiFetch<any>(`/api/stats${q}`);
+	},
 
-  recentActions: (repo: string | null, page: number, pageSize: number) => {
-    let url = `/api/recent-actions?page=${page}&pageSize=${pageSize}`;
-    if (repo) url += `&repo=${encodeURIComponent(repo)}`;
-    return apiFetch<any>(url);
-  },
+	recentActions: (repo: string | null, page: number, pageSize: number) => {
+		let url = `/api/recent-actions?page=${page}&pageSize=${pageSize}`;
+		if (repo) url += `&repo=${encodeURIComponent(repo)}`;
+		return apiFetch<any>(url);
+	},
 
-  memories: (params: {
-    repo: string;
-    type?: string;
-    search?: string;
-    minImportance?: number | null;
-    maxImportance?: number | null;
-    sortBy?: string;
-    sortOrder?: string;
-    page?: number;
-    pageSize?: number;
-  }) => {
-    const q = new URLSearchParams({ repo: params.repo });
-    if (params.type) q.set('type', params.type);
-    if (params.search) q.set('search', params.search);
-    if (params.minImportance != null) q.set('minImportance', String(params.minImportance));
-    if (params.maxImportance != null) q.set('maxImportance', String(params.maxImportance));
-    if (params.sortBy) q.set('sortBy', params.sortBy);
-    if (params.sortOrder) q.set('sortOrder', params.sortOrder);
-    if (params.page) q.set('page', String(params.page));
-    if (params.pageSize) q.set('pageSize', String(params.pageSize));
-    return apiFetch<any>(`/api/memories?${q}`);
-  },
+	memories: (params: {
+		repo: string;
+		type?: string;
+		search?: string;
+		minImportance?: number | null;
+		maxImportance?: number | null;
+		sortBy?: string;
+		sortOrder?: string;
+		page?: number;
+		pageSize?: number;
+	}) => {
+		const q = new URLSearchParams({ repo: params.repo });
+		if (params.type) q.set("type", params.type);
+		if (params.search) q.set("search", params.search);
+		if (params.minImportance != null) q.set("minImportance", String(params.minImportance));
+		if (params.maxImportance != null) q.set("maxImportance", String(params.maxImportance));
+		if (params.sortBy) q.set("sortBy", params.sortBy);
+		if (params.sortOrder) q.set("sortOrder", params.sortOrder);
+		if (params.page) q.set("page", String(params.page));
+		if (params.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<any>(`/api/memories?${q}`);
+	},
 
-  memoryById: (id: string) => apiFetch<any>(`/api/memories/${id}`),
+	memoryById: (id: string) => apiFetch<any>(`/api/memories/${id}`),
 
-  createMemory: (body: any) =>
-    apiFetch<any>('/api/memories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+	createMemory: (body: any) =>
+		apiFetch<any>("/api/memories", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}),
 
-  updateMemory: (id: string, updates: any) =>
-    apiFetch<any>(`/api/memories/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }),
+	updateMemory: (id: string, updates: any) =>
+		apiFetch<any>(`/api/memories/${id}`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(updates)
+		}),
 
-  deleteMemory: (id: string) =>
-    apiFetch<any>(`/api/memories/${id}`, { method: 'DELETE' }),
+	deleteMemory: (id: string) => apiFetch<any>(`/api/memories/${id}`, { method: "DELETE" }),
 
-  bulkImportMemories: (repo: string, items: any[]) =>
-    apiFetch<any>('/api/memories/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
+	bulkImportMemories: (repo: string, items: any[]) =>
+		apiFetch<any>("/api/memories/import", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ repo, items })
+		}),
 
-  bulkMemoryAction: (action: string, ids: string[], updates?: any) =>
-    apiFetch<any>('/api/memories/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ids, updates }) }),
+	bulkMemoryAction: (action: string, ids: string[], updates?: any) =>
+		apiFetch<any>("/api/memories/action", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action, ids, updates })
+		}),
 
-  tasks: (params: {
-    repo: string;
-    status?: string;
-    search?: string;
-    page?: number;
-    pageSize?: number;
-  }) => {
-    const q = new URLSearchParams({ repo: params.repo });
-    if (params.status) q.set('status', params.status);
-    if (params.search) q.set('search', params.search);
-    if (params.page) q.set('page', String(params.page));
-    if (params.pageSize) q.set('pageSize', String(params.pageSize));
-    return apiFetch<any>(`/api/tasks?${q}`);
-  },
+	tasks: (params: { repo: string; status?: string; search?: string; page?: number; pageSize?: number }) => {
+		const q = new URLSearchParams({ repo: params.repo });
+		if (params.status) q.set("status", params.status);
+		if (params.search) q.set("search", params.search);
+		if (params.page) q.set("page", String(params.page));
+		if (params.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<any>(`/api/tasks?${q}`);
+	},
 
-  taskById: (id: string) => apiFetch<any>(`/api/tasks/${id}`),
+	taskById: (id: string) => apiFetch<any>(`/api/tasks/${id}`),
 
-  taskTimeStats: (repo: string) =>
-    apiFetch<any>(`/api/tasks/stats/time?repo=${encodeURIComponent(repo)}`),
+	taskTimeStats: (repo: string) => apiFetch<any>(`/api/tasks/stats/time?repo=${encodeURIComponent(repo)}`),
 
-  updateTask: (id: string, updates: any) =>
-    apiFetch<any>(`/api/tasks/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    }),
+	updateTask: (id: string, updates: any) =>
+		apiFetch<any>(`/api/tasks/${id}`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(updates)
+		}),
 
-  createTask: (body: any) =>
-    apiFetch<any>('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+	createTask: (body: any) =>
+		apiFetch<any>("/api/tasks", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}),
 
-  deleteTask: (id: string) =>
-    apiFetch<any>(`/api/tasks/${id}`, { method: 'DELETE' }),
+	deleteTask: (id: string) => apiFetch<any>(`/api/tasks/${id}`, { method: "DELETE" }),
 
-  bulkImportTasks: (repo: string, items: any[]) =>
-    apiFetch<any>('/api/tasks/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
+	bulkImportTasks: (repo: string, items: any[]) =>
+		apiFetch<any>("/api/tasks/import", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ repo, items })
+		}),
 
-  updateTaskComment: (id: string, comment: string) =>
-    apiFetch<any>(`/api/tasks/comments/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comment }),
-    }),
+	updateTaskComment: (id: string, comment: string) =>
+		apiFetch<any>(`/api/tasks/comments/${id}`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ comment })
+		}),
 
-  deleteTaskComment: (id: string) =>
-    apiFetch<any>(`/api/tasks/comments/${id}`, { method: 'DELETE' }),
+	deleteTaskComment: (id: string) => apiFetch<any>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
 
-  export: (repo: string) =>
-    apiFetch<any>(`/api/export?repo=${encodeURIComponent(repo)}`),
+	export: (repo: string) => apiFetch<any>(`/api/export?repo=${encodeURIComponent(repo)}`),
 
-  capabilities: () => apiFetch<any>('/api/capabilities'),
+	capabilities: () => apiFetch<any>("/api/capabilities"),
 
-  callTool: (name: string, args: any) =>
-    apiFetch<any>(`/api/tools/${encodeURIComponent(name)}/call`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(args)
-    }),
+	callTool: (name: string, args: any) =>
+		apiFetch<any>(`/api/tools/${encodeURIComponent(name)}/call`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(args)
+		})
 };

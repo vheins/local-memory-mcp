@@ -11,141 +11,141 @@ import * as fc from "fast-check";
 type LogLevel = "debug" | "info" | "warning" | "error";
 
 describe("Property 20: StructuredLogger output adalah JSON valid dengan field wajib", () => {
-  let stderrOutput: string[] = [];
-  let stderrSpy: ReturnType<typeof vi.spyOn>;
+	let stderrOutput: string[] = [];
+	let stderrSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
-    stderrOutput = [];
-    stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
-      stderrOutput.push(typeof chunk === "string" ? chunk : chunk.toString());
-      return true;
-    });
-    // Reset LOG_LEVEL to ensure all levels are logged
-    process.env.LOG_LEVEL = "debug";
-  });
+	beforeEach(() => {
+		stderrOutput = [];
+		stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+			stderrOutput.push(typeof chunk === "string" ? chunk : chunk.toString());
+			return true;
+		});
+		// Reset LOG_LEVEL to ensure all levels are logged
+		process.env.LOG_LEVEL = "debug";
+	});
 
-  afterEach(() => {
-    stderrSpy.mockRestore();
-    delete process.env.LOG_LEVEL;
-  });
+	afterEach(() => {
+		stderrSpy.mockRestore();
+		delete process.env.LOG_LEVEL;
+	});
 
-  it("each log call produces valid JSON output with required fields", async () => {
-    // Re-import logger after setting LOG_LEVEL
-    const { logger } = await import("../utils/logger.js?t=" + Date.now());
+	it("each log call produces valid JSON output with required fields", async () => {
+		// Re-import logger after setting LOG_LEVEL
+		const { logger } = await import("../utils/logger.js?t=" + Date.now());
 
-    fc.assert(
-      fc.property(
-        fc.oneof(
-          fc.constant<LogLevel>("debug"),
-          fc.constant<LogLevel>("info"),
-          fc.constant<LogLevel>("warning"),
-          fc.constant<LogLevel>("error")
-        ),
-        fc.string({ minLength: 1, maxLength: 100 }),
-        (level: LogLevel, message: string) => {
-          stderrOutput = [];
-          logger[level](message);
+		fc.assert(
+			fc.property(
+				fc.oneof(
+					fc.constant<LogLevel>("debug"),
+					fc.constant<LogLevel>("info"),
+					fc.constant<LogLevel>("warning"),
+					fc.constant<LogLevel>("error")
+				),
+				fc.string({ minLength: 1, maxLength: 100 }),
+				(level: LogLevel, message: string) => {
+					stderrOutput = [];
+					logger[level](message);
 
-          expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
-          const lastOutput = stderrOutput[stderrOutput.length - 1];
+					expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
+					const lastOutput = stderrOutput[stderrOutput.length - 1];
 
-          // Must be text with timestamp, level, and message
-          expect(lastOutput).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[.*?\] /);
+					// Must be text with timestamp, level, and message
+					expect(lastOutput).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[.*?\] /);
 
-          // Extract parts
-          const match = lastOutput.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) \[\s*(.*?)\s*\] ([\s\S]*)$/);
-          expect(match).not.toBeNull();
-          
-          if (match) {
-            const [, timestamp, parsedLevel, messageWithCtx] = match;
+					// Extract parts
+					const match = lastOutput.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) \[\s*(.*?)\s*\] ([\s\S]*)$/);
+					expect(match).not.toBeNull();
 
-            // level must match
-            expect(parsedLevel.toLowerCase()).toBe(level);
+					if (match) {
+						const [, timestamp, parsedLevel, messageWithCtx] = match;
 
-            // message must start with the original message
-            expect(messageWithCtx.startsWith(message)).toBe(true);
+						// level must match
+						expect(parsedLevel.toLowerCase()).toBe(level);
 
-            // timestamp must be ISO 8601
-            const ts = new Date(timestamp);
-            expect(isNaN(ts.getTime())).toBe(false);
-          }
-        }
-      ),
-      { numRuns: 100 }
-    );
-  });
+						// message must start with the original message
+						expect(messageWithCtx.startsWith(message)).toBe(true);
 
-  it("log output with context includes context field", async () => {
-    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "ctx");
+						// timestamp must be ISO 8601
+						const ts = new Date(timestamp);
+						expect(isNaN(ts.getTime())).toBe(false);
+					}
+				}
+			),
+			{ numRuns: 100 }
+		);
+	});
 
-    stderrOutput = [];
-    logger.info("test message", { key: "value", count: 42 });
+	it("log output with context includes context field", async () => {
+		const { logger } = await import("../utils/logger.js?t=" + Date.now() + "ctx");
 
-    expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
-    const lastOutput = stderrOutput[stderrOutput.length - 1];
+		stderrOutput = [];
+		logger.info("test message", { key: "value", count: 42 });
 
-    expect(lastOutput).toContain('{"key":"value","count":42}');
-  });
+		expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
+		const lastOutput = stderrOutput[stderrOutput.length - 1];
 
-  it("log output without context does not include context field", async () => {
-    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "noctx");
+		expect(lastOutput).toContain('{"key":"value","count":42}');
+	});
 
-    stderrOutput = [];
-    logger.info("no context message");
+	it("log output without context does not include context field", async () => {
+		const { logger } = await import("../utils/logger.js?t=" + Date.now() + "noctx");
 
-    expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
-    const lastOutput = stderrOutput[stderrOutput.length - 1];
+		stderrOutput = [];
+		logger.info("no context message");
 
-    expect(lastOutput.trim()).not.toMatch(/\{.*\}/);
-  });
+		expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
+		const lastOutput = stderrOutput[stderrOutput.length - 1];
 
-  it("all four log levels produce valid JSON with correct level field", async () => {
-    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "levels");
+		expect(lastOutput.trim()).not.toMatch(/\{.*\}/);
+	});
 
-    const levels: LogLevel[] = ["debug", "info", "warning", "error"];
-    for (const level of levels) {
-      stderrOutput = [];
-      if (level === "warning") {
-        logger.warning(`test ${level} message`);
-      } else {
-        logger[level](`test ${level} message`);
-      }
+	it("all four log levels produce valid JSON with correct level field", async () => {
+		const { logger } = await import("../utils/logger.js?t=" + Date.now() + "levels");
 
-      expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
-      const lastOutput = stderrOutput[stderrOutput.length - 1];
+		const levels: LogLevel[] = ["debug", "info", "warning", "error"];
+		for (const level of levels) {
+			stderrOutput = [];
+			if (level === "warning") {
+				logger.warning(`test ${level} message`);
+			} else {
+				logger[level](`test ${level} message`);
+			}
 
-      expect(lastOutput).toMatch(new RegExp(`\\[\\s*${level.toUpperCase()}\\s*\\]`));
-      expect(lastOutput).toContain(`test ${level} message`);
-    }
-  });
+			expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
+			const lastOutput = stderrOutput[stderrOutput.length - 1];
 
-  it("warn alias normalizes to warning", async () => {
-    const { logger } = await import("../utils/logger.js?t=" + Date.now() + "warnalias");
+			expect(lastOutput).toMatch(new RegExp(`\\[\\s*${level.toUpperCase()}\\s*\\]`));
+			expect(lastOutput).toContain(`test ${level} message`);
+		}
+	});
 
-    stderrOutput = [];
-    logger.warn("legacy warning");
+	it("warn alias normalizes to warning", async () => {
+		const { logger } = await import("../utils/logger.js?t=" + Date.now() + "warnalias");
 
-    expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
-    const lastOutput = stderrOutput[stderrOutput.length - 1];
-    expect(lastOutput).toMatch(/\[\s*WARNING\s*\]/);
-  });
+		stderrOutput = [];
+		logger.warn("legacy warning");
 
-  it("emits structured payloads to registered log sinks", async () => {
-    const module = await import("../utils/logger.js?t=" + Date.now() + "sink");
-    const sink = vi.fn();
-    module.addLogSink(sink);
+		expect(stderrOutput.length).toBeGreaterThanOrEqual(1);
+		const lastOutput = stderrOutput[stderrOutput.length - 1];
+		expect(lastOutput).toMatch(/\[\s*WARNING\s*\]/);
+	});
 
-    module.logger.notice("[Server] Configuration updated", { source: "test" });
+	it("emits structured payloads to registered log sinks", async () => {
+		const module = await import("../utils/logger.js?t=" + Date.now() + "sink");
+		const sink = vi.fn();
+		module.addLogSink(sink);
 
-    expect(sink).toHaveBeenCalledWith({
-      level: "notice",
-      logger: "server",
-      data: {
-        message: "[Server] Configuration updated",
-        source: "test",
-      },
-    });
+		module.logger.notice("[Server] Configuration updated", { source: "test" });
 
-    module.clearLogSinks();
-  });
+		expect(sink).toHaveBeenCalledWith({
+			level: "notice",
+			logger: "server",
+			data: {
+				message: "[Server] Configuration updated",
+				source: "test"
+			}
+		});
+
+		module.clearLogSinks();
+	});
 });

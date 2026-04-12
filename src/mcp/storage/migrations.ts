@@ -5,11 +5,11 @@ import { logger } from "../utils/logger.js";
  * Handles database schema migrations and initial table creation.
  */
 export class MigrationManager {
-  constructor(private db: Database.Database) {}
+	constructor(private db: Database.Database) {}
 
-  public migrate() {
-    // 1. Create base tables first
-    this.db.exec(`
+	public migrate() {
+		// 1. Create base tables first
+		this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -141,72 +141,112 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
     `);
 
-    // 2. Safely add missing columns for existing tables
-    const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
-      { name: "title", table: "memories", definition: "ALTER TABLE memories ADD COLUMN title TEXT" },
-      { name: "hit_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0" },
-      { name: "recall_count", table: "memories", definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0" },
-      { name: "last_used_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
-      { name: "expires_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
-      { name: "supersedes", table: "memories", definition: "ALTER TABLE memories ADD COLUMN supersedes TEXT" },
-      { name: "status", table: "memories", definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'" },
-      { name: "is_global", table: "memories", definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0" },
-      { name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
-      { name: "metadata", table: "memories", definition: "ALTER TABLE memories ADD COLUMN metadata TEXT" },
-      { name: "vector_version", table: "memory_vectors", definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1" },
-      { name: "depends_on", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN depends_on TEXT" },
-      { name: "est_tokens", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN est_tokens INTEGER NOT NULL DEFAULT 0" },
-      { name: "in_progress_at", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN in_progress_at TEXT" },
-      { name: "task_code", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN task_code TEXT" },
-      { name: "task_id", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN task_id TEXT" },
-      { name: "agent", table: "memories", definition: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
-      { name: "role", table: "memories", definition: "ALTER TABLE memories ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
-      { name: "model", table: "memories", definition: "ALTER TABLE memories ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'" },
-      { name: "completed_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN completed_at TEXT" },
-      { name: "agent", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'" },
-      { name: "role", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
-      { name: "doc_path", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN doc_path TEXT" },
-      { name: "response", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN response TEXT" },
-    ];
+		// 2. Safely add missing columns for existing tables
+		const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
+			{ name: "title", table: "memories", definition: "ALTER TABLE memories ADD COLUMN title TEXT" },
+			{
+				name: "hit_count",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0"
+			},
+			{
+				name: "recall_count",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0"
+			},
+			{ name: "last_used_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT" },
+			{ name: "expires_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
+			{ name: "supersedes", table: "memories", definition: "ALTER TABLE memories ADD COLUMN supersedes TEXT" },
+			{
+				name: "status",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+			},
+			{
+				name: "is_global",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0"
+			},
+			{ name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
+			{ name: "metadata", table: "memories", definition: "ALTER TABLE memories ADD COLUMN metadata TEXT" },
+			{
+				name: "vector_version",
+				table: "memory_vectors",
+				definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1"
+			},
+			{ name: "depends_on", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN depends_on TEXT" },
+			{
+				name: "est_tokens",
+				table: "tasks",
+				definition: "ALTER TABLE tasks ADD COLUMN est_tokens INTEGER NOT NULL DEFAULT 0"
+			},
+			{ name: "in_progress_at", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN in_progress_at TEXT" },
+			{ name: "task_code", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN task_code TEXT" },
+			{ name: "task_id", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN task_id TEXT" },
+			{
+				name: "agent",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'"
+			},
+			{
+				name: "role",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'"
+			},
+			{
+				name: "model",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+			},
+			{ name: "completed_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN completed_at TEXT" },
+			{
+				name: "agent",
+				table: "tasks",
+				definition: "ALTER TABLE tasks ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'"
+			},
+			{ name: "role", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
+			{ name: "doc_path", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN doc_path TEXT" },
+			{ name: "response", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN response TEXT" }
+		];
 
-    for (const col of columnsToAdd) {
-      try {
-        const tableInfo = this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>;
-        const existingTableColumns = tableInfo.map((c) => c.name);
+		for (const col of columnsToAdd) {
+			try {
+				const tableInfo = this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>;
+				const existingTableColumns = tableInfo.map((c) => c.name);
 
-        if (tableInfo.length > 0 && !existingTableColumns.includes(col.name)) {
-          this.db.exec(col.definition);
-        }
-      } catch (e) {
-        // Skip safely
-      }
-    }
+				if (tableInfo.length > 0 && !existingTableColumns.includes(col.name)) {
+					this.db.exec(col.definition);
+				}
+			} catch (e) {
+				// Skip safely
+			}
+		}
 
-    this.ensureMemoryTypeConstraint();
-    this.ensureTaskStatusConstraintRemoved();
-    this.ensureMemoryStatusConstraintRemoved();
+		this.ensureMemoryTypeConstraint();
+		this.ensureTaskStatusConstraintRemoved();
+		this.ensureMemoryStatusConstraintRemoved();
 
-    this.db.exec(`
+		this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
       CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
       CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
     `);
 
-    // Backfill task_code if it was added via migration
-    try {
-      this.db.exec("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL");
-    } catch (e) {}
-  }
+		// Backfill task_code if it was added via migration
+		try {
+			this.db.exec("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL");
+		} catch (e) {}
+	}
 
-  private ensureMemoryTypeConstraint(): void {
-    const tableSql = this.db
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
-      .get() as { sql?: string } | undefined;
-    if (!tableSql?.sql || !tableSql.sql.includes("CHECK (type IN")) {
-      return;
-    }
+	private ensureMemoryTypeConstraint(): void {
+		const tableSql = this.db
+			.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
+			.get() as { sql?: string } | undefined;
+		if (!tableSql?.sql || !tableSql.sql.includes("CHECK (type IN")) {
+			return;
+		}
 
-    this.db.exec(`
+		this.db.exec(`
       BEGIN TRANSACTION;
 
       CREATE TABLE memories__migrated (
@@ -251,18 +291,18 @@ export class MigrationManager {
 
       COMMIT;
     `);
-  }
+	}
 
-  private ensureTaskStatusConstraintRemoved(): void {
-    const tableSql = this.db
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'")
-      .get() as { sql?: string } | undefined;
-    
-    if (!tableSql?.sql || (!tableSql.sql.includes("CHECK (status IN") && !tableSql.sql.includes("DEFAULT 'pending'"))) {
-      return;
-    }
+	private ensureTaskStatusConstraintRemoved(): void {
+		const tableSql = this.db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get() as
+			| { sql?: string }
+			| undefined;
 
-    this.db.exec(`
+		if (!tableSql?.sql || (!tableSql.sql.includes("CHECK (status IN") && !tableSql.sql.includes("DEFAULT 'pending'"))) {
+			return;
+		}
+
+		this.db.exec(`
       BEGIN TRANSACTION;
 
       CREATE TABLE tasks__migrated (
@@ -305,15 +345,15 @@ export class MigrationManager {
 
       COMMIT;
     `);
-  }
+	}
 
-  private ensureMemoryStatusConstraintRemoved(): void {
-    const tableSql = this.db
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
-      .get() as { sql?: string } | undefined;
-    
-    if (tableSql?.sql?.includes("status TEXT NOT NULL DEFAULT 'active' CHECK")) {
-        this.ensureMemoryTypeConstraint(); // Re-use rebuild logic
-    }
-  }
+	private ensureMemoryStatusConstraintRemoved(): void {
+		const tableSql = this.db
+			.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
+			.get() as { sql?: string } | undefined;
+
+		if (tableSql?.sql?.includes("status TEXT NOT NULL DEFAULT 'active' CHECK")) {
+			this.ensureMemoryTypeConstraint(); // Re-use rebuild logic
+		}
+	}
 }

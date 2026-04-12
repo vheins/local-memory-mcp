@@ -68,14 +68,14 @@ Tools are the primary operational interface for agents, allowing for structured 
     - **Description**: AGGREGATED OVERVIEW: Returns stats and a pointer table of the top memories in a repo.
 
 ### Task Management
-- **Tool**: `task-active`
-    - **Description**: PRIMARY navigation tool. Returns a minimal tabular list of active (`in_progress`/`pending`) tasks.
+- **Tool**: `task-list`
+    - **Description**: PRIMARY navigation and search tool. Returns a tabular list of tasks.
+    - **Default**: Filters for `in_progress` and `pending` tasks if no status is specified.
+    - **Capabilities**: Supports filtering by `status` (comma-separated), `phase`, and keyword `query`.
 - **Tool**: `task-create` / `task-create-interactive`
     - **Description**: Register a new task. The interactive version supports MCP elicitation fallbacks for missing required fields.
 - **Tool**: `task-detail`
     - **Description**: Fetch full description, phase, priority, and all comments for a specific task.
-- **Tool**: `task-list` / `task-search`
-    - **Description**: SEARCH/LIST LAYER: Find tasks by status, phase, code, or keyword search.
 - **Tool**: `task-update`
     - **Description**: Progress a task through its lifecycle (Backlog → Pending → In Progress → Completed).
 - **Tool**: `task-bulk-manage`
