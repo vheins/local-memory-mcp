@@ -211,7 +211,7 @@ describe("Property 13: Pagination non-overlapping", () => {
 
 					for (let page = 1; page <= totalPages; page++) {
 						const pageItems = paginate(items, page, pageSize);
-						allPages.push(...pageItems);
+						(allPages as (MockMemory | string | number)[]).push(...pageItems);
 					}
 
 					// Should have same total count
@@ -224,18 +224,8 @@ describe("Property 13: Pagination non-overlapping", () => {
 });
 
 describe("Property 14: Export format correctness", () => {
-	interface Memory {
-		id: string;
-		type: string;
-		content: string;
-		importance: number;
-		hit_count: number;
-		created_at: string;
-		agent: string;
-		model: string;
-	}
 
-	function exportToCsv(memories: Memory[]): string {
+	function exportToCsv(memories: MockMemory[]): string {
 		const headers = ["id", "type", "content", "importance", "hit_count", "created_at", "agent", "model"];
 		const csvRows = [headers.join(",")];
 		for (const m of memories) {
@@ -254,7 +244,7 @@ describe("Property 14: Export format correctness", () => {
 		return csvRows.join("\n");
 	}
 
-	function exportToJson(memories: Memory[]): string {
+	function exportToJson(memories: MockMemory[]): string {
 		return JSON.stringify(memories, null, 2);
 	}
 
@@ -308,8 +298,8 @@ describe("Property 14: Export format correctness", () => {
 						model: fc.string({ minLength: 3 })
 					})
 				),
-				(memories) => {
-					const json = exportToJson(memories as Memory[]);
+				(memories: MockMemory[]) => {
+					const json = exportToJson(memories);
 					const parsed = JSON.parse(json);
 
 					expect(Array.isArray(parsed)).toBe(true);

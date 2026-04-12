@@ -14,7 +14,12 @@ function getTextContent(result: McpResponse) {
 describe("MCP Local Memory - Bulk Task Management", () => {
 	let db: SQLiteStore;
 	let vectors: VectorStore;
-	let router: (method: string, params: unknown) => Promise<McpResponse>;
+	let router: (
+		method: string,
+		params: Record<string, unknown> | undefined,
+		signal?: AbortSignal,
+		onProgress?: (progress: number, total?: number) => void
+	) => Promise<McpResponse>;
 
 	const REPO = "bulk-test-repo";
 
