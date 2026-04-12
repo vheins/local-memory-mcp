@@ -20,7 +20,7 @@ This document maps the primary user journeys within the Local Memory Dashboard.
 1. **Entry Point:** User needs to know what tools the agent has available for the current context.
 2. **Action:** User clicks the **Reference** tab.
 3. **Filter:** User types "task" into the Filter bar.
-4. **Inspection:** User clicks on `task-active`.
+4. **Inspection:** User clicks on `task-list`.
 5. **Detail:** A drawer opens showing the **JSON Schema** for parameters, the expected output format, and the tool's intended use case (description).
 
 ## Flow 4: Task Recovery & Promotion

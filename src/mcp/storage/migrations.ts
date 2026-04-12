@@ -139,6 +139,35 @@ export class MigrationManager {
 
       CREATE INDEX IF NOT EXISTS idx_action_log_repo ON action_log(repo);
       CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
+
+      -- FTS5 Virtual Table for Memories
+      -- Note: Only using id, title, and content for search indexing
+      CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+        id UNINDEXED,
+        repo,
+        type,
+        title,
+        content,
+        metadata UNINDEXED,
+        content='memories',
+        content_rowid='id'
+      );
+
+      -- Triggers to keep FTS index in sync with base table
+      CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+        INSERT INTO memories_fts(id, repo, type, title, content, metadata) 
+        VALUES (new.id, new.repo, new.type, new.title, new.content, new.metadata);
+      END;
+      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, id, repo, type, title, content, metadata) 
+        VALUES ('delete', old.id, old.repo, old.type, old.title, old.content, old.metadata);
+      END;
+      CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, id, repo, type, title, content, metadata) 
+        VALUES ('delete', old.id, old.repo, old.type, old.title, old.content, old.metadata);
+        INSERT INTO memories_fts(id, repo, type, title, content, metadata) 
+        VALUES (new.id, new.repo, new.type, new.title, new.content, new.metadata);
+      END;
     `);
 
 		// 2. Safely add missing columns for existing tables

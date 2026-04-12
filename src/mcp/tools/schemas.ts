@@ -226,7 +226,7 @@ export const TaskDeleteSchema = z.object({
     message: "Either 'id' or 'ids' must be provided for deletion"
 });
 
-export const MemoryGetSchema = z.object({
+export const MemoryDetailSchema = z.object({
 	id: z.string().uuid()
 });
 
@@ -240,11 +240,6 @@ export const TaskGetSchema = z
 		message: "Either id or task_code must be provided"
 	});
 
-export const TaskActiveSchema = z.object({
-	repo: z.string().min(1).transform(normalizeRepo),
-	status: z.enum(["in_progress", "pending"]).optional(),
-	limit: z.number().min(1).max(20).default(5)
-});
 
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
@@ -1022,5 +1017,5 @@ export const TOOL_DEFINITIONS = [
 			},
 			required: ["schema", "tasks", "count"]
 		}
-	}
+	},
 ];

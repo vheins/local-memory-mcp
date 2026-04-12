@@ -12,7 +12,7 @@
 
 ## Phase 3: Task Management & UI Dashboard
 - Objective: Build out lifecycle management tools for context boundaries and provide a GUI for developers.
-- Key Deliverables: `task-create`, `task-active`, `task-list`, `mcp-memory-dashboard.js` server, Svelte frontend.
+- Key Deliverables: `task-create`, `task-list`, `task-detail`, `mcp-memory-dashboard.js` server, Svelte frontend.
 - Timeline: Week 5-6
 
 ## Phase 4: Advanced MCP Client Integrations

@@ -15,7 +15,7 @@ import { handleMemorySynthesize } from "./tools/memory.synthesize";
 import { handleMemoryDelete } from "./tools/memory.delete";
 import { handleMemoryRecap } from "./tools/memory.recap";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
-import { handleMemoryGet } from "./tools/memory.get";
+import { handleMemoryDetail } from "./tools/memory.detail";
 import {
 	handleTaskList,
 	handleTaskCreate,
@@ -23,7 +23,7 @@ import {
 	handleTaskUpdate,
 	handleTaskDelete
 } from "./tools/task.manage";
-import { handleTaskGet } from "./tools/task.get";
+import { handleTaskGet as handleTaskDetail } from "./tools/task.get";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
@@ -155,7 +155,7 @@ export function createRouter(
 				break;
 
 			case "memory-detail":
-				result = await handleMemoryGet(args, db);
+				result = await handleMemoryDetail(args, db);
 				break;
 
 			case "task-create":
@@ -182,8 +182,9 @@ export function createRouter(
 				break;
 
 			case "task-detail":
-				result = await handleTaskGet(args, db);
+				result = await handleTaskDetail(args, db);
 				break;
+
 
 			default:
 				throw new Error(`Unknown tool: ${name}`);

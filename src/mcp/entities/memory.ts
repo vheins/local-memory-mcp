@@ -149,6 +149,34 @@ export class MemoryEntity extends BaseEntity {
 
 	searchByRepo(repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
 		const now = new Date().toISOString();
+		
+		// Use FTS5 if query is provided, otherwise fallback to simple LIKE
+		if (query && query.length >= 3) {
+			try {
+				let sql = `
+					SELECT m.* 
+					FROM memories m
+					JOIN memories_fts f ON m.id = f.id
+					WHERE m.repo = ? AND memories_fts MATCH ? AND m.status = 'active' 
+					AND (m.expires_at IS NULL OR m.expires_at > ?)
+				`;
+				const params: (string | number)[] = [repo, query, now];
+
+				if (type) {
+					sql += " AND m.type = ?";
+					params.push(type);
+				}
+
+				sql += " ORDER BY rank, m.importance DESC, m.created_at DESC LIMIT ?";
+				params.push(limit);
+
+				const rows = this.db.prepare(sql).all(...params) as MemoryRow[];
+				return rows.map((row) => this.rowToMemoryEntry(row));
+			} catch (e) {
+				// Fallback to LIKE if FTS5 fails or is not initialized
+			}
+		}
+
 		let sql =
 			"SELECT * FROM memories WHERE repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)";
 		const params: (string | number)[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
@@ -357,7 +385,7 @@ export class MemoryEntity extends BaseEntity {
 			.run(memoryId, JSON.stringify(vector), new Date().toISOString());
 	}
 	getSummary(repo: string): { summary: string; updated_at: string } | undefined {
-		const row = this.db.prepare("SELECT summary, updated_at FROM repo_summaries WHERE repo = ?").get(repo) as
+		const row = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as
 			| { summary: string; updated_at: string }
 			| undefined;
 		return row;

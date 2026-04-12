@@ -355,7 +355,7 @@ export async function handleTaskCreateInteractive(
 		const elicited = extractAcceptedElicitationContent(
 			await options.elicit({
 				mode: "form",
-				message: "Lengkapi data task yang belum ada untuk membuat task baru.",
+				message: "Please complete the missing task details to create a new task.",
 				requestedSchema
 			})
 		);
@@ -382,28 +382,28 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 
 	addRequiredStringField(properties, required, task, "repo", {
 		title: "Repository",
-		description: "Nama repository untuk task ini.",
+		description: "Name of the repository for this task.",
 		minLength: 1
 	});
 	addRequiredStringField(properties, required, task, "task_code", {
 		title: "Task Code",
-		description: "Kode task yang unik di repository ini.",
+		description: "Unique task code in this repository.",
 		minLength: 1
 	});
 	addRequiredStringField(properties, required, task, "phase", {
 		title: "Phase",
-		description: "Fase kerja atau milestone task.",
+		description: "Project phase or milestone for this task.",
 		minLength: 1
 	});
 	addRequiredStringField(properties, required, task, "title", {
 		title: "Title",
-		description: "Judul singkat task.",
+		description: "Short task title.",
 		minLength: 3,
 		maxLength: 100
 	});
 	addRequiredStringField(properties, required, task, "description", {
 		title: "Description",
-		description: "Deskripsi task yang cukup jelas untuk dikerjakan.",
+		description: "Detailed description of the task.",
 		minLength: 1
 	});
 
@@ -411,7 +411,7 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 		properties.status = {
 			type: "string",
 			title: "Status",
-			description: "Status awal task.",
+			description: "Initial task status.",
 			enum: ["backlog", "pending"],
 			default: "backlog"
 		};
@@ -421,7 +421,7 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 		properties.priority = {
 			type: "integer",
 			title: "Priority",
-			description: "Prioritas task dari 1 sampai 5.",
+			description: "Task priority from 1 to 5.",
 			minimum: 1,
 			maximum: 5,
 			default: 3

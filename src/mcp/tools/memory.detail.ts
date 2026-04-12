@@ -1,9 +1,9 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
-import { MemoryGetSchema } from "./schemas";
+import { MemoryDetailSchema } from "./schemas";
 
-export async function handleMemoryGet(args: Record<string, unknown>, storage: SQLiteStore) {
-	const { id } = MemoryGetSchema.parse(args);
+export async function handleMemoryDetail(args: Record<string, unknown>, storage: SQLiteStore) {
+	const { id } = MemoryDetailSchema.parse(args);
 	const memory = storage.memories.getById(id);
 
 	if (!memory) {
