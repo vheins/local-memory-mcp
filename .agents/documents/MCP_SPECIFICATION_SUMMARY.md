@@ -133,7 +133,16 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 
 ---
 
-## 6. Ringkasan Kendala Teknis & Keamanan Global
+## 6. Spesifikasi Otorisasi (Authorization)
+
+### Otorisasi Berbasis OAuth 2.1
+- **Fungsi:** Mengamankan akses ke server MCP (khusus untuk transport HTTP).
+- **Transport HTTP:** Wajib menggunakan skema otorisasi bearer (`Authorization: Bearer <token>`). Token harus divalidasi audiensnya (Audience Binding) untuk mencegah *confused deputy*. Mendukung *Step-up Flow* (merespons dengan HTTP 403 jika *scope* kurang dan memberikan *header* `WWW-Authenticate`).
+- **Transport STDIO:** Spesifikasi otorisasi ini **tidak boleh** digunakan. Kredensial untuk akses harus disediakan melalui lingkungan lokal (misal: *environment variables*).
+
+---
+
+## 7. Ringkasan Kendala Teknis & Keamanan Global
 
 1. **Validasi Ketat:** Semua input (URI, argumen, skema JSON) harus divalidasi oleh kedua belah pihak untuk mencegah eksploitasi (seperti path traversal dan injeksi command).
 2. **Negosiasi Kapabilitas:** Klien dan server harus saling menghormati kapabilitas yang dideklarasikan saat inisialisasi. Tidak boleh mengirim permintaan untuk fitur yang tidak dideklarasikan.

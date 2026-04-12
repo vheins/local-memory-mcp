@@ -111,7 +111,9 @@ Resources expose structured data and context for the LLM to read. The server all
 
 ## 3. Prompts (User Control)
 
-Prompts are predefined instruction templates that guide model interactions. The server provides various templates to enforce discipline, plan sessions, and perform standardized reviews.
+Prompts are predefined instruction templates that guide model interactions. The server provides various templates to enforce discipline, plan sessions, and perform standardized reviews. 
+
+*(For complete JSON-RPC payloads and interface definitions for Prompts, see `.agents/documents/application/api/mcp-server/api-core.md`)*
 
 ### Available Prompts
 - **`architecture-design`**: Guidelines for architectural design.
@@ -139,6 +141,8 @@ Prompts are predefined instruction templates that guide model interactions. The 
 ---
 
 ## 4. Advanced Capabilities Support
+
+The following features conform to the standard MCP specification. For exact payload structures, refer to `.agents/documents/application/api/mcp-server/api-core.md`.
 
 - **Completions**: Supported via `completion/complete` to provide autocompletion for prompt arguments or tool inputs.
 - **Logging**: The server supports dynamic log level adjustment via `logging/setLevel` and emits structured logs through `notifications/message`.
