@@ -13,7 +13,6 @@ import { handleMemorySearch } from "./tools/memory.search";
 import { handleMemorySummarize } from "./tools/memory.summarize";
 import { handleMemorySynthesize } from "./tools/memory.synthesize";
 import { handleMemoryDelete } from "./tools/memory.delete";
-import { handleMemoryBulkDelete } from "./tools/memory.bulk-delete";
 import { handleMemoryRecap } from "./tools/memory.recap";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
 import { handleMemoryGet } from "./tools/memory.get";
@@ -25,7 +24,6 @@ import {
 	handleTaskDelete
 } from "./tools/task.manage";
 import { handleTaskGet } from "./tools/task.get";
-import { handleTaskBulkManage } from "./tools/task.bulk-manage";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
@@ -152,11 +150,8 @@ export function createRouter(
 				break;
 
 			case "memory-delete":
-				result = await handleMemoryDelete(args, db, vectors);
-				break;
-
-			case "memory-bulk-delete":
-				result = await handleMemoryBulkDelete(args, db, vectors, onProgress);
+			case "memory-bulk-delete": // Fallback for backward compatibility
+				result = await handleMemoryDelete(args, db, vectors, onProgress);
 				break;
 
 			case "memory-detail":
@@ -188,10 +183,6 @@ export function createRouter(
 
 			case "task-detail":
 				result = await handleTaskGet(args, db);
-				break;
-
-			case "task-bulk-manage":
-				result = await handleTaskBulkManage(args, db, vectors, onProgress);
 				break;
 
 			default:
@@ -276,7 +267,6 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 	const touchesMemory =
 		toolName.startsWith("memory-") ||
 		toolName === "task-update" ||
-		toolName === "task-bulk-manage" ||
 		toolName === "task-delete";
 	const touchesTasks = toolName.startsWith("task-");
 

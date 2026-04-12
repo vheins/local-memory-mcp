@@ -24,9 +24,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should create multiple tasks in one call", async () => {
 		const res = await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{
@@ -62,9 +61,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should allow bulk create without est_tokens", async () => {
 		const res = await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{
@@ -95,9 +93,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		}));
 
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: manyTasks
 			}
@@ -130,9 +127,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should summarize filtered task counts with pending and in-progress context", async () => {
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{
@@ -218,9 +214,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should prevent duplicate task_codes in the same request", async () => {
 		const promise = router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{ task_code: "DUP-001", title: "Task 1", description: "D", phase: "p", status: "pending", est_tokens: 10 },
@@ -249,9 +244,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		// Try to create another one with same code (via bulk)
 		const bulkPromise = router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{
@@ -286,9 +280,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 	it("should bulk delete tasks", async () => {
 		// Create 3 tasks
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{ task_code: "DEL-1", title: "Task 1", description: "Desc 1", phase: "p", status: "pending", est_tokens: 15 },
@@ -302,24 +295,22 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const idsToDelete = [tasks[0].id, tasks[1].id];
 
 		const delRes = await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-delete",
 			arguments: {
-				action: "bulk_delete",
 				repo: REPO,
 				ids: idsToDelete
 			}
 		});
 
-		expect(getTextContent(delRes)).toContain(`Deleted 2 tasks from repo "${REPO}".`);
+		expect(getTextContent(delRes)).toContain(`Deleted 2 task(s) from repo "${REPO}".`);
 		const remainingTasks = db.tasks.getTasksByRepo(REPO);
 		expect(remainingTasks.length).toBe(1);
 	});
 
 	it("auto-populates timestamps from status so agents do not need to send them manually", async () => {
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{ task_code: "TS-1", title: "To Start", description: "Desc", phase: "p", status: "backlog", est_tokens: 40 },
@@ -336,7 +327,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-update",
 			arguments: {
 				repo: REPO,
-				id: ts1.id,
+				id: ts1!.id,
 				status: "in_progress",
 				comment: "Starting TS-1",
 				agent: "Agent-1",
@@ -348,7 +339,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-update",
 			arguments: {
 				repo: REPO,
-				id: ts2.id,
+				id: ts2!.id,
 				status: "in_progress",
 				comment: "Starting TS-2",
 				agent: "Agent-1",
@@ -360,7 +351,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-update",
 			arguments: {
 				repo: REPO,
-				id: ts2.id,
+				id: ts2!.id,
 				status: "completed",
 				comment: "Finishing TS-2",
 				agent: "Agent-1",
@@ -369,8 +360,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		const started = db.tasks.getTaskById(ts1.id);
-		const done = db.tasks.getTaskById(ts2.id);
+		const started = db.tasks.getTaskById(ts1!.id);
+		const done = db.tasks.getTaskById(ts2!.id);
 
 		expect(started?.in_progress_at).toBeTruthy();
 		expect(started?.finished_at).toBeNull();
@@ -380,9 +371,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 	it("should bulk update tasks from pending to completed", async () => {
 		// Create 3 pending tasks
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [
 					{ task_code: "UP-1", title: "Task 1", description: "D", phase: "p", status: "pending", est_tokens: 10 },
@@ -397,21 +387,19 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		// Bulk update to completed
 		const upRes = await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-update",
 			arguments: {
-				action: "bulk_update",
 				repo: REPO,
 				ids: ids,
-				updates: {
-					status: "completed",
-					comment: "Bulk completion test",
-					est_tokens: 500
-				}
+				status: "completed",
+				comment: "Bulk completion test",
+				est_tokens: 500,
+                force: true
 			}
 		});
 
 		expect(upRes.isError).toBe(false);
-		expect(getTextContent(upRes)).toContain(`Updated 3 tasks in repo "${REPO}" to status "completed".`);
+		expect(getTextContent(upRes)).toContain(`Updated 3 task(s) in repo "${REPO}".`);
 
 		const updatedTasks = db.tasks.getTasksByRepo(REPO);
 		updatedTasks.forEach((t) => {
@@ -434,9 +422,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should bulk update statuses and record in-progress timestamps", async () => {
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-create",
 			arguments: {
-				action: "bulk_create",
 				repo: REPO,
 				tasks: [{ task_code: "IP-1", title: "Task 1", description: "D", phase: "p", status: "pending" }]
 			}
@@ -445,14 +432,12 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const taskId = db.tasks.getTasksByRepo(REPO)[0].id;
 
 		await router("tools/call", {
-			name: "task-bulk-manage",
+			name: "task-update",
 			arguments: {
-				action: "bulk_update",
 				repo: REPO,
 				ids: [taskId],
-				updates: {
-					status: "in_progress"
-				}
+				status: "in_progress",
+                comment: "Moving to in progress"
 			}
 		});
 

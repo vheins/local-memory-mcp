@@ -60,8 +60,8 @@ Tools are the primary operational interface for agents, allowing for structured 
     - **Description**: (MANDATORY) Acknowledge the use of a memory or report its irrelevance/contradiction after generating code.
 - **Tool**: `memory-update`
     - **Description**: Update an existing memory entry (e.g., status, importance, or metadata).
-- **Tool**: `memory-delete` / `memory-bulk-delete`
-    - **Description**: Soft-delete or remove multiple memory entries from active use.
+- **Tool**: `memory-delete`
+    - **Description**: Soft-delete one or more memory entries. Supports single `id` or bulk deletion via `ids`.
 - **Tool**: `memory-summarize`
     - **Description**: Update the high-level global summary for a repository.
 - **Tool**: `memory-recap`
@@ -73,15 +73,13 @@ Tools are the primary operational interface for agents, allowing for structured 
     - **Default**: Filters for `in_progress` and `pending` tasks if no status is specified.
     - **Capabilities**: Supports filtering by `status` (comma-separated), `phase`, and keyword `query`.
 - **Tool**: `task-create` / `task-create-interactive`
-    - **Description**: Register a new task. The interactive version supports MCP elicitation fallbacks for missing required fields.
+    - **Description**: Register one or more new tasks. Supports single task object or an array of tasks for bulk creation. The interactive version supports MCP elicitation fallbacks for missing required fields.
 - **Tool**: `task-detail`
     - **Description**: Fetch full description, phase, priority, and all comments for a specific task.
 - **Tool**: `task-update`
-    - **Description**: Progress a task through its lifecycle (Backlog → Pending → In Progress → Completed).
-- **Tool**: `task-bulk-manage`
-    - **Description**: Batch management tool for bulk creation, deletion, or status updates of multiple tasks.
+    - **Description**: Update one or more tasks. Supports single update via `id` or bulk update via `ids`. Progress tasks through their lifecycle (Backlog → Pending → In Progress → Completed).
 - **Tool**: `task-delete`
-    - **Description**: Hard deletion of a task record from the backlog.
+    - **Description**: Hard deletion of task records. Supports single `id` or an array of `ids` for bulk deletion.
 
 ### Internal Handling Logic
 - **Normalization**: Automatically maps dot-notation names (e.g., `memory.store`) to internal hyphenated IDs (`memory-store`).

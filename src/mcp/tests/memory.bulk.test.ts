@@ -47,14 +47,14 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 		const ids = memories.map((m) => m.id);
 
 		const delRes = await router("tools/call", {
-			name: "memory-bulk-delete",
+			name: "memory-delete",
 			arguments: {
 				repo: REPO,
 				ids
 			}
 		});
 
-		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 memories from repo");
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 memory entry(ies) from repo");
 		const remaining = db.memories.getRecentMemories(REPO, 10);
 		expect(remaining.length).toBe(0);
 	});

@@ -11,7 +11,7 @@ This document specifies the functional behavior of the `local-memory-mcp` applic
   - `memory-detail`: Fetch full content and metadata for a specific memory by its ID.
   - `memory-acknowledge`: (MANDATORY) Acknowledge the use of a memory or report its irrelevance.
   - `memory-update`: Update an existing memory entry (e.g., status, importance, or metadata).
-  - `memory-delete` / `memory-bulk-delete`: Soft-delete or remove multiple memory entries.
+  - `memory-delete`: Soft-delete one or more memory entries. Supports single `id` or bulk deletion via `ids`.
   - `memory-summarize`: Update the high-level global summary for a repository.
   - `memory-recap`: AGGREGATED OVERVIEW: Returns stats and top memories in a repo.
 - **Rules**:
@@ -23,11 +23,10 @@ This document specifies the functional behavior of the `local-memory-mcp` applic
 - **Description**: Tracks agent progress and prevents developmental amnesia through a structured Kanban lifecycle.
 - **Key Tools**:
   - `task-list`: PRIMARY navigation and search tool. Returns a tabular list of tasks.
-  - `task-create`: Register a new task. Supports MCP elicitation fallbacks for missing fields.
+  - `task-create`: Register one or more new tasks. Supports single task or bulk creation via an array of tasks. Supports MCP elicitation fallbacks for missing fields.
   - `task-detail`: Fetch full description, phase, priority, and all comments for a specific task.
-  - `task-update`: Progress a task through its lifecycle (Backlog → Pending → In Progress → Completed).
-  - `task-bulk-manage`: Batch management for bulk creation, deletion, or status updates.
-  - `task-delete`: Hard deletion of a task record.
+  - `task-update`: Update one or more tasks. Supports single update via `id` or bulk update via `ids`. Progress tasks through their lifecycle (Backlog → Pending → In Progress → Completed).
+  - `task-delete`: Hard deletion of task records. Supports single `id` or bulk deletion via an array of `ids`.
 - **Statuses**: `backlog`, `pending`, `in_progress`, `completed`, `canceled`, `blocked`.
 - **Logic Rules**:
   - **Single Active Focus**: Ideally only one task per repo should be `in_progress` at any time.

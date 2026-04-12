@@ -79,18 +79,17 @@ Tools are executable functions exposed to the LLM to perform actions, interact w
 - **`memory-detail`**: Fetch full content and metadata for a specific memory by its ID.
 - **`memory-acknowledge`**: (MANDATORY) Acknowledge the use of a memory or report its irrelevance.
 - **`memory-update`**: Update an existing memory entry (e.g., status, importance, or metadata).
-- **`memory-delete`** / **`memory-bulk-delete`**: Soft-delete or remove multiple memory entries.
+- **`memory-delete`**: Soft-delete one or more memory entries. Supports single `id` or bulk deletion via `ids`.
 - **`memory-summarize`**: Update the high-level global summary for a repository.
 - **`memory-recap`**: AGGREGATED OVERVIEW: Returns stats and top memories in a repo.
 
 ### Task Management
 - **`task-list`**: PRIMARY navigation and search tool. Returns a tabular list of tasks.
-- **`task-create`**: Register a new task. Supports MCP elicitation fallbacks for missing fields.
+- **`task-create`**: Register one or more new tasks. Supports single task or bulk creation. Supports MCP elicitation fallbacks for missing fields.
 - **`task-create-interactive`**: Interactively creates a task by requesting user input via elicitation.
 - **`task-detail`**: Fetch full description, phase, priority, and all comments for a specific task.
-- **`task-update`**: Progress a task through its lifecycle (Backlog → Pending → In Progress → Completed).
-- **`task-bulk-manage`**: Batch management for bulk creation, deletion, or status updates.
-- **`task-delete`**: Hard deletion of a task record.
+- **`task-update`**: Progress one or more tasks through their lifecycle (Backlog → Pending → In Progress → Completed). Supports bulk updates via `ids`.
+- **`task-delete`**: Hard deletion of task records. Supports single `id` or bulk deletion via `ids`.
 
 ---
 

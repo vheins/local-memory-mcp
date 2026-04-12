@@ -17,8 +17,8 @@ State management for work-in-progress goals.
 - **When** the update call is processed,
 - **Then** the system MUST REQUIRE `est_tokens` to be provided in the request body.
 
-## 4. Bulk Transactability (`task-bulk-manage`)
-- **Given** a list of multiple creation/deletion/update operations,
+## 4. Bulk Transactability
+- **Given** a list of multiple creation/deletion/update operations provided to `task-create`, `task-delete`, or `task-update`,
 - **When** any single operation within the list fails validation,
 - **Then** the ENTIRE set of operations MUST be rolled back to maintain database consistency.
 

@@ -97,10 +97,15 @@ export const MemoryRecapSchema = z.object({
 	offset: z.number().min(0).default(0)
 });
 
-export const MemoryBulkDeleteSchema = z.object({
-	repo: z.string().min(1).transform(normalizeRepo),
-	ids: z.array(z.string().uuid()).min(1)
-});
+export const MemoryDeleteSchema = z
+	.object({
+		repo: z.string().min(1).transform(normalizeRepo).optional(),
+		id: z.string().uuid().optional(),
+		ids: z.array(z.string().uuid()).min(1).optional()
+	})
+	.refine((data) => data.id !== undefined || data.ids !== undefined, {
+		message: "Either 'id' or 'ids' must be provided for deletion"
+	});
 
 export const MemorySummarizeSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
@@ -121,8 +126,7 @@ export const MemorySynthesizeSchema = z.object({
 export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
 export const TaskPrioritySchema = z.number().min(1).max(5);
 
-export const TaskCreateSchema = z.object({
-	repo: z.string().min(1).transform(normalizeRepo),
+const SingleTaskCreateSchema = z.object({
 	task_code: z.string().min(1),
 	phase: z.string().min(1),
 	title: z.string().min(3).max(100),
@@ -139,14 +143,39 @@ export const TaskCreateSchema = z.object({
 	est_tokens: z.number().int().min(0).optional()
 });
 
-export const TaskCreateInteractiveSchema = TaskCreateSchema.partial().extend({
+export const TaskCreateSchema = z.object({
+	repo: z.string().min(1).transform(normalizeRepo),
+	// Allow single task fields at top level (backward compatibility & single use)
+	task_code: z.string().min(1).optional(),
+	phase: z.string().min(1).optional(),
+	title: z.string().min(3).max(100).optional(),
+	description: z.string().min(1).optional(),
+	status: TaskStatusSchema.optional(),
+	priority: TaskPrioritySchema.optional(),
+	agent: z.string().optional(),
+	role: z.string().optional(),
+	doc_path: z.string().optional(),
+	tags: z.array(z.string()).optional(),
+	metadata: z.record(z.string(), z.any()).optional(),
+	parent_id: z.string().uuid().optional(),
+	depends_on: z.string().uuid().optional(),
+	est_tokens: z.number().int().min(0).optional(),
+	// Allow bulk tasks
+	tasks: z.array(SingleTaskCreateSchema).min(1).optional()
+}).refine(data => {
+    if (data.tasks) return true;
+    return !!(data.task_code && data.phase && data.title && data.description);
+}, { message: "Either 'tasks' array or single task fields (task_code, phase, title, description) must be provided" });
+
+export const TaskCreateInteractiveSchema = SingleTaskCreateSchema.partial().extend({
 	repo: z.string().min(1).transform(normalizeRepo).optional()
 });
 
 export const TaskUpdateSchema = z
 	.object({
 		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().uuid(),
+		id: z.string().uuid().optional(),
+        ids: z.array(z.string().uuid()).min(1).optional(),
 		task_code: z.string().optional(),
 		phase: z.string().optional(),
 		title: z.string().min(3).max(100).optional(),
@@ -162,10 +191,14 @@ export const TaskUpdateSchema = z
 		metadata: z.record(z.string(), z.any()).optional(),
 		parent_id: z.string().uuid().optional(),
 		depends_on: z.string().uuid().optional(),
-		est_tokens: z.number().int().min(0).optional()
+		est_tokens: z.number().int().min(0).optional(),
+        force: z.boolean().optional()
 	})
-	.refine((data) => Object.keys(data).length > 2, {
-		message: "At least one field besides repo and id must be provided for update"
+	.refine((data) => (data.id !== undefined || data.ids !== undefined), {
+		message: "Either 'id' or 'ids' must be provided for update"
+	})
+    .refine((data) => Object.keys(data).length > 2, {
+		message: "At least one field besides repo and id/ids must be provided for update"
 	});
 
 export const TaskListSchema = z.object({
@@ -185,54 +218,12 @@ export const TaskSearchSchema = z.object({
 	offset: z.number().min(0).default(0)
 });
 
-export const TaskBulkManageSchema = z
-	.object({
-		action: z.enum(["bulk_create", "bulk_delete", "bulk_update"]),
-		repo: z.string().min(1).transform(normalizeRepo),
-		tasks: z
-			.array(
-				z.object({
-					task_code: z.string().min(1),
-					phase: z.string().min(1),
-					title: z.string().min(3).max(100),
-					description: z.string().min(1),
-					status: z.enum(["backlog", "pending"]).default("backlog"),
-					priority: TaskPrioritySchema.optional(),
-					agent: z.string().optional(),
-					role: z.string().optional(),
-					doc_path: z.string().optional(),
-					tags: z.array(z.string()).optional(),
-					metadata: z.record(z.string(), z.any()).optional(),
-					parent_id: z.string().uuid().optional(),
-					depends_on: z.string().uuid().optional(),
-					est_tokens: z.number().int().min(0).optional()
-				})
-			)
-			.min(1)
-			.optional(),
-		ids: z.array(z.string().uuid()).min(1).optional(),
-		updates: z
-			.object({
-				status: TaskStatusSchema.optional(),
-				comment: z.string().optional(),
-				est_tokens: z.number().optional()
-			})
-			.optional()
-	})
-	.refine(
-		(data) =>
-			(data.action === "bulk_create" && data.tasks) ||
-			(data.action === "bulk_delete" && data.ids) ||
-			(data.action === "bulk_update" && data.ids && data.updates),
-		{
-			message:
-				"tasks is required for bulk_create, ids is required for bulk_delete or bulk_update, updates is required for bulk_update"
-		}
-	);
-
 export const TaskDeleteSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
-	id: z.string().uuid()
+	id: z.string().uuid().optional(),
+    ids: z.array(z.string().uuid()).min(1).optional()
+}).refine(data => data.id !== undefined || data.ids !== undefined, {
+    message: "Either 'id' or 'ids' must be provided for deletion"
 });
 
 export const MemoryGetSchema = z.object({
@@ -681,7 +672,7 @@ export const TOOL_DEFINITIONS = [
 	{
 		name: "memory-delete",
 		title: "Memory Delete",
-		description: "Soft-delete a memory entry (remove from active use)",
+		description: "Soft-delete one or more memory entries. Supports single 'id' or bulk 'ids'.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -691,55 +682,26 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Memory entry ID to delete" }
-			},
-			required: ["id"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				id: { type: "string" },
-				repo: { type: "string" }
-			},
-			required: ["success", "id", "repo"]
-		}
-	},
-	{
-		name: "memory-bulk-delete",
-		title: "Memory Bulk Delete",
-		description: "Delete multiple memory entries at once.",
-		annotations: {
-			readOnlyHint: false,
-			idempotentHint: false,
-			destructiveHint: true,
-			openWorldHint: false
-		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				repo: { type: "string", description: "Repository name" },
+				repo: { type: "string", description: "Repository name (optional for single id)" },
+				id: { type: "string", format: "uuid", description: "Memory entry ID to delete" },
 				ids: {
 					type: "array",
 					items: { type: "string", format: "uuid" },
 					minItems: 1,
 					description: "Array of memory IDs to delete"
 				}
-			},
-			required: ["repo", "ids"]
+			}
 		},
 		outputSchema: {
 			type: "object",
 			properties: {
 				success: { type: "boolean" },
+				id: { type: "string" },
+				ids: { type: "array", items: { type: "string" } },
 				repo: { type: "string" },
-				deletedCount: { type: "number" },
-				ids: {
-					type: "array",
-					items: { type: "string" }
-				}
+				deletedCount: { type: "number" }
 			},
-			required: ["success", "repo", "deletedCount", "ids"]
+			required: ["success"]
 		}
 	},
 	{
@@ -815,7 +777,7 @@ export const TOOL_DEFINITIONS = [
 		name: "task-create",
 		title: "Task Create",
 		description:
-			"Create a new task in a repository. task_code must be unique within the repository. 'est_tokens' is optional during planning/creation.",
+			"Register one or more new tasks in a repository. task_code must be unique within the repository. Supports single task object or an array of tasks for bulk creation.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -825,13 +787,14 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name" },
-				task_code: { type: "string", description: "Unique task code (e.g. TASK-001)" },
-				phase: { type: "string", description: "Project phase" },
-				title: { type: "string", minLength: 3, maxLength: 100 },
-				description: { type: "string" },
+				task_code: { type: "string", description: "Unique task code (e.g. TASK-001) (Required for single task)" },
+				phase: { type: "string", description: "Project phase (Required for single task)" },
+				title: { type: "string", minLength: 3, maxLength: 100, description: "Task objective (Required for single task)" },
+				description: { type: "string", description: "Detailed description (Required for single task)" },
 				status: {
 					type: "string",
 					enum: ["backlog", "pending"],
+					default: "backlog",
 					description:
 						"New tasks MUST start in 'backlog' if there are already 10 pending tasks. Otherwise can start in 'pending'."
 				},
@@ -843,9 +806,33 @@ export const TOOL_DEFINITIONS = [
 				metadata: { type: "object" },
 				parent_id: { type: "string", format: "uuid" },
 				depends_on: { type: "string", format: "uuid" },
-				est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" }
+				est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" },
+                tasks: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            task_code: { type: "string" },
+                            phase: { type: "string" },
+                            title: { type: "string", minLength: 3, maxLength: 100 },
+                            description: { type: "string" },
+                            status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
+                            priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+                            agent: { type: "string" },
+                            role: { type: "string" },
+                            doc_path: { type: "string" },
+                            tags: { type: "array", items: { type: "string" } },
+                            metadata: { type: "object" },
+                            parent_id: { type: "string", format: "uuid" },
+                            depends_on: { type: "string", format: "uuid" },
+                            est_tokens: { type: "number", minimum: 0 }
+                        },
+                        required: ["task_code", "phase", "title", "description"]
+                    },
+                    description: "Array of tasks for bulk creation"
+                }
 			},
-			required: ["repo", "task_code", "phase", "title", "description", "status"]
+			required: ["repo"]
 		},
 		outputSchema: {
 			type: "object",
@@ -857,16 +844,18 @@ export const TOOL_DEFINITIONS = [
 				phase: { type: "string" },
 				title: { type: "string" },
 				status: { type: "string" },
-				priority: { type: "number" }
+				priority: { type: "number" },
+                createdCount: { type: "number" },
+                taskCodes: { type: "array", items: { type: "string" } }
 			},
-			required: ["success", "id", "repo", "task_code", "phase", "title", "status", "priority"]
+			required: ["success", "repo"]
 		}
 	},
 	{
 		name: "task-update",
 		title: "Task Update",
 		description:
-			"Update an existing task. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
+			"Update one or more tasks. Supports single update via 'id' or bulk update via 'ids'. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -876,7 +865,8 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name" },
-				id: { type: "string", format: "uuid", description: "Task ID" },
+				id: { type: "string", format: "uuid", description: "Task ID (for single update)" },
+                ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk update)" },
 				task_code: { type: "string" },
 				phase: { type: "string" },
 				title: { type: "string", minLength: 3, maxLength: 100 },
@@ -905,30 +895,33 @@ export const TOOL_DEFINITIONS = [
 					minimum: 0,
 					description:
 						"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
-				}
+				},
+                force: { type: "boolean", description: "If true, bypasses status transition validation (e.g. pending -> completed)." }
 			},
-			required: ["repo", "id"]
+			required: ["repo"]
 		},
 		outputSchema: {
 			type: "object",
 			properties: {
 				success: { type: "boolean" },
 				id: { type: "string" },
+                ids: { type: "array", items: { type: "string" } },
 				repo: { type: "string" },
 				status: { type: "string" },
 				archivedToMemory: { type: "boolean" },
 				updatedFields: {
 					type: "array",
 					items: { type: "string" }
-				}
+				},
+                updatedCount: { type: "number" }
 			},
-			required: ["success", "id", "repo", "status", "archivedToMemory", "updatedFields"]
+			required: ["success", "repo"]
 		}
 	},
 	{
 		name: "task-delete",
 		title: "Task Delete",
-		description: "Delete a task from a repository.",
+		description: "Delete one or more tasks from a repository. Supports single 'id' or bulk 'ids'.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -939,18 +932,21 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name" },
-				id: { type: "string", format: "uuid", description: "Task ID" }
+				id: { type: "string", format: "uuid", description: "Task ID (for single deletion)" },
+                ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk deletion)" }
 			},
-			required: ["repo", "id"]
+			required: ["repo"]
 		},
 		outputSchema: {
 			type: "object",
 			properties: {
 				success: { type: "boolean" },
 				id: { type: "string" },
-				repo: { type: "string" }
+                ids: { type: "array", items: { type: "string" } },
+				repo: { type: "string" },
+                deletedCount: { type: "number" }
 			},
-			required: ["success", "id", "repo"]
+			required: ["success", "repo"]
 		}
 	},
 	{
@@ -1025,91 +1021,6 @@ export const TOOL_DEFINITIONS = [
 				offset: { type: "number" }
 			},
 			required: ["schema", "tasks", "count"]
-		}
-	},
-	{
-		name: "task-bulk-manage",
-		title: "Task Bulk Manage",
-		description:
-			"Perform bulk operations on tasks (e.g., bulk creation, bulk deletion). For bulk_create, 'est_tokens' is optional and can be filled later when the task is completed.",
-		annotations: {
-			readOnlyHint: false,
-			idempotentHint: false,
-			destructiveHint: false,
-			openWorldHint: false
-		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				action: {
-					type: "string",
-					enum: ["bulk_create", "bulk_delete", "bulk_update"],
-					description: "Action to perform in bulk"
-				},
-				repo: {
-					type: "string",
-					description: "Repository name"
-				},
-				tasks: {
-					type: "array",
-					items: {
-						type: "object",
-						properties: {
-							task_code: { type: "string" },
-							phase: { type: "string" },
-							title: { type: "string", minLength: 3, maxLength: 100 },
-							description: { type: "string" },
-							status: { type: "string", enum: ["backlog", "pending"] },
-							priority: { type: "number", minimum: 1, maximum: 5 },
-							agent: { type: "string" },
-							role: { type: "string" },
-							doc_path: { type: "string" },
-							tags: { type: "array", items: { type: "string" } },
-							metadata: { type: "object" },
-							parent_id: { type: "string", format: "uuid" },
-							depends_on: { type: "string", format: "uuid" },
-							est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" }
-						},
-						required: ["task_code", "title", "phase", "description", "status"]
-					},
-					minItems: 1
-				},
-				ids: {
-					type: "array",
-					items: { type: "string", format: "uuid" },
-					minItems: 1,
-					description: "Task IDs to delete or update"
-				},
-				updates: {
-					type: "object",
-					properties: {
-						status: { type: "string", enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"] },
-						comment: { type: "string" },
-						est_tokens: { type: "number", minimum: 0 }
-					}
-				}
-			},
-			required: ["action", "repo"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				action: { type: "string" },
-				repo: { type: "string" },
-				createdCount: { type: "number" },
-				deletedCount: { type: "number" },
-				updatedCount: { type: "number" },
-				taskCodes: {
-					type: "array",
-					items: { type: "string" }
-				},
-				ids: {
-					type: "array",
-					items: { type: "string" }
-				}
-			},
-			required: ["success", "action", "repo"]
 		}
 	}
 ];

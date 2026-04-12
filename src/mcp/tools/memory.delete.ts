@@ -1,44 +1,67 @@
-import { z } from "zod";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
+import { MemoryDeleteSchema } from "./schemas";
 
-export const MemoryDeleteSchema = z.object({
-	id: z.string().uuid()
-});
-
-export async function handleMemoryDelete(params: Record<string, unknown>, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleMemoryDelete(
+	params: Record<string, unknown>, 
+	db: SQLiteStore, 
+	vectors: VectorStore,
+	onProgress?: (progress: number, total?: number) => void
+): Promise<McpResponse> {
 	// Validate input
-	const validated = MemoryDeleteSchema.parse(params);
+	const { id, ids, repo } = MemoryDeleteSchema.parse(params);
+    const targetIds = ids || (id ? [id] : []);
 
-	// Check if memory exists
-	const existing = db.memories.getById(validated.id);
-	if (!existing) {
-		throw new Error(`Memory not found: ${validated.id}`);
-	}
+    if (targetIds.length === 0) {
+        throw new Error("Either 'id' or 'ids' must be provided for deletion");
+    }
 
-	// Delete from SQLite
-	db.memories.delete(validated.id);
+    let deletedCount = 0;
+    let lastRepo = repo || "unknown";
 
-	// Delete from vector store
-	await vectors.remove(validated.id);
+    const total = targetIds.length;
+    let progress = 0;
 
-	logger.info("[MCP] memory.delete", { repo: existing.scope.repo, id: validated.id, title: existing.title });
+    for (const targetId of targetIds) {
+        if (onProgress) {
+            onProgress(progress, total);
+        }
+
+        const existing = db.memories.getById(targetId);
+        if (existing) {
+            lastRepo = existing.scope.repo;
+            db.memories.delete(targetId);
+            await vectors.remove(targetId);
+            deletedCount++;
+        } else if (id) {
+            throw new Error(`Memory not found: ${targetId}`);
+        }
+        progress++;
+    }
+
+    if (onProgress) {
+        onProgress(progress, total);
+    }
+
+	logger.info("[MCP] memory.delete", { repo: lastRepo, count: deletedCount });
 
 	return createMcpResponse(
 		{
 			success: true,
-			id: validated.id,
-			repo: existing.scope.repo
+			id: id || undefined,
+            ids: ids || undefined,
+			repo: lastRepo,
+            deletedCount
 		},
-		`Deleted memory ${validated.id} from repo "${existing.scope.repo}".`,
+		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
 		{
-			structuredContentPathHint: "id",
+			structuredContentPathHint: "deletedCount",
 			resourceLinks: [
 				{
-					uri: `repository://${encodeURIComponent(existing.scope.repo)}/memories`,
-					name: `Memory Index (${existing.scope.repo})`,
+					uri: `repository://${encodeURIComponent(lastRepo)}/memories`,
+					name: `Memory Index (${lastRepo})`,
 					description: "Repository memory index after deletion",
 					mimeType: "application/json",
 					annotations: {

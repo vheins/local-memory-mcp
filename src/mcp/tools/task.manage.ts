@@ -193,47 +193,98 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 }
 
 export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
-	const taskData = TaskCreateSchema.parse(args);
-	const {
-		repo,
-		task_code,
-		phase,
-		title,
-		description,
-		status,
-		priority,
-		agent,
-		role,
-		doc_path,
-		tags,
-		metadata,
-		parent_id,
-		depends_on,
-		est_tokens
-	} = taskData;
+	const parsed = TaskCreateSchema.parse(args);
+    const { repo, tasks: bulkTasks, ...singleTask } = parsed;
+
+    if (bulkTasks) {
+        const createdTasks: string[] = [];
+        const now = new Date().toISOString();
+        const codesInRequest = new Set<string>();
+
+        for (const taskData of bulkTasks) {
+            if (codesInRequest.has(taskData.task_code)) {
+                throw new Error(`Duplicate task_code in request: '${taskData.task_code}'`);
+            }
+            if (storage.tasks.isTaskCodeDuplicate(repo, taskData.task_code)) {
+                throw new Error(`Duplicate task_code: '${taskData.task_code}' already exists in repository '${repo}'`);
+            }
+            codesInRequest.add(taskData.task_code);
+
+            const normalizedStatus = (taskData.status as TaskStatus) || "backlog";
+            if (normalizedStatus !== "backlog" && normalizedStatus !== "pending") {
+                throw new Error(`New tasks must be 'backlog' or 'pending'. Task '${taskData.task_code}' has status '${normalizedStatus}'.`);
+            }
+
+            if (normalizedStatus === "pending") {
+                const stats = storage.tasks.getTaskStats(repo);
+                const pendingInRequest = createdTasks.filter(c => {
+                    const t = bulkTasks.find(bt => bt.task_code === c);
+                    return t?.status === "pending";
+                }).length;
+                if (stats.todo + pendingInRequest >= 10) {
+                    throw new Error(`Cannot create task '${taskData.task_code}' as 'pending'. Maximum of 10 pending tasks reached.`);
+                }
+            }
+
+            const statusTimestamps = deriveTaskStatusTimestamps(normalizedStatus, now);
+            const task: Task = {
+                id: randomUUID(),
+                repo,
+                task_code: taskData.task_code,
+                phase: taskData.phase,
+                title: taskData.title,
+                description: taskData.description,
+                status: normalizedStatus,
+                priority: (taskData.priority as TaskPriority) || 3,
+                agent: taskData.agent || singleTask.agent || "unknown",
+                role: taskData.role || singleTask.role || "unknown",
+                doc_path: taskData.doc_path || null,
+                created_at: now,
+                updated_at: now,
+                in_progress_at: statusTimestamps.in_progress_at,
+                finished_at: statusTimestamps.finished_at,
+                canceled_at: statusTimestamps.canceled_at,
+                est_tokens: taskData.est_tokens ?? 0,
+                tags: taskData.tags || [],
+                metadata: (taskData.metadata as Record<string, unknown>) || {},
+                parent_id: taskData.parent_id || null,
+                depends_on: taskData.depends_on || null
+            };
+            storage.tasks.insertTask(task);
+            createdTasks.push(task.task_code);
+        }
+
+        return createMcpResponse(
+            { success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
+            `Created ${bulkTasks.length} tasks in repo "${repo}".`
+        );
+    }
+
+    // Single Task logic
+    const { task_code, phase, title, description, status, priority, agent, role, doc_path, tags, metadata, parent_id, depends_on, est_tokens } = singleTask;
+    
+    if (!task_code || !phase || !title || !description) {
+        throw new Error("Missing required fields for single task creation (task_code, phase, title, description)");
+    }
 
 	if (storage.tasks.isTaskCodeDuplicate(repo, task_code)) {
 		throw new Error(`Duplicate task_code: '${task_code}' already exists in repository '${repo}'`);
 	}
 
-	// New tasks MUST be backlog or pending
-	if (status !== "backlog" && status !== "pending") {
+	if (status !== "backlog" && status !== "pending" && status !== undefined) {
 		throw new Error("New tasks must be created with status 'backlog' or 'pending'.");
 	}
 
-	// Max 10 pending tasks validation
 	if (status === "pending") {
 		const stats = storage.tasks.getTaskStats(repo);
 		if (stats.todo >= 10) {
-			throw new Error(
-				`Cannot create task as 'pending'. Maximum of 10 pending tasks reached in repository '${repo}'. Please use 'backlog' instead.`
-			);
+			throw new Error(`Cannot create task as 'pending'. Maximum of 10 pending tasks reached.`);
 		}
 	}
 
 	const taskId = randomUUID();
 	const now = new Date().toISOString();
-	const statusTimestamps = deriveTaskStatusTimestamps(status as TaskStatus, now);
+	const statusTimestamps = deriveTaskStatusTimestamps((status || "backlog") as TaskStatus, now);
 	const task: Task = {
 		id: taskId,
 		repo,
@@ -241,8 +292,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		phase,
 		title,
 		description,
-		status: status as TaskStatus,
-		priority: priority as TaskPriority,
+		status: (status || "backlog") as TaskStatus,
+		priority: (priority as TaskPriority) || 3,
 		agent: agent || "unknown",
 		role: role || "unknown",
 		doc_path: doc_path || null,
@@ -272,22 +323,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			priority: task.priority,
 			depends_on: task.depends_on
 		},
-		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
-		{
-			structuredContentPathHint: "task_code",
-			resourceLinks: [
-				{
-					uri: `repository://${encodeURIComponent(task.repo)}/tasks`,
-					name: `Task Index (${task.repo})`,
-					description: "Repository task index",
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"],
-						priority: 0.8
-					}
-				}
-			]
-		}
+		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`
 	);
 }
 
@@ -330,34 +366,13 @@ export async function handleTaskCreateInteractive(
 		};
 	}
 
-	const _result = await handleTaskCreate(
+	return await handleTaskCreate(
 		{
 			...completedDraft,
 			status: completedDraft.status ?? "backlog",
 			priority: completedDraft.priority ?? 3
 		},
 		storage
-	);
-
-	const parsedTask = TaskCreateSchema.parse({
-		...completedDraft,
-		status: completedDraft.status ?? "backlog",
-		priority: completedDraft.priority ?? 3
-	});
-
-	return createMcpResponse(
-		{
-			repo: parsedTask.repo,
-			task_code: parsedTask.task_code,
-			phase: parsedTask.phase,
-			title: parsedTask.title,
-			status: parsedTask.status,
-			priority: parsedTask.priority
-		},
-		`Created task [${parsedTask.task_code}] ${parsedTask.title} in repo "${parsedTask.repo}" with status "${parsedTask.status}".`,
-		{
-			structuredContentPathHint: "task_code"
-		}
 	);
 }
 
@@ -440,107 +455,106 @@ function addRequiredStringField(
 
 export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vectors: VectorStore) {
 	const updateData = TaskUpdateSchema.parse(args);
-	const { repo, id, comment, ...updates } = updateData;
-	const existingTask = storage.tasks.getTaskById(id);
+	const { repo, id, ids, comment, force, ...updates } = updateData;
+    const targetIds = ids || (id ? [id] : []);
 
-	if (!existingTask) {
-		throw new Error(`Task not found: ${id}`);
-	}
+    if (targetIds.length === 0) {
+        throw new Error("Either 'id' or 'ids' must be provided for update");
+    }
 
-	// Enforce mandatory comment if status is changing
-	if (updates.status !== undefined && updates.status !== existingTask.status) {
-		if (comment === undefined || comment.trim() === "") {
-			throw new Error("comment is required when changing task status");
-		}
+    let updatedCount = 0;
+    const now = new Date().toISOString();
+    const isStatusChangingGlobal = updates.status !== undefined;
 
-		// Workflow transition validation
-		if (existingTask.status === "backlog" && updates.status === "completed") {
-			throw new Error("Cannot transition directly from 'backlog' to 'completed'. Task must be 'in_progress' first.");
-		}
+    for (const targetId of targetIds) {
+        const existingTask = storage.tasks.getTaskById(targetId);
+        if (!existingTask) {
+            if (id) throw new Error(`Task not found: ${targetId}`);
+            continue; // Skip missing tasks in bulk
+        }
 
-		if (existingTask.status === "pending" && updates.status === "completed") {
-			throw new Error("Cannot transition directly from 'pending' to 'completed'. Task must be 'in_progress' first.");
-		}
+        const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
 
-		if (existingTask.status === "blocked" && updates.status === "completed") {
-			throw new Error("Cannot transition directly from 'blocked' to 'completed'. Task must be 'in_progress' first.");
-		}
-	}
+        // Validations
+        if (isStatusChanging && !force) {
+            if (!comment || comment.trim() === "") {
+                throw new Error("comment is required when changing task status");
+            }
+            if ((existingTask.status === "backlog" || existingTask.status === "pending" || existingTask.status === "blocked") && updates.status === "completed") {
+                throw new Error(`Cannot transition task ${targetId} from '${existingTask.status}' directly to 'completed'. Must be 'in_progress' first.`);
+            }
+        }
 
-	if (updates.status === "completed" && updates.status !== existingTask.status && updates.est_tokens === undefined) {
-		throw new Error("est_tokens is required when changing task status to completed");
-	}
+        if (updates.status === "completed" && isStatusChanging && updates.est_tokens === undefined) {
+            throw new Error("est_tokens is required when changing task status to completed");
+        }
 
-	// Check for task_code uniqueness if being updated
-	if (updates.task_code) {
-		if (storage.tasks.isTaskCodeDuplicate(repo, updates.task_code, id)) {
-			throw new Error(`Duplicate task_code: '${updates.task_code}' already exists in repository '${repo}'`);
-		}
-	}
+        if (updates.task_code && storage.tasks.isTaskCodeDuplicate(repo, updates.task_code, targetId)) {
+            throw new Error(`Duplicate task_code: '${updates.task_code}' already exists`);
+        }
 
-	// Handle auto-timestamps for status changes
-	const finalUpdates: Record<string, unknown> = { ...updates };
-	const now = new Date().toISOString();
-	if (updates.status === "completed") {
-		finalUpdates.finished_at = now;
-	} else if (updates.status === "canceled") {
-		finalUpdates.canceled_at = now;
-	} else if (updates.status === "in_progress" && existingTask.status !== "in_progress") {
-		finalUpdates.in_progress_at = now;
-	}
+        const finalUpdates: Record<string, unknown> = { ...updates };
+        if (updates.status === "completed") finalUpdates.finished_at = now;
+        else if (updates.status === "canceled") finalUpdates.canceled_at = now;
+        else if (updates.status === "in_progress" && existingTask.status !== "in_progress") finalUpdates.in_progress_at = now;
 
-	storage.tasks.updateTask(id, finalUpdates);
+        storage.tasks.updateTask(targetId, finalUpdates);
 
-	if (comment !== undefined) {
-		const isStatusChanging = updates.status !== undefined && updates.status !== existingTask.status;
-		storage.tasks.insertTaskComment({
-			id: randomUUID(),
-			task_id: id,
-			repo,
-			comment,
-			agent: updates.agent || existingTask.agent || "unknown",
-			role: updates.role || existingTask.role || "unknown",
-			model: updates.model || "unknown",
-			previous_status: isStatusChanging ? (existingTask.status as TaskStatus) : null,
-			next_status: isStatusChanging ? (updates.status as TaskStatus) : null,
-			created_at: new Date().toISOString()
-		});
-	}
+        if (comment !== undefined || isStatusChanging) {
+            storage.tasks.insertTaskComment({
+                id: randomUUID(),
+                task_id: targetId,
+                repo,
+                comment: comment || `Status updated to ${updates.status}`,
+                agent: updates.agent || existingTask.agent || "unknown",
+                role: updates.role || existingTask.role || "unknown",
+                model: updates.model || "unknown",
+                previous_status: isStatusChanging ? (existingTask.status as TaskStatus) : null,
+                next_status: isStatusChanging ? (updates.status as TaskStatus) : null,
+                created_at: now
+            });
+        }
 
-	// Archive to memory if completed
-	if (updates.status === "completed" && existingTask.status !== "completed") {
-		await archiveTaskToMemory(id, repo, storage, vectors);
-	}
+        if (updates.status === "completed" && existingTask.status !== "completed") {
+            await archiveTaskToMemory(targetId, repo, storage, vectors);
+        }
+        updatedCount++;
+    }
 
 	return createMcpResponse(
 		{
 			success: true,
-			id,
+			id: id || undefined,
+            ids: ids || undefined,
 			repo,
-			status: updates.status ?? existingTask.status,
-			archivedToMemory: updates.status === "completed" && existingTask.status !== "completed",
-			updatedFields: Object.keys(finalUpdates)
+			status: updates.status,
+			updatedCount,
+			updatedFields: Object.keys(updates)
 		},
-		`Updated task ${id} in repo "${repo}" to status "${updates.status ?? existingTask.status}".${updates.status === "completed" ? " Archived to memory." : ""}`,
-		{
-			structuredContentPathHint: "updatedFields"
-		}
+		`Updated ${updatedCount} task(s) in repo "${repo}".`
 	);
 }
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
-	const { repo, id } = TaskDeleteSchema.parse(args);
-	storage.tasks.deleteTask(id);
+	const { repo, id, ids } = TaskDeleteSchema.parse(args);
+    const targetIds = ids || (id ? [id] : []);
+
+    if (targetIds.length === 0) {
+        throw new Error("Either 'id' or 'ids' must be provided for deletion");
+    }
+
+    for (const targetId of targetIds) {
+        storage.tasks.deleteTask(targetId);
+    }
 
 	return createMcpResponse(
 		{
 			success: true,
-			id,
-			repo
+			id: id || undefined,
+            ids: ids || undefined,
+			repo,
+            deletedCount: targetIds.length
 		},
-		`Deleted task ${id} from repo "${repo}".`,
-		{
-			structuredContentPathHint: "id"
-		}
+		`Deleted ${targetIds.length} task(s) from repo "${repo}".`
 	);
 }
