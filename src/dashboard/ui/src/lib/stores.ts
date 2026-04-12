@@ -1,163 +1,19 @@
 import { writable, derived } from "svelte/store";
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-export interface RepoMeta {
-	repo: string;
-	memory_count: number;
-	task_count?: number;
-	pending_count?: number;
-	in_progress_count?: number;
-	blocked_count?: number;
-	backlog_count?: number;
-	last_updated_at?: string;
-}
-
-export interface Memory {
-	id: string;
-	title: string;
-	content: string;
-	type: string;
-	importance: number;
-	scope: { repo: string };
-	tags?: string[];
-	created_at: string;
-	updated_at: string;
-	ttl_days?: number;
-	hit_count?: number;
-	last_accessed_at?: string;
-	is_global?: boolean;
-	status?: string;
-	metadata?: Record<string, unknown>;
-	agent?: string;
-	model?: string;
-}
-
-export interface Task {
-	id: string;
-	repo: string;
-	task_code: string;
-	phase: string;
-	title: string;
-	description: string;
-	status: string;
-	priority: number;
-	agent?: string;
-	role?: string;
-	created_at: string;
-	updated_at: string;
-	finished_at?: string;
-	in_progress_at?: string;
-	est_tokens?: number;
-	tags?: string[];
-	metadata?: Record<string, unknown>;
-	parent_id?: string;
-	depends_on?: string;
-	comments?: TaskComment[];
-}
-
-export interface TaskComment {
-	id: string;
-	task_id: string;
-	repo: string;
-	comment: string;
-	agent?: string;
-	role?: string;
-	model?: string;
-	previous_status?: string;
-	next_status?: string;
-	created_at: string;
-}
-
-export interface ReferenceItem {
-	type: "tool" | "prompt" | "resource";
-	data: {
-		name: string;
-		description?: string;
-		inputSchema?: {
-			type: string;
-			properties?: Record<string, { type: string; description?: string }>;
-			required?: string[];
-		};
-		arguments?: Array<{
-			name: string;
-			description?: string;
-			required?: boolean;
-		}>;
-		messages?: Array<{
-			role: string;
-			content: string | { text: string };
-		}>;
-		uri?: string;
-		mimeType?: string;
-	};
-}
-
-export interface DashboardStats {
-	total: number;
-	avgImportance: string;
-	totalHitCount: number;
-	expiringSoon: number;
-	byType: Record<string, number>;
-	taskStats?: {
-		total: number;
-		backlog: number;
-		todo: number;
-		inProgress: number;
-		completed: number;
-		blocked: number;
-	};
-	todayCompleted?: number;
-	todayAdded?: number;
-	todayProcessed?: number;
-	todayTokens?: number;
-	todayAvgDuration?: number;
-	timeSeries?: Record<string, Array<{ date: string; count: number }>>;
-	scatterData?: Array<{ x: number; y: number }>;
-	topMemories?: Memory[];
-}
-
-export interface RecentAction {
-	id: number;
-	action: string;
-	query?: string;
-	response?: string;
-	memory_id?: string;
-	memory_title?: string;
-	memory_type?: string;
-	task_id?: string;
-	task_title?: string;
-	task_code?: string;
-	result_count?: number;
-	created_at: string;
-	burstCount?: number;
-}
-
-export interface ReferenceDataState {
-	tools: ReferenceItem[];
-	prompts: ReferenceItem[];
-	resources: ReferenceItem[];
-}
-
-export interface TaskTimePeriodStats {
-	completed: number;
-	added: number;
-	tokens: number;
-	avgDuration: number;
-	history: Array<{ label: string; created: number; completed: number }>;
-}
-
-export interface TaskTimeStats {
-	daily: TaskTimePeriodStats;
-	weekly: TaskTimePeriodStats;
-	monthly: TaskTimePeriodStats;
-	overall: TaskTimePeriodStats;
-}
+import type {
+	RepoMeta,
+	Memory,
+	Task,
+	DashboardStats,
+	RecentAction,
+	TaskTimeStats,
+	HealthData
+} from "./interfaces";
+import type { Theme } from "./types";
 
 // ─── Stores ─────────────────────────────────────────────────────────────────
 
 // App state
-export const theme = writable<"light" | "dark">("light");
+export const theme = writable<Theme>("light");
 export const activeTab = writable<string>("dashboard");
 export const isLoading = writable<boolean>(false);
 
@@ -200,13 +56,6 @@ export const recentActionsPageSize = writable<number>(25);
 export const drawerTaskId = writable<string | null>(null);
 
 // Connection status
-export interface HealthData {
-	connected: boolean;
-	uptime: number;
-	version: string;
-	memoryCount: number;
-	dbPath: string;
-}
 export const healthData = writable<HealthData | null>(null);
 
 // Derived: ordered repos (pinned first)
@@ -228,7 +77,7 @@ export const memoriesTotalPages = derived([memoriesTotal, memoriesPageSize], ([$
 
 export function initPersistedState() {
 	// Theme
-	const savedTheme = (localStorage.getItem("theme") || "light") as "light" | "dark";
+	const savedTheme = (localStorage.getItem("theme") || "light") as Theme;
 	theme.set(savedTheme);
 	document.documentElement.classList.toggle("dark", savedTheme === "dark");
 
@@ -265,3 +114,7 @@ export function initPersistedState() {
 		localStorage.setItem("activeTab", v);
 	});
 }
+
+// Re-export types for backward compatibility if needed, but better to update imports
+export * from "./interfaces";
+export * from "./types";
