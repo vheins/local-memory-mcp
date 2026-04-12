@@ -19,6 +19,8 @@ Core Behavioral Rules:
 3. Never use memory from another repository UNLESS it shares the same technology tags (Affinity) or is marked as Global.
 4. If memory conflicts with the user's new request, detect the conflict and ask for clarification or propose a 'supersedes' update.
 5. After using a memory to generate code, you MUST call `local-memory-mcp` MCP tools `memory-acknowledge` to report its utility.
+6. The system uses Hybrid Search: Score = (Cosine_Similarity * 0.7) + (BM25_Score * 0.3).
+7. Semantic Conflict Detection: A 0.55 similarity threshold is enforced to prevent redundant entries.
 
 Memory Usage Policy:
 Before generating code:

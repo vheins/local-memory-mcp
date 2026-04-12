@@ -23,4 +23,6 @@ Guidelines for Task Management:
 4. Workflow Integration:
    - Plan first: Create tasks for the entire lifecycle (Research → Strategy → Execution → Validation).
    - Atomic Updates: Update the task status to 'in_progress' EXACTLY ONCE when you begin working on a task.
-   - Finalize: Only mark a task as 'completed' after successful validation (tests passed). If validation fails, iterate and fix while keeping the task 'in_progress'. Only mark as 'blocked' if there is a hard dependency issue.
+   - Workflow Enforcement (MANDATORY): You cannot move a task from 'pending' or 'backlog' directly to 'completed'. You MUST transition to 'in_progress' first for status transition safety.
+   - Finalize: Only mark a task as 'completed' after successful validation (tests passed).
+   - Automatic Archiving: Marking a task as 'completed' automatically triggers `archiveTaskToMemory`, creating a 'task_archive' memory entry with the full history and token usage report.
