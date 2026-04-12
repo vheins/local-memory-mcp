@@ -1,150 +1,150 @@
-# Ringkasan Spesifikasi Model Context Protocol (MCP) 2025-11-25
+# Summary of Model Context Protocol (MCP) Specification 2025-11-25
 
-Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP versi 2025-11-25, mencakup fitur server, klien, serta aspek keamanan dan transportnya.
+This document is the result of learning and synthesizing the official MCP specification version 2025-11-25, covering server features, client features, as well as security and transport aspects.
 
-## 1. Fitur Server (Server Features)
+## 1. Server Features
 
-### A. Prompts (Templat Instruksi)
-- **Fungsi:** Standarisasi cara server mengekspos templat pesan/instruksi kepada klien.
-- **Persyaratan Teknis:**
-  - Server harus mendeklarasikan kapabilitas `prompts` saat inisialisasi.
-  - Mendukung metode `prompts/list` (dengan paginasi) dan `prompts/get`.
-  - Tipe konten pesan mencakup: teks, gambar, audio (base64-encoded), dan sumber daya tersemat (*embedded resources*).
-- **Kendala Utama:**
-  - **Validasi:** Server wajib memvalidasi argumen prompt sebelum diproses.
-  - **Keamanan:** Implementasi harus waspada terhadap serangan injeksi melalui input prompt.
+### A. Prompts (Instruction Templates)
+- **Function:** Standardizes how servers expose message/instruction templates to clients.
+- **Technical Requirements:**
+  - The server must declare `prompts` capabilities during initialization.
+  - Supports `prompts/list` (with pagination) and `prompts/get` methods.
+  - Message content types include: text, image, audio (base64-encoded), and embedded resources.
+- **Key Constraints:**
+  - **Validation:** The server must validate prompt arguments before processing.
+  - **Security:** Implementations must be wary of injection attacks through prompt inputs.
 
-### B. Resources (Sumber Data)
-- **Fungsi:** Berbagi data (file, skema DB, dll.) sebagai konteks untuk LLM melalui URI unik.
-- **Persyaratan Teknis:**
-  - Mendukung metode `resources/list`, `resources/read`, dan `resources/templates/list`.
-  - Fitur opsional: `subscribe` (langganan perubahan) dan `listChanged` (notifikasi perubahan daftar).
-  - Anotasi sumber daya: `audience` (user/assistant), `priority` (0.0 - 1.0), dan `lastModified`.
-- **Kendala Utama:**
-  - **Skema URI:** Skema `https://` hanya digunakan jika klien bisa mengambil data sendiri. Untuk data internal, gunakan skema kustom atau `file://`.
-  - **Keamanan:** Server wajib memvalidasi semua URI sumber daya dan menerapkan kontrol akses.
+### B. Resources (Data Sources)
+- **Function:** Shares data (files, DB schemas, etc.) as context for the LLM through unique URIs.
+- **Technical Requirements:**
+  - Supports `resources/list`, `resources/read`, and `resources/templates/list` methods.
+  - Optional features: `subscribe` (change subscription) and `listChanged` (list change notification).
+  - Resource annotations: `audience` (user/assistant), `priority` (0.0 - 1.0), and `lastModified`.
+- **Key Constraints:**
+  - **URI Schemes:** The `https://` scheme is only used if the client can fetch the data themselves. For internal data, use custom schemes or `file://`.
+  - **Security:** The server must validate all resource URIs and apply access controls.
 
-### C. Tools (Alat Eksekusi)
-- **Fungsi:** Fungsi yang dapat dipanggil oleh LLM untuk berinteraksi dengan sistem eksternal (API, DB).
-- **Persyaratan Teknis:**
-  - Mendukung metode `tools/list` dan `tools/call`.
-  - Input menggunakan JSON Schema (default versi 2020-12).
-  - Hasil alat dapat berupa konten terstruktur atau tidak terstruktur.
-- **Kendala Utama:**
-  - **Human-in-the-loop:** Sangat disarankan adanya konfirmasi manusia sebelum alat dijalankan (terutama operasi sensitif).
-  - **Penamaan:** Nama alat harus 1-128 karakter, *case-sensitive*, dan hanya menggunakan karakter ASCII tertentu (A-Z, a-z, 0-9, `_`, `-`, `.`).
-  - **Error Handling:** Membedakan antara *Protocol Error* (masalah JSON-RPC) dan *Tool Execution Error* (masalah logika bisnis).
+### C. Tools (Execution Tools)
+- **Function:** Functions that can be called by the LLM to interact with external systems (APIs, DBs).
+- **Technical Requirements:**
+  - Supports `tools/list` and `tools/call` methods.
+  - Inputs use JSON Schema (default version 2020-12).
+  - Tool results can be structured or unstructured content.
+- **Key Constraints:**
+  - **Human-in-the-loop:** Human confirmation is highly recommended before a tool is executed (especially sensitive operations).
+  - **Naming:** Tool names must be 1-128 characters, case-sensitive, and only use specific ASCII characters (A-Z, a-z, 0-9, `_`, `-`, `.`).
+  - **Error Handling:** Distinguish between *Protocol Error* (JSON-RPC issues) and *Tool Execution Error* (business logic issues).
 
-### D. Utilities: Completion (Autolengkap)
-- **Fungsi:** Menyediakan saran autolengkap untuk argumen prompt dan templat sumber daya.
-- **Persyaratan Teknis:**
-  - Metode: `completion/complete`.
-  - Mendukung referensi tipe `ref/prompt` dan `ref/resource`.
-- **Kendala Utama:**
-  - **Limitasi:** Maksimal 100 saran per respons.
-  - **Performa:** Klien harus melakukan *debouncing* pada permintaan yang cepat, dan server harus mengurutkan saran berdasarkan relevansi.
-
----
-
-## 2. Fitur Klien (Client Features)
-
-### A. Roots (Batasan Filesystem)
-- **Fungsi:** Klien mengekspos dan menentukan batas direktori kerja (*workspace roots*) yang dapat diakses oleh server.
-- **Deklarasi Kapabilitas:** Klien wajib mendeklarasikan kapabilitas `roots` pada saat fase *initialization handshake*.
-- **Metode Utama:** `roots/list`. Server dapat mengirimkan permintaan ini ke klien untuk mengambil daftar direktori aktif. Klien wajib mengembalikan _array_ berisi objek `Root`.
-- **Objek Root:** Masing-masing objek `Root` berisi:
-  - `uri` (Wajib): URI yang menunjukkan lokasi direktori (harus menggunakan skema `file://`).
-  - `name` (Opsional): Nama referensi dari direktori tersebut.
-- **Notifikasi Perubahan:** Jika klien mendukung `roots: { listChanged: true }`, klien wajib mengirimkan notifikasi satu arah `notifications/roots/list_changed` kepada server setiap kali struktur atau daftar _workspace root_ berubah.
-- **Kendala Utama:**
-  - **URI:** Saat ini hanya mendukung skema `file://`.
-  - **Keamanan:** Klien harus memvalidasi URI untuk mencegah serangan *path traversal*. Server harus menghormati batasan *root* yang diberikan.
-
-### B. Sampling (Akses LLM)
-- **Fungsi:** Server meminta klien untuk melakukan generasi teks/media dari LLM tanpa perlu kunci API di sisi server.
-- **Persyaratan Teknis:**
-  - Metode: `sampling/createMessage`.
-  - Mendukung preferensi model melalui *hints* (saran nama model) dan prioritas (biaya, kecepatan, kecerdasan).
-  - Mendukung *multi-turn tool loop* (LLM memanggil alat di dalam proses sampling).
-- **Kendala Utama:**
-  - **Integritas Pesan:** Pesan dengan tipe `tool_result` **tidak boleh** dicampur dengan tipe konten lain (teks/gambar) dalam satu pesan yang sama.
-  - **Keamanan:** Harus ada kontrol persetujuan pengguna untuk setiap permintaan sampling.
-
-### C. Elicitation (Permintaan Informasi Pengguna)
-- **Fungsi:** Server meminta informasi tambahan dari pengguna melalui klien.
-- **Mode Operasi:**
-  1. **Form Mode:** Pengumpulan data terstruktur (teks, angka, boolean) menggunakan subset JSON Schema yang dibatasi (hanya objek datar).
-  2. **URL Mode:** Mengarahkan pengguna ke URL eksternal untuk interaksi sensitif (OAuth, pembayaran).
-- **Kendala Utama:**
-  - **Larangan Data Sensitif:** **Dilarang keras** menggunakan *Form Mode* untuk meminta password, kunci API, atau data kartu kredit. Gunakan *URL Mode* untuk hal ini.
-  - **Keamanan URL:** Klien dilarang melakukan *pre-fetch* URL secara otomatis dan harus menampilkan URL lengkap sebelum pengguna memberikan persetujuan.
-  - **Phishing:** Server harus memverifikasi bahwa pengguna yang membuka URL adalah pengguna yang sama yang memicu permintaan (misalnya melalui session cookie).
+### D. Utilities: Completion (Autocomplete)
+- **Function:** Provides autocomplete suggestions for prompt arguments and resource templates.
+- **Technical Requirements:**
+  - Method: `completion/complete`.
+  - Supports `ref/prompt` and `ref/resource` type references.
+- **Key Constraints:**
+  - **Limitations:** Maximum 100 suggestions per response.
+  - **Performance:** Clients should debounce rapid requests, and servers should sort suggestions by relevance.
 
 ---
 
-## 3. Manajemen Siklus Hidup (Lifecycle Management)
+## 2. Client Features
 
-### A. Inisialisasi (Initialization)
-- **Fungsi:** Handshake tiga langkah yang wajib dilakukan sebelum operasi apa pun berjalan.
-- **Tahapan:**
-  1. Klien mengirim request `initialize` dengan kapabilitas dan versinya.
-  2. Server merespons dengan kapabilitas dan konfirmasi protokol versinya.
-  3. Klien wajib merespons balik dengan notifikasi `notifications/initialized`.
-- **Kendala Utama:** Tidak boleh ada _request_ selain `ping` yang dikirim sebelum proses ini berhasil dipertukarkan. Jika ada ketidakcocokan versi, server membalas dengan *Protocol Error* (`-32602`) lalu memutuskan koneksi.
+### A. Roots (Filesystem Boundaries)
+- **Function:** The client exposes and defines workspace directory boundaries (*workspace roots*) that the server can access.
+- **Capability Declaration:** The client must declare `roots` capability during the initialization handshake phase.
+- **Main Method:** `roots/list`. The server can send this request to the client to fetch the list of active directories. The client must return an array of `Root` objects.
+- **Root Object:** Each `Root` object contains:
+  - `uri` (Required): URI pointing to the directory location (must use `file://` scheme).
+  - `name` (Optional): Reference name of the directory.
+- **Change Notification:** If the client supports `roots: { listChanged: true }`, the client must send a one-way `notifications/roots/list_changed` notification to the server whenever the workspace root structure or list changes.
+- **Key Constraints:**
+  - **URI:** Currently only supports the `file://` scheme.
+  - **Security:** The client must validate URIs to prevent path traversal attacks. The server must respect the provided root boundaries.
+
+### B. Sampling (LLM Access)
+- **Function:** The server requests the client to perform text/media generation from the LLM without needing an API key on the server side.
+- **Technical Requirements:**
+  - Method: `sampling/createMessage`.
+  - Supports model preferences through *hints* (model name suggestions) and priorities (cost, speed, intelligence).
+  - Supports *multi-turn tool loop* (LLM calling tools within the sampling process).
+- **Key Constraints:**
+  - **Message Integrity:** Messages with `tool_result` type **must not** be mixed with other content types (text/image) within the same message.
+  - **Security:** There must be user approval control for every sampling request.
+
+### C. Elicitation (User Information Requests)
+- **Function:** The server requests additional information from the user through the client.
+- **Operating Modes:**
+  1. **Form Mode:** Structured data collection (text, number, boolean) using a restricted subset of JSON Schema (flat objects only).
+  2. **URL Mode:** Directs the user to an external URL for sensitive interactions (OAuth, payments).
+- **Key Constraints:**
+  - **Sensitive Data Prohibition:** It is **strictly forbidden** to use *Form Mode* to request passwords, API keys, or credit card data. Use *URL Mode* for this.
+  - **URL Security:** Clients are forbidden from auto-prefetching URLs and must display the full URL before the user provides approval.
+  - **Phishing:** The server must verify that the user opening the URL is the same user who triggered the request (e.g., via session cookie).
+
+---
+
+## 3. Lifecycle Management
+
+### A. Initialization
+- **Function:** Mandatory three-step handshake before any operation runs.
+- **Stages:**
+  1. Client sends `initialize` request with capabilities and version.
+  2. Server responds with capabilities and protocol version confirmation.
+  3. Client must respond back with `notifications/initialized` notification.
+- **Key Constraints:** No requests other than `ping` may be sent before this process is successfully exchanged. If there is a version mismatch, the server replies with a *Protocol Error* (`-32602`) and then disconnects.
 
 ### B. Liveness (Ping)
-- **Fungsi:** Mengecek status koneksi secara dua arah (dikirim oleh klien maupun server kapan saja) tanpa menginterupsi jalannya *handshake* atau _request_ utama.
-- **Format Pesan:** *Request* JSON-RPC standar dengan metode `"ping"` tanpa parameter (`"params"` tidak diisi/dikosongkan).
-- **Format Respons:** Pihak yang menerima pesan `ping` WAJIB sesegera mungkin membalas dengan objek JSON-RPC standar yang berisi *result* kosong (`"result": {}`).
-- **Kendala Utama:** Jika respons tidak diterima dalam batas waktu (_timeout_) yang wajar, pengirim BERHAK memutuskan bahwa koneksi telah terputus (stale) dan dapat memutuskan sambungan atau melakukan upaya penyambungan ulang. _Ping_ disarankan rutin namun tidak boleh terlalu sering agar tak membebani komputasi jaringan.
+- **Function:** Bidirectional connection status check (sent by either client or server at any time) without interrupting the handshake or main requests.
+- **Message Format:** Standard JSON-RPC request with `"ping"` method and no parameters (`"params"` is empty/omitted).
+- **Response Format:** The party receiving the `ping` message MUST respond as soon as possible with a standard JSON-RPC object containing an empty result (`"result": {}`).
+- **Key Constraints:** If a response is not received within a reasonable timeout, the sender IS ENTITLED to decide that the connection has gone stale and may disconnect or attempt to reconnect. Routine pings are recommended but should not be too frequent to avoid network overhead.
 
-### C. Pemutusan Koneksi (Disconnection)
-- **Transport Stdio:** Klien harus menutup *input stream* (stdin) dan menunggu server mati dengan mulus sebelum menggunakan instruksi _shutdown_ paksa (seperti SIGTERM/SIGKILL).
-- **Transport HTTP:** Pemutusan secara langsung dilakukan melalui penutupan koneksi web/socket.
-
----
-
-## 4. Spesifikasi Transport (STDIO)
-
-### Aturan Format & Kanal (I/O)
-- **Format Pesan:** Protokol menggunakan JSON-RPC yang wajib di-_encode_ menggunakan **UTF-8**.
-- **Delimitasi Newline:** Setiap pesan JSON wajib dipisahkan oleh satu karakter *newline* (`\n`). Pesan sama sekali tidak boleh mengandung *newline* di dalam *payload* atau datanya (*embedded newlines*).
-- **Kanal Utama:** Server membaca seluruh instruksi dari `stdin` dan mengirim balik respons/notifikasi hanya melalui `stdout`. Server tidak boleh mengirim apa pun ke `stdout` selain pesan JSON-RPC yang valid menurut MCP.
-
-### Penggunaan Stderr
-- **Logging/Error:** Server dapat menggunakan saluran `stderr` untuk mencetak _string_ UTF-8 yang berisi log diagnostik, informasi, maupun _error_.
-- **Asumsi Klien:** Klien tidak boleh mengasumsikan bahwa keluaran pada saluran `stderr` menandakan kerusakan (crash) atau kegagalan protokol secara absolut.
+### C. Disconnection
+- **STDIO Transport:** The client should close the input stream (stdin) and wait for the server to exit gracefully before using forced shutdown instructions (like SIGTERM/SIGKILL).
+- **HTTP Transport:** Direct disconnection is done by closing the web/socket connection.
 
 ---
 
-## 5. Spesifikasi Utilities (Progress & Cancellation)
+## 4. Transport Specification (STDIO)
 
-### A. Pelaporan Kemajuan (Progress: `notifications/progress`)
-- **Fungsi:** Menyediakan pembaruan status atau metrik _progress_ _out-of-band_ untuk _request_ yang membutuhkan waktu komputasi panjang (misalnya pembuatan *embedding* atau ekstraksi data massal).
-- **Mekanisme Klien:** Klien wajib melampirkan atribut `progressToken` (dapat berupa string atau angka) pada objek `_meta` di *request* aslinya.
-- **Mekanisme Server:** Secara berkala, server mengirimkan notifikasi satu arah (`notifications/progress`) kembali ke klien.
-- **Format Pesan:** Parameter wajib meliputi `progressToken` yang sama dan angka `progress` (yang harus selalu naik/meningkat). Parameter opsional meliputi estimasi batas `total` (angka) dan `message` (teks yang bisa dibaca manusia). Notifikasi progres dianggap berakhir secara otomatis ketika server akhirnya memberikan balasan final berupa `result` atau `error` untuk *request* aslinya.
+### Format & Channel Rules (I/O)
+- **Message Format:** The protocol uses JSON-RPC which must be encoded using **UTF-8**.
+- **Newline Delimitation:** Each JSON message must be separated by a single newline character (`\n`). Messages must not contain any newlines within the payload or data (embedded newlines).
+- **Main Channel:** The server reads all instructions from `stdin` and sends back responses/notifications only through `stdout`. The server must not send anything to `stdout` other than valid MCP JSON-RPC messages.
 
-### B. Pembatalan Request (`notifications/cancelled`)
-- **Fungsi:** Memungkinkan klien untuk membatalkan proses *request* yang sedang berlangsung (*in-flight*) di sisi server, menghemat sumber daya sistem (contohnya membatalkan *embedding* vektor atau _query_ database yang memakan waktu lama).
-- **Mekanisme Klien:** Klien mengirimkan notifikasi satu arah dengan nama metode `notifications/cancelled`. Parameter yang wajib ada adalah `requestId` (menunjuk ID dari *request* asli yang ingin dibatalkan), dan klien dapat menyertakan parameter `reason` sebagai alasan opsional.
-- **Mekanisme Server:** Saat menerima notifikasi ini, server akan memicu `AbortController` yang terkait dengan `requestId` tersebut.
-- **Respons:** Proses yang diinterupsi oleh pembatalan ini akan dihentikan secara prematur, dan server **tidak akan** mengirimkan `result` maupun balasan pesan ke klien.
+### Stderr Usage
+- **Logging/Error:** The server can use the `stderr` channel to print UTF-8 strings containing diagnostic logs, information, or errors.
+- **Client Assumption:** The client must not assume that output on the `stderr` channel indicates a crash or absolute protocol failure.
 
 ---
 
-## 6. Spesifikasi Otorisasi (Authorization)
+## 5. Utilities Specification (Progress & Cancellation)
 
-### Status: Tidak Berlaku (Local-First)
-- **Konteks:** Karena server ini beroperasi secara **local-first** menggunakan transport **STDIO** (sebagai subproses IDE seperti Cursor atau VSCode), spesifikasi Otorisasi MCP berbasis OAuth 2.1 **tidak diterapkan**.
-- **Keamanan:** Keamanan akses sepenuhnya dikelola oleh izin sistem file lokal (*local filesystem permissions*) dan kredensial lingkungan (*environment variables*) di mana server dijalankan. Sesuai dengan spesifikasi MCP, transport STDIO tidak diwajibkan (bahkan disarankan untuk tidak) mengimplementasikan protokol otorisasi formal.
+### A. Progress Reporting (`notifications/progress`)
+- **Function:** Provides status updates or progress metrics out-of-band for requests requiring long computation time (e.g., embedding generation or bulk data extraction).
+- **Client Mechanism:** The client must attach a `progressToken` attribute (can be string or number) to the `_meta` object in the original request.
+- **Server Mechanism:** Periodically, the server sends a one-way notification (`notifications/progress`) back to the client.
+- **Message Format:** Mandatory parameters include the same `progressToken` and a `progress` number (which must always increase). Optional parameters include a `total` limit estimate (number) and `message` (human-readable text). Progress notification is considered automatically ended when the server finally provides a final `result` or `error` response for the original request.
+
+### B. Request Cancellation (`notifications/cancelled`)
+- **Function:** Allows the client to cancel in-flight request processes on the server side, saving system resources (e.g., cancelling a long-running vector embedding or database query).
+- **Client Mechanism:** The client sends a one-way notification with method name `notifications/cancelled`. Required parameters are `requestId` (pointing to the ID of the original request to be cancelled), and the client can include a `reason` as an optional parameter.
+- **Server Mechanism:** Upon receiving this notification, the server will trigger the `AbortController` associated with that `requestId`.
+- **Response:** Processes interrupted by this cancellation will be terminated prematurely, and the server **will not** send a `result` or message reply to the client.
 
 ---
 
-## 7. Ringkasan Kendala Teknis & Keamanan Global
+## 6. Authorization Specification
 
-1. **Validasi Ketat:** Semua input (URI, argumen, skema JSON) harus divalidasi oleh kedua belah pihak untuk mencegah eksploitasi (seperti path traversal dan injeksi command).
-2. **Negosiasi Kapabilitas:** Klien dan server harus saling menghormati kapabilitas yang dideklarasikan saat inisialisasi. Tidak boleh mengirim permintaan untuk fitur yang tidak dideklarasikan.
-3. **Privasi & Persetujuan:** Protokol ini sangat menekankan kontrol pengguna (*human-in-the-loop*), terutama untuk eksekusi alat, sampling LLM, dan pengumpulan data sensitif.
-4. **Paginasi:** Untuk daftar yang besar (prompts, resources, tools), implementasi harus mendukung kursor paginasi untuk efisiensi memori dan transport.
-5. **Transport:** MCP dirancang berjalan secara utuh di atas JSON-RPC 2.0 (stdio, SSE, dll.), sehingga setiap request/response harus patuh pada format tersebut, serta memisahkan *protocol error* dari *domain error*.
+### Status: Not Applicable (Local-First)
+- **Context:** Because this server operates **local-first** using **STDIO** transport (as an IDE subprocess like Cursor or VSCode), the OAuth 2.1-based MCP Authorization specification **is not applied**.
+- **Security:** Access security is fully managed by local filesystem permissions and environment variables where the server is run. According to the MCP specification, STDIO transport is not required (and even suggested not) to implement formal authorization protocols.
+
+---
+
+## 7. Summary of Global Technical & Security Constraints
+
+1. **Strict Validation:** All inputs (URIs, arguments, JSON schemas) must be validated by both parties to prevent exploitation (such as path traversal and command injection).
+2. **Capability Negotiation:** Client and server must respect the capabilities declared during initialization. Do not send requests for features that were not declared.
+3. **Privacy & Consent:** The protocol heavily emphasizes user control (human-in-the-loop), especially for tool execution, LLM sampling, and sensitive data collection.
+4. **Pagination:** For large lists (prompts, resources, tools), implementations should support pagination cursors for memory and transport efficiency.
+5. **Transport:** MCP is designed to run entirely on top of JSON-RPC 2.0 (stdio, SSE, etc.), so every request/response must comply with that format, and separate protocol errors from domain errors.
