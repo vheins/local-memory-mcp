@@ -178,7 +178,7 @@ export const api = {
 
 	export: (repo: string) => apiFetch<{ url: string }>(`/api/export?repo=${encodeURIComponent(repo)}`),
 
-	capabilities: () => apiFetch<{ capabilities: string[] }>("/api/capabilities"),
+	capabilities: () => apiFetch<ReferenceDataState>("/api/capabilities"),
 
 	callTool: (name: string, args: Record<string, unknown>) =>
 		apiFetch<{ result: unknown }>(`/api/tools/${encodeURIComponent(name)}/call`, {

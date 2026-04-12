@@ -57,13 +57,14 @@
 
 		<!-- Mobile overlay -->
 		{#if $appState.mobileMenuOpen}
-			<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
 			<div
 				class="drawer-overlay"
 				style="z-index:38;"
 				on:click={() => app.toggleMobileMenu()}
+				on:keydown={(e) => e.key === "Escape" && app.toggleMobileMenu()}
 				role="button"
 				tabindex="0"
+				aria-label="Close menu"
 			></div>
 			<div style="position:fixed;top:0;left:0;width:280px;height:100dvh;z-index:39;display:flex;flex-direction:column;">
 				<RepoSidebar onRepoSelect={app.onRepoSelect} />

@@ -1,17 +1,27 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
 	import type { Readable } from "svelte/store";
+	import type { ReferenceItem } from "../lib/stores";
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	export let handler: any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	export let appState: Readable<any>;
-	export let filteredTools: Readable<any[]>;
-	export let filteredPrompts: Readable<any[]>;
-	export let filteredResources: Readable<any[]>;
+	export let filteredTools: Readable<ReferenceItem[]>;
+	export let filteredPrompts: Readable<ReferenceItem[]>;
+	export let filteredResources: Readable<ReferenceItem[]>;
 
 	$: state = $appState;
 	$: tools = $filteredTools;
 	$: prompts = $filteredPrompts;
 	$: resources = $filteredResources;
+
+	function handleKeydown(e: KeyboardEvent, type: "tool" | "prompt" | "resource", item: ReferenceItem["data"]) {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault();
+			handler.openReferenceDrawer(type, item);
+		}
+	}
 </script>
 
 <div class="animate-fade-in">
@@ -83,10 +93,10 @@
 					</div>
 					<div class="ref-grid">
 						{#each tools as tool}
-							<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
 							<div
 								class="ref-card ref-card-tool animate-fade-in"
-								on:click={() => handler.openReferenceDrawer("tool", tool)}
+								on:click={() => handler.openReferenceDrawer("tool", tool.data)}
+								on:keydown={(e) => handleKeydown(e, "tool", tool.data)}
 								role="button"
 								tabindex="0"
 							>
@@ -96,18 +106,18 @@
 										Tool
 									</span>
 								</div>
-								<div class="ref-card-name">{tool.name}</div>
-								{#if tool.description}
-									<div class="ref-card-desc">{tool.description}</div>
+								<div class="ref-card-name">{tool.data.name}</div>
+								{#if tool.data.description}
+									<div class="ref-card-desc">{tool.data.description}</div>
 								{/if}
-								{#if tool.inputSchema?.properties}
+								{#if tool.data.inputSchema?.properties}
 									<div class="ref-params">
-										{#each Object.entries(tool.inputSchema.properties).slice(0, 4) as [param]}
+										{#each Object.entries(tool.data.inputSchema.properties).slice(0, 4) as [param]}
 											<code class="ref-param-tag">{param}</code>
 										{/each}
-										{#if Object.keys(tool.inputSchema.properties).length > 4}
+										{#if Object.keys(tool.data.inputSchema.properties).length > 4}
 											<code class="ref-param-tag ref-param-more"
-												>+{Object.keys(tool.inputSchema.properties).length - 4}</code
+												>+{Object.keys(tool.data.inputSchema.properties).length - 4}</code
 											>
 										{/if}
 									</div>
@@ -126,10 +136,10 @@
 					</div>
 					<div class="ref-grid">
 						{#each prompts as prompt}
-							<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
 							<div
 								class="ref-card ref-card-prompt animate-fade-in"
-								on:click={() => handler.openReferenceDrawer("prompt", prompt)}
+								on:click={() => handler.openReferenceDrawer("prompt", prompt.data)}
+								on:keydown={(e) => handleKeydown(e, "prompt", prompt.data)}
 								role="button"
 								tabindex="0"
 							>
@@ -139,9 +149,9 @@
 										Prompt
 									</span>
 								</div>
-								<div class="ref-card-name">{prompt.name}</div>
-								{#if prompt.description}
-									<div class="ref-card-desc">{prompt.description}</div>
+								<div class="ref-card-name">{prompt.data.name}</div>
+								{#if prompt.data.description}
+									<div class="ref-card-desc">{prompt.data.description}</div>
 								{/if}
 							</div>
 						{/each}
@@ -157,10 +167,10 @@
 					</div>
 					<div class="ref-grid">
 						{#each resources as resource}
-							<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
 							<div
 								class="ref-card ref-card-resource animate-fade-in"
-								on:click={() => handler.openReferenceDrawer("resource", resource)}
+								on:click={() => handler.openReferenceDrawer("resource", resource.data)}
+								on:keydown={(e) => handleKeydown(e, "resource", resource.data)}
 								role="button"
 								tabindex="0"
 							>
@@ -170,14 +180,14 @@
 										Resource
 									</span>
 								</div>
-								<div class="ref-card-name">{resource.name}</div>
-								{#if resource.description}
-									<div class="ref-card-desc">{resource.description}</div>
+								<div class="ref-card-name">{resource.data.name}</div>
+								{#if resource.data.description}
+									<div class="ref-card-desc">{resource.data.description}</div>
 								{/if}
-								{#if resource.uri}
+								{#if resource.data.uri}
 									<div class="ref-params">
 										<code class="ref-param-tag" style="background:var(--color-bg);border:1px solid var(--color-border);"
-											>{resource.uri}</code
+											>{resource.data.uri}</code
 										>
 									</div>
 								{/if}

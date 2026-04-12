@@ -2,6 +2,7 @@
 	import { onMount, afterUpdate, tick } from "svelte";
 	import { createRecentActionsHandler } from "../lib/composables/useRecentActions";
 	import Icon from "../lib/Icon.svelte";
+	import Markdown from "./Markdown.svelte";
 
 	export let onLoadPage: (page: number, append?: boolean) => Promise<void> = async () => {};
 
@@ -106,7 +107,7 @@
 											? 'max-height: 200px; overflow: hidden; mask-image: linear-gradient(to bottom, black 70%, transparent 100%);'
 											: ''}"
 									>
-										{@html handler.renderMarkdown(parsed.text)}
+										<Markdown content={parsed.text} />
 									</div>
 
 									{#if parsed.isLong}

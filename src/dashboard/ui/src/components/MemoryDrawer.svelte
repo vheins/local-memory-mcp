@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Memory } from "../lib/stores";
-	import { formatDate, renderMarkdown } from "../lib/utils";
+	import { formatDate } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";
+	import Markdown from "./Markdown.svelte";
 	import { createMemoryHandler } from "../lib/composables/useMemory";
 	import { TYPES, TYPE_LABELS, importanceColor, importanceBg } from "../lib/memoryConfig";
 
@@ -20,20 +21,31 @@
 	// Reactivity
 	$: isCreate = memory === null;
 
-	// Reset logic state when drawer opens or memory change
-	$: if (open || memory !== undefined) {
-		if (open) logic.reset(memory);
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === "Escape") onClose();
 	}
 </script>
 
 {#if open}
 	<!-- Backdrop -->
-	<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
-	<div class="drawer-overlay" on:click={onClose} role="button" tabindex="0"></div>
+	<div
+		class="drawer-overlay"
+		on:click={onClose}
+		on:keydown={handleKeyDown}
+		role="button"
+		tabindex="0"
+		aria-label="Close drawer"
+	></div>
 
 	<!-- Slide-over panel -->
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div class="drawer-panel animate-fade-in" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+	<div
+		class="drawer-panel animate-fade-in"
+		on:click|stopPropagation
+		on:keydown={handleKeyDown}
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+	>
 		<!-- ── HEADER ───────────────────────────────────────────────────── -->
 		<div class="mem-header">
 			<div style="flex:1;min-width:0;">
@@ -108,14 +120,16 @@
 				<!-- Content -->
 				<div>
 					<div class="section-label">Content</div>
-					<div class="markdown-body md-card">{@html renderMarkdown(memory.content)}</div>
+					<div class="markdown-body md-card">
+						<Markdown content={memory.content} />
+					</div>
 				</div>
 
 				<!-- Metadata -->
-				{#if (memory as any).metadata && Object.keys((memory as any).metadata).length > 0}
+				{#if memory.metadata && Object.keys(memory.metadata).length > 0}
 					<div style="margin-top:16px;">
 						<div class="section-label">Metadata</div>
-						<pre class="json-pre">{JSON.stringify((memory as any).metadata, null, 2)}</pre>
+						<pre class="json-pre">{JSON.stringify(memory.metadata, null, 2)}</pre>
 					</div>
 				{/if}
 
@@ -200,7 +214,7 @@
 						{#if $previewMode}
 							<div class="markdown-body md-card" style="min-height:200px;">
 								{#if $form.content.trim()}
-									{@html renderMarkdown($form.content)}
+									<Markdown content={$form.content} />
 								{:else}
 									<span style="color:var(--color-text-muted);font-style:italic;">Nothing to preview yet…</span>
 								{/if}

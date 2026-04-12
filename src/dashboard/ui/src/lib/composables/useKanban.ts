@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store";
-import { onMount, onDestroy } from "svelte";
+import { onMount } from "svelte";
 import { api } from "../api";
 import { currentRepo, taskSearch } from "../stores";
 import type { Task } from "../stores";
@@ -190,8 +190,9 @@ export function createKanbanHandler() {
 
 		try {
 			await api.updateTask(draggedTask.id, { status: targetCol });
-		} catch (err) {
-			console.error("Failed to move task:", err);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			console.error("Failed to move task:", message);
 			if (repo) loadTasks(repo, search);
 		}
 	}
@@ -207,8 +208,9 @@ export function createKanbanHandler() {
 			} else {
 				exportToCSV(data.tasks || [], filename + ".csv");
 			}
-		} catch (err: any) {
-			alert("Export failed: " + err.message);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			alert("Export failed: " + message);
 		}
 	}
 
@@ -221,7 +223,7 @@ export function createKanbanHandler() {
 		});
 
 		// Instead of using input event inside html, subscribe to search directly
-		let searchTimeout: any;
+		let searchTimeout: ReturnType<typeof setTimeout>;
 		const unsubSearch = taskSearch.subscribe((search) => {
 			if (initializing) return;
 			const r = get(currentRepo);

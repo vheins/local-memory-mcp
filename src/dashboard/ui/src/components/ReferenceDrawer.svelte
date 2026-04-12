@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { renderMarkdown } from "../lib/utils";
 	import { currentRepo } from "../lib/stores";
+	import type { ReferenceItem } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
+	import Markdown from "./Markdown.svelte";
 	import { createReferenceHandler } from "../lib/composables/useReference";
 
-	export let item: any = null; // { type: 'tool' | 'prompt' | 'resource', data: any }
+	export let item: ReferenceItem | null = null;
 	export let open = false;
 	export let onClose: () => void = () => {};
 
@@ -18,16 +19,27 @@
 	} else {
 		handler.reset();
 	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === "Escape") onClose();
+	}
 </script>
 
 {#if open && $state.item}
-	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-	<div class="drawer-overlay" on:click={(e) => handler.handleOverlayClick(e, onClose)} style="z-index: 100;"></div>
+	<div
+		class="drawer-overlay"
+		on:click={(e) => handler.handleOverlayClick(e, onClose)}
+		on:keydown={handleKeyDown}
+		role="button"
+		tabindex="0"
+		aria-label="Close drawer"
+		style="z-index: 100;"
+	></div>
 
-	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
 	<div
 		class="drawer-panel animate-fade-in"
 		on:click={handler.handlePanelClick}
+		on:keydown={handleKeyDown}
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
@@ -49,7 +61,9 @@
 			{#if $state.item.data.description}
 				<div class="drawer-section">
 					<div class="section-label">Description</div>
-					<div class="markdown-body md-card">{@html renderMarkdown($state.item.data.description)}</div>
+					<div class="markdown-body md-card">
+						<Markdown content={$state.item.data.description} />
+					</div>
 				</div>
 			{/if}
 
@@ -66,7 +80,7 @@
 										>{key}</span
 									>
 									<div style="display:flex; gap: 8px; align-items: center;">
-										<span style="font-size: 0.7rem; color: var(--color-text-muted);">{(param as any).type}</span>
+										<span style="font-size: 0.7rem; color: var(--color-text-muted);">{param.type}</span>
 										{#if $state.item.data.inputSchema.required?.includes(key)}
 											<span
 												style="font-size: 0.6rem; color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.1); padding: 2px 4px; border-radius: 4px;"
@@ -75,11 +89,11 @@
 										{/if}
 									</div>
 								</div>
-								{#if (param as any).description}
+								{#if param.description}
 									<div
 										style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; line-height: 1.2;"
 									>
-										{(param as any).description}
+										{param.description}
 									</div>
 								{/if}
 								<input
@@ -140,7 +154,7 @@
 								</button>
 							</div>
 							<div class="md-card markdown-body" style="padding: 1px 16px;">
-								{@html renderMarkdown("```json\n" + $state.toolResult + "\n```")}
+								<Markdown content={"```json\n" + $state.toolResult + "\n```"} />
 							</div>
 						</div>
 					{/if}
@@ -183,7 +197,9 @@
 							>
 								Role: {msg.role}
 							</div>
-							<div class="markdown-body">{@html renderMarkdown(msg.content?.text || msg.content || "")}</div>
+							<div class="markdown-body">
+								<Markdown content={typeof msg.content === "string" ? msg.content : msg.content.text} />
+							</div>
 						</div>
 					{/each}
 				</div>

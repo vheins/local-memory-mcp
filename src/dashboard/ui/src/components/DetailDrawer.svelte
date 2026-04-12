@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Memory, Task } from "../lib/stores";
-	import { formatDate, getStatusColor, getStatusLabel, getPriorityLabel, renderMarkdown } from "../lib/utils";
+	import { formatDate, getStatusColor, getStatusLabel, getPriorityLabel } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";
+	import Markdown from "./Markdown.svelte";
 	import { createDetailHandler, STATUS_FLOW } from "../lib/composables/useDetail";
 
 	// ─── Props ───────────────────────────────────────────────────────────────────
@@ -22,14 +23,30 @@
 	} else {
 		handler.reset();
 	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === "Escape") onClose();
+	}
 </script>
 
 {#if open && $mode}
-	<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
-	<div class="drawer-overlay" on:click={onClose} role="button" tabindex="0"></div>
+	<div
+		class="drawer-overlay"
+		on:click={onClose}
+		on:keydown={handleKeyDown}
+		role="button"
+		tabindex="0"
+		aria-label="Close drawer"
+	></div>
 
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div class="drawer-panel animate-fade-in" on:click|stopPropagation role="dialog" aria-modal="true" tabindex="-1">
+	<div
+		class="drawer-panel animate-fade-in"
+		on:click|stopPropagation
+		on:keydown={handleKeyDown}
+		role="dialog"
+		aria-modal="true"
+		tabindex="-1"
+	>
 		<!-- ─── HEADER ─────────────────────────────────────────────────────────── -->
 		<div class="drawer-header">
 			{#if $mode === "memory" && $handler.memory}
@@ -51,9 +68,7 @@
 					</div>
 					{#if $handler.editingTitle}
 						<div style="display:flex;gap:6px;align-items:center;">
-							<!-- svelte-ignore a11y-autofocus -->
 							<input
-								autofocus
 								class="form-input"
 								bind:value={$handler.editTitle}
 								style="font-size:0.95rem;font-weight:700;flex:1;"
@@ -71,17 +86,15 @@
 							>
 						</div>
 					{:else}
-						<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
-						<div
+						<button
 							class="drawer-title editable-title"
 							on:click={() => handler.toggleEditTitle(true)}
 							title="Click to edit title"
-							role="button"
-							tabindex="0"
+							style="text-align: left; background: none; border: none; padding: 0; width: 100%; cursor: pointer;"
 						>
 							{$handler.task?.title ?? ""}
 							<span class="edit-hint">✏️</span>
-						</div>
+						</button>
 					{/if}
 				</div>
 			{/if}
@@ -137,7 +150,9 @@
 							/>
 						</button>
 					</div>
-					<div class="markdown-body md-card">{@html renderMarkdown($handler.memory?.content || "")}</div>
+					<div class="markdown-body md-card">
+						<Markdown content={$handler.memory?.content || ""} />
+					</div>
 				</div>
 
 				<!-- Metadata JSON -->
@@ -254,7 +269,9 @@
 							>
 						</div>
 					{:else if $handler.task?.description}
-						<div class="markdown-body md-card">{@html renderMarkdown($handler.task.description)}</div>
+						<div class="markdown-body md-card">
+							<Markdown content={$handler.task.description} />
+						</div>
 					{:else}
 						<div style="color:var(--color-text-muted);font-size:0.82rem;font-style:italic;">
 							No description yet. Click Edit to add one.
@@ -347,7 +364,7 @@
 										</div>
 									{:else}
 										<div class="markdown-body" style="font-size:0.78rem;color:var(--color-text);line-height:1.5;">
-											{@html renderMarkdown(c.comment)}
+											<Markdown content={c.comment} />
 										</div>
 									{/if}
 								</div>

@@ -1,27 +1,29 @@
 <script lang="ts">
 	import { getStatusLabel, getPriorityLabel } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";
+	import type { Task } from "../lib/stores";
 
 	export let open = false;
-	export let newTask: any;
+	export let newTask: Partial<Task>;
 	export let onClose: () => void = () => {};
 	export let onSave: () => void = () => {};
 </script>
 
 {#if open}
-	<!-- svelte-ignore a11y-click-events-have-key-events tabindex-no-interactive-non-semantic-element -->
 	<div
 		class="drawer-overlay"
 		style="display:flex;align-items:center;justify-content:center;z-index:60;"
 		on:click={onClose}
+		on:keydown={(e) => e.key === "Escape" && onClose()}
 		role="button"
 		tabindex="0"
+		aria-label="Close modal"
 	>
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div
 			class="glass card animate-fade-in"
 			style="width:500px;max-width:95vw;border:1px solid var(--color-border);"
 			on:click|stopPropagation
+			on:keydown|stopPropagation
 			role="dialog"
 			aria-modal="true"
 			tabindex="-1"

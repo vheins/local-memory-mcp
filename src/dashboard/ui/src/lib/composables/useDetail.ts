@@ -48,7 +48,7 @@ export function createDetailHandler() {
 		descCopied: false
 	};
 
-	const { subscribe, update, set } = writable<DetailState>(initialState);
+	const { subscribe, update } = writable<DetailState>(initialState);
 
 	const mode = derived({ subscribe }, ($s) => {
 		return $s.task ? "task" : $s.memory ? "memory" : null;
@@ -70,7 +70,7 @@ export function createDetailHandler() {
 		}
 	}
 
-	async function saveField(field: keyof Task, value: any, onUpdated: (task: Task) => void) {
+	async function saveField<K extends keyof Task>(field: K, value: Task[K], onUpdated: (task: Task) => void) {
 		const state = get({ subscribe });
 		if (!state.task) return;
 
@@ -172,8 +172,8 @@ export function createDetailHandler() {
 				await api.deleteTask(state.task.id);
 				onDeleted(state.task.id);
 				onClose();
-			} catch (e: any) {
-				alert("Error deleting task: " + e.message);
+			} catch (e: unknown) {
+				alert("Error deleting task: " + (e instanceof Error ? e.message : String(e)));
 			}
 		}
 	}
@@ -204,7 +204,7 @@ export function createDetailHandler() {
 		setEditTitle: (val: string) => update((s) => ({ ...s, editTitle: val })),
 		setEditDescription: (val: string) => update((s) => ({ ...s, editDescription: val })),
 		setNewComment: (val: string) => update((s) => ({ ...s, newComment: val })),
-		startEditComment: (comment: any) =>
+		startEditComment: (comment: TaskComment) =>
 			update((s) => ({
 				...s,
 				editingCommentId: comment.id,

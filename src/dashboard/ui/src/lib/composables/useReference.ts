@@ -1,9 +1,10 @@
 import { writable, get, derived } from "svelte/store";
 import { api } from "../api";
 import { copyToClipboard } from "../utils";
+import type { ReferenceItem } from "../stores";
 
 export interface ReferenceState {
-	item: any | null;
+	item: ReferenceItem | null;
 	toolArgs: Record<string, string>;
 	toolRunning: boolean;
 	toolResult: string | null;
@@ -28,7 +29,7 @@ export function createReferenceHandler() {
 		return $s.item.type.charAt(0).toUpperCase() + $s.item.type.slice(1);
 	});
 
-	function setItem(item: any, currentRepo: string | null) {
+	function setItem(item: ReferenceItem | null, currentRepo: string | null) {
 		const current = get(state).item;
 		if (current === item) return;
 
@@ -60,7 +61,7 @@ export function createReferenceHandler() {
 		update((s) => ({ ...s, toolRunning: true, toolResult: null, toolError: null }));
 
 		try {
-			const parsedArgs: Record<string, any> = {};
+			const parsedArgs: Record<string, unknown> = {};
 
 			if (item.data.inputSchema?.properties) {
 				for (const [k, v] of Object.entries(stateVal.toolArgs)) {
@@ -75,8 +76,9 @@ export function createReferenceHandler() {
 
 			const result = await api.callTool(item.data.name, parsedArgs);
 			update((s) => ({ ...s, toolResult: JSON.stringify(result, null, 2) }));
-		} catch (e: any) {
-			update((s) => ({ ...s, toolError: e.message }));
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : String(e);
+			update((s) => ({ ...s, toolError: message }));
 		} finally {
 			update((s) => ({ ...s, toolRunning: false }));
 		}

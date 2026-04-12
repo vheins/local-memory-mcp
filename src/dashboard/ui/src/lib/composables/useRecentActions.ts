@@ -1,5 +1,5 @@
-import { writable, get, derived, type Writable } from "svelte/store";
-import { recentActions, recentActionsPage, recentActionsTotalItems, recentActionsPageSize } from "../stores";
+import { writable, get, derived } from "svelte/store";
+import { recentActions, recentActionsPage, recentActionsTotalItems } from "../stores";
 import { renderMarkdown } from "../utils";
 import type { RecentAction } from "../stores";
 
@@ -128,53 +128,57 @@ export function createRecentActionsHandler(onLoadPage: (page: number, append?: b
 
 	function parseResponse(response: string | undefined): { text: string; isLong: boolean } {
 		if (!response) return { text: "", isLong: false };
-		let text = response;
 		try {
 			const r = typeof response === "string" ? JSON.parse(response) : response;
 
 			if (r.content && Array.isArray(r.content)) {
-				text = r.content
-					.filter((c: any) => c.type === "text")
-					.map((c: any) => c.text)
+				const text = r.content
+					.filter((c: { type: string; text?: string }) => c.type === "text" && c.text)
+					.map((c: { text: string }) => c.text)
 					.join("\n");
+				return { text, isLong: text.length > 400 || text.split("\n").length > 8 };
 			} else if (Array.isArray(r)) {
 				if (r.length === 0) {
-					text = "No items found.";
+					return { text: "No items found.", isLong: false };
 				} else {
-					const first = r[0];
-					const isTask = first.task_code || first.task_id;
-					const isMemory = first.memory_id || first.memory_type;
+					const first = r[0] as Partial<Task & Memory>;
+					const isTask = first.task_code || first.id?.startsWith("TASK-");
+					const isMemory = first.title || first.content;
 					const type = isTask ? "task" : isMemory ? "memory" : "item";
 
-					text =
+					const text =
 						`Found ${r.length} ${type}${r.length > 1 ? "s" : ""}:\n` +
 						r
 							.slice(0, 5)
-							.map((item: any) => {
-								const title = item.title || item.task_code || item.name || item.id || "Untitled";
+							.map((item: Record<string, unknown>) => {
+								const title = (item.title as string) || (item.task_code as string) || (item.name as string) || (item.id as string) || "Untitled";
 								return `- ${title}`;
 							})
 							.join("\n") +
 						(r.length > 5 ? `\n... and ${r.length - 5} more` : "");
+					return { text, isLong: text.length > 400 || text.split("\n").length > 8 };
 				}
 			} else if (r.tasks && Array.isArray(r.tasks)) {
-				text =
+				const text =
 					`Found ${r.tasks.length} tasks:\n` +
 					r.tasks
 						.slice(0, 5)
-						.map((t: any) => `- [${t.task_code}] ${t.title}`)
+						.map((t: Task) => `- [${t.task_code}] ${t.title}`)
 						.join("\n") +
 					(r.tasks.length > 5 ? `\n... and ${r.tasks.length - 5} more` : "");
+				return { text, isLong: text.length > 400 || text.split("\n").length > 8 };
 			} else if (r.results && Array.isArray(r.results)) {
-				text =
+				const text =
 					`Found ${r.results.length} results:\n` +
 					r.results
 						.slice(0, 5)
-						.map((m: any) => `- ${m.title || m.content?.substring(0, 40) + "..."}`)
+						.map((m: Memory) => `- ${m.title || m.content?.substring(0, 40) + "..."}`)
 						.join("\n") +
 					(r.results.length > 5 ? `\n... and ${r.results.length - 5} more` : "");
+				return { text, isLong: text.length > 400 || text.split("\n").length > 8 };
 			} else if (typeof r === "object" && r !== null) {
 				const keys = Object.keys(r);
+				let text = "";
 				if (keys.length > 5) {
 					text = `{ ${keys
 						.slice(0, 4)
@@ -183,17 +187,14 @@ export function createRecentActionsHandler(onLoadPage: (page: number, append?: b
 				} else {
 					text = JSON.stringify(r, null, 2);
 				}
+				return { text, isLong: text.length > 400 || text.split("\n").length > 8 };
 			} else {
-				text = String(r);
+				const text = String(r);
+				return { text, isLong: text.length > 400 || text.split("\n").length > 8 };
 			}
 		} catch {
-			text = response;
+			return { text: response, isLong: response.length > 400 || response.split("\n").length > 8 };
 		}
-
-		return {
-			text,
-			isLong: text.length > 400 || text.split("\n").length > 8
-		};
 	}
 
 	const groupedActions = derived(recentActions, ($recentActions) => {

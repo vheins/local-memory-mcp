@@ -44,7 +44,7 @@ const staticRoot = fs.existsSync(path.join(__dirname, "public"))
 
 app.use(express.static(staticRoot));
 
-app.get("*", (req, res, next) => {
+app.use((req, res, next) => {
 	if (req.path.startsWith("/api")) return next();
 	res.sendFile(path.join(staticRoot, "index.html"));
 });

@@ -119,33 +119,36 @@ export function createMemoryHandler() {
 		try {
 			await api.deleteMemory(mem.id);
 			loadMemories();
-		} catch (err: any) {
-			alert("Failed to delete: " + err.message);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			alert("Failed to delete: " + message);
 		}
 	}
 
 	async function handleBulkDelete() {
-		const ids = get(selectedMemoryIds) as Set<string>;
+		const ids = get(selectedMemoryIds);
 		if (ids.size === 0) return;
 		if (!confirm(`Are you sure you want to delete ${ids.size} memories?`)) return;
 		try {
 			await api.bulkMemoryAction("delete", Array.from(ids));
 			selectedMemoryIds.set(new Set());
 			loadMemories();
-		} catch (err: any) {
-			alert("Failed to delete: " + err.message);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			alert("Failed to delete: " + message);
 		}
 	}
 
 	async function handleBulkArchive() {
-		const ids = get(selectedMemoryIds) as Set<string>;
+		const ids = get(selectedMemoryIds);
 		if (ids.size === 0) return;
 		try {
 			await api.bulkMemoryAction("archive", Array.from(ids));
 			selectedMemoryIds.set(new Set());
 			loadMemories();
-		} catch (err: any) {
-			alert("Failed to archive: " + err.message);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			alert("Failed to archive: " + message);
 		}
 	}
 

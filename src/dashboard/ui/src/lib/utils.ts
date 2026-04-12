@@ -103,7 +103,7 @@ export function exportToJSON(data: unknown, filename: string) {
 	URL.revokeObjectURL(url);
 }
 
-export function exportToCSV(data: Record<string, any>[], filename: string) {
+export function exportToCSV(data: Record<string, unknown>[], filename: string) {
 	if (!data.length) return;
 	const keys = Object.keys(data[0]);
 	const csv = [keys.join(","), ...data.map((row) => keys.map((k) => JSON.stringify(row[k] ?? "")).join(","))].join(
@@ -118,9 +118,9 @@ export function exportToCSV(data: Record<string, any>[], filename: string) {
 	URL.revokeObjectURL(url);
 }
 
-export function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+export function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
 	let timer: ReturnType<typeof setTimeout>;
-	return ((...args: any[]) => {
+	return ((...args: unknown[]) => {
 		clearTimeout(timer);
 		timer = setTimeout(() => fn(...args), delay);
 	}) as unknown as T;

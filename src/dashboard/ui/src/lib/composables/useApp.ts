@@ -13,7 +13,7 @@ import {
 	healthData,
 	isRepoSidebarCollapsed
 } from "../stores";
-import type { Memory, Task, RecentAction } from "../stores";
+import type { Memory, Task, RecentAction, RepoMeta, ReferenceItem, ReferenceDataState } from "../stores";
 
 const TABS = [
 	{ id: "dashboard", label: "Dashboard", icon: "layout-dashboard" },
@@ -28,7 +28,7 @@ export interface AppState {
 	selectedMemory: Memory | null;
 	selectedTask: Task | null;
 	drawerOpen: boolean;
-	selectedReference: { type: string; data: any } | null;
+	selectedReference: ReferenceItem | null;
 	referenceDrawerOpen: boolean;
 	memoryDrawerOpen: boolean;
 	memoryDrawerItem: Memory | null;
@@ -36,12 +36,15 @@ export interface AppState {
 	bulkImportTarget: "memories" | "tasks";
 	addTaskModalOpen: boolean;
 	newTask: { task_code: string; title: string; phase: string; description: string; status: string; priority: number };
-	capabilities: { tools: any[]; prompts: any[]; resources: any[] } | null;
+	capabilities: ReferenceDataState | null;
 	referenceSearch: string;
 	referenceFilter: "all" | "tools" | "prompts" | "resources";
 }
 
-export function createAppHandler(refs: { memoryList: { refresh: () => void } | null; kanbanBoard: { loadTasks: (repo: string) => void } | null }) {
+export function createAppHandler(refs: {
+	memoryList: { refresh: () => void } | null;
+	kanbanBoard: { loadTasks: (repo: string) => void } | null;
+}) {
 	const { subscribe, set, update } = writable<AppState>({
 		mobileMenuOpen: false,
 		selectedMemory: null,
@@ -66,7 +69,7 @@ export function createAppHandler(refs: { memoryList: { refresh: () => void } | n
 			availableRepos.set(data.repos || []);
 			if (data.repos?.length > 0) {
 				const saved = localStorage.getItem("selectedRepo");
-				const exists = data.repos.find((r: any) => r.repo === saved);
+				const exists = data.repos.find((r: RepoMeta) => r.repo === saved);
 				const repoToSet = exists ? saved! : data.repos[0].repo;
 				currentRepo.set(repoToSet);
 				localStorage.setItem("selectedRepo", repoToSet);
@@ -166,8 +169,12 @@ export function createAppHandler(refs: { memoryList: { refresh: () => void } | n
 		update((s) => ({ ...s, bulkImportTarget: target, bulkImportOpen: true }));
 	}
 
-	function openReferenceDrawer(itemType: string, data: any) {
-		update((s) => ({ ...s, selectedReference: { type: itemType, data }, referenceDrawerOpen: true }));
+	function openReferenceDrawer(itemType: "tool" | "prompt" | "resource", data: ReferenceItem["data"]) {
+		update((s) => ({
+			...s,
+			selectedReference: { type: itemType, data } as ReferenceItem,
+			referenceDrawerOpen: true
+		}));
 	}
 
 	function openMemoryDrawer(mem: Memory) {
@@ -226,8 +233,9 @@ export function createAppHandler(refs: { memoryList: { refresh: () => void } | n
 				newTask: { task_code: "", title: "", phase: "", description: "", status: "pending", priority: 3 }
 			}));
 			refs.kanbanBoard?.loadTasks(repo);
-		} catch (e: any) {
-			alert("Failed to create task: " + e.message);
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : "Unknown error";
+			alert("Failed to create task: " + message);
 		}
 	}
 
@@ -270,31 +278,31 @@ export function createAppHandler(refs: { memoryList: { refresh: () => void } | n
 
 	const filteredTools = derived({ subscribe }, ($s) => {
 		return ($s.capabilities?.tools || []).filter(
-			(t: any) =>
+			(t: ReferenceItem) =>
 				($s.referenceFilter === "all" || $s.referenceFilter === "tools") &&
 				(!$s.referenceSearch ||
-					t.name.toLowerCase().includes($s.referenceSearch.toLowerCase()) ||
-					(t.description || "").toLowerCase().includes($s.referenceSearch.toLowerCase()))
+					t.data.name.toLowerCase().includes($s.referenceSearch.toLowerCase()) ||
+					(t.data.description || "").toLowerCase().includes($s.referenceSearch.toLowerCase()))
 		);
 	});
 
 	const filteredPrompts = derived({ subscribe }, ($s) => {
 		return ($s.capabilities?.prompts || []).filter(
-			(p: any) =>
+			(p: ReferenceItem) =>
 				($s.referenceFilter === "all" || $s.referenceFilter === "prompts") &&
 				(!$s.referenceSearch ||
-					p.name.toLowerCase().includes($s.referenceSearch.toLowerCase()) ||
-					(p.description || "").toLowerCase().includes($s.referenceSearch.toLowerCase()))
+					p.data.name.toLowerCase().includes($s.referenceSearch.toLowerCase()) ||
+					(p.data.description || "").toLowerCase().includes($s.referenceSearch.toLowerCase()))
 		);
 	});
 
 	const filteredResources = derived({ subscribe }, ($s) => {
 		return ($s.capabilities?.resources || []).filter(
-			(r: any) =>
+			(r: ReferenceItem) =>
 				($s.referenceFilter === "all" || $s.referenceFilter === "resources") &&
 				(!$s.referenceSearch ||
-					r.name.toLowerCase().includes($s.referenceSearch.toLowerCase()) ||
-					(r.description || "").toLowerCase().includes($s.referenceSearch.toLowerCase()))
+					r.data.name.toLowerCase().includes($s.referenceSearch.toLowerCase()) ||
+					(r.data.description || "").toLowerCase().includes($s.referenceSearch.toLowerCase()))
 		);
 	});
 
