@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizeRepo } from "../utils/normalize.js";
+import { normalizeRepo } from "../utils/normalize";
 
 // Shared schema components
 export const MemoryScopeSchema = z.object({

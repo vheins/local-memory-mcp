@@ -3,7 +3,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 
-export async function handleMemoryRecap(params: any, db: SQLiteStore): Promise<McpResponse> {
+export async function handleMemoryRecap(params: Record<string, unknown>, db: SQLiteStore): Promise<McpResponse> {
 	const validated = MemoryRecapSchema.parse(params);
 
 	logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });

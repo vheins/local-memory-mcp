@@ -3,14 +3,14 @@ import { MemoryStoreSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 
 function hasMetadataLikeTitle(title: string): boolean {
 	const normalized = title.trim();
 	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
 }
 
-export async function handleMemoryStore(params: any, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleMemoryStore(params: Record<string, unknown>, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryStoreSchema.parse(params);
 

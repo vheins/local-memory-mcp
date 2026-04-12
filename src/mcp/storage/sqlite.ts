@@ -4,11 +4,11 @@ import fs from "fs";
 import os from "os";
 import { logger } from "../utils/logger";
 import { MigrationManager } from "./migrations";
-import { MemoryEntity } from "../entities/memory.js";
-import { TaskEntity } from "../entities/task.js";
-import { ActionEntity } from "../entities/action.js";
-import { SystemEntity } from "../entities/system.js";
-import { SummaryEntity } from "../entities/summary.js";
+import { MemoryEntity } from "../entities/memory";
+import { TaskEntity } from "../entities/task";
+import { ActionEntity } from "../entities/action";
+import { SystemEntity } from "../entities/system";
+import { SummaryEntity } from "../entities/summary";
 
 /**
  * Resolve database path with following priority:

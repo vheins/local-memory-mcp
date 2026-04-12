@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { BaseEntity } from "../storage/base.js";
+import { BaseEntity } from "../storage/base";
 
 export class ActionEntity extends BaseEntity {
 	constructor(db: Database.Database) {
@@ -13,7 +13,9 @@ export class ActionEntity extends BaseEntity {
 	logAction(
 		action: string,
 		repo: string,
-		optionsOrQuery?: string | { query?: string; response?: string | object; memoryId?: string; taskId?: string; resultCount?: number },
+		optionsOrQuery?:
+			| string
+			| { query?: string; response?: string | object; memoryId?: string; taskId?: string; resultCount?: number },
 		response?: string,
 		memoryId?: string,
 		taskId?: string,
@@ -72,7 +74,11 @@ export class ActionEntity extends BaseEntity {
 			.all(id) as (ActionLogRow & { memory_title?: string; memory_type?: string })[];
 	}
 
-	getRecentActions(repo?: string, limit: number = 10, offset: number = 0): (ActionLogRow & { memory_title?: string; memory_type?: string })[] {
+	getRecentActions(
+		repo?: string,
+		limit: number = 10,
+		offset: number = 0
+	): (ActionLogRow & { memory_title?: string; memory_type?: string })[] {
 		let query = `
       SELECT a.*, m.title as memory_title, m.type as memory_type 
       FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id

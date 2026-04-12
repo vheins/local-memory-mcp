@@ -1,6 +1,6 @@
 import { MemoryUpdateSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
-import { VectorStore } from "../types";
+import { Memory, VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 
@@ -9,7 +9,7 @@ function hasMetadataLikeTitle(title: string): boolean {
 	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
 }
 
-export async function handleMemoryUpdate(params: any, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleMemoryUpdate(params: Record<string, unknown>, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryUpdateSchema.parse(params);
 
@@ -34,7 +34,7 @@ export async function handleMemoryUpdate(params: any, db: SQLiteStore, vectors: 
 	}
 
 	// Update in SQLite
-	const updates: any = {};
+	const updates: Partial<Memory> = {};
 	if (validated.type !== undefined) updates.type = validated.type;
 	if (validated.title !== undefined) updates.title = validated.title;
 	if (validated.content !== undefined) updates.content = validated.content;

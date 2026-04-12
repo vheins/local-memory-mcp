@@ -2,7 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
 import { TaskGetSchema } from "./schemas";
 
-export async function handleTaskGet(args: any, storage: SQLiteStore) {
+export async function handleTaskGet(args: Record<string, unknown>, storage: SQLiteStore) {
 	const { repo, id, task_code } = TaskGetSchema.parse(args);
 
 	let task;

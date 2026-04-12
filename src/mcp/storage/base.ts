@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { tokenize } from "../utils/normalize.js";
-import { MemoryEntry, Task } from "../types.js";
+import { tokenize } from "../utils/normalize";
+import { MemoryEntry, Task } from "../types";
 
 /**
  * Base class for all database entities.

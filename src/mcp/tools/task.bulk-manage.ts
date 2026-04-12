@@ -14,7 +14,7 @@ function deriveTaskStatusTimestamps(status: TaskStatus, now: string) {
 }
 
 export async function handleTaskBulkManage(
-	args: any,
+	args: Record<string, unknown>,
 	storage: SQLiteStore,
 	vectors: VectorStore,
 	onProgress?: (progress: number, total?: number) => void
@@ -89,7 +89,7 @@ export async function handleTaskBulkManage(
 					canceled_at: statusTimestamps.canceled_at,
 					est_tokens: taskData.est_tokens ?? 0,
 					tags: taskData.tags || [],
-					metadata: taskData.metadata || {},
+					metadata: (taskData.metadata as Record<string, unknown>) || {},
 					parent_id: taskData.parent_id || null,
 					depends_on: taskData.depends_on || null
 				};
@@ -171,7 +171,7 @@ export async function handleTaskBulkManage(
 
 				const existingTask = storage.tasks.getTaskById(id);
 				if (existingTask) {
-					const updates: any = {};
+					const updates: Partial<Task> = {};
 					if (status) {
 						updates.status = status;
 						if (status === "completed") {

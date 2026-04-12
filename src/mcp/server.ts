@@ -62,13 +62,13 @@ if (totalArchived > 0) {
 }
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
-process.stdout.on("error", (err: any) => {
-	if (err.code === "EPIPE") return;
+process.stdout.on("error", (err: unknown) => {
+	if ((err as Record<string, unknown>).code === "EPIPE") return;
 	logger.error("stdout error", { error: String(err) });
 });
 
-process.stderr.on("error", (err: any) => {
-	if (err.code === "EPIPE") return;
+process.stderr.on("error", (err: unknown) => {
+	if ((err as Record<string, unknown>).code === "EPIPE") return;
 	logger.error("stderr error", { error: String(err) });
 });
 
@@ -78,8 +78,8 @@ const resourceSubscriptions = new Set<string>();
 let logNotificationsEnabled = false;
 const handleMethod = createRouter(db, vectors, {
 	getSessionContext: () => session,
-	sampleMessage: (params) => requestClient("sampling/createMessage", params) as Promise<any>,
-	elicit: (params) => requestClient("elicitation/create", params) as Promise<any>,
+	sampleMessage: (params) => requestClient("sampling/createMessage", params),
+	elicit: (params) => requestClient("elicitation/create", params),
 	onResourcesMutated: (uris) => notifyUpdatedResources(uris)
 });
 
@@ -123,7 +123,7 @@ const rl = readline.createInterface({
 function reply(payload: unknown) {
 	try {
 		process.stdout.write(JSON.stringify(payload) + "\n");
-	} catch (err: any) {
+	} catch (err: unknown) {
 		// Other errors still logged
 		logger.error("Reply error", { error: String(err) });
 	}
@@ -367,15 +367,16 @@ rl.on("line", async (line) => {
 				result
 			});
 		}
-	} catch (err: any) {
+	} catch (err: unknown) {
 		if (!abortController.signal.aborted) {
-			logger.error("Method handler error", { method, id, message: err.message });
+			const error = err as Error & { code?: number };
+			logger.error("Method handler error", { method, id, message: error.message });
 			reply({
 				jsonrpc: "2.0",
 				id,
 				error: {
-					code: typeof err?.code === "number" ? err.code : -32603,
-					message: err.message || "Internal error"
+					code: typeof error?.code === "number" ? error.code : -32603,
+					message: error.message || "Internal error"
 				}
 			});
 		}

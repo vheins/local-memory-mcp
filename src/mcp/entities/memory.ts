@@ -1,6 +1,5 @@
-import { BaseEntity } from "../storage/base.js";
-import { MemoryEntry, MemoryType } from "../types.js";
-
+import { BaseEntity } from "../storage/base";
+import { MemoryEntry, MemoryType } from "../types";
 
 /**
  * Handles all memory-related database operations.
@@ -358,7 +357,9 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	getSummary(repo: string): { summary: string; updated_at: string } | undefined {
-		return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as { summary: string; updated_at: string } | undefined;
+		return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as
+			| { summary: string; updated_at: string }
+			| undefined;
 	}
 
 	upsertSummary(repo: string, summary: string): void {
@@ -383,7 +384,13 @@ export class MemoryEntity extends BaseEntity {
 		limit?: number;
 		sortBy?: string;
 		sortOrder?: "ASC" | "DESC";
-	}): { items: (MemoryEntry & { recall_rate: number })[]; memories: (MemoryEntry & { recall_rate: number })[]; total: number; limit: number; offset: number } {
+	}): {
+		items: (MemoryEntry & { recall_rate: number })[];
+		memories: (MemoryEntry & { recall_rate: number })[];
+		total: number;
+		limit: number;
+		offset: number;
+	} {
 		const {
 			repo,
 			type,
@@ -398,12 +405,30 @@ export class MemoryEntity extends BaseEntity {
 		} = options;
 		const where = ["1=1"];
 		const params: (string | number)[] = [];
-		if (repo) { where.push("repo = ?"); params.push(repo); }
-		if (type) { where.push("type = ?"); params.push(type); }
-		if (tag) { where.push("tags LIKE ?"); params.push(`%${tag}%`); }
-		if (isGlobal !== undefined) { where.push("is_global = ?"); params.push(isGlobal ? 1 : 0); }
-		if (minImportance !== undefined) { where.push("importance >= ?"); params.push(minImportance); }
-		if (search) { where.push("(title LIKE ? OR content LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+		if (repo) {
+			where.push("repo = ?");
+			params.push(repo);
+		}
+		if (type) {
+			where.push("type = ?");
+			params.push(type);
+		}
+		if (tag) {
+			where.push("tags LIKE ?");
+			params.push(`%${tag}%`);
+		}
+		if (isGlobal !== undefined) {
+			where.push("is_global = ?");
+			params.push(isGlobal ? 1 : 0);
+		}
+		if (minImportance !== undefined) {
+			where.push("importance >= ?");
+			params.push(minImportance);
+		}
+		if (search) {
+			where.push("(title LIKE ? OR content LIKE ?)");
+			params.push(`%${search}%`, `%${search}%`);
+		}
 
 		const countSql = `SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`;
 		const total = (this.db.prepare(countSql).get(...params) as { count: number }).count;
@@ -523,4 +548,4 @@ export class MemoryEntity extends BaseEntity {
 	}
 }
 
-import { MemoryRow, VectorStore } from "../storage/base.js";
+import { MemoryRow, VectorStore } from "../storage/base";

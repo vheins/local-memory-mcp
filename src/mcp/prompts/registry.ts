@@ -1,7 +1,8 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { SessionContext, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
-import { loadPromptFromMarkdown, listPromptFiles, LoadedPrompt } from "./loader";
+import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
+import type { LoadedPrompt } from "../interfaces";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
 
 function createPromptDefinition(loaded: LoadedPrompt) {
@@ -22,7 +23,23 @@ function createPromptDefinition(loaded: LoadedPrompt) {
 	};
 }
 
-export const PROMPTS: Record<string, any> = {};
+interface PromptMessage {
+	role: "user" | "assistant";
+	content: {
+		type: "text";
+		text: string;
+	};
+}
+
+interface PromptDefinition {
+	name: string;
+	description: string;
+	arguments: Record<string, unknown>[];
+	agent?: string;
+	messages: PromptMessage[];
+}
+
+export const PROMPTS: Record<string, PromptDefinition> = {};
 
 // Dynamically discover and load all prompts from the definitions directory
 const promptFiles = listPromptFiles();
@@ -78,7 +95,7 @@ export async function getPrompt(
 	const inferredRepo = inferRepoFromSession(session);
 
 	// Substitute arguments in messages
-	const messages = prompt.messages.map((m: any) => {
+	const messages = prompt.messages.map((m: PromptMessage) => {
 		let text = m.content.text;
 
 		// Standard arguments
@@ -113,10 +130,12 @@ export async function completePromptArgument(
 	argName: string,
 	value: string,
 	contextArguments: Record<string, unknown>,
-	dataSources: any
+	dataSources: { tasks: { id: string }[] }
 ) {
+	void name;
+	void contextArguments;
 	if (argName === "task_id") {
-		const values = dataSources.tasks.map((t: any) => t.id);
+		const values = dataSources.tasks.map((t) => t.id);
 		return rankCompletionValues(values, value);
 	}
 

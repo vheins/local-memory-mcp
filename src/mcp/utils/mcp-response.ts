@@ -49,11 +49,11 @@ export type McpResponse = {
 };
 
 export function createMcpResponse(
-	data: any,
+	data: unknown,
 	summary: string,
 	options?: {
 		query?: string;
-		results?: any[];
+		results?: unknown[];
 		structuredContentPathHint?: string;
 		contentSummary?: string;
 		includeSerializedStructuredContent?: boolean | "auto";
@@ -81,25 +81,29 @@ export function createMcpResponse(
 	let finalData = data;
 	if (data && typeof data === "object") {
 		// Clone to avoid mutation
-		finalData = JSON.parse(JSON.stringify(data));
+		const cloned = JSON.parse(JSON.stringify(data));
+		finalData = cloned;
 
 		// Prune known memory/task arrays if found in the data structure
 		const arrayKeys = ["results", "tasks", "memories", "items"];
 		let foundArray = false;
 
 		for (const key of arrayKeys) {
-			if (Array.isArray(finalData[key])) {
-				finalData[key] = finalData[key].map((item: any) => pruneMetadata(item));
+			const value = (cloned as Record<string, unknown>)[key];
+			if (Array.isArray(value)) {
+				(cloned as Record<string, unknown>)[key] = value.map((item: unknown) =>
+					pruneMetadata(item as Record<string, unknown>)
+				);
 				foundArray = true;
 			}
 		}
 
 		// If it's a direct array, prune it
-		if (Array.isArray(finalData)) {
-			finalData = finalData.map((item: any) => pruneMetadata(item));
+		if (Array.isArray(cloned)) {
+			finalData = cloned.map((item: unknown) => pruneMetadata(item as Record<string, unknown>));
 		} else if (!foundArray) {
 			// If it's just an object (like a single memory), prune it
-			finalData = pruneMetadata(finalData);
+			finalData = pruneMetadata(cloned as Record<string, unknown>);
 		}
 	}
 
@@ -160,7 +164,7 @@ export function createMcpResponse(
 /**
  * Prunes redundant or operational metadata from memory/task objects to save tokens.
  */
-function pruneMetadata(item: any): any {
+function pruneMetadata(item: Record<string, unknown>): Record<string, unknown> {
 	if (!item || typeof item !== "object") return item;
 
 	// Deep clone to avoid mutating original objects (simple but safe for this context)

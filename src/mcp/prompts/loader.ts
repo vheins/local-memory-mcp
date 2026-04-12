@@ -2,18 +2,11 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import matter from "gray-matter";
+import type { LoadedPrompt } from "../interfaces";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROMPT_DIR = path.join(__dirname, "definitions");
-
-export interface LoadedPrompt {
-	name: string;
-	description: string;
-	arguments: any[];
-	content: string;
-	agent?: string;
-}
 
 export function listPromptFiles(): string[] {
 	if (!fs.existsSync(PROMPT_DIR)) return [];

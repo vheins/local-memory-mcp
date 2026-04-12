@@ -1,24 +1,30 @@
-import { BaseEntity } from "../storage/base.js";
-import { MemoryEntry, Task } from "../types.js";
+import { BaseEntity } from "../storage/base";
+import { MemoryEntry, Task } from "../types";
 
 /**
  * Handles system-wide statistics and cross-entity navigation.
  */
 export class SystemEntity extends BaseEntity {
 	listRepos(): string[] {
-		const rows = this.db.prepare("SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks").all() as { repo: string }[];
+		const rows = this.db.prepare("SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks").all() as {
+			repo: string;
+		}[];
 		return rows.map((r) => r.repo);
 	}
 
 	listRepoNavigation(): { repo: string; memoryCount: number; taskCount: number; lastActivity: string | null }[] {
 		const repos = this.listRepos();
 		return repos.map((repo) => {
-			const memoryCount = (this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as { count: number })
-				.count;
-			const taskCount = (this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as { count: number }).count;
+			const memoryCount = (
+				this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as { count: number }
+			).count;
+			const taskCount = (
+				this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as { count: number }
+			).count;
 			const lastActivity = (
 				this.db
-					.prepare(`
+					.prepare(
+						`
         SELECT MAX(created_at) as last FROM (
           SELECT created_at FROM memories WHERE repo = ? 
           UNION ALL 
@@ -26,7 +32,8 @@ export class SystemEntity extends BaseEntity {
           UNION ALL
           SELECT created_at FROM action_log WHERE repo = ?
         )
-      `)
+      `
+					)
 					.get(repo, repo, repo) as { last: string | null }
 			).last;
 
@@ -39,7 +46,12 @@ export class SystemEntity extends BaseEntity {
 		});
 	}
 
-	getDashboardStats(repo: string): { memoryStats: { type: string; count: number }[]; taskStats: { status: string; count: number }[]; recentMemories: MemoryEntry[]; activeTasks: Task[] } {
+	getDashboardStats(repo: string): {
+		memoryStats: { type: string; count: number }[];
+		taskStats: { status: string; count: number }[];
+		recentMemories: MemoryEntry[];
+		activeTasks: Task[];
+	} {
 		const memoryStats = this.db
 			.prepare("SELECT type, COUNT(*) as count FROM memories WHERE repo = ? GROUP BY type")
 			.all(repo) as { type: string; count: number }[];
@@ -47,7 +59,9 @@ export class SystemEntity extends BaseEntity {
 			.prepare("SELECT status, COUNT(*) as count FROM tasks WHERE repo = ? GROUP BY status")
 			.all(repo) as { status: string; count: number }[];
 		const recentMemories = (
-			this.db.prepare("SELECT * FROM memories WHERE repo = ? ORDER BY created_at DESC LIMIT 5").all(repo) as MemoryEntry[]
+			this.db
+				.prepare("SELECT * FROM memories WHERE repo = ? ORDER BY created_at DESC LIMIT 5")
+				.all(repo) as MemoryEntry[]
 		).map((r) => this.rowToMemoryEntry(r));
 		const activeTasks = (
 			this.db
@@ -78,13 +92,16 @@ export class SystemEntity extends BaseEntity {
 	}
 
 	getRepoDetails(repo: string): { repo: string; memoryCount: number; taskCount: number; languages: string[] } {
-		const memoryCount = (this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as { count: number })
-			.count;
-		const taskCount = (this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as { count: number }).count;
+		const memoryCount = (
+			this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as { count: number }
+		).count;
+		const taskCount = (
+			this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as { count: number }
+		).count;
 		const languages = (
-			this.db
-				.prepare("SELECT DISTINCT language FROM memories WHERE repo = ? AND language IS NOT NULL")
-				.all(repo) as { language: string }[]
+			this.db.prepare("SELECT DISTINCT language FROM memories WHERE repo = ? AND language IS NOT NULL").all(repo) as {
+				language: string;
+			}[]
 		).map((r) => r.language);
 
 		return {

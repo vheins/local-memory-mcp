@@ -3,6 +3,7 @@ import { VectorStore } from "../types";
 import {
 	SamplingCreateMessageResult,
 	SamplingRequestHandler,
+	SamplingMessage,
 	extractTextFromContent,
 	extractToolUses
 } from "../sampling";
@@ -23,7 +24,7 @@ type SynthesizeOptions = {
 };
 
 export async function handleMemorySynthesize(
-	params: any,
+	params: unknown,
 	db: SQLiteStore,
 	vectors: VectorStore,
 	options: SynthesizeOptions = {}
@@ -66,7 +67,7 @@ export async function handleMemorySynthesize(
 		.filter(Boolean)
 		.join("\n\n");
 
-	const messages: any[] = [
+	const messages: SamplingMessage[] = [
 		{
 			role: "user",
 			content: {
@@ -290,10 +291,4 @@ async function executeSamplingTool(
 		default:
 			throw new Error(`Unsupported sampling tool: ${toolName}`);
 	}
-}
-
-function formatContentForToolResult(content: any) {
-	if (content.type === "text") return content.text;
-	if (content.type === "resource") return JSON.stringify(content.resource);
-	return JSON.stringify(content);
 }

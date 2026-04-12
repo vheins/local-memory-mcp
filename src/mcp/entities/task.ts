@@ -1,5 +1,5 @@
-import { BaseEntity } from "../storage/base.js";
-import { Task, TaskComment, TaskStats } from "../types.js";
+import { BaseEntity } from "../storage/base";
+import { Task, TaskComment, TaskStats } from "../types";
 
 /**
  * Handles all task-related database operations.
@@ -373,7 +373,10 @@ export class TaskEntity extends BaseEntity {
 		return stats;
 	}
 
-	getTaskTimeStats(repo: string, period: "daily" | "weekly" | "monthly" | "overall"): { completed: number; tokens: number; avgDuration: number; added: number } {
+	getTaskTimeStats(
+		repo: string,
+		period: "daily" | "weekly" | "monthly" | "overall"
+	): { completed: number; tokens: number; avgDuration: number; added: number } {
 		let dateFilter = "";
 		if (period === "daily") dateFilter = "AND date(COALESCE(finished_at, updated_at)) = date('now')";
 		else if (period === "weekly") dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-7 days')";
@@ -399,11 +402,13 @@ export class TaskEntity extends BaseEntity {
       ${dateFilter}
     `
 			)
-			.get(repo) as {
-			completed_count: number;
-			total_tokens: number;
-			avg_duration_seconds: number;
-		} | undefined;
+			.get(repo) as
+			| {
+					completed_count: number;
+					total_tokens: number;
+					avg_duration_seconds: number;
+			  }
+			| undefined;
 
 		let addedDateFilter = "";
 		if (period === "daily") addedDateFilter = "AND date(created_at) = date('now')";

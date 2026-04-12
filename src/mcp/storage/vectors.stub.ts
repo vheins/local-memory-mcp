@@ -228,6 +228,11 @@ export class StubVectorStore implements VectorStore {
 		}
 	}
 
+	async remove(id: string): Promise<void> {
+		if (!id) return;
+		// Handled by SQL CASCADE
+	}
+
 	async search(query: string, limit: number, repo?: string): Promise<VectorResult[]> {
 		if (limit < 0) return [];
 		if (repo === "never") return [];

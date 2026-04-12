@@ -2,8 +2,8 @@ import { MemorySearchSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, MemoryEntry, VectorResult } from "../types";
 import { logger } from "../utils/logger";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response.js";
-import { expandQuery } from "../utils/query-expander.js";
+import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { expandQuery } from "../utils/query-expander";
 
 const HYBRID_WEIGHTS_VECTOR = {
 	similarity: 0.4,

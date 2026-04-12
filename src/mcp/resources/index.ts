@@ -1,8 +1,9 @@
-import { SQLiteStore } from "../storage/sqlite.js";
-import { SessionContext } from "../session.js";
-import { logger } from "../utils/logger.js";
-import { rankCompletionValues } from "../utils/completion.js";
-import { decodeCursor, encodeCursor } from "../utils/pagination.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { SessionContext } from "../session";
+import { logger } from "../utils/logger";
+import { rankCompletionValues } from "../utils/completion";
+import { decodeCursor, encodeCursor } from "../utils/pagination";
+import type { MemoryEntry, Task } from "../types.js";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -305,7 +306,9 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 						annotations: {
 							audience: ["assistant"],
 							priority: 0.85,
-							lastModified: deriveLastModifiedFromCollection(entries.map((e: any) => e.updated_at || e.created_at))
+							lastModified: deriveLastModifiedFromCollection(
+							entries.map((e: MemoryEntry) => e.updated_at || e.created_at)
+						)
 						}
 					}
 				]
@@ -317,7 +320,7 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 			const status = query.get("status");
 			const priority = query.get("priority");
 
-			let tasks: any[];
+			let tasks: Task[];
 			if (status && status !== "all") {
 				const statuses = status.split(",").map((s) => s.trim());
 				tasks = db.tasks.getTasksByMultipleStatuses(name, statuses);
@@ -328,7 +331,7 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 			if (priority) {
 				const p = Number(priority);
 				if (!isNaN(p)) {
-					tasks = tasks.filter((t: any) => t.priority === p);
+					tasks = tasks.filter((t: Task) => t.priority === p);
 				}
 			}
 
@@ -343,7 +346,7 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 						annotations: {
 							audience: ["assistant"],
 							priority: 0.9,
-							lastModified: deriveLastModifiedFromCollection(tasks.map((t: any) => t.updated_at))
+							lastModified: deriveLastModifiedFromCollection(tasks.map((t: Task) => t.updated_at))
 						}
 					}
 				]
@@ -364,7 +367,7 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 						annotations: {
 							audience: ["assistant"],
 							priority: 0.6,
-							lastModified: deriveLastModifiedFromCollection(actions.map((a: any) => a.created_at))
+							lastModified: deriveLastModifiedFromCollection(actions.map((a) => a.created_at))
 						}
 					}
 				]

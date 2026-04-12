@@ -8,7 +8,7 @@ export const MemoryDeleteSchema = z.object({
 	id: z.string().uuid()
 });
 
-export async function handleMemoryDelete(params: any, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleMemoryDelete(params: Record<string, unknown>, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryDeleteSchema.parse(params);
 

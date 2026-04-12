@@ -11,7 +11,7 @@ export type SessionContext = {
 		name?: string;
 		version?: string;
 	};
-	clientCapabilities?: Record<string, any>;
+	clientCapabilities?: Record<string, unknown>;
 	roots: McpRoot[];
 	supportsRoots: boolean;
 	supportsSampling: boolean;
@@ -33,27 +33,30 @@ export function createSessionContext(): SessionContext {
 	};
 }
 
-export function updateSessionFromInitialize(session: SessionContext, params: any): void {
-	session.clientInfo = params?.clientInfo;
-	session.clientCapabilities = params?.capabilities ?? {};
-	session.supportsRoots = Boolean(params?.capabilities?.roots);
-	session.supportsSampling = Boolean(params?.capabilities?.sampling);
-	session.supportsSamplingTools = Boolean(params?.capabilities?.sampling?.tools);
-	session.supportsElicitation = Boolean(params?.capabilities?.elicitation);
-	session.supportsElicitationForm = supportsElicitationMode(params?.capabilities?.elicitation, "form");
-	session.supportsElicitationUrl = supportsElicitationMode(params?.capabilities?.elicitation, "url");
+export function updateSessionFromInitialize(session: SessionContext, params: Record<string, unknown>): void {
+	const capabilities = (params?.capabilities || {}) as Record<string, unknown>;
+	session.clientInfo = params?.clientInfo as { name?: string; version?: string };
+	session.clientCapabilities = capabilities;
+	session.supportsRoots = Boolean(capabilities.roots);
+	session.supportsSampling = Boolean(capabilities.sampling);
+	session.supportsSamplingTools = Boolean(capabilities.sampling?.tools);
+	session.supportsElicitation = Boolean(capabilities.elicitation);
+	session.supportsElicitationForm = supportsElicitationMode(capabilities.elicitation, "form");
+	session.supportsElicitationUrl = supportsElicitationMode(capabilities.elicitation, "url");
 }
 
-function supportsElicitationMode(capability: any, mode: "form" | "url"): boolean {
+function supportsElicitationMode(capability: unknown, mode: "form" | "url"): boolean {
 	if (!capability || typeof capability !== "object") {
 		return false;
 	}
 
+	const cap = capability as Record<string, unknown>;
+
 	if (mode === "form") {
-		return Object.keys(capability).length === 0 || typeof capability.form === "object";
+		return Object.keys(cap).length === 0 || typeof cap.form === "object";
 	}
 
-	return typeof capability.url === "object";
+	return typeof cap.url === "object";
 }
 
 export function updateSessionRoots(session: SessionContext, roots: McpRoot[]): boolean {
@@ -73,8 +76,9 @@ export function normalizeRoots(roots: unknown): McpRoot[] {
 	for (const root of roots) {
 		if (!root || typeof root !== "object") continue;
 
-		const uri = typeof (root as any).uri === "string" ? (root as any).uri : undefined;
-		const name = typeof (root as any).name === "string" ? (root as any).name : undefined;
+		const r = root as Record<string, unknown>;
+		const uri = typeof r.uri === "string" ? r.uri : undefined;
+		const name = typeof r.name === "string" ? r.name : undefined;
 
 		if (!uri || seen.has(uri)) continue;
 		seen.add(uri);
@@ -84,8 +88,8 @@ export function normalizeRoots(roots: unknown): McpRoot[] {
 	return normalized;
 }
 
-export function extractRootsFromResult(result: any): McpRoot[] {
-	return normalizeRoots(result?.roots);
+export function extractRootsFromResult(result: unknown): McpRoot[] {
+	return normalizeRoots((result as Record<string, unknown>)?.roots);
 }
 
 export function getFilesystemRoots(session?: SessionContext): string[] {
