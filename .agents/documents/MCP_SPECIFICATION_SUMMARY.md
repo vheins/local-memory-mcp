@@ -114,9 +114,15 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 
 ---
 
-## 5. Spesifikasi Utilities (Cancellation)
+## 5. Spesifikasi Utilities (Progress & Cancellation)
 
-### Pembatalan Request (`notifications/cancelled`)
+### A. Pelaporan Kemajuan (Progress: `notifications/progress`)
+- **Fungsi:** Menyediakan pembaruan status atau metrik _progress_ _out-of-band_ untuk _request_ yang membutuhkan waktu komputasi panjang (misalnya pembuatan *embedding* atau ekstraksi data massal).
+- **Mekanisme Klien:** Klien wajib melampirkan atribut `progressToken` (dapat berupa string atau angka) pada objek `_meta` di *request* aslinya.
+- **Mekanisme Server:** Secara berkala, server mengirimkan notifikasi satu arah (`notifications/progress`) kembali ke klien.
+- **Format Pesan:** Parameter wajib meliputi `progressToken` yang sama dan angka `progress` (yang harus selalu naik/meningkat). Parameter opsional meliputi estimasi batas `total` (angka) dan `message` (teks yang bisa dibaca manusia). Notifikasi progres dianggap berakhir secara otomatis ketika server akhirnya memberikan balasan final berupa `result` atau `error` untuk *request* aslinya.
+
+### B. Pembatalan Request (`notifications/cancelled`)
 - **Fungsi:** Memungkinkan klien untuk membatalkan proses *request* yang sedang berlangsung (*in-flight*) di sisi server, menghemat sumber daya sistem (contohnya membatalkan *embedding* vektor atau _query_ database yang memakan waktu lama).
 - **Mekanisme Klien:** Klien mengirimkan notifikasi satu arah dengan nama metode `notifications/cancelled`. Parameter yang wajib ada adalah `requestId` (menunjuk ID dari *request* asli yang ingin dibatalkan), dan klien dapat menyertakan parameter `reason` sebagai alasan opsional.
 - **Mekanisme Server:** Saat menerima notifikasi ini, server akan memicu `AbortController` yang terkait dengan `requestId` tersebut.

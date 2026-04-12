@@ -36,6 +36,13 @@ In compliance with the [MCP Ping Specification](https://modelcontextprotocol.io/
 - **Response Format:** The receiver MUST promptly return a JSON-RPC response with an empty result object (`"result": {}`).
 - **Timeout & Error Handling:** If a response is not received within a reasonable timeout period, the sender MAY consider the connection stale, log the failure, or reset the connection. Frequent but lightweight pinging is recommended to prevent hung processes without causing excessive network/processing overhead.
 
+## Utilities: Progress
+
+In compliance with the [MCP Progress Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/progress), the server supports out-of-band progress notifications for long-running requests:
+- **Progress Token:** Requests may include a `_meta.progressToken` (string or integer) supplied by the client.
+- **Progress Notification:** While processing the request, the server MAY emit `notifications/progress` messages. These notifications MUST include the matching `progressToken`, a strictly increasing `progress` value (number), and MAY optionally include a `total` (number) or a human-readable `message`.
+- **Completion:** Progress tracking ends implicitly when the server returns the final JSON-RPC response (result or error) for the corresponding request.
+
 ## Utilities: Cancellation
 
 In compliance with the [MCP Cancellation Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/cancellation), the server supports aborting in-flight requests:
