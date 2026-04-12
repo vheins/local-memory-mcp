@@ -1,4 +1,14 @@
-import type { Memory, Task, RepoMeta, DashboardStats, RecentAction, TaskTimeStats, HealthData, Pagination, ReferenceDataState } from "./stores";
+import type {
+	Memory,
+	Task,
+	RepoMeta,
+	DashboardStats,
+	RecentAction,
+	TaskTimeStats,
+	HealthData,
+	Pagination,
+	ReferenceDataState
+} from "./stores";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
@@ -53,6 +63,17 @@ function deserialize(body: JsonApiBody | unknown): unknown {
 		const rootKey = firstType ? `${firstType}s` : "data";
 		result[rootKey] = items;
 		return result;
+	}
+
+	// Handle capability type - wrap each nested item with {data} for UI compatibility
+	if ((data as JsonApiItem).type === "capability") {
+		const attr = (data as JsonApiItem).attributes as Record<string, unknown>;
+		const wrapWithData = (arr: unknown[]) => (arr as Array<Record<string, unknown>>).map((item) => ({ data: item }));
+		return {
+			tools: wrapWithData(attr.tools || []),
+			prompts: wrapWithData(attr.prompts || []),
+			resources: wrapWithData(attr.resources || [])
+		};
 	}
 
 	return processItem(data as JsonApiItem);

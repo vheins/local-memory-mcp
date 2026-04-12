@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { TaskEntry, VectorStore } from "../types";
 
 describe("Task Search and Filtering", () => {
-	let db: SQLiteStore;
+	let db: Awaited<ReturnType<typeof createTestStore>>;
 	const REPO = "test-search-repo";
 
 	beforeEach(async () => {
 		// Use in-memory database for testing
-		db = new SQLiteStore(":memory:");
+		db = await createTestStore();
 		const mockVectors = {
 			upsert: async () => {},
 			remove: async () => {},

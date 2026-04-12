@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createRouter } from "../router";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 import { getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
@@ -12,7 +12,7 @@ function getTextContent(result: McpResponse) {
 }
 
 describe("MCP Local Memory - Bulk Task Management", () => {
-	let db: SQLiteStore;
+	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (
 		method: string,
@@ -23,8 +23,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	const REPO = "bulk-test-repo";
 
-	beforeEach(() => {
-		db = new SQLiteStore(":memory:");
+	beforeEach(async () => {
+		db = await createTestStore();
 		vectors = new StubVectorStore(db);
 		router = createRouter(db, vectors);
 	});
@@ -401,7 +401,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 				status: "completed",
 				comment: "Bulk completion test",
 				est_tokens: 500,
-                force: true
+				force: true
 			}
 		});
 
@@ -444,7 +444,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 				repo: REPO,
 				ids: [taskId],
 				status: "in_progress",
-                comment: "Moving to in progress"
+				comment: "Moving to in progress"
 			}
 		});
 

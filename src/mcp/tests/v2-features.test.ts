@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { handleMemoryStore } from "../tools/memory.store";
 import { handleMemorySearch } from "../tools/memory.search";
 import { handleMemoryAcknowledge } from "../tools/memory.acknowledge";
@@ -45,7 +45,7 @@ function makeEntry(overrides: Partial<MemoryEntry> & { repo?: string }): MemoryE
 describe("V2 Enhanced Memory Features", () => {
 	describe("1. Conflict Detection & Supersedes", () => {
 		it("should store memories with the file_claim type", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			const repo = "file-claim-repo";
 
 			const response = await handleMemoryStore(
@@ -68,7 +68,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should store structured metadata on memories", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			const repo = "metadata-repo";
 
 			const response = await handleMemoryStore(
@@ -101,7 +101,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should reject titles that look like embedded metadata", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 
 			await expect(
 				handleMemoryStore(
@@ -124,7 +124,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should reject a new memory if a similar one exists (>0.85) and no supersedes is provided", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			const repo = "conflict-repo";
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo, content: "React frontend" }));
 
@@ -146,7 +146,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should archive old memory when superseded", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			const repo = "supersede-repo";
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo }));
 
@@ -171,14 +171,16 @@ describe("V2 Enhanced Memory Features", () => {
 
 	describe("2. Strict Search Threshold (0.72)", () => {
 		it("should filter out results using dynamic threshold", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			const repo = "threshold-repo";
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo, content: "Target" }));
 			db.memories.insert(makeEntry({ id: VALID_UUID_2, repo, content: "Noisy" }));
 
 			// Adding more memories to force a stricter threshold (> 5 memories)
 			for (let i = 0; i < 5; i++) {
-				db.memories.insert(makeEntry({ id: `00000000-0000-4000-a000-00000000000${i + 3}`, repo, content: "Irrelevant" }));
+				db.memories.insert(
+					makeEntry({ id: `00000000-0000-4000-a000-00000000000${i + 3}`, repo, content: "Irrelevant" })
+				);
 			}
 
 			mockVectors.search = vi.fn().mockResolvedValue([
@@ -198,7 +200,7 @@ describe("V2 Enhanced Memory Features", () => {
 
 	describe("3. Feedback Loop", () => {
 		it("should allow updating memory type to file_claim", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
 
 			await handleMemoryUpdate(
@@ -216,7 +218,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should allow updating memory metadata", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, metadata: { source_agent: "old-agent" } }));
 
 			await handleMemoryUpdate(
@@ -240,7 +242,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should reject metadata-like titles on update", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, title: "Clean title" }));
 
 			await expect(
@@ -258,7 +260,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 
 		it("should increment recall_count on 'used'", async () => {
-			const db = new SQLiteStore(":memory:");
+			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1 }));
 
 			await handleMemoryAcknowledge(

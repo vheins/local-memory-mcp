@@ -1,7 +1,7 @@
 // Feature: memory-mcp-optimization, Property 19: memory://index filter repo
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { readResource, listResourceTemplates, listResources } from "../resources/index";
 import { MemoryEntry } from "../types";
 import { createSessionContext, updateSessionRoots } from "../session";
@@ -33,8 +33,8 @@ function makeEntry(id: string, repo: string): MemoryEntry {
 }
 
 describe("readResource memory://memories", () => {
-	it("returns recent entries when no repo filter", () => {
-		const db = new SQLiteStore(":memory:");
+	it("returns recent entries when no repo filter", async () => {
+		const db = await createTestStore();
 		db.memories.insert(makeEntry("id-1", "repo-a"));
 		db.memories.insert(makeEntry("id-2", "repo-b"));
 
@@ -44,8 +44,8 @@ describe("readResource memory://memories", () => {
 		db.close();
 	});
 
-	it("returns only entries for the specified repo when ?repo=X is given", () => {
-		const db = new SQLiteStore(":memory:");
+	it("returns only entries for the specified repo when ?repo=X is given", async () => {
+		const db = await createTestStore();
 		db.memories.insert(makeEntry("id-a1", "repo-alpha"));
 		db.memories.insert(makeEntry("id-a2", "repo-alpha"));
 		db.memories.insert(makeEntry("id-b1", "repo-beta"));
@@ -60,8 +60,8 @@ describe("readResource memory://memories", () => {
 		db.close();
 	});
 
-	it("returns empty array when repo has no entries", () => {
-		const db = new SQLiteStore(":memory:");
+	it("returns empty array when repo has no entries", async () => {
+		const db = await createTestStore();
 		db.memories.insert(makeEntry("id-1", "repo-a"));
 
 		const result = readResource("repository://nonexistent/memories", db);
@@ -74,15 +74,15 @@ describe("readResource memory://memories", () => {
 	 * Property 19: memory://memories dengan filter repo mengembalikan subset yang benar
 	 * Validates: Requirements 19.1, 19.3
 	 */
-	it("Property 19: all returned entries have repo === queried repo", () => {
-		fc.assert(
-			fc.property(
+	it("Property 19: all returned entries have repo === queried repo", async () => {
+		await fc.assert(
+			fc.asyncProperty(
 				// Generate 2-4 distinct repo names
 				fc.uniqueArray(fc.stringMatching(/^[a-z][a-z0-9-]{2,8}$/), { minLength: 2, maxLength: 4 }),
 				// Generate 1-5 memories per repo
 				fc.integer({ min: 1, max: 5 }),
-				(repos: string[], memoriesPerRepo: number) => {
-					const db = new SQLiteStore(":memory:");
+				async (repos: string[], memoriesPerRepo: number) => {
+					const db = await createTestStore();
 
 					// Insert memories for each repo
 					let counter = 0;
@@ -108,12 +108,12 @@ describe("readResource memory://memories", () => {
 		);
 	});
 
-	it("Property 19 (no filter): returns entries from all repos", () => {
-		fc.assert(
-			fc.property(
+	it("Property 19 (no filter): returns entries from all repos", async () => {
+		await fc.assert(
+			fc.asyncProperty(
 				fc.uniqueArray(fc.stringMatching(/^[a-z][a-z0-9-]{2,8}$/), { minLength: 2, maxLength: 3 }),
-				(repos: string[]) => {
-					const db = new SQLiteStore(":memory:");
+				async (repos: string[]) => {
+					const db = await createTestStore();
 
 					for (const repo of repos) {
 						db.memories.insert(makeEntry(`id-${repo}`, repo));
@@ -188,8 +188,8 @@ describe("MCP resource templates and session resources", () => {
 		expect(templates).toContain("repository://{name}/memories");
 	});
 
-	it("returns active session roots as a concrete resource", () => {
-		const db = new SQLiteStore(":memory:");
+	it("returns active session roots as a concrete resource", async () => {
+		const db = await createTestStore();
 		const session = createSessionContext();
 		updateSessionRoots(session, [
 			{ uri: "file:///workspace/project-a", name: "project-a" },
@@ -204,8 +204,8 @@ describe("MCP resource templates and session resources", () => {
 		db.close();
 	});
 
-	it("adds annotations and size metadata to concrete resource content", () => {
-		const db = new SQLiteStore(":memory:");
+	it("adds annotations and size metadata to concrete resource content", async () => {
+		const db = await createTestStore();
 		const result = readResource("repository://repo-a/summary", db);
 		const content = result.contents[0];
 
@@ -214,8 +214,8 @@ describe("MCP resource templates and session resources", () => {
 		db.close();
 	});
 
-	it("throws MCP resource not found error code for unknown resources", () => {
-		const db = new SQLiteStore(":memory:");
+	it("throws MCP resource not found error code for unknown resources", async () => {
+		const db = await createTestStore();
 
 		expect(() => readResource("memory://missing/resource", db)).toThrowError(/Unknown resource URI/);
 

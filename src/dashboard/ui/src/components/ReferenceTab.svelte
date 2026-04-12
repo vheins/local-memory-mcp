@@ -184,7 +184,7 @@
 								{#if resource?.data?.description}
 									<div class="ref-card-desc">{resource.data.description}</div>
 								{/if}
-								{#if resource.data.uri}
+								{#if resource?.data?.uri}
 									<div class="ref-params">
 										<code class="ref-param-tag" style="background:var(--color-bg);border:1px solid var(--color-border);"
 											>{resource.data.uri}</code

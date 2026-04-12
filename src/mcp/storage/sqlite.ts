@@ -34,7 +34,16 @@ function resolveDbPath(): string {
 const DB_PATH = resolveDbPath();
 
 let dbPathInstance = "";
-let saveDbFn: (() => void) | null = null;
+let sqlJsReady: Promise<void> | null = null;
+let sqlJsModule: Awaited<ReturnType<typeof initSqlJs>> | null = null;
+
+async function getSqlJs() {
+	if (!sqlJsModule) {
+		sqlJsModule = await initSqlJs();
+	}
+	await sqlJsReady;
+	return sqlJsModule;
+}
 
 function createSaveFunction(db: SqlJsDatabase, dbPath?: string): () => void {
 	return () => {
@@ -46,6 +55,15 @@ function createSaveFunction(db: SqlJsDatabase, dbPath?: string): () => void {
 	};
 }
 
+function warmUpSqlJs() {
+	if (!sqlJsReady) {
+		sqlJsReady = (async () => {
+			sqlJsModule = await initSqlJs();
+		})();
+	}
+	return sqlJsReady;
+}
+
 export class SQLiteStore {
 	public db: SqlJsDatabase;
 	public memories: MemoryEntity;
@@ -53,21 +71,26 @@ export class SQLiteStore {
 	public actions: ActionEntity;
 	public system: SystemEntity;
 	public summaries: SummaryEntity;
+	private _ready: Promise<void>;
 
-	private constructor() {
+	constructor(dbPath?: string) {
+		const finalPath = dbPath ?? DB_PATH;
+		dbPathInstance = finalPath;
+
+		warmUpSqlJs();
+
 		this.db = {} as SqlJsDatabase;
 		this.memories = {} as MemoryEntity;
 		this.tasks = {} as TaskEntity;
 		this.actions = {} as ActionEntity;
 		this.system = {} as SystemEntity;
 		this.summaries = {} as SummaryEntity;
+
+		this._ready = this._init(finalPath);
 	}
 
-	static async create(dbPath?: string): Promise<SQLiteStore> {
-		const finalPath = dbPath ?? DB_PATH;
-		dbPathInstance = finalPath;
-
-		const SQL = await initSqlJs();
+	private async _init(finalPath: string): Promise<void> {
+		const SQL = await getSqlJs();
 
 		let db: SqlJsDatabase;
 		if (finalPath === ":memory:") {
@@ -95,22 +118,27 @@ export class SQLiteStore {
 		const migrator = new MigrationManager(db, saveDb);
 		migrator.migrate();
 
-		const store = Object.create(SQLiteStore.prototype);
-		store.db = db;
-		store.memories = new MemoryEntity(db, saveDb);
-		store.tasks = new TaskEntity(db, saveDb);
-		store.actions = new ActionEntity(db, saveDb);
-		store.system = new SystemEntity(db, saveDb);
-		store.summaries = new SummaryEntity(db, saveDb);
+		Object.assign(this, {
+			db,
+			memories: new MemoryEntity(db, saveDb),
+			tasks: new TaskEntity(db, saveDb),
+			actions: new ActionEntity(db, saveDb),
+			system: new SystemEntity(db, saveDb),
+			summaries: new SummaryEntity(db, saveDb)
+		});
 
 		if (finalPath !== ":memory:") {
 			saveDb();
 		}
+	}
 
-		if (process.env.MCP_SERVER !== "true") {
-			process.stderr.write(`${new Date().toISOString()} [INFO     ] SQLiteStore initialized at ${finalPath}\n`);
-		}
+	async ready(): Promise<void> {
+		await this._ready;
+	}
 
+	static async create(dbPath?: string): Promise<SQLiteStore> {
+		const store = new SQLiteStore(dbPath);
+		await store.ready();
 		return store;
 	}
 
@@ -119,9 +147,12 @@ export class SQLiteStore {
 	}
 
 	close(): void {
-		if (saveDbFn) {
-			saveDbFn();
+		if (this.db && this.db.close) {
+			this.db.close();
 		}
-		this.db.close();
 	}
+}
+
+export async function createTestStore(): Promise<SQLiteStore> {
+	return SQLiteStore.create(":memory:");
 }

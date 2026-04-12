@@ -1,18 +1,21 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createRouter } from "../router"
-import { SQLiteStore } from "../storage/sqlite";
-import { StubVectorStore } from "../storage/vectors.stub"
+import { createRouter } from "../router";
+import { createTestStore } from "../storage/sqlite";
+import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 
 describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
-	let db: SQLiteStore;
+	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
-	let router: (method: string, params: Record<string, unknown>) => Promise<{ structuredContent: Record<string, unknown> }>;
+	let router: (
+		method: string,
+		params: Record<string, unknown>
+	) => Promise<{ structuredContent: Record<string, unknown> }>;
 
 	const REPO = "detail-test-repo";
 
-	beforeEach(() => {
-		db = new SQLiteStore(":memory:");
+	beforeEach(async () => {
+		db = await createTestStore();
 		vectors = new StubVectorStore(db);
 		router = createRouter(db, vectors);
 	});

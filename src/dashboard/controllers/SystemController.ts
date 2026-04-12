@@ -94,11 +94,22 @@ export class SystemController {
 	}
 
 	static getCapabilities(req: express.Request, res: express.Response) {
-		const caps = {
-			tools: TOOL_DEFINITIONS || [],
-			resources: listResources().resources || [],
-			prompts: Object.values(PROMPTS) || []
-		};
+		const tools = (TOOL_DEFINITIONS || []).map((tool) => ({
+			type: "tool",
+			id: tool.name,
+			attributes: tool
+		}));
+		const resources = (listResources().resources || []).map((resource) => ({
+			type: "resource",
+			id: resource.uri,
+			attributes: resource
+		}));
+		const prompts = (Object.values(PROMPTS) || []).map((prompt) => ({
+			type: "prompt",
+			id: prompt.name,
+			attributes: prompt
+		}));
+		const caps = { tools, resources, prompts };
 		res.json(jsonApiRes(caps, "capability"));
 	}
 

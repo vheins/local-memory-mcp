@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
 	import "./app.css";
 	import { activeTab, currentRepo, recentActionsTotalItems, initPersistedState } from "./lib/stores";
 	import { createAppHandler } from "./lib/composables/useApp";
+	import { api } from "./lib/api";
 
 	import RepoSidebar from "./components/RepoSidebar.svelte";
 	import TopBar from "./components/TopBar.svelte";
@@ -41,6 +43,17 @@
 		await app.loadRepos();
 		await app.loadHealth();
 		await app.loadData();
+		const tab = $activeTab;
+		if (tab === "reference") {
+			if (!get(app).capabilities) {
+				try {
+					const cap = await api.capabilities();
+					app.update((curr) => ({ ...curr, capabilities: cap }));
+				} catch (err) {
+					console.error("Failed to load capabilities:", err);
+				}
+			}
+		}
 	});
 </script>
 

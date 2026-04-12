@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createRouter } from "../router";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { RealVectorStore } from "../storage/vectors";
 import type { VectorStore } from "../types";
 import { getPrimaryTextContent } from "../utils/mcp-response";
@@ -9,14 +9,17 @@ import { getPrimaryTextContent } from "../utils/mcp-response";
 vi.setConfig({ testTimeout: 90000 });
 
 describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
-	let db: SQLiteStore;
+	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
-	let router: (method: string, params: Record<string, unknown>) => Promise<{ structuredContent: Record<string, unknown>; contents: Array<{ text: string }> }>;
+	let router: (
+		method: string,
+		params: Record<string, unknown>
+	) => Promise<{ structuredContent: Record<string, unknown>; contents: Array<{ text: string }> }>;
 
 	const REPO = "enterprise-app-v2";
 
-	beforeEach(() => {
-		db = new SQLiteStore(":memory:");
+	beforeEach(async () => {
+		db = await createTestStore();
 		vectors = new RealVectorStore(db);
 		router = createRouter(db, vectors);
 	});

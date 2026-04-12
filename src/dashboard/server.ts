@@ -7,7 +7,7 @@ import { db, mcpClient, logger } from "./lib/context";
 import routes from "./routes/index";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-let pkg = { version: "0.0.0" };
+const pkg = { version: "0.0.0" };
 try {
 	const pkgPath = path.join(__dirname, "../../package.json");
 	if (fs.existsSync(pkgPath)) {

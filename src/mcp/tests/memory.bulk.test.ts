@@ -1,19 +1,22 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createRouter } from "../router";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 import { getPrimaryTextContent } from "../utils/mcp-response";
 
 describe("MCP Local Memory - Bulk Memory Management", () => {
-	let db: SQLiteStore;
+	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
-	let router: (method: string, params: Record<string, unknown>) => Promise<{ structuredContent: Record<string, unknown> }>;
+	let router: (
+		method: string,
+		params: Record<string, unknown>
+	) => Promise<{ structuredContent: Record<string, unknown> }>;
 
 	const REPO = "bulk-mem-repo";
 
-	beforeEach(() => {
-		db = new SQLiteStore(":memory:");
+	beforeEach(async () => {
+		db = await createTestStore();
 		vectors = new StubVectorStore(db);
 		router = createRouter(db, vectors);
 	});

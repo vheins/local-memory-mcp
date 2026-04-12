@@ -208,7 +208,7 @@
 			{#if $state.item.type === "resource"}
 				<div class="drawer-section">
 					<div class="section-label">Details</div>
-					{#if $state.item.data.uri}
+					{#if $state.item?.data?.uri}
 						<div style="font-size: 0.85rem; margin-bottom: 8px;">
 							<span style="color: var(--color-text-muted);">URI:</span>
 							<code

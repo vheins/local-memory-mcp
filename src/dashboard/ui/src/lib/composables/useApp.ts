@@ -340,6 +340,7 @@ export function createAppHandler(refs: {
 		toggleReferenceDrawer,
 		toggleMemoryDrawer,
 		toggleAddTaskModal,
-		toggleBulkImport
+		toggleBulkImport,
+		refs
 	};
 }

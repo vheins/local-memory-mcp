@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
-import { SQLiteStore } from "../storage/sqlite";
+import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 
 describe("Task Pending Limit Refined Validation", () => {
-	let db: SQLiteStore;
+	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let mockVectors: VectorStore;
 	const REPO = "test-repo";
 
-	beforeEach(() => {
-		db = new SQLiteStore(":memory:");
+	beforeEach(async () => {
+		db = await createTestStore();
 		mockVectors = {
 			upsert: vi.fn().mockResolvedValue(undefined),
 			remove: vi.fn().mockResolvedValue(undefined),
