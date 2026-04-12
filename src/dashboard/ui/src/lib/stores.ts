@@ -28,7 +28,7 @@ export interface Memory {
 	last_accessed_at?: string;
 	is_global?: boolean;
 	status?: string;
-	metadata?: Record<string, any>;
+	metadata?: Record<string, unknown>;
 	agent?: string;
 	model?: string;
 }
@@ -50,7 +50,7 @@ export interface Task {
 	in_progress_at?: string;
 	est_tokens?: number;
 	tags?: string[];
-	metadata?: Record<string, any>;
+	metadata?: Record<string, unknown>;
 	parent_id?: string;
 	depends_on?: string;
 	comments?: TaskComment[];
@@ -67,6 +67,30 @@ export interface TaskComment {
 	previous_status?: string;
 	next_status?: string;
 	created_at: string;
+}
+
+export interface ReferenceItem {
+	type: "tool" | "prompt" | "resource";
+	data: {
+		name: string;
+		description?: string;
+		inputSchema?: {
+			type: string;
+			properties?: Record<string, { type: string; description?: string }>;
+			required?: string[];
+		};
+		arguments?: Array<{
+			name: string;
+			description?: string;
+			required?: boolean;
+		}>;
+		messages?: Array<{
+			role: string;
+			content: string | { text: string };
+		}>;
+		uri?: string;
+		mimeType?: string;
+	};
 }
 
 export interface DashboardStats {
@@ -88,9 +112,9 @@ export interface DashboardStats {
 	todayProcessed?: number;
 	todayTokens?: number;
 	todayAvgDuration?: number;
-	timeSeries?: Record<string, any>;
-	scatterData?: any[];
-	topMemories?: any[];
+	timeSeries?: Record<string, Array<{ date: string; count: number }>>;
+	scatterData?: Array<{ x: number; y: number }>;
+	topMemories?: Memory[];
 }
 
 export interface RecentAction {
@@ -107,6 +131,12 @@ export interface RecentAction {
 	result_count?: number;
 	created_at: string;
 	burstCount?: number;
+}
+
+export interface ReferenceDataState {
+	tools: ReferenceItem[];
+	prompts: ReferenceItem[];
+	resources: ReferenceItem[];
 }
 
 export interface TaskTimePeriodStats {
