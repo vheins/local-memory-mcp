@@ -24,8 +24,8 @@ if (process.argv.includes("doctor")) {
 	process.stderr.write(`📄 Database Status: ${fs.existsSync(dbPath) ? "✅ Exists" : "❌ Not Found"}\n`);
 
 	try {
-		const stats = db.system.getStats();
-		process.stderr.write(`📊 Memory Count: ${stats.total} entries\n`);
+		const stats = db.system.getGlobalStats();
+		process.stderr.write(`📊 Memory Count: ${stats.totalMemories} entries\n`);
 		process.stderr.write(`✅ SQLite Connection: Functional\n`);
 	} catch (err) {
 		process.stderr.write(`❌ SQLite Connection: Failed (${String(err)})\n`);

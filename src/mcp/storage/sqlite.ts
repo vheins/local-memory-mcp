@@ -78,7 +78,7 @@ export class SQLiteStore {
 		this.system = new SystemEntity(this.db);
 		this.summaries = new SummaryEntity(this.db);
 
-		logger.info(`SQLiteStore initialized at ${finalPath}`);
+		process.stderr.write(`${new Date().toISOString()} [INFO     ] SQLiteStore initialized at ${finalPath}\n`);
 	}
 
 	/**
