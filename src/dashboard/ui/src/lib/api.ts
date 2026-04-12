@@ -15,8 +15,14 @@ function deserialize(body: any): any {
   const { data, meta } = body;
   
   const processItem = (item: any) => {
-    if (item.id === 'system' && item.type === 'status') return item.attributes;
-    return { id: item.id, ...item.attributes };
+    const attr = item.attributes || {};
+    // Inject success for status responses
+    if (item.type === 'status' && attr.success === undefined) {
+      attr.success = true;
+    }
+    // Return flat object (preserving ID except for generic 'system' IDs)
+    if (item.id === 'system') return attr;
+    return { id: item.id, ...attr };
   };
 
   if (Array.isArray(data)) {
@@ -24,20 +30,19 @@ function deserialize(body: any): any {
     const result: any = {};
     if (meta) result.pagination = meta;
     
-    // Feature-specific hydration for backward compatibility
-    if (data[0]?.type === 'repository') {
-      return { repos: items.map(i => i.name || i.repo || i.id) };
-    }
+    const firstType = data[0]?.type;
+    // Map JSON:API types to legacy field names
+    if (firstType === 'repository') return { repos: items };
+    if (firstType === 'recent-action') return { ...result, actions: items };
+    if (firstType === 'memory') return { ...result, memories: items };
+    if (firstType === 'task') return { ...result, tasks: items };
     
-    const rootKey = data[0]?.type ? `${data[0].type}s` : 'data';
+    const rootKey = firstType ? `${firstType}s` : 'data';
     result[rootKey] = items;
     return result;
   }
   
-  const item = processItem(data);
-  // Unify successful responses that were previously { success: true, ... }
-  if (data.type === 'status') return { success: true, ...item };
-  return item;
+  return processItem(data);
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
@@ -93,10 +98,10 @@ export const api = {
     apiFetch<any>(`/api/memories/${id}`, { method: 'DELETE' }),
 
   bulkImportMemories: (repo: string, items: any[]) =>
-    apiFetch<any>('/api/memories/bulk-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
+    apiFetch<any>('/api/memories/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
 
   bulkMemoryAction: (action: string, ids: string[], updates?: any) =>
-    apiFetch<any>('/api/memories/bulk-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ids, updates }) }),
+    apiFetch<any>('/api/memories/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ids, updates }) }),
 
   tasks: (params: {
     repo: string;
@@ -132,17 +137,17 @@ export const api = {
     apiFetch<any>(`/api/tasks/${id}`, { method: 'DELETE' }),
 
   bulkImportTasks: (repo: string, items: any[]) =>
-    apiFetch<any>('/api/tasks/bulk-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
+    apiFetch<any>('/api/tasks/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo, items }) }),
 
   updateTaskComment: (id: string, comment: string) =>
-    apiFetch<any>(`/api/task-comments/${id}`, {
+    apiFetch<any>(`/api/tasks/comments/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ comment }),
     }),
 
   deleteTaskComment: (id: string) =>
-    apiFetch<any>(`/api/task-comments/${id}`, { method: 'DELETE' }),
+    apiFetch<any>(`/api/tasks/comments/${id}`, { method: 'DELETE' }),
 
   export: (repo: string) =>
     apiFetch<any>(`/api/export?repo=${encodeURIComponent(repo)}`),
