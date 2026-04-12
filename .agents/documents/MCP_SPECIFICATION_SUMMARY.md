@@ -79,7 +79,27 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 
 ---
 
-## 3. Ringkasan Kendala Teknis & Keamanan Global
+## 3. Manajemen Siklus Hidup (Lifecycle Management)
+
+### A. Inisialisasi (Initialization)
+- **Fungsi:** Handshake tiga langkah yang wajib dilakukan sebelum operasi apa pun berjalan.
+- **Tahapan:**
+  1. Klien mengirim request `initialize` dengan kapabilitas dan versinya.
+  2. Server merespons dengan kapabilitas dan konfirmasi protokol versinya.
+  3. Klien wajib merespons balik dengan notifikasi `notifications/initialized`.
+- **Kendala Utama:** Tidak boleh ada _request_ selain `ping` yang dikirim sebelum proses ini berhasil dipertukarkan. Jika ada ketidakcocokan versi, server membalas dengan *Protocol Error* (`-32602`) lalu memutuskan koneksi.
+
+### B. Liveness (Ping)
+- **Fungsi:** Mengecek status koneksi (`ping`).
+- **Kondisi:** Boleh dikirim oleh klien atau server kapan saja, termasuk saat di pertengahan fase inisialisasi untuk mencegah koneksi hang.
+
+### C. Pemutusan Koneksi (Disconnection)
+- **Transport Stdio:** Klien harus menutup *input stream* (stdin) dan menunggu server mati dengan mulus sebelum menggunakan instruksi _shutdown_ paksa (seperti SIGTERM/SIGKILL).
+- **Transport HTTP:** Pemutusan secara langsung dilakukan melalui penutupan koneksi web/socket.
+
+---
+
+## 4. Ringkasan Kendala Teknis & Keamanan Global
 
 1. **Validasi Ketat:** Semua input (URI, argumen, skema JSON) harus divalidasi oleh kedua belah pihak untuk mencegah eksploitasi (seperti path traversal dan injeksi command).
 2. **Negosiasi Kapabilitas:** Klien dan server harus saling menghormati kapabilitas yang dideklarasikan saat inisialisasi. Tidak boleh mengirim permintaan untuk fitur yang tidak dideklarasikan.

@@ -21,6 +21,14 @@ In compliance with the [MCP Basic Specification](https://modelcontextprotocol.io
 - **Schema Validation:** All input schemas and tools use JSON Schema draft **2020-12** by default. Clients must validate the schema dialect accordingly.
 - **Metadata (`_meta`):** Both requests and notifications may optionally include a `_meta` object for tracking progress or attaching out-of-band metadata.
 
+## Lifecycle Management
+
+In compliance with the [MCP Lifecycle Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle), the server enforces a strict initialization handshake and lifecycle process:
+- **Initialization Handshake:** The connection begins with the client sending an `initialize` request. The server MUST respond with its capabilities. The client MUST then send a `notifications/initialized` notification. No other requests (except `ping`) are permitted before this handshake is complete.
+- **Liveness (Ping):** Both client and server support the `ping` method to verify connection liveness. Pings can be sent at any time, including during initialization.
+- **Disconnection:** On stdio transports, disconnection is handled via process streams. The client gracefully exits by closing the input stream to the server, and the server shuts down gracefully.
+- **Error Handling:** If the protocol version negotiation fails during initialization, the server returns an explicit `-32602` error containing the `supported` and `requested` versions.
+
 ---
 
 ## 1. Tools (Model Control)
