@@ -2,7 +2,6 @@ import { MemoryRecapSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
-import { MemoryEntry } from "../types";
 
 export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promise<McpResponse> {
 	const validated = MemoryRecapSchema.parse(params);
@@ -87,7 +86,7 @@ export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promi
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: false
+		includeSerializedStructuredContent: validated.structured
 	});
 }
 

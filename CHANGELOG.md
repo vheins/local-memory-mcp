@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-04-12
+
+### Fixed
+
+- **Dashboard**: Fixed an issue where running the dashboard script would incorrectly spawn another instance of the dashboard instead of the MCP server, causing a JSON parse error and an endless restart loop.
+
+## [0.7.1] - 2026-04-12
+
+### Fixed
+
+- **Dashboard Reference Tab**: Fixed JSON:API extraction logic to correctly expose tool and resource names to the UI.
+- **Prompts**: Fixed an issue where prompts failed to load in production builds because of chunking-related path resolution.
+
 ## [0.6.3] - 2026-04-12
 
 ### Fixed

@@ -21,7 +21,14 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	beforeEach(async () => {
 		db = await createTestStore();
 		vectors = new RealVectorStore(db);
-		router = createRouter(db, vectors);
+		const rawRouter = createRouter(db, vectors);
+		router = async (method, params) => {
+			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
+			if (method === "tools/call" && args) {
+				args.structured = true;
+			}
+			return rawRouter(method, params) as unknown as Promise<{ structuredContent: Record<string, unknown>; contents: Array<{ text: string }> }>;
+		};
 	});
 
 	/**
@@ -118,7 +125,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			name: "memory-search",
 			arguments: { query: "file upload", repo: REPO, include_archived: true }
 		});
-		expect(auditRes.structuredContent.results.rows.some((r: string[]) => r[0] === mistakeId)).toBe(true);
+		expect((auditRes.structuredContent.results as { rows: unknown[][] }).rows.some((r: unknown[]) => r[0] === mistakeId)).toBe(true);
 	});
 
 	/**

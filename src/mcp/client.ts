@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { MCP_PROTOCOL_VERSION } from "./capabilities";
 import { logger } from "./utils/logger";
@@ -28,7 +29,11 @@ export class MCPClient {
 	async start() {
 		if (this.process) return;
 
-		const serverPath = this.serverPathOverride || path.join(__dirname, "./server.js");
+		const serverPath =
+			this.serverPathOverride ||
+			(fs.existsSync(path.join(__dirname, "../mcp/server.js"))
+				? path.join(__dirname, "../mcp/server.js")
+				: path.join(__dirname, "./server.js"));
 		this.process = spawn("node", [serverPath], {
 			stdio: ["pipe", "pipe", "inherit"]
 		});
@@ -79,7 +84,7 @@ export class MCPClient {
 					}
 				}
 			} catch (err) {
-				logger.error("Failed to parse MCP response", { error: String(err) });
+				logger.error("Failed to parse MCP response", { error: String(err), rawLine: line });
 			}
 		});
 

@@ -1,6 +1,6 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.7.1",
+	"version": "0.7.2",
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
@@ -38,6 +38,7 @@
 		"both": "npm run start & npm run dashboard",
 		"test": "vitest --run",
 		"test:watch": "vitest",
+		"type-check": "tsc --noEmit && svelte-check --tsconfig ./src/dashboard/ui/tsconfig.json",
 		"lint": "eslint . --ext .ts,.svelte",
 		"lint:fix": "eslint . --ext .ts,.svelte --fix",
 		"format": "prettier --write \"src/**/*.{ts,js,svelte}\""

@@ -56,7 +56,7 @@ export function createMcpResponse(
 		results?: unknown[];
 		structuredContentPathHint?: string;
 		contentSummary?: string;
-		includeSerializedStructuredContent?: false;
+		includeSerializedStructuredContent?: boolean;
 		resourceLinks?: Array<{
 			uri: string;
 			name: string;
@@ -74,7 +74,7 @@ export function createMcpResponse(
 		resourceLinks,
 		structuredContentPathHint,
 		contentSummary,
-		includeSerializedStructuredContent = "auto"
+		includeSerializedStructuredContent = true
 	} = options || {};
 	// includeSerializedStructuredContent is reserved for future use in protocol negotiation
 	void includeSerializedStructuredContent;
@@ -111,12 +111,12 @@ export function createMcpResponse(
 
 	const content: McpContent[] = [];
 
-	if (contentSummary?.trim().length) {
+	if (contentSummary && contentSummary.trim().length > 0) {
 		content.push({
 			type: "text",
 			text: contentSummary.trim()
 		});
-	} else if (summary.trim().length > 0) {
+	} else if (summary && summary.trim().length > 0) {
 		const pointerText = structuredContentPathHint
 			? `Read structuredContent.${structuredContentPathHint} for details.`
 			: `Read structuredContent for machine-readable results.`;
@@ -141,6 +141,10 @@ export function createMcpResponse(
 		structuredContent: finalData,
 		isError: false
 	};
+
+	if (includeSerializedStructuredContent === false) {
+		delete response.structuredContent;
+	}
 
 	response.content = content;
 

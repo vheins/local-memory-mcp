@@ -171,8 +171,8 @@
 			</thead>
 			<tbody>
 				{#if memoryHandler.loading}
-					{#each Array(5) as _}
-						<tr>
+					{#each { length: 5 } as _, i (i)}
+						<tr data-index={i}>
 							<td colspan="7" class="mem-td">
 								<div class="skeleton" style="height:20px;border-radius:6px;"></div>
 							</td>

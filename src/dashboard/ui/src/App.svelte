@@ -191,7 +191,7 @@
 						<div class="glass card hover-glow" style="margin-bottom:20px;">
 							<div class="flex items-center gap-2" style="margin-bottom:16px;">
 								<Icon name="columns" size={14} strokeWidth={1.75} />
-								<div class="stat-label">Memory Overview</div>
+								<div class="stat-label">Task Overview</div>
 							</div>
 							<KanbanBoard
 								bind:this={kanbanBoard}

@@ -58,6 +58,6 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: false
+		includeSerializedStructuredContent: isStructuredRequest
 	});
 }

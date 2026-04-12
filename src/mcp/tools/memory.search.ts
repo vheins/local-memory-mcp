@@ -130,23 +130,21 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	}
 
 	let contentSummary: string | undefined;
-	if (!validated.structured) {
-		if (paginatedResults.length > 0) {
-			const parts: string[] = [];
-			for (const [memType, items] of Object.entries(memoriesByType)) {
-				parts.push(`${capitalize(memType)}:`);
-				parts.push("- code|importance|title");
-				for (const m of items) {
-					const code = m.code || "-";
-					parts.push(`- ${code}|${m.importance}|${m.title}`);
-				}
-				parts.push("");
+	if (paginatedResults.length > 0) {
+		const parts: string[] = [];
+		for (const [memType, items] of Object.entries(memoriesByType)) {
+			parts.push(`${capitalize(memType)}:`);
+			parts.push("- code|importance|title");
+			for (const m of items) {
+				const code = m.code || "-";
+				parts.push(`- ${code}|${m.importance}|${m.title}`);
 			}
-			parts.push("Use memory-detail with memory_id (or code) for full content.");
-			contentSummary = parts.join("\n").trim();
-		} else {
-			contentSummary = `No memories found for "${validated.query}" in repo "${validated.repo}".`;
+			parts.push("");
 		}
+		parts.push("Use memory-detail with memory_id (or code) for full content.");
+		contentSummary = parts.join("\n").trim();
+	} else {
+		contentSummary = `No memories found for "${validated.query}" in repo "${validated.repo}".`;
 	}
 
 	const structuredData = {
@@ -162,9 +160,10 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 		}
 	};
 
-	return createMcpResponse(structuredData, contentSummary || "", {
+	return createMcpResponse(structuredData, contentSummary || `Found ${total} memories for "${validated.query}".`, {
 		contentSummary,
-		includeSerializedStructuredContent: false
+		structuredContentPathHint: "results",
+		includeSerializedStructuredContent: validated.structured
 	});
 }
 

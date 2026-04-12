@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { Task, TaskStatus, TaskPriority, VectorStore } from "../types";
-import { inferRepoFromSession, SessionContext } from "../session";
-import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation";
+import { inferRepoFromSession } from "../session";
+import { extractAcceptedElicitationContent } from "../elicitation";
 import { createMcpResponse } from "../utils/mcp-response";
 import {
 	TaskCreateSchema,
@@ -210,7 +210,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: false
+		includeSerializedStructuredContent: isStructuredRequest
 	});
 }
 
@@ -253,6 +253,12 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			}
 
 			const statusTimestamps = deriveTaskStatusTimestamps(normalizedStatus, now);
+			const tags = [...(taskData.tags || [])];
+			const phaseTag = `phase:${taskData.phase}`;
+			if (!tags.includes(phaseTag)) {
+				tags.push(phaseTag);
+			}
+
 			const task: Task = {
 				id: randomUUID(),
 				repo,
@@ -271,7 +277,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				finished_at: statusTimestamps.finished_at,
 				canceled_at: statusTimestamps.canceled_at,
 				est_tokens: taskData.est_tokens ?? 0,
-				tags: taskData.tags || [],
+				tags: tags,
 				metadata: (taskData.metadata as Record<string, unknown>) || {},
 				parent_id: taskData.parent_id || null,
 				depends_on: taskData.depends_on || null
@@ -325,6 +331,12 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	const taskId = randomUUID();
 	const now = new Date().toISOString();
 	const statusTimestamps = deriveTaskStatusTimestamps((status || "backlog") as TaskStatus, now);
+	const finalTags = [...(singleTask.tags || [])];
+	const phaseTag = `phase:${phase}`;
+	if (!finalTags.includes(phaseTag)) {
+		finalTags.push(phaseTag);
+	}
+
 	const task: Task = {
 		id: taskId,
 		repo,
@@ -343,7 +355,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		finished_at: statusTimestamps.finished_at,
 		canceled_at: statusTimestamps.canceled_at,
 		est_tokens: est_tokens ?? 0,
-		tags: tags || [],
+		tags: finalTags,
 		metadata: metadata || {},
 		parent_id: parent_id || null,
 		depends_on: depends_on || null
@@ -514,10 +526,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			if (!comment || comment.trim() === "") {
 				throw new Error("comment is required when changing task status");
 			}
-			if (
-				(existingTask.status === "backlog" || existingTask.status === "pending" || existingTask.status === "blocked") &&
-				updates.status === "completed"
-			) {
+			
+			const isStartable = existingTask.status === "backlog" || existingTask.status === "pending" || existingTask.status === "blocked";
+			
+			if (isStartable && updates.status === "completed") {
 				throw new Error(
 					`Cannot transition task ${targetId} from '${existingTask.status}' directly to 'completed'. Must be 'in_progress' first.`
 				);
@@ -533,6 +545,23 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		}
 
 		const finalUpdates: Record<string, unknown> = { ...updates };
+		
+		if (updates.phase !== undefined || updates.tags !== undefined) {
+			let currentTags = updates.tags || existingTask.tags || [];
+			// Remove any existing phase: tags
+			currentTags = currentTags.filter(t => !t.startsWith("phase:"));
+			
+			// Add new phase: tag if phase exists
+			const finalPhase = updates.phase !== undefined ? updates.phase : existingTask.phase;
+			if (finalPhase) {
+				const phaseTag = `phase:${finalPhase}`;
+				if (!currentTags.includes(phaseTag)) {
+					currentTags.push(phaseTag);
+				}
+			}
+			finalUpdates.tags = currentTags;
+		}
+
 		if (updates.status === "completed") finalUpdates.finished_at = now;
 		else if (updates.status === "canceled") finalUpdates.canceled_at = now;
 		else if (updates.status === "in_progress" && existingTask.status !== "in_progress")

@@ -15,7 +15,14 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 	beforeEach(async () => {
 		db = await createTestStore();
 		vectors = new StubVectorStore(db);
-		router = createRouter(db, vectors);
+		const rawRouter = createRouter(db, vectors);
+		router = async (method, params) => {
+			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
+			if (method === "tools/call" && args) {
+				args.structured = true;
+			}
+			return rawRouter(method, params);
+		};
 	});
 
 	it("should follow the complete task management lifecycle: Plan -> Execute -> Verify", async () => {

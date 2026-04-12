@@ -17,7 +17,14 @@ describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
 	beforeEach(async () => {
 		db = await createTestStore();
 		vectors = new StubVectorStore(db);
-		router = createRouter(db, vectors);
+		const rawRouter = createRouter(db, vectors);
+		router = async (method, params) => {
+			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
+			if (method === "tools/call" && args) {
+				args.structured = true;
+			}
+			return rawRouter(method, params) as unknown as Promise<{ structuredContent: Record<string, unknown> }>;
+		};
 	});
 
 	it("should fetch memory details by ID via memory-detail", async () => {

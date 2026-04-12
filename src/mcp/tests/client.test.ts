@@ -93,7 +93,7 @@ describe("Property 17: MCPClient retry maksimal 3 kali dengan exponential backof
 				process: unknown;
 			};
 
-			client.callOnce = async (_method: string, _params: unknown): Promise<unknown> => {
+			client.callOnce = async (): Promise<unknown> => {
 				callOnceCount++;
 				throw new Error("Request timeout");
 			};
@@ -126,7 +126,7 @@ describe("Property 17: MCPClient retry maksimal 3 kali dengan exponential backof
 				process: unknown;
 			};
 
-			client.callOnce = async (_method: string, _params: unknown): Promise<unknown> => {
+			client.callOnce = async (): Promise<unknown> => {
 				callOnceCount++;
 				throw new Error("Some other error");
 			};

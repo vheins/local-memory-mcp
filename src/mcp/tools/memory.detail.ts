@@ -3,7 +3,8 @@ import { createMcpResponse } from "../utils/mcp-response";
 import { MemoryDetailSchema } from "./schemas";
 
 export async function handleMemoryDetail(args: Record<string, unknown>, storage: SQLiteStore) {
-	const { id, code } = MemoryDetailSchema.parse(args);
+	const validated = MemoryDetailSchema.parse(args);
+	const { id, code } = validated;
 
 	let memory;
 	if (id) {
@@ -37,6 +38,6 @@ export async function handleMemoryDetail(args: Record<string, unknown>, storage:
 
 	return createMcpResponse(memory, content, {
 		contentSummary: content,
-		includeSerializedStructuredContent: false
+		includeSerializedStructuredContent: validated.structured
 	});
 }

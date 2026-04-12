@@ -189,13 +189,13 @@ describe("V2 Enhanced Memory Features", () => {
 				{ id: "00000000-0000-4000-a000-000000000003", score: 0.1 }
 			]);
 
-			const params = { query: "Target", repo };
+			const params = { query: "Target", repo, structured: true };
 			const response = await handleMemorySearch(params, db, mockVectors);
 
 			// New tabular format
-			const results = response.structuredContent as any;
+			const results = response.structuredContent as Record<string, unknown>;
 			expect(results.count).toBe(1);
-			expect(getPrimaryTextContent(response)).toContain("Use memory-detail");
+			expect(getPrimaryTextContent(response)).toContain("Use memory-detail with memory_id (or code) for full content.");
 			db.close();
 		});
 	});

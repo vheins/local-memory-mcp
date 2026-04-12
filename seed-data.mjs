@@ -128,7 +128,7 @@ async function main() {
 
     for (const memory of memories) {
       try {
-        const _result = await call("tools/call", {
+        await call("tools/call", {
           name: "memory.store",
           arguments: memory
         });

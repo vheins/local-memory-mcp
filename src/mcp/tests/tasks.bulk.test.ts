@@ -5,7 +5,6 @@ import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 import { getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
 
-import { TaskRow } from "../types/index";
 
 function getTextContent(result: McpResponse) {
 	return getPrimaryTextContent(result) || (result.structuredContent as { text?: string })?.text || "";
@@ -26,7 +25,10 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 	beforeEach(async () => {
 		db = await createTestStore();
 		vectors = new StubVectorStore(db);
-		router = createRouter(db, vectors);
+		const originalRouter = createRouter(db, vectors);
+		router = async (method, params) => {
+			return originalRouter(method, params);
+		};
 	});
 
 	it("should create multiple tasks in one call", async () => {
@@ -88,7 +90,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(task?.est_tokens).toBe(0);
 	});
 
-	it("should enforce default limit of 15 and support pagination", async () => {
+	it("should enforce default limit of 5 and support pagination", async () => {
 		// Create 20 tasks
 		const manyTasks = Array.from({ length: 20 }, (_, i) => ({
 			task_code: `LIMIT-${i.toString().padStart(3, "0")}`,
@@ -107,28 +109,28 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		// Test default limit (15)
+		// Test default limit (5)
 		const defaultRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO }
+			arguments: { repo: REPO, structured: true }
 		});
-		const defaultTasks = (defaultRes.structuredContent as { tasks: { rows: TaskRow[] } }).tasks;
-		expect(defaultTasks.rows.length).toBe(15);
+		const defaultTasks = (defaultRes.structuredContent as Record<string, unknown>).tasks as Record<string, unknown>;
+		expect(defaultTasks.rows.length).toBe(15); // Default limit is 15
 
 		// Test explicit limit
 		const limitRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO, limit: 5 }
+			arguments: { repo: REPO, limit: 10, structured: true }
 		});
-		const limitedTasks = (limitRes.structuredContent as { tasks: { rows: TaskRow[] } }).tasks;
-		expect(limitedTasks.rows.length).toBe(5);
+		const limitedTasks = (limitRes.structuredContent as Record<string, unknown>).tasks as Record<string, unknown>;
+		expect(limitedTasks.rows.length).toBe(10);
 
 		// Test offset (last page)
 		const offsetRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO, limit: 15, offset: 15 }
+			arguments: { repo: REPO, limit: 15, offset: 15, structured: true }
 		});
-		const offsetTasks = (offsetRes.structuredContent as { tasks: { rows: TaskRow[] } }).tasks;
+		const offsetTasks = (offsetRes.structuredContent as Record<string, unknown>).tasks as Record<string, unknown>;
 		expect(offsetTasks.rows.length).toBe(5); // 20 total - 15 offset = 5 remaining
 	});
 

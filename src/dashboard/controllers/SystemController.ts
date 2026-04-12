@@ -11,10 +11,23 @@ import { PROMPTS } from "../../mcp/prompts/registry";
 import type { RecentAction } from "../ui/src/lib/interfaces/common";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-let pkg = { version: "0.0.0" };
+
+const pkg = { version: "0.0.0" };
+
 try {
-	const pkgPath = path.join(__dirname, "../../../package.json");
-	if (fs.existsSync(pkgPath)) {
+	// Robustly find package.json by looking up from __dirname
+	let currentDir = __dirname;
+	let pkgPath = "";
+	while (currentDir !== path.parse(currentDir).root) {
+		const checkPath = path.join(currentDir, "package.json");
+		if (fs.existsSync(checkPath)) {
+			pkgPath = checkPath;
+			break;
+		}
+		currentDir = path.dirname(currentDir);
+	}
+
+	if (pkgPath) {
 		const data = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 		if (data.version) pkg.version = data.version;
 	}

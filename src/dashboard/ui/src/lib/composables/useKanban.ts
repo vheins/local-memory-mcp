@@ -40,12 +40,28 @@ export const COLUMNS: { status: string; label: string; bg: string; border: strin
 		color: "#a855f7"
 	},
 	{
+		status: "blocked",
+		label: "Blocked",
+		bg: "rgba(239,68,68,0.07)",
+		border: "rgba(239,68,68,0.18)",
+		icon: "alert-circle",
+		color: "#ef4444"
+	},
+	{
 		status: "completed",
 		label: "Completed",
 		bg: "rgba(16,185,129,0.06)",
 		border: "rgba(16,185,129,0.18)",
 		icon: "circle-check",
 		color: "#10b981"
+	},
+	{
+		status: "canceled",
+		label: "Canceled",
+		bg: "rgba(148,163,184,0.07)",
+		border: "rgba(148,163,184,0.18)",
+		icon: "x-circle",
+		color: "#94a3b8"
 	}
 ];
 
