@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { handleMemoryStore } from "../tools/memory.store.js";
-import { handleMemorySearch } from "../tools/memory.search.js";
-import { handleMemoryAcknowledge } from "../tools/memory.acknowledge.js";
-import { handleMemoryUpdate } from "../tools/memory.update.js";
-import { getPrimaryTextContent } from "../utils/mcp-response.js";
-import type { MemoryEntry, VectorStore } from "../types.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { handleMemoryStore } from "../tools/memory.store";
+import { handleMemorySearch } from "../tools/memory.search";
+import { handleMemoryAcknowledge } from "../tools/memory.acknowledge";
+import { handleMemoryUpdate } from "../tools/memory.update";
+import { getPrimaryTextContent } from "../utils/mcp-response";
+import type { MemoryEntry, VectorStore } from "../types";
 
 const VALID_UUID_1 = "11111111-1111-4111-a111-111111111111";
 const VALID_UUID_2 = "22222222-2222-4222-a222-222222222222";
@@ -16,7 +16,7 @@ const mockVectors: VectorStore = {
 	search: vi.fn().mockResolvedValue([])
 };
 
-function makeEntry(overrides: any): MemoryEntry {
+function makeEntry(overrides: Partial<MemoryEntry> & { repo?: string }): MemoryEntry {
 	return {
 		id: overrides.id || VALID_UUID_1,
 		type: overrides.type || "decision",
@@ -62,7 +62,7 @@ describe("V2 Enhanced Memory Features", () => {
 				mockVectors
 			);
 
-			const stored = db.memories.getById((response.structuredContent as any).id);
+			const stored = db.memories.getById((response.structuredContent as Record<string, unknown>).id as string);
 			expect(stored?.type).toBe("file_claim");
 			db.close();
 		});
@@ -91,7 +91,7 @@ describe("V2 Enhanced Memory Features", () => {
 				mockVectors
 			);
 
-			const stored = db.memories.getById((response.structuredContent as any).id);
+			const stored = db.memories.getById((response.structuredContent as Record<string, unknown>).id as string);
 			expect(stored?.metadata).toEqual({
 				source_agent: "codex",
 				source_role: "rules-optimizer",

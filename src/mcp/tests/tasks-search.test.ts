@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { getPrimaryTextContent } from "../utils/mcp-response.js";
-
-function getTextContent(result: Awaited<ReturnType<typeof handleTaskList>>) {
-	return getPrimaryTextContent(result) || "[]";
-}
+import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
+import { SQLiteStore } from "../storage/sqlite";
+import { TaskEntry, VectorStore } from "../types";
 
 describe("Task Search and Filtering", () => {
 	let db: SQLiteStore;
@@ -18,7 +14,7 @@ describe("Task Search and Filtering", () => {
 			upsert: async () => {},
 			remove: async () => {},
 			search: async () => []
-		} as any;
+		} as unknown as VectorStore;
 
 		// Seed some test data
 		// handleTaskCreate only allows 'backlog' or 'pending'
@@ -38,7 +34,7 @@ describe("Task Search and Filtering", () => {
 			},
 			db
 		);
-		const task1 = db.tasks.getTasksByRepo(REPO).find((t) => (t as any).task_code === "TASK-001");
+		const task1 = db.tasks.getTasksByRepo(REPO).find((t: TaskEntry) => t.task_code === "TASK-001");
 		if (!task1) throw new Error("Task 1 seed failed");
 		await handleTaskUpdate(
 			{
@@ -82,7 +78,7 @@ describe("Task Search and Filtering", () => {
 			},
 			db
 		);
-		const task3 = db.tasks.getTasksByRepo(REPO).find((t) => (t as any).task_code === "DB-FIX-003");
+		const task3 = db.tasks.getTasksByRepo(REPO).find((t: TaskEntry) => t.task_code === "DB-FIX-003");
 		if (!task3) throw new Error("Task 3 seed failed");
 		await handleTaskUpdate(
 			{
@@ -107,7 +103,7 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("TASK-001");
 	});
@@ -121,7 +117,7 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("TASK-002");
 	});
@@ -135,7 +131,7 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("DB-FIX-003");
 	});
@@ -149,9 +145,9 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(2);
-		const codes = tasks.rows.map((r: any) => r[1]);
+		const codes = tasks.rows.map((r: unknown[]) => r[1]);
 		expect(codes).toContain("TASK-001");
 		expect(codes).toContain("DB-FIX-003");
 	});
@@ -165,7 +161,7 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(3);
 	});
 
@@ -179,7 +175,7 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("TASK-002");
 	});
@@ -193,7 +189,7 @@ describe("Task Search and Filtering", () => {
 			db
 		);
 
-		const tasks = (result.structuredContent as any).tasks;
+		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(tasks.rows).toHaveLength(0);
 	});
 
@@ -201,7 +197,7 @@ describe("Task Search and Filtering", () => {
 		it("should provide same discovery as old task-search", async () => {
 			const args = { repo: REPO, query: "authentication", status: "all" };
 			const result = await handleTaskList(args, db);
-			const tasks = (result.structuredContent as any).tasks;
+			const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 			expect(tasks.rows).toHaveLength(1);
 			expect(tasks.rows[0][1]).toBe("TASK-001");
 			// TASK-001 has one comment added in handleTaskUpdate

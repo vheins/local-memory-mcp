@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { handleTaskUpdate, handleTaskCreate } from "../tools/task.manage.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore } from "../types.js";
+import { handleTaskUpdate, handleTaskCreate } from "../tools/task.manage";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
 
 describe("Task Status Transitions", () => {
 	let db: SQLiteStore;

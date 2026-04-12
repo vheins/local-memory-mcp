@@ -1,13 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createRouter } from "../router.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { StubVectorStore } from "../storage/vectors.stub.js";
-import type { VectorStore } from "../types.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { createRouter } from "../router";
+import { SQLiteStore } from "../storage/sqlite";
+import { StubVectorStore } from "../storage/vectors.stub";
+import type { VectorStore } from "../types";
+import { McpResponse } from "../utils/mcp-response";
 
 describe("MCP Local Memory - Task Management Workflow E2E", () => {
 	let db: SQLiteStore;
 	let vectors: VectorStore;
-	let router: (method: string, params: any) => Promise<any>;
+	let router: (method: string, params: unknown) => Promise<McpResponse>;
 
 	const REPO = "workflow-test-repo";
 
@@ -26,7 +27,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(initialTasks.length).toBe(0);
 
 		// ---- 2. PLANNING PHASE ----
-		const taskARes = await router("tools/call", {
+		await router("tools/call", {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
@@ -41,7 +42,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		});
 		const taskAId = db.tasks.getTasksByRepo(REPO)[0].id;
 
-		const taskBRes = await router("tools/call", {
+		await router("tools/call", {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
@@ -69,7 +70,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-list",
 			arguments: { repo: REPO }
 		});
-		const listToolTasks = (listToolRes.structuredContent as any).tasks;
+		const listToolTasks = (listToolRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(listToolTasks.rows.length).toBe(2);
 
 		// ---- 3. EXECUTION PHASE ----
@@ -89,7 +90,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		const inProgressRes = await router("resources/read", { uri: `repository://${REPO}/tasks` });
 		const inProgressTasks = JSON.parse(inProgressRes.contents[0].text);
-		expect(inProgressTasks.find((t: any) => t.id === taskAId).status).toBe("in_progress");
+		expect(inProgressTasks.find((t: { id: string; status: string }) => t.id === taskAId).status).toBe("in_progress");
 
 		// ---- 4. VALIDATION PHASE (Task A) ----
 		await router("tools/call", {

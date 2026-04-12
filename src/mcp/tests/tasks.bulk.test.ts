@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createRouter } from "../router.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { StubVectorStore } from "../storage/vectors.stub.js";
-import type { VectorStore } from "../types.js";
-import { getPrimaryTextContent } from "../utils/mcp-response.js";
+import { createRouter } from "../router";
+import { SQLiteStore } from "../storage/sqlite";
+import { StubVectorStore } from "../storage/vectors.stub";
+import type { VectorStore } from "../types";
+import { getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
 
-function getTextContent(result: any) {
-	return getPrimaryTextContent(result) || result.structuredContent?.text || "";
+function getTextContent(result: McpResponse) {
+	return getPrimaryTextContent(result) || (result.structuredContent as { text?: string })?.text || "";
 }
 
 describe("MCP Local Memory - Bulk Task Management", () => {
 	let db: SQLiteStore;
 	let vectors: VectorStore;
-	let router: (method: string, params: any) => Promise<any>;
+	let router: (method: string, params: unknown) => Promise<McpResponse>;
 
 	const REPO = "bulk-test-repo";
 
@@ -108,7 +108,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO }
 		});
-		const defaultTasks = (defaultRes.structuredContent as any).tasks;
+		const defaultTasks = (defaultRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(defaultTasks.rows.length).toBe(15);
 
 		// Test explicit limit
@@ -116,7 +116,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, limit: 5 }
 		});
-		const limitedTasks = (limitRes.structuredContent as any).tasks;
+		const limitedTasks = (limitRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(limitedTasks.rows.length).toBe(5);
 
 		// Test offset (last page)
@@ -124,7 +124,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, limit: 15, offset: 15 }
 		});
-		const offsetTasks = (offsetRes.structuredContent as any).tasks;
+		const offsetTasks = (offsetRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(offsetTasks.rows.length).toBe(5); // 20 total - 15 offset = 5 remaining
 	});
 

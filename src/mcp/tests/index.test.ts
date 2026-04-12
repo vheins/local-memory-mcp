@@ -1,10 +1,10 @@
 // Feature: memory-mcp-optimization, Property 19: memory://index filter repo
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { readResource, listResourceTemplates, listResources } from "../resources/index.js";
-import { MemoryEntry } from "../types.js";
-import { createSessionContext, updateSessionRoots } from "../session.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { readResource, listResourceTemplates, listResources } from "../resources/index";
+import { MemoryEntry } from "../types";
+import { createSessionContext, updateSessionRoots } from "../session";
 
 function makeEntry(id: string, repo: string): MemoryEntry {
 	return {
@@ -120,7 +120,7 @@ describe("readResource memory://memories", () => {
 					}
 
 					const result = readResource(`repository://${repos[0]}/memories`, db);
-					const entries: Array<any> = JSON.parse(result.contents[0].text);
+					const entries: MemoryEntry[] = JSON.parse(result.contents[0].text);
 
 					// Returns entries for the specific repo
 					expect(entries.length).toBeGreaterThan(0);
@@ -162,8 +162,9 @@ describe("MCP resource templates and session resources", () => {
 
 		try {
 			listResources(session, { cursor: "%%%not-base64%%%" });
-		} catch (error: any) {
-			expect(error.code).toBe(-32602);
+		} catch (error: unknown) {
+			const mcpError = error as { code?: number };
+			expect(mcpError.code).toBe(-32602);
 		}
 	});
 
@@ -172,8 +173,9 @@ describe("MCP resource templates and session resources", () => {
 
 		try {
 			listResourceTemplates({ cursor: "%%%not-base64%%%" });
-		} catch (error: any) {
-			expect(error.code).toBe(-32602);
+		} catch (error: unknown) {
+			const mcpError = error as { code?: number };
+			expect(mcpError.code).toBe(-32602);
 		}
 	});
 
@@ -219,9 +221,10 @@ describe("MCP resource templates and session resources", () => {
 
 		try {
 			readResource("memory://missing/resource", db);
-		} catch (error: any) {
-			expect(error.code).toBe(-32002);
-			expect(error.data.uri).toBe("memory://missing/resource");
+		} catch (error: unknown) {
+			const mcpError = error as { code: number; data: { uri: string } };
+			expect(mcpError.code).toBe(-32002);
+			expect(mcpError.data.uri).toBe("memory://missing/resource");
 		} finally {
 			db.close();
 		}

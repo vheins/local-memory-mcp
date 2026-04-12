@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createRouter } from "../router.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { RealVectorStore } from "../storage/vectors.js";
-import type { VectorStore } from "../types.js";
-import { getPrimaryTextContent } from "../utils/mcp-response.js";
+import { createRouter } from "../router";
+import { SQLiteStore } from "../storage/sqlite";
+import { RealVectorStore } from "../storage/vectors";
+import type { VectorStore } from "../types";
+import { getPrimaryTextContent } from "../utils/mcp-response";
 
 // Global configuration for heavy AI tests
 vi.setConfig({ testTimeout: 90000 });
@@ -11,7 +11,7 @@ vi.setConfig({ testTimeout: 90000 });
 describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	let db: SQLiteStore;
 	let vectors: VectorStore;
-	let router: (method: string, params: any) => Promise<any>;
+	let router: (method: string, params: Record<string, unknown>) => Promise<{ structuredContent: Record<string, unknown>; contents: Array<{ text: string }> }>;
 
 	const REPO = "enterprise-app-v2";
 
@@ -57,7 +57,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// New tabular format: results.rows[i] = [id, title, type, importance]
-		const results = (searchRes.structuredContent as any).results;
+		const results = searchRes.structuredContent.results;
 		expect(results.rows[0][1]).toBe("Database Migration"); // index 1 = title
 		expect(results.rows.length).toBeGreaterThan(1); // Should find related db facts too but lower
 	});
@@ -80,7 +80,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				model: "test-model"
 			}
 		});
-		const mistakeId = (mistakeRes.structuredContent as any).id;
+		const mistakeId = mistakeRes.structuredContent.id;
 
 		// 2. Store the correct pattern that replaces the mistake
 		await router("tools/call", {
@@ -105,17 +105,17 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// EXPECT: Mistake is archived and NOT in search results by default
 		// New tabular format: results.rows[i] = [id, title, type, importance]
-		const results = (searchRes.structuredContent as any).results;
-		expect(results.rows.some((r: any[]) => r[1] === "Streaming File Upload")).toBe(true);
-		expect(results.rows.some((r: any[]) => r[1] === "Large File Upload Failure")).toBe(false);
-		expect(results.rows.some((r: any[]) => r[0] === mistakeId)).toBe(false);
+		const results = searchRes.structuredContent.results;
+		expect(results.rows.some((r: string[]) => r[1] === "Streaming File Upload")).toBe(true);
+		expect(results.rows.some((r: string[]) => r[1] === "Large File Upload Failure")).toBe(false);
+		expect(results.rows.some((r: string[]) => r[0] === mistakeId)).toBe(false);
 
 		// 4. Audit: Verify we can still find the mistake if we EXPLICITLY ask for archived
 		const auditRes = await router("tools/call", {
 			name: "memory-search",
 			arguments: { query: "file upload", repo: REPO, include_archived: true }
 		});
-		expect((auditRes.structuredContent as any).results.rows.some((r: any[]) => r[0] === mistakeId)).toBe(true);
+		expect(auditRes.structuredContent.results.rows.some((r: string[]) => r[0] === mistakeId)).toBe(true);
 	});
 
 	/**
@@ -163,7 +163,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// EXPECT: Auth Specific memory should be the Top Match despite the query being generic "log"
 		// New tabular format: results.rows[i] = [id, title, type, importance]
-		const results = (searchRes.structuredContent as any).results;
+		const results = searchRes.structuredContent.results;
 		expect(results.rows[0][1]).toBe("Auth Security Audit"); // index 1 = title
 	});
 
@@ -276,7 +276,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// EXPECT: Should find the "Filament Custom Action" from Project A
 		// New tabular format: results.rows[i] = [id, title, type, importance]
-		const results = (searchRes.structuredContent as any).results;
+		const results = searchRes.structuredContent.results;
 		expect(results.rows[0][1]).toBe("Filament Custom Action"); // index 1 = title
 		// scope is not returned in pointer table — use memory://<id> to fetch full details
 	});

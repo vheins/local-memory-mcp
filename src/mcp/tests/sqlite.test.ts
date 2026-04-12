@@ -3,8 +3,8 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { SQLiteStore } from "../storage/sqlite.js";
-import type { MemoryEntry } from "../types.js";
+import { SQLiteStore } from "../storage/sqlite";
+import type { MemoryEntry } from "../types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

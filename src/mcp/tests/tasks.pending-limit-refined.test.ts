@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { handleTaskCreate, handleTaskUpdate } from "../tools/task.manage.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore } from "../types.js";
+import { handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
 
 describe("Task Pending Limit Refined Validation", () => {
 	let db: SQLiteStore;
@@ -73,7 +73,7 @@ describe("Task Pending Limit Refined Validation", () => {
 			db
 		);
 
-		const task = db.tasks.getTasksByRepo(REPO).find((t) => (t as any).task_code === "TASK-BACKLOG");
+		const task = db.tasks.getTasksByRepo(REPO).find((t) => (t as TaskEntry).task_code === "TASK-BACKLOG");
 		if (!task) throw new Error("Seed task not found");
 
 		// Move to pending (should be ALLOWED now)

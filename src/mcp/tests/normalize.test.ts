@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { normalize, tokenize, STOPWORDS, normalizeRepo } from "../utils/normalize.js";
+import { normalize, tokenize, STOPWORDS, normalizeRepo } from "../utils/normalize";
 
 // ─── Unit Tests: normalizeRepo() ─────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ describe("normalizeRepo() — unit tests", () => {
 
 	it("handles empty or null input", () => {
 		expect(normalizeRepo("")).toBe("");
-		expect(normalizeRepo(null as any)).toBe("");
+		expect(normalizeRepo(null as unknown as string)).toBe("");
 	});
 });
 

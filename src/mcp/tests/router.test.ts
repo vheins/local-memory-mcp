@@ -1,10 +1,10 @@
 // Feature: memory-mcp-optimization, Property 11: createRouter() uses provided storage
 import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
-import { createRouter } from "../router.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { VectorStore } from "../types.js";
-import { createSessionContext, updateSessionRoots } from "../session.js";
+import { createRouter } from "../router";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
+import { createSessionContext, updateSessionRoots } from "../session";
 import path from "node:path";
 
 /**
@@ -184,7 +184,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const router = createRouter(mockDb, mockVectors);
 
 		const result = await router("resources/templates/list", {});
-		const templates = result.resourceTemplates.map((entry: any) => entry.uriTemplate);
+		const templates = (result.resourceTemplates as Array<{ uriTemplate: string }>).map((entry) => entry.uriTemplate);
 
 		expect(templates).toContain("repository://{name}/memories");
 		expect(templates).toContain("repository://{name}/tasks");
@@ -319,7 +319,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		const result = await router("tools/list", {});
-		const toolNames = result.tools.map((tool: any) => tool.name);
+		const toolNames = result.tools.map((tool: Record<string, unknown>) => tool.name);
 
 		expect(toolNames).not.toContain("memory-synthesize");
 		expect(toolNames).not.toContain("task-create-interactive");
@@ -444,7 +444,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		expect(sampleMessage).toHaveBeenCalledTimes(1);
-		expect((result as any).structuredContent.answer).toContain("Grounded answer");
+		expect((result.structuredContent as Record<string, unknown>).answer).toContain("Grounded answer");
 	});
 
 	it("memory-synthesize supports a multi-turn sampling tool loop", async () => {
@@ -490,8 +490,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		expect(sampleMessage).toHaveBeenCalledTimes(2);
-		expect((result as any).structuredContent.toolCalls).toBe(1);
-		expect((result as any).structuredContent.iterations).toBe(2);
+		expect((result.structuredContent as Record<string, unknown>).toolCalls).toBe(1);
+		expect((result.structuredContent as Record<string, unknown>).iterations).toBe(2);
 	});
 
 	it("memory-synthesize elicits the repo when roots cannot infer it", async () => {
@@ -526,7 +526,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		expect(elicit).toHaveBeenCalledTimes(1);
 		expect(sampleMessage).toHaveBeenCalledTimes(1);
-		expect((result as any).structuredContent.repo).toBe("elicited-repo");
+		expect((result.structuredContent as Record<string, unknown>).repo).toBe("elicited-repo");
 	});
 
 	it("task-create-interactive elicits missing task fields and creates the task", async () => {
@@ -561,8 +561,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		expect(elicit).toHaveBeenCalledTimes(1);
 		expect(mockDb.tasks.insertTask).toHaveBeenCalledTimes(1);
-		expect((result as any).structuredContent.repo).toBe("interactive-repo");
-		expect((result as any).structuredContent.task_code).toBe("TASK-101");
+		expect((result as Record<string, Record<string, unknown>>).structuredContent.repo).toBe("interactive-repo");
+		expect((result as Record<string, Record<string, unknown>>).structuredContent.task_code).toBe("TASK-101");
 	});
 
 	it("returns resource links in memory-search results", async () => {
@@ -594,7 +594,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		// New policy: no automatic resource links in search results to force use of detail tools
-		const resourceLinks = result.content.filter((entry: any) => entry.type === "resource_link");
+		const resourceLinks = (result.content as Record<string, unknown>[]).filter((entry) => entry.type === "resource_link");
 		expect(resourceLinks.length).toBe(0);
 	});
 });

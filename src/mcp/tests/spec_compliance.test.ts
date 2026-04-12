@@ -24,7 +24,7 @@ describe("MCP Spec Compliance", () => {
 			hit_count: 10
 		};
 		const response = createMcpResponse(mockData, "Summary");
-		const sc = response.structuredContent as any;
+		const sc = response.structuredContent as Record<string, unknown>;
 
 		expect(sc.id).toBe("mem_1");
 		expect(sc.title).toBe("Test");
@@ -42,7 +42,7 @@ describe("MCP Spec Compliance", () => {
 			]
 		};
 		const response = createMcpResponse(mockData, "Summary");
-		const sc = response.structuredContent as any;
+		const sc = response.structuredContent as Record<string, unknown>;
 
 		expect(sc.results[0].id).toBe("1");
 		expect(sc.results[0].agent).toBeUndefined();
@@ -71,6 +71,6 @@ describe("MCP Spec Compliance", () => {
 		const textItems = response.content?.filter((item) => item.type === "text") ?? [];
 
 		expect(textItems).toHaveLength(2);
-		expect((textItems[1] as any).text).toBe('{"id":"mem_1","title":"Test"}');
+		expect((textItems[1] as Record<string, unknown>).text).toBe('{"id":"mem_1","title":"Test"}');
 	});
 });

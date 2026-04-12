@@ -1,33 +1,25 @@
 // Feature: Dashboard Filter & Export Property Tests
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fc from "fast-check";
-import { z } from "zod";
-import { MemoryTypeSchema } from "../tools/schemas.js";
 
 describe("Property 12: Dashboard filter logic correctness", () => {
-	// Mock memory data generator
-	function generateMemories(count: number): any[] {
-		const types = ["code_fact", "decision", "mistake", "pattern", "file_claim"] as const;
-		return Array.from({ length: count }, (_, i) => ({
-			id: `test-${i}`,
-			type: types[i % types.length],
-			content: `Test memory content ${i} with some keywords`,
-			importance: (i % 5) + 1,
-			hit_count: i * 2,
-			recall_rate: i > 0 ? i / (i + 1) : 0,
-			created_at: new Date(Date.now() - i * 86400000).toISOString()
-		}));
+	interface MockMemory {
+		id: string;
+		type: string;
+		content: string;
+		importance: number;
+		hit_count?: number;
 	}
 
 	// Filter function (same as in dashboard)
 	function applyFilters(
-		memories: any[],
+		memories: MockMemory[],
 		searchQuery: string,
 		typeFilter: string,
 		minImportance: number,
 		maxImportance: number
-	): any[] {
+	): MockMemory[] {
 		let filtered = [...memories];
 
 		if (searchQuery) {
@@ -186,7 +178,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 });
 
 describe("Property 13: Pagination non-overlapping", () => {
-	function paginate(items: any[], page: number, pageSize: number): any[] {
+	function paginate(items: MockMemory[] | string[] | number[], page: number, pageSize: number): (MockMemory | string | number)[] {
 		const start = (page - 1) * pageSize;
 		return items.slice(start, start + pageSize);
 	}

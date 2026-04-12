@@ -1,10 +1,10 @@
 // Feature: memory-mcp-optimization, Property 16: MCPClient cleanup pending requests
 // Feature: memory-mcp-optimization, Property 17: MCPClient retry count
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
 
-import { MCPClient } from "../client.js";
+import { MCPClient } from "../client";
 
 class TestableMCPClient extends MCPClient {
 	get pending(): Map<number, { resolve: (v: unknown) => void; reject: (r: unknown) => void }> {

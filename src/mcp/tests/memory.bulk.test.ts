@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createRouter } from "../router.js";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { StubVectorStore } from "../storage/vectors.stub.js";
-import type { VectorStore } from "../types.js";
-import { getPrimaryTextContent } from "../utils/mcp-response.js";
+import { createRouter } from "../router";
+import { SQLiteStore } from "../storage/sqlite";
+import { StubVectorStore } from "../storage/vectors.stub";
+import type { VectorStore } from "../types";
+import { getPrimaryTextContent } from "../utils/mcp-response";
 
 describe("MCP Local Memory - Bulk Memory Management", () => {
 	let db: SQLiteStore;
 	let vectors: VectorStore;
-	let router: (method: string, params: any) => Promise<any>;
+	let router: (method: string, params: Record<string, unknown>) => Promise<{ structuredContent: Record<string, unknown> }>;
 
 	const REPO = "bulk-mem-repo";
 

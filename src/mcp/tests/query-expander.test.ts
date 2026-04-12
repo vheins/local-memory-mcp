@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandQuery } from "../utils/query-expander.js";
+import { expandQuery } from "../utils/query-expander";
 
 describe("expandQuery", () => {
 	it("includes original query and expands keywords", () => {
