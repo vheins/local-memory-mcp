@@ -23,7 +23,7 @@ The system is designed as a local-first, server-driven developer tool. It operat
 - **Key Responsibilities**:
   - Visualizing the Kanban task board.
   - Auditing recent tool activity via the **Activity Log**.
-  - Inspecting MCP capabilities (Tools, Prompts, Resources) via the **Reference Service**.
+  - Inspecting MCP capabilities (Tools, Prompts, Resources) via the **Reference Catalog**.
   - Bulk data management (Import/Export).
 
 ---

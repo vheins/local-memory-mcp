@@ -4,20 +4,20 @@ export interface Task {
 	task_code: string;
 	phase: string;
 	title: string;
-	description: string;
+	description: string | null;
 	status: string;
 	priority: number;
 	agent?: string;
 	role?: string;
 	created_at: string;
 	updated_at: string;
-	finished_at?: string;
-	in_progress_at?: string;
+	finished_at?: string | null;
+	in_progress_at?: string | null;
 	est_tokens?: number;
 	tags?: string[];
 	metadata?: Record<string, unknown>;
-	parent_id?: string;
-	depends_on?: string;
+	parent_id?: string | null;
+	depends_on?: string | null;
 	comments?: TaskComment[];
 }
 
