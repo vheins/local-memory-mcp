@@ -2,14 +2,16 @@ import express from "express";
 import { randomUUID } from "crypto";
 import { db } from "../lib/context";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
-import type { MemoryType, MemoryEntry } from "../../mcp/types";
+import type { MemoryType, MemoryEntry } from "../../mcp/types/index";
+import type { IdParams, MemoryListQuery } from "../../mcp/interfaces/index";
 
 export class MemoriesController {
 	static list(req: express.Request, res: express.Response) {
 		try {
-			const { repo, type, search, minImportance, maxImportance, sortBy, sortOrder } = req.query;
-			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
-			const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) || "25", 10)));
+			const query = req.query as unknown as MemoryListQuery;
+			const { repo, type, search, minImportance, maxImportance, sortBy, sortOrder } = query;
+			const page = Math.max(1, parseInt(query.page || "1", 10));
+			const pageSize = Math.min(100, Math.max(1, parseInt((query.limit as string) || "25", 10)));
 
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
@@ -76,7 +78,7 @@ export class MemoriesController {
 
 	static update(req: express.Request, res: express.Response) {
 		try {
-			const { id } = req.params as { id: string };
+			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
 			const attributes = getAttributes(req);
@@ -103,7 +105,7 @@ export class MemoriesController {
 
 	static delete(req: express.Request, res: express.Response) {
 		try {
-			const { id } = req.params as { id: string };
+			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
 			db.memories.delete(id);

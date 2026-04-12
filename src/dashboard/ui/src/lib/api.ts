@@ -1,4 +1,4 @@
-import type { Memory, Task, RepoMeta, DashboardStats, RecentAction, TaskTimeStats, HealthData } from "./stores";
+import type { Memory, Task, RepoMeta, DashboardStats, RecentAction, TaskTimeStats, HealthData, Pagination, ReferenceDataState } from "./stores";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ export const api = {
 	recentActions: (repo: string | null, page: number, pageSize: number) => {
 		let url = `/api/recent-actions?page=${page}&pageSize=${pageSize}`;
 		if (repo) url += `&repo=${encodeURIComponent(repo)}`;
-		return apiFetch<{ actions: RecentAction[]; pagination: Record<string, unknown> }>(url);
+		return apiFetch<{ actions: RecentAction[]; pagination: Pagination }>(url);
 	},
 
 	memories: (params: {
@@ -96,7 +96,7 @@ export const api = {
 		if (params.sortOrder) q.set("sortOrder", params.sortOrder);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<{ memories: Memory[]; pagination: Record<string, unknown> }>(`/api/memories?${q}`);
+		return apiFetch<{ memories: Memory[]; pagination: Pagination }>(`/api/memories?${q}`);
 	},
 
 	memoryById: (id: string) => apiFetch<Memory>(`/api/memories/${id}`),
@@ -137,7 +137,7 @@ export const api = {
 		if (params.search) q.set("search", params.search);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<{ tasks: Task[]; pagination: Record<string, unknown> }>(`/api/tasks?${q}`);
+		return apiFetch<{ tasks: Task[]; pagination: Pagination }>(`/api/tasks?${q}`);
 	},
 
 	taskById: (id: string) => apiFetch<Task>(`/api/tasks/${id}`),

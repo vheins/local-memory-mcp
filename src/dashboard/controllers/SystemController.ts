@@ -8,6 +8,7 @@ import { condenseRecentActions } from "../lib/helpers";
 import { TOOL_DEFINITIONS } from "../../mcp/tools/schemas";
 import { listResources } from "../../mcp/resources/index";
 import { PROMPTS } from "../../mcp/prompts/registry";
+import type { RecentAction } from "../ui/src/lib/interfaces/common";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkg = { version: "0.0.0" };
@@ -52,6 +53,7 @@ export class SystemController {
 	static getStats(req: express.Request, res: express.Response) {
 		try {
 			const repo = req.query.repo as string | undefined;
+			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 			const stats = db.system.getDashboardStats(repo);
 			res.json(jsonApiRes(stats, "system-stats"));
 		} catch (err: unknown) {
@@ -66,7 +68,17 @@ export class SystemController {
 			const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 10));
 			const page = Math.max(1, parseInt(req.query.page as string) || 1);
 			const rawActions = db.actions.getRecentActions(repo, 100);
-			const allCondensed = condenseRecentActions(rawActions, 100);
+			// Map ActionLogRow to RecentAction (fixing query null vs undefined)
+			const actions: RecentAction[] = rawActions.map((a) => ({
+				...a,
+				query: a.query || undefined,
+				response: a.response || undefined,
+				memory_id: a.memory_id || undefined,
+				task_id: a.task_id || undefined,
+				memory_title: a.memory_title || undefined,
+				memory_type: a.memory_type || undefined
+			}));
+			const allCondensed = condenseRecentActions(actions, 100);
 			const offset = (page - 1) * pageSize;
 			const items = allCondensed.slice(offset, offset + pageSize);
 			res.json(
@@ -128,7 +140,7 @@ export class SystemController {
 	static async callTool(req: express.Request, res: express.Response) {
 		try {
 			if (!mcpClient.isConnected()) await mcpClient.start();
-			const { name } = req.params as { name: string };
+			const { name } = req.params as NameParams;
 			const args = getAttributes(req);
 			const result = await mcpClient.callTool(name, args);
 			res.json(jsonApiRes(result, "tool-result"));

@@ -1,13 +1,15 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db } from "../lib/context";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
-import type { Task } from "../../mcp/types";
+import { db } from "../lib/context.js";
+import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
+import type { Task, TaskComment } from "../../mcp/types/index.js";
+import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
 
 export class TasksController {
 	static list(req: express.Request, res: express.Response) {
 		try {
-			const { repo, status, search } = req.query;
+			const query = req.query as unknown as TaskListQuery;
+			const { repo, status, search } = query;
 			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
 			const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) || "20", 10)));
 
@@ -74,7 +76,7 @@ export class TasksController {
 
 	static update(req: express.Request, res: express.Response) {
 		try {
-			const { id } = req.params as { id: string };
+			const { id } = req.params as unknown as IdParams;
 			const attributes = getAttributes(req);
 			const existingTask = db.tasks.getTaskById(id);
 			if (!existingTask) return res.status(404).json(jsonApiError("Task not found", 404));
@@ -120,7 +122,7 @@ export class TasksController {
 
 	static delete(req: express.Request, res: express.Response) {
 		try {
-			const { id } = req.params as { id: string };
+			const { id } = req.params as unknown as IdParams;
 			const task = db.tasks.getTaskById(id);
 			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
 
@@ -190,7 +192,7 @@ export class TasksController {
 
 	static updateComment(req: express.Request, res: express.Response) {
 		try {
-			const { id } = req.params as { id: string };
+			const { id } = req.params as unknown as IdParams;
 			const { comment } = getAttributes(req);
 			const existingComment = db.tasks.getTaskCommentById(id);
 			if (!existingComment) return res.status(404).json(jsonApiError("Comment not found", 404));
@@ -205,7 +207,7 @@ export class TasksController {
 
 	static deleteComment(req: express.Request, res: express.Response) {
 		try {
-			const { id } = req.params as { id: string };
+			const { id } = req.params as unknown as IdParams;
 			db.tasks.deleteTaskComment(id);
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {

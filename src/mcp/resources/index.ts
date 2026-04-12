@@ -3,7 +3,7 @@ import { SessionContext } from "../session";
 import { logger } from "../utils/logger";
 import { rankCompletionValues } from "../utils/completion";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
-import type { MemoryEntry, Task } from "../types.js";
+import type { MemoryEntry, Task, MemoryType } from "../types/index";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -287,10 +287,9 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 
 			const result = db.memories.listMemoriesForDashboard({
 				repo: name,
-				type: type || undefined,
+				type: (type as MemoryType) || undefined,
 				tag: tag || undefined,
 				search: search || undefined,
-				includeArchived: false,
 				limit: 50
 			});
 			const entries = result.items;

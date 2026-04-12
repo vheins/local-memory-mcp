@@ -1,6 +1,14 @@
 import Database from "better-sqlite3";
 import { tokenize } from "../utils/normalize";
-import { MemoryEntry, Task } from "../types";
+import {
+	MemoryEntry,
+	MemoryRow,
+	MemoryType,
+	Task,
+	TaskRow,
+	TaskStatus,
+	TaskPriority
+} from "../types/index";
 
 /**
  * Base class for all database entities.
@@ -24,63 +32,65 @@ export abstract class BaseEntity {
 	/**
 	 * Mapping helper for MemoryEntry
 	 */
-	protected rowToMemoryEntry(row: MemoryRow): MemoryEntry {
+	protected rowToMemoryEntry(row: any): MemoryEntry {
+		const r = row as any;
 		return {
-			id: row.id,
-			type: row.type as MemoryType,
-			title: row.title || "Untitled",
-			content: row.content,
-			importance: row.importance,
-			agent: row.agent || "unknown",
-			role: row.role || "unknown",
-			model: row.model || "unknown",
+			id: r.id,
+			type: r.type as MemoryType,
+			title: r.title || "Untitled",
+			content: r.content,
+			importance: r.importance,
+			agent: r.agent || "unknown",
+			role: r.role || "unknown",
+			model: r.model || "unknown",
 			scope: {
-				repo: row.repo,
-				folder: row.folder || undefined,
-				language: row.language || undefined
+				repo: r.repo,
+				folder: r.folder || undefined,
+				language: r.language || undefined
 			},
-			created_at: row.created_at,
-			updated_at: row.updated_at,
-			completed_at: row.completed_at || null,
-			hit_count: row.hit_count ?? 0,
-			recall_count: row.recall_count ?? 0,
-			last_used_at: row.last_used_at ?? null,
-			expires_at: row.expires_at ?? null,
-			supersedes: row.supersedes ?? null,
-			status: (row.status as "active" | "archived") || "active",
-			is_global: row.is_global === 1,
-			tags: this.safeJSONParse<string[]>(row.tags, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {})
+			created_at: r.created_at,
+			updated_at: r.updated_at,
+			completed_at: r.completed_at || null,
+			hit_count: r.hit_count ?? 0,
+			recall_count: r.recall_count ?? 0,
+			last_used_at: r.last_used_at ?? null,
+			expires_at: r.expires_at ?? null,
+			supersedes: r.supersedes ?? null,
+			status: (r.status as "active" | "archived") || "active",
+			is_global: r.is_global === 1,
+			tags: this.safeJSONParse<string[]>(r.tags, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata, {})
 		};
 	}
 
 	/**
 	 * Mapping helper for Task
 	 */
-	protected rowToTask(row: TaskRow): Task {
+	protected rowToTask(row: any): Task {
+		const r = row as any;
 		return {
-			id: row.id,
-			repo: row.repo,
-			task_code: row.task_code,
-			phase: row.phase || "",
-			title: row.title,
-			description: row.description || null,
-			status: (row.status as TaskStatus) || "backlog",
-			priority: (row.priority as TaskPriority) || 3,
-			agent: row.agent || "unknown",
-			role: row.role || "unknown",
-			doc_path: row.doc_path || null,
-			created_at: row.created_at,
-			updated_at: row.updated_at,
-			in_progress_at: row.in_progress_at || null,
-			finished_at: row.finished_at || null,
-			canceled_at: row.canceled_at || null,
-			est_tokens: row.est_tokens || 0,
-			tags: this.safeJSONParse<string[]>(row.tags, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {}),
-			parent_id: row.parent_id || null,
-			depends_on: row.depends_on || null,
-			comments_count: row.comments_count || 0
+			id: r.id,
+			repo: r.repo,
+			task_code: r.task_code,
+			phase: r.phase || "",
+			title: r.title,
+			description: r.description || null,
+			status: (r.status as TaskStatus) || "backlog",
+			priority: (r.priority as TaskPriority) || 3,
+			agent: r.agent || "unknown",
+			role: r.role || "unknown",
+			doc_path: r.doc_path || null,
+			created_at: r.created_at,
+			updated_at: r.updated_at,
+			in_progress_at: r.in_progress_at || null,
+			finished_at: r.finished_at || null,
+			canceled_at: r.canceled_at || null,
+			est_tokens: r.est_tokens || 0,
+			tags: this.safeJSONParse<string[]>(r.tags, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata, {}),
+			parent_id: r.parent_id || null,
+			depends_on: r.depends_on || null,
+			comments_count: r.comments_count || 0
 		};
 	}
 

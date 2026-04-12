@@ -1,5 +1,5 @@
 import { BaseEntity } from "../storage/base";
-import { MemoryEntry, MemoryType } from "../types";
+import { MemoryEntry, MemoryType, MemoryRow, VectorStore } from "../types/index";
 
 /**
  * Handles all memory-related database operations.
@@ -355,14 +355,31 @@ export class MemoryEntity extends BaseEntity {
 			)
 			.run(memoryId, JSON.stringify(vector), new Date().toISOString());
 	}
+getSummary(repo: string): { summary: string; updated_at: string } | undefined {
+	const row = this.db.prepare("SELECT summary, updated_at FROM repo_summaries WHERE repo = ?").get(repo) as
+		| { summary: string; updated_at: string }
+		| undefined;
+	return row;
+}
 
-	getSummary(repo: string): { summary: string; updated_at: string } | undefined {
-		return this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as
-			| { summary: string; updated_at: string }
-			| undefined;
-	}
+getAllMemoriesWithStats(repo: string): (MemoryEntry & { recall_rate: number })[] {
+	const rows = this.db
+		.prepare(
+			`
+SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate 
+FROM memories 
+WHERE repo = ?
+ORDER BY created_at DESC
+`
+		)
+		.all(repo) as (MemoryRow & { recall_rate: number })[];
+	return rows.map((row) => ({
+		...this.rowToMemoryEntry(row),
+		recall_rate: row.recall_rate || 0
+	}));
+}
 
-	upsertSummary(repo: string, summary: string): void {
+upsertSummary(repo: string, summary: string): void {
 		this.db
 			.prepare(
 				`
@@ -379,6 +396,7 @@ export class MemoryEntity extends BaseEntity {
 		tag?: string;
 		isGlobal?: boolean;
 		minImportance?: number;
+		maxImportance?: number;
 		search?: string;
 		offset?: number;
 		limit?: number;
@@ -397,6 +415,7 @@ export class MemoryEntity extends BaseEntity {
 			tag,
 			isGlobal,
 			minImportance,
+			maxImportance,
 			search,
 			offset = 0,
 			limit = 50,
@@ -424,6 +443,10 @@ export class MemoryEntity extends BaseEntity {
 		if (minImportance !== undefined) {
 			where.push("importance >= ?");
 			params.push(minImportance);
+		}
+		if (maxImportance !== undefined) {
+			where.push("importance <= ?");
+			params.push(maxImportance);
 		}
 		if (search) {
 			where.push("(title LIKE ? OR content LIKE ?)");
@@ -547,5 +570,3 @@ export class MemoryEntity extends BaseEntity {
 		return result.changes;
 	}
 }
-
-import { MemoryRow, VectorStore } from "../storage/base";

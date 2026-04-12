@@ -2,26 +2,8 @@ import { SQLiteStore } from "../storage/sqlite";
 import { SessionContext, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
 import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
-import type { LoadedPrompt } from "../interfaces";
+import type { LoadedPrompt } from "../interfaces/index";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
-
-function createPromptDefinition(loaded: LoadedPrompt) {
-	return {
-		name: loaded.name,
-		description: loaded.description,
-		arguments: loaded.arguments,
-		agent: loaded.agent,
-		messages: [
-			{
-				role: "user",
-				content: {
-					type: "text",
-					text: loaded.content
-				}
-			}
-		]
-	};
-}
 
 interface PromptMessage {
 	role: "user" | "assistant";
@@ -37,6 +19,24 @@ interface PromptDefinition {
 	arguments: Record<string, unknown>[];
 	agent?: string;
 	messages: PromptMessage[];
+}
+
+function createPromptDefinition(loaded: LoadedPrompt): PromptDefinition {
+	return {
+		name: loaded.name,
+		description: loaded.description,
+		arguments: loaded.arguments,
+		agent: loaded.agent,
+		messages: [
+			{
+				role: "user",
+				content: {
+					type: "text",
+					text: loaded.content
+				}
+			}
+		]
+	};
 }
 
 export const PROMPTS: Record<string, PromptDefinition> = {};

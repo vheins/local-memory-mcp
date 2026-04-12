@@ -49,3 +49,34 @@ export interface TaskComment {
 	next_status: TaskStatus | null;
 	created_at: string;
 }
+
+export interface TaskRow {
+	id: string;
+	repo: string;
+	task_code: string;
+	phase: string;
+	title: string;
+	description: string | null;
+	status: TaskStatus;
+	priority: TaskPriority;
+	agent: string;
+	role: string;
+	doc_path: string | null;
+	created_at: string;
+	updated_at: string;
+	in_progress_at: string | null;
+	finished_at: string | null;
+	canceled_at: string | null;
+	est_tokens: number;
+	tags: string;
+	metadata: string;
+	parent_id: string | null;
+	depends_on: string | null;
+	comments_count: number;
+}
+
+export type TaskRowParsed = Omit<Task, "tags" | "metadata" | "comments_count"> & {
+	tags: string[];
+	metadata: Record<string, unknown>;
+	comments_count: number;
+};
