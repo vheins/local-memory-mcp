@@ -49,13 +49,16 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 ## 2. Fitur Klien (Client Features)
 
 ### A. Roots (Batasan Filesystem)
-- **Fungsi:** Klien menentukan batas direktori kerja (root) yang dapat diakses oleh server.
-- **Persyaratan Teknis:**
-  - Metode: `roots/list`.
-  - Notifikasi: `notifications/roots/list_changed`.
+- **Fungsi:** Klien mengekspos dan menentukan batas direktori kerja (*workspace roots*) yang dapat diakses oleh server.
+- **Deklarasi Kapabilitas:** Klien wajib mendeklarasikan kapabilitas `roots` pada saat fase *initialization handshake*.
+- **Metode Utama:** `roots/list`. Server dapat mengirimkan permintaan ini ke klien untuk mengambil daftar direktori aktif. Klien wajib mengembalikan _array_ berisi objek `Root`.
+- **Objek Root:** Masing-masing objek `Root` berisi:
+  - `uri` (Wajib): URI yang menunjukkan lokasi direktori (harus menggunakan skema `file://`).
+  - `name` (Opsional): Nama referensi dari direktori tersebut.
+- **Notifikasi Perubahan:** Jika klien mendukung `roots: { listChanged: true }`, klien wajib mengirimkan notifikasi satu arah `notifications/roots/list_changed` kepada server setiap kali struktur atau daftar _workspace root_ berubah.
 - **Kendala Utama:**
   - **URI:** Saat ini hanya mendukung skema `file://`.
-  - **Keamanan:** Klien harus memvalidasi URI untuk mencegah serangan *path traversal*. Server harus menghormati batasan root yang diberikan.
+  - **Keamanan:** Klien harus memvalidasi URI untuk mencegah serangan *path traversal*. Server harus menghormati batasan *root* yang diberikan.
 
 ### B. Sampling (Akses LLM)
 - **Fungsi:** Server meminta klien untuk melakukan generasi teks/media dari LLM tanpa perlu kunci API di sisi server.

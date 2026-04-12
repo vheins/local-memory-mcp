@@ -58,6 +58,13 @@ In compliance with the [MCP STDIO Transport Specification](https://modelcontextp
 - **I/O Channels:** The server reads requests/notifications from `stdin` and writes its responses/notifications exclusively to `stdout`. The server MUST NOT write anything to `stdout` that is not a valid MCP JSON-RPC message.
 - **Diagnostics & Logging:** The server MAY write UTF-8 encoded strings to `stderr` for informational, debugging, or error logging. Clients SHOULD NOT assume that output on `stderr` inherently indicates a protocol error or critical failure.
 
+## Client Features: Roots
+
+In compliance with the [MCP Roots Specification](https://modelcontextprotocol.io/specification/2025-11-25/client/roots), the server supports understanding client-defined filesystem boundaries:
+- **Capability:** The client MUST declare the `roots` capability during the initialization handshake.
+- **List Request (`roots/list`):** The server MAY issue a `roots/list` request to the client to retrieve the current active workspaces. The client returns an array of `Root` objects, each containing a mandatory `uri` (which MUST use the `file://` scheme) and an optional `name`.
+- **Notifications (`notifications/roots/list_changed`):** If the client declared `roots: { listChanged: true }`, it MUST emit a `notifications/roots/list_changed` notification whenever its workspace boundaries change, prompting the server to refresh its context.
+
 ---
 
 ## 1. Tools (Model Control)
