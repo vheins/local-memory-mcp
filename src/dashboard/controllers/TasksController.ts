@@ -6,8 +6,9 @@ import type { Task } from "../../mcp/types/index.js";
 import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
 
 export class TasksController {
-	static list(req: express.Request, res: express.Response) {
+	static async list(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const query = req.query as unknown as TaskListQuery;
 			const { repo, status, search } = query;
 			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
@@ -40,8 +41,9 @@ export class TasksController {
 		}
 	}
 
-	static get(req: express.Request, res: express.Response) {
+	static async get(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const task = db.tasks.getTaskById(req.params.id as string);
 			if (!task) throw new Error("Task not found");
 			db.actions.logAction("read", task.repo, { taskId: task.id });
@@ -52,8 +54,9 @@ export class TasksController {
 		}
 	}
 
-	static create(req: express.Request, res: express.Response) {
+	static async create(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const attributes = getAttributes(req);
 			const { repo, task_code, title } = attributes;
 			if (!repo || !task_code || !title) return res.status(400).json(jsonApiError("Required fields missing", 400));
@@ -74,8 +77,9 @@ export class TasksController {
 		}
 	}
 
-	static update(req: express.Request, res: express.Response) {
+	static async update(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			const attributes = getAttributes(req);
 			const existingTask = db.tasks.getTaskById(id);
@@ -122,8 +126,9 @@ export class TasksController {
 		}
 	}
 
-	static delete(req: express.Request, res: express.Response) {
+	static async delete(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			const task = db.tasks.getTaskById(id);
 			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
@@ -137,8 +142,9 @@ export class TasksController {
 		}
 	}
 
-	static bulkCreate(req: express.Request, res: express.Response) {
+	static async bulkCreate(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { items, repo } = getAttributes(req);
 			if (!Array.isArray(items) || !repo)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
@@ -161,8 +167,9 @@ export class TasksController {
 		}
 	}
 
-	static getTimeStats(req: express.Request, res: express.Response) {
+	static async getTimeStats(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { repo } = req.query;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
@@ -192,8 +199,9 @@ export class TasksController {
 		}
 	}
 
-	static updateComment(req: express.Request, res: express.Response) {
+	static async updateComment(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			const { comment } = getAttributes(req);
 			const existingComment = db.tasks.getTaskCommentById(id);
@@ -207,8 +215,9 @@ export class TasksController {
 		}
 	}
 
-	static deleteComment(req: express.Request, res: express.Response) {
+	static async deleteComment(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			db.tasks.deleteTaskComment(id);
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));

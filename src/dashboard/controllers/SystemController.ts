@@ -23,7 +23,8 @@ try {
 }
 
 export class SystemController {
-	static getHealth(req: express.Request, res: express.Response) {
+	static async getHealth(req: express.Request, res: express.Response) {
+		await db.refresh();
 		const stats = db.system.getGlobalStats();
 		const health = {
 			connected: mcpClient.isConnected(),
@@ -36,8 +37,9 @@ export class SystemController {
 		res.json(jsonApiRes(health, "health"));
 	}
 
-	static getRepos(req: express.Request, res: express.Response) {
+	static async getRepos(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const repos = db.system.listRepoNavigation();
 			res.json(
 				jsonApiRes(
@@ -51,8 +53,9 @@ export class SystemController {
 		}
 	}
 
-	static getStats(req: express.Request, res: express.Response) {
+	static async getStats(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const repo = req.query.repo as string | undefined;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 			const stats = db.system.getDashboardStats(repo);
@@ -63,8 +66,9 @@ export class SystemController {
 		}
 	}
 
-	static getRecentActions(req: express.Request, res: express.Response) {
+	static async getRecentActions(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const repo = req.query.repo as string | undefined;
 			const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 10));
 			const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -113,8 +117,9 @@ export class SystemController {
 		res.json(jsonApiRes(caps, "capability"));
 	}
 
-	static getExport(req: express.Request, res: express.Response) {
+	static async getExport(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { repo } = req.query;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 

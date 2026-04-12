@@ -33,7 +33,6 @@ function resolveDbPath(): string {
 
 const DB_PATH = resolveDbPath();
 
-let dbPathInstance = "";
 let sqlJsReady: Promise<void> | null = null;
 let sqlJsModule: Awaited<ReturnType<typeof initSqlJs>> | null = null;
 
@@ -72,10 +71,13 @@ export class SQLiteStore {
 	public system: SystemEntity;
 	public summaries: SummaryEntity;
 	private _ready: Promise<void>;
+	private lastLoadedAt: number = 0;
+	private saveDbPtr?: () => void;
+	private dbPathInstance: string;
 
 	constructor(dbPath?: string) {
 		const finalPath = dbPath ?? DB_PATH;
-		dbPathInstance = finalPath;
+		this.dbPathInstance = finalPath;
 
 		warmUpSqlJs();
 
@@ -109,27 +111,67 @@ export class SQLiteStore {
 			}
 		}
 
-		const saveDb = createSaveFunction(db, finalPath);
+		this.saveDbPtr = createSaveFunction(db, finalPath);
+		const wrappedSaveDb = () => {
+			if (this.saveDbPtr) {
+				this.saveDbPtr();
+				this.lastLoadedAt = Date.now();
+			}
+		};
 
 		db.run("PRAGMA journal_mode = WAL");
 		db.run("PRAGMA synchronous = NORMAL");
 		db.run("PRAGMA busy_timeout = 5000");
-
-		const migrator = new MigrationManager(db, saveDb);
+		const migrator = new MigrationManager(db, wrappedSaveDb);
 		migrator.migrate();
 		migrator.addMemoryCodeColumn();
 
 		Object.assign(this, {
 			db,
-			memories: new MemoryEntity(db, saveDb),
-			tasks: new TaskEntity(db, saveDb),
-			actions: new ActionEntity(db, saveDb),
-			system: new SystemEntity(db, saveDb),
-			summaries: new SummaryEntity(db, saveDb)
+			memories: new MemoryEntity(db, wrappedSaveDb),
+			tasks: new TaskEntity(db, wrappedSaveDb),
+			actions: new ActionEntity(db, wrappedSaveDb),
+			system: new SystemEntity(db, wrappedSaveDb),
+			summaries: new SummaryEntity(db, wrappedSaveDb)
 		});
 
+		this.lastLoadedAt = Date.now();
+
 		if (finalPath !== ":memory:") {
-			saveDb();
+			wrappedSaveDb();
+		}
+	}
+
+	async refresh(force = false): Promise<void> {
+		const path = this.getDbPath();
+		if (path === ":memory:") return;
+
+		try {
+			const stats = fs.statSync(path);
+			const mtime = stats.mtimeMs;
+
+			if (force || mtime > this.lastLoadedAt) {
+				const SQL = await getSqlJs();
+				const fileBuffer = fs.readFileSync(path);
+				const newDb = new SQL.Database(fileBuffer);
+
+				const wrappedSaveDb = () => {
+					if (this.saveDbPtr) {
+						this.saveDbPtr();
+						this.lastLoadedAt = Date.now();
+					}
+				};
+
+				this.db = newDb;
+				this.memories = new MemoryEntity(newDb, wrappedSaveDb);
+				this.tasks = new TaskEntity(newDb, wrappedSaveDb);
+				this.actions = new ActionEntity(newDb, wrappedSaveDb);
+				this.system = new SystemEntity(newDb, wrappedSaveDb);
+				this.summaries = new SummaryEntity(newDb, wrappedSaveDb);
+				this.lastLoadedAt = Date.now();
+			}
+		} catch (e) {
+			console.error("Failed to refresh database from disk:", e);
 		}
 	}
 
@@ -144,7 +186,7 @@ export class SQLiteStore {
 	}
 
 	getDbPath(): string {
-		return dbPathInstance;
+		return this.dbPathInstance;
 	}
 
 	close(): void {

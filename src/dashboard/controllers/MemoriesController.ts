@@ -6,8 +6,9 @@ import type { MemoryType, MemoryEntry } from "../../mcp/types/index";
 import type { IdParams, MemoryListQuery } from "../../mcp/interfaces/index";
 
 export class MemoriesController {
-	static list(req: express.Request, res: express.Response) {
+	static async list(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const query = req.query as unknown as MemoryListQuery;
 			const { repo, type, search, minImportance, maxImportance, sortBy, sortOrder } = query;
 			const page = Math.max(1, parseInt(query.page || "1", 10));
@@ -43,8 +44,9 @@ export class MemoriesController {
 		}
 	}
 
-	static get(req: express.Request, res: express.Response) {
+	static async get(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const memory = db.memories.getByIdWithStats(req.params.id as string);
 			if (!memory) throw new Error("Memory not found");
 			db.actions.logAction("read", memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
@@ -55,8 +57,9 @@ export class MemoriesController {
 		}
 	}
 
-	static create(req: express.Request, res: express.Response) {
+	static async create(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const attributes = getAttributes(req);
 			const { repo, type, content } = attributes;
 			if (!repo || !type || !content) return res.status(400).json(jsonApiError("Required fields missing", 400));
@@ -76,8 +79,9 @@ export class MemoriesController {
 		}
 	}
 
-	static update(req: express.Request, res: express.Response) {
+	static async update(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
@@ -103,8 +107,9 @@ export class MemoriesController {
 		}
 	}
 
-	static delete(req: express.Request, res: express.Response) {
+	static async delete(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
@@ -117,8 +122,9 @@ export class MemoriesController {
 		}
 	}
 
-	static bulkCreate(req: express.Request, res: express.Response) {
+	static async bulkCreate(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { items, repo } = getAttributes(req);
 			if (!Array.isArray(items) || !repo)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
@@ -140,8 +146,9 @@ export class MemoriesController {
 		}
 	}
 
-	static bulkAction(req: express.Request, res: express.Response) {
+	static async bulkAction(req: express.Request, res: express.Response) {
 		try {
+			await db.refresh();
 			const { action, ids, updates } = getAttributes(req);
 			if (!Array.isArray(ids) || !action)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'ids' array and 'action'", 400));
