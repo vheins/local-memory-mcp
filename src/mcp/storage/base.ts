@@ -79,37 +79,39 @@ export abstract class BaseEntity {
       tags: this.safeJSONParse(row.tags, []),
       metadata: this.safeJSONParse(row.metadata, {}),
       parent_id: row.parent_id || null,
-      depends_on: row.depends_on || null
+      depends_on: row.depends_on || null,
+      comments_count: row.comments_count || 0
     };
   }
 
   /**
    * Vector math utilities (simple bag-of-words implementation)
    */
-  protected computeVector(text: string): number[] {
+  protected computeVector(text: string): Record<string, number> {
     const tokens = tokenize(text);
-    const vector: number[] = new Array(128).fill(0);
+    const vector: Record<string, number> = {};
     tokens.forEach(token => {
-      let hash = 0;
-      for (let i = 0; i < token.length; i++) {
-        hash = (hash << 5) - hash + token.charCodeAt(i);
-        hash |= 0;
-      }
-      const index = Math.abs(hash) % 128;
-      vector[index]++;
+      vector[token] = (vector[token] || 0) + 1;
     });
     return vector;
   }
 
-  protected cosineSimilarity(v1: number[], v2: number[]): number {
+  protected cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
+    const keys1 = Object.keys(v1);
+    const keys2 = Object.keys(v2);
+    if (!keys1.length || !keys2.length) return 0;
+    
     let dotProduct = 0;
-    let mag1 = 0;
-    let mag2 = 0;
-    for (let i = 0; i < v1.length; i++) {
-      dotProduct += v1[i] * v2[i];
-      mag1 += v1[i] * v1[i];
-      mag2 += v2[i] * v2[i];
+    for (const key of keys1) {
+      if (v2[key]) dotProduct += v1[key] * v2[key];
     }
+    
+    let mag1 = 0;
+    for (const key of keys1) mag1 += v1[key] * v1[key];
+    
+    let mag2 = 0;
+    for (const key of keys2) mag2 += v2[key] * v2[key];
+    
     const mag = Math.sqrt(mag1) * Math.sqrt(mag2);
     return mag === 0 ? 0 : dotProduct / mag;
   }

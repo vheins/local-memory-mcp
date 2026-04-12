@@ -7,18 +7,30 @@ The Reference Catalog exposes the internal knowledge and templates of the system
 Resources provide read-only access to specialized data views and global knowledge.
 
 ### Knowledge Resources
-- **URI**: `memory://index`
-    - **Description**: Provides a paginated list of all active memories in the current system context.
-- **URI**: `memory://index?repo=[repo]`
-    - **Description**: Scoped memory index for a specific repository.
-- **URI**: `memory://summary/[repo]`
+- **URI**: `memory://memories`
+    - **Description**: Paginated list of all active memories in the system context.
+- **URI**: `memory://memories?repo={repo}&type={type}&tag={tag}`
+    - **Description**: Filtered list of memories by repository, entry type, or technology tag.
+- **URI**: `memory://memories/{id}`
+    - **Description**: Direct access to a specific memory entry (full details and statistics) by UUID.
+- **URI**: `memory://memories/search/{base64_query}?repo={repo}`
+    - **Description**: Scoped semantic search results for a repository.
+- **URI**: `memory://repositories/{repo}/summary`
     - **Description**: Retrieves the high-level global summary/signal for the specified repository (updated via `memory.summarize`).
-- **URI**: `memory://[id]`
-    - **Description**: Direct access to a specific memory entry by its UUID.
 
 ### Task Resources
-- **URI**: `tasks://current?repo=[repo]`
-    - **Description**: Displays the active Kanban board for a repository, including pointer tables for each status.
+- **URI**: `task://tasks`
+    - **Description**: Paginated list of all tasks in the system context.
+- **URI**: `task://tasks?repo={repo}&status={status}&priority={priority}`
+    - **Description**: Scoped task list with filtering by repository, Kanban status, or priority.
+- **URI**: `task://tasks/{id}`
+    - **Description**: Direct access to a specific task (full description and comments) by UUID.
+
+### Audit Resources
+- **URI**: `action://actions`
+    - **Description**: Paginated stream of all agent tool actions.
+- **URI**: `action://actions?repo={repo}&action={action}`
+    - **Description**: Filtered audit logs by repository or specific action type.
 
 ## 2. Prompts
 Prompts provide reusable templates that guide agent behavior for specific workflows.

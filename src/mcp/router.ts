@@ -202,7 +202,7 @@ export function createRouter(
         resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count || 0)
       };
       
-      db.logAction(actionType, repo, options);
+      db.actions.logAction(actionType, repo, options);
     } catch (e) {
       logger.error("Failed to log action", { toolName, error: String(e) });
     }
@@ -263,15 +263,14 @@ function collectAffectedResourceUris(toolName: string, args: any, result: any): 
   const touchesTasks = toolName.startsWith("task-");
 
   if (touchesMemory) {
-    uris.add("memory://index");
+    uris.add("memory://memories");
     if (repo) {
-      uris.add(`memory://index?repo=${encodeURIComponent(repo)}`);
-      uris.add(`memory://summary/${repo}`);
+      uris.add(`memory://memories?repo=${encodeURIComponent(repo)}`);
     }
   }
 
   if (touchesTasks && repo) {
-    uris.add(`tasks://current?repo=${encodeURIComponent(repo)}`);
+    uris.add(`tasks://tasks?repo=${encodeURIComponent(repo)}`);
   }
 
   const memoryId = args?.id || args?.memory_id || result?.data?.id;

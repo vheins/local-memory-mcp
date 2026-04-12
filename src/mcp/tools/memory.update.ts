@@ -18,9 +18,15 @@ export async function handleMemoryUpdate(
   const validated = MemoryUpdateSchema.parse(params);
 
   // Check if memory exists
-  const existing = db.getById(validated.id);
+  const existing = db.memories.getById(validated.id);
   if (!existing) {
     throw new Error(`Memory not found: ${validated.id}`);
+  }
+
+  // Repository Mismatch Check: If repo is provided in args, it MUST match the entry's repo
+  const repoFilter = params?.repo || params?.scope?.repo;
+  if (repoFilter && repoFilter !== existing.scope.repo) {
+    throw new Error(`Repository mismatch: provided repo "${repoFilter}" does not match memory repo "${existing.scope.repo}"`);
   }
 
   if (validated.title !== undefined && hasMetadataLikeTitle(validated.title)) {
@@ -42,7 +48,7 @@ export async function handleMemoryUpdate(
   if (validated.is_global !== undefined) updates.is_global = validated.is_global;
   if (validated.completed_at !== undefined) updates.completed_at = validated.completed_at;
 
-  db.update(validated.id, updates);
+  db.memories.update(validated.id, updates);
 
   // Update vector if content changed
   if (validated.content !== undefined) {
@@ -50,7 +56,7 @@ export async function handleMemoryUpdate(
   }
 
   // Log the update action
-  db.logAction('update', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
+  db.actions.logAction('update', existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
   logger.info("[MCP] memory.update", { repo: existing.scope.repo, id: validated.id, fields: Object.keys(updates) });
 
   return createMcpResponse(

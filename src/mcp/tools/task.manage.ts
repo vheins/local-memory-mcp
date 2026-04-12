@@ -100,10 +100,10 @@ export async function archiveTaskToMemory(
   storage: SQLiteStore,
   vectors: VectorStore
 ) {
-  const task = storage.getTaskById(taskId);
+  const task = storage.tasks.getTaskById(taskId);
   if (!task) return;
 
-  const comments = storage.getTaskCommentsByTaskId(taskId);
+  const comments = storage.tasks.getTaskCommentsByTaskId(taskId);
   
   let content = `Task: [${task.task_code}] ${task.title}\n`;
   content += `Phase: ${task.phase}\n`;
@@ -157,14 +157,14 @@ export async function handleTaskList(
   
   let tasks;
   if (status === 'all') {
-    tasks = storage.getTasksByMultipleStatuses(repo, [], limit, offset, search);
+    tasks = storage.tasks.getTasksByMultipleStatuses(repo, [], limit, offset, search);
   } else if (status) {
     const statuses = status.split(',').map(s => s.trim());
-    tasks = storage.getTasksByMultipleStatuses(repo, statuses, limit, offset, search);
+    tasks = storage.tasks.getTasksByMultipleStatuses(repo, statuses, limit, offset, search);
   } else {
     // If no status specified, exclude 'completed' by default to keep context clean.
     const activeStatuses = ['backlog', 'pending', 'in_progress', 'blocked', 'canceled'];
-    tasks = storage.getTasksByMultipleStatuses(repo, activeStatuses, limit, offset, search);
+    tasks = storage.tasks.getTasksByMultipleStatuses(repo, activeStatuses, limit, offset, search);
   }
   
   const filteredTasks = phase 
@@ -185,7 +185,7 @@ export async function handleTaskList(
   };
 
   const taskList = filteredTasks.map((t: any) => `[${t.task_code}] ${t.title} (ID: ${t.id})`).join(", ");
-  const taskStats = storage.getTaskStats(repo);
+  const taskStats = storage.tasks.getTaskStats(repo);
   let summary = buildTaskListSummary(
     repo,
     rows.length,
@@ -219,14 +219,14 @@ export async function handleTaskActive(
 
   if (status) {
     // Explicit status filter
-    tasks = storage.getTasksByMultipleStatuses(repo, [status], limit, 0);
+    tasks = storage.tasks.getTasksByMultipleStatuses(repo, [status], limit, 0);
     resolvedStatus = status;
   } else {
     // Default: in_progress first, fallback to pending
-    tasks = storage.getTasksByMultipleStatuses(repo, ["in_progress"], limit, 0);
+    tasks = storage.tasks.getTasksByMultipleStatuses(repo, ["in_progress"], limit, 0);
     resolvedStatus = "in_progress";
     if (tasks.length === 0) {
-      tasks = storage.getTasksByMultipleStatuses(repo, ["pending"], limit, 0);
+      tasks = storage.tasks.getTasksByMultipleStatuses(repo, ["pending"], limit, 0);
       resolvedStatus = "pending";
     }
   }
@@ -270,7 +270,7 @@ export async function handleTaskSearch(
     statuses = status.split(',').map((s: string) => s.trim()).filter(Boolean);
   }
 
-  const tasks = storage.getTasksByMultipleStatuses(repo, statuses, limit, offset, query);
+  const tasks = storage.tasks.getTasksByMultipleStatuses(repo, statuses, limit, offset, query);
 
   const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
   const rows = tasks.map((t: any) => [t.id, t.task_code, t.title, t.status, t.priority, t.comments_count || 0]);
@@ -306,7 +306,7 @@ export async function handleTaskCreate(
   const taskData = TaskCreateSchema.parse(args);
   const { repo, task_code, phase, title, description, status, priority, agent, role, doc_path, tags, metadata, parent_id, depends_on, est_tokens } = taskData;
 
-  if (storage.isTaskCodeDuplicate(repo, task_code)) {
+  if (storage.tasks.isTaskCodeDuplicate(repo, task_code)) {
     throw new Error(`Duplicate task_code: '${task_code}' already exists in repository '${repo}'`);
   }
 
@@ -317,7 +317,7 @@ export async function handleTaskCreate(
 
   // Max 10 pending tasks validation
   if (status === "pending") {
-    const stats = storage.getTaskStats(repo);
+    const stats = storage.tasks.getTaskStats(repo);
     if (stats.todo >= 10) {
       throw new Error(`Cannot create task as 'pending'. Maximum of 10 pending tasks reached in repository '${repo}'. Please use 'backlog' instead.`);
     }
@@ -350,7 +350,7 @@ export async function handleTaskCreate(
     depends_on: depends_on || null
   };
 
-  storage.insertTask(task);
+  storage.tasks.insertTask(task);
 
   return createMcpResponse(
     {
@@ -369,9 +369,9 @@ export async function handleTaskCreate(
       structuredContentPathHint: "task_code",
       resourceLinks: [
         {
-          uri: `tasks://current?repo=${encodeURIComponent(task.repo)}`,
-          name: `Current Tasks (${task.repo})`,
-          description: "Current task snapshot for the repository",
+          uri: `tasks://tasks?repo=${encodeURIComponent(task.repo)}`,
+          name: `Task Index (${task.repo})`,
+          description: "Repository task index",
           mimeType: "application/json",
           annotations: {
             audience: ["assistant"],
@@ -532,7 +532,7 @@ export async function handleTaskUpdate(
 ) {
   const updateData = TaskUpdateSchema.parse(args);
   const { repo, id, comment, ...updates } = updateData;
-  const existingTask = storage.getTaskById(id);
+  const existingTask = storage.tasks.getTaskById(id);
 
   if (!existingTask) {
     throw new Error(`Task not found: ${id}`);
@@ -564,7 +564,7 @@ export async function handleTaskUpdate(
 
   // Check for task_code uniqueness if being updated
   if (updates.task_code) {
-    if (storage.isTaskCodeDuplicate(repo, updates.task_code, id)) {
+    if (storage.tasks.isTaskCodeDuplicate(repo, updates.task_code, id)) {
       throw new Error(`Duplicate task_code: '${updates.task_code}' already exists in repository '${repo}'`);
     }
   }
@@ -580,11 +580,11 @@ export async function handleTaskUpdate(
     finalUpdates.in_progress_at = now;
   }
 
-  storage.updateTask(id, finalUpdates);
+  storage.tasks.updateTask(id, finalUpdates);
 
   if (comment !== undefined) {
     const isStatusChanging = updates.status !== undefined && updates.status !== existingTask.status;
-    storage.insertTaskComment({
+    storage.tasks.insertTaskComment({
       id: randomUUID(),
       task_id: id,
       repo,
@@ -624,7 +624,7 @@ export async function handleTaskDelete(
   storage: SQLiteStore
 ) {
   const { repo, id } = TaskDeleteSchema.parse(args);
-  storage.deleteTask(id);
+  storage.tasks.deleteTask(id);
 
   return createMcpResponse(
     {

@@ -17,13 +17,13 @@ export async function handleMemoryDelete(
   const validated = MemoryDeleteSchema.parse(params);
 
   // Check if memory exists
-  const existing = db.getById(validated.id);
+  const existing = db.memories.getById(validated.id);
   if (!existing) {
     throw new Error(`Memory not found: ${validated.id}`);
   }
 
   // Delete from SQLite
-  db.delete(validated.id);
+  db.memories.delete(validated.id);
 
   // Delete from vector store
   await vectors.remove(validated.id);
@@ -41,7 +41,7 @@ export async function handleMemoryDelete(
       structuredContentPathHint: "id",
       resourceLinks: [
         {
-          uri: `memory://index?repo=${encodeURIComponent(existing.scope.repo)}`,
+          uri: `memory://memories?repo=${encodeURIComponent(existing.scope.repo)}`,
           name: `Memory Index (${existing.scope.repo})`,
           description: "Repository memory index after deletion",
           mimeType: "application/json",

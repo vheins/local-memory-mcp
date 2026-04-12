@@ -18,7 +18,7 @@ export async function handleMemoryBulkDelete(
     if (onProgress) {
       onProgress(progress, total);
     }
-    storage.delete(id);
+    storage.memories.delete(id);
     await vectors.remove(id);
     progress++;
   }
@@ -27,7 +27,7 @@ export async function handleMemoryBulkDelete(
     onProgress(progress, total);
   }
 
-  storage.logAction("delete", repo, { resultCount: ids.length, query: "Bulk Delete" });
+  storage.actions.logAction("delete", repo, { resultCount: ids.length, query: "Bulk Delete" });
 
   return createMcpResponse(
     {
@@ -41,7 +41,7 @@ export async function handleMemoryBulkDelete(
       structuredContentPathHint: "ids",
       resourceLinks: [
         {
-          uri: `memory://index?repo=${encodeURIComponent(repo)}`,
+          uri: `memory://memories?repo=${encodeURIComponent(repo)}`,
           name: `Memory Index (${repo})`,
           description: "Repository memory index after bulk deletion",
           mimeType: "application/json",

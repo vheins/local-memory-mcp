@@ -136,6 +136,29 @@ export class TaskEntity extends BaseEntity {
     return rows.map(r => this.rowToTask(r));
   }
 
+  listRecentTasks(limit = 50, offset = 0): Task[] {
+    const query = `
+      SELECT t.*, d.task_code as depends_on_code,
+             (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
+      FROM tasks t 
+      LEFT JOIN tasks d ON t.depends_on = d.id 
+      ORDER BY 
+        CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
+        CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
+        CASE WHEN t.status = 'in_progress' THEN 0
+             WHEN t.status = 'pending' THEN 1
+             WHEN t.status = 'backlog' THEN 2
+             WHEN t.status = 'blocked' THEN 3
+             WHEN t.status = 'canceled' THEN 4
+             ELSE 5 END ASC,
+        t.priority DESC, 
+        t.created_at ASC
+      LIMIT ? OFFSET ?
+    `;
+    const rows = this.db.prepare(query).all(limit, offset) as any[];
+    return rows.map(r => this.rowToTask(r));
+  }
+
   getTasksByMultipleStatuses(repo: string, statuses: string[], limit?: number, offset?: number, search?: string): Task[] {
     if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset, search);
     

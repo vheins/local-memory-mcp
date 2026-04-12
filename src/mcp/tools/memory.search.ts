@@ -29,7 +29,7 @@ export async function handleMemorySearch(
   // 1. Get Candidates from SQLite
   // Fetch more than limit to support offset slicing after scoring
   const fetchLimit = (validated.offset + validated.limit) * 3;
-  const similarityResults = db.searchBySimilarity(
+  const similarityResults = db.memories.searchBySimilarity(
     searchQuery,
     validated.repo,
     fetchLimit,
@@ -93,7 +93,7 @@ export async function handleMemorySearch(
       });
     } else if (vectorResults.length > 0) {
       const vectorIds = vectorResults.map((vr: any) => vr.id);
-      const fetchedMemories = db.getByIds(vectorIds);
+      const fetchedMemories = db.memories.getByIds(vectorIds);
       const memoryMap = new Map(fetchedMemories.map(m => [m.id, m]));
 
       for (const vr of vectorResults) {
@@ -136,7 +136,7 @@ export async function handleMemorySearch(
   const paginatedResults = allMatches.slice(validated.offset, validated.offset + validated.limit);
 
   // 5. Post-processing — increment hit count only for pages actually returned
-  db.incrementHitCounts(paginatedResults.map(m => m.id));
+  db.memories.incrementHitCounts(paginatedResults.map(m => m.id));
   logger.info("[MCP] memory.search", {
     repo: validated.repo,
     query: validated.query,

@@ -31,8 +31,9 @@ export async function handleMemoryStore(
     : null;
 
   // Check for semantic conflicts before storing (threshold: 0.55)
-  if (!validated.supersedes) {
-    const conflict = await db.checkConflicts(validated.content, validated.scope.repo, validated.type, vectors, 0.55);
+  // Skip for task_archive as similar tasks often have similar content
+  if (!validated.supersedes && validated.type !== "task_archive") {
+    const conflict = await db.memories.checkConflicts(validated.content, validated.scope.repo, validated.type, vectors, 0.55);
     
     if (conflict) {
       return createMcpResponse(
@@ -57,9 +58,9 @@ export async function handleMemoryStore(
 
   // If this memory supersedes an old one, archive the old one
   if (validated.supersedes) {
-    const oldMemory = db.getById(validated.supersedes);
+    const oldMemory = db.memories.getById(validated.supersedes);
     if (oldMemory) {
-      db.update(oldMemory.id, { status: "archived" });
+      db.memories.update(oldMemory.id, { status: "archived" });
       logger.info("[MCP] memory.store - archived superseded memory", { oldId: oldMemory.id, newId: validated.supersedes });
     }
   }
@@ -95,7 +96,7 @@ export async function handleMemoryStore(
   };
 
   // Store in SQLite
-  db.insert(entry);
+  db.memories.insert(entry);
 
   // Automatically generate and store vector embedding
   try {
@@ -131,7 +132,7 @@ export async function handleMemoryStore(
           },
         },
         {
-          uri: `memory://index?repo=${encodeURIComponent(entry.scope.repo)}`,
+          uri: `memory://memories?repo=${encodeURIComponent(entry.scope.repo)}`,
           name: `Memory Index (${entry.scope.repo})`,
           description: "Repository memory index",
           mimeType: "application/json",

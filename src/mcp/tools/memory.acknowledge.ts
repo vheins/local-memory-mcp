@@ -11,14 +11,14 @@ export async function handleMemoryAcknowledge(
   const validated = MemoryAcknowledgeSchema.parse(params);
 
   // Check if memory exists
-  const memory = db.getById(validated.memory_id);
+  const memory = db.memories.getById(validated.memory_id);
   if (!memory) {
     throw new Error(`Memory with ID ${validated.memory_id} not found.`);
   }
 
   // Update statistics based on status
   if (validated.status === "used") {
-    db.incrementRecallCount(memory.id);
+    db.memories.incrementRecallCount(memory.id);
     logger.info("[MCP] memory.acknowledge - used", { id: memory.id, context: validated.application_context });
   } else if (validated.status === "contradictory") {
     // Flag for potential manual audit later

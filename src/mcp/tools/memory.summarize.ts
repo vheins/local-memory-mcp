@@ -14,7 +14,7 @@ export async function handleMemorySummarize(
   const fullSummary = `Project summary:\n- ${summary}`;
 
   // Store summary
-  db.upsertSummary(validated.repo, fullSummary);
+  db.summaries.upsertSummary(validated.repo, fullSummary);
 
   return createMcpResponse(
     {

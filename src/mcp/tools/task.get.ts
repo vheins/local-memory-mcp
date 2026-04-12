@@ -10,9 +10,9 @@ export async function handleTaskGet(
   
   let task;
   if (id) {
-    task = storage.getTaskById(id);
+    task = storage.tasks.getTaskById(id);
   } else if (task_code) {
-    task = storage.getTaskByCode(repo, task_code);
+    task = storage.tasks.getTaskByCode(repo, task_code);
   } else {
     // Should be caught by Zod refine, but for safety:
     throw new Error("Either id or task_code must be provided");

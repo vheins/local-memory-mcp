@@ -35,19 +35,19 @@ export class ActionEntity extends BaseEntity {
 
     const stmt = this.db.prepare(`
       INSERT INTO action_log (repo, action, query, response, memory_id, task_id, result_count, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (:repo, :action, :query, :response, :memory_id, :task_id, :result_count, :created_at)
     `);
 
-    stmt.run(
-      repo, 
-      action, 
-      query || null, 
-      finalResponse || null, 
-      finalMemoryId || null, 
-      finalTaskId || null, 
-      finalResultCount, 
-      new Date().toISOString()
-    );
+    stmt.run({
+      repo: repo || "",
+      action: action || "unknown",
+      query: query || null,
+      response: finalResponse ? (typeof finalResponse === 'string' ? finalResponse : JSON.stringify(finalResponse)) : null,
+      memory_id: finalMemoryId || null,
+      task_id: finalTaskId || null,
+      result_count: finalResultCount ?? 0,
+      created_at: new Date().toISOString()
+    });
   }
 
   getLastActionId(): number {

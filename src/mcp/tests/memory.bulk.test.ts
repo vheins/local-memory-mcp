@@ -23,7 +23,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
     const m1 = {
       type: "code_fact",
       title: "Memory 1 Title",
-      content: "This is a valid long content for memory 1",
+      content: "Alpha: This is a unique fact about the first component of the system.",
       importance: 3,
       agent: "Agent-A",
       model: "Model-X",
@@ -32,7 +32,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
     const m2 = {
       type: "code_fact",
       title: "Memory 2 Title",
-      content: "This is a valid long content for memory 2",
+      content: "Beta: Completely different technical detail regarding the secondary subsystem architecture.",
       importance: 3,
       agent: "Agent-A",
       model: "Model-X",

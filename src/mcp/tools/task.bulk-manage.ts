@@ -40,7 +40,7 @@ export async function handleTaskBulkManage(
         if (codesInRequest.has(taskData.task_code)) {
           throw new Error(`Duplicate task_code in request: '${taskData.task_code}'`);
         }
-        if (storage.isTaskCodeDuplicate(repo, taskData.task_code)) {
+        if (storage.tasks.isTaskCodeDuplicate(repo, taskData.task_code)) {
           throw new Error(`Duplicate task_code: '${taskData.task_code}' already exists in repository '${repo}'`);
         }
         codesInRequest.add(taskData.task_code);
@@ -55,7 +55,7 @@ export async function handleTaskBulkManage(
 
         // Max 10 pending tasks validation
         if (normalizedStatus === "pending") {
-          const stats = storage.getTaskStats(repo);
+          const stats = storage.tasks.getTaskStats(repo);
           // Count pending tasks in current request that are already processed
           const pendingInRequest = tasks.slice(0, createdTasks.length).filter(t => (t.status || "backlog") === "pending").length;
           if (stats.todo + pendingInRequest >= 10) {
@@ -87,7 +87,7 @@ export async function handleTaskBulkManage(
           parent_id: taskData.parent_id || null,
           depends_on: taskData.depends_on || null
         };
-        storage.insertTask(task);
+        storage.tasks.insertTask(task);
         createdTasks.push(task.task_code);
 
         // Archive if created as completed
@@ -126,7 +126,7 @@ export async function handleTaskBulkManage(
         if (onProgress) {
           onProgress(progress, total);
         }
-        storage.deleteTask(id);
+        storage.tasks.deleteTask(id);
         progress++;
       }
       
@@ -163,7 +163,7 @@ export async function handleTaskBulkManage(
           onProgress(progress, total);
         }
         
-        const existingTask = storage.getTaskById(id);
+        const existingTask = storage.tasks.getTaskById(id);
         if (existingTask) {
           const updates: any = {};
           if (status) {
@@ -178,10 +178,10 @@ export async function handleTaskBulkManage(
             }
           }
 
-          storage.updateTask(id, updates);
+          storage.tasks.updateTask(id, updates);
 
           if (comment || status) {
-            storage.insertTaskComment({
+            storage.tasks.insertTaskComment({
               id: randomUUID(),
               task_id: id,
               repo,

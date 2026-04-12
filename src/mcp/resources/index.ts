@@ -10,9 +10,9 @@ const MAX_PAGE_SIZE = 100;
 export function listResources(session?: SessionContext, params?: { cursor?: string; limit?: number }) {
   const resources = [
     {
-      uri: "memory://index",
-      name: "Active Memory Index",
-      title: "Active Memory Index",
+      uri: "memory://memories",
+      name: "Memories",
+      title: "Memories",
       description: "List of all active memory entries across projects",
       mimeType: "application/json",
       annotations: {
@@ -22,14 +22,26 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
       },
     },
     {
-      uri: "memory://{id}",
-      name: "Memory Detail",
-      title: "Memory Detail",
-      description: "Full content and statistics for a specific memory UUID",
+      uri: "tasks://tasks",
+      name: "Tasks",
+      title: "Tasks",
+      description: "List of all active tasks across projects",
       mimeType: "application/json",
       annotations: {
         audience: ["assistant"],
-        priority: 0.7,
+        priority: 0.8,
+        lastModified: new Date().toISOString(),
+      },
+    },
+    {
+      uri: "action://actions",
+      name: "Audit Log (Actions)",
+      title: "Audit Log",
+      description: "Audit trail of tool interactions and agent decisions",
+      mimeType: "application/json",
+      annotations: {
+        audience: ["assistant"],
+        priority: 0.6,
         lastModified: new Date().toISOString(),
       },
     },
@@ -47,18 +59,6 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
         priority: 1,
         lastModified: new Date().toISOString(),
       },
-    },
-    {
-      uri: "task://{id}",
-      name: "Task Detail",
-      title: "Task Detail",
-      description: "Full content and comments for a specific task UUID",
-      mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.8,
-        lastModified: new Date().toISOString(),
-      },
     }
   ];
 
@@ -68,10 +68,21 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
 export function listResourceTemplates(params?: { cursor?: string; limit?: number }) {
   const templates = [
     {
-      uriTemplate: "memory://index?repo={repo}",
-      name: "Project Memory Index",
-      title: "Project Memory Index",
-      description: "Metadata for all active memories in a specific project",
+      uriTemplate: "memory://memories/{id}",
+      name: "Memory Detail",
+      title: "Memory Detail",
+      description: "Full content and statistics for a specific memory UUID",
+      mimeType: "application/json",
+      annotations: {
+        audience: ["assistant"],
+        priority: 0.75,
+      },
+    },
+    {
+      uriTemplate: "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}",
+      name: "Filtered Memories",
+      title: "Filtered Memories",
+      description: "Filter memories by repository, type, tag, or archival status",
       mimeType: "application/json",
       annotations: {
         audience: ["assistant"],
@@ -79,18 +90,18 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
       },
     },
     {
-      uriTemplate: "memory://tags/{tag}",
-      name: "Memories by Tech Stack",
-      title: "Memories by Tech Stack",
-      description: "Retrieve best practices and decisions by technology tag (e.g., filament, react)",
+      uriTemplate: "memory://memories/search/{base64_query}?repo={repo}",
+      name: "Memories Search",
+      title: "Memories Search",
+      description: "Run a semantic search over memories using a base64-encoded query",
       mimeType: "application/json",
       annotations: {
         audience: ["assistant"],
-        priority: 0.55,
+        priority: 0.65,
       },
     },
     {
-      uriTemplate: "memory://summary/{repo}",
+      uriTemplate: "memory://repositories/{repo}/summary",
       name: "Project Summary",
       title: "Project Summary",
       description: "High-level summary of architectural decisions for a repository",
@@ -101,10 +112,21 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
       },
     },
     {
-      uriTemplate: "tasks://current?repo={repo}",
-      name: "Current Tasks",
-      title: "Current Tasks",
-      description: "List of all active tasks (pending, in_progress, blocked) for a specific project",
+      uriTemplate: "tasks://tasks/{id}",
+      name: "Task Detail",
+      title: "Task Detail",
+      description: "Full content and comments for a specific task UUID",
+      mimeType: "application/json",
+      annotations: {
+        audience: ["assistant"],
+        priority: 0.8,
+      },
+    },
+    {
+      uriTemplate: "tasks://tasks?repo={repo}&status={status}&priority={priority}",
+      name: "Filtered Tasks",
+      title: "Filtered Tasks",
+      description: "Filter tasks by repository, status, or priority level",
       mimeType: "application/json",
       annotations: {
         audience: ["assistant"],
@@ -112,10 +134,10 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
       },
     },
     {
-      uriTemplate: "memory://search/{base64_query}?repo={repo}",
-      name: "Semantic Memory Search",
-      title: "Semantic Memory Search",
-      description: "Run a semantic search over memories using a base64-encoded query",
+      uriTemplate: "action://actions?repo={repo}&action={action}",
+      name: "Filtered Actions",
+      title: "Filtered Actions",
+      description: "Filter audit logs by repository or action type",
       mimeType: "application/json",
       annotations: {
         audience: ["assistant"],
@@ -137,232 +159,237 @@ export function completeResourceArgument(
     tags: string[];
   },
 ) {
+  // Repo Autocomplete
   if (
-    resourceUri === "memory://index?repo={repo}"
-    || resourceUri === "memory://summary/{repo}"
-    || resourceUri === "tasks://current?repo={repo}"
+    resourceUri === "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}"
+    || resourceUri === "memory://memories/search/{base64_query}?repo={repo}"
+    || resourceUri === "memory://repositories/{repo}/summary"
+    || resourceUri === "tasks://tasks?repo={repo}&status={status}&priority={priority}"
+    || resourceUri === "action://actions?repo={repo}&action={action}"
   ) {
-    if (argumentName !== "repo") {
-      throw invalidCompletionParams(`Unknown resource argument "${argumentName}" for "${resourceUri}"`);
+    if (argumentName === "repo") {
+      return rankCompletionValues(dataSources.repos, argumentValue);
     }
-    return rankCompletionValues(dataSources.repos, argumentValue);
   }
 
-  if (resourceUri === "memory://tags/{tag}") {
-    if (argumentName !== "tag") {
-      throw invalidCompletionParams(`Unknown resource argument "${argumentName}" for "${resourceUri}"`);
+  // Tag Autocomplete
+  if (resourceUri === "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}") {
+    if (argumentName === "tag") {
+      return rankCompletionValues(dataSources.tags, argumentValue);
     }
-    return rankCompletionValues(dataSources.tags, argumentValue);
   }
 
-  throw invalidCompletionParams(`Unknown resource template: ${resourceUri}`);
+  throw invalidCompletionParams(`Unknown resource template or argument: ${resourceUri} (${argumentName})`);
 }
 
 export function readResource(uri: string, db: SQLiteStore, session?: SessionContext) {
   logger.info("[MCP] resource.read", { uri });
 
+  // 1. Session Roots
   if (uri === "session://roots") {
     const payload = JSON.stringify({ roots: session?.roots ?? [] }, null, 2);
     return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 1,
-            lastModified: new Date().toISOString(),
-          },
-        }
-      ]
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: 1,
+          lastModified: new Date().toISOString(),
+        },
+      }]
     };
   }
 
-  // 6. Current Tasks: tasks://current?repo={repo}
-  if (uri.startsWith("tasks://current?")) {
-    const parsed = new URL(uri.replace("tasks://", "http://tasks/"));
-    const repo = parsed.searchParams.get("repo");
-    if (!repo) throw resourceNotFound("Repo parameter is required for tasks://current", uri);
-    
-    const tasks = db.getTasksByRepo(repo).filter(t => ["backlog", "pending", "in_progress", "blocked"].includes(t.status));
-    const payload = JSON.stringify(tasks, null, 2);
-
-    return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.9,
-            lastModified: deriveLastModifiedFromCollection(tasks.map((task) => task.updated_at)),
-          },
-        }
-      ]
-    };
-  }
-
-  // 1. Index Resource (Repo specific or Global)
-  if (uri === "memory://index" || uri.startsWith("memory://index?")) {
-    const parsed = new URL(uri.replace("memory://", "http://memory/"));
-    const repo = parsed.searchParams.get("repo");
-    const includeArchived = parsed.searchParams.get("archived") === "true";
-
-    const entries = repo
-      ? db.searchByRepo(repo, { limit: 50, includeArchived })
-      : db.listRecent(50);
-    const payload = JSON.stringify(entries, null, 2);
-
-    return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: repo ? 0.85 : 0.7,
-            lastModified: deriveLastModifiedFromCollection(entries.map((entry: any) => entry.updated_at || entry.created_at)),
-          },
-        }
-      ]
-    };
-  }
-
-  // 2. Tag Affinity Resource: memory://tags/{tag}
-  if (uri.startsWith("memory://tags/")) {
-    const tag = uri.replace("memory://tags/", "");
-    const entries = db.searchByRepo("", { 
-      tags: [tag], 
-      limit: 50,
-      includeArchived: false 
-    });
-    const payload = JSON.stringify({ tag, count: entries.length, entries }, null, 2);
-
-    return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.55,
-            lastModified: deriveLastModifiedFromCollection(entries.map((entry: any) => entry.updated_at || entry.created_at)),
-          },
-        }
-      ]
-    };
-  }
-
-  // 3. Project Summary: memory://summary/{repo}
-  if (uri.startsWith("memory://summary/")) {
-    const repo = uri.replace("memory://summary/", "");
-    const summary = db.getSummary(repo);
+  // 2. Repo Summary: memory://repositories/{repo}/summary
+  if (uri.startsWith("memory://repositories/")) {
+    const repo = uri.replace("memory://repositories/", "").replace("/summary", "");
+    const summary = db.summaries.getSummary(repo);
     const text = summary?.summary || `No summary available for repository: ${repo}`;
 
     return {
-      contents: [
-        {
-          uri,
-          mimeType: "text/plain",
-          text,
-          size: Buffer.byteLength(text, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.95,
-            lastModified: summary?.updated_at || new Date().toISOString(),
-          },
-        }
-      ]
+      contents: [{
+        uri,
+        mimeType: "text/plain",
+        text,
+        size: Buffer.byteLength(text, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: 0.95,
+          lastModified: summary?.updated_at || new Date().toISOString(),
+        },
+      }]
     };
   }
 
-  const idMatch = uri.match(/^memory:\/\/([0-9a-f-]{36})$/i);
-  if (idMatch) {
-    const id = idMatch[1];
-    const entry = db.getByIdWithStats(id);
-    
-    if (!entry) {
-      throw resourceNotFound(`Memory with ID ${id} not found.`, uri);
-    }
-
-    const payload = JSON.stringify(entry, null, 2);
-    return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.75,
-            lastModified: entry.updated_at || entry.created_at,
-          },
-        }
-      ]
-    };
-  }
-
-  if (uri.startsWith("memory://search/")) {
-    const parts = uri.replace("memory://search/", "").split('?');
-    const encodedQuery = parts[0];
-    const query = Buffer.from(encodedQuery, 'base64').toString('utf-8');
-    
-    const parsed = new URL("http://memory/" + (parts[1] || ""));
-    const repo = parsed.searchParams.get("repo") || "";
-    
-    const results = db.searchBySimilarity(query, repo, 10);
-    const payload = JSON.stringify({ query, repo, results }, null, 2);
-    
-    return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.65,
-            lastModified: deriveLastModifiedFromCollection(results.map((entry: any) => entry.updated_at || entry.created_at)),
-          },
-        }
-      ]
-    };
-  }
-
-  const taskIdMatch = uri.match(/^task:\/\/([0-9a-f-]{36})$/i);
+  // 3. Task Detail: tasks://tasks/{id}
+  const taskIdMatch = uri.match(/^tasks:\/\/tasks\/([0-9a-f-]{36})$/i);
   if (taskIdMatch) {
     const id = taskIdMatch[1];
-    const task = db.getTaskById(id);
-    
-    if (!task) {
-      throw resourceNotFound(`Task with ID ${id} not found.`, uri);
-    }
+    const task = db.tasks.getTaskById(id);
+    if (!task) throw resourceNotFound(`Task with ID ${id} not found.`, uri);
 
     const payload = JSON.stringify(task, null, 2);
     return {
-      contents: [
-        {
-          uri,
-          mimeType: "application/json",
-          text: payload,
-          size: Buffer.byteLength(payload, "utf8"),
-          annotations: {
-            audience: ["assistant"],
-            priority: 0.8,
-            lastModified: task.updated_at || task.created_at,
-          },
-        }
-      ]
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: 0.8,
+          lastModified: task.updated_at || task.created_at,
+        },
+      }]
+    };
+  }
+
+  // 4. Task List/Filter: tasks://tasks[?params]
+  if (uri === "tasks://tasks" || uri.startsWith("tasks://tasks?")) {
+    const parsed = new URL(uri.replace("tasks://", "http://task/"));
+    const repo = parsed.searchParams.get("repo") || "";
+    const status = parsed.searchParams.get("status");
+    const priority = parsed.searchParams.get("priority");
+
+    let tasks: Task[];
+    if (repo && !status) {
+      // Default to active tasks if no status provided (matches legacy tasks://current)
+      tasks = db.tasks.getTasksByMultipleStatuses(repo, ["backlog", "pending", "in_progress", "blocked"]);
+    } else if (repo) {
+      tasks = db.tasks.getTasksByRepo(repo);
+    } else {
+      tasks = db.tasks.listRecentTasks(50);
+    }
+
+    if (status && status !== "all") {
+      tasks = tasks.filter(t => t.status === status);
+    }
+    if (priority) {
+      tasks = tasks.filter(t => t.priority === (isNaN(Number(priority)) ? t.priority : Number(priority)));
+    }
+
+    const payload = JSON.stringify(tasks, null, 2);
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: repo ? 0.9 : 0.7,
+          lastModified: deriveLastModifiedFromCollection(tasks.map(t => t.updated_at)),
+        },
+      }]
+    };
+  }
+
+  // 5. Memory Detail: memory://memories/{id}
+  const memoryIdMatch = uri.match(/^memory:\/\/memories\/([0-9a-f-]{36})$/i);
+  if (memoryIdMatch) {
+    const id = memoryIdMatch[1];
+    const entry = db.memories.getByIdWithStats(id);
+    if (!entry) throw resourceNotFound(`Memory with ID ${id} not found.`, uri);
+
+    const payload = JSON.stringify(entry, null, 2);
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: 0.75,
+          lastModified: entry.updated_at || entry.created_at,
+        },
+      }]
+    };
+  }
+
+  // 6. Memory List/Filter: memory://memories[?params]
+  if (uri === "memory://memories" || uri.startsWith("memory://memories?")) {
+    const parsed = new URL(uri.replace("memory://", "http://memory/"));
+    const repo = parsed.searchParams.get("repo") || "";
+    const type = parsed.searchParams.get("type");
+    const tag = parsed.searchParams.get("tag");
+    const includeArchived = parsed.searchParams.get("archived") === "true";
+
+    const result = db.memories.listMemoriesForDashboard({ 
+      repo: repo || undefined,
+      type: type || undefined,
+      tag: tag || undefined,
+      includeArchived,
+      limit: 50
+    });
+    const entries = result.items;
+
+    const payload = JSON.stringify(entries, null, 2);
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: repo ? 0.85 : 0.7,
+          lastModified: deriveLastModifiedFromCollection(entries.map((e: any) => e.updated_at || e.created_at)),
+        },
+      }]
+    };
+  }
+
+  // 7. Memory Search: memory://memories/search/{query}[?repo]
+  if (uri.startsWith("memory://memories/search/")) {
+    const parts = uri.replace("memory://memories/search/", "").split('?');
+    const encodedQuery = parts[0];
+    const query = Buffer.from(encodedQuery, 'base64').toString('utf-8');
+    const parsed = new URL("http://memory/" + (parts[1] || ""));
+    const repo = parsed.searchParams.get("repo") || "";
+    
+    const results = db.memories.searchBySimilarity(query, repo, 10);
+    const payload = JSON.stringify({ query, repo, results }, null, 2);
+    
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: 0.65,
+          lastModified: deriveLastModifiedFromCollection(results.map((e: any) => e.updated_at || e.created_at)),
+        },
+      }]
+    };
+  }
+
+  // 8. Action List: action://actions[?params]
+  if (uri === "action://actions" || uri.startsWith("action://actions?")) {
+    const parsed = new URL(uri.replace("action://", "http://action/"));
+    const repo = parsed.searchParams.get("repo") || "";
+    const actionType = parsed.searchParams.get("action");
+
+    const actions = db.actions.getRecentActions(repo || undefined, 100);
+    const payload = JSON.stringify(actions, null, 2);
+
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
+        annotations: {
+          audience: ["assistant"],
+          priority: 0.6,
+          lastModified: deriveLastModifiedFromCollection(actions.map(a => a.created_at)),
+        },
+      }]
     };
   }
 

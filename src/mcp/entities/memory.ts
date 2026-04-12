@@ -114,9 +114,30 @@ export class MemoryEntity extends BaseEntity {
     return rows.map(row => this.rowToMemoryEntry(row));
   }
 
-  searchByRepo(repo: string, query: string, type?: string, limit = 5): MemoryEntry[] {
-    let sql = "SELECT * FROM memories WHERE repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?)";
-    const params: any[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`];
+  getStats(repo?: string): { total: number, byType: Record<string, number> } {
+    let sql = "SELECT type, COUNT(*) as count FROM memories";
+    const params: any[] = [];
+    if (repo) {
+      sql += " WHERE repo = ?";
+      params.push(repo);
+    }
+    sql += " GROUP BY type";
+    
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    const byType: Record<string, number> = {};
+    let total = 0;
+    rows.forEach(row => {
+      byType[row.type] = row.count;
+      total += row.count;
+    });
+    
+    return { total, byType };
+  }
+
+  searchByRepo(repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
+    const now = new Date().toISOString();
+    let sql = "SELECT * FROM memories WHERE repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)";
+    const params: any[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
 
     if (type) {
       sql += " AND type = ?";
@@ -403,6 +424,14 @@ export class MemoryEntity extends BaseEntity {
       .slice(0, limit);
   }
 
+  async checkConflicts(content: string, repo: string, type: string, vectors: any, threshold: number = 0.55): Promise<any | null> {
+    const results = await this.searchBySimilarity(content, repo, 1, false);
+    if (results.length > 0 && results[0].similarity >= threshold) {
+      return results[0];
+    }
+    return null;
+  }
+
   archiveExpiredMemories(force: boolean = false): number {
     if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
     const now = new Date().toISOString();
@@ -422,23 +451,5 @@ export class MemoryEntity extends BaseEntity {
         OR (hit_count > 10 AND recall_count = 0)
       )
     `).run(new Date().toISOString());
-    return result.changes;
-  }
-
-  private computeVector(text: string): Record<string, number> {
-    const tokens = tokenize(text);
-    const vector: Record<string, number> = {};
-    for (const token of tokens) vector[token] = (vector[token] || 0) + 1;
-    return vector;
-  }
-
-  private cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
-    const keys1 = Object.keys(v1);
-    if (!keys1.length || !Object.keys(v2).length) return 0;
-    let dotProduct = 0;
-    for (const key of keys1) if (v2[key]) dotProduct += v1[key] * v2[key];
-    const mag1 = Math.sqrt(keys1.reduce((sum, k) => sum + v1[k] * v1[k], 0));
-    const mag2 = Math.sqrt(Object.keys(v2).reduce((sum, k) => sum + v2[k] * v2[k], 0));
-    return (mag1 && mag2) ? dotProduct / (mag1 * mag2) : 0;
   }
 }

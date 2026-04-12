@@ -198,7 +198,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
     
     // Check Resource Pagination via URI
     const resourceRes = await router("resources/read", {
-      uri: "memory://index?repo=cloud-infra"
+      uri: "memory://memories?repo=cloud-infra"
     });
     const entries = JSON.parse(resourceRes.contents[0].text);
     expect(entries.length).toBeLessThanOrEqual(20); // Default limit in resource.read is 20

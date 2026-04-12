@@ -32,13 +32,13 @@ function makeEntry(id: string, repo: string): MemoryEntry {
   };
 }
 
-describe("readResource memory://index", () => {
+describe("readResource memory://memories", () => {
   it("returns recent entries when no repo filter", () => {
     const db = new SQLiteStore(":memory:");
     db.insert(makeEntry("id-1", "repo-a"));
     db.insert(makeEntry("id-2", "repo-b"));
 
-    const result = readResource("memory://index", db);
+    const result = readResource("memory://memories", db);
     const entries = JSON.parse(result.contents[0].text);
     expect(entries.length).toBeGreaterThan(0);
     db.close();
@@ -50,7 +50,7 @@ describe("readResource memory://index", () => {
     db.insert(makeEntry("id-a2", "repo-alpha"));
     db.insert(makeEntry("id-b1", "repo-beta"));
 
-    const result = readResource("memory://index?repo=repo-alpha", db);
+    const result = readResource("memory://memories?repo=repo-alpha", db);
     const entries: MemoryEntry[] = JSON.parse(result.contents[0].text);
 
     expect(entries.length).toBeGreaterThan(0);
@@ -64,14 +64,14 @@ describe("readResource memory://index", () => {
     const db = new SQLiteStore(":memory:");
     db.insert(makeEntry("id-1", "repo-a"));
 
-    const result = readResource("memory://index?repo=nonexistent", db);
+    const result = readResource("memory://memories?repo=nonexistent", db);
     const entries = JSON.parse(result.contents[0].text);
     expect(entries).toEqual([]);
     db.close();
   });
 
   /**
-   * Property 19: memory://index dengan filter repo mengembalikan subset yang benar
+   * Property 19: memory://memories dengan filter repo mengembalikan subset yang benar
    * Validates: Requirements 19.1, 19.3
    */
   it("Property 19: all returned entries have repo === queried repo", () => {
@@ -97,7 +97,7 @@ describe("readResource memory://index", () => {
 
           // Query with the first repo as filter
           const targetRepo = repos[0];
-          const result = readResource(`memory://index?repo=${targetRepo}`, db);
+          const result = readResource(`memory://memories?repo=${targetRepo}`, db);
           const entries: MemoryEntry[] = JSON.parse(result.contents[0].text);
 
           // All returned entries must belong to targetRepo
@@ -125,7 +125,7 @@ describe("readResource memory://index", () => {
             db.insert(makeEntry(`id-${repo}`, repo));
           }
 
-          const result = readResource("memory://index", db);
+          const result = readResource("memory://memories", db);
           const entries: Array<{ id: string; type: string; repo: string }> =
             JSON.parse(result.contents[0].text);
 
@@ -188,9 +188,9 @@ describe("MCP resource templates and session resources", () => {
     const result = listResourceTemplates();
     const templates = (result.resourceTemplates as Array<{ uriTemplate: string }>).map((entry) => entry.uriTemplate);
 
-    expect(templates).toContain("memory://index?repo={repo}");
-    expect(templates).toContain("tasks://current?repo={repo}");
-    expect(templates).toContain("memory://search/{base64_query}?repo={repo}");
+    expect(templates).toContain("memory://memories/{id}");
+    expect(templates).toContain("tasks://tasks?repo={repo}&status={status}&priority={priority}");
+    expect(templates).toContain("memory://memories/search/{base64_query}?repo={repo}");
   });
 
   it("returns active session roots as a concrete resource", () => {
@@ -211,7 +211,7 @@ describe("MCP resource templates and session resources", () => {
 
   it("adds annotations and size metadata to concrete resource content", () => {
     const db = new SQLiteStore(":memory:");
-    const result = readResource("memory://summary/repo-a", db);
+    const result = readResource("memory://repositories/repo-a/summary", db);
     const content = result.contents[0];
 
     expect(content.annotations.priority).toBeGreaterThan(0.5);

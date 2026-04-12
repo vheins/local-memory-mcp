@@ -71,9 +71,9 @@ export interface Task {
   est_tokens: number;
   tags: string[];
   metadata: Record<string, any>;
-  parent_id: string | null;
   depends_on: string | null;
   comments?: TaskComment[];
+  comments_count?: number;
 }
 
 export interface TaskComment {

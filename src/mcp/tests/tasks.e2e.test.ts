@@ -20,7 +20,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
   it("should follow the complete task management lifecycle: Plan -> Execute -> Verify", async () => {
     // ---- 1. INITIAL CHECK ----
     const initialRes = await router("resources/read", {
-      uri: `tasks://current?repo=${REPO}`
+      uri: `tasks://tasks?repo=${REPO}`
     });
     const initialTasks = JSON.parse(initialRes.contents[0].text);
     expect(initialTasks.length).toBe(0);
@@ -58,7 +58,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
     const taskBId = db.getTasksByRepo(REPO).find(t => t.task_code === "TASK-002").id;
 
     // Verify both are pending
-    const plannedRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
+    const plannedRes = await router("resources/read", { uri: `tasks://tasks?repo=${REPO}` });
     const plannedTasks = JSON.parse(plannedRes.contents[0].text);
     expect(plannedTasks.length).toBe(2);
 
@@ -85,7 +85,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       }
     });
 
-    const inProgressRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
+    const inProgressRes = await router("resources/read", { uri: `tasks://tasks?repo=${REPO}` });
     const inProgressTasks = JSON.parse(inProgressRes.contents[0].text);
     expect(inProgressTasks.find((t: any) => t.id === taskAId).status).toBe("in_progress");
 
@@ -104,7 +104,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       }
     });
 
-    const afterARes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
+    const afterARes = await router("resources/read", { uri: `tasks://tasks?repo=${REPO}` });
     const afterATasks = JSON.parse(afterARes.contents[0].text);
     expect(afterATasks.length).toBe(1);
     expect(afterATasks[0].id).toBe(taskBId);
@@ -124,7 +124,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
       }
     });
 
-    const finalCheckRes = await router("resources/read", { uri: `tasks://current?repo=${REPO}` });
+    const finalCheckRes = await router("resources/read", { uri: `tasks://tasks?repo=${REPO}` });
     const finalCheckTasks = JSON.parse(finalCheckRes.contents[0].text);
     expect(finalCheckTasks[0].status).toBe("in_progress");
 

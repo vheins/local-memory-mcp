@@ -48,7 +48,7 @@ export async function handleMemorySynthesize(
 
   const recap = await handleMemoryRecap({ repo, limit: 8, offset: 0 }, db);
   const recapText = getPrimaryTextContent(recap);
-  const summary = validated.include_summary ? db.getSummary(repo)?.summary : "";
+  const summary = validated.include_summary ? db.summaries.getSummary(repo)?.summary : "";
 
   const taskSnapshot = validated.include_tasks
     ? await handleTaskList({ repo, status: "backlog,pending,in_progress,blocked", limit: 15, offset: 0 }, db)

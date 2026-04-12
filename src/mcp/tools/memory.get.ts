@@ -7,14 +7,14 @@ export async function handleMemoryGet(
   storage: SQLiteStore
 ) {
   const { id } = MemoryGetSchema.parse(args);
-  const memory = storage.getById(id);
+  const memory = storage.memories.getById(id);
 
   if (!memory) {
     throw new Error(`Memory not found: ${id}`);
   }
 
   // Increment hit count when explicitly fetched
-  storage.incrementHitCount(id);
+  storage.memories.incrementHitCount(id);
 
   const summary = `Memory [${memory.type}] ${memory.title}: ${memory.content.substring(0, 100)}${memory.content.length > 100 ? "..." : ""}`;
 
