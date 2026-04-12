@@ -1,16 +1,39 @@
 # Test Scenarios: Task Management
 
+Every API endpoint must have at least one positive and one negative scenario.
+
 ## 1. `task-create`
-- **Positive (Happy Path):** Call with valid title and description. Expected: Task is created and ID returned.
-- **Negative (Validation):** Omit `title`. Expected: System returns Protocol Error `-32602`.
+- **Positive:** Provide valid `title` and `description`. Expected: UUID returned, DB row created.
+- **Negative:** Omit `title`. Expected: Protocol Error `-32602`.
 
-## 2. `task-active` (Business Logic)
-- **Positive (State Transition):**
-  - Given Task A is `active`.
-  - When `task-active` is called with Task B's ID.
-  - Expected: Task B becomes `active`. Task A is demoted to `pending`.
-- **Negative:** Pass non-existent UUID. Expected: Returns `-32602` Not Found.
+## 2. `task-create-interactive`
+- **Positive:** Client has `elicitation` capability. Expected: Triggers client form, saves task upon submission.
+- **Negative:** Client lacks `elicitation` capability. Expected: Protocol Error `-32603`.
 
-## 3. `task-create-interactive` (Advanced Protocol)
-- **Positive:** Client supports `elicitation`. Tool triggers `elicitation/create` and successfully waits for human input, then stores the task.
-- **Negative:** Client does NOT support `elicitation`. Expected: Tool is not available in the `tools/list` or returns an error stating client unsupported capability.
+## 3. `task-update`
+- **Positive:** Provide valid `id` and change `status` to `completed`. Expected: DB is updated.
+- **Negative:** Provide non-existent `id`. Expected: Protocol Error `-32602` (Not Found).
+
+## 4. `task-active`
+- **Positive:** Provide valid `id` of a pending task. Expected: Task becomes active, previous active task becomes pending.
+- **Negative:** Pass invalid UUID format for `id`. Expected: Protocol Error `-32602`.
+
+## 5. `task-list`
+- **Positive:** Call with no arguments. Expected: Returns list of non-archived tasks.
+- **Negative:** DB access issue. Expected: Protocol Error `-32603`.
+
+## 6. `task-search`
+- **Positive:** Provide valid `query`. Expected: Returns semantically matched tasks.
+- **Negative:** Omit `query`. Expected: Protocol Error `-32602`.
+
+## 7. `task-detail`
+- **Positive:** Provide valid `id`. Expected: Full task JSON returned.
+- **Negative:** Provide unknown `id`. Expected: Protocol Error `-32602` (Not Found).
+
+## 8. `task-delete`
+- **Positive:** Provide valid `id`. Expected: Task deleted from DB.
+- **Negative:** Provide empty `id`. Expected: Protocol Error `-32602`.
+
+## 9. `task-bulk-manage`
+- **Positive:** Provide valid list of 1 create and 1 delete operation. Expected: Both executed inside a transaction.
+- **Negative:** Pass a create operation without `title`. Expected: Transaction aborts, Error `-32602` returned.
