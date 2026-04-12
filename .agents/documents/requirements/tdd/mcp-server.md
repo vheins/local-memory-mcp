@@ -28,21 +28,16 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 
 ## Reference Catalog (MCP Primitives)
 
-### Resources (URIs)
-- `repository://{name}/memories`: Paginated list of memories.
-- `repository://{name}/tasks`: Paginated list of tasks.
-- `repository://{name}/summary`: High-level global summary (signal).
-- `repository://{name}/actions`: Audit stream of tool actions.
-- `session://roots`: List of active workspace roots.
-
 ### Prompts (Templates)
 - `memory-agent-core`: Behavioral contract for memory usage and conflict resolution.
 - `project-briefing`: Rapid situational awareness for new sessions.
 - `task-orchestrator`: Management logic for multi-task initiatives.
+- **Auto-Injection**: The system automatically replaces `{{current_repo}}` in all prompt templates with the active repository name from the session context.
 
 ## Logic Implementation
 - **Hybrid Search**: Score = (Cosine_Similarity * 0.7) + (BM25_Score * 0.3).
+- **Collision Detection**: `memory-store` performs semantic conflict checking (threshold 0.55) to prevent duplicate knowledge entries.
 - **Task Lifecycle**: Enforced via `TaskService` middleware ensuring `in_progress` transition before `completed`.
+- **Automatic Archiving**: Completing a task automatically triggers `archiveTaskToMemory`, generating a `task_archive` memory entry containing the full description and comment history.
+- **Bulk Constraints**: All bulk operations use a transaction chunk size of **500** records to respect SQLite variable limits.
 - **Normalization**: Automatically maps dot-notation names (e.g., `memory.store`) to internal hyphenated IDs (`memory-store`).
-- **Audit Logs**: Every successful tool invocation is recorded in the Audit Actions resource.
-- **Privacy Policy**: All data is stored in the user's `@appDataDir` (e.g., `~/.gemini/antigravity`).

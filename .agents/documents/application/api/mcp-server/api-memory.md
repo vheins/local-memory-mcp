@@ -6,6 +6,7 @@ This document outlines the MCP Tool interfaces. All responses comply with the [M
 
 ### 1.1 `memory-store`
 - **Method:** `tools/call`
+- **Special Logic: Collision Detection**: Before storing, the system performs a semantic search. If a memory with similarity **> 0.55** already exists in the repo, the operation may flag a conflict or return the existing ID to prevent redundancy.
 - **Arguments:**
   - `type` (enum: `code_fact`, `decision`, `mistake`, `pattern`, `agent_handoff`, `agent_registered`, `file_claim`, `task_archive`)
   - `title` (string, required)
@@ -90,11 +91,7 @@ This document outlines the MCP Tool interfaces. All responses comply with the [M
 - **Response:**
   ```json
   {
-    "content": [
-      { "type": "text", "text": "Synthesis objective: \"Summarize auth flow\". Answer: ... (See structuredContent.answer)" }
-    ],
-    "isError": false,
-    "structuredContent": {
+    "structuredData": {
       "repo": "my-repo",
       "objective": "Summarize auth flow",
       "answer": "The authentication flow uses JWT with validToken helper...",
@@ -133,7 +130,11 @@ This document outlines the MCP Tool interfaces. All responses comply with the [M
   - `id` (UUID, required)
 - **Response:** 
   - `content`: Text summary and serialized JSON.
-  - `structuredContent`: Full memory object (PK, type, title, content, importance, etc.).
+  - `structuredContent`: Full memory object including **Usage Statistics**:
+    - `hit_count`: Total times this memory was retrieved.
+    - `recall_count`: Total times an agent explicitly acknowledged using this memory.
+    - `recall_rate`: The ratio of `recall_count / hit_count`, representing the memory's practical utility.
+    - `last_used_at`: Timestamp of the most recent retrieval or acknowledgment.
 
 ### 1.6 `memory-update`
 - **Method:** `tools/call`

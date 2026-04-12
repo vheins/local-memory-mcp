@@ -252,10 +252,19 @@ Returns performance metrics for task completion across different time intervals.
     "type": "performance-stats",
     "id": "system",
     "attributes": {
-      "daily": { "avg": 120, "history": [] },
-      "weekly": { "avg": 850, "history": [] },
-      "monthly": { "avg": 3400, "history": [] },
-      "overall": { "avg": 5000, "history": [] }
+      "daily": { 
+        "completed": 5, 
+        "tokens": 5400, 
+        "avgDuration": 3600, 
+        "added": 8,
+        "history": [
+          { "label": "09:00", "created": 2, "completed": 1 },
+          { "label": "10:00", "created": 1, "completed": 3 }
+        ]
+      },
+      "weekly": { "completed": 20, "tokens": 25000, "avgDuration": 14400, "added": 25, "history": [] },
+      "monthly": { "completed": 85, "tokens": 120000, "avgDuration": 43200, "added": 100, "history": [] },
+      "overall": { "completed": 500, "tokens": 800000, "avgDuration": 86400, "added": 600, "history": [] }
     }
   }
 }

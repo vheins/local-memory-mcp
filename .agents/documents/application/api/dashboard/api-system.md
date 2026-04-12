@@ -61,7 +61,8 @@ Retrieves a historical timeline of interactions (memory reads/writes, task updat
 | `page` | number | No | `1` | Current page number. |
 | `pageSize` | number | No | `10` | Items per page (max 50). |
 
-**Special Logic**: Identical actions within a 10-minute window are "burst-condensed" into a single list item.
+**Special Logic: Burst Condensation**
+Identical actions (same tool and repo) occurring within a **10-minute window** are automatically condensed into a single list item with an incremented `burstCount` to maintain a high-signal timeline.
 
 **Response**
 ```json
