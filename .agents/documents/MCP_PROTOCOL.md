@@ -13,6 +13,14 @@ This document details the technical interface exposed by the `local-memory-mcp` 
   - `logging` (setLevel, message notifications)
   - `completions` (complete)
 
+## Basic Protocol Requirements (JSON-RPC 2.0)
+
+In compliance with the [MCP Basic Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic), all communication with this server must adhere strictly to JSON-RPC 2.0:
+- **Requests & Responses:** All requests MUST include a valid, non-null `id` (string or integer) which MUST NOT have been used previously by the requestor in the active session. All responses MUST include the matching `id`.
+- **Notifications:** Oneway messages MUST NOT include an `id` field. The receiver must not send a response.
+- **Schema Validation:** All input schemas and tools use JSON Schema draft **2020-12** by default. Clients must validate the schema dialect accordingly.
+- **Metadata (`_meta`):** Both requests and notifications may optionally include a `_meta` object for tracking progress or attaching out-of-band metadata.
+
 ---
 
 ## 1. Tools (Model Control)
