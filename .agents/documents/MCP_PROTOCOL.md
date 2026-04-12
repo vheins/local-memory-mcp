@@ -29,6 +29,13 @@ In compliance with the [MCP Lifecycle Specification](https://modelcontextprotoco
 - **Disconnection:** On stdio transports, disconnection is handled via process streams. The client gracefully exits by closing the input stream to the server, and the server shuts down gracefully.
 - **Error Handling:** If the protocol version negotiation fails during initialization, the server returns an explicit `-32602` error containing the `supported` and `requested` versions.
 
+## Utilities: Cancellation
+
+In compliance with the [MCP Cancellation Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/cancellation), the server supports aborting in-flight requests:
+- **Notification Method:** Clients may send a `notifications/cancelled` notification containing a `requestId` and an optional `reason`.
+- **Behavior:** Upon receiving this notification, the server triggers an internal `AbortController` for the corresponding active request.
+- **Response:** If the request has not yet completed, the server aborts the underlying processing (e.g., SQLite query, vector embeddings, tool execution) and drops the response. The client MUST NOT expect a JSON-RPC `result` or `error` response for a successfully cancelled request.
+
 ## STDIO Transport Requirements
 
 In compliance with the [MCP STDIO Transport Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports), the server adheres to the following strict boundaries:

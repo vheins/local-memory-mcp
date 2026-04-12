@@ -112,7 +112,17 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 
 ---
 
-## 5. Ringkasan Kendala Teknis & Keamanan Global
+## 5. Spesifikasi Utilities (Cancellation)
+
+### Pembatalan Request (`notifications/cancelled`)
+- **Fungsi:** Memungkinkan klien untuk membatalkan proses *request* yang sedang berlangsung (*in-flight*) di sisi server, menghemat sumber daya sistem (contohnya membatalkan *embedding* vektor atau _query_ database yang memakan waktu lama).
+- **Mekanisme Klien:** Klien mengirimkan notifikasi satu arah dengan nama metode `notifications/cancelled`. Parameter yang wajib ada adalah `requestId` (menunjuk ID dari *request* asli yang ingin dibatalkan), dan klien dapat menyertakan parameter `reason` sebagai alasan opsional.
+- **Mekanisme Server:** Saat menerima notifikasi ini, server akan memicu `AbortController` yang terkait dengan `requestId` tersebut.
+- **Respons:** Proses yang diinterupsi oleh pembatalan ini akan dihentikan secara prematur, dan server **tidak akan** mengirimkan `result` maupun balasan pesan ke klien.
+
+---
+
+## 6. Ringkasan Kendala Teknis & Keamanan Global
 
 1. **Validasi Ketat:** Semua input (URI, argumen, skema JSON) harus divalidasi oleh kedua belah pihak untuk mencegah eksploitasi (seperti path traversal dan injeksi command).
 2. **Negosiasi Kapabilitas:** Klien dan server harus saling menghormati kapabilitas yang dideklarasikan saat inisialisasi. Tidak boleh mengirim permintaan untuk fitur yang tidak dideklarasikan.
