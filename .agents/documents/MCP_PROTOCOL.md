@@ -20,6 +20,7 @@ In compliance with the [MCP Basic Specification](https://modelcontextprotocol.io
 - **Notifications:** Oneway messages MUST NOT include an `id` field. The receiver must not send a response.
 - **Schema Validation:** All input schemas and tools use JSON Schema draft **2020-12** by default. Clients must validate the schema dialect accordingly.
 - **Metadata (`_meta`):** Both requests and notifications may optionally include a `_meta` object for tracking progress or attaching out-of-band metadata.
+- **Authorization:** Since this server is designed for **local-first execution** over the **stdio transport**, the MCP Authorization specification (OAuth 2.1) is **not applicable**. Security is managed via local filesystem permissions and environment-level access.
 
 ## Lifecycle Management
 

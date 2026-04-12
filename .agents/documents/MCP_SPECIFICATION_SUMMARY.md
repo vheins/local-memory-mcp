@@ -135,10 +135,9 @@ Dokumen ini merupakan hasil pembelajaran dan sintesis dari spesifikasi resmi MCP
 
 ## 6. Spesifikasi Otorisasi (Authorization)
 
-### Otorisasi Berbasis OAuth 2.1
-- **Fungsi:** Mengamankan akses ke server MCP (khusus untuk transport HTTP).
-- **Transport HTTP:** Wajib menggunakan skema otorisasi bearer (`Authorization: Bearer <token>`). Token harus divalidasi audiensnya (Audience Binding) untuk mencegah *confused deputy*. Mendukung *Step-up Flow* (merespons dengan HTTP 403 jika *scope* kurang dan memberikan *header* `WWW-Authenticate`).
-- **Transport STDIO:** Spesifikasi otorisasi ini **tidak boleh** digunakan. Kredensial untuk akses harus disediakan melalui lingkungan lokal (misal: *environment variables*).
+### Status: Tidak Berlaku (Local-First)
+- **Konteks:** Karena server ini beroperasi secara **local-first** menggunakan transport **STDIO** (sebagai subproses IDE seperti Cursor atau VSCode), spesifikasi Otorisasi MCP berbasis OAuth 2.1 **tidak diterapkan**.
+- **Keamanan:** Keamanan akses sepenuhnya dikelola oleh izin sistem file lokal (*local filesystem permissions*) dan kredensial lingkungan (*environment variables*) di mana server dijalankan. Sesuai dengan spesifikasi MCP, transport STDIO tidak diwajibkan (bahkan disarankan untuk tidak) mengimplementasikan protokol otorisasi formal.
 
 ---
 
