@@ -99,4 +99,12 @@ export class ActionEntity extends BaseEntity {
       GROUP BY action
     `).all(repo);
   }
+
+  getActionById(id: number): any | undefined {
+    return this.db.prepare(`
+      SELECT a.*, m.title as memory_title, m.type as memory_type 
+      FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
+      WHERE a.id = ?
+    `).get(id) as any | undefined;
+  }
 }

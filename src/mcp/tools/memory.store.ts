@@ -132,7 +132,7 @@ export async function handleMemoryStore(
           },
         },
         {
-          uri: `memory://memories?repo=${encodeURIComponent(entry.scope.repo)}`,
+          uri: `repository://${encodeURIComponent(entry.scope.repo)}/memories`,
           name: `Memory Index (${entry.scope.repo})`,
           description: "Repository memory index",
           mimeType: "application/json",

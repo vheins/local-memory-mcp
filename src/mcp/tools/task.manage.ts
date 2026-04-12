@@ -369,7 +369,7 @@ export async function handleTaskCreate(
       structuredContentPathHint: "task_code",
       resourceLinks: [
         {
-          uri: `tasks://tasks?repo=${encodeURIComponent(task.repo)}`,
+          uri: `repository://${encodeURIComponent(task.repo)}/tasks`,
           name: `Task Index (${task.repo})`,
           description: "Repository task index",
           mimeType: "application/json",

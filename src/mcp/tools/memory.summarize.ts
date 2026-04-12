@@ -28,8 +28,8 @@ export async function handleMemorySummarize(
       structuredContentPathHint: "summary",
       resourceLinks: [
         {
-          uri: `memory://summary/${validated.repo}`,
-          name: `Memory Summary (${validated.repo})`,
+          uri: `repository://${encodeURIComponent(validated.repo)}/summary`,
+          name: `Repository Summary (${validated.repo})`,
           description: "Repository summary resource",
           mimeType: "text/plain",
           annotations: {

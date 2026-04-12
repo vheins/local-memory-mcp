@@ -165,8 +165,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     const result = await router("resources/templates/list", {});
     const templates = result.resourceTemplates.map((entry: any) => entry.uriTemplate);
 
-    expect(templates).toContain("memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}");
-    expect(templates).toContain("tasks://tasks?repo={repo}&status={status}&priority={priority}");
+    expect(templates).toContain("repository://{name}/memories");
+    expect(templates).toContain("repository://{name}/tasks");
   });
 
   it("supports tools/list pagination with nextCursor", async () => {
@@ -207,10 +207,10 @@ describe("createRouter() — Property 11: uses provided storage", () => {
     const result = await router("completion/complete", {
       ref: {
         type: "ref/resource",
-        uri: "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}",
+        uri: "repository://{name}/memories",
       },
       argument: {
-        name: "repo",
+        name: "name",
         value: "alp",
       },
     });

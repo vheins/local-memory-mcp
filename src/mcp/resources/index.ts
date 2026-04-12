@@ -10,38 +10,14 @@ const MAX_PAGE_SIZE = 100;
 export function listResources(session?: SessionContext, params?: { cursor?: string; limit?: number }) {
   const resources = [
     {
-      uri: "memory://memories",
-      name: "Memories",
-      title: "Memories",
-      description: "List of all active memory entries across projects",
+      uri: "repository://index",
+      name: "Repository Index",
+      title: "Repository Index",
+      description: "List of all known repositories with memory/task counts and last activity",
       mimeType: "application/json",
       annotations: {
         audience: ["assistant"],
-        priority: 0.85,
-        lastModified: new Date().toISOString(),
-      },
-    },
-    {
-      uri: "tasks://tasks",
-      name: "Tasks",
-      title: "Tasks",
-      description: "List of all active tasks across projects",
-      mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.8,
-        lastModified: new Date().toISOString(),
-      },
-    },
-    {
-      uri: "action://actions",
-      name: "Audit Log (Actions)",
-      title: "Audit Log",
-      description: "Audit trail of tool interactions and agent decisions",
-      mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.6,
+        priority: 1,
         lastModified: new Date().toISOString(),
       },
     },
@@ -56,10 +32,10 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
       size: Buffer.byteLength(JSON.stringify({ roots: session?.roots ?? [] }), "utf8"),
       annotations: {
         audience: ["assistant"],
-        priority: 1,
+        priority: 0.95,
         lastModified: new Date().toISOString(),
       },
-    }
+    },
   ];
 
   return paginateEntries("resources", resources, params);
@@ -67,83 +43,82 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
 
 export function listResourceTemplates(params?: { cursor?: string; limit?: number }) {
   const templates = [
+    // ── Memory ──────────────────────────────────────────────────────────────
     {
-      uriTemplate: "memory://memories/{id}",
+      uriTemplate: "repository://{name}/memories",
+      name: "Repository Memories",
+      title: "Repository Memories",
+      description: "All active memory entries for a specific repository",
+      mimeType: "application/json",
+      annotations: { audience: ["assistant"], priority: 0.85 },
+    },
+    {
+      uriTemplate: "repository://{name}/memories?search={search}&type={type}&tag={tag}",
+      name: "Filtered Repository Memories",
+      title: "Filtered Repository Memories",
+      description: "Filter or search memories within a repository by keyword, type, or tag",
+      mimeType: "application/json",
+      annotations: { audience: ["assistant"], priority: 0.8 },
+    },
+    {
+      uriTemplate: "memory://{id}",
       name: "Memory Detail",
       title: "Memory Detail",
       description: "Full content and statistics for a specific memory UUID",
       mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.75,
-      },
+      annotations: { audience: ["assistant"], priority: 0.75 },
     },
+    // ── Tasks ────────────────────────────────────────────────────────────────
     {
-      uriTemplate: "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}",
-      name: "Filtered Memories",
-      title: "Filtered Memories",
-      description: "Filter memories by repository, type, tag, or archival status",
+      uriTemplate: "repository://{name}/tasks",
+      name: "Repository Tasks",
+      title: "Repository Tasks",
+      description: "All active tasks for a specific repository",
       mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.7,
-      },
+      annotations: { audience: ["assistant"], priority: 0.9 },
     },
     {
-      uriTemplate: "memory://memories/search/{base64_query}?repo={repo}",
-      name: "Memories Search",
-      title: "Memories Search",
-      description: "Run a semantic search over memories using a base64-encoded query",
+      uriTemplate: "repository://{name}/tasks?status={status}&priority={priority}",
+      name: "Filtered Repository Tasks",
+      title: "Filtered Repository Tasks",
+      description: "Filter tasks within a repository by status or priority level",
       mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.65,
-      },
+      annotations: { audience: ["assistant"], priority: 0.85 },
     },
     {
-      uriTemplate: "memory://repositories/{repo}/summary",
-      name: "Project Summary",
-      title: "Project Summary",
-      description: "High-level summary of architectural decisions for a repository",
-      mimeType: "text/plain",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.95,
-      },
-    },
-    {
-      uriTemplate: "tasks://tasks/{id}",
+      uriTemplate: "task://{id}",
       name: "Task Detail",
       title: "Task Detail",
       description: "Full content and comments for a specific task UUID",
       mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.8,
-      },
+      annotations: { audience: ["assistant"], priority: 0.8 },
+    },
+    // ── Repository extras ────────────────────────────────────────────────────
+    {
+      uriTemplate: "repository://{name}/summary",
+      name: "Repository Summary",
+      title: "Repository Summary",
+      description: "High-level architectural summary for a repository",
+      mimeType: "text/plain",
+      annotations: { audience: ["assistant"], priority: 0.95 },
     },
     {
-      uriTemplate: "tasks://tasks?repo={repo}&status={status}&priority={priority}",
-      name: "Filtered Tasks",
-      title: "Filtered Tasks",
-      description: "Filter tasks by repository, status, or priority level",
+      uriTemplate: "repository://{name}/actions",
+      name: "Repository Actions",
+      title: "Repository Actions",
+      description: "Audit log of agent tool actions scoped to a repository",
       mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.9,
-      },
+      annotations: { audience: ["assistant"], priority: 0.6 },
     },
+    // ── Action detail ────────────────────────────────────────────────────────
     {
-      uriTemplate: "action://actions?repo={repo}&action={action}",
-      name: "Filtered Actions",
-      title: "Filtered Actions",
-      description: "Filter audit logs by repository or action type",
+      uriTemplate: "action://{id}",
+      name: "Action Detail",
+      title: "Action Detail",
+      description: "Full details of a specific audit log entry by integer ID",
       mimeType: "application/json",
-      annotations: {
-        audience: ["assistant"],
-        priority: 0.6,
-      },
-    }
+      annotations: { audience: ["assistant"], priority: 0.55 },
+    },
   ];
 
   return paginateEntries("resourceTemplates", templates, params);
@@ -159,21 +134,22 @@ export function completeResourceArgument(
     tags: string[];
   },
 ) {
-  // Repo Autocomplete
+  // Repo autocomplete for all repository://{name}/... templates
   if (
-    resourceUri === "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}"
-    || resourceUri === "memory://memories/search/{base64_query}?repo={repo}"
-    || resourceUri === "memory://repositories/{repo}/summary"
-    || resourceUri === "tasks://tasks?repo={repo}&status={status}&priority={priority}"
-    || resourceUri === "action://actions?repo={repo}&action={action}"
+    resourceUri === "repository://{name}/memories"
+    || resourceUri === "repository://{name}/memories?search={search}&type={type}&tag={tag}"
+    || resourceUri === "repository://{name}/tasks"
+    || resourceUri === "repository://{name}/tasks?status={status}&priority={priority}"
+    || resourceUri === "repository://{name}/summary"
+    || resourceUri === "repository://{name}/actions"
   ) {
-    if (argumentName === "repo") {
+    if (argumentName === "name") {
       return rankCompletionValues(dataSources.repos, argumentValue);
     }
   }
 
-  // Tag Autocomplete
-  if (resourceUri === "memory://memories?repo={repo}&type={type}&tag={tag}&archived={archived}") {
+  // Tag autocomplete for filtered memories
+  if (resourceUri === "repository://{name}/memories?search={search}&type={type}&tag={tag}") {
     if (argumentName === "tag") {
       return rankCompletionValues(dataSources.tags, argumentValue);
     }
@@ -185,9 +161,10 @@ export function completeResourceArgument(
 export function readResource(uri: string, db: SQLiteStore, session?: SessionContext) {
   logger.info("[MCP] resource.read", { uri });
 
-  // 1. Session Roots
-  if (uri === "session://roots") {
-    const payload = JSON.stringify({ roots: session?.roots ?? [] }, null, 2);
+  // 1. Repository Index
+  if (uri === "repository://index") {
+    const repos = db.system.listRepoNavigation();
+    const payload = JSON.stringify(repos, null, 2);
     return {
       contents: [{
         uri,
@@ -203,92 +180,26 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
     };
   }
 
-  // 2. Repo Summary: memory://repositories/{repo}/summary
-  if (uri.startsWith("memory://repositories/")) {
-    const repo = uri.replace("memory://repositories/", "").replace("/summary", "");
-    const summary = db.summaries.getSummary(repo);
-    const text = summary?.summary || `No summary available for repository: ${repo}`;
-
+  // 2. Session Roots
+  if (uri === "session://roots") {
+    const payload = JSON.stringify({ roots: session?.roots ?? [] }, null, 2);
     return {
       contents: [{
         uri,
-        mimeType: "text/plain",
-        text,
-        size: Buffer.byteLength(text, "utf8"),
+        mimeType: "application/json",
+        text: payload,
+        size: Buffer.byteLength(payload, "utf8"),
         annotations: {
           audience: ["assistant"],
           priority: 0.95,
-          lastModified: summary?.updated_at || new Date().toISOString(),
+          lastModified: new Date().toISOString(),
         },
       }]
     };
   }
 
-  // 3. Task Detail: tasks://tasks/{id}
-  const taskIdMatch = uri.match(/^tasks:\/\/tasks\/([0-9a-f-]{36})$/i);
-  if (taskIdMatch) {
-    const id = taskIdMatch[1];
-    const task = db.tasks.getTaskById(id);
-    if (!task) throw resourceNotFound(`Task with ID ${id} not found.`, uri);
-
-    const payload = JSON.stringify(task, null, 2);
-    return {
-      contents: [{
-        uri,
-        mimeType: "application/json",
-        text: payload,
-        size: Buffer.byteLength(payload, "utf8"),
-        annotations: {
-          audience: ["assistant"],
-          priority: 0.8,
-          lastModified: task.updated_at || task.created_at,
-        },
-      }]
-    };
-  }
-
-  // 4. Task List/Filter: tasks://tasks[?params]
-  if (uri === "tasks://tasks" || uri.startsWith("tasks://tasks?")) {
-    const parsed = new URL(uri.replace("tasks://", "http://task/"));
-    const repo = parsed.searchParams.get("repo") || "";
-    const status = parsed.searchParams.get("status");
-    const priority = parsed.searchParams.get("priority");
-
-    let tasks: Task[];
-    if (repo && !status) {
-      // Default to active tasks if no status provided (matches legacy tasks://current)
-      tasks = db.tasks.getTasksByMultipleStatuses(repo, ["backlog", "pending", "in_progress", "blocked"]);
-    } else if (repo) {
-      tasks = db.tasks.getTasksByRepo(repo);
-    } else {
-      tasks = db.tasks.listRecentTasks(50);
-    }
-
-    if (status && status !== "all") {
-      tasks = tasks.filter(t => t.status === status);
-    }
-    if (priority) {
-      tasks = tasks.filter(t => t.priority === (isNaN(Number(priority)) ? t.priority : Number(priority)));
-    }
-
-    const payload = JSON.stringify(tasks, null, 2);
-    return {
-      contents: [{
-        uri,
-        mimeType: "application/json",
-        text: payload,
-        size: Buffer.byteLength(payload, "utf8"),
-        annotations: {
-          audience: ["assistant"],
-          priority: repo ? 0.9 : 0.7,
-          lastModified: deriveLastModifiedFromCollection(tasks.map(t => t.updated_at)),
-        },
-      }]
-    };
-  }
-
-  // 5. Memory Detail: memory://memories/{id}
-  const memoryIdMatch = uri.match(/^memory:\/\/memories\/([0-9a-f-]{36})$/i);
+  // 3. Memory Detail: memory://{id}
+  const memoryIdMatch = uri.match(/^memory:\/\/([0-9a-f-]{36})$/i);
   if (memoryIdMatch) {
     const id = memoryIdMatch[1];
     const entry = db.memories.getByIdWithStats(id);
@@ -310,24 +221,14 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
     };
   }
 
-  // 6. Memory List/Filter: memory://memories[?params]
-  if (uri === "memory://memories" || uri.startsWith("memory://memories?")) {
-    const parsed = new URL(uri.replace("memory://", "http://memory/"));
-    const repo = parsed.searchParams.get("repo") || "";
-    const type = parsed.searchParams.get("type");
-    const tag = parsed.searchParams.get("tag");
-    const includeArchived = parsed.searchParams.get("archived") === "true";
+  // 4. Task Detail: task://{id}
+  const taskIdMatch = uri.match(/^task:\/\/([0-9a-f-]{36})$/i);
+  if (taskIdMatch) {
+    const id = taskIdMatch[1];
+    const task = db.tasks.getTaskById(id);
+    if (!task) throw resourceNotFound(`Task with ID ${id} not found.`, uri);
 
-    const result = db.memories.listMemoriesForDashboard({ 
-      repo: repo || undefined,
-      type: type || undefined,
-      tag: tag || undefined,
-      includeArchived,
-      limit: 50
-    });
-    const entries = result.items;
-
-    const payload = JSON.stringify(entries, null, 2);
+    const payload = JSON.stringify(task, null, 2);
     return {
       contents: [{
         uri,
@@ -336,48 +237,133 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
         size: Buffer.byteLength(payload, "utf8"),
         annotations: {
           audience: ["assistant"],
-          priority: repo ? 0.85 : 0.7,
-          lastModified: deriveLastModifiedFromCollection(entries.map((e: any) => e.updated_at || e.created_at)),
+          priority: 0.8,
+          lastModified: task.updated_at || task.created_at,
         },
       }]
     };
   }
 
-  // 7. Memory Search: memory://memories/search/{query}[?repo]
-  if (uri.startsWith("memory://memories/search/")) {
-    const parts = uri.replace("memory://memories/search/", "").split('?');
-    const encodedQuery = parts[0];
-    const query = Buffer.from(encodedQuery, 'base64').toString('utf-8');
-    const parsed = new URL("http://memory/" + (parts[1] || ""));
-    const repo = parsed.searchParams.get("repo") || "";
-    
-    const results = db.memories.searchBySimilarity(query, repo, 10);
-    const payload = JSON.stringify({ query, repo, results }, null, 2);
-    
-    return {
-      contents: [{
-        uri,
-        mimeType: "application/json",
-        text: payload,
-        size: Buffer.byteLength(payload, "utf8"),
-        annotations: {
-          audience: ["assistant"],
-          priority: 0.65,
-          lastModified: deriveLastModifiedFromCollection(results.map((e: any) => e.updated_at || e.created_at)),
-        },
-      }]
-    };
+  // 5. Repository-scoped resources: repository://{name}/...
+  const repoBase = parseRepoUri(uri);
+  if (repoBase) {
+    const { name, path: repoPath, query } = repoBase;
+
+    // 5a. Repository Summary: repository://{name}/summary
+    if (repoPath === "summary" && !query) {
+      const summary = db.summaries.getSummary(name);
+      const text = summary?.summary || `No summary available for repository: ${name}`;
+      return {
+        contents: [{
+          uri,
+          mimeType: "text/plain",
+          text,
+          size: Buffer.byteLength(text, "utf8"),
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.95,
+            lastModified: summary?.updated_at || new Date().toISOString(),
+          },
+        }]
+      };
+    }
+
+    // 5b. Repository Memories: repository://{name}/memories[?...]
+    if (repoPath === "memories") {
+      const search = query.get("search") || "";
+      const type = query.get("type");
+      const tag = query.get("tag");
+
+      const result = db.memories.listMemoriesForDashboard({
+        repo: name,
+        type: type || undefined,
+        tag: tag || undefined,
+        search: search || undefined,
+        includeArchived: false,
+        limit: 50,
+      });
+      const entries = result.items;
+
+      const payload = JSON.stringify(entries, null, 2);
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: payload,
+          size: Buffer.byteLength(payload, "utf8"),
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.85,
+            lastModified: deriveLastModifiedFromCollection(entries.map((e: any) => e.updated_at || e.created_at)),
+          },
+        }]
+      };
+    }
+
+    // 5c. Repository Tasks: repository://{name}/tasks[?...]
+    if (repoPath === "tasks") {
+      const status = query.get("status");
+      const priority = query.get("priority");
+
+      let tasks: any[];
+      if (status && status !== "all") {
+        const statuses = status.split(",").map(s => s.trim());
+        tasks = db.tasks.getTasksByMultipleStatuses(name, statuses);
+      } else {
+        tasks = db.tasks.getTasksByMultipleStatuses(name, ["backlog", "pending", "in_progress", "blocked"]);
+      }
+
+      if (priority) {
+        const p = Number(priority);
+        if (!isNaN(p)) {
+          tasks = tasks.filter((t: any) => t.priority === p);
+        }
+      }
+
+      const payload = JSON.stringify(tasks, null, 2);
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: payload,
+          size: Buffer.byteLength(payload, "utf8"),
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.9,
+            lastModified: deriveLastModifiedFromCollection(tasks.map((t: any) => t.updated_at)),
+          },
+        }]
+      };
+    }
+
+    // 5d. Repository Actions: repository://{name}/actions
+    if (repoPath === "actions") {
+      const actions = db.actions.getRecentActions(name, 100);
+      const payload = JSON.stringify(actions, null, 2);
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: payload,
+          size: Buffer.byteLength(payload, "utf8"),
+          annotations: {
+            audience: ["assistant"],
+            priority: 0.6,
+            lastModified: deriveLastModifiedFromCollection(actions.map((a: any) => a.created_at)),
+          },
+        }]
+      };
+    }
   }
 
-  // 8. Action List: action://actions[?params]
-  if (uri === "action://actions" || uri.startsWith("action://actions?")) {
-    const parsed = new URL(uri.replace("action://", "http://action/"));
-    const repo = parsed.searchParams.get("repo") || "";
-    const actionType = parsed.searchParams.get("action");
+  // 6. Action Detail: action://{id}  (integer ID from audit log)
+  const actionIdMatch = uri.match(/^action:\/\/(\d+)$/);
+  if (actionIdMatch) {
+    const id = Number(actionIdMatch[1]);
+    const action = db.actions.getActionById(id);
+    if (!action) throw resourceNotFound(`Action with ID ${id} not found.`, uri);
 
-    const actions = db.actions.getRecentActions(repo || undefined, 100);
-    const payload = JSON.stringify(actions, null, 2);
-
+    const payload = JSON.stringify(action, null, 2);
     return {
       contents: [{
         uri,
@@ -386,14 +372,40 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
         size: Buffer.byteLength(payload, "utf8"),
         annotations: {
           audience: ["assistant"],
-          priority: 0.6,
-          lastModified: deriveLastModifiedFromCollection(actions.map(a => a.created_at)),
+          priority: 0.55,
+          lastModified: action.created_at,
         },
       }]
     };
   }
 
   throw resourceNotFound(`Unknown resource URI: ${uri}`, uri);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Parses a `repository://{name}/{path}[?query]` URI.
+ * Returns null if the URI doesn't match the pattern.
+ */
+function parseRepoUri(uri: string): { name: string; path: string; query: URLSearchParams } | null {
+  const prefix = "repository://";
+  if (!uri.startsWith(prefix)) return null;
+
+  const rest = uri.slice(prefix.length);
+  const queryStart = rest.indexOf("?");
+  const withoutQuery = queryStart === -1 ? rest : rest.slice(0, queryStart);
+  const queryString = queryStart === -1 ? "" : rest.slice(queryStart + 1);
+
+  const slashIdx = withoutQuery.indexOf("/");
+  if (slashIdx === -1) return null; // must have at least one slash
+
+  const name = withoutQuery.slice(0, slashIdx);
+  const path = withoutQuery.slice(slashIdx + 1);
+
+  if (!name || !path) return null;
+
+  return { name, path, query: new URLSearchParams(queryString) };
 }
 
 function paginateEntries<T extends object>(key: "resources" | "resourceTemplates", entries: T[], params?: { cursor?: string; limit?: number }) {

@@ -262,20 +262,26 @@ function collectAffectedResourceUris(toolName: string, args: any, result: any): 
     || toolName === "task-delete";
   const touchesTasks = toolName.startsWith("task-");
 
-  if (touchesMemory) {
-    uris.add("memory://memories");
-    if (repo) {
-      uris.add(`memory://memories?repo=${encodeURIComponent(repo)}`);
-    }
+  if (touchesMemory && repo) {
+    uris.add(`repository://${encodeURIComponent(repo)}/memories`);
   }
 
   if (touchesTasks && repo) {
-    uris.add(`tasks://tasks?repo=${encodeURIComponent(repo)}`);
+    uris.add(`repository://${encodeURIComponent(repo)}/tasks`);
+  }
+
+  if (repo) {
+    uris.add("repository://index");
   }
 
   const memoryId = args?.id || args?.memory_id || result?.data?.id;
   if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
     uris.add(`memory://${memoryId}`);
+  }
+
+  const taskId = args?.id || args?.task_id || result?.structuredData?.id;
+  if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
+    uris.add(`task://${taskId}`);
   }
 
   return [...uris];

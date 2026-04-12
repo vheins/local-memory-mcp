@@ -41,7 +41,7 @@ export async function handleMemoryDelete(
       structuredContentPathHint: "id",
       resourceLinks: [
         {
-          uri: `memory://memories?repo=${encodeURIComponent(existing.scope.repo)}`,
+          uri: `repository://${encodeURIComponent(existing.scope.repo)}/memories`,
           name: `Memory Index (${existing.scope.repo})`,
           description: "Repository memory index after deletion",
           mimeType: "application/json",
