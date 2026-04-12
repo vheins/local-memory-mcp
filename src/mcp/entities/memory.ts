@@ -1,5 +1,6 @@
 import { BaseEntity } from "../storage/base";
-import { MemoryEntry, MemoryType, MemoryRow, VectorStore } from "../types/index";
+import { MemoryEntry, MemoryRow, MemoryType, VectorStore } from "../types/index";
+import { CountResult, TypeCountResult, MemoryIdVector } from "../types/common";
 
 /**
  * Handles all memory-related database operations.
@@ -135,7 +136,7 @@ export class MemoryEntity extends BaseEntity {
 		}
 		sql += " GROUP BY type";
 
-		const rows = this.db.prepare(sql).all(...params) as { type: string; count: number }[];
+		const rows = this.db.prepare(sql).all(...params) as TypeCountResult[];
 		const byType: Record<string, number> = {};
 		let total = 0;
 		rows.forEach((row) => {
@@ -305,7 +306,7 @@ export class MemoryEntity extends BaseEntity {
 			params.push(...excludeTypes);
 		}
 
-		const row = this.db.prepare(sql).get(...params) as { count: number };
+		const row = this.db.prepare(sql).get(...params) as CountResult;
 		return row.count;
 	}
 
@@ -342,7 +343,7 @@ export class MemoryEntity extends BaseEntity {
 		}
 		sql += " LIMIT ?";
 		params.push(limit);
-		return this.db.prepare(sql).all(...params) as { memory_id: string; vector: string }[];
+		return this.db.prepare(sql).all(...params) as MemoryIdVector[];
 	}
 
 	upsertVectorEmbedding(memoryId: string, vector: number[]): void {
@@ -355,31 +356,31 @@ export class MemoryEntity extends BaseEntity {
 			)
 			.run(memoryId, JSON.stringify(vector), new Date().toISOString());
 	}
-getSummary(repo: string): { summary: string; updated_at: string } | undefined {
-	const row = this.db.prepare("SELECT summary, updated_at FROM repo_summaries WHERE repo = ?").get(repo) as
-		| { summary: string; updated_at: string }
-		| undefined;
-	return row;
-}
+	getSummary(repo: string): { summary: string; updated_at: string } | undefined {
+		const row = this.db.prepare("SELECT summary, updated_at FROM repo_summaries WHERE repo = ?").get(repo) as
+			| { summary: string; updated_at: string }
+			| undefined;
+		return row;
+	}
 
-getAllMemoriesWithStats(repo: string): (MemoryEntry & { recall_rate: number })[] {
-	const rows = this.db
-		.prepare(
-			`
+	getAllMemoriesWithStats(repo: string): (MemoryEntry & { recall_rate: number })[] {
+		const rows = this.db
+			.prepare(
+				`
 SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate 
 FROM memories 
 WHERE repo = ?
 ORDER BY created_at DESC
 `
-		)
-		.all(repo) as (MemoryRow & { recall_rate: number })[];
-	return rows.map((row) => ({
-		...this.rowToMemoryEntry(row),
-		recall_rate: row.recall_rate || 0
-	}));
-}
+			)
+			.all(repo) as (MemoryRow & { recall_rate: number })[];
+		return rows.map((row) => ({
+			...this.rowToMemoryEntry(row),
+			recall_rate: row.recall_rate || 0
+		}));
+	}
 
-upsertSummary(repo: string, summary: string): void {
+	upsertSummary(repo: string, summary: string): void {
 		this.db
 			.prepare(
 				`
@@ -454,7 +455,7 @@ upsertSummary(repo: string, summary: string): void {
 		}
 
 		const countSql = `SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`;
-		const total = (this.db.prepare(countSql).get(...params) as { count: number }).count;
+		const total = (this.db.prepare(countSql).get(...params) as CountResult).count;
 
 		const dataSql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${where.join(" AND ")} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
 		const rows = this.db.prepare(dataSql).all(...params, limit, offset) as (MemoryRow & { recall_rate: number })[];

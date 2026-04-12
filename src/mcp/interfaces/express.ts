@@ -33,7 +33,7 @@ export interface NameParams {
 	name: string;
 }
 
-export interface TaskListQuery extends ListQuery {}
+export type TaskListQuery = ListQuery;
 export interface MemoryListQuery extends ListQuery<"type" | "minImportance" | "maxImportance"> {
 	type?: string;
 	minImportance?: string;

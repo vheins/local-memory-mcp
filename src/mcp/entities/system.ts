@@ -1,14 +1,15 @@
 import { BaseEntity } from "../storage/base";
 import { MemoryEntry, Task } from "../types";
+import { CountResult, TypeCountResult, StatusCountResult, RepoResult, LastUsedResult } from "../types/common";
 
 /**
  * Handles system-wide statistics and cross-entity navigation.
  */
 export class SystemEntity extends BaseEntity {
 	listRepos(): string[] {
-		const rows = this.db.prepare("SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks").all() as {
-			repo: string;
-		}[];
+		const rows = this.db
+			.prepare("SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks")
+			.all() as RepoResult[];
 		return rows.map((r) => r.repo);
 	}
 
@@ -16,25 +17,16 @@ export class SystemEntity extends BaseEntity {
 		const repos = this.listRepos();
 		return repos.map((repo) => {
 			const memoryCount = (
-				this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as { count: number }
+				this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as CountResult
 			).count;
-			const taskCount = (
-				this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as { count: number }
-			).count;
+			const taskCount = (this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as CountResult)
+				.count;
 			const lastActivity = (
 				this.db
 					.prepare(
-						`
-        SELECT MAX(created_at) as last FROM (
-          SELECT created_at FROM memories WHERE repo = ? 
-          UNION ALL 
-          SELECT created_at FROM tasks WHERE repo = ?
-          UNION ALL
-          SELECT created_at FROM action_log WHERE repo = ?
-        )
-      `
+						`SELECT MAX(created_at) as last FROM (SELECT created_at FROM memories WHERE repo = ? UNION ALL SELECT created_at FROM tasks WHERE repo = ? UNION ALL SELECT created_at FROM action_log WHERE repo = ?)`
 					)
-					.get(repo, repo, repo) as { last: string | null }
+					.get(repo, repo, repo) as LastUsedResult
 			).last;
 
 			return {
@@ -54,10 +46,10 @@ export class SystemEntity extends BaseEntity {
 	} {
 		const memoryStats = this.db
 			.prepare("SELECT type, COUNT(*) as count FROM memories WHERE repo = ? GROUP BY type")
-			.all(repo) as { type: string; count: number }[];
+			.all(repo) as TypeCountResult[];
 		const taskStats = this.db
 			.prepare("SELECT status, COUNT(*) as count FROM tasks WHERE repo = ? GROUP BY status")
-			.all(repo) as { status: string; count: number }[];
+			.all(repo) as StatusCountResult[];
 		const recentMemories = (
 			this.db
 				.prepare("SELECT * FROM memories WHERE repo = ? ORDER BY created_at DESC LIMIT 5")
@@ -80,8 +72,8 @@ export class SystemEntity extends BaseEntity {
 	}
 
 	getGlobalStats(): { totalMemories: number; totalTasks: number; totalRepos: number } {
-		const totalMemories = (this.db.prepare("SELECT COUNT(*) as count FROM memories").get() as { count: number }).count;
-		const totalTasks = (this.db.prepare("SELECT COUNT(*) as count FROM tasks").get() as { count: number }).count;
+		const totalMemories = (this.db.prepare("SELECT COUNT(*) as count FROM memories").get() as CountResult).count;
+		const totalTasks = (this.db.prepare("SELECT COUNT(*) as count FROM tasks").get() as CountResult).count;
 		const totalRepos = this.listRepos().length;
 
 		return {
@@ -93,7 +85,7 @@ export class SystemEntity extends BaseEntity {
 
 	getRepoDetails(repo: string): { repo: string; memoryCount: number; taskCount: number; languages: string[] } {
 		const memoryCount = (
-			this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as { count: number }
+			this.db.prepare("SELECT COUNT(*) as count FROM memories WHERE repo = ?").get(repo) as CountResult
 		).count;
 		const taskCount = (
 			this.db.prepare("SELECT COUNT(*) as count FROM tasks WHERE repo = ?").get(repo) as { count: number }
