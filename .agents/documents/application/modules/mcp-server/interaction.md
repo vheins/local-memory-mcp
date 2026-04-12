@@ -22,11 +22,13 @@ When an agent provides incomplete data for a mandatory tool call, the server tri
 
 ## Business Invariants
 - **No-Retry Rule**: For long-running operations like `memory.synthesize`, the interaction layer returns a "Processing" status and prevents duplicate triggers from the same session ID.
-- **Response Format**: All tool results MUST be returned as JSON-serializable strings within the `content` array of the MCP response.
+- **Structured Content Awareness**: To minimize token waste and ensure precision, tool results MUST NOT redundantly embed large JSON strings in the `content` array. Instead:
+    - The `content` array contains a concise text summary and a explicit **Pointer Message** (e.g., "See `structuredContent` for details").
+    - The `structuredContent` extension field carries the full, machine-readable data payload.
+    - Agents are expected to parse `structuredContent` for all subsequent reasoning steps.
 
 ### Invariant Logic
-- **Root Detection**: Automatically identifies the "active" project root by searching for `.git` or `.gemini` markers upward from the `current_file_path`.
-- **Repo Inference**: If no `repo` is provided in tool arguments, the server infers it from the `basename` of the detected project root.
+- **Pointer Pattern**: The `createMcpResponse` utility automatically appends a pointer suffix to the text content, guiding the agent to the specific path in the structured response.
 ## 3. Sampling & Elicitation
 Advanced patterns for multi-turn or human-in-the-loop interactions.
 
