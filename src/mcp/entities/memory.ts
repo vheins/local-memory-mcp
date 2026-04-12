@@ -6,12 +6,13 @@ export class MemoryEntity extends BaseEntity {
 	insert(entry: MemoryEntry): void {
 		this.run(
 			`INSERT INTO memories (
-				id, repo, type, title, content, importance, folder, language,
+				id, code, repo, type, title, content, importance, folder, language,
 				created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 				supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				entry.id,
+				entry.code || null,
 				entry.scope.repo,
 				entry.type,
 				entry.title || null,
@@ -85,6 +86,11 @@ export class MemoryEntity extends BaseEntity {
 
 	getById(id: string): MemoryEntry | null {
 		const row = this.get<MemoryRow>("SELECT * FROM memories WHERE id = ?", [id]);
+		return row ? this.rowToMemoryEntry(row) : null;
+	}
+
+	getByCode(code: string): MemoryEntry | null {
+		const row = this.get<MemoryRow>("SELECT * FROM memories WHERE code = ?", [code]);
 		return row ? this.rowToMemoryEntry(row) : null;
 	}
 

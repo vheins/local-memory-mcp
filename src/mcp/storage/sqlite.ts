@@ -117,6 +117,7 @@ export class SQLiteStore {
 
 		const migrator = new MigrationManager(db, saveDb);
 		migrator.migrate();
+		migrator.addMemoryCodeColumn();
 
 		Object.assign(this, {
 			db,

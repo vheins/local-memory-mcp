@@ -380,4 +380,15 @@ export class MigrationManager {
 			this.ensureMemoryTypeConstraint();
 		}
 	}
+
+	public addMemoryCodeColumn(): void {
+		const tableInfo = this.all("PRAGMA table_info(memories)");
+		const hasCode = tableInfo.some((col) => col.name === "code");
+
+		if (!hasCode) {
+			this.run("ALTER TABLE memories ADD COLUMN code TEXT");
+			this.run("CREATE INDEX IF NOT EXISTS idx_memories_code ON memories(code)");
+			this.run("CREATE INDEX IF NOT EXISTS idx_memories_repo_code ON memories(repo, code)");
+		}
+	}
 }

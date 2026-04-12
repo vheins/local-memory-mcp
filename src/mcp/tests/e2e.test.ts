@@ -59,9 +59,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			arguments: { query: "How do I update the database schema?", repo: REPO }
 		});
 
-		// New tabular format: results.rows[i] = [id, title, type, importance]
+		// New tabular format: results.rows[i] = [id, code, title, type, importance]
 		const results = searchRes.structuredContent.results;
-		expect(results.rows[0][1]).toBe("Database Migration"); // index 1 = title
+		expect(results.rows[0][2]).toBe("Database Migration"); // index 2 = title
 		expect(results.rows.length).toBeGreaterThan(1); // Should find related db facts too but lower
 	});
 
@@ -107,10 +107,10 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// EXPECT: Mistake is archived and NOT in search results by default
-		// New tabular format: results.rows[i] = [id, title, type, importance]
+		// New tabular format: results.rows[i] = [id, code, title, type, importance]
 		const results = searchRes.structuredContent.results;
-		expect(results.rows.some((r: string[]) => r[1] === "Streaming File Upload")).toBe(true);
-		expect(results.rows.some((r: string[]) => r[1] === "Large File Upload Failure")).toBe(false);
+		expect(results.rows.some((r: string[]) => r[2] === "Streaming File Upload")).toBe(true);
+		expect(results.rows.some((r: string[]) => r[2] === "Large File Upload Failure")).toBe(false);
 		expect(results.rows.some((r: string[]) => r[0] === mistakeId)).toBe(false);
 
 		// 4. Audit: Verify we can still find the mistake if we EXPLICITLY ask for archived
@@ -165,9 +165,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// EXPECT: Auth Specific memory should be the Top Match despite the query being generic "log"
-		// New tabular format: results.rows[i] = [id, title, type, importance]
+		// New tabular format: results.rows[i] = [id, code, title, type, importance]
 		const results = searchRes.structuredContent.results;
-		expect(results.rows[0][1]).toBe("Auth Security Audit"); // index 1 = title
+		expect(results.rows[0][2]).toBe("Auth Security Audit"); // index 2 = title
 	});
 
 	/**
@@ -197,7 +197,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// Based on memory-recap implementation
-		expect(getPrimaryTextContent(recapRes)).toContain("cloud-infra");
+		expect(getPrimaryTextContent(recapRes)).toContain("Service 1 Specs");
 
 		// Check Resource Pagination via URI
 		const resourceRes = await router("resources/read", {
@@ -278,9 +278,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// EXPECT: Should find the "Filament Custom Action" from Project A
-		// New tabular format: results.rows[i] = [id, title, type, importance]
+		// New tabular format: results.rows[i] = [id, code, title, type, importance]
 		const results = searchRes.structuredContent.results;
-		expect(results.rows[0][1]).toBe("Filament Custom Action"); // index 1 = title
+		expect(results.rows[0][2]).toBe("Filament Custom Action"); // index 2 = title
 		// scope is not returned in pointer table — use memory://<id> to fetch full details
 	});
 });

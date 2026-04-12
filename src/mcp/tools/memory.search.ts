@@ -17,7 +17,6 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	const searchQuery = expandQuery(validated.query, validated.prompt);
 
 	// 1. Get Candidates from SQLite
-	// Fetch more than limit to support offset slicing after scoring
 	const fetchLimit = (validated.offset + validated.limit) * 3;
 	const similarityResults = db.memories.searchBySimilarity(
 		searchQuery,
@@ -40,28 +39,13 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 
 		candidates = candidates.map((c) => {
 			let boost = 0;
-
-			// Branch boost (+0.1)
-			if (currentBranch && c.memory.scope.branch === currentBranch) {
-				boost += 0.1;
-			}
-
-			// Folder boost (+0.15)
-			if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) {
-				boost += 0.15;
-			}
-
-			// Language boost (+0.1)
+			if (currentBranch && c.memory.scope.branch === currentBranch) boost += 0.1;
+			if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) boost += 0.15;
 			if (currentPath && c.memory.scope.language) {
 				const ext = currentPath.split(".").pop();
 				if (ext && ext.includes(c.memory.scope.language.toLowerCase())) boost += 0.1;
 			}
-
-			// Tag affinity boost (+0.2)
-			if (currentTags.length > 0 && c.memory.tags.some((t) => currentTags.includes(t.toLowerCase()))) {
-				boost += 0.2;
-			}
-
+			if (currentTags.length > 0 && c.memory.tags.some((t) => currentTags.includes(t.toLowerCase()))) boost += 0.2;
 			return { ...c, similarityScore: Math.min(1.0, c.similarityScore + boost) };
 		});
 	}
@@ -117,22 +101,13 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 
 	// 4. Threshold & Final Selection
 	scoredMemories.sort((a, b) => b.finalScore - a.finalScore);
-
 	const threshold = scoredMemories.length <= 5 ? 0.1 : 0.4;
 	let allMatches = scoredMemories.filter((sm) => sm.finalScore >= threshold).map((sm) => sm.memory);
+	if (allMatches.length === 0 && scoredMemories.length > 0) allMatches = [scoredMemories[0].memory];
 
-	// Absolute fallback: if repo has data but search failed threshold, return top 1
-	if (allMatches.length === 0 && scoredMemories.length > 0) {
-		allMatches = [scoredMemories[0].memory];
-	}
-
-	// Total count of all matches (before pagination)
 	const total = allMatches.length;
-
-	// Apply pagination (offset + limit)
 	const paginatedResults = allMatches.slice(validated.offset, validated.offset + validated.limit);
 
-	// 5. Post-processing — increment hit count only for pages actually returned
 	db.memories.incrementHitCounts(paginatedResults.map((m) => m.id));
 	logger.info("[MCP] memory.search", {
 		repo: validated.repo,
@@ -142,11 +117,39 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 		returned: paginatedResults.length
 	});
 
-	// 6. Build pointer table — columns: [id, title, type, importance]
-	const COLUMNS = ["id", "title", "type", "importance"] as const;
-	const rows = paginatedResults.map((m) => [m.id, m.title ?? "Untitled", m.type, m.importance]);
+	// 5. Prepare Output
+	const COLUMNS = ["id", "code", "title", "type", "importance"] as const;
+	const rows = paginatedResults.map((m) => [m.id, m.code || "-", m.title ?? "Untitled", m.type, m.importance]);
 
-	const structuredContent = {
+	// Group memories by type for tabular text output
+	const memoriesByType: Record<string, MemoryEntry[]> = {};
+	for (const m of paginatedResults) {
+		const typeLabel = m.type || "unknown";
+		if (!memoriesByType[typeLabel]) memoriesByType[typeLabel] = [];
+		memoriesByType[typeLabel].push(m);
+	}
+
+	let contentSummary: string | undefined;
+	if (!validated.structured) {
+		if (paginatedResults.length > 0) {
+			const parts: string[] = [];
+			for (const [memType, items] of Object.entries(memoriesByType)) {
+				parts.push(`${capitalize(memType)}:`);
+				parts.push("- code|importance|title");
+				for (const m of items) {
+					const code = m.code || "-";
+					parts.push(`- ${code}|${m.importance}|${m.title}`);
+				}
+				parts.push("");
+			}
+			parts.push("Use memory-detail with memory_id (or code) for full content.");
+			contentSummary = parts.join("\n").trim();
+		} else {
+			contentSummary = `No memories found for "${validated.query}" in repo "${validated.repo}".`;
+		}
+	}
+
+	const structuredData = {
 		schema: "memory-search" as const,
 		query: validated.query,
 		count: paginatedResults.length,
@@ -159,14 +162,12 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 		}
 	};
 
-	const memoryList = paginatedResults.map((m) => `"${m.title}" (ID: ${m.id})`).join(", ");
-	const contentSummary =
-		paginatedResults.length > 0
-			? `Found ${total} memories for "${validated.query}" (showing ${paginatedResults.length} at offset ${validated.offset}): ${memoryList}. Use memory-detail to read full content.`
-			: `No memories found for "${validated.query}" in repo "${validated.repo}".`;
-
-	return createMcpResponse(structuredContent, contentSummary, {
+	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
 		includeSerializedStructuredContent: false
 	});
+}
+
+function capitalize(str: string): string {
+	return str.charAt(0).toUpperCase() + str.slice(1);
 }

@@ -17,6 +17,7 @@ export type MemoryScope = {
 
 export type MemoryEntry = {
 	id: string;
+	code?: string;
 	type: MemoryType;
 	title: string;
 	content: string;
@@ -41,6 +42,7 @@ export type MemoryEntry = {
 
 export type MemoryRow = {
 	id: string;
+	code?: string;
 	type: MemoryType;
 	title: string;
 	content: string;

@@ -2,8 +2,9 @@ import { MemoryRecapSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
+import { MemoryEntry } from "../types";
 
-export async function handleMemoryRecap(params: Record<string, unknown>, db: SQLiteStore): Promise<McpResponse> {
+export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promise<McpResponse> {
 	const validated = MemoryRecapSchema.parse(params);
 
 	logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
@@ -19,9 +20,9 @@ export async function handleMemoryRecap(params: Record<string, unknown>, db: SQL
 		"task_archive"
 	]);
 
-	// Build pointer table — columns: [id, title, type, importance]
-	const COLUMNS = ["id", "title", "type", "importance"] as const;
-	const topRows = rows.map((row) => [row.id, row.title ?? "Untitled", row.type, row.importance]);
+	// Build pointer table — columns: [id, code, title, type, importance]
+	const COLUMNS = ["id", "code", "title", "type", "importance"] as const;
+	const topRows = rows.map((row) => [row.id, row.code || "-", row.title ?? "Untitled", row.type, row.importance]);
 
 	// Build by_type stats, excluding task_archive
 	const byType: Record<string, number> = {};
@@ -31,30 +32,65 @@ export async function handleMemoryRecap(params: Record<string, unknown>, db: SQL
 		}
 	}
 
-	const structuredContent = {
+	let contentSummary: string | undefined;
+	if (!validated.structured) {
+		if (total > 0) {
+			const parts: string[] = [];
+
+			// Show stats by type
+			for (const [memType, count] of Object.entries(byType)) {
+				if (count > 0) {
+					parts.push(`${capitalize(memType)}: ${count}`);
+				}
+			}
+
+			// Group top memories by type
+			const memoriesByType: Record<string, typeof rows> = {};
+			for (const row of rows) {
+				const typeLabel = row.type || "unknown";
+				if (!memoriesByType[typeLabel]) {
+					memoriesByType[typeLabel] = [];
+				}
+				memoriesByType[typeLabel].push(row);
+			}
+
+			for (const [memType, items] of Object.entries(memoriesByType)) {
+				parts.push("");
+				parts.push(`${capitalize(memType)}:`);
+				parts.push("- code|importance|title");
+				for (const row of items) {
+					const code = row.code || "-";
+					parts.push(`- ${code}|${row.importance}|${row.title}`);
+				}
+			}
+			parts.push("");
+			parts.push("Use memory-detail with memory_id (or code) for full content.");
+			contentSummary = parts.join("\n").trim();
+		} else {
+			contentSummary = `No memories found for repo "${validated.repo}".`;
+		}
+	}
+
+	const structuredData = {
 		schema: "memory-recap" as const,
 		repo: validated.repo,
 		count: rows.length,
 		total,
 		offset: validated.offset,
 		limit: validated.limit,
-		stats: {
-			by_type: byType
-		},
+		stats: { byType },
 		top: {
 			columns: [...COLUMNS],
 			rows: topRows
 		}
 	};
 
-	const memoryList = rows.map((row) => `"${row.title}" (ID: ${row.id})`).join(", ");
-	const contentSummary =
-		total > 0
-			? `Repo "${validated.repo}" has ${total} active memories. Showing ${rows.length} at offset ${validated.offset}: ${memoryList}. Use memory-detail to read full content.`
-			: `No memories found for repo "${validated.repo}".`;
-
-	return createMcpResponse(structuredContent, contentSummary, {
+	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
 		includeSerializedStructuredContent: false
 	});
+}
+
+function capitalize(str: string): string {
+	return str.charAt(0).toUpperCase() + str.slice(1);
 }

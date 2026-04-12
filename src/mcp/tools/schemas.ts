@@ -22,8 +22,9 @@ export const MemoryTypeSchema = z.enum([
 
 // Tool schemas
 export const MemoryStoreSchema = z.object({
+	code: z.string().max(20).optional(),
 	type: MemoryTypeSchema,
-	title: z.string().min(3).max(100),
+	title: z.string().min(3).max(255),
 	content: z.string().min(10),
 	importance: z.number().min(1).max(5),
 	agent: z.string().min(1),
@@ -41,7 +42,7 @@ export const MemoryUpdateSchema = z
 	.object({
 		id: z.string().uuid(),
 		type: MemoryTypeSchema.optional(),
-		title: z.string().min(3).max(100).optional(),
+		title: z.string().min(3).max(255).optional(),
 		content: z.string().min(10).optional(),
 		importance: z.number().min(1).max(5).optional(),
 		agent: z.string().optional(),
@@ -82,7 +83,8 @@ export const MemorySearchSchema = z.object({
 	current_file_path: z.string().optional(),
 	include_archived: z.boolean().default(false),
 	current_tags: z.array(z.string()).optional(),
-	scope: MemoryScopeSchema.partial().optional()
+	scope: MemoryScopeSchema.partial().optional(),
+	structured: z.boolean().default(false)
 });
 
 export const MemoryAcknowledgeSchema = z.object({
@@ -94,7 +96,8 @@ export const MemoryAcknowledgeSchema = z.object({
 export const MemoryRecapSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
 	limit: z.number().min(1).max(50).default(20),
-	offset: z.number().min(0).default(0)
+	offset: z.number().min(0).default(0),
+	structured: z.boolean().default(false)
 });
 
 export const MemoryDeleteSchema = z
@@ -143,29 +146,34 @@ const SingleTaskCreateSchema = z.object({
 	est_tokens: z.number().int().min(0).optional()
 });
 
-export const TaskCreateSchema = z.object({
-	repo: z.string().min(1).transform(normalizeRepo),
-	// Allow single task fields at top level (backward compatibility & single use)
-	task_code: z.string().min(1).optional(),
-	phase: z.string().min(1).optional(),
-	title: z.string().min(3).max(100).optional(),
-	description: z.string().min(1).optional(),
-	status: TaskStatusSchema.optional(),
-	priority: TaskPrioritySchema.optional(),
-	agent: z.string().optional(),
-	role: z.string().optional(),
-	doc_path: z.string().optional(),
-	tags: z.array(z.string()).optional(),
-	metadata: z.record(z.string(), z.any()).optional(),
-	parent_id: z.string().uuid().optional(),
-	depends_on: z.string().uuid().optional(),
-	est_tokens: z.number().int().min(0).optional(),
-	// Allow bulk tasks
-	tasks: z.array(SingleTaskCreateSchema).min(1).optional()
-}).refine(data => {
-    if (data.tasks) return true;
-    return !!(data.task_code && data.phase && data.title && data.description);
-}, { message: "Either 'tasks' array or single task fields (task_code, phase, title, description) must be provided" });
+export const TaskCreateSchema = z
+	.object({
+		repo: z.string().min(1).transform(normalizeRepo),
+		// Allow single task fields at top level (backward compatibility & single use)
+		task_code: z.string().min(1).optional(),
+		phase: z.string().min(1).optional(),
+		title: z.string().min(3).max(100).optional(),
+		description: z.string().min(1).optional(),
+		status: TaskStatusSchema.optional(),
+		priority: TaskPrioritySchema.optional(),
+		agent: z.string().optional(),
+		role: z.string().optional(),
+		doc_path: z.string().optional(),
+		tags: z.array(z.string()).optional(),
+		metadata: z.record(z.string(), z.any()).optional(),
+		parent_id: z.string().uuid().optional(),
+		depends_on: z.string().uuid().optional(),
+		est_tokens: z.number().int().min(0).optional(),
+		// Allow bulk tasks
+		tasks: z.array(SingleTaskCreateSchema).min(1).optional()
+	})
+	.refine(
+		(data) => {
+			if (data.tasks) return true;
+			return !!(data.task_code && data.phase && data.title && data.description);
+		},
+		{ message: "Either 'tasks' array or single task fields (task_code, phase, title, description) must be provided" }
+	);
 
 export const TaskCreateInteractiveSchema = SingleTaskCreateSchema.partial().extend({
 	repo: z.string().min(1).transform(normalizeRepo).optional()
@@ -175,7 +183,7 @@ export const TaskUpdateSchema = z
 	.object({
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
-        ids: z.array(z.string().uuid()).min(1).optional(),
+		ids: z.array(z.string().uuid()).min(1).optional(),
 		task_code: z.string().optional(),
 		phase: z.string().optional(),
 		title: z.string().min(3).max(100).optional(),
@@ -192,12 +200,12 @@ export const TaskUpdateSchema = z
 		parent_id: z.string().uuid().optional(),
 		depends_on: z.string().uuid().optional(),
 		est_tokens: z.number().int().min(0).optional(),
-        force: z.boolean().optional()
+		force: z.boolean().optional()
 	})
-	.refine((data) => (data.id !== undefined || data.ids !== undefined), {
+	.refine((data) => data.id !== undefined || data.ids !== undefined, {
 		message: "Either 'id' or 'ids' must be provided for update"
 	})
-    .refine((data) => Object.keys(data).length > 2, {
+	.refine((data) => Object.keys(data).length > 2, {
 		message: "At least one field besides repo and id/ids must be provided for update"
 	});
 
@@ -207,7 +215,8 @@ export const TaskListSchema = z.object({
 	phase: z.string().optional(),
 	query: z.string().optional(),
 	limit: z.number().min(1).max(100).default(15),
-	offset: z.number().min(0).default(0)
+	offset: z.number().min(0).default(0),
+	structured: z.boolean().default(false)
 });
 
 export const TaskSearchSchema = z.object({
@@ -215,31 +224,39 @@ export const TaskSearchSchema = z.object({
 	query: z.string().min(1),
 	status: z.string().optional(),
 	limit: z.number().min(1).max(100).default(10),
-	offset: z.number().min(0).default(0)
+	offset: z.number().min(0).default(0),
+	structured: z.boolean().default(false)
 });
 
-export const TaskDeleteSchema = z.object({
-	repo: z.string().min(1).transform(normalizeRepo),
-	id: z.string().uuid().optional(),
-    ids: z.array(z.string().uuid()).min(1).optional()
-}).refine(data => data.id !== undefined || data.ids !== undefined, {
-    message: "Either 'id' or 'ids' must be provided for deletion"
-});
+export const TaskDeleteSchema = z
+	.object({
+		repo: z.string().min(1).transform(normalizeRepo),
+		id: z.string().uuid().optional(),
+		ids: z.array(z.string().uuid()).min(1).optional()
+	})
+	.refine((data) => data.id !== undefined || data.ids !== undefined, {
+		message: "Either 'id' or 'ids' must be provided for deletion"
+	});
 
-export const MemoryDetailSchema = z.object({
-	id: z.string().uuid()
-});
+export const MemoryDetailSchema = z
+	.object({
+		id: z.string().uuid().optional(),
+		code: z.string().max(20).optional()
+	})
+	.refine((data) => data.id !== undefined || data.code !== undefined, {
+		message: "Either id or code must be provided"
+	});
 
 export const TaskGetSchema = z
 	.object({
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
-		task_code: z.string().optional()
+		task_code: z.string().optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.task_code !== undefined, {
 		message: "Either id or task_code must be provided"
 	});
-
 
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
@@ -357,7 +374,12 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				repo: { type: "string", description: "Repository name" },
 				id: { type: "string", format: "uuid", description: "Task ID (optional if task_code is provided)" },
-				task_code: { type: "string", description: "Task code (e.g. TASK-001) (optional if id is provided)" }
+				task_code: { type: "string", description: "Task code (e.g. TASK-001) (optional if id is provided)" },
+				structured: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns structured JSON without the text content details."
+				}
 			},
 			required: ["repo"]
 		}
@@ -453,6 +475,7 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				success: { type: "boolean" },
 				id: { type: "string" },
+				code: { type: "string" },
 				repo: { type: "string" },
 				type: { type: "string" },
 				title: { type: "string" },
@@ -598,6 +621,11 @@ export const TOOL_DEFINITIONS = [
 						folder: { type: "string" },
 						language: { type: "string" }
 					}
+				},
+				structured: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
 			required: ["query", "repo"]
@@ -725,6 +753,11 @@ export const TOOL_DEFINITIONS = [
 					minimum: 0,
 					default: 0,
 					description: "Number of memories to skip for pagination (optional, default 0)"
+				},
+				structured: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
 			required: ["repo"]
@@ -784,7 +817,12 @@ export const TOOL_DEFINITIONS = [
 				repo: { type: "string", description: "Repository name" },
 				task_code: { type: "string", description: "Unique task code (e.g. TASK-001) (Required for single task)" },
 				phase: { type: "string", description: "Project phase (Required for single task)" },
-				title: { type: "string", minLength: 3, maxLength: 100, description: "Task objective (Required for single task)" },
+				title: {
+					type: "string",
+					minLength: 3,
+					maxLength: 100,
+					description: "Task objective (Required for single task)"
+				},
 				description: { type: "string", description: "Detailed description (Required for single task)" },
 				status: {
 					type: "string",
@@ -802,30 +840,30 @@ export const TOOL_DEFINITIONS = [
 				parent_id: { type: "string", format: "uuid" },
 				depends_on: { type: "string", format: "uuid" },
 				est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" },
-                tasks: {
-                    type: "array",
-                    items: {
-                        type: "object",
-                        properties: {
-                            task_code: { type: "string" },
-                            phase: { type: "string" },
-                            title: { type: "string", minLength: 3, maxLength: 100 },
-                            description: { type: "string" },
-                            status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
-                            priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
-                            agent: { type: "string" },
-                            role: { type: "string" },
-                            doc_path: { type: "string" },
-                            tags: { type: "array", items: { type: "string" } },
-                            metadata: { type: "object" },
-                            parent_id: { type: "string", format: "uuid" },
-                            depends_on: { type: "string", format: "uuid" },
-                            est_tokens: { type: "number", minimum: 0 }
-                        },
-                        required: ["task_code", "phase", "title", "description"]
-                    },
-                    description: "Array of tasks for bulk creation"
-                }
+				tasks: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							task_code: { type: "string" },
+							phase: { type: "string" },
+							title: { type: "string", minLength: 3, maxLength: 100 },
+							description: { type: "string" },
+							status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
+							priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+							agent: { type: "string" },
+							role: { type: "string" },
+							doc_path: { type: "string" },
+							tags: { type: "array", items: { type: "string" } },
+							metadata: { type: "object" },
+							parent_id: { type: "string", format: "uuid" },
+							depends_on: { type: "string", format: "uuid" },
+							est_tokens: { type: "number", minimum: 0 }
+						},
+						required: ["task_code", "phase", "title", "description"]
+					},
+					description: "Array of tasks for bulk creation"
+				}
 			},
 			required: ["repo"]
 		},
@@ -834,14 +872,14 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				success: { type: "boolean" },
 				id: { type: "string" },
-				repo: { type: "string" },
 				task_code: { type: "string" },
+				repo: { type: "string" },
 				phase: { type: "string" },
 				title: { type: "string" },
 				status: { type: "string" },
 				priority: { type: "number" },
-                createdCount: { type: "number" },
-                taskCodes: { type: "array", items: { type: "string" } }
+				createdCount: { type: "number" },
+				taskCodes: { type: "array", items: { type: "string" } }
 			},
 			required: ["success", "repo"]
 		}
@@ -861,7 +899,7 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				repo: { type: "string", description: "Repository name" },
 				id: { type: "string", format: "uuid", description: "Task ID (for single update)" },
-                ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk update)" },
+				ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk update)" },
 				task_code: { type: "string" },
 				phase: { type: "string" },
 				title: { type: "string", minLength: 3, maxLength: 100 },
@@ -891,7 +929,10 @@ export const TOOL_DEFINITIONS = [
 					description:
 						"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
 				},
-                force: { type: "boolean", description: "If true, bypasses status transition validation (e.g. pending -> completed)." }
+				force: {
+					type: "boolean",
+					description: "If true, bypasses status transition validation (e.g. pending -> completed)."
+				}
 			},
 			required: ["repo"]
 		},
@@ -900,7 +941,7 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				success: { type: "boolean" },
 				id: { type: "string" },
-                ids: { type: "array", items: { type: "string" } },
+				ids: { type: "array", items: { type: "string" } },
 				repo: { type: "string" },
 				status: { type: "string" },
 				archivedToMemory: { type: "boolean" },
@@ -908,7 +949,7 @@ export const TOOL_DEFINITIONS = [
 					type: "array",
 					items: { type: "string" }
 				},
-                updatedCount: { type: "number" }
+				updatedCount: { type: "number" }
 			},
 			required: ["success", "repo"]
 		}
@@ -928,7 +969,7 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				repo: { type: "string", description: "Repository name" },
 				id: { type: "string", format: "uuid", description: "Task ID (for single deletion)" },
-                ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk deletion)" }
+				ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk deletion)" }
 			},
 			required: ["repo"]
 		},
@@ -937,9 +978,9 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				success: { type: "boolean" },
 				id: { type: "string" },
-                ids: { type: "array", items: { type: "string" } },
+				ids: { type: "array", items: { type: "string" } },
 				repo: { type: "string" },
-                deletedCount: { type: "number" }
+				deletedCount: { type: "number" }
 			},
 			required: ["success", "repo"]
 		}
@@ -987,6 +1028,11 @@ export const TOOL_DEFINITIONS = [
 					minimum: 0,
 					default: 0,
 					description: "Offset for pagination"
+				},
+				structured: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
 			required: ["repo"]
@@ -1017,5 +1063,5 @@ export const TOOL_DEFINITIONS = [
 			},
 			required: ["schema", "tasks", "count"]
 		}
-	},
+	}
 ];

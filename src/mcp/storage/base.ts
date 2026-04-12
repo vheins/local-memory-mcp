@@ -51,6 +51,7 @@ export abstract class BaseEntity {
 		const r = row as Record<string, unknown>;
 		return {
 			id: r.id as string,
+			code: (r.code as string) || undefined,
 			type: r.type as MemoryType,
 			title: (r.title as string) || "Untitled",
 			content: r.content as string,

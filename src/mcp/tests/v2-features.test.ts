@@ -192,8 +192,10 @@ describe("V2 Enhanced Memory Features", () => {
 			const params = { query: "Target", repo };
 			const response = await handleMemorySearch(params, db, mockVectors);
 
-			// New format: "Found N memories for "query" (showing N at offset 0)..."
-			expect(getPrimaryTextContent(response)).toContain("Found 1 memories for");
+			// New tabular format
+			const results = response.structuredContent as any;
+			expect(results.count).toBe(1);
+			expect(getPrimaryTextContent(response)).toContain("Use memory-detail");
 			db.close();
 		});
 	});

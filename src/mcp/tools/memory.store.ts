@@ -10,7 +10,20 @@ function hasMetadataLikeTitle(title: string): boolean {
 	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
 }
 
-export async function handleMemoryStore(params: Record<string, unknown>, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+function generateShortCode(): string {
+	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	let code = "";
+	for (let i = 0; i < 6; i++) {
+		code += chars.charAt(Math.floor(Math.random() * chars.length));
+	}
+	return code;
+}
+
+export async function handleMemoryStore(
+	params: Record<string, unknown>,
+	db: SQLiteStore,
+	vectors: VectorStore
+): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryStoreSchema.parse(params);
 
@@ -80,6 +93,7 @@ export async function handleMemoryStore(params: Record<string, unknown>, db: SQL
 
 	const entry: MemoryEntry = {
 		id: randomUUID(),
+		code: validated.code || generateShortCode(),
 		type: validated.type,
 		title: validated.title,
 		content: validated.content,
@@ -125,13 +139,15 @@ export async function handleMemoryStore(params: Record<string, unknown>, db: SQL
 		{
 			success: true,
 			id: entry.id,
+			code: entry.code,
 			repo: entry.scope.repo,
 			type: entry.type,
 			title: entry.title
 		},
-		`Stored memory "${entry.title}" in repo "${entry.scope.repo}".`,
+		`Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
 		{
-			structuredContentPathHint: "id",
+			contentSummary: `Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
+			structuredContentPathHint: "code",
 			resourceLinks: [
 				{
 					uri: `memory://${entry.id}`,

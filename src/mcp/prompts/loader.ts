@@ -6,7 +6,38 @@ import type { LoadedPrompt } from "../interfaces";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROMPT_DIR = path.join(__dirname, "definitions");
+
+function findPromptDir(): string {
+	const candidates = [
+		// Production: /dist/prompts (sibling of dist/mcp/)
+		["../../prompts", "../../prompts"],
+		// Dev: /src/mcp/prompts/definitions (next to loader.ts)
+		["./definitions", "./definitions"]
+	]
+		.map(([prod, dev]) => {
+			// Try production path first
+			const prodPath = path.resolve(__dirname, prod);
+			if (fs.existsSync(prodPath) && fs.readdirSync(prodPath).some((f) => f.endsWith(".md"))) {
+				return prodPath;
+			}
+			// Then try dev path
+			const devPath = path.resolve(__dirname, dev);
+			if (fs.existsSync(devPath) && fs.readdirSync(devPath).some((f) => f.endsWith(".md"))) {
+				return devPath;
+			}
+			return null;
+		})
+		.filter(Boolean);
+
+	if (candidates[0]) {
+		return candidates[0]!;
+	}
+
+	// Final fallback
+	return path.resolve(__dirname, "./definitions");
+}
+
+const PROMPT_DIR = findPromptDir();
 
 export function listPromptFiles(): string[] {
 	if (!fs.existsSync(PROMPT_DIR)) return [];
