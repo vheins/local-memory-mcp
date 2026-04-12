@@ -10,6 +10,12 @@ Your data never leaves your machine. We use **SQLite** as the source of truth be
 - **Robust:** Atomic transactions ensure your memories are never corrupted.
 - **Portable:** Your knowledge base is a single `.db` file that you can back up or move easily.
 
+### 2. Modular Handler Architecture
+The storage logic is decoupled into specialized entities in `src/mcp/entities/`.
+- **Encapsulation:** Logic for Tasks, Memories, and Logging is separate, preventing a "God Object" anti-pattern in the database layer.
+- **Shared Standards:** All entities inherit from a common `BaseEntity` (in `src/mcp/storage/base.ts`), ensuring consistent error handling, SQL preparation, and row mapping.
+- **Extensibility:** New features can be added by creating a new entity without risking regressions in existing core storage logic.
+
 ### 2. Semantic Intelligence (Transformers.js)
 We use **ONNX Runtime** locally to generate vector embeddings.
 - **Privacy:** Semantic understanding happens on your CPU, not in the cloud.

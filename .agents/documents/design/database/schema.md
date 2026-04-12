@@ -1,6 +1,6 @@
 # Database Schema
 
-This document specifies the current production database schema as implemented in `src/mcp/storage/sqlite.ts`.
+This document specifies the database schema used in the MCP Local Memory system. The implementation logic for these tables is modularly distributed across specialized entities in `src/mcp/entities/` (inheriting from `src/mcp/storage/base.ts`).
 
 ## Tables
 

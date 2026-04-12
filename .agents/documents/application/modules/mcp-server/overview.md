@@ -29,13 +29,21 @@ graph TD
     B --> I[Interaction Controller]
     B --> G[Reference Provider]
     
-    C --> E[(SQLite)]
-    D --> E
-    I --> E
+    subgraph StorageLayer [Modular Storage Layer]
+        C --> MemoryEnt[MemoryEntity]
+        D --> TaskEnt[TaskEntity]
+        I --> ActionEnt[ActionEntity]
+        
+        MemoryEnt --> SQLite[(SQLite Store)]
+        TaskEnt --> SQLite
+        ActionEnt --> SQLite
+        
+        Entities[...] --> Base[BaseEntity]
+    end
     
     C --> F[Transformers Engine]
     B -- Async --> H[Activity Logger]
-    H --> E
+    H --> ActionEnt
 ```
 
 ## Dependencies

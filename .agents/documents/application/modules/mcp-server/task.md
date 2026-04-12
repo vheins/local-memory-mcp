@@ -51,3 +51,6 @@ stateDiagram-v2
 ## Compliance
 - **Auditability**: Every status change must be accompanied by a `comment` explaining the transition.
 - **Observability**: Changes are automatically broadcast to the Dashboard via the `Activity` stream.
+
+## Implementation Note
+The persistence logic and state transition validation for this module are encapsulated in the **[TaskEntity](file:///home/vheins/Projects/local-memory-mcp/src/mcp/entities/task.ts)**. This entity ensures that only valid state transitions (e.g., passing through `in_progress` before `completed`) are persisted to the database.

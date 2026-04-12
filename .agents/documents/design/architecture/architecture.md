@@ -33,15 +33,27 @@ The system is designed as a local-first, server-driven developer tool. It operat
 ```mermaid
 graph TD
     Agent[AI Agent / IDE] -- JSON-RPC --> MCPServer[MCP Server]
-    MCPServer -- SQL --> SQLite[(SQLite DB)]
+    
+    subgraph StorageLayer [Modular Storage Layer]
+        MCPServer --> Entities[Storage Entities]
+        Entities --> MemoryEnt[MemoryEntity]
+        Entities --> TaskEnt[TaskEntity]
+        Entities --> ActionEnt[ActionEntity]
+        
+        MemoryEnt --> SQLite[(SQLite DB)]
+        TaskEnt --> SQLite
+        ActionEnt --> SQLite
+    end
+    
     MCPServer -- ONNX --> Model[Local Embedding Model]
     
-    DashboardServer[Dashboard Server] -- Read/Write --> SQLite
+    DashboardServer[Dashboard Server] -- Read --> SQLite
     User[Developer] -- Browser --> DashboardServer
 ```
 
 ### Data Flow Invariants
 - **Local-First**: No data leaves the machine. Embeddings are generated locally using ONNX.
+- **Modular Storage**: Logic is decoupled into specialized entities (`MemoryEntity`, `TaskEntity`, `ActionEntity`, etc.) that inherit from a shared `BaseEntity` for consistent DB access.
 - **Unified Storage**: Both the MCP server and Dashboard access the same SQLite file (typically located in `~/.gemini/antigravity/storage/`).
 - **Activity Tracking**: Every tool call handled by the MCP Server is logged asynchronously to the `action_log` table for audit visibility in the dashboard.
 - **Task Lifecycle**: The system supports a **6-stage task state machine**: `backlog` -> `pending` -> `in_progress` -> `completed` (with `canceled` and `blocked` as terminal/exception states). The Dashboard UI optimizes for the primary 4 swimlanes (`backlog`, `pending`, `in_progress`, `completed`).

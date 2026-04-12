@@ -69,17 +69,23 @@ The system performs automated "Garbage Collection" and curation:
 ```mermaid
 sequenceDiagram
     participant A as Agent
-    participant M as Memory Service
+    participant M as Memory Controller
+    participant E as MemoryEntity
     participant V as Vector Provider
     participant D as SQLite
     
     A->>M: memory.store(content)
-    M->>V: getEmbedding(content)
-    V-->>M: float32[]
-    M->>D: INSERT INTO memories
-    D-->>M: success
+    M->>E: storeMemory(content)
+    E->>V: getEmbedding(content)
+    V-->>E: float32[]
+    E->>D: INSERT INTO memories
+    D-->>E: success
+    E-->>M: ID
     M-->>A: Created (ID)
 ```
+
+## Implementation Note
+The persistence logic for this module is encapsulated in the **[MemoryEntity](file:///home/vheins/Projects/local-memory-mcp/src/mcp/entities/memory.ts)**, which handles all SQL interactions, vector serialization, and archival transitions.
 
 ## Compliance
 - **Local Privacy**: All embeddings are generated locally. No plain text or vectors are transmitted over the network.
