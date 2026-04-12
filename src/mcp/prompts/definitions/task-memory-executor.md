@@ -26,7 +26,9 @@ Please follow this strict execution flow:
 4. **Task Execution Loop**: You MUST process tasks EXACTLY ONE AT A TIME (STRICT). You are STRICTLY FORBIDDEN from spinning up parallel sub-agents or using parallel execution. For each task you select:
     - **Hydrate**: Fetch full task context via `task-detail` tool before starting work.
     - **Start**: Call `local-memory-mcp` MCP tools `task-update` to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
+    - **Transition Safety (MANDATORY)**: You are FORBIDDEN from transitioning a task straight to `completed`. You MUST set it to `in_progress` first.
     - **Execute**: Perform the work described in the task title and description.
+    - **Context Gathering**: Utilize Hybrid Search (70% Vector, 30% FTS5) for all repository research.
     - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.
     - **Validate Behavior (MANDATORY)**: Ensure the implementation logic satisfies the task intent and follows project standards. Validation must focus on behavior, control flow, data flow, and integration points, not just whether a file/class/function exists.
     - **Complete Only With Evidence**: Call `local-memory-mcp` MCP tools `task-update` to set status='completed' only after recording concrete evidence in the 'comment' field. The comment must include: files inspected, logic verified, checks/tests run (or why they could not run), and the exact reason the task is considered complete.

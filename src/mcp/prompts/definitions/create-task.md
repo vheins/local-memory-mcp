@@ -54,7 +54,8 @@ Your output MUST ONLY consist of calls to:
 
 Before creating tasks, you MUST:
 1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
-2. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-list` (defaults to active tasks: in_progress/pending). **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
+2. **Conflict Prevention**: Respect the 0.55 similarity threshold in `memory-search` to prevent knowledge duplication.
+3. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-list` (defaults to active tasks: in_progress/pending). **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
 
 ---
 
@@ -112,6 +113,7 @@ If the instruction or prompt involves a decision, new feature, or architectural 
 If a directive is complex:
 1. Create a parent task.
 2. Create child tasks using `parent_id` and `depends_on`.
+3. **Bulk Limit**: You are limited to 500 records per transaction for bulk task operations.
 
 ---
 

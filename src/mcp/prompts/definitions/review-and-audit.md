@@ -61,7 +61,9 @@ If gaps are found, your output MUST ONLY consist of calls to:
 ### 3. PRE-ANALYSIS FOR TASK GENERATION (MANDATORY)
 Before creating tasks, you MUST:
 1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
-2. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-list` to check existing tasks. **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
+2. **Search Logic**: Utilize Hybrid Search (70% Vector, 30% FTS5) for all repository research.
+3. **Conflict Prevention**: Respect the 0.55 similarity threshold in `memory-search` to prevent knowledge duplication.
+4. **Sync backlog**: Call `local-memory-mcp` MCP tools `task-list` to check existing tasks. **CRITICAL: Do NOT create a new task if a similar, redundant task already exists in `backlog` or `pending` status. If your new findings are distinct but related to an existing task, link them using `parent_id` or `depends_on` instead of creating an isolated task.**
 
 ---
 

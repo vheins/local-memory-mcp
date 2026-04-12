@@ -64,7 +64,9 @@ If gaps are found, your output MUST ONLY consist of calls to:
 ### 3. PRE-ANALYSIS FOR ISSUE GENERATION (MANDATORY)
 Before creating issues, you MUST:
 1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
-2. **Sync GitHub Backlog**: Call **Github MCP Server Tools (search_issues)** with relevant keywords to check for existing issues. **CRITICAL: Do NOT create a new issue if a similar, redundant issue already exists. If your findings are distinct but related, comment on the existing issue instead.**
+2. **Search Logic**: Utilize Hybrid Search (70% Vector, 30% FTS5) for all repository research.
+3. **Conflict Prevention**: Respect the 0.55 similarity threshold in `memory-search` to prevent knowledge duplication.
+4. **Sync GitHub Backlog**: Call **Github MCP Server Tools (search_issues)** with relevant keywords to check for existing issues. **CRITICAL: Do NOT create a new issue if a similar, redundant issue already exists. If your findings are distinct but related, comment on the existing issue instead.**
 
 ---
 
