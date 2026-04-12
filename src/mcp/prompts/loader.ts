@@ -9,28 +9,21 @@ const __dirname = path.dirname(__filename);
 
 function findPromptDir(): string {
 	const candidates = [
-		// Production: /dist/prompts (sibling of dist/mcp/)
-		["../../prompts", "../../prompts"],
+		// Production if chunked into dist/
+		"./prompts",
+		// Production if inlined into dist/mcp/
+		"../prompts",
 		// Dev: /src/mcp/prompts/definitions (next to loader.ts)
-		["./definitions", "./definitions"]
-	]
-		.map(([prod, dev]) => {
-			// Try production path first
-			const prodPath = path.resolve(__dirname, prod);
-			if (fs.existsSync(prodPath) && fs.readdirSync(prodPath).some((f) => f.endsWith(".md"))) {
-				return prodPath;
-			}
-			// Then try dev path
-			const devPath = path.resolve(__dirname, dev);
-			if (fs.existsSync(devPath) && fs.readdirSync(devPath).some((f) => f.endsWith(".md"))) {
-				return devPath;
-			}
-			return null;
-		})
-		.filter(Boolean);
+		"./definitions"
+	].map((relPath) => path.resolve(__dirname, relPath));
 
-	if (candidates[0]) {
-		return candidates[0]!;
+	for (const dir of candidates) {
+		if (fs.existsSync(dir)) {
+			const files = fs.readdirSync(dir);
+			if (files.some((f) => f.endsWith(".md"))) {
+				return dir;
+			}
+		}
 	}
 
 	// Final fallback

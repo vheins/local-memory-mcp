@@ -68,11 +68,14 @@ function deserialize(body: JsonApiBody | unknown): unknown {
 	// Handle capability type - wrap each nested item with {data} for UI compatibility
 	if ((data as JsonApiItem).type === "capability") {
 		const attr = (data as JsonApiItem).attributes as Record<string, unknown>;
-		const wrapWithData = (arr: unknown[]) => (arr as Array<Record<string, unknown>>).map((item) => ({ data: item }));
+		const wrapWithData = (arr: unknown[]) =>
+			(arr as Array<JsonApiItem>).map((item) => ({
+				data: { id: item.id, ...(item.attributes || {}) }
+			}));
 		return {
-			tools: wrapWithData(attr.tools || []),
-			prompts: wrapWithData(attr.prompts || []),
-			resources: wrapWithData(attr.resources || [])
+			tools: wrapWithData((attr.tools as unknown[]) || []),
+			prompts: wrapWithData((attr.prompts as unknown[]) || []),
+			resources: wrapWithData((attr.resources as unknown[]) || [])
 		};
 	}
 
