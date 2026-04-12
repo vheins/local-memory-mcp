@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Mark this process as an MCP server to disable stderr logging (stdin/stdout used for JSON-RPC)
+process.env.MCP_SERVER = "true";
+
 import readline from "node:readline";
 import { createRouter } from "./router";
 import { SQLiteStore } from "./storage/sqlite";
@@ -17,7 +20,7 @@ import fs from "fs";
 if (process.argv.includes("doctor")) {
 	process.stderr.write("\n🏥 MCP Local Memory - System Diagnosis\n\n");
 
-	const db = new SQLiteStore();
+	const db = await SQLiteStore.create();
 	const dbPath = db.getDbPath();
 
 	process.stderr.write(`📂 Database Path: ${dbPath}\n`);
@@ -41,8 +44,8 @@ if (process.argv.includes("doctor")) {
 	process.exit(0);
 }
 
-// Create storage instances
-const db = new SQLiteStore();
+// Create storage instances (async for sql.js)
+const db = await SQLiteStore.create();
 const vectors = new RealVectorStore(db);
 
 // Pre-load vector model in background to avoid initial request timeout

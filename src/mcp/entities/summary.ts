@@ -1,24 +1,19 @@
 import { BaseEntity } from "../storage/base";
 
-/**
- * Handles repository summaries.
- */
 export class SummaryEntity extends BaseEntity {
 	getSummary(repo: string): { summary: string; updated_at: string } | null {
-		const row = this.db.prepare("SELECT summary, updated_at FROM memory_summary WHERE repo = ?").get(repo) as
-			| { summary: string; updated_at: string }
-			| undefined;
+		const row = this.get<{ summary: string; updated_at: string }>(
+			"SELECT summary, updated_at FROM memory_summary WHERE repo = ?",
+			[repo]
+		);
 		return row || null;
 	}
 
 	upsertSummary(repo: string, summary: string): void {
-		this.db
-			.prepare(
-				`
-      INSERT INTO memory_summary (repo, summary, updated_at) VALUES (?, ?, ?)
-      ON CONFLICT(repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at
-    `
-			)
-			.run(repo, summary, new Date().toISOString());
+		this.run(
+			`INSERT INTO memory_summary (repo, summary, updated_at) VALUES (?, ?, ?)
+			ON CONFLICT(repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
+			[repo, summary, new Date().toISOString()]
+		);
 	}
 }

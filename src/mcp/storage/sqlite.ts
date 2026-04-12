@@ -1,8 +1,7 @@
-import Database from "better-sqlite3";
+import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { logger } from "../utils/logger";
 import { MigrationManager } from "./migrations";
 import { MemoryEntity } from "../entities/memory";
 import { TaskEntity } from "../entities/task";
@@ -10,13 +9,6 @@ import { ActionEntity } from "../entities/action";
 import { SystemEntity } from "../entities/system";
 import { SummaryEntity } from "../entities/summary";
 
-/**
- * Resolve database path with following priority:
- * 1. MEMORY_DB_PATH env var
- * 2. standard config dir for platform
- * 3. legacy path
- * 4. local storage dir
- */
 function resolveDbPath(): string {
 	if (process.env.MEMORY_DB_PATH) return process.env.MEMORY_DB_PATH;
 
@@ -41,57 +33,95 @@ function resolveDbPath(): string {
 
 const DB_PATH = resolveDbPath();
 
-/**
- * COORDINATOR: Orchestrates database operations by delegating to specialized entities.
- * Exposes specialized entity properties for all database interactions.
- */
-export class SQLiteStore {
-	private db: Database.Database;
+let dbPathInstance = "";
+let saveDbFn: (() => void) | null = null;
 
+function createSaveFunction(db: SqlJsDatabase, dbPath?: string): () => void {
+	return () => {
+		if (dbPath && dbPath !== ":memory:") {
+			const data = db.export();
+			const buffer = Buffer.from(data);
+			fs.writeFileSync(dbPath, buffer);
+		}
+	};
+}
+
+export class SQLiteStore {
+	public db: SqlJsDatabase;
 	public memories: MemoryEntity;
 	public tasks: TaskEntity;
 	public actions: ActionEntity;
 	public system: SystemEntity;
 	public summaries: SummaryEntity;
 
-	constructor(dbPath?: string) {
-		const finalPath = dbPath ?? DB_PATH;
-		const dbDir = path.dirname(finalPath);
+	private constructor() {
+		this.db = {} as SqlJsDatabase;
+		this.memories = {} as MemoryEntity;
+		this.tasks = {} as TaskEntity;
+		this.actions = {} as ActionEntity;
+		this.system = {} as SystemEntity;
+		this.summaries = {} as SummaryEntity;
+	}
 
-		if (!fs.existsSync(dbDir)) {
-			fs.mkdirSync(dbDir, { recursive: true });
+	static async create(dbPath?: string): Promise<SQLiteStore> {
+		const finalPath = dbPath ?? DB_PATH;
+		dbPathInstance = finalPath;
+
+		const SQL = await initSqlJs();
+
+		let db: SqlJsDatabase;
+		if (finalPath === ":memory:") {
+			db = new SQL.Database();
+		} else {
+			const dbDir = path.dirname(finalPath);
+			if (!fs.existsSync(dbDir)) {
+				fs.mkdirSync(dbDir, { recursive: true });
+			}
+
+			if (fs.existsSync(finalPath)) {
+				const fileBuffer = fs.readFileSync(finalPath);
+				db = new SQL.Database(fileBuffer);
+			} else {
+				db = new SQL.Database();
+			}
 		}
 
-		this.db = new Database(finalPath);
-		this.db.pragma("journal_mode = WAL");
-		this.db.pragma("synchronous = NORMAL");
-		this.db.pragma("busy_timeout = 5000");
+		const saveDb = createSaveFunction(db, finalPath);
 
-		// Run migrations
-		const migrator = new MigrationManager(this.db);
+		db.run("PRAGMA journal_mode = WAL");
+		db.run("PRAGMA synchronous = NORMAL");
+		db.run("PRAGMA busy_timeout = 5000");
+
+		const migrator = new MigrationManager(db, saveDb);
 		migrator.migrate();
 
-		// Initialize entities
-		this.memories = new MemoryEntity(this.db);
-		this.tasks = new TaskEntity(this.db);
-		this.actions = new ActionEntity(this.db);
-		this.system = new SystemEntity(this.db);
-		this.summaries = new SummaryEntity(this.db);
+		const store = Object.create(SQLiteStore.prototype);
+		store.db = db;
+		store.memories = new MemoryEntity(db, saveDb);
+		store.tasks = new TaskEntity(db, saveDb);
+		store.actions = new ActionEntity(db, saveDb);
+		store.system = new SystemEntity(db, saveDb);
+		store.summaries = new SummaryEntity(db, saveDb);
 
-		process.stderr.write(`${new Date().toISOString()} [INFO     ] SQLiteStore initialized at ${finalPath}\n`);
+		if (finalPath !== ":memory:") {
+			saveDb();
+		}
+
+		if (process.env.MCP_SERVER !== "true") {
+			process.stderr.write(`${new Date().toISOString()} [INFO     ] SQLiteStore initialized at ${finalPath}\n`);
+		}
+
+		return store;
 	}
 
-	/**
-	 * Returns the current database file path.
-	 */
-	public getDbPath(): string {
-		return this.db.name;
+	getDbPath(): string {
+		return dbPathInstance;
 	}
 
-	/**
-	 * Closes the database connection.
-	 */
-	public close(): void {
+	close(): void {
+		if (saveDbFn) {
+			saveDbFn();
+		}
 		this.db.close();
 	}
 }

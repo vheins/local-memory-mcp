@@ -106,11 +106,11 @@
 										Tool
 									</span>
 								</div>
-								<div class="ref-card-name">{tool.data.name}</div>
-								{#if tool.data.description}
+								<div class="ref-card-name">{tool?.data?.name || "Unknown Tool"}</div>
+								{#if tool?.data?.description}
 									<div class="ref-card-desc">{tool.data.description}</div>
 								{/if}
-								{#if tool.data.inputSchema?.properties}
+								{#if tool?.data?.inputSchema?.properties}
 									<div class="ref-params">
 										{#each Object.entries(tool.data.inputSchema.properties).slice(0, 4) as [param]}
 											<code class="ref-param-tag">{param}</code>
@@ -149,8 +149,8 @@
 										Prompt
 									</span>
 								</div>
-								<div class="ref-card-name">{prompt.data.name}</div>
-								{#if prompt.data.description}
+								<div class="ref-card-name">{prompt?.data?.name || "Unknown Prompt"}</div>
+								{#if prompt?.data?.description}
 									<div class="ref-card-desc">{prompt.data.description}</div>
 								{/if}
 							</div>
@@ -180,8 +180,8 @@
 										Resource
 									</span>
 								</div>
-								<div class="ref-card-name">{resource.data.name}</div>
-								{#if resource.data.description}
+								<div class="ref-card-name">{resource?.data?.name || "Unknown Resource"}</div>
+								{#if resource?.data?.description}
 									<div class="ref-card-desc">{resource.data.description}</div>
 								{/if}
 								{#if resource.data.uri}

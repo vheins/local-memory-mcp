@@ -11,7 +11,8 @@ let pkg = { version: "0.0.0" };
 try {
 	const pkgPath = path.join(__dirname, "../../package.json");
 	if (fs.existsSync(pkgPath)) {
-		pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+		const data = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+		if (data.version) pkg.version = data.version;
 	}
 } catch {
 	// Intentionally empty: error handled elsewhere

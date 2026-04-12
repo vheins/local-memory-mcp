@@ -54,16 +54,16 @@
 					<span class="type-chip type-{$handler.memory.type}" style="margin-bottom:8px;display:inline-flex;"
 						>{$handler.memory.type}</span
 					>
-					<div class="drawer-title">{$handler.memory.title}</div>
+					<div class="drawer-title">{$handler.memory.title || "Untitled Memory"}</div>
 				</div>
 			{:else if $mode === "task" && $handler.task}
 				<div style="flex:1;min-width:0;">
 					<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-						<span class="status-chip {getStatusColor($handler.task.status)}"
-							>{getStatusLabel($handler.task.status)}</span
+						<span class="status-chip {getStatusColor($handler.task.status || 'pending')}"
+							>{getStatusLabel($handler.task.status || "")}</span
 						>
 						<span style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);"
-							>{$handler.task.task_code}</span
+							>{$handler.task.task_code || "NEW-TASK"}</span
 						>
 					</div>
 					{#if $handler.editingTitle}
@@ -112,7 +112,7 @@
 			{#if $mode === "memory" && $handler.memory}
 				<!-- Meta grid -->
 				<div class="meta-grid" style="margin-bottom:16px;">
-					{#each [{ label: "Importance", val: $handler.memory.importance }, { label: "Hit Count", val: $handler.memory.hit_count ?? 0 }, { label: "Created", val: formatDate($handler.memory.created_at) }, { label: "Updated", val: formatDate($handler.memory.updated_at) }] as m}
+					{#each [{ label: "Importance", val: $handler.memory?.importance || 0 }, { label: "Hit Count", val: $handler.memory?.hit_count ?? 0 }, { label: "Created", val: formatDate($handler.memory?.created_at) }, { label: "Updated", val: formatDate($handler.memory?.updated_at) }] as m}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>
@@ -216,7 +216,7 @@
 
 				<!-- Meta grid -->
 				<div class="meta-grid" style="margin-bottom:16px;">
-					{#each [{ label: "Priority", val: getPriorityLabel($handler.task.priority) }, { label: "Phase", val: $handler.task.phase || "—" }, { label: "Agent", val: $handler.task.agent || "—" }, { label: "Updated", val: formatDate($handler.task.updated_at) }] as m}
+					{#each [{ label: "Priority", val: getPriorityLabel($handler.task?.priority || 1) }, { label: "Phase", val: $handler.task?.phase || "—" }, { label: "Agent", val: $handler.task?.agent || "—" }, { label: "Updated", val: formatDate($handler.task?.updated_at) }] as m}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>
@@ -270,7 +270,7 @@
 						</div>
 					{:else if $handler.task?.description}
 						<div class="markdown-body md-card">
-							<Markdown content={$handler.task.description} />
+							<Markdown content={$handler.task.description || ""} />
 						</div>
 					{:else}
 						<div style="color:var(--color-text-muted);font-size:0.82rem;font-style:italic;">
@@ -281,7 +281,7 @@
 
 				<!-- ─── Comments / Activity ─────────────────────────────────────────── -->
 				<div>
-					<div class="section-label">Activity ({$handler.task.comments?.length ?? 0})</div>
+					<div class="section-label">Activity ({$handler.task?.comments?.length ?? 0})</div>
 
 					<!-- Add comment -->
 					<div class="comment-compose" style="margin-bottom:16px;">
@@ -306,7 +306,7 @@
 					</div>
 
 					<!-- Comment list -->
-					{#if $handler.task.comments?.length}
+					{#if $handler.task?.comments?.length}
 						<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
 							{#each $handler.task.comments as c (c.id)}
 								<div class="comment-card">

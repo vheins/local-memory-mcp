@@ -6,10 +6,10 @@
 
 	export let task: Task;
 
-	$: priorityColor = priorityColors[task.priority] || "#94a3b8";
-	$: statusIcon = statusIconMap[task.status] || "circle-dot";
-	$: statusColor = statusColors[task.status] || "#94a3b8";
-	$: descPreview = cleanDesc(task.description);
+	$: priorityColor = task ? priorityColors[task.priority] : "#94a3b8";
+	$: statusIcon = task ? statusIconMap[task.status] : "circle-dot";
+	$: statusColor = task ? statusColors[task.status] : "#94a3b8";
+	$: descPreview = task ? cleanDesc(task.description) : "";
 </script>
 
 <div class="task-card animate-fade-in" role="button" tabindex="0" on:click on:keydown>
@@ -22,7 +22,9 @@
 			<span class="status-icon-dot" style="color:{statusColor};">
 				<Icon name={statusIcon} size={11} strokeWidth={2.5} />
 			</span>
-			<span class="task-code-text">{task.task_code}</span>
+			{#if task}
+				<span class="task-code-text">{task.task_code}</span>
+			{/if}
 		</div>
 		{#if task.phase}
 			<span class="phase-chip">{task.phase}</span>
@@ -30,7 +32,7 @@
 	</div>
 
 	<!-- Title — always visible, max 2 lines -->
-	<div class="task-title">{task.title}</div>
+	<div class="task-title">{task?.title || "Untitled Task"}</div>
 
 	<!-- Description preview — max 2 lines, stripped -->
 	{#if descPreview}
@@ -51,7 +53,7 @@
 		{/if}
 		<div class="time-row">
 			<Icon name="clock" size={10} strokeWidth={2} />
-			<span>{formatDate(task.updated_at)}</span>
+			<span>{task ? formatDate(task.updated_at) : ""}</span>
 		</div>
 	</div>
 

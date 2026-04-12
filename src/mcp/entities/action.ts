@@ -1,15 +1,6 @@
-import Database from "better-sqlite3";
 import { BaseEntity } from "../storage/base";
 
 export class ActionEntity extends BaseEntity {
-	constructor(db: Database.Database) {
-		super(db);
-	}
-
-	/**
-	 * Log an action to the audit trail.
-	 * Supports both object-based options (modern) and positional arguments (legacy/internal).
-	 */
 	logAction(
 		action: string,
 		repo: string,
@@ -36,42 +27,34 @@ export class ActionEntity extends BaseEntity {
 			finalResultCount = optionsOrQuery.resultCount !== undefined ? optionsOrQuery.resultCount : finalResultCount;
 		}
 
-		const stmt = this.db.prepare(`
-      INSERT INTO action_log (repo, action, query, response, memory_id, task_id, result_count, created_at)
-      VALUES (:repo, :action, :query, :response, :memory_id, :task_id, :result_count, :created_at)
-    `);
-
-		stmt.run({
-			repo: repo || "",
-			action: action || "unknown",
-			query: query || null,
-			response: finalResponse
-				? typeof finalResponse === "string"
-					? finalResponse
-					: JSON.stringify(finalResponse)
-				: null,
-			memory_id: finalMemoryId || null,
-			task_id: finalTaskId || null,
-			result_count: finalResultCount ?? 0,
-			created_at: new Date().toISOString()
-		});
+		this.run(
+			`INSERT INTO action_log (repo, action, query, response, memory_id, task_id, result_count, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				repo || "",
+				action || "unknown",
+				query || null,
+				finalResponse ? (typeof finalResponse === "string" ? finalResponse : JSON.stringify(finalResponse)) : null,
+				finalMemoryId || null,
+				finalTaskId || null,
+				finalResultCount ?? 0,
+				new Date().toISOString()
+			]
+		);
 	}
 
 	getLastActionId(): number {
-		const row = this.db.prepare("SELECT MAX(id) as id FROM action_log").get() as { id: number } | undefined;
+		const row = this.get<{ id: number }>("SELECT MAX(id) as id FROM action_log");
 		return row?.id || 0;
 	}
 
 	getActionsAfter(id: number): (ActionLogRow & { memory_title?: string; memory_type?: string })[] {
-		return this.db
-			.prepare(
-				`
-      SELECT a.*, m.title as memory_title, m.type as memory_type 
-      FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
-      WHERE a.id > ? ORDER BY a.created_at ASC
-    `
-			)
-			.all(id) as (ActionLogRow & { memory_title?: string; memory_type?: string })[];
+		return this.all<ActionLogRow & { memory_title?: string; memory_type?: string }>(
+			`SELECT a.*, m.title as memory_title, m.type as memory_type 
+			FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
+			WHERE a.id > ? ORDER BY a.created_at ASC`,
+			[id]
+		);
 	}
 
 	getRecentActions(
@@ -80,10 +63,10 @@ export class ActionEntity extends BaseEntity {
 		offset: number = 0
 	): (ActionLogRow & { memory_title?: string; memory_type?: string })[] {
 		let query = `
-      SELECT a.*, m.title as memory_title, m.type as memory_type 
-      FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id
-    `;
-		const params: unknown[] = [];
+			SELECT a.*, m.title as memory_title, m.type as memory_type 
+			FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id
+		`;
+		const params: (string | number)[] = [];
 
 		if (repo) {
 			query += " WHERE a.repo = ?";
@@ -93,46 +76,37 @@ export class ActionEntity extends BaseEntity {
 		query += " ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?";
 		params.push(limit, offset);
 
-		return this.db.prepare(query).all(...params) as (ActionLogRow & { memory_title?: string; memory_type?: string })[];
+		return this.all<ActionLogRow & { memory_title?: string; memory_type?: string }>(query, params);
 	}
 
 	getActionStatsByDate(repo: string): { date: string; count: number }[] {
-		return this.db
-			.prepare(
-				`
-      SELECT date(created_at) as date, count(*) as count 
-      FROM action_log 
-      WHERE repo = ? AND created_at > date('now', '-30 days')
-      GROUP BY date(created_at)
-      ORDER BY date ASC
-    `
-			)
-			.all(repo) as { date: string; count: number }[];
+		return this.all<{ date: string; count: number }>(
+			`SELECT date(created_at) as date, count(*) as count 
+			FROM action_log 
+			WHERE repo = ? AND created_at > date('now', '-30 days')
+			GROUP BY date(created_at)
+			ORDER BY date ASC`,
+			[repo]
+		);
 	}
 
 	getActionDistribution(repo: string): { action: string; count: number }[] {
-		return this.db
-			.prepare(
-				`
-      SELECT action, count(*) as count 
-      FROM action_log 
-      WHERE repo = ?
-      GROUP BY action
-    `
-			)
-			.all(repo) as { action: string; count: number }[];
+		return this.all<{ action: string; count: number }>(
+			`SELECT action, count(*) as count 
+			FROM action_log 
+			WHERE repo = ?
+			GROUP BY action`,
+			[repo]
+		);
 	}
 
 	getActionById(id: number): (ActionLogRow & { memory_title?: string; memory_type?: string }) | undefined {
-		return this.db
-			.prepare(
-				`
-      SELECT a.*, m.title as memory_title, m.type as memory_type 
-      FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
-      WHERE a.id = ?
-    `
-			)
-			.get(id) as (ActionLogRow & { memory_title?: string; memory_type?: string }) | undefined;
+		return this.get<ActionLogRow & { memory_title?: string; memory_type?: string }>(
+			`SELECT a.*, m.title as memory_title, m.type as memory_type 
+			FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id 
+			WHERE a.id = ?`,
+			[id]
+		);
 	}
 }
 

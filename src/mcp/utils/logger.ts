@@ -65,6 +65,12 @@ function deriveLoggerName(message: string): string | undefined {
 }
 
 function emitToStderr(level: LogLevel, message: string, context?: Record<string, unknown>) {
+	// Skip stderr output when running as MCP server (stdin/stdout used for JSON-RPC)
+	// Logs are still emitted to sinks if configured
+	if (process.env.MCP_SERVER === "true") {
+		return;
+	}
+
 	const timestamp = new Date().toISOString();
 
 	if (message.startsWith("[MCP]")) {

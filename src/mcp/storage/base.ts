@@ -1,23 +1,43 @@
-import Database from "better-sqlite3";
+import { Database as SqlJsDatabase } from "sql.js";
 import { tokenize } from "../utils/normalize";
-import {
-	MemoryEntry,
-	MemoryType,
-	Task,
-	TaskStatus,
-	TaskPriority
-} from "../types/index";
+import { MemoryEntry, MemoryType, Task, TaskStatus, TaskPriority } from "../types/index";
 
-/**
- * Base class for all database entities.
- * Provdes shared access to the database instance and mapping helpers.
- */
 export abstract class BaseEntity {
-	constructor(protected db: Database.Database) {}
+	constructor(
+		protected db: SqlJsDatabase,
+		protected saveDb?: () => void
+	) {}
 
-	/**
-	 * Safe JSON parsing helper to avoid crashes on corrupt data
-	 */
+	protected run(sql: string, params: unknown[] = []): { changes: number } {
+		this.db.run(sql, params as (string | number | null | Uint8Array)[]);
+		if (this.saveDb) this.saveDb();
+		return { changes: this.db.getRowsModified() };
+	}
+
+	protected exec(sql: string): void {
+		this.db.exec(sql);
+		if (this.saveDb) this.saveDb();
+	}
+
+	protected all<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
+		const result = this.db.exec(sql, params as (string | number | null | Uint8Array)[]);
+		if (result.length === 0) return [];
+
+		const { columns, values } = result[0];
+		return values.map((row) => {
+			const obj: Record<string, unknown> = {};
+			columns.forEach((col, i) => {
+				obj[col] = row[i];
+			});
+			return obj as T;
+		});
+	}
+
+	protected get<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T | undefined {
+		const rows = this.all<T>(sql, params);
+		return rows[0];
+	}
+
 	protected safeJSONParse<T>(json: string | null | undefined, defaultValue: T): T {
 		if (!json) return defaultValue;
 		try {
@@ -27,9 +47,6 @@ export abstract class BaseEntity {
 		}
 	}
 
-	/**
-	 * Mapping helper for MemoryEntry
-	 */
 	protected rowToMemoryEntry(row: unknown): MemoryEntry {
 		const r = row as Record<string, unknown>;
 		return {
@@ -61,9 +78,6 @@ export abstract class BaseEntity {
 		};
 	}
 
-	/**
-	 * Mapping helper for Task
-	 */
 	protected rowToTask(row: unknown): Task {
 		const r = row as Record<string, unknown>;
 		return {
@@ -92,9 +106,6 @@ export abstract class BaseEntity {
 		};
 	}
 
-	/**
-	 * Vector math utilities (simple bag-of-words implementation)
-	 */
 	protected computeVector(text: string): Record<string, number> {
 		const tokens = tokenize(text);
 		const vector: Record<string, number> = {};

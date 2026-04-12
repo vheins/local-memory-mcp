@@ -1,15 +1,40 @@
-import Database from "better-sqlite3";
-import { logger } from "../utils/logger";
+import { Database as SqlJsDatabase } from "sql.js";
 
-/**
- * Handles database schema migrations and initial table creation.
- */
 export class MigrationManager {
-	constructor(private db: Database.Database) {}
+	constructor(
+		private db: SqlJsDatabase,
+		private saveDb?: () => void
+	) {}
+
+	private run(sql: string): void {
+		this.db.run(sql);
+	}
+
+	private exec(sql: string): void {
+		this.db.exec(sql);
+	}
+
+	private all(sql: string): Record<string, unknown>[] {
+		const result = this.db.exec(sql);
+		if (result.length === 0) return [];
+
+		const { columns, values } = result[0];
+		return values.map((row) => {
+			const obj: Record<string, unknown> = {};
+			columns.forEach((col, i) => {
+				obj[col] = row[i];
+			});
+			return obj;
+		});
+	}
+
+	private get(sql: string): Record<string, unknown> | undefined {
+		const rows = this.all(sql);
+		return rows[0];
+	}
 
 	public migrate() {
-		// 1. Create base tables first
-		this.db.exec(`
+		this.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -139,38 +164,8 @@ export class MigrationManager {
 
       CREATE INDEX IF NOT EXISTS idx_action_log_repo ON action_log(repo);
       CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
-
-      -- FTS5 Virtual Table for Memories
-      -- Note: Only using id, title, and content for search indexing
-      CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-        id UNINDEXED,
-        repo,
-        type,
-        title,
-        content,
-        metadata UNINDEXED,
-        content='memories',
-        content_rowid='id'
-      );
-
-      -- Triggers to keep FTS index in sync with base table
-      CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-        INSERT INTO memories_fts(id, repo, type, title, content, metadata) 
-        VALUES (new.id, new.repo, new.type, new.title, new.content, new.metadata);
-      END;
-      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-        INSERT INTO memories_fts(memories_fts, id, repo, type, title, content, metadata) 
-        VALUES ('delete', old.id, old.repo, old.type, old.title, old.content, old.metadata);
-      END;
-      CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-        INSERT INTO memories_fts(memories_fts, id, repo, type, title, content, metadata) 
-        VALUES ('delete', old.id, old.repo, old.type, old.title, old.content, old.metadata);
-        INSERT INTO memories_fts(id, repo, type, title, content, metadata) 
-        VALUES (new.id, new.repo, new.type, new.title, new.content, new.metadata);
-      END;
     `);
 
-		// 2. Safely add missing columns for existing tables
 		const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
 			{ name: "title", table: "memories", definition: "ALTER TABLE memories ADD COLUMN title TEXT" },
 			{
@@ -240,16 +235,14 @@ export class MigrationManager {
 
 		for (const col of columnsToAdd) {
 			try {
-				const tableInfo = this.db.prepare(`PRAGMA table_info(${col.table})`).all() as Array<{ name: string }>;
-				const existingTableColumns = tableInfo.map((c) => c.name);
+				const tableInfo = this.all(`PRAGMA table_info(${col.table})`);
+				const existingTableColumns = tableInfo.map((c) => c.name as string);
 
 				if (tableInfo.length > 0 && !existingTableColumns.includes(col.name)) {
-					this.db.exec(col.definition);
+					this.exec(col.definition);
 				}
-			} catch (e) {
-				logger.error(
-					`Migration step failed for ${col.table}.${col.name}: ${e instanceof Error ? e.message : String(e)}`
-				);
+			} catch {
+				// Ignore errors - column might already exist or table doesn't exist
 			}
 		}
 
@@ -257,29 +250,28 @@ export class MigrationManager {
 		this.ensureTaskStatusConstraintRemoved();
 		this.ensureMemoryStatusConstraintRemoved();
 
-		this.db.exec(`
+		this.exec(`
       CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
       CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
       CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
     `);
 
-		// Backfill task_code if it was added via migration
 		try {
-			this.db.exec("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL");
-		} catch (e) {
-			logger.error(`Legacy backfill task_code failed: ${e instanceof Error ? e.message : String(e)}`);
+			this.run("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL");
+		} catch {
+			// Ignore if column doesn't exist
 		}
+
+		if (this.saveDb) this.saveDb();
 	}
 
 	private ensureMemoryTypeConstraint(): void {
-		const tableSql = this.db
-			.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
-			.get() as { sql?: string } | undefined;
-		if (!tableSql?.sql || !tableSql.sql.includes("CHECK (type IN")) {
+		const tableSql = this.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'");
+		if (!tableSql?.sql || !String(tableSql.sql).includes("CHECK (type IN")) {
 			return;
 		}
 
-		this.db.exec(`
+		this.exec(`
       BEGIN TRANSACTION;
 
       CREATE TABLE memories__migrated (
@@ -327,15 +319,16 @@ export class MigrationManager {
 	}
 
 	private ensureTaskStatusConstraintRemoved(): void {
-		const tableSql = this.db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get() as
-			| { sql?: string }
-			| undefined;
+		const tableSql = this.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'");
 
-		if (!tableSql?.sql || (!tableSql.sql.includes("CHECK (status IN") && !tableSql.sql.includes("DEFAULT 'pending'"))) {
+		if (
+			!tableSql?.sql ||
+			(!String(tableSql.sql).includes("CHECK (status IN") && !String(tableSql.sql).includes("DEFAULT 'pending'"))
+		) {
 			return;
 		}
 
-		this.db.exec(`
+		this.exec(`
       BEGIN TRANSACTION;
 
       CREATE TABLE tasks__migrated (
@@ -381,12 +374,10 @@ export class MigrationManager {
 	}
 
 	private ensureMemoryStatusConstraintRemoved(): void {
-		const tableSql = this.db
-			.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'")
-			.get() as { sql?: string } | undefined;
+		const tableSql = this.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'");
 
 		if (tableSql?.sql?.includes("status TEXT NOT NULL DEFAULT 'active' CHECK")) {
-			this.ensureMemoryTypeConstraint(); // Re-use rebuild logic
+			this.ensureMemoryTypeConstraint();
 		}
 	}
 }
