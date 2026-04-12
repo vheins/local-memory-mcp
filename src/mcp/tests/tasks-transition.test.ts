@@ -51,7 +51,7 @@ describe("Task Status Transitions", () => {
 				db,
 				mockVectors
 			)
-		).rejects.toThrow("Cannot transition directly from 'backlog' to 'completed'. Task must be 'in_progress' first.");
+		).rejects.toThrow(/Cannot transition task .* from 'backlog' directly to 'completed'. Must be 'in_progress' first./);
 	});
 
 	it("should allow transition from backlog to pending", async () => {
@@ -93,7 +93,7 @@ describe("Task Status Transitions", () => {
 				db,
 				mockVectors
 			)
-		).rejects.toThrow("Cannot transition directly from 'pending' to 'completed'. Task must be 'in_progress' first.");
+		).rejects.toThrow(/Cannot transition task .* from 'pending' directly to 'completed'. Must be 'in_progress' first./);
 	});
 
 	it("should allow transition from pending to in_progress", async () => {
@@ -251,6 +251,6 @@ describe("Task Status Transitions", () => {
 				db,
 				mockVectors
 			)
-		).rejects.toThrow("Cannot transition directly from 'blocked' to 'completed'. Task must be 'in_progress' first.");
+		).rejects.toThrow(/Cannot transition task .* from 'blocked' directly to 'completed'. Must be 'in_progress' first./);
 	});
 });
