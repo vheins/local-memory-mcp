@@ -183,7 +183,8 @@ export const TaskCreateSchema = z
 	);
 
 export const TaskCreateInteractiveSchema = SingleTaskCreateSchema.partial().extend({
-	repo: z.string().min(1).transform(normalizeRepo).optional()
+	repo: z.string().min(1).transform(normalizeRepo).optional(),
+	structured: z.boolean().default(false)
 });
 
 export const TaskUpdateSchema = z
@@ -346,7 +347,8 @@ export const TOOL_DEFINITIONS = [
 				priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
 				agent: { type: "string" },
 				role: { type: "string" },
-				doc_path: { type: "string" }
+				doc_path: { type: "string" },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			}
 		},
 		outputSchema: {

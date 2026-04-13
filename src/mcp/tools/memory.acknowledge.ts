@@ -33,7 +33,7 @@ export async function handleMemoryAcknowledge(params: unknown, db: SQLiteStore):
 			id: memory.id,
 			status: validated.status
 		},
-		`Acknowledged memory ${memory.id} as "${validated.status}".`,
+		`Acknowledged memory [${memory.code}] as "${validated.status}".`,
 		{
 			structuredContentPathHint: "status",
 			includeSerializedStructuredContent: validated.structured

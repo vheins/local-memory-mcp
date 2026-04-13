@@ -11,7 +11,8 @@ export async function handleMemoryDelete(
 	onProgress?: (progress: number, total?: number) => void
 ): Promise<McpResponse> {
 	// Validate input
-	const { id, ids, repo } = MemoryDeleteSchema.parse(params);
+	const validated = MemoryDeleteSchema.parse(params);
+	const { id, ids, repo, structured } = validated;
     const targetIds = ids || (id ? [id] : []);
 
     if (targetIds.length === 0) {
@@ -19,6 +20,7 @@ export async function handleMemoryDelete(
     }
 
     let deletedCount = 0;
+    const deletedCodes: string[] = [];
     let lastRepo = repo || "unknown";
 
     const total = targetIds.length;
@@ -32,6 +34,7 @@ export async function handleMemoryDelete(
         const existing = db.memories.getById(targetId);
         if (existing) {
             lastRepo = existing.scope.repo;
+            deletedCodes.push(existing.code || existing.id);
             db.memories.delete(targetId);
             await vectors.remove(targetId);
             deletedCount++;
@@ -53,12 +56,13 @@ export async function handleMemoryDelete(
 			id: id || undefined,
             ids: ids || undefined,
 			repo: lastRepo,
-            deletedCount
+            deletedCount,
+            deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes
 		},
-		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
+		`Deleted ${deletedCount} memory entry(ies) ${deletedCount > 0 ? `([${deletedCodes.slice(0, 10).join(", ")}${deletedCount > 10 ? ", ..." : ""}]) ` : ""}from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: (params as any).structured || false,
+			includeSerializedStructuredContent: structured,
 			resourceLinks: [
 				{
 					uri: `repository://${encodeURIComponent(lastRepo)}/memories`,

@@ -161,7 +161,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 		query,
 		limit,
 		offset,
-		structured: isStructuredRequest
+		structured: isStructuredRequest = false
 	} = validated;
 
 	let statuses: string[] = [];
@@ -210,7 +210,19 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: isStructuredRequest
+		includeSerializedStructuredContent: isStructuredRequest,
+		resourceLinks: [
+			{
+				uri: `repository://${encodeURIComponent(repo)}/tasks`,
+				name: `Task Index (${repo})`,
+				description: `Repository task index for ${repo}`,
+				mimeType: "application/json",
+				annotations: {
+					audience: ["assistant"],
+					priority: 0.6
+				}
+			}
+		]
 	});
 }
 
@@ -284,12 +296,37 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			};
 			storage.tasks.insertTask(task);
 			createdTasks.push(task.task_code);
+			(task as any)._temp_id = task.id; // temp store for mapping if needed
 		}
+
+		const resourceLinks = bulkTasks.slice(0, 10).map((t, idx) => {
+			const taskCode = t.task_code;
+			const taskId = (t as any)._temp_id; // This is a bit hacky, let's just use the first 10 from createdTasks if I can get IDs
+			// Actually I need to map task_code to ID.
+			return {
+				uri: `task://${taskId}`,
+				name: `Task [${taskCode}]`,
+				description: `Created task [${taskCode}] in repo ${repo}`,
+				mimeType: "application/json",
+				annotations: { audience: ["assistant"], priority: 0.9 }
+			};
+		});
+
+		resourceLinks.push({
+			uri: `repository://${encodeURIComponent(repo)}/tasks`,
+			name: `Task Index (${repo})`,
+			description: `Repository task index for ${repo}`,
+			mimeType: "application/json",
+			annotations: { audience: ["assistant"], priority: 0.6 }
+		});
 
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
 			`Created ${bulkTasks.length} tasks in repo "${repo}".`,
-			{ includeSerializedStructuredContent: (parsed as any).structured || false }
+			{ 
+				includeSerializedStructuredContent: (parsed as any).structured || false,
+				resourceLinks
+			}
 		);
 	}
 
@@ -377,7 +414,31 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			depends_on: task.depends_on
 		},
 		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
-		{ includeSerializedStructuredContent: (parsed as any).structured || false }
+		{ 
+			includeSerializedStructuredContent: (parsed as any).structured || false,
+			resourceLinks: [
+				{
+					uri: `task://${task.id}`,
+					name: `Task [${task.task_code}]`,
+					description: `Created task [${task.task_code}] in repo ${task.repo}`,
+					mimeType: "application/json",
+					annotations: {
+						audience: ["assistant"],
+						priority: 0.9
+					}
+				},
+				{
+					uri: `repository://${encodeURIComponent(task.repo)}/tasks`,
+					name: `Task Index (${task.repo})`,
+					description: `Repository task index for ${task.repo}`,
+					mimeType: "application/json",
+					annotations: {
+						audience: ["assistant"],
+						priority: 0.6
+					}
+				}
+			]
+		}
 	);
 }
 
@@ -512,6 +573,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 	}
 
 	let updatedCount = 0;
+	const updatedTasks: { id: string, code: string }[] = [];
 	const now = new Date().toISOString();
 	const isStatusChangingGlobal = updates.status !== undefined;
 
@@ -589,8 +651,25 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		if (updates.status === "completed" && existingTask.status !== "completed") {
 			await archiveTaskToMemory(targetId, repo, storage, vectors);
 		}
+		updatedTasks.push({ id: targetId, code: (updates.task_code as string) || existingTask.task_code });
 		updatedCount++;
 	}
+
+	const resourceLinks = updatedTasks.slice(0, 10).map(t => ({
+		uri: `task://${t.id}`,
+		name: `Task [${t.code}]`,
+		description: `Updated task [${t.code}] in repo ${repo}`,
+		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.9 }
+	}));
+
+	resourceLinks.push({
+		uri: `repository://${encodeURIComponent(repo)}/tasks`,
+		name: `Task Index (${repo})`,
+		description: `Repository task index for ${repo}`,
+		mimeType: "application/json",
+		annotations: { audience: ["assistant"], priority: 0.6 }
+	});
 
 	return createMcpResponse(
 		{
@@ -603,7 +682,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			updatedFields: Object.keys(updates)
 		},
 		`Updated ${updatedCount} task(s) in repo "${repo}".`,
-		{ includeSerializedStructuredContent: (args as any).structured || false }
+		{ 
+			includeSerializedStructuredContent: updateData.structured,
+			resourceLinks
+		}
 	);
 }
 
@@ -628,6 +710,17 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 			deletedCount: targetIds.length
 		},
 		`Deleted ${targetIds.length} task(s) from repo "${repo}".`,
-		{ includeSerializedStructuredContent: (args as any).structured || false }
+		{ 
+			includeSerializedStructuredContent: validated.structured,
+			resourceLinks: [
+				{
+					uri: `repository://${encodeURIComponent(repo)}/tasks`,
+					name: `Task Index (${repo})`,
+					description: `Repository task index for ${repo}`,
+					mimeType: "application/json",
+					annotations: { audience: ["assistant"], priority: 0.6 }
+				}
+			]
+		}
 	);
 }

@@ -153,7 +153,7 @@ export async function handleMemoryStore(
 				{
 					uri: `memory://${entry.id}`,
 					name: entry.title,
-					description: `Stored memory in repo ${entry.scope.repo}`,
+					description: `Stored memory [${entry.code}] in repo ${entry.scope.repo}`,
 					mimeType: "application/json",
 					annotations: {
 						audience: ["assistant"],

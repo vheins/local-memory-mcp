@@ -74,7 +74,7 @@ export async function handleMemoryUpdate(params: Record<string, unknown>, db: SQ
 				{
 					uri: `memory://${validated.id}`,
 					name: existing.title || validated.id,
-					description: `Updated memory in repo ${existing.scope.repo}`,
+					description: `Updated memory [${existing.code}] in repo ${existing.scope.repo}`,
 					mimeType: "application/json",
 					annotations: {
 						audience: ["assistant"],
