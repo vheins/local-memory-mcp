@@ -58,7 +58,7 @@ function getStaticRoot() {
 
 const staticRoot = getStaticRoot();
 logger.debug("Dashboard serving assets from", { staticRoot });
-app.use(express.static(staticRoot));
+app.use(express.static(staticRoot, { fallthrough: true }));
 
 app.use((req, res, next) => {
 	if (req.path.startsWith("/api")) return next();
@@ -96,6 +96,13 @@ app.use((req, res, next) => {
       </html>
     `);
 	}
+});
+
+// --- Error Handler ---
+app.use((err: Error & { status?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+	if ((err as { status?: number }).status === 404) return res.status(404).end();
+	logger.error("Unhandled error", { error: err.message });
+	res.status(500).end();
 });
 
 // --- Start Server ---
