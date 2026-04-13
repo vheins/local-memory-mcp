@@ -1,7 +1,12 @@
-import { pipeline, FeatureExtractionPipeline } from "@xenova/transformers";
+import { pipeline, FeatureExtractionPipeline, env } from "@xenova/transformers";
 import { VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
+
+// Suppress transformers.js stdout progress output — stdout is reserved for JSON-RPC in MCP mode
+if (process.env.MCP_SERVER === "true") {
+	env.backends.onnx.logLevel = "error";
+}
 
 export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
@@ -22,7 +27,20 @@ export class RealVectorStore implements VectorStore {
 
 	private async getExtractor(): Promise<FeatureExtractionPipeline> {
 		if (!this.extractor) {
-			this.extractor = await pipeline("feature-extraction", this.modelName);
+			// ONNX runtime writes progress to stdout (fd=1) in Node.js mode,
+			// which corrupts the JSON-RPC stream. Redirect stdout → stderr during load.
+			const isMcp = process.env.MCP_SERVER === "true";
+			const origWrite = process.stdout.write.bind(process.stdout);
+			if (isMcp) {
+				// @ts-expect-error — intentional stdout suppression during model load
+				process.stdout.write = (...args: Parameters<typeof process.stdout.write>) =>
+					process.stderr.write(args[0] as string);
+			}
+			try {
+				this.extractor = await pipeline("feature-extraction", this.modelName);
+			} finally {
+				if (isMcp) process.stdout.write = origWrite;
+			}
 		}
 		return this.extractor;
 	}
