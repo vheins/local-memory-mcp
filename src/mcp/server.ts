@@ -51,7 +51,7 @@ const vectors = new RealVectorStore(db);
 
 // Register file log sink (same dir as DB, retain last 5 files)
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
-logger.info("[Server] startup", { pid: process.pid, db: db.getDbPath() });
+logger.info("[Server] startup", { pid: process.pid, version: CAPABILITIES.serverInfo.version, db: db.getDbPath() });
 
 // Pre-load vector model in background to avoid initial request timeout
 vectors.initialize().catch((err) => {
