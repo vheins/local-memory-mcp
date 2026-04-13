@@ -211,8 +211,8 @@ export const TaskUpdateSchema = z
 		force: z.boolean().optional(),
 		structured: z.boolean().default(false)
 	})
-	.refine((data) => data.id !== undefined || data.ids !== undefined, {
-		message: "Either 'id' or 'ids' must be provided for update"
+	.refine((data) => data.id !== undefined || data.ids !== undefined || data.task_code !== undefined, {
+		message: "Either 'id', 'ids', or 'task_code' must be provided for update"
 	})
 	.refine((data) => Object.keys(data).length > 2, {
 		message: "At least one field besides repo and id/ids must be provided for update"

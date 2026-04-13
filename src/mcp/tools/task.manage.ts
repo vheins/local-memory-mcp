@@ -580,7 +580,16 @@ function addRequiredStringField(
 export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vectors: VectorStore) {
 	const updateData = TaskUpdateSchema.parse(args);
 	const { repo, id, ids, comment, force, ...updates } = updateData;
-	const targetIds = ids || (id ? [id] : []);
+
+	// Resolve task_code to id if needed
+	let resolvedId = id;
+	if (!resolvedId && !ids && updates.task_code) {
+		const found = storage.tasks.getTaskByCode(repo, updates.task_code);
+		if (!found) throw new Error(`Task not found: ${updates.task_code}`);
+		resolvedId = found.id;
+	}
+
+	const targetIds = ids || (resolvedId ? [resolvedId] : []);
 
 	if (targetIds.length === 0) {
 		throw new Error("Either 'id' or 'ids' must be provided for update");
