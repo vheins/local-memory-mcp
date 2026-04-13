@@ -1,3 +1,5 @@
+import fs from "fs";
+
 type LogLevel = "debug" | "info" | "notice" | "warning" | "error" | "critical" | "alert" | "emergency";
 
 type LogMethodLevel = LogLevel | "warn";
@@ -171,3 +173,29 @@ export function clearLogSinks() {
 }
 
 export const LOG_LEVEL_VALUES = Object.keys(LEVELS) as LogLevel[];
+
+/**
+ * Creates a file-based log sink with rotation (keeps last `maxFiles` log files).
+ * Log files are written to `logDir` as `mcp-YYYY-MM-DD_HH-MM-SS.log`.
+ * On creation, old files beyond `maxFiles` are deleted (oldest first).
+ */
+export function createFileSink(logDir: string, maxFiles = 5): LogSink {
+	fs.mkdirSync(logDir, { recursive: true });
+
+	const existing = fs
+		.readdirSync(logDir)
+		.filter((f) => f.startsWith("mcp-") && f.endsWith(".log"))
+		.sort();
+
+	while (existing.length >= maxFiles) {
+		try { fs.unlinkSync(`${logDir}/${existing.shift()!}`); } catch { /* best effort */ }
+	}
+
+	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+	const logFile = `${logDir}/mcp-${timestamp}.log`;
+
+	return (payload) => {
+		const line = `${new Date().toISOString()} [${payload.level.toUpperCase()}] ${JSON.stringify(payload.data)}\n`;
+		try { fs.appendFileSync(logFile, line); } catch { /* best effort */ }
+	};
+}

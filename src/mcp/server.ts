@@ -13,8 +13,9 @@ import {
 	updateSessionFromInitialize,
 	updateSessionRoots
 } from "./session";
-import { addLogSink, logger } from "./utils/logger";
+import { addLogSink, createFileSink, logger } from "./utils/logger";
 import fs from "fs";
+import path from "path";
 
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
@@ -47,6 +48,9 @@ if (process.argv.includes("doctor")) {
 // Create storage instances
 const db = await SQLiteStore.create();
 const vectors = new RealVectorStore(db);
+
+// Register file log sink (same dir as DB, retain last 5 files)
+addLogSink(createFileSink(path.dirname(db.getDbPath())));
 
 // Pre-load vector model in background to avoid initial request timeout
 vectors.initialize().catch((err) => {
