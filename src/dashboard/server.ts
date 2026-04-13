@@ -103,9 +103,21 @@ if (process.env.DASHBOARD_ENABLE_MCP === "true") {
 	mcpClient.start().catch((e) => logger.error("MCP Client failed", { error: e.message }));
 }
 
-app.listen(PORT, () => {
-	console.log(`${new Date().toISOString()} DASHBOARD_STARTING v${pkg.version} on port ${PORT}`);
-});
+function startServer() {
+	const server = app.listen(PORT, () => {
+		console.log(`${new Date().toISOString()} DASHBOARD_STARTING v${pkg.version} on port ${PORT}`);
+	});
+
+	server.on("error", (err: NodeJS.ErrnoException) => {
+		if (err.code === "EADDRINUSE") {
+			console.log(`${new Date().toISOString()} DASHBOARD_ALREADY_RUNNING Dashboard already running on port ${PORT}. Exiting.`);
+			process.exit(0);
+		}
+		throw err;
+	});
+}
+
+startServer();
 
 process.on("SIGINT", () => {
 	mcpClient.stop();

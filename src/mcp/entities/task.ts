@@ -218,40 +218,42 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	bulkInsertTasks(tasks: Task[]): number {
-		let count = 0;
-		for (const task of tasks) {
-			this.run(
-				`INSERT INTO tasks (
-					id, repo, task_code, phase, title, description, status, priority,
-					agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				[
-					task.id,
-					task.repo,
-					task.task_code,
-					task.phase || null,
-					task.title,
-					task.description || null,
-					task.status || "backlog",
-					task.priority || 3,
-					task.agent || "unknown",
-					task.role || "unknown",
-					task.doc_path || null,
-					task.created_at,
-					task.updated_at,
-					task.finished_at || null,
-					task.canceled_at || null,
-					task.tags ? JSON.stringify(task.tags) : null,
-					task.metadata ? JSON.stringify(task.metadata) : null,
-					task.parent_id || null,
-					task.depends_on || null,
-					task.est_tokens || 0,
-					task.in_progress_at || null
-				]
-			);
-			count++;
-		}
-		return count;
+		return this.transaction(() => {
+			let count = 0;
+			for (const task of tasks) {
+				this.run(
+					`INSERT INTO tasks (
+						id, repo, task_code, phase, title, description, status, priority,
+						agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					[
+						task.id,
+						task.repo,
+						task.task_code,
+						task.phase || null,
+						task.title,
+						task.description || null,
+						task.status || "backlog",
+						task.priority || 3,
+						task.agent || "unknown",
+						task.role || "unknown",
+						task.doc_path || null,
+						task.created_at,
+						task.updated_at,
+						task.finished_at || null,
+						task.canceled_at || null,
+						task.tags ? JSON.stringify(task.tags) : null,
+						task.metadata ? JSON.stringify(task.metadata) : null,
+						task.parent_id || null,
+						task.depends_on || null,
+						task.est_tokens || 0,
+						task.in_progress_at || null
+					]
+				);
+				count++;
+			}
+			return count;
+		});
 	}
 
 	insertTaskComment(comment: TaskComment): void {

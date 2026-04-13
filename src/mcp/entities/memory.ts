@@ -165,40 +165,42 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	bulkInsertMemories(entries: MemoryEntry[]): number {
-		let count = 0;
-		for (const entry of entries) {
-			this.run(
-				`INSERT INTO memories (
-					id, repo, type, title, content, importance, folder, language,
-					created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
-					supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				[
-					entry.id,
-					entry.scope.repo,
-					entry.type,
-					entry.title || null,
-					entry.content,
-					entry.importance,
-					entry.scope.folder || null,
-					entry.scope.language || null,
-					entry.created_at,
-					entry.updated_at,
-					entry.expires_at ?? null,
-					entry.supersedes ?? null,
-					entry.status || "active",
-					entry.is_global ? 1 : 0,
-					entry.tags ? JSON.stringify(entry.tags) : null,
-					entry.metadata ? JSON.stringify(entry.metadata) : null,
-					entry.agent || "unknown",
-					entry.role || "unknown",
-					entry.model || "unknown",
-					entry.completed_at || null
-				]
-			);
-			count++;
-		}
-		return count;
+		return this.transaction(() => {
+			let count = 0;
+			for (const entry of entries) {
+				this.run(
+					`INSERT INTO memories (
+						id, repo, type, title, content, importance, folder, language,
+						created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+						supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					[
+						entry.id,
+						entry.scope.repo,
+						entry.type,
+						entry.title || null,
+						entry.content,
+						entry.importance,
+						entry.scope.folder || null,
+						entry.scope.language || null,
+						entry.created_at,
+						entry.updated_at,
+						entry.expires_at ?? null,
+						entry.supersedes ?? null,
+						entry.status || "active",
+						entry.is_global ? 1 : 0,
+						entry.tags ? JSON.stringify(entry.tags) : null,
+						entry.metadata ? JSON.stringify(entry.metadata) : null,
+						entry.agent || "unknown",
+						entry.role || "unknown",
+						entry.model || "unknown",
+						entry.completed_at || null
+					]
+				);
+				count++;
+			}
+			return count;
+		});
 	}
 
 	bulkUpdateMemories(ids: string[], updates: Partial<MemoryEntry>): number {
@@ -228,30 +230,34 @@ export class MemoryEntity extends BaseEntity {
 		fields.push("updated_at = ?");
 		values.push(new Date().toISOString());
 
-		let count = 0;
-		const chunkSize = 500;
-		for (let i = 0; i < ids.length; i += chunkSize) {
-			const chunk = ids.slice(i, i + chunkSize);
-			const result = this.run(
-				`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
-				[...values, ...chunk] as (string | number)[]
-			);
-			count += result.changes;
-		}
-		return count;
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const result = this.run(
+					`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
+					[...values, ...chunk] as (string | number)[]
+				);
+				count += result.changes;
+			}
+			return count;
+		});
 	}
 
 	bulkDeleteMemories(ids: string[]): number {
 		if (ids.length === 0) return 0;
 
-		let count = 0;
-		const chunkSize = 500;
-		for (let i = 0; i < ids.length; i += chunkSize) {
-			const chunk = ids.slice(i, i + chunkSize);
-			const result = this.run(`DELETE FROM memories WHERE id IN (${chunk.map(() => "?").join(",")})`, chunk);
-			count += result.changes;
-		}
-		return count;
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const result = this.run(`DELETE FROM memories WHERE id IN (${chunk.map(() => "?").join(",")})`, chunk);
+				count += result.changes;
+			}
+			return count;
+		});
 	}
 
 	getRecentMemories(

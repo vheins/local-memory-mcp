@@ -55,9 +55,10 @@ export class SQLiteStore {
 
 		this.db = new Database(finalPath);
 		this.db.pragma("journal_mode = WAL");
-		this.db.pragma("synchronous = NORMAL");
-		this.db.pragma("busy_timeout = 5000");
+		this.db.pragma("synchronous = FULL");
+		this.db.pragma("busy_timeout = 10000");
 		this.db.pragma("foreign_keys = ON");
+		this.db.pragma("wal_autocheckpoint = 1000");
 
 		const migrator = new MigrationManager(this.db);
 		migrator.migrate();

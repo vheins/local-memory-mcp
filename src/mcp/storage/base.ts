@@ -5,6 +5,10 @@ import { MemoryEntry, MemoryType, Task, TaskStatus, TaskPriority } from "../type
 export abstract class BaseEntity {
 	constructor(protected db: Database.Database) {}
 
+	protected transaction<T>(fn: () => T): T {
+		return this.db.transaction(fn)();
+	}
+
 	protected run(sql: string, params: unknown[] = []): { changes: number } {
 		const stmt = this.db.prepare(sql);
 		const result = stmt.run(...(params as (string | number | null | Buffer)[]));
