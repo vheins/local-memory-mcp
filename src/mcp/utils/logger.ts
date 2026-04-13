@@ -176,7 +176,7 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 	const logFile = `${logDir}/mcp-${date}.log`;
 
 	return (payload) => {
-		const line = `${new Date().toISOString()} [${payload.level.toUpperCase()}] ${JSON.stringify(payload.data)}\n`;
+		const line = `${new Date().toISOString()} [${payload.level.toUpperCase()}] [pid:${process.pid}] ${JSON.stringify(payload.data)}\n`;
 		try { fs.appendFileSync(logFile, line); } catch { /* best effort */ }
 	};
 }
