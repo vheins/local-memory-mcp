@@ -5,26 +5,28 @@ import fs from "fs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkgVersion = "0.1.0";
 
-// Search for package.json walking up from __dirname
-const candidates = [
-	path.join(__dirname, "../../package.json"),       // dev: dist/mcp/ -> root
-	path.join(__dirname, "../../../package.json"),     // global install: lib/node_modules/.../dist/mcp/
-	path.join(__dirname, "../../../../package.json"),  // deeper nesting
-];
-
-for (const pkgPath of candidates) {
-	try {
-		if (fs.existsSync(pkgPath)) {
-			const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-			if (pkg.name === "@vheins/local-memory-mcp" && pkg.version) {
-				pkgVersion = pkg.version;
-				break;
+// __PKG_VERSION__ is injected at build time by tsup define
+// Fallback: walk up directory tree to find package.json
+if (typeof __PKG_VERSION__ !== "undefined" && __PKG_VERSION__) {
+	pkgVersion = __PKG_VERSION__;
+} else {
+	let searchDir = __dirname;
+	for (let i = 0; i < 5; i++) {
+		const candidate = path.join(searchDir, "package.json");
+		try {
+			if (fs.existsSync(candidate)) {
+				const pkg = JSON.parse(fs.readFileSync(candidate, "utf8"));
+				if (pkg.name === "@vheins/local-memory-mcp" && pkg.version) {
+					pkgVersion = pkg.version;
+					break;
+				}
 			}
-		}
-	} catch {
-		// try next
+		} catch { /* try next */ }
+		searchDir = path.dirname(searchDir);
 	}
 }
+
+declare const __PKG_VERSION__: string;
 
 // MCP Server Capabilities
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
