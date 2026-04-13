@@ -59,10 +59,10 @@ export class WriteLock {
 	 * Run a synchronous write function under the lock.
 	 * Guarantees lock is always released, even on error.
 	 */
-	async withLock<T>(fn: () => T): Promise<T> {
+	async withLock<T>(fn: () => Promise<T> | T): Promise<T> {
 		await this.acquire();
 		try {
-			return fn();
+			return await fn();
 		} finally {
 			await this.release();
 		}
