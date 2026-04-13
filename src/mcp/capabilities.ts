@@ -3,16 +3,27 @@ import path from "path";
 import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pkgPath = path.join(__dirname, "../../package.json");
 let pkgVersion = "0.1.0";
 
-try {
-	if (fs.existsSync(pkgPath)) {
-		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-		pkgVersion = pkg.version;
+// Search for package.json walking up from __dirname
+const candidates = [
+	path.join(__dirname, "../../package.json"),       // dev: dist/mcp/ -> root
+	path.join(__dirname, "../../../package.json"),     // global install: lib/node_modules/.../dist/mcp/
+	path.join(__dirname, "../../../../package.json"),  // deeper nesting
+];
+
+for (const pkgPath of candidates) {
+	try {
+		if (fs.existsSync(pkgPath)) {
+			const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+			if (pkg.name === "@vheins/local-memory-mcp" && pkg.version) {
+				pkgVersion = pkg.version;
+				break;
+			}
+		}
+	} catch {
+		// try next
 	}
-} catch {
-	// Fallback to default version if reading fails
 }
 
 // MCP Server Capabilities
