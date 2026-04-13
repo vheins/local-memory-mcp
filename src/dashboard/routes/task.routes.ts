@@ -7,6 +7,7 @@ router.get("/", TasksController.list);
 router.post("/", TasksController.create);
 router.post("/import", TasksController.bulkCreate);
 router.get("/stats/time", TasksController.getTimeStats);
+router.get("/by-code", TasksController.getByCode);
 router.get("/:id", TasksController.get);
 router.put("/:id", TasksController.update);
 router.delete("/:id", TasksController.delete);

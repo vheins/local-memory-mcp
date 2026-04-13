@@ -166,6 +166,8 @@ export const api = {
 
 	taskById: (id: string) => apiFetch<Task>(`/api/tasks/${id}`),
 
+	taskByCode: (repo: string, task_code: string) => apiFetch<Task>(`/api/tasks/by-code?repo=${encodeURIComponent(repo)}&task_code=${encodeURIComponent(task_code)}`),
+
 	taskTimeStats: (repo: string) => apiFetch<TaskTimeStats>(`/api/tasks/stats/time?repo=${encodeURIComponent(repo)}`),
 
 	updateTask: (id: string, updates: Partial<Task>) =>

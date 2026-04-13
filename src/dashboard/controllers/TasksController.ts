@@ -54,6 +54,20 @@ export class TasksController {
 		}
 	}
 
+	static async getByCode(req: express.Request, res: express.Response) {
+		try {
+			await db.refresh();
+			const { repo, task_code } = req.query;
+			if (!repo || !task_code) return res.status(400).json(jsonApiError("repo and task_code are required", 400));
+			const task = db.tasks.getTaskByCode(repo as string, task_code as string);
+			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
+			res.json(jsonApiRes(task, "task"));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Task not found";
+			res.status(404).json(jsonApiError(message, 404));
+		}
+	}
+
 	static async create(req: express.Request, res: express.Response) {
 		try {
 			await db.refresh();
@@ -63,13 +77,15 @@ export class TasksController {
 			if (db.tasks.isTaskCodeDuplicate(repo, task_code))
 				return res.status(400).json(jsonApiError("Duplicate task_code", 400));
 			const id = randomUUID();
-			db.tasks.insertTask({
-				...attributes,
-				id,
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString()
-			} as Task);
-			db.actions.logAction("write", repo, { taskId: id });
+			await db.withWrite(() => {
+				db.tasks.insertTask({
+					...attributes,
+					id,
+					created_at: new Date().toISOString(),
+					updated_at: new Date().toISOString()
+				} as Task);
+				db.actions.logAction("write", repo, { taskId: id });
+			});
 			res.json(jsonApiRes({ id }, "task"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -85,39 +101,41 @@ export class TasksController {
 			const existingTask = db.tasks.getTaskById(id);
 			if (!existingTask) return res.status(404).json(jsonApiError("Task not found", 404));
 
-			db.tasks.updateTask(id, attributes as Partial<Task>);
+			await db.withWrite(() => {
+				db.tasks.updateTask(id, attributes as Partial<Task>);
 
-			if (attributes.status && attributes.status !== existingTask.status) {
-				db.actions.logAction("update", existingTask.repo, {
-					taskId: id,
-					query: `Status changed to ${attributes.status}`
-				});
-				db.tasks.insertTaskComment({
-					id: randomUUID(),
-					task_id: id,
-					repo: existingTask.repo,
-					comment: attributes.comment || `Status updated via dashboard`,
-					agent: "dashboard",
-					role: "user",
-					model: "web-ui",
-					previous_status: existingTask.status,
-					next_status: attributes.status,
-					created_at: new Date().toISOString()
-				});
-			} else if (attributes.comment) {
-				db.tasks.insertTaskComment({
-					id: randomUUID(),
-					task_id: id,
-					repo: existingTask.repo,
-					comment: attributes.comment,
-					agent: "dashboard",
-					role: "user",
-					model: "web-ui",
-					previous_status: null,
-					next_status: null,
-					created_at: new Date().toISOString()
-				});
-			}
+				if (attributes.status && attributes.status !== existingTask.status) {
+					db.actions.logAction("update", existingTask.repo, {
+						taskId: id,
+						query: `Status changed to ${attributes.status}`
+					});
+					db.tasks.insertTaskComment({
+						id: randomUUID(),
+						task_id: id,
+						repo: existingTask.repo,
+						comment: attributes.comment || `Status updated via dashboard`,
+						agent: "dashboard",
+						role: "user",
+						model: "web-ui",
+						previous_status: existingTask.status,
+						next_status: attributes.status,
+						created_at: new Date().toISOString()
+					});
+				} else if (attributes.comment) {
+					db.tasks.insertTaskComment({
+						id: randomUUID(),
+						task_id: id,
+						repo: existingTask.repo,
+						comment: attributes.comment,
+						agent: "dashboard",
+						role: "user",
+						model: "web-ui",
+						previous_status: null,
+						next_status: null,
+						created_at: new Date().toISOString()
+					});
+				}
+			});
 
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
@@ -133,8 +151,10 @@ export class TasksController {
 			const task = db.tasks.getTaskById(id);
 			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
 
-			db.tasks.deleteTask(id);
-			db.actions.logAction("delete", task.repo, { taskId: id });
+			await db.withWrite(() => {
+				db.tasks.deleteTask(id);
+				db.actions.logAction("delete", task.repo, { taskId: id });
+			});
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -158,8 +178,11 @@ export class TasksController {
 				updated_at: (item.updated_at as string) || new Date().toISOString()
 			}));
 
-			const count = db.tasks.bulkInsertTasks(tasks as Task[]);
-			db.actions.logAction("write", repo, { query: `Bulk imported ${count} tasks` });
+			const count = await db.withWrite(() => {
+				const n = db.tasks.bulkInsertTasks(tasks as Task[]);
+				db.actions.logAction("write", repo, { query: `Bulk imported ${n} tasks` });
+				return n;
+			});
 			res.json(jsonApiRes({ count }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -207,7 +230,7 @@ export class TasksController {
 			const existingComment = db.tasks.getTaskCommentById(id);
 			if (!existingComment) return res.status(404).json(jsonApiError("Comment not found", 404));
 
-			db.tasks.updateTaskComment(id, { comment });
+			await db.withWrite(() => db.tasks.updateTaskComment(id, { comment }));
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -219,7 +242,7 @@ export class TasksController {
 		try {
 			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
-			db.tasks.deleteTaskComment(id);
+			await db.withWrite(() => db.tasks.deleteTaskComment(id));
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";

@@ -64,14 +64,16 @@ export class MemoriesController {
 			const { repo, type, content } = attributes;
 			if (!repo || !type || !content) return res.status(400).json(jsonApiError("Required fields missing", 400));
 			const id = randomUUID();
-			db.memories.insert({
-				...attributes,
-				id,
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString(),
-				scope: { repo }
+			await db.withWrite(() => {
+				db.memories.insert({
+					...attributes,
+					id,
+					created_at: new Date().toISOString(),
+					updated_at: new Date().toISOString(),
+					scope: { repo }
+				});
+				db.actions.logAction("write", repo, { memoryId: id });
 			});
-			db.actions.logAction("write", repo, { memoryId: id });
 			res.json(jsonApiRes({ id }, "memory"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -98,8 +100,10 @@ export class MemoriesController {
 				repo,
 				updated_at: new Date().toISOString()
 			};
-			db.memories.update(id, updates as Partial<MemoryEntry>);
-			db.actions.logAction("update", (existing as MemoryEntry).scope?.repo || attributes.repo || "", { memoryId: id });
+			await db.withWrite(() => {
+				db.memories.update(id, updates as Partial<MemoryEntry>);
+				db.actions.logAction("update", (existing as MemoryEntry).scope?.repo || attributes.repo || "", { memoryId: id });
+			});
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -113,8 +117,10 @@ export class MemoriesController {
 			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
-			db.memories.delete(id);
-			db.actions.logAction("delete", (existing as MemoryEntry).scope?.repo || "", { memoryId: id });
+			await db.withWrite(() => {
+				db.memories.delete(id);
+				db.actions.logAction("delete", (existing as MemoryEntry).scope?.repo || "", { memoryId: id });
+			});
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -137,8 +143,11 @@ export class MemoriesController {
 				updated_at: (item.updated_at as string) || new Date().toISOString()
 			}));
 
-			const count = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
-			db.actions.logAction("write", repo, { query: `Bulk imported ${count} memories` });
+			const count = await db.withWrite(() => {
+				const n = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
+				db.actions.logAction("write", repo, { query: `Bulk imported ${n} memories` });
+				return n;
+			});
 			res.json(jsonApiRes({ count }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -153,24 +162,27 @@ export class MemoriesController {
 			if (!Array.isArray(ids) || !action)
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'ids' array and 'action'", 400));
 
-			let count = 0;
-			if (action === "delete") {
-				count = db.memories.bulkDeleteMemories(ids);
-			} else if (action === "update" || action === "archive") {
-				count = db.memories.bulkUpdateMemories(
-					ids,
-					updates || { status: action === "archive" ? "archived" : "active" }
-				);
-			} else {
-				return res.status(400).json(jsonApiError("Invalid action", 400));
-			}
+			const count = await db.withWrite(() => {
+				let n = 0;
+				if (action === "delete") {
+					n = db.memories.bulkDeleteMemories(ids);
+				} else if (action === "update" || action === "archive") {
+					n = db.memories.bulkUpdateMemories(
+						ids,
+						updates || { status: action === "archive" ? "archived" : "active" }
+					);
+				} else {
+					throw new Error("Invalid action");
+				}
 
-			if (ids.length > 0) {
-				const mem = db.memories.getById(ids[0]);
-				db.actions.logAction(action, mem?.scope?.repo || "unknown", {
-					query: `Bulk ${action} applied to ${count} memories`
-				});
-			}
+				if (ids.length > 0) {
+					const mem = db.memories.getById(ids[0]);
+					db.actions.logAction(action, mem?.scope?.repo || "unknown", {
+						query: `Bulk ${action} applied to ${n} memories`
+					});
+				}
+				return n;
+			});
 
 			res.json(jsonApiRes({ count }, "status"));
 		} catch (err: unknown) {

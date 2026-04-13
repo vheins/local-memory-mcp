@@ -109,6 +109,20 @@ export function createRouter(
 		}
 	}
 
+	// Tools that mutate the DB — must run under write lock
+	const WRITE_TOOLS = new Set([
+		"memory-store",
+		"memory-acknowledge",
+		"memory-update",
+		"memory-delete",
+		"memory-bulk-delete",
+		"memory-summarize",
+		"task-create",
+		"task-create-interactive",
+		"task-update",
+		"task-delete",
+	]);
+
 	async function handleToolCall(
 		params: Record<string, unknown> | undefined,
 		signal?: AbortSignal,
@@ -122,81 +136,75 @@ export function createRouter(
 		let result: unknown;
 		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
 
-		switch (toolName) {
-			case "memory-store":
-				result = await handleMemoryStore(args, db, vectors);
-				break;
+		const isWrite = WRITE_TOOLS.has(toolName);
 
-			case "memory-acknowledge":
-				result = await handleMemoryAcknowledge(args, db);
-				break;
+		const executeToolLogic = async () => {
+			switch (toolName) {
+				case "memory-store":
+					return await handleMemoryStore(args, db, vectors);
 
-			case "memory-update":
-				result = await handleMemoryUpdate(args, db, vectors);
-				break;
+				case "memory-acknowledge":
+					return await handleMemoryAcknowledge(args, db);
 
-			case "memory-recap":
-				result = await handleMemoryRecap(args, db);
-				break;
+				case "memory-update":
+					return await handleMemoryUpdate(args, db, vectors);
 
-			case "memory-search":
-				result = await handleMemorySearch(args, db, vectors);
-				break;
+				case "memory-recap":
+					return await handleMemoryRecap(args, db);
 
-			case "memory-summarize":
-				result = await handleMemorySummarize(args, db);
-				break;
+				case "memory-search":
+					return await handleMemorySearch(args, db, vectors);
 
-			case "memory-synthesize":
-				result = await handleMemorySynthesize(args, db, vectors, {
-					session: getSessionContext?.(),
-					sampleMessage: options?.sampleMessage,
-					elicit: options?.elicit
-				});
-				break;
+				case "memory-summarize":
+					return await handleMemorySummarize(args, db);
 
-			case "memory-delete":
-			case "memory-bulk-delete": // Fallback for backward compatibility
-				result = await handleMemoryDelete(args, db, vectors, onProgress);
-				break;
+				case "memory-synthesize":
+					return await handleMemorySynthesize(args, db, vectors, {
+						session: getSessionContext?.(),
+						sampleMessage: options?.sampleMessage,
+						elicit: options?.elicit
+					});
 
-			case "memory-detail":
-				result = await handleMemoryDetail(args, db);
-				break;
+				case "memory-delete":
+				case "memory-bulk-delete": // Fallback for backward compatibility
+					return await handleMemoryDelete(args, db, vectors, onProgress);
 
-			case "task-create":
-				result = await handleTaskCreate(args, db);
-				break;
+				case "memory-detail":
+					return await handleMemoryDetail(args, db);
 
-			case "task-create-interactive":
-				result = await handleTaskCreateInteractive(args, db, {
-					session: getSessionContext?.(),
-					elicit: options?.elicit
-				});
-				break;
+				case "task-create":
+					return await handleTaskCreate(args, db);
 
-			case "task-update":
-				result = await handleTaskUpdate(args, db, vectors);
-				break;
+				case "task-create-interactive":
+					return await handleTaskCreateInteractive(args, db, {
+						session: getSessionContext?.(),
+						elicit: options?.elicit
+					});
 
-			case "task-delete":
-				result = await handleTaskDelete(args, db);
-				break;
+				case "task-update":
+					return await handleTaskUpdate(args, db, vectors);
 
-			case "task-list":
-				result = await handleTaskList(args, db);
-				break;
+				case "task-delete":
+					return await handleTaskDelete(args, db);
 
-			case "task-detail":
-				result = await handleTaskDetail(args, db);
-				break;
+				case "task-list":
+					return await handleTaskList(args, db);
 
+				case "task-detail":
+					return await handleTaskDetail(args, db);
 
-			default:
-				throw new Error(`Unknown tool: ${name}`);
+				default:
+					throw new Error(`Unknown tool: ${name}`);
+			}
+		};
+
+		if (isWrite) {
+			result = await db.withWrite(executeToolLogic);
+		} else {
+			result = await executeToolLogic();
 		}
 
-		// Log the action
+		// Log the action (write — use lock only if not already inside a write lock)
 		try {
 			const actionType = toolName.split("-")[1] || toolName;
 			const res = result as Record<string, unknown> | undefined;
@@ -213,7 +221,12 @@ export function createRouter(
 				resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
 			};
 
-			db.actions.logAction(actionType, repo, logOptions);
+			// action_log write: if already inside withWrite (isWrite), lock is already held
+			if (isWrite) {
+				db.actions.logAction(actionType, repo, logOptions);
+			} else {
+				await db.withWrite(() => db.actions.logAction(actionType, repo, logOptions));
+			}
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });
 		}
