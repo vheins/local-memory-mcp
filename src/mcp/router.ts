@@ -54,6 +54,23 @@ export function createRouter(
 		signal?: AbortSignal,
 		onProgress?: (progress: number, total?: number) => void
 	): Promise<unknown> {
+		const t0 = Date.now();
+		try {
+			const result = await _dispatch(method, params, signal, onProgress);
+			logger.debug(`[Router] ${method}`, { ms: Date.now() - t0 });
+			return result;
+		} catch (err) {
+			logger.error(`[Router] ${method} failed`, { ms: Date.now() - t0, error: String(err) });
+			throw err;
+		}
+	}
+
+	async function _dispatch(
+		method: string,
+		params: Record<string, unknown> | undefined,
+		signal?: AbortSignal,
+		onProgress?: (progress: number, total?: number) => void
+	): Promise<unknown> {
 		switch (method) {
 			// ---- tools ----
 			case "tools/list":
@@ -137,6 +154,8 @@ export function createRouter(
 		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
 
 		const isWrite = WRITE_TOOLS.has(toolName);
+
+		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
 
 		const executeToolLogic = async () => {
 			switch (toolName) {
