@@ -588,6 +588,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 
 	let updatedCount = 0;
 	const updatedTasks: { id: string, code: string }[] = [];
+	const completedTaskIds: string[] = [];
 	const now = new Date().toISOString();
 	const isStatusChangingGlobal = updates.status !== undefined;
 
@@ -663,7 +664,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		}
 
 		if (updates.status === "completed" && existingTask.status !== "completed") {
-			await archiveTaskToMemory(targetId, repo, storage, vectors);
+			completedTaskIds.push(targetId);
 		}
 		updatedTasks.push({ id: targetId, code: (updates.task_code as string) || existingTask.task_code });
 		updatedCount++;
@@ -696,7 +697,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		? `Updated ${updatedCount} task(s) in repo "${repo}". ✅ Task marked as completed — don't forget to commit your changes!`
 		: `Updated ${updatedCount} task(s) in repo "${repo}".`;
 
-	return createMcpResponse(
+	const response = createMcpResponse(
 		{
 			success: true,
 			id: id || undefined,
@@ -718,6 +719,19 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			}))
 		}
 	);
+
+	// Archive completed tasks AFTER releasing write lock (vector embedding is slow)
+	if (completedTaskIds.length > 0) {
+		setImmediate(() => {
+			for (const taskId of completedTaskIds) {
+				archiveTaskToMemory(taskId, repo, storage, vectors).catch((err) =>
+					logger.error("Failed to archive task to memory", { taskId, error: String(err) })
+				);
+			}
+		});
+	}
+
+	return response;
 }
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
