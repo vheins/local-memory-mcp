@@ -29,7 +29,7 @@ if (typeof __PKG_VERSION__ !== "undefined" && __PKG_VERSION__) {
 declare const __PKG_VERSION__: string;
 
 // MCP Server Capabilities
-export const MCP_PROTOCOL_VERSION = "2025-11-25";
+export const MCP_PROTOCOL_VERSION = "2025-16-18";
 
 export const CAPABILITIES = {
 	serverInfo: {
