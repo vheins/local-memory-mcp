@@ -730,12 +730,15 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 	);
 
 	// Archive completed tasks AFTER releasing write lock (vector embedding is slow)
+	// Run sequentially to avoid parallel ONNX model loading (OOM risk)
 	if (completedTaskIds.length > 0) {
-		setImmediate(() => {
+		setImmediate(async () => {
 			for (const taskId of completedTaskIds) {
-				archiveTaskToMemory(taskId, repo, storage, vectors).catch((err) =>
-					logger.error("Failed to archive task to memory", { taskId, error: String(err) })
-				);
+				try {
+					await archiveTaskToMemory(taskId, repo, storage, vectors);
+				} catch (err) {
+					logger.error("Failed to archive task to memory", { taskId, error: String(err) });
+				}
 			}
 		});
 	}
