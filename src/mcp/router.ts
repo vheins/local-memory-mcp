@@ -223,7 +223,7 @@ export function createRouter(
 			result = await executeToolLogic();
 		}
 
-		// Log the action (write — use lock only if not already inside a write lock)
+		logger.info(`[Tool] ${toolName} result`, { repo, result });
 		try {
 			const actionType = toolName.split("-")[1] || toolName;
 			const res = result as Record<string, unknown> | undefined;
