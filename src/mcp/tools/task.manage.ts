@@ -12,6 +12,7 @@ import {
 	TaskListSchema
 } from "./schemas";
 import { handleMemoryStore } from "./memory.store";
+import { type TaskCreateInteractiveOptions } from "../interfaces/mcp";
 
 function describeTaskListFilter(status?: string) {
 	if (!status) return "active";
@@ -218,7 +219,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 				description: `Repository task index for ${repo}`,
 				mimeType: "application/json",
 				annotations: {
-					audience: ["assistant"],
+					audience: ["assistant"] as ("user" | "assistant")[],
 					priority: 0.6
 				}
 			}
@@ -296,19 +297,22 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			};
 			storage.tasks.insertTask(task);
 			createdTasks.push(task.task_code);
-			(task as any)._temp_id = task.id; // temp store for mapping if needed
+			(task as Task & { _temp_id?: string })._temp_id = task.id; // temp store for mapping if needed
 		}
 
-		const resourceLinks = bulkTasks.slice(0, 10).map((t, idx) => {
+		const resourceLinks = bulkTasks.slice(0, 10).map((t) => {
 			const taskCode = t.task_code;
-			const taskId = (t as any)._temp_id; // This is a bit hacky, let's just use the first 10 from createdTasks if I can get IDs
+			const taskId = (t as Task & { _temp_id?: string })._temp_id;
 			// Actually I need to map task_code to ID.
 			return {
 				uri: `task://${taskId}`,
 				name: `Task [${taskCode}]`,
 				description: `Created task [${taskCode}] in repo ${repo}`,
 				mimeType: "application/json",
-				annotations: { audience: ["assistant"], priority: 0.9 }
+				annotations: {
+					audience: ["assistant"] as ("user" | "assistant")[],
+					priority: 0.9
+				}
 			};
 		});
 
@@ -317,15 +321,24 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			name: `Task Index (${repo})`,
 			description: `Repository task index for ${repo}`,
 			mimeType: "application/json",
-			annotations: { audience: ["assistant"], priority: 0.6 }
+			annotations: {
+			audience: ["assistant"] as ("user" | "assistant")[],
+			priority: 0.6
+		}
 		});
 
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
 			`Created ${bulkTasks.length} tasks in repo "${repo}".`,
 			{ 
-				includeSerializedStructuredContent: (parsed as any).structured || false,
-				resourceLinks
+				includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false,
+				resourceLinks: resourceLinks.map(link => ({
+					...link,
+					annotations: {
+						...link.annotations,
+						audience: link.annotations.audience as ("user" | "assistant")[]
+					}
+				}))
 			}
 		);
 	}
@@ -340,7 +353,6 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		agent,
 		role,
 		doc_path,
-		tags,
 		metadata,
 		parent_id,
 		depends_on,
@@ -415,7 +427,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		},
 		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
 		{ 
-			includeSerializedStructuredContent: (parsed as any).structured || false,
+			includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false,
 			resourceLinks: [
 				{
 					uri: `task://${task.id}`,
@@ -423,7 +435,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 					description: `Created task [${task.task_code}] in repo ${task.repo}`,
 					mimeType: "application/json",
 					annotations: {
-						audience: ["assistant"],
+						audience: ["assistant"] as ("user" | "assistant")[],
 						priority: 0.9
 					}
 				},
@@ -433,7 +445,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 					description: `Repository task index for ${task.repo}`,
 					mimeType: "application/json",
 					annotations: {
-						audience: ["assistant"],
+						audience: ["assistant"] as ("user" | "assistant")[],
 						priority: 0.6
 					}
 				}
@@ -660,7 +672,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		name: `Task [${t.code}]`,
 		description: `Updated task [${t.code}] in repo ${repo}`,
 		mimeType: "application/json",
-		annotations: { audience: ["assistant"], priority: 0.9 }
+		annotations: {
+			audience: ["assistant"] as ("user" | "assistant")[],
+			priority: 0.9
+		}
 	}));
 
 	resourceLinks.push({
@@ -668,7 +683,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		name: `Task Index (${repo})`,
 		description: `Repository task index for ${repo}`,
 		mimeType: "application/json",
-		annotations: { audience: ["assistant"], priority: 0.6 }
+		annotations: {
+			audience: ["assistant"] as ("user" | "assistant")[],
+			priority: 0.6
+		}
 	});
 
 	return createMcpResponse(
@@ -684,13 +702,20 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		`Updated ${updatedCount} task(s) in repo "${repo}".`,
 		{ 
 			includeSerializedStructuredContent: updateData.structured,
-			resourceLinks
+			resourceLinks: resourceLinks.map(link => ({
+				...link,
+				annotations: {
+					...link.annotations,
+					audience: link.annotations.audience as ("user" | "assistant")[]
+				}
+			}))
 		}
 	);
 }
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
-	const { repo, id, ids } = TaskDeleteSchema.parse(args);
+	const validated = TaskDeleteSchema.parse(args);
+	const { repo, id, ids } = validated;
 	const targetIds = ids || (id ? [id] : []);
 
 	if (targetIds.length === 0) {
@@ -718,7 +743,10 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 					name: `Task Index (${repo})`,
 					description: `Repository task index for ${repo}`,
 					mimeType: "application/json",
-					annotations: { audience: ["assistant"], priority: 0.6 }
+					annotations: {
+						audience: ["assistant"] as ("user" | "assistant")[],
+						priority: 0.6
+					}
 				}
 			]
 		}

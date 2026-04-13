@@ -39,15 +39,63 @@ app.use((req, res, next) => {
 app.use("/api", routes);
 
 // --- Static Serving ---
-const staticRoot = fs.existsSync(path.join(__dirname, "public"))
-	? path.join(__dirname, "public")
-	: path.join(process.cwd(), "src", "dashboard", "public");
+function getStaticRoot() {
+	const possibleRoots = [
+		path.join(__dirname, "public"), // Production bundled path
+		path.join(process.cwd(), "dist", "dashboard", "public"), // Root-relative dist path
+		path.join(process.cwd(), "src", "dashboard", "public") // Source path (unbuilt)
+	];
 
+	for (const root of possibleRoots) {
+		if (fs.existsSync(path.join(root, "index.html"))) {
+			return root;
+		}
+	}
+
+	// Fallback to production bundled path if no built UI found
+	return possibleRoots[0];
+}
+
+const staticRoot = getStaticRoot();
+logger.debug("Dashboard serving assets from", { staticRoot });
 app.use(express.static(staticRoot));
 
 app.use((req, res, next) => {
 	if (req.path.startsWith("/api")) return next();
-	res.sendFile(path.join(staticRoot, "index.html"));
+
+	const indexPath = path.join(staticRoot, "index.html");
+	if (fs.existsSync(indexPath)) {
+		res.sendFile(indexPath);
+	} else {
+		logger.warn("Dashboard index.html not found", { path: indexPath });
+		res.status(404).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard Not Built - Local Memory MCP</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 40px auto; padding: 20px; text-align: center; }
+          h1 { color: #e53e3e; }
+          code { background: #f7fafc; padding: 2px 4px; border-radius: 4px; border: 1px solid #edf2f7; font-family: monospace; }
+          .container { border: 1px solid #e2e8f0; border-radius: 8px; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+          .footer { margin-top: 30px; font-size: 0.8rem; color: #718096; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Dashboard Assets Not Found</h1>
+          <p>The dashboard frontend has not been built yet or assets are missing at:</p>
+          <code>${indexPath}</code>
+          <p style="margin-top: 20px;">To fix this, please run the build command in the repository root:</p>
+          <code>npm run build</code>
+        </div>
+        <div class="footer">Local Memory MCP v${pkg.version}</div>
+      </body>
+      </html>
+    `);
+	}
 });
 
 // --- Start Server ---
