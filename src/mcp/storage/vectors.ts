@@ -27,20 +27,7 @@ export class RealVectorStore implements VectorStore {
 
 	private async getExtractor(): Promise<FeatureExtractionPipeline> {
 		if (!this.extractor) {
-			// ONNX runtime writes progress to stdout (fd=1) in Node.js mode,
-			// which corrupts the JSON-RPC stream. Redirect stdout → stderr during load.
-			const isMcp = process.env.MCP_SERVER === "true";
-			const origWrite = process.stdout.write.bind(process.stdout);
-			if (isMcp) {
-				// @ts-expect-error — intentional stdout suppression during model load
-				process.stdout.write = (...args: Parameters<typeof process.stdout.write>) =>
-					process.stderr.write(args[0] as string);
-			}
-			try {
-				this.extractor = await pipeline("feature-extraction", this.modelName);
-			} finally {
-				if (isMcp) process.stdout.write = origWrite;
-			}
+			this.extractor = await pipeline("feature-extraction", this.modelName);
 		}
 		return this.extractor;
 	}
