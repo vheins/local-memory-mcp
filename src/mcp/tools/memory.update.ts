@@ -69,19 +69,7 @@ export async function handleMemoryUpdate(params: Record<string, unknown>, db: SQ
 		`Updated memory ${validated.id} in repo "${existing.scope.repo}". Fields: ${Object.keys(updates).join(", ") || "none"}.`,
 		{
 			structuredContentPathHint: "updatedFields",
-			includeSerializedStructuredContent: validated.structured,
-			resourceLinks: [
-				{
-					uri: `memory://${validated.id}`,
-					name: existing.title || validated.id,
-					description: `Updated memory [${existing.code}] in repo ${existing.scope.repo}`,
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"],
-						priority: 0.9
-					}
-				}
-			]
+			includeSerializedStructuredContent: validated.structured
 		}
 	);
 }

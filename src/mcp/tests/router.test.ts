@@ -60,7 +60,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			},
 			close: vi.fn(),
 			getDbPath: vi.fn().mockReturnValue(":memory:"),
-			refresh: vi.fn().mockResolvedValue(undefined)
+			refresh: vi.fn().mockResolvedValue(undefined),
+			withWrite: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn())
 		} as unknown as SQLiteStore;
 	}
 

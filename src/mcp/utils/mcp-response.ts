@@ -22,14 +22,6 @@ export const McpContentSchema = z.discriminatedUnion("type", [
 		annotations: McpAnnotationsSchema
 	}),
 	z.object({
-		type: z.literal("resource_link"),
-		uri: z.string(),
-		name: z.string(),
-		description: z.string().optional(),
-		mimeType: z.string().optional(),
-		annotations: McpAnnotationsSchema
-	}),
-	z.object({
 		type: z.literal("resource"),
 		resource: z.object({
 			uri: z.string(),
@@ -57,21 +49,9 @@ export function createMcpResponse(
 		structuredContentPathHint?: string;
 		contentSummary?: string;
 		includeSerializedStructuredContent?: boolean;
-		resourceLinks?: Array<{
-			uri: string;
-			name: string;
-			description?: string;
-			mimeType?: string;
-			annotations?: {
-				audience?: Array<"user" | "assistant">;
-				priority?: number;
-				lastModified?: string;
-			};
-		}>;
 	}
 ): McpResponse {
 	const {
-		resourceLinks,
 		structuredContentPathHint,
 		contentSummary,
 		includeSerializedStructuredContent = false
@@ -123,17 +103,6 @@ export function createMcpResponse(
 		content.push({
 			type: "text",
 			text: `${summary.trim()} ${pointerText}`
-		});
-	}
-
-	// Add global resource links (like repo index)
-	for (const link of resourceLinks || []) {
-		content.push({
-			type: "resource_link",
-			uri: link.uri,
-			name: link.name,
-			mimeType: link.mimeType,
-			annotations: link.annotations
 		});
 	}
 

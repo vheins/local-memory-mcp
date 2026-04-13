@@ -62,19 +62,7 @@ export async function handleMemoryDelete(
 		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: structured,
-			resourceLinks: [
-				{
-					uri: `repository://${encodeURIComponent(lastRepo)}/memories`,
-					name: `Memory Index (${lastRepo})`,
-					description: "Repository memory index after deletion",
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"],
-						priority: 0.5
-					}
-				}
-			]
+			includeSerializedStructuredContent: structured
 		}
 	);
 }

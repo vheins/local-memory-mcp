@@ -212,19 +212,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: isStructuredRequest,
-		resourceLinks: [
-			{
-				uri: `repository://${encodeURIComponent(repo)}/tasks`,
-				name: `Task Index (${repo})`,
-				description: `Repository task index for ${repo}`,
-				mimeType: "application/json",
-				annotations: {
-					audience: ["assistant"] as ("user" | "assistant")[],
-					priority: 0.6
-				}
-			}
-		]
+		includeSerializedStructuredContent: isStructuredRequest
 	});
 }
 
@@ -301,46 +289,10 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			(task as Task & { _temp_id?: string })._temp_id = task.id; // temp store for mapping if needed
 		}
 
-		const resourceLinks = bulkTasks.slice(0, 10).map((t) => {
-			const taskCode = t.task_code;
-			const taskId = (t as Task & { _temp_id?: string })._temp_id;
-			// Actually I need to map task_code to ID.
-			return {
-				uri: `task://${taskId}`,
-				name: `Task [${taskCode}]`,
-				description: `Created task [${taskCode}] in repo ${repo}`,
-				mimeType: "application/json",
-				annotations: {
-					audience: ["assistant"] as ("user" | "assistant")[],
-					priority: 0.9
-				}
-			};
-		});
-
-		resourceLinks.push({
-			uri: `repository://${encodeURIComponent(repo)}/tasks`,
-			name: `Task Index (${repo})`,
-			description: `Repository task index for ${repo}`,
-			mimeType: "application/json",
-			annotations: {
-			audience: ["assistant"] as ("user" | "assistant")[],
-			priority: 0.6
-		}
-		});
-
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
 			`Created ${bulkTasks.length} tasks in repo "${repo}".`,
-			{ 
-				includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false,
-				resourceLinks: resourceLinks.map(link => ({
-					...link,
-					annotations: {
-						...link.annotations,
-						audience: link.annotations.audience as ("user" | "assistant")[]
-					}
-				}))
-			}
+			{ includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false }
 		);
 	}
 
@@ -427,31 +379,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			depends_on: task.depends_on
 		},
 		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
-		{ 
-			includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false,
-			resourceLinks: [
-				{
-					uri: `task://${task.id}`,
-					name: `Task [${task.task_code}]`,
-					description: `Created task [${task.task_code}] in repo ${task.repo}`,
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"] as ("user" | "assistant")[],
-						priority: 0.9
-					}
-				},
-				{
-					uri: `repository://${encodeURIComponent(task.repo)}/tasks`,
-					name: `Task Index (${task.repo})`,
-					description: `Repository task index for ${task.repo}`,
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"] as ("user" | "assistant")[],
-						priority: 0.6
-					}
-				}
-			]
-		}
+		{ includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false }
 	);
 }
 
@@ -679,28 +607,6 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		updatedCount++;
 	}
 
-	const resourceLinks = updatedTasks.slice(0, 10).map(t => ({
-		uri: `task://${t.id}`,
-		name: `Task [${t.code}]`,
-		description: `Updated task [${t.code}] in repo ${repo}`,
-		mimeType: "application/json",
-		annotations: {
-			audience: ["assistant"] as ("user" | "assistant")[],
-			priority: 0.9
-		}
-	}));
-
-	resourceLinks.push({
-		uri: `repository://${encodeURIComponent(repo)}/tasks`,
-		name: `Task Index (${repo})`,
-		description: `Repository task index for ${repo}`,
-		mimeType: "application/json",
-		annotations: {
-			audience: ["assistant"] as ("user" | "assistant")[],
-			priority: 0.6
-		}
-	});
-
 	const isCompleted = updates.status === "completed" && updatedCount > 0;
 	const summaryText = isCompleted
 		? `Updated ${updatedCount} task(s) in repo "${repo}". ✅ Task marked as completed — don't forget to commit your changes!`
@@ -717,16 +623,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			updatedFields: Object.keys(updates)
 		},
 		summaryText,
-		{ 
-			includeSerializedStructuredContent: updateData.structured,
-			resourceLinks: resourceLinks.map(link => ({
-				...link,
-				annotations: {
-					...link.annotations,
-					audience: link.annotations.audience as ("user" | "assistant")[]
-				}
-			}))
-		}
+		{ includeSerializedStructuredContent: updateData.structured }
 	);
 
 	// Archive completed tasks AFTER releasing write lock (vector embedding is slow)
@@ -768,20 +665,6 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 			deletedCount: targetIds.length
 		},
 		`Deleted ${targetIds.length} task(s) from repo "${repo}".`,
-		{ 
-			includeSerializedStructuredContent: validated.structured,
-			resourceLinks: [
-				{
-					uri: `repository://${encodeURIComponent(repo)}/tasks`,
-					name: `Task Index (${repo})`,
-					description: `Repository task index for ${repo}`,
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"] as ("user" | "assistant")[],
-						priority: 0.6
-					}
-				}
-			]
-		}
+		{ includeSerializedStructuredContent: validated.structured }
 	);
 }

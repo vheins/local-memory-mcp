@@ -148,30 +148,7 @@ export async function handleMemoryStore(
 		{
 			contentSummary: `Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
 			structuredContentPathHint: "code",
-			includeSerializedStructuredContent: validated.structured,
-			resourceLinks: [
-				{
-					uri: `memory://${entry.id}`,
-					name: entry.title,
-					description: `Stored memory [${entry.code}] in repo ${entry.scope.repo}`,
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"],
-						priority: 0.9,
-						lastModified: entry.updated_at
-					}
-				},
-				{
-					uri: `repository://${encodeURIComponent(entry.scope.repo)}/memories`,
-					name: `Memory Index (${entry.scope.repo})`,
-					description: "Repository memory index",
-					mimeType: "application/json",
-					annotations: {
-						audience: ["assistant"],
-						priority: 0.6
-					}
-				}
-			]
+			includeSerializedStructuredContent: validated.structured
 		}
 	);
 }

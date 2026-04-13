@@ -34,4 +34,4 @@ Thumbs.db
 storage/*.db
 storage/*.db-*
 .kiro
-.playwright-mcp/
+.playwright-mcp/:memory:
