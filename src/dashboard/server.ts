@@ -4,9 +4,13 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { db, mcpClient, logger } from "./lib/context";
+import { addLogSink, createFileSink } from "../mcp/utils/logger";
 import routes from "./routes/index";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Register file log sink (same dir as DB)
+addLogSink(createFileSink(path.dirname(db.getDbPath())));
 const pkg = { version: "0.0.0" };
 try {
 	const pkgPath = path.join(__dirname, "../../package.json");
@@ -28,8 +32,9 @@ app.use((req, res, next) => {
 	const start = Date.now();
 	res.on("finish", () => {
 		const duration = Date.now() - start;
+		logger.info("[Dashboard] request", { method: req.method, path: req.path, status: res.statusCode, ms: duration });
 		if (duration > 1000) {
-			logger.warn("Slow request", { method: req.method, path: req.path, duration });
+			logger.warn("[Dashboard] slow request", { method: req.method, path: req.path, ms: duration });
 		}
 	});
 	next();

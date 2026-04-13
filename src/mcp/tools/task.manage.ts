@@ -691,6 +691,11 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		}
 	});
 
+	const isCompleted = updates.status === "completed" && updatedCount > 0;
+	const summaryText = isCompleted
+		? `Updated ${updatedCount} task(s) in repo "${repo}". ✅ Task marked as completed — don't forget to commit & push your changes!`
+		: `Updated ${updatedCount} task(s) in repo "${repo}".`;
+
 	return createMcpResponse(
 		{
 			success: true,
@@ -701,7 +706,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			updatedCount,
 			updatedFields: Object.keys(updates)
 		},
-		`Updated ${updatedCount} task(s) in repo "${repo}".`,
+		summaryText,
 		{ 
 			includeSerializedStructuredContent: updateData.structured,
 			resourceLinks: resourceLinks.map(link => ({
