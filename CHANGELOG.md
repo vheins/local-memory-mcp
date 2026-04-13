@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-04-13
+
+### Changed
+
+- **Documentation**: Updated CHANGELOG.md with missing version history for 0.8.x series.
+
+## [0.8.2] - 2026-04-13
+
+### Fixed
+
+- **Database**: Implemented `proper-lockfile` based `WriteLock` for exclusive write serialization across concurrent processes.
+- **Database**: Added `wal_checkpoint(PASSIVE)` on refresh to ensure dashboard sees latest data.
+- **Database**: Added startup `wal_checkpoint(TRUNCATE)` and integrity checks with auto-recovery.
+- **Database**: Improved responsiveness with 30s `busy_timeout` and lowered `wal_autocheckpoint` (100 pages).
+
+## [0.8.1] - 2026-04-13
+
+### Fixed
+
+- **Database**: Enhanced multi-agent safety with `synchronous=FULL` and WAL autocheckpointing.
+- **Database**: Wrapped bulk operations (insert/update/delete) in transactions for consistency.
+- **Dashboard**: Added singleton guard to prevent multiple instances on the same port.
+
+## [0.8.0] - 2026-04-13
+
+### Added
+
+- **Linting**: Upgraded ESLint to v10 and updated configuration to the new flat config format.
+
+### Changed
+
+- **Database Engine**: Migrated from `sql.js` (WASM) back to `better-sqlite3` (native) for improved performance.
+- **Task Management**: Added column whitelisting in `updateTask()` for SQL injection prevention.
+- **Memory Recap**: `contentSummary` is now always generated (no longer gated on structured flag).
+- **Search**: Improved recap determinism by sorting by importance DESC and created_at ASC.
+
+### Fixed
+
+- **Tests**: Fixed all failing tests after migration to better-sqlite3.
+
 ## [0.7.2] - 2026-04-12
 
 ### Fixed
