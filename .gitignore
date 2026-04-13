@@ -35,3 +35,4 @@ storage/*.db
 storage/*.db-*
 .kiro
 .playwright-mcp/:memory:
+.playwright-mcp/
