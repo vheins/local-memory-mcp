@@ -152,7 +152,7 @@ export class SQLiteStore {
 	 * @example
 	 * await db.withWrite(() => db.tasks.insertTask(task));
 	 */
-	async withWrite<T>(fn: () => T): Promise<T> {
+	async withWrite<T>(fn: () => Promise<T> | T): Promise<T> {
 		return this.lock.withLock(fn);
 	}
 
