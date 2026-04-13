@@ -8,9 +8,9 @@ import lockfile from "proper-lockfile";
 import path from "path";
 import fs from "fs";
 
-const LOCK_STALE_MS = 15_000; // consider lock stale after 15s (handles crashed processes)
-const LOCK_RETRY_DELAY_MS = 100;
-const LOCK_RETRY_COUNT = 150; // 150 * 100ms = 15s max wait
+const LOCK_STALE_MS = 30_000; // consider lock stale after 30s (handles crashed processes)
+const LOCK_RETRY_DELAY_MS = 200;
+const LOCK_RETRY_COUNT = 250; // 250 * 200ms = 50s max wait
 
 export class WriteLock {
 	private lockTarget: string;
