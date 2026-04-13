@@ -48,7 +48,7 @@ export async function handleMemoryDelete(
         onProgress(progress, total);
     }
 
-	logger.info("[MCP] memory.delete", { repo: lastRepo, count: deletedCount });
+	logger.info("[Tool] memory.delete", { repo: lastRepo, count: deletedCount });
 
 	return createMcpResponse(
 		{

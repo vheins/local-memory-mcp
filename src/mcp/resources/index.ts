@@ -160,7 +160,7 @@ export function completeResourceArgument(
 }
 
 export function readResource(uri: string, db: SQLiteStore, session?: SessionContext) {
-	logger.info("[MCP] resource.read", { uri });
+	logger.info("[Tool] resource.read", { uri });
 
 	// 1. Repository Index
 	if (uri === "repository://index") {

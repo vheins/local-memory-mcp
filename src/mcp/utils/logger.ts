@@ -46,22 +46,11 @@ function formatContextForStderr(context?: Record<string, unknown>): string {
 	return ` ${JSON.stringify(context)}`;
 }
 
-function getMcpIcon(message: string): string {
-	if (message.includes("search")) return "🔍";
-	if (message.includes("store") || message.includes("write")) return "💾";
-	if (message.includes("read") || message.includes("resource")) return "📖";
-	if (message.includes("delete")) return "🗑️";
-	if (message.includes("update")) return "🔄";
-	if (message.includes("acknowledge")) return "✅";
-	if (message.includes("recap")) return "📋";
-	if (message.includes("task")) return "⚡";
-	return "🤖";
-}
-
 function deriveLoggerName(message: string): string | undefined {
 	if (message.startsWith("[Server]")) return "server";
 	if (message.startsWith("[Vectors]")) return "vectors";
-	if (message.startsWith("[MCP]")) return "mcp";
+	if (message.startsWith("[Tool]")) return "tool";
+	if (message.startsWith("[Router]")) return "router";
 	if (message.startsWith("[Dashboard]")) return "dashboard";
 	return "app";
 }
@@ -74,14 +63,6 @@ function emitToStderr(level: LogLevel, message: string, context?: Record<string,
 	}
 
 	const timestamp = new Date().toISOString();
-
-	if (message.startsWith("[MCP]")) {
-		const icon = getMcpIcon(message);
-		const action = message.replace("[MCP] ", "").trim();
-		process.stderr.write(`${timestamp} ${icon} [MCP] ${action.padEnd(7)}${formatContextForStderr(context)}\n`);
-		return;
-	}
-
 	const levelStr = level.toUpperCase().padEnd(9);
 	process.stderr.write(`${timestamp} [${levelStr}] ${message}${formatContextForStderr(context)}\n`);
 }

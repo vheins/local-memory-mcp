@@ -78,7 +78,7 @@ export async function handleMemoryStore(
 		const oldMemory = db.memories.getById(validated.supersedes);
 		if (oldMemory) {
 			db.memories.update(oldMemory.id, { status: "archived" });
-			logger.info("[MCP] memory.store - archived superseded memory", {
+			logger.info("[Tool] memory.store - archived superseded memory", {
 				oldId: oldMemory.id,
 				newId: validated.supersedes
 			});
@@ -127,7 +127,7 @@ export async function handleMemoryStore(
 		// Continue anyway - vectors are optional for search fallback
 	}
 
-	logger.info("[MCP] memory.store", {
+	logger.info("[Tool] memory.store", {
 		repo: validated.scope.repo,
 		id: entry.id,
 		title: entry.title,

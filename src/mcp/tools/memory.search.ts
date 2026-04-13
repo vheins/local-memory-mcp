@@ -109,7 +109,7 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	const paginatedResults = allMatches.slice(validated.offset, validated.offset + validated.limit);
 
 	db.memories.incrementHitCounts(paginatedResults.map((m) => m.id));
-	logger.info("[MCP] memory.search", {
+	logger.info("[Tool] memory.search", {
 		repo: validated.repo,
 		query: validated.query,
 		total,

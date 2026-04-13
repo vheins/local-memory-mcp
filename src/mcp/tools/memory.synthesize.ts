@@ -134,7 +134,7 @@ export async function handleMemorySynthesize(
 		throw new Error("Sampling did not return a final text answer");
 	}
 
-	logger.info("[MCP] memory.synthesize", {
+	logger.info("[Tool] memory.synthesize", {
 		repo,
 		objective: validated.objective,
 		iterations,

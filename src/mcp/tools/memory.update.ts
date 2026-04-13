@@ -57,7 +57,7 @@ export async function handleMemoryUpdate(params: Record<string, unknown>, db: SQ
 
 	// Log the update action
 	db.actions.logAction("update", existing.scope.repo, { memoryId: validated.id, resultCount: 1 });
-	logger.info("[MCP] memory.update", { repo: existing.scope.repo, id: validated.id, fields: Object.keys(updates) });
+	logger.info("[Tool] memory.update", { repo: existing.scope.repo, id: validated.id, fields: Object.keys(updates) });
 
 	return createMcpResponse(
 		{

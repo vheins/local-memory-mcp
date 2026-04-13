@@ -16,15 +16,15 @@ export async function handleMemoryAcknowledge(params: unknown, db: SQLiteStore):
 	// Update statistics based on status
 	if (validated.status === "used") {
 		db.memories.incrementRecallCount(memory.id);
-		logger.info("[MCP] memory.acknowledge - used", { id: memory.id, context: validated.application_context });
+		logger.info("[Tool] memory.acknowledge - used", { id: memory.id, context: validated.application_context });
 	} else if (validated.status === "contradictory") {
 		// Flag for potential manual audit later
-		logger.warn("[MCP] memory.acknowledge - contradiction reported", {
+		logger.warn("[Tool] memory.acknowledge - contradiction reported", {
 			id: memory.id,
 			context: validated.application_context
 		});
 	} else {
-		logger.info("[MCP] memory.acknowledge - irrelevant", { id: memory.id, context: validated.application_context });
+		logger.info("[Tool] memory.acknowledge - irrelevant", { id: memory.id, context: validated.application_context });
 	}
 
 	return createMcpResponse(

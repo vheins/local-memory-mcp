@@ -6,7 +6,7 @@ import { logger } from "../utils/logger";
 export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promise<McpResponse> {
 	const validated = MemoryRecapSchema.parse(params);
 
-	logger.info("[MCP] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
+	logger.info("[Tool] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 
 	// Fetch aggregate stats (counts by type, total)
 	const stats = db.memories.getStats(validated.repo);
