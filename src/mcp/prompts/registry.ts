@@ -3,6 +3,7 @@ import { SessionContext, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
 import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
 import type { LoadedPrompt } from "../interfaces/index";
+import { logger } from "../utils/logger";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
 
 interface PromptMessage {
@@ -47,7 +48,7 @@ for (const name of promptFiles) {
 	try {
 		PROMPTS[name] = createPromptDefinition(loadPromptFromMarkdown(name));
 	} catch (e) {
-		console.warn(`Failed to load prompt ${name}: ${e}`);
+		logger.warn(`Failed to load prompt ${name}: ${e}`);
 	}
 }
 

@@ -4,6 +4,7 @@ import { Task, TaskStatus, TaskPriority, VectorStore } from "../types";
 import { inferRepoFromSession } from "../session";
 import { extractAcceptedElicitationContent } from "../elicitation";
 import { createMcpResponse } from "../utils/mcp-response";
+import { logger } from "../utils/logger";
 import {
 	TaskCreateSchema,
 	TaskCreateInteractiveSchema,
@@ -149,7 +150,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 			vectors
 		);
 	} catch (error) {
-		console.error("Failed to archive task to memory", error);
+		logger.error("Failed to archive task to memory", { error: String(error) });
 	}
 }
 

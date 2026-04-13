@@ -1,5 +1,6 @@
 import { VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
+import { logger } from "../utils/logger";
 
 // Simple vector store using SQLite - lightweight embeddings without ollama
 export class StubVectorStore implements VectorStore {
@@ -248,7 +249,7 @@ export class StubVectorStore implements VectorStore {
 			// In production, you could implement approximate nearest neighbor search here
 			return [];
 		} catch (error) {
-			console.error("Error searching vectors:", error);
+			logger.error("Error searching vectors", { error: String(error) });
 			return [];
 		}
 	}
