@@ -51,6 +51,7 @@ const vectors = new RealVectorStore(db);
 
 // Register file log sink (same dir as DB, retain last 5 files)
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
+logger.info("[Server] startup", { pid: process.pid, db: db.getDbPath() });
 
 // Pre-load vector model in background to avoid initial request timeout
 vectors.initialize().catch((err) => {
@@ -104,6 +105,7 @@ addLogSink((payload) => {
 
 // Cleanup on exit
 process.on("SIGINT", () => {
+	logger.info("[Server] shutdown", { signal: "SIGINT", pid: process.pid });
 	for (const pending of pendingClientRequests.values()) {
 		pending.reject(new Error("Server stopped"));
 	}
@@ -113,6 +115,7 @@ process.on("SIGINT", () => {
 });
 
 process.on("SIGTERM", () => {
+	logger.info("[Server] shutdown", { signal: "SIGTERM", pid: process.pid });
 	for (const pending of pendingClientRequests.values()) {
 		pending.reject(new Error("Server stopped"));
 	}
