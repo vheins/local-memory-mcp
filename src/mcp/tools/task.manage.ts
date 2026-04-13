@@ -288,7 +288,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
-			`Created ${bulkTasks.length} tasks in repo "${repo}".`
+			`Created ${bulkTasks.length} tasks in repo "${repo}".`,
+			{ includeSerializedStructuredContent: (parsed as any).structured || false }
 		);
 	}
 
@@ -375,7 +376,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			priority: task.priority,
 			depends_on: task.depends_on
 		},
-		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`
+		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
+		{ includeSerializedStructuredContent: (parsed as any).structured || false }
 	);
 }
 
@@ -600,7 +602,8 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			updatedCount,
 			updatedFields: Object.keys(updates)
 		},
-		`Updated ${updatedCount} task(s) in repo "${repo}".`
+		`Updated ${updatedCount} task(s) in repo "${repo}".`,
+		{ includeSerializedStructuredContent: (args as any).structured || false }
 	);
 }
 
@@ -624,6 +627,7 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 			repo,
 			deletedCount: targetIds.length
 		},
-		`Deleted ${targetIds.length} task(s) from repo "${repo}".`
+		`Deleted ${targetIds.length} task(s) from repo "${repo}".`,
+		{ includeSerializedStructuredContent: (args as any).structured || false }
 	);
 }

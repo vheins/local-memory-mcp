@@ -14,6 +14,6 @@ export async function handleMemorySummarize(params: Record<string, unknown>, db:
 
 	return createMcpResponse(null, content, {
 		contentSummary: content,
-		includeSerializedStructuredContent: false
+		includeSerializedStructuredContent: validated.structured
 	});
 }

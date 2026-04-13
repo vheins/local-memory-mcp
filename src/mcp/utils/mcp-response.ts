@@ -74,7 +74,7 @@ export function createMcpResponse(
 		resourceLinks,
 		structuredContentPathHint,
 		contentSummary,
-		includeSerializedStructuredContent = true
+		includeSerializedStructuredContent = false
 	} = options || {};
 	// includeSerializedStructuredContent is reserved for future use in protocol negotiation
 	void includeSerializedStructuredContent;

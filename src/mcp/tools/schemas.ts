@@ -35,7 +35,8 @@ export const MemoryStoreSchema = z.object({
 	supersedes: z.string().uuid().optional(),
 	tags: z.array(z.string()).optional(),
 	metadata: z.record(z.string(), z.any()).optional(),
-	is_global: z.boolean().default(false)
+	is_global: z.boolean().default(false),
+	structured: z.boolean().default(false)
 });
 
 export const MemoryUpdateSchema = z
@@ -52,7 +53,8 @@ export const MemoryUpdateSchema = z
 		tags: z.array(z.string()).optional(),
 		metadata: z.record(z.string(), z.any()).optional(),
 		is_global: z.boolean().optional(),
-		completed_at: z.string().optional()
+		completed_at: z.string().optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine(
 		(data) =>
@@ -90,7 +92,8 @@ export const MemorySearchSchema = z.object({
 export const MemoryAcknowledgeSchema = z.object({
 	memory_id: z.string().uuid(),
 	status: z.enum(["used", "irrelevant", "contradictory"]),
-	application_context: z.string().min(10).optional()
+	application_context: z.string().min(10).optional(),
+	structured: z.boolean().default(false)
 });
 
 export const MemoryRecapSchema = z.object({
@@ -104,7 +107,8 @@ export const MemoryDeleteSchema = z
 	.object({
 		repo: z.string().min(1).transform(normalizeRepo).optional(),
 		id: z.string().uuid().optional(),
-		ids: z.array(z.string().uuid()).min(1).optional()
+		ids: z.array(z.string().uuid()).min(1).optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.ids !== undefined, {
 		message: "Either 'id' or 'ids' must be provided for deletion"
@@ -112,7 +116,8 @@ export const MemoryDeleteSchema = z
 
 export const MemorySummarizeSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
-	signals: z.array(z.string().max(200)).min(1)
+	signals: z.array(z.string().max(200)).min(1),
+	structured: z.boolean().default(false)
 });
 
 export const MemorySynthesizeSchema = z.object({
@@ -123,7 +128,8 @@ export const MemorySynthesizeSchema = z.object({
 	include_tasks: z.boolean().default(true),
 	use_tools: z.boolean().default(true),
 	max_iterations: z.number().int().min(1).max(5).default(3),
-	max_tokens: z.number().int().min(128).max(4000).default(1200)
+	max_tokens: z.number().int().min(128).max(4000).default(1200),
+	structured: z.boolean().default(false)
 });
 
 export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
@@ -165,7 +171,8 @@ export const TaskCreateSchema = z
 		depends_on: z.string().uuid().optional(),
 		est_tokens: z.number().int().min(0).optional(),
 		// Allow bulk tasks
-		tasks: z.array(SingleTaskCreateSchema).min(1).optional()
+		tasks: z.array(SingleTaskCreateSchema).min(1).optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine(
 		(data) => {
@@ -200,7 +207,8 @@ export const TaskUpdateSchema = z
 		parent_id: z.string().uuid().optional(),
 		depends_on: z.string().uuid().optional(),
 		est_tokens: z.number().int().min(0).optional(),
-		force: z.boolean().optional()
+		force: z.boolean().optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.ids !== undefined, {
 		message: "Either 'id' or 'ids' must be provided for update"
@@ -232,7 +240,8 @@ export const TaskDeleteSchema = z
 	.object({
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
-		ids: z.array(z.string().uuid()).min(1).optional()
+		ids: z.array(z.string().uuid()).min(1).optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.ids !== undefined, {
 		message: "Either 'id' or 'ids' must be provided for deletion"
@@ -241,7 +250,8 @@ export const TaskDeleteSchema = z
 export const MemoryDetailSchema = z
 	.object({
 		id: z.string().uuid().optional(),
-		code: z.string().max(20).optional()
+		code: z.string().max(20).optional(),
+		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
 		message: "Either id or code must be provided"
@@ -291,7 +301,8 @@ export const TOOL_DEFINITIONS = [
 						"Allow the sampled model to call local memory/task tools during synthesis when the client supports sampling.tools."
 				},
 				max_iterations: { type: "number", minimum: 1, maximum: 5, default: 3 },
-				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 }
+				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON results." }
 			},
 			required: ["objective"]
 		},
@@ -359,7 +370,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Memory entry ID" }
+				id: { type: "string", format: "uuid", description: "Memory entry ID" },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
 			},
 			required: ["id"]
 		}
@@ -466,7 +478,8 @@ export const TOOL_DEFINITIONS = [
 					description: "If true, this memory is shared across all repositories"
 				},
 				ttlDays: { type: "number", minimum: 1 },
-				supersedes: { type: "string", format: "uuid" }
+				supersedes: { type: "string", format: "uuid" },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the stored memory." }
 			},
 			required: ["type", "title", "content", "importance", "scope", "agent", "model"]
 		},
@@ -500,7 +513,8 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				memory_id: { type: "string", format: "uuid" },
 				status: { type: "string", enum: ["used", "irrelevant", "contradictory"] },
-				application_context: { type: "string", minLength: 10 }
+				application_context: { type: "string", minLength: 10 },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
 			required: ["memory_id", "status"]
 		},
@@ -552,7 +566,8 @@ export const TOOL_DEFINITIONS = [
 				tags: { type: "array", items: { type: "string" } },
 				metadata: { type: "object" },
 				is_global: { type: "boolean" },
-				completed_at: { type: "string" }
+				completed_at: { type: "string" },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the updated memory." }
 			},
 			required: ["id"]
 		},
@@ -677,7 +692,8 @@ export const TOOL_DEFINITIONS = [
 					items: { type: "string", maxLength: 200 },
 					minItems: 1,
 					description: "High-level signals to include in summary"
-				}
+				},
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the summary." }
 			},
 			required: ["repo", "signals"]
 		},
@@ -712,7 +728,8 @@ export const TOOL_DEFINITIONS = [
 					items: { type: "string", format: "uuid" },
 					minItems: 1,
 					description: "Array of memory IDs to delete"
-				}
+				},
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			}
 		},
 		outputSchema: {
@@ -863,7 +880,8 @@ export const TOOL_DEFINITIONS = [
 						required: ["task_code", "phase", "title", "description"]
 					},
 					description: "Array of tasks for bulk creation"
-				}
+				},
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
 			required: ["repo"]
 		},
@@ -932,7 +950,8 @@ export const TOOL_DEFINITIONS = [
 				force: {
 					type: "boolean",
 					description: "If true, bypasses status transition validation (e.g. pending -> completed)."
-				}
+				},
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
 			required: ["repo"]
 		},
@@ -969,7 +988,8 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				repo: { type: "string", description: "Repository name" },
 				id: { type: "string", format: "uuid", description: "Task ID (for single deletion)" },
-				ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk deletion)" }
+				ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk deletion)" },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
 			required: ["repo"]
 		},

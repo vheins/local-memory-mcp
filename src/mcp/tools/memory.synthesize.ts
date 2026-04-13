@@ -153,7 +153,8 @@ export async function handleMemorySynthesize(
 		},
 		`Synthesized answer for "${validated.objective}" using repository "${repo}".`,
 		{
-			structuredContentPathHint: "answer"
+			structuredContentPathHint: "answer",
+			includeSerializedStructuredContent: validated.structured
 		}
 	);
 }

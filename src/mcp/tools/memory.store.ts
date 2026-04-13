@@ -148,6 +148,7 @@ export async function handleMemoryStore(
 		{
 			contentSummary: `Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
 			structuredContentPathHint: "code",
+			includeSerializedStructuredContent: validated.structured,
 			resourceLinks: [
 				{
 					uri: `memory://${entry.id}`,

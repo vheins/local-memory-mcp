@@ -58,6 +58,7 @@ export async function handleMemoryDelete(
 		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
+			includeSerializedStructuredContent: (params as any).structured || false,
 			resourceLinks: [
 				{
 					uri: `repository://${encodeURIComponent(lastRepo)}/memories`,
