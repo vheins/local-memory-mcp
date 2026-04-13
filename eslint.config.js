@@ -17,6 +17,12 @@ export default [
     }
   },
   {
+    files: ["**/*.test.ts", "**/*.spec.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off"
+    }
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,

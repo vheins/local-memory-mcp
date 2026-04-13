@@ -277,8 +277,8 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("logAction stores action with correct metadata", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("search", "test-repo", { query: "test query", resultCount: 5 });
-		store.actions.logAction("store", "test-repo", { id: "mem-1", type: "decision" });
+		store.actions.logAction("search", "test-repo", { query: "test query", resultCount: 5 } as any);
+		store.actions.logAction("store", "test-repo", { id: "mem-1", type: "decision" } as any);
 
 		const actions = store.actions.getRecentActions("test-repo", 10);
 		store.close();
@@ -291,9 +291,9 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("getRecentActions returns actions in descending order by created_at", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("action-1", "repo-a", { step: 1 });
-		store.actions.logAction("action-2", "repo-a", { step: 2 });
-		store.actions.logAction("action-3", "repo-a", { step: 3 });
+		store.actions.logAction("action-1", "repo-a", { step: 1 } as any);
+		store.actions.logAction("action-2", "repo-a", { step: 2 } as any);
+		store.actions.logAction("action-3", "repo-a", { step: 3 } as any);
 
 		const actions = store.actions.getRecentActions("repo-a", 10);
 		store.close();
@@ -307,7 +307,7 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 		const store = await freshStore();
 
 		for (let i = 0; i < 20; i++) {
-			store.actions.logAction(`action-${i}`, "repo-limit", { index: i });
+			store.actions.logAction(`action-${i}`, "repo-limit", { index: i } as any);
 		}
 
 		const actions = store.actions.getRecentActions("repo-limit", 5);
@@ -319,9 +319,9 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("getRecentActions filters by repo correctly", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("repo-a-action", "repo-a", { data: "a" });
-		store.actions.logAction("repo-b-action", "repo-b", { data: "b" });
-		store.actions.logAction("repo-a-second", "repo-a", { data: "a2" });
+		store.actions.logAction("repo-a-action", "repo-a", { data: "a" } as any);
+		store.actions.logAction("repo-b-action", "repo-b", { data: "b" } as any);
+		store.actions.logAction("repo-a-second", "repo-a", { data: "a2" } as any);
 
 		const repoAActions = store.actions.getRecentActions("repo-a", 10);
 		const repoBActions = store.actions.getRecentActions("repo-b", 10);

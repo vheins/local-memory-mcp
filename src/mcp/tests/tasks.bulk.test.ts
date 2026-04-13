@@ -27,7 +27,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		vectors = new StubVectorStore(db);
 		const originalRouter = createRouter(db, vectors);
 		router = async (method, params) => {
-			return originalRouter(method, params);
+			return originalRouter(method, params) as any;
 		};
 	});
 
@@ -114,7 +114,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, structured: true }
 		});
-		const defaultTasks = (defaultRes.structuredContent as Record<string, unknown>).tasks as Record<string, unknown>;
+		const defaultTasks = (defaultRes.structuredContent as any).tasks;
 		expect(defaultTasks.rows.length).toBe(15); // Default limit is 15
 
 		// Test explicit limit
@@ -122,7 +122,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, limit: 10, structured: true }
 		});
-		const limitedTasks = (limitRes.structuredContent as Record<string, unknown>).tasks as Record<string, unknown>;
+		const limitedTasks = (limitRes.structuredContent as any).tasks;
 		expect(limitedTasks.rows.length).toBe(10);
 
 		// Test offset (last page)
@@ -130,7 +130,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-list",
 			arguments: { repo: REPO, limit: 15, offset: 15, structured: true }
 		});
-		const offsetTasks = (offsetRes.structuredContent as Record<string, unknown>).tasks as Record<string, unknown>;
+		const offsetTasks = (offsetRes.structuredContent as any).tasks;
 		expect(offsetTasks.rows.length).toBe(5); // 20 total - 15 offset = 5 remaining
 	});
 

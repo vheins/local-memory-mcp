@@ -20,7 +20,7 @@ export async function handleMemoryUpdate(params: Record<string, unknown>, db: SQ
 	}
 
 	// Repository Mismatch Check: If repo is provided in args, it MUST match the entry's repo
-	const repoFilter = params?.repo || params?.scope?.repo;
+	const repoFilter = params?.repo || (params?.scope as Record<string, unknown>)?.repo;
 	if (repoFilter && repoFilter !== existing.scope.repo) {
 		throw new Error(
 			`Repository mismatch: provided repo "${repoFilter}" does not match memory repo "${existing.scope.repo}"`

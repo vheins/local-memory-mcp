@@ -147,7 +147,7 @@ export class MemoryEntity extends BaseEntity {
 	searchByRepo(repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
 		const now = new Date().toISOString();
 
-		// Use LIKE search (sql.js doesn't support FTS5)
+		// Use LIKE search (FTS5 not enabled by default)
 		let sql =
 			"SELECT * FROM memories WHERE repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)";
 		const params: (string | number)[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
@@ -259,7 +259,8 @@ export class MemoryEntity extends BaseEntity {
 		limit: number,
 		offset: number = 0,
 		includeArchived: boolean = false,
-		excludeTypes: string[] = []
+		excludeTypes: string[] = [],
+		sortOrder: "ASC" | "DESC" = "DESC"
 	): MemoryEntry[] {
 		let query = "SELECT * FROM memories WHERE repo = ?";
 		const params: (string | number)[] = [repo];
@@ -273,7 +274,7 @@ export class MemoryEntity extends BaseEntity {
 			params.push(...excludeTypes);
 		}
 
-		query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+		query += ` ORDER BY importance DESC, created_at ${sortOrder} LIMIT ? OFFSET ?`;
 		params.push(limit, offset);
 
 		const rows = this.all<MemoryRow>(query, params);

@@ -1,4 +1,4 @@
-import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
+import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -33,156 +33,53 @@ function resolveDbPath(): string {
 
 const DB_PATH = resolveDbPath();
 
-let sqlJsReady: Promise<void> | null = null;
-let sqlJsModule: Awaited<ReturnType<typeof initSqlJs>> | null = null;
-
-async function getSqlJs() {
-	if (!sqlJsModule) {
-		sqlJsModule = await initSqlJs();
-	}
-	await sqlJsReady;
-	return sqlJsModule;
-}
-
-function createSaveFunction(db: SqlJsDatabase, dbPath?: string): () => void {
-	return () => {
-		if (dbPath && dbPath !== ":memory:") {
-			const data = db.export();
-			const buffer = Buffer.from(data);
-			fs.writeFileSync(dbPath, buffer);
-		}
-	};
-}
-
-function warmUpSqlJs() {
-	if (!sqlJsReady) {
-		sqlJsReady = (async () => {
-			sqlJsModule = await initSqlJs();
-		})();
-	}
-	return sqlJsReady;
-}
-
 export class SQLiteStore {
-	public db: SqlJsDatabase;
+	public db: Database.Database;
 	public memories: MemoryEntity;
 	public tasks: TaskEntity;
 	public actions: ActionEntity;
 	public system: SystemEntity;
 	public summaries: SummaryEntity;
-	private _ready: Promise<void>;
-	private lastLoadedAt: number = 0;
-	private saveDbPtr?: () => void;
 	private dbPathInstance: string;
 
 	constructor(dbPath?: string) {
 		const finalPath = dbPath ?? DB_PATH;
 		this.dbPathInstance = finalPath;
 
-		warmUpSqlJs();
-
-		this.db = {} as SqlJsDatabase;
-		this.memories = {} as MemoryEntity;
-		this.tasks = {} as TaskEntity;
-		this.actions = {} as ActionEntity;
-		this.system = {} as SystemEntity;
-		this.summaries = {} as SummaryEntity;
-
-		this._ready = this._init(finalPath);
-	}
-
-	private async _init(finalPath: string): Promise<void> {
-		const SQL = await getSqlJs();
-
-		let db: SqlJsDatabase;
-		if (finalPath === ":memory:") {
-			db = new SQL.Database();
-		} else {
+		if (finalPath !== ":memory:") {
 			const dbDir = path.dirname(finalPath);
 			if (!fs.existsSync(dbDir)) {
 				fs.mkdirSync(dbDir, { recursive: true });
 			}
-
-			if (fs.existsSync(finalPath)) {
-				const fileBuffer = fs.readFileSync(finalPath);
-				db = new SQL.Database(fileBuffer);
-			} else {
-				db = new SQL.Database();
-			}
 		}
 
-		this.saveDbPtr = createSaveFunction(db, finalPath);
-		const wrappedSaveDb = () => {
-			if (this.saveDbPtr) {
-				this.saveDbPtr();
-				this.lastLoadedAt = Date.now();
-			}
-		};
+		this.db = new Database(finalPath);
+		this.db.pragma("journal_mode = WAL");
+		this.db.pragma("synchronous = NORMAL");
+		this.db.pragma("busy_timeout = 5000");
+		this.db.pragma("foreign_keys = ON");
 
-		db.run("PRAGMA journal_mode = WAL");
-		db.run("PRAGMA synchronous = NORMAL");
-		db.run("PRAGMA busy_timeout = 5000");
-		const migrator = new MigrationManager(db, wrappedSaveDb);
+		const migrator = new MigrationManager(this.db);
 		migrator.migrate();
 		migrator.addMemoryCodeColumn();
 
-		Object.assign(this, {
-			db,
-			memories: new MemoryEntity(db, wrappedSaveDb),
-			tasks: new TaskEntity(db, wrappedSaveDb),
-			actions: new ActionEntity(db, wrappedSaveDb),
-			system: new SystemEntity(db, wrappedSaveDb),
-			summaries: new SummaryEntity(db, wrappedSaveDb)
-		});
-
-		this.lastLoadedAt = Date.now();
-
-		if (finalPath !== ":memory:") {
-			wrappedSaveDb();
-		}
-	}
-
-	async refresh(force = false): Promise<void> {
-		const path = this.getDbPath();
-		if (path === ":memory:") return;
-
-		try {
-			const stats = fs.statSync(path);
-			const mtime = stats.mtimeMs;
-
-			if (force || mtime > this.lastLoadedAt) {
-				const SQL = await getSqlJs();
-				const fileBuffer = fs.readFileSync(path);
-				const newDb = new SQL.Database(fileBuffer);
-
-				const wrappedSaveDb = () => {
-					if (this.saveDbPtr) {
-						this.saveDbPtr();
-						this.lastLoadedAt = Date.now();
-					}
-				};
-
-				this.db = newDb;
-				this.memories = new MemoryEntity(newDb, wrappedSaveDb);
-				this.tasks = new TaskEntity(newDb, wrappedSaveDb);
-				this.actions = new ActionEntity(newDb, wrappedSaveDb);
-				this.system = new SystemEntity(newDb, wrappedSaveDb);
-				this.summaries = new SummaryEntity(newDb, wrappedSaveDb);
-				this.lastLoadedAt = Date.now();
-			}
-		} catch (e) {
-			console.error("Failed to refresh database from disk:", e);
-		}
+		this.memories = new MemoryEntity(this.db);
+		this.tasks = new TaskEntity(this.db);
+		this.actions = new ActionEntity(this.db);
+		this.system = new SystemEntity(this.db);
+		this.summaries = new SummaryEntity(this.db);
 	}
 
 	async ready(): Promise<void> {
-		await this._ready;
+		// No-op: better-sqlite3 is synchronous
+	}
+
+	async refresh(): Promise<void> {
+		// No-op: better-sqlite3 reads/writes directly to file
 	}
 
 	static async create(dbPath?: string): Promise<SQLiteStore> {
-		const store = new SQLiteStore(dbPath);
-		await store.ready();
-		return store;
+		return new SQLiteStore(dbPath);
 	}
 
 	getDbPath(): string {
@@ -190,12 +87,12 @@ export class SQLiteStore {
 	}
 
 	close(): void {
-		if (this.db && this.db.close) {
+		if (this.db && this.db.open) {
 			this.db.close();
 		}
 	}
 }
 
 export async function createTestStore(): Promise<SQLiteStore> {
-	return SQLiteStore.create(":memory:");
+	return new SQLiteStore(":memory:");
 }

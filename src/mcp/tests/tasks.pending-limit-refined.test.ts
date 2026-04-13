@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
 import { createTestStore } from "../storage/sqlite";
-import { VectorStore } from "../types";
+import { Task, VectorStore } from "../types";
 
 describe("Task Pending Limit Refined Validation", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
@@ -14,7 +14,7 @@ describe("Task Pending Limit Refined Validation", () => {
 			upsert: vi.fn().mockResolvedValue(undefined),
 			remove: vi.fn().mockResolvedValue(undefined),
 			search: vi.fn().mockResolvedValue([])
-		};
+		} as unknown as VectorStore;
 	});
 
 	async function createManyPending(count: number) {
@@ -73,7 +73,7 @@ describe("Task Pending Limit Refined Validation", () => {
 			db
 		);
 
-		const task = db.tasks.getTasksByRepo(REPO).find((t) => (t as TaskEntry).task_code === "TASK-BACKLOG");
+		const task = db.tasks.getTasksByRepo(REPO).find((t) => (t as Task).task_code === "TASK-BACKLOG");
 		if (!task) throw new Error("Seed task not found");
 
 		// Move to pending (should be ALLOWED now)

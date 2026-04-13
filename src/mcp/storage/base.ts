@@ -1,41 +1,28 @@
-import { Database as SqlJsDatabase } from "sql.js";
+import Database from "better-sqlite3";
 import { tokenize } from "../utils/normalize";
 import { MemoryEntry, MemoryType, Task, TaskStatus, TaskPriority } from "../types/index";
 
 export abstract class BaseEntity {
-	constructor(
-		protected db: SqlJsDatabase,
-		protected saveDb?: () => void
-	) {}
+	constructor(protected db: Database.Database) {}
 
 	protected run(sql: string, params: unknown[] = []): { changes: number } {
-		this.db.run(sql, params as (string | number | null | Uint8Array)[]);
-		if (this.saveDb) this.saveDb();
-		return { changes: this.db.getRowsModified() };
+		const stmt = this.db.prepare(sql);
+		const result = stmt.run(...(params as (string | number | null | Buffer)[]));
+		return { changes: result.changes };
 	}
 
 	protected exec(sql: string): void {
 		this.db.exec(sql);
-		if (this.saveDb) this.saveDb();
 	}
 
 	protected all<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
-		const result = this.db.exec(sql, params as (string | number | null | Uint8Array)[]);
-		if (result.length === 0) return [];
-
-		const { columns, values } = result[0];
-		return values.map((row) => {
-			const obj: Record<string, unknown> = {};
-			columns.forEach((col, i) => {
-				obj[col] = row[i];
-			});
-			return obj as T;
-		});
+		const stmt = this.db.prepare(sql);
+		return stmt.all(...(params as (string | number | null | Buffer)[])) as T[];
 	}
 
 	protected get<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T | undefined {
-		const rows = this.all<T>(sql, params);
-		return rows[0];
+		const stmt = this.db.prepare(sql);
+		return stmt.get(...(params as (string | number | null | Buffer)[])) as T | undefined;
 	}
 
 	protected safeJSONParse<T>(json: string | null | undefined, defaultValue: T): T {

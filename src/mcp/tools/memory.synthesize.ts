@@ -154,7 +154,7 @@ export async function handleMemorySynthesize(
 		`Synthesized answer for "${validated.objective}" using repository "${repo}".`,
 		{
 			structuredContentPathHint: "answer",
-			includeSerializedStructuredContent: validated.structured
+			includeSerializedStructuredContent: true
 		}
 	);
 }

@@ -1,13 +1,10 @@
-import { Database as SqlJsDatabase } from "sql.js";
+import Database from "better-sqlite3";
 
 export class MigrationManager {
-	constructor(
-		private db: SqlJsDatabase,
-		private saveDb?: () => void
-	) {}
+	constructor(private db: Database.Database) {}
 
 	private run(sql: string): void {
-		this.db.run(sql);
+		this.db.prepare(sql).run();
 	}
 
 	private exec(sql: string): void {
@@ -15,22 +12,11 @@ export class MigrationManager {
 	}
 
 	private all(sql: string): Record<string, unknown>[] {
-		const result = this.db.exec(sql);
-		if (result.length === 0) return [];
-
-		const { columns, values } = result[0];
-		return values.map((row) => {
-			const obj: Record<string, unknown> = {};
-			columns.forEach((col, i) => {
-				obj[col] = row[i];
-			});
-			return obj;
-		});
+		return this.db.prepare(sql).all() as Record<string, unknown>[];
 	}
 
 	private get(sql: string): Record<string, unknown> | undefined {
-		const rows = this.all(sql);
-		return rows[0];
+		return this.db.prepare(sql).get() as Record<string, unknown> | undefined;
 	}
 
 	public migrate() {
@@ -262,7 +248,6 @@ export class MigrationManager {
 			// Ignore if column doesn't exist
 		}
 
-		if (this.saveDb) this.saveDb();
 	}
 
 	private ensureMemoryTypeConstraint(): void {
@@ -376,7 +361,7 @@ export class MigrationManager {
 	private ensureMemoryStatusConstraintRemoved(): void {
 		const tableSql = this.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'");
 
-		if (tableSql?.sql?.includes("status TEXT NOT NULL DEFAULT 'active' CHECK")) {
+		if (typeof tableSql?.sql === "string" && tableSql.sql.includes("status TEXT NOT NULL DEFAULT 'active' CHECK")) {
 			this.ensureMemoryTypeConstraint();
 		}
 	}

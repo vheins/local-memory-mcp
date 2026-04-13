@@ -51,14 +51,16 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			},
 			system: {
 				listRepos: vi.fn().mockReturnValue([]),
-				getStats: vi.fn().mockReturnValue({ total: 0, byType: {}, unused: 0 })
+				getStats: vi.fn().mockReturnValue({ total: 0, byType: {}, unused: 0 }),
+				listRepoNavigation: vi.fn().mockReturnValue([])
 			},
 			summaries: {
 				getSummary: vi.fn().mockReturnValue(null),
 				upsertSummary: vi.fn()
 			},
 			close: vi.fn(),
-			getDbPath: vi.fn().mockReturnValue(":memory:")
+			getDbPath: vi.fn().mockReturnValue(":memory:"),
+			refresh: vi.fn().mockResolvedValue(undefined)
 		} as unknown as SQLiteStore;
 	}
 
@@ -66,8 +68,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		return {
 			upsert: vi.fn().mockResolvedValue(undefined),
 			remove: vi.fn().mockResolvedValue(undefined),
-			search: vi.fn().mockResolvedValue([])
-		};
+			search: vi.fn().mockResolvedValue([]),
+			initialize: vi.fn().mockResolvedValue(undefined)
+		} as unknown as VectorStore;
 	}
 
 	it("memory-recap calls getRecentMemories on the provided mock db", async () => {
@@ -96,7 +99,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		expect(mockDb.memories.searchBySimilarity).toHaveBeenCalled();
 		// Verify the first argument to searchBySimilarity contains the repo
-		const callArgs = (mockDb.memories.searchBySimilarity as ReturnType<typeof vi.fn>).mock.calls[0];
+		const callArgs = (mockDb.memories.searchBySimilarity as any).mock.calls[0];
 		expect(callArgs[1]).toBe("test-repo");
 	});
 
@@ -183,7 +186,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const mockVectors = makeMockVectors();
 		const router = createRouter(mockDb, mockVectors);
 
-		const result = await router("resources/templates/list", {});
+		const result = (await router("resources/templates/list", {})) as any;
 		const templates = (result.resourceTemplates as Array<{ uriTemplate: string }>).map((entry) => entry.uriTemplate);
 
 		expect(templates).toContain("repository://{name}/memories");
@@ -200,8 +203,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			getSessionContext: () => session
 		});
 
-		const firstPage = await router("tools/list", { limit: 2 });
-		const secondPage = await router("tools/list", { limit: 2, cursor: firstPage.nextCursor });
+		const firstPage = (await router("tools/list", { limit: 2 })) as any;
+		const secondPage = (await router("tools/list", { limit: 2, cursor: firstPage.nextCursor })) as any;
 
 		expect(firstPage.tools).toHaveLength(2);
 		expect(firstPage.nextCursor).toBeTruthy();
@@ -221,11 +224,11 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 	it("supports completion for resource template repo arguments", async () => {
 		const mockDb = makeMockDb();
-		(mockDb.system.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["alpha-repo", "beta-repo"]);
+		(mockDb.system.listRepos as any).mockReturnValue(["alpha-repo", "beta-repo"]);
 		const mockVectors = makeMockVectors();
 		const router = createRouter(mockDb, mockVectors);
 
-		const result = await router("completion/complete", {
+		const result = (await router("completion/complete", {
 			ref: {
 				type: "ref/resource",
 				uri: "repository://{name}/memories"
@@ -234,7 +237,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				name: "name",
 				value: "alp"
 			}
-		});
+		})) as any;
 
 		expect(result.completion.values).toContain("alpha-repo");
 		expect(result.completion.values).not.toContain("beta-repo");
@@ -249,7 +252,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			getSessionContext: () => session
 		});
 
-		const result = await router("completion/complete", {
+		const result = (await router("completion/complete", {
 			ref: {
 				type: "ref/prompt",
 				name: "memory-guided-review"
@@ -258,7 +261,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				name: "file_path",
 				value: "src/mcp/router"
 			}
-		});
+		})) as any;
 
 		// Verify completion returns some values (actual file path matching may vary)
 		expect(result.completion.values).toBeDefined();
@@ -271,7 +274,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const router = createRouter(mockDb, mockVectors);
 
 		// Get all prompts and verify pagination works by checking the result structure
-		const result = await router("prompts/list", {});
+		const result = (await router("prompts/list", {})) as any;
 
 		// Verify prompts are returned
 		expect(result.prompts).toBeDefined();
@@ -281,7 +284,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 	it("supports completion for prompt task_id arguments using repo context", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
-		(mockDb.tasks.getTasksByRepo as ReturnType<typeof vi.fn>).mockReturnValue([
+		(mockDb.tasks.getTasksByRepo as any).mockReturnValue([
 			{
 				id: "123e4567-e89b-12d3-a456-426614174001",
 				task_code: "TASK-123",
@@ -290,7 +293,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		]);
 		const router = createRouter(mockDb, mockVectors);
 
-		const result = await router("completion/complete", {
+		const result = (await router("completion/complete", {
 			ref: {
 				type: "ref/prompt",
 				name: "learning-retrospective"
@@ -304,7 +307,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 					repo: "test-repo"
 				}
 			}
-		});
+		})) as any;
 
 		expect(mockDb.tasks.getTasksByRepo).toHaveBeenCalledWith("test-repo", undefined, 100);
 		expect(result.completion.values).toContain("123e4567-e89b-12d3-a456-426614174001");
@@ -318,7 +321,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			getSessionContext: () => session
 		});
 
-		const result = await router("tools/list", {});
+		const result = (await router("tools/list", {})) as any;
 		const toolNames = result.tools.map((tool: Record<string, unknown>) => tool.name);
 
 		expect(toolNames).not.toContain("memory-synthesize");
@@ -351,7 +354,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const mockVectors = makeMockVectors();
 		const router = createRouter(mockDb, mockVectors);
 
-		const result = await router("logging/setLevel", { level: "debug" });
+		const result = (await router("logging/setLevel", { level: "debug" })) as any;
 		expect(result.level).toBe("debug");
 		expect(result.supportedLevels).toContain("info");
 	});
@@ -364,21 +367,6 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		await expect(router("logging/setLevel", { level: "verbose" })).rejects.toMatchObject({
 			code: -32602
 		});
-	});
-
-	it("supports prompt list pagination with nextCursor", async () => {
-		const mockDb = makeMockDb();
-		const mockVectors = makeMockVectors();
-		const router = createRouter(mockDb, mockVectors);
-
-		// Get prompts - the current implementation returns all prompts
-		const result = await router("prompts/list", {});
-
-		// Verify prompts are returned
-		expect(result.prompts).toBeDefined();
-		expect(result.prompts.length).toBeGreaterThan(0);
-		// nextCursor may or may not be present - just check structure
-		expect(typeof result.prompts).toBe("object");
 	});
 
 	it("rejects invalid cursors for prompts/list with MCP invalid params error", async () => {
@@ -407,15 +395,15 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 	it("returns a dynamic prompt with embedded resource messages", async () => {
 		const mockDb = makeMockDb();
-		(mockDb.system.listRepos as ReturnType<typeof vi.fn>).mockReturnValue(["repo-alpha"]);
+		(mockDb.system.listRepos as any).mockReturnValue(["repo-alpha"]);
 		const mockVectors = makeMockVectors();
 		const router = createRouter(mockDb, mockVectors);
 
 		// Use a prompt that exists - project-briefing
-		const result = await router("prompts/get", {
+		const result = (await router("prompts/get", {
 			name: "project-briefing",
 			arguments: {}
-		});
+		})) as any;
 
 		expect(result).toBeDefined();
 		expect(result.description).toBeDefined();
@@ -438,10 +426,10 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			sampleMessage
 		});
 
-		const result = await router("tools/call", {
+		const result = (await router("tools/call", {
 			name: "memory-synthesize",
 			arguments: { repo: "test-repo", objective: "Summarize the project state" }
-		});
+		})) as any;
 
 		expect(sampleMessage).toHaveBeenCalledTimes(1);
 		expect((result.structuredContent as Record<string, unknown>).answer).toContain("Grounded answer");
@@ -480,14 +468,14 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			sampleMessage
 		});
 
-		const result = await router("tools/call", {
+		const result = (await router("tools/call", {
 			name: "memory-synthesize",
 			arguments: {
 				repo: "test-repo",
 				objective: "Explain the latest architecture decisions",
 				max_iterations: 3
 			}
-		});
+		})) as any;
 
 		expect(sampleMessage).toHaveBeenCalledTimes(2);
 		expect((result.structuredContent as Record<string, unknown>).toolCalls).toBe(1);
@@ -519,10 +507,10 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			elicit
 		});
 
-		const result = await router("tools/call", {
+		const result = (await router("tools/call", {
 			name: "memory-synthesize",
 			arguments: { objective: "Summarize the repo using elicitation" }
-		});
+		})) as any;
 
 		expect(elicit).toHaveBeenCalledTimes(1);
 		expect(sampleMessage).toHaveBeenCalledTimes(1);
@@ -554,21 +542,21 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			elicit
 		});
 
-		const result = await router("tools/call", {
+		const result = (await router("tools/call", {
 			name: "task-create-interactive",
 			arguments: {}
-		});
+		})) as any;
 
 		expect(elicit).toHaveBeenCalledTimes(1);
 		expect(mockDb.tasks.insertTask).toHaveBeenCalledTimes(1);
-		expect((result as Record<string, Record<string, unknown>>).structuredContent.repo).toBe("interactive-repo");
-		expect((result as Record<string, Record<string, unknown>>).structuredContent.task_code).toBe("TASK-101");
+		expect(result.structuredContent.repo).toBe("interactive-repo");
+		expect(result.structuredContent.task_code).toBe("TASK-101");
 	});
 
 	it("returns resource links in memory-search results", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
-		(mockDb.memories.searchBySimilarity as ReturnType<typeof vi.fn>).mockReturnValue([
+		(mockDb.memories.searchBySimilarity as any).mockReturnValue([
 			{
 				id: "123e4567-e89b-12d3-a456-426614174000",
 				type: "decision",
@@ -585,13 +573,13 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				tags: []
 			}
 		]);
-		(mockVectors.search as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+		(mockVectors.search as any).mockResolvedValue([]);
 		const router = createRouter(mockDb, mockVectors);
 
-		const result = await router("tools/call", {
+		const result = (await router("tools/call", {
 			name: "memory-search",
 			arguments: { query: "sqlite", repo: "test-repo", limit: 5 }
-		});
+		})) as any;
 
 		// New policy: no automatic resource links in search results to force use of detail tools
 		const resourceLinks = (result.content as Record<string, unknown>[]).filter((entry) => entry.type === "resource_link");

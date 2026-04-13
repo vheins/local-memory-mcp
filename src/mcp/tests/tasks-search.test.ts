@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
 import { createTestStore } from "../storage/sqlite";
-import { TaskEntry, VectorStore } from "../types";
+import { Task, VectorStore } from "../types";
 
 describe("Task Search and Filtering", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
@@ -34,7 +34,7 @@ describe("Task Search and Filtering", () => {
 			},
 			db
 		);
-		const task1 = db.tasks.getTasksByRepo(REPO).find((t: TaskEntry) => t.task_code === "TASK-001");
+		const task1 = db.tasks.getTasksByRepo(REPO).find((t: Task) => t.task_code === "TASK-001");
 		if (!task1) throw new Error("Task 1 seed failed");
 		await handleTaskUpdate(
 			{
@@ -78,7 +78,7 @@ describe("Task Search and Filtering", () => {
 			},
 			db
 		);
-		const task3 = db.tasks.getTasksByRepo(REPO).find((t: TaskEntry) => t.task_code === "DB-FIX-003");
+		const task3 = db.tasks.getTasksByRepo(REPO).find((t: Task) => t.task_code === "DB-FIX-003");
 		if (!task3) throw new Error("Task 3 seed failed");
 		await handleTaskUpdate(
 			{
@@ -195,7 +195,7 @@ describe("Task Search and Filtering", () => {
 
 	describe("Unified task-list", () => {
 		it("should provide same discovery as old task-search", async () => {
-			const args = { repo: REPO, query: "authentication", structured: true, status: "all", structured: true };
+			const args = { repo: REPO, query: "authentication", status: "all", structured: true };
 			const result = await handleTaskList(args, db);
 			const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 			expect(tasks.rows).toHaveLength(1);

@@ -4,7 +4,7 @@ import { createMcpResponse, getPrimaryTextContent } from "../utils/mcp-response"
 describe("MCP Spec Compliance", () => {
 	it("should return content, structuredContent, and not data", () => {
 		const mockData = { id: "mem_1", title: "Test" };
-		const response = createMcpResponse(mockData, "Summary");
+		const response = createMcpResponse(mockData, "Summary", { includeSerializedStructuredContent: true });
 
 		expect(response).toHaveProperty("content");
 		expect(getPrimaryTextContent(response)).toBe("Summary Read structuredContent for machine-readable results.");
@@ -21,8 +21,8 @@ describe("MCP Spec Compliance", () => {
 			model: "test-model",
 			hit_count: 10
 		};
-		const response = createMcpResponse(mockData, "Summary");
-		const sc = response.structuredContent as Record<string, unknown>;
+		const response = createMcpResponse(mockData, "Summary", { includeSerializedStructuredContent: true });
+		const sc = response.structuredContent as any;
 
 		expect(sc.id).toBe("mem_1");
 		expect(sc.title).toBe("Test");
@@ -39,8 +39,8 @@ describe("MCP Spec Compliance", () => {
 				{ id: "2", model: "m" }
 			]
 		};
-		const response = createMcpResponse(mockData, "Summary");
-		const sc = response.structuredContent as Record<string, unknown>;
+		const response = createMcpResponse(mockData, "Summary", { includeSerializedStructuredContent: true });
+		const sc = response.structuredContent as any;
 
 		expect(sc.results[0].id).toBe("1");
 		expect(sc.results[0].agent).toBeUndefined();
@@ -63,7 +63,7 @@ describe("MCP Spec Compliance", () => {
 	});
 
 	it("should NOT include redundant JSON string in content - agent must read structuredContent", () => {
-		const response = createMcpResponse({ id: "mem_1", title: "Test" }, "Summary");
+		const response = createMcpResponse({ id: "mem_1", title: "Test" }, "Summary", { includeSerializedStructuredContent: true });
 		const textItems = response.content?.filter((item) => item.type === "text") ?? [];
 
 		expect(textItems).toHaveLength(1);

@@ -39,7 +39,8 @@ export function updateSessionFromInitialize(session: SessionContext, params: Rec
 	session.clientCapabilities = capabilities;
 	session.supportsRoots = Boolean(capabilities.roots);
 	session.supportsSampling = Boolean(capabilities.sampling);
-	session.supportsSamplingTools = Boolean(capabilities.sampling?.tools);
+	const sampling = capabilities.sampling as Record<string, unknown> | undefined;
+	session.supportsSamplingTools = Boolean(sampling?.tools);
 	session.supportsElicitation = Boolean(capabilities.elicitation);
 	session.supportsElicitationForm = supportsElicitationMode(capabilities.elicitation, "form");
 	session.supportsElicitationUrl = supportsElicitationMode(capabilities.elicitation, "url");

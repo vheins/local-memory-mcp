@@ -71,7 +71,7 @@
       </p>
     {:else if isList(token)}
       {#if token.ordered}
-        <ol start={token.start}>
+        <ol start={typeof token.start === 'number' ? token.start : undefined}>
           {#each token.items as item}
             <li>
               {#each item.tokens || [] as itemToken}

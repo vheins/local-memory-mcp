@@ -9,7 +9,7 @@
 	$: priorityColor = task ? priorityColors[task.priority] : "#94a3b8";
 	$: statusIcon = task ? statusIconMap[task.status] : "circle-dot";
 	$: statusColor = task ? statusColors[task.status] : "#94a3b8";
-	$: descPreview = task ? cleanDesc(task.description) : "";
+	$: descPreview = task ? cleanDesc(task.description ?? undefined) : "";
 </script>
 
 <div class="task-card animate-fade-in" role="button" tabindex="0" on:click on:keydown>

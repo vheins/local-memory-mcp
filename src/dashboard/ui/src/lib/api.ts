@@ -200,7 +200,10 @@ export const api = {
 
 	deleteTaskComment: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
 
-	export: (repo: string) => apiFetch<{ url: string }>(`/api/export?repo=${encodeURIComponent(repo)}`),
+	export: (repo: string) =>
+		apiFetch<{ repo: string; exported_at: string; tasks: Task[]; memories: Memory[] }>(
+			`/api/export?repo=${encodeURIComponent(repo)}`
+		),
 
 	capabilities: () => apiFetch<ReferenceDataState>("/api/capabilities"),
 

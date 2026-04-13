@@ -56,7 +56,8 @@ describe("V2 Enhanced Memory Features", () => {
 					importance: 4,
 					scope: { repo },
 					agent: "test-agent",
-					model: "test-model"
+					model: "test-model",
+					structured: true
 				},
 				db,
 				mockVectors
@@ -85,7 +86,8 @@ describe("V2 Enhanced Memory Features", () => {
 						source_agent: "codex",
 						source_role: "rules-optimizer",
 						source_timestamp: "2026-04-03T00:00:00.000Z"
-					}
+					},
+					structured: true
 				},
 				db,
 				mockVectors

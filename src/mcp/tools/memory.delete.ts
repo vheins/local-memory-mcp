@@ -59,7 +59,7 @@ export async function handleMemoryDelete(
             deletedCount,
             deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes
 		},
-		`Deleted ${deletedCount} memory entry(ies) ${deletedCount > 0 ? `([${deletedCodes.slice(0, 10).join(", ")}${deletedCount > 10 ? ", ..." : ""}]) ` : ""}from repo "${lastRepo}".`,
+		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeSerializedStructuredContent: structured,

@@ -19,6 +19,7 @@ export interface Task {
 	parent_id?: string | null;
 	depends_on?: string | null;
 	comments?: TaskComment[];
+	comment?: string;
 }
 
 export interface TaskComment {

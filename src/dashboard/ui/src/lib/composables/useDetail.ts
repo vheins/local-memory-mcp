@@ -1,6 +1,6 @@
 import { writable, get, derived } from "svelte/store";
 import { api } from "../api";
-import type { Memory, Task } from "../stores";
+import type { Memory, Task, TaskComment } from "../stores";
 import { copyToClipboard } from "../utils";
 
 export interface DetailState {

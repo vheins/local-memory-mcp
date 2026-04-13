@@ -10,7 +10,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
 	let router: (
 		method: string,
 		params: Record<string, unknown>
-	) => Promise<{ structuredContent: Record<string, unknown> }>;
+	) => Promise<any>;
 
 	const REPO = "detail-test-repo";
 
@@ -23,7 +23,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
 			if (method === "tools/call" && args) {
 				args.structured = true;
 			}
-			return rawRouter(method, params) as unknown as Promise<{ structuredContent: Record<string, unknown> }>;
+			return rawRouter(method, params);
 		};
 	});
 
@@ -54,7 +54,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
 		expect(detailRes.structuredContent.content).toBe("This is a test memory content for detail check.");
 
 		// Verify hit count incremented
-		const memory = db.memories.getById(memoryId);
+		const memory = db.memories.getById(memoryId as string);
 		expect(memory?.hit_count).toBe(1);
 	});
 

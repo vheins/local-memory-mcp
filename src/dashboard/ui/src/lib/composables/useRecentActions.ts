@@ -1,7 +1,7 @@
 import { writable, get, derived } from "svelte/store";
 import { recentActions, recentActionsPage, recentActionsTotalItems } from "../stores";
 import { renderMarkdown } from "../utils";
-import type { RecentAction } from "../stores";
+import type { RecentAction, Task, Memory } from "../stores";
 
 export interface RecentActionsState {
 	expandedResponses: Set<number>;

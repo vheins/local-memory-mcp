@@ -21,7 +21,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			if (method === "tools/call" && args) {
 				args.structured = true;
 			}
-			return rawRouter(method, params);
+			return rawRouter(method, params as any) as any;
 		};
 	});
 
@@ -30,7 +30,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		const initialRes = await router("resources/read", {
 			uri: `repository://${REPO}/tasks`
 		});
-		const initialTasks = JSON.parse(initialRes.contents[0].text);
+		const initialTasks = JSON.parse((initialRes.content as any)[0].text);
 		expect(initialTasks.length).toBe(0);
 
 		// ---- 2. PLANNING PHASE ----
@@ -69,7 +69,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		// Verify both are pending
 		const plannedRes = await router("resources/read", { uri: `repository://${REPO}/tasks` });
-		const plannedTasks = JSON.parse(plannedRes.contents[0].text);
+		const plannedTasks = JSON.parse((plannedRes.content as any)[0].text);
 		expect(plannedTasks.length).toBe(2);
 
 		// Verify task-list tool works
@@ -96,7 +96,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		});
 
 		const inProgressRes = await router("resources/read", { uri: `repository://${REPO}/tasks` });
-		const inProgressTasks = JSON.parse(inProgressRes.contents[0].text);
+		const inProgressTasks = JSON.parse((inProgressRes.content as any)[0].text);
 		expect(inProgressTasks.find((t: { id: string; status: string }) => t.id === taskAId).status).toBe("in_progress");
 
 		// ---- 4. VALIDATION PHASE (Task A) ----
@@ -115,7 +115,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		});
 
 		const afterARes = await router("resources/read", { uri: `repository://${REPO}/tasks` });
-		const afterATasks = JSON.parse(afterARes.contents[0].text);
+		const afterATasks = JSON.parse((afterARes.content as any)[0].text);
 		expect(afterATasks.length).toBe(1);
 		expect(afterATasks[0].id).toBe(taskBId);
 
@@ -135,7 +135,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		});
 
 		const finalCheckRes = await router("resources/read", { uri: `repository://${REPO}/tasks` });
-		const finalCheckTasks = JSON.parse(finalCheckRes.contents[0].text);
+		const finalCheckTasks = JSON.parse((finalCheckRes.content as any)[0].text);
 		expect(finalCheckTasks[0].status).toBe("in_progress");
 
 		const updatedTask = db.tasks.getTaskById(taskBId);

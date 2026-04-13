@@ -116,9 +116,10 @@ export class SystemController {
 			id: tool.name,
 			attributes: tool
 		}));
-		const resources = (listResources().resources || []).map((resource) => ({
+		const resourceList = listResources();
+		const resources = ((resourceList.resources as Record<string, unknown>[]) || []).map((resource) => ({
 			type: "resource",
-			id: resource.uri,
+			id: resource.uri as string,
 			attributes: resource
 		}));
 		const prompts = (Object.values(PROMPTS) || []).map((prompt) => ({
@@ -170,8 +171,8 @@ export class SystemController {
 	static async callTool(req: express.Request, res: express.Response) {
 		try {
 			if (!mcpClient.isConnected()) await mcpClient.start();
-			const { name } = req.params as NameParams;
-			const args = getAttributes(req);
+			const { name } = req.params as { name: string };
+			const args = getAttributes(req) as Record<string, unknown>;
 			const result = await mcpClient.callTool(name, args);
 			res.json(jsonApiRes(result, "tool-result"));
 		} catch (err: unknown) {

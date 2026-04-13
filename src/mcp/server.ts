@@ -44,7 +44,7 @@ if (process.argv.includes("doctor")) {
 	process.exit(0);
 }
 
-// Create storage instances (async for sql.js)
+// Create storage instances
 const db = await SQLiteStore.create();
 const vectors = new RealVectorStore(db);
 
@@ -81,8 +81,8 @@ const resourceSubscriptions = new Set<string>();
 let logNotificationsEnabled = false;
 const handleMethod = createRouter(db, vectors, {
 	getSessionContext: () => session,
-	sampleMessage: (params) => requestClient("sampling/createMessage", params),
-	elicit: (params) => requestClient("elicitation/create", params),
+	sampleMessage: (params) => requestClient("sampling/createMessage", params) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+	elicit: (params) => requestClient("elicitation/create", params) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
 	onResourcesMutated: (uris) => notifyUpdatedResources(uris)
 });
 

@@ -4,7 +4,7 @@ import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinR
 import { logger } from "./utils/logger";
 import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/schemas";
-import { complete } from "./completion";
+import { complete, type CompletionRequest } from "./completion";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
 import { handleMemoryStore } from "./tools/memory.store";
@@ -73,8 +73,14 @@ export function createRouter(
 			case "resources/templates/list":
 				return listResourceTemplates(params);
 
-			case "resources/read":
-				return readResource(params?.uri, db, getSessionContext?.());
+			case "resources/read": {
+				const result = readResource(params?.uri as string, db, getSessionContext?.()) as Record<string, unknown>;
+				// Map MCP protocol `contents` to `content` for consistency
+				if (result && Array.isArray(result.contents) && !result.content) {
+					result.content = result.contents;
+				}
+				return result;
+			}
 
 			// ---- prompts ----
 			case "prompts/list":
@@ -92,11 +98,11 @@ export function createRouter(
 			}
 
 			case "prompts/get": {
-				return getPrompt(params?.name, params?.arguments || {}, db, getSessionContext?.());
+				return getPrompt(params?.name as string, (params?.arguments as Record<string, string>) || {}, db, getSessionContext?.());
 			}
 
 			case "completion/complete":
-				return complete(params, db, getSessionContext?.());
+				return complete(params as CompletionRequest, db, getSessionContext?.());
 
 			default:
 				throw new Error(`Unsupported method: ${method}`);
@@ -201,7 +207,7 @@ export function createRouter(
 					(args?.title as string) ||
 					(args?.task_code as string) ||
 					(toolName === "memory-recap" ? `Offset: ${args?.offset || 0}` : undefined),
-				response: result,
+				response: result as Record<string, unknown>,
 				memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
 				taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
 				resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0

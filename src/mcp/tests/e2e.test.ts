@@ -14,7 +14,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	let router: (
 		method: string,
 		params: Record<string, unknown>
-	) => Promise<{ structuredContent: Record<string, unknown>; contents: Array<{ text: string }> }>;
+	) => Promise<any>;
 
 	const REPO = "enterprise-app-v2";
 
@@ -27,7 +27,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			if (method === "tools/call" && args) {
 				args.structured = true;
 			}
-			return rawRouter(method, params) as unknown as Promise<{ structuredContent: Record<string, unknown>; contents: Array<{ text: string }> }>;
+			return rawRouter(method, params);
 		};
 	});
 
@@ -210,7 +210,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		const resourceRes = await router("resources/read", {
 			uri: "repository://cloud-infra/memories"
 		});
-		const entries = JSON.parse(resourceRes.contents[0].text);
+		const entries = JSON.parse(resourceRes.content[0].text);
 		expect(entries.length).toBeLessThanOrEqual(20); // Default limit in resource.read is 20
 	});
 

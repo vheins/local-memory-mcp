@@ -106,7 +106,7 @@ export function createMemoryHandler() {
 			if (format === "json") {
 				exportToJSON(data, filename + ".json");
 			} else {
-				exportToCSV(data.memories || [], filename + ".csv");
+				exportToCSV((data.memories as unknown as Record<string, unknown>[]) || [], filename + ".csv");
 			}
 		} catch (e) {
 			console.error("Export failed:", e);

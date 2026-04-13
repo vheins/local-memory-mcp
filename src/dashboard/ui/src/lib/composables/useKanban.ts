@@ -222,7 +222,7 @@ export function createKanbanHandler() {
 			if (format === "json") {
 				exportToJSON(data.tasks || [], filename + ".json");
 			} else {
-				exportToCSV(data.tasks || [], filename + ".csv");
+				exportToCSV((data.tasks as unknown as Record<string, unknown>[]) || [], filename + ".csv");
 			}
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Unknown error";

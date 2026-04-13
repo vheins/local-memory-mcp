@@ -31,43 +31,41 @@ export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promi
 		}
 	}
 
-	let contentSummary: string | undefined;
-	if (!validated.structured) {
-		if (total > 0) {
-			const parts: string[] = [];
+	let contentSummary: string;
+	if (total > 0) {
+		const parts: string[] = [];
 
-			// Show stats by type
-			for (const [memType, count] of Object.entries(byType)) {
-				if (count > 0) {
-					parts.push(`${capitalize(memType)}: ${count}`);
-				}
+		// Show stats by type
+		for (const [memType, count] of Object.entries(byType)) {
+			if (count > 0) {
+				parts.push(`${capitalize(memType)}: ${count}`);
 			}
-
-			// Group top memories by type
-			const memoriesByType: Record<string, typeof rows> = {};
-			for (const row of rows) {
-				const typeLabel = row.type || "unknown";
-				if (!memoriesByType[typeLabel]) {
-					memoriesByType[typeLabel] = [];
-				}
-				memoriesByType[typeLabel].push(row);
-			}
-
-			for (const [memType, items] of Object.entries(memoriesByType)) {
-				parts.push("");
-				parts.push(`${capitalize(memType)}:`);
-				parts.push("- code|importance|title");
-				for (const row of items) {
-					const code = row.code || "-";
-					parts.push(`- ${code}|${row.importance}|${row.title}`);
-				}
-			}
-			parts.push("");
-			parts.push("Use memory-detail with memory_id (or code) for full content.");
-			contentSummary = parts.join("\n").trim();
-		} else {
-			contentSummary = `No memories found for repo "${validated.repo}".`;
 		}
+
+		// Group top memories by type
+		const memoriesByType: Record<string, typeof rows> = {};
+		for (const row of rows) {
+			const typeLabel = row.type || "unknown";
+			if (!memoriesByType[typeLabel]) {
+				memoriesByType[typeLabel] = [];
+			}
+			memoriesByType[typeLabel].push(row);
+		}
+
+		for (const [memType, items] of Object.entries(memoriesByType)) {
+			parts.push("");
+			parts.push(`${capitalize(memType)}:`);
+			parts.push("- code|importance|title");
+			for (const row of items) {
+				const code = row.code || "-";
+				parts.push(`- ${code}|${row.importance}|${row.title}`);
+			}
+		}
+		parts.push("");
+		parts.push("Use memory-detail with memory_id (or code) for full content.");
+		contentSummary = parts.join("\n").trim();
+	} else {
+		contentSummary = `No memories found for repo "${validated.repo}".`;
 	}
 
 	const structuredData = {

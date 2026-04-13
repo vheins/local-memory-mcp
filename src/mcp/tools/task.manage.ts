@@ -492,7 +492,8 @@ export async function handleTaskCreateInteractive(
 		{
 			...completedDraft,
 			status: completedDraft.status ?? "backlog",
-			priority: completedDraft.priority ?? 3
+			priority: completedDraft.priority ?? 3,
+			structured: true
 		},
 		storage
 	);

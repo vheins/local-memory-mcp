@@ -11,14 +11,14 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 	let router: (
 		method: string,
 		params: Record<string, unknown>
-	) => Promise<{ structuredContent: Record<string, unknown> }>;
+	) => Promise<any>;
 
 	const REPO = "bulk-mem-repo";
 
 	beforeEach(async () => {
 		db = await createTestStore();
 		vectors = new StubVectorStore(db);
-		router = createRouter(db, vectors);
+		router = createRouter(db, vectors) as any;
 	});
 
 	it("should bulk delete memories", async () => {

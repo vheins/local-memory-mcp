@@ -6,7 +6,7 @@ import { completePromptArgument } from "./prompts/registry";
 import { completeResourceArgument } from "./resources/index";
 import type { Task } from "./types";
 
-type CompletionRequest = {
+export type CompletionRequest = {
 	ref?: {
 		type?: string;
 		name?: string;
