@@ -66,7 +66,7 @@
 						{#if currentRepoData}
 							<div class="flex items-center gap-1" style="font-size:0.65rem;color:var(--color-text-muted);">
 								<Icon name="database" size={10} strokeWidth={2} />
-								<span>{currentRepoData.memory_count || 0} memories</span>
+								<span>{currentRepoData.memoryCount || 0} memories</span>
 							</div>
 						{/if}
 					</div>

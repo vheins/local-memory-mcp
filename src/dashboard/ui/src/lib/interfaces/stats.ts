@@ -9,8 +9,8 @@ export interface DashboardStats {
 	taskStats?: {
 		total: number;
 		backlog: number;
-		todo: number;
-		inProgress: number;
+		pending: number;
+		in_progress: number;
 		completed: number;
 		blocked: number;
 	};

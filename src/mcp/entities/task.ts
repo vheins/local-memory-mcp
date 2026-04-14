@@ -371,10 +371,15 @@ export class TaskEntity extends BaseEntity {
 			repo
 		]);
 
+		// avg_duration_seconds is in seconds; convert to minutes for the frontend formatDuration()
+		const avgDurationMinutes = stats?.avg_duration_seconds
+			? stats.avg_duration_seconds / 60
+			: 0;
+
 		return {
 			completed: stats?.completed_count || 0,
 			tokens: stats?.total_tokens || 0,
-			avgDuration: stats?.avg_duration_seconds || 0,
+			avgDuration: avgDurationMinutes,
 			added: added?.count || 0
 		};
 	}
