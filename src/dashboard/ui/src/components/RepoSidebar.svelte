@@ -83,7 +83,7 @@
 						on:dragover={(e) => handler.onDragOver(item.repo, e)}
 						on:drop={(e) => handler.onDrop(item.repo, e)}
 						on:dragend={handler.onDragEnd}
-						title="{item.repo} • {item.memory_count} memories"
+						title="{item.repo} • {item.memoryCount} memories"
 					>
 						{#if $currentRepo === item.repo}
 							<div class="repo-active-indicator"></div>
@@ -99,28 +99,28 @@
 								style="font-size:0.68rem;color:var(--color-text-muted);margin-bottom:2px;"
 							>
 								<Icon name="database" size={9} strokeWidth={2} />
-								{item.memory_count} memories
+								{item.memoryCount} memories
 							</div>
-							{#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) + (item.backlog_count || 0) > 0}
+							{#if (item.inProgressCount || 0) + (item.pendingCount || 0) + (item.blockedCount || 0) + (item.backlogCount || 0) > 0}
 								<div class="task-badges">
-									{#if item.in_progress_count}
+									{#if item.inProgressCount}
 										<span class="task-badge active"
-											><Icon name="zap" size={8} strokeWidth={2} /> {item.in_progress_count}</span
+											><Icon name="zap" size={8} strokeWidth={2} /> {item.inProgressCount}</span
 										>
 									{/if}
-									{#if item.pending_count}
+									{#if item.pendingCount}
 										<span class="task-badge todo"
-											><Icon name="circle-dot" size={8} strokeWidth={2} /> {item.pending_count}</span
+											><Icon name="circle-dot" size={8} strokeWidth={2} /> {item.pendingCount}</span
 										>
 									{/if}
-									{#if item.blocked_count}
+									{#if item.blockedCount}
 										<span class="task-badge blocked"
-											><Icon name="triangle-alert" size={8} strokeWidth={2} /> {item.blocked_count}</span
+											><Icon name="triangle-alert" size={8} strokeWidth={2} /> {item.blockedCount}</span
 										>
 									{/if}
-									{#if item.backlog_count}
+									{#if item.backlogCount}
 										<span class="task-badge backlog"
-											><Icon name="archive" size={8} strokeWidth={2} /> {item.backlog_count}</span
+											><Icon name="archive" size={8} strokeWidth={2} /> {item.backlogCount}</span
 										>
 									{/if}
 								</div>
@@ -154,7 +154,7 @@
 						tabindex="0"
 						on:click={() => handler.selectRepo(item.repo)}
 						on:keydown={(e) => (e.key === "Enter" || e.key === " ") && handler.selectRepo(item.repo)}
-						title="{item.repo} • {item.memory_count} memories"
+						title="{item.repo} • {item.memoryCount} memories"
 					>
 						{#if $currentRepo === item.repo}
 							<div class="repo-active-indicator"></div>
@@ -167,28 +167,28 @@
 								style="font-size:0.68rem;color:var(--color-text-muted);margin-bottom:2px;"
 							>
 								<Icon name="database" size={9} strokeWidth={2} />
-								{item.memory_count} memories
+								{item.memoryCount} memories
 							</div>
-							{#if (item.in_progress_count || 0) + (item.pending_count || 0) + (item.blocked_count || 0) + (item.backlog_count || 0) > 0}
+							{#if (item.inProgressCount || 0) + (item.pendingCount || 0) + (item.blockedCount || 0) + (item.backlogCount || 0) > 0}
 								<div class="task-badges">
-									{#if item.in_progress_count}
+									{#if item.inProgressCount}
 										<span class="task-badge active"
-											><Icon name="zap" size={8} strokeWidth={2} /> {item.in_progress_count}</span
+											><Icon name="zap" size={8} strokeWidth={2} /> {item.inProgressCount}</span
 										>
 									{/if}
-									{#if item.pending_count}
+									{#if item.pendingCount}
 										<span class="task-badge todo"
-											><Icon name="circle-dot" size={8} strokeWidth={2} /> {item.pending_count}</span
+											><Icon name="circle-dot" size={8} strokeWidth={2} /> {item.pendingCount}</span
 										>
 									{/if}
-									{#if item.blocked_count}
+									{#if item.blockedCount}
 										<span class="task-badge blocked"
-											><Icon name="triangle-alert" size={8} strokeWidth={2} /> {item.blocked_count}</span
+											><Icon name="triangle-alert" size={8} strokeWidth={2} /> {item.blockedCount}</span
 										>
 									{/if}
-									{#if item.backlog_count}
+									{#if item.backlogCount}
 										<span class="task-badge backlog"
-											><Icon name="archive" size={8} strokeWidth={2} /> {item.backlog_count}</span
+											><Icon name="archive" size={8} strokeWidth={2} /> {item.backlogCount}</span
 										>
 									{/if}
 								</div>

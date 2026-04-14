@@ -1,19 +1,19 @@
 <script lang="ts">
-	import { dashboardStats } from "../lib/stores";
+	import { createStatsHandler } from "../lib/composables/useStatsWidget";
 	import Icon from "../lib/Icon.svelte";
 
-	$: ts = $dashboardStats?.taskStats;
+	const { taskStats } = createStatsHandler();
 
 	$: stats = [
-		{ label: "Total", val: ts?.total ?? 0, icon: "layers", color: "#6366f1", glow: "rgba(99,102,241,0.12)" },
-		{ label: "Backlog", val: ts?.backlog ?? 0, icon: "inbox", color: "#64748b", glow: "rgba(100,116,139,0.12)" },
-		{ label: "To Do", val: ts?.todo ?? 0, icon: "circle-dot", color: "#0ea5e9", glow: "rgba(14,165,233,0.12)" },
-		{ label: "Active", val: ts?.inProgress ?? 0, icon: "zap", color: "#a855f7", glow: "rgba(168,85,247,0.12)" },
-		{ label: "Done", val: ts?.completed ?? 0, icon: "circle-check", color: "#10b981", glow: "rgba(16,185,129,0.12)" }
+		{ label: "Total", val: $taskStats?.total ?? 0, icon: "layers", color: "#6366f1", glow: "rgba(99,102,241,0.12)" },
+		{ label: "Backlog", val: $taskStats?.backlog ?? 0, icon: "inbox", color: "#64748b", glow: "rgba(100,116,139,0.12)" },
+		{ label: "To Do", val: $taskStats?.pending ?? 0, icon: "circle-dot", color: "#0ea5e9", glow: "rgba(14,165,233,0.12)" },
+		{ label: "Active", val: $taskStats?.in_progress ?? 0, icon: "zap", color: "#a855f7", glow: "rgba(168,85,247,0.12)" },
+		{ label: "Done", val: $taskStats?.completed ?? 0, icon: "circle-check", color: "#10b981", glow: "rgba(16,185,129,0.12)" }
 	];
 </script>
 
-{#if ts}
+{#if $taskStats}
 	<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:10px;width:100%;">
 		{#each stats as s}
 			<div class="stat-card" style="text-align:center;background:{s.glow};border:1px solid {s.glow};padding:10px 8px;">

@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { formatTokens, formatDuration } from "../lib/utils";
-	import { createTimeStatsHandler, TIME_PERIODS } from "../lib/composables/useTimeStats";
+	import { createTimeStatsHandler } from "../lib/composables/useTimeStats";
 
 	const handler = createTimeStatsHandler();
-	const { activePeriod, periodData, history, maxVal, setActivePeriod } = handler;
+	const { activePeriod, periodData, history, maxVal, setActivePeriod, periods, formatTokens, formatDuration } = handler;
 </script>
 
 <div class="glass card animate-fade-in">
@@ -16,11 +15,11 @@
 			<div style="font-size:0.75rem;color:var(--color-text-muted);">Performance over time</div>
 		</div>
 		<div class="flex gap-1" style="background:rgba(241,245,249,0.8);padding:3px;border-radius:10px;">
-			{#each TIME_PERIODS as p}
+			{#each periods as p}
 				<button
 					class="tab-btn"
-					class:active={$activePeriod === p.key}
-					on:click={() => setActivePeriod(p.key)}
+					class:active={$activePeriod === p.id}
+					on:click={() => setActivePeriod(p.id)}
 					style="padding:4px 10px;font-size:0.65rem;"
 				>
 					{p.label}

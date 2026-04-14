@@ -1,34 +1,55 @@
-import { writable, derived } from "svelte/store";
+import { derived, writable } from "svelte/store";
 import { taskTimeStats } from "../stores";
 
-export type Period = "daily" | "weekly" | "monthly" | "overall";
-
-export const TIME_PERIODS: { key: Period; label: string }[] = [
-	{ key: "daily", label: "Today" },
-	{ key: "weekly", label: "Week" },
-	{ key: "monthly", label: "Month" },
-	{ key: "overall", label: "All" }
-];
-
 export function createTimeStatsHandler() {
-	const activePeriod = writable<Period>("daily");
+	const periods = [
+		{ id: "daily", label: "Today" },
+		{ id: "weekly", label: "This Week" },
+		{ id: "monthly", label: "This Month" },
+		{ id: "overall", label: "Overall" }
+	] as const;
 
-	const periodData = derived([taskTimeStats, activePeriod], ([$stats, $period]) => $stats?.[$period]);
+	type PeriodId = (typeof periods)[number]["id"];
+	const activePeriod = writable<PeriodId>("daily");
 
-	const history = derived(
-		periodData,
-		($data) => ($data?.history || []) as Array<{ label: string; created: number; completed: number }>
-	);
+	const stats = derived(taskTimeStats, ($s) => $s);
 
-	const maxVal = derived(history, ($history) =>
-		Math.max(1, ...$history.map((h) => Math.max(h.created || 0, h.completed || 0)))
-	);
+	const periodData = derived([stats, activePeriod], ([$stats, $active]) => {
+		if (!$stats) return null;
+		return $stats[$active] || null;
+	});
+
+	const history = derived(periodData, ($data) => $data?.history || []);
+
+	const maxVal = derived(history, ($history) => {
+		return Math.max(
+			5,
+			...($history as any[]).map((h) => Math.max(h.created || 0, h.completed || 0))
+		);
+	});
+
+	function formatDuration(minutes: number) {
+		if (!minutes) return "0m";
+		if (minutes < 60) return `${Math.round(minutes)}m`;
+		const h = Math.floor(minutes / 60);
+		const m = Math.round(minutes % 60);
+		return `${h}h ${m}m`;
+	}
+
+	function formatTokens(tokens: number) {
+		if (!tokens) return "0";
+		if (tokens < 1000) return tokens.toString();
+		return `${(tokens / 1000).toFixed(1)}k`;
+	}
 
 	return {
+		periods,
 		activePeriod,
 		periodData,
 		history,
 		maxVal,
-		setActivePeriod: (p: Period) => activePeriod.set(p)
+		setActivePeriod: (p: PeriodId) => activePeriod.set(p),
+		formatDuration,
+		formatTokens
 	};
 }

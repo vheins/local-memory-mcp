@@ -24,53 +24,78 @@ const typeLabels: Record<string, string> = {
 };
 
 export function createStatsHandler() {
-	const summaryItems = derived(dashboardStats, ($stats) => {
+	const taskStats = derived(dashboardStats, ($stats) => {
+		if (!$stats?.taskStats || !Array.isArray($stats.taskStats)) return null;
+		
+		const stats: Record<string, number> = {
+			total: 0,
+			backlog: 0,
+			pending: 0,
+			in_progress: 0,
+			completed: 0,
+			blocked: 0,
+			canceled: 0
+		};
+
+		($stats.taskStats as any[]).forEach(item => {
+			if (item.status && typeof item.count === 'number') {
+				stats[item.status] = item.count;
+				stats.total += item.count;
+			}
+		});
+
+		return stats;
+	});
+
+	const summaryItems = derived([dashboardStats, taskStats], ([$stats, $taskStats]) => {
+		const memoryTotal = ($stats?.memoryStats as any[] | undefined)?.reduce((acc, curr) => acc + (curr.count || 0), 0) ?? 0;
 		return [
 			{
 				label: "Total Memories",
-				val: $stats?.total ?? "—",
+				val: memoryTotal || "—",
 				icon: "layers",
 				color: "#0ea5e9",
 				glow: "rgba(14,165,233,0.12)"
 			},
 			{
-				label: "Avg Importance",
-				val: $stats?.avgImportance ? Number($stats.avgImportance).toFixed(1) : "—",
-				icon: "star",
-				color: "#f59e0b",
-				glow: "rgba(245,158,11,0.12)"
+				label: "Active Tasks",
+				val: ($taskStats?.in_progress ?? 0) + ($taskStats?.pending ?? 0) || "—",
+				icon: "zap",
+				color: "#a855f7",
+				glow: "rgba(168,85,247,0.12)"
 			},
 			{
-				label: "Total Hits",
-				val: $stats?.totalHitCount ?? "—",
-				icon: "mouse-pointer-2",
+				label: "Completed",
+				val: $taskStats?.completed ?? "—",
+				icon: "circle-check",
 				color: "#10b981",
 				glow: "rgba(16,185,129,0.12)"
 			},
 			{
-				label: "Expiring Soon",
-				val: $stats?.expiringSoon ?? "—",
-				icon: "clock",
-				color: "#ef4444",
-				glow: "rgba(239,68,68,0.12)"
+				label: "Backlog",
+				val: $taskStats?.backlog ?? "—",
+				icon: "inbox",
+				color: "#64748b",
+				glow: "rgba(100,116,139,0.12)"
 			}
 		];
 	});
 
 	const byTypeStats = derived(dashboardStats, ($stats) => {
-		if (!$stats?.byType) return [];
-		return Object.entries($stats.byType as Record<string, number>)
-			.filter(([, count]) => count > 0)
-			.map(([type, count]) => ({
-				type,
-				count,
-				color: typeColors[type] || "#64748b",
-				label: typeLabels[type] || type
+		if (!$stats?.memoryStats || !Array.isArray($stats.memoryStats)) return [];
+		return ($stats.memoryStats as any[])
+			.filter((item) => item.count > 0)
+			.map((item) => ({
+				type: item.type,
+				count: item.count,
+				color: typeColors[item.type] || "#64748b",
+				label: typeLabels[item.type] || item.type
 			}));
 	});
 
 	return {
 		summaryItems,
-		byTypeStats
+		byTypeStats,
+		taskStats
 	};
 }

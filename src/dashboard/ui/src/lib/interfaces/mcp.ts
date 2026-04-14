@@ -1,12 +1,12 @@
 export interface RepoMeta {
 	repo: string;
-	memory_count: number;
-	task_count?: number;
-	pending_count?: number;
-	in_progress_count?: number;
-	blocked_count?: number;
-	backlog_count?: number;
-	last_updated_at?: string;
+	memoryCount: number;
+	taskCount?: number;
+	pendingCount?: number;
+	inProgressCount?: number;
+	blockedCount?: number;
+	backlogCount?: number;
+	lastActivity?: string;
 }
 
 export interface ReferenceItem {
@@ -45,4 +45,5 @@ export interface HealthData {
 	version: string;
 	memoryCount: number;
 	dbPath: string;
+	repoCount: number;
 }
