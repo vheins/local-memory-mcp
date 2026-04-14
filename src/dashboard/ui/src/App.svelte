@@ -20,6 +20,7 @@
 	import BulkImportModal from "./components/BulkImportModal.svelte";
 	import AddTaskModal from "./components/AddTaskModal.svelte";
 	import ReferenceTab from "./components/ReferenceTab.svelte";
+	import QuickCreateFAB from "./components/QuickCreateFAB.svelte";
 	import Icon from "./lib/Icon.svelte";
 
 	let kanbanBoard: KanbanBoard;
@@ -255,6 +256,12 @@
 		if ($appState.bulkImportTarget === "memories") memoryList?.refresh();
 		if ($appState.bulkImportTarget === "tasks" && $currentRepo) kanbanBoard?.loadTasks($currentRepo);
 	}}
+/>
+
+<!-- ════ Quick Create FAB ════ -->
+<QuickCreateFAB
+	onNewMemory={app.openNewMemoryDrawer}
+	onNewTask={() => app.toggleAddTaskModal(true)}
 />
 
 <style>
