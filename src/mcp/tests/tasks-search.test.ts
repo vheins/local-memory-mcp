@@ -201,7 +201,8 @@ describe("Task Search and Filtering", () => {
 			expect(tasks.rows).toHaveLength(1);
 			expect(tasks.rows[0][1]).toBe("TASK-001");
 			// TASK-001 has one comment added in handleTaskUpdate
-			expect(tasks.rows[0][5]).toBe(1);
+			// Index 5 is updated_at, index 6 is comments_count
+			expect(tasks.rows[0][6]).toBe(1);
 		});
 	});
 });

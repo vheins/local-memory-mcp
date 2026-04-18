@@ -56,9 +56,10 @@ function buildTaskListSummary(
 			if (items.length > 0) {
 				parts.push("");
 				parts.push(`${capitalize(taskStatus)}:`);
-				parts.push("- code|status|priority|title");
+				parts.push("- code|status|priority|last_updated|title");
 				for (const t of items) {
-					parts.push(`- ${t.task_code}|${t.status}|${t.priority}|${t.title}`);
+					const lastUpdated = t.updated_at ? t.updated_at.slice(0, 16).replace("T", " ") : "never";
+					parts.push(`- ${t.task_code}|${t.status}|${t.priority}|${lastUpdated}|${t.title}`);
 				}
 			}
 		}
@@ -177,13 +178,14 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 	const tasks = storage.tasks.getTasksByMultipleStatuses(repo, statuses, limit, offset, query);
 	const filteredTasks = phase ? tasks.filter((t: Task) => t.phase.toLowerCase() === phase.toLowerCase()) : tasks;
 
-	const COLUMNS = ["id", "task_code", "title", "status", "priority", "comments_count"] as const;
+	const COLUMNS = ["id", "task_code", "title", "status", "priority", "updated_at", "comments_count"] as const;
 	const rows = filteredTasks.map((t: Task & { comments_count?: number }) => [
 		t.id,
 		t.task_code,
 		t.title,
 		t.status,
 		t.priority,
+		t.updated_at,
 		t.comments_count || 0
 	]);
 

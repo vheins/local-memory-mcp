@@ -1011,7 +1011,7 @@ export const TOOL_DEFINITIONS = [
 		name: "task-list",
 		title: "Task List",
 		description:
-			"PRIMARY navigation and search tool for tasks. Returns a compact tabular list of tasks (id, task_code, title, status, priority). Defaults to in_progress and pending tasks. Use 'query' to filter by code, title, or description. Use 'status' (comma-separated) for specific filters. AGENTS: call this once at start, pick ONE task, then call task-detail.",
+			"PRIMARY navigation and search tool for tasks. Returns a compact tabular list of tasks (id, task_code, title, status, priority, updated_at). Defaults to in_progress and pending tasks. Use 'query' to filter by code, title, or description. Use 'status' (comma-separated) for specific filters. AGENTS: call this once at start, pick ONE task, then call task-detail.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -1069,13 +1069,13 @@ export const TOOL_DEFINITIONS = [
 						columns: {
 							type: "array",
 							items: { type: "string" },
-							description: "Column names in order: id, task_code, title, status, priority, comments_count"
+							description: "Column names in order: id, task_code, title, status, priority, updated_at, comments_count"
 						},
 						rows: {
 							type: "array",
 							items: { type: "array" },
 							description:
-								"Each row: [id, task_code, title, status, priority, comments_count]. Use task-detail to fetch full task."
+								"Each row: [id, task_code, title, status, priority, updated_at, comments_count]. Use task-detail to fetch full task."
 						}
 					},
 					required: ["columns", "rows"]
