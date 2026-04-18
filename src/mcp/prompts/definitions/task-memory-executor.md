@@ -11,6 +11,11 @@ agent: Task Executor
 2. **List**: Call `task-list` ONCE for active tasks.
 3. **Audit**: Identify stale `in_progress` tasks (>30m no update). Hydrate via `task-detail` to check timestamps.
 
+## Task Cache (MANDATORY)
+- `task-detail` MUST be called at most ONCE per task
+- result MUST be reused across all steps
+- do NOT re-fetch or re-inject full detail
+
 ## 2. EXECUTION LOOP
 1. **Parallelism & Sub-Agents**: 
    - **MANDATORY**: Tasks MUST be delegated to sub-agents if the current agent has sub-agent capabilities.
