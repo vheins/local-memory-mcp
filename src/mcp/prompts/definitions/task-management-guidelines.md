@@ -1,28 +1,23 @@
 ---
 name: task-management-guidelines
-description: Best practices for task tracking and progress management
+description: Task tracking & progress management standards.
 arguments: []
 agent: Project Manager
 ---
-Guidelines for Task Management:
+# Task Management Standards
 
-1. task-list (PRIMARY NAVIGATION & SEARCH):
-   - MANDATORY: Always call `local-memory-mcp` MCP tools `task-list` (with no status specified to get active tasks) at the very start of a new session.
-   - Returns a compact table: columns = [id, task_code, title, status, priority, comments_count]. Rows are pointers — NOT full tasks.
-   - Default behavior: returns `in_progress` and `pending` tasks if `status` is omitted.
-   - Filter by status via the `status` param (comma-separated, e.g., `"in_progress,pending"`).
-   - Search by keyword matching task_code, title, or description via the `query` param.
-   - After selecting a task from the table, fetch its full context via `task-detail` tool.
-   - Coordinate: If a task is already 'in_progress', do not attempt to work on it unless specifically asked to collaborate.
-   - DO NOT work on multiple tasks simultaneously.
+## 1. NAVIGATION (`task-list`)
+-   **Sync**: Call `task-list` at every session start (default: `in_progress,pending`).
+-   **Format**: Compact table (IDs only). Use `query` for keyword search.
+-   **Retrieve**: Fetch full context via `task-detail` AFTER selecting a task.
+-   **Coordination**: NEVER work on `in_progress` tasks assigned to others. Focus on ONE task at a time.
 
-3. Detail Tools:
-   - Use `local-memory-mcp` MCP tools `task-detail` to fetch full task details (including comments and history) by ID or task_code.
-   - Use `local-memory-mcp` MCP tools `memory-detail` to fetch full memory content by ID.
+## 2. DETAIL TOOLS
+-   **Tasks**: Call `task-detail` for history/comments (ID or `task_code`).
+-   **Memory**: Call `memory-detail` for full entry content.
 
-4. Workflow Integration:
-   - Plan first: Create tasks for the entire lifecycle (Research → Strategy → Execution → Validation).
-   - Atomic Updates: Update the task status to 'in_progress' EXACTLY ONCE when you begin working on a task.
-   - Workflow Enforcement (MANDATORY): You cannot move a task from 'pending' or 'backlog' directly to 'completed'. You MUST transition to 'in_progress' first for status transition safety.
-   - Finalize: Only mark a task as 'completed' after successful validation (tests passed).
-   - Automatic Archiving: Marking a task as 'completed' automatically triggers `archiveTaskToMemory`, creating a 'task_archive' memory entry with the full history and token usage report.
+## 3. WORKFLOW
+-   **Planning**: Create tasks for full lifecycle (Research → Strategy → Execution → Validation).
+-   **Transition Safety**: MUST move from `backlog/pending` → `in_progress` → `completed`. Skipping `in_progress` is forbidden.
+-   **Validation**: Only `complete` after passing tests.
+-   **Archiving**: Completion triggers auto-archive to `task_archive` memory with token reporting.

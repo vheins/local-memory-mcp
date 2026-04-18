@@ -1,13 +1,13 @@
 ---
 name: documentation-sync
-description: Reconcile memory decisions with local markdown files in the current repository
+description: Sync memory decisions with repository markdown files
 arguments: []
 agent: Documentation Specialist
 ---
-Please verify if our local documentation (README.md, docs/*.md, .agents/documents/**/*.md, .kiro/**/*.md) is in sync with our stored memories for the current repository.
+Reconcile local documentation with stored memories.
 
 Steps:
-1. **Fetch Decisions**: Use `local-memory-mcp` MCP tools `memory-search` to find all 'decision' type memories for this repo.
-2. **Read Docs**: Read the primary project documentation files including those in .agents/documents and .kiro.
-3. **Identify Gaps**: Is there any durable knowledge in the memory that is MISSING from the docs? Is there any documentation that is OUTDATED based on recent decisions?
-4. **Propose Updates**: Suggest specific changes to the documentation to reflect the current source of truth.
+1. **Search**: Find `type: decision` memories via `memory-search`.
+2. **Scan**: Read `README.md`, `docs/`, `.agents/documents/`, and `.kiro/`.
+3. **Compare**: Identify missing or outdated durable knowledge.
+4. **Update**: Propose specific changes to align docs with current source of truth.

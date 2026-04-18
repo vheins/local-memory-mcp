@@ -90,7 +90,7 @@
 						class="col-count"
 						style="margin-left:auto;background:{col.bg};color:{col.color};border:1px solid {col.border};"
 					>
-						{$kanbanState.columnTasks[col.status]?.length || 0}{$kanbanState.pagination[col.status]?.hasMore ? "+" : ""}
+						{$kanbanState.pagination[col.status]?.totalItems || 0}
 					</span>
 				</div>
 

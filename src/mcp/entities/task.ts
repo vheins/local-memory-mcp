@@ -132,6 +132,25 @@ export class TaskEntity extends BaseEntity {
 		return rows.map((r) => this.rowToTask(r));
 	}
 
+	countTasks(repo: string, status?: string, search?: string): number {
+		let query = "SELECT COUNT(*) as count FROM tasks WHERE repo = ?";
+		const params: (string | number)[] = [repo];
+
+		if (status) {
+			query += " AND status = ?";
+			params.push(status);
+		}
+
+		if (search) {
+			query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+			const searchPattern = `%${search}%`;
+			params.push(searchPattern, searchPattern, searchPattern);
+		}
+
+		const row = this.get<{ count: number }>(query, params);
+		return row?.count ?? 0;
+	}
+
 	listRecentTasks(limit = 50, offset = 0): Task[] {
 		const query = `
 			SELECT t.*, d.task_code as depends_on_code,
@@ -202,6 +221,22 @@ export class TaskEntity extends BaseEntity {
 
 		const rows = this.all<Record<string, unknown>>(query, params);
 		return rows.map((r) => this.rowToTask(r));
+	}
+
+	countTasksByMultipleStatuses(repo: string, statuses: string[], search?: string): number {
+		if (!statuses.length) return this.countTasks(repo, undefined, search);
+
+		let query = `SELECT COUNT(*) as count FROM tasks WHERE repo = ? AND status IN (${statuses.map(() => "?").join(",")})`;
+		const params: (string | number)[] = [repo, ...statuses];
+
+		if (search) {
+			query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+			const searchPattern = `%${search}%`;
+			params.push(searchPattern, searchPattern, searchPattern);
+		}
+
+		const row = this.get<{ count: number }>(query, params);
+		return row?.count ?? 0;
 	}
 
 	isTaskCodeDuplicate(repo: string, task_code: string, excludeId?: string): boolean {

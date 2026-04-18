@@ -1,20 +1,20 @@
 ---
 name: technical-planning
-description: Define the technical blueprint for a new feature or product
+description: Technical blueprint for new feature/product.
 arguments:
   - name: objective
-    description: The high-level goal for the plan
+    description: High-level goal.
     required: true
 agent: Technical Architect
 ---
-You are tasked with creating a technical blueprint for the following objective in the current repository: '{{objective}}'.
+Create technical blueprint for: '{{objective}}'.
 
-Please cover:
-1. **Tech Stack**: Confirm or select the stack.
-2. **Architecture**: Component layout and data flow.
-3. **Domain Model**: Entities, value objects, and events.
-4. **Database Schema**: Normalized tables and relationships.
-5. **API Contracts**: Endpoint definitions (request/response/errors).
-6. **Roadmap & Sprints**: Phased delivery plan.
+Cover:
+1. **Tech Stack**: Selected/confirmed technologies.
+2. **Architecture**: Components & data flow.
+3. **Domain Model**: Entities, value objects, events.
+4. **Database**: Normalized schema & relationships.
+5. **API Contracts**: Requests, responses, errors.
+6. **Execution**: Roadmap & phased delivery.
 
-Present a cohesive technical design and obtain feedback before proceeding to implementation.
+Present design for feedback before implementation.

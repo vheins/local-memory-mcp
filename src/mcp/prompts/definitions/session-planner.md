@@ -1,18 +1,18 @@
 ---
 name: session-planner
-description: Break down a complex objective into atomic tasks for the current repository
+description: Break objective into atomic tasks.
 arguments:
   - name: objective
-    description: The high-level goal for this session
+    description: High-level session goal.
     required: true
 agent: Strategy Lead
 ---
-Our objective for today in the current repository is: '{{objective}}'.
+Plan execution for: '{{objective}}'.
 
-Please act as a project manager and plan the execution:
-1. **Analyze**: Break this objective down into 3-7 small, atomic, and verifiable tasks.
-2. **Execute**: Use 'task-manage' with action='create' to add these to the local tracker for the current repo.
-3. **Hierarchy**: Use 'parent_id' or 'depends_on' if there is a clear order of operations.
-4. **Phases**: Group tasks into phases like 'research', 'implementation', and 'validation'.
+Steps:
+1. **Analyze**: Break into 3-7 atomic, verifiable tasks.
+2. **Phase**: Group into 'research', 'implementation', 'validation'.
+3. **Hierarchy**: Use `parent_id` / `depends_on` for sequencing.
+4. **Create**: Use `task-create` in current repo.
 
-Display the created plan to the user when done.
+Display final plan to user.

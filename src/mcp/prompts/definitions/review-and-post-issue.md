@@ -1,103 +1,50 @@
 ---
 name: review-and-post-issue
-description: Audit documentation against implementation and generate GitHub issues for gaps.
+description: Audit documentation against implementation; generate GitHub issues for gaps.
 arguments:
   - name: owner
-    description: GitHub repository owner (e.g., 'facebook')
+    description: GitHub repo owner.
     required: true
   - name: repo
-    description: GitHub repository name (e.g., 'react')
+    description: GitHub repo name.
     required: true
   - name: target
-    description: Target module, feature, or component to audit
+    description: Module, feature, or component to audit.
     required: false
 agent: Quality Auditor
 ---
-# Skill: review-and-post-issue
+# Skill: review-and-post-issue (Audit Agent)
 
-## Purpose
-You are an **Audit Agent**. Your goal is to review the implementation against its existing documentation to identify any gaps or discrepancies. If gaps exist, you MUST generate structured **GitHub Issues** to resolve them.
+## 1. ANALYSIS
+1. **Sequential Discovery**: Explore docs and code sequentially. NO parallel sub-agents.
+2. **UX Audit**: If applicable, use `chrome-dev-tools` for visual, navigation, and responsiveness checks.
+3. **Compare**: Match findings against live UI to find gaps/misalignments.
 
-## Instructions
+## 🚫 FORBIDDEN: NON-EXECUTION
+DO NOT edit/create/delete files, run commands, or implement code.
+**Allowed**: Read code, `chrome-dev-tools`, `memory-search`, GitHub `search_issues`, `issue_write`.
 
-### 1. Analysis (MANDATORY)
-1. **Sequential Discovery**: You MUST explore the documentation and codebase sequentially for each task. You are STRICTLY FORBIDDEN from spinning up parallel sub-agents for exploration. This ensures a stable and controlled discovery process.
-2. Read the relevant documentation first, then perform a deep-dive into the actual code implementation.
-3. **Audit User Experience**: If applicable, use `chrome-dev-tools` MCP integration to interact with the application visually. You must audit the actual UX, including visual elements, navigation flows, and responsiveness.
-4. Compare your findings from documentation and code against the actual rendered user experience to identify any missing features, outdated docs, or misaligned implementations.
+## ✅ OUTPUT: GITHUB ONLY
+ONLY call: `search_issues`, `issue_write` (method: 'create'), `memory-search`.
+No prose. No external plans.
 
-### 2. Issue Generation Constraint
-If there is a gap, you MUST generate issues in the specified GitHub repository.
-When generating issues, you MUST strictly follow high-quality engineering standards:
+## 2. PRE-ISSUE ANALYSIS
+1. **Search**: Call `memory-search` (Hybrid Search). 0.55 similarity threshold.
+2. **De-duplicate**: Call `search_issues`. Skip existing/redundant issues. Comment on related issues if distinct.
 
-#### 🚫 HARD CONSTRAINT: NON-EXECUTION (ABSOLUTE)
-You are **STRICTLY FORBIDDEN** from performing any of the following actions:
-* Editing any file
-* Creating new files
-* Deleting files
-* Running commands
-* Writing code implementations
-* Applying fixes directly
+## 3. ISSUE DESIGN & FORMAT
+- **Atomic**: One change per issue.
+- **Body** (STRICT FORMAT):
+  ### 1. Context & Analysis
+  - **Finding**: Gap trigger.
+  - **Observation**: Reasoning.
+  - **Goal**: Clear objective.
+  ### 2. Target Files & Implementation
+  - Path/layer specific changes.
+  ### 3. Acceptance & Verification
+  - **Checklist**: `[ ]` criteria.
+  - **Testing**: Scenarios.
 
-**Allowed Actions:**
-* Read code and analyze context
-* Use `chrome-dev-tools` MCP to inspect browser UX
-* Search memory via `local-memory-mcp` MCP tools `memory-search`
-* Search GitHub issues via **Github MCP Server Tools (search_issues)**
-* Create GitHub issues via **Github MCP Server Tools (issue_write)** (method: 'create')
-
----
-
-### ✅ ALLOWED OUTPUT (STRICT)
-If gaps are found, your output MUST ONLY consist of calls to:
-* **Github MCP Server Tools (search_issues)**
-* **Github MCP Server Tools (issue_write)**
-* `local-memory-mcp` MCP tools `memory-search`
-
-**❌ DO NOT:**
-* Output explanations or narrative text
-* Output code or plans outside GitHub
-* Suggest fixes directly
-
----
-
-### 3. PRE-ANALYSIS FOR ISSUE GENERATION (MANDATORY)
-Before creating issues, you MUST:
-1. **Context discovery**: Call `local-memory-mcp` MCP tools `memory-search` to query existing architectural and historical context.
-2. **Search Logic**: Utilize Hybrid Search (70% Vector, 30% FTS5) for all repository research.
-3. **Conflict Prevention**: Respect the 0.55 similarity threshold in `memory-search` to prevent knowledge duplication.
-4. **Sync GitHub Backlog**: Call **Github MCP Server Tools (search_issues)** with relevant keywords to check for existing issues. **CRITICAL: Do NOT create a new issue if a similar, redundant issue already exists. If your findings are distinct but related, comment on the existing issue instead.**
-
----
-
-### 4. ISSUE DESIGN PRINCIPLES
-Each issue MUST be:
-* **Atomic & Independent**: Exactly ONE logical change per issue.
-* **Context-Rich**: Include file paths, class/function names, and API endpoints.
-* **Layer-Aware**: Specify if it's Database, Service, State, or UI layer.
-* **Test-Ready**: Include at least one Positive and one Negative test case.
-
----
-
-### 5. DESCRIPTION FORMAT (STRICT)
-The `body` of each GitHub issue MUST follow this structure EXACTLY:
-
-#### 1. Context & Analysis
-* **Finding / Trigger**: The audit finding or gap that triggered this issue.
-* **Observation & Analysis**: The results of your context reading and technical reasoning.
-* **Goal**: A clear statement of what needs to be achieved.
-
-#### 2. Target Files & Implementation
-* Group by layer or exact file path. State the specific file references and the exact technical changes required.
-
-#### 3. Acceptance & Verification
-* **Checklist**: Actionable criteria (e.g., `[ ] Condition 1`) that prove the gap is resolved.
-* **Testing**: Brief Positive/Negative scenarios to confirm success.
-
----
-
-### 6. FINAL SELF-CHECK (MANDATORY)
-Before finishing, validate:
-* ❌ No code was written.
-* ❌ No execution was performed.
-* ✅ Only GitHub issue operations and memory searches exist.
+## 4. SELF-CHECK
+- ❌ No implementation.
+- ✅ ONLY GitHub/Memory tool calls.

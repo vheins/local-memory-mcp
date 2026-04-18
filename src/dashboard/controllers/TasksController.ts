@@ -17,14 +17,18 @@ export class TasksController {
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
 			let tasks;
+			let totalItems;
+
 			if (status && (status as string).includes(",")) {
+				const statuses = (status as string).split(",");
 				tasks = db.tasks.getTasksByMultipleStatuses(
 					repo as string,
-					(status as string).split(","),
+					statuses,
 					pageSize,
 					(page - 1) * pageSize,
 					search as string
 				);
+				totalItems = db.tasks.countTasksByMultipleStatuses(repo as string, statuses, search as string);
 			} else {
 				tasks = db.tasks.getTasksByRepo(
 					repo as string,
@@ -33,8 +37,12 @@ export class TasksController {
 					(page - 1) * pageSize,
 					search as string
 				);
+				totalItems = db.tasks.countTasks(repo as string, status as string, search as string);
 			}
-			res.json(jsonApiRes(tasks, "task", { meta: { page, pageSize } }));
+
+			const totalPages = Math.ceil(totalItems / pageSize);
+
+			res.json(jsonApiRes(tasks, "task", { meta: { page, pageSize, totalItems, totalPages } }));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
 			res.status(500).json(jsonApiError(message));

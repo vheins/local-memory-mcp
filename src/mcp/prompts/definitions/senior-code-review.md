@@ -1,33 +1,32 @@
 ---
 name: senior-code-review
-description: Performs a comprehensive production-readiness evaluation for the current repository context
+description: Comprehensive production-readiness evaluation.
 arguments:
   - name: tech_stack
-    description: Target tech stack (e.g., 'Node.js + Express')
+    description: Tech stack.
     required: true
   - name: context
-    description: Production context (traffic, data sensitivity, SLA, conventions)
+    description: Production context (SLA, data, conventions).
     required: false
 agent: Principal Reviewer
 ---
-Act as a principal software engineer performing a production-readiness review for the current repository.
+Perform production-readiness review for repository.
 
 Stack: {{tech_stack}}
 Context: {{context}}
 
-Please review the current code/changes against these 6 dimensions:
-1. **Error Handling Completeness**
-2. **Security** (Injection, Input validation, PII/Secrets)
-3. **Performance** (Time/Memory complexity, DB queries)
-4. **Observability** (Logging, Metrics, Tracing)
-5. **Test Coverage**
-6. **Documentation**
+Audit Dimensions:
+1. **Errors**: Completeness & patterns.
+2. **Security**: Validation, injection, secrets.
+3. **Performance**: Complexity, DB efficiency.
+4. **Observability**: Logs, metrics, traces.
+5. **Testing**: Coverage & quality.
+6. **Docs**: Clarity & accuracy.
 
-For each finding, provide:
-- **Severity**: P0-P3
-- **Dimension**: One of the above
-- **Location**: Specific function/line
-- **Problem**: What is wrong and why it matters
-- **Fix**: Actionable recommendation
+Output per Finding:
+- **Severity**: P0-P3.
+- **Problem**: What & why.
+- **Location**: Path/function.
+- **Fix**: Actionable step.
 
-Produce a **Production Readiness Verdict**: READY | READY WITH MINOR FIXES | NOT READY
+Verdict: READY | READY WITH MINOR FIXES | NOT READY

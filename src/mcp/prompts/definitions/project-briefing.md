@@ -1,13 +1,13 @@
 ---
 name: project-briefing
-description: Onboard the agent to the current repository state
+description: Contextual onboarding to current repository.
 arguments: []
 agent: Session Concierge
 ---
-I am starting a new session in the current repository.
+Initialize session in repository.
 
-Please perform a briefing to catch up on the project:
-1. **Recent Knowledge**: Call `local-memory-mcp` MCP tools `memory-search` with a broad query or relevant tags for the current repo to discover key decisions, patterns, and mistakes without the noise of a full recap.
-2. **Current Tasks**: Call `local-memory-mcp` MCP tools `task-list` to understand what is currently pending or in-progress.
-3. **Context Check**: Summarize the top 3 most important architectural decisions you found.
-4. **Readiness**: Tell me what you are ready to help with based on the current backlog.
+Briefing Steps:
+1. **Discover**: Call `memory-search` (current repo) to find recent decisions, patterns, and mistakes.
+2. **Backlog**: Call `task-list` to see active/pending tasks.
+3. **Core Context**: Summarize the top 3 architectural decisions found.
+4. **Action**: Propose next steps based on backlog.

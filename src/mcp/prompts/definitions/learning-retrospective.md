@@ -1,17 +1,20 @@
 ---
 name: learning-retrospective
-description: Extract durable knowledge from recent work in the current repository
+description: Harvest knowledge from completed work.
 arguments:
   - name: task_id
-    description: Optional ID of the task just completed
+    description: ID of completed task.
     required: false
 agent: Knowledge Harvester
 ---
-We have just finished some work in the current repository related to task {{task_id}}. 
+Extract durable knowledge from task {{task_id}} for repository.
 
-Please reflect on the changes and identify knowledge worth keeping:
-1. **Mistakes**: Did we encounter any bugs that were hard to find or caused by specific environment quirks? (Store as 'mistake')
-2. **Decisions**: Did we make a choice between multiple options (e.g., library choice, UI pattern)? (Store as 'decision')
-3. **Patterns**: Did we establish a repeatable way of doing things in this codebase? (Store as 'pattern')
+Identify and `memory-store`:
+1. **Mistakes**: Hard-to-find bugs or environment quirks.
+2. **Decisions**: Trade-offs, library choices, architectural pivots.
+3. **Patterns**: Repeatable implementations or conventions.
 
-Use `local-memory-mcp` MCP tools `memory-store` to record any high-value findings. Be concise and use appropriate technology tags.
+Directives:
+- Use `type: mistake | decision | pattern`.
+- Include technology tags.
+- Keep content concise.

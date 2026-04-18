@@ -1,27 +1,27 @@
 ---
 name: root-cause-analysis
-description: Apply structured 5-Why analysis to trace bugs to their origin
+description: 5-Why analysis to trace bug origins.
 arguments:
   - name: tech_stack
-    description: Target technology stack
+    description: Target tech stack.
     required: true
   - name: bug_description
-    description: Observable symptom or bug behavior
+    description: Bug behavior.
     required: true
   - name: symptoms
-    description: Additional errors, logs, metrics
+    description: Logs, errors, metrics.
     required: false
 agent: Diagnostic Lead
 ---
-You are a senior software engineer conducting a root cause analysis for a bug in the current repository.
+Conduct root cause analysis for repository bug.
 
-Tech stack: {{tech_stack}}
-Bug description: {{bug_description}}
+Stack: {{tech_stack}}
+Bug: {{bug_description}}
 Symptoms: {{symptoms}}
 
-Apply a full **5-Why analysis**:
-1. **Symptom Statement**: Technically restate the problem.
-2. **5-Why Causal Chain**: Trace from symptom to the core process/design/environmental failure.
-3. **Root Cause Statement**: "The root cause is [X] because [Y], which allowed [Z] to occur."
-4. **Fix Recommendation**: Address the root cause, not just the symptom.
-5. **Recurrence Prevention**: Suggest a monitoring or testing measure.
+Output:
+1. **Symptom**: Technical problem restatement.
+2. **5-Whys**: Causal chain from symptom to core failure.
+3. **Root Cause**: "The root cause is [X] because [Y], allowing [Z]."
+4. **Recommendation**: Fix addressing root cause.
+5. **Prevention**: Monitoring/testing measure.

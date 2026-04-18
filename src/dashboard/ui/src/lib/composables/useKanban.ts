@@ -7,7 +7,7 @@ import { exportToJSON, exportToCSV } from "../utils";
 
 export interface KanbanState {
 	loadingCols: Set<string>;
-	pagination: Record<string, { page: number; pageSize: number; hasMore: boolean }>;
+	pagination: Record<string, { page: number; pageSize: number; hasMore: boolean; totalItems: number; totalPages: number }>;
 	columnTasks: Record<string, Task[]>;
 	draggedTask: Task | null;
 	sourceCol: string | null;
@@ -66,11 +66,14 @@ export const COLUMNS: { status: string; label: string; bg: string; border: strin
 ];
 
 export function createKanbanHandler() {
-	const initialPagination: Record<string, { page: number; pageSize: number; hasMore: boolean }> = {};
+	const initialPagination: Record<
+		string,
+		{ page: number; pageSize: number; hasMore: boolean; totalItems: number; totalPages: number }
+	> = {};
 	const initialColumnTasks: Record<string, Task[]> = {};
 
 	COLUMNS.forEach((c) => {
-		initialPagination[c.status] = { page: 1, pageSize: 20, hasMore: true };
+		initialPagination[c.status] = { page: 1, pageSize: 20, hasMore: true, totalItems: 0, totalPages: 0 };
 		initialColumnTasks[c.status] = [];
 	});
 
@@ -107,13 +110,20 @@ export function createKanbanHandler() {
 
 			update((s) => {
 				const nextTasks = p.page === 1 ? data.tasks || [] : [...(s.columnTasks[status] || []), ...(data.tasks || [])];
+				const totalItems = data.pagination?.totalItems ?? nextTasks.length;
+				const totalPages = data.pagination?.totalPages ?? Math.ceil(totalItems / p.pageSize);
 
 				return {
 					...s,
 					columnTasks: { ...s.columnTasks, [status]: nextTasks },
 					pagination: {
 						...s.pagination,
-						[status]: { ...p, hasMore: (data.tasks?.length || 0) >= p.pageSize }
+						[status]: {
+							...p,
+							totalItems,
+							totalPages,
+							hasMore: nextTasks.length < totalItems
+						}
 					}
 				};
 			});
@@ -135,7 +145,7 @@ export function createKanbanHandler() {
 			const nextPagination = { ...s.pagination };
 			const nextColumnTasks = { ...s.columnTasks };
 			COLUMNS.forEach((c) => {
-				nextPagination[c.status] = { page: 1, pageSize: 20, hasMore: true };
+				nextPagination[c.status] = { page: 1, pageSize: 20, hasMore: true, totalItems: 0, totalPages: 0 };
 				nextColumnTasks[c.status] = [];
 			});
 			return { ...s, pagination: nextPagination, columnTasks: nextColumnTasks };

@@ -1,60 +1,42 @@
 ---
 name: task-memory-executor
-description: Execute all pending tasks for the current repository, updating status and storing handoffs in the task backlog.
+description: Sequentially execute pending tasks for current repository.
 arguments: []
 agent: Task Executor
 ---
 # Skill: task-memory-executor
 
-## Purpose
+## 1. SYNC & FILTER
+1. **Identify**: Get repo name (git/context).
+2. **List**: Call `task-list` ONCE for active tasks.
+3. **Audit**: Identify stale `in_progress` tasks (>30m no update). Hydrate via `task-detail` to check timestamps.
 
-You are tasked with executing all available tasks for the current repository.
+## 2. EXECUTION LOOP
+1. **Parallelism & Sub-Agents**: 
+   - **MANDATORY**: Tasks MUST be delegated to sub-agents if the current agent has sub-agent capabilities.
+   - **Concurrency**: Use up to 4 parallel sub-agents. Each sub-agent executes EXACTLY ONE task at a time.
+   - **Fallback**: If the current agent CANNOT spawn sub-agents, it MUST execute tasks sequentially (exactly ONE concurrent task) until the queue is clear.
+2. **Hydrate**: Fetch full context via `task-detail` for the assigned task.
+3. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata.
+4. **Research**: Call `memory-search` (Hybrid Search).
+5. **Execute**: 
+   - **Trace**: Inspect logic, call sites, and docs. DO NOT infer from file presence.
+   - **Logic**: Implement per description/intent.
+6. **Validate**: 
+   - Trace path end-to-end.
+   - Run tests/linters/type-checks.
+   - Logic audit for all affected paths.
+7. **Finalize**: 
+   - **Evidence**: `task-update` status to `completed` with detailed 'comment' (inspected files, verified logic, test results).
+   - **Memory**: Store insights as `code_fact`/`pattern` via `memory-store`.
+   - **Retrospective**: Invoke `learning-retrospective`.
+   - **Commit**: Atomic git commit/push.
+8. **Repeat**: Claim next task from `task-list`.
 
-## Instructions
+## 3. BACKLOG MAINTENANCE
+If active queue is empty:
+1. Call `task-list` (status: `backlog`).
+2. Move up to 20 high-priority tasks to `pending` via `task-update`.
 
----
-description: Execute all pending tasks for the current repository
----
-
-Please follow this strict execution flow:
-
-1. **Identify Repository**: Determine the current repository name (e.g., from git config or workspace context).
-2. **Fetch Active Tasks**: Call `local-memory-mcp` MCP tools `task-list` for the identified repository (defaults to active tasks).
-   - This returns a compact table: `columns = [id, task_code, title, status, priority, comments_count]`, `rows` = task pointers.
-   - DO NOT call task-list in a loop. Call it ONCE.
-3. **Filter Stale**: From the in_progress rows, identify tasks that are **stale** (stale = no update for > 30 minutes, often because an agent stopped or crashed). Fetch their full data via `task-detail` tool to inspect timestamps.
-4. **Task Execution Loop**: You MUST process tasks EXACTLY ONE AT A TIME (STRICT). You are STRICTLY FORBIDDEN from spinning up parallel sub-agents or using parallel execution. For each task you select:
-    - **Hydrate**: Fetch full task context via `task-detail` tool before starting work.
-    - **Start**: Call `local-memory-mcp` MCP tools `task-update` to set status='in_progress' for this task ONLY. Provide current agent/role information in the metadata.
-    - **Transition Safety (MANDATORY)**: You are FORBIDDEN from transitioning a task straight to `completed`. You MUST set it to `in_progress` first.
-    - **Execute**: Perform the work described in the task title and description.
-    - **Context Gathering**: Utilize Hybrid Search (70% Vector, 30% FTS5) for all repository research.
-    - **Inspect Codebase Logic & Documentation First (MANDATORY)**: Before marking anything done, inspect the relevant code paths, call sites, configs, tests, and affected modules in the repository. Also read the relevant documentation, as it might need to be updated or fixed. Do not infer correctness from file presence alone.
-    - **Validate Behavior (MANDATORY)**: Ensure the implementation logic satisfies the task intent and follows project standards. Validation must focus on behavior, control flow, data flow, and integration points, not just whether a file/class/function exists.
-    - **Complete Only With Evidence**: Call `local-memory-mcp` MCP tools `task-update` to set status='completed' only after recording concrete evidence in the 'comment' field. The comment must include: files inspected, logic verified, checks/tests run (or why they could not run), and the exact reason the task is considered complete.
-    - **Compact Context**: Summarize key learnings, decisions, and patterns discovered during task execution. Store critical insights as memory entries (type: 'code_fact' or 'pattern') using `local-memory-mcp` MCP tools `memory-store`.
-    - **Retrospective**: Invoke the `learning-retrospective` skill. If the skill is unavailable, use the `learning-retrospective` prompt from `local-memory-mcp` to extract and store durable knowledge (mistakes, decisions, patterns) from this task.
-    - **Commit**: Perform an atomic git commit and push for the changes made in the task.
-    - **Handoff**: Use `local-memory-mcp` MCP tools `task-update` to document **detailed fix steps**, milestones, project-specific knowledge gained during execution, and validation evidence. If complex, decompose into smaller tasks using `local-memory-mcp` MCP tools `task-create`.
-    - **Next**: Call `task-list` once more (optionally with `status='in_progress,pending'`) to get the next actionable task and repeat this loop.
-5. **Backlog Migration**: Once all 'pending' and 'in_progress' tasks are completed or blocked, call `local-memory-mcp` MCP tools `task-list` with status='backlog'. If any exist, select up to 20 tasks (prioritizing by priority field) and update their status to 'pending' using `local-memory-mcp` MCP tools `task-update` to ensure the next agent has work ready.
-6. **Report**: After processing all tasks, provide a summary of your progress.
-
-## Mandatory Validation Rules
-
-Before a task can be marked `completed`, the agent **must** satisfy all applicable rules below:
-
-1. **Read the implementation, not just the filesystem**
-   - Inspect the actual source files related to the task.
-   - Trace the relevant logic path end-to-end using code search and file reads.
-   - Verify how the changed code is invoked, not just that it exists.
-
-2. **Confirm behavior against task intent**
-   - Compare the implementation against the task title, description, acceptance criteria, or bug report.
-   - Check that the business logic is actually implemented and wired correctly.
-   - If the task affects existing behavior, inspect adjacent modules and integration points for regressions.
-
-3. **Use concrete verification**
-   - Run targeted tests, linters, type checks, or validation scripts if available.
-   - If automated tests cannot be run, perform a manual logic audit of all affected paths.
-   - Document the specific verification method used in the task completion comment.
+## 4. REPORT
+Provide progress summary.

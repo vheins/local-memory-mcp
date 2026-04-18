@@ -1,15 +1,15 @@
 ---
 name: tech-affinity-scout
-description: Find relevant best practices from other projects with similar tech for the current repository
+description: Scout best practices from similar tech projects.
 arguments:
   - name: tags
-    description: Comma-separated tech tags (e.g., 'react, tailwind')
+    description: CSV tech tags (e.g., 'react, tailwind').
     required: true
 agent: Tech Scout
 ---
-I am working on the current repository using [{{tags}}].
+Scout for relevant knowledge using tags: [{{tags}}].
 
-Please scout for relevant knowledge from other projects:
-1. **Search**: Use `local-memory-mcp` MCP tools `memory-search` with current_tags=[{{tags}}] and include_archived=false.
-2. **Filter**: Look for 'patterns' or 'decisions' from other repositories that might apply here.
-3. **Translate**: Explain how these external best practices can be adapted to our current project context.
+Steps:
+1. **Search**: Call `memory-search` with `current_tags=[{{tags}}]`.
+2. **Filter**: Identify applicable 'patterns' or 'decisions' from other repos.
+3. **Adapt**: Explain adaptation of these practices to current project.
