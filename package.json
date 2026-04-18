@@ -1,6 +1,6 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.8.31",
+	"version": "0.8.32",
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
@@ -70,7 +70,7 @@
 		"eslint": "^10.2.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-prettier": "^5.5.5",
-		"eslint-plugin-svelte": "^2.46.1",
+		"eslint-plugin-svelte": "^3.17.0",
 		"fast-check": "^4.6.0",
 		"globals": "^17.5.0",
 		"prettier": "^3.8.2",
