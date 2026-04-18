@@ -78,6 +78,38 @@ export class TaskEntity extends BaseEntity {
 		return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(id) } : null;
 	}
 
+	getTasksByIds(ids: string[]): Task[] {
+		if (ids.length === 0) return [];
+		const placeholders = ids.map(() => "?").join(",");
+		const rows = this.all<Record<string, unknown>>(
+			`SELECT t.*, d.task_code as depends_on_code,
+				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
+			FROM tasks t
+			LEFT JOIN tasks d ON t.depends_on = d.id
+			WHERE t.id IN (${placeholders})`,
+			ids
+		);
+
+		const comments = this.all<TaskComment>(
+			`SELECT * FROM task_comments WHERE task_id IN (${placeholders}) ORDER BY created_at DESC, id DESC`,
+			ids
+		);
+
+		const commentsMap = new Map<string, TaskComment[]>();
+		for (const c of comments) {
+			if (!commentsMap.has(c.task_id)) {
+				commentsMap.set(c.task_id, []);
+			}
+			commentsMap.get(c.task_id)!.push(c);
+		}
+
+		return rows.map((r) => {
+			const task = this.rowToTask(r);
+			task.comments = commentsMap.get(task.id) || [];
+			return task;
+		});
+	}
+
 	getTaskByCode(repo: string, taskCode: string): Task | null {
 		const row = this.get<Record<string, unknown>>(
 			`SELECT t.*, d.task_code as depends_on_code FROM tasks t LEFT JOIN tasks d ON t.depends_on = d.id WHERE t.repo = ? AND t.task_code = ?`,

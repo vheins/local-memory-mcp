@@ -529,8 +529,11 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 	const now = new Date().toISOString();
 	const isStatusChangingGlobal = updates.status !== undefined;
 
+	const existingTasks = storage.tasks.getTasksByIds(targetIds);
+	const taskMap = new Map(existingTasks.map(t => [t.id, t]));
+
 	for (const targetId of targetIds) {
-		const existingTask = storage.tasks.getTaskById(targetId);
+		const existingTask = taskMap.get(targetId);
 		if (!existingTask) {
 			if (id) throw new Error(`Task not found: ${targetId}`);
 			continue;
