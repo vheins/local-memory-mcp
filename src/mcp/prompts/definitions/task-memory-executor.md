@@ -19,7 +19,8 @@ agent: Task Executor
 ## 2. EXECUTION LOOP
 1. **Parallelism & Sub-Agents**: 
    - **MANDATORY**: Tasks MUST be delegated to sub-agents if the current agent has sub-agent capabilities.
-   - **Concurrency**: Use up to 4 parallel sub-agents. Each sub-agent executes EXACTLY ONE task at a time.
+   - **Decomposition**: If a task is too broad, the agent is allowed to decompose it into multiple tasks (via `task-create`) and delegate them to sub-agents.
+   - **Spawn Limit**: The total number of parallel sub-agents MUST NOT exceed 4. Each sub-agent executes EXACTLY ONE task at a time.
    - **Fallback**: If the current agent CANNOT spawn sub-agents, it MUST execute tasks sequentially (exactly ONE concurrent task) until the queue is clear.
 2. **Hydrate**: Fetch full context via `task-detail` for the assigned task.
 3. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata.
