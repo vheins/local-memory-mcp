@@ -10,40 +10,32 @@
 
 	const dispatch = createEventDispatcher();
 
-	let bulkImport = createBulkImportWithTarget(importTarget);
+	let bulkImport = createBulkImport({
+		repo,
+		importTarget,
+		onSuccess: () => dispatch("success"),
+		onClose: () => {
+			isOpen = false;
+			dispatch("close");
+		}
+	});
 
-	function createBulkImportWithTarget(target: ImportTarget) {
-		return createBulkImport({
-			repo,
-			importTarget: target,
-			onSuccess: () => dispatch("success"),
-			onClose: () => {
-				isOpen = false;
-				dispatch("close");
-			}
-		});
-	}
+	$: bulkImport.isOpen.set(isOpen);
 
-	$: bulkImport = createBulkImportWithTarget(importTarget);
-
-	$: if (bulkImport) {
-		bulkImport.isOpen.set(isOpen);
-	}
-
-	const file = bulkImport?.file;
-	const csvData = bulkImport?.csvData;
-	const headers = bulkImport?.headers;
-	const fileName = bulkImport?.fileName;
-	const errorMsg = bulkImport?.errorMsg;
-	const isSubmitting = bulkImport?.isSubmitting;
-	const composableIsOpen = bulkImport?.isOpen;
-	const close = bulkImport?.close;
-	const handleFileSelect = bulkImport?.handleFileSelect;
-	const handleFileDrop = bulkImport?.handleFileDrop;
-	const downloadExample = bulkImport?.downloadExample;
-	const handleImport = bulkImport?.handleImport;
-	const setFile = bulkImport?.setFile;
-	const setCsvData = bulkImport?.setCsvData;
+	$: file = bulkImport.file;
+	$: csvData = bulkImport.csvData;
+	$: headers = bulkImport.headers;
+	$: fileName = bulkImport.fileName;
+	$: errorMsg = bulkImport.errorMsg;
+	$: isSubmitting = bulkImport.isSubmitting;
+	$: composableIsOpen = bulkImport.isOpen;
+	$: close = bulkImport.close;
+	$: handleFileSelect = bulkImport.handleFileSelect;
+	$: handleFileDrop = bulkImport.handleFileDrop;
+	$: downloadExample = bulkImport.downloadExample;
+	$: handleImport = bulkImport.handleImport;
+	$: setFile = bulkImport.setFile;
+	$: setCsvData = bulkImport.setCsvData;
 
 	$: currentFile = $file;
 	$: currentCsvData = $csvData;
