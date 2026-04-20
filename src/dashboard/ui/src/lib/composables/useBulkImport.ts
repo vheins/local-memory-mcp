@@ -17,7 +17,7 @@ export interface CSVResult {
 export const TEMPLATES: Record<ImportTarget, string> = {
 	memories: "title,type,content,importance\nExample Memory,fact,This is an example memory content,3",
 	tasks:
-		"task_code,title,phase,description,status,priority\nTSK-001,Example Task,Phase 1,Example task description,todo,3"
+		"task_code,title,phase,description,status,priority\nTSK-001,Example Task,Phase 1,Example task description,backlog,3"
 };
 
 // ─── Composable ──────────────────────────────────────────────────────────────

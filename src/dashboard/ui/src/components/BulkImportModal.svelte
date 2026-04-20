@@ -2,48 +2,49 @@
 	import { createEventDispatcher } from "svelte";
 	import { fade, scale } from "svelte/transition";
 	import Icon from "../lib/Icon.svelte";
-	import { createBulkImport } from "../lib/composables/useBulkImport";
+	import { createBulkImport, type ImportTarget } from "../lib/composables/useBulkImport";
 
 	export let repo: string;
-	export let importTarget: "memories" | "tasks" = "memories";
+	export let importTarget: ImportTarget = "memories";
 	export let isOpen = false;
 
 	const dispatch = createEventDispatcher();
 
-	// Initialize composable
-	const {
-		file,
-		csvData,
-		headers,
-		fileName,
-		errorMsg,
-		isSubmitting,
-		isOpen: composableIsOpen,
-		close,
-		handleFileSelect,
-		handleFileDrop,
-		downloadExample,
-		handleImport,
-		setFile,
-		setCsvData
-	} = createBulkImport({
-		repo,
-		importTarget,
-		onSuccess: () => dispatch("success"),
-		onClose: () => {
-			isOpen = false;
-			dispatch("close");
-		}
-	});
+	let bulkImport = createBulkImportWithTarget(importTarget);
 
-	// Sync prop with composable state
-	$: if (isOpen) {
-		composableIsOpen.set(true);
-	} else {
-		composableIsOpen.set(false);
+	function createBulkImportWithTarget(target: ImportTarget) {
+		return createBulkImport({
+			repo,
+			importTarget: target,
+			onSuccess: () => dispatch("success"),
+			onClose: () => {
+				isOpen = false;
+				dispatch("close");
+			}
+		});
 	}
 
-	// Reactive access to stores for the template
+	$: bulkImport = createBulkImportWithTarget(importTarget);
+
+	$: if (bulkImport) {
+		bulkImport.isOpen.set(isOpen);
+	}
+
+	const file = bulkImport?.file;
+	const csvData = bulkImport?.csvData;
+	const headers = bulkImport?.headers;
+	const fileName = bulkImport?.fileName;
+	const errorMsg = bulkImport?.errorMsg;
+	const isSubmitting = bulkImport?.isSubmitting;
+	const composableIsOpen = bulkImport?.isOpen;
+	const close = bulkImport?.close;
+	const handleFileSelect = bulkImport?.handleFileSelect;
+	const handleFileDrop = bulkImport?.handleFileDrop;
+	const downloadExample = bulkImport?.downloadExample;
+	const handleImport = bulkImport?.handleImport;
+	const setFile = bulkImport?.setFile;
+	const setCsvData = bulkImport?.setCsvData;
+
 	$: currentFile = $file;
 	$: currentCsvData = $csvData;
 	$: currentHeaders = $headers;
