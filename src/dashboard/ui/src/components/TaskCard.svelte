@@ -39,6 +39,24 @@
 		<div class="task-desc">{descPreview}</div>
 	{/if}
 
+	<!-- Hierarchy Badges -->
+	{#if task.parent_code || task.depends_on_code}
+		<div class="hierarchy-row">
+			{#if task.parent_code}
+				<span class="h-badge parent" title="Parent: {task.parent_code}">
+					<Icon name="chevron-up" size={9} strokeWidth={2.5} />
+					{task.parent_code}
+				</span>
+			{/if}
+			{#if task.depends_on_code}
+				<span class="h-badge depends" title="Depends on: {task.depends_on_code}">
+					<Icon name="link" size={9} strokeWidth={2.5} />
+					{task.depends_on_code}
+				</span>
+			{/if}
+		</div>
+	{/if}
+
 	<!-- Footer: agent + time -->
 	<div class="card-footer">
 		{#if task.agent}
@@ -163,6 +181,37 @@
 		background: rgba(129, 140, 248, 0.15);
 		color: #a5b4fc;
 		border-color: rgba(129, 140, 248, 0.25);
+	}
+
+	/* ── Hierarchy ── */
+	.hierarchy-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-bottom: 8px;
+	}
+
+	.h-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		font-size: 0.58rem;
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-weight: 700;
+		font-family: "JetBrains Mono", monospace;
+	}
+
+	.h-badge.parent {
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
+		border: 1px solid rgba(16, 185, 129, 0.2);
+	}
+
+	.h-badge.depends {
+		background: rgba(245, 158, 11, 0.1);
+		color: #f59e0b;
+		border: 1px solid rgba(245, 158, 11, 0.2);
 	}
 
 	/* ── Footer ── */

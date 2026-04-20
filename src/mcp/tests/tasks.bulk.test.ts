@@ -217,7 +217,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		expect(getTextContent(result)).toContain("Current Available Tasks:");
 		expect(getTextContent(result)).toContain("Completed:");
-		expect(getTextContent(result)).toContain("- SUM-001|completed|3|Completed task");
+		expect(getTextContent(result)).toMatch(/- SUM-001\|completed\|3\|\d{4}-\d{2}-\d{2} \d{2}:\d{2}\|Completed task/);
 		expect(getTextContent(result)).toContain("See task-detail with task_code for details.");
 	});
 

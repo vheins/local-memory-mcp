@@ -2,7 +2,7 @@
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 
-const serverPath = "./dist/server.js";
+const serverPath = "./dist/mcp/server.js";
 const serverProcess = spawn("node", [serverPath], {
   stdio: ["pipe", "pipe", "inherit"]
 });
@@ -30,7 +30,7 @@ rl.on("line", (line) => {
       }
     }
   } catch (err) {
-    console.error("Parse error:", err);
+    // console.error("Parse error:", err);
   }
 });
 
@@ -47,7 +47,7 @@ function call(method, params = {}) {
         pendingRequests.delete(id);
         reject(new Error("Timeout"));
       }
-    }, 5000);
+    }, 10000);
   });
 }
 
@@ -59,6 +59,13 @@ async function main() {
       capabilities: {},
       clientInfo: { name: "seed", version: "1.0" }
     });
+
+    // Send initialized notification
+    const initNotify = { jsonrpc: "2.0", method: "notifications/initialized" };
+    serverProcess.stdin.write(JSON.stringify(initNotify) + "\n");
+    
+    // Give it a moment to process initialization
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     console.log("Adding sample memories...");
 
@@ -87,56 +94,107 @@ async function main() {
         content: "All API responses follow the format: { success: boolean, data?: any, error?: string }. Maintain consistency.",
         importance: 4,
         scope: { repo: "backend-api" }
-      },
-      {
-        type: "decision",
-        content: "Frontend uses React with TypeScript and Material-UI for component library. No class components allowed.",
-        importance: 5,
-        scope: { repo: "frontend-app", language: "typescript" }
-      },
-      {
-        type: "mistake",
-        content: "Never store sensitive data in localStorage - use httpOnly cookies instead. localStorage is vulnerable to XSS.",
-        importance: 5,
-        scope: { repo: "frontend-app" }
-      },
-      {
-        type: "code_fact",
-        content: "Database migrations are in migrations/ directory. Run 'npm run migrate' to apply. Never edit migration history.",
-        importance: 3,
-        scope: { repo: "backend-api", folder: "migrations" }
-      },
-      {
-        type: "pattern",
-        content: "Error handling follows try-catch pattern with specific error types. Always log errors before rethrowing.",
-        importance: 3,
-        scope: { repo: "backend-api" }
-      },
-      {
-        type: "decision",
-        content: "Use Docker for development environments. docker-compose.yml defines all services. No local installs.",
-        importance: 4,
-        scope: { repo: "devops" }
-      },
-      {
-        type: "code_fact",
-        content: "CI/CD pipeline uses GitHub Actions. Deploy to staging on merge to main, production requires manual approval.",
-        importance: 3,
-        scope: { repo: "devops" }
       }
     ];
 
     for (const memory of memories) {
       try {
         await call("tools/call", {
-          name: "memory.store",
-          arguments: memory
+          name: "memory-store",
+          arguments: { ...memory, title: memory.type.toUpperCase() + " example", agent: "seeder", model: "seed-script" }
         });
-        console.log(`✓ Added: ${memory.content.substring(0, 50)}...`);
+        console.log(`✓ Added memory: ${memory.content.substring(0, 30)}...`);
       } catch (err) {
-        console.error(`✗ Failed to add: ${memory.content.substring(0, 50)}...`, err.message);
+        console.error(`✗ Failed to add memory: ${memory.content.substring(0, 30)}...`, err.message);
       }
     }
+
+    console.log("\nAdding sample tasks...");
+    const ts = Date.now().toString().slice(-4);
+
+    // 1. Create a parent task
+    const parentRes = await call("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: "hierarchy-repo",
+        task_code: `ROOT-${ts}`,
+        phase: "planning",
+        title: "Main System Architecture",
+        description: "Design the core architecture for the new system.",
+        status: "pending",
+        priority: 5,
+        agent: "architect",
+        role: "architect",
+        structured: true
+      }
+    });
+    const parentId = parentRes.structuredContent?.id;
+    
+    if (!parentId) {
+      console.error("Failed to get parentId from response:", JSON.stringify(parentRes));
+      throw new Error("Could not extract parentId");
+    }
+    console.log(`✓ Created Parent Task: ROOT-${ts} (ID: ${parentId})`);
+
+    // 2. Create a child task
+    await call("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: "hierarchy-repo",
+        task_code: `CHILD-${ts}`,
+        phase: "implementation",
+        title: "Database Schema Implementation",
+        description: "Implement the database schema based on the architecture.",
+        status: "pending",
+        priority: 4,
+        parent_id: parentId,
+        agent: "developer",
+        role: "developer"
+      }
+    });
+    console.log(`✓ Created Child Task: CHILD-${ts} (Parent: ROOT-${ts})`);
+
+    // 3. Create a dependency task
+    const blockerRes = await call("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: "hierarchy-repo",
+        task_code: `BLOC-${ts}`,
+        phase: "infrastructure",
+        title: "Setup Database Instance",
+        description: "Provision the database instance on cloud.",
+        status: "pending",
+        priority: 4,
+        agent: "devops",
+        role: "devops",
+        structured: true
+      }
+    });
+    const blockerId = blockerRes.structuredContent?.id;
+    
+    if (!blockerId) {
+       console.error("Failed to get blockerId from response:", JSON.stringify(blockerRes));
+       throw new Error("Could not extract blockerId");
+    }
+    console.log(`✓ Created Blocker Task: BLOC-${ts} (ID: ${blockerId})`);
+
+    // 4. Create a task that depends on the blocker
+    await call("tools/call", {
+      name: "task-create",
+      arguments: {
+        repo: "hierarchy-repo",
+        task_code: `DEPN-${ts}`,
+        phase: "implementation",
+        title: "API Connectivity Test",
+        description: "Verify that the API can connect to the database.",
+        status: "backlog",
+        priority: 3,
+        depends_on: blockerId,
+        agent: "developer",
+        role: "developer"
+      }
+    });
+    console.log(`✓ Created Dependent Task: DEPN-${ts} (Depends on: BLOC-${ts})`);
 
     console.log("\nSample data added successfully!");
     serverProcess.kill();

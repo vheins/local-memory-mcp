@@ -18,6 +18,8 @@ export interface Task {
 	metadata?: Record<string, unknown>;
 	parent_id?: string | null;
 	depends_on?: string | null;
+	parent_code?: string | null;
+	depends_on_code?: string | null;
 	comments?: TaskComment[];
 	comment?: string;
 }

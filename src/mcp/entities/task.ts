@@ -72,7 +72,11 @@ export class TaskEntity extends BaseEntity {
 
 	getTaskById(id: string): Task | null {
 		const row = this.get<Record<string, unknown>>(
-			`SELECT t.*, d.task_code as depends_on_code FROM tasks t LEFT JOIN tasks d ON t.depends_on = d.id WHERE t.id = ?`,
+			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code 
+			 FROM tasks t 
+			 LEFT JOIN tasks d ON t.depends_on = d.id 
+			 LEFT JOIN tasks p ON t.parent_id = p.id 
+			 WHERE t.id = ?`,
 			[id]
 		);
 		return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(id) } : null;
@@ -80,7 +84,11 @@ export class TaskEntity extends BaseEntity {
 
 	getTaskByCode(repo: string, taskCode: string): Task | null {
 		const row = this.get<Record<string, unknown>>(
-			`SELECT t.*, d.task_code as depends_on_code FROM tasks t LEFT JOIN tasks d ON t.depends_on = d.id WHERE t.repo = ? AND t.task_code = ?`,
+			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code 
+			 FROM tasks t 
+			 LEFT JOIN tasks d ON t.depends_on = d.id 
+			 LEFT JOIN tasks p ON t.parent_id = p.id 
+			 WHERE t.repo = ? AND t.task_code = ?`,
 			[repo, taskCode]
 		);
 		return row ? { ...this.rowToTask(row), comments: this.getTaskCommentsByTaskId(row.id as string) } : null;
@@ -88,10 +96,11 @@ export class TaskEntity extends BaseEntity {
 
 	getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): Task[] {
 		let query = `
-			SELECT t.*, d.task_code as depends_on_code,
+			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
 			FROM tasks t 
 			LEFT JOIN tasks d ON t.depends_on = d.id 
+			LEFT JOIN tasks p ON t.parent_id = p.id 
 			WHERE t.repo = ?
 		`;
 		const params: (string | number)[] = [repo];
@@ -150,14 +159,15 @@ export class TaskEntity extends BaseEntity {
 		const row = this.get<{ count: number }>(query, params);
 		return row?.count ?? 0;
 	}
-
-	listRecentTasks(limit = 50, offset = 0): Task[] {
-		const query = `
-			SELECT t.*, d.task_code as depends_on_code,
-				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
-			FROM tasks t 
-			LEFT JOIN tasks d ON t.depends_on = d.id 
-			ORDER BY 
+listRecentTasks(limit = 50, offset = 0): Task[] {
+	const query = `
+		SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+			(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
+		FROM tasks t 
+		LEFT JOIN tasks d ON t.depends_on = d.id 
+		LEFT JOIN tasks p ON t.parent_id = p.id 
+		ORDER BY 
+...
 				CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
 				CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
 				CASE WHEN t.status = 'in_progress' THEN 0
@@ -184,10 +194,11 @@ export class TaskEntity extends BaseEntity {
 		if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset, search);
 
 		let query = `
-			SELECT t.*, d.task_code as depends_on_code,
+			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
 			FROM tasks t 
 			LEFT JOIN tasks d ON t.depends_on = d.id 
+			LEFT JOIN tasks p ON t.parent_id = p.id 
 			WHERE t.repo = ? AND t.status IN (${statuses.map(() => "?").join(",")})
 		`;
 		const params: (string | number)[] = [repo, ...statuses];

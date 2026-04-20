@@ -94,6 +94,8 @@ export abstract class BaseEntity {
 			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {}),
 			parent_id: (r.parent_id as string) || null,
 			depends_on: (r.depends_on as string) || null,
+			parent_code: (r.parent_code as string) || null,
+			depends_on_code: (r.depends_on_code as string) || null,
 			comments_count: (r.comments_count as number) || 0
 		};
 	}

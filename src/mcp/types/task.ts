@@ -33,6 +33,8 @@ export interface Task {
 	metadata: Record<string, unknown>;
 	parent_id: string | null;
 	depends_on: string | null;
+	parent_code?: string | null;
+	depends_on_code?: string | null;
 	comments?: TaskComment[];
 	comments_count?: number;
 }
@@ -72,6 +74,8 @@ export interface TaskRow {
 	metadata: string;
 	parent_id: string | null;
 	depends_on: string | null;
+	parent_code?: string | null;
+	depends_on_code?: string | null;
 	comments_count: number;
 }
 

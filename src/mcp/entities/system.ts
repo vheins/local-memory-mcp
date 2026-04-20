@@ -97,8 +97,8 @@ export class SystemEntity extends BaseEntity {
 		const taskStats = {
 			total: 0,
 			backlog: 0,
-			pending: 0,
-			in_progress: 0,
+			todo: 0,
+			inProgress: 0,
 			completed: 0,
 			blocked: 0
 		};
@@ -106,8 +106,8 @@ export class SystemEntity extends BaseEntity {
 		taskRows.forEach((r) => {
 			taskStats.total += r.count;
 			if (r.status === "backlog") taskStats.backlog = r.count;
-			else if (r.status === "pending") taskStats.pending = r.count;
-			else if (r.status === "in_progress") taskStats.in_progress = r.count;
+			else if (r.status === "pending") taskStats.todo = r.count;
+			else if (r.status === "in_progress") taskStats.inProgress = r.count;
 			else if (r.status === "completed") taskStats.completed = r.count;
 			else if (r.status === "blocked") taskStats.blocked = r.count;
 		});
