@@ -10,15 +10,25 @@
 
 	const dispatch = createEventDispatcher();
 
-	let bulkImport = createBulkImport({
-		repo,
-		importTarget,
-		onSuccess: () => dispatch("success"),
-		onClose: () => {
-			isOpen = false;
-			dispatch("close");
-		}
-	});
+	let bulkImport: ReturnType<typeof createBulkImport>;
+
+	function initBulkImport(target: ImportTarget) {
+		bulkImport = createBulkImport({
+			repo,
+			importTarget: target,
+			onSuccess: () => dispatch("success"),
+			onClose: () => {
+				isOpen = false;
+				dispatch("close");
+			}
+		});
+	}
+
+	initBulkImport(importTarget);
+
+	$: if (importTarget) {
+		initBulkImport(importTarget);
+	}
 
 	$: bulkImport.isOpen.set(isOpen);
 
