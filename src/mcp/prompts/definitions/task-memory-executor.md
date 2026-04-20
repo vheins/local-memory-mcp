@@ -32,6 +32,7 @@ agent: Task Executor
    - Trace path end-to-end.
    - Run tests/linters/type-checks.
    - Logic audit for all affected paths.
+   - **Browser Verification (MANDATORY)**: If the task involves UI/UX changes, use `browser-subagent` (Chrome DevTools) to verify the feature is functional and consumable by the user. Check for console errors, layout issues, and interactive behavior. see credential in seeder
 7. **Finalize**: 
    - **Evidence**: `task-update` status to `completed` with detailed 'comment' (inspected files, verified logic, test results).
    - **Memory**: Store insights as `code_fact`/`pattern` via `memory-store`.
