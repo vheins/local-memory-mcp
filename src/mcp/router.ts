@@ -16,6 +16,7 @@ import { handleMemoryDelete } from "./tools/memory.delete";
 import { handleMemoryRecap } from "./tools/memory.recap";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
 import { handleMemoryDetail } from "./tools/memory.detail";
+import { handleHandoffCreate, handleHandoffList, handleTaskClaim } from "./tools/handoff.manage";
 import {
 	handleTaskList,
 	handleTaskCreate,
@@ -134,8 +135,10 @@ export function createRouter(
 		"memory-delete",
 		"memory-bulk-delete",
 		"memory-summarize",
+		"handoff-create",
 		"task-create",
 		"task-create-interactive",
+		"task-claim",
 		"task-update",
 		"task-delete",
 	]);
@@ -190,6 +193,15 @@ export function createRouter(
 
 				case "memory-detail":
 					return await handleMemoryDetail(args, db);
+
+				case "handoff-create":
+					return await handleHandoffCreate(args, db);
+
+				case "handoff-list":
+					return await handleHandoffList(args, db);
+
+				case "task-claim":
+					return await handleTaskClaim(args, db);
 
 				case "task-create":
 					return await handleTaskCreate(args, db);
