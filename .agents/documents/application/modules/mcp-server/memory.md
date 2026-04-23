@@ -10,7 +10,7 @@ The system uses the following core tables to maintain state:
 The primary store for semantic knowledge.
 - **`id`**: UUID v4 (Primary Key).
 - **`repo`**: Repository name for scoping.
-- **`type`**: Enum (code_fact, decision, mistake, pattern, agent_handoff, agent_registered, file_claim, task_archive).
+- **`type`**: Enum (code_fact, decision, mistake, pattern, task_archive).
 - **`title`**: Human-readable title for UI display.
 - **`content`**: The actual knowledge payload.
 - **`importance`**: Integer (1 to 5) used for ranking.
@@ -55,7 +55,7 @@ The system performs automated "Garbage Collection" and curation:
 
 ## Data Model (memories table)
 - `id` (UUID, PK)
-- `type` (decision, code_fact, mistake, pattern, agent_handoff)
+- `type` (decision, code_fact, mistake, pattern, task_archive)
 - `title` (TEXT)
 - `content` (TEXT)
 - `repo` (TEXT)
@@ -83,6 +83,11 @@ sequenceDiagram
     E-->>M: ID
     M-->>A: Created (ID)
 ```
+
+## Agent Coordination
+- Handoffs and task claims are **not** stored as memories.
+- Use the dedicated `handoffs` and `claims` tables via the `handoff-create`, `handoff-list`, and `task-claim` MCP tools.
+- This keeps durable semantic memory separate from transient agent coordination state.
 
 ## Implementation Note
 The persistence logic for this module is encapsulated in the **[MemoryEntity](file:///home/vheins/Projects/local-memory-mcp/src/mcp/entities/memory.ts)**, which handles all SQL interactions, vector serialization, and archival transitions.

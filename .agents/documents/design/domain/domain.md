@@ -9,7 +9,7 @@ Represents a distilled unit of knowledge or a project artifact captured by an AI
 
 - **Attributes:**
   - `id`: UUID Primary Key.
-  - `type`: `code_fact`, `decision`, `mistake`, `pattern`, `agent_handoff`, `agent_registered`, `file_claim`, `task_archive`.
+  - `type`: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive`.
   - `scope`: Geographic constraints (`repo`, `branch`, `folder`, `language`).
   - `agent`, `role`, `model`: Attribution metadata for the creator.
   - `importance`: 1 (Low) to 5 (Critical) rating.
@@ -43,6 +43,25 @@ High-fidelity telemetry capturing every system operation (tool call).
   - `action`: Name of the tool invoked.
   - `query`: The primary search or input term.
   - `result_count`: Quantifiable impact of the action.
+
+### 5. Handoff
+Represents transient coordination state passed between agents.
+
+- **Attributes:**
+  - `from_agent` / `to_agent`: Source and optional destination agent.
+  - `task_id`: Optional associated task.
+  - `summary`: Short handoff objective.
+  - `context`: Structured transfer payload.
+  - `status`: `pending`, `accepted`, `rejected`, `expired`.
+
+### 6. Claim
+Represents task ownership in the dedicated coordination layer.
+
+- **Attributes:**
+  - `task_id`: Claimed task.
+  - `agent`, `role`: Current owner attribution.
+  - `claimed_at`, `released_at`: Claim lifecycle timestamps.
+  - `metadata`: Structured operational context.
 
 ---
 

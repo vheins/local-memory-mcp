@@ -15,7 +15,7 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 | Column | Type | Description |
 |--------|------|-------------|
 | id | TEXT (UUID) | PK |
-| type | TEXT | code_fact, decision, mistake, pattern, agent_handoff, agent_registered, file_claim, task_archive |
+| type | TEXT | code_fact, decision, mistake, pattern, task_archive |
 | title | TEXT | Short descriptor (Indexed FTS5) |
 | content | TEXT | Body (Indexed FTS5) |
 | embedding | BLOB | 384-dim Float32 vector |
@@ -25,6 +25,10 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 
 ### `tasks` Table
 - **Columns**: `id`, `task_code` (Unique), `title`, `description`, `status`, `phase`, `priority`, `agent`, `role`, `est_tokens`, `parent_id`, `comments` (JSON).
+
+### `handoffs` / `claims` Tables
+- **Purpose**: Store transient agent coordination state outside the durable memory index.
+- **Access Pattern**: Exposed through `handoff-create`, `handoff-list`, and `task-claim`.
 
 ## Reference Catalog (MCP Primitives)
 

@@ -9,7 +9,7 @@ This document outlines the MCP Tool interfaces. All responses comply with the [M
 - **Method:** `tools/call`
 - **Special Logic: Collision Detection**: Before storing, the system performs a semantic search. If a memory with similarity **> 0.55** already exists in the repo, the operation may flag a conflict or return the existing ID to prevent redundancy.
 - **Arguments:**
-  - `type` (enum: `code_fact`, `decision`, `mistake`, `pattern`, `agent_handoff`, `agent_registered`, `file_claim`, `task_archive`)
+  - `type` (enum: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive`)
   - `title` (string, required)
   - `content` (string, required)
   - `importance` (number 1-5, required)
@@ -39,6 +39,14 @@ This document outlines the MCP Tool interfaces. All responses comply with the [M
   	}
   }
   ```
+
+### 1.1.1 Agent Coordination Tools
+
+- **`handoff-create`**: Create a handoff record with `repo`, `from_agent`, optional `to_agent`, optional `task_id` / `task_code`, `summary`, and structured `context`.
+- **`handoff-list`**: List existing handoffs by repository with optional `status`, `from_agent`, and `to_agent` filters.
+- **`task-claim`**: Record task ownership in the dedicated claims table using `repo`, `agent`, and either `task_id` or `task_code`.
+
+These tools replace the old practice of encoding handoffs or claims as memory entry types.
 
 ### 1.2 `memory-search`
 

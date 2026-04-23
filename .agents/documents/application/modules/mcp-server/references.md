@@ -51,7 +51,7 @@ Tools are the primary operational interface for agents, allowing for structured 
 - **Tool**: `memory-synthesize`
     - **Description**: Advanced reasoning tool that uses client sampling to synthesize a grounded answer from local memory and tasks.
 - **Tool**: `memory-store`
-    - **Description**: Store a new human-auditable knowledge entry. Supported types: `code_fact`, `decision`, `mistake`, `pattern`, `agent_handoff`, `agent_registered`, `file_claim`, `task_archive`.
+    - **Description**: Store a new human-auditable knowledge entry. Supported types: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive`.
 - **Tool**: `memory-search`
     - **Description**: NAVIGATION LAYER: Returns a pointer table of matching memory IDs. Returns `[id, title, type, importance]`.
 - **Tool**: `memory-detail`
@@ -66,6 +66,12 @@ Tools are the primary operational interface for agents, allowing for structured 
     - **Description**: Update the high-level global summary for a repository.
 - **Tool**: `memory-recap`
     - **Description**: AGGREGATED OVERVIEW: Returns stats and a pointer table of the top memories in a repo.
+- **Tool**: `handoff-create`
+    - **Description**: Create a structured handoff record for another agent, optionally attached to a task.
+- **Tool**: `handoff-list`
+    - **Description**: List handoffs by repository and agent/status filters.
+- **Tool**: `task-claim`
+    - **Description**: Record task ownership in the dedicated claims table instead of encoding claims as memory.
 
 ### Task Management
 - **Tool**: `task-list`
