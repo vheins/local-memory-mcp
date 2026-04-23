@@ -112,7 +112,7 @@
 			{#if $mode === "memory" && $handler.memory}
 				<!-- Meta grid -->
 				<div class="meta-grid" style="margin-bottom:16px;">
-					{#each [{ label: "Importance", val: $handler.memory?.importance || 0 }, { label: "Hit Count", val: $handler.memory?.hit_count ?? 0 }, { label: "Created", val: formatDate($handler.memory?.created_at) }, { label: "Updated", val: formatDate($handler.memory?.updated_at) }] as m}
+					{#each [{ label: "Importance", val: $handler.memory?.importance || 0 }, { label: "Hit Count", val: $handler.memory?.hit_count ?? 0 }, { label: "Created", val: formatDate($handler.memory?.created_at) }, { label: "Updated", val: formatDate($handler.memory?.updated_at) }] as m (m.label)}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>
@@ -125,7 +125,7 @@
 					<div style="margin-bottom:16px;">
 						<div class="section-label">Tags</div>
 						<div style="display:flex;flex-wrap:wrap;gap:6px;">
-							{#each $handler.memory.tags as tag}
+							{#each $handler.memory.tags as tag (tag)}
 								<span class="tag-chip">{tag}</span>
 							{/each}
 						</div>
@@ -169,7 +169,7 @@
 				<!-- Status action buttons -->
 				{#if STATUS_FLOW[$handler.task.status]?.length}
 					<div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
-						{#each STATUS_FLOW[$handler.task.status] as action}
+						{#each STATUS_FLOW[$handler.task.status] as action (action.next)}
 							<button
 								class="btn"
 								style="background:{action.color};color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
@@ -223,7 +223,7 @@
 						{ label: "Updated", val: formatDate($handler.task?.updated_at) },
 						{ label: "Parent", val: $handler.task?.parent_code || "—" },
 						{ label: "Depends On", val: $handler.task?.depends_on_code || "—" }
-					] as m}
+					] as m (m.label)}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>

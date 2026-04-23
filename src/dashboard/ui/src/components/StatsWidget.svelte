@@ -7,7 +7,7 @@
 </script>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-bottom:12px;">
-	{#each $summaryItems as item}
+	{#each $summaryItems as item (item.label)}
 		<div
 			class="stat-card"
 			style="text-align:center;background:{item.glow};border:1px solid {item.glow};padding:10px 8px;"
@@ -32,7 +32,7 @@
 	<div style="margin-top:4px;">
 		<div class="stat-label" style="font-size:0.6rem;margin-bottom:6px;">By Type</div>
 		<div style="display:flex;flex-wrap:wrap;gap:8px;">
-			{#each $byTypeStats as item}
+			{#each $byTypeStats as item (item.label)}
 				<div class="flex items-center gap-2 glassy-badge" style="--badge-color: {item.color};">
 					<div class="indicator-dot"></div>
 					<span class="count">{item.count}</span>

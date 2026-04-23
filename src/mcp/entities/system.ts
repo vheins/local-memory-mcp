@@ -1,5 +1,5 @@
 import { BaseEntity } from "../storage/base";
-import { MemoryEntry, Task } from "../types";
+import { MemoryEntry } from "../types";
 
 export class SystemEntity extends BaseEntity {
 	listRepos(): string[] {

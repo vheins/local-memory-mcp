@@ -129,15 +129,15 @@
 								<table>
 									<thead>
 										<tr>
-											{#each currentHeaders as h}
+											{#each currentHeaders as h (h)}
 												<th>{h}</th>
 											{/each}
 										</tr>
 									</thead>
 									<tbody>
-										{#each currentCsvData.slice(0, 5) as row}
+										{#each currentCsvData.slice(0, 5) as row, rowIndex (`${rowIndex}-${JSON.stringify(row)}`)}
 											<tr>
-												{#each currentHeaders as h}
+												{#each currentHeaders as h (h)}
 													<td>{row[h.toLowerCase().replace(/[^a-z0-9_]/g, "_")] || ""}</td>
 												{/each}
 											</tr>

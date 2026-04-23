@@ -21,7 +21,7 @@
 
 {#if $taskStats}
 	<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:10px;width:100%;">
-		{#each stats as s}
+		{#each stats as s (s.label)}
 			<div class="stat-card" style="text-align:center;background:{s.glow};border:1px solid {s.glow};padding:10px 8px;">
 				<div style="display:flex;justify-content:center;margin-bottom:2px;color:{s.color};opacity:0.8;">
 					<Icon name={s.icon} size={14} strokeWidth={1.75} />
@@ -58,7 +58,7 @@
 
 			{#if isExpanded}
 				<div style="display:flex;flex-direction:column;gap:6px;" class="animate-fade-in">
-					{#each $activeTasks as task}
+					{#each $activeTasks as task (task.id)}
 						<div
 							style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid var(--color-border);"
 						>

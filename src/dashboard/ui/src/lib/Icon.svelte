@@ -1403,9 +1403,9 @@
 	aria-hidden="true"
 >
 	{#if icons[name]}
-		{#each icons[name] as element}
-			<svelte:element this={element.tag} {...element.attrs} />
-		{/each}
+			{#each icons[name] as element, elementIndex (`${element.tag}-${elementIndex}`)}
+				<svelte:element this={element.tag} {...element.attrs} />
+			{/each}
 	{:else}
 		<!-- fallback: question mark circle -->
 		<circle cx="12" cy="12" r="10" />

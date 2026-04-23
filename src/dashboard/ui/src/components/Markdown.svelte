@@ -36,7 +36,7 @@
 </script>
 
 <div class="markdown-body">
-  {#each tokens as token}
+  {#each tokens as token, tokenIndex (`${token.type}-${tokenIndex}`)}
     {#if token.type === 'heading'}
       {#if token.depth === 1}
         <h1>{token.text}</h1>
@@ -53,7 +53,7 @@
       {/if}
     {:else if token.type === 'paragraph'}
       <p>
-        {#each token.tokens || [] as inline}
+        {#each token.tokens || [] as inline, inlineIndex (`${inline.type}-${inlineIndex}`)}
           {#if inline.type === 'text'}
             {inline.text}
           {:else if isStrong(inline)}
@@ -72,9 +72,9 @@
     {:else if isList(token)}
       {#if token.ordered}
         <ol start={typeof token.start === 'number' ? token.start : undefined}>
-          {#each token.items as item}
+          {#each token.items as item, itemIndex (`ordered-${itemIndex}`)}
             <li>
-              {#each item.tokens || [] as itemToken}
+              {#each item.tokens || [] as itemToken, itemTokenIndex (`${itemToken.type}-${itemTokenIndex}`)}
                 {#if itemToken.type === 'text'}
                   {itemToken.text}
                 {:else}
@@ -87,9 +87,9 @@
         </ol>
       {:else}
         <ul>
-          {#each token.items as item}
+          {#each token.items as item, itemIndex (`unordered-${itemIndex}`)}
             <li>
-              {#each item.tokens || [] as itemToken}
+              {#each item.tokens || [] as itemToken, itemTokenIndex (`${itemToken.type}-${itemTokenIndex}`)}
                 {#if itemToken.type === 'text'}
                   {itemToken.text}
                 {:else}
@@ -106,15 +106,15 @@
       <table>
         <thead>
           <tr>
-            {#each token.header as header}
+            {#each token.header as header, headerIndex (`${header.text}-${headerIndex}`)}
               <th>{header.text}</th>
             {/each}
           </tr>
         </thead>
         <tbody>
-          {#each token.rows as row}
+          {#each token.rows as row, rowIndex (`row-${rowIndex}`)}
             <tr>
-              {#each row as cell}
+              {#each row as cell, cellIndex (`${cell.text}-${cellIndex}`)}
                 <td>{cell.text}</td>
               {/each}
             </tr>

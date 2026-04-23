@@ -64,7 +64,7 @@
 			on:change={() => memoryHandler.onFilterChange()}
 		>
 			<option value="">All Types</option>
-			{#each TYPES as t}
+			{#each TYPES as t (t)}
 				<option value={t}>{TYPE_LABELS[t]}</option>
 			{/each}
 		</select>
@@ -76,7 +76,7 @@
 			on:change={() => memoryHandler.onFilterChange()}
 		>
 			<option value={null}>Min Imp.</option>
-			{#each [1, 2, 3, 4, 5] as i}
+			{#each [1, 2, 3, 4, 5] as i (i)}
 				<option value={i}>{i}</option>
 			{/each}
 		</select>
@@ -90,7 +90,7 @@
 				memoryHandler.loadMemories();
 			}}
 		>
-			{#each [10, 25, 50, 100] as n}
+			{#each [10, 25, 50, 100] as n (n)}
 				<option value={n}>{n} / page</option>
 			{/each}
 		</select>
@@ -199,7 +199,7 @@
 								<div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{mem.title}</div>
 								{#if mem.tags?.length}
 									<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
-										{#each mem.tags.slice(0, 3) as tag}
+										{#each mem.tags.slice(0, 3) as tag (tag)}
 											<span
 												style="font-size:0.6rem;background:rgba(99,102,241,0.1);color:#6366f1;padding:1px 5px;border-radius:9999px;"
 												>{tag}</span
@@ -271,7 +271,7 @@
 				{#each Array.from({ length: Math.min(5, $memoriesTotalPages) }, (_, i) => {
 					const start = Math.max(1, Math.min($memoriesPage - 2, $memoriesTotalPages - 4));
 					return start + i;
-				}) as p}
+				}) as p (p)}
 					<button
 						class="btn btn-sm"
 						class:btn-primary={p === $memoriesPage}

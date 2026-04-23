@@ -89,7 +89,7 @@
 				<div class="field-group">
 					<label class="field-label" for="new_task_status">Status</label>
 					<select id="new_task_status" class="form-select" bind:value={newTask.status}>
-						{#each ["backlog", "pending", "in_progress"] as s}
+						{#each ["backlog", "pending", "in_progress"] as s (s)}
 							<option value={s}>{getStatusLabel(s)}</option>
 						{/each}
 					</select>
@@ -97,7 +97,7 @@
 				<div class="field-group">
 					<label class="field-label" for="new_task_priority">Priority</label>
 					<select id="new_task_priority" class="form-select" bind:value={newTask.priority}>
-						{#each [1, 2, 3, 4, 5] as p}
+						{#each [1, 2, 3, 4, 5] as p (p)}
 							<option value={p}>{getPriorityLabel(p)}</option>
 						{/each}
 					</select>

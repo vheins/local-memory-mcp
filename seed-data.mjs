@@ -29,7 +29,7 @@ rl.on("line", (line) => {
         pending.resolve(response.result);
       }
     }
-  } catch (err) {
+  } catch {
     // console.error("Parse error:", err);
   }
 });

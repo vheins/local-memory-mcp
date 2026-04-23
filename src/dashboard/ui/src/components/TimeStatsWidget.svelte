@@ -8,9 +8,13 @@
 		LinearScale,
 		Tooltip,
 		Legend,
-		type ChartConfiguration
+		type ChartConfiguration,
+		type ChartDataset
 	} from "chart.js";
 	import { createTimeStatsHandler } from "../lib/composables/useTimeStats";
+	import type { TaskTimePeriodStats } from "../lib/stores";
+
+	type TimeStatsHistoryItem = TaskTimePeriodStats["history"][number];
 
 	// Register required Chart.js components
 	Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
@@ -96,11 +100,11 @@
 		chart = new Chart(canvas, config);
 	}
 
-	function updateChart(data: any[]) {
+	function updateChart(data: TimeStatsHistoryItem[]) {
 		if (!chart) return;
 		chart.data.labels = data.map((h) => h.label);
-		chart.data.datasets[0].data = data.map((h) => h.created);
-		chart.data.datasets[1].data = data.map((h) => h.completed);
+		(chart.data.datasets[0] as ChartDataset<"bar", number[]>).data = data.map((h) => h.created);
+		(chart.data.datasets[1] as ChartDataset<"bar", number[]>).data = data.map((h) => h.completed);
 		chart.update("none"); // Update without internal animation for immediate feel on tab switch
 	}
 
@@ -134,7 +138,7 @@
 			<div style="font-size:0.75rem;color:var(--color-text-muted);">Execution throughput</div>
 		</div>
 		<div class="flex gap-1" style="background:rgba(241,245,249,0.5);padding:3px;border-radius:10px;">
-			{#each periods as p}
+			{#each periods as p (p.id)}
 				<button
 					class="tab-btn"
 					class:active={$activePeriod === p.id}

@@ -71,7 +71,7 @@
 
 	<!-- Kanban Board -->
 	<div class="kanban-board" style="padding-bottom:16px;">
-		{#each COLUMNS as col}
+		{#each COLUMNS as col (col.status)}
 			<!-- svelte-ignore a11y-no-static-element-interactions -->
 			<div
 				class="kanban-col {$kanbanState.dragOverCol === col.status ? 'drag-over' : ''}"

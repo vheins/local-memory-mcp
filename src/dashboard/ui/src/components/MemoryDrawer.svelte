@@ -110,7 +110,7 @@
 						{ label: "Hit Count", val: memory.hit_count ?? 0 },
 						{ label: "Created", val: formatDate(memory.created_at) },
 						{ label: "Updated", val: formatDate(memory.updated_at) }
-					] as m}
+					] as m (m.label)}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>
@@ -123,7 +123,7 @@
 					<div class="section-block">
 						<div class="field-label">Tags</div>
 						<div class="tags-row">
-							{#each memory.tags as tag}
+							{#each memory.tags as tag (tag)}
 								<span class="tag-chip">{tag}</span>
 							{/each}
 						</div>
@@ -153,7 +153,7 @@
 					<div class="field-group">
 						<label for="mem_type" class="field-label">Type <span class="required">*</span></label>
 						<select id="mem_type" class="form-select" bind:value={$form.type}>
-							{#each TYPES as t}
+							{#each TYPES as t (t)}
 								<option value={t}>{TYPE_LABELS[t]}</option>
 							{/each}
 						</select>
@@ -175,7 +175,7 @@
 							style="accent-color:{importanceColor[$form.importance]};"
 						/>
 						<div class="importance-ticks">
-							{#each [1, 2, 3, 4, 5] as n}
+							{#each [1, 2, 3, 4, 5] as n (n)}
 								<span class:active={$form.importance >= n}>{n}</span>
 							{/each}
 						</div>

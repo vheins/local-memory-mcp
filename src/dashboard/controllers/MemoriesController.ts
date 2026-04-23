@@ -144,9 +144,9 @@ export class MemoriesController {
 			}));
 
 			const count = await db.withWrite(() => {
-				const n = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
-				db.actions.logAction("write", repo, { query: `Bulk imported ${n} memories` });
-				return n;
+				const insertedCount = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
+				db.actions.logAction("write", repo, { query: `Bulk imported ${insertedCount} memories` });
+				return insertedCount;
 			});
 			res.json(jsonApiRes({ count }, "status"));
 		} catch (err: unknown) {
@@ -163,7 +163,7 @@ export class MemoriesController {
 				return res.status(400).json(jsonApiError("Invalid payload: requires 'ids' array and 'action'", 400));
 
 			const count = await db.withWrite(() => {
-				let n = 0;
+				let n: number;
 				if (action === "delete") {
 					n = db.memories.bulkDeleteMemories(ids);
 				} else if (action === "update" || action === "archive") {

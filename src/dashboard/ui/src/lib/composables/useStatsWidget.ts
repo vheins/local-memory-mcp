@@ -1,9 +1,10 @@
 import { derived, writable } from "svelte/store";
-import { currentRepo, dashboardStats } from "../stores";
+import { dashboardStats } from "../stores";
 import { api } from "../api";
+import type { Task } from "../stores";
 
 // We'll use a local store to hold the recent active tasks fetched specifically for the leaderboard
-const activeTasksStore = writable<any[]>([]);
+const activeTasksStore = writable<Task[]>([]);
 
 export function createStatsHandler() {
 	const memoryStats = derived(dashboardStats, ($s) => {

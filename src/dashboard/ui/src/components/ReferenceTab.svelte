@@ -2,14 +2,39 @@
 	import Icon from "../lib/Icon.svelte";
 	import type { Readable } from "svelte/store";
 	import type { ReferenceItem } from "../lib/stores";
+	import type { AppState } from "../lib/composables/useApp";
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	export let handler: any;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	export let appState: Readable<any>;
+	export let handler: {
+		openReferenceDrawer: (type: "tool" | "prompt" | "resource", item: ReferenceItem["data"]) => void;
+		setReferenceSearch: (search: string) => void;
+		setReferenceFilter: (filter: AppState["referenceFilter"]) => void;
+	};
+	export let appState: Readable<AppState>;
 	export let filteredTools: Readable<ReferenceItem[]>;
 	export let filteredPrompts: Readable<ReferenceItem[]>;
 	export let filteredResources: Readable<ReferenceItem[]>;
+
+	function getCategories(state: AppState): Array<{
+		id: AppState["referenceFilter"];
+		icon: string;
+		label: string;
+		count: number;
+	}> {
+		return [
+			{
+				id: "all",
+				icon: "layers",
+				label: "All",
+				count:
+					(state.capabilities?.tools?.length || 0) +
+					(state.capabilities?.prompts?.length || 0) +
+					(state.capabilities?.resources?.length || 0)
+			},
+			{ id: "tools", icon: "tool", label: "Tools", count: state.capabilities?.tools?.length || 0 },
+			{ id: "prompts", icon: "sparkle", label: "Prompts", count: state.capabilities?.prompts?.length || 0 },
+			{ id: "resources", icon: "database", label: "Resources", count: state.capabilities?.resources?.length || 0 }
+		];
+	}
 
 	$: state = $appState;
 	$: tools = $filteredTools;
@@ -62,7 +87,7 @@
 		<!-- Category sidebar -->
 		<div class="glass ref-sidebar">
 			<div class="ref-sidebar-label">Category</div>
-			{#each [{ id: "all", icon: "layers", label: "All", count: (state.capabilities?.tools?.length || 0) + (state.capabilities?.prompts?.length || 0) + (state.capabilities?.resources?.length || 0) }, { id: "tools", icon: "tool", label: "Tools", count: state.capabilities?.tools?.length || 0 }, { id: "prompts", icon: "sparkle", label: "Prompts", count: state.capabilities?.prompts?.length || 0 }, { id: "resources", icon: "database", label: "Resources", count: state.capabilities?.resources?.length || 0 }] as cat}
+			{#each getCategories(state) as cat (cat.id)}
 				<button
 					class="ref-cat-btn"
 					class:active={state.referenceFilter === cat.id}
@@ -92,7 +117,7 @@
 						<span class="ref-section-count">{tools.length}</span>
 					</div>
 					<div class="ref-grid">
-						{#each tools as tool}
+						{#each tools as tool (tool.data.name)}
 							<div
 								class="ref-card ref-card-tool animate-fade-in"
 								on:click={() => handler.openReferenceDrawer("tool", tool.data)}
@@ -112,7 +137,7 @@
 								{/if}
 								{#if tool?.data?.inputSchema?.properties}
 									<div class="ref-params">
-										{#each Object.entries(tool.data.inputSchema.properties).slice(0, 4) as [param]}
+										{#each Object.entries(tool.data.inputSchema.properties).slice(0, 4) as [param] (param)}
 											<code class="ref-param-tag">{param}</code>
 										{/each}
 										{#if Object.keys(tool.data.inputSchema.properties).length > 4}
@@ -135,7 +160,7 @@
 						<span class="ref-section-count">{prompts.length}</span>
 					</div>
 					<div class="ref-grid">
-						{#each prompts as prompt}
+						{#each prompts as prompt (prompt.data.name)}
 							<div
 								class="ref-card ref-card-prompt animate-fade-in"
 								on:click={() => handler.openReferenceDrawer("prompt", prompt.data)}
@@ -166,7 +191,7 @@
 						<span class="ref-section-count">{resources.length}</span>
 					</div>
 					<div class="ref-grid">
-						{#each resources as resource}
+						{#each resources as resource (resource.data.uri || resource.data.name)}
 							<div
 								class="ref-card ref-card-resource animate-fade-in"
 								on:click={() => handler.openReferenceDrawer("resource", resource.data)}

@@ -10,8 +10,6 @@
 	export let onClose: () => void = () => {};
 
 	const handler = createReferenceHandler();
-	// Provide full store so bindings can work if needed
-	const state = handler;
 	const typeLabel = handler.typeLabel;
 
 	$: if (open) {
@@ -25,7 +23,7 @@
 	}
 </script>
 
-{#if open && $state.item}
+{#if open && $handler.item}
 	<div
 		class="drawer-overlay"
 		on:click={(e) => handler.handleOverlayClick(e, onClose)}
@@ -48,7 +46,7 @@
 		<div class="drawer-header">
 			<div style="flex:1; min-width:0; padding-right:16px;">
 				<span class="type-chip" style="margin-bottom:8px;display:inline-flex;">{$typeLabel}</span>
-				<div class="drawer-title">{$state.item.data.name}</div>
+				<div class="drawer-title">{$handler.item.data.name}</div>
 			</div>
 			<button class="btn btn-ghost btn-icon" on:click={onClose} aria-label="Close" style="flex-shrink:0;">
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -58,20 +56,20 @@
 		</div>
 
 		<div class="drawer-body">
-			{#if $state.item.data.description}
+			{#if $handler.item.data.description}
 				<div class="drawer-section">
 					<div class="section-label">Description</div>
 					<div class="markdown-body md-card">
-						<Markdown content={$state.item.data.description} />
+						<Markdown content={$handler.item.data.description} />
 					</div>
 				</div>
 			{/if}
 
-			{#if $state.item.type === "tool"}
+			{#if $handler.item.type === "tool"}
 				<div class="drawer-section">
-					{#if $state.item.data.inputSchema?.properties && Object.keys($state.item.data.inputSchema.properties).length > 0}
+					{#if $handler.item.data.inputSchema?.properties && Object.keys($handler.item.data.inputSchema.properties).length > 0}
 						<div class="section-label">Playground (Input Parameters)</div>
-						{#each Object.entries($state.item.data.inputSchema.properties) as [key, param]}
+						{#each Object.entries($handler.item.data.inputSchema.properties) as [key, param] (key)}
 							<div
 								style="border: 1px solid var(--color-border); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; background: rgba(0,0,0,0.01);"
 							>
@@ -81,7 +79,7 @@
 									>
 									<div style="display:flex; gap: 8px; align-items: center;">
 										<span style="font-size: 0.7rem; color: var(--color-text-muted);">{param.type}</span>
-										{#if $state.item.data.inputSchema.required?.includes(key)}
+										{#if $handler.item.data.inputSchema.required?.includes(key)}
 											<span
 												style="font-size: 0.6rem; color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.1); padding: 2px 4px; border-radius: 4px;"
 												>REQ</span
@@ -101,7 +99,7 @@
 									class="form-input"
 									style="font-size:0.8rem; padding: 4px 8px; border-radius: 4px; min-height: 28px;"
 									placeholder={`Value for ${key}`}
-									value={$state.toolArgs[key] || ""}
+									value={$handler.toolArgs[key] || ""}
 									on:input={(e) => handler.setToolArg(key, e.currentTarget.value)}
 								/>
 							</div>
@@ -119,52 +117,52 @@
 							class="btn btn-accent"
 							style="width:100%"
 							on:click={() => handler.runTool()}
-							disabled={$state.toolRunning}
+							disabled={$handler.toolRunning}
 						>
-							{$state.toolRunning ? "Running..." : "Submit"}
+							{$handler.toolRunning ? "Running..." : "Submit"}
 						</button>
 					</div>
 
 					<!-- Tool result -->
-					{#if $state.toolError}
+					{#if $handler.toolError}
 						<div
 							style="margin-top: 12px; border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; padding: 12px; border-radius: 8px; font-size: 0.85rem;"
 						>
 							<strong>Error:</strong>
-							{$state.toolError}
+							{$handler.toolError}
 						</div>
 					{/if}
 
-					{#if $state.toolResult}
+					{#if $handler.toolResult}
 						<div style="margin-top: 12px;" class="drawer-section">
 							<div class="section-label" style="display:flex; justify-content:space-between; align-items:center;">
 								<span>Response</span>
 								<button
 									class="btn btn-ghost btn-icon"
-									on:click={() => handler.copyToClipboardWrapper($state.toolResult || "")}
+									on:click={() => handler.copyToClipboardWrapper($handler.toolResult || "")}
 									title="Copy to clipboard"
 									style="width:24px; height:24px; padding:0; border:none; background:transparent;"
 								>
 									<Icon
-										name={$state.copied ? "check" : "copy"}
+										name={$handler.copied ? "check" : "copy"}
 										size={14}
 										strokeWidth={2}
-										className={$state.copied ? "text-success" : ""}
+										className={$handler.copied ? "text-success" : ""}
 									/>
 								</button>
 							</div>
 							<div class="md-card markdown-body" style="padding: 1px 16px;">
-								<Markdown content={"```json\n" + $state.toolResult + "\n```"} />
+								<Markdown content={"```json\n" + $handler.toolResult + "\n```"} />
 							</div>
 						</div>
 					{/if}
 				</div>
 			{/if}
 
-			{#if $state.item.type === "prompt" && $state.item.data.arguments}
+			{#if $handler.item.type === "prompt" && $handler.item.data.arguments}
 				<div class="drawer-section">
 					<div class="section-label">Arguments</div>
-					{#each $state.item.data.arguments as arg}
+					{#each $handler.item.data.arguments as arg (arg.name)}
 						<div
 							style="border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; margin-bottom: 8px; background: rgba(0,0,0,0.02);"
 						>
@@ -181,16 +179,16 @@
 							{/if}
 						</div>
 					{/each}
-					{#if $state.item.data.arguments.length === 0}
+					{#if $handler.item.data.arguments.length === 0}
 						<div style="font-size: 0.85rem; color: var(--color-text-muted); font-style: italic;">No arguments.</div>
 					{/if}
 				</div>
 			{/if}
 
-			{#if $state.item.type === "prompt" && $state.item.data.messages && $state.item.data.messages.length > 0}
+			{#if $handler.item.type === "prompt" && $handler.item.data.messages && $handler.item.data.messages.length > 0}
 				<div class="drawer-section">
 					<div class="section-label">Template</div>
-					{#each $state.item.data.messages as msg}
+					{#each $handler.item.data.messages as msg, msgIndex (`${msg.role}-${msgIndex}`)}
 						<div class="md-card" style="margin-bottom: 8px;">
 							<div
 								style="font-size: 0.7rem; font-weight: bold; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 8px;"
@@ -205,21 +203,21 @@
 				</div>
 			{/if}
 
-			{#if $state.item.type === "resource"}
+			{#if $handler.item.type === "resource"}
 				<div class="drawer-section">
 					<div class="section-label">Details</div>
-					{#if $state.item?.data?.uri}
+					{#if $handler.item?.data?.uri}
 						<div style="font-size: 0.85rem; margin-bottom: 8px;">
 							<span style="color: var(--color-text-muted);">URI:</span>
 							<code
 								style="font-size: 0.8rem; background: var(--color-bg); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border);"
-								>{$state.item.data.uri}</code
+								>{$handler.item.data.uri}</code
 							>
 						</div>
 					{/if}
-					{#if $state.item.data.mimeType}
+					{#if $handler.item.data.mimeType}
 						<div style="font-size: 0.85rem;">
-							<span style="color: var(--color-text-muted);">MIME Type:</span> <span>{$state.item.data.mimeType}</span>
+							<span style="color: var(--color-text-muted);">MIME Type:</span> <span>{$handler.item.data.mimeType}</span>
 						</div>
 					{/if}
 				</div>

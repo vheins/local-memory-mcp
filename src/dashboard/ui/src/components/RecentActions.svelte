@@ -11,6 +11,7 @@
 	const handlerState = handler;
 
 	let chatContainer: HTMLDivElement | undefined = undefined;
+	let handleChatScroll: ((e: Event) => void) | undefined = undefined;
 
 	afterUpdate(() => {
 		// Only auto-scroll to bottom on INITIAL load (first page)
@@ -23,13 +24,14 @@
 		tick().then(() => {
 			handler.scrollToBottom(chatContainer, "instant");
 			if (chatContainer) {
-				chatContainer.addEventListener("scroll", (e) => handler.handleScroll(e, chatContainer));
+				handleChatScroll = (e) => handler.handleScroll(e, chatContainer);
+				chatContainer.addEventListener("scroll", handleChatScroll);
 			}
 		});
 
 		return () => {
-			if (chatContainer) {
-				chatContainer.removeEventListener("scroll", (e) => handler.handleScroll(e, chatContainer));
+			if (chatContainer && handleChatScroll) {
+				chatContainer.removeEventListener("scroll", handleChatScroll);
 			}
 		};
 	});
@@ -51,7 +53,7 @@
 				<div style="font-size:0.875rem;opacity:0.7;">Events will appear here as they happen.</div>
 			</div>
 		{:else}
-			{#each $groupedActions as group}
+			{#each $groupedActions as group (group.date)}
 				<div class="date-header">
 					<span>{group.date}</span>
 				</div>

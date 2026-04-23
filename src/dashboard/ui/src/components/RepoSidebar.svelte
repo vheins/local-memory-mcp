@@ -70,7 +70,7 @@
 					<Icon name="star" size={10} strokeWidth={2} />
 					Pinned
 				</div>
-				{#each $orderedRepos.pinned as item}
+				{#each $orderedRepos.pinned as item (item.repo)}
 					<div
 						class="repo-item"
 						class:active={$currentRepo === item.repo}
@@ -146,7 +146,7 @@
 						All
 					</div>
 				{/if}
-				{#each $orderedRepos.unpinned as item}
+				{#each $orderedRepos.unpinned as item (item.repo)}
 					<div
 						class="repo-item"
 						class:active={$currentRepo === item.repo}
@@ -214,7 +214,7 @@
 			{/if}
 		{:else}
 			<!-- Collapsed: show initials only -->
-			{#each $availableRepos as item}
+			{#each $availableRepos as item (item.repo)}
 				<div
 					class="repo-item collapsed"
 					class:active={$currentRepo === item.repo}

@@ -1,5 +1,8 @@
 import { derived, writable } from "svelte/store";
 import { taskTimeStats } from "../stores";
+import type { TaskTimePeriodStats } from "../stores";
+
+type TimeStatsHistoryItem = TaskTimePeriodStats["history"][number];
 
 export function createTimeStatsHandler() {
 	const periods = [
@@ -21,12 +24,9 @@ export function createTimeStatsHandler() {
 
 	const history = derived(periodData, ($data) => $data?.history || []);
 
-	const maxVal = derived(history, ($history) => {
-		return Math.max(
-			5,
-			...($history as any[]).map((h) => Math.max(h.created || 0, h.completed || 0))
-		);
-	});
+	const maxVal = derived(history, ($history) =>
+		Math.max(5, ...($history as TimeStatsHistoryItem[]).map((h) => Math.max(h.created || 0, h.completed || 0)))
+	);
 
 	function formatDuration(minutes: number) {
 		if (!minutes) return "0m";

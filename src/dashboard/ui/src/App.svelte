@@ -108,7 +108,7 @@
 				<!-- Tab nav -->
 				<div style="margin-bottom:20px;">
 					<div class="tab-nav" style="display:inline-flex;">
-						{#each TABS as tab}
+						{#each TABS as tab (tab.id)}
 							<button
 								class="tab-btn"
 								class:active={$activeTab === tab.id}
