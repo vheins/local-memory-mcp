@@ -174,6 +174,45 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_coding_standards_version ON coding_standards(version);
       CREATE INDEX IF NOT EXISTS idx_coding_standards_is_global ON coding_standards(is_global);
       CREATE INDEX IF NOT EXISTS idx_coding_standards_repo ON coding_standards(repo);
+
+      CREATE TABLE IF NOT EXISTS handoffs (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        from_agent TEXT NOT NULL,
+        to_agent TEXT,
+        task_id TEXT,
+        summary TEXT NOT NULL,
+        context TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_handoffs_repo ON handoffs(repo);
+      CREATE INDEX IF NOT EXISTS idx_handoffs_status ON handoffs(status);
+      CREATE INDEX IF NOT EXISTS idx_handoffs_from_agent ON handoffs(from_agent);
+      CREATE INDEX IF NOT EXISTS idx_handoffs_to_agent ON handoffs(to_agent);
+      CREATE INDEX IF NOT EXISTS idx_handoffs_task_id ON handoffs(task_id);
+      CREATE INDEX IF NOT EXISTS idx_handoffs_created_at ON handoffs(created_at);
+
+      CREATE TABLE IF NOT EXISTS claims (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'unknown',
+        claimed_at TEXT NOT NULL,
+        released_at TEXT,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_claims_repo ON claims(repo);
+      CREATE INDEX IF NOT EXISTS idx_claims_task_id ON claims(task_id);
+      CREATE INDEX IF NOT EXISTS idx_claims_agent ON claims(agent);
+      CREATE INDEX IF NOT EXISTS idx_claims_claimed_at ON claims(claimed_at);
     `);
 
 		const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [

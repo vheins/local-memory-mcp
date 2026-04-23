@@ -8,6 +8,7 @@ import { TaskEntity } from "../entities/task";
 import { ActionEntity } from "../entities/action";
 import { SystemEntity } from "../entities/system";
 import { SummaryEntity } from "../entities/summary";
+import { HandoffEntity } from "../entities/handoff";
 import { WriteLock } from "./write-lock";
 import { logger } from "../utils/logger";
 
@@ -42,6 +43,7 @@ export class SQLiteStore {
 	public actions: ActionEntity;
 	public system: SystemEntity;
 	public summaries: SummaryEntity;
+	public handoffs: HandoffEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
 
@@ -77,6 +79,7 @@ export class SQLiteStore {
 		this.actions = new ActionEntity(this.db);
 		this.system = new SystemEntity(this.db);
 		this.summaries = new SummaryEntity(this.db);
+		this.handoffs = new HandoffEntity(this.db);
 		this.lock = new WriteLock(finalPath);
 	}
 
