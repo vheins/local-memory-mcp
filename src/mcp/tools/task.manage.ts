@@ -226,6 +226,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		const createdTasks: string[] = [];
 		const now = new Date().toISOString();
 		const codesInRequest = new Set<string>();
+		const initialStats = storage.tasks.getTaskStats(repo);
+		let pendingInRequestCount = 0;
 
 		for (const taskData of bulkTasks) {
 			if (codesInRequest.has(taskData.task_code)) {
@@ -244,12 +246,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			}
 
 			if (normalizedStatus === "pending") {
-				const stats = storage.tasks.getTaskStats(repo);
-				const pendingInRequest = createdTasks.filter((c) => {
-					const t = bulkTasks.find((bt) => bt.task_code === c);
-					return t?.status === "pending";
-				}).length;
-				if (stats.todo + pendingInRequest >= 10) {
+				if (initialStats.todo + pendingInRequestCount >= 10) {
 					throw new Error(
 						`Cannot create task '${taskData.task_code}' as 'pending'. Maximum of 10 pending tasks reached.`
 					);
@@ -288,6 +285,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			};
 			storage.tasks.insertTask(task);
 			createdTasks.push(task.task_code);
+			if (normalizedStatus === "pending") {
+				pendingInRequestCount++;
+			}
 			(task as Task & { _temp_id?: string })._temp_id = task.id; // temp store for mapping if needed
 		}
 
