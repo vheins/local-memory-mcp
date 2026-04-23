@@ -483,8 +483,6 @@ a:hover { color: var(--color-primary-dark); }
 .type-mistake { background: linear-gradient(135deg, rgba(244,67,54,0.14), rgba(211,47,47,0.08)); color: #c62828; border-color: rgba(244,67,54,0.30); }
 .type-code_fact { background: linear-gradient(135deg, rgba(156,39,176,0.14), rgba(123,31,162,0.08)); color: #6a1b9a; border-color: rgba(156,39,176,0.30); }
 .type-pattern { background: linear-gradient(135deg, rgba(56,142,60,0.14), rgba(27,94,32,0.08)); color: #1b5e20; border-color: rgba(56,142,60,0.30); }
-.type-agent_handoff { background: linear-gradient(135deg, rgba(255,152,0,0.14), rgba(245,124,0,0.08)); color: #e65100; border-color: rgba(255,152,0,0.30); }
-.type-agent_registered { background: linear-gradient(135deg, rgba(156,204,101,0.14), rgba(139,195,74,0.08)); color: #33691e; border-color: rgba(156,204,101,0.30); }
 .type-file_claim { background: linear-gradient(135deg, rgba(0,188,212,0.14), rgba(0,151,167,0.08)); color: #006064; border-color: rgba(0,188,212,0.30); }
 .type-task_archive { background: linear-gradient(135deg, rgba(121,85,72,0.14), rgba(93,64,55,0.08)); color: #3e2723; border-color: rgba(121,85,72,0.30); }
 
@@ -492,8 +490,6 @@ a:hover { color: var(--color-primary-dark); }
 .dark .type-mistake { background: linear-gradient(135deg, rgba(251,113,133,0.20), rgba(244,63,94,0.08)); color: #fda4af; border-color: rgba(251,113,133,0.32); }
 .dark .type-code_fact { background: linear-gradient(135deg, rgba(192,132,252,0.20), rgba(167,139,250,0.08)); color: #d8b4fe; border-color: rgba(192,132,252,0.32); }
 .dark .type-pattern { background: linear-gradient(135deg, rgba(52,211,153,0.20), rgba(16,185,129,0.08)); color: #6ee7b7; border-color: rgba(52,211,153,0.32); }
-.dark .type-agent_handoff { background: linear-gradient(135deg, rgba(251,146,60,0.20), rgba(249,115,22,0.08)); color: #fdba74; border-color: rgba(251,146,60,0.32); }
-.dark .type-agent_registered { background: linear-gradient(135deg, rgba(163,230,53,0.20), rgba(132,204,22,0.08)); color: #bef264; border-color: rgba(163,230,53,0.32); }
 .dark .type-file_claim { background: linear-gradient(135deg, rgba(34,211,238,0.20), rgba(6,182,212,0.08)); color: #67e8f9; border-color: rgba(34,211,238,0.32); }
 .dark .type-task_archive { background: linear-gradient(135deg, rgba(180,120,100,0.20), rgba(150,90,70,0.08)); color: #d4a08a; border-color: rgba(180,120,100,0.32); }
 

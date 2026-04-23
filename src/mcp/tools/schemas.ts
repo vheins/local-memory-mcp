@@ -14,8 +14,6 @@ export const MemoryTypeSchema = z.enum([
 	"decision",
 	"mistake",
 	"pattern",
-	"agent_handoff",
-	"agent_registered",
 	"file_claim",
 	"task_archive"
 ]);
@@ -465,8 +463,6 @@ export const TOOL_DEFINITIONS = [
 						"decision",
 						"mistake",
 						"pattern",
-						"agent_handoff",
-						"agent_registered",
 						"file_claim",
 						"task_archive"
 					],
@@ -598,8 +594,6 @@ export const TOOL_DEFINITIONS = [
 						"decision",
 						"mistake",
 						"pattern",
-						"agent_handoff",
-						"agent_registered",
 						"file_claim",
 						"task_archive"
 					]
@@ -663,8 +657,6 @@ export const TOOL_DEFINITIONS = [
 							"decision",
 							"mistake",
 							"pattern",
-							"agent_handoff",
-							"agent_registered",
 							"file_claim",
 							"task_archive"
 						]

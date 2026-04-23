@@ -42,8 +42,7 @@ export function createStatsHandler() {
 			decision: "#f59e0b",
 			mistake: "#ef4444",
 			pattern: "#a855f7",
-			task_archive: "#0ea5e9",
-			agent_handoff: "#6366f1"
+			task_archive: "#0ea5e9"
 		};
 		return colors[type] || "#94a3b8";
 	}

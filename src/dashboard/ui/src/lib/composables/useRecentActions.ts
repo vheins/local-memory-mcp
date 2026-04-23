@@ -57,20 +57,6 @@ export function createRecentActionsHandler(onLoadPage: (page: number, append?: b
 			color: "#ef4444",
 			bgAlpha: "rgba(239,68,68,0.12)"
 		},
-		agent_handoff: {
-			icon: "bot",
-			label: "Handoff",
-			gradient: "linear-gradient(135deg,#0ea5e9,#6366f1)",
-			color: "#0ea5e9",
-			bgAlpha: "rgba(14,165,233,0.12)"
-		},
-		agent_registered: {
-			icon: "sparkle",
-			label: "Registered",
-			gradient: "linear-gradient(135deg,#a855f7,#6366f1)",
-			color: "#a855f7",
-			bgAlpha: "rgba(168,85,247,0.12)"
-		},
 		list: {
 			icon: "list",
 			label: "List",
@@ -115,9 +101,7 @@ export function createRecentActionsHandler(onLoadPage: (page: number, append?: b
 			write: "Stored",
 			update: "Updated",
 			delete: "Deleted",
-			read: "Read",
-			agent_handoff: "Handoff",
-			agent_registered: "Registered"
+			read: "Read"
 		};
 		const typeLabel = a.memory_type ? `[${a.memory_type}]` : "";
 		return {

@@ -3,8 +3,6 @@ export type MemoryType =
 	| "decision"
 	| "mistake"
 	| "pattern"
-	| "agent_handoff"
-	| "agent_registered"
 	| "file_claim"
 	| "task_archive";
 
