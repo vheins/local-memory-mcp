@@ -70,3 +70,39 @@ export type MemoryRowParsed = Omit<MemoryEntry, "hit_count" | "recall_count" | "
 	tags: string[];
 	metadata: Record<string, unknown>;
 };
+
+export type CodingStandardEntry = {
+	id: string;
+	title: string;
+	content: string;
+	context: string;
+	version: string;
+	language: string | null;
+	stack: string[];
+	is_global: boolean;
+	repo: string | null;
+	tags: string[];
+	metadata: Record<string, unknown>;
+	created_at: string;
+	updated_at: string;
+	agent: string;
+	model: string;
+};
+
+export type CodingStandardRow = {
+	id: string;
+	title: string;
+	content: string;
+	context: string;
+	version: string;
+	language: string | null;
+	stack: string | null;
+	is_global: number;
+	repo: string | null;
+	tags: string | null;
+	metadata: string | null;
+	created_at: string;
+	updated_at: string;
+	agent: string;
+	model: string;
+};
