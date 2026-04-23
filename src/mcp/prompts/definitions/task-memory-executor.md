@@ -37,7 +37,9 @@ agent: Task Executor
    - **Evidence**: `task-update` status to `completed` with detailed 'comment' (inspected files, verified logic, test results).
    - **Memory**: Store insights as `code_fact`/`pattern` via `memory-store`.
    - **Retrospective**: Invoke `learning-retrospective`.
-   - **Commit**: Atomic git commit/push.
+   - **Commit**: Atomic git commit. The commit message MUST include the task code (for example: `fix: ... [TASK-123]`).
+   - **GitHub Issue Traceability**: If task metadata contains a GitHub Issue reference, the commit message MUST also include the issue hashtag in `#123` format.
+   - **Issue Number Extraction**: Read the issue number from task metadata when available. If metadata only contains a GitHub Issue URL, extract the trailing issue number from that URL before committing.
 8. **Repeat**: Claim next task from `task-list`.
 
 ## 3. BACKLOG MAINTENANCE
