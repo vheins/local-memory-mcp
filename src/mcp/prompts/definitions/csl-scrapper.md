@@ -17,20 +17,26 @@ Goal:
 - Extract only source-backed coding standards from the documentation.
 - Produce one atomic CSL entry per distinct rule, constraint, prohibition, or required workflow.
 - Each entry must be ready for the standard-store tool shape: name, content, context, version, language, stack, tags, metadata, repo, is_global.
+- Identify documentation navigation menus (e.g., sidebars, index pages) containing links to related sub-pages. If present, create iterative scraping tasks for these sub-pages.
 
 Atomic entry rules:
 - One entry = one rule. Split bundled guidance into separate entries.
 - Keep content concise, imperative, and implementation-relevant.
+- ALWAYS include relevant code examples or snippets from the source that illustrate or enforce the rule. Do NOT discard code blocks.
 - Preserve the source meaning without inventing requirements.
-- Ignore navigation text, marketing copy, release notes, changelog noise, and examples that do not establish a rule.
+- Ignore marketing copy, release notes, and changelog noise. Do NOT ignore code examples.
 - Do not emit duplicates or near-duplicates.
 - Do not infer version, language, stack, or scope unless the source makes them explicit.
 - Use metadata to preserve provenance, including the source_url and a short evidence_excerpt for each entry.
 
 Output contract:
-- If tool calls are available, emit one standard-store call per accepted entry.
-- If tool calls are unavailable, return a JSON array of standard-store-compatible payloads.
-- Use title-like names for the "name" field and store the atomic rule text in "content".
+- If tool calls are available:
+  - Emit one `standard-store` call per accepted entry.
+  - Emit one `task-create` call for each discovered documentation sub-page URL. The task title should be "Scrape: [URL]" and the description should instruct to use the `csl-scrapper` prompt for that URL.
+- If tool calls are unavailable, return a JSON object with:
+  - `standards`: Array of `standard-store`-compatible payloads.
+  - `next_urls`: Array of sub-page URLs to scrape.
+- Use title-like names for the "name" field and store the atomic rule text along with its code examples in "content".
 - Use "context" for the topic area (for example: naming, error-handling, routing, testing, hooks, security).
 - Default version to "1.0.0" only when the source gives no versioning signal.
 - Prefer is_global=true unless the source is clearly repo-specific.
