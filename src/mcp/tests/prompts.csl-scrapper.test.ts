@@ -28,6 +28,8 @@ describe("csl-scrapper prompt", () => {
 		expect(result.description).toContain("atomic CSL");
 		expect(result.messages[0].content.text).toContain("https://react.dev/reference/rules/rules-of-hooks");
 		expect(result.messages[0].content.text).toContain("standard-store");
+		expect(result.messages[0].content.text).toContain("parent_id");
+		expect(result.messages[0].content.text).toContain("parent/child");
 	});
 
 	it("includes explicit refusal guidance for unverifiable sources", async () => {

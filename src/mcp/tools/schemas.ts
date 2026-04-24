@@ -255,6 +255,22 @@ export const MemoryDetailSchema = z
 		message: "Either id or code must be provided"
 	});
 
+export const StandardDetailSchema = z.object({
+	id: z.string().uuid(),
+	structured: z.boolean().default(false)
+});
+
+export const StandardDeleteSchema = z
+	.object({
+		repo: z.string().min(1).transform(normalizeRepo).optional(),
+		id: z.string().uuid().optional(),
+		ids: z.array(z.string().uuid()).min(1).optional(),
+		structured: z.boolean().default(false)
+	})
+	.refine((data) => data.id !== undefined || data.ids !== undefined, {
+		message: "Either 'id' or 'ids' must be provided for deletion"
+	});
+
 export const TaskGetSchema = z
 	.object({
 		repo: z.string().min(1).transform(normalizeRepo),
@@ -325,25 +341,74 @@ export const TaskClaimSchema = z
 export const StandardStoreSchema = z.object({
 	name: z.string().min(3).max(255),
 	content: z.string().min(10),
+	parent_id: z.string().uuid().optional(),
 	context: z.string().optional(),
 	version: z.string().optional(),
 	language: z.string().optional(),
 	stack: z.array(z.string()).optional(),
-	repo: z.string().optional(),
+	repo: z.string().transform(normalizeRepo).optional(),
 	is_global: z.boolean().optional(),
-	tags: z.array(z.string()).optional(),
-	metadata: z.record(z.string(), z.any()).optional(),
+	tags: z.array(z.string().min(1)).min(1),
+	metadata: z.record(z.string(), z.any()).refine((value) => Object.keys(value).length > 0, {
+		message: "metadata must contain at least one key"
+	}),
 	agent: z.string().optional(),
 	model: z.string().optional(),
 	structured: z.boolean().default(false)
+}).refine((data) => data.is_global !== false || !!data.repo, {
+	message: "repo is required for repo-specific standards"
 });
+
+export const StandardUpdateSchema = z
+	.object({
+		id: z.string().uuid(),
+		name: z.string().min(3).max(255).optional(),
+		content: z.string().min(10).optional(),
+		parent_id: z.string().uuid().nullable().optional(),
+		context: z.string().optional(),
+		version: z.string().optional(),
+		language: z.string().optional(),
+		stack: z.array(z.string().min(1)).min(1).optional(),
+		repo: z.string().transform(normalizeRepo).optional(),
+		is_global: z.boolean().optional(),
+		tags: z.array(z.string().min(1)).min(1).optional(),
+		metadata: z
+			.record(z.string(), z.any())
+			.refine((value) => Object.keys(value).length > 0, { message: "metadata must contain at least one key" })
+			.optional(),
+		agent: z.string().optional(),
+		model: z.string().optional(),
+		structured: z.boolean().default(false)
+	})
+	.refine(
+		(data) =>
+			data.name !== undefined ||
+			data.content !== undefined ||
+			data.parent_id !== undefined ||
+			data.context !== undefined ||
+			data.version !== undefined ||
+			data.language !== undefined ||
+			data.stack !== undefined ||
+			data.repo !== undefined ||
+			data.is_global !== undefined ||
+			data.tags !== undefined ||
+			data.metadata !== undefined ||
+			data.agent !== undefined ||
+			data.model !== undefined,
+		{ message: "At least one field must be provided for update" }
+	)
+	.refine((data) => data.is_global !== false || !!data.repo, {
+		message: "repo is required for repo-specific standards"
+	});
 
 export const StandardSearchSchema = z.object({
 	query: z.string().optional(),
 	stack: z.array(z.string()).optional(),
+	tags: z.array(z.string()).optional(),
 	language: z.string().optional(),
+	context: z.string().optional(),
 	version: z.string().optional(),
-	repo: z.string().optional(),
+	repo: z.string().transform(normalizeRepo).optional(),
 	is_global: z.boolean().optional(),
 	limit: z.number().min(1).max(100).default(20),
 	offset: z.number().min(0).default(0),
@@ -457,6 +522,20 @@ export const TOOL_DEFINITIONS = [
 				code: { type: "string", description: "Short memory code. Optional if id is provided." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
 			}
+		}
+	},
+	{
+		name: "standard-detail",
+		title: "Standard Detail",
+		description:
+			"Fetch full details of a specific coding standard by ID. Use after standard-search when a result is relevant and full guidance is needed.",
+		inputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string", format: "uuid", description: "Coding standard ID." },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
+			},
+			required: ["id"]
 		}
 	},
 	{
@@ -802,6 +881,42 @@ export const TOOL_DEFINITIONS = [
 					items: { type: "string", format: "uuid" },
 					minItems: 1,
 					description: "Array of memory IDs to delete"
+				},
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+			}
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				success: { type: "boolean" },
+				id: { type: "string" },
+				ids: { type: "array", items: { type: "string" } },
+				repo: { type: "string" },
+				deletedCount: { type: "number" }
+			},
+			required: ["success"]
+		}
+	},
+	{
+		name: "standard-delete",
+		title: "Standard Delete",
+		description: "Delete one or more coding standards. Supports single 'id' or bulk 'ids'.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: true,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name (optional for single id)" },
+				id: { type: "string", format: "uuid", description: "Coding standard ID to delete" },
+				ids: {
+					type: "array",
+					items: { type: "string", format: "uuid" },
+					minItems: 1,
+					description: "Array of coding standard IDs to delete"
 				},
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			}
@@ -1341,6 +1456,7 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				name: { type: "string", minLength: 3, maxLength: 255, description: "Human-readable standard name" },
 				content: { type: "string", minLength: 10, description: "One atomic, actionable standard written as concise Markdown" },
+				parent_id: { type: "string", format: "uuid", description: "Optional parent standard ID when this rule is a child/specialization." },
 				context: { type: "string", description: "Context or category (e.g., 'error-handling', 'security')" },
 				version: { type: "string", description: "Version of the standard (e.g., '1.0.0')" },
 				language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" },
@@ -1364,7 +1480,7 @@ export const TOOL_DEFINITIONS = [
 				model: { type: "string", description: "AI model used" },
 				structured: { type: "boolean", default: false }
 			},
-			required: ["name", "content"]
+			required: ["name", "content", "tags", "metadata"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1376,6 +1492,7 @@ export const TOOL_DEFINITIONS = [
 						id: { type: "string" },
 						title: { type: "string" },
 						content: { type: "string" },
+						parent_id: { type: "string", nullable: true },
 						context: { type: "string" },
 						version: { type: "string" },
 						language: { type: "string", nullable: true },
@@ -1393,6 +1510,7 @@ export const TOOL_DEFINITIONS = [
 						"id",
 						"title",
 						"content",
+						"parent_id",
 						"context",
 						"version",
 						"stack",
@@ -1411,10 +1529,52 @@ export const TOOL_DEFINITIONS = [
 		}
 	},
 	{
+		name: "standard-update",
+		title: "Standard Update",
+		description:
+			"Update an existing coding standard. Use this when the rule changes, expands scope, or metadata/tags need correction.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string", description: "Standard ID to update" },
+				name: { type: "string", minLength: 3, maxLength: 255 },
+				content: { type: "string", minLength: 10 },
+				parent_id: { type: "string", format: "uuid", nullable: true },
+				context: { type: "string" },
+				version: { type: "string" },
+				language: { type: "string" },
+				stack: { type: "array", items: { type: "string" } },
+				repo: { type: "string" },
+				is_global: { type: "boolean" },
+				tags: { type: "array", items: { type: "string" } },
+				metadata: { type: "object" },
+				agent: { type: "string" },
+				model: { type: "string" },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["id"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				success: { type: "boolean" },
+				id: { type: "string" },
+				updatedFields: { type: "array", items: { type: "string" } }
+			},
+			required: ["success", "id", "updatedFields"]
+		}
+	},
+	{
 		name: "standard-search",
 		title: "Standard Search",
 		description:
-			"Navigation and lookup layer for coding standards. Query by text, stack, language, version, repo, and global scope before applying or creating standards.",
+			"NAVIGATION LAYER: Returns a compact pointer table of matching coding standards. Use `standard-detail` to fetch full content for a selected result.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -1429,7 +1589,13 @@ export const TOOL_DEFINITIONS = [
 					items: { type: "string" },
 					description: "Technology stack to filter by (e.g., ['react', 'nextjs'])"
 				},
+				tags: {
+					type: "array",
+					items: { type: "string" },
+					description: "Tag filter"
+				},
 				language: { type: "string", description: "Programming language filter" },
+				context: { type: "string", description: "Context/category filter" },
 				version: { type: "string", description: "Version filter" },
 				repo: { type: "string", description: "Repository filter (optional)" },
 				is_global: { type: "boolean", description: "Filter by global/repo-specific" },
@@ -1442,35 +1608,29 @@ export const TOOL_DEFINITIONS = [
 		outputSchema: {
 			type: "object",
 			properties: {
-				success: { type: "boolean" },
-				standards: {
-					type: "array",
-					items: {
-						type: "object",
-						properties: {
-							id: { type: "string" },
-							title: { type: "string" },
-							content: { type: "string" },
-							context: { type: "string" },
-							version: { type: "string" },
-							language: { type: "string", nullable: true },
-							stack: { type: "array", items: { type: "string" } },
-							is_global: { type: "boolean" },
-							repo: { type: "string", nullable: true },
-							tags: { type: "array", items: { type: "string" } },
-							metadata: { type: "object" },
-							created_at: { type: "string" },
-							updated_at: { type: "string" },
-							agent: { type: "string" },
-							model: { type: "string" }
+				schema: { type: "string", enum: ["standard-search"] },
+				query: { type: "string" },
+				count: { type: "number", description: "Number of rows returned" },
+				total: { type: "number", description: "Total number of matches before pagination" },
+				offset: { type: "number" },
+				limit: { type: "number" },
+				results: {
+					type: "object",
+					properties: {
+						columns: {
+							type: "array",
+							items: { type: "string" }
+						},
+						rows: {
+							type: "array",
+							items: { type: "array" },
+							description: "Each row includes standard id and pointer metadata. Fetch full content via standard-detail."
 						}
 					},
-					description: "Matching coding standards"
-				},
-				count: { type: "number", description: "Number of results returned" },
-				message: { type: "string" }
+					required: ["columns", "rows"]
+				}
 			},
-			required: ["success", "standards", "count", "message"]
+			required: ["schema", "query", "count", "total", "offset", "limit", "results"]
 		}
 	}
 ];

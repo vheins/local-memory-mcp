@@ -4,7 +4,7 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 
-describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
+describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-detail)", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (
@@ -85,6 +85,35 @@ describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
 		expect(detailRes.structuredContent.title).toBe("Test Task");
 	});
 
+	it("should fetch coding standard details by ID via standard-detail", async () => {
+		const storeRes = await router("tools/call", {
+			name: "standard-store",
+			arguments: {
+				name: "TS Error Standard",
+				content: "Use typed errors and structured logging for server boundaries.",
+				language: "typescript",
+				stack: ["node", "typescript"],
+				tags: ["backend", "errors"],
+				metadata: { source: "detail-test" },
+				repo: REPO,
+				is_global: false
+			}
+		});
+		const standardId = storeRes.structuredContent.standard.id;
+
+		const detailRes = await router("tools/call", {
+			name: "standard-detail",
+			arguments: { id: standardId }
+		});
+
+		expect(detailRes.structuredContent.id).toBe(standardId);
+		expect(detailRes.structuredContent.title).toBe("TS Error Standard");
+		expect(detailRes.structuredContent.content).toContain("typed errors");
+
+		const standard = db.standards.getById(standardId as string);
+		expect(standard?.hit_count).toBe(1);
+	});
+
 	it("should fetch task details by task_code via task-detail", async () => {
 		// 1. Create a task
 		const createRes = await router("tools/call", {
@@ -137,5 +166,15 @@ describe("MCP Local Memory - Detail Tools (memory-detail, task-detail)", () => {
 				arguments: { repo: REPO, task_code: "NON-EXISTENT" }
 			})
 		).rejects.toThrow(`Task not found: NON-EXISTENT in repo ${REPO}`);
+	});
+
+	it("should throw error if coding standard not found", async () => {
+		const fakeId = "00000000-0000-0000-0000-000000000000";
+		await expect(
+			router("tools/call", {
+				name: "standard-detail",
+				arguments: { id: fakeId }
+			})
+		).rejects.toThrow(`Coding standard not found: ${fakeId}`);
 	});
 });

@@ -4,13 +4,15 @@
 	import Icon from "../lib/Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 	import { formatDate } from "../lib/utils";
-	import type { CodingStandard, McpToolResponse, StandardSearchResult } from "../lib/interfaces";
+	import type { CodingStandard } from "../lib/interfaces";
 
 	export let repo = "";
 
 	let standards: CodingStandard[] = [];
 	let loading = false;
+	let detailLoading = false;
 	let saving = false;
+	let deleting = false;
 	let error = "";
 	let query = "";
 	let language = "";
@@ -18,24 +20,43 @@
 	let scope: "repo" | "global" | "all" = "repo";
 	let selected: CodingStandard | null = null;
 	let showCreate = false;
+	let editMode = false;
 
 	let form = {
 		name: "",
+		parent_id: "",
 		context: "general",
 		version: "1.0.0",
 		language: "",
 		stack: "",
 		tags: "",
+		metadata: '{"source":"dashboard"}',
 		content: ""
 	};
 
-	$: if (repo) {
-		void loadStandards();
+	let editForm = {
+		name: "",
+		parent_id: "",
+		context: "general",
+		version: "1.0.0",
+		language: "",
+		stack: "",
+		tags: "",
+		metadata: '{"source":"dashboard"}',
+		content: ""
+	};
+
+	function parseMetadata(value: string): Record<string, unknown> | null {
+		try {
+			const parsed = JSON.parse(value) as Record<string, unknown>;
+			return parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0 ? parsed : null;
+		} catch {
+			return null;
+		}
 	}
 
-	function structured<T>(response: unknown): T | null {
-		const result = response as McpToolResponse<T>;
-		return result?.structuredContent ?? null;
+	$: if (repo) {
+		void loadStandards();
 	}
 
 	function splitList(value: string) {
@@ -45,24 +66,77 @@
 			.filter(Boolean);
 	}
 
+	function stringifyMetadata(value: Record<string, unknown>) {
+		return JSON.stringify(value, null, 2);
+	}
+
+	async function loadStandardDetail(id: string) {
+		detailLoading = true;
+		editMode = false;
+		try {
+			const detail = await api.standardById(id);
+			selected = detail;
+			if (detail) {
+				editForm = {
+					name: detail.title,
+					parent_id: detail.parent_id || "",
+					context: detail.context,
+					version: detail.version,
+					language: detail.language || "",
+					stack: detail.stack.join(", "),
+					tags: detail.tags.join(", "),
+					metadata: stringifyMetadata(detail.metadata),
+					content: detail.content
+				};
+			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			detailLoading = false;
+		}
+	}
+
+	function startEdit() {
+		if (!selected) return;
+		editForm = {
+			name: selected.title,
+			parent_id: selected.parent_id || "",
+			context: selected.context,
+			version: selected.version,
+			language: selected.language || "",
+			stack: selected.stack.join(", "),
+			tags: selected.tags.join(", "),
+			metadata: stringifyMetadata(selected.metadata),
+			content: selected.content
+		};
+		editMode = true;
+	}
+
+	function cancelEdit() {
+		editMode = false;
+	}
+
 	async function loadStandards() {
 		if (!repo) return;
 		loading = true;
 		error = "";
 		try {
-			const args: Record<string, unknown> = {
+			const result = await api.standards({
 				query: query || undefined,
 				language: language || undefined,
-				stack: splitList(stack),
-				limit: 100,
-				structured: true
-			};
-			if (scope === "repo") args.repo = repo;
-			if (scope === "global") args.is_global = true;
-
-			const result = structured<StandardSearchResult>(await api.callTool("standard-search", args));
-			standards = result?.standards || [];
-			if (selected && !standards.some((item) => item.id === selected?.id)) selected = null;
+				stack: stack || undefined,
+				repo: scope === "repo" ? repo : undefined,
+				is_global: scope === "global" ? true : undefined,
+				page: 1,
+				pageSize: 100
+			});
+			standards = result.standards || [];
+			if (!selected || !standards.some((item) => item.id === selected?.id)) {
+				selected = standards[0] || null;
+			}
+			if (selected?.id) {
+				await loadStandardDetail(selected.id);
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -71,33 +145,90 @@
 	}
 
 	async function saveStandard() {
-		if (!form.name.trim() || !form.content.trim()) return;
+		const metadata = parseMetadata(form.metadata);
+		if (!form.name.trim() || !form.content.trim() || splitList(form.tags).length === 0 || !metadata) return;
 		saving = true;
 		error = "";
 		try {
 			const isGlobal = scope === "global";
-			const result = structured<{ standard: CodingStandard }>(
-				await api.callTool("standard-store", {
-					name: form.name.trim(),
-					content: form.content.trim(),
-					context: form.context.trim() || "general",
-					version: form.version.trim() || "1.0.0",
-					language: form.language.trim() || undefined,
-					stack: splitList(form.stack),
-					tags: splitList(form.tags),
-					repo: isGlobal ? undefined : repo,
-					is_global: isGlobal,
-					structured: true
-				})
-			);
-			form = { name: "", context: "general", version: "1.0.0", language: "", stack: "", tags: "", content: "" };
+			const result = await api.createStandard({
+				title: form.name.trim(),
+				content: form.content.trim(),
+				parent_id: form.parent_id.trim() || undefined,
+				context: form.context.trim() || "general",
+				version: form.version.trim() || "1.0.0",
+				language: form.language.trim() || undefined,
+				stack: splitList(form.stack),
+				tags: splitList(form.tags),
+				metadata,
+				repo: isGlobal ? undefined : repo,
+				is_global: isGlobal
+			});
+			form = {
+				name: "",
+				parent_id: "",
+				context: "general",
+				version: "1.0.0",
+				language: "",
+				stack: "",
+				tags: "",
+				metadata: '{"source":"dashboard"}',
+				content: ""
+			};
 			showCreate = false;
 			await loadStandards();
-			selected = result?.standard || standards[0] || null;
+			selected = result || selected;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			saving = false;
+		}
+	}
+
+	async function updateStandard() {
+		if (!selected) return;
+		const metadata = parseMetadata(editForm.metadata);
+		if (!editForm.name.trim() || !editForm.content.trim() || splitList(editForm.tags).length === 0 || !metadata) return;
+		saving = true;
+		error = "";
+		try {
+			await api.updateStandard(selected.id, {
+				title: editForm.name.trim(),
+				content: editForm.content.trim(),
+				parent_id: editForm.parent_id.trim() || null,
+				context: editForm.context.trim() || "general",
+				version: editForm.version.trim() || "1.0.0",
+				language: editForm.language.trim() || undefined,
+				stack: splitList(editForm.stack),
+				tags: splitList(editForm.tags),
+				metadata,
+				repo: selected.is_global ? undefined : selected.repo || repo,
+				is_global: selected.is_global
+			});
+			editMode = false;
+			await loadStandardDetail(selected.id);
+			await loadStandards();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function deleteStandard() {
+		if (!selected) return;
+		if (!confirm(`Delete coding standard "${selected.title}"?`)) return;
+		deleting = true;
+		error = "";
+		try {
+			await api.deleteStandard(selected.id);
+			editMode = false;
+			selected = null;
+			await loadStandards();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			deleting = false;
 		}
 	}
 
@@ -149,6 +280,10 @@
 					<input class="form-input" placeholder="Error handling standard" bind:value={form.name} />
 				</label>
 				<label>
+					<span>Parent ID</span>
+					<input class="form-input" placeholder="Optional parent standard UUID" bind:value={form.parent_id} />
+				</label>
+				<label>
 					<span>Context</span>
 					<input class="form-input" placeholder="testing, security, routing" bind:value={form.context} />
 				</label>
@@ -168,12 +303,20 @@
 					<span>Tags</span>
 					<input class="form-input" placeholder="frontend, linting" bind:value={form.tags} />
 				</label>
+				<label>
+					<span>Metadata JSON</span>
+					<input class="form-input" placeholder="JSON metadata" bind:value={form.metadata} />
+				</label>
 			</div>
 			<label class="content-label">
 				<span>Content</span>
 				<textarea class="form-textarea content-input" placeholder="Write the implementation rule in concise Markdown..." bind:value={form.content}></textarea>
 			</label>
-			<button class="btn btn-primary" on:click={saveStandard} disabled={saving || !form.name.trim() || !form.content.trim()}>
+			<button
+				class="btn btn-primary"
+				on:click={saveStandard}
+				disabled={saving || !form.name.trim() || !form.content.trim() || splitList(form.tags).length === 0 || !parseMetadata(form.metadata)}
+			>
 				<Icon name="check" size={14} strokeWidth={2} />
 				{saving ? "Saving..." : "Save Standard"}
 			</button>
@@ -199,7 +342,7 @@
 			{:else}
 				<div class="standard-list">
 					{#each standards as standard (standard.id)}
-						<button class:selected={selected?.id === standard.id} class="standard-row" on:click={() => (selected = standard)}>
+						<button class:selected={selected?.id === standard.id} class="standard-row" on:click={() => loadStandardDetail(standard.id)}>
 							<div class="row-title">{standard.title}</div>
 							<div class="row-meta">
 								<span>{standard.context}</span>
@@ -220,21 +363,82 @@
 		</div>
 
 		<div class="glass card panel-card detail-panel">
-			{#if selected}
+			{#if detailLoading}
+				<div class="muted-state">Loading standard detail...</div>
+			{:else if selected}
 				<div class="detail-heading">
 					<div>
 						<div class="detail-title">{selected.title}</div>
 						<div class="row-meta">
 							<span>{selected.context}</span>
 							<span>v{selected.version}</span>
+							<span>{selected.parent_id ? `child of ${selected.parent_id}` : "root"}</span>
 							<span>{formatDate(selected.updated_at)}</span>
 						</div>
 					</div>
-					<span class="scope-pill">{selected.is_global ? "Global" : "Repo"}</span>
+					<div class="detail-actions">
+						<span class="scope-pill">{selected.is_global ? "Global" : "Repo"}</span>
+						<button class="btn btn-ghost btn-sm" on:click={startEdit}>
+							<Icon name="pencil" size={14} strokeWidth={2} />
+							Edit
+						</button>
+						<button class="btn btn-ghost btn-sm danger-text" on:click={deleteStandard} disabled={deleting}>
+							<Icon name="trash" size={14} strokeWidth={2} />
+							{deleting ? "Deleting..." : "Delete"}
+						</button>
+					</div>
 				</div>
-				<div class="markdown-body md-card">
-					<Markdown content={selected.content} />
-				</div>
+				{#if editMode}
+					<div class="form-grid">
+						<label>
+							<span>Name</span>
+							<input class="form-input" bind:value={editForm.name} />
+						</label>
+						<label>
+							<span>Parent ID</span>
+							<input class="form-input" bind:value={editForm.parent_id} />
+						</label>
+						<label>
+							<span>Context</span>
+							<input class="form-input" bind:value={editForm.context} />
+						</label>
+						<label>
+							<span>Version</span>
+							<input class="form-input" bind:value={editForm.version} />
+						</label>
+						<label>
+							<span>Language</span>
+							<input class="form-input" bind:value={editForm.language} />
+						</label>
+						<label>
+							<span>Stack</span>
+							<input class="form-input" bind:value={editForm.stack} />
+						</label>
+						<label>
+							<span>Tags</span>
+							<input class="form-input" bind:value={editForm.tags} />
+						</label>
+						<label>
+							<span>Metadata JSON</span>
+							<input class="form-input" bind:value={editForm.metadata} />
+						</label>
+					</div>
+					<label class="content-label">
+						<span>Content</span>
+						<textarea class="form-textarea content-input" bind:value={editForm.content}></textarea>
+					</label>
+					<div class="editor-actions">
+						<button class="btn btn-primary" on:click={updateStandard} disabled={saving || !parseMetadata(editForm.metadata)}>
+							<Icon name="check" size={14} strokeWidth={2} />
+							{saving ? "Saving..." : "Save Changes"}
+						</button>
+						<button class="btn btn-ghost" on:click={cancelEdit} disabled={saving}>Cancel</button>
+					</div>
+				{:else}
+					<div class="markdown-body md-card">
+						<Markdown content={selected.content} />
+					</div>
+				{/if}
 			{:else}
 				<div class="empty-state detail-empty">
 					<Icon name="book-open" size={22} strokeWidth={1.75} />
@@ -257,6 +461,9 @@
 	.panel-card { padding: 16px; min-width: 0; }
 	.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 	.form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 10px; }
+	.detail-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.editor-actions { display: flex; gap: 10px; margin-top: 12px; }
+	.danger-text { color: var(--color-danger, #d04b4b); }
 	label span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
 	.content-input { min-height: 150px; resize: vertical; margin-bottom: 10px; }
 	.content-label { display: block; }

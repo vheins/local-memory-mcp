@@ -1,4 +1,4 @@
-import { VectorStore, VectorResult } from "../types";
+import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 import { STOPWORDS } from "../utils/stopwords.js";
@@ -43,27 +43,33 @@ export class StubVectorStore implements VectorStore {
 		return union.size > 0 ? intersection.size / union.size : 0;
 	}
 
-	async upsert(id: string, text: string): Promise<void> {
+	async upsert(id: string, text: string, kind: VectorEntityKind = "memory"): Promise<void> {
 		try {
 			// Generate simple vector from text tokens
 			const tokens = this.generateTextVector(text);
 
-			// Store tokens as JSON array for better retrieval
-			this.db.memories.upsertVectorEmbedding(
-				id,
-				tokens.map(() => 0)
-			); // Stub implementation using placeholder numbers
+			if (kind === "standard") {
+				this.db.standards.upsertVectorEmbedding(
+					id,
+					tokens.map(() => 0)
+				);
+			} else {
+				this.db.memories.upsertVectorEmbedding(
+					id,
+					tokens.map(() => 0)
+				);
+			}
 		} catch {
 			// Silently fail - vector is optional for search fallback
 		}
 	}
 
-	async remove(id: string): Promise<void> {
+	async remove(id: string, _kind: VectorEntityKind = "memory"): Promise<void> {
 		if (!id) return;
 		// Handled by SQL CASCADE
 	}
 
-	async search(query: string, limit: number, repo?: string): Promise<VectorResult[]> {
+	async search(query: string, limit: number, repo?: string, _kind: VectorEntityKind = "memory"): Promise<VectorResult[]> {
 		if (limit < 0) return [];
 		if (repo === "never") return [];
 		try {

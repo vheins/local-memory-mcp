@@ -72,6 +72,7 @@ export type CodingStandardEntry = {
 	id: string;
 	title: string;
 	content: string;
+	parent_id: string | null;
 	context: string;
 	version: string;
 	language: string | null;
@@ -82,6 +83,8 @@ export type CodingStandardEntry = {
 	metadata: Record<string, unknown>;
 	created_at: string;
 	updated_at: string;
+	hit_count: number;
+	last_used_at: string | null;
 	agent: string;
 	model: string;
 };
@@ -90,6 +93,7 @@ export type CodingStandardRow = {
 	id: string;
 	title: string;
 	content: string;
+	parent_id: string | null;
 	context: string;
 	version: string;
 	language: string | null;
@@ -100,6 +104,8 @@ export type CodingStandardRow = {
 	metadata: string | null;
 	created_at: string;
 	updated_at: string;
+	hit_count: number;
+	last_used_at: string | null;
 	agent: string;
 	model: string;
 };

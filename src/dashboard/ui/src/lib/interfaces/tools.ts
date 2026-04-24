@@ -8,6 +8,7 @@ export interface CodingStandard {
 	id: string;
 	title: string;
 	content: string;
+	parent_id?: string | null;
 	context: string;
 	version: string;
 	language: string | null;
@@ -18,15 +19,23 @@ export interface CodingStandard {
 	metadata: Record<string, unknown>;
 	created_at: string;
 	updated_at: string;
+	hit_count?: number;
+	last_used_at?: string | null;
 	agent?: string;
 	model?: string;
 }
 
 export interface StandardSearchResult {
-	success: boolean;
-	standards: CodingStandard[];
+	schema: "standard-search";
+	query: string;
 	count: number;
-	message?: string;
+	total: number;
+	offset: number;
+	limit: number;
+	results: {
+		columns: string[];
+		rows: unknown[][];
+	};
 }
 
 export interface Handoff {

@@ -119,6 +119,7 @@ export class MigrationManager {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        parent_id TEXT,
         context TEXT,
         version TEXT,
         language TEXT,
@@ -129,13 +130,25 @@ export class MigrationManager {
         metadata TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        hit_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at TEXT,
         agent TEXT NOT NULL DEFAULT 'unknown',
-        model TEXT NOT NULL DEFAULT 'unknown'
+        model TEXT NOT NULL DEFAULT 'unknown',
+        FOREIGN KEY (parent_id) REFERENCES coding_standards(id) ON DELETE SET NULL
       );
 
       CREATE INDEX IF NOT EXISTS idx_coding_standards_repo ON coding_standards(repo);
       CREATE INDEX IF NOT EXISTS idx_coding_standards_is_global ON coding_standards(is_global);
       CREATE INDEX IF NOT EXISTS idx_coding_standards_language ON coding_standards(language);
+      CREATE INDEX IF NOT EXISTS idx_coding_standards_hit_count ON coding_standards(hit_count);
+
+      CREATE TABLE IF NOT EXISTS standard_vectors (
+        standard_id TEXT PRIMARY KEY,
+        vector TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        vector_version INTEGER NOT NULL DEFAULT 1,
+        FOREIGN KEY (standard_id) REFERENCES coding_standards(id) ON DELETE CASCADE
+      );
 
       CREATE TABLE IF NOT EXISTS memories_archive (
         id TEXT PRIMARY KEY,
@@ -244,6 +257,21 @@ export class MigrationManager {
 				name: "vector_version",
 				table: "memory_vectors",
 				definition: "ALTER TABLE memory_vectors ADD COLUMN vector_version INTEGER NOT NULL DEFAULT 1"
+			},
+			{
+				name: "parent_id",
+				table: "coding_standards",
+				definition: "ALTER TABLE coding_standards ADD COLUMN parent_id TEXT"
+			},
+			{
+				name: "hit_count",
+				table: "coding_standards",
+				definition: "ALTER TABLE coding_standards ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0"
+			},
+			{
+				name: "last_used_at",
+				table: "coding_standards",
+				definition: "ALTER TABLE coding_standards ADD COLUMN last_used_at TEXT"
 			},
 			{ name: "depends_on", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN depends_on TEXT" },
 			{

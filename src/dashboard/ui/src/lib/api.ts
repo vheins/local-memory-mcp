@@ -1,6 +1,7 @@
 import type {
 	Memory,
 	Task,
+	CodingStandard,
 	RepoMeta,
 	DashboardStats,
 	RecentAction,
@@ -201,6 +202,37 @@ export const api = {
 		}),
 
 	deleteTaskComment: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
+
+	standards: (params: { repo?: string; query?: string; language?: string; stack?: string; tags?: string; is_global?: boolean; page?: number; pageSize?: number }) => {
+		const q = new URLSearchParams();
+		if (params.repo) q.set("repo", params.repo);
+		if (params.query) q.set("query", params.query);
+		if (params.language) q.set("language", params.language);
+		if (params.stack) q.set("stack", params.stack);
+		if (params.tags) q.set("tags", params.tags);
+		if (params.is_global !== undefined) q.set("is_global", String(params.is_global));
+		if (params.page) q.set("page", String(params.page));
+		if (params.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<{ standards: CodingStandard[]; pagination: Pagination }>(`/api/standards?${q}`);
+	},
+
+	standardById: (id: string) => apiFetch<CodingStandard>(`/api/standards/${id}`),
+
+	createStandard: (body: Partial<CodingStandard>) =>
+		apiFetch<CodingStandard>("/api/standards", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}),
+
+	updateStandard: (id: string, updates: Partial<CodingStandard>) =>
+		apiFetch<{ success: boolean }>(`/api/standards/${id}`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(updates)
+		}),
+
+	deleteStandard: (id: string) => apiFetch<{ success: boolean }>(`/api/standards/${id}`, { method: "DELETE" }),
 
 	export: (repo: string) =>
 		apiFetch<{ repo: string; exported_at: string; tasks: Task[]; memories: Memory[] }>(

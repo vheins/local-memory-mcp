@@ -16,11 +16,13 @@ Goal:
 - Use the web_fetch tool (if available) to retrieve the content of the provided Source URL.
 - Extract only source-backed coding standards from the documentation.
 - Produce one atomic CSL entry per distinct rule, constraint, prohibition, or required workflow.
-- Each entry must be ready for the standard-store tool shape: name, content, context, version, language, stack, tags, metadata, repo, is_global.
+- Each entry must be ready for the standard-store tool shape: name, content, parent_id, context, version, language, stack, tags, metadata, repo, is_global.
 - Identify documentation navigation menus (e.g., sidebars, index pages) containing links to related sub-pages. If present, create iterative scraping tasks for these sub-pages.
+- Detect documentation hierarchy when a page contains an umbrella rule with narrower sub-rules. In that case, emit one parent entry plus child entries linked with `parent_id`.
 
 Atomic entry rules:
 - One entry = one rule. Split bundled guidance into separate entries.
+- Use parent/child only for genuine hierarchy: parent = umbrella principle, child = narrower enforceable specialization.
 - Keep content concise, imperative, and implementation-relevant.
 - ALWAYS include relevant code examples or snippets from the source that illustrate or enforce the rule. Do NOT discard code blocks.
 - Preserve the source meaning without inventing requirements.
@@ -32,12 +34,14 @@ Atomic entry rules:
 Output contract:
 - If tool calls are available:
   - Emit one `standard-store` call per accepted entry.
+  - When parent/child hierarchy exists, emit the parent first, then emit children with `parent_id` referencing the created parent standard ID.
   - Emit one `task-create` call for each discovered documentation sub-page URL. The task title should be "Scrape: [URL]" and the description should instruct to use the `csl-scrapper` prompt for that URL.
 - If tool calls are unavailable, return a JSON object with:
   - `standards`: Array of `standard-store`-compatible payloads.
   - `next_urls`: Array of sub-page URLs to scrape.
 - Use title-like names for the "name" field and store the atomic rule text along with its code examples in "content".
 - Use "context" for the topic area (for example: naming, error-handling, routing, testing, hooks, security).
+- Use `parent_id` only when the source explicitly shows the rule is nested under a broader parent concept on the same page.
 - Default version to "1.0.0" only when the source gives no versioning signal.
 - Prefer is_global=true unless the source is clearly repo-specific.
 
