@@ -440,14 +440,14 @@ export const TOOL_DEFINITIONS = [
 		name: "memory-detail",
 		title: "Memory Detail",
 		description:
-			"Fetch full details of a specific memory by ID. Use this when you have a memory ID (e.g. from search results) and need to read the full content.",
+			"Fetch full details of a specific memory by ID or short code. Use after memory-recap or memory-search when a pointer row is relevant and full content is needed.",
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Memory entry ID" },
+				id: { type: "string", format: "uuid", description: "Memory entry ID. Optional if code is provided." },
+				code: { type: "string", description: "Short memory code. Optional if id is provided." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
-			},
-			required: ["id"]
+			}
 		}
 	},
 	{
@@ -816,7 +816,7 @@ export const TOOL_DEFINITIONS = [
 		name: "memory-recap",
 		title: "Memory Recap",
 		description:
-			"AGGREGATED OVERVIEW LAYER: Returns stats (counts by type) and a pointer table of top memories [id, title, type, importance]. NO content. Use for orientation only — retrieve full memory via memory-detail.",
+			"AGGREGATED OVERVIEW LAYER: Returns stats (counts by type) and a pointer table of top memories [id, code, title, type, importance]. NO content. Use for orientation only — retrieve full memory via memory-detail.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -859,12 +859,12 @@ export const TOOL_DEFINITIONS = [
 				stats: {
 					type: "object",
 					properties: {
-						by_type: {
+						byType: {
 							type: "object",
 							description: "Count of active memories per type (e.g. { decision: 3, code_fact: 7 })"
 						}
 					},
-					required: ["by_type"]
+					required: ["byType"]
 				},
 				top: {
 					type: "object",
@@ -872,12 +872,12 @@ export const TOOL_DEFINITIONS = [
 						columns: {
 							type: "array",
 							items: { type: "string" },
-							description: "Column names: [id, title, type, importance]"
+							description: "Column names: [id, code, title, type, importance]"
 						},
 						rows: {
 							type: "array",
 							items: { type: "array" },
-							description: "Each row: [id, title, type, importance]. Fetch full content via memory-detail"
+							description: "Each row: [id, code, title, type, importance]. Fetch full content via memory-detail"
 						}
 					},
 					required: ["columns", "rows"]
@@ -1077,7 +1077,7 @@ export const TOOL_DEFINITIONS = [
 		name: "task-list",
 		title: "Task List",
 		description:
-			"PRIMARY navigation and search tool for tasks. Returns a compact tabular list of tasks (id, task_code, title, status, priority, updated_at). Defaults to in_progress and pending tasks. Use 'query' to filter by code, title, or description. Use 'status' (comma-separated) for specific filters. AGENTS: call this once at start, pick ONE task, then call task-detail.",
+			"PRIMARY navigation and search tool for tasks. Returns a compact tabular list of tasks (id, task_code, title, status, priority, updated_at, comments_count). Defaults to in_progress and pending tasks. Use 'query' to filter by code, title, or description. Use 'status' (comma-separated) for specific filters. AGENTS: call this once at start, pick ONE task, then call task-detail.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -1156,7 +1156,7 @@ export const TOOL_DEFINITIONS = [
 		name: "handoff-create",
 		title: "Handoff Create",
 		description:
-			"Create a handoff record for another agent, optionally linked to a task by id or task_code.",
+			"Create a handoff record when work needs context transfer between agents. Optionally link it to a task by task_id or task_code, and put machine-readable details in context.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -1171,8 +1171,11 @@ export const TOOL_DEFINITIONS = [
 				to_agent: { type: "string", description: "Optional target agent" },
 				task_id: { type: "string", format: "uuid", description: "Optional task id to associate" },
 				task_code: { type: "string", description: "Optional task code to associate" },
-				summary: { type: "string", minLength: 1, description: "Short handoff summary" },
-				context: { type: "object", description: "Structured handoff context payload" },
+				summary: { type: "string", minLength: 1, description: "Concise human-readable transfer summary" },
+				context: {
+					type: "object",
+					description: "Structured handoff context, such as changed files, blockers, verification status, and next steps"
+				},
 				expires_at: { type: "string", description: "Optional expiration timestamp" },
 				structured: { type: "boolean", default: false }
 			},
@@ -1200,7 +1203,7 @@ export const TOOL_DEFINITIONS = [
 		name: "handoff-list",
 		title: "Handoff List",
 		description:
-			"List handoffs for a repository with optional status and agent filters.",
+			"Navigation layer for handoff queues. List repository handoffs with optional status and agent filters, then inspect selected rows before acting.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -1226,8 +1229,16 @@ export const TOOL_DEFINITIONS = [
 				handoffs: {
 					type: "object",
 					properties: {
-						columns: { type: "array", items: { type: "string" } },
-						rows: { type: "array", items: { type: "array" } }
+						columns: {
+							type: "array",
+							items: { type: "string" },
+							description: "Column names: [id, from_agent, to_agent, task_id, status, created_at, summary]"
+						},
+						rows: {
+							type: "array",
+							items: { type: "array" },
+							description: "Each row: [id, from_agent, to_agent, task_id, status, created_at, summary]"
+						}
 					},
 					required: ["columns", "rows"]
 				},
@@ -1241,7 +1252,7 @@ export const TOOL_DEFINITIONS = [
 		name: "task-claim",
 		title: "Task Claim",
 		description:
-			"Claim a task for an agent using the dedicated claims table, by task id or task_code.",
+			"Claim task ownership for an agent using the dedicated claims table. Use this before taking work from task-list; provide either task_id or task_code.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -1252,8 +1263,8 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name" },
-				task_id: { type: "string", format: "uuid", description: "Task id to claim" },
-				task_code: { type: "string", description: "Task code to claim" },
+				task_id: { type: "string", format: "uuid", description: "Task id to claim. Optional if task_code is provided." },
+				task_code: { type: "string", description: "Task code to claim. Optional if task_id is provided." },
 				agent: { type: "string", description: "Claiming agent name" },
 				role: { type: "string", description: "Claiming agent role" },
 				metadata: { type: "object", description: "Optional claim metadata" },
@@ -1281,7 +1292,7 @@ export const TOOL_DEFINITIONS = [
 		name: "standard-store",
 		title: "Standard Store",
 		description:
-			"Save/validate coding standards. Accept: name, description, language, stack, version, content. Return: stored standard object",
+			"Store one atomic coding standard. Use for durable implementation rules with explicit context, stack/language filters, and repo/global scope.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -1291,8 +1302,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				name: { type: "string", minLength: 3, maxLength: 255, description: "Standard name" },
-				content: { type: "string", minLength: 10, description: "Standard content/best practices" },
+				name: { type: "string", minLength: 3, maxLength: 255, description: "Human-readable standard name" },
+				content: { type: "string", minLength: 10, description: "One atomic, actionable standard written as concise Markdown" },
 				context: { type: "string", description: "Context or category (e.g., 'error-handling', 'security')" },
 				version: { type: "string", description: "Version of the standard (e.g., '1.0.0')" },
 				language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" },
@@ -1301,7 +1312,7 @@ export const TOOL_DEFINITIONS = [
 					items: { type: "string" },
 					description: "Technology stack (e.g., ['react', 'nextjs'])"
 				},
-				repo: { type: "string", description: "Repository name (optional, defaults to global)" },
+				repo: { type: "string", description: "Repository name for repo-specific standards. Omit only for global standards." },
 				is_global: { type: "boolean", description: "Whether standard applies globally or repo-specific" },
 				tags: {
 					type: "array",
@@ -1366,7 +1377,7 @@ export const TOOL_DEFINITIONS = [
 		name: "standard-search",
 		title: "Standard Search",
 		description:
-			"Query coding standards by stack, language, version. Return: matching standards array. Invalid stack returns empty array, not error.",
+			"Navigation and lookup layer for coding standards. Query by text, stack, language, version, repo, and global scope before applying or creating standards.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,

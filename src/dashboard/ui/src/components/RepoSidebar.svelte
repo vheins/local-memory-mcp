@@ -415,6 +415,12 @@
 		opacity: 1;
 	}
 
+	@media (hover: none), (max-width: 1024px) {
+		.pin-btn {
+			opacity: 1;
+		}
+	}
+
 	.pin-btn:hover {
 		color: #0ea5e9;
 		transform: scale(1.15);

@@ -152,7 +152,7 @@
 	</div>
 
 	<!-- Metrics grid -->
-	<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;">
+	<div class="metrics-grid">
 		<div
 			style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.1);border-radius:12px;padding:12px;"
 		>
@@ -228,12 +228,33 @@
 				<canvas bind:this={canvas}></canvas>
 			</div>
 		{:else}
-			<div
-				class="flex items-center justify-center"
-				style="height:120px;color:var(--color-text-muted);font-size:0.75rem;"
-			>
-				No trend data available for this period
+			<div class="compact-empty">
+				No trend data for this period
 			</div>
 		{/if}
 	</div>
 </div>
+
+<style>
+	.metrics-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 12px;
+		margin-bottom: 16px;
+	}
+
+	.compact-empty {
+		min-height: 56px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+	}
+
+	@media (max-width: 640px) {
+		.metrics-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

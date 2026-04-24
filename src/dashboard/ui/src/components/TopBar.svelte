@@ -35,7 +35,7 @@
 </script>
 
 <header class="top-bar glass-strong" style="border-bottom: 1px solid var(--color-border); z-index: 30;">
-	<div class="flex items-center justify-between" style="padding: 10px 20px; min-height: 60px;">
+	<div class="top-bar-inner">
 		<!-- Left: Mobile menu + current repo -->
 		<div class="flex items-center gap-3">
 			<!-- Mobile hamburger -->
@@ -50,7 +50,7 @@
 			</button>
 
 			{#if $currentRepo}
-				<div class="flex items-center gap-2">
+				<div class="current-repo">
 					<div
 						style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#0ea5e9,#6366f1);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:white;flex-shrink:0;box-shadow:0 4px 10px rgba(14,165,233,0.28);"
 					>
@@ -58,8 +58,7 @@
 					</div>
 					<div>
 						<div
-							class="font-semibold"
-							style="font-size:0.82rem;color:var(--color-text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+							class="font-semibold current-repo-name"
 						>
 							{$currentRepo}
 						</div>
@@ -80,7 +79,7 @@
 		</div>
 
 		<!-- Right: external links, status, countdown, theme toggle -->
-		<div class="flex items-center gap-2">
+		<div class="top-actions">
 			<!-- ── External Links Group ── -->
 			<div class="ext-links-group">
 				<!-- GitHub link -->
@@ -164,11 +163,11 @@
 			</div>
 
 			<!-- Separator -->
-			<div style="width:1px;height:20px;background:var(--color-border);opacity:0.6;"></div>
+			<div class="top-separator"></div>
 
 			<!-- Connection status -->
 			{#if $healthData}
-				<div class="flex items-center gap-2">
+				<div class="top-status">
 					<div class="status-dot status-dot-online"></div>
 					<span style="font-size:0.72rem;font-weight:600;color:var(--color-text-muted);"> Online </span>
 					<span
@@ -180,7 +179,7 @@
 			{/if}
 
 			<!-- Countdown + Refresh -->
-			<div class="flex items-center gap-2">
+			<div class="refresh-group">
 				<div class="countdown-bar">
 					<div class="countdown-track">
 						<div class="countdown-fill" style="width:{countdownPct}%;background:{countdownColor};"></div>
@@ -219,7 +218,7 @@
 			<!-- DB path -->
 			{#if $healthData?.dbPath}
 				<span
-					class="flex items-center gap-1"
+					class="db-path-label flex items-center gap-1"
 					style="font-size:0.65rem;color:var(--color-text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
 					title={$healthData.dbPath}
 				>
@@ -232,9 +231,81 @@
 </header>
 
 <style>
+	.top-bar-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		min-height: 60px;
+		padding: 10px 20px;
+	}
+
+	.current-repo {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
+	.current-repo-name {
+		color: var(--color-text);
+		font-size: 0.82rem;
+		max-width: 200px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.top-actions,
+	.refresh-group,
+	.top-status {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.top-actions {
+		min-width: 0;
+	}
+
+	.top-separator {
+		width: 1px;
+		height: 20px;
+		background: var(--color-border);
+		opacity: 0.6;
+	}
+
 	@media (max-width: 1024px) {
 		#mobileMenuBtn {
 			display: flex !important;
+		}
+	}
+
+	@media (max-width: 760px) {
+		.top-bar-inner {
+			padding: 8px 12px;
+		}
+
+		.current-repo-name {
+			max-width: 112px;
+		}
+
+		.ext-links-group,
+		.top-separator,
+		.db-path-label,
+		.top-status span {
+			display: none !important;
+		}
+
+		.top-actions {
+			gap: 6px;
+			flex-shrink: 0;
+		}
+	}
+
+	@media (max-width: 420px) {
+		.current-repo-name {
+			max-width: 82px;
 		}
 	}
 
@@ -386,6 +457,22 @@
 	/* hide external links on very small screens */
 	@media (max-width: 640px) {
 		.ext-links-group {
+			display: none;
+		}
+	}
+
+	@media (max-width: 760px) {
+		.countdown-bar {
+			padding: 5px 8px;
+		}
+
+		.countdown-track {
+			width: 32px;
+		}
+	}
+
+	@media (max-width: 420px) {
+		.countdown-label {
 			display: none;
 		}
 	}

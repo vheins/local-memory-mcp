@@ -16,6 +16,8 @@
 	let agentFilter = "";
 	let selected: Handoff | null = null;
 	let lastClaim: TaskClaim | null = null;
+	let showCreate = false;
+	let showClaim = false;
 
 	let handoffForm = {
 		from_agent: "",
@@ -109,6 +111,7 @@
 				})
 			);
 			handoffForm = { from_agent: "", to_agent: "", task_code: "", summary: "", context: "" };
+			showCreate = false;
 			await loadHandoffs();
 			selected = result || handoffs[0] || null;
 		} catch (e) {
@@ -134,6 +137,7 @@
 				})
 			);
 			claimForm = { task_code: "", agent: claimForm.agent, role: claimForm.role, metadata: "" };
+			showClaim = false;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -155,6 +159,16 @@
 				<div class="toolbar-subtitle">{handoffs.length} handoffs in view</div>
 			</div>
 		</div>
+		<div class="toolbar-actions">
+			<button class="btn btn-primary" on:click={() => (showCreate = !showCreate)}>
+				<Icon name="git-branch" size={14} strokeWidth={2} />
+				{showCreate ? "Close Handoff" : "New Handoff"}
+			</button>
+			<button class="btn btn-accent" on:click={() => (showClaim = !showClaim)}>
+				<Icon name="check" size={14} strokeWidth={2} />
+				{showClaim ? "Close Claim" : "Claim Task"}
+			</button>
+		</div>
 		<div class="toolbar-controls">
 			<select class="form-select" bind:value={status} on:change={() => loadHandoffs()}>
 				<option value="">All statuses</option>
@@ -175,29 +189,33 @@
 		<div class="error-banner">{error}</div>
 	{/if}
 
-	<div class="feature-grid">
-		<div class="glass card panel-card">
+	{#if showCreate || showClaim}
+		<div class="action-grid">
+			{#if showCreate}
+				<div class="glass card panel-card action-panel">
 			<div class="section-label">Create Handoff</div>
 			<div class="form-stack">
-				<input class="form-input" placeholder="From agent" bind:value={handoffForm.from_agent} />
-				<input class="form-input" placeholder="To agent (optional)" bind:value={handoffForm.to_agent} />
-				<input class="form-input" placeholder="Task code (optional)" bind:value={handoffForm.task_code} />
-				<textarea class="form-textarea summary-input" placeholder="Summary" bind:value={handoffForm.summary}></textarea>
-				<textarea class="form-textarea json-input" placeholder="Context JSON object" bind:value={handoffForm.context}></textarea>
+				<label><span>From agent</span><input class="form-input" placeholder="agent-a" bind:value={handoffForm.from_agent} /></label>
+				<label><span>To agent</span><input class="form-input" placeholder="agent-b (optional)" bind:value={handoffForm.to_agent} /></label>
+				<label><span>Task code</span><input class="form-input" placeholder="TASK-123 (optional)" bind:value={handoffForm.task_code} /></label>
+				<label><span>Summary</span><textarea class="form-textarea summary-input" placeholder="What should the next agent know?" bind:value={handoffForm.summary}></textarea></label>
+				<label><span>Context JSON</span><textarea class="form-textarea json-input" placeholder="Context JSON object" bind:value={handoffForm.context}></textarea></label>
 				<button class="btn btn-primary" on:click={createHandoff} disabled={creating || !handoffForm.from_agent.trim() || !handoffForm.summary.trim()}>
 					<Icon name="git-branch" size={14} strokeWidth={2} />
 					{creating ? "Creating..." : "Create Handoff"}
 				</button>
 			</div>
 		</div>
+			{/if}
 
-		<div class="glass card panel-card">
+			{#if showClaim}
+				<div class="glass card panel-card action-panel">
 			<div class="section-label">Claim Task</div>
 			<div class="form-stack">
-				<input class="form-input" placeholder="Task code" bind:value={claimForm.task_code} />
-				<input class="form-input" placeholder="Agent" bind:value={claimForm.agent} />
-				<input class="form-input" placeholder="Role" bind:value={claimForm.role} />
-				<textarea class="form-textarea json-input" placeholder="Metadata JSON object" bind:value={claimForm.metadata}></textarea>
+				<label><span>Task code</span><input class="form-input" placeholder="TASK-123" bind:value={claimForm.task_code} /></label>
+				<label><span>Agent</span><input class="form-input" placeholder="agent-name" bind:value={claimForm.agent} /></label>
+				<label><span>Role</span><input class="form-input" placeholder="worker" bind:value={claimForm.role} /></label>
+				<label><span>Metadata JSON</span><textarea class="form-textarea json-input" placeholder="Metadata JSON object" bind:value={claimForm.metadata}></textarea></label>
 				<button class="btn btn-accent" on:click={claimTask} disabled={claiming || !claimForm.task_code.trim() || !claimForm.agent.trim()}>
 					<Icon name="check" size={14} strokeWidth={2} />
 					{claiming ? "Claiming..." : "Claim Task"}
@@ -214,13 +232,26 @@
 				</div>
 			{/if}
 		</div>
+			{/if}
+		</div>
+	{/if}
 
+	<div class="feature-grid">
 		<div class="glass card panel-card list-panel">
-			<div class="section-label">Handoff Queue</div>
+			<div class="panel-heading">
+				<div class="section-label">Handoff Queue</div>
+				{#if handoffs.length === 0}
+					<button class="btn btn-ghost btn-sm" on:click={() => (showCreate = true)}>Create handoff</button>
+				{/if}
+			</div>
 			{#if loading}
 				<div class="muted-state">Loading handoffs...</div>
 			{:else if handoffs.length === 0}
-				<div class="muted-state">No handoffs found.</div>
+				<div class="empty-state">
+					<Icon name="git-branch" size={22} strokeWidth={1.75} />
+					<div class="empty-title">No handoffs found</div>
+					<div class="empty-copy">Create a handoff when work needs context transfer between agents.</div>
+				</div>
 			{:else}
 				<div class="handoff-list">
 					{#each handoffs as handoff (handoff.id)}
@@ -253,7 +284,11 @@
 					<div class="linked-task">Task ID: {selected.task_id}</div>
 				{/if}
 			{:else}
-				<div class="muted-state">Select a handoff to inspect details.</div>
+				<div class="empty-state detail-empty">
+					<Icon name="book-open" size={22} strokeWidth={1.75} />
+					<div class="empty-title">Select a handoff</div>
+					<div class="empty-copy">Details for the selected handoff appear here.</div>
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -261,13 +296,18 @@
 
 <style>
 	.feature-shell { display: flex; flex-direction: column; gap: 14px; }
-	.feature-toolbar { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 16px; }
+	.feature-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; padding: 16px; }
 	.toolbar-title { display: flex; align-items: center; gap: 10px; }
 	.toolbar-subtitle { font-size: 0.72rem; color: var(--color-text-muted); font-weight: 600; margin-top: 2px; }
-	.toolbar-controls { display: grid; grid-template-columns: 160px minmax(180px, 1fr) auto; gap: 10px; align-items: center; min-width: min(100%, 520px); }
-	.feature-grid { display: grid; grid-template-columns: 0.85fr 0.85fr 1fr 0.9fr; gap: 14px; align-items: start; }
-	.panel-card { padding: 16px; min-width: 0; min-height: 360px; }
+	.toolbar-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+	.toolbar-controls { display: grid; grid-template-columns: 160px minmax(180px, 1fr) auto; gap: 10px; align-items: center; grid-column: 1 / -1; }
+	.action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+	.feature-grid { display: grid; grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.05fr); gap: 14px; align-items: start; }
+	.panel-card { padding: 16px; min-width: 0; }
+	.action-panel { min-height: 0; }
+	.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 	.form-stack { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+	label span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
 	.summary-input { min-height: 92px; resize: vertical; }
 	.json-input { min-height: 86px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; }
 	.handoff-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 650px; overflow: auto; }
@@ -289,14 +329,21 @@
 	.detail-grid span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 750; text-transform: uppercase; margin-bottom: 4px; }
 	.detail-grid strong { font-size: 0.82rem; color: var(--color-text); word-break: break-word; }
 	.muted-state { color: var(--color-text-muted); font-size: 0.85rem; padding: 24px 4px; text-align: center; }
+	.empty-state { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--color-text-muted); text-align: center; }
+	.empty-title { color: var(--color-text); font-size: 0.92rem; font-weight: 850; }
+	.empty-copy { max-width: 260px; font-size: 0.78rem; line-height: 1.45; }
+	.detail-empty { min-height: 260px; }
 	.error-banner { border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; font-weight: 700; }
 	:global(html.dark) .handoff-row { background: rgba(15,23,42,0.45); }
 	:global(html.dark) .handoff-row:hover, :global(html.dark) .handoff-row.selected { background: rgba(14,165,233,0.12); }
 	@media (max-width: 1280px) {
-		.feature-grid { grid-template-columns: 1fr 1fr; }
-		.feature-toolbar { align-items: stretch; flex-direction: column; }
+		.feature-toolbar { grid-template-columns: 1fr; }
+		.toolbar-actions { justify-content: stretch; }
+		.toolbar-actions .btn { flex: 1; justify-content: center; }
 	}
 	@media (max-width: 760px) {
-		.toolbar-controls, .feature-grid, .detail-grid { grid-template-columns: 1fr; }
+		.toolbar-controls, .feature-grid, .detail-grid, .action-grid { grid-template-columns: 1fr; }
+		.toolbar-actions { flex-direction: column; }
+		.toolbar-actions .btn { width: 100%; }
 	}
 </style>

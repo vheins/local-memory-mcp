@@ -7,7 +7,10 @@ agent: Session Concierge
 Initialize session in repository.
 
 Briefing Steps:
-1. **Discover**: Call `memory-search` (current repo) to find recent decisions, patterns, and mistakes.
-2. **Backlog**: Call `task-list` to see active/pending tasks.
-3. **Core Context**: Summarize the top 3 architectural decisions found.
-4. **Action**: Propose next steps based on backlog.
+1. **Repository**: Identify current repo from context.
+2. **Tasks**: Call `task-list` for `in_progress,pending` tasks.
+3. **Handoffs**: Call `handoff-list` with `status=pending` to surface transfer context.
+4. **Memory**: Call `memory-search` or `memory-recap` for recent decisions, patterns, and mistakes; hydrate important entries with `memory-detail`.
+5. **Standards**: Call `standard-search` with current repo/stack when implementation guidance is needed.
+6. **Core Context**: Summarize active task, pending handoffs, applicable standards, and top architectural decisions.
+7. **Action**: Propose next steps based on the active queue.

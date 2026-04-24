@@ -16,6 +16,7 @@ const REQUEST_TIMEOUT_MS = 10000;
 
 export class MCPClient {
 	private process: ChildProcess | null = null;
+	private starting: Promise<void> | null = null;
 	private requestId = 0;
 	private pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
 	private isInitialized = false;
@@ -27,6 +28,18 @@ export class MCPClient {
 	}
 
 	async start() {
+		if (this.isInitialized && this.process) return;
+		if (this.starting) return this.starting;
+
+		this.starting = this.startInternal();
+		try {
+			await this.starting;
+		} finally {
+			this.starting = null;
+		}
+	}
+
+	private async startInternal() {
 		if (this.process) return;
 
 		const serverPath =
@@ -51,6 +64,7 @@ export class MCPClient {
 			logger.error("MCP server process closed unexpectedly", { code, restartCount: this.restartCount });
 			this.process = null;
 			this.isInitialized = false;
+			this.starting = null;
 
 			if (this.restartCount < MAX_RESTARTS) {
 				this.restartCount++;

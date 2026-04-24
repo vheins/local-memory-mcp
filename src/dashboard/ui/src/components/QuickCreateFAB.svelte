@@ -272,8 +272,17 @@
 	/* Responsive: move up on mobile to avoid bottom nav overlap */
 	@media (max-width: 640px) {
 		.fab-container {
-			bottom: 20px;
-			right: 16px;
+			bottom: max(18px, env(safe-area-inset-bottom));
+			right: 14px;
+		}
+
+		.fab-main {
+			width: 48px;
+			height: 48px;
+		}
+
+		.fab-container:not(.open) .fab-main::after {
+			display: none;
 		}
 	}
 </style>

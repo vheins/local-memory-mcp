@@ -82,13 +82,13 @@
 				tabindex="0"
 				aria-label="Close menu"
 			></div>
-			<div style="position:fixed;top:0;left:0;width:280px;height:100dvh;z-index:39;display:flex;flex-direction:column;">
+			<div class="mobile-sidebar-shell">
 				<RepoSidebar onRepoSelect={app.onRepoSelect} />
 			</div>
 		{/if}
 
 		<!-- Content Shell -->
-		<div id="dashboardShell" style="padding: 20px; min-height: 100vh;">
+		<div id="dashboardShell" class="dashboard-shell">
 			{#if !$currentRepo}
 				<div style="text-align:center;padding:80px 20px;" class="animate-fade-in">
 					<div
@@ -108,7 +108,7 @@
 				</div>
 			{:else}
 				<!-- Tab nav -->
-				<div style="margin-bottom:20px;">
+				<div class="tabs-wrap">
 					<div class="tab-nav" style="display:inline-flex;">
 						{#each TABS as tab (tab.id)}
 							<button
