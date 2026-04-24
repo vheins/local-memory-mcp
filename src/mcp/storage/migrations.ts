@@ -115,6 +115,28 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_task_comments_repo ON task_comments(repo);
       CREATE INDEX IF NOT EXISTS idx_task_comments_created_at ON task_comments(created_at DESC);
 
+      CREATE TABLE IF NOT EXISTS coding_standards (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        context TEXT,
+        version TEXT,
+        language TEXT,
+        stack TEXT,
+        is_global INTEGER NOT NULL DEFAULT 0,
+        repo TEXT,
+        tags TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        agent TEXT NOT NULL DEFAULT 'unknown',
+        model TEXT NOT NULL DEFAULT 'unknown'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_coding_standards_repo ON coding_standards(repo);
+      CREATE INDEX IF NOT EXISTS idx_coding_standards_is_global ON coding_standards(is_global);
+      CREATE INDEX IF NOT EXISTS idx_coding_standards_language ON coding_standards(language);
+
       CREATE TABLE IF NOT EXISTS memories_archive (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
@@ -150,30 +172,6 @@ export class MigrationManager {
 
       CREATE INDEX IF NOT EXISTS idx_action_log_repo ON action_log(repo);
       CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
-
-      CREATE TABLE IF NOT EXISTS coding_standards (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        context TEXT NOT NULL,
-        version TEXT NOT NULL DEFAULT '1.0',
-        language TEXT,
-        stack TEXT,
-        is_global INTEGER NOT NULL DEFAULT 1,
-        repo TEXT,
-        tags TEXT,
-        metadata TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        agent TEXT NOT NULL DEFAULT 'unknown',
-        model TEXT NOT NULL DEFAULT 'unknown'
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_coding_standards_context ON coding_standards(context);
-      CREATE INDEX IF NOT EXISTS idx_coding_standards_language ON coding_standards(language);
-      CREATE INDEX IF NOT EXISTS idx_coding_standards_version ON coding_standards(version);
-      CREATE INDEX IF NOT EXISTS idx_coding_standards_is_global ON coding_standards(is_global);
-      CREATE INDEX IF NOT EXISTS idx_coding_standards_repo ON coding_standards(repo);
 
       CREATE TABLE IF NOT EXISTS handoffs (
         id TEXT PRIMARY KEY,

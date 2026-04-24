@@ -2,7 +2,6 @@ import { SQLiteStore } from "../storage/sqlite";
 import { SessionContext, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
 import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
-import { cslScrapperPrompt } from "./definitions/csl-scrapper";
 import type { LoadedPrompt } from "../interfaces/index";
 import { logger } from "../utils/logger";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
@@ -52,8 +51,6 @@ for (const name of promptFiles) {
 		logger.warn(`Failed to load prompt ${name}: ${e}`);
 	}
 }
-
-PROMPTS["csl-scrapper"] = cslScrapperPrompt as PromptDefinition;
 
 /**
  * Handles MCP 'prompts/list'

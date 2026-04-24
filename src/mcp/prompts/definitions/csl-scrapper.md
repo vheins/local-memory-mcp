@@ -1,30 +1,19 @@
-export const cslScrapperPrompt = {
-	name: "csl-scrapper",
-	description: "Scrape trusted documentation into atomic CSL coding standards entries.",
-	arguments: [
-		{
-			name: "source_title",
-			description: "Human-readable title of the documentation source.",
-			required: true
-		},
-		{
-			name: "source_url",
-			description: "Canonical URL for the documentation source.",
-			required: true
-		},
-		{
-			name: "documentation_content",
-			description: "Documentation excerpt or page content to normalize into atomic coding standards.",
-			required: true
-		}
-	],
-	agent: "Documentation Scraper",
-	messages: [
-		{
-			role: "user" as const,
-			content: {
-				type: "text" as const,
-				text: `Convert trusted documentation into atomic CSL (Coding Standards Library) entries for the coding_standards entity.
+---
+name: csl-scrapper
+description: Scrape trusted documentation into atomic CSL coding standards entries.
+arguments:
+  - name: source_title
+    description: Human-readable title of the documentation source.
+    required: true
+  - name: source_url
+    description: Canonical URL for the documentation source.
+    required: true
+  - name: documentation_content
+    description: Documentation excerpt or page content to normalize into atomic coding standards.
+    required: true
+agent: Documentation Scraper
+---
+Convert trusted documentation into atomic CSL (Coding Standards Library) entries for the coding_standards entity.
 
 Source title: {{source_title}}
 Source URL: {{source_url}}
@@ -62,12 +51,10 @@ Refusal rules:
 - Refuse when no source-backed coding standards can be extracted.
 
 If you refuse, return exactly:
+```json
 {
   "action": "refuse",
   "reason": "<short explanation>",
   "missing": ["<missing evidence or source requirement>"]
-}`
-			}
-		}
-	]
-};
+}
+```

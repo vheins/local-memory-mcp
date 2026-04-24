@@ -267,7 +267,6 @@ export const TaskGetSchema = z
 		message: "Either id or task_code must be provided"
 	});
 
-
 export const HandoffStatusSchema = z.enum(["pending", "accepted", "rejected", "expired"]);
 
 export const HandoffCreateSchema = z
@@ -312,6 +311,35 @@ export const TaskClaimSchema = z
 	.refine((data) => !(data.task_id && data.task_code), {
 		message: "Provide either task_id or task_code, not both"
 	});
+
+// CSL (Coding Standards Library) Schemas
+export const StandardStoreSchema = z.object({
+	name: z.string().min(3).max(255),
+	content: z.string().min(10),
+	context: z.string().optional(),
+	version: z.string().optional(),
+	language: z.string().optional(),
+	stack: z.array(z.string()).optional(),
+	repo: z.string().optional(),
+	is_global: z.boolean().optional(),
+	tags: z.array(z.string()).optional(),
+	metadata: z.record(z.string(), z.any()).optional(),
+	agent: z.string().optional(),
+	model: z.string().optional(),
+	structured: z.boolean().default(false)
+});
+
+export const StandardSearchSchema = z.object({
+	query: z.string().optional(),
+	stack: z.array(z.string()).optional(),
+	language: z.string().optional(),
+	version: z.string().optional(),
+	repo: z.string().optional(),
+	is_global: z.boolean().optional(),
+	limit: z.number().min(1).max(100).default(20),
+	offset: z.number().min(0).default(0),
+	structured: z.boolean().default(false)
+});
 
 // Tool definitions for MCP
 export const TOOL_DEFINITIONS = [
@@ -1122,6 +1150,279 @@ export const TOOL_DEFINITIONS = [
 				offset: { type: "number" }
 			},
 			required: ["schema", "tasks", "count"]
+		}
+	},
+	{
+		name: "handoff-create",
+		title: "Handoff Create",
+		description:
+			"Create a handoff record for another agent, optionally linked to a task by id or task_code.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name" },
+				from_agent: { type: "string", description: "Agent creating the handoff" },
+				to_agent: { type: "string", description: "Optional target agent" },
+				task_id: { type: "string", format: "uuid", description: "Optional task id to associate" },
+				task_code: { type: "string", description: "Optional task code to associate" },
+				summary: { type: "string", minLength: 1, description: "Short handoff summary" },
+				context: { type: "object", description: "Structured handoff context payload" },
+				expires_at: { type: "string", description: "Optional expiration timestamp" },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["repo", "from_agent", "summary"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string" },
+				repo: { type: "string" },
+				from_agent: { type: "string" },
+				to_agent: { type: "string", nullable: true },
+				task_id: { type: "string", nullable: true },
+				summary: { type: "string" },
+				context: { type: "object" },
+				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
+				created_at: { type: "string" },
+				updated_at: { type: "string" },
+				expires_at: { type: "string", nullable: true }
+			},
+			required: ["id", "repo", "from_agent", "summary", "context", "status", "created_at", "updated_at"]
+		}
+	},
+	{
+		name: "handoff-list",
+		title: "Handoff List",
+		description:
+			"List handoffs for a repository with optional status and agent filters.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name" },
+				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
+				from_agent: { type: "string" },
+				to_agent: { type: "string" },
+				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
+				offset: { type: "number", minimum: 0, default: 0 },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["repo"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				schema: { type: "string", enum: ["handoff-list"] },
+				handoffs: {
+					type: "object",
+					properties: {
+						columns: { type: "array", items: { type: "string" } },
+						rows: { type: "array", items: { type: "array" } }
+					},
+					required: ["columns", "rows"]
+				},
+				count: { type: "number" },
+				offset: { type: "number" }
+			},
+			required: ["schema", "handoffs", "count", "offset"]
+		}
+	},
+	{
+		name: "task-claim",
+		title: "Task Claim",
+		description:
+			"Claim a task for an agent using the dedicated claims table, by task id or task_code.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name" },
+				task_id: { type: "string", format: "uuid", description: "Task id to claim" },
+				task_code: { type: "string", description: "Task code to claim" },
+				agent: { type: "string", description: "Claiming agent name" },
+				role: { type: "string", description: "Claiming agent role" },
+				metadata: { type: "object", description: "Optional claim metadata" },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["repo", "agent"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string" },
+				repo: { type: "string" },
+				task_id: { type: "string" },
+				task_code: { type: "string", nullable: true },
+				agent: { type: "string" },
+				role: { type: "string" },
+				claimed_at: { type: "string" },
+				released_at: { type: "string", nullable: true },
+				metadata: { type: "object" }
+			},
+			required: ["id", "repo", "task_id", "agent", "role", "claimed_at", "metadata"]
+		}
+	},
+	{
+		name: "standard-store",
+		title: "Standard Store",
+		description:
+			"Save/validate coding standards. Accept: name, description, language, stack, version, content. Return: stored standard object",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				name: { type: "string", minLength: 3, maxLength: 255, description: "Standard name" },
+				content: { type: "string", minLength: 10, description: "Standard content/best practices" },
+				context: { type: "string", description: "Context or category (e.g., 'error-handling', 'security')" },
+				version: { type: "string", description: "Version of the standard (e.g., '1.0.0')" },
+				language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" },
+				stack: {
+					type: "array",
+					items: { type: "string" },
+					description: "Technology stack (e.g., ['react', 'nextjs'])"
+				},
+				repo: { type: "string", description: "Repository name (optional, defaults to global)" },
+				is_global: { type: "boolean", description: "Whether standard applies globally or repo-specific" },
+				tags: {
+					type: "array",
+					items: { type: "string" },
+					description: "Tags for categorization"
+				},
+				metadata: {
+					type: "object",
+					description: "Additional metadata"
+				},
+				agent: { type: "string", description: "Agent creating the standard" },
+				model: { type: "string", description: "AI model used" },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["name", "content"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				success: { type: "boolean" },
+				standard: {
+					type: "object",
+					properties: {
+						id: { type: "string" },
+						title: { type: "string" },
+						content: { type: "string" },
+						context: { type: "string" },
+						version: { type: "string" },
+						language: { type: "string", nullable: true },
+						stack: { type: "array", items: { type: "string" } },
+						is_global: { type: "boolean" },
+						repo: { type: "string", nullable: true },
+						tags: { type: "array", items: { type: "string" } },
+						metadata: { type: "object" },
+						created_at: { type: "string" },
+						updated_at: { type: "string" },
+						agent: { type: "string" },
+						model: { type: "string" }
+					},
+					required: [
+						"id",
+						"title",
+						"content",
+						"context",
+						"version",
+						"stack",
+						"is_global",
+						"tags",
+						"metadata",
+						"created_at",
+						"updated_at",
+						"agent",
+						"model"
+					]
+				},
+				message: { type: "string" }
+			},
+			required: ["success", "standard", "message"]
+		}
+	},
+	{
+		name: "standard-search",
+		title: "Standard Search",
+		description:
+			"Query coding standards by stack, language, version. Return: matching standards array. Invalid stack returns empty array, not error.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Search query (optional, searches title/content)" },
+				stack: {
+					type: "array",
+					items: { type: "string" },
+					description: "Technology stack to filter by (e.g., ['react', 'nextjs'])"
+				},
+				language: { type: "string", description: "Programming language filter" },
+				version: { type: "string", description: "Version filter" },
+				repo: { type: "string", description: "Repository filter (optional)" },
+				is_global: { type: "boolean", description: "Filter by global/repo-specific" },
+				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
+				offset: { type: "number", minimum: 0, default: 0 },
+				structured: { type: "boolean", default: false }
+			},
+			required: []
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				success: { type: "boolean" },
+				standards: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							id: { type: "string" },
+							title: { type: "string" },
+							content: { type: "string" },
+							context: { type: "string" },
+							version: { type: "string" },
+							language: { type: "string", nullable: true },
+							stack: { type: "array", items: { type: "string" } },
+							is_global: { type: "boolean" },
+							repo: { type: "string", nullable: true },
+							tags: { type: "array", items: { type: "string" } },
+							metadata: { type: "object" },
+							created_at: { type: "string" },
+							updated_at: { type: "string" },
+							agent: { type: "string" },
+							model: { type: "string" }
+						}
+					},
+					description: "Matching coding standards"
+				},
+				count: { type: "number", description: "Number of results returned" },
+				message: { type: "string" }
+			},
+			required: ["success", "standards", "count", "message"]
 		}
 	}
 ];

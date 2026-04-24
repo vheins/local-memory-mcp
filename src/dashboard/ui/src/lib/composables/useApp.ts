@@ -20,6 +20,8 @@ const TABS = [
 	{ id: "activity", label: "Activity", icon: "activity" },
 	{ id: "memories", label: "Memories", icon: "brain" },
 	{ id: "tasks", label: "Tasks", icon: "clipboard-list" },
+	{ id: "standards", label: "Standards", icon: "check" },
+	{ id: "handoffs", label: "Handoffs", icon: "git-branch" },
 	{ id: "reference", label: "Reference", icon: "book-open" }
 ];
 

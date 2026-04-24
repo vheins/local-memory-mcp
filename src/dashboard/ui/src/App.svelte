@@ -21,6 +21,8 @@
 	import AddTaskModal from "./components/AddTaskModal.svelte";
 	import ReferenceTab from "./components/ReferenceTab.svelte";
 	import QuickCreateFAB from "./components/QuickCreateFAB.svelte";
+	import StandardsPanel from "./components/StandardsPanel.svelte";
+	import HandoffsPanel from "./components/HandoffsPanel.svelte";
 	import Icon from "./lib/Icon.svelte";
 
 	let kanbanBoard: KanbanBoard;
@@ -202,6 +204,16 @@
 							/>
 						</div>
 					</div>
+				{/if}
+
+				<!-- ════ STANDARDS TAB ════ -->
+				{#if $activeTab === "standards"}
+					<StandardsPanel repo={$currentRepo} />
+				{/if}
+
+				<!-- ════ HANDOFFS TAB ════ -->
+				{#if $activeTab === "handoffs"}
+					<HandoffsPanel repo={$currentRepo} />
 				{/if}
 
 				<!-- ════ REFERENCE TAB ════ -->

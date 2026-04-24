@@ -210,7 +210,7 @@ export const api = {
 	capabilities: () => apiFetch<ReferenceDataState>("/api/capabilities"),
 
 	callTool: (name: string, args: Record<string, unknown>) =>
-		apiFetch<{ result: unknown }>(`/api/tools/${encodeURIComponent(name)}/call`, {
+		apiFetch<unknown>(`/api/tools/${encodeURIComponent(name)}/call`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(args)
