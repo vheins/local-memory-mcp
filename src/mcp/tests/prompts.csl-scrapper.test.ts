@@ -18,9 +18,7 @@ describe("csl-scrapper prompt", () => {
 		const result = (await router("prompts/get", {
 			name: "csl-scrapper",
 			arguments: {
-				source_title: "React Docs - Rules of Hooks",
-				source_url: "https://react.dev/reference/rules/rules-of-hooks",
-				documentation_content: "Only call Hooks at the top level. Don’t call Hooks inside loops, conditions, or nested functions."
+				source_url: "https://react.dev/reference/rules/rules-of-hooks"
 			}
 		})) as {
 			description: string;
@@ -28,9 +26,7 @@ describe("csl-scrapper prompt", () => {
 		};
 
 		expect(result.description).toContain("atomic CSL");
-		expect(result.messages[0].content.text).toContain("React Docs - Rules of Hooks");
 		expect(result.messages[0].content.text).toContain("https://react.dev/reference/rules/rules-of-hooks");
-		expect(result.messages[0].content.text).toContain("Only call Hooks at the top level");
 		expect(result.messages[0].content.text).toContain("standard-store");
 	});
 
@@ -40,9 +36,7 @@ describe("csl-scrapper prompt", () => {
 		const result = (await router("prompts/get", {
 			name: "csl-scrapper",
 			arguments: {
-				source_title: "Unknown Source",
-				source_url: "https://example.com/unknown",
-				documentation_content: "content unavailable"
+				source_url: "https://example.com/unknown"
 			}
 		})) as {
 			messages: Array<{ content: { text: string } }>;
