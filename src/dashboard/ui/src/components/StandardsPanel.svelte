@@ -9,6 +9,7 @@
 	export let repo = "";
 
 	let standards: CodingStandard[] = [];
+	let standardTree: StandardTreeNode[] = [];
 	let loading = false;
 	let detailLoading = false;
 	let saving = false;
@@ -69,6 +70,32 @@
 	function stringifyMetadata(value: Record<string, unknown>) {
 		return JSON.stringify(value, null, 2);
 	}
+
+	type StandardTreeNode = {
+		standard: CodingStandard;
+		children: CodingStandard[];
+	};
+
+	function buildStandardTree(items: CodingStandard[]): StandardTreeNode[] {
+		const byParent = new Map<string, CodingStandard[]>();
+		const byId = new Set(items.map((item) => item.id));
+
+		for (const item of items) {
+			const parentId = item.parent_id;
+			if (!parentId || !byId.has(parentId)) continue;
+			const siblings = byParent.get(parentId) || [];
+			siblings.push(item);
+			byParent.set(parentId, siblings);
+		}
+
+		const roots = items.filter((item) => !item.parent_id || !byId.has(item.parent_id));
+		return roots.map((root) => ({
+			standard: root,
+			children: (byParent.get(root.id) || []).sort((a, b) => a.title.localeCompare(b.title))
+		}));
+	}
+
+	$: standardTree = buildStandardTree(standards);
 
 	async function loadStandardDetail(id: string) {
 		detailLoading = true;
@@ -341,22 +368,58 @@
 				</div>
 			{:else}
 				<div class="standard-list">
-					{#each standards as standard (standard.id)}
-						<button class:selected={selected?.id === standard.id} class="standard-row" on:click={() => loadStandardDetail(standard.id)}>
-							<div class="row-title">{standard.title}</div>
-							<div class="row-meta">
-								<span>{standard.context}</span>
-								<span>{standard.language || "any language"}</span>
-								<span>{standard.is_global ? "global" : standard.repo || repo}</span>
-							</div>
-							{#if standard.stack.length || standard.tags.length}
-								<div class="tag-row">
-									{#each [...new Set([...standard.stack, ...standard.tags])].slice(0, 6) as tag}
-										<span class="mini-chip">{tag}</span>
+					{#each standardTree as node (node.standard.id)}
+						<div class="standard-group">
+							<button
+								class:selected={selected?.id === node.standard.id}
+								class="standard-row standard-row-root"
+								on:click={() => loadStandardDetail(node.standard.id)}
+							>
+								<div class="row-title">{node.standard.title}</div>
+								<div class="row-meta">
+									<span>{node.standard.context}</span>
+									<span>{node.standard.language || "any language"}</span>
+									<span>{node.standard.is_global ? "global" : node.standard.repo || repo}</span>
+									<span>{node.children.length > 0 ? `${node.children.length} child` : "root"}</span>
+								</div>
+								{#if node.standard.stack.length || node.standard.tags.length}
+									<div class="tag-row">
+										{#each [...new Set([...node.standard.stack, ...node.standard.tags])].slice(0, 6) as tag}
+											<span class="mini-chip">{tag}</span>
+										{/each}
+									</div>
+								{/if}
+							</button>
+							{#if node.children.length > 0}
+								<div class="standard-children">
+									{#each node.children as child (child.id)}
+										<button
+											class:selected={selected?.id === child.id}
+											class="standard-row standard-row-child"
+											on:click={() => loadStandardDetail(child.id)}
+										>
+											<div class="row-title">
+												<Icon name="corner-down-right" size={13} strokeWidth={2} />
+												<span>{child.title}</span>
+											</div>
+											<div class="row-meta">
+												<span>{child.context}</span>
+												<span>{child.language || "any language"}</span>
+												<span>{child.is_global ? "global" : child.repo || repo}</span>
+												<span>child</span>
+											</div>
+											{#if child.stack.length || child.tags.length}
+												<div class="tag-row">
+													{#each [...new Set([...child.stack, ...child.tags])].slice(0, 6) as tag}
+														<span class="mini-chip">{tag}</span>
+													{/each}
+												</div>
+											{/if}
+										</button>
 									{/each}
 								</div>
 							{/if}
-						</button>
+						</div>
 					{/each}
 				</div>
 			{/if}
@@ -461,6 +524,11 @@
 	.panel-card { padding: 16px; min-width: 0; }
 	.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 	.form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 10px; }
+	.standard-group { display: flex; flex-direction: column; gap: 8px; }
+	.standard-children { display: flex; flex-direction: column; gap: 8px; margin-left: 14px; padding-left: 12px; border-left: 1px solid var(--color-border, rgba(148, 163, 184, 0.28)); }
+	.standard-row-root { width: 100%; }
+	.standard-row-child { width: 100%; background: rgba(148, 163, 184, 0.06); }
+	.row-title :global(svg) { flex: 0 0 auto; }
 	.detail-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 	.editor-actions { display: flex; gap: 10px; margin-top: 12px; }
 	.danger-text { color: var(--color-danger, #d04b4b); }
