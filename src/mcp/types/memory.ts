@@ -3,7 +3,6 @@ export type MemoryType =
 	| "decision"
 	| "mistake"
 	| "pattern"
-	| "file_claim"
 	| "task_archive";
 
 export type MemoryScope = {

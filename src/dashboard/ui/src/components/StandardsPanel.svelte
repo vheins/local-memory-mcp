@@ -54,7 +54,7 @@
 				query: query || undefined,
 				language: language || undefined,
 				stack: splitList(stack),
-				limit: 50,
+				limit: 100,
 				structured: true
 			};
 			if (scope === "repo") args.repo = repo;
@@ -208,7 +208,7 @@
 							</div>
 							{#if standard.stack.length || standard.tags.length}
 								<div class="tag-row">
-									{#each [...standard.stack, ...standard.tags].slice(0, 6) as tag (tag)}
+									{#each [...new Set([...standard.stack, ...standard.tags])].slice(0, 6) as tag}
 										<span class="mini-chip">{tag}</span>
 									{/each}
 								</div>

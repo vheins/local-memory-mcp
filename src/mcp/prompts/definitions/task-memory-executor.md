@@ -9,7 +9,7 @@ agent: Task Executor
 ## 1. SYNC & FILTER
 1. **Identify**: Get repo name (git/context).
 2. **List**: Call `task-list` ONCE for active tasks.
-3. **Handoffs**: Call `handoff-list` with `status=pending` and inspect relevant transfer context before selecting work.
+3. **Handoffs**: Call `handoff-list` with `status=pending` and inspect relevant transfer context before selecting work. Treat a pending handoff as active only when it has unfinished work, a blocker, a next owner, or a linked task. If it is obsolete or only describes completed work, close it with `handoff-update status=expired`.
 4. **Audit**: Identify stale `in_progress` tasks (>30m no update). Hydrate via `task-detail` to check timestamps.
 
 ## Task Cache (MANDATORY)
@@ -38,9 +38,10 @@ agent: Task Executor
    - **Browser Verification (MANDATORY)**: If the task involves UI/UX changes, use Playwright or Chrome DevTools to verify the feature is functional and consumable by the user. Check console errors, layout overflow, responsive behavior, and core interactions.
 9. **Finalize**:
    - **Evidence**: `task-update` status to `completed` with detailed 'comment' (inspected files, verified logic, test results).
+   - **Cleanup**: Completing/canceling a task automatically releases active claims and expires linked pending handoffs.
    - **Memory**: Store insights as `code_fact`/`pattern` via `memory-store`.
    - **Standards**: Store durable implementation rules via `standard-store`, not generic memory.
-   - **Handoff**: If work remains or ownership changes, create `handoff-create` with concise summary and structured context.
+   - **Handoff**: If work remains or ownership changes, create `handoff-create` with concise summary and structured context containing next steps/blockers/remaining work. Do not create handoffs for completed-work summaries.
    - **Retrospective**: Invoke `learning-retrospective`.
    - **Commit**: Atomic git commit. The commit message MUST include the task code (for example: `fix: ... [TASK-123]`).
    - **GitHub Issue Traceability**: If task metadata contains a GitHub Issue reference, the commit message MUST also include the issue hashtag in `#123` format.

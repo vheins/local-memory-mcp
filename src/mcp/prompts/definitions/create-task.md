@@ -19,7 +19,7 @@ ONLY call MCP tools. No prose, no code, no plans outside MCP.
 ## 1. PRE-ANALYSIS
 1. **Search Memory**: Call `memory-search` (architecture/history).
 2. **Search Standards**: Call `standard-search` when coding conventions may constrain the task.
-3. **Check Handoffs**: Call `handoff-list` for pending context that may already describe the work.
+3. **Check Handoffs**: Call `handoff-list` for pending context that may already describe unfinished work. Ignore or close stale handoffs that only describe completed work.
 4. **Research Codebase**: Read relevant source files to verify current implementation and paths.
 5. **De-duplicate**: Call `task-list`. DO NOT duplicate existing tasks. Link related tasks via `parent_id`/`depends_on`.
 

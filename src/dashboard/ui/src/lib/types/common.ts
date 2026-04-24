@@ -5,7 +5,6 @@ export type MemoryType =
 	| "decision"
 	| "mistake"
 	| "pattern"
-	| "file_claim"
 	| "task_archive";
 
 export type TaskStatus = "backlog" | "pending" | "in_progress" | "completed" | "canceled" | "blocked";

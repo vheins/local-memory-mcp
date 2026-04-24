@@ -16,12 +16,13 @@ agent: Project Manager
 -   **Tasks**: Call `task-detail` for history/comments (ID or `task_code`).
 -   **Memory**: Call `memory-detail` for full entry content.
 -   **Standards**: Call `standard-search` before implementation when coding standards may apply.
--   **Handoffs**: Call `handoff-list` to discover pending context transfers before starting a task.
+-   **Handoffs**: Call `handoff-list` to discover pending context transfers before starting a task. Close stale handoffs with `handoff-update` when no concrete next owner, unfinished task, or blocker remains.
 
 ## 3. WORKFLOW
 -   **Planning**: Create tasks for full lifecycle (Research → Strategy → Execution → Validation).
 -   **Transition Safety**: MUST move from `backlog/pending` → `in_progress` → `completed`. Skipping `in_progress` is forbidden.
+-   **Automatic Cleanup**: `task-update` to `completed` or `canceled` automatically releases active claims and expires pending handoffs linked to that task.
 -   **Claiming**: Use `task-claim` when taking ownership of a task, with `task_code` when working from human-visible queues.
--   **Handoff**: Use `handoff-create` when pausing, transferring ownership, or leaving structured context for another agent.
+-   **Handoff**: Use `handoff-create` only when pausing or transferring unfinished work. Do not use pending handoffs for completion summaries; close consumed/stale handoffs with `handoff-update`.
 -   **Validation**: Only mark `completed` after passing tests or explicitly documenting why verification could not run.
 -   **Archiving**: Completion triggers auto-archive to `task_archive` memory with token reporting.

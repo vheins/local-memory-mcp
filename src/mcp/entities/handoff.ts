@@ -112,6 +112,14 @@ export class HandoffEntity extends BaseEntity {
 		return result.changes > 0;
 	}
 
+	updatePendingHandoffsForTask(task_id: string, status: Handoff["status"]): number {
+		const result = this.run(
+			"UPDATE handoffs SET status = ?, updated_at = ? WHERE task_id = ? AND status = 'pending'",
+			[status, new Date().toISOString(), task_id]
+		);
+		return result.changes;
+	}
+
 	claimTask(params: {
 		repo: string;
 		task_id: string;
@@ -164,6 +172,14 @@ export class HandoffEntity extends BaseEntity {
 
 		const result = this.run(sql, params);
 		return result.changes > 0;
+	}
+
+	releaseClaimsForTask(task_id: string): number {
+		const result = this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [
+			new Date().toISOString(),
+			task_id
+		]);
+		return result.changes;
 	}
 
 	listClaims(params: { repo: string; agent?: string; active_only?: boolean; limit?: number; offset?: number }): Claim[] {

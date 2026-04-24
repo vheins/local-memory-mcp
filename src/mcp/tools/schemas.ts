@@ -14,7 +14,6 @@ export const MemoryTypeSchema = z.enum([
 	"decision",
 	"mistake",
 	"pattern",
-	"file_claim",
 	"task_archive"
 ]);
 
@@ -283,7 +282,17 @@ export const HandoffCreateSchema = z
 	})
 	.refine((data) => !(data.task_id && data.task_code), {
 		message: "Provide either task_id or task_code, not both"
+	})
+	.refine((data) => data.to_agent || data.task_id || data.task_code || data.context?.next_steps || data.context?.blockers || data.context?.remaining_work, {
+		message:
+			"Handoffs must identify a target agent, linked task, next_steps, blockers, or remaining_work. Do not create pending handoffs for completed-work summaries."
 	});
+
+export const HandoffUpdateSchema = z.object({
+	id: z.string().uuid(),
+	status: HandoffStatusSchema,
+	structured: z.boolean().default(false)
+});
 
 export const HandoffListSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
@@ -474,7 +483,7 @@ export const TOOL_DEFINITIONS = [
 		name: "memory-store",
 		title: "Memory Store",
 		description:
-			"Store a new memory entry. Keep 'title' concise and human-readable; do not embed agent/role/date metadata in the title. Put auxiliary context into 'metadata'. Use 'tags' for tech-stack and 'is_global' for universal rules.",
+			"Store a new durable knowledge entry. Do not store coordination state here: task claims, file claims, agent registration, and handoffs belong to task-claim, task-update, and handoff-* tools. Keep 'title' concise and human-readable; put auxiliary context into 'metadata'.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -491,10 +500,9 @@ export const TOOL_DEFINITIONS = [
 						"decision",
 						"mistake",
 						"pattern",
-						"file_claim",
 						"task_archive"
 					],
-					description: "Type of memory being stored"
+					description: "Type of durable knowledge being stored. Coordination types such as file_claim are intentionally unsupported."
 				},
 				title: {
 					type: "string",
@@ -622,7 +630,6 @@ export const TOOL_DEFINITIONS = [
 						"decision",
 						"mistake",
 						"pattern",
-						"file_claim",
 						"task_archive"
 					]
 				},
@@ -685,7 +692,6 @@ export const TOOL_DEFINITIONS = [
 							"decision",
 							"mistake",
 							"pattern",
-							"file_claim",
 							"task_archive"
 						]
 					}
@@ -1156,7 +1162,7 @@ export const TOOL_DEFINITIONS = [
 		name: "handoff-create",
 		title: "Handoff Create",
 		description:
-			"Create a handoff record when work needs context transfer between agents. Optionally link it to a task by task_id or task_code, and put machine-readable details in context.",
+			"Create a pending handoff only when unfinished work needs context transfer between agents. Do not use this for completed-work summaries, release notes, validation notes, or archives; put those on task-update/task comments or durable memory.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -1174,7 +1180,8 @@ export const TOOL_DEFINITIONS = [
 				summary: { type: "string", minLength: 1, description: "Concise human-readable transfer summary" },
 				context: {
 					type: "object",
-					description: "Structured handoff context, such as changed files, blockers, verification status, and next steps"
+					description:
+						"Structured handoff context. Include next_steps, blockers, or remaining_work unless a target agent or task is provided."
 				},
 				expires_at: { type: "string", description: "Optional expiration timestamp" },
 				structured: { type: "boolean", default: false }
@@ -1197,6 +1204,36 @@ export const TOOL_DEFINITIONS = [
 				expires_at: { type: "string", nullable: true }
 			},
 			required: ["id", "repo", "from_agent", "summary", "context", "status", "created_at", "updated_at"]
+		}
+	},
+	{
+		name: "handoff-update",
+		title: "Handoff Update",
+		description:
+			"Close or reclassify a handoff after it has been consumed or found stale. Use accepted when transfer context was consumed, rejected when intentionally declined, and expired when the handoff is obsolete or only described completed work.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				id: { type: "string", format: "uuid", description: "Handoff ID" },
+				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["id", "status"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				success: { type: "boolean" },
+				id: { type: "string" },
+				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] }
+			},
+			required: ["success", "id", "status"]
 		}
 	},
 	{

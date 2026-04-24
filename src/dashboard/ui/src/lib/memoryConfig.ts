@@ -3,7 +3,6 @@ export const TYPES = [
 	"decision",
 	"mistake",
 	"pattern",
-	"file_claim",
 	"task_archive"
 ] as const;
 
@@ -12,7 +11,6 @@ export const TYPE_LABELS: Record<string, string> = {
 	decision: "Decision",
 	mistake: "Mistake",
 	pattern: "Pattern",
-	file_claim: "File Claim",
 	task_archive: "Task Archive"
 };
 

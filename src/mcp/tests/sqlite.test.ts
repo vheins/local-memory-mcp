@@ -6,7 +6,7 @@ import * as fc from "fast-check";
 import { SQLiteStore, createTestStore } from "../storage/sqlite";
 import type { MemoryEntry } from "../types";
 
-type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "file_claim";
+type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
 
 function makeEntry(
 	overrides: Partial<{

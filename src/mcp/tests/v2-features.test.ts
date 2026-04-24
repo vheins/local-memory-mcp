@@ -44,11 +44,11 @@ function makeEntry(overrides: Partial<MemoryEntry> & { repo?: string }): MemoryE
 
 describe("V2 Enhanced Memory Features", () => {
 	describe("1. Conflict Detection & Supersedes", () => {
-		it("should store memories with the file_claim type", async () => {
+		it("should reject legacy file_claim coordination memories", async () => {
 			const db = await createTestStore();
 			const repo = "file-claim-repo";
 
-			const response = await handleMemoryStore(
+			await expect(handleMemoryStore(
 				{
 					type: "file_claim",
 					title: "Claim ownership of migration file",
@@ -61,10 +61,7 @@ describe("V2 Enhanced Memory Features", () => {
 				},
 				db,
 				mockVectors
-			);
-
-			const stored = db.memories.getById((response.structuredContent as Record<string, unknown>).id as string);
-			expect(stored?.type).toBe("file_claim");
+			)).rejects.toThrow();
 			db.close();
 		});
 
@@ -203,21 +200,21 @@ describe("V2 Enhanced Memory Features", () => {
 	});
 
 	describe("3. Feedback Loop", () => {
-		it("should allow updating memory type to file_claim", async () => {
-			const db = await createTestStore();
-			db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
+			it("should reject updating memory type to file_claim", async () => {
+				const db = await createTestStore();
+				db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
 
-			await handleMemoryUpdate(
+			await expect(handleMemoryUpdate(
 				{
 					id: VALID_UUID_1,
 					type: "file_claim"
 				},
 				db,
 				mockVectors
-			);
+			)).rejects.toThrow();
 
 			const updated = db.memories.getById(VALID_UUID_1);
-			expect(updated?.type).toBe("file_claim");
+			expect(updated?.type).toBe("decision");
 			db.close();
 		});
 

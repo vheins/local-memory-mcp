@@ -1,6 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
-import { HandoffCreateSchema, HandoffListSchema, TaskClaimSchema } from "./schemas";
+import { HandoffCreateSchema, HandoffListSchema, HandoffUpdateSchema, TaskClaimSchema } from "./schemas";
 
 function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
 	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -96,6 +96,35 @@ export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 	const contentSummary = buildHandoffListSummary(repo, rows.length, status, from_agent, to_agent);
 
 	return createMcpResponse(structuredData, contentSummary, {
+		contentSummary,
+		includeSerializedStructuredContent: structured
+	});
+}
+
+export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
+	const validated = HandoffUpdateSchema.parse(args);
+	const { id, status, structured } = validated;
+
+	const existing = storage.handoffs.getHandoffById(id);
+	if (!existing) {
+		throw new Error(`Handoff not found: ${id}`);
+	}
+
+	const success = storage.handoffs.updateHandoffStatus(id, status);
+	if (!success) {
+		throw new Error(`Failed to update handoff: ${id}`);
+	}
+
+	const updated = storage.handoffs.getHandoffById(id);
+	const result = {
+		success,
+		id,
+		status,
+		handoff: updated
+	};
+	const contentSummary = [`Updated handoff ${id}.`, `Status: ${status}`].join("\n");
+
+	return createMcpResponse(result, contentSummary, {
 		contentSummary,
 		includeSerializedStructuredContent: structured
 	});

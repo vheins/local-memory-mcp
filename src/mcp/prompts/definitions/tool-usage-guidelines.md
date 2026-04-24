@@ -21,6 +21,7 @@ Use the tools in the same flow exposed by the dashboard: navigate with compact l
 - **Hydrate**: Use `task-detail` after selecting a task from the list. Do not treat list rows as full task context.
 - **Mutate**: Use `task-create`, `task-update`, and `task-delete` for lifecycle changes.
 - **Transitions**: Move `backlog/pending/blocked` to `in_progress` before `completed`; include validation evidence and token estimate on completion.
+- **Automatic cleanup**: Moving a task to `completed` or `canceled` automatically releases active claims and expires pending handoffs linked to that task.
 
 ## 3. Standards Flow
 - **Search first**: Use `standard-search` to find coding standards by `query`, `language`, `stack`, `repo`, and `is_global`.
@@ -30,7 +31,9 @@ Use the tools in the same flow exposed by the dashboard: navigate with compact l
 
 ## 4. Handoff & Claim Flow
 - **Queue**: Use `handoff-list` as the handoff navigation layer. Filter by `status`, `from_agent`, or `to_agent`.
-- **Create handoff**: Use `handoff-create` when work needs context transfer. Include `from_agent`, optional `to_agent`, optional `task_code` or `task_id`, concise `summary`, and structured `context`.
+- **Create handoff**: Use `handoff-create` only when unfinished work needs context transfer. Include `from_agent`, optional `to_agent`, optional `task_code` or `task_id`, concise `summary`, and structured `context` with `next_steps`, `blockers`, or `remaining_work`.
+- **Close handoff**: Use `handoff-update` to move stale or consumed handoffs out of `pending`. Use `accepted` when consumed, `rejected` when declined, and `expired` when obsolete or only a completed-work summary.
+- **No completion handoff**: Do not create pending handoffs for completed-work summaries, release notes, validation notes, or archive records. Put those on `task-update` comments or durable memory.
 - **Claim task**: Use `task-claim` for task ownership. Do not encode claims in memory metadata.
 - **Linkage**: Prefer `task_code` for human workflows and `task_id` when already hydrated.
 

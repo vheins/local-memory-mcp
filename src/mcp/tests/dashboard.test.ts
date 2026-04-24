@@ -42,7 +42,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
+						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "task_archive"),
 						content: fc.string({ minLength: 10, maxLength: 100 }),
 						importance: fc.integer({ min: 1, max: 5 }),
 						hit_count: fc.integer({ min: 0, max: 100 })
@@ -76,12 +76,12 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
+						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "task_archive"),
 						content: fc.string({ minLength: 10, maxLength: 100 }),
 						importance: fc.integer({ min: 1, max: 5 })
 					})
 				),
-				fc.constantFrom("", "code_fact", "decision", "mistake", "pattern", "file_claim"),
+				fc.constantFrom("", "code_fact", "decision", "mistake", "pattern", "task_archive"),
 				(memories: MockMemory[], typeFilter: string) => {
 					const filtered = applyFilters(memories, "", typeFilter, 0, 5);
 
@@ -106,7 +106,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
+						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "task_archive"),
 						content: fc.string({ minLength: 10 }),
 						importance: fc.integer({ min: 1, max: 5 })
 					})
@@ -135,7 +135,7 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
+						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "task_archive"),
 						content: fc.string({ minLength: 10 }),
 						importance: fc.integer({ min: 1, max: 5 })
 					})
@@ -254,7 +254,7 @@ describe("Property 14: Export format correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
+						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "task_archive"),
 						content: fc.string({ minLength: 5, maxLength: 50 }),
 						importance: fc.integer({ min: 1, max: 5 }),
 						hit_count: fc.integer({ min: 0, max: 20 }),
@@ -289,7 +289,7 @@ describe("Property 14: Export format correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "file_claim"),
+						type: fc.constantFrom("code_fact", "decision", "mistake", "pattern", "task_archive"),
 						content: fc.string({ minLength: 5 }),
 						importance: fc.integer({ min: 1, max: 5 }),
 						hit_count: fc.integer({ min: 0, max: 10 }),
@@ -316,7 +316,7 @@ describe("Property 14: Export format correctness", () => {
 				fc.array(
 					fc.record({
 						id: fc.uuid(),
-						type: fc.constantFrom("decision", "mistake", "code_fact", "pattern", "file_claim"),
+						type: fc.constantFrom("decision", "mistake", "code_fact", "pattern", "task_archive"),
 						content: fc.string({ minLength: 10 }),
 						importance: fc.integer({ min: 1, max: 5 }),
 						hit_count: fc.integer({ min: 0, max: 100 }),
@@ -325,7 +325,7 @@ describe("Property 14: Export format correctness", () => {
 						model: fc.string({ minLength: 3 })
 					})
 				),
-				fc.constantFrom("decision", "mistake", "code_fact", "pattern", "file_claim"),
+				fc.constantFrom("decision", "mistake", "code_fact", "pattern", "task_archive"),
 				(memories, typeFilter) => {
 					// Apply filter (same as dashboard)
 					const filtered = memories.filter((m) => m.type === typeFilter);

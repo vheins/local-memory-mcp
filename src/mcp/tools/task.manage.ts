@@ -528,6 +528,8 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 	let updatedCount = 0;
 	const updatedTasks: { id: string, code: string }[] = [];
 	const completedTaskIds: string[] = [];
+	let releasedClaims = 0;
+	let expiredHandoffs = 0;
 	const now = new Date().toISOString();
 	const isStatusChangingGlobal = updates.status !== undefined;
 
@@ -608,14 +610,24 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		if (updates.status === "completed" && existingTask.status !== "completed") {
 			completedTaskIds.push(targetId);
 		}
+		if (
+			isStatusChanging &&
+			(updates.status === "completed" || updates.status === "canceled")
+		) {
+			releasedClaims += storage.handoffs.releaseClaimsForTask(targetId);
+			expiredHandoffs += storage.handoffs.updatePendingHandoffsForTask(targetId, "expired");
+		}
 		updatedTasks.push({ id: targetId, code: (updates.task_code as string) || existingTask.task_code });
 		updatedCount++;
 	}
 
 	const isCompleted = updates.status === "completed" && updatedCount > 0;
-	const summaryText = isCompleted
+	let summaryText = isCompleted
 		? `Updated ${updatedCount} task(s) in repo "${repo}". ✅ Task marked as completed — don't forget to commit your changes!`
 		: `Updated ${updatedCount} task(s) in repo "${repo}".`;
+	if (releasedClaims || expiredHandoffs) {
+		summaryText += ` Auto-closed coordination: released ${releasedClaims} claim(s), expired ${expiredHandoffs} handoff(s).`;
+	}
 
 	const response = createMcpResponse(
 		{
@@ -625,7 +637,11 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			repo,
 			status: updates.status,
 			updatedCount,
-			updatedFields: Object.keys(updates)
+			updatedFields: Object.keys(updates),
+			coordinationCleanup: {
+				releasedClaims,
+				expiredHandoffs
+			}
 		},
 		summaryText,
 		{ includeSerializedStructuredContent: updateData.structured }

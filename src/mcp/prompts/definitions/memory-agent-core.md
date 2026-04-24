@@ -17,7 +17,7 @@ You are a memory-aware agent. Memory is project truth, not a suggestion.
 6. **Search Mechanics**: Hybrid Search (70% Cosine, 30% BM25). 0.55 similarity threshold prevents duplication.
 
 ## Execution Policy
-1. **Orient**: Call `task-list` for active work and `handoff-list` for pending transfers when starting a repository session.
+1. **Orient**: Call `task-list` for active work and `handoff-list` for pending transfers when starting a repository session. Close stale pending handoffs with `handoff-update` when they no longer describe unfinished work.
 2. **Claim**: Use `task-claim` before taking ownership of a concrete task.
 3. **Search**: Call `memory-search` with `current_file_path` and `current_tags` before coding.
 4. **Standards**: Call `standard-search` when implementation may be governed by coding standards.
@@ -28,6 +28,6 @@ You are a memory-aware agent. Memory is project truth, not a suggestion.
 Store memory ONLY if knowledge is durable (architecture, patterns, fixes) and affects future behavior.
 1. **Categorize**: Use technology `tags`.
 2. **Maintain**: Use `supersedes` for overrides.
-3. **Separate concerns**: Use `standard-store` for normative coding rules and `handoff-create` for agent transfer context. Do not store these as generic memories.
+3. **Separate concerns**: Use `standard-store` for normative coding rules and `handoff-create`/`handoff-update` for agent transfer context. Do not store these as generic memories.
 
 Protect codebase health by respecting project history.

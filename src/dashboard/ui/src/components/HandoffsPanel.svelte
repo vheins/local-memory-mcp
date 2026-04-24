@@ -11,6 +11,7 @@
 	let loading = false;
 	let creating = false;
 	let claiming = false;
+	let updatingStatus = false;
 	let error = "";
 	let status = "pending";
 	let agentFilter = "";
@@ -26,6 +27,7 @@
 		summary: "",
 		context: ""
 	};
+	const handoffContextPlaceholder = '{"next_steps":["..."],"blockers":[],"remaining_work":"..."}';
 
 	let claimForm = {
 		task_code: "",
@@ -50,6 +52,14 @@
 			throw new Error("JSON must be an object.");
 		}
 		return parsed as Record<string, unknown>;
+	}
+
+	function canCreateHandoff() {
+		return (
+			!!handoffForm.from_agent.trim() &&
+			!!handoffForm.summary.trim() &&
+			(!!handoffForm.to_agent.trim() || !!handoffForm.task_code.trim() || !!handoffForm.context.trim())
+		);
 	}
 
 	function rowToHandoff(columns: string[], row: unknown[]): Handoff {
@@ -145,6 +155,25 @@
 		}
 	}
 
+	async function updateHandoffStatus(nextStatus: Handoff["status"]) {
+		if (!selected) return;
+		updatingStatus = true;
+		error = "";
+		try {
+			await api.callTool("handoff-update", {
+				id: selected.id,
+				status: nextStatus,
+				structured: true
+			});
+			await loadHandoffs();
+			selected = handoffs.find((handoff) => handoff.id === selected?.id) || null;
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			updatingStatus = false;
+		}
+	}
+
 	onMount(() => {
 		void loadHandoffs();
 	});
@@ -199,8 +228,8 @@
 				<label><span>To agent</span><input class="form-input" placeholder="agent-b (optional)" bind:value={handoffForm.to_agent} /></label>
 				<label><span>Task code</span><input class="form-input" placeholder="TASK-123 (optional)" bind:value={handoffForm.task_code} /></label>
 				<label><span>Summary</span><textarea class="form-textarea summary-input" placeholder="What should the next agent know?" bind:value={handoffForm.summary}></textarea></label>
-				<label><span>Context JSON</span><textarea class="form-textarea json-input" placeholder="Context JSON object" bind:value={handoffForm.context}></textarea></label>
-				<button class="btn btn-primary" on:click={createHandoff} disabled={creating || !handoffForm.from_agent.trim() || !handoffForm.summary.trim()}>
+				<label><span>Context JSON</span><textarea class="form-textarea json-input" placeholder={handoffContextPlaceholder} bind:value={handoffForm.context}></textarea></label>
+				<button class="btn btn-primary" on:click={createHandoff} disabled={creating || !canCreateHandoff()}>
 					<Icon name="git-branch" size={14} strokeWidth={2} />
 					{creating ? "Creating..." : "Create Handoff"}
 				</button>
@@ -280,6 +309,11 @@
 					<div><span>Status</span><strong>{selected.status}</strong></div>
 					<div><span>Created</span><strong>{formatDate(selected.created_at)}</strong></div>
 				</div>
+				<div class="status-actions">
+					<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "accepted"} on:click={() => updateHandoffStatus("accepted")}>Accept</button>
+					<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "expired"} on:click={() => updateHandoffStatus("expired")}>Expire</button>
+					<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "rejected"} on:click={() => updateHandoffStatus("rejected")}>Reject</button>
+				</div>
 				{#if selected.task_id}
 					<div class="linked-task">Task ID: {selected.task_id}</div>
 				{/if}
@@ -328,6 +362,7 @@
 	.detail-grid div { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px; }
 	.detail-grid span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 750; text-transform: uppercase; margin-bottom: 4px; }
 	.detail-grid strong { font-size: 0.82rem; color: var(--color-text); word-break: break-word; }
+	.status-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 	.muted-state { color: var(--color-text-muted); font-size: 0.85rem; padding: 24px 4px; text-align: center; }
 	.empty-state { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--color-text-muted); text-align: center; }
 	.empty-title { color: var(--color-text); font-size: 0.92rem; font-weight: 850; }
