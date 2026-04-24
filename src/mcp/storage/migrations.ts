@@ -140,7 +140,6 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_coding_standards_repo ON coding_standards(repo);
       CREATE INDEX IF NOT EXISTS idx_coding_standards_is_global ON coding_standards(is_global);
       CREATE INDEX IF NOT EXISTS idx_coding_standards_language ON coding_standards(language);
-      CREATE INDEX IF NOT EXISTS idx_coding_standards_hit_count ON coding_standards(hit_count);
 
       CREATE TABLE IF NOT EXISTS standard_vectors (
         standard_id TEXT PRIMARY KEY,
@@ -329,6 +328,7 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
       CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
       CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
+      CREATE INDEX IF NOT EXISTS idx_coding_standards_hit_count ON coding_standards(hit_count);
     `);
 
 		try {
