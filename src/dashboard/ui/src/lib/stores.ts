@@ -26,7 +26,9 @@ export const repoSearchQuery = writable<string>("");
 
 // Stats state
 export const dashboardStats = writable<DashboardStats | null>(null);
+export const globalDashboardStats = writable<DashboardStats | null>(null);
 export const taskTimeStats = writable<TaskTimeStats | null>(null);
+export const globalTaskTimeStats = writable<TaskTimeStats | null>(null);
 
 // Memory state
 export const memories = writable<Memory[]>([]);

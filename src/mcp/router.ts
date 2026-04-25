@@ -16,7 +16,14 @@ import { handleMemoryDelete } from "./tools/memory.delete";
 import { handleMemoryRecap } from "./tools/memory.recap";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
 import { handleMemoryDetail } from "./tools/memory.detail";
-import { handleHandoffCreate, handleHandoffList, handleHandoffUpdate, handleTaskClaim } from "./tools/handoff.manage";
+import {
+	handleClaimList,
+	handleClaimRelease,
+	handleHandoffCreate,
+	handleHandoffList,
+	handleHandoffUpdate,
+	handleTaskClaim
+} from "./tools/handoff.manage";
 import { handleStandardStore } from "./tools/standard.store";
 import { handleStandardSearch } from "./tools/standard.search";
 import { handleStandardUpdate } from "./tools/standard.update";
@@ -148,6 +155,7 @@ export function createRouter(
 		"task-create",
 		"task-create-interactive",
 		"task-claim",
+		"claim-release",
 		"task-update",
 		"task-delete",
 	]);
@@ -214,6 +222,12 @@ export function createRouter(
 
 				case "task-claim":
 					return await handleTaskClaim(args, db);
+
+				case "claim-list":
+					return await handleClaimList(args, db);
+
+				case "claim-release":
+					return await handleClaimRelease(args, db);
 
 				case "standard-store":
 					return await handleStandardStore(args, db, vectors);

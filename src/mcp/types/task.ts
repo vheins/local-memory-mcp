@@ -11,6 +11,18 @@ export interface TaskStats {
 	canceled: number;
 }
 
+export interface TaskCoordination {
+	active_claim_count: number;
+	active_claim_agent: string | null;
+	active_claim_role: string | null;
+	active_claim_claimed_at: string | null;
+	pending_handoff_count: number;
+	pending_handoff_id: string | null;
+	pending_handoff_summary: string | null;
+	pending_handoff_to_agent: string | null;
+	pending_handoff_created_at: string | null;
+}
+
 export interface Task {
 	id: string;
 	repo: string;
@@ -35,6 +47,7 @@ export interface Task {
 	depends_on: string | null;
 	parent_code?: string | null;
 	depends_on_code?: string | null;
+	coordination?: TaskCoordination;
 	comments?: TaskComment[];
 	comments_count?: number;
 }

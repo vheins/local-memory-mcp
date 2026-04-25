@@ -1,6 +1,6 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db } from "../lib/context.js";
+import { db, mcpClient } from "../lib/context.js";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
 import type { Task } from "../../mcp/types/index.js";
 import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
@@ -109,43 +109,40 @@ export class TasksController {
 			const existingTask = db.tasks.getTaskById(id);
 			if (!existingTask) return res.status(404).json(jsonApiError("Task not found", 404));
 
-			await db.withWrite(() => {
-				db.tasks.updateTask(id, attributes as Partial<Task>);
+			if (!mcpClient.isConnected()) await mcpClient.start();
 
-				if (attributes.status && attributes.status !== existingTask.status) {
-					db.actions.logAction("update", existingTask.repo, {
-						taskId: id,
-						query: `Status changed to ${attributes.status}`
-					});
-					db.tasks.insertTaskComment({
-						id: randomUUID(),
-						task_id: id,
-						repo: existingTask.repo,
-						comment: attributes.comment || `Status updated via dashboard`,
-						agent: "dashboard",
-						role: "user",
-						model: "web-ui",
-						previous_status: existingTask.status,
-						next_status: attributes.status,
-						created_at: new Date().toISOString()
-					});
-				} else if (attributes.comment) {
-					db.tasks.insertTaskComment({
-						id: randomUUID(),
-						task_id: id,
-						repo: existingTask.repo,
-						comment: attributes.comment,
-						agent: "dashboard",
-						role: "user",
-						model: "web-ui",
-						previous_status: null,
-						next_status: null,
-						created_at: new Date().toISOString()
-					});
+			const toolArgs: Record<string, unknown> = {
+				repo: existingTask.repo,
+				id,
+				agent: "dashboard",
+				role: "user",
+				model: "web-ui",
+				structured: true
+			};
+
+			for (const [key, value] of Object.entries(attributes as Record<string, unknown>)) {
+				if (value !== undefined) {
+					toolArgs[key] = value;
 				}
-			});
+			}
 
-			res.json(jsonApiRes({ message: "Updated" }, "status"));
+			if (attributes.status && attributes.status !== existingTask.status && !toolArgs.comment) {
+				toolArgs.comment = `Status updated via dashboard to ${attributes.status}`;
+			}
+
+			if (attributes.status === "completed" && toolArgs.est_tokens === undefined) {
+				toolArgs.est_tokens = existingTask.est_tokens || 0;
+			}
+
+			await mcpClient.callTool("task-update", toolArgs);
+			await db.refresh();
+
+			const updatedTask = db.tasks.getTaskById(id);
+			if (!updatedTask) {
+				return res.status(500).json(jsonApiError("Task updated but could not be reloaded", 500));
+			}
+
+			res.json(jsonApiRes(updatedTask, "task"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
 			res.status(500).json(jsonApiError(message));
@@ -202,24 +199,24 @@ export class TasksController {
 		try {
 			await db.refresh();
 			const { repo } = req.query;
-			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
+			const targetRepo = typeof repo === "string" && repo.length > 0 ? repo : null;
 
 			const stats = {
 				daily: {
-					...db.tasks.getTaskTimeStats(repo as string, "daily"),
-					history: db.tasks.getTaskComparisonSeries(repo as string, "daily")
+					...db.tasks.getTaskTimeStats(targetRepo, "daily"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "daily")
 				},
 				weekly: {
-					...db.tasks.getTaskTimeStats(repo as string, "weekly"),
-					history: db.tasks.getTaskComparisonSeries(repo as string, "weekly")
+					...db.tasks.getTaskTimeStats(targetRepo, "weekly"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "weekly")
 				},
 				monthly: {
-					...db.tasks.getTaskTimeStats(repo as string, "monthly"),
-					history: db.tasks.getTaskComparisonSeries(repo as string, "monthly")
+					...db.tasks.getTaskTimeStats(targetRepo, "monthly"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "monthly")
 				},
 				overall: {
-					...db.tasks.getTaskTimeStats(repo as string, "overall"),
-					history: db.tasks.getTaskComparisonSeries(repo as string, "overall")
+					...db.tasks.getTaskTimeStats(targetRepo, "overall"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "overall")
 				}
 			};
 

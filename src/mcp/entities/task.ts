@@ -2,6 +2,20 @@ import { BaseEntity } from "../storage/base";
 import { Task, TaskComment, TaskStats } from "../types";
 
 export class TaskEntity extends BaseEntity {
+	private coordinationSelect(alias = "t") {
+		return `
+			(SELECT COUNT(*) FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL) as active_claim_count,
+			(SELECT c.agent FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_agent,
+			(SELECT c.role FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_role,
+			(SELECT c.claimed_at FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_claimed_at,
+			(SELECT COUNT(*) FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending') as pending_handoff_count,
+			(SELECT h.id FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_id,
+			(SELECT h.summary FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_summary,
+			(SELECT h.to_agent FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_to_agent,
+			(SELECT h.created_at FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_created_at
+		`;
+	}
+
 	insertTask(task: Task): void {
 		this.run(
 			`INSERT INTO tasks (
@@ -72,7 +86,8 @@ export class TaskEntity extends BaseEntity {
 
 	getTaskById(id: string): Task | null {
 		const row = this.get<Record<string, unknown>>(
-			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code 
+			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+				${this.coordinationSelect("t")}
 			 FROM tasks t 
 			 LEFT JOIN tasks d ON t.depends_on = d.id 
 			 LEFT JOIN tasks p ON t.parent_id = p.id 
@@ -87,6 +102,7 @@ export class TaskEntity extends BaseEntity {
 		const placeholders = ids.map(() => "?").join(",");
 		const rows = this.all<Record<string, unknown>>(
 			`SELECT t.*, d.task_code as depends_on_code,
+				${this.coordinationSelect("t")},
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
 			FROM tasks t
 			LEFT JOIN tasks d ON t.depends_on = d.id
@@ -116,7 +132,8 @@ export class TaskEntity extends BaseEntity {
 
 	getTaskByCode(repo: string, taskCode: string): Task | null {
 		const row = this.get<Record<string, unknown>>(
-			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code 
+			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+				${this.coordinationSelect("t")}
 			 FROM tasks t 
 			 LEFT JOIN tasks d ON t.depends_on = d.id 
 			 LEFT JOIN tasks p ON t.parent_id = p.id 
@@ -129,6 +146,7 @@ export class TaskEntity extends BaseEntity {
 	getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): Task[] {
 		let query = `
 			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+				${this.coordinationSelect("t")},
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
 			FROM tasks t 
 			LEFT JOIN tasks d ON t.depends_on = d.id 
@@ -194,6 +212,7 @@ export class TaskEntity extends BaseEntity {
 listRecentTasks(limit = 50, offset = 0): Task[] {
 	const query = `
 		SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+			${this.coordinationSelect("t")},
 			(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
 		FROM tasks t 
 		LEFT JOIN tasks d ON t.depends_on = d.id 
@@ -227,6 +246,7 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 
 		let query = `
 			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+				${this.coordinationSelect("t")},
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
 			FROM tasks t 
 			LEFT JOIN tasks d ON t.depends_on = d.id 
@@ -413,7 +433,7 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 	}
 
 	getTaskTimeStats(
-		repo: string,
+		repo: string | null,
 		period: "daily" | "weekly" | "monthly" | "overall"
 	): { completed: number; tokens: number; avgDuration: number; added: number } {
 		let dateFilter = "";
@@ -421,6 +441,9 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 		else if (period === "weekly") dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-7 days')";
 		else if (period === "monthly")
 			dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-30 days')";
+
+		const repoWhere = repo ? "repo = ?" : "1=1";
+		const repoParams = repo ? [repo] : [];
 
 		const stats = this.get<{ completed_count: number; total_tokens: number; avg_duration_seconds: number }>(
 			`SELECT 
@@ -434,10 +457,10 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 					END
 				) as avg_duration_seconds
 			FROM tasks 
-			WHERE repo = ? 
+			WHERE ${repoWhere}
 			AND status = 'completed' 
 			${dateFilter}`,
-			[repo]
+			repoParams
 		);
 
 		let addedDateFilter = "";
@@ -445,9 +468,10 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 		else if (period === "weekly") addedDateFilter = "AND date(created_at) >= date('now', '-7 days')";
 		else if (period === "monthly") addedDateFilter = "AND date(created_at) >= date('now', '-30 days')";
 
-		const added = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM tasks WHERE repo = ? ${addedDateFilter}`, [
-			repo
-		]);
+		const added = this.get<{ count: number }>(
+			`SELECT COUNT(*) as count FROM tasks WHERE ${repoWhere} ${addedDateFilter}`,
+			repoParams
+		);
 
 		// avg_duration_seconds is in seconds; convert to minutes for the frontend formatDuration()
 		const avgDurationMinutes = stats?.avg_duration_seconds
@@ -463,7 +487,7 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 	}
 
 	getTaskComparisonSeries(
-		repo: string,
+		repo: string | null,
 		period: "daily" | "weekly" | "monthly" | "overall"
 	): { label: string; created: number; completed: number }[] {
 		let labelFormat: string;
@@ -483,27 +507,32 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 			dateFilter = "1=1";
 		}
 
+		const createdDateFilter = dateFilter.replace("COALESCE(finished_at, created_at)", "created_at");
+		const completedDateFilter = dateFilter.replace("COALESCE(finished_at, created_at)", "COALESCE(finished_at, updated_at)");
+		const createdRepoFilter = repo ? "repo = ? AND " : "";
+		const completedRepoFilter = repo ? "repo = ? AND " : "";
+
 		const query = `
 			SELECT label, SUM(created) as created, SUM(completed) as completed
 			FROM (
 				SELECT strftime(?, created_at) as label, 1 as created, 0 as completed 
 				FROM tasks 
-				WHERE repo = ? AND ${dateFilter.replace("COALESCE(finished_at, created_at)", "created_at")}
+				WHERE ${createdRepoFilter}${createdDateFilter}
 				UNION ALL
 				SELECT strftime(?, COALESCE(finished_at, updated_at)) as label, 0 as created, 1 as completed 
 				FROM tasks 
-				WHERE repo = ? AND status = 'completed' AND ${dateFilter.replace("COALESCE(finished_at, created_at)", "COALESCE(finished_at, updated_at)")}
+				WHERE ${completedRepoFilter}status = 'completed' AND ${completedDateFilter}
 			)
 			GROUP BY label
 			ORDER BY label ASC
 			LIMIT 100
 		`;
 
-		return this.all<{ label: string; created: number; completed: number }>(query, [
-			labelFormat,
-			repo,
-			labelFormat,
-			repo
-		]);
+		const params: Array<string | null> = [labelFormat];
+		if (repo) params.push(repo);
+		params.push(labelFormat);
+		if (repo) params.push(repo);
+
+		return this.all<{ label: string; created: number; completed: number }>(query, params);
 	}
 }

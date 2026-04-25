@@ -5,6 +5,7 @@ import type {
 	RepoMeta,
 	DashboardStats,
 	RecentAction,
+	TaskClaim,
 	TaskTimeStats,
 	HealthData,
 	Pagination,
@@ -169,10 +170,11 @@ export const api = {
 
 	taskByCode: (repo: string, task_code: string) => apiFetch<Task>(`/api/tasks/by-code?repo=${encodeURIComponent(repo)}&task_code=${encodeURIComponent(task_code)}`),
 
-	taskTimeStats: (repo: string) => apiFetch<TaskTimeStats>(`/api/tasks/stats/time?repo=${encodeURIComponent(repo)}`),
+	taskTimeStats: (repo?: string | null) =>
+		apiFetch<TaskTimeStats>(repo ? `/api/tasks/stats/time?repo=${encodeURIComponent(repo)}` : "/api/tasks/stats/time"),
 
 	updateTask: (id: string, updates: Partial<Task>) =>
-		apiFetch<{ success: boolean }>(`/api/tasks/${id}`, {
+		apiFetch<Task>(`/api/tasks/${id}`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(updates)
@@ -202,6 +204,25 @@ export const api = {
 		}),
 
 	deleteTaskComment: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
+
+	coordinationClaims: (params: { repo: string; agent?: string; active_only?: boolean; page?: number; pageSize?: number }) => {
+		const q = new URLSearchParams({ repo: params.repo });
+		if (params.agent) q.set("agent", params.agent);
+		if (params.active_only !== undefined) q.set("active_only", String(params.active_only));
+		if (params.page) q.set("page", String(params.page));
+		if (params.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<{ claims: TaskClaim[]; pagination: Pagination }>(`/api/coordination/claims?${q}`);
+	},
+
+	releaseClaim: (body: { repo: string; task_id?: string; task_code?: string; agent?: string }) =>
+		apiFetch<{ success: boolean; task_id: string; task_code?: string | null; agent?: string | null }>(
+			"/api/coordination/claims/release",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body)
+			}
+		),
 
 	standards: (params: { repo?: string; query?: string; language?: string; stack?: string; tags?: string; is_global?: boolean; page?: number; pageSize?: number }) => {
 		const q = new URLSearchParams();

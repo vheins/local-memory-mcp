@@ -65,6 +65,8 @@ describe("MCP handoff and claim tools", () => {
 		expect(listRes.structuredContent.schema).toBe("handoff-list");
 		expect(listRes.structuredContent.count).toBe(1);
 		expect(listRes.structuredContent.handoffs.rows[0][1]).toBe("agent-a");
+		expect(listRes.structuredContent.handoffs.rows[0][4]).toBe("HANDOFF-101");
+		expect(listRes.structuredContent.handoffs.rows[0][10]).toEqual({ file: "src/mcp/router.ts" });
 	});
 
 	it("rejects completion-summary handoffs without transfer context", async () => {
@@ -132,6 +134,54 @@ describe("MCP handoff and claim tools", () => {
 		expect(claimRes.structuredContent.agent).toBe("agent-claim");
 		expect(claimRes.structuredContent.role).toBe("worker");
 		expect(claimRes.structuredContent.metadata).toEqual({ lane: "handoff" });
+
+		const listRes = await router("tools/call", {
+			name: "claim-list",
+			arguments: {
+				repo: REPO
+			}
+		});
+
+		expect(listRes.structuredContent.schema).toBe("claim-list");
+		expect(listRes.structuredContent.count).toBe(1);
+		expect(listRes.structuredContent.claims.rows[0][2]).toBe("CLAIM-101");
+	});
+
+	it("releases an active claim by task_code", async () => {
+		await router("tools/call", {
+			name: "task-create",
+			arguments: {
+				repo: REPO,
+				task_code: "CLAIM-RELEASE-101",
+				phase: "implementation",
+				title: "Releasable task",
+				description: "Task used to validate claim-release.",
+				status: "pending",
+				priority: 3
+			}
+		});
+
+		await router("tools/call", {
+			name: "task-claim",
+			arguments: {
+				repo: REPO,
+				task_code: "CLAIM-RELEASE-101",
+				agent: "agent-release",
+				role: "worker"
+			}
+		});
+
+		const releaseRes = await router("tools/call", {
+			name: "claim-release",
+			arguments: {
+				repo: REPO,
+				task_code: "CLAIM-RELEASE-101",
+				agent: "agent-release"
+			}
+		});
+
+		expect(releaseRes.structuredContent.success).toBe(true);
+		expect(releaseRes.structuredContent.task_code).toBe("CLAIM-RELEASE-101");
 	});
 
 	it("auto-releases active claims and expires linked pending handoffs when a task completes", async () => {

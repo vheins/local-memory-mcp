@@ -44,6 +44,7 @@ export class SystemController {
 			uptime: Math.floor((Date.now() - startTime) / 1000),
 			version: pkg.version,
 			memoryCount: stats.totalMemories,
+			repoCount: stats.totalRepos,
 			pendingRequests: mcpClient.getPendingCount(),
 			dbPath: db.getDbPath()
 		};
@@ -70,8 +71,7 @@ export class SystemController {
 		try {
 			await db.refresh();
 			const repo = req.query.repo as string | undefined;
-			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
-			const stats = db.system.getDashboardStats(repo);
+			const stats = repo ? db.system.getDashboardStats(repo) : db.system.getGlobalDashboardStats();
 			res.json(jsonApiRes(stats, "system-stats"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";

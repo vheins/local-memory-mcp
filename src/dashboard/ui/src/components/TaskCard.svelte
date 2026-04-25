@@ -10,6 +10,7 @@
 	$: statusIcon = task ? statusIconMap[task.status] : "circle-dot";
 	$: statusColor = task ? statusColors[task.status] : "#94a3b8";
 	$: descPreview = task ? cleanDesc(task.description ?? undefined) : "";
+	$: coordination = task?.coordination;
 </script>
 
 <div class="task-card animate-fade-in" role="button" tabindex="0" on:click on:keydown>
@@ -52,6 +53,23 @@
 				<span class="h-badge depends" title="Depends on: {task.depends_on_code}">
 					<Icon name="link" size={9} strokeWidth={2.5} />
 					{task.depends_on_code}
+				</span>
+			{/if}
+		</div>
+	{/if}
+
+	{#if coordination && (coordination.active_claim_count > 0 || coordination.pending_handoff_count > 0)}
+		<div class="coordination-row">
+			{#if coordination.active_claim_count > 0}
+				<span class="coord-badge claim" title="Claimed by {coordination.active_claim_agent || 'agent'}">
+					<Icon name="check" size={9} strokeWidth={2.5} />
+					{coordination.active_claim_agent || coordination.active_claim_count + " claim"}
+				</span>
+			{/if}
+			{#if coordination.pending_handoff_count > 0}
+				<span class="coord-badge handoff" title={coordination.pending_handoff_summary || "Pending handoff"}>
+					<Icon name="git-branch" size={9} strokeWidth={2.5} />
+					{coordination.pending_handoff_to_agent || "handoff"}{coordination.pending_handoff_count > 1 ? ` +${coordination.pending_handoff_count - 1}` : ""}
 				</span>
 			{/if}
 		</div>
@@ -191,6 +209,13 @@
 		margin-bottom: 8px;
 	}
 
+	.coordination-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-bottom: 8px;
+	}
+
 	.h-badge {
 		display: inline-flex;
 		align-items: center;
@@ -212,6 +237,29 @@
 		background: rgba(245, 158, 11, 0.1);
 		color: #f59e0b;
 		border: 1px solid rgba(245, 158, 11, 0.2);
+	}
+
+	.coord-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		font-size: 0.58rem;
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-weight: 700;
+		font-family: "JetBrains Mono", monospace;
+	}
+
+	.coord-badge.claim {
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
+		border: 1px solid rgba(16, 185, 129, 0.2);
+	}
+
+	.coord-badge.handoff {
+		background: rgba(99, 102, 241, 0.1);
+		color: #6366f1;
+		border: 1px solid rgba(99, 102, 241, 0.2);
 	}
 
 	/* ── Footer ── */

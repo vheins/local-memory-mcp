@@ -5,7 +5,9 @@ import {
 	currentRepo,
 	availableRepos,
 	dashboardStats,
+	globalDashboardStats,
 	taskTimeStats,
+	globalTaskTimeStats,
 	recentActions,
 	recentActionsPage,
 	recentActionsPageSize,
@@ -90,6 +92,16 @@ export function createAppHandler(refs: {
 		}
 	}
 
+	async function loadGlobalStats() {
+		try {
+			const [stats, timeStats] = await Promise.all([api.stats(), api.taskTimeStats()]);
+			globalDashboardStats.set(stats);
+			globalTaskTimeStats.set(timeStats);
+		} catch (e) {
+			console.error("Failed to load global stats:", e);
+		}
+	}
+
 	async function loadStats() {
 		const repo = get(currentRepo);
 		if (!repo) return;
@@ -126,8 +138,12 @@ export function createAppHandler(refs: {
 	}
 
 	async function loadData() {
-		if (!get(currentRepo)) return;
-		await Promise.all([loadStats(), loadRecentActions()]);
+		const repo = get(currentRepo);
+		if (repo) {
+			await Promise.all([loadGlobalStats(), loadStats(), loadRecentActions()]);
+			return;
+		}
+		await loadGlobalStats();
 	}
 
 	async function onRepoSelect(repo: string) {
@@ -319,6 +335,7 @@ export function createAppHandler(refs: {
 		filteredResources,
 		loadRepos,
 		loadHealth,
+		loadGlobalStats,
 		loadData,
 		loadStats,
 		loadRecentActions,

@@ -342,6 +342,30 @@ export const TaskClaimSchema = z
 		message: "Provide either task_id or task_code, not both"
 	});
 
+export const ClaimListSchema = z.object({
+	repo: z.string().min(1).transform(normalizeRepo),
+	agent: z.string().min(1).optional(),
+	active_only: z.boolean().default(true),
+	limit: z.number().min(1).max(100).default(20),
+	offset: z.number().min(0).default(0),
+	structured: z.boolean().default(false)
+});
+
+export const ClaimReleaseSchema = z
+	.object({
+		repo: z.string().min(1).transform(normalizeRepo),
+		task_id: z.string().uuid().optional(),
+		task_code: z.string().optional(),
+		agent: z.string().min(1).optional(),
+		structured: z.boolean().default(false)
+	})
+	.refine((data) => data.task_id !== undefined || data.task_code !== undefined, {
+		message: "Either task_id or task_code must be provided"
+	})
+	.refine((data) => !(data.task_id && data.task_code), {
+		message: "Provide either task_id or task_code, not both"
+	});
+
 // CSL (Coding Standards Library) Schemas
 export const StandardStoreSchema = z.object({
 	name: z.string().min(3).max(255),
@@ -1389,12 +1413,12 @@ export const TOOL_DEFINITIONS = [
 						columns: {
 							type: "array",
 							items: { type: "string" },
-							description: "Column names: [id, from_agent, to_agent, task_id, status, created_at, summary]"
+							description: "Column names: [id, from_agent, to_agent, task_id, task_code, status, created_at, updated_at, expires_at, summary, context]"
 						},
 						rows: {
 							type: "array",
 							items: { type: "array" },
-							description: "Each row: [id, from_agent, to_agent, task_id, status, created_at, summary]"
+							description: "Each row: [id, from_agent, to_agent, task_id, task_code, status, created_at, updated_at, expires_at, summary, context]"
 						}
 					},
 					required: ["columns", "rows"]
@@ -1442,11 +1466,94 @@ export const TOOL_DEFINITIONS = [
 				released_at: { type: "string", nullable: true },
 				metadata: { type: "object" }
 			},
-			required: ["id", "repo", "task_id", "agent", "role", "claimed_at", "metadata"]
-		}
-	},
-	{
-		name: "standard-store",
+				required: ["id", "repo", "task_id", "agent", "role", "claimed_at", "metadata"]
+			}
+		},
+		{
+			name: "claim-list",
+			title: "Claim List",
+			description:
+				"List task claims in a repository. Use this to inspect active ownership, optionally filtered by agent.",
+			annotations: {
+				readOnlyHint: true,
+				idempotentHint: true,
+				destructiveHint: false,
+				openWorldHint: false
+			},
+			inputSchema: {
+				type: "object",
+				properties: {
+					repo: { type: "string", description: "Repository name" },
+					agent: { type: "string", description: "Optional agent filter" },
+					active_only: { type: "boolean", description: "When true, return only unreleased claims" },
+					limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
+					offset: { type: "number", minimum: 0, default: 0 },
+					structured: { type: "boolean", default: false }
+				},
+				required: ["repo"]
+			},
+			outputSchema: {
+				type: "object",
+				properties: {
+					schema: { type: "string", enum: ["claim-list"] },
+					claims: {
+						type: "object",
+						properties: {
+							columns: {
+								type: "array",
+								items: { type: "string" },
+								description: "Column names: [id, task_id, task_code, agent, role, claimed_at, released_at, metadata]"
+							},
+							rows: {
+								type: "array",
+								items: { type: "array" },
+								description: "Each row: [id, task_id, task_code, agent, role, claimed_at, released_at, metadata]"
+							}
+						},
+						required: ["columns", "rows"]
+					},
+					count: { type: "number" },
+					offset: { type: "number" }
+				},
+				required: ["schema", "claims", "count", "offset"]
+			}
+		},
+		{
+			name: "claim-release",
+			title: "Claim Release",
+			description:
+				"Release an active claim for a task. Optionally restrict the release to a specific agent.",
+			annotations: {
+				readOnlyHint: false,
+				idempotentHint: false,
+				destructiveHint: false,
+				openWorldHint: false
+			},
+			inputSchema: {
+				type: "object",
+				properties: {
+					repo: { type: "string", description: "Repository name" },
+					task_id: { type: "string", format: "uuid", description: "Task id to release. Optional if task_code is provided." },
+					task_code: { type: "string", description: "Task code to release. Optional if task_id is provided." },
+					agent: { type: "string", description: "Optional agent name to release only that claim" },
+					structured: { type: "boolean", default: false }
+				},
+				required: ["repo"]
+			},
+			outputSchema: {
+				type: "object",
+				properties: {
+					success: { type: "boolean" },
+					repo: { type: "string" },
+					task_id: { type: "string" },
+					task_code: { type: "string", nullable: true },
+					agent: { type: "string", nullable: true }
+				},
+				required: ["success", "repo", "task_id"]
+			}
+		},
+		{
+			name: "standard-store",
 		title: "Standard Store",
 		description:
 			"Store one atomic coding standard. Use for durable implementation rules with explicit context, stack/language filters, and repo/global scope.",

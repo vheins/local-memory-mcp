@@ -215,7 +215,12 @@ export function createKanbanHandler() {
 		});
 
 		try {
-			await api.updateTask(draggedTask.id, { status: targetCol });
+			const updatedTask = await api.updateTask(draggedTask.id, { status: targetCol });
+			update((s) => {
+				const nextCols = { ...s.columnTasks };
+				nextCols[targetCol] = (nextCols[targetCol] || []).map((task) => (task.id === updatedTask.id ? updatedTask : task));
+				return { ...s, columnTasks: nextCols };
+			});
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Unknown error";
 			console.error("Failed to move task:", message);

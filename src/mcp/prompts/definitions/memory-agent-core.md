@@ -18,7 +18,7 @@ You are a memory-aware agent. Memory is project truth, not a suggestion.
 
 ## Execution Policy
 1. **Orient**: Call `task-list` for active work and `handoff-list` for pending transfers when starting a repository session. Close stale pending handoffs with `handoff-update` when they no longer describe unfinished work.
-2. **Claim**: Use `task-claim` before taking ownership of a concrete task.
+2. **Claim**: Use `task-claim` before taking ownership of a concrete task. Use `claim-list` when ownership is unclear and `claim-release` to clear stale claims during reassignment.
 3. **Search**: Call `memory-search` with `current_file_path` and `current_tags` before coding.
 4. **Standards**: Call `standard-search` when implementation may be governed by coding standards.
 5. **Retrieve**: Use `memory-detail` for full content if search pointer rows are insufficient.

@@ -75,8 +75,7 @@ export function createDetailHandler() {
 		if (!state.task) return;
 
 		try {
-			await api.updateTask(state.task.id, { [field]: value });
-			const updatedTask = { ...state.task, [field]: value } as Task;
+			const updatedTask = await api.updateTask(state.task.id, { [field]: value });
 			update((s) => ({ ...s, task: updatedTask }));
 			onUpdated(updatedTask);
 		} catch (e) {
@@ -110,12 +109,9 @@ export function createDetailHandler() {
 
 		update((s) => ({ ...s, postingComment: true }));
 		try {
-			await api.updateTask(state.task.id, { comment: state.newComment.trim() });
-			const refreshed = await api.taskById(state.task.id);
-			if (refreshed) {
-				update((s) => ({ ...s, task: refreshed, newComment: "" }));
-				onUpdated(refreshed);
-			}
+			const refreshed = await api.updateTask(state.task.id, { comment: state.newComment.trim() });
+			update((s) => ({ ...s, task: refreshed, newComment: "" }));
+			onUpdated(refreshed);
 		} catch (e) {
 			console.error("Failed to post comment:", e);
 		} finally {

@@ -1,6 +1,13 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
-import { HandoffCreateSchema, HandoffListSchema, HandoffUpdateSchema, TaskClaimSchema } from "./schemas";
+import {
+	ClaimListSchema,
+	ClaimReleaseSchema,
+	HandoffCreateSchema,
+	HandoffListSchema,
+	HandoffUpdateSchema,
+	TaskClaimSchema
+} from "./schemas";
 
 function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
 	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -15,6 +22,20 @@ function buildHandoffListSummary(repo: string, count: number, status?: string, f
 
 	if (toAgent) {
 		parts.push(`To agent: ${toAgent}.`);
+	}
+
+	return parts.join("\n");
+}
+
+function buildClaimListSummary(repo: string, count: number, agent?: string, activeOnly?: boolean) {
+	const parts = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
+
+	if (agent) {
+		parts.push(`Agent filter: ${agent}.`);
+	}
+
+	if (activeOnly) {
+		parts.push("Showing active claims only.");
 	}
 
 	return parts.join("\n");
@@ -72,15 +93,31 @@ export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 		offset
 	});
 
-	const COLUMNS = ["id", "from_agent", "to_agent", "task_id", "status", "created_at", "summary"] as const;
+	const COLUMNS = [
+		"id",
+		"from_agent",
+		"to_agent",
+		"task_id",
+		"task_code",
+		"status",
+		"created_at",
+		"updated_at",
+		"expires_at",
+		"summary",
+		"context"
+	] as const;
 	const rows = handoffs.map((handoff) => [
 		handoff.id,
 		handoff.from_agent,
 		handoff.to_agent,
 		handoff.task_id,
+		handoff.task_code ?? null,
 		handoff.status,
 		handoff.created_at,
-		handoff.summary
+		handoff.updated_at,
+		handoff.expires_at,
+		handoff.summary,
+		handoff.context
 	]);
 
 	const structuredData = {
@@ -186,4 +223,92 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	}
 
 	return response;
+}
+
+export async function handleClaimList(args: unknown, storage: SQLiteStore) {
+	const validated = ClaimListSchema.parse(args);
+	const { repo, agent, active_only, limit, offset, structured } = validated;
+
+	const claims = storage.handoffs.listClaims({
+		repo,
+		agent,
+		active_only,
+		limit,
+		offset
+	});
+
+	const COLUMNS = ["id", "task_id", "task_code", "agent", "role", "claimed_at", "released_at", "metadata"] as const;
+	const rows = claims.map((claim) => [
+		claim.id,
+		claim.task_id,
+		claim.task_code ?? null,
+		claim.agent,
+		claim.role,
+		claim.claimed_at,
+		claim.released_at,
+		claim.metadata
+	]);
+
+	const structuredData = {
+		schema: "claim-list" as const,
+		claims: {
+			columns: [...COLUMNS],
+			rows
+		},
+		count: rows.length,
+		offset
+	};
+
+	const contentSummary = buildClaimListSummary(repo, rows.length, agent, active_only);
+
+	return createMcpResponse(structuredData, contentSummary, {
+		contentSummary,
+		includeSerializedStructuredContent: structured
+	});
+}
+
+export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
+	const validated = ClaimReleaseSchema.parse(args);
+	const { repo, task_id, task_code, agent, structured } = validated;
+
+	let resolvedTaskId = task_id;
+	let resolvedTaskCode: string | null = task_code ?? null;
+
+	if (resolvedTaskId) {
+		const task = storage.tasks.getTaskById(resolvedTaskId);
+		if (!task || task.repo !== repo) {
+			throw new Error(`Task not found: ${resolvedTaskId} in repo ${repo}`);
+		}
+		resolvedTaskCode = task.task_code;
+	} else if (task_code) {
+		const task = storage.tasks.getTaskByCode(repo, task_code);
+		if (!task) {
+			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
+		}
+		resolvedTaskId = task.id;
+		resolvedTaskCode = task.task_code;
+	}
+
+	const success = storage.handoffs.releaseClaim(resolvedTaskId!, agent);
+	if (!success) {
+		throw new Error(`No active claim found for task ${resolvedTaskCode || resolvedTaskId}`);
+	}
+
+	const result = {
+		success,
+		repo,
+		task_id: resolvedTaskId!,
+		task_code: resolvedTaskCode,
+		agent: agent ?? null
+	};
+	const contentSummary = [
+		`Released claim for task ${resolvedTaskCode || resolvedTaskId}.`,
+		`Repo: ${repo}`,
+		agent ? `Agent: ${agent}` : "Agent: any active claimant"
+	].join("\n");
+
+	return createMcpResponse(result, contentSummary, {
+		contentSummary,
+		includeSerializedStructuredContent: structured
+	});
 }

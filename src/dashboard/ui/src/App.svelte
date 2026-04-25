@@ -23,6 +23,7 @@
 	import QuickCreateFAB from "./components/QuickCreateFAB.svelte";
 	import StandardsPanel from "./components/StandardsPanel.svelte";
 	import HandoffsPanel from "./components/HandoffsPanel.svelte";
+	import GlobalCommandCenter from "./components/GlobalCommandCenter.svelte";
 	import Icon from "./lib/Icon.svelte";
 
 	let kanbanBoard: KanbanBoard;
@@ -89,7 +90,7 @@
 
 		<!-- Content Shell -->
 		<div id="dashboardShell" class="dashboard-shell">
-			{#if !$currentRepo}
+			{#if !$currentRepo && $activeTab !== "dashboard"}
 				<div style="text-align:center;padding:80px 20px;" class="animate-fade-in">
 					<div
 						style="display:inline-flex;width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(99,102,241,0.15));border:1px solid rgba(14,165,233,0.2);align-items:center;justify-content:center;margin-bottom:20px;"
@@ -127,16 +128,39 @@
 				<!-- ════ DASHBOARD TAB ════ -->
 				{#if $activeTab === "dashboard"}
 					<div style="display:grid;grid-template-columns:1fr;gap:12px;align-items:start;" class="dashboard-grid">
+						<GlobalCommandCenter />
+
 						<div style="display:flex;flex-direction:column;gap:12px;">
-							<div class="glass card hover-glow" style="padding:16px;">
-								<div class="section-label" style="margin-bottom:10px;">Memory Overview</div>
-								<StatsWidget />
-							</div>
-							<div class="glass card hover-glow" style="padding:16px;">
-								<div class="section-label" style="margin-bottom:10px;">Task Overview</div>
-								<TaskStatsWidget />
-							</div>
-							<TimeStatsWidget />
+							{#if $currentRepo}
+								<div class="glass card hover-glow" style="padding:16px;">
+									<div class="flex items-center justify-between" style="margin-bottom:10px;">
+										<div class="section-label">Selected Repo Pulse</div>
+										<div
+											style="font-size:0.68rem;font-weight:800;color:var(--color-primary);background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.16);padding:4px 8px;border-radius:999px;"
+										>
+											{$currentRepo}
+										</div>
+									</div>
+									<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;" class="repo-pulse-grid">
+										<div class="glass card" style="padding:16px;">
+											<div class="section-label" style="margin-bottom:10px;">Memory Overview</div>
+											<StatsWidget />
+										</div>
+										<div class="glass card" style="padding:16px;">
+											<div class="section-label" style="margin-bottom:10px;">Task Overview</div>
+											<TaskStatsWidget />
+										</div>
+									</div>
+								</div>
+								<TimeStatsWidget />
+							{:else}
+								<div class="glass card hover-glow" style="padding:16px;">
+									<div class="section-label" style="margin-bottom:10px;">Per-Repository Pulse</div>
+									<div style="color:var(--color-text-muted);font-size:0.8rem;">
+										Select a repository from the sidebar to inspect repo-specific memory, task, and execution metrics.
+									</div>
+								</div>
+							{/if}
 						</div>
 					</div>
 				{/if}
@@ -208,12 +232,12 @@
 
 				<!-- ════ STANDARDS TAB ════ -->
 				{#if $activeTab === "standards"}
-					<StandardsPanel repo={$currentRepo} />
+					<StandardsPanel repo={$currentRepo || ""} />
 				{/if}
 
 				<!-- ════ HANDOFFS TAB ════ -->
 				{#if $activeTab === "handoffs"}
-					<HandoffsPanel repo={$currentRepo} />
+					<HandoffsPanel repo={$currentRepo || ""} />
 				{/if}
 
 				<!-- ════ REFERENCE TAB ════ -->
@@ -279,6 +303,9 @@
 <style>
 	@media (max-width: 900px) {
 		.dashboard-grid {
+			grid-template-columns: 1fr !important;
+		}
+		.repo-pulse-grid {
 			grid-template-columns: 1fr !important;
 		}
 	}

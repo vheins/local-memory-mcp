@@ -44,6 +44,7 @@ export interface Handoff {
 	from_agent: string;
 	to_agent: string | null;
 	task_id: string | null;
+	task_code?: string | null;
 	summary: string;
 	context: Record<string, unknown>;
 	status: "pending" | "accepted" | "rejected" | "expired";
@@ -72,4 +73,14 @@ export interface TaskClaim {
 	claimed_at: string;
 	released_at: string | null;
 	metadata: Record<string, unknown>;
+}
+
+export interface ClaimListResult {
+	schema: "claim-list";
+	claims: {
+		columns: string[];
+		rows: unknown[][];
+	};
+	count: number;
+	offset: number;
 }

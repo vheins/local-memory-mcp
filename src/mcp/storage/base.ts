@@ -96,6 +96,17 @@ export abstract class BaseEntity {
 			depends_on: (r.depends_on as string) || null,
 			parent_code: (r.parent_code as string) || null,
 			depends_on_code: (r.depends_on_code as string) || null,
+			coordination: {
+				active_claim_count: (r.active_claim_count as number) || 0,
+				active_claim_agent: (r.active_claim_agent as string) || null,
+				active_claim_role: (r.active_claim_role as string) || null,
+				active_claim_claimed_at: (r.active_claim_claimed_at as string) || null,
+				pending_handoff_count: (r.pending_handoff_count as number) || 0,
+				pending_handoff_id: (r.pending_handoff_id as string) || null,
+				pending_handoff_summary: (r.pending_handoff_summary as string) || null,
+				pending_handoff_to_agent: (r.pending_handoff_to_agent as string) || null,
+				pending_handoff_created_at: (r.pending_handoff_created_at as string) || null
+			},
 			comments_count: (r.comments_count as number) || 0
 		};
 	}

@@ -18,7 +18,7 @@ Use the tools in the same flow exposed by the dashboard: navigate with compact l
 
 ## 2. Task Flow
 - **Navigate**: Start with `task-list` using active statuses (`in_progress,pending`) or explicit filters.
-- **Hydrate**: Use `task-detail` after selecting a task from the list. Do not treat list rows as full task context.
+- **Hydrate**: Use `task-detail` after selecting a task from the list. Full task detail includes comments plus current coordination state such as active claims and pending handoffs.
 - **Mutate**: Use `task-create`, `task-update`, and `task-delete` for lifecycle changes.
 - **Transitions**: Move `backlog/pending/blocked` to `in_progress` before `completed`; include validation evidence and token estimate on completion.
 - **Automatic cleanup**: Moving a task to `completed` or `canceled` automatically releases active claims and expires pending handoffs linked to that task.
@@ -30,11 +30,13 @@ Use the tools in the same flow exposed by the dashboard: navigate with compact l
 - **Scope**: Prefer repo-specific standards for local conventions; use global standards only for cross-repo rules.
 
 ## 4. Handoff & Claim Flow
-- **Queue**: Use `handoff-list` as the handoff navigation layer. Filter by `status`, `from_agent`, or `to_agent`.
+- **Queue**: Use `handoff-list` as the handoff navigation layer. Filter by `status`, `from_agent`, or `to_agent`. Hydrated handoff rows include `task_code`, `updated_at`, `expires_at`, and structured `context`.
 - **Create handoff**: Use `handoff-create` only when unfinished work needs context transfer. Include `from_agent`, optional `to_agent`, optional `task_code` or `task_id`, concise `summary`, and structured `context` with `next_steps`, `blockers`, or `remaining_work`.
 - **Close handoff**: Use `handoff-update` to move stale or consumed handoffs out of `pending`. Use `accepted` when consumed, `rejected` when declined, and `expired` when obsolete or only a completed-work summary.
 - **No completion handoff**: Do not create pending handoffs for completed-work summaries, release notes, validation notes, or archive records. Put those on `task-update` comments or durable memory.
 - **Claim task**: Use `task-claim` for task ownership. Do not encode claims in memory metadata.
+- **Inspect claims**: Use `claim-list` to inspect active ownership by repo or agent before reassigning work.
+- **Release claims**: Use `claim-release` to explicitly clear stale ownership when work is transferred or abandoned.
 - **Linkage**: Prefer `task_code` for human workflows and `task_id` when already hydrated.
 
 ## 5. Reference Flow

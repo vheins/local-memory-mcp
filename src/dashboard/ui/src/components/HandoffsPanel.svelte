@@ -17,6 +17,9 @@
 	let agentFilter = "";
 	let selected: Handoff | null = null;
 	let lastClaim: TaskClaim | null = null;
+	let claims: TaskClaim[] = [];
+	let claimsLoading = false;
+	let releasingClaimId: string | null = null;
 	let showCreate = false;
 	let showClaim = false;
 
@@ -37,7 +40,7 @@
 	};
 
 	$: if (repo) {
-		void loadHandoffs();
+		void refreshCoordination();
 	}
 
 	function structured<T>(response: unknown): T | null {
@@ -70,13 +73,30 @@
 			from_agent: String(data.from_agent || ""),
 			to_agent: data.to_agent ? String(data.to_agent) : null,
 			task_id: data.task_id ? String(data.task_id) : null,
+			task_code: data.task_code ? String(data.task_code) : null,
 			summary: String(data.summary || ""),
-			context: {},
+			context:
+				data.context && typeof data.context === "object" && !Array.isArray(data.context)
+					? (data.context as Record<string, unknown>)
+					: {},
 			status: String(data.status || "pending") as Handoff["status"],
 			created_at: String(data.created_at || ""),
-			updated_at: String(data.created_at || ""),
-			expires_at: null
+			updated_at: String(data.updated_at || data.created_at || ""),
+			expires_at: data.expires_at ? String(data.expires_at) : null
 		};
+	}
+
+	async function loadClaims() {
+		if (!repo) return;
+		claimsLoading = true;
+		try {
+			const result = await api.coordinationClaims({ repo, active_only: true, pageSize: 20 });
+			claims = result.claims || [];
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			claimsLoading = false;
+		}
 	}
 
 	async function loadHandoffs() {
@@ -102,6 +122,10 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function refreshCoordination() {
+		await Promise.all([loadHandoffs(), loadClaims()]);
 	}
 
 	async function createHandoff() {
@@ -148,6 +172,7 @@
 			);
 			claimForm = { task_code: "", agent: claimForm.agent, role: claimForm.role, metadata: "" };
 			showClaim = false;
+			await loadClaims();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -165,7 +190,7 @@
 				status: nextStatus,
 				structured: true
 			});
-			await loadHandoffs();
+			await refreshCoordination();
 			selected = handoffs.find((handoff) => handoff.id === selected?.id) || null;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -174,8 +199,25 @@
 		}
 	}
 
+	async function releaseClaim(claim: TaskClaim) {
+		releasingClaimId = claim.id;
+		error = "";
+		try {
+			await api.releaseClaim({
+				repo,
+				task_id: claim.task_id,
+				agent: claim.agent
+			});
+			await loadClaims();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			releasingClaimId = null;
+		}
+	}
+
 	onMount(() => {
-		void loadHandoffs();
+		void refreshCoordination();
 	});
 </script>
 
@@ -210,6 +252,10 @@
 			<button class="btn btn-ghost" on:click={loadHandoffs}>
 				<Icon name="refresh-cw" size={14} strokeWidth={2} />
 				Refresh
+			</button>
+			<button class="btn btn-ghost" on:click={refreshCoordination}>
+				<Icon name="refresh-cw" size={14} strokeWidth={2} />
+				Sync All
 			</button>
 		</div>
 	</div>
@@ -300,30 +346,77 @@
 			{/if}
 		</div>
 
-		<div class="glass card panel-card detail-panel">
-			{#if selected}
-				<div class="detail-title">{selected.summary}</div>
-				<div class="detail-grid">
-					<div><span>From</span><strong>{selected.from_agent}</strong></div>
-					<div><span>To</span><strong>{selected.to_agent || "unassigned"}</strong></div>
-					<div><span>Status</span><strong>{selected.status}</strong></div>
-					<div><span>Created</span><strong>{formatDate(selected.created_at)}</strong></div>
-				</div>
-				<div class="status-actions">
-					<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "accepted"} on:click={() => updateHandoffStatus("accepted")}>Accept</button>
-					<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "expired"} on:click={() => updateHandoffStatus("expired")}>Expire</button>
-					<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "rejected"} on:click={() => updateHandoffStatus("rejected")}>Reject</button>
-				</div>
-				{#if selected.task_id}
-					<div class="linked-task">Task ID: {selected.task_id}</div>
+		<div class="detail-stack">
+			<div class="glass card panel-card detail-panel">
+				{#if selected}
+					<div class="detail-title">{selected.summary}</div>
+					<div class="detail-grid">
+						<div><span>From</span><strong>{selected.from_agent}</strong></div>
+						<div><span>To</span><strong>{selected.to_agent || "unassigned"}</strong></div>
+						<div><span>Status</span><strong>{selected.status}</strong></div>
+						<div><span>Created</span><strong>{formatDate(selected.created_at)}</strong></div>
+						<div><span>Updated</span><strong>{formatDate(selected.updated_at)}</strong></div>
+						<div><span>Expires</span><strong>{selected.expires_at ? formatDate(selected.expires_at) : "—"}</strong></div>
+					</div>
+					<div class="status-actions">
+						<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "accepted"} on:click={() => updateHandoffStatus("accepted")}>Accept</button>
+						<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "expired"} on:click={() => updateHandoffStatus("expired")}>Expire</button>
+						<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "rejected"} on:click={() => updateHandoffStatus("rejected")}>Reject</button>
+					</div>
+					{#if selected.task_id || selected.task_code}
+						<div class="linked-task">
+							<div>Task: {selected.task_code || "—"}</div>
+							{#if selected.task_id}<div class="muted-inline">{selected.task_id}</div>{/if}
+						</div>
+					{/if}
+					{#if Object.keys(selected.context || {}).length > 0}
+						<div class="context-card">
+							<div class="section-label" style="margin-bottom:8px;">Transfer Context</div>
+							<pre class="json-pre">{JSON.stringify(selected.context, null, 2)}</pre>
+						</div>
+					{/if}
+				{:else}
+					<div class="empty-state detail-empty">
+						<Icon name="book-open" size={22} strokeWidth={1.75} />
+						<div class="empty-title">Select a handoff</div>
+						<div class="empty-copy">Details for the selected handoff appear here.</div>
+					</div>
 				{/if}
-			{:else}
-				<div class="empty-state detail-empty">
-					<Icon name="book-open" size={22} strokeWidth={1.75} />
-					<div class="empty-title">Select a handoff</div>
-					<div class="empty-copy">Details for the selected handoff appear here.</div>
+			</div>
+
+			<div class="glass card panel-card claims-panel">
+				<div class="panel-heading">
+					<div class="section-label">Active Claims</div>
+					<div class="toolbar-subtitle">{claims.length} active</div>
 				</div>
-			{/if}
+				{#if claimsLoading}
+					<div class="muted-state">Loading claims...</div>
+				{:else if claims.length === 0}
+					<div class="empty-state claims-empty">
+						<Icon name="check" size={20} strokeWidth={1.75} />
+						<div class="empty-title">No active claims</div>
+						<div class="empty-copy">Claims taken from agents will appear here for release and inspection.</div>
+					</div>
+				{:else}
+					<div class="claim-list">
+						{#each claims as claim (claim.id)}
+							<div class="claim-row">
+								<div>
+									<div class="row-title">{claim.task_code || claim.task_id}</div>
+									<div class="row-meta">
+										<span>{claim.agent}</span>
+										<span>{claim.role}</span>
+										<span>{formatDate(claim.claimed_at)}</span>
+									</div>
+								</div>
+								<button class="btn btn-ghost btn-sm" disabled={releasingClaimId === claim.id} on:click={() => releaseClaim(claim)}>
+									{releasingClaimId === claim.id ? "Releasing..." : "Release"}
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>
@@ -337,6 +430,7 @@
 	.toolbar-controls { display: grid; grid-template-columns: 160px minmax(180px, 1fr) auto; gap: 10px; align-items: center; grid-column: 1 / -1; }
 	.action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 	.feature-grid { display: grid; grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.05fr); gap: 14px; align-items: start; }
+	.detail-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 	.panel-card { padding: 16px; min-width: 0; }
 	.action-panel { min-height: 0; }
 	.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -357,6 +451,12 @@
 	.row-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-text-muted); font-size: 0.72rem; font-weight: 600; }
 	.row-date { color: var(--color-text-muted); font-size: 0.7rem; font-weight: 700; }
 	.claim-result, .linked-task { margin-top: 14px; padding: 12px; border: 1px solid rgba(16,185,129,0.25); background: rgba(16,185,129,0.08); border-radius: 8px; }
+	.context-card { margin-top: 14px; }
+	.claim-list { display: flex; flex-direction: column; gap: 8px; }
+	.claim-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: rgba(255,255,255,0.04); }
+	.claims-empty { min-height: 160px; }
+	.json-pre { margin: 0; padding: 12px; border-radius: 10px; background: rgba(15,23,42,0.78); color: #e2e8f0; font-size: 0.72rem; overflow: auto; }
+	.muted-inline { color: var(--color-text-muted); font-size: 0.68rem; margin-top: 4px; word-break: break-all; }
 	.detail-title { font-size: 1rem; font-weight: 850; color: var(--color-text); margin-bottom: 14px; line-height: 1.35; }
 	.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 	.detail-grid div { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px; }

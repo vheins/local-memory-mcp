@@ -231,6 +231,35 @@
 					{/each}
 				</div>
 
+				{#if $handler.task.coordination && (($handler.task.coordination.active_claim_count || 0) > 0 || ($handler.task.coordination.pending_handoff_count || 0) > 0)}
+					<div style="margin-bottom:16px;">
+						<div class="section-label">Coordination</div>
+						<div class="meta-grid">
+							{#if ($handler.task.coordination.active_claim_count || 0) > 0}
+								<div class="meta-cell">
+									<div class="meta-label">Active Claim</div>
+									<div class="meta-value">{$handler.task.coordination.active_claim_agent || "claimed"}</div>
+									<div class="meta-subvalue">
+										{$handler.task.coordination.active_claim_role || "worker"}
+										{#if $handler.task.coordination.active_claim_claimed_at}
+											• {formatDate($handler.task.coordination.active_claim_claimed_at)}
+										{/if}
+									</div>
+								</div>
+							{/if}
+							{#if ($handler.task.coordination.pending_handoff_count || 0) > 0}
+								<div class="meta-cell">
+									<div class="meta-label">Pending Handoff</div>
+									<div class="meta-value">{$handler.task.coordination.pending_handoff_to_agent || "unassigned"}</div>
+									<div class="meta-subvalue">
+										{$handler.task.coordination.pending_handoff_summary || "Transfer waiting"}
+									</div>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
 				<!-- Description -->
 				<div style="margin-bottom:16px;">
 					<div class="section-label" style="display:flex;align-items:center;gap:6px;width:100%;">
@@ -463,6 +492,13 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-text);
+	}
+
+	.meta-subvalue {
+		font-size: 0.7rem;
+		color: var(--color-text-muted);
+		margin-top: 4px;
+		line-height: 1.35;
 	}
 
 	.section-label {

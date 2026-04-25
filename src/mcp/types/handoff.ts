@@ -4,6 +4,7 @@ export interface Handoff {
 	from_agent: string;
 	to_agent: string | null;
 	task_id: string | null;
+	task_code?: string | null;
 	summary: string;
 	context: Record<string, unknown>;
 	status: "pending" | "accepted" | "rejected" | "expired";
@@ -30,6 +31,7 @@ export interface Claim {
 	id: string;
 	repo: string;
 	task_id: string;
+	task_code?: string | null;
 	agent: string;
 	role: string;
 	claimed_at: string;
