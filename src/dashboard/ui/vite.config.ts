@@ -11,7 +11,8 @@ export default defineConfig({
 	base: "/",
 	build: {
 		outDir: path.resolve(__dirname, "../../../dist/dashboard/public"),
-		emptyOutDir: true
+		emptyOutDir: true,
+		chunkSizeWarningLimit: 1500
 	},
 	server: {
 		port: 5173,

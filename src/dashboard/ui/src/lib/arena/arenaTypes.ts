@@ -1,4 +1,4 @@
-export type AgentState = 'idle' | 'claiming' | 'processing' | 'handoff_out' | 'handoff_in';
+export type AgentState = 'idle' | 'claiming' | 'processing' | 'handoff_out' | 'handoff_in' | 'burnout';
 export type AgentFacing = 'down' | 'up' | 'left' | 'right';
 
 export interface VisualAgent {
@@ -17,6 +17,7 @@ export interface VisualAgent {
 	state: AgentState;
 	claimedTaskIds: string[];
 	repos: string[];
+	lastUpdateTs: number;
 }
 
 export interface VisualTask {

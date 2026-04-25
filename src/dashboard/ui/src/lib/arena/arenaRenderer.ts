@@ -10,7 +10,11 @@ const WANDER_PAUSE : [number, number] = [600, 1600];
 
 // ─── Color helpers ─────────────────────────────────────────────────────────
 function h2r(hex: string): [number, number, number] {
-	const n = parseInt(hex.replace('#',''), 16);
+	if (!hex) return [0, 0, 0];
+	let s = hex.replace('#', '');
+	if (s.length === 3) s = s[0]+s[0]+s[1]+s[1]+s[2]+s[2];
+	else if (s.length === 8) s = s.slice(0, 6);
+	const n = parseInt(s, 16);
 	return [(n>>16)&255,(n>>8)&255,n&255];
 }
 function lighten(hex: string, amt: number) {
@@ -94,7 +98,7 @@ export class ArenaRenderer {
 		this.prevTs = ts; this.ts = ts;
 		if (this.scene && this.layout) {
 			const zones = computeZones(this.layout.canvasWidth, this.layout.canvasHeight);
-			const idle = zones.find(z => z.id === 'idle')!;
+			const idle = zones.find(z => z.id === 'in_progress') || zones[0];
 			this.updateAgents(dt, idle, ts);
 		}
 		this.render();
@@ -199,11 +203,12 @@ export class ArenaRenderer {
 
 		// 2. Floor texture
 		switch (id) {
-			case 'idle':        this.drawCheckerFloor(ctx, x, y, w, h, isDark); break;
-			case 'in_progress': this.drawCarpetFloor(ctx, x, y, w, h, color, isDark); break;
-			case 'blocked':     this.drawCrackedTileFloor(ctx, x, y, w, h, isDark); break;
-			case 'completed':   this.drawCleanTileFloor(ctx, x, y, w, h, isDark); break;
-			case 'canceled':    this.drawConcreteFloor(ctx, x, y, w, h, isDark); break;
+			case 'in_progress': this.drawPlazaFloor(ctx, x, y, w, h, isDark); break;
+			case 'backlog':     this.drawDirtFloor(ctx, x, y, w, h, '#5b3a6e', isDark); break;
+			case 'pending':     this.drawDirtFloor(ctx, x, y, w, h, '#a68246', isDark); break;
+			case 'blocked':     this.drawDirtFloor(ctx, x, y, w, h, '#8b2a2a', isDark); break;
+			case 'burnout':     this.drawCleanTileFloor(ctx, x, y, w, h, isDark); break;
+			case 'completed':   this.drawGrassFloor(ctx, x, y, w, h, isDark); break;
 			default:            this.drawWoodPlankFloor(ctx, x, y, w, h, isDark); break;
 		}
 
@@ -234,10 +239,10 @@ export class ArenaRenderer {
 	}
 
 	// ── Floor textures ────────────────────────────────────────────────────────
-	private drawCheckerFloor(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
-		const t = 20;
-		const c0 = isDark ? '#1a1f2e' : '#e8e4dc';
-		const c1 = isDark ? '#141824' : '#d4cfc6';
+	private drawPlazaFloor(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		const t = 24;
+		const c0 = isDark ? '#2e3540' : '#b0b8c4';
+		const c1 = isDark ? '#262d36' : '#a0a8b4';
 		ctx.fillStyle = c0; ctx.fillRect(x,y,w,h);
 		for (let cx2 = Math.floor(x/t)*t; cx2 < x+w; cx2 += t) {
 			for (let cy2 = Math.floor(y/t)*t; cy2 < y+h; cy2 += t) {
@@ -245,18 +250,53 @@ export class ArenaRenderer {
 					ctx.fillStyle = c1;
 					ctx.fillRect(cx2, cy2, t, t);
 				}
+				// Draw subtle stone cracks
+				if (tileNoise(cx2, cy2) > 0.8) {
+					ctx.strokeStyle = isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)';
+					ctx.lineWidth = 1;
+					ctx.beginPath();
+					ctx.moveTo(cx2 + 2, cy2 + 2);
+					ctx.lineTo(cx2 + t/2, cy2 + t/2);
+					ctx.stroke();
+				}
 			}
 		}
-		// grout lines
-		ctx.strokeStyle = isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)';
-		ctx.lineWidth = 0.75;
-		for (let cx2 = Math.floor(x/t)*t; cx2 <= x+w; cx2 += t) {
-			ctx.beginPath(); ctx.moveTo(cx2,y); ctx.lineTo(cx2,y+h); ctx.stroke();
-		}
-		for (let cy2 = Math.floor(y/t)*t; cy2 <= y+h; cy2 += t) {
-			ctx.beginPath(); ctx.moveTo(x,cy2); ctx.lineTo(x+w,cy2); ctx.stroke();
+	}
+	
+	private drawDirtFloor(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, baseColor:string, isDark:boolean) {
+		ctx.fillStyle = baseColor;
+		ctx.fillRect(x, y, w, h);
+		for (let cx2 = x; cx2 < x+w; cx2 += 16) {
+			for (let cy2 = y; cy2 < y+h; cy2 += 16) {
+				const r = tileNoise(cx2, cy2);
+				if (r > 0.5) {
+					ctx.fillStyle = isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)';
+					ctx.beginPath();
+					ctx.arc(cx2 + r*10, cy2 + r*10, 2 + r*2, 0, Math.PI*2);
+					ctx.fill();
+				}
+			}
 		}
 	}
+
+	private drawGrassFloor(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		ctx.fillStyle = isDark ? '#1a4020' : '#4ade80';
+		ctx.fillRect(x, y, w, h);
+		ctx.strokeStyle = isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)';
+		for (let cx2 = x; cx2 < x+w; cx2 += 12) {
+			for (let cy2 = y; cy2 < y+h; cy2 += 12) {
+				const r = tileNoise(cx2, cy2);
+				if (r > 0.4) {
+					ctx.beginPath();
+					ctx.moveTo(cx2 + r*5, cy2 + 8);
+					ctx.lineTo(cx2 + r*5 + 2, cy2 + 2);
+					ctx.lineTo(cx2 + r*5 + 4, cy2 + 8);
+					ctx.stroke();
+				}
+			}
+		}
+	}
+
 
 	private drawWoodPlankFloor(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
 		const pH = 9;
@@ -430,13 +470,46 @@ export class ArenaRenderer {
 	private drawRoomDecor(ctx: CanvasRenderingContext2D, zone: ZoneRect, isDark:boolean) {
 		const { x, y, w, h, id } = zone;
 		switch (id) {
-			case 'idle': this.decorLobby(ctx, x, y, w, h, isDark); break;
-			case 'pending': this.decorInbox(ctx, x, y, w, h, isDark); break;
 			case 'in_progress': this.decorWorkspace(ctx, x, y, w, h, isDark); break;
+			case 'backlog': this.decorArchive(ctx, x, y, w, h, isDark); break;
+			case 'pending': this.decorLobby(ctx, x, y, w, h, isDark); break;
 			case 'blocked': this.decorIssues(ctx, x, y, w, h, isDark); break;
-			case 'completed': this.decorDone(ctx, x, y, w, h, isDark); break;
-			case 'canceled': this.decorArchive(ctx, x, y, w, h, isDark); break;
+			case 'burnout': this.decorTherapy(ctx, x, y, w, h, isDark); break;
 		}
+	}
+
+	private decorPlaza(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		// Fountain in middle
+		const fx = x + w/2;
+		const fy = y + h/2;
+		ctx.fillStyle = isDark ? '#1e293b' : '#94a3b8';
+		ctx.beginPath(); ctx.arc(fx, fy, 24, 0, Math.PI*2); ctx.fill();
+		ctx.fillStyle = isDark ? '#0ea5e9' : '#38bdf8';
+		ctx.beginPath(); ctx.arc(fx, fy, 20, 0, Math.PI*2); ctx.fill();
+		ctx.fillStyle = 'rgba(255,255,255,0.4)';
+		ctx.beginPath(); ctx.arc(fx, fy, 8, 0, Math.PI*2); ctx.fill();
+	}
+
+	private decorFence(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		ctx.strokeStyle = isDark ? '#452b14' : '#8b5a2b';
+		ctx.lineWidth = 4;
+		ctx.strokeRect(x+4, y+4, w-8, h-8);
+	}
+
+	private decorBlocked(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		this.decorFence(ctx, x, y, w, h, isDark);
+		// Cones
+		ctx.fillStyle = '#f97316';
+		[[x+20, y+h-20], [x+40, y+h-20]].forEach(([cx, cy]) => {
+			ctx.beginPath(); ctx.moveTo(cx, cy-10); ctx.lineTo(cx+6, cy); ctx.lineTo(cx-6, cy); ctx.fill();
+		});
+	}
+
+	private decorGarden(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		// Hedges
+		ctx.fillStyle = isDark ? '#064e3b' : '#166534';
+		ctx.fillRect(x+10, y+10, 20, 20);
+		ctx.beginPath(); ctx.arc(x+w-20, y+h-20, 15, 0, Math.PI*2); ctx.fill();
 	}
 
 	private decorLobby(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
@@ -468,6 +541,9 @@ export class ArenaRenderer {
 		this.drawPowerStrip(ctx, x+12, y+h-16, Math.min(w-24, 60), isDark);
 		// Whiteboard on wall
 		this.drawWhiteboard(ctx, x+w-36, y+18, isDark);
+		// Add new decorations
+		this.drawWaterDispenser(ctx, x+20, y+12, isDark);
+		this.drawFlowerVase(ctx, x+w/2, y+24, isDark);
 	}
 
 	private decorIssues(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
@@ -493,6 +569,8 @@ export class ArenaRenderer {
 		for (let fx = x+10; fx < x+w-22; fx += 26) {
 			this.drawFilingCabinet(ctx, fx, y+18, isDark);
 		}
+		// Add plant
+		this.drawPotPlant(ctx, x+w-15, y+h-20, isDark);
 	}
 
 	// ── Furniture sprites ─────────────────────────────────────────────────────
@@ -682,6 +760,72 @@ export class ArenaRenderer {
 		});
 	}
 
+	private drawFlowerVase(ctx: CanvasRenderingContext2D, x:number,y:number, isDark:boolean) {
+		// Table/stand
+		ctx.fillStyle = isDark ? '#2d1a08' : '#8b5a2b';
+		rr(ctx, x-6, y-2, 12, 10, 1); ctx.fill();
+		// Vase
+		ctx.fillStyle = isDark ? '#1e3a8a' : '#bfdbfe';
+		ctx.beginPath(); ctx.ellipse(x, y-6, 4, 6, 0, 0, Math.PI*2); ctx.fill();
+		// Flowers
+		const fc = ['#f43f5e', '#ec4899', '#d946ef'];
+		[[-3,-12],[3,-11],[0,-14]].forEach(([fx, fy], i) => {
+			ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 1;
+			ctx.beginPath(); ctx.moveTo(x, y-10); ctx.lineTo(x+fx, y+fy); ctx.stroke();
+			ctx.fillStyle = fc[i];
+			ctx.beginPath(); ctx.arc(x+fx, y+fy, 2.5, 0, Math.PI*2); ctx.fill();
+		});
+	}
+
+	private drawWaterDispenser(ctx: CanvasRenderingContext2D, x:number, y:number, isDark:boolean) {
+		// Base
+		ctx.fillStyle = isDark ? '#1e293b' : '#e2e8f0';
+		rr(ctx, x, y, 14, 24, 2); ctx.fill();
+		ctx.strokeStyle = isDark ? '#334155' : '#cbd5e1'; ctx.lineWidth = 1;
+		rr(ctx, x, y, 14, 24, 2); ctx.stroke();
+		// Bottle
+		ctx.fillStyle = isDark ? '#0ea5e955' : '#38bdf855';
+		rr(ctx, x+2, y-12, 10, 12, 3); ctx.fill();
+		// Taps
+		ctx.fillStyle = '#ef4444'; ctx.fillRect(x+3, y+8, 2, 3);
+		ctx.fillStyle = '#3b82f6'; ctx.fillRect(x+9, y+8, 2, 3);
+		// Drip tray
+		ctx.fillStyle = isDark ? '#0f172a' : '#94a3b8';
+		rr(ctx, x+2, y+14, 10, 3, 1); ctx.fill();
+	}
+
+	private drawHospitalBed(ctx: CanvasRenderingContext2D, x:number, y:number, isDark:boolean) {
+		// Bed frame (horizontal)
+		ctx.fillStyle = isDark ? '#1e293b' : '#cbd5e1';
+		rr(ctx, x-20, y-10, 40, 20, 3); ctx.fill();
+		// Mattress
+		ctx.fillStyle = isDark ? '#0f172a' : '#f8fafc';
+		rr(ctx, x-18, y-8, 36, 16, 2); ctx.fill();
+		// Pillow (on the right, since head is at +X)
+		ctx.fillStyle = isDark ? '#1e1b4b' : '#e0e7ff';
+		rr(ctx, x+10, y-6, 8, 12, 2); ctx.fill();
+		// Blanket (on the left)
+		ctx.fillStyle = isDark ? '#172554' : '#bfdbfe';
+		rr(ctx, x-18, y-8, 20, 16, 2); ctx.fill();
+		// IV Drip Pole
+		ctx.strokeStyle = isDark ? '#64748b' : '#94a3b8'; ctx.lineWidth = 2;
+		ctx.beginPath(); ctx.moveTo(x+16, y-10); ctx.lineTo(x+16, y-25); ctx.stroke();
+		ctx.fillStyle = isDark ? '#0ea5e988' : '#38bdf888';
+		rr(ctx, x+14, y-25, 4, 6, 1); ctx.fill();
+	}
+
+	private decorTherapy(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
+		// Draw beds under the agents
+		for (let idx = 0; idx < 6; idx++) {
+			const bx = x + 40 + (idx % 3) * 60;
+			const by = y + h / 2 + Math.floor(idx / 3) * 40;
+			this.drawHospitalBed(ctx, bx, by, isDark);
+		}
+		// Add some therapy room decor
+		this.drawPotPlant(ctx, x+w-20, y+20, isDark);
+		this.drawFlowerVase(ctx, x+20, y+20, isDark);
+	}
+
 	// ── Workstations ──────────────────────────────────────────────────────────
 	private drawWorkstation(task: VisualTask, isDark: boolean, ts: number) {
 		const { ctx } = this;
@@ -779,12 +923,16 @@ export class ArenaRenderer {
 
 		// Handoff badge
 		if (hasPendingHandoff) {
+			const bx = x + SW / 2;
+			const by = mY - 1;
 			ctx.fillStyle = '#f59e0b';
-			ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 6;
-			ctx.beginPath(); ctx.arc(x+SW/2, mY-1, 4, 0, Math.PI*2); ctx.fill();
+			ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 8;
+			ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI*2); ctx.fill();
 			ctx.shadowBlur = 0;
-			ctx.fillStyle = '#1a1a1a'; ctx.font = 'bold 5px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-			ctx.fillText('!', x+SW/2, mY-1);
+			ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+			ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI*2); ctx.stroke();
+			ctx.fillStyle = '#1a1a1a'; ctx.font = 'bold 6.5px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+			ctx.fillText('!', bx, by);
 		}
 	}
 
@@ -831,16 +979,17 @@ export class ArenaRenderer {
 	// ── RPG Character ─────────────────────────────────────────────────────────
 	private drawCharacter(agent: VisualAgent, isDark: boolean, ts: number) {
 		const { ctx } = this;
-		const { x, y, color, walkPhase, facing, state, name, id } = agent;
+		const { x, y, walkPhase, facing, state, name, id } = agent;
+		const color = agent.color || '#64748b';
 		const hovered = id === this.hoveredId;
 		const spd = Math.hypot(agent.vx, agent.vy);
 		const moving = spd > 5;
 
 		// Derive unique styling
-		const nh = strHash(name);
-		const hairColor = HAIR_COLORS[nh % HAIR_COLORS.length];
-		const pantColor = PANT_COLORS[(nh >> 3) % PANT_COLORS.length];
-		const skinTone  = SKIN_TONES[(nh >> 6) % SKIN_TONES.length];
+		const nh = strHash(name || '');
+		const hairColor = HAIR_COLORS[nh % HAIR_COLORS.length] || '#000';
+		const pantColor = PANT_COLORS[(nh >>> 3) % PANT_COLORS.length] || '#1e3a5f';
+		const skinTone  = SKIN_TONES[(nh >>> 6) % SKIN_TONES.length] || '#f5c89a';
 		const hairStyle = nh % 5;
 		const shirtHighlight = lighten(color, 30);
 
@@ -862,7 +1011,12 @@ export class ArenaRenderer {
 
 		ctx.save();
 		ctx.translate(x, y);
-		if (facing === 'left') ctx.scale(-1, 1);
+		if (state === 'burnout') {
+			ctx.rotate(Math.PI / 2);
+			ctx.translate(0, 15);
+		} else if (facing === 'left') {
+			ctx.scale(-1, 1);
+		}
 
 		// ─ Legs ─
 		ctx.fillStyle = pantColor;
@@ -927,19 +1081,23 @@ export class ArenaRenderer {
 
 		// ─ Face (only when facing down or side) ─
 		if (facing !== 'up') {
-			this.drawFace(ctx, 0, headY, skinTone, facing, moving, walkPhase);
+			this.drawFace(ctx, 0, headY, skinTone, facing, moving, walkPhase, state, ts, nh);
 		}
 
 		ctx.restore(); // end translate(x,y) + scale
 
 		// ─ State badges ─
-		if (state !== 'idle') {
+		if (state !== 'idle' && state !== 'burnout') {
 			const dotColor = state === 'processing' ? '#a855f7' : state === 'claiming' ? '#0ea5e9' : '#f59e0b';
-			ctx.fillStyle = dotColor; ctx.shadowColor = dotColor; ctx.shadowBlur = 6;
-			ctx.beginPath(); ctx.arc(x + (facing === 'left' ? -8 : 8), y - 47 + headBob, 4, 0, Math.PI*2); ctx.fill();
+			const badgeX = x + (facing === 'left' ? -10 : 10);
+			const badgeY = y - 48 + headBob;
+			ctx.fillStyle = dotColor; ctx.shadowColor = dotColor; ctx.shadowBlur = 10;
+			ctx.beginPath(); ctx.arc(badgeX, badgeY, 5, 0, Math.PI*2); ctx.fill();
 			ctx.shadowBlur = 0;
-			ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1;
-			ctx.beginPath(); ctx.arc(x + (facing === 'left' ? -8 : 8), y - 47 + headBob, 4, 0, Math.PI*2); ctx.stroke();
+			ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+			ctx.beginPath(); ctx.arc(badgeX, badgeY, 5, 0, Math.PI*2); ctx.stroke();
+			ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+			ctx.beginPath(); ctx.arc(badgeX, badgeY, 6, 0, Math.PI*2); ctx.stroke();
 		}
 
 		// ─ Working effect: pulse ring + thought dots ─
@@ -953,6 +1111,20 @@ export class ArenaRenderer {
 				const boff = 0.3 + 0.7*Math.sin(ts*0.004 + bi*1.1);
 				ctx.fillStyle = rgba(color, 0.5 + boff*0.5);
 				ctx.beginPath(); ctx.arc(x + (facing === 'left' ? -5+bi*5 : -5+bi*5), y-54+headBob, 1.5+boff, 0, Math.PI*2); ctx.fill();
+			}
+		}
+
+		// ─ Burnout effect ─
+		if (state === 'burnout') {
+			const zPhase = (ts * 0.002) % (Math.PI * 2);
+			for (let i = 0; i < 3; i++) {
+				const zt = (zPhase + i * (Math.PI*2/3)) % (Math.PI*2);
+				const alpha = Math.max(0, Math.sin(zt));
+				const zx = x + 5 + Math.cos(zt)*5 + zt * 2;
+				const zy = y - 10 - zt * 8;
+				ctx.fillStyle = `rgba(150, 150, 200, ${alpha})`;
+				ctx.font = `bold ${8 + zt * 1.5}px monospace`;
+				ctx.fillText('Z', zx, zy);
 			}
 		}
 
@@ -1009,7 +1181,7 @@ export class ArenaRenderer {
 	}
 
 	// ─ Face details ─
-	private drawFace(ctx: CanvasRenderingContext2D, x:number, y:number, _skinTone:string, facing: AgentFacing, moving:boolean, walkPhase:number) {
+	private drawFace(ctx: CanvasRenderingContext2D, x:number, y:number, _skinTone:string, facing: AgentFacing, moving:boolean, walkPhase:number, state?: string, ts?: number, seed?: number) {
 		if (facing === 'right') {
 			// Side profile: one eye, profile nose
 			ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -1019,24 +1191,65 @@ export class ArenaRenderer {
 			ctx.beginPath(); ctx.arc(x+9, y, 3, -0.5, 0.5); ctx.stroke();
 		} else {
 			// Front face (or mirrored for 'left')
-			// Eyes
-			ctx.fillStyle = 'white';
-			ctx.beginPath(); ctx.ellipse(x-3, y-2, 2.5, 2, 0, 0, Math.PI*2); ctx.fill();
-			ctx.beginPath(); ctx.ellipse(x+3, y-2, 2.5, 2, 0, 0, Math.PI*2); ctx.fill();
-			ctx.fillStyle = 'rgba(20,20,80,0.85)';
-			ctx.beginPath(); ctx.arc(x-3, y-2, 1.3, 0, Math.PI*2); ctx.fill();
-			ctx.beginPath(); ctx.arc(x+3, y-2, 1.3, 0, Math.PI*2); ctx.fill();
-			// Eye shine
-			ctx.fillStyle = 'white';
-			ctx.beginPath(); ctx.arc(x-3.5, y-2.5, 0.5, 0, Math.PI*2); ctx.fill();
-			ctx.beginPath(); ctx.arc(x+2.5, y-2.5, 0.5, 0, Math.PI*2); ctx.fill();
-			// Mouth
-			const mouthOpen = moving && Math.sin(walkPhase) > 0.5;
-			ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
-			if (mouthOpen) {
-				ctx.beginPath(); ctx.arc(x, y+2, 2, 0, Math.PI); ctx.stroke();
+			if (state === 'burnout') {
+				const isSwirling = ((seed || 0) % 2 === 0);
+				if (isSwirling) {
+					// Swirling eyes
+					ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+					ctx.lineWidth = 1;
+					const spin = ((ts || 0) * 0.005) % (Math.PI * 2);
+					
+					// Left eye swirl
+					ctx.save(); ctx.translate(x-3, y-2); ctx.rotate(spin);
+					ctx.beginPath(); ctx.moveTo(0, 0);
+					for (let i = 0; i < 15; i++) {
+						const angle = i * 0.5;
+						const radius = i * 0.15;
+						ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+					}
+					ctx.stroke();
+					ctx.restore();
+
+					// Right eye swirl
+					ctx.save(); ctx.translate(x+3, y-2); ctx.rotate(spin);
+					ctx.beginPath(); ctx.moveTo(0, 0);
+					for (let i = 0; i < 15; i++) {
+						const angle = i * 0.5;
+						const radius = i * 0.15;
+						ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+					}
+					ctx.stroke();
+					ctx.restore();
+				} else {
+					// Closed eyes (curved lines down)
+					ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+					ctx.lineWidth = 1.5;
+					ctx.beginPath(); ctx.arc(x-3, y-2, 2.5, 0, Math.PI); ctx.stroke();
+					ctx.beginPath(); ctx.arc(x+3, y-2, 2.5, 0, Math.PI); ctx.stroke();
+				}
+				// Sad/burnout mouth
+				ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+				ctx.beginPath(); ctx.arc(x, y+3, 2, Math.PI, Math.PI*2); ctx.stroke();
 			} else {
-				ctx.beginPath(); ctx.moveTo(x-2.5, y+2.5); ctx.quadraticCurveTo(x, y+4, x+2.5, y+2.5); ctx.stroke();
+				// Eyes
+				ctx.fillStyle = 'white';
+				ctx.beginPath(); ctx.ellipse(x-3, y-2, 2.5, 2, 0, 0, Math.PI*2); ctx.fill();
+				ctx.beginPath(); ctx.ellipse(x+3, y-2, 2.5, 2, 0, 0, Math.PI*2); ctx.fill();
+				ctx.fillStyle = 'rgba(20,20,80,0.85)';
+				ctx.beginPath(); ctx.arc(x-3, y-2, 1.3, 0, Math.PI*2); ctx.fill();
+				ctx.beginPath(); ctx.arc(x+3, y-2, 1.3, 0, Math.PI*2); ctx.fill();
+				// Eye shine
+				ctx.fillStyle = 'white';
+				ctx.beginPath(); ctx.arc(x-3.5, y-2.5, 0.5, 0, Math.PI*2); ctx.fill();
+				ctx.beginPath(); ctx.arc(x+2.5, y-2.5, 0.5, 0, Math.PI*2); ctx.fill();
+				// Mouth
+				const mouthOpen = moving && Math.sin(walkPhase) > 0.5;
+				ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1;
+				if (mouthOpen) {
+					ctx.beginPath(); ctx.arc(x, y+2, 2, 0, Math.PI); ctx.stroke();
+				} else {
+					ctx.beginPath(); ctx.moveTo(x-2.5, y+2.5); ctx.quadraticCurveTo(x, y+4, x+2.5, y+2.5); ctx.stroke();
+				}
 			}
 		}
 	}
