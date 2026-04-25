@@ -69,6 +69,21 @@ function scoreKeywordRelevance(query: string, standard: CodingStandardEntry): nu
 	);
 }
 
+function collectMatchedTerms(query: string, standard: CodingStandardEntry): string[] {
+	const queryTokens = Array.from(new Set(tokenizeSearchText(query)));
+	if (queryTokens.length === 0) return [];
+
+	const searchableFields = [
+		standard.title.toLowerCase(),
+		standard.context.toLowerCase(),
+		standard.tags.join(" ").toLowerCase(),
+		standard.stack.join(" ").toLowerCase(),
+		standard.content.toLowerCase()
+	];
+
+	return queryTokens.filter((token) => searchableFields.some((field) => field.includes(token)));
+}
+
 function toConfidence(finalScore: number, keywordScore: number): StandardConfidence {
 	if (finalScore >= 0.72 || keywordScore >= 0.85) return "high";
 	if (finalScore >= 0.42 || keywordScore >= 0.45) return "medium";
@@ -114,6 +129,7 @@ export async function handleStandardSearch(
 		similarityScore: number;
 		vectorScore: number;
 		keywordScore: number;
+		matchedTerms: string[];
 		finalScore: number;
 		confidence: StandardConfidence;
 	}> = [];
@@ -128,6 +144,7 @@ export async function handleStandardSearch(
 			scoredStandards = similarityResults.map((candidate) => {
 				const vectorScore = vectorScoreMap.get(candidate.id) ?? 0;
 				const keywordScore = scoreKeywordRelevance(validated.query || "", candidate);
+				const matchedTerms = collectMatchedTerms(validated.query || "", candidate);
 				const usageScore = Math.min(1, candidate.hit_count / 10);
 				const finalScore =
 					candidate.similarity * HYBRID_WEIGHTS_STANDARD.similarity +
@@ -139,6 +156,7 @@ export async function handleStandardSearch(
 					similarityScore: candidate.similarity,
 					vectorScore,
 					keywordScore,
+					matchedTerms,
 					finalScore,
 					confidence: toConfidence(finalScore, keywordScore)
 				};
@@ -150,6 +168,7 @@ export async function handleStandardSearch(
 				const standard = standardMap.get(row.id);
 				if (!standard) return [];
 				const keywordScore = scoreKeywordRelevance(validated.query || "", standard);
+				const matchedTerms = collectMatchedTerms(validated.query || "", standard);
 				const usageScore = Math.min(1, standard.hit_count / 10);
 				const finalScore =
 					row.score * HYBRID_WEIGHTS_STANDARD.vector +
@@ -161,6 +180,7 @@ export async function handleStandardSearch(
 						similarityScore: 0,
 						vectorScore: row.score,
 						keywordScore,
+						matchedTerms,
 						finalScore,
 						confidence: toConfidence(finalScore, keywordScore)
 					}
@@ -171,6 +191,7 @@ export async function handleStandardSearch(
 		logger.warn("Standard vector search failed, using similarity only", { error: String(error) });
 		scoredStandards = similarityResults.map((candidate) => {
 			const keywordScore = scoreKeywordRelevance(validated.query || "", candidate);
+			const matchedTerms = collectMatchedTerms(validated.query || "", candidate);
 			const finalScore =
 				candidate.similarity * (HYBRID_WEIGHTS_STANDARD.similarity + HYBRID_WEIGHTS_STANDARD.vector * 0.5) +
 				keywordScore * HYBRID_WEIGHTS_STANDARD.keyword +
@@ -180,6 +201,7 @@ export async function handleStandardSearch(
 				similarityScore: candidate.similarity,
 				vectorScore: 0,
 				keywordScore,
+				matchedTerms,
 				finalScore,
 				confidence: toConfidence(finalScore, keywordScore)
 			};
@@ -205,8 +227,8 @@ export async function handleStandardSearch(
 		topConfidence: paginatedResults[0]?.confidence
 	});
 
-	const COLUMNS = ["code", "id", "title", "context", "language", "scope", "tags", "confidence", "score", "updated_at"] as const;
-	const rows = paginatedResults.map(({ standard, confidence, finalScore }) => [
+	const COLUMNS = ["code", "id", "title", "context", "language", "scope", "tags", "confidence", "score", "matched_terms", "updated_at"] as const;
+	const rows = paginatedResults.map(({ standard, confidence, finalScore, matchedTerms }) => [
 		standard.code ?? "-",
 		standard.id,
 		standard.title,
@@ -216,6 +238,7 @@ export async function handleStandardSearch(
 		standard.tags.join(", "),
 		confidence,
 		Number(finalScore.toFixed(3)),
+		matchedTerms.join(", "),
 		standard.updated_at
 	]);
 
@@ -223,10 +246,10 @@ export async function handleStandardSearch(
 	if (paginatedResults.length > 0) {
 		const parts = [
 			"Standards:",
-			"- code|confidence|title|context|language|scope",
+			"- code|confidence|matched_terms|title|context|language|scope",
 			...paginatedResults.map(
-				({ standard, confidence }) =>
-					`- ${standard.code ?? "-"}|${confidence}|${standard.title}|${standard.context}|${standard.language || "-"}|${
+				({ standard, confidence, matchedTerms }) =>
+					`- ${standard.code ?? "-"}|${confidence}|${matchedTerms.join(", ")}|${standard.title}|${standard.context}|${standard.language || "-"}|${
 						standard.is_global ? "global" : standard.repo || "-"
 					}`
 			),

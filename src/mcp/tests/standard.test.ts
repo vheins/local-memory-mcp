@@ -267,7 +267,7 @@ describe("CSL (Coding Standards Library)", () => {
 			expect(data.count).toBeGreaterThan(0);
 			expect(result.content?.[0]?.type).toBe("text");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("code|confidence|title|context|language|scope");
+			expect(text).toContain("code|confidence|matched_terms|title|context|language|scope");
 			expect(text).toContain("Use standard-detail with code for full content.");
 		});
 
@@ -366,10 +366,13 @@ describe("CSL (Coding Standards Library)", () => {
 
 			const data = result.structuredContent as any;
 			expect(data.results.columns).toContain("confidence");
+			expect(data.results.columns).toContain("matched_terms");
 			expect(data.results.rows[0][2]).toBe("Laravel Service Container Singleton vs Scoped Binding");
 			expect(["high", "medium"]).toContain(data.results.rows[0][7]);
+			expect(String(data.results.rows[0][9])).toContain("singleton");
+			expect(String(data.results.rows[0][9])).toContain("scoped");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("code|confidence|title|context|language|scope");
+			expect(text).toContain("code|confidence|matched_terms|title|context|language|scope");
 		});
 	});
 });
