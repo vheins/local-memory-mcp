@@ -134,15 +134,15 @@ export async function handleStandardSearch(
 	if (paginatedResults.length > 0) {
 		const parts = [
 			"Standards:",
-			"- title|context|language|scope",
+			"- code|title|context|language|scope",
 			...paginatedResults.map(
 				(standard) =>
-					`- ${standard.title}|${standard.context}|${standard.language || "-"}|${
+					`- ${standard.code ?? "-"}|${standard.title}|${standard.context}|${standard.language || "-"}|${
 						standard.is_global ? "global" : standard.repo || "-"
 					}`
 			),
 			"",
-			"Use standard-detail with id or code for full content."
+			"Use standard-detail with code for full content."
 		];
 		contentSummary = parts.join("\n");
 	} else {

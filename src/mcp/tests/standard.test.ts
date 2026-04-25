@@ -266,6 +266,9 @@ describe("CSL (Coding Standards Library)", () => {
 			const data = result.structuredContent as any;
 			expect(data.count).toBeGreaterThan(0);
 			expect(result.content?.[0]?.type).toBe("text");
+			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
+			expect(text).toContain("code|title|context|language|scope");
+			expect(text).toContain("Use standard-detail with code for full content.");
 		});
 
 		it("supports tag filtering", async () => {
