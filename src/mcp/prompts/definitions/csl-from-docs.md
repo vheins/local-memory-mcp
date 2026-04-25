@@ -21,23 +21,25 @@ Goal:
 - If the path is a file:
   - Use the `read_file` tool to retrieve the content of the file.
   - Extract source-backed coding standards from the content.
-  - Produce one atomic CSL entry per distinct rule, constraint, prohibition, or required workflow.
+  - For each extracted rule, use the `standard-search` tool to check if a similar rule already exists (match by name or core instruction).
+  - Produce one atomic CSL entry per distinct rule that DOES NOT already exist.
   - Each entry must be ready for the `standard-store` tool shape: name, content, parent_id, context, version, language, stack, tags, metadata, repo, is_global.
 
 Atomic entry rules:
 - One entry = one rule. Split bundled guidance into separate entries.
+- DO NOT emit duplicates. If `standard-search` returns a high-confidence match, skip the entry or update it if the new source is more authoritative.
 - Use parent/child only for genuine hierarchy: parent = umbrella principle, child = narrower enforceable specialization.
 - Keep content concise, imperative, and implementation-relevant.
 - ALWAYS include relevant code examples or snippets from the source that illustrate or enforce the rule. Do NOT discard code blocks.
 - Preserve the source meaning without inventing requirements.
 - Ignore boilerplate, non-normative text, or metadata noise. Do NOT ignore code examples.
-- Do not emit duplicates or near-duplicates.
 - Do not infer version, language, stack, or scope unless the source makes them explicit.
 - Use metadata to preserve provenance, including the original file path and a short evidence_excerpt for each entry.
 
 Output contract:
 - If tool calls are available:
-  - Emit `standard-store` calls for every accepted entry found across all processed files.
+  - First, emit `standard-search` calls to verify existing data.
+  - Then, emit `standard-store` calls for every unique/new accepted entry.
   - When parent/child hierarchy exists, emit the parent first, then emit children with `parent_id` referencing the created parent standard ID.
 - If tool calls are unavailable, return a JSON object with:
   - `standards`: Array of `standard-store`-compatible payloads.
