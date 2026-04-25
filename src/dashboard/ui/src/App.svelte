@@ -23,6 +23,7 @@
 	import QuickCreateFAB from "./components/QuickCreateFAB.svelte";
 	import StandardsPanel from "./components/StandardsPanel.svelte";
 	import HandoffsPanel from "./components/HandoffsPanel.svelte";
+	import AgentArena from "./components/AgentArena.svelte";
 	import GlobalCommandCenter from "./components/GlobalCommandCenter.svelte";
 	import Icon from "./lib/Icon.svelte";
 
@@ -238,6 +239,11 @@
 				<!-- ════ HANDOFFS TAB ════ -->
 				{#if $activeTab === "handoffs"}
 					<HandoffsPanel repo={$currentRepo || ""} />
+				{/if}
+
+				<!-- ════ AGENT ARENA TAB ════ -->
+				{#if $activeTab === "arena"}
+					<AgentArena />
 				{/if}
 
 				<!-- ════ REFERENCE TAB ════ -->

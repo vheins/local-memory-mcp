@@ -24,6 +24,7 @@ const TABS = [
 	{ id: "tasks", label: "Tasks", icon: "clipboard-list" },
 	{ id: "standards", label: "Standards", icon: "check" },
 	{ id: "handoffs", label: "Handoffs", icon: "git-branch" },
+	{ id: "arena", label: "Agent Arena", icon: "cpu" },
 	{ id: "reference", label: "Reference", icon: "book-open" }
 ];
 
