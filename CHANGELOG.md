@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.15] - 2026-04-25
+
+### Fixed
+
+- **Agent Arena**: Fixed handoff animation stuck on pickup phase due to time base mismatch (Date.now vs performance.now).
+- **Agent Arena**: Ensured agents remain in a 'resting' visual state in the therapy room after arrival instead of resetting to normal sprites.
+
+## [0.9.14] - 2026-04-25
+
+### Added
+
+- **Agent Arena**: RPG-style characters with detailed sprites (shoes, pants with walk swing, shirt, swinging arms, head with gradients).
+- **Agent Arena**: Realistic room environments with 6 distinct floor textures and room-specific furniture (sofa, reception desk, clock, whiteboard, hazard sign).
+- **Agent Arena**: Animated workstations with monitors and typing animation.
+- **Agent Arena**: Ambient lighting overlays per zone.
+
+### Changed
+
+- **Agent Arena**: Implemented biome logic for arena floor rendering.
+- **Agent Arena**: Increased Vite chunk size limit for complex dashboard UI.
+
+## [0.9.13] - 2026-04-25
+
+### Added
+
+- **Agent Arena**: gather.town-style 2D world with walking agents and specialized rooms.
+- **Agent Arena**: Organic wander behavior for idle agents in the Lobby.
+- **Agent Arena**: Handoff beams with animated particles.
+
+## [0.9.12] - 2026-04-25
+
+### Added
+
+- **Dashboard**: Added "Agent Arena" tab for real-time agent activity visualization using high-performance canvas rendering.
+
+## [0.9.11] - 2026-04-25
+
+### Added
+
+- **MCP**: Injected server instructions into MCP initialize response to improve agent behavior alignment.
+
+## [0.9.10] - 2026-04-25
+
+### Changed
+
+- **Prompts**: Clarified task priority semantics across all agent prompts.
+
+## [0.9.9] - 2026-04-25
+
+### Added
+
+- **Dashboard**: Added coordinated dashboard orchestration flow.
+
 ## [0.9.8] - 2026-04-25
 
 ### Added
