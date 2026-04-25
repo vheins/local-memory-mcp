@@ -180,6 +180,9 @@ export function buildArenaScene(
 		const isStale = (now - lastUpdateTs) > 30000;
 
 		let state: any = claimedIds.size > 0 ? 'processing' : 'idle';
+		if (tgt && tgt.status === 'blocked') {
+			state = 'blocked';
+		}
 		if (isStale) {
 			state = 'burnout';
 			const burnoutZone = zones.find(z => z.id === 'burnout') || idleZone;

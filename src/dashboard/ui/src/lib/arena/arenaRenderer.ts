@@ -120,6 +120,10 @@ export class ArenaRenderer {
 					const travel = WANDER_INT[0] + Math.random()*(WANDER_INT[1]-WANDER_INT[0]);
 					ws.nextPickAt = ts + pause + travel;
 				}
+				if (Math.random() < 0.005) {
+					const facings: AgentFacing[] = ['up', 'down', 'left', 'right'];
+					a.facing = facings[Math.floor(Math.random() * facings.length)];
+				}
 			} else { this.wander.delete(a.id); }
 
 			const dx = a.targetX - a.x, dy = a.targetY - a.y;
@@ -979,7 +983,7 @@ export class ArenaRenderer {
 	// ── RPG Character ─────────────────────────────────────────────────────────
 	private drawCharacter(agent: VisualAgent, isDark: boolean, ts: number) {
 		const { ctx } = this;
-		const { x, y, walkPhase, facing, state, name, id } = agent;
+		let { x, y, walkPhase, facing, state, name, id } = agent;
 		const color = agent.color || '#64748b';
 		const hovered = id === this.hoveredId;
 		const spd = Math.hypot(agent.vx, agent.vy);
@@ -997,6 +1001,12 @@ export class ArenaRenderer {
 		const legSwing  = moving ? Math.sin(walkPhase) * 5 : 0;
 		const armSwing  = moving ? Math.sin(walkPhase + Math.PI) * 4 : 0;
 		const headBob   = moving ? Math.sin(walkPhase * 2) * 1.2 : 0;
+
+		if (state === 'blocked') {
+			x += Math.sin(ts * 0.05) * 1.5;
+		} else if (state === 'idle' && !moving) {
+			y += Math.sin(ts * 0.003 + nh) * 1;
+		}
 
 		// Ground shadow
 		ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -1088,7 +1098,7 @@ export class ArenaRenderer {
 
 		// ─ State badges ─
 		if (state !== 'idle' && state !== 'burnout') {
-			const dotColor = state === 'processing' ? '#a855f7' : state === 'claiming' ? '#0ea5e9' : '#f59e0b';
+			const dotColor = state === 'blocked' ? '#ef4444' : state === 'processing' ? '#a855f7' : state === 'claiming' ? '#0ea5e9' : '#f59e0b';
 			const badgeX = x + (facing === 'left' ? -10 : 10);
 			const badgeY = y - 48 + headBob;
 			ctx.fillStyle = dotColor; ctx.shadowColor = dotColor; ctx.shadowBlur = 10;
