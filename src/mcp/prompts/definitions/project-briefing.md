@@ -13,4 +13,5 @@ Briefing Steps:
 4. **Memory**: Call `memory-search` or `memory-recap` for recent decisions, patterns, and mistakes; hydrate important entries with `memory-detail`.
 5. **Standards**: Call `standard-search` with current repo/stack when implementation guidance is needed.
 6. **Core Context**: Summarize active task, pending handoffs, applicable standards, and top architectural decisions.
-7. **Action**: Propose next steps based on the active queue.
+7. **Priority Reminder**: Treat task priority with MCP semantics: `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`.
+8. **Action**: Propose next steps based on the active queue.

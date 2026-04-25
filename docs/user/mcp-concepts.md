@@ -87,7 +87,7 @@ Tools are executable functions exposed to the LLM to perform actions, interact w
 - **`task-list`**: PRIMARY navigation and search tool. Returns a tabular list of tasks.
 - **`task-create`**: Register one or more new tasks. Supports single task or bulk creation. Supports MCP elicitation fallbacks for missing fields.
 - **`task-create-interactive`**: Interactively creates a task by requesting user input via elicitation.
-- **`task-detail`**: Fetch full description, phase, priority, and all comments for a specific task.
+- **`task-detail`**: Fetch full description, phase, priority, coordination state, and all comments for a specific task.
 - **`task-update`**: Progress one or more tasks through their lifecycle (Backlog → Pending → In Progress → Completed). Supports bulk updates via `ids`.
 - **`task-delete`**: Hard deletion of task records. Supports single `id` or bulk deletion via `ids`.
 
@@ -107,7 +107,7 @@ Resources provide read-only access to specialized data views and global knowledg
 - **`memory://{id}`**: Direct access to a specific memory entry (full details and statistics) by its UUID.
 - **`repository://{name}/summary`**: Retrieves the high-level global summary/signal for a repository.
 - **`repository://{name}/tasks`**: Paginated list of all tasks for a specific repository.
-- **`repository://{name}/tasks?status={status}&priority={priority}`**: Scoped task list for a repository with filtering.
+- **`repository://{name}/tasks?status={status}&priority={priority}`**: Scoped task list for a repository with filtering. Priority uses MCP semantics: `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`.
 - **`task://{id}`**: Direct access to a specific task (full description and comments) by its UUID.
 - **`repository://{name}/actions`**: Paginated stream of all agent tool actions logged within a repository.
 - **`action://{id}`**: Direct access to a specific action audit log entry by its integer ID.

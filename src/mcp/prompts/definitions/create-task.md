@@ -32,7 +32,13 @@ ONLY call MCP tools. No prose, no code, no plans outside MCP.
 ## 3. ATTRIBUTES & FORMAT
 - `task_code`: FEAT/FIX/REFACTOR-XXX.
 - `phase`: Discovery/Implementation/Testing.
-- `priority`: 1-5.
+- `priority`: 1-5 using this exact scale:
+  - `1 = Low`
+  - `2 = Normal`
+  - `3 = Medium`
+  - `4 = High`
+  - `5 = Critical`
+- `priority` is ascending by urgency. `5` is the highest urgency and `1` is the lowest. Never encode `Critical` as `1`.
 - `description` (STRICT FORMAT):
   ### 1. Context & Analysis
   - **Trigger**: Instruction/finding.

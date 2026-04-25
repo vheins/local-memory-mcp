@@ -51,7 +51,8 @@ agent: Task Executor
 ## 3. BACKLOG MAINTENANCE
 If active queue is empty:
 1. Call `task-list` (status: `backlog`).
-2. Move up to 20 high-priority tasks to `pending` via `task-update`.
+2. Move up to 20 highest-priority tasks to `pending` via `task-update`.
+3. Interpret priority using MCP ordering: `5=Critical`, `4=High`, `3=Medium`, `2=Normal`, `1=Low`.
 
 ## 4. REPORT
 Provide progress summary.

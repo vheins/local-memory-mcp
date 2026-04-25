@@ -31,6 +31,7 @@ ONLY call MCP tools. No prose, code, or external plans.
 ## 3. TASK DESIGN & FORMAT
 - **Atomic**: One change per task.
 - **Attributes**: `task_code`, `phase`, `priority`, `agent`, `model`.
+- **Priority Scale**: Use MCP ordering exactly: `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`. `5` is the highest urgency.
 - **Description** (STRICT FORMAT):
   ### 1. Context & Analysis
   - **Finding**: Gap trigger.

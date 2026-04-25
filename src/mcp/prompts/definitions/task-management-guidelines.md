@@ -9,6 +9,7 @@ agent: Project Manager
 ## 1. NAVIGATION (`task-list`)
 -   **Sync**: Call `task-list` at every session start (default: `in_progress,pending`).
 -   **Format**: Compact pointer table: `id`, `task_code`, `title`, `status`, `priority`, `updated_at`, `comments_count`. Use `query` for keyword search.
+-   **Priority Scale**: Interpret `priority` with MCP semantics: `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`.
 -   **Retrieve**: Fetch full context via `task-detail` AFTER selecting a task. The hydrated task includes current coordination state such as active claims and pending handoffs.
 -   **Coordination**: Check active ownership with task coordination metadata, `task-claim`, and `claim-list`. NEVER work on tasks claimed by others. Focus on ONE task at a time.
 

@@ -519,7 +519,7 @@ export const TOOL_DEFINITIONS = [
 				title: { type: "string", minLength: 3, maxLength: 100 },
 				description: { type: "string", minLength: 1 },
 				status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
-				priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+				priority: { type: "number", minimum: 1, maximum: 5, default: 3, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
 				agent: { type: "string" },
 				role: { type: "string" },
 				doc_path: { type: "string" },
@@ -1066,7 +1066,7 @@ export const TOOL_DEFINITIONS = [
 					description:
 						"New tasks MUST start in 'backlog' if there are already 10 pending tasks. Otherwise can start in 'pending'."
 				},
-				priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+				priority: { type: "number", minimum: 1, maximum: 5, default: 3, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
 				agent: { type: "string" },
 				role: { type: "string" },
 				doc_path: { type: "string" },
@@ -1085,7 +1085,7 @@ export const TOOL_DEFINITIONS = [
 							title: { type: "string", minLength: 3, maxLength: 100 },
 							description: { type: "string" },
 							status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
-							priority: { type: "number", minimum: 1, maximum: 5, default: 3 },
+							priority: { type: "number", minimum: 1, maximum: 5, default: 3, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
 							agent: { type: "string" },
 							role: { type: "string" },
 							doc_path: { type: "string" },
@@ -1145,7 +1145,7 @@ export const TOOL_DEFINITIONS = [
 					enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
 					description: "New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
 				},
-				priority: { type: "number", minimum: 1, maximum: 5 },
+				priority: { type: "number", minimum: 1, maximum: 5, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
 				agent: { type: "string" },
 				role: { type: "string" },
 				model: { type: "string" },
