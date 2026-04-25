@@ -62,7 +62,8 @@ export class RealVectorStore implements VectorStore {
 		}
 	}
 
-	async remove(id: string, _kind: VectorEntityKind = "memory"): Promise<void> {
+	async remove(id: string, kind: VectorEntityKind = "memory"): Promise<void> {
+		void kind;
 		if (!id) return;
 		// Handled by SQL CASCADE
 	}

@@ -4,7 +4,16 @@ import { SQLiteStore } from "../storage/sqlite";
 import { CodingStandardEntry, VectorStore } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { buildStandardVectorText } from "./standard.shared";
+import { buildStandardVectorText, toContextSlug } from "./standard.shared";
+
+function generateShortCode(): string {
+	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+	let code = "";
+	for (let i = 0; i < 6; i++) {
+		code += chars.charAt(Math.floor(Math.random() * chars.length));
+	}
+	return code;
+}
 
 export async function handleStandardStore(
 	params: Record<string, unknown>,
@@ -14,15 +23,54 @@ export async function handleStandardStore(
 	// Validate input
 	const validated = StandardStoreSchema.parse(params);
 
+	// --- Similarity conflict check ---
+	// Threshold 0.82: stricter than memory-store (0.55) since coding standards
+	// tend to be more terse and dense.
+	// Exempt when version, language, OR stack differs from the conflicting entry.
+	const incomingVersion = validated.version || "1.0.0";
+	const incomingLanguage = validated.language ?? null;
+	const incomingStack = validated.stack ?? [];
+	const conflict = db.standards.checkConflicts(
+		validated.content,
+		incomingVersion,
+		validated.repo,
+		incomingLanguage,
+		incomingStack,
+		0.82
+	);
+
+	if (conflict) {
+		return createMcpResponse(
+			{
+				success: false,
+				error: "STANDARD_CONFLICT",
+				message: `This standard's content is highly similar to an existing standard (ID: ${conflict.id}, similarity: ${(conflict.similarity * 100).toFixed(1)}%).`,
+				conflicting_standard: {
+					id: conflict.id,
+					title: conflict.title,
+					version: conflict.version,
+					language: conflict.language,
+					stack: conflict.stack,
+					content: conflict.content
+				},
+				instruction:
+					"Use 'standard-update' on the existing ID to update it. To store a distinct variant, supply a different 'version', 'language', or non-overlapping 'stack'."
+			},
+			`Rejected: conflicts with standard "${conflict.title}" (${conflict.id}). Update it via 'standard-update', or differentiate by version / language / stack.`,
+			{ structuredContentPathHint: "conflicting_standard" }
+		);
+	}
+
 	// Create coding standard entry
 	const now = new Date().toISOString();
 
 	const entry: CodingStandardEntry = {
 		id: randomUUID(),
+		code: generateShortCode(),
 		title: validated.name,
 		content: validated.content,
 		parent_id: validated.parent_id || null,
-		context: validated.context || "general",
+		context: toContextSlug(validated.context || "general"),
 		version: validated.version || "1.0.0",
 		language: validated.language || null,
 		stack: validated.stack || [],
@@ -49,6 +97,7 @@ export async function handleStandardStore(
 
 	logger.info("[Tool] standard.store - saved coding standard", {
 		standardId: entry.id,
+		code: entry.code,
 		title: entry.title,
 		stack: entry.stack,
 		language: entry.language
@@ -58,9 +107,9 @@ export async function handleStandardStore(
 		{
 			success: true,
 			standard: entry,
-			message: `Coding standard "${entry.title}" saved successfully.`
+			message: `Coding standard [${entry.code}] "${entry.title}" saved successfully.`
 		},
-		`Saved coding standard: ${entry.title}`,
+		`Saved coding standard [${entry.code}]: ${entry.title}`,
 		{
 			structuredContentPathHint: "standard",
 			includeSerializedStructuredContent: true

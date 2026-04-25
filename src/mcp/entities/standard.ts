@@ -5,11 +5,12 @@ export class StandardEntity extends BaseEntity {
 	insert(entry: CodingStandardEntry): void {
 		this.run(
 			`INSERT INTO coding_standards (
-				id, title, content, parent_id, context, version, language, stack,
+				id, code, title, content, parent_id, context, version, language, stack,
 				is_global, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				entry.id,
+				entry.code ?? null,
 				entry.title,
 				entry.content,
 				entry.parent_id,
@@ -33,6 +34,11 @@ export class StandardEntity extends BaseEntity {
 
 	getById(id: string): CodingStandardEntry | null {
 		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE id = ?", [id]);
+		return row ? this.rowToEntry(row) : null;
+	}
+
+	getByCode(code: string): CodingStandardEntry | null {
+		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE code = ?", [code]);
 		return row ? this.rowToEntry(row) : null;
 	}
 
@@ -141,6 +147,65 @@ export class StandardEntity extends BaseEntity {
 			.sort((a, b) => b.similarity - a.similarity);
 	}
 
+	/**
+	 * Check if a new coding standard's content conflicts with an existing one.
+	 *
+	 * Returns the first conflicting entry whose cosine similarity exceeds `threshold`.
+	 * A conflict is SKIPPED (returns null) when the incoming version differs from
+	 * the conflicting entry's version — this allows intentional version bumps.
+	 *
+	 * @param content   Raw content of the new standard to check.
+	 * @param incomingVersion  Version of the new standard (e.g. "2.0.0").
+	 * @param repo      Repo filter; pass undefined for global standards.
+	 * @param threshold Cosine-similarity cutoff (default 0.82 — stricter than memory).
+	 */
+	checkConflicts(
+		content: string,
+		incomingVersion: string,
+		repo: string | undefined,
+		incomingLanguage: string | null | undefined,
+		incomingStack: string[],
+		threshold = 0.82
+	): (CodingStandardEntry & { similarity: number }) | null {
+		// Pull broad candidates without any dimension filter so we compare across all
+		const candidates = this.search({ repo, limit: 80, offset: 0 });
+		if (candidates.length === 0) return null;
+
+		const queryVector = this.computeVector(content);
+
+		for (const standard of candidates) {
+			const similarity = this.cosineSimilarity(queryVector, this.computeVector(standard.content));
+			if (similarity < threshold) continue;
+
+			// ---- Guard: exempt if ANY identifying dimension differs ----
+
+			// 1. Version guard
+			if (incomingVersion && standard.version && incomingVersion !== standard.version) {
+				continue;
+			}
+
+			// 2. Language guard (only when BOTH sides have a language value)
+			if (incomingLanguage && standard.language && incomingLanguage !== standard.language) {
+				continue;
+			}
+
+			// 3. Stack guard: if incoming stack is non-empty and has NO overlap with
+			//    the existing stack, treat them as targeting different ecosystems.
+			if (
+				incomingStack.length > 0 &&
+				standard.stack.length > 0 &&
+				!incomingStack.some((s) => standard.stack.includes(s))
+			) {
+				continue;
+			}
+
+			// All guards passed — this is a genuine duplicate
+			return { ...standard, similarity };
+		}
+
+		return null;
+	}
+
 	getByIds(ids: string[]): CodingStandardEntry[] {
 		if (ids.length === 0) return [];
 		const placeholders = ids.map(() => "?").join(",");
@@ -229,6 +294,7 @@ export class StandardEntity extends BaseEntity {
 	private rowToEntry(row: CodingStandardRow): CodingStandardEntry {
 		return {
 			id: row.id,
+			code: row.code ?? undefined,
 			title: row.title,
 			content: row.content,
 			parent_id: row.parent_id ?? null,

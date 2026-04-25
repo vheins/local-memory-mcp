@@ -118,8 +118,9 @@ export async function handleStandardSearch(
 		version: validated.version
 	});
 
-	const COLUMNS = ["id", "title", "context", "language", "scope", "tags", "updated_at"] as const;
+	const COLUMNS = ["code", "id", "title", "context", "language", "scope", "tags", "updated_at"] as const;
 	const rows = paginatedResults.map((standard) => [
+		standard.code ?? "-",
 		standard.id,
 		standard.title,
 		standard.context,
@@ -141,7 +142,7 @@ export async function handleStandardSearch(
 					}`
 			),
 			"",
-			"Use standard-detail with id for full content."
+			"Use standard-detail with id or code for full content."
 		];
 		contentSummary = parts.join("\n");
 	} else {

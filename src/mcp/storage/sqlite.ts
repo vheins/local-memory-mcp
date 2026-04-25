@@ -75,6 +75,7 @@ export class SQLiteStore {
 		const migrator = new MigrationManager(this.db);
 		migrator.migrate();
 		migrator.addMemoryCodeColumn();
+		migrator.addStandardCodeColumn();
 
 		this.memories = new MemoryEntity(this.db);
 		this.tasks = new TaskEntity(this.db);

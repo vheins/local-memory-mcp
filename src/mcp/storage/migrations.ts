@@ -465,4 +465,15 @@ export class MigrationManager {
 			this.run("CREATE INDEX IF NOT EXISTS idx_memories_repo_code ON memories(repo, code)");
 		}
 	}
+
+	public addStandardCodeColumn(): void {
+		const tableInfo = this.all("PRAGMA table_info(coding_standards)");
+		const hasCode = tableInfo.some((col) => col.name === "code");
+
+		if (!hasCode) {
+			this.run("ALTER TABLE coding_standards ADD COLUMN code TEXT");
+			this.run("CREATE INDEX IF NOT EXISTS idx_coding_standards_code ON coding_standards(code)");
+			this.run("CREATE INDEX IF NOT EXISTS idx_coding_standards_repo_code ON coding_standards(repo, code)");
+		}
+	}
 }

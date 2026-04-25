@@ -255,10 +255,15 @@ export const MemoryDetailSchema = z
 		message: "Either id or code must be provided"
 	});
 
-export const StandardDetailSchema = z.object({
-	id: z.string().uuid(),
-	structured: z.boolean().default(false)
-});
+export const StandardDetailSchema = z
+	.object({
+		id: z.string().uuid().optional(),
+		code: z.string().max(20).optional(),
+		structured: z.boolean().default(false)
+	})
+	.refine((data) => data.id !== undefined || data.code !== undefined, {
+		message: "Either id or code must be provided"
+	});
 
 export const StandardDeleteSchema = z
 	.object({
@@ -528,14 +533,14 @@ export const TOOL_DEFINITIONS = [
 		name: "standard-detail",
 		title: "Standard Detail",
 		description:
-			"Fetch full details of a specific coding standard by ID. Use after standard-search when a result is relevant and full guidance is needed.",
+			"Fetch full details of a specific coding standard by ID or short code. Use after standard-search when a result is relevant and full guidance is needed.",
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Coding standard ID." },
+				id: { type: "string", format: "uuid", description: "Coding standard ID. Optional if code is provided." },
+				code: { type: "string", description: "Short standard code (e.g. 'A3KPQ2'). Optional if id is provided." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
-			},
-			required: ["id"]
+			}
 		}
 	},
 	{

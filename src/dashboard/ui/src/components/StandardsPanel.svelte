@@ -9,7 +9,7 @@
 	export let repo = "";
 
 	let standards: CodingStandard[] = [];
-	let standardTree: StandardTreeNode[] = [];
+	let standardTree: StandardTreeNode[];
 	let loading = false;
 	let detailLoading = false;
 	let saving = false;
@@ -77,21 +77,21 @@
 	};
 
 	function buildStandardTree(items: CodingStandard[]): StandardTreeNode[] {
-		const byParent = new Map<string, CodingStandard[]>();
+		const byParent: Record<string, CodingStandard[]> = {};
 		const byId = new Set(items.map((item) => item.id));
 
 		for (const item of items) {
 			const parentId = item.parent_id;
 			if (!parentId || !byId.has(parentId)) continue;
-			const siblings = byParent.get(parentId) || [];
+			const siblings = byParent[parentId] || [];
 			siblings.push(item);
-			byParent.set(parentId, siblings);
+			byParent[parentId] = siblings;
 		}
 
 		const roots = items.filter((item) => !item.parent_id || !byId.has(item.parent_id));
 		return roots.map((root) => ({
 			standard: root,
-			children: (byParent.get(root.id) || []).sort((a, b) => a.title.localeCompare(b.title))
+			children: (byParent[root.id] || []).sort((a, b) => a.title.localeCompare(b.title))
 		}));
 	}
 
@@ -384,7 +384,7 @@
 								</div>
 								{#if node.standard.stack.length || node.standard.tags.length}
 									<div class="tag-row">
-										{#each [...new Set([...node.standard.stack, ...node.standard.tags])].slice(0, 6) as tag}
+										{#each [...new Set([...node.standard.stack, ...node.standard.tags])].slice(0, 6) as tag (tag)}
 											<span class="mini-chip">{tag}</span>
 										{/each}
 									</div>
@@ -410,7 +410,7 @@
 											</div>
 											{#if child.stack.length || child.tags.length}
 												<div class="tag-row">
-													{#each [...new Set([...child.stack, ...child.tags])].slice(0, 6) as tag}
+													{#each [...new Set([...child.stack, ...child.tags])].slice(0, 6) as tag (tag)}
 														<span class="mini-chip">{tag}</span>
 													{/each}
 												</div>

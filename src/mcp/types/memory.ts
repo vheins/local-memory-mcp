@@ -70,6 +70,7 @@ export type MemoryRowParsed = Omit<MemoryEntry, "hit_count" | "recall_count" | "
 
 export type CodingStandardEntry = {
 	id: string;
+	code?: string;
 	title: string;
 	content: string;
 	parent_id: string | null;
@@ -91,6 +92,7 @@ export type CodingStandardEntry = {
 
 export type CodingStandardRow = {
 	id: string;
+	code?: string;
 	title: string;
 	content: string;
 	parent_id: string | null;

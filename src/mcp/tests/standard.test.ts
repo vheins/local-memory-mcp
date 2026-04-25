@@ -224,7 +224,7 @@ describe("CSL (Coding Standards Library)", () => {
 			const data = result.structuredContent as any;
 			expect(data.schema).toBe("standard-search");
 			expect(data.count).toBeGreaterThan(0);
-			expect(data.results.rows.find((row: any[]) => String(row[1]).includes("React"))).toBeDefined();
+			expect(data.results.rows.find((row: any[]) => String(row[2]).includes("React"))).toBeDefined();
 		});
 
 		it("returns relevant results for specific languages", async () => {
@@ -237,7 +237,7 @@ describe("CSL (Coding Standards Library)", () => {
 			)) as McpResponse;
 
 			const data = result.structuredContent as any;
-			expect(data.results.rows.find((row: any[]) => row[3] === "python")).toBeDefined();
+			expect(data.results.rows.find((row: any[]) => row[4] === "python")).toBeDefined();
 		});
 
 		it("returns empty array for invalid language", async () => {
@@ -279,7 +279,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			const data = result.structuredContent as any;
 			expect(data.count).toBe(1);
-			expect(data.results.rows[0][1]).toBe("Python Testing");
+			expect(data.results.rows[0][2]).toBe("Python Testing");
 		});
 
 		it("can return vector-only matches when lexical overlap is weak", async () => {
@@ -316,7 +316,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			const data = result.structuredContent as any;
 			expect(data.count).toBe(1);
-			expect(data.results.rows[0][0]).toBe(standardId);
+			expect(data.results.rows[0][1]).toBe(standardId);
 		});
 	});
 });

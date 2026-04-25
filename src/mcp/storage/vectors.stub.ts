@@ -64,12 +64,14 @@ export class StubVectorStore implements VectorStore {
 		}
 	}
 
-	async remove(id: string, _kind: VectorEntityKind = "memory"): Promise<void> {
+	async remove(id: string, kind: VectorEntityKind = "memory"): Promise<void> {
+		void kind;
 		if (!id) return;
 		// Handled by SQL CASCADE
 	}
 
-	async search(query: string, limit: number, repo?: string, _kind: VectorEntityKind = "memory"): Promise<VectorResult[]> {
+	async search(query: string, limit: number, repo?: string, kind: VectorEntityKind = "memory"): Promise<VectorResult[]> {
+		void kind;
 		if (limit < 0) return [];
 		if (repo === "never") return [];
 		try {

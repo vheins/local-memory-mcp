@@ -4,16 +4,21 @@ import { StandardDetailSchema } from "./schemas";
 
 export async function handleStandardDetail(args: Record<string, unknown>, storage: SQLiteStore) {
 	const validated = StandardDetailSchema.parse(args);
-	const standard = storage.standards.getById(validated.id);
+
+	const standard = validated.id
+		? storage.standards.getById(validated.id)
+		: storage.standards.getByCode(validated.code!);
 
 	if (!standard) {
-		throw new Error(`Coding standard not found: ${validated.id}`);
+		const identifier = validated.id ?? validated.code;
+		throw new Error(`Coding standard not found: ${identifier}`);
 	}
 
 	storage.standards.incrementHitCounts([standard.id]);
 
 	const lines: string[] = [
 		`ID: ${standard.id}`,
+		...(standard.code ? [`Code: ${standard.code}`] : []),
 		`Title: ${standard.title}`,
 		`Parent ID: ${standard.parent_id || "-"}`,
 		`Context: ${standard.context}`,
@@ -38,3 +43,4 @@ export async function handleStandardDetail(args: Record<string, unknown>, storag
 		includeSerializedStructuredContent: validated.structured
 	});
 }
+
