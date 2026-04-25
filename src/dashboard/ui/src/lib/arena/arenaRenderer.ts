@@ -1,4 +1,4 @@
-import type { ArenaScene, ArenaLayoutConfig, ZoneRect, AgentFacing, VisualAgent, VisualTask } from './arenaTypes';
+import type { ArenaScene, ArenaLayoutConfig, ZoneRect, AgentFacing, VisualAgent, VisualTask, HandoffAnimData, HandoffVehicle, HelperVariant } from './arenaTypes';
 import { STATUS_COLORS, computeZones } from './arenaTransform';
 
 // ─── Motion ────────────────────────────────────────────────────────────────
@@ -7,6 +7,12 @@ const SPEED_WANDER = 50;
 const ARRIVE_DIST  = 6;
 const WANDER_INT   : [number, number] = [2800, 5000];
 const WANDER_PAUSE : [number, number] = [600, 1600];
+
+// ─── Handoff Animation ────────────────────────────────────────────────────
+const HANDOFF_SPEED    = 100;   // px/s during transport
+const PICKUP_DURATION  = 800;   // ms idle at pickup
+const ARRIVE_DURATION  = 600;   // ms for arrival transition
+const HELPER_SPAWN_OFFSET = 28; // px offset where helper appears from
 
 // ─── Color helpers ─────────────────────────────────────────────────────────
 function h2r(hex: string): [number, number, number] {
@@ -54,6 +60,26 @@ function rr(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number,r
 const HAIR_COLORS = ['#1a0a00','#2d1a00','#0f0f0f','#4a2d00','#8B4513','#d4a800','#c0392b','#7b2d8b','#1a3a5c','#2d4a1a'];
 const SKIN_TONES  = ['#f5c89a','#e8a870','#d4875a','#c06840','#8B5e3c','#6b3d28'];
 const PANT_COLORS = ['#1e3a5f','#2d4a1a','#3d2a1a','#2a1a3d','#1a3d3d','#3d1a2a','#2a2a3d'];
+
+// ─── Helper (Staff) styling ───────────────────────────────────────────────
+const HELPER_SHIRT_COLORS: Record<HelperVariant, string> = {
+	male_nurse: '#1e6e9e',
+	female_nurse: '#2d8e6e',
+	staff1: '#5a3e8a',
+	staff2: '#8a5a3e'
+};
+const HELPER_HAIR: Record<HelperVariant, string> = {
+	male_nurse: '#1a0a00',
+	female_nurse: '#4a2d00',
+	staff1: '#0f0f0f',
+	staff2: '#2d1a00'
+};
+const HELPER_SKIN: Record<HelperVariant, string> = {
+	male_nurse: '#e8a870',
+	female_nurse: '#f5c89a',
+	staff1: '#d4875a',
+	staff2: '#c06840'
+};
 
 // ─── Wander state ──────────────────────────────────────────────────────────
 interface WanderState { nextPickAt: number }
@@ -105,10 +131,16 @@ export class ArenaRenderer {
 		this.rafId = requestAnimationFrame(this.loop);
 	};
 
-	// ── Agent physics + wander ────────────────────────────────────────────────
+	// ── Agent physics + wander + handoff animation ─────────────────────────
 	private updateAgents(dt: number, idleZone: ZoneRect, ts: number) {
 		if (!this.scene) return;
 		for (const a of this.scene.agents.values()) {
+			// ── Handoff animation takes priority over normal movement ────
+			if (a.handoffAnim) {
+				this.updateHandoffAnim(a, dt, ts);
+				continue;
+			}
+
 			if (a.state === 'idle') {
 				let ws = this.wander.get(a.id);
 				if (!ws) { ws = { nextPickAt: ts }; this.wander.set(a.id, ws); }
@@ -152,6 +184,87 @@ export class ArenaRenderer {
 		}
 	}
 
+	// ── Handoff animation state machine ──────────────────────────────────
+	private updateHandoffAnim(a: VisualAgent, dt: number, ts: number) {
+		const h = a.handoffAnim!;
+		const elapsed = ts - h.phaseStartTs;
+
+		switch (h.phase) {
+			case 'pickup': {
+				// Helper appears, idle for PICKUP_DURATION ms
+				a.vx = 0; a.vy = 0;
+				a.walkPhase = 0;
+				if (elapsed >= PICKUP_DURATION) {
+					h.phase = 'moving';
+					h.phaseStartTs = ts;
+					h.progress = 0;
+				}
+				break;
+			}
+			case 'moving': {
+				// Move along path from start to end
+				const totalDist = Math.hypot(h.endX - h.startX, h.endY - h.startY);
+				const travelTime = totalDist / HANDOFF_SPEED; // seconds
+				h.progress = Math.min(1, h.progress + (dt / travelTime));
+
+				// Smooth easing (ease-in-out)
+				const t = h.progress;
+				const ease = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+
+				// Update agent position along path
+				a.x = h.startX + (h.endX - h.startX) * ease;
+				a.y = h.startY + (h.endY - h.startY) * ease;
+				a.vx = 0; a.vy = 0;
+
+				// Wheel rotation
+				const speed = totalDist * (dt / travelTime);
+				h.wheelAngle = (h.wheelAngle + speed * 0.15) % (Math.PI * 2);
+
+				// Helper walk animation
+				h.helperWalkPhase = (h.helperWalkPhase + dt * HANDOFF_SPEED * 0.08) % (Math.PI * 2);
+				h.stepBounce = Math.sin(h.helperWalkPhase * 2) * 1.5;
+
+				// Helper facing: direction of movement
+				const mdx = h.endX - h.startX;
+				const mdy = h.endY - h.startY;
+				h.helperFacing = Math.abs(mdx) > Math.abs(mdy)
+					? (mdx > 0 ? 'right' : 'left')
+					: (mdy > 0 ? 'down' : 'up');
+
+				if (h.progress >= 1) {
+					h.phase = 'arrive';
+					h.phaseStartTs = ts;
+					a.x = h.endX;
+					a.y = h.endY;
+				}
+				break;
+			}
+			case 'arrive': {
+				// Settle into position, helper fades out
+				a.x = h.endX; a.y = h.endY;
+				a.vx = 0; a.vy = 0;
+				a.walkPhase = 0;
+				h.helperWalkPhase = h.helperWalkPhase > 0.05 ? h.helperWalkPhase * 0.92 : 0;
+
+				if (elapsed >= ARRIVE_DURATION) {
+					// Transition to resting — agent stays in vehicle at therapy room
+					h.phase = 'resting';
+					h.phaseStartTs = ts;
+					a.targetX = h.endX;
+					a.targetY = h.endY;
+				}
+				break;
+			}
+			case 'resting': {
+				// Agent rests in vehicle at therapy room position
+				a.x = h.endX; a.y = h.endY;
+				a.vx = 0; a.vy = 0;
+				a.walkPhase = 0;
+				break;
+			}
+		}
+	}
+
 	// ── Main render ───────────────────────────────────────────────────────────
 	private render() {
 		const { canvas, ctx, scene, layout, isDark, ts } = this;
@@ -172,10 +285,22 @@ export class ArenaRenderer {
 		this.drawClaimLinks(scene, ts);
 		this.drawHandoffBeams(scene, ts);
 
+		// Draw handoff path trails (before agents so they appear under)
+		for (const a of scene.agents.values()) {
+			if (a.handoffAnim) this.drawHandoffTrail(a, isDark, ts);
+		}
+
 		// Sort agents by y (depth order), hovered last
 		const sortedAgents = Array.from(scene.agents.values())
 			.sort((a,b) => a.y - b.y || (a.id === this.hoveredId ? 1 : -1));
-		for (const a of sortedAgents) this.drawCharacter(a, isDark, ts);
+		for (const a of sortedAgents) {
+			if (a.handoffAnim) {
+				// Draw vehicle + helper + passive agent
+				this.drawHandoffGroup(a, isDark, ts);
+			} else {
+				this.drawCharacter(a, isDark, ts);
+			}
+		}
 	}
 
 	// ── Global floor ──────────────────────────────────────────────────────────
@@ -537,7 +662,7 @@ export class ArenaRenderer {
 		// Letter sorter on wall
 		this.drawLetterSorter(ctx, x+w-28, y+20, isDark);
 		// Clock on wall
-		this.drawClock(ctx, x+18, y+20, isDark, this.ts);
+		this.drawClock(ctx, x+18, y+20, isDark);
 	}
 
 	private decorWorkspace(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
@@ -558,7 +683,7 @@ export class ArenaRenderer {
 		ctx.beginPath(); ctx.moveTo(x,y+h-8); ctx.lineTo(x+w,y+h-8); ctx.stroke();
 		ctx.setLineDash([]); ctx.restore();
 		// Hazard sign on wall
-		this.drawHazardSign(ctx, x+w/2-10, y+16, isDark);
+		this.drawHazardSign(ctx, x+w/2-10, y+16);
 	}
 
 	private decorDone(ctx: CanvasRenderingContext2D, x:number,y:number,w:number,h:number, isDark:boolean) {
@@ -675,7 +800,7 @@ export class ArenaRenderer {
 		});
 	}
 
-	private drawClock(ctx: CanvasRenderingContext2D, cx:number,cy:number, isDark:boolean, ts:number) {
+	private drawClock(ctx: CanvasRenderingContext2D, cx:number,cy:number, isDark:boolean) {
 		const r = 9;
 		ctx.fillStyle = isDark ? '#1e2840' : '#f0f4fc';
 		ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
@@ -723,7 +848,7 @@ export class ArenaRenderer {
 		});
 	}
 
-	private drawHazardSign(ctx: CanvasRenderingContext2D, x:number,y:number, _isDark:boolean) {
+	private drawHazardSign(ctx: CanvasRenderingContext2D, x:number,y:number) {
 		ctx.fillStyle = '#f59e0b';
 		ctx.beginPath(); ctx.moveTo(x+10,y); ctx.lineTo(x+20,y+16); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill();
 		ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
@@ -980,10 +1105,436 @@ export class ArenaRenderer {
 		}
 	}
 
+	// ═══════════════════════════════════════════════════════════════════════════
+	// ── HANDOFF ANIMATION RENDERING ───────────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// ── Handoff dotted trail path ─────────────────────────────────────────
+	private drawHandoffTrail(agent: VisualAgent, isDark: boolean, ts: number) {
+		const { ctx } = this;
+		const h = agent.handoffAnim!;
+
+		// Draw dotted path from start to end
+		ctx.save();
+		ctx.strokeStyle = isDark ? 'rgba(20, 184, 166, 0.35)' : 'rgba(20, 184, 166, 0.45)';
+		ctx.lineWidth = 2;
+		ctx.setLineDash([6, 5]);
+		ctx.lineDashOffset = -(ts * 0.03) % 11;
+		ctx.beginPath();
+		ctx.moveTo(h.startX, h.startY);
+		ctx.lineTo(h.endX, h.endY);
+		ctx.stroke();
+		ctx.setLineDash([]);
+		ctx.lineDashOffset = 0;
+
+		// Glow pulse dot traveling along the path (only during moving phase)
+		if (h.phase === 'moving') {
+			const dotProgress = (ts % 2000) / 2000;
+			const dx = h.startX + (h.endX - h.startX) * dotProgress;
+			const dy = h.startY + (h.endY - h.startY) * dotProgress;
+			ctx.fillStyle = '#14b8a6';
+			ctx.shadowColor = '#14b8a6';
+			ctx.shadowBlur = 6;
+			ctx.beginPath(); ctx.arc(dx, dy, 3, 0, Math.PI * 2); ctx.fill();
+			ctx.shadowBlur = 0;
+		}
+
+		// Destination indicator (crosshair at therapy room target)
+		if (h.phase !== 'arrive') {
+			const pulse = 0.4 + 0.3 * Math.sin(ts * 0.004);
+			ctx.strokeStyle = `rgba(20, 184, 166, ${pulse})`;
+			ctx.lineWidth = 1;
+			ctx.beginPath(); ctx.arc(h.endX, h.endY, 8, 0, Math.PI * 2); ctx.stroke();
+			ctx.beginPath(); ctx.moveTo(h.endX - 4, h.endY); ctx.lineTo(h.endX + 4, h.endY); ctx.stroke();
+			ctx.beginPath(); ctx.moveTo(h.endX, h.endY - 4); ctx.lineTo(h.endX, h.endY + 4); ctx.stroke();
+		}
+
+		ctx.restore();
+	}
+
+	// ── Wheelchair sprite (top-down) ──────────────────────────────────────
+	private drawWheelchair(ctx: CanvasRenderingContext2D, x: number, y: number, wheelAngle: number, isDark: boolean) {
+		ctx.save();
+		ctx.translate(x, y);
+
+		// Shadow
+		ctx.fillStyle = 'rgba(0,0,0,0.2)';
+		ctx.beginPath(); ctx.ellipse(0, 3, 14, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+		// Frame (main chassis)
+		ctx.fillStyle = isDark ? '#2d3a50' : '#7a8ea0';
+		rr(ctx, -10, -12, 20, 18, 3); ctx.fill();
+		ctx.strokeStyle = isDark ? '#4a5a70' : '#5a7090';
+		ctx.lineWidth = 1;
+		rr(ctx, -10, -12, 20, 18, 3); ctx.stroke();
+
+		// Seat cushion
+		ctx.fillStyle = isDark ? '#1e3a5f' : '#3b82f6';
+		rr(ctx, -8, -6, 16, 10, 2); ctx.fill();
+
+		// Backrest
+		ctx.fillStyle = isDark ? '#1e3055' : '#2563eb';
+		rr(ctx, -8, -12, 16, 7, 2); ctx.fill();
+
+		// Armrests
+		ctx.fillStyle = isDark ? '#3a4a60' : '#6a7a90';
+		rr(ctx, -12, -10, 3, 14, 1); ctx.fill();
+		rr(ctx, 9, -10, 3, 14, 1); ctx.fill();
+
+		// Big wheels (with rotation spokes)
+		const wheelR = 5;
+		[-9, 9].forEach(wx => {
+			// Tire
+			ctx.strokeStyle = isDark ? '#1a1a2a' : '#333';
+			ctx.lineWidth = 2.5;
+			ctx.beginPath(); ctx.arc(wx, 4, wheelR, 0, Math.PI * 2); ctx.stroke();
+			// Rim
+			ctx.fillStyle = isDark ? '#4a5a70' : '#aabbc0';
+			ctx.beginPath(); ctx.arc(wx, 4, wheelR - 1.5, 0, Math.PI * 2); ctx.fill();
+			// Spokes (rotating)
+			ctx.strokeStyle = isDark ? '#2a3a50' : '#7a8a9a';
+			ctx.lineWidth = 0.75;
+			for (let si = 0; si < 4; si++) {
+				const sa = wheelAngle + (si * Math.PI / 2);
+				ctx.beginPath();
+				ctx.moveTo(wx, 4);
+				ctx.lineTo(wx + Math.cos(sa) * (wheelR - 1), 4 + Math.sin(sa) * (wheelR - 1));
+				ctx.stroke();
+			}
+		});
+
+		// Front casters (small wheels)
+		[-5, 5].forEach(cx => {
+			ctx.fillStyle = isDark ? '#1a1a2a' : '#333';
+			ctx.beginPath(); ctx.arc(cx, -13, 2, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = isDark ? '#4a5a70' : '#999';
+			ctx.beginPath(); ctx.arc(cx, -13, 1, 0, Math.PI * 2); ctx.fill();
+		});
+
+		// Footrest
+		ctx.fillStyle = isDark ? '#3a4a60' : '#5a7090';
+		rr(ctx, -6, 5, 12, 3, 1); ctx.fill();
+
+		ctx.restore();
+	}
+
+	// ── Stretcher/gurney sprite (top-down) ────────────────────────────────
+	private drawStretcher(ctx: CanvasRenderingContext2D, x: number, y: number, wheelAngle: number, breathePhase: number, isDark: boolean) {
+		ctx.save();
+		ctx.translate(x, y);
+
+		// Shadow
+		ctx.fillStyle = 'rgba(0,0,0,0.18)';
+		ctx.beginPath(); ctx.ellipse(0, 4, 20, 7, 0, 0, Math.PI * 2); ctx.fill();
+
+		// Frame (long horizontal stretcher)
+		ctx.fillStyle = isDark ? '#2d3a50' : '#8899aa';
+		rr(ctx, -18, -10, 36, 16, 3); ctx.fill();
+		ctx.strokeStyle = isDark ? '#4a5a70' : '#6a7a90';
+		ctx.lineWidth = 1;
+		rr(ctx, -18, -10, 36, 16, 3); ctx.stroke();
+
+		// Mattress
+		ctx.fillStyle = isDark ? '#1a2535' : '#f0f4f8';
+		rr(ctx, -16, -8, 32, 12, 2); ctx.fill();
+
+		// Pillow (head end)
+		ctx.fillStyle = isDark ? '#2a3a5a' : '#e0e7ff';
+		rr(ctx, 10, -6, 6, 8, 2); ctx.fill();
+
+		// Blanket with breathing animation
+		const breathOffset = Math.sin(breathePhase) * 0.8;
+		ctx.fillStyle = isDark ? '#1e3a5f' : '#bfdbfe';
+		rr(ctx, -15, -7 + breathOffset, 22, 10 - breathOffset * 0.5, 2); ctx.fill();
+		// Blanket fold line
+		ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
+		ctx.lineWidth = 0.5;
+		ctx.beginPath(); ctx.moveTo(-5, -7 + breathOffset); ctx.lineTo(-5, 3 - breathOffset * 0.3); ctx.stroke();
+
+		// Wheels with rolling spokes
+		const wr = 3;
+		[[-15, 5], [15, 5], [-15, -11], [15, -11]].forEach(([wx, wy]) => {
+			// Tire
+			ctx.fillStyle = isDark ? '#1a1a2a' : '#333';
+			ctx.beginPath(); ctx.arc(wx, wy, wr, 0, Math.PI * 2); ctx.fill();
+			// Hub
+			ctx.fillStyle = isDark ? '#4a5a70' : '#999';
+			ctx.beginPath(); ctx.arc(wx, wy, 1.5, 0, Math.PI * 2); ctx.fill();
+			// Spoke line (rotating)
+			ctx.strokeStyle = isDark ? '#3a4a5a' : '#777';
+			ctx.lineWidth = 0.5;
+			const sa = wheelAngle;
+			ctx.beginPath();
+			ctx.moveTo(wx + Math.cos(sa) * wr * 0.5, wy + Math.sin(sa) * wr * 0.5);
+			ctx.lineTo(wx - Math.cos(sa) * wr * 0.5, wy - Math.sin(sa) * wr * 0.5);
+			ctx.stroke();
+		});
+
+		// Side rails
+		ctx.strokeStyle = isDark ? '#5a6a80' : '#7a8a9a';
+		ctx.lineWidth = 1.5;
+		ctx.beginPath(); ctx.moveTo(-16, -10); ctx.lineTo(16, -10); ctx.stroke();
+		ctx.beginPath(); ctx.moveTo(-16, 6); ctx.lineTo(16, 6); ctx.stroke();
+
+		ctx.restore();
+	}
+
+	// ── Helper character (small nurse/staff walking sprite) ───────────────
+	private drawHelperCharacter(ctx: CanvasRenderingContext2D, x: number, y: number, variant: HelperVariant, facing: AgentFacing, walkPhase: number, isDark: boolean) {
+		ctx.save();
+		ctx.translate(x, y);
+		if (facing === 'left') ctx.scale(-1, 1);
+
+		const shirtColor = HELPER_SHIRT_COLORS[variant];
+		const hairColor = HELPER_HAIR[variant];
+		const skinColor = HELPER_SKIN[variant];
+		const moving = walkPhase > 0.1;
+		const legSwing  = moving ? Math.sin(walkPhase) * 4 : 0;
+		const armSwing  = moving ? Math.sin(walkPhase + Math.PI) * 3 : 0;
+		const headBob   = moving ? Math.sin(walkPhase * 2) * 0.8 : 0;
+
+		// Shadow
+		ctx.fillStyle = 'rgba(0,0,0,0.18)';
+		ctx.beginPath(); ctx.ellipse(0, 2, 8, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+
+		// Legs
+		ctx.fillStyle = isDark ? '#1a2535' : '#334155';
+		ctx.save(); ctx.translate(-2.5, 0); ctx.rotate(legSwing * 0.08);
+		rr(ctx, -2, -3, 4, 7, 1.5); ctx.fill(); ctx.restore();
+		ctx.save(); ctx.translate(2.5, 0); ctx.rotate(-legSwing * 0.08);
+		rr(ctx, -2, -3, 4, 7, 1.5); ctx.fill(); ctx.restore();
+
+		// Shoes
+		ctx.fillStyle = isDark ? '#0f172a' : '#1e293b';
+		ctx.save(); ctx.translate(-2.5, legSwing * 0.4);
+		rr(ctx, -2.5, 3, 5, 3, 1.5); ctx.fill(); ctx.restore();
+		ctx.save(); ctx.translate(2.5, -legSwing * 0.4);
+		rr(ctx, -2.5, 3, 5, 3, 1.5); ctx.fill(); ctx.restore();
+
+		// Body (scrubs/uniform)
+		const bGrd = ctx.createLinearGradient(-5, -20, 5, -10);
+		bGrd.addColorStop(0, lighten(shirtColor, 20));
+		bGrd.addColorStop(1, shirtColor);
+		ctx.fillStyle = bGrd;
+		rr(ctx, -5, -20, 10, 11, 2); ctx.fill();
+
+		// Medical cross on chest (for nurses)
+		if (variant === 'male_nurse' || variant === 'female_nurse') {
+			ctx.fillStyle = 'rgba(255,255,255,0.5)';
+			ctx.fillRect(-1, -17, 2, 5);
+			ctx.fillRect(-2.5, -15.5, 5, 2);
+		}
+
+		// Arms
+		ctx.save(); ctx.translate(-6.5, -19); ctx.rotate(armSwing * 0.1);
+		ctx.fillStyle = bGrd; rr(ctx, -1.5, 0, 3, 7, 1.5); ctx.fill();
+		ctx.fillStyle = skinColor; ctx.beginPath(); ctx.ellipse(0, 8, 2, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.restore();
+		ctx.save(); ctx.translate(6.5, -19); ctx.rotate(-armSwing * 0.1);
+		ctx.fillStyle = bGrd; rr(ctx, -1.5, 0, 3, 7, 1.5); ctx.fill();
+		ctx.fillStyle = skinColor; ctx.beginPath(); ctx.ellipse(0, 8, 2, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.restore();
+
+		// Neck
+		ctx.fillStyle = skinColor;
+		ctx.fillRect(-2, -22, 4, 3);
+
+		// Head
+		const headY = -29 + headBob;
+		ctx.fillStyle = skinColor;
+		ctx.beginPath(); ctx.ellipse(0, headY, 6.5, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+
+		// Hair (simple cap style for medical staff)
+		ctx.fillStyle = hairColor;
+		ctx.beginPath(); ctx.ellipse(0, headY, 6.5, 7.5, 0, Math.PI, 0); ctx.fill();
+
+		// Nurse cap (for nurse variants)
+		if (variant === 'male_nurse' || variant === 'female_nurse') {
+			ctx.fillStyle = '#f0f0f0';
+			rr(ctx, -5, headY - 8, 10, 5, 2); ctx.fill();
+			ctx.fillStyle = '#ef4444';
+			ctx.fillRect(-1, headY - 7, 2, 3);
+			ctx.fillRect(-2, headY - 6, 4, 1);
+		}
+
+		// Face (simple - only when not facing up)
+		if (facing !== 'up') {
+			// Eyes
+			ctx.fillStyle = 'rgba(0,0,0,0.7)';
+			ctx.beginPath(); ctx.arc(-2, headY - 1, 1, 0, Math.PI * 2); ctx.fill();
+			ctx.beginPath(); ctx.arc(2, headY - 1, 1, 0, Math.PI * 2); ctx.fill();
+			// Smile
+			ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+			ctx.lineWidth = 0.75;
+			ctx.beginPath(); ctx.arc(0, headY + 1.5, 2, 0.1, Math.PI - 0.1); ctx.stroke();
+		}
+
+		ctx.restore();
+	}
+
+	// ── Handoff group: vehicle + helper + passive agent ───────────────────
+	private drawHandoffGroup(agent: VisualAgent, isDark: boolean, ts: number) {
+		const { ctx } = this;
+		const h = agent.handoffAnim!;
+		const { x, y } = agent;
+
+		// Calculate helper position (behind the vehicle, pushing)
+		const dx = h.endX - h.startX;
+		const dy = h.endY - h.startY;
+		const dist = Math.hypot(dx, dy) || 1;
+		const nx = -dx / dist; // normal pointing back from direction of travel
+		const ny = -dy / dist;
+		const helperDist = h.vehicle === 'wheelchair' ? 18 : 22;
+		const helperX = x + nx * helperDist;
+		const helperY = y + ny * helperDist + h.stepBounce;
+
+		// Fade in/out for helper
+		let helperAlpha = 1;
+		if (h.phase === 'pickup') {
+			const pickupElapsed = ts - h.phaseStartTs;
+			helperAlpha = Math.min(1, pickupElapsed / 400); // fade in over 400ms
+		} else if (h.phase === 'arrive') {
+			const arriveElapsed = ts - h.phaseStartTs;
+			helperAlpha = Math.max(0, 1 - arriveElapsed / ARRIVE_DURATION);
+		} else if (h.phase === 'resting') {
+			helperAlpha = 0; // helper has left
+		}
+
+		// Draw the vehicle
+		if (h.vehicle === 'wheelchair') {
+			this.drawWheelchair(ctx, x, y, h.wheelAngle, isDark);
+		} else {
+			const breathPhase = ts * 0.002;
+			this.drawStretcher(ctx, x, y, h.wheelAngle, breathPhase, isDark);
+		}
+
+		// Draw the agent sitting/lying passively in the vehicle
+		this.drawPassiveAgent(agent, isDark, ts);
+
+		// Draw helper character (with alpha for fade in/out)
+		if (helperAlpha > 0.01) {
+			ctx.save();
+			ctx.globalAlpha = helperAlpha;
+			this.drawHelperCharacter(
+				ctx, helperX, helperY,
+				h.helperVariant, h.helperFacing,
+				h.phase === 'moving' ? h.helperWalkPhase : 0,
+				isDark
+			);
+			ctx.restore();
+		}
+
+		// Name label
+		ctx.fillStyle = isDark ? 'rgba(226,232,240,0.82)' : 'rgba(15,23,42,0.7)';
+		ctx.font = '7px system-ui,sans-serif';
+		ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+		const lbl = agent.name.length > 12 ? agent.name.slice(0, 12) + '…' : agent.name;
+		ctx.fillText(lbl, x, y + (h.vehicle === 'stretcher' ? 14 : 12));
+
+		// Rolling SFX indicator (small animated lines near wheels when moving)
+		if (h.phase === 'moving') {
+			this.drawRollingSFX(ctx, x, y, h.wheelAngle, h.vehicle, isDark, ts);
+		}
+	}
+
+	// ── Passive agent (seated in wheelchair or lying on stretcher) ─────────
+	private drawPassiveAgent(agent: VisualAgent, isDark: boolean, ts: number) {
+		const { ctx } = this;
+		const h = agent.handoffAnim!;
+		const { x, y, name, color } = agent;
+
+		const nh = strHash(name || '');
+		const hairColor = HAIR_COLORS[nh % HAIR_COLORS.length] || '#000';
+		const skinTone  = SKIN_TONES[(nh >>> 6) % SKIN_TONES.length] || '#f5c89a';
+
+		if (h.vehicle === 'wheelchair') {
+			// Agent seated in wheelchair - drawn above the seat
+			ctx.save();
+			ctx.translate(x, y);
+
+			// Body (seated, smaller)
+			ctx.fillStyle = color || '#64748b';
+			rr(ctx, -5, -16, 10, 8, 2); ctx.fill();
+
+			// Head
+			ctx.fillStyle = skinTone;
+			ctx.beginPath(); ctx.ellipse(0, -24, 6, 7, 0, 0, Math.PI * 2); ctx.fill();
+
+			// Hair
+			ctx.fillStyle = hairColor;
+			ctx.beginPath(); ctx.ellipse(0, -24, 6, 7, 0, Math.PI, 0); ctx.fill();
+
+			// Closed eyes (resting)
+			ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+			ctx.lineWidth = 1;
+			ctx.beginPath(); ctx.arc(-2, -24, 1.5, 0, Math.PI); ctx.stroke();
+			ctx.beginPath(); ctx.arc(2, -24, 1.5, 0, Math.PI); ctx.stroke();
+
+			// Arms resting on armrests
+			ctx.fillStyle = skinTone;
+			ctx.beginPath(); ctx.ellipse(-10, -10, 2, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.beginPath(); ctx.ellipse(10, -10, 2, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+
+			ctx.restore();
+		} else {
+			// Agent lying on stretcher
+			ctx.save();
+			ctx.translate(x, y);
+
+			// Body (lying down horizontally, head toward +x side)
+			// Blanket already drawn on stretcher, agent head sticks out
+			const breathe = Math.sin(ts * 0.002) * 0.5;
+
+			// Head (at pillow end)
+			ctx.fillStyle = skinTone;
+			ctx.beginPath(); ctx.ellipse(10, -1 + breathe, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+			// Hair
+			ctx.fillStyle = hairColor;
+			ctx.beginPath(); ctx.ellipse(10, -1 + breathe, 5, 6, 0, Math.PI * 0.8, Math.PI * 2.2); ctx.fill();
+
+			// Closed eyes
+			ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+			ctx.lineWidth = 0.75;
+			ctx.beginPath(); ctx.arc(9, -2 + breathe, 1, 0, Math.PI); ctx.stroke();
+			ctx.beginPath(); ctx.arc(12, -2 + breathe, 1, 0, Math.PI); ctx.stroke();
+
+			ctx.restore();
+		}
+	}
+
+	// ── Rolling wheel SFX (small motion lines) ───────────────────────────
+	private drawRollingSFX(ctx: CanvasRenderingContext2D, x: number, y: number, wheelAngle: number, vehicle: HandoffVehicle, isDark: boolean, ts: number) {
+		ctx.save();
+		const alpha = 0.15 + 0.1 * Math.sin(ts * 0.01);
+		ctx.strokeStyle = isDark ? `rgba(148,163,184,${alpha})` : `rgba(71,85,105,${alpha})`;
+		ctx.lineWidth = 1;
+
+		// Small arc lines behind wheels
+		const wheelPositions = vehicle === 'wheelchair'
+			? [[-9, y + 4], [9, y + 4]]
+			: [[-15, y + 5], [15, y + 5], [-15, y - 11], [15, y - 11]];
+
+		wheelPositions.forEach(([wx, wy]) => {
+			for (let i = 0; i < 2; i++) {
+				const offset = (wheelAngle + i * Math.PI) % (Math.PI * 2);
+				const lineX = x + wx - 3 - i * 2;
+				const lineY = wy + Math.sin(offset) * 2;
+				ctx.beginPath();
+				ctx.moveTo(lineX, lineY - 1);
+				ctx.lineTo(lineX - 3, lineY);
+				ctx.stroke();
+			}
+		});
+
+		ctx.restore();
+	}
+
 	// ── RPG Character ─────────────────────────────────────────────────────────
 	private drawCharacter(agent: VisualAgent, isDark: boolean, ts: number) {
 		const { ctx } = this;
-		let { x, y, walkPhase, facing, state, name, id } = agent;
+		const { walkPhase, facing, state, name, id } = agent;
+		let { x, y } = agent;
 		const color = agent.color || '#64748b';
 		const hovered = id === this.hoveredId;
 		const spd = Math.hypot(agent.vx, agent.vy);

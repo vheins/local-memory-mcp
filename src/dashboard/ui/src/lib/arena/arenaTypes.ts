@@ -1,5 +1,34 @@
-export type AgentState = 'idle' | 'claiming' | 'processing' | 'handoff_out' | 'handoff_in' | 'burnout';
+export type AgentState = 'idle' | 'claiming' | 'processing' | 'handoff_out' | 'handoff_in' | 'burnout' | 'blocked';
 export type AgentFacing = 'down' | 'up' | 'left' | 'right';
+
+// ── Handoff Animation Types ────────────────────────────────────────────────
+export type HandoffAnimPhase = 'pickup' | 'moving' | 'arrive' | 'resting';
+export type HandoffVehicle = 'wheelchair' | 'stretcher';
+export type HelperVariant = 'male_nurse' | 'female_nurse' | 'staff1' | 'staff2';
+
+export interface HandoffAnimData {
+	phase: HandoffAnimPhase;
+	vehicle: HandoffVehicle;
+	helperVariant: HelperVariant;
+	/** Start position when handoff began */
+	startX: number;
+	startY: number;
+	/** Target position in therapy room */
+	endX: number;
+	endY: number;
+	/** 0..1 progress along the path */
+	progress: number;
+	/** Timestamp when current phase started */
+	phaseStartTs: number;
+	/** Wheel rotation angle (radians) */
+	wheelAngle: number;
+	/** Helper walk phase for leg animation */
+	helperWalkPhase: number;
+	/** Helper facing direction */
+	helperFacing: AgentFacing;
+	/** Step bounce offset (sine-based for natural walk) */
+	stepBounce: number;
+}
 
 export interface VisualAgent {
 	id: string;
@@ -18,6 +47,8 @@ export interface VisualAgent {
 	claimedTaskIds: string[];
 	repos: string[];
 	lastUpdateTs: number;
+	/** Active handoff animation data, null when no handoff in progress */
+	handoffAnim: HandoffAnimData | null;
 }
 
 export interface VisualTask {

@@ -1,5 +1,5 @@
 import type { Task, TaskClaim, Handoff } from '../interfaces';
-import type { VisualAgent, VisualTask, VisualHandoff, ArenaScene, ArenaLayoutConfig, ZoneRect } from './arenaTypes';
+import type { ArenaScene, ArenaLayoutConfig, ZoneRect, AgentState, HandoffAnimData, HandoffVehicle, HelperVariant } from './arenaTypes';
 
 export const STATUS_COLORS: Record<string, string> = {
 	backlog: '#64748b',
@@ -29,6 +29,23 @@ const AGENT_COLORS = [
 const MAX_TASKS_PER_ZONE = 16;
 const TASK_INNER_PAD = 22;
 const TASK_TOP_PAD = 28; // below zone label
+
+// ── Handoff Animation Helpers ──────────────────────────────────────────────
+const HELPER_VARIANTS: HelperVariant[] = ['male_nurse', 'female_nurse', 'staff1', 'staff2'];
+
+function pickVehicle(nameHash: number): HandoffVehicle {
+	return nameHash % 2 === 0 ? 'wheelchair' : 'stretcher';
+}
+
+function pickHelper(nameHash: number): HelperVariant {
+	return HELPER_VARIANTS[(nameHash >>> 4) % HELPER_VARIANTS.length];
+}
+
+function nameHash(name: string): number {
+	let h = 5381;
+	for (let i = 0; i < name.length; i++) h = ((h << 5) + h + name.charCodeAt(i)) >>> 0;
+	return h;
+}
 
 export function agentColor(name: string): string {
 	let h = 5381;
@@ -64,7 +81,7 @@ function placeTasksInZones(tasks: Task[], zones: ZoneRect[]): Map<string, { x: n
 	zones.forEach((z) => byZone.set(z.id, []));
 
 	for (const task of tasks) {
-		let zid = STATUS_TO_ZONE[task.status] ?? 'pending';
+		const zid = STATUS_TO_ZONE[task.status] ?? 'pending';
 		if (!byZone.has(zid)) continue;
 		const bucket = byZone.get(zid)!;
 		if (bucket.length < MAX_TASKS_PER_ZONE) bucket.push(task);
@@ -119,7 +136,7 @@ export function buildArenaScene(
 	for (const task of tasks) {
 		const pos = taskPositions.get(task.id);
 		if (!pos) continue;
-		const prev = existingScene?.tasks.get(task.id);
+		// const prev = existingScene?.tasks.get(task.id);
 		scene.tasks.set(task.id, {
 			id: task.id,
 			taskCode: task.task_code,
@@ -179,16 +196,45 @@ export function buildArenaScene(
 		const lastUpdateTs = tasksChanged ? now : (prev?.lastUpdateTs ?? now);
 		const isStale = (now - lastUpdateTs) > 30000;
 
-		let state: any = claimedIds.size > 0 ? 'processing' : 'idle';
+		let state: AgentState = claimedIds.size > 0 ? 'processing' : 'idle';
 		if (tgt && tgt.status === 'blocked') {
 			state = 'blocked';
 		}
+
+		// Detect burnout and start handoff animation
+		let handoffAnim: HandoffAnimData | null = prev?.handoffAnim ?? null;
 		if (isStale) {
 			state = 'burnout';
 			const burnoutZone = zones.find(z => z.id === 'burnout') || idleZone;
 			// Place them nicely in the burnout zone (spread out on therapy beds)
 			targetX = burnoutZone.x + 40 + (idx % 3) * 60;
 			targetY = burnoutZone.y + burnoutZone.h / 2 + Math.floor(idx / 3) * 40;
+
+			// Start handoff animation if agent just transitioned to burnout
+			const wasBurnout = prev?.state === 'burnout';
+			if (!wasBurnout && !handoffAnim) {
+				const nh = nameHash(name);
+				const currentX = prev?.x ?? spawnX;
+				const currentY = prev?.y ?? spawnY;
+				handoffAnim = {
+					phase: 'pickup',
+					vehicle: pickVehicle(nh),
+					helperVariant: pickHelper(nh),
+					startX: currentX,
+					startY: currentY,
+					endX: targetX,
+					endY: targetY,
+					progress: 0,
+					phaseStartTs: performance.now(),
+					wheelAngle: 0,
+					helperWalkPhase: 0,
+					helperFacing: 'down',
+					stepBounce: 0
+				};
+			}
+		} else {
+			// Clear handoff animation when agent is no longer burnout
+			handoffAnim = null;
 		}
 
 		scene.agents.set(name, {
@@ -207,7 +253,8 @@ export function buildArenaScene(
 			state,
 			claimedTaskIds: Array.from(claimedIds),
 			repos: Array.from(repos),
-			lastUpdateTs
+			lastUpdateTs,
+			handoffAnim
 		});
 	});
 
