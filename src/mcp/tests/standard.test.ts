@@ -267,7 +267,7 @@ describe("CSL (Coding Standards Library)", () => {
 			expect(data.count).toBeGreaterThan(0);
 			expect(result.content?.[0]?.type).toBe("text");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("code|title|context|language|scope");
+			expect(text).toContain("code|confidence|title|context|language|scope");
 			expect(text).toContain("Use standard-detail with code for full content.");
 		});
 
@@ -320,6 +320,56 @@ describe("CSL (Coding Standards Library)", () => {
 			const data = result.structuredContent as any;
 			expect(data.count).toBe(1);
 			expect(data.results.rows[0][1]).toBe(standardId);
+		});
+
+		it("ranks exact keyword matches above generic laravel matches and exposes confidence", async () => {
+			const rankingDb = new SQLiteStore(":memory:");
+			const mockVectors: VectorStore = {
+				upsert: vi.fn().mockResolvedValue(undefined),
+				remove: vi.fn().mockResolvedValue(undefined),
+				search: vi.fn().mockResolvedValue([])
+			};
+
+			await handleStandardStore(
+				{
+					name: "Laravel Service Provider Register Method Responsibility",
+					content: "Use register() only for binding services into the container.",
+					language: "php",
+					stack: ["laravel"],
+					tags: ["laravel", "providers"],
+					metadata: { source: "laravel-docs" }
+				},
+				rankingDb,
+				mockVectors
+			);
+
+			await handleStandardStore(
+				{
+					name: "Laravel Service Container Singleton vs Scoped Binding",
+					content: "Use singleton() for app-wide reuse and scoped() for per-lifecycle bindings.",
+					language: "php",
+					stack: ["laravel"],
+					tags: ["laravel", "container", "singleton", "scoped"],
+					metadata: { source: "laravel-docs" }
+				},
+				rankingDb,
+				mockVectors
+			);
+
+			const result = (await handleStandardSearch(
+				{
+					query: "Laravel Service Container Singleton vs Scoped Binding"
+				},
+				rankingDb,
+				mockVectors
+			)) as McpResponse;
+
+			const data = result.structuredContent as any;
+			expect(data.results.columns).toContain("confidence");
+			expect(data.results.rows[0][2]).toBe("Laravel Service Container Singleton vs Scoped Binding");
+			expect(["high", "medium"]).toContain(data.results.rows[0][7]);
+			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
+			expect(text).toContain("code|confidence|title|context|language|scope");
 		});
 	});
 });
