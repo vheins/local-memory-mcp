@@ -293,7 +293,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
-			`${bulkTasks.length} tasks created.`,
+			`Created ${bulkTasks.length} tasks in repo "${repo}".`,
 			{ includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false }
 		);
 	}
