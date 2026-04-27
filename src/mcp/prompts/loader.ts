@@ -57,3 +57,38 @@ export function loadPromptFromMarkdown(name: string): LoadedPrompt {
 		content: content.trim()
 	};
 }
+
+function findServerInstructionsDir(): string {
+	const candidates = [
+		// Production if chunked into dist/
+		"./prompts/server",
+		// Production if inlined into dist/mcp/
+		"../prompts/server",
+		// Dev: /src/mcp/prompts/server (next to loader.ts)
+		"./server"
+	].map((relPath) => path.resolve(__dirname, relPath));
+
+	for (const dir of candidates) {
+		if (fs.existsSync(dir)) {
+			const filePath = path.join(dir, "instructions.md");
+			if (fs.existsSync(filePath)) {
+				return dir;
+			}
+		}
+	}
+
+	// Final fallback
+	return path.resolve(__dirname, "./server");
+}
+
+const SERVER_DIR = findServerInstructionsDir();
+
+export function loadServerInstructions(): string {
+	const filePath = path.join(SERVER_DIR, "instructions.md");
+	if (!fs.existsSync(filePath)) {
+		throw new Error(`Server instructions file not found: ${filePath}`);
+	}
+	const fileContent = fs.readFileSync(filePath, "utf-8");
+	const { content } = matter(fileContent);
+	return content.trim();
+}

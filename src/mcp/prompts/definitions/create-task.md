@@ -7,7 +7,6 @@ arguments:
     required: true
 agent: Task Planner
 ---
-# Skill: create-task (Task Creation Orchestrator)
 
 ## 🚫 FORBIDDEN: NON-EXECUTION
 DO NOT edit/create/delete files, run commands, or implement code.

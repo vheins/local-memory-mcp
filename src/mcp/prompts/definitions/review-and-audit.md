@@ -7,7 +7,6 @@ arguments:
     required: false
 agent: Quality Auditor
 ---
-# Skill: review-and-audit (Audit Agent)
 
 ## 1. ANALYSIS
 1. **Sequential Discovery**: Explore docs and code sequentially. NO parallel sub-agents.

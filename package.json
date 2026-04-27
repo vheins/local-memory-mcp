@@ -14,7 +14,8 @@
 		"dist",
 		"bin",
 		"storage/.gitkeep",
-		"dist/prompts/definitions"
+		"dist/prompts/definitions",
+		"dist/prompts/server"
 	],
 	"repository": {
 		"type": "git",
@@ -27,7 +28,7 @@
 	"author": "Muhammad Rheza Alfin <m.rheza.alfin@gmail.com>",
 	"license": "MIT",
 	"scripts": {
-		"build": "rm -rf dist && npm run dashboard:build && tsup --config tsup.config.ts && mkdir -p bin && cp -r src/mcp/prompts/definitions dist/prompts/ && printf \"#!/usr/bin/env node\\nimport '../dist/dashboard/server.js';\\n\" > bin/mcp-memory-dashboard.js && shx chmod +x dist/mcp/server.js dist/dashboard/server.js bin/mcp-memory-server.js bin/mcp-memory-dashboard.js",
+		"build": "rm -rf dist && npm run dashboard:build && tsup --config tsup.config.ts && mkdir -p bin && cp -r src/mcp/prompts/definitions dist/prompts/ && cp -r src/mcp/prompts/server dist/prompts/ && printf \"#!/usr/bin/env node\\nimport '../dist/dashboard/server.js';\\n\" > bin/mcp-memory-dashboard.js && shx chmod +x dist/mcp/server.js dist/dashboard/server.js bin/mcp-memory-server.js bin/mcp-memory-dashboard.js",
 		"dashboard:build": "vite build --config src/dashboard/ui/vite.config.ts",
 		"dashboard:dev": "vite dev --config src/dashboard/ui/vite.config.ts",
 		"prepare": "npm run build",

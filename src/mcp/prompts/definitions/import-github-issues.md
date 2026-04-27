@@ -4,7 +4,6 @@ description: Import GitHub Issues as local tasks.
 arguments: []
 agent: Integration Scout
 ---
-# Skill: import-github-issues
 
 ## 1. FETCH
 -   **Primary**: Use `github-mcp-server` to list open issues.

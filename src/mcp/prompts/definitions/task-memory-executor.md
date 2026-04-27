@@ -4,7 +4,6 @@ description: Sequentially execute pending tasks for current repository.
 arguments: []
 agent: Task Executor
 ---
-# Skill: task-memory-executor
 
 ## 1. SYNC & FILTER
 1. **Identify**: Get repo name (git/context).

@@ -13,7 +13,6 @@ arguments:
     required: true
 agent: Integration Architect
 ---
-# Skill: export-task-to-github
 
 ## 1. RETRIEVE
 1.  **Fetch**: Call `task-detail` for `task_id`.
