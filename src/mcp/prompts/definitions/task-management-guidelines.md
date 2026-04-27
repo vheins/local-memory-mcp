@@ -16,7 +16,7 @@ agent: Project Manager
 ## 2. DETAIL TOOLS
 -   **Tasks**: Call `task-detail` for history/comments (ID or `task_code`).
 -   **Memory**: Call `memory-detail` for full entry content.
--   **Standards**: Call `standard-search` before implementation when coding standards may apply.
+-   **Standards**: Call `standard-search` before any code edit, test edit, refactor, migration, or implementation decision. If no relevant standards are returned, continue and state that no applicable standards were found.
 -   **Handoffs**: Call `handoff-list` to discover pending context transfers before starting a task. Close stale handoffs with `handoff-update` when no concrete next owner, unfinished task, or blocker remains.
 
 ## 3. WORKFLOW

@@ -41,7 +41,7 @@ Use at the START of every session and before any implementation work:
 1. Call \`task-list\` to sync active/pending tasks for the current repository.
 2. Call \`handoff-list\` to check pending context transfers. Close stale handoffs with \`handoff-update\`.
 3. Call \`memory-search\` and \`memory-synthesize\` to hydrate architectural context before coding.
-4. Call \`standard-search\` when implementation may be governed by language/stack conventions.
+4. Call \`standard-search\` before any code edit, test edit, refactor, migration, or implementation decision. This is mandatory even for small tasks; use the task intent, affected files, inferred language, stack, and repo as filters. If no relevant standards are returned, continue and state that no applicable standards were found.
 
 ## Core Workflows
 
@@ -56,6 +56,7 @@ Use at the START of every session and before any implementation work:
 - Completing a task auto-releases claims and expires linked handoffs.
 
 **Standards**: \`standard-search\` → \`standard-store\`
+- \`standard-search\` is the pre-implementation gate for code, tests, refactors, migrations, and implementation decisions.
 - One rule per entry. Treat as normative implementation contracts, not docs summaries.
 
 **Handoffs/Claims**: \`handoff-list\` → \`handoff-create\` / \`handoff-update\` | \`task-claim\` / \`claim-release\`

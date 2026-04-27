@@ -27,7 +27,7 @@ agent: Task Executor
 3. **Claim**: Use `task-claim` with `task_code` or `task_id` before implementation.
 4. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata.
 5. **Research**: Call `memory-search` (Hybrid Search) and hydrate relevant results with `memory-detail`.
-6. **Standards (MANDATORY PER TASK)**: Call `standard-search` for every task inside the execution loop before implementation, using the task intent plus inferred language/stack/repo as filters. This is required even for decomposed tasks and sub-agent assignments, so each task execution remains aligned with current standards. Apply only relevant standards and hydrate details when needed.
+6. **Standards (MANDATORY PER TASK)**: Call `standard-search` for every task inside the execution loop before any code edit, test edit, refactor, migration, or implementation decision, using the task intent, affected files, inferred language, stack, and repo as filters. This is required even for small tasks, decomposed tasks, and sub-agent assignments. Apply only relevant standards, hydrate details when needed, and if no relevant standards are returned, continue and state that no applicable standards were found.
 7. **Execute**:
    - **Trace**: Inspect logic, call sites, and docs. DO NOT infer from file presence.
    - **Logic**: Implement per description/intent.

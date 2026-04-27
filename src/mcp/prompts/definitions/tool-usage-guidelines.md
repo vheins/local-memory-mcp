@@ -24,7 +24,7 @@ Use the tools in the same flow exposed by the dashboard: navigate with compact l
 - **Automatic cleanup**: Moving a task to `completed` or `canceled` automatically releases active claims and expires pending handoffs linked to that task.
 
 ## 3. Standards Flow
-- **Search first**: Use `standard-search` to find coding standards by `query`, `language`, `stack`, `repo`, and `is_global`.
+- **Search first**: `standard-search` is mandatory before any code edit, test edit, refactor, migration, or implementation decision. Search by `query`, `language`, `stack`, `repo`, and `is_global`; if no relevant standards are returned, continue and state that no applicable standards were found.
 - **Apply precisely**: Treat standards as implementation rules, not generic documentation summaries.
 - **Store atomically**: Use `standard-store` for one rule per entry with `name`, `content`, `context`, `version`, `language`, `stack`, `tags`, and correct repo/global scope.
 - **Scope**: Prefer repo-specific standards for local conventions; use global standards only for cross-repo rules.

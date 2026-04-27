@@ -1725,7 +1725,7 @@ export const TOOL_DEFINITIONS = [
 		name: "standard-search",
 		title: "Standard Search",
 		description:
-			"NAVIGATION LAYER: Returns a compact pointer table of matching coding standards. Use `standard-detail` to fetch full content for a selected result.",
+			"MANDATORY PRE-IMPLEMENTATION CHECK: Call before any code edit, test edit, refactor, migration, or implementation decision to find applicable coding standards. Returns a compact pointer table; use `standard-detail` for relevant results. If no relevant standards are returned, continue and state that no applicable standards were found.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,

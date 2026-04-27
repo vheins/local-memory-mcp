@@ -24,7 +24,7 @@ ONLY call MCP tools. No prose, code, or external plans.
 
 ## 2. PRE-TASK ANALYSIS
 1. **Search**: Call `memory-search` (Hybrid Search). 0.55 similarity threshold.
-2. **Standards**: Call `standard-search` when implementation conventions are relevant.
+2. **Standards**: Call `standard-search` before creating implementation tasks so task scope reflects applicable coding standards. If no relevant standards are returned, note that no applicable standards were found.
 3. **Handoffs**: Call `handoff-list` for pending transfer context related to the target. Treat handoffs as active only when they contain unfinished work, blockers, a next owner, or a linked task.
 4. **De-duplicate**: Call `task-list`. Skip existing/redundant tasks. Link via `parent_id`/`depends_on`.
 
