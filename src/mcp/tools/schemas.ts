@@ -1257,7 +1257,7 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				repo: {
 					type: "string",
-					description: "Repository name"
+					description: "Repository name (required)"
 				},
 				status: {
 					type: "string",
