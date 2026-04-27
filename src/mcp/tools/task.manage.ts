@@ -15,6 +15,21 @@ import {
 import { handleMemoryStore } from "./memory.store";
 import { type TaskCreateInteractiveOptions } from "../interfaces/mcp";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolves a parent_id value that is either a UUID or a task_code string.
+ * Returns the resolved UUID, or throws if the task cannot be found.
+ */
+function resolveParentId(value: string | null | undefined, repo: string, storage: SQLiteStore): string | null {
+	if (!value) return null;
+	if (UUID_REGEX.test(value)) return value;
+	// Treat as task_code
+	const parent = storage.tasks.getTaskByCode(repo, value);
+	if (!parent) throw new Error(`parent_id: task with code '${value}' not found in repo '${repo}'`);
+	return parent.id;
+}
+
 function describeTaskListFilter(status?: string) {
 	if (!status) return "active";
 	if (status === "all") return "all";
@@ -280,7 +295,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				est_tokens: taskData.est_tokens ?? 0,
 				tags: tags,
 				metadata: (taskData.metadata as Record<string, unknown>) || {},
-				parent_id: taskData.parent_id || null,
+				parent_id: resolveParentId(taskData.parent_id, repo, storage),
 				depends_on: taskData.depends_on || null
 			};
 			storage.tasks.insertTask(task);
@@ -362,7 +377,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		est_tokens: est_tokens ?? 0,
 		tags: finalTags,
 		metadata: metadata || {},
-		parent_id: parent_id || null,
+		parent_id: resolveParentId(parent_id, repo, storage),
 		depends_on: depends_on || null
 	};
 
@@ -569,6 +584,11 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		}
 
 		const finalUpdates: Record<string, unknown> = { ...updates };
+
+		// Resolve parent_id if it was provided (can be UUID or task code)
+		if (updates.parent_id !== undefined) {
+			finalUpdates.parent_id = resolveParentId(updates.parent_id, repo, storage);
+		}
 
 		if (updates.phase !== undefined || updates.tags !== undefined) {
 			let currentTags = updates.tags || existingTask.tags || [];

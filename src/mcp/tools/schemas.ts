@@ -138,7 +138,7 @@ const SingleTaskCreateSchema = z.object({
 	doc_path: z.string().optional(),
 	tags: z.array(z.string()).optional(),
 	metadata: z.record(z.string(), z.any()).optional(),
-	parent_id: z.string().uuid().optional(),
+	parent_id: z.string().optional(),
 	depends_on: z.string().uuid().optional(),
 	est_tokens: z.number().int().min(0).optional()
 });
@@ -158,7 +158,7 @@ export const TaskCreateSchema = z
 		doc_path: z.string().optional(),
 		tags: z.array(z.string()).optional(),
 		metadata: z.record(z.string(), z.any()).optional(),
-		parent_id: z.string().uuid().optional(),
+		parent_id: z.string().optional(),
 		depends_on: z.string().uuid().optional(),
 		est_tokens: z.number().int().min(0).optional(),
 		// Allow bulk tasks
@@ -196,7 +196,7 @@ export const TaskUpdateSchema = z
 		doc_path: z.string().optional(),
 		tags: z.array(z.string()).optional(),
 		metadata: z.record(z.string(), z.any()).optional(),
-		parent_id: z.string().uuid().optional(),
+		parent_id: z.string().optional(),
 		depends_on: z.string().uuid().optional(),
 		est_tokens: z.number().int().min(0).optional(),
 		force: z.boolean().optional(),
@@ -1080,7 +1080,7 @@ export const TOOL_DEFINITIONS = [
 				doc_path: { type: "string" },
 				tags: { type: "array", items: { type: "string" } },
 				metadata: { type: "object" },
-				parent_id: { type: "string", format: "uuid" },
+				parent_id: { type: "string", description: "Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing." },
 				depends_on: { type: "string", format: "uuid" },
 				est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" },
 				tasks: {
@@ -1105,7 +1105,7 @@ export const TOOL_DEFINITIONS = [
 							doc_path: { type: "string" },
 							tags: { type: "array", items: { type: "string" } },
 							metadata: { type: "object" },
-							parent_id: { type: "string", format: "uuid" },
+							parent_id: { type: "string", description: "Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing." },
 							depends_on: { type: "string", format: "uuid" },
 							est_tokens: { type: "number", minimum: 0 }
 						},
@@ -1176,7 +1176,7 @@ export const TOOL_DEFINITIONS = [
 				doc_path: { type: "string" },
 				tags: { type: "array", items: { type: "string" } },
 				metadata: { type: "object" },
-				parent_id: { type: "string", format: "uuid" },
+				parent_id: { type: "string", description: "Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing." },
 				depends_on: { type: "string", format: "uuid" },
 				est_tokens: {
 					type: "number",
