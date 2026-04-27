@@ -3,11 +3,14 @@ name: session-planner
 description: Break objective into atomic tasks.
 arguments:
   - name: objective
-    description: High-level session goal.
-    required: true
+    description: High-level session goal. Optional — inferred from active task, recent conversation, or pending handoff if omitted.
+    required: false
 agent: Strategy Lead
 ---
-Plan execution for: '{{objective}}'.
+## 0. CONTEXT RESOLUTION
+- **objective**: If provided, use directly. If omitted — extract from the active `in_progress` task description, the most recent pending handoff, or the last user request in conversation context.
+
+Plan execution for the resolved objective.
 
 Steps:
 1. **Orient**: Call `task-list` to avoid duplicate active/backlog work.

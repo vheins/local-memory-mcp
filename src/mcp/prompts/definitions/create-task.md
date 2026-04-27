@@ -3,8 +3,8 @@ name: create-task
 description: Create structured, atomic tasks in Local Memory MCP.
 arguments:
   - name: instruction
-    description: Directive to analyze and break into tasks.
-    required: true
+    description: Directive to analyze and break into tasks. Optional — derived from active task, pending handoff, or recent conversation if omitted.
+    required: false
 agent: Task Planner
 ---
 

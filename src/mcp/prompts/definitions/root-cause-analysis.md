@@ -3,21 +3,22 @@ name: root-cause-analysis
 description: 5-Why analysis to trace bug origins.
 arguments:
   - name: tech_stack
-    description: Target tech stack.
-    required: true
+    description: Target tech stack. Optional — auto-detected from repo/context if omitted.
+    required: false
   - name: bug_description
-    description: Bug behavior.
-    required: true
+    description: Bug behavior. Optional — inferred from active task or recent conversation if omitted.
+    required: false
   - name: symptoms
     description: Logs, errors, metrics.
     required: false
 agent: Diagnostic Lead
 ---
-Conduct root cause analysis for repository bug.
+## 0. CONTEXT RESOLUTION
+- **tech_stack**: If provided, use directly. If omitted — detect from repo package files or active task tags.
+- **bug_description**: If provided, use directly. If omitted — extract from active task description or recent error/log context.
+- **symptoms**: Optional. Use if provided; otherwise infer from available logs or error traces.
 
-Stack: {{tech_stack}}
-Bug: {{bug_description}}
-Symptoms: {{symptoms}}
+Conduct root cause analysis for the active repository bug.
 
 Output:
 1. **Symptom**: Technical problem restatement.

@@ -3,21 +3,22 @@ name: security-triage
 description: Assess vulnerability exploitability and prioritize fix.
 arguments:
   - name: tech_stack
-    description: App stack.
-    required: true
+    description: App stack. Optional — auto-detected from repo/context if omitted.
+    required: false
   - name: vulnerability_report
-    description: Report details (CVE, SAST).
-    required: true
+    description: Report details (CVE, SAST). Optional — extracted from active task description or recent conversation if omitted.
+    required: false
   - name: codebase_context
     description: Usage context.
     required: false
 agent: Security Engineer
 ---
-Triage vulnerability for repository.
+## 0. CONTEXT RESOLUTION
+- **tech_stack**: If provided, use directly. If omitted — detect from repo package files, language, or active task tags.
+- **vulnerability_report**: If provided, use directly. If omitted — extract from active task description, recent conversation, or attached SAST output.
+- **codebase_context**: Optional. Use if provided.
 
-Stack: {{tech_stack}}
-Report: {{vulnerability_report}}
-Context: {{codebase_context}}
+Triage the resolved vulnerability for the active repository.
 
 Output:
 1. **Classification**: Type, CVE, CVSS, vector.

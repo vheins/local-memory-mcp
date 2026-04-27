@@ -3,17 +3,18 @@ name: senior-code-review
 description: Comprehensive production-readiness evaluation.
 arguments:
   - name: tech_stack
-    description: Tech stack.
-    required: true
+    description: Tech stack. Optional — auto-detected from repo package files, language, or active task tags if omitted.
+    required: false
   - name: context
     description: Production context (SLA, data, conventions).
     required: false
 agent: Principal Reviewer
 ---
-Perform production-readiness review for repository.
+## 0. CONTEXT RESOLUTION
+- **tech_stack**: If provided, use directly. If omitted — detect from repo package files or language.
+- **context**: Optional. Use if provided; otherwise infer from task description or recent conversation.
 
-Stack: {{tech_stack}}
-Context: {{context}}
+Perform production-readiness review for the active repository.
 
 Audit Dimensions:
 1. **Errors**: Completeness & patterns.

@@ -3,11 +3,14 @@ name: technical-planning
 description: Technical blueprint for new feature/product.
 arguments:
   - name: objective
-    description: High-level goal.
-    required: true
+    description: High-level goal. Optional — inferred from active task description, pending handoff, or recent conversation if omitted.
+    required: false
 agent: Technical Architect
 ---
-Create technical blueprint for: '{{objective}}'.
+## 0. CONTEXT RESOLUTION
+- **objective**: If provided, use directly. If omitted — extract from the active `in_progress` task description, the most recent pending handoff summary, or the last user instruction in conversation context.
+
+Create technical blueprint for the resolved objective.
 
 Cover:
 1. **Tech Stack**: Selected/confirmed technologies.

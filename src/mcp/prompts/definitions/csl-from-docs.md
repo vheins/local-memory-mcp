@@ -3,14 +3,15 @@ name: csl-from-docs
 description: Create atomic CSL coding standards entries from a local file or directory path.
 arguments:
   - name: path
-    description: Local path (file or directory) containing documentation or standards.
-    required: true
+    description: Local path (file or directory) containing documentation or standards. Optional — defaults to docs/, README, or prompts definitions directory of the active repo if omitted.
+    required: false
 agent: Documentation Processor
 ---
-Fetch and convert local documentation from the provided path into atomic CSL (Coding Standards Library) entries for the coding_standards entity.
+## 0. CONTEXT RESOLUTION
+- **path**: If provided, use directly. If omitted — default to `docs/`, `README.md`, or `src/mcp/prompts/definitions/` in the active repo root.
+- **current_repo**: Auto-detect from git remote or active workspace context.
 
-Path: {{path}}
-Current repo: {{current_repo}}
+Fetch and convert local documentation from the resolved path into atomic CSL (Coding Standards Library) entries.
 
 Goal:
 - Analyze the provided path.

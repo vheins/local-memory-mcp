@@ -3,16 +3,20 @@ name: review-and-audit
 description: Audit documentation against implementation; generate local tasks for gaps.
 arguments:
   - name: target
-    description: Module, feature, or component to audit.
+    description: Module, feature, or component to audit. Optional — if omitted, audits all available documentation against the full implementation.
     required: false
 agent: Quality Auditor
 ---
 
+## 0. CONTEXT RESOLUTION
+- **Target**: If `target` provided — scope audit to that module/feature/component. If omitted — **fallback**: audit ALL existing documentation (README, docs/, prompts, schemas) against the full codebase implementation. Enumerate each doc file and compare with corresponding source.
+- **Repo**: Auto-detect from git remote or active workspace context.
+
 ## 1. ANALYSIS
-1. **Sequential Discovery**: Explore docs and code sequentially. NO parallel sub-agents.
-2. **UX Audit**: Use `chrome-dev-tools` for visual, navigation, and responsiveness checks.
+1. **Discovery**: Explore docs and code. Coding sub-agents MAY be used for parallel file reading if the agent supports sub-agents. `chrome-devtools-mcp` MCP tools (direct tool calls) are **ALLOWED**. **FORBIDDEN**: spawning a `browser_subagent` — do NOT invoke the `browser_subagent` tool here. Distinction: MCP tool call = allowed; spawned browser agent process = forbidden.
+2. **UX Audit**: If target involves UI and the audit explicitly requires visual inspection, note it as a separate task — do NOT block the audit on it.
 3. **Reference Audit**: Check current tool/prompt/resource definitions through code or the dashboard Reference flow.
-4. **Compare**: Match docs + code findings against live UI to find gaps/misalignments.
+4. **Compare**: Match docs + code findings to find gaps/misalignments.
 
 ## 🚫 FORBIDDEN: NON-EXECUTION
 DO NOT edit/create/delete files, run commands, or implement code.
