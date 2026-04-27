@@ -248,7 +248,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			if (normalizedStatus === "pending") {
 				if (initialStats.todo + pendingInRequestCount >= 10) {
 					throw new Error(
-						`Cannot create task '${taskData.task_code}' as 'pending'. Maximum of 10 pending tasks reached.`
+						`Cannot create task '${taskData.task_code}' as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`
 					);
 				}
 			}
@@ -329,7 +329,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	if (status === "pending") {
 		const stats = storage.tasks.getTaskStats(repo);
 		if (stats.todo >= 10) {
-			throw new Error(`Cannot create task as 'pending'. Maximum of 10 pending tasks reached.`);
+			throw new Error(`Cannot create task as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`);
 		}
 	}
 
