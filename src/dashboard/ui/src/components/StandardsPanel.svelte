@@ -14,7 +14,10 @@
 	let detailLoading = false;
 	let saving = false;
 	let deleting = false;
+	let exporting = false;
+	let importing = false;
 	let error = "";
+	let notice = "";
 	let query = "";
 	let language = "";
 	let stack = "";
@@ -22,6 +25,7 @@
 	let selected: CodingStandard | null = null;
 	let showCreate = false;
 	let editMode = false;
+	let importInput: HTMLInputElement;
 
 	let form = {
 		name: "",
@@ -261,6 +265,61 @@
 		}
 	}
 
+	function exportFilename(payloadScope: "repo" | "global" | "all") {
+		const repoPart = repo ? repo.replace(/[^a-z0-9._-]+/gi, "-") : "all";
+		const stamp = new Date().toISOString().slice(0, 10);
+		return `standards-${repoPart}-${payloadScope}-${stamp}.json`;
+	}
+
+	async function exportStandards() {
+		exporting = true;
+		error = "";
+		notice = "";
+		try {
+			const payloadScope = scope === "global" || scope === "all" ? scope : "repo";
+			const payload = await api.exportStandards({
+				repo: payloadScope === "repo" ? repo : undefined,
+				scope: payloadScope
+			});
+			const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = exportFilename(payload.scope);
+			link.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			exporting = false;
+		}
+	}
+
+	async function importStandards(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		importing = true;
+		error = "";
+		notice = "";
+		try {
+			const payload = JSON.parse(await file.text());
+			const standardsCount = Array.isArray(payload?.standards) ? payload.standards.length : 0;
+			const result = await api.importStandards({
+				...payload,
+				refresh_vectors: standardsCount > 0 && standardsCount <= 500
+			});
+			await loadStandards();
+			const vectorNote = result.vectors_refreshed ? "" : " Vector refresh skipped for large import.";
+			notice = `Imported ${result.imported} and updated ${result.updated} standard(s).${vectorNote}`;
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			importing = false;
+			input.value = "";
+		}
+	}
+
 	onMount(() => {
 		void loadStandards();
 	});
@@ -279,6 +338,23 @@
 			<Icon name={showCreate ? "chevron-left" : "plus"} size={14} strokeWidth={2} />
 			{showCreate ? "Close Form" : "New Standard"}
 		</button>
+		<div class="toolbar-actions">
+			<button class="btn btn-ghost btn-sm" on:click={exportStandards} disabled={exporting || standards.length === 0}>
+				<Icon name="download" size={14} strokeWidth={2} />
+				{exporting ? "Exporting..." : "Export"}
+			</button>
+			<button class="btn btn-ghost btn-sm" on:click={() => importInput?.click()} disabled={importing}>
+				<Icon name="upload" size={14} strokeWidth={2} />
+				{importing ? "Importing..." : "Import"}
+			</button>
+			<input
+				bind:this={importInput}
+				class="file-input"
+				type="file"
+				accept="application/json,.json"
+				on:change={importStandards}
+			/>
+		</div>
 		<div class="toolbar-controls">
 			<input class="form-input" placeholder="Search standards..." bind:value={query} on:input={() => loadStandards()} />
 			<input class="form-input" placeholder="Language" bind:value={language} on:input={() => loadStandards()} />
@@ -298,6 +374,9 @@
 
 	{#if error}
 		<div class="error-banner">{error}</div>
+	{/if}
+	{#if notice}
+		<div class="notice-banner">{notice}</div>
 	{/if}
 
 	{#if showCreate}
@@ -540,7 +619,7 @@
 	}
 	.feature-toolbar {
 		display: grid;
-		grid-template-columns: 1fr auto;
+		grid-template-columns: 1fr auto auto;
 		gap: 14px;
 		padding: 16px;
 		align-items: start;
@@ -552,6 +631,15 @@
 	}
 	.toolbar-action {
 		justify-self: end;
+	}
+	.toolbar-actions {
+		display: flex;
+		gap: 8px;
+		justify-self: end;
+		flex-wrap: wrap;
+	}
+	.file-input {
+		display: none;
 	}
 	.toolbar-subtitle {
 		font-size: 0.72rem;
@@ -747,6 +835,15 @@
 		font-size: 0.82rem;
 		font-weight: 700;
 	}
+	.notice-banner {
+		border: 1px solid #bae6fd;
+		background: #f0f9ff;
+		color: #0369a1;
+		border-radius: 8px;
+		padding: 10px 12px;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
 	:global(html.dark) .standard-row {
 		background: rgba(15, 23, 42, 0.45);
 	}
@@ -763,7 +860,8 @@
 		.feature-toolbar {
 			grid-template-columns: 1fr;
 		}
-		.toolbar-action {
+		.toolbar-action,
+		.toolbar-actions {
 			justify-self: stretch;
 			justify-content: center;
 		}

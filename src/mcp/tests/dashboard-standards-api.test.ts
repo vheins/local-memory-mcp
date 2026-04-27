@@ -30,7 +30,7 @@ describe("Dashboard Standards API", () => {
 	beforeAll(async () => {
 		const standardRoutes = (await import("../../dashboard/routes/standard.routes")).default;
 		app = express();
-		app.use(express.json());
+		app.use(express.json({ limit: "50mb" }));
 		app.use("/api/standards", standardRoutes);
 		server = app.listen(0);
 		const { port } = server.address() as AddressInfo;
@@ -114,4 +114,60 @@ describe("Dashboard Standards API", () => {
 		expect(listAfterDelete.data).toHaveLength(1);
 		expect(listAfterDelete.data[0].id).toBe(parentId);
 	}, 15000);
+
+	it("exports standards and imports large standard sets with upsert semantics", async () => {
+		const repo = "bulk-standards-export-import";
+		const standards = Array.from({ length: 1000 }, (_, index) => ({
+			id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+			code: `B${String(index).padStart(5, "0")}`,
+			title: `Bulk Standard ${index}`,
+			content: `Rule ${index}: keep implementation behavior deterministic for bulk migration.`,
+			parent_id: null,
+			context: "bulk-migration",
+			version: "1.0.0",
+			language: "typescript",
+			stack: ["node", "svelte"],
+			is_global: false,
+			repo,
+			tags: ["bulk", "migration"],
+			metadata: { source: "api-test", index },
+			created_at: "2026-01-01T00:00:00.000Z",
+			updated_at: "2026-01-01T00:00:00.000Z",
+			hit_count: 0,
+			last_used_at: null,
+			agent: "test",
+			model: "vitest"
+		}));
+
+		const importRes = await fetch(`${baseUrl}/api/standards/import`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ schema: "local-memory-mcp.standards.v1", standards, refresh_vectors: false })
+		});
+		expect(importRes.ok).toBe(true);
+		const imported = (await importRes.json()) as any;
+		expect(imported.data.attributes.imported).toBe(1000);
+		expect(imported.data.attributes.updated).toBe(0);
+		expect(imported.data.attributes.vectors_refreshed).toBe(false);
+
+		const exportRes = await fetch(`${baseUrl}/api/standards/export?repo=${encodeURIComponent(repo)}&scope=repo`);
+		expect(exportRes.ok).toBe(true);
+		const exported = (await exportRes.json()) as any;
+		expect(exported.data.attributes.schema).toBe("local-memory-mcp.standards.v1");
+		expect(exported.data.attributes.standards).toHaveLength(1000);
+
+		const reimportRes = await fetch(`${baseUrl}/api/standards/import`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ ...exported.data.attributes, refresh_vectors: false })
+		});
+		expect(reimportRes.ok).toBe(true);
+		const reimported = (await reimportRes.json()) as any;
+		expect(reimported.data.attributes.imported).toBe(0);
+		expect(reimported.data.attributes.updated).toBe(1000);
+
+		const listRes = await fetch(`${baseUrl}/api/standards?repo=${encodeURIComponent(repo)}&pageSize=100`);
+		const listed = (await listRes.json()) as any;
+		expect(listed.meta.totalItems).toBe(1000);
+	}, 30000);
 });

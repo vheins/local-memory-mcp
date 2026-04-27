@@ -6,6 +6,7 @@ export interface McpToolResponse<T = unknown> {
 
 export interface CodingStandard {
 	id: string;
+	code?: string;
 	title: string;
 	content: string;
 	parent_id?: string | null;
@@ -23,6 +24,23 @@ export interface CodingStandard {
 	last_used_at?: string | null;
 	agent?: string;
 	model?: string;
+}
+
+export interface StandardsExport {
+	schema: "local-memory-mcp.standards.v1";
+	exported_at: string;
+	repo: string | null;
+	scope: "repo" | "global" | "all";
+	standards: CodingStandard[];
+}
+
+export interface StandardsImportResult {
+	imported: number;
+	updated: number;
+	total: number;
+	vectors_refreshed: boolean;
+	vector_failures: number;
+	ids: string[];
 }
 
 export interface StandardSearchResult {

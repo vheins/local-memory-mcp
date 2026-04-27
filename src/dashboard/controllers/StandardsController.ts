@@ -5,6 +5,63 @@ import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
 import type { CodingStandardEntry } from "../../mcp/types";
 import { buildStandardVectorText } from "../../mcp/tools/standard.shared";
 
+const STANDARDS_EXPORT_SCHEMA = "local-memory-mcp.standards.v1";
+
+type StandardsExportPayload = {
+	schema: typeof STANDARDS_EXPORT_SCHEMA;
+	exported_at: string;
+	repo: string | null;
+	scope: "repo" | "global" | "all";
+	standards: CodingStandardEntry[];
+};
+
+function normalizeStandardForImport(value: unknown): CodingStandardEntry | null {
+	if (!value || typeof value !== "object") return null;
+	const item = value as Partial<CodingStandardEntry>;
+	if (!item.title || !item.content) return null;
+	const now = new Date().toISOString();
+	return {
+		id: typeof item.id === "string" && item.id ? item.id : randomUUID(),
+		code: typeof item.code === "string" && item.code ? item.code : undefined,
+		title: String(item.title),
+		content: String(item.content),
+		parent_id: typeof item.parent_id === "string" && item.parent_id ? item.parent_id : null,
+		context: String(item.context || "general"),
+		version: String(item.version || "1.0.0"),
+		language: typeof item.language === "string" && item.language ? item.language : null,
+		stack: Array.isArray(item.stack) ? item.stack.map(String).filter(Boolean) : [],
+		is_global: item.is_global !== false,
+		repo: typeof item.repo === "string" && item.repo ? item.repo : null,
+		tags: Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean) : [],
+		metadata:
+			item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+				? (item.metadata as Record<string, unknown>)
+				: { source: "standards-import" },
+		created_at: typeof item.created_at === "string" && item.created_at ? item.created_at : now,
+		updated_at: typeof item.updated_at === "string" && item.updated_at ? item.updated_at : now,
+		hit_count: typeof item.hit_count === "number" ? item.hit_count : 0,
+		last_used_at: typeof item.last_used_at === "string" ? item.last_used_at : null,
+		agent: String(item.agent || "dashboard-import"),
+		model: String(item.model || "web-ui")
+	};
+}
+
+function standardsFromImportPayload(body: unknown): unknown[] {
+	if (Array.isArray(body)) return body;
+	if (!body || typeof body !== "object") return [];
+	const payload = body as { standards?: unknown; data?: { attributes?: { standards?: unknown } } };
+	if (Array.isArray(payload.standards)) return payload.standards;
+	if (Array.isArray(payload.data?.attributes?.standards)) return payload.data.attributes.standards;
+	return [];
+}
+
+function shouldRefreshVectors(body: unknown, count: number): boolean {
+	if (body && typeof body === "object" && "refresh_vectors" in body) {
+		return (body as { refresh_vectors?: unknown }).refresh_vectors === true;
+	}
+	return count <= 500;
+}
+
 export class StandardsController {
 	static async list(req: express.Request, res: express.Response) {
 		try {
@@ -76,6 +133,119 @@ export class StandardsController {
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Coding standard not found";
 			res.status(404).json(jsonApiError(message, 404));
+		}
+	}
+
+	static async export(req: express.Request, res: express.Response) {
+		try {
+			await db.refresh();
+			const { repo, scope = "repo" } = req.query;
+			const scopeValue = scope === "global" || scope === "all" ? scope : "repo";
+			const items = db.standards.search({
+				repo: scopeValue === "repo" ? (repo as string | undefined) : undefined,
+				is_global: scopeValue === "global" ? true : undefined,
+				limit: 100000,
+				offset: 0
+			});
+
+			const payload: StandardsExportPayload = {
+				schema: STANDARDS_EXPORT_SCHEMA,
+				exported_at: new Date().toISOString(),
+				repo: typeof repo === "string" && repo ? repo : null,
+				scope: scopeValue,
+				standards: items
+			};
+
+			res.json(jsonApiRes(payload, "standard-export"));
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
+		}
+	}
+
+	static async import(req: express.Request, res: express.Response) {
+		try {
+			await db.refresh();
+			const rawStandards = standardsFromImportPayload(req.body);
+			if (rawStandards.length === 0) {
+				return res.status(400).json(jsonApiError("No standards found in import payload", 400));
+			}
+
+			const standards = rawStandards.map(normalizeStandardForImport).filter((item): item is CodingStandardEntry => !!item);
+			if (standards.length === 0) {
+				return res.status(400).json(jsonApiError("Import payload does not contain valid standards", 400));
+			}
+			const refreshVectors = shouldRefreshVectors(req.body, standards.length);
+
+			const imported: string[] = [];
+			const updated: string[] = [];
+			let vectorFailures = 0;
+
+			await db.withWrite(async () => {
+				for (const standard of standards) {
+					const existing = db.standards.getById(standard.id) || (standard.code ? db.standards.getByCode(standard.code) : null);
+					if (existing) {
+						db.standards.update(existing.id, {
+							code: standard.code,
+							title: standard.title,
+							content: standard.content,
+							parent_id: standard.parent_id,
+							context: standard.context,
+							version: standard.version,
+							language: standard.language,
+							stack: standard.stack,
+							is_global: standard.is_global,
+							repo: standard.repo,
+							tags: standard.tags,
+							metadata: standard.metadata,
+							hit_count: standard.hit_count,
+							last_used_at: standard.last_used_at,
+							agent: standard.agent,
+							model: standard.model
+						});
+						if (refreshVectors) {
+							const refreshed = db.standards.getById(existing.id) || { ...standard, id: existing.id };
+							try {
+								await vectors.upsert(existing.id, buildStandardVectorText(refreshed), "standard");
+							} catch {
+								vectorFailures += 1;
+							}
+						}
+						updated.push(existing.id);
+					} else {
+						db.standards.insert(standard);
+						if (refreshVectors) {
+							try {
+								await vectors.upsert(standard.id, buildStandardVectorText(standard), "standard");
+							} catch {
+								vectorFailures += 1;
+							}
+						}
+						imported.push(standard.id);
+					}
+				}
+				db.actions.logAction("write", "standards-import", {
+					query: "standards-import",
+					resultCount: imported.length + updated.length
+				});
+			});
+
+			res.json(
+				jsonApiRes(
+					{
+						imported: imported.length,
+						updated: updated.length,
+						total: imported.length + updated.length,
+						vectors_refreshed: refreshVectors,
+						vector_failures: vectorFailures,
+						ids: [...imported, ...updated]
+					},
+					"standard-import"
+				)
+			);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Internal server error";
+			res.status(500).json(jsonApiError(message));
 		}
 	}
 

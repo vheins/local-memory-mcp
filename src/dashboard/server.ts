@@ -26,7 +26,7 @@ const app = express();
 const PORT = process.env.PORT || 3456;
 
 // --- Middleware ---
-app.use(express.json());
+app.use(express.json({ limit: process.env.DASHBOARD_JSON_LIMIT || "50mb" }));
 
 app.use((req, res, next) => {
 	const start = Date.now();

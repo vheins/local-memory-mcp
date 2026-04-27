@@ -9,7 +9,9 @@ import type {
 	TaskTimeStats,
 	HealthData,
 	Pagination,
-	ReferenceDataState
+	ReferenceDataState,
+	StandardsExport,
+	StandardsImportResult
 } from "./stores";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -270,6 +272,20 @@ export const api = {
 		}),
 
 	deleteStandard: (id: string) => apiFetch<{ success: boolean }>(`/api/standards/${id}`, { method: "DELETE" }),
+
+	exportStandards: (params: { repo?: string; scope?: "repo" | "global" | "all" }) => {
+		const q = new URLSearchParams();
+		if (params.repo) q.set("repo", params.repo);
+		if (params.scope) q.set("scope", params.scope);
+		return apiFetch<StandardsExport>(`/api/standards/export?${q}`);
+	},
+
+	importStandards: (body: StandardsExport | { standards: Partial<CodingStandard>[]; refresh_vectors?: boolean }) =>
+		apiFetch<StandardsImportResult>("/api/standards/import", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}),
 
 	export: (repo: string) =>
 		apiFetch<{ repo: string; exported_at: string; tasks: Task[]; memories: Memory[] }>(
