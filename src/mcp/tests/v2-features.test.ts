@@ -48,20 +48,22 @@ describe("V2 Enhanced Memory Features", () => {
 			const db = await createTestStore();
 			const repo = "file-claim-repo";
 
-			await expect(handleMemoryStore(
-				{
-					type: "file_claim",
-					title: "Claim ownership of migration file",
-					content: "Agent A is working on src/storage/sqlite.ts migration changes.",
-					importance: 4,
-					scope: { repo },
-					agent: "test-agent",
-					model: "test-model",
-					structured: true
-				},
-				db,
-				mockVectors
-			)).rejects.toThrow();
+			await expect(
+				handleMemoryStore(
+					{
+						type: "file_claim",
+						title: "Claim ownership of migration file",
+						content: "Agent A is working on src/storage/sqlite.ts migration changes.",
+						importance: 4,
+						scope: { repo },
+						agent: "test-agent",
+						model: "test-model",
+						structured: true
+					},
+					db,
+					mockVectors
+				)
+			).rejects.toThrow();
 			db.close();
 		});
 
@@ -200,18 +202,20 @@ describe("V2 Enhanced Memory Features", () => {
 	});
 
 	describe("3. Feedback Loop", () => {
-			it("should reject updating memory type to file_claim", async () => {
-				const db = await createTestStore();
-				db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
+		it("should reject updating memory type to file_claim", async () => {
+			const db = await createTestStore();
+			db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
 
-			await expect(handleMemoryUpdate(
-				{
-					id: VALID_UUID_1,
-					type: "file_claim"
-				},
-				db,
-				mockVectors
-			)).rejects.toThrow();
+			await expect(
+				handleMemoryUpdate(
+					{
+						id: VALID_UUID_1,
+						type: "file_claim"
+					},
+					db,
+					mockVectors
+				)
+			).rejects.toThrow();
 
 			const updated = db.memories.getById(VALID_UUID_1);
 			expect(updated?.type).toBe("decision");

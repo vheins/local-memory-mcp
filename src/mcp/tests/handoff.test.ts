@@ -87,7 +87,7 @@ describe("Handoff and Claim Storage", () => {
                 VALUES ('task-2', 'test-repo', 'T-2', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
 
 			handoffs.claimTask({ repo: "test-repo", task_id: "task-2", agent: "agent-a" });
-			
+
 			let activeClaim = handoffs.getClaim("task-2");
 			expect(activeClaim).not.toBeNull();
 
@@ -111,8 +111,8 @@ describe("Handoff and Claim Storage", () => {
 
 			const allClaims = handoffs.listClaims({ repo: "test-repo" });
 			expect(allClaims.length).toBe(2);
-			
-			const c1 = allClaims.find(c => c.id === claim1.id);
+
+			const c1 = allClaims.find((c) => c.id === claim1.id);
 			expect(c1?.released_at).not.toBeNull();
 		});
 	});

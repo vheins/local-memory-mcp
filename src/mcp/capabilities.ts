@@ -21,7 +21,9 @@ if (typeof __PKG_VERSION__ !== "undefined" && __PKG_VERSION__) {
 					break;
 				}
 			}
-		} catch { /* try next */ }
+		} catch {
+			/* try next */
+		}
 		searchDir = path.dirname(searchDir);
 	}
 }

@@ -227,7 +227,19 @@ export async function handleStandardSearch(
 		topConfidence: paginatedResults[0]?.confidence
 	});
 
-	const COLUMNS = ["code", "id", "title", "context", "language", "scope", "tags", "confidence", "score", "matched_terms", "updated_at"] as const;
+	const COLUMNS = [
+		"code",
+		"id",
+		"title",
+		"context",
+		"language",
+		"scope",
+		"tags",
+		"confidence",
+		"score",
+		"matched_terms",
+		"updated_at"
+	] as const;
 	const rows = paginatedResults.map(({ standard, confidence, finalScore, matchedTerms }) => [
 		standard.code ?? "-",
 		standard.id,

@@ -11,10 +11,34 @@
 
 	$: stats = [
 		{ label: "Total", val: $taskStats?.total ?? 0, icon: "layers", color: "#6366f1", glow: "rgba(99,102,241,0.12)" },
-		{ label: "Backlog", val: $taskStats?.backlog ?? 0, icon: "inbox", color: "#64748b", glow: "rgba(100,116,139,0.12)" },
-		{ label: "To Do", val: $taskStats?.pending ?? 0, icon: "circle-dot", color: "#0ea5e9", glow: "rgba(14,165,233,0.12)" },
-		{ label: "Active", val: $taskStats?.in_progress ?? 0, icon: "zap", color: "#a855f7", glow: "rgba(168,85,247,0.12)" },
-		{ label: "Done", val: $taskStats?.completed ?? 0, icon: "circle-check", color: "#10b981", glow: "rgba(16,185,129,0.12)" }
+		{
+			label: "Backlog",
+			val: $taskStats?.backlog ?? 0,
+			icon: "inbox",
+			color: "#64748b",
+			glow: "rgba(100,116,139,0.12)"
+		},
+		{
+			label: "To Do",
+			val: $taskStats?.pending ?? 0,
+			icon: "circle-dot",
+			color: "#0ea5e9",
+			glow: "rgba(14,165,233,0.12)"
+		},
+		{
+			label: "Active",
+			val: $taskStats?.in_progress ?? 0,
+			icon: "zap",
+			color: "#a855f7",
+			glow: "rgba(168,85,247,0.12)"
+		},
+		{
+			label: "Done",
+			val: $taskStats?.completed ?? 0,
+			icon: "circle-check",
+			color: "#10b981",
+			glow: "rgba(16,185,129,0.12)"
+		}
 	];
 	let isExpanded = true;
 </script>
@@ -51,7 +75,11 @@
 					<Icon name="clock-arrow-up" size={12} strokeWidth={2} />
 					Active Priorities
 				</div>
-				<div style="color:var(--color-text-muted); transition: transform 0.2s ease; transform: rotate({isExpanded ? '0deg' : '-90deg'})">
+				<div
+					style="color:var(--color-text-muted); transition: transform 0.2s ease; transform: rotate({isExpanded
+						? '0deg'
+						: '-90deg'})"
+				>
 					<Icon name="chevron-down" size={12} strokeWidth={2.5} />
 				</div>
 			</button>

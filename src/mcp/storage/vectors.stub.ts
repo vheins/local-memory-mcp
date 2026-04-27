@@ -70,7 +70,12 @@ export class StubVectorStore implements VectorStore {
 		// Handled by SQL CASCADE
 	}
 
-	async search(query: string, limit: number, repo?: string, kind: VectorEntityKind = "memory"): Promise<VectorResult[]> {
+	async search(
+		query: string,
+		limit: number,
+		repo?: string,
+		kind: VectorEntityKind = "memory"
+	): Promise<VectorResult[]> {
 		void kind;
 		if (limit < 0) return [];
 		if (repo === "never") return [];

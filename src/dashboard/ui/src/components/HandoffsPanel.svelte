@@ -248,7 +248,12 @@
 				<option value="rejected">Rejected</option>
 				<option value="expired">Expired</option>
 			</select>
-			<input class="form-input" placeholder="To agent filter" bind:value={agentFilter} on:input={() => loadHandoffs()} />
+			<input
+				class="form-input"
+				placeholder="To agent filter"
+				bind:value={agentFilter}
+				on:input={() => loadHandoffs()}
+			/>
 			<button class="btn btn-ghost" on:click={loadHandoffs}>
 				<Icon name="refresh-cw" size={14} strokeWidth={2} />
 				Refresh
@@ -268,45 +273,98 @@
 		<div class="action-grid">
 			{#if showCreate}
 				<div class="glass card panel-card action-panel">
-			<div class="section-label">Create Handoff</div>
-			<div class="form-stack">
-				<label><span>From agent</span><input class="form-input" placeholder="agent-a" bind:value={handoffForm.from_agent} /></label>
-				<label><span>To agent</span><input class="form-input" placeholder="agent-b (optional)" bind:value={handoffForm.to_agent} /></label>
-				<label><span>Task code</span><input class="form-input" placeholder="TASK-123 (optional)" bind:value={handoffForm.task_code} /></label>
-				<label><span>Summary</span><textarea class="form-textarea summary-input" placeholder="What should the next agent know?" bind:value={handoffForm.summary}></textarea></label>
-				<label><span>Context JSON</span><textarea class="form-textarea json-input" placeholder={handoffContextPlaceholder} bind:value={handoffForm.context}></textarea></label>
-				<button class="btn btn-primary" on:click={createHandoff} disabled={creating || !canCreateHandoff()}>
-					<Icon name="git-branch" size={14} strokeWidth={2} />
-					{creating ? "Creating..." : "Create Handoff"}
-				</button>
-			</div>
-		</div>
+					<div class="section-label">Create Handoff</div>
+					<div class="form-stack">
+						<label
+							><span>From agent</span><input
+								class="form-input"
+								placeholder="agent-a"
+								bind:value={handoffForm.from_agent}
+							/></label
+						>
+						<label
+							><span>To agent</span><input
+								class="form-input"
+								placeholder="agent-b (optional)"
+								bind:value={handoffForm.to_agent}
+							/></label
+						>
+						<label
+							><span>Task code</span><input
+								class="form-input"
+								placeholder="TASK-123 (optional)"
+								bind:value={handoffForm.task_code}
+							/></label
+						>
+						<label
+							><span>Summary</span><textarea
+								class="form-textarea summary-input"
+								placeholder="What should the next agent know?"
+								bind:value={handoffForm.summary}
+							></textarea></label
+						>
+						<label
+							><span>Context JSON</span><textarea
+								class="form-textarea json-input"
+								placeholder={handoffContextPlaceholder}
+								bind:value={handoffForm.context}
+							></textarea></label
+						>
+						<button class="btn btn-primary" on:click={createHandoff} disabled={creating || !canCreateHandoff()}>
+							<Icon name="git-branch" size={14} strokeWidth={2} />
+							{creating ? "Creating..." : "Create Handoff"}
+						</button>
+					</div>
+				</div>
 			{/if}
 
 			{#if showClaim}
 				<div class="glass card panel-card action-panel">
-			<div class="section-label">Claim Task</div>
-			<div class="form-stack">
-				<label><span>Task code</span><input class="form-input" placeholder="TASK-123" bind:value={claimForm.task_code} /></label>
-				<label><span>Agent</span><input class="form-input" placeholder="agent-name" bind:value={claimForm.agent} /></label>
-				<label><span>Role</span><input class="form-input" placeholder="worker" bind:value={claimForm.role} /></label>
-				<label><span>Metadata JSON</span><textarea class="form-textarea json-input" placeholder="Metadata JSON object" bind:value={claimForm.metadata}></textarea></label>
-				<button class="btn btn-accent" on:click={claimTask} disabled={claiming || !claimForm.task_code.trim() || !claimForm.agent.trim()}>
-					<Icon name="check" size={14} strokeWidth={2} />
-					{claiming ? "Claiming..." : "Claim Task"}
-				</button>
-			</div>
-			{#if lastClaim}
-				<div class="claim-result">
-					<div class="row-title">Claimed {lastClaim.task_code || lastClaim.task_id}</div>
-					<div class="row-meta">
-						<span>{lastClaim.agent}</span>
-						<span>{lastClaim.role}</span>
-						<span>{formatDate(lastClaim.claimed_at)}</span>
+					<div class="section-label">Claim Task</div>
+					<div class="form-stack">
+						<label
+							><span>Task code</span><input
+								class="form-input"
+								placeholder="TASK-123"
+								bind:value={claimForm.task_code}
+							/></label
+						>
+						<label
+							><span>Agent</span><input
+								class="form-input"
+								placeholder="agent-name"
+								bind:value={claimForm.agent}
+							/></label
+						>
+						<label><span>Role</span><input class="form-input" placeholder="worker" bind:value={claimForm.role} /></label
+						>
+						<label
+							><span>Metadata JSON</span><textarea
+								class="form-textarea json-input"
+								placeholder="Metadata JSON object"
+								bind:value={claimForm.metadata}
+							></textarea></label
+						>
+						<button
+							class="btn btn-accent"
+							on:click={claimTask}
+							disabled={claiming || !claimForm.task_code.trim() || !claimForm.agent.trim()}
+						>
+							<Icon name="check" size={14} strokeWidth={2} />
+							{claiming ? "Claiming..." : "Claim Task"}
+						</button>
 					</div>
+					{#if lastClaim}
+						<div class="claim-result">
+							<div class="row-title">Claimed {lastClaim.task_code || lastClaim.task_id}</div>
+							<div class="row-meta">
+								<span>{lastClaim.agent}</span>
+								<span>{lastClaim.role}</span>
+								<span>{formatDate(lastClaim.claimed_at)}</span>
+							</div>
+						</div>
+					{/if}
 				</div>
-			{/if}
-		</div>
 			{/if}
 		</div>
 	{/if}
@@ -330,7 +388,11 @@
 			{:else}
 				<div class="handoff-list">
 					{#each handoffs as handoff (handoff.id)}
-						<button class:selected={selected?.id === handoff.id} class="handoff-row" on:click={() => (selected = handoff)}>
+						<button
+							class:selected={selected?.id === handoff.id}
+							class="handoff-row"
+							on:click={() => (selected = handoff)}
+						>
 							<div class="handoff-top">
 								<span class="status-pill status-{handoff.status}">{handoff.status}</span>
 								<span class="row-date">{formatDate(handoff.created_at)}</span>
@@ -356,12 +418,26 @@
 						<div><span>Status</span><strong>{selected.status}</strong></div>
 						<div><span>Created</span><strong>{formatDate(selected.created_at)}</strong></div>
 						<div><span>Updated</span><strong>{formatDate(selected.updated_at)}</strong></div>
-						<div><span>Expires</span><strong>{selected.expires_at ? formatDate(selected.expires_at) : "—"}</strong></div>
+						<div>
+							<span>Expires</span><strong>{selected.expires_at ? formatDate(selected.expires_at) : "—"}</strong>
+						</div>
 					</div>
 					<div class="status-actions">
-						<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "accepted"} on:click={() => updateHandoffStatus("accepted")}>Accept</button>
-						<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "expired"} on:click={() => updateHandoffStatus("expired")}>Expire</button>
-						<button class="btn btn-ghost btn-sm" disabled={updatingStatus || selected.status === "rejected"} on:click={() => updateHandoffStatus("rejected")}>Reject</button>
+						<button
+							class="btn btn-ghost btn-sm"
+							disabled={updatingStatus || selected.status === "accepted"}
+							on:click={() => updateHandoffStatus("accepted")}>Accept</button
+						>
+						<button
+							class="btn btn-ghost btn-sm"
+							disabled={updatingStatus || selected.status === "expired"}
+							on:click={() => updateHandoffStatus("expired")}>Expire</button
+						>
+						<button
+							class="btn btn-ghost btn-sm"
+							disabled={updatingStatus || selected.status === "rejected"}
+							on:click={() => updateHandoffStatus("rejected")}>Reject</button
+						>
 					</div>
 					{#if selected.task_id || selected.task_code}
 						<div class="linked-task">
@@ -409,7 +485,11 @@
 										<span>{formatDate(claim.claimed_at)}</span>
 									</div>
 								</div>
-								<button class="btn btn-ghost btn-sm" disabled={releasingClaimId === claim.id} on:click={() => releaseClaim(claim)}>
+								<button
+									class="btn btn-ghost btn-sm"
+									disabled={releasingClaimId === claim.id}
+									on:click={() => releaseClaim(claim)}
+								>
 									{releasingClaimId === claim.id ? "Releasing..." : "Release"}
 								</button>
 							</div>
@@ -422,63 +502,319 @@
 </div>
 
 <style>
-	.feature-shell { display: flex; flex-direction: column; gap: 14px; }
-	.feature-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; padding: 16px; }
-	.toolbar-title { display: flex; align-items: center; gap: 10px; }
-	.toolbar-subtitle { font-size: 0.72rem; color: var(--color-text-muted); font-weight: 600; margin-top: 2px; }
-	.toolbar-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
-	.toolbar-controls { display: grid; grid-template-columns: 160px minmax(180px, 1fr) auto; gap: 10px; align-items: center; grid-column: 1 / -1; }
-	.action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-	.feature-grid { display: grid; grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.05fr); gap: 14px; align-items: start; }
-	.detail-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-	.panel-card { padding: 16px; min-width: 0; }
-	.action-panel { min-height: 0; }
-	.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-	.form-stack { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-	label span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
-	.summary-input { min-height: 92px; resize: vertical; }
-	.json-input { min-height: 86px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; }
-	.handoff-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 650px; overflow: auto; }
-	.handoff-row { text-align: left; border: 1px solid var(--color-border); background: rgba(255,255,255,0.48); border-radius: 8px; padding: 12px; cursor: pointer; color: var(--color-text); }
-	.handoff-row:hover, .handoff-row.selected { border-color: rgba(14,165,233,0.45); background: rgba(14,165,233,0.08); }
-	.handoff-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
-	.status-pill { border-radius: 999px; padding: 2px 8px; font-size: 0.67rem; text-transform: uppercase; font-weight: 850; border: 1px solid var(--color-border); }
-	.status-pending { color: #0369a1; background: rgba(14,165,233,0.12); }
-	.status-accepted { color: #047857; background: rgba(16,185,129,0.12); }
-	.status-rejected { color: #b91c1c; background: rgba(239,68,68,0.12); }
-	.status-expired { color: #64748b; background: rgba(100,116,139,0.12); }
-	.row-title { font-size: 0.9rem; font-weight: 800; margin-bottom: 6px; line-height: 1.35; }
-	.row-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-text-muted); font-size: 0.72rem; font-weight: 600; }
-	.row-date { color: var(--color-text-muted); font-size: 0.7rem; font-weight: 700; }
-	.claim-result, .linked-task { margin-top: 14px; padding: 12px; border: 1px solid rgba(16,185,129,0.25); background: rgba(16,185,129,0.08); border-radius: 8px; }
-	.context-card { margin-top: 14px; }
-	.claim-list { display: flex; flex-direction: column; gap: 8px; }
-	.claim-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: rgba(255,255,255,0.04); }
-	.claims-empty { min-height: 160px; }
-	.json-pre { margin: 0; padding: 12px; border-radius: 10px; background: rgba(15,23,42,0.78); color: #e2e8f0; font-size: 0.72rem; overflow: auto; }
-	.muted-inline { color: var(--color-text-muted); font-size: 0.68rem; margin-top: 4px; word-break: break-all; }
-	.detail-title { font-size: 1rem; font-weight: 850; color: var(--color-text); margin-bottom: 14px; line-height: 1.35; }
-	.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-	.detail-grid div { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px; }
-	.detail-grid span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 750; text-transform: uppercase; margin-bottom: 4px; }
-	.detail-grid strong { font-size: 0.82rem; color: var(--color-text); word-break: break-word; }
-	.status-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-	.muted-state { color: var(--color-text-muted); font-size: 0.85rem; padding: 24px 4px; text-align: center; }
-	.empty-state { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--color-text-muted); text-align: center; }
-	.empty-title { color: var(--color-text); font-size: 0.92rem; font-weight: 850; }
-	.empty-copy { max-width: 260px; font-size: 0.78rem; line-height: 1.45; }
-	.detail-empty { min-height: 260px; }
-	.error-banner { border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; font-weight: 700; }
-	:global(html.dark) .handoff-row { background: rgba(15,23,42,0.45); }
-	:global(html.dark) .handoff-row:hover, :global(html.dark) .handoff-row.selected { background: rgba(14,165,233,0.12); }
+	.feature-shell {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.feature-toolbar {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 14px;
+		align-items: start;
+		padding: 16px;
+	}
+	.toolbar-title {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.toolbar-subtitle {
+		font-size: 0.72rem;
+		color: var(--color-text-muted);
+		font-weight: 600;
+		margin-top: 2px;
+	}
+	.toolbar-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		justify-content: flex-end;
+	}
+	.toolbar-controls {
+		display: grid;
+		grid-template-columns: 160px minmax(180px, 1fr) auto;
+		gap: 10px;
+		align-items: center;
+		grid-column: 1 / -1;
+	}
+	.action-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 14px;
+	}
+	.feature-grid {
+		display: grid;
+		grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.05fr);
+		gap: 14px;
+		align-items: start;
+	}
+	.detail-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		min-width: 0;
+	}
+	.panel-card {
+		padding: 16px;
+		min-width: 0;
+	}
+	.action-panel {
+		min-height: 0;
+	}
+	.panel-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 12px;
+	}
+	.form-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 12px;
+	}
+	label span {
+		display: block;
+		font-size: 0.68rem;
+		color: var(--color-text-muted);
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin-bottom: 4px;
+	}
+	.summary-input {
+		min-height: 92px;
+		resize: vertical;
+	}
+	.json-input {
+		min-height: 86px;
+		resize: vertical;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: 0.78rem;
+	}
+	.handoff-list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 12px;
+		max-height: 650px;
+		overflow: auto;
+	}
+	.handoff-row {
+		text-align: left;
+		border: 1px solid var(--color-border);
+		background: rgba(255, 255, 255, 0.48);
+		border-radius: 8px;
+		padding: 12px;
+		cursor: pointer;
+		color: var(--color-text);
+	}
+	.handoff-row:hover,
+	.handoff-row.selected {
+		border-color: rgba(14, 165, 233, 0.45);
+		background: rgba(14, 165, 233, 0.08);
+	}
+	.handoff-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 10px;
+		margin-bottom: 8px;
+	}
+	.status-pill {
+		border-radius: 999px;
+		padding: 2px 8px;
+		font-size: 0.67rem;
+		text-transform: uppercase;
+		font-weight: 850;
+		border: 1px solid var(--color-border);
+	}
+	.status-pending {
+		color: #0369a1;
+		background: rgba(14, 165, 233, 0.12);
+	}
+	.status-accepted {
+		color: #047857;
+		background: rgba(16, 185, 129, 0.12);
+	}
+	.status-rejected {
+		color: #b91c1c;
+		background: rgba(239, 68, 68, 0.12);
+	}
+	.status-expired {
+		color: #64748b;
+		background: rgba(100, 116, 139, 0.12);
+	}
+	.row-title {
+		font-size: 0.9rem;
+		font-weight: 800;
+		margin-bottom: 6px;
+		line-height: 1.35;
+	}
+	.row-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 600;
+	}
+	.row-date {
+		color: var(--color-text-muted);
+		font-size: 0.7rem;
+		font-weight: 700;
+	}
+	.claim-result,
+	.linked-task {
+		margin-top: 14px;
+		padding: 12px;
+		border: 1px solid rgba(16, 185, 129, 0.25);
+		background: rgba(16, 185, 129, 0.08);
+		border-radius: 8px;
+	}
+	.context-card {
+		margin-top: 14px;
+	}
+	.claim-list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.claim-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 12px;
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.04);
+	}
+	.claims-empty {
+		min-height: 160px;
+	}
+	.json-pre {
+		margin: 0;
+		padding: 12px;
+		border-radius: 10px;
+		background: rgba(15, 23, 42, 0.78);
+		color: #e2e8f0;
+		font-size: 0.72rem;
+		overflow: auto;
+	}
+	.muted-inline {
+		color: var(--color-text-muted);
+		font-size: 0.68rem;
+		margin-top: 4px;
+		word-break: break-all;
+	}
+	.detail-title {
+		font-size: 1rem;
+		font-weight: 850;
+		color: var(--color-text);
+		margin-bottom: 14px;
+		line-height: 1.35;
+	}
+	.detail-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 10px;
+	}
+	.detail-grid div {
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+		padding: 10px;
+	}
+	.detail-grid span {
+		display: block;
+		font-size: 0.68rem;
+		color: var(--color-text-muted);
+		font-weight: 750;
+		text-transform: uppercase;
+		margin-bottom: 4px;
+	}
+	.detail-grid strong {
+		font-size: 0.82rem;
+		color: var(--color-text);
+		word-break: break-word;
+	}
+	.status-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-top: 12px;
+	}
+	.muted-state {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		padding: 24px 4px;
+		text-align: center;
+	}
+	.empty-state {
+		min-height: 260px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		color: var(--color-text-muted);
+		text-align: center;
+	}
+	.empty-title {
+		color: var(--color-text);
+		font-size: 0.92rem;
+		font-weight: 850;
+	}
+	.empty-copy {
+		max-width: 260px;
+		font-size: 0.78rem;
+		line-height: 1.45;
+	}
+	.detail-empty {
+		min-height: 260px;
+	}
+	.error-banner {
+		border: 1px solid #fecaca;
+		background: #fef2f2;
+		color: #dc2626;
+		border-radius: 8px;
+		padding: 10px 12px;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	:global(html.dark) .handoff-row {
+		background: rgba(15, 23, 42, 0.45);
+	}
+	:global(html.dark) .handoff-row:hover,
+	:global(html.dark) .handoff-row.selected {
+		background: rgba(14, 165, 233, 0.12);
+	}
 	@media (max-width: 1280px) {
-		.feature-toolbar { grid-template-columns: 1fr; }
-		.toolbar-actions { justify-content: stretch; }
-		.toolbar-actions .btn { flex: 1; justify-content: center; }
+		.feature-toolbar {
+			grid-template-columns: 1fr;
+		}
+		.toolbar-actions {
+			justify-content: stretch;
+		}
+		.toolbar-actions .btn {
+			flex: 1;
+			justify-content: center;
+		}
 	}
 	@media (max-width: 760px) {
-		.toolbar-controls, .feature-grid, .detail-grid, .action-grid { grid-template-columns: 1fr; }
-		.toolbar-actions { flex-direction: column; }
-		.toolbar-actions .btn { width: 100%; }
+		.toolbar-controls,
+		.feature-grid,
+		.detail-grid,
+		.action-grid {
+			grid-template-columns: 1fr;
+		}
+		.toolbar-actions {
+			flex-direction: column;
+		}
+		.toolbar-actions .btn {
+			width: 100%;
+		}
 	}
 </style>

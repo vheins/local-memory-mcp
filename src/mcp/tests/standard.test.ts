@@ -21,8 +21,7 @@ describe("CSL (Coding Standards Library)", () => {
 			const result = (await handleStandardStore(
 				{
 					name: "Error Handling Best Practices",
-					content:
-						"Always use try-catch blocks for async operations. Handle errors gracefully and log them.",
+					content: "Always use try-catch blocks for async operations. Handle errors gracefully and log them.",
 					language: "typescript",
 					stack: ["node", "express"],
 					version: "1.0.0",

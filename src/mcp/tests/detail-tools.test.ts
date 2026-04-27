@@ -7,10 +7,7 @@ import type { VectorStore } from "../types";
 describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-detail)", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
-	let router: (
-		method: string,
-		params: Record<string, unknown>
-	) => Promise<any>;
+	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
 
 	const REPO = "detail-test-repo";
 

@@ -28,7 +28,8 @@ describe("Task Search and Filtering", () => {
 				phase: "Development",
 				title: "Implement authentication",
 				description: "Setup JWT and OAuth2",
-				status: "pending", structured: true,
+				status: "pending",
+				structured: true,
 				agent: "test-agent",
 				role: "test-role"
 			},
@@ -57,7 +58,8 @@ describe("Task Search and Filtering", () => {
 				phase: "Testing",
 				title: "Write unit tests",
 				description: "Cover all auth edge cases",
-				status: "pending", structured: true,
+				status: "pending",
+				structured: true,
 				agent: "test-agent",
 				role: "test-role"
 			},
@@ -72,7 +74,8 @@ describe("Task Search and Filtering", () => {
 				phase: "Maintenance",
 				title: "Fix database leak",
 				description: "Connections not closing properly",
-				status: "pending", structured: true,
+				status: "pending",
+				structured: true,
 				agent: "test-agent",
 				role: "test-role"
 			},
@@ -98,7 +101,8 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
-				query: "authentication", structured: true
+				query: "authentication",
+				structured: true
 			},
 			db
 		);
@@ -112,7 +116,8 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
-				query: "edge cases", structured: true
+				query: "edge cases",
+				structured: true
 			},
 			db
 		);
@@ -126,7 +131,8 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
-				query: "DB-FIX", structured: true
+				query: "DB-FIX",
+				structured: true
 			},
 			db
 		);
@@ -140,7 +146,8 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
-				status: "in_progress,blocked", structured: true
+				status: "in_progress,blocked",
+				structured: true
 			},
 			db
 		);
@@ -156,7 +163,8 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
-				status: "all", structured: true
+				status: "all",
+				structured: true
 			},
 			db
 		);
@@ -170,7 +178,8 @@ describe("Task Search and Filtering", () => {
 			{
 				repo: REPO,
 				query: "auth",
-				status: "pending", structured: true
+				status: "pending",
+				structured: true
 			},
 			db
 		);
@@ -184,7 +193,8 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
-				query: "non-existent-task", structured: true
+				query: "non-existent-task",
+				structured: true
 			},
 			db
 		);

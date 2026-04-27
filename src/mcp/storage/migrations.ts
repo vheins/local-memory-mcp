@@ -336,7 +336,6 @@ export class MigrationManager {
 		} catch {
 			// Ignore if column doesn't exist
 		}
-
 	}
 
 	private ensureMemoryTypeConstraint(): void {

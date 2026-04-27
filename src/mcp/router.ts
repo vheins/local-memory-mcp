@@ -128,7 +128,12 @@ export function createRouter(
 			}
 
 			case "prompts/get": {
-				return getPrompt(params?.name as string, (params?.arguments as Record<string, string>) || {}, db, getSessionContext?.());
+				return getPrompt(
+					params?.name as string,
+					(params?.arguments as Record<string, string>) || {},
+					db,
+					getSessionContext?.()
+				);
 			}
 
 			case "completion/complete":
@@ -157,7 +162,7 @@ export function createRouter(
 		"task-claim",
 		"claim-release",
 		"task-update",
-		"task-delete",
+		"task-delete"
 	]);
 
 	async function handleToolCall(
@@ -356,10 +361,7 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 		((res?.data as Record<string, unknown>)?.repo as string);
 	const uris = new Set<string>();
 
-	const touchesMemory =
-		toolName.startsWith("memory-") ||
-		toolName === "task-update" ||
-		toolName === "task-delete";
+	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-update" || toolName === "task-delete";
 	const touchesTasks = toolName.startsWith("task-");
 
 	if (touchesMemory && repo) {

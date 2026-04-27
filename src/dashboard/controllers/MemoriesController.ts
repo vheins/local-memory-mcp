@@ -102,7 +102,9 @@ export class MemoriesController {
 			};
 			await db.withWrite(() => {
 				db.memories.update(id, updates as Partial<MemoryEntry>);
-				db.actions.logAction("update", (existing as MemoryEntry).scope?.repo || attributes.repo || "", { memoryId: id });
+				db.actions.logAction("update", (existing as MemoryEntry).scope?.repo || attributes.repo || "", {
+					memoryId: id
+				});
 			});
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
@@ -167,10 +169,7 @@ export class MemoriesController {
 				if (action === "delete") {
 					n = db.memories.bulkDeleteMemories(ids);
 				} else if (action === "update" || action === "archive") {
-					n = db.memories.bulkUpdateMemories(
-						ids,
-						updates || { status: action === "archive" ? "archived" : "active" }
-					);
+					n = db.memories.bulkUpdateMemories(ids, updates || { status: action === "archive" ? "archived" : "active" });
 				} else {
 					throw new Error("Invalid action");
 				}

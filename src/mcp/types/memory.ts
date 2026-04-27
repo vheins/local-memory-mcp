@@ -1,9 +1,4 @@
-export type MemoryType =
-	| "code_fact"
-	| "decision"
-	| "mistake"
-	| "pattern"
-	| "task_archive";
+export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
 
 export type MemoryScope = {
 	repo: string;

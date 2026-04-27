@@ -12,8 +12,20 @@ export class StandardsController {
 			const { repo, query, language, stack, tags, is_global } = req.query;
 			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
 			const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) || "100", 10)));
-			const stackList = typeof stack === "string" ? stack.split(",").map((item) => item.trim()).filter(Boolean) : [];
-			const tagList = typeof tags === "string" ? tags.split(",").map((item) => item.trim()).filter(Boolean) : [];
+			const stackList =
+				typeof stack === "string"
+					? stack
+							.split(",")
+							.map((item) => item.trim())
+							.filter(Boolean)
+					: [];
+			const tagList =
+				typeof tags === "string"
+					? tags
+							.split(",")
+							.map((item) => item.trim())
+							.filter(Boolean)
+					: [];
 
 			const items = db.standards.search({
 				query: query as string | undefined,
@@ -121,7 +133,8 @@ export class StandardsController {
 			const updates: Partial<CodingStandardEntry> = {};
 			if (attributes.title !== undefined) updates.title = attributes.title as string;
 			if (attributes.content !== undefined) updates.content = attributes.content as string;
-			if (attributes.parent_id !== undefined) updates.parent_id = attributes.parent_id === null ? null : (attributes.parent_id as string);
+			if (attributes.parent_id !== undefined)
+				updates.parent_id = attributes.parent_id === null ? null : (attributes.parent_id as string);
 			if (attributes.context !== undefined) updates.context = attributes.context as string;
 			if (attributes.version !== undefined) updates.version = attributes.version as string;
 			if (attributes.language !== undefined) updates.language = (attributes.language as string) || null;

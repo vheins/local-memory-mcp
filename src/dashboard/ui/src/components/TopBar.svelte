@@ -57,9 +57,7 @@
 						{getRepoInitials($currentRepo)}
 					</div>
 					<div>
-						<div
-							class="font-semibold current-repo-name"
-						>
+						<div class="font-semibold current-repo-name">
 							{$currentRepo}
 						</div>
 						{#if currentRepoData}

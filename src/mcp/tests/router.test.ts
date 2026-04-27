@@ -583,7 +583,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		})) as any;
 
 		// New policy: no automatic resource links in search results to force use of detail tools
-		const resourceLinks = (result.content as Record<string, unknown>[]).filter((entry) => entry.type === "resource_link");
+		const resourceLinks = (result.content as Record<string, unknown>[]).filter(
+			(entry) => entry.type === "resource_link"
+		);
 		expect(resourceLinks.length).toBe(0);
 	});
 });

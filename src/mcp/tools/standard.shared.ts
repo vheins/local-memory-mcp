@@ -13,10 +13,12 @@ export function toContextSlug(value: string): string {
 		.replace(/^-+|-+$/g, "");
 }
 
-export function buildStandardVectorText(standard: Pick<
-	CodingStandardEntry,
-	"title" | "content" | "context" | "version" | "language" | "stack" | "tags" | "metadata"
->): string {
+export function buildStandardVectorText(
+	standard: Pick<
+		CodingStandardEntry,
+		"title" | "content" | "context" | "version" | "language" | "stack" | "tags" | "metadata"
+	>
+): string {
 	return [
 		standard.title,
 		standard.content,

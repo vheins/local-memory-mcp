@@ -7,7 +7,10 @@ import { exportToJSON, exportToCSV } from "../utils";
 
 export interface KanbanState {
 	loadingCols: Set<string>;
-	pagination: Record<string, { page: number; pageSize: number; hasMore: boolean; totalItems: number; totalPages: number }>;
+	pagination: Record<
+		string,
+		{ page: number; pageSize: number; hasMore: boolean; totalItems: number; totalPages: number }
+	>;
 	columnTasks: Record<string, Task[]>;
 	draggedTask: Task | null;
 	sourceCol: string | null;
@@ -218,7 +221,9 @@ export function createKanbanHandler() {
 			const updatedTask = await api.updateTask(draggedTask.id, { status: targetCol });
 			update((s) => {
 				const nextCols = { ...s.columnTasks };
-				nextCols[targetCol] = (nextCols[targetCol] || []).map((task) => (task.id === updatedTask.id ? updatedTask : task));
+				nextCols[targetCol] = (nextCols[targetCol] || []).map((task) =>
+					task.id === updatedTask.id ? updatedTask : task
+				);
 				return { ...s, columnTasks: nextCols };
 			});
 		} catch (err: unknown) {

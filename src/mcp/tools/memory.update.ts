@@ -9,7 +9,11 @@ function hasMetadataLikeTitle(title: string): boolean {
 	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
 }
 
-export async function handleMemoryUpdate(params: Record<string, unknown>, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleMemoryUpdate(
+	params: Record<string, unknown>,
+	db: SQLiteStore,
+	vectors: VectorStore
+): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryUpdateSchema.parse(params);
 

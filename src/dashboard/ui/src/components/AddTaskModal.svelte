@@ -28,7 +28,6 @@
 
 	<!-- Modal panel -->
 	<div class="modal-panel animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
-
 		<!-- Header -->
 		<div class="modal-header">
 			<div class="modal-header-icon">
@@ -108,11 +107,7 @@
 		<!-- Footer -->
 		<div class="modal-footer">
 			<button class="btn btn-ghost" on:click={onClose}>Cancel</button>
-			<button
-				class="btn btn-primary modal-save-btn"
-				on:click={onSave}
-				disabled={!newTask.task_code || !newTask.title}
-			>
+			<button class="btn btn-primary modal-save-btn" on:click={onSave} disabled={!newTask.task_code || !newTask.title}>
 				<Icon name="plus" size={13} strokeWidth={2.5} />
 				Create Task
 			</button>
@@ -210,7 +205,9 @@
 		background: transparent;
 		color: var(--color-text-muted);
 		cursor: pointer;
-		transition: background 0.15s ease, color 0.15s ease;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease;
 		flex-shrink: 0;
 	}
 

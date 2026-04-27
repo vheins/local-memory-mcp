@@ -9,13 +9,7 @@ export const MemoryScopeSchema = z.object({
 	language: z.string().optional()
 });
 
-export const MemoryTypeSchema = z.enum([
-	"code_fact",
-	"decision",
-	"mistake",
-	"pattern",
-	"task_archive"
-]);
+export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "task_archive"]);
 
 // Tool schemas
 export const MemoryStoreSchema = z.object({
@@ -304,10 +298,19 @@ export const HandoffCreateSchema = z
 	.refine((data) => !(data.task_id && data.task_code), {
 		message: "Provide either task_id or task_code, not both"
 	})
-	.refine((data) => data.to_agent || data.task_id || data.task_code || data.context?.next_steps || data.context?.blockers || data.context?.remaining_work, {
-		message:
-			"Handoffs must identify a target agent, linked task, next_steps, blockers, or remaining_work. Do not create pending handoffs for completed-work summaries."
-	});
+	.refine(
+		(data) =>
+			data.to_agent ||
+			data.task_id ||
+			data.task_code ||
+			data.context?.next_steps ||
+			data.context?.blockers ||
+			data.context?.remaining_work,
+		{
+			message:
+				"Handoffs must identify a target agent, linked task, next_steps, blockers, or remaining_work. Do not create pending handoffs for completed-work summaries."
+		}
+	);
 
 export const HandoffUpdateSchema = z.object({
 	id: z.string().uuid(),
@@ -367,26 +370,28 @@ export const ClaimReleaseSchema = z
 	});
 
 // CSL (Coding Standards Library) Schemas
-export const StandardStoreSchema = z.object({
-	name: z.string().min(3).max(255),
-	content: z.string().min(10),
-	parent_id: z.string().uuid().optional(),
-	context: z.string().optional(),
-	version: z.string().optional(),
-	language: z.string().optional(),
-	stack: z.array(z.string()).optional(),
-	repo: z.string().transform(normalizeRepo).optional(),
-	is_global: z.boolean().optional(),
-	tags: z.array(z.string().min(1)).min(1),
-	metadata: z.record(z.string(), z.any()).refine((value) => Object.keys(value).length > 0, {
-		message: "metadata must contain at least one key"
-	}),
-	agent: z.string().optional(),
-	model: z.string().optional(),
-	structured: z.boolean().default(false)
-}).refine((data) => data.is_global !== false || !!data.repo, {
-	message: "repo is required for repo-specific standards"
-});
+export const StandardStoreSchema = z
+	.object({
+		name: z.string().min(3).max(255),
+		content: z.string().min(10),
+		parent_id: z.string().uuid().optional(),
+		context: z.string().optional(),
+		version: z.string().optional(),
+		language: z.string().optional(),
+		stack: z.array(z.string()).optional(),
+		repo: z.string().transform(normalizeRepo).optional(),
+		is_global: z.boolean().optional(),
+		tags: z.array(z.string().min(1)).min(1),
+		metadata: z.record(z.string(), z.any()).refine((value) => Object.keys(value).length > 0, {
+			message: "metadata must contain at least one key"
+		}),
+		agent: z.string().optional(),
+		model: z.string().optional(),
+		structured: z.boolean().default(false)
+	})
+	.refine((data) => data.is_global !== false || !!data.repo, {
+		message: "repo is required for repo-specific standards"
+	});
 
 export const StandardUpdateSchema = z
 	.object({
@@ -519,7 +524,13 @@ export const TOOL_DEFINITIONS = [
 				title: { type: "string", minLength: 3, maxLength: 100 },
 				description: { type: "string", minLength: 1 },
 				status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
-				priority: { type: "number", minimum: 1, maximum: 5, default: 3, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
+				priority: {
+					type: "number",
+					minimum: 1,
+					maximum: 5,
+					default: 3,
+					description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
+				},
 				agent: { type: "string" },
 				role: { type: "string" },
 				doc_path: { type: "string" },
@@ -603,14 +614,9 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				type: {
 					type: "string",
-					enum: [
-						"code_fact",
-						"decision",
-						"mistake",
-						"pattern",
-						"task_archive"
-					],
-					description: "Type of durable knowledge being stored. Coordination types such as file_claim are intentionally unsupported."
+					enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"],
+					description:
+						"Type of durable knowledge being stored. Coordination types such as file_claim are intentionally unsupported."
 				},
 				title: {
 					type: "string",
@@ -667,7 +673,11 @@ export const TOOL_DEFINITIONS = [
 				},
 				ttlDays: { type: "number", minimum: 1 },
 				supersedes: { type: "string", format: "uuid" },
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the stored memory." }
+				structured: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns structured JSON of the stored memory."
+				}
 			},
 			required: ["type", "title", "content", "importance", "scope", "agent", "model"]
 		},
@@ -733,13 +743,7 @@ export const TOOL_DEFINITIONS = [
 				id: { type: "string", format: "uuid" },
 				type: {
 					type: "string",
-					enum: [
-						"code_fact",
-						"decision",
-						"mistake",
-						"pattern",
-						"task_archive"
-					]
+					enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"]
 				},
 				title: { type: "string", minLength: 3, maxLength: 100 },
 				content: { type: "string", minLength: 10 },
@@ -752,7 +756,11 @@ export const TOOL_DEFINITIONS = [
 				metadata: { type: "object" },
 				is_global: { type: "boolean" },
 				completed_at: { type: "string" },
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the updated memory." }
+				structured: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns structured JSON of the updated memory."
+				}
 			},
 			required: ["id"]
 		},
@@ -795,13 +803,7 @@ export const TOOL_DEFINITIONS = [
 					type: "array",
 					items: {
 						type: "string",
-						enum: [
-							"code_fact",
-							"decision",
-							"mistake",
-							"pattern",
-							"task_archive"
-						]
+						enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"]
 					}
 				},
 				minImportance: { type: "number", minimum: 1, maximum: 5 },
@@ -1066,7 +1068,13 @@ export const TOOL_DEFINITIONS = [
 					description:
 						"New tasks MUST start in 'backlog' if there are already 10 pending tasks. Otherwise can start in 'pending'."
 				},
-				priority: { type: "number", minimum: 1, maximum: 5, default: 3, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
+				priority: {
+					type: "number",
+					minimum: 1,
+					maximum: 5,
+					default: 3,
+					description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
+				},
 				agent: { type: "string" },
 				role: { type: "string" },
 				doc_path: { type: "string" },
@@ -1085,7 +1093,13 @@ export const TOOL_DEFINITIONS = [
 							title: { type: "string", minLength: 3, maxLength: 100 },
 							description: { type: "string" },
 							status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
-							priority: { type: "number", minimum: 1, maximum: 5, default: 3, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
+							priority: {
+								type: "number",
+								minimum: 1,
+								maximum: 5,
+								default: 3,
+								description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
+							},
 							agent: { type: "string" },
 							role: { type: "string" },
 							doc_path: { type: "string" },
@@ -1145,7 +1159,12 @@ export const TOOL_DEFINITIONS = [
 					enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
 					description: "New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
 				},
-				priority: { type: "number", minimum: 1, maximum: 5, description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical." },
+				priority: {
+					type: "number",
+					minimum: 1,
+					maximum: 5,
+					description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
+				},
 				agent: { type: "string" },
 				role: { type: "string" },
 				model: { type: "string" },
@@ -1413,12 +1432,14 @@ export const TOOL_DEFINITIONS = [
 						columns: {
 							type: "array",
 							items: { type: "string" },
-							description: "Column names: [id, from_agent, to_agent, task_id, task_code, status, created_at, updated_at, expires_at, summary, context]"
+							description:
+								"Column names: [id, from_agent, to_agent, task_id, task_code, status, created_at, updated_at, expires_at, summary, context]"
 						},
 						rows: {
 							type: "array",
 							items: { type: "array" },
-							description: "Each row: [id, from_agent, to_agent, task_id, task_code, status, created_at, updated_at, expires_at, summary, context]"
+							description:
+								"Each row: [id, from_agent, to_agent, task_id, task_code, status, created_at, updated_at, expires_at, summary, context]"
 						}
 					},
 					required: ["columns", "rows"]
@@ -1444,7 +1465,11 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name" },
-				task_id: { type: "string", format: "uuid", description: "Task id to claim. Optional if task_code is provided." },
+				task_id: {
+					type: "string",
+					format: "uuid",
+					description: "Task id to claim. Optional if task_code is provided."
+				},
 				task_code: { type: "string", description: "Task code to claim. Optional if task_id is provided." },
 				agent: { type: "string", description: "Claiming agent name" },
 				role: { type: "string", description: "Claiming agent role" },
@@ -1466,94 +1491,97 @@ export const TOOL_DEFINITIONS = [
 				released_at: { type: "string", nullable: true },
 				metadata: { type: "object" }
 			},
-				required: ["id", "repo", "task_id", "agent", "role", "claimed_at", "metadata"]
-			}
+			required: ["id", "repo", "task_id", "agent", "role", "claimed_at", "metadata"]
+		}
+	},
+	{
+		name: "claim-list",
+		title: "Claim List",
+		description:
+			"List task claims in a repository. Use this to inspect active ownership, optionally filtered by agent.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
 		},
-		{
-			name: "claim-list",
-			title: "Claim List",
-			description:
-				"List task claims in a repository. Use this to inspect active ownership, optionally filtered by agent.",
-			annotations: {
-				readOnlyHint: true,
-				idempotentHint: true,
-				destructiveHint: false,
-				openWorldHint: false
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name" },
+				agent: { type: "string", description: "Optional agent filter" },
+				active_only: { type: "boolean", description: "When true, return only unreleased claims" },
+				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
+				offset: { type: "number", minimum: 0, default: 0 },
+				structured: { type: "boolean", default: false }
 			},
-			inputSchema: {
-				type: "object",
-				properties: {
-					repo: { type: "string", description: "Repository name" },
-					agent: { type: "string", description: "Optional agent filter" },
-					active_only: { type: "boolean", description: "When true, return only unreleased claims" },
-					limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
-					offset: { type: "number", minimum: 0, default: 0 },
-					structured: { type: "boolean", default: false }
-				},
-				required: ["repo"]
-			},
-			outputSchema: {
-				type: "object",
-				properties: {
-					schema: { type: "string", enum: ["claim-list"] },
-					claims: {
-						type: "object",
-						properties: {
-							columns: {
-								type: "array",
-								items: { type: "string" },
-								description: "Column names: [id, task_id, task_code, agent, role, claimed_at, released_at, metadata]"
-							},
-							rows: {
-								type: "array",
-								items: { type: "array" },
-								description: "Each row: [id, task_id, task_code, agent, role, claimed_at, released_at, metadata]"
-							}
+			required: ["repo"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				schema: { type: "string", enum: ["claim-list"] },
+				claims: {
+					type: "object",
+					properties: {
+						columns: {
+							type: "array",
+							items: { type: "string" },
+							description: "Column names: [id, task_id, task_code, agent, role, claimed_at, released_at, metadata]"
 						},
-						required: ["columns", "rows"]
+						rows: {
+							type: "array",
+							items: { type: "array" },
+							description: "Each row: [id, task_id, task_code, agent, role, claimed_at, released_at, metadata]"
+						}
 					},
-					count: { type: "number" },
-					offset: { type: "number" }
+					required: ["columns", "rows"]
 				},
-				required: ["schema", "claims", "count", "offset"]
-			}
-		},
-		{
-			name: "claim-release",
-			title: "Claim Release",
-			description:
-				"Release an active claim for a task. Optionally restrict the release to a specific agent.",
-			annotations: {
-				readOnlyHint: false,
-				idempotentHint: false,
-				destructiveHint: false,
-				openWorldHint: false
+				count: { type: "number" },
+				offset: { type: "number" }
 			},
-			inputSchema: {
-				type: "object",
-				properties: {
-					repo: { type: "string", description: "Repository name" },
-					task_id: { type: "string", format: "uuid", description: "Task id to release. Optional if task_code is provided." },
-					task_code: { type: "string", description: "Task code to release. Optional if task_id is provided." },
-					agent: { type: "string", description: "Optional agent name to release only that claim" },
-					structured: { type: "boolean", default: false }
-				},
-				required: ["repo"]
-			},
-			outputSchema: {
-				type: "object",
-				properties: {
-					success: { type: "boolean" },
-					repo: { type: "string" },
-					task_id: { type: "string" },
-					task_code: { type: "string", nullable: true },
-					agent: { type: "string", nullable: true }
-				},
-				required: ["success", "repo", "task_id"]
-			}
+			required: ["schema", "claims", "count", "offset"]
+		}
+	},
+	{
+		name: "claim-release",
+		title: "Claim Release",
+		description: "Release an active claim for a task. Optionally restrict the release to a specific agent.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
 		},
-		{
-			name: "standard-store",
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name" },
+				task_id: {
+					type: "string",
+					format: "uuid",
+					description: "Task id to release. Optional if task_code is provided."
+				},
+				task_code: { type: "string", description: "Task code to release. Optional if task_id is provided." },
+				agent: { type: "string", description: "Optional agent name to release only that claim" },
+				structured: { type: "boolean", default: false }
+			},
+			required: ["repo"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				success: { type: "boolean" },
+				repo: { type: "string" },
+				task_id: { type: "string" },
+				task_code: { type: "string", nullable: true },
+				agent: { type: "string", nullable: true }
+			},
+			required: ["success", "repo", "task_id"]
+		}
+	},
+	{
+		name: "standard-store",
 		title: "Standard Store",
 		description:
 			"Store one atomic coding standard. Use for durable implementation rules with explicit context, stack/language filters, and repo/global scope.",
@@ -1567,8 +1595,16 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				name: { type: "string", minLength: 3, maxLength: 255, description: "Human-readable standard name" },
-				content: { type: "string", minLength: 10, description: "One atomic, actionable standard written as concise Markdown" },
-				parent_id: { type: "string", format: "uuid", description: "Optional parent standard ID when this rule is a child/specialization." },
+				content: {
+					type: "string",
+					minLength: 10,
+					description: "One atomic, actionable standard written as concise Markdown"
+				},
+				parent_id: {
+					type: "string",
+					format: "uuid",
+					description: "Optional parent standard ID when this rule is a child/specialization."
+				},
 				context: { type: "string", description: "Context or category (e.g., 'error-handling', 'security')" },
 				version: { type: "string", description: "Version of the standard (e.g., '1.0.0')" },
 				language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" },
@@ -1577,7 +1613,10 @@ export const TOOL_DEFINITIONS = [
 					items: { type: "string" },
 					description: "Technology stack (e.g., ['react', 'nextjs'])"
 				},
-				repo: { type: "string", description: "Repository name for repo-specific standards. Omit only for global standards." },
+				repo: {
+					type: "string",
+					description: "Repository name for repo-specific standards. Omit only for global standards."
+				},
 				is_global: { type: "boolean", description: "Whether standard applies globally or repo-specific" },
 				tags: {
 					type: "array",

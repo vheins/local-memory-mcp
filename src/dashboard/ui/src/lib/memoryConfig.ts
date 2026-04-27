@@ -1,10 +1,4 @@
-export const TYPES = [
-	"code_fact",
-	"decision",
-	"mistake",
-	"pattern",
-	"task_archive"
-] as const;
+export const TYPES = ["code_fact", "decision", "mistake", "pattern", "task_archive"] as const;
 
 export const TYPE_LABELS: Record<string, string> = {
 	code_fact: "Code Fact",

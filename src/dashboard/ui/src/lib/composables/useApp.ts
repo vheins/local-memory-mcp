@@ -18,13 +18,13 @@ import {
 import type { Memory, Task, RecentAction, RepoMeta, ReferenceItem, ReferenceDataState } from "../stores";
 
 const TABS = [
+	{ id: "arena", label: "Agent Arena", icon: "cpu" },
 	{ id: "dashboard", label: "Dashboard", icon: "layout-dashboard" },
 	{ id: "activity", label: "Activity", icon: "activity" },
 	{ id: "memories", label: "Memories", icon: "brain" },
 	{ id: "tasks", label: "Tasks", icon: "clipboard-list" },
 	{ id: "standards", label: "Standards", icon: "check" },
 	{ id: "handoffs", label: "Handoffs", icon: "git-branch" },
-	{ id: "arena", label: "Agent Arena", icon: "cpu" },
 	{ id: "reference", label: "Reference", icon: "book-open" }
 ];
 

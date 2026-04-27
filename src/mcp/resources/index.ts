@@ -306,8 +306,8 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 							audience: ["assistant"],
 							priority: 0.85,
 							lastModified: deriveLastModifiedFromCollection(
-							entries.map((e: MemoryEntry) => e.updated_at || e.created_at)
-						)
+								entries.map((e: MemoryEntry) => e.updated_at || e.created_at)
+							)
 						}
 					}
 				]

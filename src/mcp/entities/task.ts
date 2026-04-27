@@ -53,9 +53,24 @@ export class TaskEntity extends BaseEntity {
 		const values: unknown[] = [];
 		const anyUpdates = updates as Record<string, unknown>;
 		const VALID_COLUMNS = new Set([
-			"repo", "task_code", "phase", "title", "description", "status", "priority",
-			"agent", "role", "doc_path", "finished_at", "canceled_at", "tags", "metadata",
-			"parent_id", "depends_on", "est_tokens", "in_progress_at"
+			"repo",
+			"task_code",
+			"phase",
+			"title",
+			"description",
+			"status",
+			"priority",
+			"agent",
+			"role",
+			"doc_path",
+			"finished_at",
+			"canceled_at",
+			"tags",
+			"metadata",
+			"parent_id",
+			"depends_on",
+			"est_tokens",
+			"in_progress_at"
 		]);
 
 		Object.keys(updates).forEach((key) => {
@@ -209,8 +224,8 @@ export class TaskEntity extends BaseEntity {
 		const row = this.get<{ count: number }>(query, params);
 		return row?.count ?? 0;
 	}
-listRecentTasks(limit = 50, offset = 0): Task[] {
-	const query = `
+	listRecentTasks(limit = 50, offset = 0): Task[] {
+		const query = `
 		SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 			${this.coordinationSelect("t")},
 			(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
@@ -474,9 +489,7 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 		);
 
 		// avg_duration_seconds is in seconds; convert to minutes for the frontend formatDuration()
-		const avgDurationMinutes = stats?.avg_duration_seconds
-			? stats.avg_duration_seconds / 60
-			: 0;
+		const avgDurationMinutes = stats?.avg_duration_seconds ? stats.avg_duration_seconds / 60 : 0;
 
 		return {
 			completed: stats?.completed_count || 0,
@@ -508,7 +521,10 @@ listRecentTasks(limit = 50, offset = 0): Task[] {
 		}
 
 		const createdDateFilter = dateFilter.replace("COALESCE(finished_at, created_at)", "created_at");
-		const completedDateFilter = dateFilter.replace("COALESCE(finished_at, created_at)", "COALESCE(finished_at, updated_at)");
+		const completedDateFilter = dateFilter.replace(
+			"COALESCE(finished_at, created_at)",
+			"COALESCE(finished_at, updated_at)"
+		);
 		const createdRepoFilter = repo ? "repo = ? AND " : "";
 		const completedRepoFilter = repo ? "repo = ? AND " : "";
 

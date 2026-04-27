@@ -50,7 +50,9 @@
 	function parseMetadata(value: string): Record<string, unknown> | null {
 		try {
 			const parsed = JSON.parse(value) as Record<string, unknown>;
-			return parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0 ? parsed : null;
+			return parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0
+				? parsed
+				: null;
 		} catch {
 			return null;
 		}
@@ -280,7 +282,12 @@
 		<div class="toolbar-controls">
 			<input class="form-input" placeholder="Search standards..." bind:value={query} on:input={() => loadStandards()} />
 			<input class="form-input" placeholder="Language" bind:value={language} on:input={() => loadStandards()} />
-			<input class="form-input" placeholder="Stack tags, comma separated" bind:value={stack} on:input={() => loadStandards()} />
+			<input
+				class="form-input"
+				placeholder="Stack tags, comma separated"
+				bind:value={stack}
+				on:input={() => loadStandards()}
+			/>
 			<select class="form-select" bind:value={scope} on:change={() => loadStandards()}>
 				<option value="repo">Repo + global</option>
 				<option value="global">Global only</option>
@@ -337,12 +344,20 @@
 			</div>
 			<label class="content-label">
 				<span>Content</span>
-				<textarea class="form-textarea content-input" placeholder="Write the implementation rule in concise Markdown..." bind:value={form.content}></textarea>
+				<textarea
+					class="form-textarea content-input"
+					placeholder="Write the implementation rule in concise Markdown..."
+					bind:value={form.content}
+				></textarea>
 			</label>
 			<button
 				class="btn btn-primary"
 				on:click={saveStandard}
-				disabled={saving || !form.name.trim() || !form.content.trim() || splitList(form.tags).length === 0 || !parseMetadata(form.metadata)}
+				disabled={saving ||
+					!form.name.trim() ||
+					!form.content.trim() ||
+					splitList(form.tags).length === 0 ||
+					!parseMetadata(form.metadata)}
 			>
 				<Icon name="check" size={14} strokeWidth={2} />
 				{saving ? "Saving..." : "Save Standard"}
@@ -491,7 +506,11 @@
 						<textarea class="form-textarea content-input" bind:value={editForm.content}></textarea>
 					</label>
 					<div class="editor-actions">
-						<button class="btn btn-primary" on:click={updateStandard} disabled={saving || !parseMetadata(editForm.metadata)}>
+						<button
+							class="btn btn-primary"
+							on:click={updateStandard}
+							disabled={saving || !parseMetadata(editForm.metadata)}
+						>
 							<Icon name="check" size={14} strokeWidth={2} />
 							{saving ? "Saving..." : "Save Changes"}
 						</button>
@@ -514,49 +533,243 @@
 </div>
 
 <style>
-	.feature-shell { display: flex; flex-direction: column; gap: 14px; }
-	.feature-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 16px; align-items: start; }
-	.toolbar-title { display: flex; align-items: center; gap: 10px; }
-	.toolbar-action { justify-self: end; }
-	.toolbar-subtitle { font-size: 0.72rem; color: var(--color-text-muted); font-weight: 600; margin-top: 2px; }
-	.toolbar-controls { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(130px, 0.6fr) minmax(180px, 1fr) minmax(140px, 0.6fr); gap: 10px; grid-column: 1 / -1; }
-	.feature-grid { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.25fr); gap: 14px; align-items: start; }
-	.panel-card { padding: 16px; min-width: 0; }
-	.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-	.form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 10px; }
-	.standard-group { display: flex; flex-direction: column; gap: 8px; }
-	.standard-children { display: flex; flex-direction: column; gap: 8px; margin-left: 14px; padding-left: 12px; border-left: 1px solid var(--color-border, rgba(148, 163, 184, 0.28)); }
-	.standard-row-root { width: 100%; }
-	.standard-row-child { width: 100%; background: rgba(148, 163, 184, 0.06); }
-	.row-title :global(svg) { flex: 0 0 auto; }
-	.detail-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-	.editor-actions { display: flex; gap: 10px; margin-top: 12px; }
-	.danger-text { color: var(--color-danger, #d04b4b); }
-	label span { display: block; font-size: 0.68rem; color: var(--color-text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
-	.content-input { min-height: 150px; resize: vertical; margin-bottom: 10px; }
-	.content-label { display: block; }
-	.list-panel, .detail-panel { min-height: 460px; }
-	.standard-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 650px; overflow: auto; }
-	.standard-row { text-align: left; border: 1px solid var(--color-border); background: rgba(255,255,255,0.48); border-radius: 8px; padding: 12px; cursor: pointer; color: var(--color-text); }
-	.standard-row:hover, .standard-row.selected { border-color: rgba(14,165,233,0.45); background: rgba(14,165,233,0.08); }
-	.row-title { font-size: 0.9rem; font-weight: 800; margin-bottom: 6px; }
-	.row-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-text-muted); font-size: 0.72rem; font-weight: 600; }
-	.tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-	.mini-chip, .scope-pill { border: 1px solid var(--color-border); border-radius: 999px; padding: 2px 7px; font-size: 0.68rem; font-weight: 700; color: var(--color-text-muted); }
-	.detail-heading { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
-	.detail-title { font-size: 1rem; font-weight: 850; color: var(--color-text); margin-bottom: 6px; }
-	.muted-state { color: var(--color-text-muted); font-size: 0.85rem; padding: 24px 4px; text-align: center; }
-	.empty-state { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--color-text-muted); text-align: center; }
-	.empty-title { color: var(--color-text); font-size: 0.92rem; font-weight: 850; }
-	.empty-copy { max-width: 260px; font-size: 0.78rem; line-height: 1.45; }
-	.detail-empty { min-height: 360px; }
-	.error-banner { border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; font-weight: 700; }
-	:global(html.dark) .standard-row { background: rgba(15,23,42,0.45); }
-	:global(html.dark) .standard-row:hover, :global(html.dark) .standard-row.selected { background: rgba(14,165,233,0.12); }
+	.feature-shell {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.feature-toolbar {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 14px;
+		padding: 16px;
+		align-items: start;
+	}
+	.toolbar-title {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.toolbar-action {
+		justify-self: end;
+	}
+	.toolbar-subtitle {
+		font-size: 0.72rem;
+		color: var(--color-text-muted);
+		font-weight: 600;
+		margin-top: 2px;
+	}
+	.toolbar-controls {
+		display: grid;
+		grid-template-columns: minmax(220px, 1.2fr) minmax(130px, 0.6fr) minmax(180px, 1fr) minmax(140px, 0.6fr);
+		gap: 10px;
+		grid-column: 1 / -1;
+	}
+	.feature-grid {
+		display: grid;
+		grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.25fr);
+		gap: 14px;
+		align-items: start;
+	}
+	.panel-card {
+		padding: 16px;
+		min-width: 0;
+	}
+	.panel-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 12px;
+	}
+	.form-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+		margin: 12px 0 10px;
+	}
+	.standard-group {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.standard-children {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-left: 14px;
+		padding-left: 12px;
+		border-left: 1px solid var(--color-border, rgba(148, 163, 184, 0.28));
+	}
+	.standard-row-root {
+		width: 100%;
+	}
+	.standard-row-child {
+		width: 100%;
+		background: rgba(148, 163, 184, 0.06);
+	}
+	.row-title :global(svg) {
+		flex: 0 0 auto;
+	}
+	.detail-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.editor-actions {
+		display: flex;
+		gap: 10px;
+		margin-top: 12px;
+	}
+	.danger-text {
+		color: var(--color-danger, #d04b4b);
+	}
+	label span {
+		display: block;
+		font-size: 0.68rem;
+		color: var(--color-text-muted);
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin-bottom: 4px;
+	}
+	.content-input {
+		min-height: 150px;
+		resize: vertical;
+		margin-bottom: 10px;
+	}
+	.content-label {
+		display: block;
+	}
+	.list-panel,
+	.detail-panel {
+		min-height: 460px;
+	}
+	.standard-list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 12px;
+		max-height: 650px;
+		overflow: auto;
+	}
+	.standard-row {
+		text-align: left;
+		border: 1px solid var(--color-border);
+		background: rgba(255, 255, 255, 0.48);
+		border-radius: 8px;
+		padding: 12px;
+		cursor: pointer;
+		color: var(--color-text);
+	}
+	.standard-row:hover,
+	.standard-row.selected {
+		border-color: rgba(14, 165, 233, 0.45);
+		background: rgba(14, 165, 233, 0.08);
+	}
+	.row-title {
+		font-size: 0.9rem;
+		font-weight: 800;
+		margin-bottom: 6px;
+	}
+	.row-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 600;
+	}
+	.tag-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 5px;
+		margin-top: 8px;
+	}
+	.mini-chip,
+	.scope-pill {
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		padding: 2px 7px;
+		font-size: 0.68rem;
+		font-weight: 700;
+		color: var(--color-text-muted);
+	}
+	.detail-heading {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		align-items: flex-start;
+		margin-bottom: 12px;
+	}
+	.detail-title {
+		font-size: 1rem;
+		font-weight: 850;
+		color: var(--color-text);
+		margin-bottom: 6px;
+	}
+	.muted-state {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		padding: 24px 4px;
+		text-align: center;
+	}
+	.empty-state {
+		min-height: 260px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		color: var(--color-text-muted);
+		text-align: center;
+	}
+	.empty-title {
+		color: var(--color-text);
+		font-size: 0.92rem;
+		font-weight: 850;
+	}
+	.empty-copy {
+		max-width: 260px;
+		font-size: 0.78rem;
+		line-height: 1.45;
+	}
+	.detail-empty {
+		min-height: 360px;
+	}
+	.error-banner {
+		border: 1px solid #fecaca;
+		background: #fef2f2;
+		color: #dc2626;
+		border-radius: 8px;
+		padding: 10px 12px;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	:global(html.dark) .standard-row {
+		background: rgba(15, 23, 42, 0.45);
+	}
+	:global(html.dark) .standard-row:hover,
+	:global(html.dark) .standard-row.selected {
+		background: rgba(14, 165, 233, 0.12);
+	}
 	@media (max-width: 1100px) {
-		.toolbar-controls, .feature-grid, .form-grid { grid-template-columns: 1fr; }
-		.feature-toolbar { grid-template-columns: 1fr; }
-		.toolbar-action { justify-self: stretch; justify-content: center; }
-		.list-panel, .detail-panel { min-height: auto; }
+		.toolbar-controls,
+		.feature-grid,
+		.form-grid {
+			grid-template-columns: 1fr;
+		}
+		.feature-toolbar {
+			grid-template-columns: 1fr;
+		}
+		.toolbar-action {
+			justify-self: stretch;
+			justify-content: center;
+		}
+		.list-panel,
+		.detail-panel {
+			min-height: auto;
+		}
 	}
 </style>

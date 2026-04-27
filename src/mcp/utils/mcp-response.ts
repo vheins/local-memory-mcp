@@ -51,11 +51,7 @@ export function createMcpResponse(
 		includeSerializedStructuredContent?: boolean;
 	}
 ): McpResponse {
-	const {
-		structuredContentPathHint,
-		contentSummary,
-		includeSerializedStructuredContent = false
-	} = options || {};
+	const { structuredContentPathHint, contentSummary, includeSerializedStructuredContent = false } = options || {};
 	// includeSerializedStructuredContent is reserved for future use in protocol negotiation
 	void includeSerializedStructuredContent;
 

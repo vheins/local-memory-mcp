@@ -1,10 +1,10 @@
-export type AgentState = 'idle' | 'claiming' | 'processing' | 'handoff_out' | 'handoff_in' | 'burnout' | 'blocked';
-export type AgentFacing = 'down' | 'up' | 'left' | 'right';
+export type AgentState = "idle" | "claiming" | "processing" | "handoff_out" | "handoff_in" | "burnout" | "blocked";
+export type AgentFacing = "down" | "up" | "left" | "right";
 
 // ── Handoff Animation Types ────────────────────────────────────────────────
-export type HandoffAnimPhase = 'pickup' | 'moving' | 'arrive' | 'resting';
-export type HandoffVehicle = 'wheelchair' | 'stretcher';
-export type HelperVariant = 'male_nurse' | 'female_nurse' | 'staff1' | 'staff2';
+export type HandoffAnimPhase = "pickup" | "moving" | "arrive" | "resting";
+export type HandoffVehicle = "wheelchair" | "stretcher";
+export type HelperVariant = "male_nurse" | "female_nurse" | "staff1" | "staff2";
 
 export interface HandoffAnimData {
 	phase: HandoffAnimPhase;
@@ -41,7 +41,7 @@ export interface VisualAgent {
 	targetY: number;
 	vx: number;
 	vy: number;
-	walkPhase: number;   // 0–2π continuous, drives leg/bob animation
+	walkPhase: number; // 0–2π continuous, drives leg/bob animation
 	facing: AgentFacing;
 	state: AgentState;
 	claimedTaskIds: string[];

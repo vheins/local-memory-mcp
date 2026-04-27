@@ -35,9 +35,9 @@ export class WriteLock {
 			retries: {
 				retries: LOCK_RETRY_COUNT,
 				minTimeout: LOCK_RETRY_DELAY_MS,
-				maxTimeout: LOCK_RETRY_DELAY_MS,
+				maxTimeout: LOCK_RETRY_DELAY_MS
 			},
-			realpath: false,
+			realpath: false
 		});
 		this.locked = true;
 	}

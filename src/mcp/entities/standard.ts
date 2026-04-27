@@ -209,10 +209,7 @@ export class StandardEntity extends BaseEntity {
 	getByIds(ids: string[]): CodingStandardEntry[] {
 		if (ids.length === 0) return [];
 		const placeholders = ids.map(() => "?").join(",");
-		const rows = this.all<CodingStandardRow>(
-			`SELECT * FROM coding_standards WHERE id IN (${placeholders})`,
-			ids
-		);
+		const rows = this.all<CodingStandardRow>(`SELECT * FROM coding_standards WHERE id IN (${placeholders})`, ids);
 		return rows.map((row) => this.rowToEntry(row));
 	}
 

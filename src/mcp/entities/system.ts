@@ -214,8 +214,12 @@ export class SystemEntity extends BaseEntity {
 			"SELECT COUNT(*) as count FROM memories WHERE expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?",
 			[new Date().toISOString(), new Date(Date.now() + 7 * 86400 * 1000).toISOString()]
 		);
-		const typeStats = this.all<{ type: string; count: number }>("SELECT type, COUNT(*) as count FROM memories GROUP BY type");
-		const taskRows = this.all<{ status: string; count: number }>("SELECT status, COUNT(*) as count FROM tasks GROUP BY status");
+		const typeStats = this.all<{ type: string; count: number }>(
+			"SELECT type, COUNT(*) as count FROM memories GROUP BY type"
+		);
+		const taskRows = this.all<{ status: string; count: number }>(
+			"SELECT status, COUNT(*) as count FROM tasks GROUP BY status"
+		);
 		const repos = this.listRepoNavigation().sort((a, b) => {
 			const pressureA =
 				a.blockedCount * 5 + a.inProgressCount * 3 + a.pendingCount * 2 + a.pendingHandoffs * 2 + a.activeClaims;
@@ -257,7 +261,9 @@ export class SystemEntity extends BaseEntity {
 			byType,
 			taskStats: this.buildTaskStats(taskRows),
 			repoCount: repos.length,
-			activeRepoCount: repos.filter((repo) => repo.inProgressCount > 0 || repo.pendingCount > 0 || repo.blockedCount > 0).length,
+			activeRepoCount: repos.filter(
+				(repo) => repo.inProgressCount > 0 || repo.pendingCount > 0 || repo.blockedCount > 0
+			).length,
 			coordination: {
 				activeClaims: activeClaimsRow?.count ?? 0,
 				agentsClaiming: agentsClaimingRow?.count ?? 0,

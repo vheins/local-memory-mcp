@@ -1,9 +1,9 @@
-import { writable, get } from 'svelte/store';
-import { api } from '../api';
-import { availableRepos } from '../stores';
-import type { Task, TaskClaim, Handoff, HandoffListResult, McpToolResponse } from '../interfaces';
-import { buildArenaScene } from '../arena/arenaTransform';
-import type { ArenaScene, ArenaLayoutConfig } from '../arena/arenaTypes';
+import { writable, get } from "svelte/store";
+import { api } from "../api";
+import { availableRepos } from "../stores";
+import type { Task, TaskClaim, Handoff, HandoffListResult, McpToolResponse } from "../interfaces";
+import { buildArenaScene } from "../arena/arenaTransform";
+import type { ArenaScene, ArenaLayoutConfig } from "../arena/arenaTypes";
 
 export interface ArenaData {
 	scene: ArenaScene | null;
@@ -21,17 +21,17 @@ function structured<T>(response: unknown): T | null {
 function rowToHandoff(columns: string[], row: unknown[], repo: string): Handoff {
 	const d = Object.fromEntries(columns.map((c, i) => [c, row[i]])) as Record<string, unknown>;
 	return {
-		id: String(d.id ?? ''),
+		id: String(d.id ?? ""),
 		repo,
-		from_agent: String(d.from_agent ?? ''),
+		from_agent: String(d.from_agent ?? ""),
 		to_agent: d.to_agent ? String(d.to_agent) : null,
 		task_id: d.task_id ? String(d.task_id) : null,
 		task_code: d.task_code ? String(d.task_code) : null,
-		summary: String(d.summary ?? ''),
+		summary: String(d.summary ?? ""),
 		context: (d.context as Record<string, unknown>) ?? {},
-		status: String(d.status ?? 'pending') as Handoff['status'],
-		created_at: String(d.created_at ?? ''),
-		updated_at: String(d.updated_at ?? d.created_at ?? ''),
+		status: String(d.status ?? "pending") as Handoff["status"],
+		created_at: String(d.created_at ?? ""),
+		updated_at: String(d.updated_at ?? d.created_at ?? ""),
 		expires_at: d.expires_at ? String(d.expires_at) : null
 	};
 }
@@ -66,11 +66,11 @@ export function createArenaHandler() {
 			const perRepo = await Promise.allSettled(
 				repos.map((repo) =>
 					Promise.allSettled([
-						api.tasks({ repo, status: 'in_progress', pageSize: 10 }),
-						api.tasks({ repo, status: 'pending', pageSize: 8 }),
-						api.tasks({ repo, status: 'blocked', pageSize: 4 }),
+						api.tasks({ repo, status: "in_progress", pageSize: 10 }),
+						api.tasks({ repo, status: "pending", pageSize: 8 }),
+						api.tasks({ repo, status: "blocked", pageSize: 4 }),
 						api.coordinationClaims({ repo, active_only: true, pageSize: 50 }),
-						api.callTool('handoff-list', { repo, status: 'pending', limit: 10, structured: true })
+						api.callTool("handoff-list", { repo, status: "pending", limit: 10, structured: true })
 					])
 				)
 			);
@@ -81,15 +81,15 @@ export function createArenaHandler() {
 
 			repos.forEach((repo, i) => {
 				const repoResult = perRepo[i];
-				if (repoResult.status === 'rejected') return;
+				if (repoResult.status === "rejected") return;
 				const [ipRes, pendRes, blockedRes, claimsRes, handoffsRes] = repoResult.value;
 
-				if (ipRes.status === 'fulfilled') allTasks.push(...(ipRes.value.tasks ?? []));
-				if (pendRes.status === 'fulfilled') allTasks.push(...(pendRes.value.tasks ?? []));
-				if (blockedRes.status === 'fulfilled') allTasks.push(...(blockedRes.value.tasks ?? []));
-				if (claimsRes.status === 'fulfilled') allClaims.push(...(claimsRes.value.claims ?? []));
+				if (ipRes.status === "fulfilled") allTasks.push(...(ipRes.value.tasks ?? []));
+				if (pendRes.status === "fulfilled") allTasks.push(...(pendRes.value.tasks ?? []));
+				if (blockedRes.status === "fulfilled") allTasks.push(...(blockedRes.value.tasks ?? []));
+				if (claimsRes.status === "fulfilled") allClaims.push(...(claimsRes.value.claims ?? []));
 
-				if (handoffsRes.status === 'fulfilled') {
+				if (handoffsRes.status === "fulfilled") {
 					const result = structured<HandoffListResult>(handoffsRes.value);
 					const cols = result?.handoffs?.columns ?? [];
 					const rows = result?.handoffs?.rows ?? [];
@@ -112,7 +112,7 @@ export function createArenaHandler() {
 			store.update((s) => ({
 				...s,
 				loading: false,
-				error: e instanceof Error ? e.message : 'Failed to load arena data'
+				error: e instanceof Error ? e.message : "Failed to load arena data"
 			}));
 		} finally {
 			fetchInProgress = false;

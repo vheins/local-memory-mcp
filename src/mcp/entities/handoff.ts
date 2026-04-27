@@ -97,7 +97,15 @@ export class HandoffEntity extends BaseEntity {
 			`SELECT h.*, t.task_code
 			 FROM handoffs h
 			 LEFT JOIN tasks t ON h.task_id = t.id
-			 WHERE ${conditions.map((condition) => condition.replace(/\brepo\b/g, "h.repo").replace(/\bstatus\b/g, "h.status").replace(/\bto_agent\b/g, "h.to_agent").replace(/\bfrom_agent\b/g, "h.from_agent")).join(" AND ")}
+			 WHERE ${conditions
+					.map((condition) =>
+						condition
+							.replace(/\brepo\b/g, "h.repo")
+							.replace(/\bstatus\b/g, "h.status")
+							.replace(/\bto_agent\b/g, "h.to_agent")
+							.replace(/\bfrom_agent\b/g, "h.from_agent")
+					)
+					.join(" AND ")}
 			 ORDER BY h.created_at DESC LIMIT ? OFFSET ?`,
 			values
 		);
@@ -125,10 +133,11 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	updatePendingHandoffsForTask(task_id: string, status: Handoff["status"]): number {
-		const result = this.run(
-			"UPDATE handoffs SET status = ?, updated_at = ? WHERE task_id = ? AND status = 'pending'",
-			[status, new Date().toISOString(), task_id]
-		);
+		const result = this.run("UPDATE handoffs SET status = ?, updated_at = ? WHERE task_id = ? AND status = 'pending'", [
+			status,
+			new Date().toISOString(),
+			task_id
+		]);
 		return result.changes;
 	}
 
@@ -143,10 +152,7 @@ export class HandoffEntity extends BaseEntity {
 		const id = randomUUID();
 
 		// Release any existing active claim for this task
-		this.run(
-			"UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL",
-			[now, params.task_id]
-		);
+		this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [now, params.task_id]);
 
 		this.run(
 			`INSERT INTO claims (id, repo, task_id, agent, role, claimed_at, released_at, metadata)
@@ -206,7 +212,13 @@ export class HandoffEntity extends BaseEntity {
 		return result.changes;
 	}
 
-	listClaims(params: { repo: string; agent?: string; active_only?: boolean; limit?: number; offset?: number }): Claim[] {
+	listClaims(params: {
+		repo: string;
+		agent?: string;
+		active_only?: boolean;
+		limit?: number;
+		offset?: number;
+	}): Claim[] {
 		const conditions: string[] = ["repo = ?"];
 		const values: unknown[] = [params.repo];
 
@@ -226,7 +238,14 @@ export class HandoffEntity extends BaseEntity {
 			`SELECT c.*, t.task_code
 			 FROM claims c
 			 LEFT JOIN tasks t ON c.task_id = t.id
-			 WHERE ${conditions.map((condition) => condition.replace(/\brepo\b/g, "c.repo").replace(/\bagent\b/g, "c.agent").replace(/released_at/g, "c.released_at")).join(" AND ")}
+			 WHERE ${conditions
+					.map((condition) =>
+						condition
+							.replace(/\brepo\b/g, "c.repo")
+							.replace(/\bagent\b/g, "c.agent")
+							.replace(/released_at/g, "c.released_at")
+					)
+					.join(" AND ")}
 			 ORDER BY c.claimed_at DESC LIMIT ? OFFSET ?`,
 			values
 		);

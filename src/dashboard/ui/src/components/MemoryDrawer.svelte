@@ -44,7 +44,6 @@
 
 	<!-- Modal panel -->
 	<div class="modal-panel animate-fade-in" role="dialog" aria-modal="true" tabindex="-1">
-
 		<!-- ── HEADER ─────────────────────────────────────────────────────── -->
 		<div class="modal-header">
 			<div class="modal-header-icon">
@@ -53,11 +52,7 @@
 			<div style="flex:1;min-width:0;">
 				{#if isEditing}
 					<div class="modal-mode-label">{isCreate ? "New Memory" : "Edit Memory"}</div>
-					<input
-						class="form-input modal-title-input"
-						placeholder="Memory title…"
-						bind:value={$form.title}
-					/>
+					<input class="form-input modal-title-input" placeholder="Memory title…" bind:value={$form.title} />
 				{:else if memory}
 					<div class="modal-mode-label">View Memory</div>
 					<div class="modal-title-text">{memory.title}</div>
@@ -105,12 +100,7 @@
 
 				<!-- Meta grid -->
 				<div class="meta-grid">
-					{#each [
-						{ label: "Importance", val: memory.importance },
-						{ label: "Hit Count", val: memory.hit_count ?? 0 },
-						{ label: "Created", val: formatDate(memory.created_at) },
-						{ label: "Updated", val: formatDate(memory.updated_at) }
-					] as m (m.label)}
+					{#each [{ label: "Importance", val: memory.importance }, { label: "Hit Count", val: memory.hit_count ?? 0 }, { label: "Created", val: formatDate(memory.created_at) }, { label: "Updated", val: formatDate(memory.updated_at) }] as m (m.label)}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>
@@ -146,7 +136,7 @@
 					</div>
 				{/if}
 
-			<!-- ══ CREATE / EDIT MODE ══ -->
+				<!-- ══ CREATE / EDIT MODE ══ -->
 			{:else}
 				<!-- Type + Importance -->
 				<div class="field-grid-2">
@@ -164,12 +154,15 @@
 							<span
 								class="importance-badge"
 								style="background:{importanceBg[$form.importance]};color:{importanceColor[$form.importance]};"
-							>{$form.importance}</span>
+								>{$form.importance}</span
+							>
 						</label>
 						<input
 							id="mem_importance"
 							type="range"
-							min="1" max="5" step="1"
+							min="1"
+							max="5"
+							step="1"
 							bind:value={$form.importance}
 							class="importance-slider"
 							style="accent-color:{importanceColor[$form.importance]};"
@@ -371,7 +364,9 @@
 		background: transparent;
 		color: var(--color-text-muted);
 		cursor: pointer;
-		transition: background 0.15s ease, color 0.15s ease;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease;
 		flex-shrink: 0;
 	}
 

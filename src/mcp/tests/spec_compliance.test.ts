@@ -63,7 +63,9 @@ describe("MCP Spec Compliance", () => {
 	});
 
 	it("should NOT include redundant JSON string in content - agent must read structuredContent", () => {
-		const response = createMcpResponse({ id: "mem_1", title: "Test" }, "Summary", { includeSerializedStructuredContent: true });
+		const response = createMcpResponse({ id: "mem_1", title: "Test" }, "Summary", {
+			includeSerializedStructuredContent: true
+		});
 		const textItems = response.content?.filter((item) => item.type === "text") ?? [];
 
 		expect(textItems).toHaveLength(1);

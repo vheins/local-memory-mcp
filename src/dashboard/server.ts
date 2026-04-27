@@ -123,7 +123,9 @@ function startServer() {
 
 	server.on("error", (err: NodeJS.ErrnoException) => {
 		if (err.code === "EADDRINUSE") {
-			console.log(`${new Date().toISOString()} DASHBOARD_ALREADY_RUNNING Dashboard already running on port ${PORT}. Exiting.`);
+			console.log(
+				`${new Date().toISOString()} DASHBOARD_ALREADY_RUNNING Dashboard already running on port ${PORT}. Exiting.`
+			);
 			process.exit(0);
 		}
 		throw err;

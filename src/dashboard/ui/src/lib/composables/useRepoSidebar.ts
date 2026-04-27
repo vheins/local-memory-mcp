@@ -1,8 +1,4 @@
-import {
-	currentRepo,
-	pinnedRepos,
-	isRepoSidebarCollapsed
-} from "../stores";
+import { currentRepo, pinnedRepos, isRepoSidebarCollapsed } from "../stores";
 import { getRepoInitials } from "../utils";
 
 export function createRepoSidebarHandler(onRepoSelect?: (repo: string) => void) {

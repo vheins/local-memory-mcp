@@ -1,20 +1,12 @@
 import { writable, derived } from "svelte/store";
-import type {
-	RepoMeta,
-	Memory,
-	Task,
-	DashboardStats,
-	RecentAction,
-	TaskTimeStats,
-	HealthData
-} from "./interfaces";
+import type { RepoMeta, Memory, Task, DashboardStats, RecentAction, TaskTimeStats, HealthData } from "./interfaces";
 import type { Theme } from "./types";
 
 // ─── Stores ─────────────────────────────────────────────────────────────────
 
 // App state
 export const theme = writable<Theme>("light");
-export const activeTab = writable<string>("dashboard");
+export const activeTab = writable<string>("arena");
 export const isLoading = writable<boolean>(false);
 
 // Repo state

@@ -77,9 +77,7 @@
 							font: { size: 10, family: "monospace" },
 							callback: function (val, index) {
 								const label = this.getLabelForValue(index as number);
-								return label.includes(":00")
-									? label.split(":")[0]
-									: label.replace("2026-", "").replace("2025-", "");
+								return label.includes(":00") ? label.split(":")[0] : label.replace("2026-", "").replace("2025-", "");
 							}
 						}
 					},
@@ -132,7 +130,9 @@
 	<!-- Header + period tabs -->
 	<div class="flex items-center justify-between mb-4">
 		<div>
-			<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-primary);">
+			<div
+				style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-primary);"
+			>
 				Performance
 			</div>
 			<div style="font-size:0.75rem;color:var(--color-text-muted);">Execution throughput</div>
@@ -228,9 +228,7 @@
 				<canvas bind:this={canvas}></canvas>
 			</div>
 		{:else}
-			<div class="compact-empty">
-				No trend data for this period
-			</div>
+			<div class="compact-empty">No trend data for this period</div>
 		{/if}
 	</div>
 </div>

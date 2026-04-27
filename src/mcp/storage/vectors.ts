@@ -68,7 +68,12 @@ export class RealVectorStore implements VectorStore {
 		// Handled by SQL CASCADE
 	}
 
-	async search(query: string, limit: number, repo?: string, kind: VectorEntityKind = "memory"): Promise<VectorResult[]> {
+	async search(
+		query: string,
+		limit: number,
+		repo?: string,
+		kind: VectorEntityKind = "memory"
+	): Promise<VectorResult[]> {
 		try {
 			const extractor = await this.getExtractor();
 			const output = await extractor(query, { pooling: "mean", normalize: true });

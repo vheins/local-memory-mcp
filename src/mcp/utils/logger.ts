@@ -169,7 +169,11 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 		.sort();
 
 	while (existing.length >= maxFiles) {
-		try { fs.unlinkSync(`${logDir}/${existing.shift()!}`); } catch { /* best effort */ }
+		try {
+			fs.unlinkSync(`${logDir}/${existing.shift()!}`);
+		} catch {
+			/* best effort */
+		}
 	}
 
 	const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -177,6 +181,10 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 
 	return (payload) => {
 		const line = `${new Date().toISOString()} [${payload.level.toUpperCase()}] [pid:${process.pid}] ${JSON.stringify(payload.data)}\n`;
-		try { fs.appendFileSync(logFile, line); } catch { /* best effort */ }
+		try {
+			fs.appendFileSync(logFile, line);
+		} catch {
+			/* best effort */
+		}
 	};
 }

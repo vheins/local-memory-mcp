@@ -91,7 +91,7 @@
 
 		<!-- Content Shell -->
 		<div id="dashboardShell" class="dashboard-shell">
-			{#if !$currentRepo && $activeTab !== "dashboard"}
+			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena"}
 				<div style="text-align:center;padding:80px 20px;" class="animate-fade-in">
 					<div
 						style="display:inline-flex;width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(99,102,241,0.15));border:1px solid rgba(14,165,233,0.2);align-items:center;justify-content:center;margin-bottom:20px;"
@@ -142,7 +142,10 @@
 											{$currentRepo}
 										</div>
 									</div>
-									<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;" class="repo-pulse-grid">
+									<div
+										style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;"
+										class="repo-pulse-grid"
+									>
 										<div class="glass card" style="padding:16px;">
 											<div class="section-label" style="margin-bottom:10px;">Memory Overview</div>
 											<StatsWidget />
@@ -243,7 +246,9 @@
 
 				<!-- ════ AGENT ARENA TAB ════ -->
 				{#if $activeTab === "arena"}
-					<AgentArena />
+					<div class="arena-fullwidth">
+						<AgentArena />
+					</div>
 				{/if}
 
 				<!-- ════ REFERENCE TAB ════ -->
@@ -301,10 +306,7 @@
 />
 
 <!-- ════ Quick Create FAB ════ -->
-<QuickCreateFAB
-	onNewMemory={app.openNewMemoryDrawer}
-	onNewTask={() => app.toggleAddTaskModal(true)}
-/>
+<QuickCreateFAB onNewMemory={app.openNewMemoryDrawer} onNewTask={() => app.toggleAddTaskModal(true)} />
 
 <style>
 	@media (max-width: 900px) {
@@ -313,6 +315,21 @@
 		}
 		.repo-pulse-grid {
 			grid-template-columns: 1fr !important;
+		}
+	}
+
+	/* Arena full-width: break out of dashboard-shell padding */
+	.arena-fullwidth {
+		margin-left: -20px;
+		margin-right: -20px;
+		width: calc(100% + 40px);
+	}
+
+	@media (max-width: 1024px) {
+		.arena-fullwidth {
+			margin-left: -12px;
+			margin-right: -12px;
+			width: calc(100% + 24px);
 		}
 	}
 </style>

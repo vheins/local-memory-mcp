@@ -40,7 +40,8 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 		candidates = candidates.map((c) => {
 			let boost = 0;
 			if (currentBranch && c.memory.scope.branch === currentBranch) boost += 0.1;
-			if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase())) boost += 0.15;
+			if (currentPath && c.memory.scope.folder && currentPath.includes(c.memory.scope.folder.toLowerCase()))
+				boost += 0.15;
 			if (currentPath && c.memory.scope.language) {
 				const ext = currentPath.split(".").pop();
 				if (ext && ext.includes(c.memory.scope.language.toLowerCase())) boost += 0.1;

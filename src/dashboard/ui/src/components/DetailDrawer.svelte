@@ -216,14 +216,7 @@
 
 				<!-- Meta grid -->
 				<div class="meta-grid" style="margin-bottom:16px;">
-					{#each [
-						{ label: "Priority", val: getPriorityLabel($handler.task?.priority || 1) },
-						{ label: "Phase", val: $handler.task?.phase || "—" },
-						{ label: "Agent", val: $handler.task?.agent || "—" },
-						{ label: "Updated", val: formatDate($handler.task?.updated_at) },
-						{ label: "Parent", val: $handler.task?.parent_code || "—" },
-						{ label: "Depends On", val: $handler.task?.depends_on_code || "—" }
-					] as m (m.label)}
+					{#each [{ label: "Priority", val: getPriorityLabel($handler.task?.priority || 1) }, { label: "Phase", val: $handler.task?.phase || "—" }, { label: "Agent", val: $handler.task?.agent || "—" }, { label: "Updated", val: formatDate($handler.task?.updated_at) }, { label: "Parent", val: $handler.task?.parent_code || "—" }, { label: "Depends On", val: $handler.task?.depends_on_code || "—" }] as m (m.label)}
 						<div class="meta-cell">
 							<div class="meta-label">{m.label}</div>
 							<div class="meta-value">{m.val}</div>

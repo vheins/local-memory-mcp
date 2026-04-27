@@ -526,7 +526,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 	}
 
 	let updatedCount = 0;
-	const updatedTasks: { id: string, code: string }[] = [];
+	const updatedTasks: { id: string; code: string }[] = [];
 	const completedTaskIds: string[] = [];
 	let releasedClaims = 0;
 	let expiredHandoffs = 0;
@@ -534,7 +534,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 	const isStatusChangingGlobal = updates.status !== undefined;
 
 	const existingTasks = storage.tasks.getTasksByIds(targetIds);
-	const taskMap = new Map(existingTasks.map(t => [t.id, t]));
+	const taskMap = new Map(existingTasks.map((t) => [t.id, t]));
 
 	for (const targetId of targetIds) {
 		const existingTask = taskMap.get(targetId);
@@ -549,9 +549,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			if (!comment || comment.trim() === "") {
 				throw new Error("comment is required when changing task status");
 			}
-			
-			const isStartable = existingTask.status === "backlog" || existingTask.status === "pending" || existingTask.status === "blocked";
-			
+
+			const isStartable =
+				existingTask.status === "backlog" || existingTask.status === "pending" || existingTask.status === "blocked";
+
 			if (isStartable && updates.status === "completed") {
 				throw new Error(
 					`Cannot transition task ${targetId} from '${existingTask.status}' directly to 'completed'. Must be 'in_progress' first.`
@@ -568,12 +569,12 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		}
 
 		const finalUpdates: Record<string, unknown> = { ...updates };
-		
+
 		if (updates.phase !== undefined || updates.tags !== undefined) {
 			let currentTags = updates.tags || existingTask.tags || [];
 			// Remove any existing phase: tags
-			currentTags = currentTags.filter(t => !t.startsWith("phase:"));
-			
+			currentTags = currentTags.filter((t) => !t.startsWith("phase:"));
+
 			// Add new phase: tag if phase exists
 			const finalPhase = updates.phase !== undefined ? updates.phase : existingTask.phase;
 			if (finalPhase) {
@@ -610,10 +611,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		if (updates.status === "completed" && existingTask.status !== "completed") {
 			completedTaskIds.push(targetId);
 		}
-		if (
-			isStatusChanging &&
-			(updates.status === "completed" || updates.status === "canceled")
-		) {
+		if (isStatusChanging && (updates.status === "completed" || updates.status === "canceled")) {
 			releasedClaims += storage.handoffs.releaseClaimsForTask(targetId);
 			expiredHandoffs += storage.handoffs.updatePendingHandoffsForTask(targetId, "expired");
 		}

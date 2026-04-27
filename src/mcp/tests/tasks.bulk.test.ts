@@ -5,7 +5,6 @@ import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 import { getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
 
-
 function getTextContent(result: McpResponse) {
 	return getPrimaryTextContent(result) || (result.structuredContent as { text?: string })?.text || "";
 }

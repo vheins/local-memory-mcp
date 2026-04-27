@@ -8,10 +8,7 @@ import { getPrimaryTextContent } from "../utils/mcp-response";
 describe("MCP Local Memory - Bulk Memory Management", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
-	let router: (
-		method: string,
-		params: Record<string, unknown>
-	) => Promise<any>;
+	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
 
 	const REPO = "bulk-mem-repo";
 

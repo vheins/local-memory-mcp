@@ -5,7 +5,6 @@ import * as fc from "fast-check";
 import { MockMemory } from "../types/index";
 
 describe("Property 12: Dashboard filter logic correctness", () => {
-
 	// Filter function (same as in dashboard)
 	function applyFilters(
 		memories: MockMemory[],
@@ -172,7 +171,11 @@ describe("Property 12: Dashboard filter logic correctness", () => {
 });
 
 describe("Property 13: Pagination non-overlapping", () => {
-	function paginate(items: MockMemory[] | string[] | number[], page: number, pageSize: number): (MockMemory | string | number)[] {
+	function paginate(
+		items: MockMemory[] | string[] | number[],
+		page: number,
+		pageSize: number
+	): (MockMemory | string | number)[] {
 		const start = (page - 1) * pageSize;
 		return items.slice(start, start + pageSize);
 	}
@@ -224,7 +227,6 @@ describe("Property 13: Pagination non-overlapping", () => {
 });
 
 describe("Property 14: Export format correctness", () => {
-
 	function exportToCsv(memories: MockMemory[]): string {
 		const headers = ["id", "type", "content", "importance", "hit_count", "created_at", "agent", "model"];
 		const csvRows = [headers.join(",")];

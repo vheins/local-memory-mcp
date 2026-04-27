@@ -43,4 +43,3 @@ export async function handleStandardDetail(args: Record<string, unknown>, storag
 		includeSerializedStructuredContent: validated.structured
 	});
 }
-

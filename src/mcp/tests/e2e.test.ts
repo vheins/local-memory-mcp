@@ -11,10 +11,7 @@ vi.setConfig({ testTimeout: 90000 });
 describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
-	let router: (
-		method: string,
-		params: Record<string, unknown>
-	) => Promise<any>;
+	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
 
 	const REPO = "enterprise-app-v2";
 
@@ -125,7 +122,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			name: "memory-search",
 			arguments: { query: "file upload", repo: REPO, include_archived: true }
 		});
-		expect((auditRes.structuredContent.results as { rows: unknown[][] }).rows.some((r: unknown[]) => r[0] === mistakeId)).toBe(true);
+		expect(
+			(auditRes.structuredContent.results as { rows: unknown[][] }).rows.some((r: unknown[]) => r[0] === mistakeId)
+		).toBe(true);
 	});
 
 	/**

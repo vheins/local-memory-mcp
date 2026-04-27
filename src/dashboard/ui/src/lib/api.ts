@@ -168,7 +168,8 @@ export const api = {
 
 	taskById: (id: string) => apiFetch<Task>(`/api/tasks/${id}`),
 
-	taskByCode: (repo: string, task_code: string) => apiFetch<Task>(`/api/tasks/by-code?repo=${encodeURIComponent(repo)}&task_code=${encodeURIComponent(task_code)}`),
+	taskByCode: (repo: string, task_code: string) =>
+		apiFetch<Task>(`/api/tasks/by-code?repo=${encodeURIComponent(repo)}&task_code=${encodeURIComponent(task_code)}`),
 
 	taskTimeStats: (repo?: string | null) =>
 		apiFetch<TaskTimeStats>(repo ? `/api/tasks/stats/time?repo=${encodeURIComponent(repo)}` : "/api/tasks/stats/time"),
@@ -205,7 +206,13 @@ export const api = {
 
 	deleteTaskComment: (id: string) => apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, { method: "DELETE" }),
 
-	coordinationClaims: (params: { repo: string; agent?: string; active_only?: boolean; page?: number; pageSize?: number }) => {
+	coordinationClaims: (params: {
+		repo: string;
+		agent?: string;
+		active_only?: boolean;
+		page?: number;
+		pageSize?: number;
+	}) => {
 		const q = new URLSearchParams({ repo: params.repo });
 		if (params.agent) q.set("agent", params.agent);
 		if (params.active_only !== undefined) q.set("active_only", String(params.active_only));
@@ -224,7 +231,16 @@ export const api = {
 			}
 		),
 
-	standards: (params: { repo?: string; query?: string; language?: string; stack?: string; tags?: string; is_global?: boolean; page?: number; pageSize?: number }) => {
+	standards: (params: {
+		repo?: string;
+		query?: string;
+		language?: string;
+		stack?: string;
+		tags?: string;
+		is_global?: boolean;
+		page?: number;
+		pageSize?: number;
+	}) => {
 		const q = new URLSearchParams();
 		if (params.repo) q.set("repo", params.repo);
 		if (params.query) q.set("query", params.query);

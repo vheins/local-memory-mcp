@@ -69,7 +69,9 @@
 			{#if coordination.pending_handoff_count > 0}
 				<span class="coord-badge handoff" title={coordination.pending_handoff_summary || "Pending handoff"}>
 					<Icon name="git-branch" size={9} strokeWidth={2.5} />
-					{coordination.pending_handoff_to_agent || "handoff"}{coordination.pending_handoff_count > 1 ? ` +${coordination.pending_handoff_count - 1}` : ""}
+					{coordination.pending_handoff_to_agent || "handoff"}{coordination.pending_handoff_count > 1
+						? ` +${coordination.pending_handoff_count - 1}`
+						: ""}
 				</span>
 			{/if}
 		</div>

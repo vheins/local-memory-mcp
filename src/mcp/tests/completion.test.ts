@@ -104,12 +104,16 @@ describe("rankCompletionValues() — property tests", () => {
 
 	it("never returns falsy values", () => {
 		fc.assert(
-			fc.property(fc.array(fc.oneof(fc.string(), fc.constant(null), fc.constant(undefined))), fc.string(), (candidates, input) => {
-				const result = rankCompletionValues(candidates as string[], input);
-				for (const val of result) {
-					expect(val).toBeTruthy();
+			fc.property(
+				fc.array(fc.oneof(fc.string(), fc.constant(null), fc.constant(undefined))),
+				fc.string(),
+				(candidates, input) => {
+					const result = rankCompletionValues(candidates as string[], input);
+					for (const val of result) {
+						expect(val).toBeTruthy();
+					}
 				}
-			})
+			)
 		);
 	});
 

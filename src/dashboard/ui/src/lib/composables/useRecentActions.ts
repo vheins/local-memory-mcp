@@ -135,7 +135,12 @@ export function createRecentActionsHandler(onLoadPage: (page: number, append?: b
 						r
 							.slice(0, 5)
 							.map((item: Record<string, unknown>) => {
-								const title = (item.title as string) || (item.task_code as string) || (item.name as string) || (item.id as string) || "Untitled";
+								const title =
+									(item.title as string) ||
+									(item.task_code as string) ||
+									(item.name as string) ||
+									(item.id as string) ||
+									"Untitled";
 								return `- ${title}`;
 							})
 							.join("\n") +

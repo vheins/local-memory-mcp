@@ -43,9 +43,7 @@ describe("Dashboard Standards API", () => {
 		});
 	});
 
-	it(
-		"supports create, list, get, update, and delete for /api/standards",
-		async () => {
+	it("supports create, list, get, update, and delete for /api/standards", async () => {
 		const createRes = await fetch(`${baseUrl}/api/standards`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -115,7 +113,5 @@ describe("Dashboard Standards API", () => {
 		const listAfterDelete = (await listAfterDeleteRes.json()) as any;
 		expect(listAfterDelete.data).toHaveLength(1);
 		expect(listAfterDelete.data[0].id).toBe(parentId);
-		},
-		15000
-	);
+	}, 15000);
 });

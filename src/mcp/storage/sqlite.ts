@@ -63,7 +63,7 @@ export class SQLiteStore {
 		this.db = new Database(finalPath);
 		this.db.pragma("journal_mode = WAL");
 		this.db.pragma("synchronous = FULL");
-		this.db.pragma("busy_timeout = 30000");   // increased: 30s
+		this.db.pragma("busy_timeout = 30000"); // increased: 30s
 		this.db.pragma("foreign_keys = ON");
 		this.db.pragma("wal_autocheckpoint = 100"); // more frequent: every 100 pages
 
