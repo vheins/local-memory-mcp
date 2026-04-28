@@ -44,6 +44,7 @@ const AGENT_COLORS = [
 const MAX_TASKS_PER_ZONE = 16;
 const TASK_INNER_PAD = 22;
 const TASK_TOP_PAD = 28; // below zone label
+const ACTIVE_TASK_STATUSES = new Set(["in_progress", "pending"]);
 
 // ── Handoff Animation Helpers ──────────────────────────────────────────────
 const HELPER_VARIANTS: HelperVariant[] = ["male_nurse", "female_nurse", "staff1", "staff2"];
@@ -205,6 +206,10 @@ export function buildArenaScene(
 
 		const firstVisibleTask = Array.from(claimedIds).find((id) => scene.tasks.has(id));
 		const tgt = firstVisibleTask ? scene.tasks.get(firstVisibleTask)! : null;
+		const visibleClaimedTasks = Array.from(claimedIds)
+			.map((id) => scene.tasks.get(id))
+			.filter((task): task is NonNullable<typeof task> => Boolean(task));
+		const hasActiveClaimedTask = visibleClaimedTasks.some((task) => ACTIVE_TASK_STATUSES.has(task.status));
 
 		// Target: 18px above+right of task (so agent is adjacent to desk)
 		let targetX = tgt ? tgt.x + 20 : spawnX;
@@ -216,7 +221,7 @@ export function buildArenaScene(
 
 		const now = Date.now();
 		const lastUpdateTs = tasksChanged ? now : (prev?.lastUpdateTs ?? now);
-		const isStale = now - lastUpdateTs > 30000;
+		const isStale = !hasActiveClaimedTask && now - lastUpdateTs > 30000;
 
 		let state: AgentState = claimedIds.size > 0 ? "processing" : "idle";
 		if (tgt && tgt.status === "blocked") {

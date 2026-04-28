@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-04-28
+
+### Fixed
+
+- **Agent Arena**: Prevented active claimed tasks from being marked stale and sending agents to the Therapy Room while work is still in progress.
+
 ## [0.10.1] - 2026-04-27
 
 ### Changed
