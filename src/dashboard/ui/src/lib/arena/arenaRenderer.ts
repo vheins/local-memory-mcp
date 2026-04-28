@@ -2183,9 +2183,17 @@ export class ArenaRenderer {
 		const shirtHighlight = lighten(color, 30);
 
 		// Walk cycle values
+		const working = state === "processing" && !moving;
+		const workPhase = ts * 0.018 + (nh % 20);
 		const legSwing = moving ? Math.sin(walkPhase) * 5 : 0;
-		const armSwing = moving ? Math.sin(walkPhase + Math.PI) * 4 : 0;
-		const headBob = moving ? Math.sin(walkPhase * 2) * 1.2 : 0;
+		let armSwing = moving ? Math.sin(walkPhase + Math.PI) * 4 : 0;
+		let headBob = moving ? Math.sin(walkPhase * 2) * 1.2 : 0;
+
+		if (working) {
+			armSwing = Math.sin(workPhase) * 5;
+			headBob = Math.sin(workPhase * 0.55) * 0.8;
+			y += Math.sin(workPhase * 0.35) * 0.7;
+		}
 
 		if (state === "blocked") {
 			x += Math.sin(ts * 0.05) * 1.5;
@@ -2215,6 +2223,9 @@ export class ArenaRenderer {
 		if (state === "burnout") {
 			ctx.rotate(Math.PI / 2);
 			ctx.translate(0, 15);
+		} else if (working) {
+			ctx.rotate(Math.sin(workPhase * 0.45) * 0.03);
+			ctx.translate(0, 1);
 		} else if (facing === "left") {
 			ctx.scale(-1, 1);
 		}
@@ -2271,7 +2282,7 @@ export class ArenaRenderer {
 		// ─ Left arm ─
 		ctx.save();
 		ctx.translate(-9, -24);
-		ctx.rotate(armSwing * 0.12);
+		ctx.rotate(working ? 0.55 + Math.max(0, Math.sin(workPhase)) * 0.28 : armSwing * 0.12);
 		const laGrd = ctx.createLinearGradient(-2, 0, 2, 10);
 		laGrd.addColorStop(0, shirtHighlight);
 		laGrd.addColorStop(1, color);
@@ -2288,7 +2299,7 @@ export class ArenaRenderer {
 		// ─ Right arm ─
 		ctx.save();
 		ctx.translate(9, -24);
-		ctx.rotate(-armSwing * 0.12);
+		ctx.rotate(working ? -0.55 - Math.max(0, Math.sin(workPhase + Math.PI)) * 0.28 : -armSwing * 0.12);
 		ctx.fillStyle = laGrd;
 		rr(ctx, -2, 0, 4, 9, 2);
 		ctx.fill();
@@ -2367,6 +2378,17 @@ export class ArenaRenderer {
 			ctx.beginPath();
 			ctx.arc(x, y - 38 + headBob, 17 + pulse * 4, 0, Math.PI * 2);
 			ctx.stroke();
+			if (working) {
+				for (let ti = 0; ti < 4; ti++) {
+					const tapPhase = (workPhase + ti * 0.9) % (Math.PI * 2);
+					const alpha = Math.max(0, Math.sin(tapPhase));
+					if (alpha < 0.25) continue;
+					ctx.fillStyle = rgba(color, alpha * 0.75);
+					ctx.beginPath();
+					ctx.arc(x - 9 + ti * 6, y - 11 - alpha * 3, 1.1 + alpha * 0.9, 0, Math.PI * 2);
+					ctx.fill();
+				}
+			}
 			// Thought bubble
 			for (let bi = 0; bi < 3; bi++) {
 				const boff = 0.3 + 0.7 * Math.sin(ts * 0.004 + bi * 1.1);
