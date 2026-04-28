@@ -8,7 +8,7 @@ import type {
 	HandoffVehicle,
 	HelperVariant
 } from "./arenaTypes";
-import { STATUS_COLORS, computeZones } from "./arenaTransform";
+import { STATUS_COLORS, computeZones, therapySlotPosition } from "./arenaTransform";
 
 // ─── Motion ────────────────────────────────────────────────────────────────
 const SPEED_WALK = 85;
@@ -1281,11 +1281,11 @@ export class ArenaRenderer {
 	}
 
 	private decorTherapy(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isDark: boolean) {
+		const zone: ZoneRect = { id: "burnout", label: "Therapy Room", x, y, w, h, color: "#14b8a6" };
 		// Draw beds under the agents
 		for (let idx = 0; idx < 6; idx++) {
-			const bx = x + 40 + (idx % 3) * 60;
-			const by = y + h / 2 + Math.floor(idx / 3) * 40;
-			this.drawHospitalBed(ctx, bx, by, isDark);
+			const bed = therapySlotPosition(zone, idx);
+			this.drawHospitalBed(ctx, bed.x, bed.y, isDark);
 		}
 		// Add some therapy room decor
 		this.drawPotPlant(ctx, x + w - 20, y + 20, isDark);

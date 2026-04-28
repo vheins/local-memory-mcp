@@ -45,6 +45,32 @@ const MAX_TASKS_PER_ZONE = 16;
 const TASK_INNER_PAD = 22;
 const TASK_TOP_PAD = 28; // below zone label
 const ACTIVE_TASK_STATUSES = new Set(["in_progress", "pending"]);
+const THERAPY_SLOT_PAD_X = 34;
+const THERAPY_SLOT_PAD_TOP = 54;
+const THERAPY_SLOT_PAD_BOTTOM = 28;
+const THERAPY_SLOT_MIN_GAP_X = 58;
+const THERAPY_SLOT_MIN_GAP_Y = 42;
+
+function clamp(n: number, min: number, max: number): number {
+	return Math.min(max, Math.max(min, n));
+}
+
+export function therapySlotPosition(zone: ZoneRect, idx: number): { x: number; y: number } {
+	const availableW = Math.max(1, zone.w - THERAPY_SLOT_PAD_X * 2);
+	const availableH = Math.max(1, zone.h - THERAPY_SLOT_PAD_TOP - THERAPY_SLOT_PAD_BOTTOM);
+	const cols = clamp(Math.floor(availableW / THERAPY_SLOT_MIN_GAP_X) + 1, 1, 3);
+	const rows = Math.max(1, Math.floor(availableH / THERAPY_SLOT_MIN_GAP_Y) + 1);
+	const slot = idx % (cols * rows);
+	const col = slot % cols;
+	const row = Math.floor(slot / cols);
+	const colGap = cols > 1 ? availableW / (cols - 1) : 0;
+	const rowGap = rows > 1 ? availableH / (rows - 1) : 0;
+
+	return {
+		x: zone.x + THERAPY_SLOT_PAD_X + col * colGap,
+		y: zone.y + THERAPY_SLOT_PAD_TOP + row * rowGap
+	};
+}
 
 // ── Handoff Animation Helpers ──────────────────────────────────────────────
 const HELPER_VARIANTS: HelperVariant[] = ["male_nurse", "female_nurse", "staff1", "staff2"];
@@ -233,9 +259,10 @@ export function buildArenaScene(
 		if (isStale) {
 			state = "burnout";
 			const burnoutZone = zones.find((z) => z.id === "burnout") || idleZone;
-			// Place them nicely in the burnout zone (spread out on therapy beds)
-			targetX = burnoutZone.x + 40 + (idx % 3) * 60;
-			targetY = burnoutZone.y + burnoutZone.h / 2 + Math.floor(idx / 3) * 40;
+			// Place them inside the therapy room, aligned with the rendered beds.
+			const therapySlot = therapySlotPosition(burnoutZone, idx);
+			targetX = therapySlot.x;
+			targetY = therapySlot.y;
 
 			// Start handoff animation if agent just transitioned to burnout
 			const wasBurnout = prev?.state === "burnout";
