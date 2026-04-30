@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.11] - 2026-04-30
+
+### Changed
+
+- **Task Executor**: Updated runner identity resolution to support multiple terminal sessions by using provided `agent_identity` or auto-generated `<runner>-<randomName>` identity from active CLI/IDE with session token.
+- **Task Executor**: Explicitly requires the same runner identity to be written into claim/update/handoff metadata for better cross-session attribution.
+- **Prompts**: Preserved dependency-aware execution checks while making runner identity configurable and session-aware.
+
 ## [0.10.10] - 2026-04-30
 
 ### Changed

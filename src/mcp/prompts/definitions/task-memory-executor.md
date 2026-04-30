@@ -1,12 +1,19 @@
 ---
 name: task-memory-executor
 description: Sequentially execute pending tasks for current repository.
-arguments: []
+arguments:
+  - name: agent_identity
+    description: Optional runner identity (e.g., Codex-Jarvis, Codex-HulkBuster, Gemini-Ultron). If omitted, identity is inferred from the active CLI/IDE and a short session token is appended.
+    required: false
 agent: Task Executor
 ---
 
 ## 1. SYNC & FILTER
-1. **Identify**: Get repo name (git/context).
+1. **Identify**: Determine runner identity and repo context.
+   - Resolver priority: `agent_identity` argument -> auto session identity generated once per run.
+   - Auto identity format: `<runner>-<randomName>`.
+   - `<runner>` should come from the active CLI/IDE label (for example `vibe-coding-cli`, `vibe-coding-ide`, `Codex`, `Gemini`) and `<randomName>` is a short stable session token.
+   - Use this identity for all `task-claim`, `task-update`, and handoff writes.
 2. **List**: Call `task-list` ONCE for active tasks.
 3. **Dependency-aware selection** (in `task-list` order):
    - Process tasks in the order returned by `task-list`.
@@ -33,8 +40,8 @@ agent: Task Executor
    - **Fallback**: If the current agent CANNOT spawn sub-agents, it MUST execute tasks sequentially (exactly ONE concurrent task) until the queue is clear.
 2. **Hydrate**: Fetch full context via `task-detail` for the assigned task.
 3. **Readiness re-check**: Re-check blockers from hydrated detail (`depends_on`, `parent_id`) before claim. If still blocked, return to step 2 (execution loop) and pick the next ready task in list order.
-4. **Claim**: Use `task-claim` with `task_code` or `task_id` before implementation.
-5. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata.
+4. **Claim**: Use `task-claim` with `task_code` or `task_id` before implementation, and write the runner identity into claim metadata.
+5. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata and the same runner identity used by claims.
 6. **Research**: Call `memory-search` (Hybrid Search) and hydrate relevant results with `memory-detail`.
 7. **Standards (MANDATORY PER TASK)**: Call `standard-search` for every task inside the execution loop before any code edit, test edit, refactor, migration, or implementation decision, using the task intent, affected files, inferred language, stack, and repo as filters. This is required even for small tasks, decomposed tasks, and sub-agent assignments. Apply only relevant standards, hydrate details when needed, and if no relevant standards are returned, continue and state that no applicable standards were found.
 8. **Execute**:
@@ -50,7 +57,7 @@ agent: Task Executor
    - **Cleanup**: Completing/canceling a task automatically releases active claims and expires linked pending handoffs.
    - **Memory**: Store insights as `code_fact`/`pattern` via `memory-store`.
    - **Standards**: Store durable implementation rules via `standard-store`, not generic memory.
-   - **Handoff**: If work remains or ownership changes, create `handoff-create` with concise summary and structured context containing next steps/blockers/remaining work. Do not create handoffs for completed-work summaries.
+   - **Handoff**: If work remains or ownership changes, create `handoff-create` with concise summary and structured context containing next steps/blockers/remaining work. Do not create handoffs for completed-work summaries. Include runner identity in handoff metadata/context.
    - **Retrospective**: Invoke `learning-retrospective`.
    - **Commit**: Atomic git commit. The commit message MUST follow this format: `type(scope): [task-code] your commit message`, followed by a detailed description:
      ```

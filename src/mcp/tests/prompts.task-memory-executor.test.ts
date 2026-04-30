@@ -27,5 +27,7 @@ describe("task-memory-executor prompt", () => {
 		expect(promptText).toContain("Readiness re-check");
 		expect(promptText).toContain("depends_on");
 		expect(promptText).toContain("parent_id");
+		expect(promptText).toContain("agent_identity");
+		expect(promptText).toContain("runner identity");
 	});
 });
