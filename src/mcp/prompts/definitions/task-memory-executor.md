@@ -8,8 +8,17 @@ agent: Task Executor
 ## 1. SYNC & FILTER
 1. **Identify**: Get repo name (git/context).
 2. **List**: Call `task-list` ONCE for active tasks.
-3. **Handoffs**: Call `handoff-list` with `status=pending` and inspect relevant transfer context before selecting work. Treat a pending handoff as active only when it has unfinished work, a blocker, a next owner, or a linked task. If it is obsolete or only describes completed work, close it with `handoff-update status=expired`.
-4. **Audit**: Identify stale `in_progress` tasks (>30m no update). Hydrate via `task-detail` to check timestamps.
+3. **Dependency-aware selection** (in `task-list` order):
+   - Process tasks in the order returned by `task-list`.
+   - A task is READY only if:
+     - status is `backlog` or `pending`, and
+     - `depends_on` is empty, or the dependency task exists and is `completed`, and
+     - `parent_id` is empty, or the parent task is `completed`.
+   - Keep non-ready tasks out of execution for now.
+   - If a task is blocked by unresolved dependency/parent, do not claim it and continue to the next ready task.
+   - If all active tasks are blocked, report blockers and stop execution loop.
+4. **Handoffs**: Call `handoff-list` with `status=pending` and inspect relevant transfer context before selecting work. Treat a pending handoff as active only when it has unfinished work, a blocker, a next owner, or a linked task. If it is obsolete or only describes completed work, close it with `handoff-update status=expired`.
+5. **Audit**: Identify stale `in_progress` tasks (>30m no update). Hydrate via `task-detail` to check timestamps.
 
 ## Task Cache (MANDATORY)
 - `task-detail` MUST be called at most ONCE per task
@@ -23,19 +32,20 @@ agent: Task Executor
    - **Spawn Limit**: The total number of parallel sub-agents MUST NOT exceed 2. Each sub-agent executes EXACTLY ONE task at a time.
    - **Fallback**: If the current agent CANNOT spawn sub-agents, it MUST execute tasks sequentially (exactly ONE concurrent task) until the queue is clear.
 2. **Hydrate**: Fetch full context via `task-detail` for the assigned task.
-3. **Claim**: Use `task-claim` with `task_code` or `task_id` before implementation.
-4. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata.
-5. **Research**: Call `memory-search` (Hybrid Search) and hydrate relevant results with `memory-detail`.
-6. **Standards (MANDATORY PER TASK)**: Call `standard-search` for every task inside the execution loop before any code edit, test edit, refactor, migration, or implementation decision, using the task intent, affected files, inferred language, stack, and repo as filters. This is required even for small tasks, decomposed tasks, and sub-agent assignments. Apply only relevant standards, hydrate details when needed, and if no relevant standards are returned, continue and state that no applicable standards were found.
-7. **Execute**:
+3. **Readiness re-check**: Re-check blockers from hydrated detail (`depends_on`, `parent_id`) before claim. If still blocked, return to step 2 (execution loop) and pick the next ready task in list order.
+4. **Claim**: Use `task-claim` with `task_code` or `task_id` before implementation.
+5. **Start**: `task-update` status to `in_progress` (MUST transition: `pending` → `in_progress`). Add agent/role metadata.
+6. **Research**: Call `memory-search` (Hybrid Search) and hydrate relevant results with `memory-detail`.
+7. **Standards (MANDATORY PER TASK)**: Call `standard-search` for every task inside the execution loop before any code edit, test edit, refactor, migration, or implementation decision, using the task intent, affected files, inferred language, stack, and repo as filters. This is required even for small tasks, decomposed tasks, and sub-agent assignments. Apply only relevant standards, hydrate details when needed, and if no relevant standards are returned, continue and state that no applicable standards were found.
+8. **Execute**:
    - **Trace**: Inspect logic, call sites, and docs. DO NOT infer from file presence.
    - **Logic**: Implement per description/intent.
-8. **Validate**:
+9. **Validate**:
    - Trace path end-to-end.
    - Run tests/linters/type-checks.
    - Logic audit for all affected paths.
    - **Browser Verification (MANDATORY)**: If the task involves UI/UX changes, use Playwright or Chrome DevTools to verify the feature is functional and consumable by the user. Check console errors, layout overflow, responsive behavior, and core interactions.
-9. **Finalize**:
+10. **Finalize**:
    - **Evidence**: `task-update` status to `completed` with detailed 'comment' (inspected files, verified logic, test results).
    - **Cleanup**: Completing/canceling a task automatically releases active claims and expires linked pending handoffs.
    - **Memory**: Store insights as `code_fact`/`pattern` via `memory-store`.
@@ -50,7 +60,7 @@ agent: Task Executor
      This ensures full traceability between code changes and project context.
    - **GitHub Issue Traceability**: If task metadata contains a GitHub Issue reference, the commit message MUST also include the issue hashtag in `#123` format.
    - **Issue Number Extraction**: Read the issue number from task metadata when available. If metadata only contains a GitHub Issue URL, extract the trailing issue number from that URL before committing.
-10. **Repeat**: Claim next task from `task-list`.
+11. **Repeat**: Claim next task from `task-list`.
 
 ## 3. BACKLOG MAINTENANCE
 If active queue is empty:

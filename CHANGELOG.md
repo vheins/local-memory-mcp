@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.10] - 2026-04-30
+
+### Changed
+
+- **Task Executor**: Enforced dependency-aware execution order in `task-memory-executor` by requiring `depends_on` and `parent_id` prerequisites before execution and adding blocked-task skipping logic.
+- **Task Executor**: Added readiness re-check after hydration so unresolved dependencies are re-evaluated before claim.
+- **Prompts**: Added prompt-level regression test coverage for dependency-aware execution and readiness checks.
+
 ## [0.10.8] - 2026-04-28
 
 ### Changed
