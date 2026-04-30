@@ -42,7 +42,12 @@ agent: Task Executor
    - **Standards**: Store durable implementation rules via `standard-store`, not generic memory.
    - **Handoff**: If work remains or ownership changes, create `handoff-create` with concise summary and structured context containing next steps/blockers/remaining work. Do not create handoffs for completed-work summaries.
    - **Retrospective**: Invoke `learning-retrospective`.
-   - **Commit**: Atomic git commit. The commit message MUST include the task code (for example: `fix: ... [TASK-123]`).
+   - **Commit**: Atomic git commit. The commit message MUST follow this format: `type(scope): [task-code] your commit message`, followed by a detailed description:
+     ```
+     - [Task Title]
+       [Summary Task]
+     ```
+     This ensures full traceability between code changes and project context.
    - **GitHub Issue Traceability**: If task metadata contains a GitHub Issue reference, the commit message MUST also include the issue hashtag in `#123` format.
    - **Issue Number Extraction**: Read the issue number from task metadata when available. If metadata only contains a GitHub Issue URL, extract the trailing issue number from that URL before committing.
 10. **Repeat**: Claim next task from `task-list`.

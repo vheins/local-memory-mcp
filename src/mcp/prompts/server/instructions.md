@@ -21,6 +21,11 @@ Use at the START of every session and before any implementation work:
 **Tasks**: `task-list` → `task-claim` → `task-update` (in_progress → completed)
 - Register planned steps via `task-create` before execution.
 - Never skip intermediate `in_progress` state before `completed`.
+- **Commit Message**: Every commit MUST include the **Task Code**, **Title**, and **Summary** in this format:
+  `type(scope): [task-code] message`
+  
+  `- [Task Title]`
+  `  [Summary Task]`
 - Completing a task auto-releases claims and expires linked handoffs.
 
 **Standards**: `standard-search` → `standard-store`
@@ -41,6 +46,7 @@ Use at the START of every session and before any implementation work:
 - `root-cause-analysis` — structured bug / incident investigation
 - `fix-suggestion` — propose and validate fixes
 - `security-triage` — security risk assessment
+- `sentinel-issue-resolver` — autonomous GitHub issue resolution (SENTINEL identity)
 - `learning-retrospective` — capture lessons and update memory
 - `documentation-sync` — sync docs with current codebase state
 - `project-briefing` — generate repository briefing from memory
