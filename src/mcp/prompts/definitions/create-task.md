@@ -43,8 +43,8 @@ ONLY call MCP tools. No prose, no code, no plans outside MCP.
   - **Trigger**: Instruction/finding.
   - **Observation**: Technical reasoning.
   - **Goal**: Clear objective.
-  ### 2. Target Files & Implementation
-  - Combined scope/steps per path/layer.
+  ### 2. Step & Implementation
+  - Detailed execution steps per path/layer.
   ### 3. Acceptance & Verification
   - **Checklist**: `[ ]` criteria.
   - **Testing**: Scenarios.

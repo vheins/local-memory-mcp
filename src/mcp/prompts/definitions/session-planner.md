@@ -20,6 +20,6 @@ Steps:
 5. **Phase**: Group into `research`, `implementation`, and `validation`.
 6. **Hierarchy**: Use `parent_id` / `depends_on` for sequencing.
 7. **Priority Scale**: When creating tasks, use the exact MCP scale `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`. Higher number means higher urgency.
-8. **Create**: Use `task-create` in current repo with stable `task_code`, tags, and acceptance criteria.
+8. **Create**: Use `task-create` in current repo with stable `task_code`, tags, and acceptance criteria following the format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification.
 
 Display final plan to user.

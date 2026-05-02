@@ -40,8 +40,8 @@ ONLY call MCP tools. No prose, code, or external plans.
   - **Finding**: Gap trigger.
   - **Observation**: Reasoning.
   - **Goal**: Clear objective.
-  ### 2. Target Files & Implementation
-  - Combined scope/steps per path/layer.
+  ### 2. Step & Implementation
+  - Detailed execution steps per path/layer.
   ### 3. Acceptance & Verification
   - **Checklist**: `[ ]` criteria.
   - **Testing**: Scenarios.

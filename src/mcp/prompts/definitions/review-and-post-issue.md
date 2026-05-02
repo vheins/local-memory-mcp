@@ -42,7 +42,7 @@ No prose. No external plans.
   - **Finding**: Gap trigger.
   - **Observation**: Reasoning.
   - **Goal**: Clear objective.
-  ### 2. Target Files & Implementation
+  ### 2. Step & Implementation
   - Path/layer specific changes.
   ### 3. Acceptance & Verification
   - **Checklist**: `[ ]` criteria.

@@ -472,7 +472,7 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 	});
 	addRequiredStringField(properties, required, task, "description", {
 		title: "Description",
-		description: "Detailed description of the task.",
+		description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification",
 		minLength: 1
 	});
 

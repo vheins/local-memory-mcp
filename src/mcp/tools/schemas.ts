@@ -522,7 +522,11 @@ export const TOOL_DEFINITIONS = [
 				task_code: { type: "string" },
 				phase: { type: "string" },
 				title: { type: "string", minLength: 3, maxLength: 100 },
-				description: { type: "string", minLength: 1 },
+				description: {
+					type: "string",
+					minLength: 1,
+					description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+				},
 				status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
 				priority: {
 					type: "number",
@@ -1060,7 +1064,11 @@ export const TOOL_DEFINITIONS = [
 					maxLength: 100,
 					description: "Task objective (Required for single task)"
 				},
-				description: { type: "string", description: "Detailed description (Required for single task)" },
+				description: {
+					type: "string",
+					description:
+						"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+				},
 				status: {
 					type: "string",
 					enum: ["backlog", "pending"],
@@ -1091,7 +1099,10 @@ export const TOOL_DEFINITIONS = [
 							task_code: { type: "string" },
 							phase: { type: "string" },
 							title: { type: "string", minLength: 3, maxLength: 100 },
-							description: { type: "string" },
+							description: {
+								type: "string",
+								description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+							},
 							status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
 							priority: {
 								type: "number",
@@ -1153,7 +1164,10 @@ export const TOOL_DEFINITIONS = [
 				task_code: { type: "string" },
 				phase: { type: "string" },
 				title: { type: "string", minLength: 3, maxLength: 100 },
-				description: { type: "string" },
+				description: {
+								type: "string",
+								description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+							},
 				status: {
 					type: "string",
 					enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
