@@ -67,6 +67,33 @@ agent: Task Executor
      This ensures full traceability between code changes and project context.
    - **GitHub Issue Traceability**: If task metadata contains a GitHub Issue reference, the commit message MUST also include the issue hashtag in `#123` format.
    - **Issue Number Extraction**: Read the issue number from task metadata when available. If metadata only contains a GitHub Issue URL, extract the trailing issue number from that URL before committing.
+
+10A. **BLOCKER HANDLING (AUTOMATIC TASK CREATION)**:
+   - **Trigger**: When task status is updated to `blocked` with a comment explaining the blocker reason.
+   - **Blocker Classification**: Analyze the blocker comment to determine if it is **internal solvable** or **external**:
+     - **Internal Solvable** (auto-create task): Missing dependency, missing module/function, configuration/env setup, implementation gap, failing test, build error.
+     - **External** (skip auto-create): Awaiting user input/approval, API/service unavailability, manual external setup required.
+   - **Pattern Matching**: Use regex patterns to detect internal blockers in the comment:
+     - Missing patterns: `/(module|package|library|dependency|import)\s+(not\s+found|missing|undefined|not\s+installed)/i`
+     - Not implemented: `/(function|interface|class|method|endpoint)\s+not\s+(found|implemented|exists)/i`
+     - Configuration: `/(config|configuration|setup|env|environment)\s+(missing|not\s+set|invalid)/i`
+     - Test/build failure: `/(test|build|compile|type\s+check)\s+(failed|error)/i`
+   - **Auto-Create Task** (if internal solvable):
+     - Task Code: `${parent_task_code}-FIX-${unix_timestamp}`
+     - Title: `FIX: [${parent_task_title}] - Resolve: ${blocker_reason_extracted}`
+     - Description: Follow standard format (1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification)
+       - Context: Reference parent task code and explain the blocking factor
+       - Steps: Identify root cause and implement fix
+       - Verification: Confirm parent task can proceed
+     - Parent ID: Set to current blocked task ID
+     - Priority: `4` (HIGH)
+     - Phase: `blocker-resolution`
+     - Tags: `["blocker-fix", "auto-generated"]`
+     - Metadata: Include `triggered_by_task`, `blocker_reason`, `creation_timestamp`, and `agent_identity`
+   - **Update Parent Task**: Add comment linking to the new blocker-fix task: `"Blocker resolution task created: ${new_task_code}"`
+   - **Link Dependencies**: Set parent task's `depends_on` to the new blocker-fix task (parent waits for fix before retry)
+   - **Skip Creation** (if external): Log that blocker is external, keep task status as `blocked`, no automatic task created.
+
 11. **Repeat**: Claim next task from `task-list`.
 
 ## 3. BACKLOG MAINTENANCE
@@ -75,5 +102,94 @@ If active queue is empty:
 2. Move up to 20 highest-priority tasks to `pending` via `task-update`.
 3. Interpret priority using MCP ordering: `5=Critical`, `4=High`, `3=Medium`, `2=Normal`, `1=Low`.
 
-## 4. REPORT
+## 4. BLOCKER REFERENCE (Patterns & Detection)
+
+### Internal Solvable Blocker Patterns (Trigger Auto Task Creation)
+
+**Missing Dependencies/Modules**:
+- `module not found`, `missing dependency`, `import not installed`, `undefined function`, `no such file`
+- Example: "ImportError: Function 'validateToken' not found"
+
+**Not Implemented**:
+- `function/method not implemented`, `interface not exists`, `component undefined`
+- Example: "Function 'processPayment' not implemented - exists in type definitions but no implementation"
+
+**Configuration/Setup Issues**:
+- `.env missing`, `configuration not set`, `setup invalid`, `environment variable not found`
+- Example: "DATABASE_URL environment variable not set"
+
+**Test/Build Failures** (solvable):
+- `test failed`, `assertion failed`, `type error`, `build error`, `compilation failed`
+- Example: "Type error: Property 'user' does not exist on type 'Request'"
+
+**Implementation Gaps**:
+- `endpoint not implemented`, `API route missing`, `middleware not registered`
+- Example: "GET /api/users endpoint returns 404 - not implemented"
+
+### External Blocker Patterns (Skip Auto Task Creation)
+
+**Awaiting User/External Action**:
+- `awaiting user`, `requires manual`, `user must`, `external dependency`, `manual setup`
+- Example: "Awaiting user approval for database migration", "Requires manual infrastructure setup"
+
+**External Service Issues**:
+- `API not responding`, `service unavailable`, `server not ready`
+- Example: "Payment gateway API not responding - external service unavailable"
+
+**Manual Prerequisites**:
+- `install locally`, `run script manually`, `requires external tool`
+- Example: "Requires manual Docker setup - not part of this task"
+
+### Auto Task Creation Example Flow
+
+**Parent Task Blocked:**
+```
+Task Code: FEATURE-42
+Title: Add payment processing middleware
+Status: blocked
+Comment: "Function 'chargeCard' in services/payment.ts not implemented - exists in interface but implementation missing"
+```
+
+**Detection & Classification:**
+```
+Pattern detected: "Function .* not implemented" → INTERNAL SOLVABLE ✅
+Action: Create blocker-fix task
+```
+
+**Auto-Generated Task:**
+```
+Task Code: FEATURE-42-FIX-1714737908
+Title: FIX: [Add payment processing middleware] - Resolve: Function 'chargeCard' not implemented
+Parent ID: FEATURE-42
+Priority: 4 (HIGH)
+Phase: blocker-resolution
+Tags: ["blocker-fix", "auto-generated"]
+
+Description:
+1. Context & Analysis:
+   Parent task FEATURE-42 blocked due to: Function 'chargeCard' in services/payment.ts not implemented
+   The function exists in the interface but has no implementation body
+   Blocking factor: services/payment.ts - chargeCard function stub
+
+2. Step & Implementation:
+   - Review services/payment.ts chargeCard function signature
+   - Implement full payment processing logic (charges, refunds, error handling)
+   - Add proper error handling and validation
+   - Write unit tests for charge scenarios
+
+3. Acceptance & Verification:
+   - chargeCard function fully implemented
+   - Unit tests passing
+   - Function can be called from FEATURE-42 middleware
+   - FEATURE-42 parent task can proceed without blockers
+```
+
+**Execution Workflow:**
+1. Agent picks blocker-fix task first (independent, no dependencies)
+2. Implements `chargeCard` function
+3. Completes blocker-fix task
+4. Parent task FEATURE-42 becomes ready (fix completed)
+5. Agent proceeds with FEATURE-42 execution
+
+## 5. REPORT
 Provide progress summary.
