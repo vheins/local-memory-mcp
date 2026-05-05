@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { healthData, currentRepo, availableRepos, theme } from "../lib/stores";
+	import { healthData, currentRepo, availableRepos, theme, themePreference } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
 	import { onMount, onDestroy } from "svelte";
 	import { createTopBarHandler, GITHUB_URL, NPM_URL } from "../lib/composables/useTopBar";
@@ -203,7 +203,7 @@
 			<button
 				class="btn btn-ghost btn-icon btn-sm"
 				on:click={toggleTheme}
-				title="Toggle theme"
+				title={$themePreference === "auto" ? "Theme: auto (Shift+click for manual)" : "Theme: manual (Shift+click for auto)"}
 				aria-label="Toggle theme"
 			>
 				{#if $theme === "dark"}

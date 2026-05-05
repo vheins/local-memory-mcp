@@ -1,5 +1,5 @@
-import { writable } from "svelte/store";
-import { theme } from "../stores";
+import { get, writable } from "svelte/store";
+import { theme, themePreference } from "../stores";
 import { getRepoInitials } from "../utils";
 
 export const GITHUB_URL = "https://github.com/vheins/local-memory-mcp";
@@ -34,8 +34,18 @@ export function createTopBarHandler(onRefresh: () => void) {
 		}
 	}
 
-	function toggleTheme() {
-		theme.update((t: string) => (t === "dark" ? "light" : "dark"));
+	function toggleTheme(event?: MouseEvent) {
+		if (event?.shiftKey) {
+			themePreference.set("auto");
+			return;
+		}
+
+		themePreference.update((pref) => {
+			if (pref === "auto") {
+				return get(theme) === "dark" ? "light" : "dark";
+			}
+			return pref === "dark" ? "light" : "dark";
+		});
 	}
 
 	function startCountdown() {

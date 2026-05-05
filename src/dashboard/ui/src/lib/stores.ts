@@ -1,11 +1,12 @@
 import { writable, derived } from "svelte/store";
 import type { RepoMeta, Memory, Task, DashboardStats, RecentAction, TaskTimeStats, HealthData } from "./interfaces";
-import type { Theme } from "./types";
+import type { Theme, ThemePreference } from "./types";
 
 // ─── Stores ─────────────────────────────────────────────────────────────────
 
 // App state
 export const theme = writable<Theme>("light");
+export const themePreference = writable<ThemePreference>("auto");
 export const activeTab = writable<string>("arena");
 export const isLoading = writable<boolean>(false);
 
@@ -69,11 +70,77 @@ export const memoriesTotalPages = derived([memoriesTotal, memoriesPageSize], ([$
 
 // ─── Persistence helpers ─────────────────────────────────────────────────────
 
+function isNightTime(date = new Date()) {
+	const hour = date.getHours();
+	return hour >= 18 || hour < 6;
+}
+
+function resolveTheme(preference: ThemePreference, date = new Date()): Theme {
+	return preference === "auto" ? (isNightTime(date) ? "dark" : "light") : preference;
+}
+
+function getMillisUntilNextThemeBoundary(date = new Date()) {
+	const nextBoundary = new Date(date);
+	if (isNightTime(date)) {
+		nextBoundary.setHours(6, 0, 0, 0);
+		if (date.getHours() >= 18) {
+			nextBoundary.setDate(nextBoundary.getDate() + 1);
+		}
+		return nextBoundary.getTime() - date.getTime();
+	}
+
+	nextBoundary.setHours(18, 0, 0, 0);
+	return nextBoundary.getTime() - date.getTime();
+}
+
+function applyTheme(resolvedTheme: Theme) {
+	document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
+	localStorage.setItem("theme", resolvedTheme);
+}
+
 export function initPersistedState() {
-	// Theme
-	const savedTheme = (localStorage.getItem("theme") || "light") as Theme;
-	theme.set(savedTheme);
-	document.documentElement.classList.toggle("dark", savedTheme === "dark");
+	let themeTimer: ReturnType<typeof setTimeout> | null = null;
+	let currentPreference: ThemePreference = "auto";
+
+	const storedPreference = localStorage.getItem("themePreference");
+	const legacyTheme = localStorage.getItem("theme");
+	const savedPreference: ThemePreference = storedPreference === "auto" || storedPreference === "light" || storedPreference === "dark"
+		? storedPreference
+		: legacyTheme === "dark" || legacyTheme === "light"
+			? legacyTheme
+			: "auto";
+
+	themePreference.set(savedPreference);
+	const resolvedTheme = resolveTheme(savedPreference);
+	theme.set(resolvedTheme);
+	localStorage.setItem("themePreference", savedPreference);
+	applyTheme(resolvedTheme);
+
+	const scheduleAutoThemeSync = () => {
+		if (themeTimer) {
+			clearTimeout(themeTimer);
+			themeTimer = null;
+		}
+
+		if (currentPreference === "auto") {
+			const delay = Math.max(1000, getMillisUntilNextThemeBoundary());
+			themeTimer = setTimeout(() => {
+				const autoTheme = resolveTheme("auto");
+				theme.set(autoTheme);
+				applyTheme(autoTheme);
+				scheduleAutoThemeSync();
+			}, delay);
+		}
+	};
+
+	themePreference.subscribe((preference) => {
+		currentPreference = preference;
+		localStorage.setItem("themePreference", preference);
+		const nextTheme = resolveTheme(preference);
+		theme.set(nextTheme);
+		applyTheme(nextTheme);
+		scheduleAutoThemeSync();
+	});
 
 	// Sidebar collapsed
 	isRepoSidebarCollapsed.set(localStorage.getItem("repoSidebarCollapsed") === "1");
@@ -89,12 +156,6 @@ export function initPersistedState() {
 	// Active tab
 	const savedTab = localStorage.getItem("activeTab");
 	if (savedTab) activeTab.set(savedTab);
-
-	// Subscribe to persist changes
-	theme.subscribe((t) => {
-		localStorage.setItem("theme", t);
-		document.documentElement.classList.toggle("dark", t === "dark");
-	});
 
 	isRepoSidebarCollapsed.subscribe((v) => {
 		localStorage.setItem("repoSidebarCollapsed", v ? "1" : "0");

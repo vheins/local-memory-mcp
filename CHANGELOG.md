@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-05-05
+
+### Added
+
+- **Dashboard Theme**: Added automatic light/dark switching based on time of day while preserving manual override.
+
+### Changed
+
+- **Dashboard UX**: Clarified Standards and Handoffs tabs with better labels, summaries, and status context.
+- **Theme Toggle**: Kept the existing manual toggle and added `Shift+click` to return to auto mode.
+
 ## [0.10.11] - 2026-04-30
 
 ### Changed

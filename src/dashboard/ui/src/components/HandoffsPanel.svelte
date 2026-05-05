@@ -23,6 +23,9 @@
 	let showCreate = false;
 	let showClaim = false;
 
+	$: pendingHandoffs = handoffs.filter((handoff) => handoff.status === "pending").length;
+	$: resolvedHandoffs = handoffs.filter((handoff) => handoff.status !== "pending").length;
+
 	let handoffForm = {
 		from_agent: "",
 		to_agent: "",
@@ -227,7 +230,9 @@
 			<Icon name="git-branch" size={16} strokeWidth={2} />
 			<div>
 				<div class="section-label">Handoffs & Claims</div>
-				<div class="toolbar-subtitle">{handoffs.length} handoffs in view</div>
+				<div class="toolbar-subtitle">
+					Handoffs transfer context between agents. Claims reserve a task for one owner.
+				</div>
 			</div>
 		</div>
 		<div class="toolbar-actions">
@@ -265,6 +270,25 @@
 		</div>
 	</div>
 
+	<div class="insight-strip">
+		<div class="insight-card">
+			<span>Pending</span>
+			<strong>{pendingHandoffs}</strong>
+		</div>
+		<div class="insight-card">
+			<span>Resolved</span>
+			<strong>{resolvedHandoffs}</strong>
+		</div>
+		<div class="insight-card">
+			<span>Claims</span>
+			<strong>{claims.length}</strong>
+		</div>
+		<div class="insight-card">
+			<span>Action</span>
+			<strong>{showCreate ? "Creating" : showClaim ? "Claiming" : "Reviewing"}</strong>
+		</div>
+	</div>
+
 	{#if error}
 		<div class="error-banner">{error}</div>
 	{/if}
@@ -274,6 +298,7 @@
 			{#if showCreate}
 				<div class="glass card panel-card action-panel">
 					<div class="section-label">Create Handoff</div>
+					<div class="toolbar-subtitle">Use this when context must move from one agent to another.</div>
 					<div class="form-stack">
 						<label
 							><span>From agent</span><input
@@ -285,21 +310,21 @@
 						<label
 							><span>To agent</span><input
 								class="form-input"
-								placeholder="agent-b (optional)"
+								placeholder="recipient agent (optional)"
 								bind:value={handoffForm.to_agent}
 							/></label
 						>
 						<label
 							><span>Task code</span><input
 								class="form-input"
-								placeholder="TASK-123 (optional)"
+								placeholder="TASK-123 or leave blank"
 								bind:value={handoffForm.task_code}
 							/></label
 						>
 						<label
 							><span>Summary</span><textarea
 								class="form-textarea summary-input"
-								placeholder="What should the next agent know?"
+								placeholder="What should the next agent know next?"
 								bind:value={handoffForm.summary}
 							></textarea></label
 						>
@@ -321,6 +346,7 @@
 			{#if showClaim}
 				<div class="glass card panel-card action-panel">
 					<div class="section-label">Claim Task</div>
+					<div class="toolbar-subtitle">Use this to mark a task as owned by one agent.</div>
 					<div class="form-stack">
 						<label
 							><span>Task code</span><input
@@ -372,7 +398,10 @@
 	<div class="feature-grid">
 		<div class="glass card panel-card list-panel">
 			<div class="panel-heading">
-				<div class="section-label">Handoff Queue</div>
+				<div>
+					<div class="section-label">Handoff Queue</div>
+					<div class="toolbar-subtitle">Pick one handoff to inspect status, context, and linked task.</div>
+				</div>
 				{#if handoffs.length === 0}
 					<button class="btn btn-ghost btn-sm" on:click={() => (showCreate = true)}>Create handoff</button>
 				{/if}
@@ -399,7 +428,7 @@
 							</div>
 							<div class="row-title">{handoff.summary}</div>
 							<div class="row-meta">
-								<span>{handoff.from_agent} -> {handoff.to_agent || "unassigned"}</span>
+								<span>{handoff.from_agent} to {handoff.to_agent || "unassigned"}</span>
 								{#if handoff.task_id}<span>{handoff.task_id.slice(0, 8)}</span>{/if}
 							</div>
 						</button>
@@ -412,6 +441,16 @@
 			<div class="glass card panel-card detail-panel">
 				{#if selected}
 					<div class="detail-title">{selected.summary}</div>
+					<div class="detail-callout">
+						<div>
+							<span>What this is</span>
+							<strong>A transfer of context between agents.</strong>
+						</div>
+						<div>
+							<span>What to do next</span>
+							<strong>Accept, reject, or expire the handoff.</strong>
+						</div>
+					</div>
 					<div class="detail-grid">
 						<div><span>From</span><strong>{selected.from_agent}</strong></div>
 						<div><span>To</span><strong>{selected.to_agent || "unassigned"}</strong></div>
@@ -455,14 +494,17 @@
 					<div class="empty-state detail-empty">
 						<Icon name="book-open" size={22} strokeWidth={1.75} />
 						<div class="empty-title">Select a handoff</div>
-						<div class="empty-copy">Details for the selected handoff appear here.</div>
+						<div class="empty-copy">The transfer summary, status, and actions appear here.</div>
 					</div>
 				{/if}
 			</div>
 
 			<div class="glass card panel-card claims-panel">
 				<div class="panel-heading">
-					<div class="section-label">Active Claims</div>
+					<div>
+						<div class="section-label">Active Claims</div>
+						<div class="toolbar-subtitle">Claims tell you which agent currently owns a task.</div>
+					</div>
 					<div class="toolbar-subtitle">{claims.length} active</div>
 				</div>
 				{#if claimsLoading}
@@ -471,7 +513,7 @@
 					<div class="empty-state claims-empty">
 						<Icon name="check" size={20} strokeWidth={1.75} />
 						<div class="empty-title">No active claims</div>
-						<div class="empty-copy">Claims taken from agents will appear here for release and inspection.</div>
+						<div class="empty-copy">Claimed tasks will appear here so you can inspect or release them.</div>
 					</div>
 				{:else}
 					<div class="claim-list">
@@ -524,6 +566,32 @@
 		color: var(--color-text-muted);
 		font-weight: 600;
 		margin-top: 2px;
+		line-height: 1.45;
+	}
+	.insight-strip {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 10px;
+	}
+	.insight-card {
+		padding: 12px 14px;
+		border-radius: 14px;
+		border: 1px solid var(--color-border);
+		background: rgba(255, 255, 255, 0.32);
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.insight-card span {
+		font-size: 0.66rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
+	}
+	.insight-card strong {
+		font-size: 0.84rem;
+		color: var(--color-text);
 	}
 	.toolbar-actions {
 		display: flex;
@@ -717,6 +785,32 @@
 		margin-bottom: 14px;
 		line-height: 1.35;
 	}
+	.detail-callout {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+		margin-bottom: 12px;
+	}
+	.detail-callout div {
+		padding: 12px;
+		border-radius: 10px;
+		border: 1px solid var(--color-border);
+		background: rgba(14, 165, 233, 0.06);
+	}
+	.detail-callout span {
+		display: block;
+		font-size: 0.66rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+		margin-bottom: 4px;
+	}
+	.detail-callout strong {
+		font-size: 0.8rem;
+		color: var(--color-text);
+		line-height: 1.45;
+	}
 	.detail-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -804,10 +898,12 @@
 		}
 	}
 	@media (max-width: 760px) {
+		.insight-strip,
 		.toolbar-controls,
 		.feature-grid,
 		.detail-grid,
-		.action-grid {
+		.action-grid,
+		.detail-callout {
 			grid-template-columns: 1fr;
 		}
 		.toolbar-actions {

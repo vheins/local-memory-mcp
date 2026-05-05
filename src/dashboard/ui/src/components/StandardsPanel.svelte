@@ -331,12 +331,14 @@
 			<Icon name="check" size={16} strokeWidth={2} />
 			<div>
 				<div class="section-label">Coding Standards</div>
-				<div class="toolbar-subtitle">{standards.length} matching standards</div>
+				<div class="toolbar-subtitle">
+					Rules the agents follow in this repo. Filter, inspect, import, or add one rule at a time.
+				</div>
 			</div>
 		</div>
 		<button class="btn btn-primary toolbar-action" on:click={() => (showCreate = !showCreate)}>
 			<Icon name={showCreate ? "chevron-left" : "plus"} size={14} strokeWidth={2} />
-			{showCreate ? "Close Form" : "New Standard"}
+			{showCreate ? "Close Editor" : "Add Rule"}
 		</button>
 		<div class="toolbar-actions">
 			<button class="btn btn-ghost btn-sm" on:click={exportStandards} disabled={exporting || standards.length === 0}>
@@ -357,10 +359,15 @@
 		</div>
 		<div class="toolbar-controls">
 			<input class="form-input" placeholder="Search standards..." bind:value={query} on:input={() => loadStandards()} />
-			<input class="form-input" placeholder="Language" bind:value={language} on:input={() => loadStandards()} />
 			<input
 				class="form-input"
-				placeholder="Stack tags, comma separated"
+				placeholder="Language, e.g. typescript"
+				bind:value={language}
+				on:input={() => loadStandards()}
+			/>
+			<input
+				class="form-input"
+				placeholder="Stack tags, e.g. svelte, vite"
 				bind:value={stack}
 				on:input={() => loadStandards()}
 			/>
@@ -369,6 +376,25 @@
 				<option value="global">Global only</option>
 				<option value="all">All standards</option>
 			</select>
+		</div>
+	</div>
+
+	<div class="insight-strip">
+		<div class="insight-card">
+			<span>Visible</span>
+			<strong>{standards.length}</strong>
+		</div>
+		<div class="insight-card">
+			<span>Scope</span>
+			<strong>{scope === "repo" ? "Repo + global" : scope === "global" ? "Global only" : "All"}</strong>
+		</div>
+		<div class="insight-card">
+			<span>Mode</span>
+			<strong>{showCreate ? "Editing" : selected ? "Reviewing" : "Browsing"}</strong>
+		</div>
+		<div class="insight-card">
+			<span>Focus</span>
+			<strong>{selected ? selected.context : "Pick a rule"}</strong>
 		</div>
 	</div>
 
@@ -383,8 +409,8 @@
 		<div class="glass card panel-card create-panel">
 			<div class="panel-heading">
 				<div>
-					<div class="section-label">New Standard</div>
-					<div class="toolbar-subtitle">Save one atomic coding standard for this repo or globally.</div>
+					<div class="section-label">Rule Editor</div>
+					<div class="toolbar-subtitle">Keep it atomic: one rule, one purpose, one clear outcome.</div>
 				</div>
 			</div>
 			<div class="form-grid">
@@ -474,7 +500,7 @@
 									<span>{node.standard.context}</span>
 									<span>{node.standard.language || "any language"}</span>
 									<span>{node.standard.is_global ? "global" : node.standard.repo || repo}</span>
-									<span>{node.children.length > 0 ? `${node.children.length} child` : "root"}</span>
+									<span>{node.children.length > 0 ? `${node.children.length} child rules` : "root rule"}</span>
 								</div>
 								{#if node.standard.stack.length || node.standard.tags.length}
 									<div class="tag-row">
@@ -500,7 +526,7 @@
 												<span>{child.context}</span>
 												<span>{child.language || "any language"}</span>
 												<span>{child.is_global ? "global" : child.repo || repo}</span>
-												<span>child</span>
+												<span>child rule</span>
 											</div>
 											{#if child.stack.length || child.tags.length}
 												<div class="tag-row">
@@ -603,8 +629,8 @@
 			{:else}
 				<div class="empty-state detail-empty">
 					<Icon name="book-open" size={22} strokeWidth={1.75} />
-					<div class="empty-title">Select a standard</div>
-					<div class="empty-copy">The full Markdown content and scope metadata appear here.</div>
+					<div class="empty-title">Select a rule</div>
+					<div class="empty-copy">The content, scope, and editing actions appear here.</div>
 				</div>
 			{/if}
 		</div>
@@ -646,6 +672,32 @@
 		color: var(--color-text-muted);
 		font-weight: 600;
 		margin-top: 2px;
+		line-height: 1.45;
+	}
+	.insight-strip {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 10px;
+	}
+	.insight-card {
+		padding: 12px 14px;
+		border-radius: 14px;
+		border: 1px solid var(--color-border);
+		background: rgba(255, 255, 255, 0.32);
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.insight-card span {
+		font-size: 0.66rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-muted);
+	}
+	.insight-card strong {
+		font-size: 0.84rem;
+		color: var(--color-text);
 	}
 	.toolbar-controls {
 		display: grid;
@@ -852,6 +904,7 @@
 		background: rgba(14, 165, 233, 0.12);
 	}
 	@media (max-width: 1100px) {
+		.insight-strip,
 		.toolbar-controls,
 		.feature-grid,
 		.form-grid {
