@@ -199,6 +199,8 @@ export const TaskUpdateSchema = z
 		parent_id: z.string().optional(),
 		depends_on: z.string().uuid().optional(),
 		est_tokens: z.number().int().min(0).optional(),
+		commit_id: z.string().optional(),
+		changed_files: z.array(z.string()).optional(),
 		force: z.boolean().optional(),
 		structured: z.boolean().default(false)
 	})
@@ -1149,7 +1151,7 @@ export const TOOL_DEFINITIONS = [
 		name: "task-update",
 		title: "Task Update",
 		description:
-			"Update one or more tasks. Supports single update via 'id' or bulk update via 'ids'. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task.",
+			"Update one or more tasks. Supports single update via 'id' or bulk update via 'ids'. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task. You may also include 'commit_id' (git commit hash) and 'changed_files' (list of files changed) for traceability.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -1197,6 +1199,15 @@ export const TOOL_DEFINITIONS = [
 					minimum: 0,
 					description:
 						"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
+				},
+				commit_id: {
+					type: "string",
+					description: "Git commit hash. Recommended when status changes to 'completed' for traceability."
+				},
+				changed_files: {
+					type: "array",
+					items: { type: "string" },
+					description: "List of files changed. Recommended when status changes to 'completed' for traceability."
 				},
 				force: {
 					type: "boolean",

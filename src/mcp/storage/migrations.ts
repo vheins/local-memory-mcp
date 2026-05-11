@@ -86,6 +86,8 @@ export class MigrationManager {
         depends_on TEXT,
         est_tokens INTEGER NOT NULL DEFAULT 0,
         in_progress_at TEXT,
+        commit_id TEXT,
+        changed_files TEXT,
         FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
         FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
       );
@@ -304,7 +306,17 @@ export class MigrationManager {
 			},
 			{ name: "role", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'" },
 			{ name: "doc_path", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN doc_path TEXT" },
-			{ name: "response", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN response TEXT" }
+			{ name: "response", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN response TEXT" },
+			{
+				name: "commit_id",
+				table: "tasks",
+				definition: "ALTER TABLE tasks ADD COLUMN commit_id TEXT"
+			},
+			{
+				name: "changed_files",
+				table: "tasks",
+				definition: "ALTER TABLE tasks ADD COLUMN changed_files TEXT"
+			}
 		];
 
 		for (const col of columnsToAdd) {
@@ -426,17 +438,21 @@ export class MigrationManager {
         depends_on TEXT,
         est_tokens INTEGER NOT NULL DEFAULT 0,
         in_progress_at TEXT,
+        commit_id TEXT,
+        changed_files TEXT,
         FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
         FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
       );
 
       INSERT INTO tasks__migrated (
         id, repo, task_code, phase, title, description, status, priority,
-        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
+        commit_id, changed_files
       )
       SELECT
         id, repo, task_code, phase, title, description, status, priority,
-        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
+        agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
+        commit_id, changed_files
       FROM tasks;
 
       DROP TABLE tasks;

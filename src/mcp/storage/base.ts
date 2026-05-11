@@ -90,6 +90,8 @@ export abstract class BaseEntity {
 			finished_at: (r.finished_at as string) || null,
 			canceled_at: (r.canceled_at as string) || null,
 			est_tokens: (r.est_tokens as number) || 0,
+			commit_id: (r.commit_id as string) || null,
+			changed_files: this.safeJSONParse<string[]>(r.changed_files as string, []),
 			tags: this.safeJSONParse<string[]>(r.tags as string, []),
 			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {}),
 			parent_id: (r.parent_id as string) || null,

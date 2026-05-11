@@ -20,8 +20,9 @@ export class TaskEntity extends BaseEntity {
 		this.run(
 			`INSERT INTO tasks (
 				id, repo, task_code, phase, title, description, status, priority,
-				agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
+				commit_id, changed_files
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				task.id,
 				task.repo,
@@ -43,7 +44,9 @@ export class TaskEntity extends BaseEntity {
 				task.parent_id || null,
 				task.depends_on || null,
 				task.est_tokens || 0,
-				task.in_progress_at || null
+				task.in_progress_at || null,
+				task.commit_id || null,
+				task.changed_files ? JSON.stringify(task.changed_files) : null
 			]
 		);
 	}
@@ -70,12 +73,14 @@ export class TaskEntity extends BaseEntity {
 			"parent_id",
 			"depends_on",
 			"est_tokens",
-			"in_progress_at"
+			"in_progress_at",
+			"commit_id",
+			"changed_files"
 		]);
 
 		Object.keys(updates).forEach((key) => {
 			if (VALID_COLUMNS.has(key) && anyUpdates[key] !== undefined) {
-				if (key === "tags" || key === "metadata") {
+				if (key === "tags" || key === "metadata" || key === "changed_files") {
 					fields.push(`${key} = ?`);
 					values.push(JSON.stringify(anyUpdates[key]));
 				} else {
@@ -337,8 +342,9 @@ export class TaskEntity extends BaseEntity {
 				this.run(
 					`INSERT INTO tasks (
 						id, repo, task_code, phase, title, description, status, priority,
-						agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+						agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
+						commit_id, changed_files
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
 						task.id,
 						task.repo,
@@ -360,7 +366,9 @@ export class TaskEntity extends BaseEntity {
 						task.parent_id || null,
 						task.depends_on || null,
 						task.est_tokens || 0,
-						task.in_progress_at || null
+						task.in_progress_at || null,
+						task.commit_id || null,
+						task.changed_files ? JSON.stringify(task.changed_files) : null
 					]
 				);
 				count++;

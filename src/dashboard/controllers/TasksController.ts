@@ -130,8 +130,16 @@ export class TasksController {
 				toolArgs.comment = `Status updated via dashboard to ${attributes.status}`;
 			}
 
-			if (attributes.status === "completed" && toolArgs.est_tokens === undefined) {
-				toolArgs.est_tokens = existingTask.est_tokens || 0;
+			if (attributes.status === "completed") {
+				if (toolArgs.est_tokens === undefined) {
+					toolArgs.est_tokens = existingTask.est_tokens || 0;
+				}
+				if (toolArgs.commit_id === undefined) {
+					toolArgs.commit_id = existingTask.commit_id || null;
+				}
+				if (toolArgs.changed_files === undefined) {
+					toolArgs.changed_files = existingTask.changed_files || [];
+				}
 			}
 
 			await mcpClient.callTool("task-update", toolArgs);

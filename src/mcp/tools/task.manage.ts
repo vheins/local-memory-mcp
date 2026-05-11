@@ -129,6 +129,13 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 	let content = `Task: [${task.task_code}] ${task.title}\n`;
 	content += `Phase: ${task.phase}\n`;
 	content += `Description: ${task.description || "No description"}\n`;
+	content += `Commit: ${task.commit_id || "N/A"}\n`;
+	if (task.changed_files && task.changed_files.length > 0) {
+		content += `Files changed:\n`;
+		for (const f of task.changed_files) {
+			content += `  - ${f}\n`;
+		}
+	}
 
 	if (comments && comments.length > 0) {
 		content += `\nComments & History:\n`;
@@ -575,8 +582,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			}
 		}
 
-		if (updates.status === "completed" && isStatusChanging && updates.est_tokens === undefined) {
-			throw new Error("est_tokens is required when changing task status to completed");
+		if (updates.status === "completed" && isStatusChanging) {
+			if (updates.est_tokens === undefined) {
+				throw new Error("est_tokens is required when changing task status to completed");
+			}
 		}
 
 		if (updates.task_code && storage.tasks.isTaskCodeDuplicate(repo, updates.task_code, targetId)) {
@@ -606,7 +615,11 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			finalUpdates.tags = currentTags;
 		}
 
-		if (updates.status === "completed") finalUpdates.finished_at = now;
+		if (updates.status === "completed") {
+		finalUpdates.finished_at = now;
+		finalUpdates.commit_id = updates.commit_id;
+		finalUpdates.changed_files = updates.changed_files;
+	}
 		else if (updates.status === "canceled") finalUpdates.canceled_at = now;
 		else if (updates.status === "in_progress" && existingTask.status !== "in_progress")
 			finalUpdates.in_progress_at = now;
@@ -641,7 +654,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 
 	const isCompleted = updates.status === "completed" && updatedCount > 0;
 	let summaryText = isCompleted
-		? `Updated ${updatedCount} task(s) in repo "${repo}". ✅ Task marked as completed — don't forget to commit your changes!`
+		? `Updated ${updatedCount} task(s) in repo "${repo}". ✅ Task marked as completed with commit ${updates.commit_id} (${(updates.changed_files || []).length} files changed).`
 		: `Updated ${updatedCount} task(s) in repo "${repo}".`;
 	if (releasedClaims || expiredHandoffs) {
 		summaryText += ` Auto-closed coordination: released ${releasedClaims} claim(s), expired ${expiredHandoffs} handoff(s).`;

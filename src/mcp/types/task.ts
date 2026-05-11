@@ -41,6 +41,8 @@ export interface Task {
 	finished_at: string | null;
 	canceled_at: string | null;
 	est_tokens: number;
+	commit_id: string | null;
+	changed_files: string[];
 	tags: string[];
 	metadata: Record<string, unknown>;
 	parent_id: string | null;
@@ -83,6 +85,8 @@ export interface TaskRow {
 	finished_at: string | null;
 	canceled_at: string | null;
 	est_tokens: number;
+	commit_id: string | null;
+	changed_files: string;
 	tags: string;
 	metadata: string;
 	parent_id: string | null;
