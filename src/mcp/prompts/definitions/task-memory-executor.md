@@ -94,7 +94,13 @@ agent: Task Executor
    - **Link Dependencies**: Set parent task's `depends_on` to the new blocker-fix task (parent waits for fix before retry)
    - **Skip Creation** (if external): Log that blocker is external, keep task status as `blocked`, no automatic task created.
 
-11. **Repeat**: Claim next task from `task-list`.
+11. **Loop**: Follow `~/.agents/AGENTS.md` → **CONTINUOUS EXECUTION MODE**:
+    - `task-list` (pending) → claim next
+    - If empty → promote backlog → loop
+    - If backlog empty → check stale in_progress → loop
+    - If stale empty → check handoff → loop
+    - **Only then → STOP**
+    - **Violation = incomplete execution**
 
 ## 3. BACKLOG MAINTENANCE
 If active queue is empty:
