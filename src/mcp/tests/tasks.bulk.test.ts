@@ -85,7 +85,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		expect(res.isError).toBe(false);
-		const task = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "BULK-NO-TOKENS");
+		const task = db.tasks.getTaskByCode(REPO, "BULK-NO-TOKENS");
 		expect(task?.est_tokens).toBe(0);
 	});
 
@@ -167,8 +167,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		const completedId = db.tasks.getTasksByRepo(REPO).find((task) => task.task_code === "SUM-001")?.id;
-		const inProgressId = db.tasks.getTasksByRepo(REPO).find((task) => task.task_code === "SUM-003")?.id;
+		const completedId = db.tasks.getTaskByCode(REPO, "SUM-001")?.id;
+		const inProgressId = db.tasks.getTaskByCode(REPO, "SUM-003")?.id;
 
 		await router("tools/call", {
 			name: "task-update",

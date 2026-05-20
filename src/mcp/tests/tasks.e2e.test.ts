@@ -63,7 +63,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 				est_tokens: 240
 			}
 		});
-		const taskB = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-002");
+		const taskB = db.tasks.getTaskByCode(REPO, "TASK-002");
 		expect(taskB).toBeDefined();
 		const taskBId = taskB!.id;
 
@@ -164,7 +164,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const taskId = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-003")?.id;
+		const taskId = db.tasks.getTaskByCode(REPO, "TASK-003")?.id;
 		expect(taskId).toBeDefined();
 
 		await expect(
@@ -196,7 +196,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const task = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-003A");
+		const task = db.tasks.getTaskByCode(REPO, "TASK-003A");
 		expect(task).toBeDefined();
 		expect(task?.est_tokens).toBe(0);
 	});
@@ -215,7 +215,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const taskId = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-003B")?.id;
+		const taskId = db.tasks.getTaskByCode(REPO, "TASK-003B")?.id;
 		expect(taskId).toBeDefined();
 
 		await router("tools/call", {
@@ -262,7 +262,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const taskId = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-004")?.id;
+		const taskId = db.tasks.getTaskByCode(REPO, "TASK-004")?.id;
 		expect(taskId).toBeDefined();
 
 		await router("tools/call", {
@@ -302,7 +302,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const createdTask = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-005");
+		const createdTask = db.tasks.getTaskByCode(REPO, "TASK-005");
 		expect(createdTask?.in_progress_at).toBeNull();
 		expect(createdTask?.finished_at).toBeNull();
 
