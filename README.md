@@ -98,15 +98,14 @@ npm run build
 
 > The server serves the compiled Svelte build from `dist/dashboard/public/` in production.
 
-### Auto-launch Dashboard di IDE
+### Auto-launch Dashboard in IDEs
 
-Dashboard bisa otomatis menyala setiap kali project dibuka di VS Code, Cursor, Windsurf, Zed, atau JetBrains IDEs.
+The dashboard can auto-start when you open a project in VS Code, Cursor, Windsurf, Zed, or JetBrains IDEs.
 
-📖 **[Lihat panduan lengkap auto-start dashboard →](docs/user/auto-start-dashboard.md)**
+📖 **[See the auto-start guide →](docs/en/auto-start-dashboard.md)**
 
 ## 📖 Documentation
 
-### English (en)
 - [Getting Started & Setup](docs/en/getting-started.md) — Installation & client configuration
 - [Tool Reference & Usage Guide](docs/en/tools-reference.md) — Complete tool docs with examples and workflows
 - [Troubleshooting Guide](docs/en/troubleshooting.md) — Fix common issues
@@ -119,24 +118,9 @@ Dashboard bisa otomatis menyala setiap kali project dibuka di VS Code, Cursor, W
 - [Kiro Integration](docs/en/kiro-integration.md) — Setup for Kiro IDE
 - [Auto-Start Dashboard in IDEs](docs/en/auto-start-dashboard.md) — tasks.json for VS Code, Cursor, Windsurf, Zed, JetBrains
 
-### Bahasa Indonesia (id)
-- [Memulai & Instalasi](docs/id/getting-started.md) — Instalasi dan konfigurasi klien
-- [Panduan Penggunaan Tools](docs/id/tools-reference.md) — Dokumentasi tools lengkap dengan contoh dan alur kerja
-- [Panduan Pemecahan Masalah](docs/id/troubleshooting.md) — Mengatasi masalah umum
-- [Fitur & Cara Kerja](docs/id/features.md) — Semantic search, anti-hallusinasi, decay memori
-- [Logika Hybrid Search](docs/id/hybrid-search.md) — Cara kerja skoring pencarian
-- [Panduan Dashboard](docs/id/dashboard-guide.md) — UI web untuk manajemen memori & task
-- [Referensi Protokol MCP](docs/id/mcp-concepts.md) — Detail teknis protokol
-- [Integrasi dengan Claude Code](docs/id/claude-code-integration.md) — Panduan setup untuk Claude Code CLI
-- [Integrasi dengan Codex (OpenAI)](docs/id/codex-integration.md) — Panduan setup untuk Codex CLI
-- [Integrasi dengan Kiro](docs/id/kiro-integration.md) — Panduan setup untuk Kiro IDE
-- [Auto-Start Dashboard di IDE](docs/id/auto-start-dashboard.md) — tasks.json untuk VS Code, Cursor, Windsurf, Zed, JetBrains
+> 🇮🇩 **Indonesian version available:** [`README.id.md`](README.id.md) & docs in [`docs/id/`](docs/id/)
 
-### Lainnya
 - [Contribution Guidelines](CONTRIBUTING.md)
-- [Architecture & Design](.agents/documents/design/architecture/architecture.md) (Developer)
-- [Implementation Details](.agents/documents/implementation-details.md) (Developer)
-- [Debugging Guide](.agents/documents/debugging-guide.md) (Developer)
 
 ## ⚠️ Disclaimer
 
