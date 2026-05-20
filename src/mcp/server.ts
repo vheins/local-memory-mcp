@@ -16,6 +16,8 @@ import {
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import fs from "fs";
 import path from "path";
+import { SamplingCreateMessageResult } from "./sampling.js";
+import { ElicitationCreateResult } from "./elicitation.js";
 
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
@@ -86,8 +88,8 @@ const resourceSubscriptions = new Set<string>();
 let logNotificationsEnabled = false;
 const handleMethod = createRouter(db, vectors, {
 	getSessionContext: () => session,
-	sampleMessage: (params) => requestClient("sampling/createMessage", params) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-	elicit: (params) => requestClient("elicitation/create", params) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+	sampleMessage: (params) => requestClient<SamplingCreateMessageResult>("sampling/createMessage", params),
+	elicit: (params) => requestClient<ElicitationCreateResult>("elicitation/create", params),
 	onResourcesMutated: (uris) => notifyUpdatedResources(uris)
 });
 
@@ -151,7 +153,7 @@ const pendingClientRequests = new Map<
 >();
 let outgoingRequestId = 0;
 
-function requestClient(method: string, params: unknown = {}) {
+function requestClient<T = unknown>(method: string, params: unknown = {}): Promise<T> {
 	const id = `server:${++outgoingRequestId}`;
 
 	reply({
@@ -161,8 +163,8 @@ function requestClient(method: string, params: unknown = {}) {
 		params
 	});
 
-	return new Promise((resolve, reject) => {
-		pendingClientRequests.set(id, { method, resolve, reject });
+	return new Promise<T>((resolve, reject) => {
+		pendingClientRequests.set(id, { method, resolve: resolve as (value: unknown) => void, reject });
 	});
 }
 
