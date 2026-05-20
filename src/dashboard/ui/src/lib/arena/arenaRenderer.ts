@@ -1292,7 +1292,16 @@ export class ArenaRenderer {
 		this.drawFlowerVase(ctx, x + 20, y + 20, isDark);
 	}
 
-	private drawMonitorActivity(task: VisualTask, sx: number, sy: number, sw: number, sh: number, color: string, isDark: boolean, ts: number) {
+	private drawMonitorActivity(
+		task: VisualTask,
+		sx: number,
+		sy: number,
+		sw: number,
+		sh: number,
+		color: string,
+		isDark: boolean,
+		ts: number
+	) {
 		const { ctx } = this;
 		const active = !!task.claimedByAgentId;
 		const seed = strHash(task.id);

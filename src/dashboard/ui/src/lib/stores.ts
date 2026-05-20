@@ -104,11 +104,12 @@ export function initPersistedState() {
 
 	const storedPreference = localStorage.getItem("themePreference");
 	const legacyTheme = localStorage.getItem("theme");
-	const savedPreference: ThemePreference = storedPreference === "auto" || storedPreference === "light" || storedPreference === "dark"
-		? storedPreference
-		: legacyTheme === "dark" || legacyTheme === "light"
-			? legacyTheme
-			: "auto";
+	const savedPreference: ThemePreference =
+		storedPreference === "auto" || storedPreference === "light" || storedPreference === "dark"
+			? storedPreference
+			: legacyTheme === "dark" || legacyTheme === "light"
+				? legacyTheme
+				: "auto";
 
 	themePreference.set(savedPreference);
 	const resolvedTheme = resolveTheme(savedPreference);
