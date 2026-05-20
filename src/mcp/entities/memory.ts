@@ -476,8 +476,12 @@ export class MemoryEntity extends BaseEntity {
 		if (candidates.length < 5) {
 			const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
 			const recent = this.all<MemoryRow>(recentSql, [...params, now.toISOString()]);
+			const candidateIds = new Set(candidates.map((c) => c.id));
 			for (const r of recent) {
-				if (!candidates.find((c) => c.id === r.id)) candidates.push(r);
+				if (!candidateIds.has(r.id)) {
+						candidateIds.add(r.id);
+						candidates.push(r);
+					}
 			}
 		}
 
