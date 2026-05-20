@@ -49,10 +49,6 @@ export async function handleMemoryDelete(
 	const validIdsToDelete: string[] = [];
 
 	for (const targetId of targetIds) {
-		if (onProgress) {
-			onProgress(progress, total);
-		}
-
 		const existing = existingMap.get(targetId);
 		if (existing) {
 			lastRepo = existing.scope.repo;
@@ -61,13 +57,16 @@ export async function handleMemoryDelete(
 		} else if (id) {
 			throw new Error(`Memory not found: ${targetId}`);
 		}
-		progress++;
 	}
 
 	if (validIdsToDelete.length > 0) {
 		db.memories.bulkDeleteMemories(validIdsToDelete);
 		for (const validId of validIdsToDelete) {
+			if (onProgress) {
+				onProgress(progress, total);
+			}
 			await vectors.remove(validId);
+			progress++;
 		}
 		deletedCount = validIdsToDelete.length;
 	}
