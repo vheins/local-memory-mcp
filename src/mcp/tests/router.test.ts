@@ -1,7 +1,7 @@
 // Feature: memory-mcp-optimization, Property 11: createRouter() uses provided storage
 import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
-import { createRouter } from "../router";
+import { createRouter, validateRootBoundPath } from "../router";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createSessionContext, updateSessionRoots } from "../session";
@@ -587,5 +587,39 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			(entry) => entry.type === "resource_link"
 		);
 		expect(resourceLinks.length).toBe(0);
+	});
+});
+
+describe("validateRootBoundPath", () => {
+	it("should not throw if value is not a string", () => {
+		const session = createSessionContext();
+		expect(() => validateRootBoundPath(123, "field", session)).not.toThrow();
+		expect(() => validateRootBoundPath({}, "field", session)).not.toThrow();
+		expect(() => validateRootBoundPath(null, "field", session)).not.toThrow();
+	});
+
+	it("should not throw if value is a relative path", () => {
+		const session = createSessionContext();
+		expect(() => validateRootBoundPath("relative/path/to/file.ts", "field", session)).not.toThrow();
+	});
+
+	it("should not throw if value is an absolute path within roots", () => {
+		const session = createSessionContext();
+		const rootPath = path.resolve("/allowed/root");
+		updateSessionRoots(session, [{ uri: `file://${rootPath}`, name: "root" }]);
+
+		const allowedPath = path.resolve(rootPath, "src/index.ts");
+		expect(() => validateRootBoundPath(allowedPath, "field", session)).not.toThrow();
+	});
+
+	it("should throw if value is an absolute path outside roots", () => {
+		const session = createSessionContext();
+		const rootPath = path.resolve("/allowed/root");
+		updateSessionRoots(session, [{ uri: `file://${rootPath}`, name: "root" }]);
+
+		const outsidePath = path.resolve("/outside/root/src/index.ts");
+		expect(() => validateRootBoundPath(outsidePath, "field", session)).toThrowError(
+			"field must stay within the active MCP roots"
+		);
 	});
 });
