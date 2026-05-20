@@ -98,34 +98,45 @@ npm run build
 
 > The server serves the compiled Svelte build from `dist/dashboard/public/` in production.
 
-### Auto-launch in VS Code
-Add this to your `.vscode/tasks.json` to have the dashboard start automatically:
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Launch Memory Dashboard",
-      "type": "shell",
-      "command": "npx -y @vheins/local-memory-mcp dashboard",
-      "isBackground": true,
-      "runOptions": { "runOn": "folderOpen" }
-    }
-  ]
-}
-```
+### Auto-launch Dashboard di IDE
+
+Dashboard bisa otomatis menyala setiap kali project dibuka di VS Code, Cursor, Windsurf, Zed, atau JetBrains IDEs.
+
+📖 **[Lihat panduan lengkap auto-start dashboard →](docs/user/auto-start-dashboard.md)**
 
 ## 📖 Documentation
 
-- [Getting Started & Setup](docs/user/getting-started.md)
-- [How it Works & Features](docs/user/features.md)
-- [Dashboard Guide](docs/user/dashboard-guide.md)
-- [MCP Protocol Reference](docs/user/mcp-concepts.md)
-- [Hybrid Search Logic](docs/user/hybrid-search.md)
+### English (en)
+- [Getting Started & Setup](docs/en/getting-started.md) — Installation & client configuration
+- [Tool Reference & Usage Guide](docs/en/tools-reference.md) — Complete tool docs with examples and workflows
+- [Troubleshooting Guide](docs/en/troubleshooting.md) — Fix common issues
+- [Features & How It Works](docs/en/features.md) — Semantic search, anti-hallucination, memory decay
+- [Hybrid Search Logic](docs/en/hybrid-search.md) — How search scoring works
+- [Dashboard Guide](docs/en/dashboard-guide.md) — Web UI for memory & task management
+- [MCP Protocol Reference](docs/en/mcp-concepts.md) — Technical protocol details
+- [Claude Code Integration](docs/en/claude-code-integration.md) — Setup for Claude Code CLI
+- [Codex (OpenAI) Integration](docs/en/codex-integration.md) — Setup for Codex CLI
+- [Kiro Integration](docs/en/kiro-integration.md) — Setup for Kiro IDE
+- [Auto-Start Dashboard in IDEs](docs/en/auto-start-dashboard.md) — tasks.json for VS Code, Cursor, Windsurf, Zed, JetBrains
+
+### Bahasa Indonesia (id)
+- [Memulai & Instalasi](docs/id/getting-started.md) — Instalasi dan konfigurasi klien
+- [Panduan Penggunaan Tools](docs/id/tools-reference.md) — Dokumentasi tools lengkap dengan contoh dan alur kerja
+- [Panduan Pemecahan Masalah](docs/id/troubleshooting.md) — Mengatasi masalah umum
+- [Fitur & Cara Kerja](docs/id/features.md) — Semantic search, anti-hallusinasi, decay memori
+- [Logika Hybrid Search](docs/id/hybrid-search.md) — Cara kerja skoring pencarian
+- [Panduan Dashboard](docs/id/dashboard-guide.md) — UI web untuk manajemen memori & task
+- [Referensi Protokol MCP](docs/id/mcp-concepts.md) — Detail teknis protokol
+- [Integrasi dengan Claude Code](docs/id/claude-code-integration.md) — Panduan setup untuk Claude Code CLI
+- [Integrasi dengan Codex (OpenAI)](docs/id/codex-integration.md) — Panduan setup untuk Codex CLI
+- [Integrasi dengan Kiro](docs/id/kiro-integration.md) — Panduan setup untuk Kiro IDE
+- [Auto-Start Dashboard di IDE](docs/id/auto-start-dashboard.md) — tasks.json untuk VS Code, Cursor, Windsurf, Zed, JetBrains
+
+### Lainnya
 - [Contribution Guidelines](CONTRIBUTING.md)
-- [Developer: Architecture & Design](.agents/documents/design/architecture/architecture.md)
-- [Developer: Implementation Details](.agents/documents/implementation-details.md)
-- [Developer: Debugging Guide](.agents/documents/debugging-guide.md)
+- [Architecture & Design](.agents/documents/design/architecture/architecture.md) (Developer)
+- [Implementation Details](.agents/documents/implementation-details.md) (Developer)
+- [Debugging Guide](.agents/documents/debugging-guide.md) (Developer)
 
 ## ⚠️ Disclaimer
 
