@@ -622,4 +622,9 @@ describe("validateRootBoundPath", () => {
 			"field must stay within the active MCP roots"
 		);
 	});
+
+	it("should not throw if session is undefined", () => {
+		const outsidePath = path.resolve("/outside/root/src/index.ts");
+		expect(() => validateRootBoundPath(outsidePath, "field")).not.toThrow();
+	});
 });
