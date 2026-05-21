@@ -112,9 +112,12 @@ export const MemoryDeleteSchema = z
 		codes: z.array(z.string().max(20)).min(1).optional(),
 		structured: z.boolean().default(false)
 	})
-	.refine((data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined, {
-		message: "Either 'id', 'ids', 'code', or 'codes' must be provided for deletion"
-	});
+	.refine(
+		(data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined,
+		{
+			message: "Either 'id', 'ids', 'code', or 'codes' must be provided for deletion"
+		}
+	);
 
 export const MemorySummarizeSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
@@ -282,9 +285,12 @@ export const StandardDeleteSchema = z
 		codes: z.array(z.string().max(20)).min(1).optional(),
 		structured: z.boolean().default(false)
 	})
-	.refine((data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined, {
-		message: "Either 'id', 'ids', 'code', or 'codes' must be provided for deletion"
-	});
+	.refine(
+		(data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined,
+		{
+			message: "Either 'id', 'ids', 'code', or 'codes' must be provided for deletion"
+		}
+	);
 
 export const TaskGetSchema = z
 	.object({
@@ -545,7 +551,8 @@ export const TOOL_DEFINITIONS = [
 				description: {
 					type: "string",
 					minLength: 1,
-					description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+					description:
+						"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
 				},
 				status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
 				priority: {
@@ -977,7 +984,11 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name (optional for single id)" },
-				id: { type: "string", format: "uuid", description: "Coding standard ID to delete. Optional if code is provided." },
+				id: {
+					type: "string",
+					format: "uuid",
+					description: "Coding standard ID to delete. Optional if code is provided."
+				},
 				ids: {
 					type: "array",
 					items: { type: "string", format: "uuid" },
@@ -1128,7 +1139,11 @@ export const TOOL_DEFINITIONS = [
 				doc_path: { type: "string" },
 				tags: { type: "array", items: { type: "string" } },
 				metadata: { type: "object" },
-				parent_id: { type: "string", description: "Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing." },
+				parent_id: {
+					type: "string",
+					description:
+						"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
+				},
 				depends_on: { type: "string", format: "uuid" },
 				est_tokens: { type: "number", minimum: 0, description: "Estimated tokens budget for this task" },
 				tasks: {
@@ -1141,7 +1156,8 @@ export const TOOL_DEFINITIONS = [
 							title: { type: "string", minLength: 3, maxLength: 100 },
 							description: {
 								type: "string",
-								description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+								description:
+									"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
 							},
 							status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
 							priority: {
@@ -1156,7 +1172,11 @@ export const TOOL_DEFINITIONS = [
 							doc_path: { type: "string" },
 							tags: { type: "array", items: { type: "string" } },
 							metadata: { type: "object" },
-							parent_id: { type: "string", description: "Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing." },
+							parent_id: {
+								type: "string",
+								description:
+									"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
+							},
 							depends_on: { type: "string", format: "uuid" },
 							est_tokens: { type: "number", minimum: 0 }
 						},
@@ -1205,9 +1225,10 @@ export const TOOL_DEFINITIONS = [
 				phase: { type: "string" },
 				title: { type: "string", minLength: 3, maxLength: 100 },
 				description: {
-								type: "string",
-								description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
-							},
+					type: "string",
+					description:
+						"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+				},
 				status: {
 					type: "string",
 					enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
@@ -1230,7 +1251,11 @@ export const TOOL_DEFINITIONS = [
 				doc_path: { type: "string" },
 				tags: { type: "array", items: { type: "string" } },
 				metadata: { type: "object" },
-				parent_id: { type: "string", description: "Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing." },
+				parent_id: {
+					type: "string",
+					description:
+						"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
+				},
 				depends_on: { type: "string", format: "uuid" },
 				est_tokens: {
 					type: "number",
@@ -1287,7 +1312,11 @@ export const TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				repo: { type: "string", description: "Repository name" },
-				id: { type: "string", format: "uuid", description: "Task ID (for single deletion). Optional if task_code is provided." },
+				id: {
+					type: "string",
+					format: "uuid",
+					description: "Task ID (for single deletion). Optional if task_code is provided."
+				},
 				ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk deletion)" },
 				task_code: { type: "string", description: "Task code (e.g. TASK-001). Optional if id is provided." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
