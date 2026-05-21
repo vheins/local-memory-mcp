@@ -203,7 +203,7 @@ describe("Task Status Transitions", () => {
 
 		// to blocked from pending
 		await createTask("TASK-002", "pending");
-		const task2 = db.tasks.getTasksByRepo(REPO).find((t) => t.task_code === "TASK-002");
+		const task2 = db.tasks.getTaskByCode(REPO, "TASK-002");
 		if (!task2) throw new Error("Task TASK-002 not found");
 
 		await handleTaskUpdate(

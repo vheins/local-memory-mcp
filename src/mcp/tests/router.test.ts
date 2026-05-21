@@ -1,11 +1,12 @@
 // Feature: memory-mcp-optimization, Property 11: createRouter() uses provided storage
 import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
-import { createRouter } from "../router";
-import { SQLiteStore } from "../storage/sqlite";
-import { VectorStore } from "../types";
 import { createSessionContext, updateSessionRoots } from "../session";
 import path from "node:path";
+import { createRouter } from "../router";
+import { validateRootBoundPath } from "../router";
+import { SQLiteStore } from "../storage/sqlite";
+import { VectorStore } from "../types";
 
 /**
  * Property 11: createRouter() menggunakan storage yang diberikan
@@ -587,5 +588,42 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			(entry) => entry.type === "resource_link"
 		);
 		expect(resourceLinks.length).toBe(0);
+	});
+});
+
+describe("validateRootBoundPath", () => {
+	it("should return early if value is not a string", () => {
+		expect(() => validateRootBoundPath(123, "field")).not.toThrow();
+		expect(() => validateRootBoundPath(null, "field")).not.toThrow();
+		expect(() => validateRootBoundPath({}, "field")).not.toThrow();
+		expect(() => validateRootBoundPath(undefined, "field")).not.toThrow();
+	});
+
+	it("should return early if value is not an absolute path", () => {
+		expect(() => validateRootBoundPath("relative/path", "field")).not.toThrow();
+		expect(() => validateRootBoundPath("./relative/path", "field")).not.toThrow();
+	});
+
+	it("should throw an error if path is outside allowed roots", () => {
+		const session = createSessionContext();
+		updateSessionRoots(session, [{ uri: "file:///allowed/root", name: "root" }]);
+
+		const outsidePath = path.resolve("/outside/root/file.txt");
+		expect(() => validateRootBoundPath(outsidePath, "my_field", session)).toThrowError(
+			"my_field must stay within the active MCP roots"
+		);
+	});
+
+	it("should not throw if path is within allowed roots", () => {
+		const session = createSessionContext();
+		updateSessionRoots(session, [{ uri: "file:///allowed/root", name: "root" }]);
+
+		const insidePath = path.resolve("/allowed/root/file.txt");
+		expect(() => validateRootBoundPath(insidePath, "my_field", session)).not.toThrow();
+	});
+
+	it("should not throw if no session or roots are provided (isPathWithinRoots returns true by default)", () => {
+		const insidePath = path.resolve("/allowed/root/file.txt");
+		expect(() => validateRootBoundPath(insidePath, "my_field")).not.toThrow();
 	});
 });
