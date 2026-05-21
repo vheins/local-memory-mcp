@@ -402,15 +402,13 @@ export class TaskEntity extends BaseEntity {
 		const values: unknown[] = [];
 		const anyUpdates = updates as Record<string, unknown>;
 		const VALID_COLUMNS = new Set([
-			"task_id",
 			"repo",
 			"comment",
 			"agent",
 			"role",
 			"model",
 			"previous_status",
-			"next_status",
-			"created_at"
+			"next_status"
 		]);
 
 		Object.keys(updates).forEach((key) => {

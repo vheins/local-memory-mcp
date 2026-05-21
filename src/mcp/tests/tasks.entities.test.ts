@@ -73,4 +73,158 @@ describe("TaskEntity - updateTaskComment", () => {
 		expect(updatedComment?.comment).toBe("Updated comment");
 		expect((updatedComment as any).non_existent_column).toBeUndefined();
 	});
+
+	it("should handle empty updates ({}) gracefully", () => {
+		const taskId = "task-empty";
+		db.tasks.insertTask({
+			id: taskId,
+			repo: "test-repo",
+			task_code: "TASK-EMPTY",
+			phase: "execute",
+			title: "Empty Test",
+			description: "",
+			status: "pending",
+			priority: "medium",
+			agent: "test",
+			role: "test",
+			doc_path: null,
+			finished_at: null,
+			canceled_at: null,
+			tags: null,
+			metadata: null,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+			parent_id: null,
+			depends_on: null,
+			est_tokens: null,
+			in_progress_at: null,
+			commit_id: null,
+			changed_files: null
+		});
+
+		const commentId = "comment-empty";
+		db.tasks.insertTaskComment({
+			id: commentId,
+			task_id: taskId,
+			repo: "test-repo",
+			comment: "Original",
+			agent: "test",
+			role: "test",
+			model: "test",
+			previous_status: null,
+			next_status: null,
+			created_at: new Date().toISOString()
+		});
+
+		// Empty update
+		db.tasks.updateTaskComment(commentId, {});
+
+		const updated = db.tasks.getTaskCommentById(commentId);
+		expect(updated?.comment).toBe("Original");
+	});
+
+	it("should not update if all keys are invalid", () => {
+		const taskId = "task-inv";
+		db.tasks.insertTask({
+			id: taskId,
+			repo: "test-repo",
+			task_code: "TASK-INV",
+			phase: "execute",
+			title: "Inv Test",
+			description: "",
+			status: "pending",
+			priority: "medium",
+			agent: "test",
+			role: "test",
+			doc_path: null,
+			finished_at: null,
+			canceled_at: null,
+			tags: null,
+			metadata: null,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+			parent_id: null,
+			depends_on: null,
+			est_tokens: null,
+			in_progress_at: null,
+			commit_id: null,
+			changed_files: null
+		});
+
+		const commentId = "comment-inv";
+		db.tasks.insertTaskComment({
+			id: commentId,
+			task_id: taskId,
+			repo: "test-repo",
+			comment: "Original",
+			agent: "test",
+			role: "test",
+			model: "test",
+			previous_status: null,
+			next_status: null,
+			created_at: new Date().toISOString()
+		});
+
+		db.tasks.updateTaskComment(commentId, {
+			"invalid_key": "val1",
+			"task_id": "new-task-id", // task_id should be ignored
+			"created_at": new Date().toISOString() // created_at should be ignored
+		} as any);
+
+		const updated = db.tasks.getTaskCommentById(commentId);
+		expect(updated?.comment).toBe("Original");
+		expect(updated?.task_id).toBe(taskId);
+	});
+
+	it("should not update valid keys with undefined values", () => {
+		const taskId = "task-undef";
+		db.tasks.insertTask({
+			id: taskId,
+			repo: "test-repo",
+			task_code: "TASK-UNDEF",
+			phase: "execute",
+			title: "Undef Test",
+			description: "",
+			status: "pending",
+			priority: "medium",
+			agent: "test",
+			role: "test",
+			doc_path: null,
+			finished_at: null,
+			canceled_at: null,
+			tags: null,
+			metadata: null,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+			parent_id: null,
+			depends_on: null,
+			est_tokens: null,
+			in_progress_at: null,
+			commit_id: null,
+			changed_files: null
+		});
+
+		const commentId = "comment-undef";
+		db.tasks.insertTaskComment({
+			id: commentId,
+			task_id: taskId,
+			repo: "test-repo",
+			comment: "Original",
+			agent: "test",
+			role: "test",
+			model: "test",
+			previous_status: null,
+			next_status: null,
+			created_at: new Date().toISOString()
+		});
+
+		db.tasks.updateTaskComment(commentId, {
+			comment: undefined,
+			agent: "new-agent"
+		});
+
+		const updated = db.tasks.getTaskCommentById(commentId);
+		expect(updated?.comment).toBe("Original");
+		expect(updated?.agent).toBe("new-agent");
+	});
 });
