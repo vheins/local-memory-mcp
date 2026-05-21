@@ -17,37 +17,24 @@ export class MemoryArchiveEntity extends BaseEntity {
 	}
 
 	archiveExpiredMemories(force: boolean = false): number {
+		if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
 		const now = new Date().toISOString();
-		if (!force) {
-			const activeCount = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM memories WHERE status = 'active'`)?.count ?? 0;
-			if (activeCount < 100) return 0;
-		}
-
-		return this.transaction(() => {
-			const result = this.run(
-				`UPDATE memories SET status = 'archived', updated_at = ? WHERE expires_at IS NOT NULL AND expires_at <= ? AND status = 'active'`,
-				[now, now]
-			);
-			return result.changes;
-		});
+		const result = this.run(
+			`UPDATE memories SET status = 'archived', updated_at = ? WHERE expires_at IS NOT NULL AND expires_at <= ? AND status = 'active'`,
+			[now, now]
+		);
+		return result.changes;
 	}
 
 	archiveLowScoreMemories(force: boolean = false): number {
-		if (!force) {
-			const activeCount = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM memories WHERE status = 'active'`)?.count ?? 0;
-			if (activeCount < 100) return 0;
-		}
-
-		const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-
-		return this.transaction(() => {
-			const result = this.run(
-				`UPDATE memories SET status = 'archived', updated_at = ? WHERE status = 'active' AND (
-					(importance <= 2 AND hit_count = 0 AND created_at < ?)
-				)`,
-				[new Date().toISOString(), threeDaysAgo]
-			);
-			return result.changes;
-		});
+		if (process.env.ENABLE_AUTO_ARCHIVE !== "true" && !force) return 0;
+		const result = this.run(
+			`UPDATE memories SET status = 'archived', updated_at = ? WHERE status = 'active' AND (
+				(julianday('now') - julianday(COALESCE(last_used_at, created_at)) > 90 AND importance < 3)
+				OR (hit_count > 10 AND recall_count = 0)
+			)`,
+			[new Date().toISOString()]
+		);
+		return result.changes;
 	}
 }

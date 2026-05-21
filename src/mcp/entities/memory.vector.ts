@@ -79,10 +79,11 @@ export class MemoryVectorEntity extends BaseEntity {
 
 				if (row.repo === repo) score += 0.1;
 
-				if (row.is_global) score += 0.05;
+
 
 				return { ...memory, similarity: score };
 			})
+			.filter((r) => r.similarity > 0)
 			.sort((a, b) => b.similarity - a.similarity)
 			.slice(0, limit);
 	}
