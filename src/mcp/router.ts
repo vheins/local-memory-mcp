@@ -433,7 +433,7 @@ function normalizeToolArguments(args: unknown, session?: SessionContext): Record
 	return nextArgs;
 }
 
-function validateRootBoundPath(value: unknown, field: string, session?: SessionContext): void {
+export function validateRootBoundPath(value: unknown, field: string, session?: SessionContext): void {
 	if (typeof value !== "string" || !path.isAbsolute(value)) {
 		return;
 	}
