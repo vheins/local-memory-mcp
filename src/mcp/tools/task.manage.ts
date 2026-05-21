@@ -351,7 +351,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	if (status === "pending") {
 		const stats = storage.tasks.getTaskStats(repo);
 		if (stats.todo >= 10) {
-			throw new Error(`Cannot create task as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`);
+			throw new Error(
+				`Cannot create task as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`
+			);
 		}
 	}
 
@@ -479,7 +481,8 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 	});
 	addRequiredStringField(properties, required, task, "description", {
 		title: "Description",
-		description: "Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification",
+		description:
+			"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification",
 		minLength: 1
 	});
 
@@ -616,11 +619,10 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		}
 
 		if (updates.status === "completed") {
-		finalUpdates.finished_at = now;
-		finalUpdates.commit_id = updates.commit_id;
-		finalUpdates.changed_files = updates.changed_files;
-	}
-		else if (updates.status === "canceled") finalUpdates.canceled_at = now;
+			finalUpdates.finished_at = now;
+			finalUpdates.commit_id = updates.commit_id;
+			finalUpdates.changed_files = updates.changed_files;
+		} else if (updates.status === "canceled") finalUpdates.canceled_at = now;
 		else if (updates.status === "in_progress" && existingTask.status !== "in_progress")
 			finalUpdates.in_progress_at = now;
 

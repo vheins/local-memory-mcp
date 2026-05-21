@@ -171,7 +171,9 @@ export class StandardsController {
 				return res.status(400).json(jsonApiError("No standards found in import payload", 400));
 			}
 
-			const standards = rawStandards.map(normalizeStandardForImport).filter((item): item is CodingStandardEntry => !!item);
+			const standards = rawStandards
+				.map(normalizeStandardForImport)
+				.filter((item): item is CodingStandardEntry => !!item);
 			if (standards.length === 0) {
 				return res.status(400).json(jsonApiError("Import payload does not contain valid standards", 400));
 			}
@@ -183,7 +185,8 @@ export class StandardsController {
 
 			await db.withWrite(async () => {
 				for (const standard of standards) {
-					const existing = db.standards.getById(standard.id) || (standard.code ? db.standards.getByCode(standard.code) : null);
+					const existing =
+						db.standards.getById(standard.id) || (standard.code ? db.standards.getByCode(standard.code) : null);
 					if (existing) {
 						db.standards.update(existing.id, {
 							code: standard.code,

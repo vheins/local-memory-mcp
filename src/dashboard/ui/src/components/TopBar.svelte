@@ -203,7 +203,9 @@
 			<button
 				class="btn btn-ghost btn-icon btn-sm"
 				on:click={toggleTheme}
-				title={$themePreference === "auto" ? "Theme: auto (Shift+click for manual)" : "Theme: manual (Shift+click for auto)"}
+				title={$themePreference === "auto"
+					? "Theme: auto (Shift+click for manual)"
+					: "Theme: manual (Shift+click for auto)"}
 				aria-label="Toggle theme"
 			>
 				{#if $theme === "dark"}
