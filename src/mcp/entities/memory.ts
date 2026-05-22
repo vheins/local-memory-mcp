@@ -2,6 +2,24 @@ import { BaseEntity } from "../storage/base";
 import { MemoryEntry, MemoryRow, MemoryType, VectorStore } from "../types/index";
 import { CountResult, TypeCountResult, MemoryIdVector } from "../types/common";
 
+const VALID_COLUMNS = new Set([
+	"code",
+	"type",
+	"title",
+	"content",
+	"importance",
+	"agent",
+	"role",
+	"model",
+	"completed_at",
+	"expires_at",
+	"supersedes",
+	"status",
+	"hit_count",
+	"recall_count",
+	"last_used_at"
+]);
+
 export class MemoryEntity extends BaseEntity {
 	insert(entry: MemoryEntry): void {
 		this.run(
@@ -64,7 +82,7 @@ export class MemoryEntity extends BaseEntity {
 				} else if (k === "is_global") {
 					fields.push(`${k} = ?`);
 					values.push(val ? 1 : 0);
-				} else if (k !== "id" && k !== "created_at") {
+				} else if (VALID_COLUMNS.has(k)) {
 					fields.push(`${k} = ?`);
 					values.push(val);
 				}
@@ -212,13 +230,27 @@ export class MemoryEntity extends BaseEntity {
 		(Object.keys(updates) as (keyof MemoryEntry)[]).forEach((key) => {
 			const value = updates[key];
 			if (value !== undefined) {
-				if (key === "tags" || key === "metadata") {
+				if (key === "scope") {
+					const scope = updates.scope;
+					if (scope?.repo) {
+						fields.push("repo = ?");
+						values.push(scope.repo);
+					}
+					if (scope?.folder !== undefined) {
+						fields.push("folder = ?");
+						values.push(scope.folder);
+					}
+					if (scope?.language !== undefined) {
+						fields.push("language = ?");
+						values.push(scope.language);
+					}
+				} else if (key === "tags" || key === "metadata") {
 					fields.push(`${key} = ?`);
 					values.push(JSON.stringify(value));
 				} else if (key === "is_global") {
 					fields.push(`${key} = ?`);
 					values.push(value ? 1 : 0);
-				} else {
+				} else if (VALID_COLUMNS.has(key)) {
 					fields.push(`${key} = ?`);
 					values.push(value);
 				}
