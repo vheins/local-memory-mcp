@@ -317,7 +317,8 @@
 						<textarea
 							class="form-textarea"
 							placeholder="Add a comment or status note…"
-							bind:value={$handler.newComment}
+							value={$handler.newComment}
+							on:input={(e) => handler.setNewComment(e.currentTarget.value)}
 							rows="2"
 							style="font-size:0.82rem;resize:vertical;"
 							on:keydown={(e) => handler.handleCommentKeydown(e, onTaskUpdated)}
