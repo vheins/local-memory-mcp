@@ -24,6 +24,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				delete: vi.fn(),
 				getById: vi.fn().mockReturnValue(null),
 				searchByRepo: vi.fn().mockReturnValue([]),
+				searchBySimilarity: vi.fn().mockReturnValue([]),
 				getRecentMemories: vi.fn().mockReturnValue([]),
 				getTotalCount: vi.fn().mockReturnValue(0),
 				getSummary: vi.fn().mockReturnValue(null),
@@ -31,7 +32,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				incrementHitCount: vi.fn(),
 				incrementHitCounts: vi.fn(),
 				incrementRecallCount: vi.fn(),
-
+				archiveExpiredMemories: vi.fn().mockReturnValue(0),
+				upsertVectorEmbedding: vi.fn(),
+				checkConflicts: vi.fn().mockResolvedValue(null),
 				getStats: vi.fn().mockReturnValue({ total: 0, byType: {} })
 			},
 			tasks: {
@@ -43,16 +46,6 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				updateTask: vi.fn(),
 				deleteTask: vi.fn(),
 				getTaskById: vi.fn().mockReturnValue(null)
-			},
-			memoryVectors: {
-				searchBySimilarity: vi.fn().mockReturnValue([]),
-				upsertVectorEmbedding: vi.fn(),
-				checkConflicts: vi.fn().mockResolvedValue(null),
-			},
-			memoryArchives: {
-				archiveExpiredMemories: vi.fn().mockReturnValue(0),
-				archiveLowScoreMemories: vi.fn().mockReturnValue(0),
-				bulkDeleteMemories: vi.fn().mockReturnValue(0),
 			},
 			actions: {
 				logAction: vi.fn()
@@ -106,9 +99,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			arguments: { query: "test query", repo: "test-repo", limit: 5 }
 		});
 
-		expect(mockDb.memoryVectors.searchBySimilarity).toHaveBeenCalled();
+		expect(mockDb.memories.searchBySimilarity).toHaveBeenCalled();
 		// Verify the first argument to searchBySimilarity contains the repo
-		const callArgs = (mockDb.memoryVectors.searchBySimilarity as any).mock.calls[0];
+		const callArgs = (mockDb.memories.searchBySimilarity as any).mock.calls[0];
 		expect(callArgs[1]).toBe("test-repo");
 	});
 
@@ -565,7 +558,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 	it("returns resource links in memory-search results", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
-		(mockDb.memoryVectors.searchBySimilarity as any).mockReturnValue([
+		(mockDb.memories.searchBySimilarity as any).mockReturnValue([
 			{
 				id: "123e4567-e89b-12d3-a456-426614174000",
 				type: "decision",

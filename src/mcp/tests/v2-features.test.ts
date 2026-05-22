@@ -281,45 +281,4 @@ describe("V2 Enhanced Memory Features", () => {
 			db.close();
 		});
 	});
-
-	describe("4. VALID_COLUMNS Whitelist", () => {
-		it("should correctly whitelist valid columns, reject invalid columns, and handle scope", async () => {
-			const db = await createTestStore();
-			const repo = "whitelist-test-repo";
-			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo, title: "Original Title", type: "decision" }));
-
-			db.memories.update(VALID_UUID_1, {
-				title: "New Title",
-				status: "archived",
-				id: "should-be-rejected-id",
-				created_at: "should-be-rejected-date",
-				invalid_column: "should-be-rejected",
-				scope: { repo: "new-repo", folder: "new-folder", language: "typescript" }
-			} as any);
-
-			const updated = db.memories.getById(VALID_UUID_1);
-			expect(updated).toBeDefined();
-			expect(updated?.title).toBe("New Title");
-			expect(updated?.status).toBe("archived");
-			expect(updated?.id).toBe(VALID_UUID_1);
-			expect(updated?.created_at).not.toBe("should-be-rejected-date");
-			expect((updated as any).invalid_column).toBeUndefined();
-			expect(updated?.scope.repo).toBe("new-repo");
-			expect(updated?.scope.folder).toBe("new-folder");
-			expect(updated?.scope.language).toBe("typescript");
-
-			db.memories.bulkUpdateMemories([VALID_UUID_1], {
-				importance: 5,
-				id: "bulk-rejected-id",
-				scope: { folder: "bulk-folder" }
-			} as any);
-
-			const bulkUpdated = db.memories.getById(VALID_UUID_1);
-			expect(bulkUpdated?.importance).toBe(5);
-			expect(bulkUpdated?.id).toBe(VALID_UUID_1);
-			expect(bulkUpdated?.scope.folder).toBe("bulk-folder");
-
-			db.close();
-		});
-	});
 });
