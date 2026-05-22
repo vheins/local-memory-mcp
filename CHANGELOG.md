@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-05-22
+
+### Fixed
+
+- **Brand Name**: Corrected "Docubook" to "DocuBook" in changelog.
+
 ## [0.14.0] - 2026-05-22
 
 ### Added
 
-- **Ecosystem Section**: Added "Ecosystem" as a Reference category filter with TopBar navigation and dedicated section showing partner tools (Docubook).
+- **Ecosystem Section**: Added "Ecosystem" as a Reference category filter with TopBar navigation and dedicated section showing partner tools (DocuBook).
 - **FloatingChat**: Replaced QuickCreateFAB with a WhatsApp-style floating chat popup (380x560px) for quick backlog task creation.
 - **Chat Input**: Added send panel to Activity tab for creating backlog tasks directly from chat input.
 - **Donation Link**: Added coffee/donation link (teer.id) to TopBar external links group.
