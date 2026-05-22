@@ -167,7 +167,7 @@ export class MemoriesController {
 			const count = await db.withWrite(() => {
 				let n: number;
 				if (action === "delete") {
-					n = db.memories.bulkDeleteMemories(ids);
+					n = db.memoryArchives.bulkDeleteMemories(ids);
 				} else if (action === "update" || action === "archive") {
 					n = db.memories.bulkUpdateMemories(ids, updates || { status: action === "archive" ? "archived" : "active" });
 				} else {

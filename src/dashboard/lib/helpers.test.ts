@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { condenseRecentActions, RecentAction } from './helpers.js';
+import { condenseRecentActions, RecentAction } from './helpers';
 
 describe('condenseRecentActions', () => {
 	const baseAction: RecentAction = {

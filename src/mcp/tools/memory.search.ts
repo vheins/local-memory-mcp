@@ -18,7 +18,7 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 
 	// 1. Get Candidates from SQLite
 	const fetchLimit = (validated.offset + validated.limit) * 3;
-	const similarityResults = db.memories.searchBySimilarity(
+	const similarityResults = db.memoryVectors.searchBySimilarity(
 		searchQuery,
 		validated.repo,
 		fetchLimit,
