@@ -41,7 +41,7 @@
 	});
 
 	const appState = { subscribe: app.subscribe, set: app.set, update: app.update };
-	const { filteredTools, filteredPrompts, filteredResources, sidebarCollapsed, TABS } = app;
+	const { filteredTools, filteredPrompts, filteredResources, sidebarCollapsed } = app;
 
 	onMount(async () => {
 		initPersistedState();
@@ -109,20 +109,44 @@
 					</div>
 				</div>
 			{:else}
-				<!-- Tab nav -->
 				<div class="tabs-wrap">
 					<div class="tab-nav" style="display:inline-flex;">
-						{#each TABS as tab (tab.id)}
-							<button
-								class="tab-btn"
-								class:active={$activeTab === tab.id}
-								on:click={() => app.onTabChange(tab.id)}
-								id="tab-{tab.id}"
-							>
-								<Icon name={tab.icon} size={14} strokeWidth={1.75} />
-								<span>{tab.label}</span>
-							</button>
-						{/each}
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "activity"}
+							on:click={() => app.onTabChange("activity")}
+							id="tab-activity"
+						>
+							<Icon name="activity" size={14} strokeWidth={1.75} />
+							<span>Activity</span>
+						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "memories"}
+							on:click={() => app.onTabChange("memories")}
+							id="tab-memories"
+						>
+							<Icon name="brain" size={14} strokeWidth={1.75} />
+							<span>Memories</span>
+						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "tasks"}
+							on:click={() => app.onTabChange("tasks")}
+							id="tab-tasks"
+						>
+							<Icon name="clipboard-list" size={14} strokeWidth={1.75} />
+							<span>Tasks</span>
+						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "handoffs"}
+							on:click={() => app.onTabChange("handoffs")}
+							id="tab-handoffs"
+						>
+							<Icon name="git-branch" size={14} strokeWidth={1.75} />
+							<span>Handoffs</span>
+						</button>
 					</div>
 				</div>
 

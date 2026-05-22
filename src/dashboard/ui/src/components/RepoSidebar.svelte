@@ -1,9 +1,16 @@
 <script lang="ts">
-	import { availableRepos, currentRepo, isRepoSidebarCollapsed, orderedRepos, repoSearchQuery } from "../lib/stores";
+	import { availableRepos, currentRepo, isRepoSidebarCollapsed, orderedRepos, repoSearchQuery, activeTab } from "../lib/stores";
 	import { createRepoSidebarHandler } from "../lib/composables/useRepoSidebar";
 	import Icon from "../lib/Icon.svelte";
 
 	export let onRepoSelect: (repo: string) => void = () => {};
+
+	const SIDEBAR_TABS = [
+		{ id: "arena", label: "Agent Arena", icon: "cpu" },
+		{ id: "dashboard", label: "Dashboard", icon: "layout-dashboard" },
+		{ id: "standards", label: "Standards", icon: "check" },
+		{ id: "reference", label: "Reference", icon: "book-open" }
+	];
 
 	const handler = createRepoSidebarHandler(onRepoSelect);
 
@@ -41,6 +48,28 @@
 				<Icon name="chevron-left" size={14} strokeWidth={2} />
 			</span>
 		</button>
+	</div>
+
+	<!-- Navigation -->
+	<div class="nav-section" class:collapsed>
+		{#each SIDEBAR_TABS as tab (tab.id)}
+			<button
+				class="nav-item"
+				class:active={$activeTab === tab.id}
+				class:collapsed
+				on:click={() => activeTab.set(tab.id)}
+				title={collapsed ? tab.label : ""}
+				id="nav-{tab.id}"
+			>
+				<Icon name={tab.icon} size={collapsed ? 18 : 15} strokeWidth={collapsed ? 1.75 : 1.75} />
+				{#if !collapsed}
+					<span class="nav-label">{tab.label}</span>
+					{#if $activeTab === tab.id}
+						<span class="nav-active-dot"></span>
+					{/if}
+				{/if}
+			</button>
+		{/each}
 	</div>
 
 	<!-- Search -->
@@ -266,6 +295,80 @@
 
 	.collapse-btn {
 		flex-shrink: 0;
+	}
+
+	.nav-section {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px 8px 6px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.nav-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 10px;
+		border-radius: 9px;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		text-align: left;
+		position: relative;
+		width: 100%;
+	}
+
+	.nav-item:hover {
+		color: var(--color-text);
+		background: rgba(14, 165, 233, 0.07);
+	}
+
+	.nav-item.active {
+		color: var(--color-primary, #0ea5e9);
+		background: rgba(14, 165, 233, 0.1);
+	}
+
+	:global(html.dark) .nav-item:hover {
+		background: rgba(14, 165, 233, 0.1);
+	}
+
+	:global(html.dark) .nav-item.active {
+		background: rgba(56, 189, 248, 0.12);
+		color: #7dd3fc;
+	}
+
+	.nav-label {
+		flex: 1;
+	}
+
+	.nav-active-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--color-primary, #0ea5e9);
+		flex-shrink: 0;
+	}
+
+	:global(html.dark) .nav-active-dot {
+		background: #7dd3fc;
+	}
+
+	.nav-section.collapsed {
+		align-items: center;
+		padding: 6px 4px;
+		gap: 4px;
+	}
+
+	.nav-item.collapsed {
+		justify-content: center;
+		padding: 8px 4px;
+		width: auto;
+		align-self: stretch;
 	}
 
 	.search-wrapper {
