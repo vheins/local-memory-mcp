@@ -205,6 +205,8 @@ a:hover { color: var(--color-primary-dark); }
   width: var(--sidebar-width);
   height: 100dvh;
   overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
   transition: width 0.3s var(--ease-smooth);
   z-index: 40;
 }

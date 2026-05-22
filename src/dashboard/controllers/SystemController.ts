@@ -9,6 +9,14 @@ import { TOOL_DEFINITIONS } from "../../mcp/tools/schemas";
 import { listResources } from "../../mcp/resources/index";
 import { PROMPTS } from "../../mcp/prompts/registry";
 import type { RecentAction } from "../ui/src/lib/interfaces/common";
+import {
+	handleHandoffList,
+	handleHandoffCreate,
+	handleHandoffUpdate,
+	handleTaskClaim,
+	handleClaimList,
+	handleClaimRelease
+} from "../../mcp/tools/handoff.manage";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -170,9 +178,25 @@ export class SystemController {
 
 	static async callTool(req: express.Request, res: express.Response) {
 		try {
-			if (!mcpClient.isConnected()) await mcpClient.start();
 			const { name } = req.params as { name: string };
 			const args = getAttributes(req) as Record<string, unknown>;
+
+			const COORDINATION_TOOLS: Record<string, (args: unknown, storage: typeof db) => Promise<unknown>> = {
+				"handoff-list": handleHandoffList,
+				"handoff-create": handleHandoffCreate,
+				"handoff-update": handleHandoffUpdate,
+				"task-claim": handleTaskClaim,
+				"claim-list": handleClaimList,
+				"claim-release": handleClaimRelease
+			};
+
+			if (name in COORDINATION_TOOLS) {
+				const result = await COORDINATION_TOOLS[name](args, db);
+				res.json(jsonApiRes(result, "tool-result"));
+				return;
+			}
+
+			if (!mcpClient.isConnected()) await mcpClient.start();
 			const result = await mcpClient.callTool(name, args);
 			res.json(jsonApiRes(result, "tool-result"));
 		} catch (err: unknown) {
