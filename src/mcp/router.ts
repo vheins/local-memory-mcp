@@ -37,6 +37,7 @@ import {
 	handleTaskDelete
 } from "./tools/task.manage";
 import { handleTaskGet as handleTaskDetail } from "./tools/task.get";
+import { handleTaskSearch } from "./tools/task.search";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
@@ -266,6 +267,9 @@ export function createRouter(
 
 				case "task-list":
 					return await handleTaskList(args, db);
+
+				case "task-search":
+					return await handleTaskSearch(args, db);
 
 				case "task-detail":
 					return await handleTaskDetail(args, db);

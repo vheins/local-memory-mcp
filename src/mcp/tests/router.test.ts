@@ -23,6 +23,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				update: vi.fn(),
 				delete: vi.fn(),
 				getById: vi.fn().mockReturnValue(null),
+				getByIds: vi.fn().mockReturnValue([]),
+				getByCode: vi.fn().mockReturnValue(null),
 				searchByRepo: vi.fn().mockReturnValue([]),
 				getRecentMemories: vi.fn().mockReturnValue([]),
 				getTotalCount: vi.fn().mockReturnValue(0),
@@ -178,10 +180,42 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 					});
 
 					expect(mockDb.memories.insert).toHaveBeenCalled();
+					expect(mockDb.withWrite).toHaveBeenCalled();
 				}
 			),
 			{ numRuns: 100 }
 		);
+	});
+
+	it("write tools go through withWrite at the router level", async () => {
+		const mockDb = makeMockDb();
+		const mockVectors = makeMockVectors();
+		const validId = "123e4567-e89b-12d3-a456-426614174000";
+		(mockDb.memories.getByIds as any).mockReturnValue([
+			{ id: validId, code: "ABC123", scope: { repo: "test-repo" } }
+		]);
+		const router = createRouter(mockDb, mockVectors);
+
+		await router("tools/call", {
+			name: "memory-delete",
+			arguments: { id: validId, repo: "test-repo" }
+		});
+
+		expect(mockDb.withWrite).toHaveBeenCalled();
+		expect(mockDb.memoryArchives.bulkDeleteMemories).toHaveBeenCalledWith([validId]);
+	});
+
+	it("read tools do not go through withWrite for main execution", async () => {
+		const mockDb = makeMockDb();
+		const mockVectors = makeMockVectors();
+		const router = createRouter(mockDb, mockVectors);
+
+		await router("tools/call", {
+			name: "memory-search",
+			arguments: { query: "test", repo: "test-repo", limit: 5 }
+		});
+
+		expect(mockDb.memoryVectors.searchBySimilarity).toHaveBeenCalled();
 	});
 
 	it("different router instances use their own injected db independently", () => {

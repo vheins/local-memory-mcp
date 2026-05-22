@@ -36,9 +36,10 @@ export async function handleMemoryStore(
 	// Create memory entry
 	const now = new Date().toISOString();
 
-	// Compute expires_at if ttlDays is provided
+	// Compute expires_at if ttlDays is provided — use created_at base for determinism
+	const createdAtTime = new Date(now).getTime();
 	const expires_at =
-		validated.ttlDays != null ? new Date(Date.now() + validated.ttlDays * 86400000).toISOString() : null;
+		validated.ttlDays != null ? new Date(createdAtTime + validated.ttlDays * 86400000).toISOString() : null;
 
 	// Check for semantic conflicts before storing (threshold: 0.55)
 	// Skip for task_archive as similar tasks often have similar content

@@ -239,6 +239,8 @@ export const TaskSearchSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
 	query: z.string().min(1),
 	status: z.string().optional(),
+	phase: z.string().optional(),
+	priority: z.number().min(1).max(5).optional(),
 	limit: z.number().min(1).max(100).default(10),
 	offset: z.number().min(0).default(0),
 	structured: z.boolean().default(false)
@@ -1413,6 +1415,59 @@ export const TOOL_DEFINITIONS = [
 				offset: { type: "number" }
 			},
 			required: ["schema", "tasks", "count"]
+		}
+	},
+	{
+		name: "task-search",
+		title: "Task Search",
+		description:
+			"Dedicated search tool for tasks. Returns a compact pointer table of matching tasks [id, task_code, title, status, priority, updated_at, phase]. Use task-detail for full task content.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository name" },
+				query: { type: "string", minLength: 1, description: "Search keyword matching task code, title, or description" },
+				status: { type: "string", description: "Optional status filter (single or comma-separated)" },
+				phase: { type: "string", description: "Filter by phase (e.g., 'research', 'implementation')" },
+				priority: { type: "number", minimum: 1, maximum: 5, description: "Filter by priority (1-5)" },
+				limit: { type: "number", minimum: 1, maximum: 100, default: 10 },
+				offset: { type: "number", minimum: 0, default: 0 },
+				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+			},
+			required: ["repo", "query"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				schema: { type: "string", enum: ["task-search"] },
+				query: { type: "string" },
+				count: { type: "number", description: "Number of rows returned" },
+				total: { type: "number", description: "Total matching tasks before pagination" },
+				offset: { type: "number" },
+				limit: { type: "number" },
+				results: {
+					type: "object",
+					properties: {
+						columns: {
+							type: "array",
+							items: { type: "string" },
+							description: "Column names: [id, task_code, title, status, priority, updated_at, phase]"
+						},
+						rows: {
+							type: "array",
+							items: { type: "array" },
+							description: "Each row: [id, task_code, title, status, priority, updated_at, phase]. Use task-detail to fetch full task."
+						}
+					},
+					required: ["columns", "rows"]
+				}
+			},
+			required: ["schema", "query", "count", "total", "offset", "limit", "results"]
 		}
 	},
 	{

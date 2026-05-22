@@ -29,18 +29,34 @@ export class StubVectorStore implements VectorStore {
 		return normalized.filter((word) => !STOPWORDS.has(word));
 	}
 
-	// Calculate similarity between two token sets
-	private calculateSimilarity(tokens1: string[], tokens2: string[]): number {
-		if (tokens1.length === 0 || tokens2.length === 0) return 0;
+	// Convert token array to frequency vector for cosine similarity
+	private computeFrequencyVector(tokens: string[]): Record<string, number> {
+		const vector: Record<string, number> = {};
+		for (const token of tokens) {
+			vector[token] = (vector[token] || 0) + 1;
+		}
+		return vector;
+	}
 
-		const set1 = new Set(tokens1);
-		const set2 = new Set(tokens2);
+	// Compute cosine similarity between two frequency vectors
+	private cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
+		const keys1 = Object.keys(v1);
+		const keys2 = Object.keys(v2);
+		if (!keys1.length || !keys2.length) return 0;
 
-		// Jaccard similarity: intersection / union
-		const intersection = new Set([...set1].filter((x) => set2.has(x)));
-		const union = new Set([...set1, ...set2]);
+		let dotProduct = 0;
+		for (const key of keys1) {
+			if (v2[key]) dotProduct += v1[key] * v2[key];
+		}
 
-		return union.size > 0 ? intersection.size / union.size : 0;
+		let mag1 = 0;
+		for (const key of keys1) mag1 += v1[key] * v1[key];
+
+		let mag2 = 0;
+		for (const key of keys2) mag2 += v2[key] * v2[key];
+
+		const mag = Math.sqrt(mag1) * Math.sqrt(mag2);
+		return mag === 0 ? 0 : dotProduct / mag;
 	}
 
 	async upsert(id: string, text: string, kind: VectorEntityKind = "memory"): Promise<void> {
@@ -76,20 +92,42 @@ export class StubVectorStore implements VectorStore {
 		repo?: string,
 		kind: VectorEntityKind = "memory"
 	): Promise<VectorResult[]> {
-		void kind;
 		if (limit < 0) return [];
 		if (repo === "never") return [];
 		try {
-			// Get all memories and compute similarity to query
 			const queryTokens = this.generateTextVector(query);
+			if (queryTokens.length === 0) return [];
 
-			if (queryTokens.length === 0) {
-				return [];
+			const queryFreq = this.computeFrequencyVector(queryTokens);
+
+			// Get candidate vectors from DB (memory_vectors or coding_standards)
+			const candidates = (
+				kind === "standard"
+					? this.db.standards.getVectorCandidates(repo, 100)
+					: this.db.memoryVectors.getVectorCandidates(repo, 100)
+			).map((c: Record<string, unknown>) => ({
+				id: (c.standard_id ?? c.memory_id) as string,
+			}));
+
+			if (candidates.length === 0) return [];
+
+			const ids = candidates.map((c) => c.id);
+			const entries = (
+				kind === "standard"
+					? this.db.standards.getByIds(ids)
+					: this.db.memories.getByIds(ids)
+			) as { id: string; title: string; content: string }[];
+
+			const results: VectorResult[] = [];
+			for (const entry of entries) {
+				const text = `${entry.title} ${entry.content}`;
+				const entryTokens = this.generateTextVector(text);
+				const entryFreq = this.computeFrequencyVector(entryTokens);
+				const score = this.cosineSimilarity(queryFreq, entryFreq);
+				results.push({ id: entry.id, score });
 			}
 
-			// For now, return empty - we'll use similarity search in SQLite instead
-			// In production, you could implement approximate nearest neighbor search here
-			return [];
+			return results.sort((a, b) => b.score - a.score).slice(0, limit);
 		} catch (error) {
 			logger.error("Error searching vectors", { error: String(error) });
 			return [];

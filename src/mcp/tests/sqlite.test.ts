@@ -1,10 +1,11 @@
 // Feature: memory-mcp-optimization
 // Property tests for SQLiteStore — Properties 1, 6, 7, 8, 9, 10, 18, 19
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
 import { SQLiteStore, createTestStore } from "../storage/sqlite";
-import type { MemoryEntry } from "../types";
+import { handleMemoryStore } from "../tools/memory.store";
+import type { MemoryEntry, VectorStore } from "../types";
 
 type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
 
@@ -154,7 +155,47 @@ describe("Property 7: Pagination non-overlapping", () => {
 });
 
 describe("Property 8: TTL stores correct expires_at", () => {
-	it.skip("expires_at equals created_at + ttlDays * 86400 seconds - method not implemented", async () => {});
+	it("expires_at equals created_at + ttlDays * 86400 seconds", async () => {
+		const mockVectors: VectorStore = {
+			upsert: vi.fn().mockResolvedValue(undefined),
+			remove: vi.fn().mockResolvedValue(undefined),
+			search: vi.fn().mockResolvedValue([])
+		};
+
+		await fc.assert(
+			fc.asyncProperty(fc.integer({ min: 1, max: 365 }), async (ttlDays: number) => {
+				const db = await freshStore();
+				const repo = "p8-ttl";
+
+				const response = await handleMemoryStore(
+					{
+						type: "code_fact",
+						title: "TTL Test Memory",
+						content: "Testing that expires_at equals created_at plus ttlDays",
+						importance: 3,
+						scope: { repo },
+						agent: "test-agent",
+						model: "test-model",
+						ttlDays,
+						structured: true
+					},
+					db,
+					mockVectors
+				);
+
+				const stored = db.memories.getById(
+					(response.structuredContent as Record<string, unknown>).id as string
+				);
+				db.close();
+
+				expect(stored).not.toBeNull();
+				const createdMs = new Date(stored!.created_at).getTime();
+				const expiresMs = new Date(stored!.expires_at!).getTime();
+				expect(expiresMs).toBe(createdMs + ttlDays * 86400000);
+			}),
+			{ numRuns: 50 }
+		);
+	});
 });
 
 describe("Property 9: Expired memories excluded from search results", () => {
