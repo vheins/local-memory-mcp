@@ -18,8 +18,6 @@ import { type ElicitationCreateResult } from "./elicitation";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import fs from "fs";
 import path from "path";
-import { SamplingCreateMessageResult } from "./sampling.js";
-import { ElicitationCreateResult } from "./elicitation.js";
 
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
