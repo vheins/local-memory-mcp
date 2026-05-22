@@ -82,7 +82,7 @@ describe("Dashboard Coordination API", () => {
 			finished_at: null,
 			canceled_at: null,
 			est_tokens: 5,
-			tags: [],
+			tags: [], commit_id: null, changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null
@@ -136,7 +136,7 @@ describe("Dashboard Coordination API", () => {
 			finished_at: null,
 			canceled_at: null,
 			est_tokens: 42,
-			tags: [],
+			tags: [], commit_id: null, changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null

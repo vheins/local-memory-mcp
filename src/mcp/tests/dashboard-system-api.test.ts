@@ -69,7 +69,7 @@ describe("Dashboard System API", () => {
 			finished_at: null,
 			canceled_at: null,
 			est_tokens: 50,
-			tags: [],
+			tags: [], commit_id: null, changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null
@@ -94,7 +94,7 @@ describe("Dashboard System API", () => {
 			finished_at: now,
 			canceled_at: null,
 			est_tokens: 120,
-			tags: [],
+			tags: [], commit_id: null, changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null

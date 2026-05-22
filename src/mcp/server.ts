@@ -18,6 +18,8 @@ import { type ElicitationCreateResult } from "./elicitation";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import fs from "fs";
 import path from "path";
+import { SamplingCreateMessageResult } from "./sampling.js";
+import { ElicitationCreateResult } from "./elicitation.js";
 
 // --- CLI Doctor Mode ---
 if (process.argv.includes("doctor")) {
@@ -61,8 +63,8 @@ vectors.initialize().catch((err) => {
 });
 
 // Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
-const expiredArchived = db.memories.archiveExpiredMemories();
-const lowScoreArchived = db.memories.archiveLowScoreMemories();
+const expiredArchived = db.memoryArchives.archiveExpiredMemories();
+const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories();
 const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);
 
 if (totalArchived > 0) {
