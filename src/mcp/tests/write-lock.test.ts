@@ -19,15 +19,6 @@ vi.mock("fs", () => ({
 	},
 }));
 
-vi.mock("path", async (importOriginal) => {
-    const actual = await importOriginal<typeof import('path')>();
-    return {
-        default: {
-            ...actual,
-            dirname: vi.fn((p) => actual.dirname(p))
-        }
-    };
-});
 
 describe("WriteLock", () => {
 	const dbPath = "/test/db/path/memory.db";
