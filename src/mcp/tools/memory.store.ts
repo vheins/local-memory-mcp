@@ -43,7 +43,7 @@ export async function handleMemoryStore(
 	// Check for semantic conflicts before storing (threshold: 0.55)
 	// Skip for task_archive as similar tasks often have similar content
 	if (!validated.supersedes && validated.type !== "task_archive") {
-		const conflict = await db.memories.checkConflicts(
+		const conflict = await db.memoryVectors.checkConflicts(
 			validated.content,
 			validated.scope.repo,
 			validated.type,

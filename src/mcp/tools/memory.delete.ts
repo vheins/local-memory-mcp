@@ -60,7 +60,7 @@ export async function handleMemoryDelete(
 	}
 
 	if (validIdsToDelete.length > 0) {
-		db.memories.bulkDeleteMemories(validIdsToDelete);
+		db.memoryArchives.bulkDeleteMemories(validIdsToDelete);
 		for (const validId of validIdsToDelete) {
 			if (onProgress) {
 				onProgress(progress, total);
