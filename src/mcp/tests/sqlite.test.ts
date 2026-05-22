@@ -73,7 +73,7 @@ describe("Property 1: Pre-filter SQL limits searchBySimilarity candidates", () =
 						);
 					}
 
-					const results = store.memories.searchBySimilarity(query, repo, limit);
+					const results = store.memoryVectors.searchBySimilarity(query, repo, limit);
 					store.close();
 
 					return results.length <= limit;
@@ -174,7 +174,7 @@ describe("Property 9: Expired memories excluded from search results", () => {
 					})
 				);
 
-				const results = store.memories.searchBySimilarity(query, repo, 10);
+				const results = store.memoryVectors.searchBySimilarity(query, repo, 10);
 				store.close();
 
 				return !results.some((r) => r.id === "expired-sim");
@@ -227,8 +227,8 @@ describe("Property 10: archiveExpiredMemories() is idempotent", () => {
 					);
 				}
 
-				const first = store.memories.archiveExpiredMemories(true);
-				const second = store.memories.archiveExpiredMemories(true);
+				const first = store.memoryArchives.archiveExpiredMemories(true);
+				const second = store.memoryArchives.archiveExpiredMemories(true);
 				store.close();
 
 				return first === n && second === 0;
