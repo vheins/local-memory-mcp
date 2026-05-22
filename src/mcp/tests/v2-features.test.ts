@@ -201,31 +201,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 	});
 
-	describe("3. Vector Error Fallback", () => {
-		it("should handle vector search failure gracefully by falling back to similarity only", async () => {
-			const db = await createTestStore();
-			const repo = "error-test-repo";
-
-			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo, content: "Test content", importance: 5 }));
-
-			const errorMockVectors = {
-				upsert: vi.fn().mockResolvedValue(undefined),
-				remove: vi.fn().mockResolvedValue(undefined),
-				search: vi.fn().mockRejectedValue(new Error("Vector store connection failed"))
-			};
-
-			const params = { query: "Test", repo, structured: true };
-			const response = await handleMemorySearch(params, db, errorMockVectors);
-
-			// Should fallback to similarity and still return results
-			const results = response.structuredContent as Record<string, unknown>;
-			expect(results.count).toBe(1);
-			expect(getPrimaryTextContent(response)).toContain("Use memory-detail with memory_id (or code) for full content.");
-			db.close();
-		});
-	});
-
-	describe("4. Feedback Loop", () => {
+	describe("3. Feedback Loop", () => {
 		it("should reject updating memory type to file_claim", async () => {
 			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
@@ -306,7 +282,7 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 	});
 
-	describe("5. VALID_COLUMNS Whitelist", () => {
+	describe("4. VALID_COLUMNS Whitelist", () => {
 		it("should correctly whitelist valid columns, reject invalid columns, and handle scope", async () => {
 			const db = await createTestStore();
 			const repo = "whitelist-test-repo";

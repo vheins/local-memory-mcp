@@ -124,7 +124,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 	const task = storage.tasks.getTaskById(taskId);
 	if (!task) return;
 
-	const comments = storage.taskComments.getTaskCommentsByTaskId(taskId);
+	const comments = storage.tasks.getTaskCommentsByTaskId(taskId);
 
 	let content = `Task: [${task.task_code}] ${task.title}\n`;
 	content += `Phase: ${task.phase}\n`;
@@ -248,7 +248,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		const createdTasks: string[] = [];
 		const now = new Date().toISOString();
 		const codesInRequest = new Set<string>();
-		const initialStats = storage.taskStats.getTaskStats(repo);
+		const initialStats = storage.tasks.getTaskStats(repo);
 		let pendingInRequestCount = 0;
 
 		for (const taskData of bulkTasks) {
@@ -349,7 +349,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	}
 
 	if (status === "pending") {
-		const stats = storage.taskStats.getTaskStats(repo);
+		const stats = storage.tasks.getTaskStats(repo);
 		if (stats.todo >= 10) {
 			throw new Error(
 				`Cannot create task as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`
@@ -629,7 +629,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		storage.tasks.updateTask(targetId, finalUpdates);
 
 		if (comment !== undefined || isStatusChanging) {
-			storage.taskComments.insertTaskComment({
+			storage.tasks.insertTaskComment({
 				id: randomUUID(),
 				task_id: targetId,
 				repo,

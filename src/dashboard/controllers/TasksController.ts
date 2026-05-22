@@ -213,20 +213,20 @@ export class TasksController {
 
 			const stats = {
 				daily: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "daily"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "daily")
+					...db.tasks.getTaskTimeStats(targetRepo, "daily"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "daily")
 				},
 				weekly: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "weekly"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "weekly")
+					...db.tasks.getTaskTimeStats(targetRepo, "weekly"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "weekly")
 				},
 				monthly: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "monthly"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "monthly")
+					...db.tasks.getTaskTimeStats(targetRepo, "monthly"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "monthly")
 				},
 				overall: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "overall"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "overall")
+					...db.tasks.getTaskTimeStats(targetRepo, "overall"),
+					history: db.tasks.getTaskComparisonSeries(targetRepo, "overall")
 				}
 			};
 
@@ -242,10 +242,10 @@ export class TasksController {
 			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
 			const { comment } = getAttributes(req);
-			const existingComment = db.taskComments.getTaskCommentById(id);
+			const existingComment = db.tasks.getTaskCommentById(id);
 			if (!existingComment) return res.status(404).json(jsonApiError("Comment not found", 404));
 
-			await db.withWrite(() => db.taskComments.updateTaskComment(id, { comment }));
+			await db.withWrite(() => db.tasks.updateTaskComment(id, { comment }));
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -257,7 +257,7 @@ export class TasksController {
 		try {
 			await db.refresh();
 			const { id } = req.params as unknown as IdParams;
-			await db.withWrite(() => db.taskComments.deleteTaskComment(id));
+			await db.withWrite(() => db.tasks.deleteTaskComment(id));
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";

@@ -424,7 +424,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(archMemories.length).toBe(3);
 
 		// Verify comments created
-		const comments = db.taskComments.getTaskCommentsByTaskId(ids[0]);
+		const comments = db.tasks.getTaskCommentsByTaskId(ids[0]);
 		expect(comments.length).toBe(1);
 		expect(comments[0].comment).toBe("Bulk completion test");
 		expect(comments[0].next_status).toBe("completed");
