@@ -1,7 +1,23 @@
 import { writable, get, derived } from "svelte/store";
 import { api } from "../api";
-import type { Memory, Task, TaskComment, CodingStandard } from "../stores";
+import type { Memory, Task, TaskComment, CodingStandard, Handoff } from "../stores";
 import { copyToClipboard } from "../utils";
+
+interface HandoffForm {
+	from_agent: string;
+	to_agent: string;
+	task_code: string;
+	summary: string;
+	context: string;
+}
+
+const INITIAL_HANDOFF_FORM: HandoffForm = {
+	from_agent: "",
+	to_agent: "",
+	task_code: "",
+	summary: "",
+	context: ""
+};
 
 interface StandardForm {
 	name: string;
@@ -53,6 +69,7 @@ export interface DetailState {
 	memory: Memory | null;
 	task: Task | null;
 	standard: CodingStandard | null;
+	handoff: Handoff | null;
 	editingTitle: boolean;
 	editingDescription: boolean;
 	editTitle: string;
@@ -69,6 +86,10 @@ export interface DetailState {
 	standardSaving: boolean;
 	standardDeleting: boolean;
 	standardError: string;
+	handoffCreating: boolean;
+	handoffUpdating: boolean;
+	handoffForm: HandoffForm;
+	handoffError: string;
 }
 
 export const STATUS_FLOW: Record<string, { next: string; label: string; color: string }[]> = {
@@ -88,6 +109,7 @@ export function createDetailHandler() {
 		memory: null,
 		task: null,
 		standard: null,
+		handoff: null,
 		editingTitle: false,
 		editingDescription: false,
 		editTitle: "",
@@ -103,13 +125,17 @@ export function createDetailHandler() {
 		standardForm: { ...INITIAL_STANDARD_FORM },
 		standardSaving: false,
 		standardDeleting: false,
-		standardError: ""
+		standardError: "",
+		handoffCreating: false,
+		handoffUpdating: false,
+		handoffForm: { ...INITIAL_HANDOFF_FORM },
+		handoffError: ""
 	};
 
 	const { subscribe, update } = writable<DetailState>(initialState);
 
 	const mode = derived({ subscribe }, ($s) => {
-		return $s.task ? "task" : $s.memory ? "memory" : $s.standard ? "standard" : null;
+		return $s.task ? "task" : $s.memory ? "memory" : $s.handoff ? "handoff" : $s.standard ? "standard" : null;
 	});
 
 	async function handleCopyContent(text: string) {
@@ -369,27 +395,140 @@ export function createDetailHandler() {
 		}
 	}
 
-	return {
-		subscribe,
-		mode,
-		setMemory: (memory: Memory | null) => update((s) => ({ ...s, memory, task: null, standard: null })),
-		setTask: (task: Task | null) => {
-			if (task) {
-				update((s) => ({
-					...s,
-					task,
-					memory: null,
-					editTitle: task.title,
-					editDescription: task.description || "",
-					editingTitle: false,
-					editingDescription: false,
-					newComment: "",
-					editingCommentId: null
-				}));
-			} else {
-				update((s) => ({ ...s, task: null }));
+	// ─── Handoff CRUD ──────────────────────────────────────────────────────
+
+	function setHandoff(handoff: Handoff | null) {
+		if (handoff) {
+			update((s) => ({
+				...s,
+				handoff,
+				task: null,
+				memory: null,
+				standard: null,
+				handoffForm: {
+					from_agent: handoff.from_agent,
+					to_agent: handoff.to_agent || "",
+					task_code: handoff.task_code || "",
+					summary: handoff.summary,
+					context: JSON.stringify(handoff.context, null, 2)
+				},
+				handoffError: ""
+			}));
+		} else {
+			update((s) => ({
+				...s,
+				handoff: {
+					id: "__new__",
+					repo: s.handoff?.repo || "",
+					from_agent: "",
+					to_agent: null,
+					task_id: null,
+					summary: "",
+					context: {},
+					status: "pending",
+					created_at: "",
+					updated_at: "",
+					expires_at: null
+				},
+				handoffForm: { ...INITIAL_HANDOFF_FORM },
+				handoffError: ""
+			}));
+		}
+	}
+
+	function parseHandoffContext(value: string): Record<string, unknown> {
+		if (!value.trim()) return {};
+		try {
+			const parsed = JSON.parse(value) as unknown;
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				throw new Error("JSON must be an object.");
 			}
-		},
+			return parsed as Record<string, unknown>;
+		} catch (e) {
+			throw e;
+		}
+	}
+
+	async function createHandoff(onCreated: () => void, repo: string) {
+		const state = get({ subscribe });
+		const form = state.handoffForm;
+		if (!form.from_agent.trim() || !form.summary.trim()) return;
+
+		update((s) => ({ ...s, handoffCreating: true, handoffError: "" }));
+		try {
+			await api.callTool("handoff-create", {
+				repo,
+				from_agent: form.from_agent.trim(),
+				to_agent: form.to_agent.trim() || undefined,
+				task_code: form.task_code.trim() || undefined,
+				summary: form.summary.trim(),
+				context: parseHandoffContext(form.context),
+				structured: true
+			});
+			onCreated();
+		} catch (e) {
+			update((s) => ({
+				...s,
+				handoffError: e instanceof Error ? e.message : "Failed to create handoff."
+			}));
+		} finally {
+			update((s) => ({ ...s, handoffCreating: false }));
+		}
+	}
+
+	async function updateHandoffStatus(status: string, onUpdated: () => void) {
+		const state = get({ subscribe });
+		if (!state.handoff || state.handoff.id === "__new__") return;
+
+		update((s) => ({ ...s, handoffUpdating: true, handoffError: "" }));
+		try {
+			await api.callTool("handoff-update", {
+				id: state.handoff.id,
+				status,
+				structured: true
+			});
+			onUpdated();
+		} catch (e) {
+			update((s) => ({
+				...s,
+				handoffError: e instanceof Error ? e.message : "Failed to update handoff."
+			}));
+		} finally {
+			update((s) => ({ ...s, handoffUpdating: false }));
+		}
+	}
+
+	async function handleCopyHandoffContext(context: Record<string, unknown>) {
+		const success = await copyToClipboard(JSON.stringify(context, null, 2));
+		if (success) {
+			update((s) => ({ ...s, contentCopied: true }));
+			setTimeout(() => update((s) => ({ ...s, contentCopied: false })), 2000);
+		}
+	}
+
+		return {
+			subscribe,
+			mode,
+			setMemory: (memory: Memory | null) => update((s) => ({ ...s, memory, task: null, standard: null, handoff: null })),
+			setTask: (task: Task | null) => {
+				if (task) {
+					update((s) => ({
+						...s,
+						task,
+						memory: null,
+						standard: null,
+						handoff: null,
+						editTitle: task.title,
+						editDescription: task.description || "",
+						editingTitle: false,
+						editingDescription: false,
+						newComment: "",
+						editingCommentId: null
+					}));
+				} else {
+					update((s) => ({ ...s, task: null }));
+				}
+			},
 		toggleEditTitle: (val: boolean) => update((s) => ({ ...s, editingTitle: val })),
 		toggleEditDescription: (val: boolean) => update((s) => ({ ...s, editingDescription: val })),
 		setEditTitle: (val: string) => update((s) => ({ ...s, editTitle: val })),
@@ -426,6 +565,7 @@ export function createDetailHandler() {
 				memory: null,
 				task: null,
 				standard: null,
+				handoff: null,
 				editingTitle: false,
 				editingDescription: false,
 				editTitle: "",
@@ -441,7 +581,11 @@ export function createDetailHandler() {
 				standardForm: { ...INITIAL_STANDARD_FORM },
 				standardSaving: false,
 				standardDeleting: false,
-				standardError: ""
+				standardError: "",
+				handoffCreating: false,
+				handoffUpdating: false,
+				handoffForm: { ...INITIAL_HANDOFF_FORM },
+				handoffError: ""
 			}));
 		},
 		handleTitleKeydown: (e: KeyboardEvent, onUpdated: (task: Task) => void) => {
@@ -453,6 +597,10 @@ export function createDetailHandler() {
 		cancelStandardEdit,
 		saveStandard,
 		deleteStandard,
-		handleCopyStandardContent
+		handleCopyStandardContent,
+		setHandoff,
+		createHandoff,
+		updateHandoffStatus,
+		handleCopyHandoffContext
 	};
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Memory, Task, CodingStandard } from "../lib/stores";
+	import type { Memory, Task, CodingStandard, Handoff } from "../lib/stores";
 	import { formatDate, getStatusColor, getStatusLabel, getPriorityLabel } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";
 	import Markdown from "./Markdown.svelte";
@@ -9,22 +9,28 @@
 	export let memory: Memory | null = null;
 	export let task: Task | null = null;
 	export let standard: CodingStandard | null = null;
+	export let handoff: Handoff | null = null;
 	export let open = false;
 	export let onClose: () => void = () => {};
 	export let onTaskUpdated: (task: Task) => void = () => {};
 	export let onTaskDeleted: (id: string) => void = () => {};
 	export let onStandardUpdated: (standard: CodingStandard) => void = () => {};
 	export let onStandardDeleted: (id: string) => void = () => {};
+	export let onHandoffUpdated: () => void = () => {};
+	export let onHandoffCreated: () => void = () => {};
 	export let repo: string | null = null;
 
 	const handler = createDetailHandler();
 	const { mode } = handler;
+
+	const handoffContextPlaceholder = '{"next_steps":["..."],"blockers":[],"remaining_work":"..."}';
 
 	// Sync props to composable
 	$: if (open) {
 		handler.setMemory(memory);
 		handler.setTask(task);
 		handler.setStandard(standard);
+		handler.setHandoff(handoff);
 	} else {
 		handler.reset();
 	}
@@ -407,6 +413,160 @@
 						</div>
 					{/if}
 				</div>
+			{/if}
+
+			<!-- ══ HANDOFF MODE ══ -->
+			{#if $mode === "handoff"}
+				{#if $handler.handoff && $handler.handoff.id === "__new__"}
+					<!-- ══ CREATE FORM ══ -->
+					<div class="section-label" style="margin-bottom:12px;">New Handoff</div>
+					{#if $handler.handoffError}
+						<div class="error-box">{$handler.handoffError}</div>
+					{/if}
+					<div class="std-form-grid">
+						<label>
+							<span class="std-field-label">From agent *</span>
+							<input
+								class="form-input"
+								placeholder="agent-a"
+								bind:value={$handler.handoffForm.from_agent}
+							/>
+						</label>
+						<label>
+							<span class="std-field-label">To agent</span>
+							<input
+								class="form-input"
+								placeholder="recipient agent (optional)"
+								bind:value={$handler.handoffForm.to_agent}
+							/>
+						</label>
+						<label>
+							<span class="std-field-label">Task code</span>
+							<input
+								class="form-input"
+								placeholder="TASK-123"
+								bind:value={$handler.handoffForm.task_code}
+							/>
+						</label>
+					</div>
+					<label style="display:block;margin-top:12px;">
+						<span class="std-field-label">Summary *</span>
+						<textarea
+							class="form-textarea"
+							style="min-height:80px;resize:vertical;"
+							placeholder="What should the next agent know?"
+							bind:value={$handler.handoffForm.summary}
+						></textarea>
+					</label>
+					<label style="display:block;margin-top:12px;">
+						<span class="std-field-label">Context JSON</span>
+						<textarea
+							class="form-textarea"
+							style="min-height:80px;resize:vertical;font-family:'JetBrains Mono',monospace;font-size:0.82rem;"
+							placeholder={handoffContextPlaceholder}
+							bind:value={$handler.handoffForm.context}
+						></textarea>
+					</label>
+					<div style="display:flex;gap:8px;margin-top:12px;">
+						<button
+							class="btn btn-primary"
+							disabled={$handler.handoffCreating ||
+								!$handler.handoffForm.from_agent.trim() ||
+								!$handler.handoffForm.summary.trim()}
+							on:click={() => handler.createHandoff(onHandoffCreated, repo || "")}
+						>
+							<Icon name="git-branch" size={14} strokeWidth={2} />
+							{$handler.handoffCreating ? "Creating..." : "Create Handoff"}
+						</button>
+						<button class="btn btn-ghost" on:click={onClose} disabled={$handler.handoffCreating}>Cancel</button>
+					</div>
+				{:else if $handler.handoff}
+					<!-- ══ VIEW MODE ══ -->
+					{#if $handler.handoffError}
+						<div class="error-box">{$handler.handoffError}</div>
+					{/if}
+					<div class="drawer-title" style="margin-bottom:14px;">{$handler.handoff.summary}</div>
+
+					<!-- Status action buttons -->
+					<div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
+						<button
+							class="btn"
+							style="background:#10b981;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
+							disabled={$handler.handoffUpdating || $handler.handoff.status !== "pending"}
+							on:click={() => handler.updateHandoffStatus("accepted", onHandoffUpdated)}
+						>
+							Accept
+						</button>
+						<button
+							class="btn"
+							style="background:#ef4444;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
+							disabled={$handler.handoffUpdating || $handler.handoff.status !== "pending"}
+							on:click={() => handler.updateHandoffStatus("rejected", onHandoffUpdated)}
+						>
+							Reject
+						</button>
+						<button
+							class="btn"
+							style="background:#64748b;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
+							disabled={$handler.handoffUpdating || $handler.handoff.status === "expired" || $handler.handoff.status === "accepted"}
+							on:click={() => handler.updateHandoffStatus("expired", onHandoffUpdated)}
+						>
+							Mark Expired
+						</button>
+					</div>
+
+					<!-- Status badge -->
+					<div style="margin-bottom:16px;">
+						<div class="section-label">Status</div>
+						<span class="status-chip" class:status-pending={$handler.handoff.status === "pending"}
+							class:status-accepted={$handler.handoff.status === "accepted"}
+							class:status-rejected={$handler.handoff.status === "rejected"}
+							class:status-expired={$handler.handoff.status === "expired"}
+							style="font-size:0.85rem;padding:4px 10px;display:inline-block;">
+							{$handler.handoff.status.toUpperCase()}
+						</span>
+					</div>
+
+					<!-- Meta grid -->
+					<div class="meta-grid" style="margin-bottom:16px;">
+						{#each [
+							{ label: "From", val: $handler.handoff.from_agent },
+							{ label: "To", val: $handler.handoff.to_agent || "unassigned" },
+							{ label: "Task", val: $handler.handoff.task_code || $handler.handoff.task_id || "—" },
+							{ label: "Created", val: formatDate($handler.handoff.created_at) },
+							{ label: "Updated", val: formatDate($handler.handoff.updated_at) },
+							{ label: "Expires", val: $handler.handoff.expires_at ? formatDate($handler.handoff.expires_at) : "—" }
+						] as m (m.label)}
+							<div class="meta-cell">
+								<div class="meta-label">{m.label}</div>
+								<div class="meta-value">{m.val}</div>
+							</div>
+						{/each}
+					</div>
+
+					<!-- Context JSON -->
+					{#if $handler.handoff.context && Object.keys($handler.handoff.context).length > 0}
+						<div>
+							<div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+								<span>Transfer Context</span>
+								<button
+									class="btn btn-ghost btn-icon"
+									on:click={() => handler.handleCopyHandoffContext($handler.handoff?.context || {})}
+									title="Copy to clipboard"
+									style="width:20px;height:20px;padding:0;border:none;background:transparent;"
+								>
+									<Icon
+										name={$handler.contentCopied ? "check" : "copy"}
+										size={12}
+										strokeWidth={2}
+										className={$handler.contentCopied ? "text-success" : ""}
+									/>
+								</button>
+							</div>
+							<pre class="json-pre">{JSON.stringify($handler.handoff.context, null, 2)}</pre>
+						</div>
+					{/if}
+				{/if}
 			{/if}
 
 			<!-- ══ STANDARD MODE ══ -->
