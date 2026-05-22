@@ -33,6 +33,13 @@
 	let chatMessage = "";
 	let isSendingChat = false;
 
+	function chatTitle() {
+		const now = new Date();
+		const hh = String(now.getHours()).padStart(2, "0");
+		const mm = String(now.getMinutes()).padStart(2, "0");
+		return `Chat · ${hh}:${mm}`;
+	}
+
 	async function sendChat() {
 		const msg = chatMessage.trim();
 		if (!msg || isSendingChat) return;
@@ -44,7 +51,8 @@
 			await api.createTask({
 				repo,
 				task_code: taskCode,
-				title: msg.length > 100 ? msg.substring(0, 97) + "..." : msg,
+				title: chatTitle(),
+				description: msg,
 				status: "backlog",
 				priority: 3,
 				phase: "Inbox"

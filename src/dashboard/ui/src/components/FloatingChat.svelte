@@ -67,10 +67,14 @@
 		isSending = true;
 		try {
 			const taskCode = "CHAT-" + Date.now().toString(36).toUpperCase();
+			const now = new Date();
+			const hh = String(now.getHours()).padStart(2, "0");
+			const mm = String(now.getMinutes()).padStart(2, "0");
 			await api.createTask({
 				repo,
 				task_code: taskCode,
-				title: msg.length > 100 ? msg.substring(0, 97) + "..." : msg,
+				title: `Chat · ${hh}:${mm}`,
+				description: msg,
 				status: "backlog",
 				priority: 3,
 				phase: "Inbox"
