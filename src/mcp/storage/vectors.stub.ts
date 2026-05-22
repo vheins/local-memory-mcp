@@ -54,7 +54,7 @@ export class StubVectorStore implements VectorStore {
 					tokens.map(() => 0)
 				);
 			} else {
-				this.db.memoryVectors.upsertVectorEmbedding(
+				this.db.memories.upsertVectorEmbedding(
 					id,
 					tokens.map(() => 0)
 				);
