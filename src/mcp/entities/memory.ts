@@ -1,6 +1,6 @@
 import { BaseEntity } from "../storage/base";
-import { MemoryEntry, MemoryRow, MemoryType, VectorStore } from "../types/index";
-import { CountResult, TypeCountResult, MemoryIdVector } from "../types/common";
+import { MemoryEntry, MemoryRow, MemoryType } from "../types/index";
+import { CountResult, TypeCountResult } from "../types/common";
 
 export class MemoryEntity extends BaseEntity {
 	insert(entry: MemoryEntry): void {
