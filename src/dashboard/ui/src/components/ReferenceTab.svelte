@@ -45,7 +45,7 @@
 
 	const ECOSYSTEM_ITEMS = [
 		{
-			name: "Docubook",
+			name: "DocuBook",
 			description: "AI-powered documentation generator that turns your codebase into beautiful, searchable docs.",
 			url: "https://www.docubook.pro/",
 			icon: "book-open"
