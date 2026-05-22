@@ -162,7 +162,7 @@
 				<!-- Divider -->
 				<div class="ext-link-divider"></div>
 
-				<!-- Donasi -->
+				<!-- Donate -->
 				<a
 					href={DONATION_URL}
 					target="_blank"
@@ -176,7 +176,7 @@
 						<path d="M17 12a5 5 0 01-5 5m-5-5a5 5 0 015-5" />
 						<path d="M12 7v10" />
 					</svg>
-					<span class="ext-link-label">Donasi</span>
+					<span class="ext-link-label">Donate</span>
 				</a>
 			</div>
 
