@@ -201,7 +201,31 @@ describe("V2 Enhanced Memory Features", () => {
 		});
 	});
 
-	describe("3. Feedback Loop", () => {
+	describe("3. Vector Error Fallback", () => {
+		it("should handle vector search failure gracefully by falling back to similarity only", async () => {
+			const db = await createTestStore();
+			const repo = "error-test-repo";
+
+			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo, content: "Test content", importance: 5 }));
+
+			const errorMockVectors = {
+				upsert: vi.fn().mockResolvedValue(undefined),
+				remove: vi.fn().mockResolvedValue(undefined),
+				search: vi.fn().mockRejectedValue(new Error("Vector store connection failed"))
+			};
+
+			const params = { query: "Test", repo, structured: true };
+			const response = await handleMemorySearch(params, db, errorMockVectors);
+
+			// Should fallback to similarity and still return results
+			const results = response.structuredContent as Record<string, unknown>;
+			expect(results.count).toBe(1);
+			expect(getPrimaryTextContent(response)).toContain("Use memory-detail with memory_id (or code) for full content.");
+			db.close();
+		});
+	});
+
+	describe("4. Feedback Loop", () => {
 		it("should reject updating memory type to file_claim", async () => {
 			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
@@ -278,6 +302,47 @@ describe("V2 Enhanced Memory Features", () => {
 
 			const updated = db.memories.getById(VALID_UUID_1);
 			expect(updated?.recall_count).toBe(1);
+			db.close();
+		});
+	});
+
+	describe("5. VALID_COLUMNS Whitelist", () => {
+		it("should correctly whitelist valid columns, reject invalid columns, and handle scope", async () => {
+			const db = await createTestStore();
+			const repo = "whitelist-test-repo";
+			db.memories.insert(makeEntry({ id: VALID_UUID_1, repo, title: "Original Title", type: "decision" }));
+
+			db.memories.update(VALID_UUID_1, {
+				title: "New Title",
+				status: "archived",
+				id: "should-be-rejected-id",
+				created_at: "should-be-rejected-date",
+				invalid_column: "should-be-rejected",
+				scope: { repo: "new-repo", folder: "new-folder", language: "typescript" }
+			} as any);
+
+			const updated = db.memories.getById(VALID_UUID_1);
+			expect(updated).toBeDefined();
+			expect(updated?.title).toBe("New Title");
+			expect(updated?.status).toBe("archived");
+			expect(updated?.id).toBe(VALID_UUID_1);
+			expect(updated?.created_at).not.toBe("should-be-rejected-date");
+			expect((updated as any).invalid_column).toBeUndefined();
+			expect(updated?.scope.repo).toBe("new-repo");
+			expect(updated?.scope.folder).toBe("new-folder");
+			expect(updated?.scope.language).toBe("typescript");
+
+			db.memories.bulkUpdateMemories([VALID_UUID_1], {
+				importance: 5,
+				id: "bulk-rejected-id",
+				scope: { folder: "bulk-folder" }
+			} as any);
+
+			const bulkUpdated = db.memories.getById(VALID_UUID_1);
+			expect(bulkUpdated?.importance).toBe(5);
+			expect(bulkUpdated?.id).toBe(VALID_UUID_1);
+			expect(bulkUpdated?.scope.folder).toBe("bulk-folder");
+
 			db.close();
 		});
 	});
