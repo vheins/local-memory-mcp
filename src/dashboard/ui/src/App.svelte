@@ -106,7 +106,7 @@
 	<!-- Main content -->
 	<div class="main-content" class:sidebar-collapsed={$sidebarCollapsed}>
 		<!-- Top bar -->
-		<TopBar onRefresh={app.onRefresh} onToggleMobileMenu={app.toggleMobileMenu} />
+		<TopBar onRefresh={app.onRefresh} onToggleMobileMenu={app.toggleMobileMenu} onEcosystem={app.onEcosystemClick} />
 
 		<!-- Mobile overlay -->
 		{#if $appState.mobileMenuOpen}

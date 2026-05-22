@@ -43,7 +43,7 @@ export interface AppState {
 	newTask: { task_code: string; title: string; phase: string; description: string; status: string; priority: number };
 	capabilities: ReferenceDataState | null;
 	referenceSearch: string;
-	referenceFilter: "all" | "tools" | "prompts" | "resources";
+	referenceFilter: "all" | "tools" | "prompts" | "resources" | "ecosystem";
 }
 
 export function createAppHandler(refs: {
@@ -273,7 +273,7 @@ export function createAppHandler(refs: {
 		update((s) => ({ ...s, referenceSearch: search }));
 	}
 
-	function setReferenceFilter(filter: "all" | "tools" | "prompts" | "resources") {
+	function setReferenceFilter(filter: "all" | "tools" | "prompts" | "resources" | "ecosystem") {
 		update((s) => ({ ...s, referenceFilter: filter }));
 	}
 
@@ -291,6 +291,11 @@ export function createAppHandler(refs: {
 
 	function toggleBulkImport(open: boolean) {
 		update((s) => ({ ...s, bulkImportOpen: open }));
+	}
+
+	function onEcosystemClick() {
+		activeTab.set("reference");
+		update((s) => ({ ...s, referenceFilter: "ecosystem", referenceSearch: "" }));
 	}
 
 	const sidebarCollapsed = derived(isRepoSidebarCollapsed, ($c) => $c);
@@ -361,6 +366,7 @@ export function createAppHandler(refs: {
 		toggleMemoryDrawer,
 		toggleAddTaskModal,
 		toggleBulkImport,
+		onEcosystemClick,
 		refs
 	};
 }

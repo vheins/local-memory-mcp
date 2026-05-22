@@ -28,11 +28,13 @@
 				count:
 					(state.capabilities?.tools?.length || 0) +
 					(state.capabilities?.prompts?.length || 0) +
-					(state.capabilities?.resources?.length || 0)
+					(state.capabilities?.resources?.length || 0) +
+					ECOSYSTEM_ITEMS.length
 			},
 			{ id: "tools", icon: "tool", label: "Tools", count: state.capabilities?.tools?.length || 0 },
 			{ id: "prompts", icon: "sparkle", label: "Prompts", count: state.capabilities?.prompts?.length || 0 },
-			{ id: "resources", icon: "database", label: "Resources", count: state.capabilities?.resources?.length || 0 }
+			{ id: "resources", icon: "database", label: "Resources", count: state.capabilities?.resources?.length || 0 },
+			{ id: "ecosystem", icon: "zap", label: "Ecosystem", count: ECOSYSTEM_ITEMS.length }
 		];
 	}
 
@@ -230,7 +232,7 @@
 					</div>
 				{/if}
 
-				{#if tools.length === 0 && prompts.length === 0 && resources.length === 0}
+				{#if tools.length === 0 && prompts.length === 0 && resources.length === 0 && state.referenceFilter !== "ecosystem"}
 					<div style="text-align:center;padding:48px 16px;color:var(--color-text-muted);">
 						<Icon name="search" size={28} strokeWidth={1.25} />
 						<div style="font-size:0.82rem;margin-top:10px;">No results for "{state.referenceSearch}"</div>
@@ -238,6 +240,7 @@
 				{/if}
 
 				<!-- Ecosystem -->
+				{#if state.referenceFilter === "all" || state.referenceFilter === "ecosystem"}
 				<div class="eco-section">
 					<div class="ref-section-header">
 						<Icon name="zap" size={13} strokeWidth={1.75} />
@@ -269,6 +272,7 @@
 						{/each}
 					</div>
 				</div>
+			{/if}
 			{/if}
 		</div>
 	</div>

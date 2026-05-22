@@ -6,6 +6,7 @@
 
 	export let onRefresh: () => void = () => {};
 	export let onToggleMobileMenu: () => void = () => {};
+	export let onEcosystem: () => void = () => {};
 
 	const handler = createTopBarHandler(onRefresh);
 	const {
@@ -182,6 +183,23 @@
 					</svg>
 					<span class="ext-link-label">Donate</span>
 				</a>
+
+				<!-- Divider -->
+				<div class="ext-link-divider"></div>
+
+				<!-- Ecosystem -->
+				<button
+					class="ext-link-btn ext-link-eco"
+					on:click={onEcosystem}
+					title="View ecosystem tools"
+					aria-label="Ecosystem"
+					id="ecoLink"
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+					</svg>
+					<span class="ext-link-label">Ecosystem</span>
+				</button>
 			</div>
 
 			<!-- Separator -->
@@ -403,6 +421,16 @@
 	:global(html.dark) .ext-link-donate:hover {
 		background: rgba(249, 115, 22, 0.15) !important;
 		color: #fb923c !important;
+	}
+
+	.ext-link-eco:hover {
+		background: rgba(14, 165, 233, 0.1) !important;
+		color: #0284c7 !important;
+	}
+
+	:global(html.dark) .ext-link-eco:hover {
+		background: rgba(56, 189, 248, 0.15) !important;
+		color: #7dd3fc !important;
 	}
 
 	.ext-link-divider {
