@@ -71,6 +71,7 @@ describe("TaskEntity - updateTaskComment", () => {
 
 		expect(updatedComment).not.toBeNull();
 		expect(updatedComment?.comment).toBe("Updated comment");
+		// Ensure the non-existent column wasn't added to the object and didn't crash sqlite
 		expect((updatedComment as any).non_existent_column).toBeUndefined();
 	});
 

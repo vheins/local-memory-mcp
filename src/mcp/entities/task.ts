@@ -401,10 +401,18 @@ export class TaskEntity extends BaseEntity {
 		const fields: string[] = [];
 		const values: unknown[] = [];
 		const anyUpdates = updates as Record<string, unknown>;
-		const COLUMN_NAME_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+		const VALID_COLUMNS = new Set([
+			"repo",
+			"comment",
+			"agent",
+			"role",
+			"model",
+			"previous_status",
+			"next_status"
+		]);
 
 		Object.keys(updates).forEach((key) => {
-			if (COLUMN_NAME_REGEX.test(key) && anyUpdates[key] !== undefined) {
+			if (VALID_COLUMNS.has(key) && anyUpdates[key] !== undefined) {
 				fields.push(`${key} = ?`);
 				values.push(anyUpdates[key]);
 			}
