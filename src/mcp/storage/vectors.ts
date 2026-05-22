@@ -54,7 +54,7 @@ export class RealVectorStore implements VectorStore {
 			if (kind === "standard") {
 				this.db.standards.upsertVectorEmbedding(id, vector);
 			} else {
-				this.db.memories.upsertVectorEmbedding(id, vector);
+				this.db.memoryVectors.upsertVectorEmbedding(id, vector);
 			}
 		} catch (error) {
 			logger.error("[Vectors] Error during upsert", { id, kind, error: String(error) });
@@ -82,7 +82,7 @@ export class RealVectorStore implements VectorStore {
 			const rows =
 				kind === "standard"
 					? this.db.standards.getVectorCandidates(repo, 100).map((row) => ({ id: row.standard_id, vector: row.vector }))
-					: this.db.memories.getVectorCandidates(repo, 100).map((row) => ({ id: row.memory_id, vector: row.vector }));
+					: this.db.memoryVectors.getVectorCandidates(repo, 100).map((row) => ({ id: row.memory_id, vector: row.vector }));
 
 			const results: VectorResult[] = rows.map((row) => {
 				const memoryVector = JSON.parse(row.vector) as number[];

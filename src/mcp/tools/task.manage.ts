@@ -300,7 +300,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				finished_at: statusTimestamps.finished_at,
 				canceled_at: statusTimestamps.canceled_at,
 				est_tokens: taskData.est_tokens ?? 0,
-				tags: tags,
+				tags: tags, commit_id: null, changed_files: [],
 				metadata: (taskData.metadata as Record<string, unknown>) || {},
 				parent_id: resolveParentId(taskData.parent_id, repo, storage),
 				depends_on: taskData.depends_on || null
@@ -384,7 +384,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		finished_at: statusTimestamps.finished_at,
 		canceled_at: statusTimestamps.canceled_at,
 		est_tokens: est_tokens ?? 0,
-		tags: finalTags,
+		tags: finalTags, commit_id: null, changed_files: [],
 		metadata: metadata || {},
 		parent_id: resolveParentId(parent_id, repo, storage),
 		depends_on: depends_on || null
