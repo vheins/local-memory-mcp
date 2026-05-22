@@ -37,12 +37,21 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			tasks: {
 				getTasksByRepo: vi.fn().mockReturnValue([]),
 				getTasksByMultipleStatuses: vi.fn().mockReturnValue([]),
-				getTaskStats: vi.fn().mockReturnValue({ todo: 0 }),
 				isTaskCodeDuplicate: vi.fn().mockReturnValue(false),
 				insertTask: vi.fn(),
 				updateTask: vi.fn(),
 				deleteTask: vi.fn(),
 				getTaskById: vi.fn().mockReturnValue(null)
+			},
+			taskStats: {
+				getTaskStats: vi.fn().mockReturnValue({ todo: 0 }),
+				getTaskTimeStats: vi.fn().mockReturnValue({ completed: 0, tokens: 0, avgDuration: 0, added: 0 }),
+				getTaskComparisonSeries: vi.fn().mockReturnValue([])
+			},
+			taskComments: {
+				getTaskCommentsByTaskId: vi.fn().mockReturnValue([]),
+				insertTaskComment: vi.fn(),
+				getAllTaskCommentsByRepo: vi.fn().mockReturnValue([])
 			},
 			memoryVectors: {
 				searchBySimilarity: vi.fn().mockReturnValue([]),
