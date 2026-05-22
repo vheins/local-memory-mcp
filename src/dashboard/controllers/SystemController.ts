@@ -140,7 +140,7 @@ export class SystemController {
 			const memories = db.memories.getAllMemoriesWithStats(repo as string);
 			const tasks = db.tasks.getTasksByRepo(repo as string);
 
-			const allComments = db.tasks.getAllTaskCommentsByRepo(repo as string);
+			const allComments = db.taskComments.getAllTaskCommentsByRepo(repo as string);
 			const commentsByTaskId = allComments.reduce(
 				(acc, comment) => {
 					if (!acc[comment.task_id]) acc[comment.task_id] = [];

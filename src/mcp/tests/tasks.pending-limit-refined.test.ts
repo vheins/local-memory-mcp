@@ -94,7 +94,7 @@ describe("Task Pending Limit Refined Validation", () => {
 		if (!updatedTask) throw new Error("Updated task not found");
 		expect(updatedTask.status).toBe("pending");
 
-		const stats = db.tasks.getTaskStats(REPO);
+		const stats = db.taskStats.getTaskStats(REPO);
 		expect(stats.todo).toBe(11);
 	});
 });

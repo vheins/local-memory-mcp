@@ -1,60 +1,68 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createTestStore } from "../storage/sqlite";
+import type { SQLiteStore } from "../storage/sqlite";
 
+
+function createTaskWithComment(
+	db: SQLiteStore,
+	overrides: { taskId?: string; commentId?: string; repo?: string } = {}
+): { taskId: string; commentId: string } {
+	const taskId = overrides.taskId || "task-default";
+	const commentId = overrides.commentId || "comment-default";
+	const repo = overrides.repo || "test-repo";
+	const now = new Date().toISOString();
+
+	db.tasks.insertTask({
+		id: taskId,
+		repo,
+		task_code: "TASK-" + taskId,
+		phase: "execute",
+		title: "Test Task",
+		description: "Test Description",
+		status: "pending",
+		priority: 3,
+		agent: "test",
+		role: "test",
+		doc_path: null,
+		finished_at: null,
+		canceled_at: null,
+		tags: [],
+		metadata: {},
+		created_at: now,
+		updated_at: now,
+		parent_id: null,
+		depends_on: null,
+		est_tokens: 0,
+		in_progress_at: null,
+		commit_id: null,
+		changed_files: []
+	});
+
+	db.taskComments.insertTaskComment({
+		id: commentId,
+		task_id: taskId,
+		repo,
+		comment: "Initial comment",
+		agent: "test",
+		role: "test",
+		model: "test",
+		previous_status: null,
+		next_status: null,
+		created_at: now
+	});
+
+	return { taskId, commentId };
+}
 
 describe("TaskEntity - updateTaskComment", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 
-
 	beforeEach(async () => {
 		db = await createTestStore();
-
 	});
 
 	it("should only update valid columns and ignore invalid ones", () => {
-		// Insert a task first due to foreign key constraints if any (we'll just insert directly or use a task if needed, let's see)
-		// Usually tasks.ts handles this or sqlite handles it. Let's create a task and a comment.
-
-		const taskId = "task-123";
-		db.tasks.insertTask({
-			id: taskId,
-			repo: "test-repo",
-			task_code: "TASK-123",
-			phase: "execute",
-			title: "Test Task",
-			description: "Test Description",
-			status: "pending",
-			priority: "medium",
-			agent: "test-agent",
-			role: "test-role",
-			doc_path: null,
-			finished_at: null,
-			canceled_at: null,
-			tags: null,
-			metadata: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-			parent_id: null,
-			depends_on: null,
-			est_tokens: null,
-			in_progress_at: null,
-			commit_id: null,
-			changed_files: null
-		});
-
-		const commentId = "comment-123";
-		db.tasks.insertTaskComment({
-			id: commentId,
-			task_id: taskId,
-			repo: "test-repo",
-			comment: "Initial comment",
-			agent: "test-agent",
-			role: "test-role",
-			model: "test-model",
-			previous_status: null,
-			next_status: null,
-			created_at: new Date().toISOString()
-		});
+		const { commentId } = createTaskWithComment(db, { commentId: "comment-123", taskId: "task-123" });
 
 		// Now attempt to update with invalid keys
 		const updates = {
@@ -63,11 +71,9 @@ describe("TaskEntity - updateTaskComment", () => {
 			"comment = 'hacked', agent": "evil_agent"
 		};
 
-		// The any cast is needed because typescript would prevent passing invalid keys,
-		// but at runtime or via API endpoints this can happen
-		db.tasks.updateTaskComment(commentId, updates as any);
+		db.taskComments.updateTaskComment(commentId, updates as any);
 
-		const updatedComment = db.tasks.getTaskCommentById(commentId);
+		const updatedComment = db.taskComments.getTaskCommentById(commentId);
 
 		expect(updatedComment).not.toBeNull();
 		expect(updatedComment?.comment).toBe("Updated comment");
@@ -76,156 +82,38 @@ describe("TaskEntity - updateTaskComment", () => {
 	});
 
 	it("should handle empty updates ({}) gracefully", () => {
-		const taskId = "task-empty";
-		db.tasks.insertTask({
-			id: taskId,
-			repo: "test-repo",
-			task_code: "TASK-EMPTY",
-			phase: "execute",
-			title: "Empty Test",
-			description: "",
-			status: "pending",
-			priority: "medium",
-			agent: "test",
-			role: "test",
-			doc_path: null,
-			finished_at: null,
-			canceled_at: null,
-			tags: null,
-			metadata: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-			parent_id: null,
-			depends_on: null,
-			est_tokens: null,
-			in_progress_at: null,
-			commit_id: null,
-			changed_files: null
-		});
+		const { commentId } = createTaskWithComment(db, { commentId: "comment-empty", taskId: "task-empty" });
 
-		const commentId = "comment-empty";
-		db.tasks.insertTaskComment({
-			id: commentId,
-			task_id: taskId,
-			repo: "test-repo",
-			comment: "Original",
-			agent: "test",
-			role: "test",
-			model: "test",
-			previous_status: null,
-			next_status: null,
-			created_at: new Date().toISOString()
-		});
+		db.taskComments.updateTaskComment(commentId, {});
 
-		// Empty update
-		db.tasks.updateTaskComment(commentId, {});
-
-		const updated = db.tasks.getTaskCommentById(commentId);
-		expect(updated?.comment).toBe("Original");
+		const updated = db.taskComments.getTaskCommentById(commentId);
+		expect(updated?.comment).toBe("Initial comment");
 	});
 
 	it("should not update if all keys are invalid", () => {
-		const taskId = "task-inv";
-		db.tasks.insertTask({
-			id: taskId,
-			repo: "test-repo",
-			task_code: "TASK-INV",
-			phase: "execute",
-			title: "Inv Test",
-			description: "",
-			status: "pending",
-			priority: "medium",
-			agent: "test",
-			role: "test",
-			doc_path: null,
-			finished_at: null,
-			canceled_at: null,
-			tags: null,
-			metadata: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-			parent_id: null,
-			depends_on: null,
-			est_tokens: null,
-			in_progress_at: null,
-			commit_id: null,
-			changed_files: null
-		});
+		const { commentId, taskId } = createTaskWithComment(db, { commentId: "comment-inv", taskId: "task-inv" });
 
-		const commentId = "comment-inv";
-		db.tasks.insertTaskComment({
-			id: commentId,
-			task_id: taskId,
-			repo: "test-repo",
-			comment: "Original",
-			agent: "test",
-			role: "test",
-			model: "test",
-			previous_status: null,
-			next_status: null,
-			created_at: new Date().toISOString()
-		});
-
-		db.tasks.updateTaskComment(commentId, {
+		db.taskComments.updateTaskComment(commentId, {
 			"invalid_key": "val1",
-			"task_id": "new-task-id", // task_id should be ignored
-			"created_at": new Date().toISOString() // created_at should be ignored
+			"task_id": "new-task-id",
+			"created_at": new Date().toISOString()
 		} as any);
 
-		const updated = db.tasks.getTaskCommentById(commentId);
-		expect(updated?.comment).toBe("Original");
+		const updated = db.taskComments.getTaskCommentById(commentId);
+		expect(updated?.comment).toBe("Initial comment");
 		expect(updated?.task_id).toBe(taskId);
 	});
 
 	it("should not update valid keys with undefined values", () => {
-		const taskId = "task-undef";
-		db.tasks.insertTask({
-			id: taskId,
-			repo: "test-repo",
-			task_code: "TASK-UNDEF",
-			phase: "execute",
-			title: "Undef Test",
-			description: "",
-			status: "pending",
-			priority: "medium",
-			agent: "test",
-			role: "test",
-			doc_path: null,
-			finished_at: null,
-			canceled_at: null,
-			tags: null,
-			metadata: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-			parent_id: null,
-			depends_on: null,
-			est_tokens: null,
-			in_progress_at: null,
-			commit_id: null,
-			changed_files: null
-		});
+		const { commentId } = createTaskWithComment(db, { commentId: "comment-undef", taskId: "task-undef" });
 
-		const commentId = "comment-undef";
-		db.tasks.insertTaskComment({
-			id: commentId,
-			task_id: taskId,
-			repo: "test-repo",
-			comment: "Original",
-			agent: "test",
-			role: "test",
-			model: "test",
-			previous_status: null,
-			next_status: null,
-			created_at: new Date().toISOString()
-		});
-
-		db.tasks.updateTaskComment(commentId, {
+		db.taskComments.updateTaskComment(commentId, {
 			comment: undefined,
 			agent: "new-agent"
 		});
 
-		const updated = db.tasks.getTaskCommentById(commentId);
-		expect(updated?.comment).toBe("Original");
+		const updated = db.taskComments.getTaskCommentById(commentId);
+		expect(updated?.comment).toBe("Initial comment");
 		expect(updated?.agent).toBe("new-agent");
 	});
 });
