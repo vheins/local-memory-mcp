@@ -19,7 +19,7 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 		throw new Error(`Task not found: ${id || task_code} in repo ${repo}`);
 	}
 
-	const comments = storage.tasks.getTaskCommentsByTaskId(task.id);
+	const comments = storage.taskComments.getTaskCommentsByTaskId(task.id);
 
 	let contentSummary: string | undefined;
 	if (!isStructuredRequest) {

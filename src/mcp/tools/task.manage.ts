@@ -124,7 +124,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 	const task = storage.tasks.getTaskById(taskId);
 	if (!task) return;
 
-	const comments = storage.tasks.getTaskCommentsByTaskId(taskId);
+	const comments = storage.taskComments.getTaskCommentsByTaskId(taskId);
 
 	let content = `Task: [${task.task_code}] ${task.title}\n`;
 	content += `Phase: ${task.phase}\n`;
@@ -629,7 +629,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		storage.tasks.updateTask(targetId, finalUpdates);
 
 		if (comment !== undefined || isStatusChanging) {
-			storage.tasks.insertTaskComment({
+			storage.taskComments.insertTaskComment({
 				id: randomUUID(),
 				task_id: targetId,
 				repo,
