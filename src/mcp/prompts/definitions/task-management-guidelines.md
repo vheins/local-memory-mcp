@@ -3,6 +3,13 @@ name: task-management-guidelines
 description: Task tracking & progress management standards.
 arguments: []
 agent: Project Manager
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Utility
+complexity: Beginner
+tags: [workflow, tasks, status-management, mcp]
+author: vheins
 ---
 # Task Management Standards
 

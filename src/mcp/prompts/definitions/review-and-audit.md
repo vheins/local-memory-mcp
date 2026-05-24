@@ -3,20 +3,24 @@ name: review-and-audit
 description: Audit documentation against implementation; generate local tasks for gaps.
 arguments:
   - name: target
-    description: Module, feature, or component to audit. Optional — if omitted, audits all available documentation against the full implementation.
+    description: Module, feature, or component to audit.
     required: false
 agent: Quality Auditor
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Orchestrator
+complexity: Advanced
+tags: [workflow, audit, ux, gap-analysis, mcp]
+author: vheins
 ---
-
-## 0. CONTEXT RESOLUTION
-- **Target**: If `target` provided — scope audit to that module/feature/component. If omitted — **fallback**: audit ALL existing documentation (README, docs/, prompts, schemas) against the full codebase implementation. Enumerate each doc file and compare with corresponding source.
-- **Repo**: Auto-detect from git remote or active workspace context.
+# Skill: review-and-audit (Audit Agent)
 
 ## 1. ANALYSIS
-1. **Discovery**: Explore docs and code. Coding sub-agents MAY be used for parallel file reading if the agent supports sub-agents. `chrome-devtools-mcp` MCP tools (direct tool calls) are **ALLOWED**. **FORBIDDEN**: spawning a `browser_subagent` — do NOT invoke the `browser_subagent` tool here. Distinction: MCP tool call = allowed; spawned browser agent process = forbidden.
-2. **UX Audit**: If target involves UI and the audit explicitly requires visual inspection, note it as a separate task — do NOT block the audit on it.
+1. **Sequential Discovery**: Explore docs and code sequentially. NO parallel sub-agents.
+2. **UX Audit**: Use `chrome-dev-tools` for visual, navigation, and responsiveness checks.
 3. **Reference Audit**: Check current tool/prompt/resource definitions through code or the dashboard Reference flow.
-4. **Compare**: Match docs + code findings to find gaps/misalignments.
+4. **Compare**: Match docs + code findings against live UI to find gaps/misalignments.
 
 ## 🚫 FORBIDDEN: NON-EXECUTION
 DO NOT edit/create/delete files, run commands, or implement code.
@@ -40,8 +44,8 @@ ONLY call MCP tools. No prose, code, or external plans.
   - **Finding**: Gap trigger.
   - **Observation**: Reasoning.
   - **Goal**: Clear objective.
-  ### 2. Step & Implementation
-  - Detailed execution steps per path/layer.
+  ### 2. Target Files & Implementation
+  - Combined scope/steps per path/layer.
   ### 3. Acceptance & Verification
   - **Checklist**: `[ ]` criteria.
   - **Testing**: Scenarios.

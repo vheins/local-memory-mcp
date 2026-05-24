@@ -3,6 +3,13 @@ name: memory-index-policy
 description: Strict memory storage criteria.
 arguments: []
 agent: Memory Auditor
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Utility
+complexity: Beginner
+tags: [memory, indexing, policy, mcp]
+author: vheins
 ---
 # Memory Indexing Rules
 

@@ -3,14 +3,15 @@ name: session-planner
 description: Break objective into atomic tasks.
 arguments:
   - name: objective
-    description: High-level session goal. Optional — inferred from active task, recent conversation, or pending handoff if omitted.
-    required: false
+    description: High-level session goal.
+    required: true
 agent: Strategy Lead
+version: "1.0.0"
+category: workflows
+tags: [workflow, planning, task-breakdown]
 ---
-## 0. CONTEXT RESOLUTION
-- **objective**: If provided, use directly. If omitted — extract from the active `in_progress` task description, the most recent pending handoff, or the last user request in conversation context.
 
-Plan execution for the resolved objective.
+Plan execution for: '{{objective}}'.
 
 Steps:
 1. **Orient**: Call `task-list` to avoid duplicate active/backlog work.
@@ -20,6 +21,6 @@ Steps:
 5. **Phase**: Group into `research`, `implementation`, and `validation`.
 6. **Hierarchy**: Use `parent_id` / `depends_on` for sequencing.
 7. **Priority Scale**: When creating tasks, use the exact MCP scale `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`. Higher number means higher urgency.
-8. **Create**: Use `task-create` in current repo with stable `task_code`, tags, and acceptance criteria following the format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification.
+8. **Create**: Use `task-create` in current repo with stable `task_code`, tags, and acceptance criteria.
 
 Display final plan to user.

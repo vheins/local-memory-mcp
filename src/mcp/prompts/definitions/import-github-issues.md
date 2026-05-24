@@ -3,6 +3,13 @@ name: import-github-issues
 description: Import GitHub Issues as local tasks.
 arguments: []
 agent: Integration Scout
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Orchestrator
+complexity: Intermediate
+tags: [workflow, github, issue-import, mcp]
+author: vheins
 ---
 
 ## 1. FETCH

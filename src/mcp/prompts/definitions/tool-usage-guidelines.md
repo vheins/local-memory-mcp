@@ -3,6 +3,13 @@ name: tool-usage-guidelines
 description: Tool usage standards & data integrity.
 arguments: []
 agent: System Architect
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Utility
+complexity: Beginner
+tags: [workflow, tooling, memory, policy, mcp]
+author: vheins
 ---
 # Tool Usage Standards
 

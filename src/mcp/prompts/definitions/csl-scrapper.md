@@ -3,15 +3,18 @@ name: csl-scrapper
 description: Scrape trusted documentation from a URL into atomic CSL coding standards entries.
 arguments:
   - name: source_url
-    description: Canonical URL for the documentation source to scrape. Optional — if omitted, use the most recently referenced URL from conversation context.
-    required: false
+    description: Canonical URL for the documentation source to scrape.
+    required: true
 agent: Documentation Scraper
+version: "1.0.0"
+category: workflows
+tags: [workflow, csl, scraping, coding-standards, mcp]
 ---
-## 0. CONTEXT RESOLUTION
-- **source_url**: Use `{{source_url}}` if provided. If omitted — extract from the most recently mentioned URL in conversation context or active task description.
-- **current_repo**: Auto-detect from git remote or active workspace context.
 
-Fetch and convert trusted documentation from the resolved URL into atomic CSL (Coding Standards Library) entries.
+Fetch and convert trusted documentation from the provided URL into atomic CSL (Coding Standards Library) entries for the coding_standards entity.
+
+Source URL: {{source_url}}
+Current repo: {{current_repo}}
 
 Goal:
 - Use the web_fetch tool (if available) to retrieve the content of the provided Source URL.

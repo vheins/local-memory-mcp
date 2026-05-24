@@ -3,6 +3,13 @@ name: documentation-sync
 description: Sync memory decisions with repository markdown files
 arguments: []
 agent: Documentation Specialist
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Utility
+complexity: Beginner
+tags: [workflow, documentation, memory, sync]
+author: vheins
 ---
 Reconcile local documentation with stored memories.
 

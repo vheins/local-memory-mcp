@@ -3,6 +3,13 @@ name: project-briefing
 description: Contextual onboarding to current repository.
 arguments: []
 agent: Session Concierge
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Utility
+complexity: Beginner
+tags: [workflow, briefing, onboarding, memory, backlog]
+author: vheins
 ---
 Initialize session in repository.
 

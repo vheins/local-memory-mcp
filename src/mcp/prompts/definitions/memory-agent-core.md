@@ -3,6 +3,13 @@ name: memory-agent-core
 description: Behavioral contract for memory-aware agents.
 arguments: []
 agent: Memory Guardian
+version: "1.0.0"
+license: Proprietary — Personal Use Only
+category: workflows
+type: Utility
+complexity: Advanced
+tags: [memory, workflow, guardrails, mcp]
+author: vheins
 ---
 # Memory Guardian Protocol
 
