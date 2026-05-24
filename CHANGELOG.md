@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4] - 2026-05-24
+
+### Changed
+
+- **Prompt Definitions**: Aligned all 25 prompt definitions with skill files from vibe-coding-premium. Arguments made required where appropriate, added context resolution removal, FSM pipeline format for technical-planning, blueprint orchestration and sprint plan import sections for create-task, standardized commit format with keyword-based issue references.
+
 ## [0.14.3] - 2026-05-22
 
 ### Security
