@@ -221,7 +221,7 @@
 			</thead>
 			<tbody>
 				{#if loading}
-					{#each { length: 5 } as dummy, i (i)}
+					{#each { length: 5 } as _, i (i)}
 						<tr>
 							<td colspan="8" class="mem-td">
 								<div class="skeleton" style="height:20px;border-radius:6px;"></div>
