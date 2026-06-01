@@ -415,25 +415,34 @@ export function createDetailHandler() {
 				handoffError: ""
 			}));
 		} else {
-			update((s) => ({
-				...s,
-				handoff: {
-					id: "__new__",
-					repo: s.handoff?.repo || "",
-					from_agent: "",
-					to_agent: null,
-					task_id: null,
-					summary: "",
-					context: {},
-					status: "pending",
-					created_at: "",
-					updated_at: "",
-					expires_at: null
-				},
-				handoffForm: { ...INITIAL_HANDOFF_FORM },
-				handoffError: ""
-			}));
+			// Clear handoff — do NOT create a phantom __new__ object here.
+			// Use initNewHandoff() when the user explicitly wants to create a new handoff.
+			update((s) => ({ ...s, handoff: null, handoffForm: { ...INITIAL_HANDOFF_FORM }, handoffError: "" }));
 		}
+	}
+
+	function initNewHandoff(repoName: string) {
+		update((s) => ({
+			...s,
+			handoff: {
+				id: "__new__",
+				repo: repoName,
+				from_agent: "",
+				to_agent: null,
+				task_id: null,
+				summary: "",
+				context: {},
+				status: "pending",
+				created_at: "",
+				updated_at: "",
+				expires_at: null
+			},
+			task: null,
+			memory: null,
+			standard: null,
+			handoffForm: { ...INITIAL_HANDOFF_FORM },
+			handoffError: ""
+		}));
 	}
 
 	function parseHandoffContext(value: string): Record<string, unknown> {
@@ -599,6 +608,7 @@ export function createDetailHandler() {
 		deleteStandard,
 		handleCopyStandardContent,
 		setHandoff,
+		initNewHandoff,
 		createHandoff,
 		updateHandoffStatus,
 		handleCopyHandoffContext
