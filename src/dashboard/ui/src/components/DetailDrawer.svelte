@@ -25,12 +25,22 @@
 
 	const handoffContextPlaceholder = '{"next_steps":["..."],"blockers":[],"remaining_work":"..."}';
 
-	// Sync props to composable
+	// Sync props to composable — use if/else so only one entity setter runs,
+	// preventing setHandoff(null) from creating a phantom __new__ handoff and
+	// overriding the standard/task mode that was just set.
 	$: if (open) {
-		handler.setMemory(memory);
-		handler.setTask(task);
-		handler.setStandard(standard);
-		handler.setHandoff(handoff);
+		if (memory) {
+			handler.setMemory(memory);
+		} else if (task) {
+			handler.setTask(task);
+		} else if (standard !== undefined) {
+			handler.setStandard(standard);
+		} else if (handoff) {
+			handler.setHandoff(handoff);
+		} else {
+			// No entity prop supplied — this is a "New Handoff" request from HandoffsPanel
+			handler.initNewHandoff(repo || "");
+		}
 	} else {
 		handler.reset();
 	}
