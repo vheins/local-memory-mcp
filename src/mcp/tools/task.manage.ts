@@ -30,6 +30,14 @@ function resolveParentId(value: string | null | undefined, repo: string, storage
 	return parent.id;
 }
 
+function resolveDependsOn(value: string | null | undefined, repo: string, storage: SQLiteStore): string | null {
+	if (!value) return null;
+	if (UUID_REGEX.test(value)) return value;
+	const task = storage.tasks.getTaskByCode(repo, value);
+	if (!task) throw new Error(`depends_on: task with code '${value}' not found in repo '${repo}'`);
+	return task.id;
+}
+
 function describeTaskListFilter(status?: string) {
 	if (!status) return "active";
 	if (status === "all") return "all";
@@ -246,6 +254,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 	if (bulkTasks) {
 		const createdTasks: string[] = [];
+		const tasksToInsert: Task[] = [];
 		const now = new Date().toISOString();
 		const codesInRequest = new Set<string>();
 		const initialStats = storage.taskStats.getTaskStats(repo);
@@ -303,15 +312,16 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				tags: tags, commit_id: null, changed_files: [],
 				metadata: (taskData.metadata as Record<string, unknown>) || {},
 				parent_id: resolveParentId(taskData.parent_id, repo, storage),
-				depends_on: taskData.depends_on || null
+				depends_on: resolveDependsOn(taskData.depends_on, repo, storage)
 			};
-			storage.tasks.insertTask(task);
+			tasksToInsert.push(task);
 			createdTasks.push(task.task_code);
 			if (normalizedStatus === "pending") {
 				pendingInRequestCount++;
 			}
-			(task as Task & { _temp_id?: string })._temp_id = task.id; // temp store for mapping if needed
 		}
+
+		storage.tasks.bulkInsertTasks(tasksToInsert);
 
 		const taskCodesStr = createdTasks.length > 0 ? `: ${createdTasks.join(", ")}` : "";
 		return createMcpResponse(
@@ -388,7 +398,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		tags: finalTags, commit_id: null, changed_files: [],
 		metadata: metadata || {},
 		parent_id: resolveParentId(parent_id, repo, storage),
-		depends_on: depends_on || null
+		depends_on: resolveDependsOn(depends_on, repo, storage)
 	};
 
 	storage.tasks.insertTask(task);
@@ -601,6 +611,11 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		// Resolve parent_id if it was provided (can be UUID or task code)
 		if (updates.parent_id !== undefined) {
 			finalUpdates.parent_id = resolveParentId(updates.parent_id, repo, storage);
+		}
+
+		// Resolve depends_on if it was provided (can be UUID or task code)
+		if (updates.depends_on !== undefined) {
+			finalUpdates.depends_on = resolveDependsOn(updates.depends_on as string | null | undefined, repo, storage);
 		}
 
 		if (updates.phase !== undefined || updates.tags !== undefined) {
