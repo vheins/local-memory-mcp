@@ -5,6 +5,16 @@ import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildStandardVectorText } from "./standard.shared";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function resolveStandardParentId(value: string | null | undefined, db: SQLiteStore): string | null {
+	if (!value) return null;
+	if (UUID_REGEX.test(value)) return value;
+	const standard = db.standards.getByCode(value);
+	if (!standard) throw new Error(`parent_id: standard with code '${value}' not found`);
+	return standard.id;
+}
+
 export async function handleStandardUpdate(
 	params: Record<string, unknown>,
 	db: SQLiteStore,
@@ -30,7 +40,7 @@ export async function handleStandardUpdate(
 	const updates: Partial<CodingStandardEntry> = {};
 	if (validated.name !== undefined) updates.title = validated.name;
 	if (validated.content !== undefined) updates.content = validated.content;
-	if (validated.parent_id !== undefined) updates.parent_id = validated.parent_id;
+	if (validated.parent_id !== undefined) updates.parent_id = resolveStandardParentId(validated.parent_id, db);
 	if (validated.context !== undefined) updates.context = validated.context;
 	if (validated.version !== undefined) updates.version = validated.version;
 	if (validated.language !== undefined) updates.language = validated.language;

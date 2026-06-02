@@ -32,6 +32,43 @@ export class StandardEntity extends BaseEntity {
 		);
 	}
 
+	bulkInsertStandards(entries: CodingStandardEntry[]): number {
+		return this.transaction(() => {
+			let count = 0;
+			for (const entry of entries) {
+				this.run(
+					`INSERT INTO coding_standards (
+						id, code, title, content, parent_id, context, version, language, stack,
+						is_global, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					[
+						entry.id,
+						entry.code ?? null,
+						entry.title,
+						entry.content,
+						entry.parent_id,
+						entry.context,
+						entry.version,
+						entry.language ?? null,
+						entry.stack.length > 0 ? JSON.stringify(entry.stack) : null,
+						entry.is_global ? 1 : 0,
+						entry.repo ?? null,
+						entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
+						Object.keys(entry.metadata).length > 0 ? JSON.stringify(entry.metadata) : null,
+						entry.created_at,
+						entry.updated_at,
+						entry.hit_count,
+						entry.last_used_at,
+						entry.agent,
+						entry.model
+					]
+				);
+				count++;
+			}
+			return count;
+		});
+	}
+
 	getById(id: string): CodingStandardEntry | null {
 		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE id = ?", [id]);
 		return row ? this.rowToEntry(row) : null;

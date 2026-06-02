@@ -6,6 +6,8 @@ import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildStandardVectorText, toContextSlug } from "./standard.shared";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function generateShortCode(): string {
 	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
 	let code = "";
@@ -15,25 +17,41 @@ function generateShortCode(): string {
 	return code;
 }
 
-export async function handleStandardStore(
-	params: Record<string, unknown>,
+function resolveStandardParentId(value: string | null | undefined, db: SQLiteStore): string | null {
+	if (!value) return null;
+	if (UUID_REGEX.test(value)) return value;
+	const standard = db.standards.getByCode(value);
+	if (!standard) throw new Error(`parent_id: standard with code '${value}' not found`);
+	return standard.id;
+}
+
+async function storeSingleStandard(
+	params: {
+		name: string;
+		content: string;
+		parent_id?: string;
+		context?: string;
+		version?: string;
+		language?: string;
+		stack?: string[];
+		repo?: string;
+		is_global?: boolean;
+		tags: string[];
+		metadata: Record<string, unknown>;
+		agent?: string;
+		model?: string;
+		structured: boolean;
+	},
 	db: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {
-	// Validate input
-	const validated = StandardStoreSchema.parse(params);
-
-	// --- Similarity conflict check ---
-	// Threshold 0.82: stricter than memory-store (0.55) since coding standards
-	// tend to be more terse and dense.
-	// Exempt when version, language, OR stack differs from the conflicting entry.
-	const incomingVersion = validated.version || "1.0.0";
-	const incomingLanguage = validated.language ?? null;
-	const incomingStack = validated.stack ?? [];
+	const incomingVersion = params.version || "1.0.0";
+	const incomingLanguage = params.language ?? null;
+	const incomingStack = params.stack ?? [];
 	const conflict = db.standards.checkConflicts(
-		validated.content,
+		params.content,
 		incomingVersion,
-		validated.repo,
+		params.repo,
 		incomingLanguage,
 		incomingStack,
 		0.82
@@ -60,32 +78,30 @@ export async function handleStandardStore(
 		);
 	}
 
-	// Create coding standard entry
 	const now = new Date().toISOString();
 
 	const entry: CodingStandardEntry = {
 		id: randomUUID(),
 		code: generateShortCode(),
-		title: validated.name,
-		content: validated.content,
-		parent_id: validated.parent_id || null,
-		context: toContextSlug(validated.context || "general"),
-		version: validated.version || "1.0.0",
-		language: validated.language || null,
-		stack: validated.stack || [],
-		is_global: validated.is_global !== false,
-		repo: validated.repo || null,
-		tags: validated.tags || [],
-		metadata: validated.metadata,
+		title: params.name,
+		content: params.content,
+		parent_id: resolveStandardParentId(params.parent_id, db),
+		context: toContextSlug(params.context || "general"),
+		version: params.version || "1.0.0",
+		language: params.language || null,
+		stack: params.stack || [],
+		is_global: params.is_global !== false,
+		repo: params.repo || null,
+		tags: params.tags || [],
+		metadata: params.metadata,
 		created_at: now,
 		updated_at: now,
 		hit_count: 0,
 		last_used_at: null,
-		agent: validated.agent || "unknown",
-		model: validated.model || "unknown"
+		agent: params.agent || "unknown",
+		model: params.model || "unknown"
 	};
 
-	// Insert into database
 	db.standards.insert(entry);
 
 	try {
@@ -93,14 +109,6 @@ export async function handleStandardStore(
 	} catch (error) {
 		logger.warn("Failed to generate standard vector embedding", { error: String(error) });
 	}
-
-	logger.info("[Tool] standard.store - saved coding standard", {
-		standardId: entry.id,
-		code: entry.code,
-		title: entry.title,
-		stack: entry.stack,
-		language: entry.language
-	});
 
 	return createMcpResponse(
 		{
@@ -111,7 +119,61 @@ export async function handleStandardStore(
 		`Saved coding standard [${entry.code}]: ${entry.title}`,
 		{
 			structuredContentPathHint: "standard",
-			includeSerializedStructuredContent: true
+			includeSerializedStructuredContent: params.structured
 		}
+	);
+}
+
+export async function handleStandardStore(
+	params: Record<string, unknown>,
+	db: SQLiteStore,
+	vectors: VectorStore
+): Promise<McpResponse> {
+	const validated = StandardStoreSchema.parse(params);
+
+	// Bulk mode
+	if (validated.standards) {
+		const storedCodes: string[] = [];
+		for (const std of validated.standards) {
+			const result = await storeSingleStandard(
+				{
+					...std,
+					structured: validated.structured
+				},
+				db,
+				vectors
+			);
+			if (result.isError) return result;
+			const data = result.structuredContent as { standard?: { code?: string } };
+			if (data?.standard?.code) storedCodes.push(data.standard.code);
+		}
+		const codesStr = storedCodes.length > 0 ? `: ${storedCodes.join(", ")}` : "";
+		return createMcpResponse(
+			{ success: true, createdCount: validated.standards.length, codes: storedCodes },
+			`Saved ${validated.standards.length} coding standards${codesStr}.`,
+			{ includeSerializedStructuredContent: validated.structured }
+		);
+	}
+
+	// Single mode
+	return storeSingleStandard(
+		{
+			name: validated.name!,
+			content: validated.content!,
+			parent_id: validated.parent_id,
+			context: validated.context,
+			version: validated.version,
+			language: validated.language,
+			stack: validated.stack,
+			repo: validated.repo,
+			is_global: validated.is_global,
+			tags: validated.tags!,
+			metadata: validated.metadata!,
+			agent: validated.agent,
+			model: validated.model,
+			structured: validated.structured
+		},
+		db,
+		vectors
 	);
 }
