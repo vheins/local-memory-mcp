@@ -23,7 +23,7 @@ describe("task-memory-executor prompt", () => {
 		};
 
 		const promptText = result.messages[0].content.text;
-		expect(promptText).toContain("Dependency-aware selection");
+		expect(promptText).toContain("Dependency-ready filtering");
 		expect(promptText).toContain("Readiness re-check");
 		expect(promptText).toContain("depends_on");
 		expect(promptText).toContain("parent_id");
