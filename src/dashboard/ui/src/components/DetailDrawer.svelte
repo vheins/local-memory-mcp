@@ -30,11 +30,11 @@
 			handler.setMemory(memory);
 		} else if (task) {
 			handler.setTask(task);
-		} else if (standard !== undefined) {
+		} else if ("standard" in $$props) {
 			handler.setStandard(standard);
 		} else if (handoff) {
 			handler.setHandoff(handoff);
-		} else {
+		} else if ("handoff" in $$props) {
 			handler.initNewHandoff(repo || "");
 		}
 	} else {
