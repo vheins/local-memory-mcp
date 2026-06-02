@@ -93,12 +93,15 @@ export function createMcpResponse(
 			text: contentSummary.trim()
 		});
 	} else if (summary && summary.trim().length > 0) {
-		const pointerText = structuredContentPathHint
-			? `Read structuredContent.${structuredContentPathHint} for details.`
-			: `Read structuredContent for machine-readable results.`;
+		let text = summary.trim();
+		if (includeSerializedStructuredContent) {
+			text += ` ${structuredContentPathHint
+				? `Read structuredContent.${structuredContentPathHint} for details.`
+				: `Read structuredContent for machine-readable results.`}`;
+		}
 		content.push({
 			type: "text",
-			text: `${summary.trim()} ${pointerText}`
+			text
 		});
 	}
 
