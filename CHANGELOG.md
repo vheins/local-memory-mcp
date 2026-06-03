@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.7] - 2026-06-03
+
+### Changed
+
+- **Delete Confirmations**: Replaced all native browser `confirm()`/`alert()` with SweetAlert2 modals across the dashboard UI. Delete confirmations now use styled, theme-aware dialogs.
+
 ## [0.14.6] - 2026-06-03
 
 ### Fixed
