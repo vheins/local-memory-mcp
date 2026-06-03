@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.6] - 2026-06-03
+
+### Fixed
+
+- **Dashboard Icons**: Resolved 13 broken icon references across the Svelte UI. Added 10 missing SVG icon definitions to `Icon.svelte`. Replaced nonexistent icon names (`x-circle`, `trash-2`, `edit-2`, `pencil`, `circle-alert`, `save`, `loader`, `check-check`) with valid equivalents. svelte-check: 0 errors.
+
+## [0.14.5] - 2026-06-03
+
+### Added
+
+- **Bulk CRUD**: Bulk create, read, update, delete for memories and coding standards.
+- **N+1 Elimination**: Optimized query patterns to eliminate N+1 in bulk operations.
+- **Parent Code Resolution**: `parent_id` now accepts task codes and standard codes, resolved to UUIDs before storage.
+
 ## [0.14.4] - 2026-05-24
 
 ### Changed
