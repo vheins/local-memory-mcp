@@ -49,14 +49,17 @@ describe("MCP Spec Compliance", () => {
 	});
 
 	it("should include a text content entry for text-only responses", () => {
-		const response = createMcpResponse({ ok: true }, "Completed");
+		const response = createMcpResponse({ ok: true }, "Completed", {
+			includeSerializedStructuredContent: true
+		});
 
 		expect(getPrimaryTextContent(response)).toBe("Completed Read structuredContent for machine-readable results.");
 	});
 
 	it("should support structured content path hints in summary text", () => {
 		const response = createMcpResponse({ results: [{ id: "1" }] }, "Found 1 memory.", {
-			structuredContentPathHint: "results"
+			structuredContentPathHint: "results",
+			includeSerializedStructuredContent: true
 		});
 
 		expect(getPrimaryTextContent(response)).toBe("Found 1 memory. Read structuredContent.results for details.");

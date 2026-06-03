@@ -249,7 +249,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		const summaryText = getPrimaryTextContent(duplicateRes);
 		expect(summaryText).toContain("conflict");
 		expect(summaryText).toContain("Hint:");
-		expect(summaryText).toContain("memory-delete");
+		expect(summaryText).toContain("delete first");
 		expect(db.memories.getTotalCount(REPO)).toBe(1); // Should still be 1
 	});
 

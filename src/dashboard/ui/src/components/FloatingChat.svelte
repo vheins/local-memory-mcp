@@ -2,7 +2,13 @@
 	import { onMount, afterUpdate, tick } from "svelte";
 	import { get } from "svelte/store";
 	import Icon from "../lib/Icon.svelte";
-	import { currentRepo, recentActions, recentActionsPage, recentActionsTotalItems, chatRefreshSignal } from "../lib/stores";
+	import {
+		currentRepo,
+		recentActions,
+		recentActionsPage,
+		recentActionsTotalItems,
+		chatRefreshSignal
+	} from "../lib/stores";
 	import { api } from "../lib/api";
 	import { createRecentActionsHandler } from "../lib/composables/useRecentActions";
 	import Markdown from "./Markdown.svelte";
@@ -97,104 +103,113 @@
 <svelte:window on:keydown={handleKeyDown} />
 
 {#if $currentRepo}
-{#if open}
-	<div class="chat-backdrop" on:click={() => (open = false)} role="button" tabindex="-1" aria-label="Close"></div>
-	<div class="chat-popup animate-fade-in-scale">
-		<div class="chat-popup-header">
-			<div class="chat-popup-title">
-				<div class="chat-popup-avatar">
-					<Icon name="message-circle" size={16} strokeWidth={2.2} />
+	{#if open}
+		<div
+			class="chat-backdrop"
+			on:click={() => (open = false)}
+			on:keydown={(e) => e.key === "Enter" && (open = false)}
+			role="button"
+			tabindex="-1"
+			aria-label="Close"
+		></div>
+		<div class="chat-popup animate-fade-in-scale">
+			<div class="chat-popup-header">
+				<div class="chat-popup-title">
+					<div class="chat-popup-avatar">
+						<Icon name="message-circle" size={16} strokeWidth={2.2} />
+					</div>
+					<div>
+						<div class="chat-popup-name">Recent Activity</div>
+						<div class="chat-popup-status">{$recentActionsTotalItems} events</div>
+					</div>
 				</div>
-				<div>
-					<div class="chat-popup-name">Recent Activity</div>
-					<div class="chat-popup-status">{$recentActionsTotalItems} events</div>
-				</div>
-			</div>
-			<button class="chat-popup-close" on:click={() => (open = false)} title="Close" aria-label="Close">
-				<Icon name="x" size={16} strokeWidth={2.5} />
-			</button>
-		</div>
-
-		<div class="chat-popup-body" bind:this={chatContainer}>
-			{#if $handlerState.isLoadingMore}
-				<div class="popup-load-more">
-					<Icon name="refresh-cw" size={12} className="animate-spin" />
-					<span>Loading older...</span>
-				</div>
-			{/if}
-
-			{#if $raStore.length === 0}
-				<div class="popup-empty">
-					<Icon name="message-circle" size={36} strokeWidth={1} />
-					<div>No activity yet</div>
-					<div>Events appear here as they happen.</div>
-				</div>
-			{:else}
-				{#each $groupedActions as group (group.date)}
-					<div class="popup-date-header"><span>{group.date}</span></div>
-					{#each group.items as action (action.id)}
-						{@const label = handler.getLabel(action)}
-						{@const cfg = handler.getConfig(action.action)}
-						<div class="popup-bubble-row popup-bubble-right">
-							<div class="popup-bubble-wrap">
-								<div class="popup-chat-bubble popup-chat-bubble-action">
-									<div class="popup-action-badge" style="color:{cfg.color};background:{cfg.bgAlpha};">
-										<Icon name={cfg.icon} size={8} strokeWidth={2.5} />
-										<span>{cfg.label}</span>
-									</div>
-									<div class="popup-action-main">{label.main}</div>
-									{#if label.sub}<div class="popup-action-sub">{label.sub}</div>{/if}
-								</div>
-							</div>
-						</div>
-						{#if action.response}
-							{@const parsed = handler.parseResponse(action.response)}
-							{@const isExpanded = $handlerState.expandedResponses.has(action.id)}
-							<div class="popup-bubble-row popup-bubble-left">
-								<div class="popup-bubble-wrap">
-									<div class="popup-chat-bubble popup-chat-bubble-mcp">
-										<div class="popup-mcp-sender">MCP</div>
-										<div
-											class="popup-markdown"
-											style="{!isExpanded && parsed.isLong ? 'max-height:80px;overflow:hidden;mask-image:linear-gradient(to bottom,black 60%,transparent 100%);' : ''}"
-										>
-											<Markdown content={parsed.text} />
-										</div>
-										{#if parsed.isLong}
-											<button class="popup-read-more" on:click={() => handler.toggleExpand(action.id)}>
-												{isExpanded ? "Less" : "More"}
-											</button>
-										{/if}
-									</div>
-								</div>
-							</div>
-						{/if}
-					{/each}
-				{/each}
-			{/if}
-		</div>
-
-		<div class="chat-popup-footer">
-			<div class="chat-input-row">
-				<input
-					type="text"
-					placeholder="Create a backlog task..."
-					value={chatMessage}
-					on:input={(e) => (chatMessage = e.currentTarget.value)}
-					on:keydown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
-					disabled={isSending}
-				/>
-				<button class="chat-send-btn" on:click={sendChat} disabled={!chatMessage.trim() || isSending}>
-					<Icon name="send" size={14} strokeWidth={2} />
+				<button class="chat-popup-close" on:click={() => (open = false)} title="Close" aria-label="Close">
+					<Icon name="x" size={16} strokeWidth={2.5} />
 				</button>
 			</div>
+
+			<div class="chat-popup-body" bind:this={chatContainer}>
+				{#if $handlerState.isLoadingMore}
+					<div class="popup-load-more">
+						<Icon name="refresh-cw" size={12} className="animate-spin" />
+						<span>Loading older...</span>
+					</div>
+				{/if}
+
+				{#if $raStore.length === 0}
+					<div class="popup-empty">
+						<Icon name="message-circle" size={36} strokeWidth={1} />
+						<div>No activity yet</div>
+						<div>Events appear here as they happen.</div>
+					</div>
+				{:else}
+					{#each $groupedActions as group (group.date)}
+						<div class="popup-date-header"><span>{group.date}</span></div>
+						{#each group.items as action (action.id)}
+							{@const label = handler.getLabel(action)}
+							{@const cfg = handler.getConfig(action.action)}
+							<div class="popup-bubble-row popup-bubble-right">
+								<div class="popup-bubble-wrap">
+									<div class="popup-chat-bubble popup-chat-bubble-action">
+										<div class="popup-action-badge" style="color:{cfg.color};background:{cfg.bgAlpha};">
+											<Icon name={cfg.icon} size={8} strokeWidth={2.5} />
+											<span>{cfg.label}</span>
+										</div>
+										<div class="popup-action-main">{label.main}</div>
+										{#if label.sub}<div class="popup-action-sub">{label.sub}</div>{/if}
+									</div>
+								</div>
+							</div>
+							{#if action.response}
+								{@const parsed = handler.parseResponse(action.response)}
+								{@const isExpanded = $handlerState.expandedResponses.has(action.id)}
+								<div class="popup-bubble-row popup-bubble-left">
+									<div class="popup-bubble-wrap">
+										<div class="popup-chat-bubble popup-chat-bubble-mcp">
+											<div class="popup-mcp-sender">MCP</div>
+											<div
+												class="popup-markdown"
+												style={!isExpanded && parsed.isLong
+													? "max-height:80px;overflow:hidden;mask-image:linear-gradient(to bottom,black 60%,transparent 100%);"
+													: ""}
+											>
+												<Markdown content={parsed.text} />
+											</div>
+											{#if parsed.isLong}
+												<button class="popup-read-more" on:click={() => handler.toggleExpand(action.id)}>
+													{isExpanded ? "Less" : "More"}
+												</button>
+											{/if}
+										</div>
+									</div>
+								</div>
+							{/if}
+						{/each}
+					{/each}
+				{/if}
+			</div>
+
+			<div class="chat-popup-footer">
+				<div class="chat-input-row">
+					<input
+						type="text"
+						placeholder="Create a backlog task..."
+						value={chatMessage}
+						on:input={(e) => (chatMessage = e.currentTarget.value)}
+						on:keydown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
+						disabled={isSending}
+					/>
+					<button class="chat-send-btn" on:click={sendChat} disabled={!chatMessage.trim() || isSending}>
+						<Icon name="send" size={14} strokeWidth={2} />
+					</button>
+				</div>
+			</div>
 		</div>
-	</div>
-{:else}
-	<button class="chat-fab" on:click={toggle} title="Open activity chat" aria-label="Open activity chat">
-		<Icon name="message-circle" size={22} strokeWidth={2.2} />
-	</button>
-{/if}
+	{:else}
+		<button class="chat-fab" on:click={toggle} title="Open activity chat" aria-label="Open activity chat">
+			<Icon name="message-circle" size={22} strokeWidth={2.2} />
+		</button>
+	{/if}
 {/if}
 
 <style>
@@ -222,7 +237,9 @@
 		color: white;
 		background: linear-gradient(135deg, #0ea5e9, #6366f1);
 		box-shadow: 0 4px 20px rgba(14, 165, 233, 0.45);
-		transition: transform 0.2s ease, box-shadow 0.2s ease;
+		transition:
+			transform 0.2s ease,
+			box-shadow 0.2s ease;
 		flex-shrink: 0;
 	}
 
@@ -242,8 +259,14 @@
 	}
 
 	@keyframes fab-pulse {
-		0% { transform: scale(1); opacity: 0.7; }
-		100% { transform: scale(1.45); opacity: 0; }
+		0% {
+			transform: scale(1);
+			opacity: 0.7;
+		}
+		100% {
+			transform: scale(1.45);
+			opacity: 0;
+		}
 	}
 
 	.chat-popup {
@@ -255,7 +278,9 @@
 		height: 560px;
 		background: var(--color-surface, #fff);
 		border-radius: 16px;
-		box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.1);
+		box-shadow:
+			0 8px 40px rgba(0, 0, 0, 0.18),
+			0 4px 16px rgba(0, 0, 0, 0.1);
 		border: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
@@ -508,7 +533,7 @@
 
 	:global(html.dark) .chat-popup-footer {
 		background: rgba(6, 12, 28, 0.7);
-		border-top-color: rgba(148, 163, 184, 0.10);
+		border-top-color: rgba(148, 163, 184, 0.1);
 	}
 
 	:global(.chat-popup-footer .chat-input-row) {

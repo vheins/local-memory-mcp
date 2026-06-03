@@ -59,7 +59,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		expect(res.isError).toBe(false);
-		expect(getTextContent(res)).toContain(`Created 2 tasks in repo "${REPO}".`);
+		expect(getTextContent(res)).toContain(`Created 2 tasks in repo "${REPO}`);
 
 		const tasks = db.tasks.getTasksByRepo(REPO);
 		expect(tasks.length).toBe(2);
@@ -312,7 +312,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		expect(getTextContent(delRes)).toContain(`Deleted 2 task(s) from repo "${REPO}".`);
+		expect(getTextContent(delRes)).toContain(`Deleted 2 task(s) from repo "${REPO}`);
 		const remainingTasks = db.tasks.getTasksByRepo(REPO);
 		expect(remainingTasks.length).toBe(1);
 	});

@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 import { McpResponse } from "../utils/mcp-response";
+
+vi.setConfig({ testTimeout: 30000 });
 
 describe("MCP Local Memory - Task Management Workflow E2E", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;

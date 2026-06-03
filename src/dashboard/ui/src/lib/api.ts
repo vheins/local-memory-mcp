@@ -19,7 +19,9 @@ import type {
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(url, options);
 	if (!res.ok) {
-		const err = await res.json().catch(() => ({ error: res.statusText }));
+		const err: { error?: string; errors?: Array<{ detail?: string }> } = await res
+			.json()
+			.catch(() => ({ error: res.statusText }));
 		throw new Error(err.error || err.errors?.[0]?.detail || `HTTP ${res.status}`);
 	}
 	const body = await res.json();

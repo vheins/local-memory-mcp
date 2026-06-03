@@ -29,7 +29,8 @@ describe("CSL (Coding Standards Library)", () => {
 					tags: ["backend", "errors"],
 					metadata: { source: "internal-docs", owner: "platform" },
 					agent: "test-agent",
-					model: "gpt-4"
+					model: "gpt-4",
+					structured: true
 				},
 				db,
 				vectors
@@ -66,7 +67,8 @@ describe("CSL (Coding Standards Library)", () => {
 					language: "typescript",
 					stack: ["react"],
 					tags: ["react", "hooks"],
-					metadata: { source: "styleguide" }
+					metadata: { source: "styleguide" },
+					structured: true
 				},
 				db,
 				vectors
@@ -82,7 +84,8 @@ describe("CSL (Coding Standards Library)", () => {
 					name: "React Hooks",
 					content: "Follow hook rules consistently.",
 					tags: ["react", "hooks"],
-					metadata: { source: "react-docs" }
+					metadata: { source: "react-docs" },
+					structured: true
 				},
 				db,
 				vectors
@@ -95,7 +98,8 @@ describe("CSL (Coding Standards Library)", () => {
 					content: "Always clean up subscriptions in effects.",
 					parent_id: parentId,
 					tags: ["react", "hooks", "effects"],
-					metadata: { source: "react-docs" }
+					metadata: { source: "react-docs" },
+					structured: true
 				},
 				db,
 				vectors
@@ -114,7 +118,8 @@ describe("CSL (Coding Standards Library)", () => {
 					language: "typescript",
 					stack: ["node"],
 					tags: ["node", "errors"],
-					metadata: { source: "guide-v1" }
+					metadata: { source: "guide-v1" },
+					structured: true
 				},
 				db,
 				vectors
@@ -145,7 +150,8 @@ describe("CSL (Coding Standards Library)", () => {
 					name: "Parent Standard",
 					content: "Parent guidance.",
 					tags: ["architecture"],
-					metadata: { source: "guide" }
+					metadata: { source: "guide" },
+					structured: true
 				},
 				db,
 				vectors
@@ -155,7 +161,8 @@ describe("CSL (Coding Standards Library)", () => {
 					name: "Child Standard",
 					content: "Child guidance.",
 					tags: ["architecture", "child"],
-					metadata: { source: "guide" }
+					metadata: { source: "guide" },
+					structured: true
 				},
 				db,
 				vectors
@@ -299,7 +306,8 @@ describe("CSL (Coding Standards Library)", () => {
 					language: "typescript",
 					stack: ["react"],
 					tags: ["react", "effects"],
-					metadata: { source: "react-docs" }
+					metadata: { source: "react-docs" },
+					structured: true
 				},
 				vectorOnlyDb,
 				mockVectors
