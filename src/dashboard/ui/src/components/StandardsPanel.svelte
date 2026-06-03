@@ -1,19 +1,11 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { api } from "../lib/api";
 	import Icon from "../lib/Icon.svelte";
-	import {
-		currentRepo,
-		standards,
-		standardsTotal,
-		standardsPage,
-		standardsTotalPages,
-		standardsSearch,
-		standardsContextFilter
-	} from "../lib/stores";
+	import { currentRepo } from "../lib/stores";
 	import type { CodingStandard } from "../lib/stores";
 	import { formatDate } from "../lib/utils";
 	import { confirmDelete } from "../lib/confirm";
-	import { createStandardHandler } from "../lib/composables/useStandardList";
 	import DetailDrawer from "./DetailDrawer.svelte";
 
 	export let repo = "";
