@@ -20,9 +20,9 @@ export class TaskEntity extends BaseEntity {
 		this.run(
 			`INSERT INTO tasks (
 				id, repo, task_code, phase, title, description, status, priority,
-				agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
+				agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, suggested_skills, metadata, parent_id, depends_on, est_tokens, in_progress_at,
 				commit_id, changed_files
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				task.id,
 				task.repo,
@@ -40,6 +40,7 @@ export class TaskEntity extends BaseEntity {
 				task.finished_at || null,
 				task.canceled_at || null,
 				task.tags ? JSON.stringify(task.tags) : null,
+				task.suggested_skills ? JSON.stringify(task.suggested_skills) : null,
 				task.metadata ? JSON.stringify(task.metadata) : null,
 				task.parent_id || null,
 				task.depends_on || null,
@@ -69,6 +70,7 @@ export class TaskEntity extends BaseEntity {
 			"finished_at",
 			"canceled_at",
 			"tags",
+			"suggested_skills",
 			"metadata",
 			"parent_id",
 			"depends_on",
@@ -80,7 +82,7 @@ export class TaskEntity extends BaseEntity {
 
 		Object.keys(updates).forEach((key) => {
 			if (VALID_COLUMNS.has(key) && anyUpdates[key] !== undefined) {
-				if (key === "tags" || key === "metadata" || key === "changed_files") {
+				if (key === "tags" || key === "metadata" || key === "changed_files" || key === "suggested_skills") {
 					fields.push(`${key} = ?`);
 					values.push(JSON.stringify(anyUpdates[key]));
 				} else {
@@ -114,7 +116,15 @@ export class TaskEntity extends BaseEntity {
 			 WHERE t.id = ?`,
 			[id]
 		);
-		return row ? { ...this.rowToTask(row), comments: this.all<TaskComment>("SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at DESC, id DESC", [id]) } : null;
+		return row
+			? {
+					...this.rowToTask(row),
+					comments: this.all<TaskComment>(
+						"SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at DESC, id DESC",
+						[id]
+					)
+				}
+			: null;
 	}
 
 	getTasksByIds(ids: string[]): Task[] {
@@ -160,7 +170,15 @@ export class TaskEntity extends BaseEntity {
 			 WHERE t.repo = ? AND t.task_code = ?`,
 			[repo, taskCode]
 		);
-		return row ? { ...this.rowToTask(row), comments: this.all<TaskComment>("SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at DESC, id DESC", [row.id as string]) } : null;
+		return row
+			? {
+					...this.rowToTask(row),
+					comments: this.all<TaskComment>(
+						"SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at DESC, id DESC",
+						[row.id as string]
+					)
+				}
+			: null;
 	}
 
 	getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): Task[] {
@@ -352,9 +370,9 @@ export class TaskEntity extends BaseEntity {
 				this.run(
 					`INSERT INTO tasks (
 						id, repo, task_code, phase, title, description, status, priority,
-						agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
+						agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, suggested_skills, metadata, parent_id, depends_on, est_tokens, in_progress_at,
 						commit_id, changed_files
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
 						task.id,
 						task.repo,
@@ -372,6 +390,7 @@ export class TaskEntity extends BaseEntity {
 						task.finished_at || null,
 						task.canceled_at || null,
 						task.tags ? JSON.stringify(task.tags) : null,
+						task.suggested_skills ? JSON.stringify(task.suggested_skills) : null,
 						task.metadata ? JSON.stringify(task.metadata) : null,
 						task.parent_id || null,
 						task.depends_on || null,

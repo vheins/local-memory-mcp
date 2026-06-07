@@ -44,6 +44,7 @@ export interface Task {
 	commit_id: string | null;
 	changed_files: string[];
 	tags: string[];
+	suggested_skills: string[];
 	metadata: Record<string, unknown>;
 	parent_id: string | null;
 	depends_on: string | null;
@@ -88,6 +89,7 @@ export interface TaskRow {
 	commit_id: string | null;
 	changed_files: string;
 	tags: string;
+	suggested_skills: string;
 	metadata: string;
 	parent_id: string | null;
 	depends_on: string | null;

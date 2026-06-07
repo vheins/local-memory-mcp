@@ -93,6 +93,7 @@ export abstract class BaseEntity {
 			commit_id: (r.commit_id as string) || null,
 			changed_files: this.safeJSONParse<string[]>(r.changed_files as string, []),
 			tags: this.safeJSONParse<string[]>(r.tags as string, []),
+			suggested_skills: this.safeJSONParse<string[]>(r.suggested_skills as string, []),
 			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {}),
 			parent_id: (r.parent_id as string) || null,
 			depends_on: (r.depends_on as string) || null,

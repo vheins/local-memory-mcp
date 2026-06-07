@@ -33,6 +33,8 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 
 		if (task.phase) lines.push(`Phase: ${task.phase}`);
 		if (task.description) lines.push(`Description: ${task.description}`);
+		if (task.suggested_skills && task.suggested_skills.length > 0)
+			lines.push(`Suggested Skills: ${task.suggested_skills.join(", ")}`);
 		if (task.metadata) lines.push(`Metadata: ${JSON.stringify(task.metadata)}`);
 		lines.push(`Created: ${task.created_at}`);
 		if (task.updated_at) lines.push(`Updated: ${task.updated_at}`);

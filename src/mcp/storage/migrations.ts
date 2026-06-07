@@ -316,6 +316,11 @@ export class MigrationManager {
 				name: "changed_files",
 				table: "tasks",
 				definition: "ALTER TABLE tasks ADD COLUMN changed_files TEXT"
+			},
+			{
+				name: "suggested_skills",
+				table: "tasks",
+				definition: "ALTER TABLE tasks ADD COLUMN suggested_skills TEXT"
 			}
 		];
 
