@@ -20,19 +20,34 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /**
  * Resolves a parent_id value that is either a UUID or a task_code string.
  * Returns the resolved UUID, or throws if the task cannot be found.
+ * An optional localCodeMap is checked first for cross-references within the same batch.
  */
-function resolveParentId(value: string | null | undefined, repo: string, storage: SQLiteStore): string | null {
+function resolveParentId(
+	value: string | null | undefined,
+	repo: string,
+	storage: SQLiteStore,
+	localCodeMap?: Map<string, string>
+): string | null {
 	if (!value) return null;
 	if (UUID_REGEX.test(value)) return value;
-	// Treat as task_code
+	// Check in-memory batch map first (cross-reference within same create batch)
+	if (localCodeMap?.has(value)) return localCodeMap.get(value)!;
+	// Treat as task_code, fall back to DB
 	const parent = storage.tasks.getTaskByCode(repo, value);
 	if (!parent) throw new Error(`parent_id: task with code '${value}' not found in repo '${repo}'`);
 	return parent.id;
 }
 
-function resolveDependsOn(value: string | null | undefined, repo: string, storage: SQLiteStore): string | null {
+function resolveDependsOn(
+	value: string | null | undefined,
+	repo: string,
+	storage: SQLiteStore,
+	localCodeMap?: Map<string, string>
+): string | null {
 	if (!value) return null;
 	if (UUID_REGEX.test(value)) return value;
+	// Check in-memory batch map first (cross-reference within same create batch)
+	if (localCodeMap?.has(value)) return localCodeMap.get(value)!;
 	const task = storage.tasks.getTaskByCode(repo, value);
 	if (!task) throw new Error(`depends_on: task with code '${value}' not found in repo '${repo}'`);
 	return task.id;
@@ -265,6 +280,12 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		const initialStats = storage.taskStats.getTaskStats(repo);
 		let pendingInRequestCount = 0;
 
+		// Pre-generate UUIDs and build local code→UUID map for cross-reference resolution
+		const localCodeMap = new Map<string, string>();
+		for (const taskData of bulkTasks) {
+			localCodeMap.set(taskData.task_code, randomUUID());
+		}
+
 		for (const taskData of bulkTasks) {
 			if (codesInRequest.has(taskData.task_code)) {
 				throw new Error(`Duplicate task_code in request: '${taskData.task_code}'`);
@@ -296,8 +317,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				tags.push(phaseTag);
 			}
 
+			const taskId = localCodeMap.get(taskData.task_code)!;
 			const task: Task = {
-				id: randomUUID(),
+				id: taskId,
 				repo,
 				task_code: taskData.task_code,
 				phase: taskData.phase,
@@ -314,10 +336,12 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				finished_at: statusTimestamps.finished_at,
 				canceled_at: statusTimestamps.canceled_at,
 				est_tokens: taskData.est_tokens ?? 0,
-				tags: tags, commit_id: null, changed_files: [],
+				tags: tags,
+				commit_id: null,
+				changed_files: [],
 				metadata: (taskData.metadata as Record<string, unknown>) || {},
-				parent_id: resolveParentId(taskData.parent_id, repo, storage),
-				depends_on: resolveDependsOn(taskData.depends_on, repo, storage)
+				parent_id: resolveParentId(taskData.parent_id, repo, storage, localCodeMap),
+				depends_on: resolveDependsOn(taskData.depends_on, repo, storage, localCodeMap)
 			};
 			tasksToInsert.push(task);
 			createdTasks.push(task.task_code);
@@ -400,7 +424,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		finished_at: statusTimestamps.finished_at,
 		canceled_at: statusTimestamps.canceled_at,
 		est_tokens: est_tokens ?? 0,
-		tags: finalTags, commit_id: null, changed_files: [],
+		tags: finalTags,
+		commit_id: null,
+		changed_files: [],
 		metadata: metadata || {},
 		parent_id: resolveParentId(parent_id, repo, storage),
 		depends_on: resolveDependsOn(depends_on, repo, storage)
@@ -675,12 +701,8 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		updatedCount++;
 	}
 
-	const taskCodesStr = updatedTasks.length > 0
-		? ` Tasks: ${updatedTasks.map((t) => t.code).join(", ")}.`
-		: "";
-	const fieldsStr = Object.keys(updates).length > 0
-		? ` Fields: ${Object.keys(updates).join(", ")}.`
-		: "";
+	const taskCodesStr = updatedTasks.length > 0 ? ` Tasks: ${updatedTasks.map((t) => t.code).join(", ")}.` : "";
+	const fieldsStr = Object.keys(updates).length > 0 ? ` Fields: ${Object.keys(updates).join(", ")}.` : "";
 	const isCompleted = updates.status === "completed" && updatedCount > 0;
 	let summaryText = isCompleted
 		? `Updated ${updatedCount} task(s) in repo "${repo}". Task marked as completed with commit ${updates.commit_id} (${(updates.changed_files || []).length} files changed).`
