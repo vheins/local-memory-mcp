@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-06-07
+
+### Added
+
+- **Sequential Auto-Generated Codes**: Task, memory, and standard codes are now auto-generated when omitted. Patterns: `TASK-001`, `MEM-001`, `STD-001` (sequential per repository).
+- **Optional `task_code`**: No longer required during task creation. Omit to get a sequential `TASK-xxx` code, or provide a custom code as before.
+- **`suggested_skills` Field**: Tasks can now carry a `suggested_skills` array. The task-memory-executor prompt reads this field and loads each skill via the `skill()` tool before execution.
+- **Cross-Reference Resolution**: `depends_on` and `parent_id` now auto-resolve task codes within the same batch creation request, eliminating ordering constraints.
+
+### Changed
+
+- **Memory Codes**: Replaced random 6-char codes with sequential `MEM-001` format.
+- **Standard Codes**: Replaced random 6-char codes with sequential `STD-001` format.
+- **Prompt Tests**: Updated assertions to match current FSM prompt formatting.
+- **Documentation**: Updated `tools-reference.md` (EN/ID) and workflow prompts to reflect optional `task_code`, sequential codes, and `suggested_skills`.
+
+## [0.14.10] - 2026-06-03
+
+### Fixed
+
+- **Cross-Reference Resolution**: `depends_on` and `parent_id` in bulk task creation now auto-resolve task codes within the same request batch.
+
 ## [0.14.7] - 2026-06-03
 
 ### Changed
