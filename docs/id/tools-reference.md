@@ -14,22 +14,24 @@ Simpan apa yang Anda pelajari agar tetap ada di seluruh sesi.
 
 ```json
 {
-  "type": "decision",
-  "title": "Use SQLite for local persistence",
-  "content": "We chose SQLite over JSON files because...",
-  "importance": 4,
-  "agent": "assistant",
-  "model": "gpt-4",
-  "scope": { "repo": "my-project" },
-  "tags": ["database", "architecture"]
+	"type": "decision",
+	"title": "Use SQLite for local persistence",
+	"content": "We chose SQLite over JSON files because...",
+	"importance": 4,
+	"agent": "assistant",
+	"model": "gpt-4",
+	"scope": { "repo": "my-project" },
+	"tags": ["database", "architecture"]
 }
 ```
 
 **Bidang:**
+
 - `type` (`code_fact`, `decision`, `mistake`, `pattern`, `task_archive`) — jenis pengetahuan ini
 - `importance` (1-5) — seberapa kritis ini; semakin tinggi = semakin lambat meluruh
 - `scope.repo` — proyek tempat ini berada
 - `tags` — label teknologi untuk kemudahan ditemukan lintas proyek
+- `code` (opsional) — jika tidak diisi, akan dibuat otomatis sebagai `MEM-001`, `MEM-002`, dst. (berurutan per repo)
 
 ### `memory-search` — Menemukan Memori yang Relevan
 
@@ -37,13 +39,14 @@ Lapisan navigasi. Mengembalikan tabel kompak dari ID memori yang cocok (bukan ko
 
 ```json
 {
-  "query": "authentication flow",
-  "repo": "my-project",
-  "limit": 5
+	"query": "authentication flow",
+	"repo": "my-project",
+	"limit": 5
 }
 ```
 
 **Tips pro:**
+
 - Gunakan `current_tags: ["react", "typescript"]` untuk menemukan memori yang relevan dengan tech-stack dari proyek lain.
 - Gunakan `types: ["decision", "pattern"]` untuk menyaring berdasarkan jenis pengetahuan.
 - Gunakan `include_archived: true` untuk mencari juga memori yang diarsipkan/meluruh.
@@ -53,18 +56,18 @@ Lapisan navigasi. Mengembalikan tabel kompak dari ID memori yang cocok (bukan ko
 Setelah pencarian mengembalikan baris pointer, ambil konten lengkap:
 
 ```json
-{ "code": "Q7PXYE" }
+{ "code": "MEM-001" }
 ```
 
-Mendukung pencarian berdasarkan `id` (UUID) atau `code` (kode pendek seperti `Q7PXYE`).
+Mendukung pencarian berdasarkan `id` (UUID) atau `code` (mis. `MEM-001`). Kode bersifat berurutan per repo.
 
 ### `memory-update` — Mengedit Memori yang Ada
 
 ```json
 {
-  "code": "Q7PXYE",
-  "importance": 5,
-  "status": "archived"
+	"code": "MEM-001",
+	"importance": 5,
+	"status": "archived"
 }
 ```
 
@@ -74,9 +77,9 @@ Wajib setelah menggunakan memori untuk menghasilkan kode. Membantu sistem peluru
 
 ```json
 {
-  "code": "Q7PXYE",
-  "status": "used",
-  "application_context": "Used this pattern when implementing the auth middleware"
+	"code": "MEM-001",
+	"status": "used",
+	"application_context": "Used this pattern when implementing the auth middleware"
 }
 ```
 
@@ -85,11 +88,11 @@ Wajib setelah menggunakan memori untuk menghasilkan kode. Membantu sistem peluru
 Tunggal atau massal:
 
 ```json
-{ "code": "Q7PXYE" }
+{ "code": "MEM-001" }
 ```
 
 ```json
-{ "codes": ["Q7PXYE", "ZZUHFH"] }
+{ "codes": ["MEM-001", "MEM-002"] }
 ```
 
 ### `memory-recap` — Ikhtisar Dasbor
@@ -106,8 +109,8 @@ Menjaga ringkasan proyek tingkat tinggi yang dapat dengan cepat dirujuk oleh age
 
 ```json
 {
-  "repo": "my-project",
-  "signals": ["Microservices migration in progress", "PostgreSQL chosen as primary DB"]
+	"repo": "my-project",
+	"signals": ["Microservices migration in progress", "PostgreSQL chosen as primary DB"]
 }
 ```
 
@@ -117,8 +120,8 @@ Menggunakan LLM klien AI Anda sendiri untuk menjawab pertanyaan yang didasarkan 
 
 ```json
 {
-  "repo": "my-project",
-  "objective": "What do we know about authentication?"
+	"repo": "my-project",
+	"objective": "What do we know about authentication?"
 }
 ```
 
@@ -130,26 +133,56 @@ Melacak item pekerjaan melalui siklus hidupnya: Backlog → Pending → In Progr
 
 ### `task-create` — Mendaftarkan Tugas
 
+`task_code` bersifat opsional. Jika tidak diisi, akan dibuat otomatis sebagai `TASK-001`, `TASK-002`, dst. (berurutan per repo).
+
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "phase": "implementation",
-  "title": "Implement JWT middleware",
-  "description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
-  "priority": 4,
-  "status": "pending"
+	"repo": "my-project",
+	"phase": "implementation",
+	"title": "Implement JWT middleware",
+	"description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
+	"priority": 4,
+	"status": "pending",
+	"suggested_skills": ["fix-bug", "implement-feature"]
+}
+```
+
+Dengan `task_code` eksplisit dan `suggested_skills`:
+
+```json
+{
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"phase": "implementation",
+	"title": "Implement JWT middleware",
+	"description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
+	"priority": 4,
+	"status": "pending",
+	"suggested_skills": ["implement-feature"]
+}
+```
+
+Mode massal (`task_code` opsional di setiap item):
+
+```json
+{
+	"repo": "my-project",
+	"tasks": [
+		{ "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
+		{ "phase": "impl", "title": "...", "description": "..." }
+	]
 }
 ```
 
 Mode massal:
+
 ```json
 {
-  "repo": "my-project",
-  "tasks": [
-    { "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
-    { "task_code": "AUTH-002", "phase": "impl", "title": "...", "description": "..." }
-  ]
+	"repo": "my-project",
+	"tasks": [
+		{ "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
+		{ "task_code": "AUTH-002", "phase": "impl", "title": "...", "description": "..." }
+	]
 }
 ```
 
@@ -160,6 +193,7 @@ Mode massal:
 ```
 
 Secara default menyaring ke `in_progress` dan `pending`. Gunakan `status` untuk filter kustom:
+
 ```json
 { "repo": "my-project", "status": "backlog", "limit": 20 }
 ```
@@ -176,27 +210,29 @@ Mengembalikan deskripsi lengkap, komentar, status koordinasi (klaim, handoff), d
 
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "status": "in_progress",
-  "comment": "Starting implementation"
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"status": "in_progress",
+	"comment": "Starting implementation"
 }
 ```
 
 Saat menyelesaikan:
+
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "status": "completed",
-  "est_tokens": 1500,
-  "commit_id": "abc123",
-  "changed_files": ["src/middleware/auth.ts", "tests/auth.test.ts"],
-  "comment": "All tests passing"
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"status": "completed",
+	"est_tokens": 1500,
+	"commit_id": "abc123",
+	"changed_files": ["src/middleware/auth.ts", "tests/auth.test.ts"],
+	"comment": "All tests passing"
 }
 ```
 
 **Transisi status yang diizinkan:**
+
 - backlog → pending, in_progress
 - pending → in_progress, blocked
 - in_progress → completed, blocked, canceled
@@ -204,12 +240,13 @@ Saat menyelesaikan:
 - completed/canceled → terminal (tidak ada keluar)
 
 Pembaruan massal:
+
 ```json
 {
-  "repo": "my-project",
-  "ids": ["uuid-1", "uuid-2"],
-  "status": "blocked",
-  "comment": "Blocked by missing API key"
+	"repo": "my-project",
+	"ids": ["uuid-1", "uuid-2"],
+	"status": "blocked",
+	"comment": "Blocked by missing API key"
 }
 ```
 
@@ -236,20 +273,22 @@ Panggilan WAJIB sebelum mengimplementasikan apa pun. Mengembalikan standar kodin
 ### `standard-detail` — Membaca Standar Lengkap
 
 ```json
-{ "code": "J78C5E" }
+{ "code": "STD-001" }
 ```
+
+Kode dibuat otomatis sebagai `STD-001`, `STD-002`, dst. (berurutan per repo atau lingkup global).
 
 ### `standard-store` — Menyimpan Standar Baru
 
 ```json
 {
-  "name": "React Component Naming",
-  "content": "Use PascalCase for component filenames matching the export name.",
-  "tags": ["naming", "react"],
-  "metadata": { "source": "team-agreement" },
-  "stack": ["react"],
-  "language": "typescript",
-  "is_global": true
+	"name": "React Component Naming",
+	"content": "Use PascalCase for component filenames matching the export name.",
+	"tags": ["naming", "react"],
+	"metadata": { "source": "team-agreement" },
+	"stack": ["react"],
+	"language": "typescript",
+	"is_global": true
 }
 ```
 
@@ -257,16 +296,16 @@ Panggilan WAJIB sebelum mengimplementasikan apa pun. Mengembalikan standar kodin
 
 ```json
 {
-  "code": "J78C5E",
-  "name": "React Component Naming (Updated)",
-  "version": "2.0.0"
+	"code": "STD-001",
+	"name": "React Component Naming (Updated)",
+	"version": "2.0.0"
 }
 ```
 
 ### `standard-delete` — Menghapus Standar
 
 ```json
-{ "code": "J78C5E" }
+{ "code": "STD-001" }
 ```
 
 ---
@@ -279,15 +318,15 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 
 ```json
 {
-  "repo": "my-project",
-  "from_agent": "agent-a",
-  "to_agent": "agent-b",
-  "task_code": "AUTH-001",
-  "summary": "Auth middleware needs review",
-  "context": {
-    "next_steps": ["Review the JWT validation logic", "Add refresh token endpoint"],
-    "blockers": ["Awaiting secrets manager access"]
-  }
+	"repo": "my-project",
+	"from_agent": "agent-a",
+	"to_agent": "agent-b",
+	"task_code": "AUTH-001",
+	"summary": "Auth middleware needs review",
+	"context": {
+		"next_steps": ["Review the JWT validation logic", "Add refresh token endpoint"],
+		"blockers": ["Awaiting secrets manager access"]
+	}
 }
 ```
 
@@ -307,10 +346,10 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "agent": "agent-b",
-  "role": "maintainer"
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"agent": "agent-b",
+	"role": "maintainer"
 }
 ```
 
@@ -331,6 +370,7 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 ## Alur Kerja Agen Umum
 
 ### Memulai Sesi Baru
+
 ```
 1. task-list (repo: my-project)
 2. Pilih SATU tugas dari daftar
@@ -342,6 +382,7 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 ```
 
 ### Men-debug Bug
+
 ```
 1. memory-search (query: deskripsi error, repo: ...)
 2. memory-detail pada hasil yang relevan
@@ -351,6 +392,7 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 ```
 
 ### Transfer Pengetahuan Antar Agen
+
 ```
 1. task-detail / memory-search untuk mengumpulkan konteks
 2. handoff-create dengan next_steps dan blockers
@@ -359,6 +401,7 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 ```
 
 ### Orientasi ke Proyek Baru
+
 ```
 1. memory-synthesize (objective: "Tentang apa proyek ini?")
 2. memory-recap untuk melihat memori teratas
@@ -371,9 +414,9 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 
 ## Ringkasan Grup Alat
 
-| Grup | Alat | Tujuan |
-|-------|-------|---------|
-| Memory | store, search, detail, update, acknowledge, delete, recap, summarize, synthesize | Pengetahuan tahan lama jangka panjang |
-| Task | create, list, detail, update, delete | Siklus hidup item pekerjaan |
-| Standard | store, search, detail, update, delete | Aturan koding yang dapat digunakan kembali |
-| Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Orkestrasi multi-agen |
+| Grup         | Alat                                                                                | Tujuan                                     |
+| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------ |
+| Memory       | store, search, detail, update, acknowledge, delete, recap, summarize, synthesize    | Pengetahuan tahan lama jangka panjang      |
+| Task         | create, list, detail, update, delete                                                | Siklus hidup item pekerjaan                |
+| Standard     | store, search, detail, update, delete                                               | Aturan koding yang dapat digunakan kembali |
+| Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Orkestrasi multi-agen                      |

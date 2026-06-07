@@ -14,22 +14,24 @@ Store what you learn so it persists across sessions.
 
 ```json
 {
-  "type": "decision",
-  "title": "Use SQLite for local persistence",
-  "content": "We chose SQLite over JSON files because...",
-  "importance": 4,
-  "agent": "assistant",
-  "model": "gpt-4",
-  "scope": { "repo": "my-project" },
-  "tags": ["database", "architecture"]
+	"type": "decision",
+	"title": "Use SQLite for local persistence",
+	"content": "We chose SQLite over JSON files because...",
+	"importance": 4,
+	"agent": "assistant",
+	"model": "gpt-4",
+	"scope": { "repo": "my-project" },
+	"tags": ["database", "architecture"]
 }
 ```
 
 **Fields:**
+
 - `type` (`code_fact`, `decision`, `mistake`, `pattern`, `task_archive`) — what kind of knowledge this is
 - `importance` (1-5) — how critical this is; higher = slower to decay
 - `scope.repo` — which project this belongs to
 - `tags` — technology labels for cross-project discoverability
+- `code` (optional) — if omitted, auto-generated as `MEM-001`, `MEM-002`, etc. (sequential per repo)
 
 ### `memory-search` — Find Relevant Memories
 
@@ -37,13 +39,14 @@ Navigation layer. Returns a compact table of matching memory IDs (not full conte
 
 ```json
 {
-  "query": "authentication flow",
-  "repo": "my-project",
-  "limit": 5
+	"query": "authentication flow",
+	"repo": "my-project",
+	"limit": 5
 }
 ```
 
 **Pro tips:**
+
 - Use `current_tags: ["react", "typescript"]` to find tech-stack relevant memories from other projects.
 - Use `types: ["decision", "pattern"]` to filter by knowledge type.
 - Use `include_archived: true` to search archived/decayed memories too.
@@ -53,18 +56,18 @@ Navigation layer. Returns a compact table of matching memory IDs (not full conte
 After search returns pointer rows, fetch the full content:
 
 ```json
-{ "code": "Q7PXYE" }
+{ "code": "MEM-001" }
 ```
 
-Supports lookup by `id` (UUID) or `code` (short code like `Q7PXYE`).
+Supports lookup by `id` (UUID) or `code` (e.g., `MEM-001`). Codes are sequential per repo.
 
 ### `memory-update` — Edit an Existing Memory
 
 ```json
 {
-  "code": "Q7PXYE",
-  "importance": 5,
-  "status": "archived"
+	"code": "MEM-001",
+	"importance": 5,
+	"status": "archived"
 }
 ```
 
@@ -74,9 +77,9 @@ Mandatory after using a memory to generate code. Helps the decay system know wha
 
 ```json
 {
-  "code": "Q7PXYE",
-  "status": "used",
-  "application_context": "Used this pattern when implementing the auth middleware"
+	"code": "MEM-001",
+	"status": "used",
+	"application_context": "Used this pattern when implementing the auth middleware"
 }
 ```
 
@@ -85,11 +88,11 @@ Mandatory after using a memory to generate code. Helps the decay system know wha
 Single or bulk:
 
 ```json
-{ "code": "Q7PXYE" }
+{ "code": "MEM-001" }
 ```
 
 ```json
-{ "codes": ["Q7PXYE", "ZZUHFH"] }
+{ "codes": ["MEM-001", "MEM-002"] }
 ```
 
 ### `memory-recap` — Dashboard Overview
@@ -106,8 +109,8 @@ Keeps a high-level project summary that agents can quickly reference:
 
 ```json
 {
-  "repo": "my-project",
-  "signals": ["Microservices migration in progress", "PostgreSQL chosen as primary DB"]
+	"repo": "my-project",
+	"signals": ["Microservices migration in progress", "PostgreSQL chosen as primary DB"]
 }
 ```
 
@@ -117,8 +120,8 @@ Uses your AI client's own LLM to answer questions grounded in local memories:
 
 ```json
 {
-  "repo": "my-project",
-  "objective": "What do we know about authentication?"
+	"repo": "my-project",
+	"objective": "What do we know about authentication?"
 }
 ```
 
@@ -130,26 +133,56 @@ Track work items through their lifecycle: Backlog → Pending → In Progress �
 
 ### `task-create` — Register a Task
 
+`task_code` is optional. If omitted, auto-generated as `TASK-001`, `TASK-002`, etc. (sequential per repo).
+
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "phase": "implementation",
-  "title": "Implement JWT middleware",
-  "description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
-  "priority": 4,
-  "status": "pending"
+	"repo": "my-project",
+	"phase": "implementation",
+	"title": "Implement JWT middleware",
+	"description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
+	"priority": 4,
+	"status": "pending",
+	"suggested_skills": ["fix-bug", "implement-feature"]
+}
+```
+
+With explicit `task_code` and `suggested_skills`:
+
+```json
+{
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"phase": "implementation",
+	"title": "Implement JWT middleware",
+	"description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
+	"priority": 4,
+	"status": "pending",
+	"suggested_skills": ["implement-feature"]
+}
+```
+
+Bulk mode (task_code optional in each item):
+
+```json
+{
+	"repo": "my-project",
+	"tasks": [
+		{ "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
+		{ "phase": "impl", "title": "...", "description": "..." }
+	]
 }
 ```
 
 Bulk mode:
+
 ```json
 {
-  "repo": "my-project",
-  "tasks": [
-    { "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
-    { "task_code": "AUTH-002", "phase": "impl", "title": "...", "description": "..." }
-  ]
+	"repo": "my-project",
+	"tasks": [
+		{ "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
+		{ "task_code": "AUTH-002", "phase": "impl", "title": "...", "description": "..." }
+	]
 }
 ```
 
@@ -160,6 +193,7 @@ Bulk mode:
 ```
 
 Filters by default to `in_progress` and `pending`. Use `status` for custom filters:
+
 ```json
 { "repo": "my-project", "status": "backlog", "limit": 20 }
 ```
@@ -176,27 +210,29 @@ Returns full description, comments, coordination state (claims, handoffs), and s
 
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "status": "in_progress",
-  "comment": "Starting implementation"
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"status": "in_progress",
+	"comment": "Starting implementation"
 }
 ```
 
 When completing:
+
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "status": "completed",
-  "est_tokens": 1500,
-  "commit_id": "abc123",
-  "changed_files": ["src/middleware/auth.ts", "tests/auth.test.ts"],
-  "comment": "All tests passing"
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"status": "completed",
+	"est_tokens": 1500,
+	"commit_id": "abc123",
+	"changed_files": ["src/middleware/auth.ts", "tests/auth.test.ts"],
+	"comment": "All tests passing"
 }
 ```
 
 **Status transitions allowed:**
+
 - backlog → pending, in_progress
 - pending → in_progress, blocked
 - in_progress → completed, blocked, canceled
@@ -204,12 +240,13 @@ When completing:
 - completed/canceled → terminal (no outgoing)
 
 Bulk update:
+
 ```json
 {
-  "repo": "my-project",
-  "ids": ["uuid-1", "uuid-2"],
-  "status": "blocked",
-  "comment": "Blocked by missing API key"
+	"repo": "my-project",
+	"ids": ["uuid-1", "uuid-2"],
+	"status": "blocked",
+	"comment": "Blocked by missing API key"
 }
 ```
 
@@ -236,20 +273,22 @@ MANDATORY call before implementing anything. Returns matching coding standards:
 ### `standard-detail` — Read Full Standard
 
 ```json
-{ "code": "J78C5E" }
+{ "code": "STD-001" }
 ```
+
+Codes are auto-generated as `STD-001`, `STD-002`, etc. (sequential per repo or global scope).
 
 ### `standard-store` — Save a New Standard
 
 ```json
 {
-  "name": "React Component Naming",
-  "content": "Use PascalCase for component filenames matching the export name.",
-  "tags": ["naming", "react"],
-  "metadata": { "source": "team-agreement" },
-  "stack": ["react"],
-  "language": "typescript",
-  "is_global": true
+	"name": "React Component Naming",
+	"content": "Use PascalCase for component filenames matching the export name.",
+	"tags": ["naming", "react"],
+	"metadata": { "source": "team-agreement" },
+	"stack": ["react"],
+	"language": "typescript",
+	"is_global": true
 }
 ```
 
@@ -257,16 +296,16 @@ MANDATORY call before implementing anything. Returns matching coding standards:
 
 ```json
 {
-  "code": "J78C5E",
-  "name": "React Component Naming (Updated)",
-  "version": "2.0.0"
+	"code": "STD-001",
+	"name": "React Component Naming (Updated)",
+	"version": "2.0.0"
 }
 ```
 
 ### `standard-delete` — Remove Standards
 
 ```json
-{ "code": "J78C5E" }
+{ "code": "STD-001" }
 ```
 
 ---
@@ -279,15 +318,15 @@ Used when multiple agents need to transfer context.
 
 ```json
 {
-  "repo": "my-project",
-  "from_agent": "agent-a",
-  "to_agent": "agent-b",
-  "task_code": "AUTH-001",
-  "summary": "Auth middleware needs review",
-  "context": {
-    "next_steps": ["Review the JWT validation logic", "Add refresh token endpoint"],
-    "blockers": ["Awaiting secrets manager access"]
-  }
+	"repo": "my-project",
+	"from_agent": "agent-a",
+	"to_agent": "agent-b",
+	"task_code": "AUTH-001",
+	"summary": "Auth middleware needs review",
+	"context": {
+		"next_steps": ["Review the JWT validation logic", "Add refresh token endpoint"],
+		"blockers": ["Awaiting secrets manager access"]
+	}
 }
 ```
 
@@ -307,10 +346,10 @@ Used when multiple agents need to transfer context.
 
 ```json
 {
-  "repo": "my-project",
-  "task_code": "AUTH-001",
-  "agent": "agent-b",
-  "role": "maintainer"
+	"repo": "my-project",
+	"task_code": "AUTH-001",
+	"agent": "agent-b",
+	"role": "maintainer"
 }
 ```
 
@@ -331,6 +370,7 @@ Used when multiple agents need to transfer context.
 ## Common Agent Workflows
 
 ### Starting a New Session
+
 ```
 1. task-list (repo: my-project)
 2. Pick ONE task from the list
@@ -342,6 +382,7 @@ Used when multiple agents need to transfer context.
 ```
 
 ### Debugging a Bug
+
 ```
 1. memory-search (query: error description, repo: ...)
 2. memory-detail on relevant results
@@ -351,6 +392,7 @@ Used when multiple agents need to transfer context.
 ```
 
 ### Knowledge Transfer Between Agents
+
 ```
 1. task-detail / memory-search to gather context
 2. handoff-create with next_steps and blockers
@@ -359,6 +401,7 @@ Used when multiple agents need to transfer context.
 ```
 
 ### Onboarding to a New Project
+
 ```
 1. memory-synthesize (objective: "What is this project about?")
 2. memory-recap to see top memories
@@ -371,9 +414,9 @@ Used when multiple agents need to transfer context.
 
 ## Tool Groups Summary
 
-| Group | Tools | Purpose |
-|-------|-------|---------|
-| Memory | store, search, detail, update, acknowledge, delete, recap, summarize, synthesize | Durable long-term knowledge |
-| Task | create, list, detail, update, delete | Work item lifecycle |
-| Standard | store, search, detail, update, delete | Reusable coding rules |
-| Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Multi-agent orchestration |
+| Group        | Tools                                                                               | Purpose                     |
+| ------------ | ----------------------------------------------------------------------------------- | --------------------------- |
+| Memory       | store, search, detail, update, acknowledge, delete, recap, summarize, synthesize    | Durable long-term knowledge |
+| Task         | create, list, detail, update, delete                                                | Work item lifecycle         |
+| Standard     | store, search, detail, update, delete                                               | Reusable coding rules       |
+| Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Multi-agent orchestration   |

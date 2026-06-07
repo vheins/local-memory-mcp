@@ -13,12 +13,12 @@ tags: [workflow, audit, ux, gap-analysis, mcp]
 
 ## FSM
 
-Entry=S0 → S1 → S2 → S3  Exit=done
+Entry=S0 → S1 → S2 → S3 Exit=done
 Guard: S(N) req S(N-1)✅; NO code/edit/delete — read+MCP tools ONLY
 
 S0 | sequential discovery: docs → code → UI (chrome-dev-tools) | — | findings | —
 S1 | pre-task analysis: memory-search (0.55 threshold) + standard-search + handoff-list + task-list dedup | S0✅ | context | —
-S2 | design tasks: atomic, attributes (task_code, phase, priority, agent, model), strict description format | S1✅ | task specs | —
+S2 | design tasks: atomic, attributes (task_code optional — auto-generated as TASK-xxx, phase, priority, agent, model), strict description format | S1✅ | task specs | —
 S3 | create via task-create + log decisions via memory-store + standard-store for coding rules | S2✅ | MCP tasks | —
 
 ## Description Format (STRICT — used in S2)
