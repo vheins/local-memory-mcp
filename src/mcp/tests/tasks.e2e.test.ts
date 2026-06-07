@@ -289,6 +289,44 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(task!.comments![0].next_status).toBeNull();
 	});
 
+	it("should auto-generate task_code when not provided in single create", async () => {
+		const res = await router("tools/call", {
+			name: "task-create",
+			arguments: {
+				repo: REPO,
+				phase: "implementation",
+				title: "Auto-generated Code Task",
+				description: "Task created without explicit task_code",
+				status: "pending",
+				priority: 3
+			}
+		});
+
+		const data = res.structuredContent as Record<string, unknown>;
+		expect(data.task_code).toBe("TASK-001");
+
+		const task = db.tasks.getTaskByCode(REPO, "TASK-001");
+		expect(task).toBeDefined();
+		expect(task?.title).toBe("Auto-generated Code Task");
+
+		// Second auto-generated task should increment
+		await router("tools/call", {
+			name: "task-create",
+			arguments: {
+				repo: REPO,
+				phase: "research",
+				title: "Second Auto Task",
+				description: "Should get TASK-002",
+				status: "backlog",
+				priority: 2
+			}
+		});
+
+		const task2 = db.tasks.getTaskByCode(REPO, "TASK-002");
+		expect(task2).toBeDefined();
+		expect(task2?.title).toBe("Second Auto Task");
+	});
+
 	it("auto-populates timestamps from status so agents do not need to send them manually", async () => {
 		await router("tools/call", {
 			name: "task-create",

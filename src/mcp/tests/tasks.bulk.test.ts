@@ -67,6 +67,43 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(tasks.find((t) => t.task_code === "BULK-002")).toBeDefined();
 	});
 
+	it("should auto-generate task_codes for bulk tasks without task_code", async () => {
+		const res = await router("tools/call", {
+			name: "task-create",
+			arguments: {
+				repo: REPO,
+				tasks: [
+					{
+						title: "Auto Bulk 1",
+						description: "First auto-generated bulk task",
+						phase: "research",
+						status: "pending",
+						priority: 3
+					},
+					{
+						title: "Auto Bulk 2",
+						description: "Second auto-generated bulk task",
+						phase: "implementation",
+						status: "backlog",
+						priority: 2
+					}
+				]
+			}
+		});
+
+		expect(res.isError).toBe(false);
+
+		const tasks = db.tasks.getTasksByRepo(REPO);
+		expect(tasks.length).toBe(2);
+
+		const task1 = tasks.find((t) => t.task_code === "TASK-001");
+		const task2 = tasks.find((t) => t.task_code === "TASK-002");
+		expect(task1).toBeDefined();
+		expect(task2).toBeDefined();
+		expect(task1?.title).toBe("Auto Bulk 1");
+		expect(task2?.title).toBe("Auto Bulk 2");
+	});
+
 	it("should allow bulk create without est_tokens", async () => {
 		const res = await router("tools/call", {
 			name: "task-create",
