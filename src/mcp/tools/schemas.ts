@@ -186,6 +186,31 @@ export const MemorySynthesizeSchema = z.object({
 export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
 export const TaskPrioritySchema = z.number().min(1).max(5);
 
+const TaskMetadataSchema = z
+	.record(z.string(), z.any())
+	.optional()
+	.superRefine((metadata, ctx) => {
+		if (!metadata) return;
+		if (metadata.required_skills !== undefined) {
+			if (!Array.isArray(metadata.required_skills)) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.required_skills must be an array of strings", path: ["metadata", "required_skills"] });
+			} else if (metadata.required_skills.length === 0) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.required_skills must not be empty when present", path: ["metadata", "required_skills"] });
+			} else if (!metadata.required_skills.every((s: unknown) => typeof s === "string" && s.length > 0)) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.required_skills must be an array of non-empty strings", path: ["metadata", "required_skills"] });
+			}
+		}
+		if (metadata.fsm_gates !== undefined) {
+			if (!Array.isArray(metadata.fsm_gates)) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.fsm_gates must be an array of strings", path: ["metadata", "fsm_gates"] });
+			} else if (metadata.fsm_gates.length === 0) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.fsm_gates must not be empty when present", path: ["metadata", "fsm_gates"] });
+			} else if (!metadata.fsm_gates.every((s: unknown) => typeof s === "string" && s.length > 0)) {
+				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.fsm_gates must be an array of non-empty strings", path: ["metadata", "fsm_gates"] });
+			}
+		}
+	});
+
 const SingleTaskCreateSchema = z.object({
 	task_code: z.string().min(1).optional(),
 	phase: z.string().min(1),
@@ -198,7 +223,7 @@ const SingleTaskCreateSchema = z.object({
 	doc_path: z.string().optional(),
 	tags: z.array(z.string()).optional(),
 	suggested_skills: z.array(z.string()).optional(),
-	metadata: z.record(z.string(), z.any()).optional(),
+	metadata: TaskMetadataSchema,
 	parent_id: z.string().optional(),
 	depends_on: z.string().optional(),
 	est_tokens: z.number().int().min(0).optional()

@@ -20,7 +20,8 @@ S0 | sync: resolve identity (arg→auto `<runner>-<randomName>`, 1x reuse all lo
 S1 | hydrate: task-detail ONCE per task — MUST cache, MUST reuse all steps, NO re-fetch | S0✅ | full task | —
 G0 | readiness: depends_on✅ AND parent_id✅? if all blocked → report blockers + pause | S1✅ | → S2 / skip+pick next | —
 S2 | claim: task-claim(with identity metadata) + task-update→in_progress(agent, role, identity) | G0✅ | ownership | —
-S3 | research: check task-detail for suggested_skills — load each via skill() tool; then memory-search + standard-search(MANDATORY per task — even sub-agents/decomposed) + hydrate relevant | S2✅ | context | —
+G0.5 | skill readiness: check task.metadata.required_skills — if present, load each via skill() and verify FSM completed (all gates passed). If skill not loaded or FSM incomplete → ⛔ block with reason. If absent → skip (most tasks don't use skills). Check task-detail for suggested_skills too — if present, load each. | S2✅ | → S3 / ⛔ → blocker | —
+S3 | research: memory-search + standard-search(MANDATORY per task — even sub-agents/decomposed) + hydrate relevant | G0.5✅ | context | —
 S4 | execute: trace logic+callsites+docs — DO NOT infer from file presence; decompose if too broad | S3✅ | changes | —
 S5 | validate: tests + linters + type-check + browser(if UI — MANDATORY: console errors, overflow, responsive, core interactions) + logic audit all paths | S4✅ | verification | —
 S6 | finalize: task-update→completed(evidence: inspected files, verified logic, test results) + memory-store(insights) + standard-store(rules) + handoff(if work remains — with identity) + retrospective + report | S5✅ | completion | —
