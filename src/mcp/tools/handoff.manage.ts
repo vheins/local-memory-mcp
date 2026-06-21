@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
 import {
@@ -173,15 +174,16 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 
 	let taskId = task_id;
 	let resolvedTaskCode: string;
+	let task: import("../types").Task | null = null;
 
 	if (taskId) {
-		const task = storage.tasks.getTaskById(taskId);
+		task = storage.tasks.getTaskById(taskId);
 		if (!task || task.repo !== repo) {
 			throw new Error(`Task not found: ${taskId} in repo ${repo}`);
 		}
 		resolvedTaskCode = task.task_code;
 	} else if (task_code) {
-		const task = storage.tasks.getTaskByCode(repo, task_code);
+		task = storage.tasks.getTaskByCode(repo, task_code);
 		if (!task) {
 			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
 		}
@@ -198,6 +200,23 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 		role,
 		metadata
 	});
+
+	if (task && task.status !== "completed") {
+		const now = new Date().toISOString();
+		storage.tasks.updateTask(task.id, { status: "in_progress", in_progress_at: now });
+		storage.taskComments.insertTaskComment({
+			id: randomUUID(),
+			task_id: task.id,
+			repo,
+			comment: `Claimed by ${agent} — auto-promoted to in_progress`,
+			agent,
+			role: role || "unknown",
+			model: "system",
+			previous_status: task.status as import("../types").TaskStatus,
+			next_status: "in_progress" as import("../types").TaskStatus,
+			created_at: now
+		});
+	}
 
 	const responseData = {
 		...claim,

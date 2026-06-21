@@ -21,7 +21,7 @@ S2 | continue to task or respond | S1✅ | ready | —
 - memory-acknowledge after code gen from memory
 - Global scope = cross-repo only; prefer repo-specific
 
-**Tasks**: task-list → task-claim → task-update(in_progress) → task-update(completed)
+**Tasks**: task-list → task-claim(auto → in_progress) → task-update(completed)
 
 - Register via task-create before execution
 - NEVER skip in_progress
