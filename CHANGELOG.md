@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Argument Order Bug**: Fixed `isTaskCodeDuplicate` call in `task.manage.ts` that was passing `repo` in the `owner` parameter position, silently disabling duplicate task code detection.
 - **Wrong Owner Attribution**: Fixed `handoff.manage.ts` that was storing the repo name (`owner: repo`) instead of the actual owner (`owner: owner`) in task comments during claim operations.
 
+## [0.18.5] - 2026-06-23
+
+### Fixed
+
+- **getTaskByCode Fallback**: When querying by task_code with a specific owner fails, automatically retry without the owner filter. This ensures tasks created via the Dashboard (with empty owner) can be found by MCP API calls (which pass non-empty owner), and vice versa.
+
 ## [0.18.4] - 2026-06-23
 
 ### Fixed

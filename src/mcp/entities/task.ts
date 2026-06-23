@@ -182,20 +182,27 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	getTaskByCode(owner: string, repo: string, taskCode: string): Task | null {
-		const params: unknown[] = [repo, taskCode];
-		const ownerClause = owner ? "t.owner = ? AND " : "";
+		const baseQuery = `SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+			${this.coordinationSelect("t")}
+		 FROM tasks t 
+		 LEFT JOIN tasks d ON t.depends_on = d.id 
+		 LEFT JOIN tasks p ON t.parent_id = p.id `;
+
+		// First attempt: with owner filter if owner provided
+		let row: Record<string, unknown> | undefined;
 		if (owner) {
-			params.unshift(owner);
+			row = this.get<Record<string, unknown>>(baseQuery + `WHERE t.owner = ? AND t.repo = ? AND t.task_code = ?`, [
+				owner,
+				repo,
+				taskCode
+			]);
 		}
-		const row = this.get<Record<string, unknown>>(
-			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-				${this.coordinationSelect("t")}
-			 FROM tasks t 
-			 LEFT JOIN tasks d ON t.depends_on = d.id 
-			 LEFT JOIN tasks p ON t.parent_id = p.id 
-			 WHERE ${ownerClause}t.repo = ? AND t.task_code = ?`,
-			params
-		);
+
+		// Fallback: without owner filter (handles tasks created via dashboard with owner="")
+		if (!row) {
+			row = this.get<Record<string, unknown>>(baseQuery + `WHERE t.repo = ? AND t.task_code = ?`, [repo, taskCode]);
+		}
+
 		return row
 			? {
 					...this.rowToTask(row),
