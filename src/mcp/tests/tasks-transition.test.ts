@@ -41,6 +41,7 @@ describe("Task Status Transitions", () => {
 		await expect(
 			handleTaskUpdate(
 				{
+					owner: "test",
 					repo: REPO,
 					id: task.id,
 					status: "completed",
@@ -61,6 +62,7 @@ describe("Task Status Transitions", () => {
 
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "pending",
@@ -83,6 +85,7 @@ describe("Task Status Transitions", () => {
 		await expect(
 			handleTaskUpdate(
 				{
+					owner: "test",
 					repo: REPO,
 					id: task.id,
 					status: "completed",
@@ -103,6 +106,7 @@ describe("Task Status Transitions", () => {
 
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "in_progress",
@@ -125,6 +129,7 @@ describe("Task Status Transitions", () => {
 		// to in_progress first
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "in_progress",
@@ -138,6 +143,7 @@ describe("Task Status Transitions", () => {
 
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "completed",
@@ -161,6 +167,7 @@ describe("Task Status Transitions", () => {
 		// to in_progress first
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "in_progress",
@@ -175,6 +182,7 @@ describe("Task Status Transitions", () => {
 		// to blocked
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "blocked",
@@ -190,6 +198,7 @@ describe("Task Status Transitions", () => {
 		// back to in_progress
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "in_progress",
@@ -209,6 +218,7 @@ describe("Task Status Transitions", () => {
 
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task2.id,
 				status: "blocked",
@@ -229,6 +239,7 @@ describe("Task Status Transitions", () => {
 		// to blocked
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "blocked",
@@ -243,6 +254,7 @@ describe("Task Status Transitions", () => {
 		await expect(
 			handleTaskUpdate(
 				{
+					owner: "test",
 					repo: REPO,
 					id: task.id,
 					status: "completed",

@@ -88,6 +88,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: taskAId,
 				status: "in_progress",
@@ -107,6 +108,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: taskAId,
 				status: "completed",
@@ -127,6 +129,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: taskBId,
 				status: "in_progress",
@@ -176,6 +179,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			router("tools/call", {
 				name: "task-update",
 				arguments: {
+					owner: "test",
 					repo: REPO,
 					id: taskId,
 					status: "in_progress",
@@ -228,6 +232,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: taskId,
 				status: "in_progress",
@@ -241,6 +246,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			router("tools/call", {
 				name: "task-update",
 				arguments: {
+					owner: "test",
 					repo: REPO,
 					id: taskId,
 					status: "completed",
@@ -276,6 +282,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: taskId,
 				comment: "Investigated root cause and prepared next steps",
@@ -359,6 +366,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: createdTask!.id,
 				status: "in_progress",
@@ -375,6 +383,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: createdTask!.id,
 				status: "completed",

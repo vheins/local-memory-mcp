@@ -20,6 +20,7 @@ describe("CSL (Coding Standards Library)", () => {
 		it("persists a coding standard and requires tags plus metadata", async () => {
 			const result = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "Error Handling Best Practices",
 					content: "Always use try-catch blocks for async operations. Handle errors gracefully and log them.",
 					language: "typescript",
@@ -50,6 +51,7 @@ describe("CSL (Coding Standards Library)", () => {
 			await expect(
 				handleStandardStore(
 					{
+						owner: "test",
 						name: "React Hooks Rule",
 						content: "Use hooks consistently and never call them conditionally."
 					},
@@ -62,6 +64,7 @@ describe("CSL (Coding Standards Library)", () => {
 		it("stores standards with global scope by default", async () => {
 			const result = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "React Hooks Standard",
 					content: "Use hooks for state management. Never call hooks conditionally.",
 					language: "typescript",
@@ -81,6 +84,7 @@ describe("CSL (Coding Standards Library)", () => {
 		it("stores child standards linked to a parent", async () => {
 			const parent = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "React Hooks",
 					content: "Follow hook rules consistently.",
 					tags: ["react", "hooks"],
@@ -94,6 +98,7 @@ describe("CSL (Coding Standards Library)", () => {
 			const parentId = (parent.structuredContent as any).standard.id;
 			const child = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "React Hooks Cleanup",
 					content: "Always clean up subscriptions in effects.",
 					parent_id: parentId,
@@ -113,6 +118,7 @@ describe("CSL (Coding Standards Library)", () => {
 		it("updates standard fields and keeps vectors in sync", async () => {
 			const stored = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "Node Error Handling",
 					content: "Use try-catch with logging.",
 					language: "typescript",
@@ -147,6 +153,7 @@ describe("CSL (Coding Standards Library)", () => {
 		it("updates parent linkage", async () => {
 			const parent = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "Parent Standard",
 					content: "Parent guidance.",
 					tags: ["architecture"],
@@ -158,6 +165,7 @@ describe("CSL (Coding Standards Library)", () => {
 			)) as McpResponse;
 			const child = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "Child Standard",
 					content: "Child guidance.",
 					tags: ["architecture", "child"],
@@ -180,6 +188,7 @@ describe("CSL (Coding Standards Library)", () => {
 		beforeEach(async () => {
 			await handleStandardStore(
 				{
+					owner: "test",
 					name: "React State Management",
 					content: "Use Redux or Context API for state.",
 					language: "typescript",
@@ -193,6 +202,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			await handleStandardStore(
 				{
+					owner: "test",
 					name: "Node Error Handling",
 					content: "Use try-catch with proper logging.",
 					language: "typescript",
@@ -206,6 +216,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			await handleStandardStore(
 				{
+					owner: "test",
 					name: "Python Testing",
 					content: "Use pytest for all test cases.",
 					language: "python",
@@ -301,6 +312,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			const stored = (await handleStandardStore(
 				{
+					owner: "test",
 					name: "React Effects",
 					content: "Prefer effect cleanup and isolate subscriptions.",
 					language: "typescript",
@@ -339,6 +351,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			await handleStandardStore(
 				{
+					owner: "test",
 					name: "Laravel Service Provider Register Method Responsibility",
 					content: "Use register() only for binding services into the container.",
 					language: "php",
@@ -352,6 +365,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			await handleStandardStore(
 				{
+					owner: "test",
 					name: "Laravel Service Container Singleton vs Scoped Binding",
 					content: "Use singleton() for app-wide reuse and scoped() for per-lifecycle bindings.",
 					language: "php",

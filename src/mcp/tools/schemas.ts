@@ -299,7 +299,7 @@ export const TaskCreateInteractiveSchema = SingleTaskCreateSchema.partial().exte
 
 export const TaskUpdateSchema = z
 	.object({
-		owner: z.string().optional().default(""),
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
@@ -357,7 +357,7 @@ export const TaskSearchSchema = z.object({
 
 export const TaskDeleteSchema = z
 	.object({
-		owner: z.string().optional().default(""),
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
@@ -407,7 +407,7 @@ export const StandardDeleteSchema = z
 
 export const TaskGetSchema = z
 	.object({
-		owner: z.string().optional().default(""),
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
@@ -496,7 +496,7 @@ export const ClaimListSchema = z.object({
 
 export const ClaimReleaseSchema = z
 	.object({
-		owner: z.string().optional().default(""),
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
@@ -520,7 +520,7 @@ export const StandardStoreSchema = z
 		version: z.string().optional(),
 		language: z.string().optional(),
 		stack: z.array(z.string()).optional(),
-		owner: z.string().optional().default(""),
+		owner: z.string().min(1),
 		repo: z.string().transform(normalizeRepo).optional(),
 		is_global: z.boolean().optional(),
 		tags: z.array(z.string().min(1)).min(1).optional(),
@@ -753,6 +753,7 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 				repo: { type: "string", description: "Repository name" },
 				id: { type: "string", format: "uuid", description: "Task ID (optional if task_code is provided)" },
 				task_code: { type: "string", description: "Task code (e.g. TASK-001) (optional if id is provided)" },
@@ -762,7 +763,7 @@ export const TOOL_DEFINITIONS = [
 					description: "If true, returns structured JSON without the text content details."
 				}
 			},
-			required: ["repo"]
+			required: ["repo", "owner"]
 		}
 	},
 	{
@@ -1419,6 +1420,7 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 				repo: { type: "string", description: "Repository name" },
 				id: { type: "string", format: "uuid", description: "Task ID (for single update)" },
 				ids: { type: "array", items: { type: "string", format: "uuid" }, description: "Task IDs (for bulk update)" },
@@ -1482,7 +1484,7 @@ export const TOOL_DEFINITIONS = [
 				},
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["repo"]
+			required: ["repo", "owner"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1515,6 +1517,7 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 				repo: { type: "string", description: "Repository name" },
 				id: {
 					type: "string",
@@ -1525,7 +1528,7 @@ export const TOOL_DEFINITIONS = [
 				task_code: { type: "string", description: "Task code (e.g. TASK-001). Optional if id is provided." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["repo"]
+			required: ["repo", "owner"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1918,6 +1921,7 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 				repo: { type: "string", description: "Repository name" },
 				task_id: {
 					type: "string",
@@ -1928,7 +1932,7 @@ export const TOOL_DEFINITIONS = [
 				agent: { type: "string", description: "Optional agent name to release only that claim" },
 				structured: { type: "boolean", default: false }
 			},
-			required: ["repo"]
+			required: ["repo", "owner"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1956,6 +1960,7 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 				name: { type: "string", minLength: 3, maxLength: 255, description: "Human-readable standard name" },
 				content: {
 					type: "string",
@@ -2013,7 +2018,8 @@ export const TOOL_DEFINITIONS = [
 					description: "Array of standards for bulk creation"
 				},
 				structured: { type: "boolean", default: false }
-			}
+			},
+			required: ["owner"]
 		},
 		outputSchema: {
 			type: "object",

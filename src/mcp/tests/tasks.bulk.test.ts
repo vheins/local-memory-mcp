@@ -215,6 +215,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: completedId,
 				status: "in_progress",
@@ -228,6 +229,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: completedId,
 				status: "completed",
@@ -241,6 +243,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: inProgressId,
 				status: "in_progress",
@@ -354,6 +357,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const delRes = await router("tools/call", {
 			name: "task-delete",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				ids: idsToDelete
 			}
@@ -384,6 +388,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: ts1!.id,
 				status: "in_progress",
@@ -396,6 +401,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: ts2!.id,
 				status: "in_progress",
@@ -408,6 +414,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				id: ts2!.id,
 				status: "completed",
@@ -448,6 +455,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const upRes = await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				ids: ids,
 				status: "completed",
@@ -494,6 +502,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		await router("tools/call", {
 			name: "task-update",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				ids: [taskId],
 				status: "in_progress",

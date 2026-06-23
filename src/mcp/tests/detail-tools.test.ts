@@ -75,7 +75,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		// 2. Fetch it via task-detail by ID
 		const detailRes = await router("tools/call", {
 			name: "task-detail",
-			arguments: { repo: REPO, id: taskId }
+			arguments: { repo: REPO, owner: "test", id: taskId }
 		});
 
 		expect(detailRes.structuredContent.id).toBe(taskId);
@@ -87,6 +87,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		const storeRes = await router("tools/call", {
 			name: "standard-store",
 			arguments: {
+				owner: "test",
 				name: "TS Error Standard",
 				content: "Use typed errors and structured logging for server boundaries.",
 				language: "typescript",
@@ -155,14 +156,14 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		await expect(
 			router("tools/call", {
 				name: "task-detail",
-				arguments: { repo: REPO, id: fakeId }
+				arguments: { repo: REPO, owner: "test", id: fakeId }
 			})
 		).rejects.toThrow(`Task not found: ${fakeId}`);
 
 		await expect(
 			router("tools/call", {
 				name: "task-detail",
-				arguments: { repo: REPO, task_code: "NON-EXISTENT" }
+				arguments: { repo: REPO, owner: "test", task_code: "NON-EXISTENT" }
 			})
 		).rejects.toThrow(`Task not found: NON-EXISTENT in repo ${REPO}`);
 	});

@@ -22,6 +22,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 		await router("tools/call", {
 			name: "standard-store",
 			arguments: {
+				owner: "test",
 				name: "Standard A",
 				content: "Use API schemas for every public endpoint.",
 				repo: REPO,
@@ -34,6 +35,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 		await router("tools/call", {
 			name: "standard-store",
 			arguments: {
+				owner: "test",
 				name: "Standard B",
 				content: "Use service-layer boundaries for write operations.",
 				repo: REPO,

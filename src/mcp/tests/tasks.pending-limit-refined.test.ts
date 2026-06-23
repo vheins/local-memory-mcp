@@ -82,6 +82,7 @@ describe("Task Pending Limit Refined Validation", () => {
 		// Move to pending (should be ALLOWED now)
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task.id,
 				status: "pending",

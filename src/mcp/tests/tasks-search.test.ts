@@ -40,6 +40,7 @@ describe("Task Search and Filtering", () => {
 		if (!task1) throw new Error("Task 1 seed failed");
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task1.id,
 				status: "in_progress",
@@ -88,6 +89,7 @@ describe("Task Search and Filtering", () => {
 		if (!task3) throw new Error("Task 3 seed failed");
 		await handleTaskUpdate(
 			{
+				owner: "test",
 				repo: REPO,
 				id: task3.id,
 				status: "blocked",
