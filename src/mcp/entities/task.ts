@@ -19,13 +19,14 @@ export class TaskEntity extends BaseEntity {
 	insertTask(task: Task): void {
 		this.run(
 			`INSERT INTO tasks (
-				id, repo, task_code, phase, title, description, status, priority,
+				id, repo, owner, task_code, phase, title, description, status, priority,
 				agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, suggested_skills, metadata, parent_id, depends_on, est_tokens, in_progress_at,
 				commit_id, changed_files
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				task.id,
 				task.repo,
+				task.owner || "",
 				task.task_code,
 				task.phase || null,
 				task.title,
@@ -57,6 +58,7 @@ export class TaskEntity extends BaseEntity {
 		const values: unknown[] = [];
 		const anyUpdates = updates as Record<string, unknown>;
 		const VALID_COLUMNS = new Set([
+			"owner",
 			"repo",
 			"task_code",
 			"phase",
@@ -160,15 +162,15 @@ export class TaskEntity extends BaseEntity {
 		});
 	}
 
-	getTaskByCode(repo: string, taskCode: string): Task | null {
+	getTaskByCode(owner: string, repo: string, taskCode: string): Task | null {
 		const row = this.get<Record<string, unknown>>(
 			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				${this.coordinationSelect("t")}
 			 FROM tasks t 
 			 LEFT JOIN tasks d ON t.depends_on = d.id 
 			 LEFT JOIN tasks p ON t.parent_id = p.id 
-			 WHERE t.repo = ? AND t.task_code = ?`,
-			[repo, taskCode]
+			 WHERE t.owner = ? AND t.repo = ? AND t.task_code = ?`,
+			[owner, repo, taskCode]
 		);
 		return row
 			? {
@@ -181,7 +183,14 @@ export class TaskEntity extends BaseEntity {
 			: null;
 	}
 
-	getTasksByRepo(repo: string, status?: string, limit?: number, offset?: number, search?: string): Task[] {
+	getTasksByRepo(
+		owner: string,
+		repo: string,
+		status?: string,
+		limit?: number,
+		offset?: number,
+		search?: string
+	): Task[] {
 		let query = `
 			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				${this.coordinationSelect("t")},
@@ -189,9 +198,9 @@ export class TaskEntity extends BaseEntity {
 			FROM tasks t 
 			LEFT JOIN tasks d ON t.depends_on = d.id 
 			LEFT JOIN tasks p ON t.parent_id = p.id 
-			WHERE t.repo = ?
+			WHERE ${owner ? "t.owner = ? AND " : ""}t.repo = ?
 		`;
-		const params: (string | number)[] = [repo];
+		const params: (string | number)[] = owner ? [owner, repo] : [repo];
 
 		if (status) {
 			query += " AND t.status = ?";
@@ -229,9 +238,10 @@ export class TaskEntity extends BaseEntity {
 		return rows.map((r) => this.rowToTask(r));
 	}
 
-	countTasks(repo: string, status?: string, search?: string): number {
-		let query = "SELECT COUNT(*) as count FROM tasks WHERE repo = ?";
-		const params: (string | number)[] = [repo];
+	countTasks(owner: string, repo: string, status?: string, search?: string): number {
+		const ownerClause = owner ? "owner = ? AND " : "";
+		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${ownerClause}repo = ?`;
+		const params: (string | number)[] = owner ? [owner, repo] : [repo];
 
 		if (status) {
 			query += " AND status = ?";
@@ -256,7 +266,6 @@ export class TaskEntity extends BaseEntity {
 		LEFT JOIN tasks d ON t.depends_on = d.id 
 		LEFT JOIN tasks p ON t.parent_id = p.id 
 		ORDER BY 
-...
 				CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
 				CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
 				CASE WHEN t.status = 'in_progress' THEN 0
@@ -274,14 +283,16 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	getTasksByMultipleStatuses(
+		owner: string,
 		repo: string,
 		statuses: string[],
 		limit?: number,
 		offset?: number,
 		search?: string
 	): Task[] {
-		if (!statuses.length) return this.getTasksByRepo(repo, undefined, limit, offset, search);
+		if (!statuses.length) return this.getTasksByRepo(owner, repo, undefined, limit, offset, search);
 
+		const ownerClause = owner ? "t.owner = ? AND " : "";
 		let query = `
 			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				${this.coordinationSelect("t")},
@@ -289,9 +300,9 @@ export class TaskEntity extends BaseEntity {
 			FROM tasks t 
 			LEFT JOIN tasks d ON t.depends_on = d.id 
 			LEFT JOIN tasks p ON t.parent_id = p.id 
-			WHERE t.repo = ? AND t.status IN (${statuses.map(() => "?").join(",")})
+			WHERE ${ownerClause}t.repo = ? AND t.status IN (${statuses.map(() => "?").join(",")})
 		`;
-		const params: (string | number)[] = [repo, ...statuses];
+		const params: (string | number)[] = owner ? [owner, repo, ...statuses] : [repo, ...statuses];
 
 		if (search) {
 			query += " AND (t.title LIKE ? OR t.description LIKE ? OR t.task_code LIKE ?)";
@@ -324,11 +335,12 @@ export class TaskEntity extends BaseEntity {
 		return rows.map((r) => this.rowToTask(r));
 	}
 
-	countTasksByMultipleStatuses(repo: string, statuses: string[], search?: string): number {
-		if (!statuses.length) return this.countTasks(repo, undefined, search);
+	countTasksByMultipleStatuses(owner: string, repo: string, statuses: string[], search?: string): number {
+		if (!statuses.length) return this.countTasks(owner, repo, undefined, search);
 
-		let query = `SELECT COUNT(*) as count FROM tasks WHERE repo = ? AND status IN (${statuses.map(() => "?").join(",")})`;
-		const params: (string | number)[] = [repo, ...statuses];
+		const ownerClause = owner ? "owner = ? AND " : "";
+		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${ownerClause}repo = ? AND status IN (${statuses.map(() => "?").join(",")})`;
+		const params: (string | number)[] = owner ? [owner, repo, ...statuses] : [repo, ...statuses];
 
 		if (search) {
 			query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
@@ -340,9 +352,9 @@ export class TaskEntity extends BaseEntity {
 		return row?.count ?? 0;
 	}
 
-	isTaskCodeDuplicate(repo: string, task_code: string, excludeId?: string): boolean {
-		let query = "SELECT COUNT(*) as count FROM tasks WHERE repo = ? AND task_code = ?";
-		const params: (string | number)[] = [repo, task_code];
+	isTaskCodeDuplicate(owner: string, repo: string, task_code: string, excludeId?: string): boolean {
+		let query = "SELECT COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ? AND task_code = ?";
+		const params: (string | number)[] = [owner, repo, task_code];
 
 		if (excludeId) {
 			query += " AND id != ?";
@@ -367,12 +379,12 @@ export class TaskEntity extends BaseEntity {
 		);
 	}
 
-	getExistingTaskCodes(repo: string, codes: string[]): Set<string> {
+	getExistingTaskCodes(owner: string, repo: string, codes: string[]): Set<string> {
 		if (codes.length === 0) return new Set();
 		const placeholders = codes.map(() => "?").join(",");
 		const rows = this.all<{ task_code: string }>(
-			`SELECT task_code FROM tasks WHERE repo = ? AND task_code IN (${placeholders})`,
-			[repo, ...codes]
+			`SELECT task_code FROM tasks WHERE owner = ? AND repo = ? AND task_code IN (${placeholders})`,
+			[owner, repo, ...codes]
 		);
 		return new Set(rows.map((r) => r.task_code));
 	}
@@ -383,13 +395,14 @@ export class TaskEntity extends BaseEntity {
 			for (const task of tasks) {
 				this.run(
 					`INSERT INTO tasks (
-						id, repo, task_code, phase, title, description, status, priority,
+						id, repo, owner, task_code, phase, title, description, status, priority,
 						agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, suggested_skills, metadata, parent_id, depends_on, est_tokens, in_progress_at,
 						commit_id, changed_files
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
 						task.id,
 						task.repo,
+						task.owner || "",
 						task.task_code,
 						task.phase || null,
 						task.title,

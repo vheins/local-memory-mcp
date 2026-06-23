@@ -8,7 +8,7 @@ export async function handleMemorySummarize(params: Record<string, unknown>, db:
 	const summary = validated.signals.join("\n- ");
 	const fullSummary = `Project summary:\n- ${summary}`;
 
-	db.summaries.upsertSummary(validated.repo, fullSummary);
+	db.summaries.upsertSummary(validated.owner!, validated.repo, fullSummary);
 
 	const content = `Updated summary for repo "${validated.repo}" with ${validated.signals.length} signals:\n\n${fullSummary}`;
 

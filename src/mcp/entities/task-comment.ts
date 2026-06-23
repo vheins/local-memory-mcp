@@ -5,12 +5,13 @@ export class TaskCommentEntity extends BaseEntity {
 	insertTaskComment(comment: TaskComment): void {
 		this.run(
 			`INSERT INTO task_comments (
-				id, task_id, repo, comment, agent, role, model, previous_status, next_status, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, task_id, repo, owner, comment, agent, role, model, previous_status, next_status, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				comment.id,
 				comment.task_id,
 				comment.repo,
+				comment.owner,
 				comment.comment,
 				comment.agent || "unknown",
 				comment.role || "unknown",
@@ -27,6 +28,7 @@ export class TaskCommentEntity extends BaseEntity {
 		const values: unknown[] = [];
 		const anyUpdates = updates as Record<string, unknown>;
 		const VALID_COLUMNS = new Set([
+			"owner",
 			"repo",
 			"comment",
 			"agent",
@@ -64,9 +66,10 @@ export class TaskCommentEntity extends BaseEntity {
 		]);
 	}
 
-	getAllTaskCommentsByRepo(repo: string): TaskComment[] {
-		return this.all<TaskComment>(`SELECT * FROM task_comments WHERE repo = ? ORDER BY created_at DESC, id DESC`, [
-			repo
-		]);
+	getAllTaskCommentsByRepo(owner: string, repo: string): TaskComment[] {
+		return this.all<TaskComment>(
+			`SELECT * FROM task_comments WHERE owner = ? AND repo = ? ORDER BY created_at DESC, id DESC`,
+			[owner, repo]
+		);
 	}
 }

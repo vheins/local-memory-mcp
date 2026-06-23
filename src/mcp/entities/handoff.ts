@@ -6,6 +6,7 @@ export class HandoffEntity extends BaseEntity {
 	private rowToHandoff(row: HandoffRow): Handoff {
 		return {
 			id: row.id,
+			owner: row.owner,
 			repo: row.repo,
 			from_agent: row.from_agent,
 			to_agent: row.to_agent ?? null,
@@ -23,6 +24,7 @@ export class HandoffEntity extends BaseEntity {
 	private rowToClaim(row: ClaimRow): Claim {
 		return {
 			id: row.id,
+			owner: row.owner,
 			repo: row.repo,
 			task_id: row.task_id,
 			task_code: "task_code" in row ? ((row as ClaimRow & { task_code?: string | null }).task_code ?? null) : null,
@@ -35,6 +37,7 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	createHandoff(params: {
+		owner: string;
 		repo: string;
 		from_agent: string;
 		to_agent?: string | null;
@@ -46,10 +49,11 @@ export class HandoffEntity extends BaseEntity {
 		const now = new Date().toISOString();
 		const id = randomUUID();
 		this.run(
-			`INSERT INTO handoffs (id, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO handoffs (id, owner, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				id,
+				params.owner,
 				params.repo,
 				params.from_agent,
 				params.to_agent ?? null,
@@ -66,6 +70,7 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	listHandoffs(params: {
+		owner: string;
 		repo: string;
 		status?: Handoff["status"];
 		to_agent?: string;
@@ -73,8 +78,8 @@ export class HandoffEntity extends BaseEntity {
 		limit?: number;
 		offset?: number;
 	}): Handoff[] {
-		const conditions: string[] = ["repo = ?"];
-		const values: unknown[] = [params.repo];
+		const conditions: string[] = ["owner = ?", "repo = ?"];
+		const values: unknown[] = [params.owner, params.repo];
 
 		if (params.status) {
 			conditions.push("status = ?");
@@ -100,6 +105,7 @@ export class HandoffEntity extends BaseEntity {
 			 WHERE ${conditions
 					.map((condition) =>
 						condition
+							.replace(/\bowner\b/g, "h.owner")
 							.replace(/\brepo\b/g, "h.repo")
 							.replace(/\bstatus\b/g, "h.status")
 							.replace(/\bto_agent\b/g, "h.to_agent")
@@ -142,6 +148,7 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	claimTask(params: {
+		owner: string;
 		repo: string;
 		task_id: string;
 		agent: string;
@@ -155,10 +162,11 @@ export class HandoffEntity extends BaseEntity {
 		this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [now, params.task_id]);
 
 		this.run(
-			`INSERT INTO claims (id, repo, task_id, agent, role, claimed_at, released_at, metadata)
-			VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+			`INSERT INTO claims (id, owner, repo, task_id, agent, role, claimed_at, released_at, metadata)
+			VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
 			[
 				id,
+				params.owner,
 				params.repo,
 				params.task_id,
 				params.agent,
@@ -213,14 +221,15 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	listClaims(params: {
+		owner: string;
 		repo: string;
 		agent?: string;
 		active_only?: boolean;
 		limit?: number;
 		offset?: number;
 	}): Claim[] {
-		const conditions: string[] = ["repo = ?"];
-		const values: unknown[] = [params.repo];
+		const conditions: string[] = params.owner ? ["owner = ?", "repo = ?"] : ["repo = ?"];
+		const values: unknown[] = params.owner ? [params.owner, params.repo] : [params.repo];
 
 		if (params.agent) {
 			conditions.push("agent = ?");
@@ -241,6 +250,7 @@ export class HandoffEntity extends BaseEntity {
 			 WHERE ${conditions
 					.map((condition) =>
 						condition
+							.replace(/\bowner\b/g, "c.owner")
 							.replace(/\brepo\b/g, "c.repo")
 							.replace(/\bagent\b/g, "c.agent")
 							.replace(/released_at/g, "c.released_at")

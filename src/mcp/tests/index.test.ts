@@ -16,7 +16,7 @@ function makeEntry(id: string, repo: string): MemoryEntry {
 		agent: "test-agent",
 		role: "unknown",
 		model: "test-model",
-		scope: { repo },
+		scope: { owner: "test", repo },
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString(),
 		completed_at: null,

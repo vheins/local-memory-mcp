@@ -4,13 +4,13 @@ import { TaskGetSchema } from "./schemas";
 
 export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 	const validated = TaskGetSchema.parse(args);
-	const { repo, id, task_code, structured: isStructuredRequest } = validated;
+	const { owner, repo, id, task_code, structured: isStructuredRequest } = validated;
 
 	let task;
 	if (id) {
 		task = storage.tasks.getTaskById(id);
 	} else if (task_code) {
-		task = storage.tasks.getTaskByCode(repo, task_code);
+		task = storage.tasks.getTaskByCode(owner, repo, task_code);
 	} else {
 		throw new Error("Either id or task_code must be provided");
 	}
@@ -50,10 +50,14 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 		if (task.comments_count !== undefined) lines.push(`Comments: ${task.comments_count}`);
 		if (task.coordination) {
 			if (task.coordination.active_claim_count > 0) {
-				lines.push(`Claim: ${task.coordination.active_claim_agent || "?"} (${task.coordination.active_claim_role || ""}) since ${task.coordination.active_claim_claimed_at || ""}`);
+				lines.push(
+					`Claim: ${task.coordination.active_claim_agent || "?"} (${task.coordination.active_claim_role || ""}) since ${task.coordination.active_claim_claimed_at || ""}`
+				);
 			}
 			if (task.coordination.pending_handoff_count > 0) {
-				lines.push(`Handoff: ${task.coordination.pending_handoff_summary || ""} → ${task.coordination.pending_handoff_to_agent || "?"}`);
+				lines.push(
+					`Handoff: ${task.coordination.pending_handoff_summary || ""} → ${task.coordination.pending_handoff_to_agent || "?"}`
+				);
 			}
 		}
 		lines.push(`Created: ${task.created_at}`);

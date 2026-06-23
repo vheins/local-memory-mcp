@@ -49,7 +49,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 					title: m.title,
 					content: m.content,
 					importance: 4,
-					scope: { repo: REPO },
+					scope: { owner: "test", repo: REPO },
 					agent: "test-agent",
 					model: "test-model"
 				}
@@ -60,7 +60,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		// EXPECT: "Database Migration" should be Top Match, not "Primary Database"
 		const searchRes = await router("tools/call", {
 			name: "memory-search",
-			arguments: { query: "How do I update the database schema?", repo: REPO }
+			arguments: { query: "How do I update the database schema?", owner: "test", repo: REPO }
 		});
 
 		// New tabular format: results.rows[i] = [id, code, title, type, importance]
@@ -82,7 +82,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "Large File Upload Failure",
 				content: "Don't use fs.readFileSync for large files, it causes OOM errors.",
 				importance: 5,
-				scope: { repo: REPO },
+				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model"
 			}
@@ -97,7 +97,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "Streaming File Upload",
 				content: "Always use streams (fs.createReadStream) for files > 10MB.",
 				importance: 5,
-				scope: { repo: REPO },
+				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model",
 				supersedes: mistakeId
@@ -107,7 +107,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		// 3. Search for "file upload"
 		const searchRes = await router("tools/call", {
 			name: "memory-search",
-			arguments: { query: "How to handle file uploads?", repo: REPO }
+			arguments: { query: "How to handle file uploads?", owner: "test", repo: REPO }
 		});
 
 		// EXPECT: Mistake is archived and NOT in search results by default
@@ -120,7 +120,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		// 4. Audit: Verify we can still find the mistake if we EXPLICITLY ask for archived
 		const auditRes = await router("tools/call", {
 			name: "memory-search",
-			arguments: { query: "file upload", repo: REPO, include_archived: true }
+			arguments: { query: "file upload", owner: "test", repo: REPO, include_archived: true }
 		});
 		expect(
 			(auditRes.structuredContent.results as { rows: unknown[][] }).rows.some((r: unknown[]) => r[0] === mistakeId)
@@ -140,7 +140,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "Global Logging",
 				content: "Use logger.info for all modules.",
 				importance: 2,
-				scope: { repo: REPO },
+				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model"
 			}
@@ -154,7 +154,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "Auth Security Audit",
 				content: "Auth module requires PII masking in logs.",
 				importance: 5,
-				scope: { repo: REPO, folder: "src/auth" },
+				scope: { owner: "test", repo: REPO, folder: "src/auth" },
 				agent: "test-agent",
 				model: "test-model"
 			}
@@ -165,6 +165,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			name: "memory-search",
 			arguments: {
 				query: "How to log data?",
+				owner: "test",
 				repo: REPO,
 				current_file_path: "src/auth/services/ldap/provider.ts"
 			}
@@ -189,7 +190,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 					title: `Service ${i} Specs`,
 					content: `Documentation for microservice number ${i} in our mesh network.`,
 					importance: 3,
-					scope: { repo: "cloud-infra" },
+					scope: { owner: "test", repo: "cloud-infra" },
 					agent: "test-agent",
 					model: "test-model"
 				}
@@ -199,7 +200,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		// Call memory-recap (which uses pagination)
 		const recapRes = await router("tools/call", {
 			name: "memory-recap",
-			arguments: { repo: "cloud-infra", limit: 5, offset: 0 }
+			arguments: { owner: "test", repo: "cloud-infra", limit: 5, offset: 0 }
 		});
 
 		// Based on memory-recap implementation
@@ -226,7 +227,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "Styling Standard",
 				content: originalContent,
 				importance: 3,
-				scope: { repo: REPO },
+				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model"
 			}
@@ -240,7 +241,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "CSS Rule",
 				content: "Use Tailwind CSS for styling our UI components.", // Subtly different but semantically identical
 				importance: 3,
-				scope: { repo: REPO },
+				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model"
 			}
@@ -250,7 +251,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		expect(summaryText).toContain("conflict");
 		expect(summaryText).toContain("Hint:");
 		expect(summaryText).toContain("delete first");
-		expect(db.memories.getTotalCount(REPO)).toBe(1); // Should still be 1
+		expect(db.memories.getTotalCount("test", REPO)).toBe(1); // Should still be 1
 	});
 
 	/**
@@ -266,7 +267,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 				title: "Filament Custom Action",
 				content: "Always use ->requiresConfirmation() for destructive actions in Filament.",
 				importance: 5,
-				scope: { repo: "project-a" },
+				scope: { owner: "test", repo: "project-a" },
 				agent: "test-agent",
 				model: "test-model",
 				tags: ["filament", "laravel"]
@@ -278,6 +279,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			name: "memory-search",
 			arguments: {
 				query: "how to make safe actions?",
+				owner: "test",
 				repo: "project-b",
 				current_tags: ["filament"]
 			}

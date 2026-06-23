@@ -26,6 +26,7 @@ async function storeSingleStandard(
 		version?: string;
 		language?: string;
 		stack?: string[];
+		owner?: string;
 		repo?: string;
 		is_global?: boolean;
 		tags: string[];
@@ -43,7 +44,8 @@ async function storeSingleStandard(
 	const conflict = db.standards.checkConflicts(
 		params.content,
 		incomingVersion,
-		params.repo,
+		params.owner!,
+		params.repo ?? undefined,
 		incomingLanguage,
 		incomingStack,
 		0.82
@@ -74,7 +76,7 @@ async function storeSingleStandard(
 
 	const entry: CodingStandardEntry = {
 		id: randomUUID(),
-		code: generateNextCode(params.repo || "__global__", "standard", db),
+		code: generateNextCode(params.owner!, params.repo || "__global__", "standard", db),
 		title: params.name,
 		content: params.content,
 		parent_id: resolveStandardParentId(params.parent_id, db),
@@ -83,6 +85,7 @@ async function storeSingleStandard(
 		language: params.language || null,
 		stack: params.stack || [],
 		is_global: params.is_global !== false,
+		owner: params.owner!,
 		repo: params.repo || null,
 		tags: params.tags || [],
 		metadata: params.metadata,
@@ -137,7 +140,8 @@ export async function handleStandardStore(
 			const conflict = db.standards.checkConflicts(
 				std.content,
 				incomingVersion,
-				undefined,
+				validated.owner!,
+				validated.repo,
 				incomingLanguage,
 				incomingStack,
 				0.82
@@ -165,7 +169,7 @@ export async function handleStandardStore(
 			}
 
 			const now = new Date().toISOString();
-			const code = generateNextCode(standardRepo, "standard", db, batchCodes);
+			const code = generateNextCode(validated.owner! ?? "", standardRepo, "standard", db, batchCodes);
 			batchCodes.add(code);
 			entries.push({
 				id: randomUUID(),
@@ -178,6 +182,7 @@ export async function handleStandardStore(
 				language: std.language || null,
 				stack: std.stack || [],
 				is_global: std.is_global !== false,
+				owner: validated.owner!,
 				repo: null,
 				tags: std.tags || [],
 				metadata: std.metadata,
@@ -221,6 +226,7 @@ export async function handleStandardStore(
 			version: validated.version,
 			language: validated.language,
 			stack: validated.stack,
+			owner: validated.owner!,
 			repo: validated.repo,
 			is_global: validated.is_global,
 			tags: validated.tags!,

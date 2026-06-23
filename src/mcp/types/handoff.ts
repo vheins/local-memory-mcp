@@ -1,5 +1,6 @@
 export interface Handoff {
 	id: string;
+	owner: string;
 	repo: string;
 	from_agent: string;
 	to_agent: string | null;
@@ -15,6 +16,7 @@ export interface Handoff {
 
 export interface HandoffRow {
 	id: string;
+	owner: string;
 	repo: string;
 	from_agent: string;
 	to_agent: string | null;
@@ -29,6 +31,7 @@ export interface HandoffRow {
 
 export interface Claim {
 	id: string;
+	owner: string;
 	repo: string;
 	task_id: string;
 	task_code?: string | null;
@@ -41,6 +44,7 @@ export interface Claim {
 
 export interface ClaimRow {
 	id: string;
+	owner: string;
 	repo: string;
 	task_id: string;
 	agent: string;

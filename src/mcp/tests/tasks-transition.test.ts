@@ -21,6 +21,7 @@ describe("Task Status Transitions", () => {
 		return await handleTaskCreate(
 			{
 				repo: REPO,
+				owner: "test",
 				task_code: taskCode,
 				phase: "test",
 				title: "Test Task",
@@ -35,7 +36,7 @@ describe("Task Status Transitions", () => {
 
 	it("should block transition from backlog to completed", async () => {
 		await createTask("TASK-001", "backlog");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		await expect(
 			handleTaskUpdate(
@@ -56,7 +57,7 @@ describe("Task Status Transitions", () => {
 
 	it("should allow transition from backlog to pending", async () => {
 		await createTask("TASK-001", "backlog");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		await handleTaskUpdate(
 			{
@@ -77,7 +78,7 @@ describe("Task Status Transitions", () => {
 
 	it("should block transition from pending to completed", async () => {
 		await createTask("TASK-001", "pending");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		await expect(
 			handleTaskUpdate(
@@ -98,7 +99,7 @@ describe("Task Status Transitions", () => {
 
 	it("should allow transition from pending to in_progress", async () => {
 		await createTask("TASK-001", "pending");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		await handleTaskUpdate(
 			{
@@ -119,7 +120,7 @@ describe("Task Status Transitions", () => {
 
 	it("should allow transition from in_progress to completed", async () => {
 		await createTask("TASK-001", "pending");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		// to in_progress first
 		await handleTaskUpdate(
@@ -155,7 +156,7 @@ describe("Task Status Transitions", () => {
 
 	it("should allow transition to blocked and back", async () => {
 		await createTask("TASK-001", "pending");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		// to in_progress first
 		await handleTaskUpdate(
@@ -203,7 +204,7 @@ describe("Task Status Transitions", () => {
 
 		// to blocked from pending
 		await createTask("TASK-002", "pending");
-		const task2 = db.tasks.getTaskByCode(REPO, "TASK-002");
+		const task2 = db.tasks.getTaskByCode("test", REPO, "TASK-002");
 		if (!task2) throw new Error("Task TASK-002 not found");
 
 		await handleTaskUpdate(
@@ -223,7 +224,7 @@ describe("Task Status Transitions", () => {
 
 	it("should block transition from blocked to completed", async () => {
 		await createTask("TASK-001", "pending");
-		const task = db.tasks.getTasksByRepo(REPO)[0];
+		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		// to blocked
 		await handleTaskUpdate(

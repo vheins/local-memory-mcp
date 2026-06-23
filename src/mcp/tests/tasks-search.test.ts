@@ -24,6 +24,7 @@ describe("Task Search and Filtering", () => {
 		await handleTaskCreate(
 			{
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-001",
 				phase: "Development",
 				title: "Implement authentication",
@@ -35,7 +36,7 @@ describe("Task Search and Filtering", () => {
 			},
 			db
 		);
-		const task1 = db.tasks.getTaskByCode(REPO, "TASK-001");
+		const task1 = db.tasks.getTaskByCode("test", REPO, "TASK-001");
 		if (!task1) throw new Error("Task 1 seed failed");
 		await handleTaskUpdate(
 			{
@@ -54,6 +55,7 @@ describe("Task Search and Filtering", () => {
 		await handleTaskCreate(
 			{
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-002",
 				phase: "Testing",
 				title: "Write unit tests",
@@ -70,6 +72,7 @@ describe("Task Search and Filtering", () => {
 		await handleTaskCreate(
 			{
 				repo: REPO,
+				owner: "test",
 				task_code: "DB-FIX-003",
 				phase: "Maintenance",
 				title: "Fix database leak",
@@ -81,7 +84,7 @@ describe("Task Search and Filtering", () => {
 			},
 			db
 		);
-		const task3 = db.tasks.getTaskByCode(REPO, "DB-FIX-003");
+		const task3 = db.tasks.getTaskByCode("test", REPO, "DB-FIX-003");
 		if (!task3) throw new Error("Task 3 seed failed");
 		await handleTaskUpdate(
 			{
@@ -101,6 +104,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				query: "authentication",
 				structured: true
 			},
@@ -116,6 +120,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				query: "edge cases",
 				structured: true
 			},
@@ -131,6 +136,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				query: "DB-FIX",
 				structured: true
 			},
@@ -146,6 +152,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				status: "in_progress,blocked",
 				structured: true
 			},
@@ -163,6 +170,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				status: "all",
 				structured: true
 			},
@@ -177,6 +185,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				query: "auth",
 				status: "pending",
 				structured: true
@@ -193,6 +202,7 @@ describe("Task Search and Filtering", () => {
 		const result = await handleTaskList(
 			{
 				repo: REPO,
+				owner: "test",
 				query: "non-existent-task",
 				structured: true
 			},
@@ -205,7 +215,7 @@ describe("Task Search and Filtering", () => {
 
 	describe("Unified task-list", () => {
 		it("should provide same discovery as old task-search", async () => {
-			const args = { repo: REPO, query: "authentication", status: "all", structured: true };
+			const args = { repo: REPO, owner: "test", query: "authentication", status: "all", structured: true };
 			const result = await handleTaskList(args, db);
 			const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 			expect(tasks.rows).toHaveLength(1);

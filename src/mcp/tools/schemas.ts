@@ -3,6 +3,7 @@ import { normalizeRepo } from "../utils/normalize";
 
 // Shared schema components
 export const MemoryScopeSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	branch: z.string().optional(),
 	folder: z.string().optional(),
@@ -117,6 +118,7 @@ export const MemoryUpdateSchema = z
 export const MemorySearchSchema = z.object({
 	query: z.string().min(3),
 	prompt: z.string().optional(),
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	types: z.array(MemoryTypeSchema).optional(),
 	minImportance: z.number().min(1).max(5).optional(),
@@ -143,6 +145,7 @@ export const MemoryAcknowledgeSchema = z
 	});
 
 export const MemoryRecapSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	limit: z.number().min(1).max(50).default(20),
 	offset: z.number().min(0).default(0),
@@ -151,6 +154,7 @@ export const MemoryRecapSchema = z.object({
 
 export const MemoryDeleteSchema = z
 	.object({
+		owner: z.string().optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo).optional(),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
@@ -166,12 +170,14 @@ export const MemoryDeleteSchema = z
 	);
 
 export const MemorySummarizeSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	signals: z.array(z.string().max(200)).min(1),
 	structured: z.boolean().default(false)
 });
 
 export const MemorySynthesizeSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo).optional(),
 	objective: z.string().min(5),
 	current_file_path: z.string().optional(),
@@ -193,20 +199,44 @@ const TaskMetadataSchema = z
 		if (!metadata) return;
 		if (metadata.required_skills !== undefined) {
 			if (!Array.isArray(metadata.required_skills)) {
-				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.required_skills must be an array of strings", path: ["metadata", "required_skills"] });
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "metadata.required_skills must be an array of strings",
+					path: ["metadata", "required_skills"]
+				});
 			} else if (metadata.required_skills.length === 0) {
-				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.required_skills must not be empty when present", path: ["metadata", "required_skills"] });
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "metadata.required_skills must not be empty when present",
+					path: ["metadata", "required_skills"]
+				});
 			} else if (!metadata.required_skills.every((s: unknown) => typeof s === "string" && s.length > 0)) {
-				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.required_skills must be an array of non-empty strings", path: ["metadata", "required_skills"] });
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "metadata.required_skills must be an array of non-empty strings",
+					path: ["metadata", "required_skills"]
+				});
 			}
 		}
 		if (metadata.fsm_gates !== undefined) {
 			if (!Array.isArray(metadata.fsm_gates)) {
-				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.fsm_gates must be an array of strings", path: ["metadata", "fsm_gates"] });
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "metadata.fsm_gates must be an array of strings",
+					path: ["metadata", "fsm_gates"]
+				});
 			} else if (metadata.fsm_gates.length === 0) {
-				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.fsm_gates must not be empty when present", path: ["metadata", "fsm_gates"] });
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "metadata.fsm_gates must not be empty when present",
+					path: ["metadata", "fsm_gates"]
+				});
 			} else if (!metadata.fsm_gates.every((s: unknown) => typeof s === "string" && s.length > 0)) {
-				ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata.fsm_gates must be an array of non-empty strings", path: ["metadata", "fsm_gates"] });
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "metadata.fsm_gates must be an array of non-empty strings",
+					path: ["metadata", "fsm_gates"]
+				});
 			}
 		}
 	});
@@ -231,6 +261,7 @@ const SingleTaskCreateSchema = z.object({
 
 export const TaskCreateSchema = z
 	.object({
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		// Allow single task fields at top level (backward compatibility & single use)
 		task_code: z.string().min(1).optional(),
@@ -261,12 +292,14 @@ export const TaskCreateSchema = z
 	);
 
 export const TaskCreateInteractiveSchema = SingleTaskCreateSchema.partial().extend({
+	owner: z.string().optional().default(""),
 	repo: z.string().min(1).transform(normalizeRepo).optional(),
 	structured: z.boolean().default(false)
 });
 
 export const TaskUpdateSchema = z
 	.object({
+		owner: z.string().optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
@@ -300,6 +333,7 @@ export const TaskUpdateSchema = z
 	});
 
 export const TaskListSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	status: z.string().optional(),
 	phase: z.string().optional(),
@@ -310,6 +344,7 @@ export const TaskListSchema = z.object({
 });
 
 export const TaskSearchSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	query: z.string().min(1),
 	status: z.string().optional(),
@@ -322,6 +357,7 @@ export const TaskSearchSchema = z.object({
 
 export const TaskDeleteSchema = z
 	.object({
+		owner: z.string().optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
@@ -354,6 +390,7 @@ export const StandardDetailSchema = z
 
 export const StandardDeleteSchema = z
 	.object({
+		owner: z.string().optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo).optional(),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
@@ -370,6 +407,7 @@ export const StandardDeleteSchema = z
 
 export const TaskGetSchema = z
 	.object({
+		owner: z.string().optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
@@ -383,6 +421,7 @@ export const HandoffStatusSchema = z.enum(["pending", "accepted", "rejected", "e
 
 export const HandoffCreateSchema = z
 	.object({
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		from_agent: z.string().min(1),
 		to_agent: z.string().min(1).optional(),
@@ -417,6 +456,7 @@ export const HandoffUpdateSchema = z.object({
 });
 
 export const HandoffListSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	status: HandoffStatusSchema.optional(),
 	from_agent: z.string().min(1).optional(),
@@ -428,6 +468,7 @@ export const HandoffListSchema = z.object({
 
 export const TaskClaimSchema = z
 	.object({
+		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
@@ -444,6 +485,7 @@ export const TaskClaimSchema = z
 	});
 
 export const ClaimListSchema = z.object({
+	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	agent: z.string().min(1).optional(),
 	active_only: z.boolean().default(true),
@@ -454,6 +496,7 @@ export const ClaimListSchema = z.object({
 
 export const ClaimReleaseSchema = z
 	.object({
+		owner: z.string().optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
@@ -477,6 +520,7 @@ export const StandardStoreSchema = z
 		version: z.string().optional(),
 		language: z.string().optional(),
 		stack: z.array(z.string()).optional(),
+		owner: z.string().optional().default(""),
 		repo: z.string().transform(normalizeRepo).optional(),
 		is_global: z.boolean().optional(),
 		tags: z.array(z.string().min(1)).min(1).optional(),
@@ -511,6 +555,7 @@ export const StandardUpdateSchema = z
 		version: z.string().optional(),
 		language: z.string().optional(),
 		stack: z.array(z.string().min(1)).min(1).optional(),
+		owner: z.string().optional().default(""),
 		repo: z.string().transform(normalizeRepo).optional(),
 		is_global: z.boolean().optional(),
 		tags: z.array(z.string().min(1)).min(1).optional(),
@@ -553,6 +598,7 @@ export const StandardSearchSchema = z.object({
 	language: z.string().optional(),
 	context: z.string().optional(),
 	version: z.string().optional(),
+	owner: z.string().optional().default(""),
 	repo: z.string().transform(normalizeRepo).optional(),
 	is_global: z.boolean().optional(),
 	limit: z.number().min(1).max(100).default(20),

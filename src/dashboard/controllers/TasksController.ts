@@ -22,22 +22,24 @@ export class TasksController {
 			if (status && (status as string).includes(",")) {
 				const statuses = (status as string).split(",");
 				tasks = db.tasks.getTasksByMultipleStatuses(
+					"",
 					repo as string,
 					statuses,
 					pageSize,
 					(page - 1) * pageSize,
 					search as string
 				);
-				totalItems = db.tasks.countTasksByMultipleStatuses(repo as string, statuses, search as string);
+				totalItems = db.tasks.countTasksByMultipleStatuses("", repo as string, statuses, search as string);
 			} else {
 				tasks = db.tasks.getTasksByRepo(
+					"",
 					repo as string,
 					status as string,
 					pageSize,
 					(page - 1) * pageSize,
 					search as string
 				);
-				totalItems = db.tasks.countTasks(repo as string, status as string, search as string);
+				totalItems = db.tasks.countTasks("", repo as string, status as string, search as string);
 			}
 
 			const totalPages = Math.ceil(totalItems / pageSize);
@@ -54,7 +56,7 @@ export class TasksController {
 			await db.refresh();
 			const task = db.tasks.getTaskById(req.params.id as string);
 			if (!task) throw new Error("Task not found");
-			db.actions.logAction("read", task.repo, { taskId: task.id });
+			db.actions.logAction("read", task.owner || "", task.repo, { taskId: task.id });
 			res.json(jsonApiRes(task, "task"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Task not found";
@@ -67,7 +69,7 @@ export class TasksController {
 			await db.refresh();
 			const { repo, task_code } = req.query;
 			if (!repo || !task_code) return res.status(400).json(jsonApiError("repo and task_code are required", 400));
-			const task = db.tasks.getTaskByCode(repo as string, task_code as string);
+			const task = db.tasks.getTaskByCode("", repo as string, task_code as string);
 			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
 			res.json(jsonApiRes(task, "task"));
 		} catch (err: unknown) {
@@ -82,7 +84,7 @@ export class TasksController {
 			const attributes = getAttributes(req);
 			const { repo, task_code, title } = attributes;
 			if (!repo || !task_code || !title) return res.status(400).json(jsonApiError("Required fields missing", 400));
-			if (db.tasks.isTaskCodeDuplicate(repo, task_code))
+			if (db.tasks.isTaskCodeDuplicate("", repo, task_code))
 				return res.status(400).json(jsonApiError("Duplicate task_code", 400));
 			const id = randomUUID();
 			await db.withWrite(() => {
@@ -92,7 +94,7 @@ export class TasksController {
 					created_at: new Date().toISOString(),
 					updated_at: new Date().toISOString()
 				} as Task);
-				db.actions.logAction("write", repo, { taskId: id });
+				db.actions.logAction("write", "", repo, { taskId: id });
 			});
 			res.json(jsonApiRes({ id }, "task"));
 		} catch (err: unknown) {
@@ -168,7 +170,7 @@ export class TasksController {
 
 			await db.withWrite(() => {
 				db.tasks.deleteTask(id);
-				db.actions.logAction("delete", task.repo, { taskId: id });
+				db.actions.logAction("delete", task.owner || "", task.repo, { taskId: id });
 			});
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
@@ -187,6 +189,7 @@ export class TasksController {
 			const tasks = items.map((item: Record<string, unknown>) => ({
 				...item,
 				id: (item.id as string) || randomUUID(),
+				owner: (item.owner as string) || "",
 				repo,
 				task_code: (item.task_code as string) || randomUUID().substring(0, 8),
 				created_at: (item.created_at as string) || new Date().toISOString(),
@@ -195,7 +198,7 @@ export class TasksController {
 
 			const count = await db.withWrite(() => {
 				const n = db.tasks.bulkInsertTasks(tasks as Task[]);
-				db.actions.logAction("write", repo, { query: `Bulk imported ${n} tasks` });
+				db.actions.logAction("write", "", repo, { query: `Bulk imported ${n} tasks` });
 				return n;
 			});
 			res.json(jsonApiRes({ count }, "status"));
@@ -213,20 +216,20 @@ export class TasksController {
 
 			const stats = {
 				daily: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "daily"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "daily")
+					...db.taskStats.getTaskTimeStats("", targetRepo, "daily"),
+					history: db.taskStats.getTaskComparisonSeries("", targetRepo, "daily")
 				},
 				weekly: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "weekly"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "weekly")
+					...db.taskStats.getTaskTimeStats("", targetRepo, "weekly"),
+					history: db.taskStats.getTaskComparisonSeries("", targetRepo, "weekly")
 				},
 				monthly: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "monthly"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "monthly")
+					...db.taskStats.getTaskTimeStats("", targetRepo, "monthly"),
+					history: db.taskStats.getTaskComparisonSeries("", targetRepo, "monthly")
 				},
 				overall: {
-					...db.taskStats.getTaskTimeStats(targetRepo, "overall"),
-					history: db.taskStats.getTaskComparisonSeries(targetRepo, "overall")
+					...db.taskStats.getTaskTimeStats("", targetRepo, "overall"),
+					history: db.taskStats.getTaskComparisonSeries("", targetRepo, "overall")
 				}
 			};
 

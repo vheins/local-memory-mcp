@@ -33,7 +33,7 @@ function makeEntry(
 		agent: overrides.agent ?? "test-agent",
 		role: "unknown",
 		model: overrides.model ?? "test-model",
-		scope: { repo: overrides.repo ?? "test-repo" },
+		scope: { owner: "test", repo: overrides.repo ?? "test-repo" },
 		created_at: overrides.created_at ?? now,
 		updated_at: now,
 		completed_at: null,
@@ -74,7 +74,7 @@ describe("Property 1: Pre-filter SQL limits searchBySimilarity candidates", () =
 						);
 					}
 
-					const results = store.memoryVectors.searchBySimilarity(query, repo, limit);
+					const results = store.memoryVectors.searchBySimilarity(query, "test", repo, limit);
 					store.close();
 
 					return results.length <= limit;
@@ -136,8 +136,8 @@ describe("Property 7: Pagination non-overlapping", () => {
 						);
 					}
 
-					const pageI = store.memories.getRecentMemories(repo, pageSize, i * pageSize);
-					const pageJ = store.memories.getRecentMemories(repo, pageSize, j * pageSize);
+					const pageI = store.memories.getRecentMemories("test", repo, pageSize, i * pageSize);
+					const pageJ = store.memories.getRecentMemories("test", repo, pageSize, j * pageSize);
 					store.close();
 
 					const idsI = new Set(pageI.map((m) => m.id));
@@ -173,7 +173,7 @@ describe("Property 8: TTL stores correct expires_at", () => {
 						title: "TTL Test Memory",
 						content: "Testing that expires_at equals created_at plus ttlDays",
 						importance: 3,
-						scope: { repo },
+						scope: { owner: "test", repo },
 						agent: "test-agent",
 						model: "test-model",
 						ttlDays,
@@ -183,9 +183,7 @@ describe("Property 8: TTL stores correct expires_at", () => {
 					mockVectors
 				);
 
-				const stored = db.memories.getById(
-					(response.structuredContent as Record<string, unknown>).id as string
-				);
+				const stored = db.memories.getById((response.structuredContent as Record<string, unknown>).id as string);
 				db.close();
 
 				expect(stored).not.toBeNull();
@@ -215,7 +213,7 @@ describe("Property 9: Expired memories excluded from search results", () => {
 					})
 				);
 
-				const results = store.memoryVectors.searchBySimilarity(query, repo, 10);
+				const results = store.memoryVectors.searchBySimilarity(query, "", repo, 10);
 				store.close();
 
 				return !results.some((r) => r.id === "expired-sim");
@@ -240,7 +238,7 @@ describe("Property 9: Expired memories excluded from search results", () => {
 					})
 				);
 
-				const results = store.memories.searchByRepo(repo);
+				const results = store.memories.searchByRepo("test", repo);
 				store.close();
 
 				return !results.some((r) => r.id === "expired-byrepo");
@@ -318,10 +316,10 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("logAction stores action with correct metadata", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("search", "test-repo", { query: "test query", resultCount: 5 } as any);
-		store.actions.logAction("store", "test-repo", { id: "mem-1", type: "decision" } as any);
+		store.actions.logAction("search", "test", "test-repo", { query: "test query", resultCount: 5 } as any);
+		store.actions.logAction("store", "test", "test-repo", { id: "mem-1", type: "decision" } as any);
 
-		const actions = store.actions.getRecentActions("test-repo", 10);
+		const actions = store.actions.getRecentActions("test", "test-repo", 10);
 		store.close();
 
 		expect(actions.length).toBe(2);
@@ -332,11 +330,11 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("getRecentActions returns actions in descending order by created_at", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("action-1", "repo-a", { step: 1 } as any);
-		store.actions.logAction("action-2", "repo-a", { step: 2 } as any);
-		store.actions.logAction("action-3", "repo-a", { step: 3 } as any);
+		store.actions.logAction("action-1", "test", "repo-a", { step: 1 } as any);
+		store.actions.logAction("action-2", "test", "repo-a", { step: 2 } as any);
+		store.actions.logAction("action-3", "test", "repo-a", { step: 3 } as any);
 
-		const actions = store.actions.getRecentActions("repo-a", 10);
+		const actions = store.actions.getRecentActions("test", "repo-a", 10);
 		store.close();
 
 		expect(actions[0].action).toBe("action-3");
@@ -348,10 +346,10 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 		const store = await freshStore();
 
 		for (let i = 0; i < 20; i++) {
-			store.actions.logAction(`action-${i}`, "repo-limit", { index: i } as any);
+			store.actions.logAction(`action-${i}`, "test", "repo-limit", { index: i } as any);
 		}
 
-		const actions = store.actions.getRecentActions("repo-limit", 5);
+		const actions = store.actions.getRecentActions("test", "repo-limit", 5);
 		store.close();
 
 		expect(actions.length).toBe(5);
@@ -360,12 +358,12 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("getRecentActions filters by repo correctly", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("repo-a-action", "repo-a", { data: "a" } as any);
-		store.actions.logAction("repo-b-action", "repo-b", { data: "b" } as any);
-		store.actions.logAction("repo-a-second", "repo-a", { data: "a2" } as any);
+		store.actions.logAction("repo-a-action", "test", "repo-a", { data: "a" } as any);
+		store.actions.logAction("repo-b-action", "test", "repo-b", { data: "b" } as any);
+		store.actions.logAction("repo-a-second", "test", "repo-a", { data: "a2" } as any);
 
-		const repoAActions = store.actions.getRecentActions("repo-a", 10);
-		const repoBActions = store.actions.getRecentActions("repo-b", 10);
+		const repoAActions = store.actions.getRecentActions("test", "repo-a", 10);
+		const repoBActions = store.actions.getRecentActions("test", "repo-b", 10);
 		store.close();
 
 		expect(repoAActions.length).toBe(2);
@@ -375,7 +373,7 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("getRecentActions returns empty array when no actions exist", async () => {
 		const store = await freshStore();
 
-		const actions = store.actions.getRecentActions("nonexistent-repo", 10);
+		const actions = store.actions.getRecentActions("", "nonexistent-repo", 10);
 		store.close();
 
 		expect(actions).toEqual([]);
@@ -384,9 +382,9 @@ describe("Property 19: Action Log stores and retrieves recent actions", () => {
 	it("getRecentActions without repo parameter returns all actions", async () => {
 		const store = await freshStore();
 
-		store.actions.logAction("action-1", "repo-a", {});
-		store.actions.logAction("action-2", "repo-b", {});
-		store.actions.logAction("action-3", "repo-c", {});
+		store.actions.logAction("action-1", "test", "repo-a", {});
+		store.actions.logAction("action-2", "test", "repo-b", {});
+		store.actions.logAction("action-3", "test", "repo-c", {});
 
 		const allActions = store.actions.getRecentActions();
 		store.close();
@@ -404,7 +402,7 @@ describe("Dashboard memory queries", () => {
 		store.memories.insert(makeEntry({ id: "m2", repo, created_at: "2024-01-03T00:00:00Z" }));
 		store.memories.insert(makeEntry({ id: "m3", repo, created_at: "2024-01-02T00:00:00Z" }));
 
-		const memories = store.memories.getRecentMemories(repo, 10, 0);
+		const memories = store.memories.getRecentMemories("test", repo, 10, 0);
 		store.close();
 
 		expect(memories[0].id).toBe("m2");
@@ -420,8 +418,8 @@ describe("Dashboard memory queries", () => {
 			store.memories.insert(makeEntry({ id: `m-${i}`, repo }));
 		}
 
-		const firstPage = store.memories.getRecentMemories(repo, 3, 0);
-		const secondPage = store.memories.getRecentMemories(repo, 3, 3);
+		const firstPage = store.memories.getRecentMemories("test", repo, 3, 0);
+		const secondPage = store.memories.getRecentMemories("test", repo, 3, 3);
 		store.close();
 
 		expect(firstPage.length).toBe(3);

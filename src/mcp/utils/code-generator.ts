@@ -11,10 +11,11 @@ const ENTITY_CONFIG: Record<EntityType, { prefix: string; table: string; column:
 /**
  * Generates the next sequential code for an entity type within a repo.
  * Pattern: {PREFIX}-{NNN} (e.g., TASK-001, MEM-042, STD-999)
- * Scoped per-repo. The optional batchCodes Set accounts for codes
+ * Scoped per-owner per-repo. The optional batchCodes Set accounts for codes
  * generated in the same batch but not yet persisted.
  */
 export function generateNextCode(
+	owner: string,
 	repo: string,
 	entityType: EntityType,
 	storage: SQLiteStore,
@@ -29,10 +30,10 @@ export function generateNextCode(
 			`
     SELECT MAX(CAST(SUBSTR(${config.column}, ?) AS INTEGER)) as max_seq
     FROM ${config.table}
-    WHERE repo = ? AND ${config.column} LIKE ?
+    WHERE owner = ? AND repo = ? AND ${config.column} LIKE ?
   `
 		)
-		.get(offset, repo, pattern) as { max_seq: number | null };
+		.get(offset, owner, repo, pattern) as { max_seq: number | null };
 
 	let nextSeq = (row?.max_seq ?? 0) + 1;
 

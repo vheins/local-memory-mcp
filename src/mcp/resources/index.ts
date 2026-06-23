@@ -3,6 +3,7 @@ import { SessionContext } from "../session";
 import { logger } from "../utils/logger";
 import { rankCompletionValues } from "../utils/completion";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
+import { parseRepoInput } from "../utils/normalize";
 import type { MemoryEntry, Task, MemoryType } from "../types/index";
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -260,7 +261,7 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 
 		// 5a. Repository Summary: repository://{name}/summary
 		if (repoPath === "summary") {
-			const summary = db.summaries.getSummary(name);
+			const summary = db.summaries.getSummary("", name);
 			const text = summary?.summary || `No summary available for repository: ${name}`;
 			return {
 				contents: [
@@ -318,13 +319,14 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 		if (repoPath === "tasks") {
 			const status = query.get("status");
 			const priority = query.get("priority");
+			const owner = parseRepoInput(name).owner;
 
 			let tasks: Task[];
 			if (status && status !== "all") {
 				const statuses = status.split(",").map((s) => s.trim());
-				tasks = db.tasks.getTasksByMultipleStatuses(name, statuses);
+				tasks = db.tasks.getTasksByMultipleStatuses(owner, name, statuses);
 			} else {
-				tasks = db.tasks.getTasksByMultipleStatuses(name, ["backlog", "pending", "in_progress", "blocked"]);
+				tasks = db.tasks.getTasksByMultipleStatuses(owner, name, ["backlog", "pending", "in_progress", "blocked"]);
 			}
 
 			if (priority) {
@@ -354,7 +356,7 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 
 		// 5d. Repository Actions: repository://{name}/actions
 		if (repoPath === "actions") {
-			const actions = db.actions.getRecentActions(name, 100);
+			const actions = db.actions.getRecentActions("", name, 100);
 			const payload = JSON.stringify(actions, null, 2);
 			return {
 				contents: [

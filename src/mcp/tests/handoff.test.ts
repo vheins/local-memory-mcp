@@ -14,6 +14,7 @@ describe("Handoff and Claim Storage", () => {
 	describe("Handoffs", () => {
 		it("should create and retrieve a handoff", () => {
 			const handoff = handoffs.createHandoff({
+				owner: "test",
 				repo: "test-repo",
 				from_agent: "agent-a",
 				to_agent: "agent-b",
@@ -34,20 +35,20 @@ describe("Handoff and Claim Storage", () => {
 		});
 
 		it("should list handoffs with filters", () => {
-			handoffs.createHandoff({ repo: "repo-1", from_agent: "a", summary: "1" });
-			handoffs.createHandoff({ repo: "repo-1", from_agent: "a", to_agent: "b", summary: "2" });
-			handoffs.createHandoff({ repo: "repo-2", from_agent: "a", summary: "3" });
+			handoffs.createHandoff({ owner: "test", repo: "repo-1", from_agent: "a", summary: "1" });
+			handoffs.createHandoff({ owner: "test", repo: "repo-1", from_agent: "a", to_agent: "b", summary: "2" });
+			handoffs.createHandoff({ owner: "test", repo: "repo-2", from_agent: "a", summary: "3" });
 
-			const allRepo1 = handoffs.listHandoffs({ repo: "repo-1" });
+			const allRepo1 = handoffs.listHandoffs({ owner: "test", repo: "repo-1" });
 			expect(allRepo1.length).toBe(2);
 
-			const toB = handoffs.listHandoffs({ repo: "repo-1", to_agent: "b" });
+			const toB = handoffs.listHandoffs({ owner: "test", repo: "repo-1", to_agent: "b" });
 			expect(toB.length).toBe(1);
 			expect(toB[0].summary).toBe("2");
 		});
 
 		it("should update handoff status", () => {
-			const handoff = handoffs.createHandoff({ repo: "test-repo", from_agent: "a", summary: "1" });
+			const handoff = handoffs.createHandoff({ owner: "test", repo: "test-repo", from_agent: "a", summary: "1" });
 			expect(handoff.status).toBe("pending");
 
 			const success = handoffs.updateHandoffStatus(handoff.id, "accepted");
@@ -61,10 +62,11 @@ describe("Handoff and Claim Storage", () => {
 	describe("Claims", () => {
 		it("should create and retrieve a claim", () => {
 			// First, ensure the task exists since there's a foreign key constraint
-			store.db.exec(`INSERT INTO tasks (id, repo, task_code, title, status, created_at, updated_at) 
-                VALUES ('task-1', 'test-repo', 'T-1', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
+			store.db.exec(`INSERT INTO tasks (id, owner, repo, task_code, title, status, created_at, updated_at) 
+                VALUES ('task-1', '', 'test-repo', 'T-1', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
 
 			const claim = handoffs.claimTask({
+				owner: "test",
 				repo: "test-repo",
 				task_id: "task-1",
 				agent: "agent-a",
@@ -83,10 +85,10 @@ describe("Handoff and Claim Storage", () => {
 		});
 
 		it("should release a claim", () => {
-			store.db.exec(`INSERT INTO tasks (id, repo, task_code, title, status, created_at, updated_at) 
-                VALUES ('task-2', 'test-repo', 'T-2', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
+			store.db.exec(`INSERT INTO tasks (id, owner, repo, task_code, title, status, created_at, updated_at) 
+                VALUES ('task-2', '', 'test-repo', 'T-2', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
 
-			handoffs.claimTask({ repo: "test-repo", task_id: "task-2", agent: "agent-a" });
+			handoffs.claimTask({ owner: "test", repo: "test-repo", task_id: "task-2", agent: "agent-a" });
 
 			let activeClaim = handoffs.getClaim("task-2");
 			expect(activeClaim).not.toBeNull();
@@ -99,17 +101,17 @@ describe("Handoff and Claim Storage", () => {
 		});
 
 		it("should auto-release previous claim when new one is made", () => {
-			store.db.exec(`INSERT INTO tasks (id, repo, task_code, title, status, created_at, updated_at) 
-                VALUES ('task-3', 'test-repo', 'T-3', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
+			store.db.exec(`INSERT INTO tasks (id, owner, repo, task_code, title, status, created_at, updated_at) 
+                VALUES ('task-3', '', 'test-repo', 'T-3', 'Test', 'pending', '2023-01-01', '2023-01-01')`);
 
-			const claim1 = handoffs.claimTask({ repo: "test-repo", task_id: "task-3", agent: "agent-a" });
-			const claim2 = handoffs.claimTask({ repo: "test-repo", task_id: "task-3", agent: "agent-b" });
+			const claim1 = handoffs.claimTask({ owner: "test", repo: "test-repo", task_id: "task-3", agent: "agent-a" });
+			const claim2 = handoffs.claimTask({ owner: "test", repo: "test-repo", task_id: "task-3", agent: "agent-b" });
 
 			const activeClaim = handoffs.getClaim("task-3");
 			expect(activeClaim?.id).toBe(claim2.id);
 			expect(activeClaim?.agent).toBe("agent-b");
 
-			const allClaims = handoffs.listClaims({ repo: "test-repo" });
+			const allClaims = handoffs.listClaims({ owner: "test", repo: "test-repo" });
 			expect(allClaims.length).toBe(2);
 
 			const c1 = allClaims.find((c) => c.id === claim1.id);

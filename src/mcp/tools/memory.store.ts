@@ -31,7 +31,7 @@ async function storeSingleMemory(
 		agent: string;
 		role: string;
 		model: string;
-		scope: { repo: string; branch?: string; folder?: string; language?: string };
+		scope: { owner?: string; repo: string; branch?: string; folder?: string; language?: string };
 		ttlDays?: number;
 		supersedes?: string;
 		tags?: string[];
@@ -57,6 +57,7 @@ async function storeSingleMemory(
 	if (!resolvedSupersedes && params.type !== "task_archive") {
 		const conflict = await db.memoryVectors.checkConflicts(
 			params.content,
+			params.scope.owner!,
 			params.scope.repo,
 			params.type,
 			vectors,
@@ -91,7 +92,7 @@ async function storeSingleMemory(
 
 	const entry: MemoryEntry = {
 		id: randomUUID(),
-		code: params.code || generateNextCode(params.scope.repo, "memory", db),
+		code: params.code || generateNextCode(params.scope.owner ?? "", params.scope.repo, "memory", db),
 		type: params.type as MemoryEntry["type"],
 		title: params.title,
 		content: params.content,
@@ -99,7 +100,7 @@ async function storeSingleMemory(
 		agent: params.agent,
 		role: params.role,
 		model: params.model,
-		scope: params.scope,
+		scope: { ...params.scope, owner: params.scope.owner! },
 		created_at: now,
 		updated_at: now,
 		completed_at: null,
@@ -167,7 +168,14 @@ export async function handleMemoryStore(
 			const resolvedSupersedes = resolveMemorySupersedes(mem.supersedes, db);
 
 			if (!resolvedSupersedes && mem.type !== "task_archive") {
-				const conflict = await db.memoryVectors.checkConflicts(mem.content, mem.scope.repo, mem.type, vectors, 0.55);
+				const conflict = await db.memoryVectors.checkConflicts(
+					mem.content,
+					mem.scope.owner!,
+					mem.scope.repo,
+					mem.type,
+					vectors,
+					0.55
+				);
 				if (conflict) {
 					return createMcpResponse(
 						{
@@ -195,7 +203,7 @@ export async function handleMemoryStore(
 				tags.push(mem.scope.language.toLowerCase());
 			}
 
-			const code = mem.code || generateNextCode(mem.scope.repo, "memory", db, batchCodes);
+			const code = mem.code || generateNextCode(mem.scope.owner ?? "", mem.scope.repo, "memory", db, batchCodes);
 			batchCodes.add(code);
 			entries.push({
 				id: randomUUID(),
@@ -207,7 +215,7 @@ export async function handleMemoryStore(
 				agent: mem.agent,
 				role: mem.role as string,
 				model: mem.model,
-				scope: mem.scope,
+				scope: { ...mem.scope, owner: mem.scope.owner! },
 				created_at: now,
 				updated_at: now,
 				completed_at: null,

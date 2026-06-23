@@ -79,7 +79,7 @@ export class SystemController {
 		try {
 			await db.refresh();
 			const repo = req.query.repo as string | undefined;
-			const stats = repo ? db.system.getDashboardStats(repo) : db.system.getGlobalDashboardStats();
+			const stats = repo ? db.system.getDashboardStats("", repo) : db.system.getGlobalDashboardStats();
 			res.json(jsonApiRes(stats, "system-stats"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -93,7 +93,7 @@ export class SystemController {
 			const repo = req.query.repo as string | undefined;
 			const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 10));
 			const page = Math.max(1, parseInt(req.query.page as string) || 1);
-			const rawActions = db.actions.getRecentActions(repo, 100);
+			const rawActions = db.actions.getRecentActions("", repo, 100);
 			// Map ActionLogRow to RecentAction (fixing query null vs undefined)
 			const actions: RecentAction[] = rawActions.map((a) => ({
 				...a,
@@ -145,10 +145,10 @@ export class SystemController {
 			const { repo } = req.query;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
-			const memories = db.memories.getAllMemoriesWithStats(repo as string);
-			const tasks = db.tasks.getTasksByRepo(repo as string);
+			const memories = db.memories.getAllMemoriesWithStats("", repo as string);
+			const tasks = db.tasks.getTasksByRepo("", repo as string);
 
-			const allComments = db.taskComments.getAllTaskCommentsByRepo(repo as string);
+			const allComments = db.taskComments.getAllTaskCommentsByRepo("", repo as string);
 			const commentsByTaskId = allComments.reduce(
 				(acc, comment) => {
 					if (!acc[comment.task_id]) acc[comment.task_id] = [];

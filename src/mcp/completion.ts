@@ -101,7 +101,7 @@ function getSuggestedTags(db: SQLiteStore) {
 	// but for tags suggestion we just need a sample of tags.
 	// Assuming system-wide stats or specific recently used tags.
 	// For now matching the existing logic by delegating to memories.
-	const memories = db.memories.getRecentMemories("", 1000);
+	const memories = db.memories.getRecentMemories("", "", 1000);
 
 	for (const memory of memories) {
 		for (const tag of memory.tags || []) {
@@ -126,7 +126,7 @@ function getSuggestedTasks(
 
 	if (!repo) return [];
 
-	return db.tasks.getTasksByRepo(repo, undefined, 100).map((task: Task) => ({
+	return db.tasks.getTasksByRepo("", repo, undefined, 100).map((task: Task) => ({
 		id: task.id,
 		task_code: task.task_code,
 		title: task.title

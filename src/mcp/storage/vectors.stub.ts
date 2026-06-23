@@ -104,19 +104,19 @@ export class StubVectorStore implements VectorStore {
 			const candidates = (
 				kind === "standard"
 					? this.db.standards.getVectorCandidates(repo, 100)
-					: this.db.memoryVectors.getVectorCandidates(repo, 100)
+					: this.db.memoryVectors.getVectorCandidates("", repo, 100)
 			).map((c: Record<string, unknown>) => ({
-				id: (c.standard_id ?? c.memory_id) as string,
+				id: (c.standard_id ?? c.memory_id) as string
 			}));
 
 			if (candidates.length === 0) return [];
 
 			const ids = candidates.map((c) => c.id);
-			const entries = (
-				kind === "standard"
-					? this.db.standards.getByIds(ids)
-					: this.db.memories.getByIds(ids)
-			) as { id: string; title: string; content: string }[];
+			const entries = (kind === "standard" ? this.db.standards.getByIds(ids) : this.db.memories.getByIds(ids)) as {
+				id: string;
+				title: string;
+				content: string;
+			}[];
 
 			const results: VectorResult[] = [];
 			for (const entry of entries) {

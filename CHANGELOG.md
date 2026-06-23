@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.16.3] - 2026-06-21
+## [0.17.0] - 2026-06-23
+
+### Added
+
+- **Multi-Owner Support**: Added `owner` field across all entities — memories, tasks, standards, handoffs, claims, comments, and summaries. All tools now accept an `owner` parameter. Repo names can optionally be specified as `owner/repo` format, which auto-parses via `parseRepoInput`.
+- **Owner-Scoped Code Generation**: Sequential codes (`TASK-001`, `MEM-001`, `STD-001`) are now scoped per-owner per-repository instead of per-repository only, preventing code collisions across different users/organizations sharing the same repo name.
+- **Improved Schema Validation**: `required_skills` and `fsm_gates` metadata validation now produce clearer, multi-line error messages for better debugging.
+
+### Changed
+
+- **Database Schema**: Added `owner TEXT NOT NULL DEFAULT ''` column to all tables (`memories`, `tasks`, `standards`, `handoffs`, `claims`, `task_comments`, `memory_summary`, `memories_archive`, `action_logs`). `memory_summary` primary key changed from `repo` to `(owner, repo)` composite key.
+- **Code Generator**: `generateNextCode()` now requires an `owner` parameter; SQL queries filter by both owner and repo.
+- **Tool Schemas**: All tool input schemas updated with optional/default `owner` field (store, search, recap, detail, delete, summarize, synthesize, acknowledge, manage).
+- **Tests**: All test suites updated to include `owner` in mock data and assertions. 283 tests passing across 34 test files.
+- **Dashboard Controllers**: API endpoints updated to pass `owner` through to entity operations.
+
+## [0.17.0] - 2026-06-23
 
 ### Added
 

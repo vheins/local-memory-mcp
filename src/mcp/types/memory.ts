@@ -1,6 +1,7 @@
 export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
 
 export type MemoryScope = {
+	owner: string;
 	repo: string;
 	branch?: string;
 	folder?: string;
@@ -42,6 +43,7 @@ export type MemoryRow = {
 	agent: string;
 	role: string;
 	model: string;
+	owner: string;
 	repo: string;
 	branch?: string;
 	folder?: string;
@@ -74,6 +76,7 @@ export type CodingStandardEntry = {
 	language: string | null;
 	stack: string[];
 	is_global: boolean;
+	owner: string;
 	repo: string | null;
 	tags: string[];
 	metadata: Record<string, unknown>;
@@ -96,6 +99,7 @@ export type CodingStandardRow = {
 	language: string | null;
 	stack: string | null;
 	is_global: number;
+	owner: string;
 	repo: string | null;
 	tags: string | null;
 	metadata: string | null;

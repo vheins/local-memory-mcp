@@ -44,11 +44,11 @@ function buildClaimListSummary(repo: string, count: number, agent?: string, acti
 
 export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 	const validated = HandoffCreateSchema.parse(args);
-	const { repo, from_agent, to_agent, task_id, task_code, summary, context, expires_at, structured } = validated;
+	const { owner, repo, from_agent, to_agent, task_id, task_code, summary, context, expires_at, structured } = validated;
 
 	let resolvedTaskId = task_id ?? null;
 	if (!resolvedTaskId && task_code) {
-		const task = storage.tasks.getTaskByCode(repo, task_code);
+		const task = storage.tasks.getTaskByCode(owner, repo, task_code);
 		if (!task) {
 			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
 		}
@@ -56,6 +56,7 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 	}
 
 	const handoff = storage.handoffs.createHandoff({
+		owner: owner,
 		repo,
 		from_agent,
 		to_agent,
@@ -83,9 +84,10 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 
 export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 	const validated = HandoffListSchema.parse(args);
-	const { repo, status, from_agent, to_agent, limit, offset, structured } = validated;
+	const { owner, repo, status, from_agent, to_agent, limit, offset, structured } = validated;
 
 	const handoffs = storage.handoffs.listHandoffs({
+		owner: owner,
 		repo,
 		status,
 		from_agent,
@@ -170,7 +172,7 @@ export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 
 export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	const validated = TaskClaimSchema.parse(args);
-	const { repo, task_id, task_code, agent, role, metadata, structured } = validated;
+	const { owner, repo, task_id, task_code, agent, role, metadata, structured } = validated;
 
 	let taskId = task_id;
 	let resolvedTaskCode: string;
@@ -183,7 +185,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 		}
 		resolvedTaskCode = task.task_code;
 	} else if (task_code) {
-		task = storage.tasks.getTaskByCode(repo, task_code);
+		task = storage.tasks.getTaskByCode(owner, repo, task_code);
 		if (!task) {
 			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
 		}
@@ -194,6 +196,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	}
 
 	const claim = storage.handoffs.claimTask({
+		owner: owner,
 		repo,
 		task_id: taskId!,
 		agent,
@@ -207,6 +210,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 		storage.taskComments.insertTaskComment({
 			id: randomUUID(),
 			task_id: task.id,
+			owner: repo,
 			repo,
 			comment: `Claimed by ${agent} — auto-promoted to in_progress`,
 			agent,
@@ -246,9 +250,10 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 
 export async function handleClaimList(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimListSchema.parse(args);
-	const { repo, agent, active_only, limit, offset, structured } = validated;
+	const { owner, repo, agent, active_only, limit, offset, structured } = validated;
 
 	const claims = storage.handoffs.listClaims({
+		owner: owner,
 		repo,
 		agent,
 		active_only,
@@ -288,7 +293,7 @@ export async function handleClaimList(args: unknown, storage: SQLiteStore) {
 
 export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimReleaseSchema.parse(args);
-	const { repo, task_id, task_code, agent, structured } = validated;
+	const { owner, repo, task_id, task_code, agent, structured } = validated;
 
 	let resolvedTaskId = task_id;
 	let resolvedTaskCode: string | null = task_code ?? null;
@@ -300,7 +305,7 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 		}
 		resolvedTaskCode = task.task_code;
 	} else if (task_code) {
-		const task = storage.tasks.getTaskByCode(repo, task_code);
+		const task = storage.tasks.getTaskByCode(owner, repo, task_code);
 		if (!task) {
 			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
 		}

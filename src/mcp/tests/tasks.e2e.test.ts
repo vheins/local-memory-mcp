@@ -40,6 +40,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-001",
 				phase: "research",
 				title: "Research Architecture",
@@ -49,12 +50,13 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 				est_tokens: 120
 			}
 		});
-		const taskAId = db.tasks.getTasksByRepo(REPO)[0].id;
+		const taskAId = db.tasks.getTasksByRepo("test", REPO)[0].id;
 
 		await router("tools/call", {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-002",
 				phase: "implementation",
 				title: "Implement Core Logic",
@@ -65,7 +67,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 				est_tokens: 240
 			}
 		});
-		const taskB = db.tasks.getTaskByCode(REPO, "TASK-002");
+		const taskB = db.tasks.getTaskByCode("test", REPO, "TASK-002");
 		expect(taskB).toBeDefined();
 		const taskBId = taskB!.id;
 
@@ -77,7 +79,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		// Verify task-list tool works
 		const listToolRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO }
+			arguments: { repo: REPO, owner: "test" }
 		});
 		const listToolTasks = (listToolRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(listToolTasks.rows.length).toBe(2);
@@ -156,6 +158,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-003",
 				phase: "implementation",
 				title: "Comment enforcement",
@@ -166,7 +169,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const taskId = db.tasks.getTaskByCode(REPO, "TASK-003")?.id;
+		const taskId = db.tasks.getTaskByCode("test", REPO, "TASK-003")?.id;
 		expect(taskId).toBeDefined();
 
 		await expect(
@@ -189,6 +192,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-003A",
 				phase: "implementation",
 				title: "Create without token estimate",
@@ -198,7 +202,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const task = db.tasks.getTaskByCode(REPO, "TASK-003A");
+		const task = db.tasks.getTaskByCode("test", REPO, "TASK-003A");
 		expect(task).toBeDefined();
 		expect(task?.est_tokens).toBe(0);
 	});
@@ -208,6 +212,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-003B",
 				phase: "implementation",
 				title: "Completion requires token estimate",
@@ -217,7 +222,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const taskId = db.tasks.getTaskByCode(REPO, "TASK-003B")?.id;
+		const taskId = db.tasks.getTaskByCode("test", REPO, "TASK-003B")?.id;
 		expect(taskId).toBeDefined();
 
 		await router("tools/call", {
@@ -252,6 +257,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-004",
 				phase: "implementation",
 				title: "Standalone comments",
@@ -264,7 +270,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const taskId = db.tasks.getTaskByCode(REPO, "TASK-004")?.id;
+		const taskId = db.tasks.getTaskByCode("test", REPO, "TASK-004")?.id;
 		expect(taskId).toBeDefined();
 
 		await router("tools/call", {
@@ -294,6 +300,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				phase: "implementation",
 				title: "Auto-generated Code Task",
 				description: "Task created without explicit task_code",
@@ -305,7 +312,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		const data = res.structuredContent as Record<string, unknown>;
 		expect(data.task_code).toBe("TASK-001");
 
-		const task = db.tasks.getTaskByCode(REPO, "TASK-001");
+		const task = db.tasks.getTaskByCode("test", REPO, "TASK-001");
 		expect(task).toBeDefined();
 		expect(task?.title).toBe("Auto-generated Code Task");
 
@@ -314,6 +321,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				phase: "research",
 				title: "Second Auto Task",
 				description: "Should get TASK-002",
@@ -322,7 +330,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const task2 = db.tasks.getTaskByCode(REPO, "TASK-002");
+		const task2 = db.tasks.getTaskByCode("test", REPO, "TASK-002");
 		expect(task2).toBeDefined();
 		expect(task2?.title).toBe("Second Auto Task");
 	});
@@ -332,6 +340,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-005",
 				phase: "implementation",
 				title: "Auto timestamp on create",
@@ -342,7 +351,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 			}
 		});
 
-		const createdTask = db.tasks.getTaskByCode(REPO, "TASK-005");
+		const createdTask = db.tasks.getTaskByCode("test", REPO, "TASK-005");
 		expect(createdTask?.in_progress_at).toBeNull();
 		expect(createdTask?.finished_at).toBeNull();
 

@@ -80,7 +80,7 @@ export async function handleMemoryUpdate(
 	}
 
 	// Log the update action
-	db.actions.logAction("update", existing.scope.repo, { memoryId: resolvedId, resultCount: 1 });
+	db.actions.logAction("update", existing.scope.owner, existing.scope.repo, { memoryId: resolvedId, resultCount: 1 });
 	logger.info("[Tool] memory.update", { repo: existing.scope.repo, id: resolvedId, fields: Object.keys(updates) });
 
 	return createMcpResponse(

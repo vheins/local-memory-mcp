@@ -29,6 +29,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "HANDOFF-101",
 				phase: "implementation",
 				title: "Handoff target task",
@@ -42,6 +43,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "handoff-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				from_agent: "agent-a",
 				to_agent: "agent-b",
 				task_code: "HANDOFF-101",
@@ -58,6 +60,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "handoff-list",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				to_agent: "agent-b"
 			}
 		});
@@ -75,6 +78,7 @@ describe("MCP handoff and claim tools", () => {
 				name: "handoff-create",
 				arguments: {
 					repo: REPO,
+					owner: "test",
 					from_agent: "agent-a",
 					summary: "Completed implementation and tests"
 				}
@@ -87,6 +91,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "handoff-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				from_agent: "agent-a",
 				summary: "Blocked waiting for API contract",
 				context: { blockers: ["API contract missing"] }
@@ -110,6 +115,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLAIM-101",
 				phase: "implementation",
 				title: "Claimable task",
@@ -123,6 +129,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-claim",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLAIM-101",
 				agent: "agent-claim",
 				role: "worker",
@@ -138,7 +145,8 @@ describe("MCP handoff and claim tools", () => {
 		const listRes = await router("tools/call", {
 			name: "claim-list",
 			arguments: {
-				repo: REPO
+				repo: REPO,
+				owner: "test"
 			}
 		});
 
@@ -152,6 +160,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLAIM-RELEASE-101",
 				phase: "implementation",
 				title: "Releasable task",
@@ -165,6 +174,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-claim",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLAIM-RELEASE-101",
 				agent: "agent-release",
 				role: "worker"
@@ -175,6 +185,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "claim-release",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLAIM-RELEASE-101",
 				agent: "agent-release"
 			}
@@ -189,6 +200,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLEANUP-101",
 				phase: "implementation",
 				title: "Cleanup coordination task",
@@ -202,6 +214,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-update",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLEANUP-101",
 				status: "in_progress",
 				comment: "Starting cleanup validation.",
@@ -213,6 +226,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-claim",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLEANUP-101",
 				agent: "agent-claim",
 				role: "worker"
@@ -223,6 +237,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "handoff-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				from_agent: "agent-claim",
 				task_code: "CLEANUP-101",
 				summary: "Continue cleanup validation if blocked",
@@ -234,6 +249,7 @@ describe("MCP handoff and claim tools", () => {
 			name: "task-update",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "CLEANUP-101",
 				status: "completed",
 				comment: "Validated cleanup behavior.",

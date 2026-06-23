@@ -35,7 +35,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 				importance: 3,
 				agent: "TestAgent",
 				model: "test-model",
-				scope: { repo: REPO }
+				scope: { owner: "test", repo: REPO }
 			}
 		});
 		const memoryId = storeRes.structuredContent.id;
@@ -61,6 +61,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-101",
 				phase: "test",
 				title: "Test Task",
@@ -117,6 +118,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-102",
 				phase: "test",
 				title: "Test Task 102",
@@ -130,7 +132,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		// 2. Fetch it via task-detail by task_code
 		const detailRes = await router("tools/call", {
 			name: "task-detail",
-			arguments: { repo: REPO, task_code: "TASK-102" }
+			arguments: { repo: REPO, owner: "test", task_code: "TASK-102" }
 		});
 
 		expect(detailRes.structuredContent.id).toBe(taskId);

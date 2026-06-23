@@ -3,6 +3,7 @@ import { BaseEntity } from "../storage/base";
 export class ActionEntity extends BaseEntity {
 	logAction(
 		action: string,
+		owner: string,
 		repo: string,
 		optionsOrQuery?:
 			| string
@@ -28,9 +29,10 @@ export class ActionEntity extends BaseEntity {
 		}
 
 		this.run(
-			`INSERT INTO action_log (repo, action, query, response, memory_id, task_id, result_count, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO action_log (owner, repo, action, query, response, memory_id, task_id, result_count, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
+				owner,
 				repo || "",
 				action || "unknown",
 				query || null,
@@ -58,6 +60,7 @@ export class ActionEntity extends BaseEntity {
 	}
 
 	getRecentActions(
+		owner?: string,
 		repo?: string,
 		limit: number = 10,
 		offset: number = 0
@@ -67,10 +70,19 @@ export class ActionEntity extends BaseEntity {
 			FROM action_log a LEFT JOIN memories m ON a.memory_id = m.id
 		`;
 		const params: (string | number)[] = [];
+		const where: string[] = [];
 
 		if (repo) {
-			query += " WHERE a.repo = ?";
+			where.push("a.repo = ?");
 			params.push(repo);
+		}
+		if (owner) {
+			where.push("a.owner = ?");
+			params.push(owner);
+		}
+
+		if (where.length > 0) {
+			query += " WHERE " + where.join(" AND ");
 		}
 
 		query += " ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?";
@@ -79,24 +91,24 @@ export class ActionEntity extends BaseEntity {
 		return this.all<ActionLogRow & { memory_title?: string; memory_type?: string }>(query, params);
 	}
 
-	getActionStatsByDate(repo: string): { date: string; count: number }[] {
+	getActionStatsByDate(owner: string, repo: string): { date: string; count: number }[] {
 		return this.all<{ date: string; count: number }>(
 			`SELECT date(created_at) as date, count(*) as count 
 			FROM action_log 
-			WHERE repo = ? AND created_at > date('now', '-30 days')
+			WHERE owner = ? AND repo = ? AND created_at > date('now', '-30 days')
 			GROUP BY date(created_at)
 			ORDER BY date ASC`,
-			[repo]
+			[owner, repo]
 		);
 	}
 
-	getActionDistribution(repo: string): { action: string; count: number }[] {
+	getActionDistribution(owner: string, repo: string): { action: string; count: number }[] {
 		return this.all<{ action: string; count: number }>(
 			`SELECT action, count(*) as count 
 			FROM action_log 
-			WHERE repo = ?
+			WHERE owner = ? AND repo = ?
 			GROUP BY action`,
-			[repo]
+			[owner, repo]
 		);
 	}
 
@@ -112,6 +124,7 @@ export class ActionEntity extends BaseEntity {
 
 interface ActionLogRow {
 	id: number;
+	owner: string;
 	repo: string;
 	action: string;
 	query: string | null;

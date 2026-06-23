@@ -24,6 +24,7 @@ export class MigrationManager {
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         type TEXT NOT NULL,
         title TEXT,
         content TEXT NOT NULL,
@@ -52,9 +53,11 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_memories_title ON memories(title);
 
       CREATE TABLE IF NOT EXISTS memory_summary (
-        repo TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         summary TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (owner, repo)
       );
 
       CREATE TABLE IF NOT EXISTS memory_vectors (
@@ -67,6 +70,7 @@ export class MigrationManager {
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         task_code TEXT NOT NULL,
         phase TEXT,
         title TEXT NOT NULL,
@@ -103,6 +107,7 @@ export class MigrationManager {
         id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         comment TEXT NOT NULL,
         agent TEXT NOT NULL DEFAULT 'unknown',
         role TEXT NOT NULL DEFAULT 'unknown',
@@ -128,6 +133,7 @@ export class MigrationManager {
         stack TEXT,
         is_global INTEGER NOT NULL DEFAULT 0,
         repo TEXT,
+        owner TEXT NOT NULL DEFAULT '',
         tags TEXT,
         metadata TEXT,
         created_at TEXT NOT NULL,
@@ -154,6 +160,7 @@ export class MigrationManager {
       CREATE TABLE IF NOT EXISTS memories_archive (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         type TEXT NOT NULL,
         content TEXT NOT NULL,
         importance INTEGER NOT NULL,
@@ -180,6 +187,7 @@ export class MigrationManager {
         memory_id TEXT,
         task_id TEXT,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         result_count INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
       );
@@ -190,6 +198,7 @@ export class MigrationManager {
       CREATE TABLE IF NOT EXISTS handoffs (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         from_agent TEXT NOT NULL,
         to_agent TEXT,
         task_id TEXT,
@@ -212,6 +221,7 @@ export class MigrationManager {
       CREATE TABLE IF NOT EXISTS claims (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         task_id TEXT NOT NULL,
         agent TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'unknown',
@@ -321,6 +331,51 @@ export class MigrationManager {
 				name: "suggested_skills",
 				table: "tasks",
 				definition: "ALTER TABLE tasks ADD COLUMN suggested_skills TEXT"
+			},
+			{
+				name: "owner",
+				table: "memories",
+				definition: "ALTER TABLE memories ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "tasks",
+				definition: "ALTER TABLE tasks ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "task_comments",
+				definition: "ALTER TABLE task_comments ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "coding_standards",
+				definition: "ALTER TABLE coding_standards ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "memories_archive",
+				definition: "ALTER TABLE memories_archive ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "action_log",
+				definition: "ALTER TABLE action_log ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "handoffs",
+				definition: "ALTER TABLE handoffs ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "claims",
+				definition: "ALTER TABLE claims ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+			},
+			{
+				name: "owner",
+				table: "memory_summary",
+				definition: "ALTER TABLE memory_summary ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
 			}
 		];
 
@@ -367,6 +422,7 @@ export class MigrationManager {
       CREATE TABLE memories__migrated (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         type TEXT NOT NULL,
         title TEXT,
         content TEXT NOT NULL,
@@ -391,12 +447,12 @@ export class MigrationManager {
       );
 
       INSERT INTO memories__migrated (
-        id, repo, type, title, content, importance, folder, language,
+        id, repo, owner, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
         supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
       )
       SELECT
-        id, repo, type, title, content, importance, folder, language,
+        id, repo, owner, type, title, content, importance, folder, language,
         created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
         supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
       FROM memories;
@@ -424,6 +480,7 @@ export class MigrationManager {
       CREATE TABLE tasks__migrated (
         id TEXT PRIMARY KEY,
         repo TEXT NOT NULL,
+        owner TEXT NOT NULL DEFAULT '',
         task_code TEXT NOT NULL,
         phase TEXT,
         title TEXT NOT NULL,
@@ -450,12 +507,12 @@ export class MigrationManager {
       );
 
       INSERT INTO tasks__migrated (
-        id, repo, task_code, phase, title, description, status, priority,
+        id, repo, owner, task_code, phase, title, description, status, priority,
         agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
         commit_id, changed_files
       )
       SELECT
-        id, repo, task_code, phase, title, description, status, priority,
+        id, repo, owner, task_code, phase, title, description, status, priority,
         agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
         commit_id, changed_files
       FROM tasks;

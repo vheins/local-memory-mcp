@@ -26,7 +26,7 @@ function makeEntry(overrides: Partial<MemoryEntry> & { repo?: string }): MemoryE
 		agent: overrides.agent || "test-agent",
 		role: "unknown",
 		model: overrides.model || "test-model",
-		scope: { repo: overrides.repo || "test-repo" },
+		scope: { owner: "test", repo: overrides.repo || "test-repo" },
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString(),
 		completed_at: null,
@@ -55,7 +55,7 @@ describe("V2 Enhanced Memory Features", () => {
 						title: "Claim ownership of migration file",
 						content: "Agent A is working on src/storage/sqlite.ts migration changes.",
 						importance: 4,
-						scope: { repo },
+						scope: { owner: "test", repo },
 						agent: "test-agent",
 						model: "test-model",
 						structured: true
@@ -77,7 +77,7 @@ describe("V2 Enhanced Memory Features", () => {
 					title: "JSON:API response standard restored",
 					content: "Responses must use the JSON:API envelope for consistency.",
 					importance: 4,
-					scope: { repo },
+					scope: { owner: "test", repo },
 					agent: "codex",
 					role: "rules-optimizer",
 					model: "gpt-5.4",
@@ -111,7 +111,7 @@ describe("V2 Enhanced Memory Features", () => {
 						title: "[agent: codex | role: rules-optimizer | 2026-04-03] JSON:API response standard restored",
 						content: "Responses must use the JSON:API envelope for consistency.",
 						importance: 4,
-						scope: { repo: "metadata-guard-repo" },
+						scope: { owner: "test", repo: "metadata-guard-repo" },
 						agent: "codex",
 						role: "rules-optimizer",
 						model: "gpt-5.4"
@@ -136,7 +136,7 @@ describe("V2 Enhanced Memory Features", () => {
 				title: "Conflict Test",
 				content: "React frontend again",
 				importance: 5,
-				scope: { repo },
+				scope: { owner: "test", repo },
 				agent: "test-agent",
 				model: "test-model"
 			};
@@ -156,7 +156,7 @@ describe("V2 Enhanced Memory Features", () => {
 				title: "New One",
 				content: "Better content",
 				importance: 5,
-				scope: { repo },
+				scope: { owner: "test", repo },
 				agent: "test-agent",
 				model: "test-model",
 				supersedes: VALID_UUID_1
@@ -190,7 +190,7 @@ describe("V2 Enhanced Memory Features", () => {
 				{ id: "00000000-0000-4000-a000-000000000003", score: 0.1 }
 			]);
 
-			const params = { query: "Target", repo, structured: true };
+			const params = { query: "Target", owner: "test", repo, structured: true };
 			const response = await handleMemorySearch(params, db, mockVectors);
 
 			// New tabular format
@@ -214,7 +214,7 @@ describe("V2 Enhanced Memory Features", () => {
 				search: vi.fn().mockRejectedValue(new Error("Vector store connection failed"))
 			};
 
-			const params = { query: "Test", repo, structured: true };
+			const params = { query: "Test", owner: "test", repo, structured: true };
 			const response = await handleMemorySearch(params, db, errorMockVectors);
 
 			// Should fallback to similarity and still return results

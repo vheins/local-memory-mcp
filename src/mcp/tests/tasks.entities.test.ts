@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createTestStore } from "../storage/sqlite";
 import type { SQLiteStore } from "../storage/sqlite";
 
-
 function createTaskWithComment(
 	db: SQLiteStore,
 	overrides: { taskId?: string; commentId?: string; repo?: string } = {}
@@ -14,6 +13,7 @@ function createTaskWithComment(
 
 	db.tasks.insertTask({
 		id: taskId,
+		owner: "test",
 		repo,
 		task_code: "TASK-" + taskId,
 		phase: "execute",
@@ -24,6 +24,7 @@ function createTaskWithComment(
 		agent: "test",
 		role: "test",
 		doc_path: null,
+		suggested_skills: [],
 		finished_at: null,
 		canceled_at: null,
 		tags: [],
@@ -41,6 +42,7 @@ function createTaskWithComment(
 	db.taskComments.insertTaskComment({
 		id: commentId,
 		task_id: taskId,
+		owner: "test",
 		repo,
 		comment: "Initial comment",
 		agent: "test",
@@ -67,7 +69,7 @@ describe("TaskEntity - updateTaskComment", () => {
 		// Now attempt to update with invalid keys
 		const updates = {
 			comment: "Updated comment",
-			"non_existent_column": "evil_value",
+			non_existent_column: "evil_value",
 			"comment = 'hacked', agent": "evil_agent"
 		};
 
@@ -94,9 +96,9 @@ describe("TaskEntity - updateTaskComment", () => {
 		const { commentId, taskId } = createTaskWithComment(db, { commentId: "comment-inv", taskId: "task-inv" });
 
 		db.taskComments.updateTaskComment(commentId, {
-			"invalid_key": "val1",
-			"task_id": "new-task-id",
-			"created_at": new Date().toISOString()
+			invalid_key: "val1",
+			task_id: "new-task-id",
+			created_at: new Date().toISOString()
 		} as any);
 
 		const updated = db.taskComments.getTaskCommentById(commentId);

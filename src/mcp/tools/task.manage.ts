@@ -25,6 +25,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  */
 function resolveParentId(
 	value: string | null | undefined,
+	owner: string,
 	repo: string,
 	storage: SQLiteStore,
 	localCodeMap?: Map<string, string>
@@ -34,13 +35,14 @@ function resolveParentId(
 	// Check in-memory batch map first (cross-reference within same create batch)
 	if (localCodeMap?.has(value)) return localCodeMap.get(value)!;
 	// Treat as task_code, fall back to DB
-	const parent = storage.tasks.getTaskByCode(repo, value);
+	const parent = storage.tasks.getTaskByCode(owner, repo, value);
 	if (!parent) throw new Error(`parent_id: task with code '${value}' not found in repo '${repo}'`);
 	return parent.id;
 }
 
 function resolveDependsOn(
 	value: string | null | undefined,
+	owner: string,
 	repo: string,
 	storage: SQLiteStore,
 	localCodeMap?: Map<string, string>
@@ -49,7 +51,7 @@ function resolveDependsOn(
 	if (UUID_REGEX.test(value)) return value;
 	// Check in-memory batch map first (cross-reference within same create batch)
 	if (localCodeMap?.has(value)) return localCodeMap.get(value)!;
-	const task = storage.tasks.getTaskByCode(repo, value);
+	const task = storage.tasks.getTaskByCode(owner, repo, value);
 	if (!task) throw new Error(`depends_on: task with code '${value}' not found in repo '${repo}'`);
 	return task.id;
 }
@@ -189,7 +191,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 				agent: task.agent || "system",
 				role: task.role || "unknown",
 				model: "system",
-				scope: { repo: repo },
+				scope: { repo, owner: task.owner || "" },
 				tags: ["task-archive", ...task.tags],
 				metadata: metadata
 			},
@@ -204,6 +206,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 	const validated = TaskListSchema.parse(args);
 	const {
+		owner,
 		repo,
 		status = "backlog,pending,in_progress,blocked",
 		phase,
@@ -221,7 +224,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 			.filter(Boolean);
 	}
 
-	const tasks = storage.tasks.getTasksByMultipleStatuses(repo, statuses, limit, offset, query);
+	const tasks = storage.tasks.getTasksByMultipleStatuses(owner, repo, statuses, limit, offset, query);
 	const filteredTasks = phase ? tasks.filter((t: Task) => t.phase.toLowerCase() === phase.toLowerCase()) : tasks;
 
 	const COLUMNS = ["id", "task_code", "title", "status", "priority", "updated_at", "comments_count"] as const;
@@ -266,7 +269,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 
 export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	const parsed = TaskCreateSchema.parse(args);
-	const { repo, tasks: bulkTasks, ...singleTask } = parsed;
+	const { owner, repo, tasks: bulkTasks, ...singleTask } = parsed;
 
 	if (bulkTasks) {
 		const createdTasks: string[] = [];
@@ -278,16 +281,16 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		const batchCodes = new Set<string>();
 		for (const taskData of bulkTasks) {
 			if (!taskData.task_code) {
-				taskData.task_code = generateNextCode(repo, "task", storage, batchCodes);
+				taskData.task_code = generateNextCode(owner ?? "", repo, "task", storage, batchCodes);
 			}
 			batchCodes.add(taskData.task_code);
 		}
 
 		// Batch duplicate check: single query instead of N
 		const allCodes = bulkTasks.map((t) => t.task_code as string);
-		const existingCodes = storage.tasks.getExistingTaskCodes(repo, allCodes);
+		const existingCodes = storage.tasks.getExistingTaskCodes(owner, repo, allCodes);
 
-		const initialStats = storage.taskStats.getTaskStats(repo);
+		const initialStats = storage.taskStats.getTaskStats(owner, repo);
 		let pendingInRequestCount = 0;
 
 		// Pre-generate UUIDs and build local code→UUID map for cross-reference resolution
@@ -329,6 +332,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			const taskId = localCodeMap.get(code)!;
 			const task: Task = {
 				id: taskId,
+				owner,
 				repo,
 				task_code: code,
 				phase: taskData.phase,
@@ -350,8 +354,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				commit_id: null,
 				changed_files: [],
 				metadata: (taskData.metadata as Record<string, unknown>) || {},
-				parent_id: resolveParentId(taskData.parent_id, repo, storage, localCodeMap),
-				depends_on: resolveDependsOn(taskData.depends_on, repo, storage, localCodeMap)
+				parent_id: resolveParentId(taskData.parent_id, owner, repo, storage, localCodeMap),
+				depends_on: resolveDependsOn(taskData.depends_on, owner, repo, storage, localCodeMap)
 			};
 			tasksToInsert.push(task);
 			createdTasks.push(code);
@@ -391,9 +395,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	}
 
 	// Auto-generate task_code if not provided
-	const resolvedCode = task_code || generateNextCode(repo, "task", storage);
+	const resolvedCode = task_code || generateNextCode(owner ?? "", repo, "task", storage);
 
-	if (storage.tasks.isTaskCodeDuplicate(repo, resolvedCode)) {
+	if (storage.tasks.isTaskCodeDuplicate(owner, repo, resolvedCode)) {
 		throw new Error(`Duplicate task_code: '${resolvedCode}' already exists in repository '${repo}'`);
 	}
 
@@ -402,7 +406,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	}
 
 	if (status === "pending") {
-		const stats = storage.taskStats.getTaskStats(repo);
+		const stats = storage.taskStats.getTaskStats(owner, repo);
 		if (stats.todo >= 10) {
 			throw new Error(
 				`Cannot create task as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`
@@ -421,6 +425,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 	const task: Task = {
 		id: taskId,
+		owner,
 		repo,
 		task_code: resolvedCode,
 		phase,
@@ -442,8 +447,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		commit_id: null,
 		changed_files: [],
 		metadata: metadata || {},
-		parent_id: resolveParentId(parent_id, repo, storage),
-		depends_on: resolveDependsOn(depends_on, repo, storage)
+		parent_id: resolveParentId(parent_id, owner, repo, storage),
+		depends_on: resolveDependsOn(depends_on, owner, repo, storage)
 	};
 
 	storage.tasks.insertTask(task);
@@ -585,12 +590,12 @@ function addRequiredStringField(
 
 export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vectors: VectorStore) {
 	const updateData = TaskUpdateSchema.parse(args);
-	const { repo, id, ids, comment, force, ...updates } = updateData;
+	const { owner, repo, id, ids, comment, force, ...updates } = updateData;
 
 	// Resolve task_code to id if needed
 	let resolvedId = id;
 	if (!resolvedId && !ids && updates.task_code) {
-		const found = storage.tasks.getTaskByCode(repo, updates.task_code);
+		const found = storage.tasks.getTaskByCode(owner, repo, updates.task_code);
 		if (!found) throw new Error(`Task not found: ${updates.task_code}`);
 		resolvedId = found.id;
 	}
@@ -650,12 +655,12 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 
 		// Resolve parent_id if it was provided (can be UUID or task code)
 		if (updates.parent_id !== undefined) {
-			finalUpdates.parent_id = resolveParentId(updates.parent_id, repo, storage);
+			finalUpdates.parent_id = resolveParentId(updates.parent_id, owner, repo, storage);
 		}
 
 		// Resolve depends_on if it was provided (can be UUID or task code)
 		if (updates.depends_on !== undefined) {
-			finalUpdates.depends_on = resolveDependsOn(updates.depends_on as string | null | undefined, repo, storage);
+			finalUpdates.depends_on = resolveDependsOn(updates.depends_on as string | null | undefined, owner, repo, storage);
 		}
 
 		if (updates.phase !== undefined || updates.tags !== undefined) {
@@ -688,6 +693,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			storage.taskComments.insertTaskComment({
 				id: randomUUID(),
 				task_id: targetId,
+				owner,
 				repo,
 				comment: comment || `Status updated to ${updates.status}`,
 				agent: updates.agent || existingTask.agent || "unknown",
@@ -758,14 +764,14 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	const validated = TaskDeleteSchema.parse(args);
-	const { repo, id, ids, task_code } = validated;
+	const { owner, repo, id, ids, task_code } = validated;
 
 	// Resolve task_code to id if needed
 	const resolvedIds: string[] = [];
 	if (ids) resolvedIds.push(...ids);
 	if (id) resolvedIds.push(id);
 	if (task_code) {
-		const task = storage.tasks.getTaskByCode(repo, task_code);
+		const task = storage.tasks.getTaskByCode(owner, repo, task_code);
 		if (!task) throw new Error(`Task not found: ${task_code}`);
 		resolvedIds.push(task.id);
 	}

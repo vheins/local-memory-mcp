@@ -31,6 +31,7 @@ function normalizeStandardForImport(value: unknown): CodingStandardEntry | null 
 		language: typeof item.language === "string" && item.language ? item.language : null,
 		stack: Array.isArray(item.stack) ? item.stack.map(String).filter(Boolean) : [],
 		is_global: item.is_global !== false,
+		owner: typeof item.owner === "string" ? item.owner : "",
 		repo: typeof item.repo === "string" && item.repo ? item.repo : null,
 		tags: Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean) : [],
 		metadata:
@@ -128,7 +129,10 @@ export class StandardsController {
 			const standard = db.standards.getById(req.params.id as string);
 			if (!standard) throw new Error("Coding standard not found");
 			db.standards.incrementHitCounts([standard.id]);
-			db.actions.logAction("read", standard.repo || "global", { query: standard.title, resultCount: 1 });
+			db.actions.logAction("read", standard.owner, standard.repo || "global", {
+				query: standard.title,
+				resultCount: 1
+			});
 			res.json(jsonApiRes(standard, "standard"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Coding standard not found";
@@ -227,7 +231,7 @@ export class StandardsController {
 						imported.push(standard.id);
 					}
 				}
-				db.actions.logAction("write", "standards-import", {
+				db.actions.logAction("write", "", "standards-import", {
 					query: "standards-import",
 					resultCount: imported.length + updated.length
 				});
@@ -272,6 +276,7 @@ export class StandardsController {
 				language: (attributes.language as string) || null,
 				stack: Array.isArray(attributes.stack) ? (attributes.stack as string[]) : [],
 				is_global: attributes.is_global !== false,
+				owner: (attributes.owner as string) || "",
 				repo: (attributes.repo as string) || null,
 				tags: tags as string[],
 				metadata: metadata as Record<string, unknown>,
@@ -286,7 +291,7 @@ export class StandardsController {
 			await db.withWrite(async () => {
 				db.standards.insert(entry);
 				await vectors.upsert(entry.id, buildStandardVectorText(entry), "standard");
-				db.actions.logAction("write", entry.repo || "global", { query: entry.title, resultCount: 1 });
+				db.actions.logAction("write", entry.owner, entry.repo || "global", { query: entry.title, resultCount: 1 });
 			});
 
 			res.json(jsonApiRes(entry, "standard"));
@@ -327,7 +332,10 @@ export class StandardsController {
 					updated_at: new Date().toISOString()
 				};
 				await vectors.upsert(existing.id, buildStandardVectorText(merged), "standard");
-				db.actions.logAction("update", existing.repo || "global", { query: existing.title, resultCount: 1 });
+				db.actions.logAction("update", existing.owner, existing.repo || "global", {
+					query: existing.title,
+					resultCount: 1
+				});
 			});
 
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
@@ -346,7 +354,10 @@ export class StandardsController {
 			await db.withWrite(async () => {
 				db.standards.delete(existing.id);
 				await vectors.remove(existing.id, "standard");
-				db.actions.logAction("delete", existing.repo || "global", { query: existing.title, resultCount: 1 });
+				db.actions.logAction("delete", existing.owner, existing.repo || "global", {
+					query: existing.title,
+					resultCount: 1
+				});
 			});
 
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));

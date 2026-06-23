@@ -13,6 +13,7 @@ export class CoordinationController {
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
 			const claims = db.handoffs.listClaims({
+				owner: "",
 				repo: repo as string,
 				agent: typeof agent === "string" ? agent : undefined,
 				active_only: active_only === undefined ? true : String(active_only) === "true",
@@ -21,6 +22,7 @@ export class CoordinationController {
 			});
 
 			const total = db.handoffs.listClaims({
+				owner: "",
 				repo: repo as string,
 				agent: typeof agent === "string" ? agent : undefined,
 				active_only: active_only === undefined ? true : String(active_only) === "true",

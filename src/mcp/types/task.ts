@@ -31,6 +31,7 @@ export interface TaskCoordination {
 
 export interface Task {
 	id: string;
+	owner: string;
 	repo: string;
 	task_code: string;
 	phase: string;
@@ -66,6 +67,7 @@ export interface Task {
 export interface TaskComment {
 	id: string;
 	task_id: string;
+	owner: string;
 	repo: string;
 	comment: string;
 	agent: string;
@@ -78,6 +80,7 @@ export interface TaskComment {
 
 export interface TaskRow {
 	id: string;
+	owner: string;
 	repo: string;
 	task_code: string;
 	phase: string;

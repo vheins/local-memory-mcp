@@ -51,6 +51,7 @@ export abstract class BaseEntity {
 			role: (r.role as string) || "unknown",
 			model: (r.model as string) || "unknown",
 			scope: {
+				owner: r.owner as string,
 				repo: r.repo as string,
 				folder: (r.folder as string) || undefined,
 				language: (r.language as string) || undefined
@@ -74,6 +75,7 @@ export abstract class BaseEntity {
 		const r = row as Record<string, unknown>;
 		return {
 			id: r.id as string,
+			owner: r.owner as string,
 			repo: r.repo as string,
 			task_code: r.task_code as string,
 			phase: (r.phase as string) || "",

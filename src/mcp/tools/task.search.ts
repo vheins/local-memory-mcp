@@ -6,7 +6,17 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 
 export async function handleTaskSearch(args: unknown, storage: SQLiteStore): Promise<McpResponse> {
 	const validated = TaskSearchSchema.parse(args);
-	const { repo, query, status, limit, offset, structured: isStructuredRequest = false, phase, priority } = validated;
+	const {
+		owner,
+		repo,
+		query,
+		status,
+		limit,
+		offset,
+		structured: isStructuredRequest = false,
+		phase,
+		priority
+	} = validated;
 
 	let tasks: Task[];
 	if (status) {
@@ -15,12 +25,12 @@ export async function handleTaskSearch(args: unknown, storage: SQLiteStore): Pro
 			.map((s: string) => s.trim())
 			.filter(Boolean);
 		if (statuses.length > 1) {
-			tasks = storage.tasks.getTasksByMultipleStatuses(repo, statuses, undefined, undefined, query);
+			tasks = storage.tasks.getTasksByMultipleStatuses(owner, repo, statuses, undefined, undefined, query);
 		} else {
-			tasks = storage.tasks.getTasksByRepo(repo, status, undefined, undefined, query);
+			tasks = storage.tasks.getTasksByRepo(owner, repo, status, undefined, undefined, query);
 		}
 	} else {
-		tasks = storage.tasks.getTasksByRepo(repo, undefined, undefined, undefined, query);
+		tasks = storage.tasks.getTasksByRepo(owner, repo, undefined, undefined, undefined, query);
 	}
 
 	if (phase) {

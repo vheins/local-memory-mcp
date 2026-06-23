@@ -49,7 +49,7 @@ export class MemoriesController {
 			await db.refresh();
 			const memory = db.memories.getByIdWithStats(req.params.id as string);
 			if (!memory) throw new Error("Memory not found");
-			db.actions.logAction("read", memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
+			db.actions.logAction("read", memory.scope.owner, memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
 			res.json(jsonApiRes(memory, "memory"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Memory not found";
@@ -72,7 +72,7 @@ export class MemoriesController {
 					updated_at: new Date().toISOString(),
 					scope: { repo }
 				});
-				db.actions.logAction("write", repo, { memoryId: id });
+				db.actions.logAction("write", "", repo, { memoryId: id });
 			});
 			res.json(jsonApiRes({ id }, "memory"));
 		} catch (err: unknown) {
@@ -102,9 +102,14 @@ export class MemoriesController {
 			};
 			await db.withWrite(() => {
 				db.memories.update(id, updates as Partial<MemoryEntry>);
-				db.actions.logAction("update", (existing as MemoryEntry).scope?.repo || attributes.repo || "", {
-					memoryId: id
-				});
+				db.actions.logAction(
+					"update",
+					(existing as MemoryEntry).scope?.owner || "",
+					(existing as MemoryEntry).scope?.repo || attributes.repo || "",
+					{
+						memoryId: id
+					}
+				);
 			});
 			res.json(jsonApiRes({ message: "Updated" }, "status"));
 		} catch (err: unknown) {
@@ -121,7 +126,12 @@ export class MemoriesController {
 			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
 			await db.withWrite(() => {
 				db.memories.delete(id);
-				db.actions.logAction("delete", (existing as MemoryEntry).scope?.repo || "", { memoryId: id });
+				db.actions.logAction(
+					"delete",
+					(existing as MemoryEntry).scope?.owner || "",
+					(existing as MemoryEntry).scope?.repo || "",
+					{ memoryId: id }
+				);
 			});
 			res.json(jsonApiRes({ message: "Deleted" }, "status"));
 		} catch (err: unknown) {
@@ -147,7 +157,7 @@ export class MemoriesController {
 
 			const count = await db.withWrite(() => {
 				const insertedCount = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
-				db.actions.logAction("write", repo, { query: `Bulk imported ${insertedCount} memories` });
+				db.actions.logAction("write", "", repo, { query: `Bulk imported ${insertedCount} memories` });
 				return insertedCount;
 			});
 			res.json(jsonApiRes({ count }, "status"));
@@ -176,7 +186,7 @@ export class MemoriesController {
 
 				if (ids.length > 0) {
 					const mem = db.memories.getById(ids[0]);
-					db.actions.logAction(action, mem?.scope?.repo || "unknown", {
+					db.actions.logAction(action, mem?.scope?.owner || "", mem?.scope?.repo || "unknown", {
 						query: `Bulk ${action} applied to ${n} memories`
 					});
 				}

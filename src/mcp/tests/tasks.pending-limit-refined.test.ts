@@ -22,6 +22,7 @@ describe("Task Pending Limit Refined Validation", () => {
 			await handleTaskCreate(
 				{
 					repo: REPO,
+					owner: "test",
 					task_code: `TASK-${i}`,
 					phase: "test",
 					title: "Test Task",
@@ -42,6 +43,7 @@ describe("Task Pending Limit Refined Validation", () => {
 			handleTaskCreate(
 				{
 					repo: REPO,
+					owner: "test",
 					task_code: "TASK-11",
 					phase: "test",
 					title: "11th Task",
@@ -62,6 +64,7 @@ describe("Task Pending Limit Refined Validation", () => {
 		await handleTaskCreate(
 			{
 				repo: REPO,
+				owner: "test",
 				task_code: "TASK-BACKLOG",
 				phase: "test",
 				title: "Backlog Task",
@@ -73,7 +76,7 @@ describe("Task Pending Limit Refined Validation", () => {
 			db
 		);
 
-		const task = db.tasks.getTaskByCode(REPO, "TASK-BACKLOG");
+		const task = db.tasks.getTaskByCode("test", REPO, "TASK-BACKLOG");
 		if (!task) throw new Error("Seed task not found");
 
 		// Move to pending (should be ALLOWED now)
@@ -94,7 +97,7 @@ describe("Task Pending Limit Refined Validation", () => {
 		if (!updatedTask) throw new Error("Updated task not found");
 		expect(updatedTask.status).toBe("pending");
 
-		const stats = db.taskStats.getTaskStats(REPO);
+		const stats = db.taskStats.getTaskStats("test", REPO);
 		expect(stats.todo).toBe(11);
 	});
 });

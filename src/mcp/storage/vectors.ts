@@ -82,7 +82,9 @@ export class RealVectorStore implements VectorStore {
 			const rows =
 				kind === "standard"
 					? this.db.standards.getVectorCandidates(repo, 100).map((row) => ({ id: row.standard_id, vector: row.vector }))
-					: this.db.memoryVectors.getVectorCandidates(repo, 100).map((row) => ({ id: row.memory_id, vector: row.vector }));
+					: this.db.memoryVectors
+							.getVectorCandidates("", repo, 100)
+							.map((row) => ({ id: row.memory_id, vector: row.vector }));
 
 			const results: VectorResult[] = rows.map((row) => {
 				const memoryVector = JSON.parse(row.vector) as number[];

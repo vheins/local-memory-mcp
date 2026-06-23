@@ -24,14 +24,15 @@ export class MemoryEntity extends BaseEntity {
 	insert(entry: MemoryEntry): void {
 		this.run(
 			`INSERT INTO memories (
-				id, code, repo, type, title, content, importance, folder, language,
+				id, code, repo, owner, type, title, content, importance, folder, language,
 				created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 				supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				entry.id,
 				entry.code || null,
 				entry.scope.repo,
+				entry.scope.owner,
 				entry.type,
 				entry.title || null,
 				entry.content,
@@ -64,6 +65,10 @@ export class MemoryEntity extends BaseEntity {
 			if (val !== undefined) {
 				if (k === "scope") {
 					const scope = updates.scope;
+					if (scope?.owner !== undefined) {
+						fields.push("owner = ?");
+						values.push(scope.owner);
+					}
 					if (scope?.repo) {
 						fields.push("repo = ?");
 						values.push(scope.repo);
@@ -142,10 +147,17 @@ export class MemoryEntity extends BaseEntity {
 		return rows.map((row) => this.rowToMemoryEntry(row));
 	}
 
-	getStats(repo?: string): { total: number; byType: Record<string, number> } {
+	getStats(owner?: string, repo?: string): { total: number; byType: Record<string, number> } {
 		let sql = "SELECT type, COUNT(*) as count FROM memories";
 		const params: unknown[] = [];
-		if (repo) {
+		if (owner) {
+			sql += " WHERE owner = ?";
+			params.push(owner);
+			if (repo) {
+				sql += " AND repo = ?";
+				params.push(repo);
+			}
+		} else if (repo) {
 			sql += " WHERE repo = ?";
 			params.push(repo);
 		}
@@ -162,13 +174,12 @@ export class MemoryEntity extends BaseEntity {
 		return { total, byType };
 	}
 
-	searchByRepo(repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
+	searchByRepo(owner: string, repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
 		const now = new Date().toISOString();
 
-		// Use LIKE search (FTS5 not enabled by default)
 		let sql =
-			"SELECT * FROM memories WHERE repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)";
-		const params: (string | number)[] = [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
+			"SELECT * FROM memories WHERE owner = ? AND repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)";
+		const params: (string | number)[] = [owner, repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
 
 		if (type) {
 			sql += " AND type = ?";
@@ -188,13 +199,14 @@ export class MemoryEntity extends BaseEntity {
 			for (const entry of entries) {
 				this.run(
 					`INSERT INTO memories (
-						id, repo, type, title, content, importance, folder, language,
+						id, repo, owner, type, title, content, importance, folder, language,
 						created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 						supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
 						entry.id,
 						entry.scope.repo,
+						entry.scope.owner,
 						entry.type,
 						entry.title || null,
 						entry.content,
@@ -232,6 +244,10 @@ export class MemoryEntity extends BaseEntity {
 			if (value !== undefined) {
 				if (key === "scope") {
 					const scope = updates.scope;
+					if (scope?.owner !== undefined) {
+						fields.push("owner = ?");
+						values.push(scope.owner);
+					}
 					if (scope?.repo) {
 						fields.push("repo = ?");
 						values.push(scope.repo);
@@ -277,8 +293,8 @@ export class MemoryEntity extends BaseEntity {
 		});
 	}
 
-
 	getRecentMemories(
+		owner: string,
 		repo: string,
 		limit: number,
 		offset: number = 0,
@@ -286,8 +302,8 @@ export class MemoryEntity extends BaseEntity {
 		excludeTypes: string[] = [],
 		sortOrder: "ASC" | "DESC" = "DESC"
 	): MemoryEntry[] {
-		let query = "SELECT * FROM memories WHERE repo = ?";
-		const params: (string | number)[] = [repo];
+		let query = "SELECT * FROM memories WHERE owner = ? AND repo = ?";
+		const params: (string | number)[] = [owner, repo];
 
 		if (!includeArchived) {
 			query += " AND status = 'active'";
@@ -305,9 +321,9 @@ export class MemoryEntity extends BaseEntity {
 		return rows.map((row) => this.rowToMemoryEntry(row));
 	}
 
-	getTotalCount(repo: string, includeArchived = false, excludeTypes: string[] = []): number {
-		let sql = "SELECT COUNT(*) as count FROM memories WHERE repo = ?";
-		const params: (string | number)[] = [repo];
+	getTotalCount(owner: string, repo: string, includeArchived = false, excludeTypes: string[] = []): number {
+		let sql = "SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ?";
+		const params: (string | number)[] = [owner, repo];
 
 		if (!includeArchived) sql += " AND status = 'active'";
 
@@ -342,20 +358,18 @@ export class MemoryEntity extends BaseEntity {
 		]);
 	}
 
-
-
-	getSummary(repo: string): { summary: string; updated_at: string } | undefined {
+	getSummary(owner: string, repo: string): { summary: string; updated_at: string } | undefined {
 		const row = this.get<{ summary: string; updated_at: string }>(
-			"SELECT summary, updated_at FROM memory_summary WHERE repo = ?",
-			[repo]
+			"SELECT summary, updated_at FROM memory_summary WHERE owner = ? AND repo = ?",
+			[owner, repo]
 		);
 		return row;
 	}
 
-	getAllMemoriesWithStats(repo: string): (MemoryEntry & { recall_rate: number })[] {
+	getAllMemoriesWithStats(owner: string, repo: string): (MemoryEntry & { recall_rate: number })[] {
 		const rows = this.all<MemoryRow & { recall_rate: number }>(
-			`SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE repo = ? ORDER BY created_at DESC`,
-			[repo]
+			`SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE owner = ? AND repo = ? ORDER BY created_at DESC`,
+			[owner, repo]
 		);
 		return rows.map((row) => ({
 			...this.rowToMemoryEntry(row),
@@ -363,15 +377,16 @@ export class MemoryEntity extends BaseEntity {
 		}));
 	}
 
-	upsertSummary(repo: string, summary: string): void {
+	upsertSummary(owner: string, repo: string, summary: string): void {
 		this.run(
-			`INSERT INTO memory_summary (repo, summary, updated_at) VALUES (?, ?, ?)
-			ON CONFLICT(repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
-			[repo, summary, new Date().toISOString()]
+			`INSERT INTO memory_summary (owner, repo, summary, updated_at) VALUES (?, ?, ?, ?)
+			ON CONFLICT(owner, repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
+			[owner, repo, summary, new Date().toISOString()]
 		);
 	}
 
 	listMemoriesForDashboard(options: {
+		owner?: string;
 		repo?: string;
 		type?: MemoryType;
 		tag?: string;
@@ -391,6 +406,7 @@ export class MemoryEntity extends BaseEntity {
 		offset: number;
 	} {
 		const {
+			owner,
 			repo,
 			type,
 			tag,
@@ -405,6 +421,10 @@ export class MemoryEntity extends BaseEntity {
 		} = options;
 		const where = ["1=1"];
 		const params: (string | number)[] = [];
+		if (owner) {
+			where.push("owner = ?");
+			params.push(owner);
+		}
 		if (repo) {
 			where.push("repo = ?");
 			params.push(repo);
@@ -447,7 +467,4 @@ export class MemoryEntity extends BaseEntity {
 
 		return { items, memories: items, total, limit, offset };
 	}
-
-
-
 }

@@ -105,11 +105,11 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		await router("tools/call", {
 			name: "memory-recap",
-			arguments: { repo: "test-repo", limit: 5 }
+			arguments: { owner: "test", repo: "test-repo", limit: 5 }
 		});
 
-		expect(mockDb.memories.getRecentMemories).toHaveBeenCalledWith("test-repo", 5, 0, false, ["task_archive"]);
-		expect(mockDb.memories.getTotalCount).toHaveBeenCalledWith("test-repo", false, ["task_archive"]);
+		expect(mockDb.memories.getRecentMemories).toHaveBeenCalledWith("test", "test-repo", 5, 0, false, ["task_archive"]);
+		expect(mockDb.memories.getTotalCount).toHaveBeenCalledWith("test", "test-repo", false, ["task_archive"]);
 	});
 
 	it("memory-search calls searchBySimilarity on the provided mock db", async () => {
@@ -119,13 +119,13 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		await router("tools/call", {
 			name: "memory-search",
-			arguments: { query: "test query", repo: "test-repo", limit: 5 }
+			arguments: { query: "test query", owner: "test", repo: "test-repo", limit: 5 }
 		});
 
 		expect(mockDb.memoryVectors.searchBySimilarity).toHaveBeenCalled();
 		// Verify the first argument to searchBySimilarity contains the repo
 		const callArgs = (mockDb.memoryVectors.searchBySimilarity as any).mock.calls[0];
-		expect(callArgs[1]).toBe("test-repo");
+		expect(callArgs[2]).toBe("test-repo");
 	});
 
 	it("property: for any repo string, memory-recap always uses the injected db", async () => {
@@ -140,7 +140,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 					await router("tools/call", {
 						name: "memory-recap",
-						arguments: { repo, limit }
+						arguments: { owner: "test", repo, limit }
 					});
 
 					// The mock db methods must have been called (not a real DB)
@@ -181,7 +181,15 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 					await router("tools/call", {
 						name: "memory-store",
-						arguments: { type, content, importance, title, scope: { repo }, agent: "test-agent", model: "test-model" }
+						arguments: {
+							type,
+							content,
+							importance,
+							title,
+							scope: { owner: "test", repo },
+							agent: "test-agent",
+							model: "test-model"
+						}
 					});
 
 					expect(mockDb.memories.insert).toHaveBeenCalled();
@@ -215,7 +223,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		await router("tools/call", {
 			name: "memory-search",
-			arguments: { query: "test", repo: "test-repo", limit: 5 }
+			arguments: { query: "test", owner: "test", repo: "test-repo", limit: 5 }
 		});
 
 		expect(mockDb.memoryVectors.searchBySimilarity).toHaveBeenCalled();
@@ -364,7 +372,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			}
 		})) as any;
 
-		expect(mockDb.tasks.getTasksByRepo).toHaveBeenCalledWith("test-repo", undefined, 100);
+		expect(mockDb.tasks.getTasksByRepo).toHaveBeenCalledWith("", "test-repo", undefined, 100);
 		expect(result.completion.values).toContain("123e4567-e89b-12d3-a456-426614174001");
 	});
 
@@ -397,6 +405,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				name: "memory-search",
 				arguments: {
 					query: "test query",
+					owner: "test",
 					repo: "test-repo",
 					current_file_path: "/tmp/outside.ts"
 				}
@@ -483,7 +492,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		const result = (await router("tools/call", {
 			name: "memory-synthesize",
-			arguments: { repo: "test-repo", objective: "Summarize the project state" }
+			arguments: { owner: "test", repo: "test-repo", objective: "Summarize the project state" }
 		})) as any;
 
 		expect(sampleMessage).toHaveBeenCalledTimes(1);
@@ -526,6 +535,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const result = (await router("tools/call", {
 			name: "memory-synthesize",
 			arguments: {
+				owner: "test",
 				repo: "test-repo",
 				objective: "Explain the latest architecture decisions",
 				max_iterations: 3
@@ -564,7 +574,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		const result = (await router("tools/call", {
 			name: "memory-synthesize",
-			arguments: { objective: "Summarize the repo using elicitation" }
+			arguments: { owner: "test", objective: "Summarize the repo using elicitation" }
 		})) as any;
 
 		expect(elicit).toHaveBeenCalledTimes(1);
@@ -582,6 +592,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const elicit = vi.fn().mockResolvedValue({
 			action: "accept",
 			content: {
+				owner: "test",
 				repo: "interactive-repo",
 				task_code: "TASK-101",
 				phase: "implementation",
@@ -633,7 +644,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		const result = (await router("tools/call", {
 			name: "memory-search",
-			arguments: { query: "sqlite", repo: "test-repo", limit: 5 }
+			arguments: { query: "sqlite", owner: "test", repo: "test-repo", limit: 5 }
 		})) as any;
 
 		// New policy: no automatic resource links in search results to force use of detail tools

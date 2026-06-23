@@ -6,8 +6,8 @@ export class StandardEntity extends BaseEntity {
 		this.run(
 			`INSERT INTO coding_standards (
 				id, code, title, content, parent_id, context, version, language, stack,
-				is_global, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				is_global, owner, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				entry.id,
 				entry.code ?? null,
@@ -19,6 +19,7 @@ export class StandardEntity extends BaseEntity {
 				entry.language ?? null,
 				entry.stack.length > 0 ? JSON.stringify(entry.stack) : null,
 				entry.is_global ? 1 : 0,
+				entry.owner ?? "",
 				entry.repo ?? null,
 				entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
 				Object.keys(entry.metadata).length > 0 ? JSON.stringify(entry.metadata) : null,
@@ -39,8 +40,8 @@ export class StandardEntity extends BaseEntity {
 				this.run(
 					`INSERT INTO coding_standards (
 						id, code, title, content, parent_id, context, version, language, stack,
-						is_global, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+						is_global, owner, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
 						entry.id,
 						entry.code ?? null,
@@ -52,6 +53,7 @@ export class StandardEntity extends BaseEntity {
 						entry.language ?? null,
 						entry.stack.length > 0 ? JSON.stringify(entry.stack) : null,
 						entry.is_global ? 1 : 0,
+						entry.owner ?? "",
 						entry.repo ?? null,
 						entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
 						Object.keys(entry.metadata).length > 0 ? JSON.stringify(entry.metadata) : null,
@@ -86,12 +88,13 @@ export class StandardEntity extends BaseEntity {
 		language?: string;
 		stack?: string;
 		tag?: string;
+		owner?: string;
 		repo?: string;
 		is_global?: boolean;
 		limit?: number;
 		offset?: number;
 	}): CodingStandardEntry[] {
-		const { query, context, version, language, stack, tag, repo, is_global, limit = 20, offset = 0 } = options;
+		const { query, context, version, language, stack, tag, owner, repo, is_global, limit = 20, offset = 0 } = options;
 
 		const where: string[] = [];
 		const params: (string | number | null)[] = [];
@@ -121,8 +124,13 @@ export class StandardEntity extends BaseEntity {
 			params.push(`%${tag}%`);
 		}
 		if (repo !== undefined) {
-			where.push("(repo = ? OR is_global = 1)");
-			params.push(repo);
+			if (owner !== undefined) {
+				where.push("((owner = ? AND repo = ?) OR is_global = 1)");
+				params.push(owner, repo);
+			} else {
+				where.push("(repo = ? OR is_global = 1)");
+				params.push(repo);
+			}
 		}
 		if (is_global !== undefined) {
 			where.push("is_global = ?");
@@ -193,19 +201,21 @@ export class StandardEntity extends BaseEntity {
 	 *
 	 * @param content   Raw content of the new standard to check.
 	 * @param incomingVersion  Version of the new standard (e.g. "2.0.0").
+	 * @param owner     Owner filter; pass undefined for global standards.
 	 * @param repo      Repo filter; pass undefined for global standards.
 	 * @param threshold Cosine-similarity cutoff (default 0.82 — stricter than memory).
 	 */
 	checkConflicts(
 		content: string,
 		incomingVersion: string,
+		owner: string | undefined,
 		repo: string | undefined,
 		incomingLanguage: string | null | undefined,
 		incomingStack: string[],
 		threshold = 0.82
 	): (CodingStandardEntry & { similarity: number }) | null {
 		// Pull broad candidates without any dimension filter so we compare across all
-		const candidates = this.search({ repo, limit: 80, offset: 0 });
+		const candidates = this.search({ repo, owner, limit: 80, offset: 0 });
 		if (candidates.length === 0) return null;
 
 		const queryVector = this.computeVector(content);
@@ -337,6 +347,7 @@ export class StandardEntity extends BaseEntity {
 			language: row.language ?? null,
 			stack: this.safeJSONParse<string[]>(row.stack, []),
 			is_global: row.is_global === 1,
+			owner: row.owner,
 			repo: row.repo ?? null,
 			tags: this.safeJSONParse<string[]>(row.tags, []),
 			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {}),

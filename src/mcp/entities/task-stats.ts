@@ -2,10 +2,10 @@ import { BaseEntity } from "../storage/base";
 import { TaskStats } from "../types";
 
 export class TaskStatsEntity extends BaseEntity {
-	getTaskStats(repo: string): TaskStats {
+	getTaskStats(owner: string, repo: string): TaskStats {
 		const rows = this.all<{ status: string; count: number }>(
-			"SELECT status, COUNT(*) as count FROM tasks WHERE repo = ? GROUP BY status",
-			[repo]
+			"SELECT status, COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ? GROUP BY status",
+			[owner, repo]
 		);
 		const stats: TaskStats = { total: 0, backlog: 0, todo: 0, inProgress: 0, completed: 0, blocked: 0, canceled: 0 };
 		rows.forEach((r) => {
@@ -22,6 +22,7 @@ export class TaskStatsEntity extends BaseEntity {
 	}
 
 	getTaskTimeStats(
+		owner: string,
 		repo: string | null,
 		period: "daily" | "weekly" | "monthly" | "overall"
 	): { completed: number; tokens: number; avgDuration: number; added: number } {
@@ -31,8 +32,8 @@ export class TaskStatsEntity extends BaseEntity {
 		else if (period === "monthly")
 			dateFilter = "AND date(COALESCE(finished_at, updated_at)) >= date('now', '-30 days')";
 
-		const repoWhere = repo ? "repo = ?" : "1=1";
-		const repoParams = repo ? [repo] : [];
+		const repoWhere = repo ? "owner = ? AND repo = ?" : "1=1";
+		const repoParams = repo ? [owner, repo] : [];
 
 		const stats = this.get<{ completed_count: number; total_tokens: number; avg_duration_seconds: number }>(
 			`SELECT 
@@ -73,6 +74,7 @@ export class TaskStatsEntity extends BaseEntity {
 	}
 
 	getTaskComparisonSeries(
+		owner: string,
 		repo: string | null,
 		period: "daily" | "weekly" | "monthly" | "overall"
 	): { label: string; created: number; completed: number }[] {
@@ -98,8 +100,8 @@ export class TaskStatsEntity extends BaseEntity {
 			"COALESCE(finished_at, created_at)",
 			"COALESCE(finished_at, updated_at)"
 		);
-		const createdRepoFilter = repo ? "repo = ? AND " : "";
-		const completedRepoFilter = repo ? "repo = ? AND " : "";
+		const createdRepoFilter = repo ? "owner = ? AND repo = ? AND " : "";
+		const completedRepoFilter = repo ? "owner = ? AND repo = ? AND " : "";
 
 		const query = `
 			SELECT label, SUM(created) as created, SUM(completed) as completed
@@ -118,9 +120,9 @@ export class TaskStatsEntity extends BaseEntity {
 		`;
 
 		const params: Array<string | null> = [labelFormat];
-		if (repo) params.push(repo);
+		if (repo) params.push(owner, repo);
 		params.push(labelFormat);
-		if (repo) params.push(repo);
+		if (repo) params.push(owner, repo);
 
 		return this.all<{ label: string; created: number; completed: number }>(query, params);
 	}

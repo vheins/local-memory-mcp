@@ -35,6 +35,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{
 						task_code: "BULK-001",
@@ -61,7 +62,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(res.isError).toBe(false);
 		expect(getTextContent(res)).toContain(`Created 2 tasks in repo "${REPO}`);
 
-		const tasks = db.tasks.getTasksByRepo(REPO);
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		expect(tasks.length).toBe(2);
 		expect(tasks.find((t) => t.task_code === "BULK-001")).toBeDefined();
 		expect(tasks.find((t) => t.task_code === "BULK-002")).toBeDefined();
@@ -72,6 +73,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{
 						title: "Auto Bulk 1",
@@ -93,7 +95,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		expect(res.isError).toBe(false);
 
-		const tasks = db.tasks.getTasksByRepo(REPO);
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		expect(tasks.length).toBe(2);
 
 		const task1 = tasks.find((t) => t.task_code === "TASK-001");
@@ -109,6 +111,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{
 						task_code: "BULK-NO-TOKENS",
@@ -122,7 +125,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		expect(res.isError).toBe(false);
-		const task = db.tasks.getTaskByCode(REPO, "BULK-NO-TOKENS");
+		const task = db.tasks.getTaskByCode("test", REPO, "BULK-NO-TOKENS");
 		expect(task?.est_tokens).toBe(0);
 	});
 
@@ -141,6 +144,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: manyTasks
 			}
 		});
@@ -148,7 +152,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		// Test default limit (5)
 		const defaultRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO, structured: true }
+			arguments: { repo: REPO, owner: "test", structured: true }
 		});
 		const defaultTasks = (defaultRes.structuredContent as any).tasks;
 		expect(defaultTasks.rows.length).toBe(15); // Default limit is 15
@@ -156,7 +160,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		// Test explicit limit
 		const limitRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO, limit: 10, structured: true }
+			arguments: { repo: REPO, owner: "test", limit: 10, structured: true }
 		});
 		const limitedTasks = (limitRes.structuredContent as any).tasks;
 		expect(limitedTasks.rows.length).toBe(10);
@@ -164,7 +168,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		// Test offset (last page)
 		const offsetRes = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO, limit: 15, offset: 15, structured: true }
+			arguments: { repo: REPO, owner: "test", limit: 15, offset: 15, structured: true }
 		});
 		const offsetTasks = (offsetRes.structuredContent as any).tasks;
 		expect(offsetTasks.rows.length).toBe(5); // 20 total - 15 offset = 5 remaining
@@ -175,6 +179,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{
 						task_code: "SUM-001",
@@ -204,8 +209,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		const completedId = db.tasks.getTaskByCode(REPO, "SUM-001")?.id;
-		const inProgressId = db.tasks.getTaskByCode(REPO, "SUM-003")?.id;
+		const completedId = db.tasks.getTaskByCode("test", REPO, "SUM-001")?.id;
+		const inProgressId = db.tasks.getTaskByCode("test", REPO, "SUM-003")?.id;
 
 		await router("tools/call", {
 			name: "task-update",
@@ -248,7 +253,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		const result = await router("tools/call", {
 			name: "task-list",
-			arguments: { repo: REPO, status: "completed" }
+			arguments: { repo: REPO, owner: "test", status: "completed" }
 		});
 
 		expect(getTextContent(result)).toContain("Current Available Tasks:");
@@ -264,6 +269,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{ task_code: "DUP-001", title: "Task 1", description: "D", phase: "p", status: "pending", est_tokens: 10 },
 					{ task_code: "DUP-001", title: "Task 2", description: "D", phase: "p", status: "pending", est_tokens: 12 }
@@ -280,6 +286,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "EXISTING-001",
 				title: "Initial",
 				description: "D",
@@ -294,6 +301,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{
 						task_code: "EXISTING-001",
@@ -313,6 +321,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				task_code: "EXISTING-001",
 				title: "Duplicate",
 				description: "D",
@@ -330,6 +339,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{ task_code: "DEL-1", title: "Task 1", description: "Desc 1", phase: "p", status: "pending", est_tokens: 15 },
 					{ task_code: "DEL-2", title: "Task 2", description: "Desc 2", phase: "p", status: "pending", est_tokens: 16 },
@@ -338,7 +348,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		const tasks = db.tasks.getTasksByRepo(REPO);
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		const idsToDelete = [tasks[0].id, tasks[1].id];
 
 		const delRes = await router("tools/call", {
@@ -350,7 +360,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		expect(getTextContent(delRes)).toContain(`Deleted 2 task(s) from repo "${REPO}`);
-		const remainingTasks = db.tasks.getTasksByRepo(REPO);
+		const remainingTasks = db.tasks.getTasksByRepo("test", REPO);
 		expect(remainingTasks.length).toBe(1);
 	});
 
@@ -359,6 +369,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{ task_code: "TS-1", title: "To Start", description: "Desc", phase: "p", status: "backlog", est_tokens: 40 },
 					{ task_code: "TS-2", title: "To Finish", description: "Desc", phase: "p", status: "backlog", est_tokens: 60 }
@@ -366,7 +377,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		const tasks = db.tasks.getTasksByRepo(REPO);
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		const ts1 = tasks.find((t) => t.task_code === "TS-1");
 		const ts2 = tasks.find((t) => t.task_code === "TS-2");
 
@@ -421,6 +432,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [
 					{ task_code: "UP-1", title: "Task 1", description: "D", phase: "p", status: "pending", est_tokens: 10 },
 					{ task_code: "UP-2", title: "Task 2", description: "D", phase: "p", status: "pending", est_tokens: 10 },
@@ -429,7 +441,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		const tasks = db.tasks.getTasksByRepo(REPO);
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		const ids = tasks.map((t) => t.id);
 
 		// Bulk update to completed
@@ -448,7 +460,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(upRes.isError).toBe(false);
 		expect(getTextContent(upRes)).toContain(`Updated 3 task(s) in repo "${REPO}".`);
 
-		const updatedTasks = db.tasks.getTasksByRepo(REPO);
+		const updatedTasks = db.tasks.getTasksByRepo("test", REPO);
 		updatedTasks.forEach((t) => {
 			expect(t.status).toBe("completed");
 			expect(t.finished_at).toBeTruthy();
@@ -456,7 +468,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		// Verify task archive memory created
-		const memories = db.memories.searchByRepo(REPO);
+		const memories = db.memories.searchByRepo("test", REPO);
 		const archMemories = memories.filter((m) => m.type === "task_archive");
 		expect(archMemories.length).toBe(3);
 
@@ -472,11 +484,12 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
+				owner: "test",
 				tasks: [{ task_code: "IP-1", title: "Task 1", description: "D", phase: "p", status: "pending" }]
 			}
 		});
 
-		const taskId = db.tasks.getTasksByRepo(REPO)[0].id;
+		const taskId = db.tasks.getTasksByRepo("test", REPO)[0].id;
 
 		await router("tools/call", {
 			name: "task-update",

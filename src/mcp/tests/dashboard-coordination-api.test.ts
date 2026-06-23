@@ -22,7 +22,7 @@ vi.mock("../../dashboard/lib/context", async () => {
 			callTool: vi.fn(async (name: string, args: Record<string, unknown>) =>
 				router("tools/call", {
 					name,
-					arguments: { ...args, structured: true }
+					arguments: { owner: "test", ...args, structured: true }
 				})
 			)
 		},
@@ -66,6 +66,7 @@ describe("Dashboard Coordination API", () => {
 
 		db.tasks.insertTask({
 			id: taskId,
+			owner: "test",
 			repo: "dashboard-coordination",
 			task_code: "COORD-101",
 			phase: "implementation",
@@ -76,18 +77,22 @@ describe("Dashboard Coordination API", () => {
 			agent: "agent-a",
 			role: "worker",
 			doc_path: null,
+			suggested_skills: [],
 			created_at: now,
 			updated_at: now,
 			in_progress_at: now,
 			finished_at: null,
 			canceled_at: null,
 			est_tokens: 5,
-			tags: [], commit_id: null, changed_files: [],
+			tags: [],
+			commit_id: null,
+			changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null
 		});
 		db.handoffs.claimTask({
+			owner: "test",
 			repo: "dashboard-coordination",
 			task_id: taskId,
 			agent: "agent-a",
@@ -120,6 +125,7 @@ describe("Dashboard Coordination API", () => {
 
 		db.tasks.insertTask({
 			id: taskId,
+			owner: "test",
 			repo: "dashboard-update-flow",
 			task_code: "FLOW-101",
 			phase: "implementation",
@@ -130,24 +136,29 @@ describe("Dashboard Coordination API", () => {
 			agent: "agent-b",
 			role: "worker",
 			doc_path: null,
+			suggested_skills: [],
 			created_at: now,
 			updated_at: now,
 			in_progress_at: now,
 			finished_at: null,
 			canceled_at: null,
 			est_tokens: 42,
-			tags: [], commit_id: null, changed_files: [],
+			tags: [],
+			commit_id: null,
+			changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null
 		});
 		db.handoffs.claimTask({
+			owner: "test",
 			repo: "dashboard-update-flow",
 			task_id: taskId,
 			agent: "agent-b",
 			role: "worker"
 		});
 		const handoff = db.handoffs.createHandoff({
+			owner: "test",
 			repo: "dashboard-update-flow",
 			from_agent: "agent-b",
 			task_id: taskId,

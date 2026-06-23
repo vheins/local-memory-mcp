@@ -27,7 +27,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 			importance: 3,
 			agent: "Agent-A",
 			model: "Model-X",
-			scope: { repo: REPO }
+			scope: { owner: "test", repo: REPO }
 		};
 		const m2 = {
 			type: "code_fact",
@@ -36,13 +36,13 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 			importance: 3,
 			agent: "Agent-A",
 			model: "Model-X",
-			scope: { repo: REPO }
+			scope: { owner: "test", repo: REPO }
 		};
 
 		await router("tools/call", { name: "memory-store", arguments: m1 });
 		await router("tools/call", { name: "memory-store", arguments: m2 });
 
-		const memories = db.memories.getRecentMemories(REPO, 10);
+		const memories = db.memories.getRecentMemories("test", REPO, 10);
 		expect(memories.length).toBe(2);
 		const ids = memories.map((m) => m.id);
 
@@ -55,7 +55,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 		});
 
 		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 memory entry(ies) from repo");
-		const remaining = db.memories.getRecentMemories(REPO, 10);
+		const remaining = db.memories.getRecentMemories("test", REPO, 10);
 		expect(remaining.length).toBe(0);
 	});
 });

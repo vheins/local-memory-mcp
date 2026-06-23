@@ -41,12 +41,16 @@ export async function handleMemorySynthesize(
 		throw new Error("repo is required when repo cannot be inferred from active MCP roots");
 	}
 
-	const recap = await handleMemoryRecap({ repo, limit: 8, offset: 0 }, db);
+	const repoOwner = validated.owner;
+	const recap = await handleMemoryRecap({ owner: repoOwner, repo, limit: 8, offset: 0 }, db);
 	const recapText = getPrimaryTextContent(recap);
-	const summary = validated.include_summary ? db.summaries.getSummary(repo)?.summary : "";
+	const summary = validated.include_summary ? db.summaries.getSummary(repoOwner, repo)?.summary : "";
 
 	const taskSnapshot = validated.include_tasks
-		? await handleTaskList({ repo, status: "backlog,pending,in_progress,blocked", limit: 15, offset: 0 }, db)
+		? await handleTaskList(
+				{ owner: repoOwner, repo, status: "backlog,pending,in_progress,blocked", limit: 15, offset: 0 },
+				db
+			)
 		: null;
 	const taskText = taskSnapshot ? getPrimaryTextContent(taskSnapshot) : "";
 
@@ -117,7 +121,7 @@ export async function handleMemorySynthesize(
 				content: [
 					{
 						type: "text" as const,
-						text: await executeSamplingTool(toolUse.name, toolUse.input, db, vectors)
+						text: await executeSamplingTool(toolUse.name, toolUse.input, db, vectors, repoOwner)
 					}
 				]
 			}))
@@ -247,12 +251,14 @@ async function executeSamplingTool(
 	toolName: string,
 	rawInput: Record<string, unknown>,
 	db: SQLiteStore,
-	vectors: VectorStore
+	vectors: VectorStore,
+	owner: string
 ) {
 	switch (toolName) {
 		case "memory_search": {
 			const response = await handleMemorySearch(
 				{
+					owner,
 					repo: rawInput.repo,
 					query: rawInput.query,
 					limit: rawInput.limit ?? 5
@@ -266,6 +272,7 @@ async function executeSamplingTool(
 		case "memory_recap": {
 			const response = await handleMemoryRecap(
 				{
+					owner,
 					repo: rawInput.repo,
 					limit: rawInput.limit ?? 8,
 					offset: 0
@@ -278,6 +285,7 @@ async function executeSamplingTool(
 		case "task_list": {
 			const response = await handleTaskList(
 				{
+					owner,
 					repo: rawInput.repo,
 					status: rawInput.status,
 					search: rawInput.search,

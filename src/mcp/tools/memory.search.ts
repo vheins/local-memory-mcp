@@ -20,6 +20,7 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	const fetchLimit = (validated.offset + validated.limit) * 3;
 	const similarityResults = db.memoryVectors.searchBySimilarity(
 		searchQuery,
+		validated.owner!,
 		validated.repo,
 		fetchLimit,
 		validated.include_archived,

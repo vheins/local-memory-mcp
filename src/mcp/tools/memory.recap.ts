@@ -9,15 +9,20 @@ export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promi
 	logger.info("[Tool] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 
 	// Fetch aggregate stats (counts by type, total)
-	const stats = db.memories.getStats(validated.repo);
+	const stats = db.memories.getStats(validated.owner!, validated.repo);
 
 	// Total active memories (excluding task_archive)
-	const total = db.memories.getTotalCount(validated.repo, false, ["task_archive"]);
+	const total = db.memories.getTotalCount(validated.owner!, validated.repo, false, ["task_archive"]);
 
 	// Fetch top memories ordered by importance DESC, created_at DESC
-	const rows = db.memories.getRecentMemories(validated.repo, validated.limit, validated.offset, false, [
-		"task_archive"
-	]);
+	const rows = db.memories.getRecentMemories(
+		validated.owner!,
+		validated.repo,
+		validated.limit,
+		validated.offset,
+		false,
+		["task_archive"]
+	);
 
 	// Build pointer table — columns: [id, code, title, type, importance]
 	const COLUMNS = ["id", "code", "title", "type", "importance"] as const;

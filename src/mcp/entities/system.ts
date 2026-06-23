@@ -26,12 +26,19 @@ export class SystemEntity extends BaseEntity {
 		return taskStats;
 	}
 
-	listRepos(): string[] {
-		const rows = this.all<{ repo: string }>("SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks");
+	listRepos(owner?: string): string[] {
+		let sql: string;
+		if (owner) {
+			sql = "SELECT DISTINCT repo FROM memories WHERE owner = ? UNION SELECT DISTINCT repo FROM tasks WHERE owner = ?";
+		} else {
+			sql = "SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks";
+		}
+		const params = owner ? [owner, owner] : [];
+		const rows = this.all<{ repo: string }>(sql, params);
 		return rows.map((r) => r.repo);
 	}
 
-	listRepoNavigation(): {
+	listRepoNavigation(owner?: string): {
 		repo: string;
 		memoryCount: number;
 		taskCount: number;
@@ -45,18 +52,25 @@ export class SystemEntity extends BaseEntity {
 		unassignedHandoffs: number;
 		staleClaims: number;
 	}[] {
-		const repos = this.listRepos();
+		const repos = this.listRepos(owner);
+		const ownerFilter = owner ? " AND owner = ?" : "";
+		const ownerParams = owner ? [owner] : [];
+
 		const activeClaimRows = this.all<{ repo: string; count: number }>(
-			"SELECT repo, COUNT(*) as count FROM claims WHERE released_at IS NULL GROUP BY repo"
+			`SELECT repo, COUNT(*) as count FROM claims WHERE released_at IS NULL${ownerFilter} GROUP BY repo`,
+			ownerParams
 		);
 		const pendingHandoffRows = this.all<{ repo: string; count: number }>(
-			"SELECT repo, COUNT(*) as count FROM handoffs WHERE status = 'pending' GROUP BY repo"
+			`SELECT repo, COUNT(*) as count FROM handoffs WHERE status = 'pending'${ownerFilter} GROUP BY repo`,
+			ownerParams
 		);
 		const unassignedHandoffRows = this.all<{ repo: string; count: number }>(
-			"SELECT repo, COUNT(*) as count FROM handoffs WHERE status = 'pending' AND to_agent IS NULL GROUP BY repo"
+			`SELECT repo, COUNT(*) as count FROM handoffs WHERE status = 'pending' AND to_agent IS NULL${ownerFilter} GROUP BY repo`,
+			ownerParams
 		);
 		const staleClaimRows = this.all<{ repo: string; count: number }>(
-			"SELECT repo, COUNT(*) as count FROM claims WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day') GROUP BY repo"
+			`SELECT repo, COUNT(*) as count FROM claims WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')${ownerFilter} GROUP BY repo`,
+			ownerParams
 		);
 
 		const activeClaimsByRepo = Object.fromEntries(activeClaimRows.map((row) => [row.repo, row.count]));
@@ -64,19 +78,23 @@ export class SystemEntity extends BaseEntity {
 		const unassignedHandoffsByRepo = Object.fromEntries(unassignedHandoffRows.map((row) => [row.repo, row.count]));
 		const staleClaimsByRepo = Object.fromEntries(staleClaimRows.map((row) => [row.repo, row.count]));
 
+		const repoOwnerFilter = owner ? " AND owner = ?" : "";
+		const repoOwnerParams = owner ? [owner] : [];
+
 		return repos.map((repo) => {
-			const memoryCountRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM memories WHERE repo = ?", [
-				repo
-			]);
+			const memoryCountRow = this.get<{ count: number }>(
+				`SELECT COUNT(*) as count FROM memories WHERE repo = ?${repoOwnerFilter}`,
+				owner ? [repo, owner] : [repo]
+			);
 			const lastActivityRow = this.get<{ last: string | null }>(
-				`SELECT MAX(created_at) as last FROM (SELECT created_at FROM memories WHERE repo = ? UNION ALL SELECT created_at FROM tasks WHERE repo = ? UNION ALL SELECT created_at FROM action_log WHERE repo = ?)`,
-				[repo, repo, repo]
+				`SELECT MAX(created_at) as last FROM (SELECT created_at FROM memories WHERE repo = ?${repoOwnerFilter} UNION ALL SELECT created_at FROM tasks WHERE repo = ?${repoOwnerFilter} UNION ALL SELECT created_at FROM action_log WHERE repo = ?${repoOwnerFilter})`,
+				owner ? [repo, owner, repo, owner, repo, owner] : [repo, repo, repo]
 			);
 
 			// Per-status task counts in a single query
 			const taskStatusRows = this.all<{ status: string; count: number }>(
-				"SELECT status, COUNT(*) as count FROM tasks WHERE repo = ? GROUP BY status",
-				[repo]
+				`SELECT status, COUNT(*) as count FROM tasks WHERE repo = ?${repoOwnerFilter} GROUP BY status`,
+				owner ? [repo, owner] : [repo]
 			);
 			const taskStatusMap: Record<string, number> = {};
 			taskStatusRows.forEach((r) => {
@@ -101,7 +119,10 @@ export class SystemEntity extends BaseEntity {
 		});
 	}
 
-	getDashboardStats(repo: string): {
+	getDashboardStats(
+		owner: string,
+		repo: string
+	): {
 		scope: "repo";
 		total: number;
 		avgImportance: string;
@@ -119,22 +140,26 @@ export class SystemEntity extends BaseEntity {
 		};
 		topMemories: MemoryEntry[];
 	} {
-		const totalCountRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM memories WHERE repo = ?", [repo]);
-		const avgImportanceRow = this.get<{ avg: number }>("SELECT AVG(importance) as avg FROM memories WHERE repo = ?", [
-			repo
-		]);
+		const totalCountRow = this.get<{ count: number }>(
+			"SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ?",
+			[owner, repo]
+		);
+		const avgImportanceRow = this.get<{ avg: number }>(
+			"SELECT AVG(importance) as avg FROM memories WHERE owner = ? AND repo = ?",
+			[owner, repo]
+		);
 		const totalHitCountRow = this.get<{ count: number }>(
-			"SELECT SUM(hit_count) as count FROM memories WHERE repo = ?",
-			[repo]
+			"SELECT SUM(hit_count) as count FROM memories WHERE owner = ? AND repo = ?",
+			[owner, repo]
 		);
 		const expiringSoonRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM memories WHERE repo = ? AND expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?",
-			[repo, new Date().toISOString(), new Date(Date.now() + 7 * 86400 * 1000).toISOString()]
+			"SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ? AND expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?",
+			[owner, repo, new Date().toISOString(), new Date(Date.now() + 7 * 86400 * 1000).toISOString()]
 		);
 
 		const typeStats = this.all<{ type: string; count: number }>(
-			"SELECT type, COUNT(*) as count FROM memories WHERE repo = ? GROUP BY type",
-			[repo]
+			"SELECT type, COUNT(*) as count FROM memories WHERE owner = ? AND repo = ? GROUP BY type",
+			[owner, repo]
 		);
 		const byType: Record<string, number> = {};
 		typeStats.forEach((t) => {
@@ -142,15 +167,15 @@ export class SystemEntity extends BaseEntity {
 		});
 
 		const taskRows = this.all<{ status: string; count: number }>(
-			"SELECT status, COUNT(*) as count FROM tasks WHERE repo = ? GROUP BY status",
-			[repo]
+			"SELECT status, COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ? GROUP BY status",
+			[owner, repo]
 		);
 
 		const taskStats = this.buildTaskStats(taskRows);
 
 		const topMemoriesRows = this.all<Record<string, unknown>>(
-			"SELECT * FROM memories WHERE repo = ? ORDER BY importance DESC, created_at DESC LIMIT 5",
-			[repo]
+			"SELECT * FROM memories WHERE owner = ? AND repo = ? ORDER BY importance DESC, created_at DESC LIMIT 5",
+			[owner, repo]
 		);
 		const topMemories = topMemoriesRows.map((r) => this.rowToMemoryEntry(r));
 
@@ -288,12 +313,21 @@ export class SystemEntity extends BaseEntity {
 		};
 	}
 
-	getRepoDetails(repo: string): { repo: string; memoryCount: number; taskCount: number; languages: string[] } {
-		const memoryCountRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM memories WHERE repo = ?", [repo]);
-		const taskCountRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM tasks WHERE repo = ?", [repo]);
+	getRepoDetails(
+		owner: string,
+		repo: string
+	): { repo: string; memoryCount: number; taskCount: number; languages: string[] } {
+		const memoryCountRow = this.get<{ count: number }>(
+			"SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ?",
+			[owner, repo]
+		);
+		const taskCountRow = this.get<{ count: number }>(
+			"SELECT COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ?",
+			[owner, repo]
+		);
 		const languagesRows = this.all<{ language: string }>(
-			"SELECT DISTINCT language FROM memories WHERE repo = ? AND language IS NOT NULL",
-			[repo]
+			"SELECT DISTINCT language FROM memories WHERE owner = ? AND repo = ? AND language IS NOT NULL",
+			[owner, repo]
 		);
 		const languages = languagesRows.map((r) => r.language);
 

@@ -53,6 +53,7 @@ describe("Dashboard System API", () => {
 		const activeTaskId = randomUUID();
 		db.tasks.insertTask({
 			id: activeTaskId,
+			owner: "test",
 			repo: "orchestrator-a",
 			task_code: "ORCH-A-1",
 			phase: "implementation",
@@ -63,13 +64,16 @@ describe("Dashboard System API", () => {
 			agent: "agent-a",
 			role: "worker",
 			doc_path: null,
+			suggested_skills: [],
 			created_at: now,
 			updated_at: now,
 			in_progress_at: now,
 			finished_at: null,
 			canceled_at: null,
 			est_tokens: 50,
-			tags: [], commit_id: null, changed_files: [],
+			tags: [],
+			commit_id: null,
+			changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null
@@ -78,6 +82,7 @@ describe("Dashboard System API", () => {
 		const completedTaskId = randomUUID();
 		db.tasks.insertTask({
 			id: completedTaskId,
+			owner: "test",
 			repo: "orchestrator-b",
 			task_code: "ORCH-B-1",
 			phase: "testing",
@@ -88,19 +93,23 @@ describe("Dashboard System API", () => {
 			agent: "agent-b",
 			role: "worker",
 			doc_path: null,
+			suggested_skills: [],
 			created_at: now,
 			updated_at: now,
 			in_progress_at: now,
 			finished_at: now,
 			canceled_at: null,
 			est_tokens: 120,
-			tags: [], commit_id: null, changed_files: [],
+			tags: [],
+			commit_id: null,
+			changed_files: [],
 			metadata: {},
 			parent_id: null,
 			depends_on: null
 		});
 
 		db.handoffs.claimTask({
+			owner: "test",
 			repo: "orchestrator-a",
 			task_id: activeTaskId,
 			agent: "agent-orchestrator",
@@ -108,6 +117,7 @@ describe("Dashboard System API", () => {
 		});
 
 		db.handoffs.createHandoff({
+			owner: "test",
 			repo: "orchestrator-a",
 			from_agent: "agent-a",
 			summary: "Need follow-up on review findings",

@@ -304,9 +304,9 @@ export function createRouter(
 
 			// action_log write: if already inside withWrite (isWrite), lock is already held
 			if (isWrite) {
-				db.actions.logAction(actionType, repo, logOptions);
+				db.actions.logAction(actionType, "", repo, logOptions);
 			} else {
-				await db.withWrite(() => db.actions.logAction(actionType, repo, logOptions));
+				await db.withWrite(() => db.actions.logAction(actionType, "", repo, logOptions));
 			}
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });

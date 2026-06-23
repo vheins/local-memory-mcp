@@ -3,12 +3,15 @@ import { MemoryEntry, MemoryRow, VectorStore } from "../types/index";
 import { MemoryIdVector } from "../types/common";
 
 export class MemoryVectorEntity extends BaseEntity {
-	getVectorCandidates(repo?: string, limit = 100): { memory_id: string; vector: string }[] {
+	getVectorCandidates(owner?: string, repo?: string, limit = 100): { memory_id: string; vector: string }[] {
 		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN memories m ON mv.memory_id = m.id`;
 		const params: (string | number)[] = [];
 		if (repo) {
-			sql += " WHERE m.repo = ?";
-			params.push(repo);
+			sql += " WHERE m.owner = ? AND m.repo = ?";
+			params.push(owner!, repo);
+		} else if (owner) {
+			sql += " WHERE m.owner = ?";
+			params.push(owner);
 		}
 		sql += " LIMIT ?";
 		params.push(limit);
@@ -25,6 +28,7 @@ export class MemoryVectorEntity extends BaseEntity {
 
 	searchBySimilarity(
 		query: string,
+		owner: string,
 		repo: string,
 		limit: number = 10,
 		includeArchived: boolean = false,
@@ -33,8 +37,8 @@ export class MemoryVectorEntity extends BaseEntity {
 		const queryVector = this.computeVector(query);
 		const now = new Date();
 
-		const where = ["(repo = ? OR is_global = 1)"];
-		const params: (string | number)[] = [repo];
+		const where = ["(owner = ? AND repo = ? OR is_global = 1)"];
+		const params: (string | number)[] = [owner, repo];
 
 		if (currentTags.length > 0) {
 			const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
@@ -44,9 +48,9 @@ export class MemoryVectorEntity extends BaseEntity {
 
 		let sql = `SELECT * FROM memories WHERE (${where.join(" AND ")}) AND (expires_at IS NULL OR expires_at > ?)`;
 		if (!includeArchived) sql += " AND status = 'active'";
-		sql += ` ORDER BY CASE WHEN repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
+		sql += ` ORDER BY CASE WHEN owner = ? AND repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
 
-		const candidates = this.all<MemoryRow>(sql, [...params, now.toISOString(), repo]);
+		const candidates = this.all<MemoryRow>(sql, [...params, now.toISOString(), owner, repo]);
 
 		if (candidates.length < 5) {
 			const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
@@ -79,8 +83,6 @@ export class MemoryVectorEntity extends BaseEntity {
 
 				if (row.repo === repo) score += 0.1;
 
-
-
 				return { ...memory, similarity: score };
 			})
 			.filter((r) => r.similarity > 0)
@@ -90,12 +92,13 @@ export class MemoryVectorEntity extends BaseEntity {
 
 	async checkConflicts(
 		content: string,
+		owner: string,
 		repo: string,
 		_type: string,
 		_vectors: VectorStore,
 		threshold: number = 0.55
 	): Promise<(MemoryEntry & { similarity: number }) | null> {
-		const results = await this.searchBySimilarity(content, repo, 1, false);
+		const results = await this.searchBySimilarity(content, owner, repo, 1, false);
 		if (results.length > 0 && results[0].similarity >= threshold) {
 			return results[0];
 		}
