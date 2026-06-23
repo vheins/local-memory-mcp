@@ -647,7 +647,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			}
 		}
 
-		if (updates.task_code && storage.tasks.isTaskCodeDuplicate(repo, updates.task_code, targetId)) {
+		if (updates.task_code && storage.tasks.isTaskCodeDuplicate(owner, repo, updates.task_code, targetId)) {
 			throw new Error(`Duplicate task_code: '${updates.task_code}' already exists`);
 		}
 

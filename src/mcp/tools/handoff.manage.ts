@@ -210,7 +210,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 		storage.taskComments.insertTaskComment({
 			id: randomUUID(),
 			task_id: task.id,
-			owner: repo,
+			owner: owner,
 			repo,
 			comment: `Claimed by ${agent} — auto-promoted to in_progress`,
 			agent,
