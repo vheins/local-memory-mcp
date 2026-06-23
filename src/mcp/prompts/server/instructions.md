@@ -5,6 +5,15 @@ description: Main instructions for the MCP server
 
 Local Memory MCP — persistent memory, task coordination, and coding standards for AI agents.
 
+## Data Scoping
+
+All data (memories, tasks, handoffs, claims) is scoped by **owner/repo**:
+
+- **owner** = organization/namespace (e.g., GitHub org, username)
+- **repo** = project/repository name
+
+Pass both `owner` and `repo` whenever a tool requires them. The `owner/repo` pair forms the unique data boundary.
+
 ## Session Start Mode
 
 Entry=orient → hydrate → ready Guard: S(N) req S(N-1)✅

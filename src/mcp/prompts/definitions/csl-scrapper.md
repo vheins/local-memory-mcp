@@ -70,4 +70,4 @@ If you refuse, return exactly:
 }
 ```
 
-Source: {{source_url}} Repo: {{current_repo}}
+Source: {{source_url}} Owner: {{current_owner}} Repo: {{current_repo}}

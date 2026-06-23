@@ -141,3 +141,14 @@ export function inferRepoFromSession(session?: SessionContext): string | undefin
 	}
 	return undefined;
 }
+
+export function inferOwnerFromSession(session?: SessionContext): string | undefined {
+	const roots = getFilesystemRoots(session);
+	if (roots.length === 1) {
+		const parts = roots[0].split(path.sep).filter(Boolean);
+		if (parts.length >= 2) {
+			return parts[parts.length - 2];
+		}
+	}
+	return undefined;
+}

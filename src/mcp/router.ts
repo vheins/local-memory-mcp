@@ -1,10 +1,17 @@
 import path from "node:path";
 import { listResources, listResourceTemplates, readResource } from "./resources/index";
-import { SessionContext, findContainingRoot, inferRepoFromSession, isPathWithinRoots } from "./session";
+import {
+	SessionContext,
+	findContainingRoot,
+	inferOwnerFromSession,
+	inferRepoFromSession,
+	isPathWithinRoots
+} from "./session";
 import { logger } from "./utils/logger";
 import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/schemas";
 import { complete, type CompletionRequest } from "./completion";
+import { parseRepoInput } from "./utils/normalize";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
 import { handleMemoryStore } from "./tools/memory.store";
@@ -418,6 +425,32 @@ function normalizeToolArguments(args: unknown, session?: SessionContext): Record
 	const scope = nextArgs.scope as Record<string, unknown> | undefined;
 	if (scope && !scope.repo) {
 		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
+	}
+
+	if (!nextArgs.owner) {
+		const repoVal = (nextArgs.repo as string) || "";
+		const parsed = parseRepoInput(repoVal, undefined);
+		nextArgs.owner = parsed.owner || inferOwnerFromSession(session) || "";
+	}
+
+	if (scope && !scope.owner) {
+		const repoVal = (scope.repo as string) || (nextArgs.repo as string) || "";
+		const parsed = parseRepoInput(repoVal, undefined);
+		scope.owner = parsed.owner || (nextArgs.owner as string) || inferOwnerFromSession(session) || "";
+	}
+
+	const ownerVal = (nextArgs.owner as string) || inferOwnerFromSession(session) || "";
+	const repoVal = (nextArgs.repo as string) || inferRepoFromSession(session) || "";
+	const memories = nextArgs.memories as Array<Record<string, unknown>> | undefined;
+	if (memories) {
+		for (const mem of memories) {
+			const memScope = mem.scope as Record<string, unknown> | undefined;
+			if (memScope) {
+				if (!memScope.owner)
+					memScope.owner = ownerVal || parseRepoInput((memScope.repo as string) || repoVal, undefined).owner || "";
+				if (!memScope.repo) memScope.repo = repoVal;
+			}
+		}
 	}
 
 	if (typeof nextArgs.current_file_path === "string" && scope) {

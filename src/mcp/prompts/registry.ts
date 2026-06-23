@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite";
-import { SessionContext, inferRepoFromSession } from "../session";
+import { SessionContext, inferOwnerFromSession, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
 import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
 import type { LoadedPrompt } from "../interfaces/index";
@@ -94,6 +94,7 @@ export async function getPrompt(
 	}
 
 	const inferredRepo = inferRepoFromSession(session);
+	const inferredOwner = inferOwnerFromSession(session);
 
 	// Substitute arguments in messages
 	const messages = prompt.messages.map((m: PromptMessage) => {
@@ -106,6 +107,7 @@ export async function getPrompt(
 
 		// Auto-injected context
 		text = text.replace(/{{current_repo}}/g, inferredRepo || "unknown-repo");
+		text = text.replace(/{{current_owner}}/g, inferredOwner || "unknown-owner");
 
 		return {
 			...m,

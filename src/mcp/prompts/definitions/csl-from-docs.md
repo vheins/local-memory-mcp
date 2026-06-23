@@ -65,4 +65,4 @@ If you refuse, return exactly:
 }
 ```
 
-Path: {{path}} Repo: {{current_repo}}
+Path: {{path}} Owner: {{current_owner}} Repo: {{current_repo}}

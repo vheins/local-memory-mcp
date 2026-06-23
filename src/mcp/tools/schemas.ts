@@ -624,7 +624,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name. Optional when a single MCP root is active." },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name. Optional when a single MCP root is active." },
 				objective: { type: "string", minLength: 5, description: "Question or synthesis objective." },
 				current_file_path: {
 					type: "string",
@@ -642,7 +643,7 @@ export const TOOL_DEFINITIONS = [
 				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON results." }
 			},
-			required: ["objective"]
+			required: ["owner", "objective"]
 		},
 		outputSchema: {
 			type: "object",
@@ -672,6 +673,10 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username)"
+				},
 				repo: {
 					type: "string",
 					description: "Repository name. Optional when it can be inferred from MCP roots or elicited from the user."
@@ -813,12 +818,13 @@ export const TOOL_DEFINITIONS = [
 				scope: {
 					type: "object",
 					properties: {
-						repo: { type: "string", description: "Repository name" },
-						branch: { type: "string" },
-						folder: { type: "string" },
-						language: { type: "string" }
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+						repo: { type: "string", description: "Repository/project name" },
+						branch: { type: "string", description: "Git branch this memory relates to" },
+						folder: { type: "string", description: "Subdirectory within the repo" },
+						language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" }
 					},
-					required: ["repo"]
+					required: ["owner", "repo"]
 				},
 				tags: {
 					type: "array",
@@ -833,7 +839,11 @@ export const TOOL_DEFINITIONS = [
 					type: "boolean",
 					description: "If true, this memory is shared across all repositories"
 				},
-				ttlDays: { type: "number", minimum: 1 },
+				ttlDays: {
+					type: "number",
+					minimum: 1,
+					description: "Time-to-live in days. After this period, the memory expires."
+				},
 				supersedes: {
 					type: "string",
 					description: "Optional memory ID (UUID) or memory code to supersede. Resolved before storing."
@@ -843,29 +853,34 @@ export const TOOL_DEFINITIONS = [
 					items: {
 						type: "object",
 						properties: {
-							type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
-							title: { type: "string", minLength: 3, maxLength: 100 },
-							content: { type: "string", minLength: 10 },
-							importance: { type: "number", minimum: 1, maximum: 5 },
-							agent: { type: "string" },
-							role: { type: "string", default: "unknown" },
-							model: { type: "string" },
+							type: {
+								type: "string",
+								enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"],
+								description: "Type of durable knowledge being stored"
+							},
+							title: { type: "string", minLength: 3, maxLength: 100, description: "Short human-readable title" },
+							content: { type: "string", minLength: 10, description: "The memory content" },
+							importance: { type: "number", minimum: 1, maximum: 5, description: "Importance score (1-5)" },
+							agent: { type: "string", description: "Name of the agent creating this memory" },
+							role: { type: "string", default: "unknown", description: "Role of the agent creating this memory" },
+							model: { type: "string", description: "AI model used by the agent" },
 							scope: {
 								type: "object",
 								properties: {
-									repo: { type: "string" },
-									branch: { type: "string" },
-									folder: { type: "string" },
-									language: { type: "string" }
+									owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+									repo: { type: "string", description: "Repository/project name" },
+									branch: { type: "string", description: "Git branch this memory relates to" },
+									folder: { type: "string", description: "Subdirectory within the repo" },
+									language: { type: "string", description: "Programming language" }
 								},
-								required: ["repo"]
+								required: ["owner", "repo"]
 							},
-							code: { type: "string" },
-							ttlDays: { type: "number", minimum: 1 },
-							supersedes: { type: "string" },
-							tags: { type: "array", items: { type: "string" } },
-							metadata: { type: "object" },
-							is_global: { type: "boolean", default: false }
+							code: { type: "string", description: "Optional custom code. Auto-generated if omitted." },
+							ttlDays: { type: "number", minimum: 1, description: "Time-to-live in days" },
+							supersedes: { type: "string", description: "UUID or code of a memory this entry replaces" },
+							tags: { type: "array", items: { type: "string" }, description: "Technology stack tags" },
+							metadata: { type: "object", description: "Structured metadata for non-title context" },
+							is_global: { type: "boolean", default: false, description: "If true, shared across all repositories" }
 						},
 						required: ["type", "title", "content", "importance", "agent", "model", "scope"]
 					},
@@ -990,9 +1005,14 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				query: { type: "string", minLength: 3 },
-				prompt: { type: "string" },
-				repo: { type: "string" },
+				query: {
+					type: "string",
+					minLength: 3,
+					description: "Search keyword to match against memory titles and content"
+				},
+				prompt: { type: "string", description: "Natural language prompt for semantic search" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				current_tags: {
 					type: "array",
 					items: { type: "string" },
@@ -1003,21 +1023,27 @@ export const TOOL_DEFINITIONS = [
 					items: {
 						type: "string",
 						enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"]
-					}
+					},
+					description: "Filter by memory type(s)"
 				},
-				minImportance: { type: "number", minimum: 1, maximum: 5 },
+				minImportance: { type: "number", minimum: 1, maximum: 5, description: "Minimum importance threshold (1-5)" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 5 },
 				offset: { type: "number", minimum: 0, default: 0 },
 				includeRecap: { type: "boolean", default: false },
-				current_file_path: { type: "string" },
-				include_archived: { type: "boolean", default: false },
+				current_file_path: { type: "string", description: "Absolute file path for workspace-local grounding" },
+				include_archived: {
+					type: "boolean",
+					default: false,
+					description: "Include archived/expired memories in results"
+				},
 				scope: {
 					type: "object",
 					properties: {
-						repo: { type: "string" },
-						branch: { type: "string" },
-						folder: { type: "string" },
-						language: { type: "string" }
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+						repo: { type: "string", description: "Repository/project name" },
+						branch: { type: "string", description: "Git branch filter" },
+						folder: { type: "string", description: "Subdirectory filter" },
+						language: { type: "string", description: "Programming language filter" }
 					}
 				},
 				structured: {
@@ -1026,7 +1052,7 @@ export const TOOL_DEFINITIONS = [
 					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
-			required: ["query", "repo"]
+			required: ["owner", "query", "repo"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1069,7 +1095,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				signals: {
 					type: "array",
 					items: { type: "string", maxLength: 200 },
@@ -1078,7 +1105,7 @@ export const TOOL_DEFINITIONS = [
 				},
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the summary." }
 			},
-			required: ["repo", "signals"]
+			required: ["owner", "repo", "signals"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1198,7 +1225,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name (required)" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name (required)" },
 				limit: {
 					type: "number",
 					minimum: 1,
@@ -1218,7 +1246,7 @@ export const TOOL_DEFINITIONS = [
 					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
-			required: ["repo"]
+			required: ["owner", "repo"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1272,7 +1300,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				task_code: { type: "string", description: "Unique task code (e.g. TASK-001) (Required for single task)" },
 				phase: { type: "string", description: "Project phase (Required for single task)" },
 				title: {
@@ -1300,11 +1329,11 @@ export const TOOL_DEFINITIONS = [
 					default: 3,
 					description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
 				},
-				agent: { type: "string" },
-				role: { type: "string" },
-				doc_path: { type: "string" },
-				tags: { type: "array", items: { type: "string" } },
-				metadata: { type: "object" },
+				agent: { type: "string", description: "Agent assigned to this task" },
+				role: { type: "string", description: "Role of the assigned agent" },
+				doc_path: { type: "string", description: "Path to related documentation file" },
+				tags: { type: "array", items: { type: "string" }, description: "Tags for categorization" },
+				metadata: { type: "object", description: "Structured metadata for additional context" },
 				parent_id: {
 					type: "string",
 					description:
@@ -1320,15 +1349,15 @@ export const TOOL_DEFINITIONS = [
 					items: {
 						type: "object",
 						properties: {
-							task_code: { type: "string" },
-							phase: { type: "string" },
-							title: { type: "string", minLength: 3, maxLength: 100 },
+							task_code: { type: "string", description: "Unique task code (e.g. TASK-001)" },
+							phase: { type: "string", description: "Project phase" },
+							title: { type: "string", minLength: 3, maxLength: 100, description: "Task objective" },
 							description: {
 								type: "string",
 								description:
 									"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
 							},
-							status: { type: "string", enum: ["backlog", "pending"], default: "backlog" },
+							status: { type: "string", enum: ["backlog", "pending"], default: "backlog", description: "Task status" },
 							priority: {
 								type: "number",
 								minimum: 1,
@@ -1336,11 +1365,11 @@ export const TOOL_DEFINITIONS = [
 								default: 3,
 								description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
 							},
-							agent: { type: "string" },
-							role: { type: "string" },
-							doc_path: { type: "string" },
-							tags: { type: "array", items: { type: "string" } },
-							metadata: { type: "object" },
+							agent: { type: "string", description: "Agent assigned to this task" },
+							role: { type: "string", description: "Role of the assigned agent" },
+							doc_path: { type: "string", description: "Path to related documentation file" },
+							tags: { type: "array", items: { type: "string" }, description: "Tags for categorization" },
+							metadata: { type: "object", description: "Structured metadata for additional context" },
 							parent_id: {
 								type: "string",
 								description:
@@ -1358,7 +1387,7 @@ export const TOOL_DEFINITIONS = [
 				},
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["repo"]
+			required: ["owner", "repo"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1524,9 +1553,10 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 				repo: {
 					type: "string",
-					description: "Repository name (required)"
+					description: "Repository/project name (required)"
 				},
 				status: {
 					type: "string",
@@ -1561,7 +1591,7 @@ export const TOOL_DEFINITIONS = [
 					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
-			required: ["repo"]
+			required: ["owner", "repo"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1603,7 +1633,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				query: {
 					type: "string",
 					minLength: 1,
@@ -1616,7 +1647,7 @@ export const TOOL_DEFINITIONS = [
 				offset: { type: "number", minimum: 0, default: 0 },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["repo", "query"]
+			required: ["owner", "repo", "query"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1662,7 +1693,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				from_agent: { type: "string", description: "Agent creating the handoff" },
 				to_agent: { type: "string", description: "Optional target agent" },
 				task_id: { type: "string", format: "uuid", description: "Optional task id to associate" },
@@ -1676,7 +1708,7 @@ export const TOOL_DEFINITIONS = [
 				expires_at: { type: "string", description: "Optional expiration timestamp" },
 				structured: { type: "boolean", default: false }
 			},
-			required: ["repo", "from_agent", "summary"]
+			required: ["owner", "repo", "from_agent", "summary"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1739,7 +1771,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
 				from_agent: { type: "string" },
 				to_agent: { type: "string" },
@@ -1747,7 +1780,7 @@ export const TOOL_DEFINITIONS = [
 				offset: { type: "number", minimum: 0, default: 0 },
 				structured: { type: "boolean", default: false }
 			},
-			required: ["repo"]
+			required: ["owner", "repo"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1791,7 +1824,8 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				task_id: {
 					type: "string",
 					format: "uuid",
@@ -1803,7 +1837,7 @@ export const TOOL_DEFINITIONS = [
 				metadata: { type: "object", description: "Optional claim metadata" },
 				structured: { type: "boolean", default: false }
 			},
-			required: ["repo", "agent"]
+			required: ["owner", "repo", "agent"]
 		},
 		outputSchema: {
 			type: "object",
@@ -1835,14 +1869,15 @@ export const TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				repo: { type: "string", description: "Repository/project name" },
 				agent: { type: "string", description: "Optional agent filter" },
 				active_only: { type: "boolean", description: "When true, return only unreleased claims" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
 				structured: { type: "boolean", default: false }
 			},
-			required: ["repo"]
+			required: ["owner", "repo"]
 		},
 		outputSchema: {
 			type: "object",
