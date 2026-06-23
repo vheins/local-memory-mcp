@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Argument Order Bug**: Fixed `isTaskCodeDuplicate` call in `task.manage.ts` that was passing `repo` in the `owner` parameter position, silently disabling duplicate task code detection.
 - **Wrong Owner Attribution**: Fixed `handoff.manage.ts` that was storing the repo name (`owner: repo`) instead of the actual owner (`owner: owner`) in task comments during claim operations.
 
+## [0.18.2] - 2026-06-23
+
+### Fixed
+
+- **Task Code Duplication**: Added database-level UNIQUE constraint on `(owner, repo, task_code)` to prevent duplicate task codes. Added clear error handling for constraint violations.
+- **Owner Consistency**: Fixed `getTaskByCode`, `isTaskCodeDuplicate`, and `getExistingTaskCodes` to handle empty owner strings consistently, resolving "Task not found" errors for tasks created via the dashboard with empty owner.
+- **Search Consistency**: Fixed `task-search` to produce identical results in text and structured modes by using explicit all-status enumeration.
+- **task-list Status Filter**: Added `"all"` option to `status` parameter documentation, allowing listing all task statuses in a single call.
+
 ## [0.17.0] - 2026-06-23
 
 ### Added
