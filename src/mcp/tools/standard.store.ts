@@ -9,10 +9,15 @@ import { generateNextCode } from "../utils/code-generator";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function resolveStandardParentId(value: string | null | undefined, db: SQLiteStore): string | null {
+function resolveStandardParentId(
+	value: string | null | undefined,
+	db: SQLiteStore,
+	owner?: string,
+	repo?: string
+): string | null {
 	if (!value) return null;
 	if (UUID_REGEX.test(value)) return value;
-	const standard = db.standards.getByCode(value);
+	const standard = db.standards.getByCode(value, owner, repo);
 	if (!standard) throw new Error(`parent_id: standard with code '${value}' not found`);
 	return standard.id;
 }
@@ -79,7 +84,7 @@ async function storeSingleStandard(
 		code: generateNextCode(params.owner!, params.repo || "__global__", "standard", db),
 		title: params.name,
 		content: params.content,
-		parent_id: resolveStandardParentId(params.parent_id, db),
+		parent_id: resolveStandardParentId(params.parent_id, db, params.owner, params.repo),
 		context: toContextSlug(params.context || "general"),
 		version: params.version || "1.0.0",
 		language: params.language || null,
@@ -176,7 +181,7 @@ export async function handleStandardStore(
 				code,
 				title: std.name,
 				content: std.content,
-				parent_id: resolveStandardParentId(std.parent_id, db),
+				parent_id: resolveStandardParentId(std.parent_id, db, validated.owner, validated.repo),
 				context: toContextSlug(std.context || "general"),
 				version: std.version || "1.0.0",
 				language: std.language || null,

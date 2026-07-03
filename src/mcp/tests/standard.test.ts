@@ -135,6 +135,8 @@ describe("CSL (Coding Standards Library)", () => {
 			const result = (await handleStandardUpdate(
 				{
 					id: standardId,
+					owner: "test",
+					repo: "test-repo",
 					content: "Use typed errors, try-catch, and structured logging.",
 					tags: ["node", "errors", "logging"],
 					metadata: { source: "guide-v2", changed_by: "qa" }
@@ -178,7 +180,7 @@ describe("CSL (Coding Standards Library)", () => {
 
 			const parentId = (parent.structuredContent as any).standard.id;
 			const childId = (child.structuredContent as any).standard.id;
-			await handleStandardUpdate({ id: childId, parent_id: parentId }, db, vectors);
+			await handleStandardUpdate({ id: childId, parent_id: parentId, owner: "test", repo: "test-repo" }, db, vectors);
 
 			expect(db.standards.getById(childId)?.parent_id).toBe(parentId);
 		});

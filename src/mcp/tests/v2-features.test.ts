@@ -234,6 +234,8 @@ describe("V2 Enhanced Memory Features", () => {
 				handleMemoryUpdate(
 					{
 						id: VALID_UUID_1,
+						owner: "test",
+						repo: "test-repo",
 						type: "file_claim"
 					},
 					db,
@@ -253,6 +255,8 @@ describe("V2 Enhanced Memory Features", () => {
 			await handleMemoryUpdate(
 				{
 					id: VALID_UUID_1,
+					owner: "test",
+					repo: "test-repo",
 					metadata: {
 						source_agent: "codex",
 						source_role: "rules-optimizer"
@@ -278,6 +282,8 @@ describe("V2 Enhanced Memory Features", () => {
 				handleMemoryUpdate(
 					{
 						id: VALID_UUID_1,
+						owner: "test",
+						repo: "test-repo",
 						title: "[agent: codex | role: rules-optimizer | 2026-04-03] Noisy title"
 					},
 					db,
@@ -295,6 +301,8 @@ describe("V2 Enhanced Memory Features", () => {
 			await handleMemoryAcknowledge(
 				{
 					memory_id: VALID_UUID_1,
+					owner: "test",
+					repo: "test-repo",
 					status: "used"
 				},
 				db

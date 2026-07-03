@@ -11,10 +11,15 @@ function hasMetadataLikeTitle(title: string): boolean {
 	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
 }
 
-function resolveMemorySupersedes(value: string | null | undefined, db: SQLiteStore): string | null {
+function resolveMemorySupersedes(
+	value: string | null | undefined,
+	db: SQLiteStore,
+	owner?: string,
+	repo?: string
+): string | null {
 	if (!value) return null;
 	if (UUID_REGEX.test(value)) return value;
-	const memory = db.memories.getByCode(value);
+	const memory = db.memories.getByCode(value, owner, repo);
 	if (!memory) throw new Error(`supersedes: memory with code '${value}' not found`);
 	return memory.id;
 }
@@ -30,7 +35,7 @@ export async function handleMemoryUpdate(
 	// Resolve code to id if needed
 	let resolvedId = validated.id;
 	if (!resolvedId && validated.code) {
-		const byCode = db.memories.getByCode(validated.code);
+		const byCode = db.memories.getByCode(validated.code, validated.owner, validated.repo);
 		if (!byCode) throw new Error(`Memory not found: ${validated.code}`);
 		resolvedId = byCode.id;
 	} else if (!resolvedId) {
@@ -66,7 +71,8 @@ export async function handleMemoryUpdate(
 	if (validated.agent !== undefined) updates.agent = validated.agent;
 	if (validated.role !== undefined) updates.role = validated.role;
 	if (validated.status !== undefined) updates.status = validated.status;
-	if (validated.supersedes !== undefined) updates.supersedes = resolveMemorySupersedes(validated.supersedes, db);
+	if (validated.supersedes !== undefined)
+		updates.supersedes = resolveMemorySupersedes(validated.supersedes, db, existing.scope.owner, existing.scope.repo);
 	if (validated.tags !== undefined) updates.tags = validated.tags;
 	if (validated.metadata !== undefined) updates.metadata = validated.metadata;
 	if (validated.is_global !== undefined) updates.is_global = validated.is_global;

@@ -43,7 +43,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		// 2. Fetch it via memory-detail
 		const detailRes = await router("tools/call", {
 			name: "memory-detail",
-			arguments: { id: memoryId }
+			arguments: { id: memoryId, owner: "test", repo: REPO }
 		});
 
 		expect(detailRes.structuredContent.id).toBe(memoryId);
@@ -102,7 +102,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 
 		const detailRes = await router("tools/call", {
 			name: "standard-detail",
-			arguments: { id: standardId }
+			arguments: { id: standardId, owner: "test", repo: REPO }
 		});
 
 		expect(detailRes.structuredContent.id).toBe(standardId);
@@ -146,7 +146,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		await expect(
 			router("tools/call", {
 				name: "memory-detail",
-				arguments: { id: fakeId }
+				arguments: { id: fakeId, owner: "test", repo: REPO }
 			})
 		).rejects.toThrow(`Memory not found: ${fakeId}`);
 	});
@@ -173,7 +173,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		await expect(
 			router("tools/call", {
 				name: "standard-detail",
-				arguments: { id: fakeId }
+				arguments: { id: fakeId, owner: "test", repo: REPO }
 			})
 		).rejects.toThrow(`Coding standard not found: ${fakeId}`);
 	});

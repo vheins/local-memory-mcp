@@ -10,7 +10,7 @@ export async function handleMemoryAcknowledge(params: unknown, db: SQLiteStore):
 	// Resolve code to id
 	let memoryId = validated.memory_id;
 	if (!memoryId && validated.code) {
-		const byCode = db.memories.getByCode(validated.code);
+		const byCode = db.memories.getByCode(validated.code, validated.owner, validated.repo);
 		if (!byCode) throw new Error(`Memory not found: ${validated.code}`);
 		memoryId = byCode.id;
 	} else if (!memoryId) {

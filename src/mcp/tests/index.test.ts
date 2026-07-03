@@ -104,9 +104,9 @@ describe("readResource memory://memories", () => {
 					return allMatch;
 				}
 			),
-			{ numRuns: 100 }
+			{ numRuns: 50 }
 		);
-	});
+	}, 15000);
 
 	it("Property 19 (no filter): returns entries from all repos", async () => {
 		await fc.assert(

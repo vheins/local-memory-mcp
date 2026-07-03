@@ -49,6 +49,7 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 		const delRes = await router("tools/call", {
 			name: "memory-delete",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				ids
 			}

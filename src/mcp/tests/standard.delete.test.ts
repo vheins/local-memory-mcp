@@ -51,6 +51,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 		const delRes = await router("tools/call", {
 			name: "standard-delete",
 			arguments: {
+				owner: "test",
 				repo: REPO,
 				ids: standards.map((standard) => standard.id)
 			}

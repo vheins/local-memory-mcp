@@ -12,20 +12,20 @@ export async function handleMemoryDelete(
 ): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryDeleteSchema.parse(params);
-	const { id, ids, code, codes, repo, structured } = validated;
+	const { id, ids, code, codes, owner, repo, structured } = validated;
 
 	// Resolve code(s) to id(s)
 	const resolvedIds: string[] = [];
 	if (ids) resolvedIds.push(...ids);
 	if (id) resolvedIds.push(id);
 	if (code) {
-		const entry = db.memories.getByCode(code);
+		const entry = db.memories.getByCode(code, owner, repo);
 		if (!entry) throw new Error(`Memory not found: ${code}`);
 		resolvedIds.push(entry.id);
 	}
 	if (codes) {
 		for (const c of codes) {
-			const entry = db.memories.getByCode(c);
+			const entry = db.memories.getByCode(c, owner, repo);
 			if (!entry) throw new Error(`Memory not found: ${c}`);
 			resolvedIds.push(entry.id);
 		}

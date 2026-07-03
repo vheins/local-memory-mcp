@@ -209,7 +209,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		await router("tools/call", {
 			name: "memory-delete",
-			arguments: { id: validId, repo: "test-repo" }
+			arguments: { id: validId, owner: "test", repo: "test-repo" }
 		});
 
 		expect(mockDb.withWrite).toHaveBeenCalled();

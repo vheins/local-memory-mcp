@@ -13,10 +13,15 @@ function hasMetadataLikeTitle(title: string): boolean {
 	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
 }
 
-function resolveMemorySupersedes(value: string | null | undefined, db: SQLiteStore): string | null {
+function resolveMemorySupersedes(
+	value: string | null | undefined,
+	db: SQLiteStore,
+	owner?: string,
+	repo?: string
+): string | null {
 	if (!value) return null;
 	if (UUID_REGEX.test(value)) return value;
-	const memory = db.memories.getByCode(value);
+	const memory = db.memories.getByCode(value, owner, repo);
 	if (!memory) throw new Error(`supersedes: memory with code '${value}' not found`);
 	return memory.id;
 }
@@ -52,7 +57,7 @@ async function storeSingleMemory(
 	const createdAtTime = new Date(now).getTime();
 	const expires_at = params.ttlDays != null ? new Date(createdAtTime + params.ttlDays * 86400000).toISOString() : null;
 
-	const resolvedSupersedes = resolveMemorySupersedes(params.supersedes, db);
+	const resolvedSupersedes = resolveMemorySupersedes(params.supersedes, db, params.scope.owner, params.scope.repo);
 
 	if (!resolvedSupersedes && params.type !== "task_archive") {
 		const conflict = await db.memoryVectors.checkConflicts(
@@ -165,7 +170,7 @@ export async function handleMemoryStore(
 			const createdAtTime = new Date(now).getTime();
 			const expires_at = mem.ttlDays != null ? new Date(createdAtTime + mem.ttlDays * 86400000).toISOString() : null;
 
-			const resolvedSupersedes = resolveMemorySupersedes(mem.supersedes, db);
+			const resolvedSupersedes = resolveMemorySupersedes(mem.supersedes, db, mem.scope.owner, mem.scope.repo);
 
 			if (!resolvedSupersedes && mem.type !== "task_archive") {
 				const conflict = await db.memoryVectors.checkConflicts(

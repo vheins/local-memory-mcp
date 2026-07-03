@@ -4,13 +4,13 @@ import { MemoryDetailSchema } from "./schemas";
 
 export async function handleMemoryDetail(args: Record<string, unknown>, storage: SQLiteStore) {
 	const validated = MemoryDetailSchema.parse(args);
-	const { id, code } = validated;
+	const { id, code, owner, repo } = validated;
 
 	let memory;
 	if (id) {
 		memory = storage.memories.getById(id);
 	} else if (code) {
-		memory = storage.memories.getByCode(code);
+		memory = storage.memories.getByCode(code, owner, repo);
 	}
 
 	if (!memory) {

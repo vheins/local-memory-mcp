@@ -7,7 +7,7 @@ export async function handleStandardDetail(args: Record<string, unknown>, storag
 
 	const standard = validated.id
 		? storage.standards.getById(validated.id)
-		: storage.standards.getByCode(validated.code!);
+		: storage.standards.getByCode(validated.code!, validated.owner, validated.repo);
 
 	if (!standard) {
 		const identifier = validated.id ?? validated.code;

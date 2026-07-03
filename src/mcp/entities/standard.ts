@@ -76,8 +76,14 @@ export class StandardEntity extends BaseEntity {
 		return row ? this.rowToEntry(row) : null;
 	}
 
-	getByCode(code: string): CodingStandardEntry | null {
-		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE code = ?", [code]);
+	getByCode(code: string, owner?: string, repo?: string): CodingStandardEntry | null {
+		let sql = "SELECT * FROM coding_standards WHERE code = ?";
+		const params: (string | null)[] = [code];
+		if (owner && repo) {
+			sql += " AND owner = ? AND repo = ?";
+			params.push(owner, repo);
+		}
+		const row = this.get<CodingStandardRow>(sql, params);
 		return row ? this.rowToEntry(row) : null;
 	}
 

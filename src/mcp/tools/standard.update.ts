@@ -7,10 +7,15 @@ import { buildStandardVectorText } from "./standard.shared";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function resolveStandardParentId(value: string | null | undefined, db: SQLiteStore): string | null {
+function resolveStandardParentId(
+	value: string | null | undefined,
+	db: SQLiteStore,
+	owner?: string,
+	repo?: string
+): string | null {
 	if (!value) return null;
 	if (UUID_REGEX.test(value)) return value;
-	const standard = db.standards.getByCode(value);
+	const standard = db.standards.getByCode(value, owner, repo);
 	if (!standard) throw new Error(`parent_id: standard with code '${value}' not found`);
 	return standard.id;
 }
@@ -25,7 +30,7 @@ export async function handleStandardUpdate(
 	// Resolve code to id if needed
 	let resolvedId = validated.id;
 	if (!resolvedId && validated.code) {
-		const byCode = db.standards.getByCode(validated.code);
+		const byCode = db.standards.getByCode(validated.code, validated.owner, validated.repo);
 		if (!byCode) throw new Error(`Coding standard not found: ${validated.code}`);
 		resolvedId = byCode.id;
 	} else if (!resolvedId) {
@@ -40,7 +45,8 @@ export async function handleStandardUpdate(
 	const updates: Partial<CodingStandardEntry> = {};
 	if (validated.name !== undefined) updates.title = validated.name;
 	if (validated.content !== undefined) updates.content = validated.content;
-	if (validated.parent_id !== undefined) updates.parent_id = resolveStandardParentId(validated.parent_id, db);
+	if (validated.parent_id !== undefined)
+		updates.parent_id = resolveStandardParentId(validated.parent_id, db, existing.owner, existing.repo ?? undefined);
 	if (validated.context !== undefined) updates.context = validated.context;
 	if (validated.version !== undefined) updates.version = validated.version;
 	if (validated.language !== undefined) updates.language = validated.language;

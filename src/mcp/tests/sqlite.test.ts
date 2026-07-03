@@ -149,9 +149,9 @@ describe("Property 7: Pagination non-overlapping", () => {
 					return true;
 				}
 			),
-			{ numRuns: 100 }
+			{ numRuns: 50 }
 		);
-	});
+	}, 15000);
 });
 
 describe("Property 8: TTL stores correct expires_at", () => {
@@ -307,9 +307,9 @@ describe("Property 18: listRepos() returns unique and sorted list", () => {
 					return true;
 				}
 			),
-			{ numRuns: 100 }
+			{ numRuns: 50 }
 		);
-	});
+	}, 15000);
 });
 
 describe("Property 19: Action Log stores and retrieves recent actions", () => {

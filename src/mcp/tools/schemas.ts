@@ -81,6 +81,8 @@ export const MemoryUpdateSchema = z
 	.object({
 		id: z.string().uuid().optional(),
 		code: z.string().max(20).optional(),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
 		type: MemoryTypeSchema.optional(),
 		title: z.string().min(3).max(255).optional(),
 		content: z.string().min(10).optional(),
@@ -136,6 +138,8 @@ export const MemoryAcknowledgeSchema = z
 	.object({
 		memory_id: z.string().uuid().optional(),
 		code: z.string().max(20).optional(),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
 		status: z.enum(["used", "irrelevant", "contradictory"]),
 		application_context: z.string().min(10).optional(),
 		structured: z.boolean().default(false)
@@ -154,8 +158,8 @@ export const MemoryRecapSchema = z.object({
 
 export const MemoryDeleteSchema = z
 	.object({
-		owner: z.string().optional().default(""),
-		repo: z.string().min(1).transform(normalizeRepo).optional(),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
 		code: z.string().max(20).optional(),
@@ -387,6 +391,8 @@ export const MemoryDetailSchema = z
 	.object({
 		id: z.string().uuid().optional(),
 		code: z.string().max(20).optional(),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
 		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
@@ -397,6 +403,8 @@ export const StandardDetailSchema = z
 	.object({
 		id: z.string().uuid().optional(),
 		code: z.string().max(20).optional(),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
 		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
@@ -405,8 +413,8 @@ export const StandardDetailSchema = z
 
 export const StandardDeleteSchema = z
 	.object({
-		owner: z.string().optional().default(""),
-		repo: z.string().min(1).transform(normalizeRepo).optional(),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
 		id: z.string().uuid().optional(),
 		ids: z.array(z.string().uuid()).min(1).optional(),
 		code: z.string().max(20).optional(),
@@ -570,8 +578,8 @@ export const StandardUpdateSchema = z
 		version: z.string().optional(),
 		language: z.string().optional(),
 		stack: z.array(z.string().min(1)).min(1).optional(),
-		owner: z.string().optional().default(""),
-		repo: z.string().transform(normalizeRepo).optional(),
+		owner: z.string().min(1),
+		repo: z.string().transform(normalizeRepo),
 		is_global: z.boolean().optional(),
 		tags: z.array(z.string().min(1)).min(1).optional(),
 		metadata: z

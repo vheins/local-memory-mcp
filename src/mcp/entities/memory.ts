@@ -112,8 +112,14 @@ export class MemoryEntity extends BaseEntity {
 		return row ? this.rowToMemoryEntry(row) : null;
 	}
 
-	getByCode(code: string): MemoryEntry | null {
-		const row = this.get<MemoryRow>("SELECT * FROM memories WHERE code = ?", [code]);
+	getByCode(code: string, owner?: string, repo?: string): MemoryEntry | null {
+		let sql = "SELECT * FROM memories WHERE code = ?";
+		const params: (string | null)[] = [code];
+		if (owner && repo) {
+			sql += " AND owner = ? AND repo = ?";
+			params.push(owner, repo);
+		}
+		const row = this.get<MemoryRow>(sql, params);
 		return row ? this.rowToMemoryEntry(row) : null;
 	}
 
