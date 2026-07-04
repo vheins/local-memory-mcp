@@ -79,7 +79,6 @@ export class SystemEntity extends BaseEntity {
 		const staleClaimsByRepo = Object.fromEntries(staleClaimRows.map((row) => [row.repo, row.count]));
 
 		const repoOwnerFilter = owner ? " AND owner = ?" : "";
-		const repoOwnerParams = owner ? [owner] : [];
 
 		return repos.map((repo) => {
 			const memoryCountRow = this.get<{ count: number }>(

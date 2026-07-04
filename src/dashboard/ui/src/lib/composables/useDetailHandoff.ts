@@ -54,15 +54,11 @@ export function createDetailHandoff(subscribe: (run: (s: DetailState) => void) =
 
 	function parseHandoffContext(value: string): Record<string, unknown> {
 		if (!value.trim()) return {};
-		try {
-			const parsed = JSON.parse(value) as unknown;
-			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-				throw new Error("JSON must be an object.");
-			}
-			return parsed as Record<string, unknown>;
-		} catch (e) {
-			throw e;
+		const parsed = JSON.parse(value) as unknown;
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			throw new Error("JSON must be an object.");
 		}
+		return parsed as Record<string, unknown>;
 	}
 
 	async function createHandoff(onCreated: () => void, repo: string) {

@@ -750,6 +750,11 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				id: { type: "string", format: "uuid", description: "Memory entry ID. Optional if code is provided." },
 				code: { type: "string", description: "Short memory code. Optional if id is provided." },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Required when using code."
+				},
+				repo: { type: "string", description: "Repository/project name. Required when using code." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
 			}
 		}
@@ -764,6 +769,11 @@ export const TOOL_DEFINITIONS = [
 			properties: {
 				id: { type: "string", format: "uuid", description: "Coding standard ID. Optional if code is provided." },
 				code: { type: "string", description: "Short standard code (e.g. 'A3KPQ2'). Optional if id is provided." },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Required when using code."
+				},
+				repo: { type: "string", description: "Repository/project name. Required when using code." },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
 			}
 		}

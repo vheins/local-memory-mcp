@@ -19,3 +19,8 @@
 - Objective: Tap into advanced MCP features like form elicitation, completions, and server-driven prompts.
 - Key Deliverables: `memory-synthesize` (Sampling), `task-create-interactive` (Elicitation), auto-completion API.
 - Timeline: Week 7-8
+
+## Phase 5: Upstream Alignment & Knowledge Graph Integration
+- Objective: Adopt core features from upstream Beledarian/mcp-local-memory to enable structured relationship mapping, zero-dependency entity extraction, and drop-in client compatibility.
+- Key Deliverables: Upstream alias compatibility layer, Knowledge Graph database schema and CRUD tools, NLP Archivist auto-ingestion, Time Tunnel date queries, and Soul Maintenance memory decay model.
+- Timeline: Week 9-14

@@ -1,4 +1,4 @@
-import type { Memory, Task, TaskComment, CodingStandard, Handoff } from "../stores";
+import type { Memory, Task, CodingStandard, Handoff } from "../stores";
 
 export interface HandoffForm {
 	from_agent: string;

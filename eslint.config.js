@@ -6,47 +6,40 @@ import globals from "globals";
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  js.configs.recommended,
-  ...ts.configs.recommended,
-  ...svelte.configs["flat/recommended"],
-  prettier,
-  ...svelte.configs["flat/prettier"],
-  {
-    rules: {
-      "@typescript-eslint/no-explicit-any": "error"
-    }
-  },
-  {
-    files: ["**/*.test.ts", "**/*.spec.ts"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off"
-    }
-  },
-  {
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-      },
-    },
-  },
-  {
-    files: ["**/*.svelte"],
-    languageOptions: {
-      parserOptions: {
-        parser: ts.parser,
-      },
-    },
-  },
-  {
-    ignores: [
-      "dist/",
-      "node_modules/",
-      "bin/",
-      "build/",
-      "*.db",
-      "storage/",
-      ".svelte-kit/",
-    ],
-  }
+	js.configs.recommended,
+	...ts.configs.recommended,
+	...svelte.configs["flat/recommended"],
+	prettier,
+	...svelte.configs["flat/prettier"],
+	{
+		rules: {
+			"@typescript-eslint/no-explicit-any": "error",
+			"@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }]
+		}
+	},
+	{
+		files: ["**/*.test.ts", "**/*.spec.ts"],
+		rules: {
+			"@typescript-eslint/no-explicit-any": "off"
+		}
+	},
+	{
+		languageOptions: {
+			globals: {
+				...globals.browser,
+				...globals.node
+			}
+		}
+	},
+	{
+		files: ["**/*.svelte"],
+		languageOptions: {
+			parserOptions: {
+				parser: ts.parser
+			}
+		}
+	},
+	{
+		ignores: ["dist/", "node_modules/", "bin/", "build/", "*.db", "storage/", ".svelte-kit/"]
+	}
 ];

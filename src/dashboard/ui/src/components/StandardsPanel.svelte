@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { api } from "../lib/api";
 	import Icon from "../lib/Icon.svelte";
-	import { currentRepo } from "../lib/stores";
+
 	import type { CodingStandard } from "../lib/stores";
 	import { formatDate } from "../lib/utils";
 	import { confirmDelete } from "../lib/confirm";
@@ -86,11 +86,11 @@
 		selectedStandard = null;
 	}
 
-	function handleStandardUpdated(_std: CodingStandard) {
+	function handleStandardUpdated(_: unknown) {
 		void loadStandards();
 	}
 
-	function handleStandardDeleted(_id: string) {
+	function handleStandardDeleted(_: unknown) {
 		void loadStandards();
 	}
 

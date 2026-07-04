@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Memory, Task, CodingStandard, Handoff } from "../lib/stores";
-	import Icon from "../lib/Icon.svelte";
 	import { getStatusColor, getStatusLabel } from "../lib/utils";
 	import { createDetailHandler } from "../lib/composables/useDetail";
 	import MemoryDetailPanel from "./MemoryDetailPanel.svelte";
@@ -132,23 +131,11 @@
 			{/if}
 
 			{#if $mode === "handoff"}
-				<HandoffDetailPanel
-					{handler}
-					{onClose}
-					{onHandoffCreated}
-					{onHandoffUpdated}
-					repo={repo || ""}
-				/>
+				<HandoffDetailPanel {handler} {onClose} {onHandoffCreated} {onHandoffUpdated} repo={repo || ""} />
 			{/if}
 
 			{#if $mode === "standard"}
-				<StandardDetailPanel
-					{handler}
-					{onClose}
-					{onStandardUpdated}
-					{onStandardDeleted}
-					{repo}
-				/>
+				<StandardDetailPanel {handler} {onClose} {onStandardUpdated} {onStandardDeleted} {repo} />
 			{/if}
 		</div>
 	</div>

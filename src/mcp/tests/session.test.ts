@@ -4,7 +4,6 @@
 
 import { describe, it, expect } from "vitest";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createSessionContext, inferOwnerFromSession, inferRepoFromSession } from "../session";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
