@@ -10,19 +10,19 @@ tags: [workflow, tooling, memory, policy, mcp]
 
 ## Memory Flow
 
-Entry=S0 → S1 → S2 → S3 → S4 → S5   Exit=maintained
+Entry=S0 → S1 → S2 → S3 → S4 → S5 Exit=maintained
 Guard: S(N) req S(N-1)✅
 
 S0 | navigate: memory-recap (overview) / memory-search (targeted) | — | pointer rows | —
 S1 | hydrate: memory-detail (id or code) before relying on content | S0✅ | full entry | —
-S2 | store: memory-store (durable only, tech tags, human title, aux in metadata) | — | stored | —
+S2 | store: memory-store(type+title+content+importance+agent+model+scope, durable only, tech tags, human title, aux in metadata) | — | stored | —
 S3 | maintain: memory-update / supersedes for changes; avoid duplicates | — | updated | —
 S4 | acknowledge: memory-acknowledge (used|irrelevant|contradictory) after code gen | code generated? | feedback | —
 S5 | verify: confirm acknowledge called after code gen, no duplicate memories created | S4✅ | verified | —
 
 ## Standards Flow
 
-Entry=S0 → S1 → S2 → S3   Exit=done
+Entry=S0 → S1 → S2 → S3 Exit=done
 Guard: S(N) req S(N-1)✅
 
 S0 | search: standard-search mandatory before code edit/test/refactor/migrate (query, lang, stack, repo) | — | applicable | —
@@ -32,7 +32,7 @@ S3 | verify: confirm standard-search was called, scope and tags correct | S2✅ 
 
 ## Handoff & Claim Flow
 
-Entry=S0 → S1 → S2 → S3 → S4   Exit=resolved
+Entry=S0 → S1 → S2 → S3 → S4 Exit=resolved
 Guard: S(N) req S(N-1)✅
 
 S0 | check: handoff-list (status, from/to agent) + claim-list | — | active state | —

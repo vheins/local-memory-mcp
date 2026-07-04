@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { db, mcpClient, startTime } from "../lib/context";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
 import { condenseRecentActions } from "../lib/helpers";
-import { TOOL_DEFINITIONS } from "../../mcp/tools/schemas";
+import { TOOL_DEFINITIONS } from "../../mcp/tools/tool-definitions";
 import { listResources } from "../../mcp/resources/index";
 import { PROMPTS } from "../../mcp/prompts/registry";
 import type { RecentAction } from "../ui/src/lib/interfaces/common";

@@ -17,7 +17,7 @@ Entry=S0 → S1 → S2 Exit=stored
 Guard: S(N) req S(N-1)✅
 
 S0 | identify: mistakes (bugs/quirks), decisions (trade-offs/pivots), patterns (conventions) | task_id? | knowledge items | —
-S1 | store via memory-store (type=mistake|decision|pattern, include tech tags, concise) | S0✅ | durable memories | —
+S1 | store via memory-store (type+title+content+importance+agent+model+scope, type=mistake|decision|pattern, include tech tags, concise) | S0✅ | durable memories | —
 S2 | verify: confirm stored count matches identified items, check type correctness | S1✅ | verified | —
 
 ## Directives

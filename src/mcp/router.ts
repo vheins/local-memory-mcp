@@ -9,7 +9,7 @@ import {
 } from "./session";
 import { logger } from "./utils/logger";
 import { getPrompt, listPrompts } from "./prompts/registry";
-import { TOOL_DEFINITIONS } from "./tools/schemas";
+import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
 import { parseRepoInput } from "./utils/normalize";
 import { SQLiteStore } from "./storage/sqlite";

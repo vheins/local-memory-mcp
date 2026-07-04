@@ -40,5 +40,7 @@ Entry=S0 → S1 → S2 Exit=stored
 Guard: store ONLY if durable + affects future behavior; use supersedes for overrides
 
 S0 | categorize: type + tech tags; NEVER store coordination state (claims, file ownership) as memory | is durable? | classified | —
-S1 | store: memory-store(decisions/patterns) or standard-store(normative rules) or handoff-create(transfer ctx) | S0✅ | stored | —
+S1 | store: memory-store(type+title+content+importance+agent+model+scope) or standard-store(normative rules) or handoff-create(transfer ctx) | S0✅ | stored | —
 S2 | verify: confirm stored entity matches category, no forbidden types mixed in | S1✅ | verified | —
+
+**⚠️ `memory-store` requires ALL 7 fields**: `type`, `title`, `content`, `importance`, `agent`, `model`, `scope` (with `scope.owner` + `scope.repo`). Or use `memories[]` array for bulk.

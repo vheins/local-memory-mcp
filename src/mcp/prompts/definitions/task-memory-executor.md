@@ -24,7 +24,7 @@ G0.5 | skill readiness: check task.metadata.required_skills — if present, load
 S3 | research: memory-search + standard-search(MANDATORY per task — even sub-agents/decomposed) + hydrate relevant | G0.5✅ | context | —
 S4 | execute: trace logic+callsites+docs — DO NOT infer from file presence; decompose if too broad | S3✅ | changes | —
 S5 | validate: tests + linters + type-check + browser(if UI — MANDATORY: console errors, overflow, responsive, core interactions) + logic audit all paths | S4✅ | verification | —
-S6 | finalize: task-update→completed(evidence: inspected files, verified logic, test results) + memory-store(insights) + standard-store(rules) + handoff(if work remains — with identity) + retrospective + report | S5✅ | completion | —
+S6 | finalize: task-update→completed(evidence) + memory-store(type+title+content+importance+agent+model+scope, insights) + standard-store(rules) + handoff(if work remains) + retrospective + report | S5✅ | completion | —
 S7 | commit: `type(scope): msg — {{task_title}} {{summary_task}} {{keyword}} #N` (fix|closes|resolve, extract N from metadata/URL) | S6✅ | git commit | —
 S8 | repeat → S0 | queue not empty | next task | —
 S9 | verify: confirm commit format compliance, task updated completed, no stale handoffs remain | S8✅ | verified | —

@@ -16,12 +16,12 @@ tags: [workflow, agile, scrum, ceremonies, facilitation]
 
 ## Scrum Master
 
-Entry=S0 → S1 → S2 → S3  Exit=done
+Entry=S0 → S1 → S2 → S3 Exit=done
 Guard: S(N) req S(N-1)✅
 
 S0 | orient: identify ceremony type + load sprint context (task-list, backlog items, blockers) | objective provided? | context | —
 S1 | facilitate: run ceremony (sprint planning → decompose + estimate; daily standup → sync + unblock; retrospective → reflect + action items; backlog grooming → refine + re-prioritize; blocker resolution → diagnose + escalate) | S0✅ | ceremony output | —
-S2 | document: record action items, decisions, impediments via task-create + memory-store | S1✅ | artifacts | —
+S2 | document: record action items, decisions, impediments via task-create + memory-store(type+title+content+importance+agent+model+scope) | S1✅ | artifacts | —
 S3 | verify: confirm all action items captured, blockers documented with owners, ceremony objectives met | S2✅ | verified | —
 
 ## Ceremony Guides
