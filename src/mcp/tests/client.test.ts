@@ -1,168 +1,142 @@
-// Feature: memory-mcp-optimization, Property 16: MCPClient cleanup pending requests
-// Feature: memory-mcp-optimization, Property 17: MCPClient retry count
+// Integration tests for the SDK-based MCPClient wrapper
 
-import { describe, it, expect, vi } from "vitest";
-import * as fc from "fast-check";
-
+import { describe, it, expect } from "vitest";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { MCPClient } from "../client";
+import { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 
-class TestableMCPClient extends MCPClient {
-	get pending(): Map<number, { resolve: (v: unknown) => void; reject: (r: unknown) => void }> {
-		return (
-			this as unknown as {
-				pendingRequests: Map<number, { resolve: (v: unknown) => void; reject: (r: unknown) => void }>;
-			}
-		).pendingRequests;
-	}
+describe("MCPClient (SDK-based)", () => {
+	it("can be instantiated with no arguments", () => {
+		const client = new MCPClient();
+		expect(client).toBeInstanceOf(MCPClient);
+	});
 
-	injectPending(n: number): Promise<unknown>[] {
-		const promises: Promise<unknown>[] = [];
-		for (let i = 0; i < n; i++) {
-			const id = 1000 + i;
-			const p = new Promise((resolve, reject) => {
-				this.pending.set(id, {
-					resolve,
-					reject
-				});
-			});
-			promises.push(p);
-		}
-		return promises;
-	}
-}
+	it("isConnected() returns false before start()", () => {
+		const client = new MCPClient();
+		expect(client.isConnected()).toBe(false);
+	});
 
-describe("Property 16: MCPClient cleanup pending requests saat stop atau timeout", () => {
-	it("stop() clears the pending map synchronously", () => {
-		const client = new TestableMCPClient();
-		const n = 5;
-		const promises = client.injectPending(n);
-		const rejections = promises.map((p) => p.catch(() => undefined));
-		client.stop();
+	it("getPendingCount() returns 0", () => {
+		const client = new MCPClient();
 		expect(client.getPendingCount()).toBe(0);
-		void Promise.all(rejections);
 	});
 
-	it("stop() rejects all pending requests with 'Client stopped'", async () => {
-		const client = new TestableMCPClient();
-		const n = 5;
-		const promises = client.injectPending(n);
-		client.stop();
-		const results = await Promise.allSettled(promises);
-		for (const result of results) {
-			expect(result.status).toBe("rejected");
-			if (result.status === "rejected") {
-				expect((result.reason as Error).message).toBe("Client stopped");
-			}
-		}
+	it("stop() is safe to call before start()", async () => {
+		const client = new MCPClient();
+		await expect(client.stop()).resolves.toBeUndefined();
 	});
 
-	it("getPendingCount() returns correct count before and after stop()", () => {
-		const client = new TestableMCPClient();
-		const n = 10;
-		const promises = client.injectPending(n);
-		const rejections = promises.map((p) => p.catch(() => undefined));
-		expect(client.getPendingCount()).toBe(n);
-		client.stop();
-		expect(client.getPendingCount()).toBe(0);
-		void Promise.all(rejections);
-	});
-
-	it("property: for any N >= 0, after stop() pendingCount === 0", () => {
-		fc.assert(
-			fc.property(fc.integer({ min: 0, max: 20 }), (n: number) => {
-				const client = new TestableMCPClient();
-				const promises = client.injectPending(n);
-				promises.forEach((p) => p.catch(() => undefined));
-				client.stop();
-				return client.getPendingCount() === 0;
-			})
-		);
+	it("start() throws when server.js is not found", async () => {
+		const client = new MCPClient("/nonexistent/server.js");
+		await expect(client.start()).rejects.toThrow();
 	});
 });
 
-describe("Property 17: MCPClient retry maksimal 3 kali dengan exponential backoff", () => {
-	it("retries exactly 3 times (4 total attempts) on timeout before rejecting", async () => {
-		vi.useFakeTimers();
-
-		try {
-			let callOnceCount = 0;
-
-			const client = new TestableMCPClient() as unknown as {
-				callOnce: (method: string, params: unknown) => Promise<unknown>;
-				callWithRetry: (method: string, params: unknown) => Promise<unknown>;
-				process: unknown;
-			};
-
-			client.callOnce = async (): Promise<unknown> => {
-				callOnceCount++;
-				throw new Error("Request timeout");
-			};
-
-			client.process = { stdin: { write: () => true } };
-
-			const retryPromise = client.callWithRetry("test/method", {});
-			retryPromise.catch(() => undefined);
-
-			await vi.runAllTimersAsync();
-			const result = await retryPromise.catch((e: Error) => e);
-
-			expect(result).toBeInstanceOf(Error);
-			expect((result as Error).message).toBe("Request timeout");
-			expect(callOnceCount).toBe(4);
-		} finally {
-			vi.useRealTimers();
-		}
+describe("SDK Client integration", () => {
+	it("Client can be created with name and version", () => {
+		const client = new Client({ name: "test", version: "1.0.0" });
+		expect(client).toBeDefined();
 	});
 
-	it("does not retry on non-timeout errors", async () => {
-		vi.useFakeTimers();
+	it("InMemoryTransport can connect a client to a server", async () => {
+		const server = new McpServer(
+			{ name: "test-server", version: "1.0.0" },
+			{ capabilities: { tools: {} } }
+		);
 
-		try {
-			let callOnceCount = 0;
+		server.registerTool("greet", {
+			description: "Greet someone",
+			inputSchema: z.object({ name: z.string() })
+		}, async (args: any) => ({
+			content: [{ type: "text" as const, text: `Hello, ${args.name}!` }]
+		}));
 
-			const client = new TestableMCPClient() as unknown as {
-				callOnce: (method: string, params: unknown) => Promise<unknown>;
-				callWithRetry: (method: string, params: unknown) => Promise<unknown>;
-				process: unknown;
-			};
+		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+		const client = new Client({ name: "test-client", version: "1.0.0" });
 
-			client.callOnce = async (): Promise<unknown> => {
-				callOnceCount++;
-				throw new Error("Some other error");
-			};
+		await Promise.all([
+			server.connect(serverTransport),
+			client.connect(clientTransport)
+		]);
 
-			client.process = { stdin: { write: () => true } };
+		const tools = await client.listTools();
+		expect(tools.tools).toBeDefined();
+		const toolNames = tools.tools.map((t: any) => t.name);
+		expect(toolNames).toContain("greet");
 
-			const retryPromise = client.callWithRetry("test/method", {});
-			retryPromise.catch(() => undefined);
+		const result = await client.callTool({ name: "greet", arguments: { name: "World" } });
+		const content = result.content as Array<{ type: string; text: string }>;
+		expect(content[0].text).toBe("Hello, World!");
 
-			await vi.runAllTimersAsync();
-			const result = await retryPromise.catch((e: Error) => e);
-
-			expect(result).toBeInstanceOf(Error);
-			expect((result as Error).message).toBe("Some other error");
-			expect(callOnceCount).toBe(1);
-		} finally {
-			vi.useRealTimers();
-		}
+		await client.close();
+		await server.close();
 	});
 
-	it("property: retry delays follow exponential backoff pattern", () => {
-		vi.useFakeTimers();
+	it("Client readResource integration with InMemoryTransport", async () => {
+		const server = new McpServer(
+			{ name: "test-server", version: "1.0.0" },
+			{ capabilities: { resources: {} } }
+		);
 
-		try {
-			fc.assert(
-				fc.property(fc.constant(null), () => {
-					const expectedDelays = [1000, 2000, 4000];
-					expect(expectedDelays).toHaveLength(3);
-					for (let i = 1; i < expectedDelays.length; i++) {
-						expect(expectedDelays[i]).toBe(expectedDelays[i - 1] * 2);
-					}
-					return true;
-				})
-			);
-		} finally {
-			vi.useRealTimers();
-		}
+		server.registerResource(
+			"config",
+			"config://app",
+			{ mimeType: "application/json" },
+			async (_uri: unknown) => ({
+				contents: [{
+					uri: "config://app",
+					text: JSON.stringify({ debug: true })
+				}]
+			})
+		);
+
+		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+		const client = new Client({ name: "test-client", version: "1.0.0" });
+
+		await Promise.all([
+			server.connect(serverTransport),
+			client.connect(clientTransport)
+		]);
+
+		const resources = await client.listResources();
+		expect(resources.resources).toBeDefined();
+
+		const result = await client.readResource({ uri: "config://app" });
+		const contents = result.contents as Array<{ uri: string; text: string }>;
+		expect(contents[0].text).toContain("debug");
+
+		await client.close();
+		await server.close();
+	});
+
+	it("Client can list prompts", async () => {
+		const server = new McpServer(
+			{ name: "test-server", version: "1.0.0" },
+			{ capabilities: { prompts: {} } }
+		);
+
+		server.registerPrompt("review", {
+			description: "Review code",
+			argsSchema: z.object({ code: z.string() })
+		}, async (args: any) => ({
+			messages: [{ role: "user" as const, content: { type: "text" as const, text: `Review: ${args.code}` } }]
+		}));
+
+		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+		const client = new Client({ name: "test-client", version: "1.0.0" });
+
+		await Promise.all([
+			server.connect(serverTransport),
+			client.connect(clientTransport)
+		]);
+
+		const prompts = await client.listPrompts();
+		expect(prompts.prompts).toBeDefined();
+		const promptNames = prompts.prompts.map((p: any) => p.name);
+		expect(promptNames).toContain("review");
+
+		await client.close();
+		await server.close();
 	});
 });

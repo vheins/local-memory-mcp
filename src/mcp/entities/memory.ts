@@ -416,7 +416,7 @@ export class MemoryEntity extends BaseEntity {
 		limit: number;
 		offset: number;
 	} {
-		let {
+		const {
 			owner,
 			repo,
 			type,
@@ -427,9 +427,23 @@ export class MemoryEntity extends BaseEntity {
 			search,
 			offset = 0,
 			limit = 50,
-			sortBy = "created_at",
 			sortOrder = "DESC"
 		} = options;
+		let sortBy = options.sortBy ?? "created_at";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 		const ALLOWED_SORT_COLUMNS = new Set([
 			"created_at",
 			"updated_at",

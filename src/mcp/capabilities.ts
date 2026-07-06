@@ -1,6 +1,6 @@
-import { fileURLToPath } from "url";
-import path from "path";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let pkgVersion = "0.1.0";
@@ -30,18 +30,14 @@ if (typeof __PKG_VERSION__ !== "undefined" && __PKG_VERSION__) {
 
 declare const __PKG_VERSION__: string;
 
-// MCP Server Capabilities
+// MCP Protocol version supported by this server
 export const MCP_PROTOCOL_VERSION = "2025-03-26";
 
-import { loadServerInstructions } from "./prompts/loader.js";
-
-const SERVER_INSTRUCTIONS = loadServerInstructions();
-
+// Server info for the MCP initialize response
 export const CAPABILITIES = {
 	serverInfo: {
 		name: "local-memory-mcp",
-		version: pkgVersion,
-		instructions: SERVER_INSTRUCTIONS
+		version: pkgVersion
 	},
 	capabilities: {
 		completions: {},

@@ -1,26 +1,32 @@
 # Product Roadmap: Local Memory MCP
 
 ## Phase 1: Core Foundation
+
 - Objective: Establish basic SQLite storage, logging, and MCP Server setup.
 - Key Deliverables: DB Setup, `memory-store`, `memory-delete`, `memory-detail`, basic CLI startup scripts.
 - Timeline: Week 1-2
 
 ## Phase 2: Semantic Capabilities
+
 - Objective: Integrate embeddings, vector similarity search, and hybrid query capabilities.
 - Key Deliverables: `@xenova/transformers` ONNX model initialization, `memory-search`, FTS5 optimizations.
 - Timeline: Week 3-4
 
 ## Phase 3: Task Management & UI Dashboard
+
 - Objective: Build out lifecycle management tools for context boundaries and provide a GUI for developers.
 - Key Deliverables: `task-create`, `task-list`, `task-detail`, `mcp-memory-dashboard.js` server, Svelte frontend.
 - Timeline: Week 5-6
 
 ## Phase 4: Advanced MCP Client Integrations
+
 - Objective: Tap into advanced MCP features like form elicitation, completions, and server-driven prompts.
 - Key Deliverables: `memory-synthesize` (Sampling), `task-create-interactive` (Elicitation), auto-completion API.
 - Timeline: Week 7-8
 
-## Phase 5: Upstream Alignment & Knowledge Graph Integration
-- Objective: Adopt core features from upstream Beledarian/mcp-local-memory to enable structured relationship mapping, zero-dependency entity extraction, and drop-in client compatibility.
-- Key Deliverables: Upstream alias compatibility layer, Knowledge Graph database schema and CRUD tools, NLP Archivist auto-ingestion, Time Tunnel date queries, and Soul Maintenance memory decay model.
+## Phase 5: Agentic Auto-Features & Upstream Alignment
+
+- Objective: Supercharge agentic coding workflows with automatic context recall, decision logging, and session summarization. Secondary: upstream alias layer and Knowledge Graph.
+- Sprint A (Agentic): `agent-context`, `decision-log`, `session-summarize` tools, upstream alias layer
+- Sprint B (Infrastructure): Knowledge Graph, NLP Archivist, Time Tunnel, Soul Maintenance
 - Timeline: Week 9-14

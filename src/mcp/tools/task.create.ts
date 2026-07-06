@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
-import { Task, TaskStatus, TaskPriority, VectorStore } from "../types";
+import { Task, TaskStatus, TaskPriority } from "../types";
 import { inferRepoFromSession } from "../session";
 import { extractAcceptedElicitationContent } from "../elicitation";
 import { createMcpResponse } from "../utils/mcp-response";
