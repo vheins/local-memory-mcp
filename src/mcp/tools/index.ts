@@ -54,6 +54,7 @@ import {
 	handleDeleteRelation,
 	handleDeleteObservation
 } from "./kg.crud";
+import { handleKGBackfill } from "./kg-backfill";
 import { McpResponse } from "../utils/mcp-response";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -100,7 +101,8 @@ const WRITE_TOOLS = new Set([
 	"delete_entity",
 	"create_relation",
 	"delete_relation",
-	"delete_observation"
+	"delete_observation",
+	"kg-backfill"
 ]);
 
 // ── Session / argument middleware ─────────────────────────────────────────
@@ -371,7 +373,8 @@ function buildExecutors(
 		delete_entity: (args, db, _vectors, _extra) => handleDeleteEntity(args, db, _vectors),
 		create_relation: (args, db, _vectors, _extra) => handleCreateRelation(args, db, _vectors),
 		delete_relation: (args, db, _vectors, _extra) => handleDeleteRelation(args, db, _vectors),
-		delete_observation: (args, db, _vectors, _extra) => handleDeleteObservation(args, db, _vectors)
+		delete_observation: (args, db, _vectors, _extra) => handleDeleteObservation(args, db, _vectors),
+		"kg-backfill": (args, db, _vectors, _extra) => handleKGBackfill(args, db)
 	};
 }
 

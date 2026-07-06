@@ -251,5 +251,34 @@ export const KG_TOOL_DEFINITIONS = [
 				deletedCount: { type: "number" }
 			}
 		}
+	},
+	{
+		name: "kg-backfill",
+		description:
+			"Scan existing memories and standards to extract Knowledge Graph entities via NLP. If no repo specified, scans all repositories. Progress logged every 100 items.",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: {
+					type: "string",
+					description: "Optional repo filter. If omitted, scans all repos."
+				},
+				owner: {
+					type: "string",
+					description: "Optional owner."
+				},
+				source: {
+					type: "string",
+					enum: ["memories", "standards", "both"],
+					description: "Source to scan."
+				}
+			}
+		}
 	}
 ];

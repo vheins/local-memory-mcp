@@ -58,5 +58,6 @@ export {
 	DeleteEntitySchema,
 	CreateRelationSchema,
 	DeleteRelationSchema,
-	DeleteObservationSchema
+	DeleteObservationSchema,
+	KGBackfillSchema
 } from "./knowledge-graph";

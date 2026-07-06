@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.2] - 2026-07-06
+
+### Added
+
+- **kg-backfill tool**: Batch scan all existing memories/standards and extract KG entities via compromise NLP. Supports per-repo or full-database operation. Run once to populate the Knowledge Graph from historical data. Backfilled 425K+ entities across 45 repos.
+
+### Fixed
+
+- **Handoff owner validation**: Handoff tools (`handoff-create`, `handoff-list`, `task-claim`, `claim-list`, `claim-release`) now gracefully handle missing `owner` parameter when MCP clients connect without workspace roots. Zod schemas fall back to empty string instead of throwing `invalid_type`.
+
 ## [0.19.1] - 2026-07-06
 
 ### Refactored

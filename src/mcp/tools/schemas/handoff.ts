@@ -4,7 +4,7 @@ import { HandoffStatusSchema } from "./shared";
 
 export const HandoffCreateSchema = z
 	.object({
-		owner: z.string().min(1),
+		owner: z.string().min(1).optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		from_agent: z.string().min(1),
 		to_agent: z.string().min(1).optional(),
@@ -39,7 +39,7 @@ export const HandoffUpdateSchema = z.object({
 });
 
 export const HandoffListSchema = z.object({
-	owner: z.string().min(1),
+	owner: z.string().min(1).optional().default(""),
 	repo: z.string().min(1).transform(normalizeRepo),
 	status: HandoffStatusSchema.optional(),
 	from_agent: z.string().min(1).optional(),
@@ -51,7 +51,7 @@ export const HandoffListSchema = z.object({
 
 export const TaskClaimSchema = z
 	.object({
-		owner: z.string().min(1),
+		owner: z.string().min(1).optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
@@ -68,7 +68,7 @@ export const TaskClaimSchema = z
 	});
 
 export const ClaimListSchema = z.object({
-	owner: z.string().min(1),
+	owner: z.string().min(1).optional().default(""),
 	repo: z.string().min(1).transform(normalizeRepo),
 	agent: z.string().min(1).optional(),
 	active_only: z.boolean().default(true),
@@ -79,7 +79,7 @@ export const ClaimListSchema = z.object({
 
 export const ClaimReleaseSchema = z
 	.object({
-		owner: z.string().min(1),
+		owner: z.string().min(1).optional().default(""),
 		repo: z.string().min(1).transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
