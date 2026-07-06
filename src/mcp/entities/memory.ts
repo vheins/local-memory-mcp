@@ -116,7 +116,7 @@ export class MemoryEntity extends BaseEntity {
 		let sql = "SELECT * FROM memories WHERE code = ?";
 		const params: (string | null)[] = [code];
 		if (owner && repo) {
-			sql += " AND owner = ? AND repo = ?";
+			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
 			params.push(owner, repo);
 		}
 		const row = this.get<MemoryRow>(sql, params);
@@ -355,9 +355,11 @@ export class MemoryEntity extends BaseEntity {
 	incrementHitCounts(ids: string[]): void {
 		if (!ids || ids.length === 0) return;
 		const now = new Date().toISOString();
-		for (const id of ids) {
-			this.run("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?", [now, id]);
-		}
+		const placeholders = ids.map(() => "?").join(",");
+		this.run(`UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`, [
+			now,
+			...ids
+		]);
 	}
 
 	incrementRecallCount(id: string): void {
@@ -410,12 +412,11 @@ export class MemoryEntity extends BaseEntity {
 		sortOrder?: "ASC" | "DESC";
 	}): {
 		items: (MemoryEntry & { recall_rate: number })[];
-		memories: (MemoryEntry & { recall_rate: number })[];
 		total: number;
 		limit: number;
 		offset: number;
 	} {
-		const {
+		let {
 			owner,
 			repo,
 			type,
@@ -429,6 +430,17 @@ export class MemoryEntity extends BaseEntity {
 			sortBy = "created_at",
 			sortOrder = "DESC"
 		} = options;
+		const ALLOWED_SORT_COLUMNS = new Set([
+			"created_at",
+			"updated_at",
+			"importance",
+			"hit_count",
+			"title",
+			"recall_rate"
+		]);
+		if (!ALLOWED_SORT_COLUMNS.has(sortBy)) {
+			sortBy = "created_at";
+		}
 		const where = ["1=1"];
 		const params: (string | number)[] = [];
 		if (owner) {
@@ -475,6 +487,6 @@ export class MemoryEntity extends BaseEntity {
 			recall_rate: row.recall_rate || 0
 		}));
 
-		return { items, memories: items, total, limit, offset };
+		return { items, total, limit, offset };
 	}
 }

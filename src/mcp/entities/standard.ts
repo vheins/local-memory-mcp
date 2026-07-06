@@ -80,7 +80,7 @@ export class StandardEntity extends BaseEntity {
 		let sql = "SELECT * FROM coding_standards WHERE code = ?";
 		const params: (string | null)[] = [code];
 		if (owner && repo) {
-			sql += " AND owner = ? AND repo = ?";
+			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
 			params.push(owner, repo);
 		}
 		const row = this.get<CodingStandardRow>(sql, params);

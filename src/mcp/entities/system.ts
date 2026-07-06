@@ -78,38 +78,53 @@ export class SystemEntity extends BaseEntity {
 		const unassignedHandoffsByRepo = Object.fromEntries(unassignedHandoffRows.map((row) => [row.repo, row.count]));
 		const staleClaimsByRepo = Object.fromEntries(staleClaimRows.map((row) => [row.repo, row.count]));
 
-		const repoOwnerFilter = owner ? " AND owner = ?" : "";
+		const ownerWhere = owner ? " WHERE owner = ?" : "";
+
+		// Aggregate memory counts per repo (single query instead of N)
+		const memoryCountRows = this.all<{ repo: string; count: number }>(
+			`SELECT repo, COUNT(*) as count FROM memories${ownerWhere} GROUP BY repo`,
+			ownerParams
+		);
+		const memoryCountByRepo = Object.fromEntries(memoryCountRows.map((r) => [r.repo, r.count]));
+
+		// Aggregate task status counts per repo (single query instead of N)
+		const taskAggRows = this.all<{ repo: string; status: string; count: number }>(
+			`SELECT repo, status, COUNT(*) as count FROM tasks${ownerWhere} GROUP BY repo, status`,
+			ownerParams
+		);
+		const taskCountsByRepo: Record<string, { total: number; byStatus: Record<string, number> }> = {};
+		for (const row of taskAggRows) {
+			if (!taskCountsByRepo[row.repo]) {
+				taskCountsByRepo[row.repo] = { total: 0, byStatus: {} };
+			}
+			taskCountsByRepo[row.repo].total += row.count;
+			taskCountsByRepo[row.repo].byStatus[row.status] = row.count;
+		}
+
+		// Aggregate last activity per repo (single query instead of N)
+		const lastActivityRows = this.all<{ repo: string; last: string | null }>(
+			`SELECT repo, MAX(updated_at) as last FROM (
+				SELECT repo, updated_at FROM memories${ownerWhere}
+				UNION ALL
+				SELECT repo, updated_at FROM tasks${ownerWhere}
+			) GROUP BY repo`,
+			owner ? [owner, owner] : []
+		);
+		const lastActivityByRepo = Object.fromEntries(lastActivityRows.map((r) => [r.repo, r.last]));
 
 		return repos.map((repo) => {
-			const memoryCountRow = this.get<{ count: number }>(
-				`SELECT COUNT(*) as count FROM memories WHERE repo = ?${repoOwnerFilter}`,
-				owner ? [repo, owner] : [repo]
-			);
-			const lastActivityRow = this.get<{ last: string | null }>(
-				`SELECT MAX(created_at) as last FROM (SELECT created_at FROM memories WHERE repo = ?${repoOwnerFilter} UNION ALL SELECT created_at FROM tasks WHERE repo = ?${repoOwnerFilter} UNION ALL SELECT created_at FROM action_log WHERE repo = ?${repoOwnerFilter})`,
-				owner ? [repo, owner, repo, owner, repo, owner] : [repo, repo, repo]
-			);
-
-			// Per-status task counts in a single query
-			const taskStatusRows = this.all<{ status: string; count: number }>(
-				`SELECT status, COUNT(*) as count FROM tasks WHERE repo = ?${repoOwnerFilter} GROUP BY status`,
-				owner ? [repo, owner] : [repo]
-			);
-			const taskStatusMap: Record<string, number> = {};
-			taskStatusRows.forEach((r) => {
-				taskStatusMap[r.status] = r.count;
-			});
-			const taskCount = taskStatusRows.reduce((sum, r) => sum + r.count, 0);
+			const memCount = memoryCountByRepo[repo] ?? 0;
+			const taskInfo = taskCountsByRepo[repo] ?? { total: 0, byStatus: {} };
 
 			return {
 				repo,
-				memoryCount: memoryCountRow?.count ?? 0,
-				taskCount,
-				inProgressCount: taskStatusMap["in_progress"] ?? 0,
-				pendingCount: taskStatusMap["pending"] ?? 0,
-				blockedCount: taskStatusMap["blocked"] ?? 0,
-				backlogCount: taskStatusMap["backlog"] ?? 0,
-				lastActivity: lastActivityRow?.last ?? null,
+				memoryCount: memCount,
+				taskCount: taskInfo.total,
+				inProgressCount: taskInfo.byStatus["in_progress"] ?? 0,
+				pendingCount: taskInfo.byStatus["pending"] ?? 0,
+				blockedCount: taskInfo.byStatus["blocked"] ?? 0,
+				backlogCount: taskInfo.byStatus["backlog"] ?? 0,
+				lastActivity: lastActivityByRepo[repo] ?? null,
 				activeClaims: activeClaimsByRepo[repo] ?? 0,
 				pendingHandoffs: pendingHandoffsByRepo[repo] ?? 0,
 				unassignedHandoffs: unassignedHandoffsByRepo[repo] ?? 0,

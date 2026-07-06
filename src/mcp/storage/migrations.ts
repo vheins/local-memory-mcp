@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { logger } from "../utils/logger";
 
 export class MigrationManager {
 	constructor(private db: Database.Database) {}
@@ -411,7 +412,7 @@ export class MigrationManager {
 		`) as unknown as Array<{ owner: string; repo: string; task_code: string; cnt: number }>;
 
 		if (dupRows.length > 0) {
-			console.log(`Found ${dupRows.length} duplicate task_code(s). Deduplicating by suffix...`);
+			logger.info(`Found ${dupRows.length} duplicate task_code(s). Deduplicating by suffix...`);
 			for (const dup of dupRows) {
 				// Keep the oldest row (by created_at ASC, id ASC as tie-breaker), suffix the rest
 				const rows = this.all(
@@ -427,7 +428,7 @@ export class MigrationManager {
 					const newCode = `${dup.task_code}-${i + 1}`;
 					this.run("UPDATE tasks SET task_code = ? WHERE id = ?", newCode, rows[i].id);
 				}
-				console.log(`  Deduplicated ${dup.task_code}: kept 1 (${rows[0].id}), renamed ${rows.length - 1} rows`);
+				logger.info(`  Deduplicated ${dup.task_code}: kept 1 (${rows[0].id}), renamed ${rows.length - 1} rows`);
 			}
 		}
 

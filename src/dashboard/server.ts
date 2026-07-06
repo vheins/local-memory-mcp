@@ -41,6 +41,42 @@ app.use((req, res, next) => {
 	next();
 });
 
+// --- Auth Middleware ---
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction): void {
+	const token = process.env.DASHBOARD_TOKEN;
+
+	// Auth not configured — pass through
+	if (!token) {
+		return next();
+	}
+
+	// Health check — unauthenticated
+	if (req.path === "/" && req.method === "GET") {
+		return next();
+	}
+
+	// Non-API routes (static files, SPA fallback) — no auth required
+	if (!req.path.startsWith("/api")) {
+		return next();
+	}
+
+	const authHeader = req.headers.authorization;
+	if (!authHeader || !authHeader.startsWith("Bearer ")) {
+		res.status(401).json({ error: "Unauthorized: missing or invalid token" });
+		return;
+	}
+
+	const providedToken = authHeader.slice(7);
+	if (providedToken !== token) {
+		res.status(401).json({ error: "Unauthorized: invalid token" });
+		return;
+	}
+
+	next();
+}
+
+app.use(authMiddleware);
+
 // --- API Routes ---
 app.use("/api", routes);
 
@@ -109,7 +145,6 @@ app.use((err: Error & { status?: number }, req: express.Request, res: express.Re
 	if ((err as { status?: number }).status === 404) return res.status(404).end();
 	logger.error("Unhandled error", { error: err.message });
 	res.status(500).end();
-	next();
 });
 
 // --- Start Server ---
