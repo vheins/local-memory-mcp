@@ -29,6 +29,7 @@ Kemudian buka `http://localhost:3456`.
 ## Cara Menggunakan
 
 ### 1. Mode Orkestrator
+
 Gunakan tab `Dashboard` sebelum masuk ke dalam repo.
 
 - Tinjau **Pusat Komando Global** untuk jumlah repo, repo aktif, tugas terblokir, klaim aktif, dan handoff tertunda.
@@ -36,6 +37,7 @@ Gunakan tab `Dashboard` sebelum masuk ke dalam repo.
 - Pertahankan satu repositori terpilih di sidebar untuk menjaga pulse repo langsung di bawah gambaran global.
 
 ### 2. Mode Eksekusi Repositori
+
 Setelah repo dipilih:
 
 - Buka tab `Tasks` untuk papan kanban.
@@ -43,6 +45,7 @@ Setelah repo dipilih:
 - Buka laci tugas untuk memeriksa status koordinasi terperinci sebelum memindahkan tugas atau mengambil kepemilikan.
 
 ### 3. Klaim dan Handoff
+
 Gunakan tab `Handoffs` sebagai konsol koordinasi.
 
 - **Klaim:** Periksa kepemilikan aktif di seluruh repo yang dipilih dan lepaskan klaim basi ketika penugasan ulang diperlukan.
@@ -62,6 +65,25 @@ Dasbor mencerminkan alur alat MCP:
 - `task-update` adalah jalur transisi status yang otoritatif
 
 Ini berarti dasbor bukan lagi jalur mutasi terpisah untuk tugas. Pembersihan koordinasi dan aturan siklus hidup tugas tetap konsisten antara UI dan pemanggil MCP.
+
+### 4. Tab Knowledge Graph
+
+Tab `Knowledge Graph` menyediakan visualisasi dan pengelolaan graf pengetahuan interaktif:
+
+- **Force-Directed Graph:** Node entitas (lingkaran) terhubung oleh tepi relasi (garis berlabel) yang dapat diseret dan dijelajahi.
+- **Warna Node:** Berdasarkan tipe entitas — orang, tempat, organisasi, konsep — dengan legenda warna.
+- **Panel Entitas:** Daftar semua entitas dalam repo yang dipilih, lengkap dengan tipe, deskripsi, dan jumlah observasi/relasi.
+- **Panel Relasi:** Daftar semua relasi berarah antar entitas.
+
+Operasi CRUD:
+
+- **Tambah Entitas:** Modal form dengan field nama, tipe (dropdown), dan deskripsi (opsional).
+- **Hapus Entitas:** Konfirmasi modal yang meruntuhkan kaskade relasi dan observasi terkait.
+- **Tambah Relasi:** Pilih entitas sumber dan target dari dropdown, masukkan tipe relasi.
+- **Hapus Relasi:** Hapus langsung dari daftar relasi.
+- **Hapus Observasi:** Hapus catatan observasi individual.
+
+Data di-backend oleh endpoint REST di `/api/kg/*` yang juga digunakan oleh alat MCP `create_entity`, `delete_entity`, `create_relation`, `delete_relation`, dan `delete_observation`.
 
 ## Catatan
 

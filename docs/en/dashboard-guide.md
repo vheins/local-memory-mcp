@@ -29,6 +29,7 @@ Then open `http://localhost:3456`.
 ## How to Use
 
 ### 1. Orchestrator Mode
+
 Use the `Dashboard` tab before drilling into a repo.
 
 - Review **Global Command Center** for repo count, active repos, blocked tasks, active claims, and pending handoffs.
@@ -36,6 +37,7 @@ Use the `Dashboard` tab before drilling into a repo.
 - Keep one repository selected in the sidebar to maintain a live repo pulse underneath the global overview.
 
 ### 2. Repository Execution Mode
+
 Once a repo is selected:
 
 - Open the `Tasks` tab for the kanban board.
@@ -43,6 +45,7 @@ Once a repo is selected:
 - Open the task drawer to inspect detailed coordination state before moving a task or taking ownership.
 
 ### 3. Claims and Handoffs
+
 Use the `Handoffs` tab as the coordination console.
 
 - **Claims:** Inspect active ownership across the selected repo and release stale claims when reassignment is needed.
@@ -62,6 +65,20 @@ The dashboard mirrors the MCP tool flow:
 - `task-update` is the authoritative status transition path
 
 This means the dashboard is no longer a separate mutation path for tasks. Coordination cleanup and task lifecycle rules stay consistent between UI and MCP callers.
+
+### Knowledge Graph Tab
+
+The Knowledge Graph tab provides an interactive force-directed graph visualization of entities and their relations.
+
+- **Color-coded nodes** by entity type: green (person), blue (place), orange (organization), purple (concept)
+- **Edge labels** showing relation types between connected entities
+- **Click** a node to inspect its details and observations in a tooltip
+- **Double-click** a node to delete it (cascades to relations and observations)
+- **Right-click** an edge to delete the relation
+- **Add Entity modal**: name, type dropdown (person/place/organization/concept), description
+- **Add Relation modal**: from-entity select, to-entity select, relation type input
+
+Use this tab to visually map your domain knowledge, discover hidden connections, and manage the Knowledge Graph without writing MCP tool calls.
 
 ## Notes
 

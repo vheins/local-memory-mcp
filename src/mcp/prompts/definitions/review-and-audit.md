@@ -17,9 +17,9 @@ Entry=S0 → S1 → S2 → S3 → S4 Exit=done
 Guard: S(N) req S(N-1)✅; NO code/edit/delete — read+MCP tools ONLY
 
 S0 | sequential discovery: docs → code → UI (chrome-dev-tools) | — | findings | —
-S1 | pre-task analysis: memory-search (0.55 threshold) + standard-search + handoff-list + task-list dedup | S0✅ | context | —
+S1 | pre-task analysis: agent-context(one-call) OR memory-search (0.55 threshold) + standard-search + handoff-list + task-list dedup | S0✅ | context | —
 S2 | design tasks: atomic, attributes (task_code optional — auto-generated as TASK-xxx, phase, priority, agent, model), strict description format | S1✅ | task specs | —
-S3 | create via task-create + log decisions via memory-store(type+title+content+importance+agent+model+scope) + standard-store for coding rules | S2✅ | MCP tasks | —
+S3 | create via task-create + log decisions via memory-store(type+title+content+importance+agent+model+scope) or decision-log(structured decisions) + standard-store for coding rules | S2✅ | MCP tasks | —
 S4 | verify: confirm task count matches gap count, description format compliance, parent/child linkage | S3✅ | verified | —
 
 ## FORBIDDEN: NON-EXECUTION

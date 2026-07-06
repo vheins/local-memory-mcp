@@ -23,7 +23,7 @@ Entry=S0 → S1 → S2 → S3 → S4 Exit=done
 Guard: S(N) req S(N-1)✅; NO code/edit/delete — GitHub+MCP tools ONLY
 
 S0 | sequential discovery: docs → code → UI (chrome-dev-tools if applicable) | — | findings | —
-S1 | pre-issue analysis: memory-search (0.55 threshold) + search_issues dedup (comment on related if distinct) | S0✅ | context | —
+S1 | pre-issue analysis: agent-context(one-call) OR memory-search (0.55 threshold) + search_issues dedup (comment on related if distinct) | S0✅ | context | —
 S2 | design issues: atomic, strict body format, labels | S1✅ | issue specs | —
 S3 | create via issue_write(method=create) | S2✅ | GitHub issues | —
 S4 | verify: confirm issue count matches gap count, all issues created on GitHub | S3✅ | verified | —
@@ -31,11 +31,11 @@ S4 | verify: confirm issue count matches gap count, all issues created on GitHub
 ## FORBIDDEN: NON-EXECUTION
 
 DO NOT edit/create/delete files, run commands, or implement code.
-Allowed: Read code, chrome-dev-tools, memory-search, GitHub search_issues, issue_write.
+Allowed: Read code, chrome-dev-tools, agent-context, memory-search, GitHub search_issues, issue_write.
 
 ## OUTPUT: GITHUB ONLY
 
-ONLY call: search_issues, issue_write (method: create), memory-search.
+ONLY call: search_issues, issue_write (method: create), agent-context, memory-search.
 No prose. No external plans.
 
 ## SELF-CHECK

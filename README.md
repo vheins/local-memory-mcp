@@ -11,11 +11,18 @@ Built with a **Local-First** philosophy, this service stores architectural decis
 
 ## 🚀 Key Features
 
-- 🧠 **Semantic Search (V2):** Find memories based on meaning, not just keywords, using the `all-MiniLM-L6-v2` model locally.
-- 🔄 **Tech-Stack Affinity:** Share knowledge across repositories intelligently based on technology tags (e.g., Filament memories in Repo A are accessible in Repo B).
-- 🛡️ **Anti-Hallucination Guard:** Prevents Agents from hallucinating with strict similarity thresholds and decision conflict detection.
-- 📉 **Automatic Memory Decay:** Automatically archives obsolete memories to keep the context clean and relevant.
-- 📊 **Glassy Dashboard:** Visualize memories, usage statistics, and audit interaction logs through a modern web interface.
+- 🧠 **Semantic Search (V2):** Find memories based on meaning, not just keywords, using the `all-MiniLM-L6-v2` model locally with hybrid TF-IDF + vector ranking.
+- 🔄 **Tech-Stack Affinity:** Share knowledge across repositories intelligently based on technology tags.
+- 🛡️ **Anti-Hallucination Guard:** Strict similarity thresholds and decision conflict detection.
+- 🧩 **Knowledge Graph:** Structured entities, relations, and observations with auto-extraction via offline NLP.
+- 🕰️ **Time Tunnel:** Query memories with natural language dates ("yesterday", "last week").
+- 📉 **Soul Maintenance:** Biological-style memory decay with tag immunization — automatically archives obsolete memories.
+- 🤖 **Agentic Tools:** Agent-context recall, structured decision logging, session summarization.
+- 📊 **Glassy Dashboard:** Visualize memories, tasks, handoffs, knowledge graph, and interaction logs through a modern Svelte 5 interface.
+
+### Drop-In Upstream Compatibility
+
+Compatible with `Beledarian/mcp-local-memory` clients: `remember_fact`, `remember_facts`, `recall`, `forget` are built-in aliases.
 
 ## 🔌 MCP Usage & Configuration
 
@@ -24,6 +31,7 @@ Add this service to your AI Agent (Claude Desktop, Cursor, Windsurf, etc.) using
 > 💡 **Recommendation:** If your MCP runs frequently (agents, CI, automation), avoid `npx` and use a global or local install instead. It reduces unnecessary NPM downloads and speeds up Agent startup.
 
 ### 🚀 Quick Start (Zero Setup)
+
 Best for **first-time users** or **quick testing**. This uses `npx` to run the server without any permanent setup.
 
 ```json
@@ -33,13 +41,16 @@ Best for **first-time users** or **quick testing**. This uses `npx` to run the s
   "type": "stdio"
 }
 ```
-* **Uses `npx`**: Automatically handles the execution.
-* **Tradeoff**: May re-download the package in some environments and is not optimal for frequent execution.
+
+- **Uses `npx`**: Automatically handles the execution.
+- **Tradeoff**: May re-download the package in some environments and is not optimal for frequent execution.
 
 ### ⚡ Recommended for Production / Frequent Usage
+
 This method ensures the fastest startup times and maximum reliability for daily use.
 
 1. **Install globally:**
+
    ```bash
    npm install -g @vheins/local-memory-mcp
    ```
@@ -51,31 +62,35 @@ This method ensures the fastest startup times and maximum reliability for daily 
      "type": "stdio"
    }
    ```
-* **Faster startup**: No network checks required on every start.
-* **No repeated downloads**: Saves bandwidth and avoids NPM registry dependency.
-* **Better for automation**: More stable for heavy-duty Agent workflows.
+
+- **Faster startup**: No network checks required on every start.
+- **No repeated downloads**: Saves bandwidth and avoids NPM registry dependency.
+- **Better for automation**: More stable for heavy-duty Agent workflows.
 
 ### 🧠 How It Works (Important Insight)
-* **npx usage**: When you use `npx`, it often performs a network request to check for the latest version or re-downloads the package if it's not in the cache. Since MCP clients start and stop tools frequently, this can lead to hundreds of unnecessary downloads.
-* **Installed binary**: By installing the package, you keep a permanent copy on your disk. The Agent reuses this local version instantly, providing a much smoother experience.
+
+- **npx usage**: When you use `npx`, it often performs a network request to check for the latest version or re-downloads the package if it's not in the cache. Since MCP clients start and stop tools frequently, this can lead to hundreds of unnecessary downloads.
+- **Installed binary**: By installing the package, you keep a permanent copy on your disk. The Agent reuses this local version instantly, providing a much smoother experience.
 
 ## 📊 Glassy Dashboard
 
 Visualize and manage your Agent's memory through a modern web interface.
 
-| Dashboard Overview | Memories Management |
-|:---:|:---:|
+|                  Dashboard Overview                   |                  Memories Management                  |
+| :---------------------------------------------------: | :---------------------------------------------------: |
 | ![Dashboard Overview](docs/screenshots/dashboard.png) | ![Memories Management](docs/screenshots/memories.png) |
 
-| Task Tracking | Available Tools & Reference |
-|:---:|:---:|
+|                Task Tracking                 |                  Available Tools & Reference                   |
+| :------------------------------------------: | :------------------------------------------------------------: |
 | ![Task Tracking](docs/screenshots/tasks.png) | ![Available Tools & Reference](docs/screenshots/reference.png) |
 
 ### How to Run
+
 ```bash
 local-memory-mcp dashboard
 ```
-*If not installed globally, use:* `npx @vheins/local-memory-mcp dashboard`
+
+_If not installed globally, use:_ `npx @vheins/local-memory-mcp dashboard`
 
 ### Developer Workflow (Dashboard UI)
 

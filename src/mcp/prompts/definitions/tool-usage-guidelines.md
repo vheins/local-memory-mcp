@@ -13,12 +13,19 @@ tags: [workflow, tooling, memory, policy, mcp]
 Entry=S0 → S1 → S2 → S3 → S4 → S5 Exit=maintained
 Guard: S(N) req S(N-1)✅
 
-S0 | navigate: memory-recap (overview) / memory-search (targeted) | — | pointer rows | —
+S0 | navigate: agent-context(one-call session context) OR memory-recap (overview) / memory-search (targeted) | — | pointer rows | —
 S1 | hydrate: memory-detail (id or code) before relying on content | S0✅ | full entry | —
-S2 | store: memory-store(type+title+content+importance+agent+model+scope, durable only, tech tags, human title, aux in metadata) | — | stored | —
+S2 | store: memory-store(type+title+content+importance+agent+model+scope, durable only, tech tags, human title, aux in metadata) or decision-log(structured decisions) | — | stored | —
 S3 | maintain: memory-update / supersedes for changes; avoid duplicates | — | updated | —
 S4 | acknowledge: memory-acknowledge (used|irrelevant|contradictory) after code gen | code generated? | feedback | —
 S5 | verify: confirm acknowledge called after code gen, no duplicate memories created | S4✅ | verified | —
+
+## Knowledge Graph Tools
+
+- `create-entity(key, name, entity_type, observations)`, `delete-entity(key)`
+- `create-relation(source_key, target_key, relation_type)`, `delete-relation(source_key, target_key, relation_type)`
+- `delete-observation(key, observation)`
+- Specialized for structured data workflows only (entity-relationship modeling). Not part of standard memory/task flow.
 
 ## Standards Flow
 

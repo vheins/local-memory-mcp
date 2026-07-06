@@ -31,8 +31,8 @@ Violation: tasks created with a wrong owner will be invisible to other agents qu
 
 Entry=orient → hydrate → ready Guard: S(N) req S(N-1)✅
 
-S0 | task-list (active/pending) + handoff-list(pending; close stale via handoff-update) | session start? | active tasks + transfers | —
-S1 | memory-search + memory-synthesize (architectural context) + standard-search(MANDATORY before code/test/refactor/migrate — task intent, lang, stack, repo filters) | S0✅ | hydrated context | —
+S0 | agent-context (one-call context: memories + tasks + decisions) OR task-list + handoff-list + memory-search | session start? | active context | —
+S1 | standard-search(MANDATORY before code/test/refactor/migrate — task intent, lang, stack, repo filters) | S0✅ | hydrated context | —
 S2 | continue to task or respond | S1✅ | ready | —
 
 ## Core Workflows
@@ -42,6 +42,8 @@ S2 | continue to task or respond | S1✅ | ready | —
 - Durable only (arch, patterns, decisions, fixes)
 - memory-acknowledge after code gen from memory
 - Global scope = cross-repo only; prefer repo-specific
+- decision-log = shortcut for storing decision-type memories (auto-sets type=decision, importance=4)
+- session-summarize = archive session as task_archive memory (type=task_archive, importance=3)
 
 **Tasks**: task-list → task-claim(auto → in_progress) → task-update(completed)
 
@@ -59,6 +61,12 @@ S2 | continue to task or respond | S1✅ | ready | —
 
 - Create ONLY for unfinished work (concrete next owner/steps)
 - NO handoff for completion summaries → use task-update comments
+
+**Knowledge Graph**: create-entity | create-relation → delete-entity | delete-relation | delete-observation
+
+- Structured entity-relationship storage for domain concepts
+- Auto-extracted via NLP Archivist on every memory-store (people, places, orgs, concepts)
+- Visualize in Dashboard → Knowledge Graph tab (force-directed graph)
 
 ## Available Prompts (slash commands)
 

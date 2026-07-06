@@ -16,7 +16,7 @@ tags: [workflow, planning, task-breakdown]
 Entry=S0 → S1 → S2 → S3 → S4 → S5 → S6 Exit=planned
 Guard: S(N) req S(N-1)✅
 
-S0 | orient: task-list (avoid dupes) + standard-search (if code edits) + handoff-list (close stale) | objective provided? | existing state | —
+S0 | orient: agent-context(one-call) OR task-list (avoid dupes) + standard-search (if code edits) + handoff-list (close stale) | objective provided? | existing state | —
 S1 | analyze: break into 3-7 atomic verifiable tasks | S0✅ | task breakdown | —
 S2 | phase: group into research / implementation / validation | S1✅ | phased tasks | —
 S3 | hierarchy: parent_id + depends_on for sequencing; priority 1-5 scale | S2✅ | structured plan | —

@@ -13,10 +13,10 @@ tags: [workflow, task-creation, planning, mcp]
 
 ## Create Task
 
-Entry=S0 → S1 → S2 → S3 → S4  Exit=created
+Entry=S0 → S1 → S2 → S3 → S4 Exit=created
 Guard: S(N) req S(N-1)✅; NO code/edit/delete — MCP tools ONLY (allowed: task-create, task-list, task-detail, task-update, memory-store, memory-search, standard-search, standard-store, handoff-list, handoff-update, read)
 
-S0 | pre_analysis: memory-search(architecture/history) + standard-search(if task leads to code/test/refactor/migrate decisions) + handoff-list(pending; close stale that describe completed work) + read code(verify paths+impl) + task-list dedup(DO NOT duplicate; link via parent_id/depends_on) | — | context | —
+S0 | pre_analysis: agent-context(one-call) OR memory-search(architecture/history) + standard-search(if task leads to code/test/refactor/migrate decisions) + handoff-list(pending; close stale that describe completed work) + read code(verify paths+impl) + task-list dedup(DO NOT duplicate; link via parent_id/depends_on) | — | context | —
 S1 | design tasks: atomic(1 logical change), layered(DB/Service/State/UI), context(paths+symbols+APIs), min 1 pos+1 neg test | S0✅ | task specs | —
 S2 | assign attributes: task_code(optional — auto-generated as TASK-xxx if omitted), phase(Discovery|Implementation|Testing), priority(1=Low..5=Critical), strict description format | S1✅ | task attrs | —
 S3 | create via task-create(bulk max 500) + log decisions via memory-store(arch/feature changes; skip simple bugs) | S2✅ | MCP tasks created | —
@@ -43,6 +43,7 @@ G2 | sprint? | src=.agents/documents/tasks/sprints/ | → route sprint flow | �
 `1=Low` `2=Normal` `3=Medium` `4=High` `5=Critical` (ascending urgency)
 
 ## 3B. SKILL TRACKING METADATA
+
 When a task's description references specific skills (e.g., "Load feature-decomposition skill"), set `metadata.required_skills` and `metadata.fsm_gates`:
 
 - `metadata.required_skills`: `["skill-name-1", "skill-name-2"]` — array of skill names the task depends on.
@@ -65,5 +66,12 @@ Root parent → sprint parents (per sprint) → module/feature children → atom
 Convert sprint dependency columns + implementation order into depends_on
 Preserve cross-sprint blockers via MCP task ID links
 Store creation audit: created, linked, skipped dup, blocked counts
+
+## Upstream Aliases
+
+- `remember_fact(fact)` / `remember_facts(facts)` → `memory-store`
+- `recall(query)` → `memory-search`
+- `forget(id)` → `memory-delete(id)`
+- Drop-in compatibility with Beledarian/mcp-local-memory
 
 Analyze: {{instruction}}

@@ -420,3 +420,108 @@ Used when multiple agents need to transfer context.
 | Task         | create, list, detail, update, delete                                                | Work item lifecycle         |
 | Standard     | store, search, detail, update, delete                                               | Reusable coding rules       |
 | Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Multi-agent orchestration   |
+
+---
+
+## Knowledge Graph Tools
+
+These tools manage structured entity-relationship data for mapping domain concepts.
+
+### `create-entity` — Create a Knowledge Graph Entity
+
+```json
+{
+	"name": "PaymentService",
+	"type": "concept",
+	"description": "Handles payment processing and invoicing",
+	"repo": "my-project"
+}
+```
+
+### `delete-entity` — Delete an Entity (Cascades)
+
+Cascades to delete all related relations and observations.
+
+```json
+{ "name": "PaymentService" }
+```
+
+### `create-relation` — Link Two Entities
+
+```json
+{
+	"from_entity": "PaymentService",
+	"to_entity": "User",
+	"relation_type": "processes_payments_for",
+	"repo": "my-project"
+}
+```
+
+### `delete-relation` — Remove a Relation
+
+```json
+{
+	"from_entity": "PaymentService",
+	"to_entity": "User",
+	"relation_type": "processes_payments_for"
+}
+```
+
+### `delete-observation` — Delete an Observation
+
+```json
+{ "id": "<observation-uuid>" }
+```
+
+---
+
+## Agentic Tools
+
+### `agent-context` — One-Call Session Context
+
+Returns relevant memories, active tasks, and recent decisions for the current session.
+
+```json
+{
+	"repo": "my-project",
+	"objective": "implement auth",
+	"limit": 5
+}
+```
+
+### `decision-log` — Structured Decision Logging
+
+Persists a decision with context, rationale, and alternatives.
+
+```json
+{
+	"summary": "Use SQLite over PostgreSQL",
+	"context": "We need local-first storage without server setup",
+	"rationale": "SQLite is embedded, zero-config, and sufficient for single-user agent workflows",
+	"alternatives": ["PostgreSQL", "JSON files"]
+}
+```
+
+### `session-summarize` — Archive Session Summary
+
+```json
+{
+	"summary": "Implemented authentication flow with JWT tokens. Updated user model.",
+	"key_decisions": ["Use JWT with 24h expiry"],
+	"next_steps": ["Add refresh token rotation"],
+	"repo": "my-project"
+}
+```
+
+---
+
+## Upstream Compatibility Aliases
+
+These tools match the `Beledarian/mcp-local-memory` interface for drop-in compatibility:
+
+| Upstream         | Maps To               | Description          |
+| :--------------- | :-------------------- | :------------------- |
+| `remember_fact`  | `memory-store`        | Store a fact         |
+| `remember_facts` | `memory-store` (bulk) | Store multiple facts |
+| `recall`         | `memory-search`       | Search memories      |
+| `forget`         | `memory-delete`       | Delete a memory      |

@@ -16,6 +16,12 @@ Dibangun dengan filosofi **Local-First**, layanan ini menyimpan keputusan arsite
 - **Anti-Hallusinasi:** Mencegah Agent berhalusinasi dengan batas kemiripan yang ketat dan deteksi konflik keputusan.
 - **Decay Memori Otomatis:** Mengarsipkan memori usang secara otomatis untuk menjaga konteks tetap bersih dan relevan.
 - **Dashboard Modern:** Visualisasikan memori, statistik penggunaan, dan log audit melalui antarmuka web.
+- **Knowledge Graph:** Kelola entitas, relasi, dan observasi untuk memetakan hubungan antar konsep dalam basis pengetahuan Anda.
+- **NLP Archivist:** Ekstraksi entitas otomatis (orang, tempat, organisasi, konsep) dari konten memori menggunakan pustaka _compromise_.
+- **Time Tunnel:** Filter pencarian memori berdasarkan waktu relatif (hari ini, kemarin, minggu lalu, bulan lalu, N hari terakhir).
+- **Soul Maintenance:** Mesin decay memori biologis dengan sistem imunitas tag — lindungi memori penting dari peluruhan.
+- **Agentic Tools:** Alat khusus agen — `agent-context` (konteks sesi), `decision-log` (catat keputusan), `session-summarize` (ringkas sesi).
+- **Upstream Aliases:** Kompatibilitas dengan alat pihak ketiga — `remember_fact`, `recall`, `forget` sebagai alias untuk alat memory bawaan.
 
 ## Penggunaan & Konfigurasi MCP
 
@@ -38,6 +44,7 @@ Cocok untuk **pengguna pertama** atau **pengujian cepat**.
 ### Direkomendasikan untuk Produksi
 
 1. **Install secara global:**
+
    ```bash
    npm install -g @vheins/local-memory-mcp
    ```
@@ -57,7 +64,8 @@ Jalankan dashboard web untuk visualisasi memori dan task:
 ```bash
 local-memory-mcp dashboard
 ```
-*Jika belum install global:* `npx @vheins/local-memory-mcp dashboard`
+
+_Jika belum install global:_ `npx @vheins/local-memory-mcp dashboard`
 
 Buka `http://localhost:3456` di browser.
 
