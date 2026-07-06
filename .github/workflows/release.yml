@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   release:
@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org/
-      - run: npm ci
+      - run: npm install --legacy-peer-deps
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
