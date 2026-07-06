@@ -2,6 +2,7 @@
 	import { taskSearch } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
 	import TaskCard from "./TaskCard.svelte";
+	import ExportToolbar from "./ExportToolbar.svelte";
 	import type { Task } from "../lib/stores";
 	import { createKanbanHandler, COLUMNS } from "../lib/composables/useKanban";
 
@@ -33,35 +34,7 @@
 			/>
 		</div>
 		<div class="flex gap-2">
-			<div class="flex gap-1 mr-1">
-				<button class="btn btn-ghost btn-sm" on:click={() => kanban.handleExport("json")} title="Export JSON">
-					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-						><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line
-							x1="12"
-							y1="15"
-							x2="12"
-							y2="3"
-						/></svg
-					>
-					JSON
-				</button>
-				<button class="btn btn-ghost btn-sm" on:click={() => kanban.handleExport("csv")} title="Export CSV">
-					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-						><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line
-							x1="12"
-							y1="15"
-							x2="12"
-							y2="3"
-						/></svg
-					>
-					CSV
-				</button>
-			</div>
-			<div style="width:1px;height:24px;background:var(--color-border);margin:0 4px;"></div>
-			<button class="btn btn-ghost btn-sm" on:click={onBulkImport} title="Bulk Import">
-				<Icon name="upload" size={14} strokeWidth={2.5} />
-				Import
-			</button>
+			<ExportToolbar onExport={(f) => kanban.handleExport(f)} onImport={onBulkImport} />
 			<button class="btn btn-accent btn-sm" on:click={onAddTask}>
 				<Icon name="plus" size={14} strokeWidth={2.5} />
 				Add Task

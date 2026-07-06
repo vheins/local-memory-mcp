@@ -1,46 +1,56 @@
 <script lang="ts">
 	import { createStatsHandler } from "../lib/composables/useStatsWidget";
+	import { dashboardStats } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
 
 	const handler = createStatsHandler();
 	const { summaryItems, byTypeStats } = handler;
 </script>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-bottom:12px;">
-	{#each $summaryItems as item (item.label)}
-		<div
-			class="stat-card"
-			style="text-align:center;background:{item.glow};border:1px solid {item.glow};padding:10px 8px;"
-		>
-			<div style="display:flex;justify-content:center;margin-bottom:2px;color:{item.color};opacity:0.8;">
-				<Icon name={item.icon} size={14} strokeWidth={1.75} />
-			</div>
-			<div style="font-size:1.25rem;font-weight:900;color:{item.color};line-height:1;letter-spacing:-0.03em;">
-				{item.val}
-			</div>
-			<div
-				style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;"
-			>
-				{item.label}
-			</div>
-		</div>
-	{/each}
-</div>
-
-<!-- By Type -->
-{#if $byTypeStats.length > 0}
-	<div style="margin-top:4px;">
-		<div class="stat-label" style="font-size:0.6rem;margin-bottom:6px;">By Type</div>
-		<div style="display:flex;flex-wrap:wrap;gap:8px;">
-			{#each $byTypeStats as item (item.label)}
-				<div class="flex items-center gap-2 glassy-badge" style="--badge-color: {item.color};">
-					<div class="indicator-dot"></div>
-					<span class="count">{item.count}</span>
-					<span class="label">{item.label}</span>
-				</div>
-			{/each}
-		</div>
+{#if $dashboardStats === null}
+	<div
+		style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:12px;background:rgba(239,68,68,0.06);color:var(--color-danger);font-size:0.75rem;font-weight:600;border-radius:8px;border:1px solid rgba(239,68,68,0.12);"
+	>
+		<Icon name="triangle-alert" size={12} strokeWidth={1.75} />
+		<span>Unable to load stats</span>
 	</div>
+{:else}
+	<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-bottom:12px;">
+		{#each $summaryItems as item (item.label)}
+			<div
+				class="stat-card"
+				style="text-align:center;background:{item.glow};border:1px solid {item.glow};padding:10px 8px;"
+			>
+				<div style="display:flex;justify-content:center;margin-bottom:2px;color:{item.color};opacity:0.8;">
+					<Icon name={item.icon} size={14} strokeWidth={1.75} />
+				</div>
+				<div style="font-size:1.25rem;font-weight:900;color:{item.color};line-height:1;letter-spacing:-0.03em;">
+					{item.val}
+				</div>
+				<div
+					style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;"
+				>
+					{item.label}
+				</div>
+			</div>
+		{/each}
+	</div>
+
+	<!-- By Type -->
+	{#if $byTypeStats.length > 0}
+		<div style="margin-top:4px;">
+			<div class="stat-label" style="font-size:0.6rem;margin-bottom:6px;">By Type</div>
+			<div style="display:flex;flex-wrap:wrap;gap:8px;">
+				{#each $byTypeStats as item (item.label)}
+					<div class="flex items-center gap-2 glassy-badge" style="--badge-color: {item.color};">
+						<div class="indicator-dot"></div>
+						<span class="count">{item.count}</span>
+						<span class="label">{item.label}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 {/if}
 
 <style>

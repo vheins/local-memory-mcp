@@ -2,6 +2,8 @@
 
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { api } from "./api";
+import { chatRefreshSignal } from "./stores";
 
 export function formatDate(dateStr: string): string {
 	const date = new Date(dateStr);
@@ -135,4 +137,25 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 		console.error("Failed to copy text: ", err);
 		return false;
 	}
+}
+
+export function chatTitle(): string {
+	const now = new Date();
+	const hh = String(now.getHours()).padStart(2, "0");
+	const mm = String(now.getMinutes()).padStart(2, "0");
+	return `Chat · ${hh}:${mm}`;
+}
+
+export async function createChatTask(msg: string, repo: string): Promise<void> {
+	const taskCode = "CHAT-" + Date.now().toString(36).toUpperCase();
+	await api.createTask({
+		repo,
+		task_code: taskCode,
+		title: chatTitle(),
+		description: msg,
+		status: "backlog",
+		priority: 3,
+		phase: "Inbox"
+	});
+	chatRefreshSignal.update((n) => n + 1);
 }

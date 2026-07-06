@@ -16,6 +16,7 @@
 	import { formatDate } from "../lib/utils";
 	import type { Memory } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
+	import ExportToolbar from "./ExportToolbar.svelte";
 	import { TYPES, TYPE_LABELS, importanceColor, importanceBg } from "../lib/memoryConfig";
 
 	export let onMemoryClick: (mem: Memory) => void = () => {};
@@ -36,17 +37,9 @@
 	<!-- Toolbar -->
 	<div class="flex items-center gap-2 mb-3" style="flex-wrap:wrap;">
 		<div style="position:relative;flex:1;min-width:160px;">
-			<svg
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-muted);"
-			>
-				<circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-			</svg>
+			<span class="search-icon-inner">
+				<Icon name="search" size={20} />
+			</span>
 			<input
 				class="form-input"
 				style="padding-left:32px;font-size:0.8rem;"
@@ -95,35 +88,7 @@
 			{/each}
 		</select>
 
-		<div class="flex gap-1">
-			<button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.handleExport("json")} title="Export JSON">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-					><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line
-						x1="12"
-						y1="15"
-						x2="12"
-						y2="3"
-					/></svg
-				>
-				JSON
-			</button>
-			<button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.handleExport("csv")} title="Export CSV">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-					><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line
-						x1="12"
-						y1="15"
-						x2="12"
-						y2="3"
-					/></svg
-				>
-				CSV
-			</button>
-			<div style="width:1px;height:14px;background:var(--color-border);margin:auto 4px;"></div>
-			<button class="btn btn-ghost btn-sm" on:click={onBulkImport} title="Bulk Import">
-				<Icon name="upload" size={13} strokeWidth={2} />
-				Import
-			</button>
-		</div>
+		<ExportToolbar onExport={(f) => memoryHandler.handleExport(f)} onImport={onBulkImport} />
 
 		<!-- New Memory CTA -->
 		<button class="btn btn-accent btn-sm" on:click={onNewMemory} id="newMemoryBtn" style="margin-left:auto;">
@@ -137,6 +102,15 @@
 		{$memoriesTotal} memories
 		{$selectedMemoryIds.size > 0 ? `· ${$selectedMemoryIds.size} selected` : ""}
 	</div>
+
+	<!-- Error State -->
+	{#if memoryHandler.error}
+		<div class="mem-error">
+			<Icon name="triangle-alert" size={14} strokeWidth={1.75} />
+			<span>Failed to load memories: {memoryHandler.error}</span>
+			<button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.loadMemories()}>Retry</button>
+		</div>
+	{/if}
 
 	<!-- Table -->
 	<div class="mem-table-wrap">
@@ -170,7 +144,13 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#if memoryHandler.loading}
+				{#if memoryHandler.error}
+					<tr>
+						<td colspan="7" class="mem-td" style="padding:40px;text-align:center;color:var(--color-text-muted);">
+							Unable to load memories. Check your connection and try again.
+						</td>
+					</tr>
+				{:else if memoryHandler.loading}
 					{#each { length: 5 } as dummy, i (i)}
 						<tr data-index={i} data-dummy={dummy}>
 							<td colspan="7" class="mem-td">
@@ -318,6 +298,30 @@
 </div>
 
 <style>
+	.mem-error {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 16px;
+		margin-bottom: 8px;
+		background: rgba(239, 68, 68, 0.08);
+		color: var(--color-danger);
+		font-size: 0.8rem;
+		font-weight: 600;
+		border-radius: 10px;
+		border: 1px solid rgba(239, 68, 68, 0.15);
+	}
+
+	.search-icon-inner {
+		position: absolute;
+		left: 10px;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--color-text-muted);
+		display: flex;
+		pointer-events: none;
+	}
+
 	/* ── Table wrapper ── */
 	.mem-table-wrap {
 		overflow-x: auto;

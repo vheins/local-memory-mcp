@@ -64,11 +64,13 @@
 
 	$: hoveredAgent = hoveredAgentId && $arena.scene ? ($arena.scene.agents.get(hoveredAgentId) ?? null) : null;
 
+	const ARENA_INIT_DELAY_MS = 60;
+
 	onMount(() => {
 		const tid = setTimeout(() => {
 			initCanvas();
 			if (layout) arena.start(layout);
-		}, 60);
+		}, ARENA_INIT_DELAY_MS);
 
 		const ro = new ResizeObserver(() => initCanvas());
 		ro.observe(wrapEl);

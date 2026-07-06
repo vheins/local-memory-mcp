@@ -21,6 +21,7 @@ import type { Memory } from "../stores";
 
 export function createMemoryHandler() {
 	let loading = false;
+	let error = "";
 
 	async function loadMemories(repo: string | null = get(currentRepo)) {
 		if (!repo) {
@@ -29,6 +30,7 @@ export function createMemoryHandler() {
 		}
 
 		loading = true;
+		error = "";
 		try {
 			const data = await api.memories({
 				repo,
@@ -45,6 +47,7 @@ export function createMemoryHandler() {
 			memoriesTotal.set(data.pagination?.totalItems || 0);
 		} catch (e) {
 			console.error("Failed to load memories:", e);
+			error = e instanceof Error ? e.message : "Failed to load memories";
 		} finally {
 			loading = false;
 		}
@@ -156,6 +159,9 @@ export function createMemoryHandler() {
 	return {
 		get loading() {
 			return loading;
+		},
+		get error() {
+			return error;
 		},
 		loadMemories,
 		onSearchInput,

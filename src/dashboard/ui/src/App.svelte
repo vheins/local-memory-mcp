@@ -2,9 +2,10 @@
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import "./app.css";
-	import { activeTab, currentRepo, recentActionsTotalItems, initPersistedState, chatRefreshSignal } from "./lib/stores";
+	import { activeTab, currentRepo, recentActionsTotalItems, initPersistedState } from "./lib/stores";
 	import { createAppHandler } from "./lib/composables/useApp";
 	import { api } from "./lib/api";
+	import { createChatTask } from "./lib/utils";
 
 	import RepoSidebar from "./components/RepoSidebar.svelte";
 	import TopBar from "./components/TopBar.svelte";
@@ -34,13 +35,6 @@
 	let chatMessage = "";
 	let isSendingChat = false;
 
-	function chatTitle() {
-		const now = new Date();
-		const hh = String(now.getHours()).padStart(2, "0");
-		const mm = String(now.getMinutes()).padStart(2, "0");
-		return `Chat · ${hh}:${mm}`;
-	}
-
 	async function sendChat() {
 		const msg = chatMessage.trim();
 		if (!msg || isSendingChat) return;
@@ -48,19 +42,9 @@
 		if (!repo) return;
 		isSendingChat = true;
 		try {
-			const taskCode = "CHAT-" + Date.now().toString(36).toUpperCase();
-			await api.createTask({
-				repo,
-				task_code: taskCode,
-				title: chatTitle(),
-				description: msg,
-				status: "backlog",
-				priority: 3,
-				phase: "Inbox"
-			});
+			await createChatTask(msg, repo);
 			chatMessage = "";
 			await app.onRefresh();
-			chatRefreshSignal.update((n) => n + 1);
 		} catch (e) {
 			console.error("Failed to create task from chat:", e);
 		} finally {
@@ -127,32 +111,25 @@
 		{/if}
 
 		<!-- Content Shell -->
-		<div id="dashboardShell" class="dashboard-shell">
+		<div id="dashboardShell" class="dashboard-shell" aria-live="polite">
 			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena"}
-				<div style="text-align:center;padding:80px 20px;" class="animate-fade-in">
-					<div
-						style="display:inline-flex;width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(99,102,241,0.15));border:1px solid rgba(14,165,233,0.2);align-items:center;justify-content:center;margin-bottom:20px;"
-						class="animate-float"
-					>
-						<Icon name="brain" size={32} strokeWidth={1.5} className="" />
+				<div class="empty-state animate-fade-in">
+					<div class="empty-state-icon animate-float">
+						<Icon name="brain" size={32} strokeWidth={1.5} />
 					</div>
-					<div
-						style="font-size:1.25rem;font-weight:800;color:var(--color-text);margin-bottom:8px;letter-spacing:-0.02em;"
-					>
-						No Repository Selected
-					</div>
-					<div style="color:var(--color-text-muted);font-size:0.875rem;">
-						Select a repository from the sidebar to get started.
-					</div>
+					<div class="empty-state-title">No Repository Selected</div>
+					<div class="empty-state-text">Select a repository from the sidebar to get started.</div>
 				</div>
 			{:else}
 				<div class="tabs-wrap">
-					<div class="tab-nav" style="display:inline-flex;">
+					<div class="tab-nav" style="display:inline-flex;" role="tablist">
 						<button
 							class="tab-btn"
 							class:active={$activeTab === "activity"}
 							on:click={() => app.onTabChange("activity")}
 							id="tab-activity"
+							role="tab"
+							aria-selected={$activeTab === "activity"}
 						>
 							<Icon name="activity" size={14} strokeWidth={1.75} />
 							<span>Activity</span>
@@ -162,6 +139,8 @@
 							class:active={$activeTab === "memories"}
 							on:click={() => app.onTabChange("memories")}
 							id="tab-memories"
+							role="tab"
+							aria-selected={$activeTab === "memories"}
 						>
 							<Icon name="brain" size={14} strokeWidth={1.75} />
 							<span>Memories</span>
@@ -171,6 +150,8 @@
 							class:active={$activeTab === "tasks"}
 							on:click={() => app.onTabChange("tasks")}
 							id="tab-tasks"
+							role="tab"
+							aria-selected={$activeTab === "tasks"}
 						>
 							<Icon name="clipboard-list" size={14} strokeWidth={1.75} />
 							<span>Tasks</span>
@@ -180,6 +161,8 @@
 							class:active={$activeTab === "handoffs"}
 							on:click={() => app.onTabChange("handoffs")}
 							id="tab-handoffs"
+							role="tab"
+							aria-selected={$activeTab === "handoffs"}
 						>
 							<Icon name="git-branch" size={14} strokeWidth={1.75} />
 							<span>Handoffs</span>
@@ -189,6 +172,8 @@
 							class:active={$activeTab === "knowledge-graph"}
 							on:click={() => app.onTabChange("knowledge-graph")}
 							id="tab-knowledge-graph"
+							role="tab"
+							aria-selected={$activeTab === "knowledge-graph"}
 						>
 							<Icon name="share-2" size={14} strokeWidth={1.75} />
 							<span>Knowledge Graph</span>
@@ -201,36 +186,34 @@
 					<div style="display:grid;grid-template-columns:1fr;gap:12px;align-items:start;" class="dashboard-grid">
 						<GlobalCommandCenter />
 
-						<div style="display:flex;flex-direction:column;gap:12px;">
+						<div class="flex flex-col" style="gap:12px;">
 							{#if $currentRepo}
-								<div class="glass card hover-glow" style="padding:16px;">
-									<div class="flex items-center justify-between" style="margin-bottom:10px;">
+								<div class="glass card hover-glow card-body">
+									<div class="flex items-center justify-between card-section-title">
 										<div class="section-label">Selected Repo Pulse</div>
-										<div
-											style="font-size:0.68rem;font-weight:800;color:var(--color-primary);background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.16);padding:4px 8px;border-radius:999px;"
-										>
+										<div class="repo-badge">
 											{$currentRepo}
 										</div>
 									</div>
 									<div
-										style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;"
 										class="repo-pulse-grid"
+										style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;"
 									>
-										<div class="glass card" style="padding:16px;">
-											<div class="section-label" style="margin-bottom:10px;">Memory Overview</div>
+										<div class="glass card card-body">
+											<div class="section-label card-section-title">Memory Overview</div>
 											<StatsWidget />
 										</div>
-										<div class="glass card" style="padding:16px;">
-											<div class="section-label" style="margin-bottom:10px;">Task Overview</div>
+										<div class="glass card card-body">
+											<div class="section-label card-section-title">Task Overview</div>
 											<TaskStatsWidget />
 										</div>
 									</div>
 								</div>
 								<TimeStatsWidget />
 							{:else}
-								<div class="glass card hover-glow" style="padding:16px;">
-									<div class="section-label" style="margin-bottom:10px;">Per-Repository Pulse</div>
-									<div style="color:var(--color-text-muted);font-size:0.8rem;">
+								<div class="glass card hover-glow card-body">
+									<div class="section-label card-section-title">Per-Repository Pulse</div>
+									<div class="muted-text">
 										Select a repository from the sidebar to inspect repo-specific memory, task, and execution metrics.
 									</div>
 								</div>
@@ -350,6 +333,7 @@
 
 <!-- ════ Unified Detail Drawer (Memory + Task) ════ -->
 <DetailDrawer
+	drawerMode={$appState.selectedMemory ? "memory" : "task"}
 	memory={$appState.selectedMemory}
 	task={$appState.selectedTask}
 	open={$appState.drawerOpen}
@@ -397,6 +381,62 @@
 <FloatingChat onRefresh={app.onRefresh} />
 
 <style>
+	/* ── Card body padding utility ── */
+	:global(.card-body) {
+		padding: 16px;
+	}
+
+	/* ── Section title spacing inside cards ── */
+	:global(.card-section-title) {
+		margin-bottom: 10px;
+	}
+
+	/* ── Empty state layout ── */
+	.empty-state {
+		text-align: center;
+		padding: 80px 20px;
+	}
+
+	.empty-state-icon {
+		display: inline-flex;
+		width: 72px;
+		height: 72px;
+		border-radius: 20px;
+		background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(99, 102, 241, 0.15));
+		border: 1px solid rgba(14, 165, 233, 0.2);
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 20px;
+	}
+
+	.empty-state-title {
+		font-size: 1.25rem;
+		font-weight: 800;
+		color: var(--color-text);
+		margin-bottom: 8px;
+		letter-spacing: -0.02em;
+	}
+
+	.empty-state-text {
+		color: var(--color-text-muted);
+		font-size: 0.875rem;
+	}
+
+	.repo-badge {
+		font-size: 0.68rem;
+		font-weight: 800;
+		color: var(--color-primary);
+		background: rgba(99, 102, 241, 0.08);
+		border: 1px solid rgba(99, 102, 241, 0.16);
+		padding: 4px 8px;
+		border-radius: 999px;
+	}
+
+	.muted-text {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+	}
+
 	@media (max-width: 900px) {
 		.dashboard-grid {
 			grid-template-columns: 1fr !important;

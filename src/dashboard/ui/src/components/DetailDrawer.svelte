@@ -6,6 +6,7 @@
 	import TaskDetailPanel from "./TaskDetailPanel.svelte";
 	import HandoffDetailPanel from "./HandoffDetailPanel.svelte";
 	import StandardDetailPanel from "./StandardDetailPanel.svelte";
+	import Icon from "../lib/Icon.svelte";
 
 	export let memory: Memory | null = null;
 	export let task: Task | null = null;
@@ -21,19 +22,21 @@
 	export let onHandoffCreated: () => void = () => {};
 	export let repo: string | null = null;
 
+	export let drawerMode: "memory" | "task" | "handoff" | "standard" | "new-handoff" = "memory";
+
 	const handler = createDetailHandler();
-	const { mode } = handler;
+	const handlerMode = handler.mode;
 
 	$: if (open) {
-		if (memory) {
+		if (drawerMode === "memory" && memory) {
 			handler.setMemory(memory);
-		} else if (task) {
+		} else if (drawerMode === "task" && task) {
 			handler.setTask(task);
-		} else if ("standard" in $$props) {
+		} else if (drawerMode === "standard") {
 			handler.setStandard(standard);
-		} else if (handoff) {
+		} else if (drawerMode === "handoff" && handoff) {
 			handler.setHandoff(handoff);
-		} else if ("handoff" in $$props) {
+		} else if (drawerMode === "new-handoff") {
 			handler.initNewHandoff(repo || "");
 		}
 	} else {
@@ -45,7 +48,7 @@
 	}
 </script>
 
-{#if open && $mode}
+{#if open && $handlerMode}
 	<div
 		class="drawer-overlay"
 		on:click={onClose}
@@ -64,14 +67,14 @@
 		tabindex="-1"
 	>
 		<div class="drawer-header">
-			{#if $mode === "memory" && $handler.memory}
+			{#if $handlerMode === "memory" && $handler.memory}
 				<div>
 					<span class="type-chip type-{$handler.memory.type}" style="margin-bottom:8px;display:inline-flex;"
 						>{$handler.memory.type}</span
 					>
 					<div class="drawer-title">{$handler.memory.title || "Untitled Memory"}</div>
 				</div>
-			{:else if $mode === "task" && $handler.task}
+			{:else if $handlerMode === "task" && $handler.task}
 				<div style="flex:1;min-width:0;">
 					<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
 						<span class="status-chip {getStatusColor($handler.task.status || 'pending')}"
@@ -115,26 +118,24 @@
 			{/if}
 
 			<button class="btn btn-ghost btn-icon" on:click={onClose} aria-label="Close" style="flex-shrink:0;">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-					<path d="M18 6 6 18M6 6l12 12" />
-				</svg>
+				<Icon name="x" size={24} />
 			</button>
 		</div>
 
 		<div class="drawer-body">
-			{#if $mode === "memory" && $handler.memory}
+			{#if $handlerMode === "memory" && $handler.memory}
 				<MemoryDetailPanel {handler} />
 			{/if}
 
-			{#if $mode === "task" && $handler.task}
+			{#if $handlerMode === "task" && $handler.task}
 				<TaskDetailPanel {handler} {onClose} {onTaskUpdated} {onTaskDeleted} />
 			{/if}
 
-			{#if $mode === "handoff"}
+			{#if $handlerMode === "handoff"}
 				<HandoffDetailPanel {handler} {onClose} {onHandoffCreated} {onHandoffUpdated} repo={repo || ""} />
 			{/if}
 
-			{#if $mode === "standard"}
+			{#if $handlerMode === "standard"}
 				<StandardDetailPanel {handler} {onClose} {onStandardUpdated} {onStandardDeleted} {repo} />
 			{/if}
 		</div>

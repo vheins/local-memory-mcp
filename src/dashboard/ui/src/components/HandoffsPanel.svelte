@@ -331,6 +331,7 @@
 </div>
 
 <DetailDrawer
+	drawerMode={selectedHandoff ? "handoff" : "new-handoff"}
 	handoff={selectedHandoff}
 	open={handoffDrawerOpen}
 	onClose={closeHandoffDrawer}

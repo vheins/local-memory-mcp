@@ -360,6 +360,7 @@
 </div>
 
 <DetailDrawer
+	drawerMode="standard"
 	standard={selectedStandard}
 	open={standardDrawerOpen}
 	onClose={closeStandardDrawer}

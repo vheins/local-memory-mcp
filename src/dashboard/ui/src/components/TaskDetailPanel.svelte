@@ -41,18 +41,7 @@
 					style="color: #ef4444;"
 					on:click={() => handler.deleteTask(onTaskDeleted, onClose)}
 				>
-					<svg
-						style="margin-right:4px;"
-						width="14"
-						height="14"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-					>
-						<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-						></path>
-					</svg>
+					<Icon name="trash" size={16} />
 					Delete Task
 				</button>
 			{/if}
@@ -134,10 +123,8 @@
 					style="font-size:0.78rem;"
 					on:click={() => handler.saveDescription(onTaskUpdated)}>Save</button
 				>
-				<button
-					class="btn btn-ghost"
-					style="font-size:0.78rem;"
-					on:click={() => handler.toggleEditDescription(false)}>Cancel</button
+				<button class="btn btn-ghost" style="font-size:0.78rem;" on:click={() => handler.toggleEditDescription(false)}
+					>Cancel</button
 				>
 			</div>
 		{:else if $handler.task?.description}
@@ -183,9 +170,7 @@
 						<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
 							<div style="display:flex;align-items:center;gap:6px;">
 								<div class="comment-avatar">{(c.agent || "U").charAt(0).toUpperCase()}</div>
-								<span style="font-size:0.72rem;font-weight:600;color:var(--color-text);"
-									>{c.agent || "Unknown"}</span
-								>
+								<span style="font-size:0.72rem;font-weight:600;color:var(--color-text);">{c.agent || "Unknown"}</span>
 								{#if c.previous_status && c.next_status}
 									<span style="font-size:0.65rem;color:var(--color-text-muted);">
 										{getStatusLabel(c.previous_status)} → {getStatusLabel(c.next_status)}

@@ -2,15 +2,10 @@
 	import { onMount, afterUpdate, tick } from "svelte";
 	import { get } from "svelte/store";
 	import Icon from "../lib/Icon.svelte";
-	import {
-		currentRepo,
-		recentActions,
-		recentActionsPage,
-		recentActionsTotalItems,
-		chatRefreshSignal
-	} from "../lib/stores";
+	import { currentRepo, recentActions, recentActionsPage, recentActionsTotalItems } from "../lib/stores";
 	import { api } from "../lib/api";
 	import { createRecentActionsHandler } from "../lib/composables/useRecentActions";
+	import { createChatTask } from "../lib/utils";
 	import Markdown from "./Markdown.svelte";
 
 	export let onRefresh: () => void = () => {};
@@ -38,12 +33,11 @@
 	}
 
 	const handler = createRecentActionsHandler(loadPage);
-	const { groupedActions, recentActions: raStore, recentActionsPage: raPage } = handler;
-	const handlerState = handler;
+	const { groupedActions, recentActions: actionsStore, recentActionsPage: actionsPage } = handler;
 
 	afterUpdate(() => {
-		const p = $raPage;
-		if (open && p <= 1 && !$handlerState.isLoadingMore && $raStore.length > 0) {
+		const p = $actionsPage;
+		if (open && p <= 1 && !$handler.isLoadingMore && $actionsStore.length > 0) {
 			handler.scrollToBottom(chatContainer, "instant");
 		}
 	});
@@ -74,23 +68,10 @@
 		if (!repo) return;
 		isSending = true;
 		try {
-			const taskCode = "CHAT-" + Date.now().toString(36).toUpperCase();
-			const now = new Date();
-			const hh = String(now.getHours()).padStart(2, "0");
-			const mm = String(now.getMinutes()).padStart(2, "0");
-			await api.createTask({
-				repo,
-				task_code: taskCode,
-				title: `Chat · ${hh}:${mm}`,
-				description: msg,
-				status: "backlog",
-				priority: 3,
-				phase: "Inbox"
-			});
+			await createChatTask(msg, repo);
 			chatMessage = "";
 			await loadPage(1);
 			onRefresh();
-			chatRefreshSignal.update((n) => n + 1);
 			tick().then(() => handler.scrollToBottom(chatContainer, "instant"));
 		} catch (e) {
 			console.error("Failed to create task:", e);
@@ -129,14 +110,14 @@
 			</div>
 
 			<div class="chat-popup-body" bind:this={chatContainer}>
-				{#if $handlerState.isLoadingMore}
+				{#if $handler.isLoadingMore}
 					<div class="popup-load-more">
 						<Icon name="refresh-cw" size={12} className="animate-spin" />
 						<span>Loading older...</span>
 					</div>
 				{/if}
 
-				{#if $raStore.length === 0}
+				{#if $actionsStore.length === 0}
 					<div class="popup-empty">
 						<Icon name="message-circle" size={36} strokeWidth={1} />
 						<div>No activity yet</div>
@@ -162,7 +143,7 @@
 							</div>
 							{#if action.response}
 								{@const parsed = handler.parseResponse(action.response)}
-								{@const isExpanded = $handlerState.expandedResponses.has(action.id)}
+								{@const isExpanded = $handler.expandedResponses.has(action.id)}
 								<div class="popup-bubble-row popup-bubble-left">
 									<div class="popup-bubble-wrap">
 										<div class="popup-chat-bubble popup-chat-bubble-mcp">

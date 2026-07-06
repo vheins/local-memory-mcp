@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-07-06
+
+### Refactored
+
+- **Icon.svelte**: Extracted SVG icon data to `lib/icons/iconData.ts`. Reduced from 1739 to 33 lines.
+- **KGGraph.svelte**: Decomposed into `KGForceLayout.ts`, `KGCanvasRenderer.ts`, `KGModal.svelte`. Reduced from 1076 to 527 lines. Force layout uses `Map` lookup (O(1) vs O(n²)).
+- **ExportToolbar**: Shared component extracted from duplicate export buttons in KanbanBoard and MemoryList.
+- **RepoItem**: Shared component extracted from duplicate pinned/unpinned repo item templates in RepoSidebar.
+- **Chat logic**: Duplicate `sendChat` code in App.svelte and FloatingChat.svelte unified via `createChatTask()` utility.
+- **DetailDrawer**: Replaced fragile `$$props` introspection with explicit `drawerMode` prop (Svelte 5 readiness).
+
+### Fixed
+
+- **Inline SVGs**: Replaced 5 locations with centralized `<Icon>` component (KanbanBoard, TaskDetailPanel, DetailDrawer, MemoryList).
+- **Magic numbers**: Named constants for timeouts (`TAB_SWITCH_DEBOUNCE_MS`, `DRAWER_CLOSE_TRANSITION_MS`, `ARENA_INIT_DELAY_MS`).
+- **Error states**: Added error banners to MemoryList and StatsWidget.
+- **Cryptic names**: Renamed `raStore`/`raPage` → `actionsStore`/`actionsPage` in FloatingChat.
+- **Duplicate icon**: `memory` icon now unique (chip design) instead of subset of `brain`.
+- **Accessibility**: Added `role="tablist"`, `role="tab"`, `aria-selected`, and `aria-live="polite"` to tab navigation.
+
 ## [0.19.0] - 2026-07-06
 
 ### Added

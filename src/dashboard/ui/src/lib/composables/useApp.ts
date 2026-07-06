@@ -1,6 +1,9 @@
 import { writable, get, derived } from "svelte/store";
 import { api } from "../api";
 import { alertError } from "../confirm";
+
+const TAB_SWITCH_DEBOUNCE_MS = 50;
+const DRAWER_CLOSE_TRANSITION_MS = 300;
 import {
 	activeTab,
 	currentRepo,
@@ -169,9 +172,9 @@ export function createAppHandler(refs: {
 		activeTab.set(tab);
 		const repo = get(currentRepo);
 		if (tab === "memories") {
-			setTimeout(() => refs.memoryList?.refresh(), 50);
+			setTimeout(() => refs.memoryList?.refresh(), TAB_SWITCH_DEBOUNCE_MS);
 		} else if (tab === "tasks" && repo) {
-			setTimeout(() => refs.kanbanBoard?.loadTasks(repo), 50);
+			setTimeout(() => refs.kanbanBoard?.loadTasks(repo), TAB_SWITCH_DEBOUNCE_MS);
 		} else if (tab === "reference") {
 			const s = get({ subscribe });
 			if (!s.capabilities) {
@@ -230,7 +233,7 @@ export function createAppHandler(refs: {
 		update((s) => ({ ...s, drawerOpen: false }));
 		setTimeout(() => {
 			update((s) => ({ ...s, selectedMemory: null, selectedTask: null }));
-		}, 300);
+		}, DRAWER_CLOSE_TRANSITION_MS);
 	}
 
 	function handleTaskUpdated(updated: Task) {
