@@ -37,3 +37,10 @@ storage/*.db-*
 .playwright-mcp/:memory:
 .playwright-mcp/
 :memory:
+
+# Turbo
+.turbo/
+
+# Docs build
+apps/docs/.vitepress/dist
+apps/docs/.vitepress/cache
