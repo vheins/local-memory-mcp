@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-07-06
+
+### Added
+
+- **SDK Migration**: Migrated from custom JSON-RPC to `@modelcontextprotocol/server` v2 beta. All 27+ tools registered via `registerTool()`, resources/prompts via SDK. Replaced custom `MCPClient` with SDK `Client` + `StdioClientTransport`.
+- **Agentic Tools**: 3 new agentic productivity tools — `agent-context` (session context recall), `decision-log` (structured decision persistence), `session-summarize` (session archive).
+- **Upstream Aliases**: `remember_fact`, `remember_facts`, `recall`, `forget` — drop-in compatibility with `Beledarian/mcp-local-memory` clients.
+- **Knowledge Graph**: 3 new database tables (`entities`, `relations`, `observations`) with cascading FK constraints. 5 CRUD tools (`create-entity`, `delete-entity`, `create-relation`, `delete-relation`, `delete-observation`) with SQLite transactions and FK validation.
+- **NLP Archivist**: Automatic entity extraction via `compromise` library (people, places, organizations, concepts) on every memory-store — zero-dependency, local-only.
+- **Time Tunnel**: Relative date filtering in `memory-search` — supports "today", "yesterday", "last week", "last month", "last N days", "last hour".
+- **Soul Maintenance**: Biological-style memory decay engine with tag-based immunization. Startup maintenance job sweeps decayed memories (24h dedup).
+- **Dashboard Knowledge Graph**: Interactive force-directed canvas graph (custom Canvas 2D renderer) with type-colored nodes, edge labels, tooltip inspection, and Add/Delete Entity/Relation modals.
+
+### Changed
+
+- **Protocol Layer**: `server.ts` reduced from 398 lines to 91 lines using SDK's `serveStdio()`. Session, progress, cancellation, completion, and log notifications wired to SDK.
+- **Tool Registration**: All tool handlers moved from `router.ts` switch-case to `tools/index.ts` via `registerTool()`. Write-lock, action logging, and resource mutation notifications handled centrally.
+
+### Fixed
+
+- **Lint Hygiene**: 22 unused-variable and dead-code issues resolved across 9 files.
+- **Test Client**: `MCPClient` now uses SDK `Client` + `InMemoryTransport` — removed 236 lines of custom JSON-RPC client code.
+
 ## [0.18.1] - 2026-06-23
 
 ### Fixed

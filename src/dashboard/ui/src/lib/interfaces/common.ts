@@ -5,6 +5,29 @@ export interface Pagination {
 	totalPages: number;
 }
 
+export interface KGNode {
+	id: string;
+	name: string;
+	type: string;
+	description?: string;
+	memoryCount?: number;
+}
+
+export interface KGEdge {
+	source: string;
+	target: string;
+	relation_type: string;
+}
+
+export interface KGEntity {
+	name: string;
+	type: string;
+	description?: string;
+	repo: string;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface RecentAction {
 	id: number;
 	action: string;

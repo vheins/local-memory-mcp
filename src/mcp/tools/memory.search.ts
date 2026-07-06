@@ -4,6 +4,7 @@ import { VectorStore, MemoryEntry, VectorResult } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { expandQuery } from "../utils/query-expander";
+import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
 
 const HYBRID_WEIGHTS_VECTOR = {
 	similarity: 0.4,
@@ -14,7 +15,10 @@ const HYBRID_WEIGHTS_VECTOR = {
 export async function handleMemorySearch(params: unknown, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
 	const validated = MemorySearchSchema.parse(params);
 
-	const searchQuery = expandQuery(validated.query, validated.prompt);
+	// Time Tunnel: extract relative date phrases from the original query
+	const timeTunnel = parseRelativeDate(validated.query);
+	const effectiveQuery = timeTunnel ? timeTunnel.cleanedQuery : validated.query;
+	const searchQuery = expandQuery(effectiveQuery, validated.prompt);
 
 	// 1. Get Candidates from SQLite
 	const fetchLimit = (validated.offset + validated.limit) * 3;
@@ -107,6 +111,11 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	let allMatches = scoredMemories.filter((sm) => sm.finalScore >= threshold).map((sm) => sm.memory);
 	if (allMatches.length === 0 && scoredMemories.length > 0) allMatches = [scoredMemories[0].memory];
 
+	// 4a. Time Tunnel: filter by temporal window if a relative date was parsed
+	if (timeTunnel) {
+		allMatches = applyTimeFilter(allMatches, timeTunnel);
+	}
+
 	const total = allMatches.length;
 	const paginatedResults = allMatches.slice(validated.offset, validated.offset + validated.limit);
 
@@ -171,4 +180,20 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 
 function capitalize(str: string): string {
 	return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Filter memory results to those whose created_at falls within the temporal window.
+ * Uses [since, until) semantics — since inclusive, until exclusive.
+ */
+function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): MemoryEntry[] {
+	const sinceMs = tunnel.since ? new Date(tunnel.since).getTime() : 0;
+	const untilMs = tunnel.until ? new Date(tunnel.until).getTime() : Infinity;
+
+	return memories.filter((m) => {
+		const createdAtMs = new Date(m.created_at).getTime();
+		if (sinceMs > 0 && createdAtMs < sinceMs) return false;
+		if (untilMs < Infinity && createdAtMs >= untilMs) return false;
+		return true;
+	});
 }

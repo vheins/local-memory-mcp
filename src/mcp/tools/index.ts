@@ -47,6 +47,13 @@ import { handleTaskSearch } from "./task.search";
 import { handleAgentContext } from "./agent-context";
 import { handleDecisionLog } from "./decision-log";
 import { handleSessionSummarize } from "./session-summarize";
+import {
+	handleCreateEntity,
+	handleDeleteEntity,
+	handleCreateRelation,
+	handleDeleteRelation,
+	handleDeleteObservation
+} from "./kg.crud";
 import { McpResponse } from "../utils/mcp-response";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -83,7 +90,17 @@ const WRITE_TOOLS = new Set([
 	"task-update",
 	"task-delete",
 	"decision-log",
-	"session-summarize"
+	"session-summarize",
+	// Upstream alias tools (write)
+	"remember_fact",
+	"remember_facts",
+	"forget",
+	// Knowledge graph tools (write)
+	"create_entity",
+	"delete_entity",
+	"create_relation",
+	"delete_relation",
+	"delete_observation"
 ]);
 
 // ── Session / argument middleware ─────────────────────────────────────────
@@ -343,7 +360,18 @@ function buildExecutors(
 		"task-detail": (args, db, _vectors, _extra) => handleTaskDetail(args, db),
 		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
 		"decision-log": (args, db, vectors, _extra) => handleDecisionLog(args, db, vectors),
-		"session-summarize": (args, db, vectors, _extra) => handleSessionSummarize(args, db, vectors)
+		"session-summarize": (args, db, vectors, _extra) => handleSessionSummarize(args, db, vectors),
+		// Upstream alias tools
+		remember_fact: (args, db, vectors, _extra) => handleMemoryStore(args, db, vectors),
+		remember_facts: (args, db, vectors, _extra) => handleMemoryStore(args, db, vectors),
+		recall: (args, db, vectors, _extra) => handleMemorySearch(args, db, vectors),
+		forget: (args, db, vectors, _extra) => handleMemoryDelete(args, db, vectors),
+		// Knowledge graph tools
+		create_entity: (args, db, _vectors, _extra) => handleCreateEntity(args, db, _vectors),
+		delete_entity: (args, db, _vectors, _extra) => handleDeleteEntity(args, db, _vectors),
+		create_relation: (args, db, _vectors, _extra) => handleCreateRelation(args, db, _vectors),
+		delete_relation: (args, db, _vectors, _extra) => handleDeleteRelation(args, db, _vectors),
+		delete_observation: (args, db, _vectors, _extra) => handleDeleteObservation(args, db, _vectors)
 	};
 }
 

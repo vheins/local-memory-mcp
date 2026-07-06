@@ -52,3 +52,11 @@ export {
 } from "./standard";
 
 export { AgentContextSchema, DecisionLogSchema, SessionSummarizeSchema } from "./agent";
+
+export {
+	CreateEntitySchema,
+	DeleteEntitySchema,
+	CreateRelationSchema,
+	DeleteRelationSchema,
+	DeleteObservationSchema
+} from "./knowledge-graph";

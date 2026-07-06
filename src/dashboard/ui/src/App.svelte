@@ -23,6 +23,7 @@
 	import FloatingChat from "./components/FloatingChat.svelte";
 	import StandardsPanel from "./components/StandardsPanel.svelte";
 	import HandoffsPanel from "./components/HandoffsPanel.svelte";
+	import KGGraph from "./components/KGGraph.svelte";
 	import AgentArena from "./components/AgentArena.svelte";
 	import GlobalCommandCenter from "./components/GlobalCommandCenter.svelte";
 	import Icon from "./lib/Icon.svelte";
@@ -90,7 +91,8 @@
 	$: if ($activeTab === "reference") {
 		const s = get(app);
 		if (!s.capabilities) {
-			api.capabilities()
+			api
+				.capabilities()
 				.then((cap) => app.update((curr) => ({ ...curr, capabilities: cap })))
 				.catch((err) => console.error("Failed to load capabilities:", err));
 		}
@@ -182,6 +184,15 @@
 							<Icon name="git-branch" size={14} strokeWidth={1.75} />
 							<span>Handoffs</span>
 						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "knowledge-graph"}
+							on:click={() => app.onTabChange("knowledge-graph")}
+							id="tab-knowledge-graph"
+						>
+							<Icon name="share-2" size={14} strokeWidth={1.75} />
+							<span>Knowledge Graph</span>
+						</button>
 					</div>
 				</div>
 
@@ -260,7 +271,7 @@
 									type="text"
 									placeholder="Type a message to create a backlog task..."
 									value={chatMessage}
-									on:input={(e) => chatMessage = e.currentTarget.value}
+									on:input={(e) => (chatMessage = e.currentTarget.value)}
 									on:keydown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
 									disabled={isSendingChat}
 								/>
@@ -314,6 +325,11 @@
 				<!-- ════ HANDOFFS TAB ════ -->
 				{#if $activeTab === "handoffs"}
 					<HandoffsPanel repo={$currentRepo || ""} />
+				{/if}
+
+				<!-- ════ KNOWLEDGE GRAPH TAB ════ -->
+				{#if $activeTab === "knowledge-graph"}
+					<KGGraph repo={$currentRepo || ""} />
 				{/if}
 
 				<!-- ════ AGENT ARENA TAB ════ -->

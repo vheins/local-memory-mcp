@@ -8,6 +8,7 @@ import { SQLiteStore } from "./storage/sqlite";
 import { RealVectorStore } from "./storage/vectors";
 import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
+import { runStartupMaintenance } from "./services/maintenance-job";
 import fs from "fs";
 import path from "path";
 
@@ -52,16 +53,15 @@ vectors.initialize().catch((err) => {
 	logger.warn("[Server] Initial vector model loading failed. Will retry on first use.", { error: String(err) });
 });
 
-// Optional: Automatic cleanup of expired/low-utility memories (default: disabled)
-const expiredArchived = db.memoryArchives.archiveExpiredMemories();
-const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories();
-const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0);
-
-if (totalArchived > 0) {
-	logger.info(
-		`[Server] Archived ${totalArchived} memories (expired: ${expiredArchived}, low-score: ${lowScoreArchived}) on startup.`
-	);
-}
+// Run startup maintenance: memory decay, expired archiving, and low-score archiving
+runStartupMaintenance(db).then((result) => {
+	if (!result.skipped) {
+		logger.info("[Server] Startup maintenance complete", {
+			decayed: result.decay.decayed,
+			archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived
+		});
+	}
+});
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
 process.stdout.on("error", (err: unknown) => {

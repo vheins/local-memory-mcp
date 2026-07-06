@@ -5,6 +5,7 @@ import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { generateNextCode } from "../utils/code-generator";
+import { saveExtractions } from "./kg-archivist";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -128,6 +129,15 @@ async function storeSingleMemory(
 		logger.warn("Failed to generate vector embedding", { error: String(error) });
 	}
 
+	// Auto-extract entities and observations via NLP archivist
+	try {
+		saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
+	} catch (error) {
+		logger.warn("[KG-Archivist] NLP extraction failed, memory stored without KG enrichment", {
+			error: String(error)
+		});
+	}
+
 	return createMcpResponse(
 		{
 			success: true,
@@ -246,6 +256,15 @@ export async function handleMemoryStore(
 				await vectors.upsert(entry.id, entry.content);
 			} catch (error) {
 				logger.warn("Failed to generate vector embedding", { error: String(error) });
+			}
+
+			// Auto-extract entities and observations via NLP archivist
+			try {
+				saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
+			} catch (error) {
+				logger.warn("[KG-Archivist] NLP extraction failed, memory stored without KG enrichment", {
+					error: String(error)
+				});
 			}
 		}
 

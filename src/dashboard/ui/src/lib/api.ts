@@ -11,7 +11,10 @@ import type {
 	Pagination,
 	ReferenceDataState,
 	StandardsExport,
-	StandardsImportResult
+	StandardsImportResult,
+	KGNode,
+	KGEdge,
+	KGEntity
 } from "./stores";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -301,5 +304,41 @@ export const api = {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(args)
+		}),
+
+	// ─── Knowledge Graph ──────────────────────────────────────────────────────
+
+	kgGraph: (repo: string) =>
+		apiFetch<{ nodes: KGNode[]; edges: KGEdge[] }>(`/api/kg/graph?repo=${encodeURIComponent(repo)}`),
+
+	kgEntities: (repo: string, params?: { type?: string; search?: string }) => {
+		const q = new URLSearchParams({ repo });
+		if (params?.type) q.set("type", params.type);
+		if (params?.search) q.set("search", params.search);
+		return apiFetch<{ entities: KGEntity[] }>(`/api/kg/entities?${q}`);
+	},
+
+	kgCreateEntity: (body: { name: string; type?: string; description?: string; repo: string }) =>
+		apiFetch<{ id: string }>("/api/kg/entities", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}),
+
+	kgDeleteEntity: (name: string) =>
+		apiFetch<{ success: boolean }>(`/api/kg/entities/${encodeURIComponent(name)}`, { method: "DELETE" }),
+
+	kgCreateRelation: (body: { from_entity: string; to_entity: string; relation_type: string; repo: string }) =>
+		apiFetch<{ success: boolean }>("/api/kg/relations", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}),
+
+	kgDeleteRelation: (body: { from_entity: string; to_entity: string; relation_type: string }) =>
+		apiFetch<{ success: boolean }>("/api/kg/relations", {
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
 		})
 };

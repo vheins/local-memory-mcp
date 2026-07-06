@@ -15,7 +15,7 @@ export async function handleAgentContext(
 	const { owner, repo, objective, type_filter, limit, structured: isStructuredRequest } = validated;
 
 	// 1. Search for relevant memories
-	let memories: MemoryEntry[] = [];
+	let memories: MemoryEntry[];
 	let decisionMemories: MemoryEntry[] = [];
 
 	const shouldFetchDecisions = !type_filter || type_filter === "decision";

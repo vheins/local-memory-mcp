@@ -213,5 +213,81 @@ export const AGENT_TOOL_DEFINITIONS = [
 				title: { type: "string" }
 			}
 		}
+	},
+	// ── Upstream compatibility aliases ──────────────────────────────────────
+	{
+		name: "remember_fact",
+		title: "Remember Fact (Upstream)",
+		description:
+			"Upstream-compatible alias for memory-store. Stores a single fact as a memory entry. Accepts the same arguments as memory-store. Owner and repo are auto-inferred from session when omitted.",
+		annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: { type: "string", description: "Auto-detected from session." },
+				repo: { type: "string", description: "Auto-detected from session." },
+				title: { type: "string", description: "Title for the fact/memory." },
+				content: { type: "string", description: "The fact content to store." },
+				type: { type: "string", default: "code_fact" },
+				importance: { type: "number", default: 3 },
+				tags: { type: "array", items: { type: "string" } }
+			},
+			required: ["content"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: { success: { type: "boolean" }, id: { type: "string" }, code: { type: "string" } }
+		}
+	},
+	{
+		name: "remember_facts",
+		title: "Remember Facts (Upstream Bulk)",
+		description: "Upstream-compatible alias for bulk memory-store. Stores multiple facts at once.",
+		annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: { type: "string" },
+				repo: { type: "string" },
+				facts: { type: "array", items: { type: "object" }, description: "Array of fact objects." }
+			},
+			required: ["facts"]
+		},
+		outputSchema: { type: "object", properties: { success: { type: "boolean" }, count: { type: "number" } } }
+	},
+	{
+		name: "recall",
+		title: "Recall (Upstream)",
+		description: "Upstream-compatible alias for memory-search. Searches stored memories by query.",
+		annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: { type: "string" },
+				repo: { type: "string" },
+				query: { type: "string", description: "Search query." },
+				type: { type: "string", description: "Filter by memory type." },
+				limit: { type: "number", default: 10 }
+			},
+			required: ["query"]
+		},
+		outputSchema: { type: "object", properties: { memories: { type: "array", items: { type: "object" } } } }
+	},
+	{
+		name: "forget",
+		title: "Forget (Upstream)",
+		description: "Upstream-compatible alias for memory-delete. Deletes a stored memory by id or code.",
+		annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: true },
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: { type: "string" },
+				repo: { type: "string" },
+				id: { type: "string", description: "Memory ID to delete." },
+				code: { type: "string", description: "Memory code to delete." }
+			},
+			required: []
+		},
+		outputSchema: { type: "object", properties: { success: { type: "boolean" } } }
 	}
 ];
