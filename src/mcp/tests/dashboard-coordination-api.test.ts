@@ -169,7 +169,7 @@ describe("Dashboard Coordination API", () => {
 		const updateRes = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ status: "completed" })
+			body: JSON.stringify({ status: "completed", est_tokens: 100 })
 		});
 
 		expect(updateRes.ok).toBe(true);

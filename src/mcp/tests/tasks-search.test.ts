@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { handleTaskList, handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
+import { handleTaskCreate } from "../tools/task.create";
+import { handleTaskUpdate } from "../tools/task.update";
+import { handleTaskList } from "../tools/task.list";
 import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 

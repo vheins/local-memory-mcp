@@ -36,13 +36,10 @@ import { handleStandardSearch } from "./tools/standard.search";
 import { handleStandardUpdate } from "./tools/standard.update";
 import { handleStandardDetail } from "./tools/standard.detail";
 import { handleStandardDelete } from "./tools/standard.delete";
-import {
-	handleTaskList,
-	handleTaskCreate,
-	handleTaskCreateInteractive,
-	handleTaskUpdate,
-	handleTaskDelete
-} from "./tools/task.manage";
+import { handleTaskCreate, handleTaskCreateInteractive } from "./tools/task.create";
+import { handleTaskUpdate } from "./tools/task.update";
+import { handleTaskDelete } from "./tools/task.delete";
+import { handleTaskList } from "./tools/task.list";
 import { handleTaskGet as handleTaskDetail } from "./tools/task.get";
 import { handleTaskSearch } from "./tools/task.search";
 import { SamplingRequestHandler } from "./sampling";
@@ -432,7 +429,7 @@ function normalizeToolArguments(args: unknown, session?: SessionContext): Record
 		const parsed = parseRepoInput(repoVal, undefined);
 		nextArgs.owner = parsed.owner || inferOwnerFromSession(session) || "";
 		if (nextArgs.owner && !repoVal.includes("/")) {
-			console.warn(
+			logger.warn(
 				`[router] owner inferred from session (${nextArgs.owner}) — may be incorrect. Agents should pass explicit owner/repo.`
 			);
 		}

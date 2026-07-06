@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { handleTaskCreate, handleTaskUpdate } from "../tools/task.manage";
+import { handleTaskCreate } from "../tools/task.create";
+import { handleTaskUpdate } from "../tools/task.update";
 import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 
