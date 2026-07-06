@@ -17,6 +17,9 @@
 		"dist/prompts/definitions",
 		"dist/prompts/server"
 	],
+	"workspaces": [
+		"apps/*"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/vheins/local-memory-mcp.git"
@@ -42,7 +45,12 @@
 		"type-check": "tsc --noEmit && svelte-check --tsconfig ./src/dashboard/ui/tsconfig.json",
 		"lint": "eslint . --ext .ts,.svelte",
 		"lint:fix": "eslint . --ext .ts,.svelte --fix",
-		"format": "prettier --write \"src/**/*.{ts,js,svelte}\""
+		"format": "prettier --write \"src/**/*.{ts,js,svelte}\"",
+		"docs:dev": "npm run --workspace=docs dev",
+		"docs:build": "npm run --workspace=docs build",
+		"turbo:build": "turbo run build",
+		"turbo:dev": "turbo run dev",
+		"turbo:test": "turbo run test"
 	},
 	"dependencies": {
 		"@types/proper-lockfile": "^4.1.4",
