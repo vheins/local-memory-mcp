@@ -16,7 +16,7 @@ export const StandardStoreSchema = z
 		is_global: z.boolean().optional(),
 		tags: z.array(z.string().min(1)).min(1).optional(),
 		metadata: z
-			.record(z.string(), z.any())
+			.record(z.string(), z.unknown())
 			.refine((value) => Object.keys(value).length > 0, { message: "metadata must contain at least one key" })
 			.optional(),
 		agent: z.string().optional(),
@@ -51,7 +51,7 @@ export const StandardUpdateSchema = z
 		is_global: z.boolean().optional(),
 		tags: z.array(z.string().min(1)).min(1).optional(),
 		metadata: z
-			.record(z.string(), z.any())
+			.record(z.string(), z.unknown())
 			.refine((value) => Object.keys(value).length > 0, { message: "metadata must contain at least one key" })
 			.optional(),
 		agent: z.string().optional(),

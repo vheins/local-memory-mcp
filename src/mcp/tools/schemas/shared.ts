@@ -30,7 +30,7 @@ export const SingleMemorySchema = z.object({
 	ttlDays: z.number().min(1).optional(),
 	supersedes: z.string().optional(),
 	tags: z.array(z.string()).optional(),
-	metadata: z.record(z.string(), z.any()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 	is_global: z.boolean().default(false)
 });
 
@@ -44,7 +44,7 @@ export const SingleStandardSchema = z.object({
 	stack: z.array(z.string()).optional(),
 	is_global: z.boolean().optional(),
 	tags: z.array(z.string().min(1)).min(1),
-	metadata: z.record(z.string(), z.any()).refine((value) => Object.keys(value).length > 0, {
+	metadata: z.record(z.string(), z.unknown()).refine((value) => Object.keys(value).length > 0, {
 		message: "metadata must contain at least one key"
 	}),
 	agent: z.string().optional(),

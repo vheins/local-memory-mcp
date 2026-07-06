@@ -3,7 +3,7 @@ import { normalizeRepo } from "../../utils/normalize";
 import { TaskStatusSchema, TaskPrioritySchema, TaskStatusValues } from "./shared";
 
 const TaskMetadataSchema = z
-	.record(z.string(), z.any())
+	.record(z.string(), z.unknown())
 	.optional()
 	.superRefine((metadata, ctx) => {
 		if (!metadata) return;
@@ -100,7 +100,7 @@ export const TaskCreateSchema = z
 		doc_path: z.string().optional(),
 		tags: z.array(z.string()).optional(),
 		suggested_skills: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.any()).optional(),
+		metadata: z.record(z.string(), z.unknown()).optional(),
 		parent_id: z.string().optional(),
 		depends_on: z.string().optional(),
 		est_tokens: z.number().int().min(0).optional(),
@@ -141,7 +141,7 @@ export const TaskUpdateSchema = z
 		comment: z.string().min(1).optional(),
 		doc_path: z.string().optional(),
 		tags: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.any()).optional(),
+		metadata: z.record(z.string(), z.unknown()).optional(),
 		suggested_skills: z.array(z.string()).optional(),
 		parent_id: z.string().optional(),
 		depends_on: z.string().optional(),

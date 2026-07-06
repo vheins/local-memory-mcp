@@ -11,7 +11,7 @@ export const HandoffCreateSchema = z
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
 		summary: z.string().min(1),
-		context: z.record(z.string(), z.any()).optional(),
+		context: z.record(z.string(), z.unknown()).optional(),
 		expires_at: z.string().optional(),
 		structured: z.boolean().default(false)
 	})
@@ -57,7 +57,7 @@ export const TaskClaimSchema = z
 		task_code: z.string().optional(),
 		agent: z.string().min(1),
 		role: z.string().optional(),
-		metadata: z.record(z.string(), z.any()).optional(),
+		metadata: z.record(z.string(), z.unknown()).optional(),
 		structured: z.boolean().default(false)
 	})
 	.refine((data) => data.task_id !== undefined || data.task_code !== undefined, {

@@ -16,7 +16,7 @@ export const MemoryStoreSchema = z
 		ttlDays: z.number().min(1).optional(),
 		supersedes: z.string().optional(),
 		tags: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.any()).optional(),
+		metadata: z.record(z.string(), z.unknown()).optional(),
 		is_global: z.boolean().default(false),
 		structured: z.boolean().default(false),
 		memories: z.array(SingleMemorySchema).min(1).optional()
@@ -47,7 +47,7 @@ export const MemoryUpdateSchema = z
 		status: z.enum(["active", "archived"]).optional(),
 		supersedes: z.string().optional(),
 		tags: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.any()).optional(),
+		metadata: z.record(z.string(), z.unknown()).optional(),
 		is_global: z.boolean().optional(),
 		completed_at: z.string().optional(),
 		structured: z.boolean().default(false)
