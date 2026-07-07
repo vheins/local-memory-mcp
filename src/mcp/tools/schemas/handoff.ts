@@ -4,8 +4,11 @@ import { HandoffStatusSchema } from "./shared";
 
 export const HandoffCreateSchema = z
 	.object({
-		owner: z.string().min(1).optional().default(""),
-		repo: z.string().min(1).transform(normalizeRepo),
+		owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
+		repo: z
+			.string()
+			.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
+			.transform(normalizeRepo),
 		from_agent: z.string().min(1),
 		to_agent: z.string().min(1).optional(),
 		task_id: z.string().uuid().optional(),
@@ -39,8 +42,11 @@ export const HandoffUpdateSchema = z.object({
 });
 
 export const HandoffListSchema = z.object({
-	owner: z.string().min(1).optional().default(""),
-	repo: z.string().min(1).transform(normalizeRepo),
+	owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
+	repo: z
+		.string()
+		.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
+		.transform(normalizeRepo),
 	status: HandoffStatusSchema.optional(),
 	from_agent: z.string().min(1).optional(),
 	to_agent: z.string().min(1).optional(),
@@ -51,8 +57,11 @@ export const HandoffListSchema = z.object({
 
 export const TaskClaimSchema = z
 	.object({
-		owner: z.string().min(1).optional().default(""),
-		repo: z.string().min(1).transform(normalizeRepo),
+		owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
+		repo: z
+			.string()
+			.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
+			.transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
 		agent: z.string().min(1),
@@ -68,8 +77,8 @@ export const TaskClaimSchema = z
 	});
 
 export const ClaimListSchema = z.object({
-	owner: z.string().min(1).optional().default(""),
-	repo: z.string().min(1).transform(normalizeRepo),
+	owner: z.string().optional().default(""),
+	repo: z.string().transform(normalizeRepo).optional().default(""),
 	agent: z.string().min(1).optional(),
 	active_only: z.boolean().default(true),
 	limit: z.number().min(1).max(100).default(20),
@@ -79,8 +88,11 @@ export const ClaimListSchema = z.object({
 
 export const ClaimReleaseSchema = z
 	.object({
-		owner: z.string().min(1).optional().default(""),
-		repo: z.string().min(1).transform(normalizeRepo),
+		owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
+		repo: z
+			.string()
+			.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
+			.transform(normalizeRepo),
 		task_id: z.string().uuid().optional(),
 		task_code: z.string().optional(),
 		agent: z.string().min(1).optional(),

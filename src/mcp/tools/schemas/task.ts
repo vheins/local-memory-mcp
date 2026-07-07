@@ -164,8 +164,11 @@ export const TaskUpdateSchema = z
 	});
 
 export const TaskListSchema = z.object({
-	owner: z.string().min(1),
-	repo: z.string().min(1).transform(normalizeRepo),
+	owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
+	repo: z
+		.string()
+		.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
+		.transform(normalizeRepo),
 	status: TaskStatusListSchema.default("backlog,pending,in_progress,blocked"),
 	phase: z.string().optional(),
 	query: z.string().optional(),
@@ -199,7 +202,10 @@ export const TaskDeleteSchema = z
 	.refine(
 		(data) =>
 			data.id !== undefined || data.ids !== undefined || data.task_code !== undefined || data.task_codes !== undefined,
-		{ message: "Either 'id', 'ids', 'task_code', or 'task_codes' must be provided for deletion" }
+		{
+			message:
+				"Either 'id' (UUID), 'ids' (array of UUIDs), 'task_code' (string code like PERF-1), or 'task_codes' (array of string codes) must be provided. Note: 'ids' expects UUID format, not task codes — use 'task_code'/'task_codes' for string identifiers."
+		}
 	);
 
 export const TaskGetSchema = z

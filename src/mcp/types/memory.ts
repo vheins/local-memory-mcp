@@ -30,6 +30,7 @@ export type MemoryEntry = {
 	status: "active" | "archived";
 	tags: string[];
 	metadata: Record<string, unknown>;
+	structuredData?: Record<string, unknown>;
 	is_global: boolean;
 };
 

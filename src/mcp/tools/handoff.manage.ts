@@ -9,6 +9,7 @@ import {
 	HandoffUpdateSchema,
 	TaskClaimSchema
 } from "./schemas";
+import { ZodError } from "zod";
 
 function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
 	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -83,7 +84,19 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 }
 
 export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
-	const validated = HandoffListSchema.parse(args);
+	const parsed = HandoffListSchema.safeParse(args);
+	if (!parsed.success) {
+		const missing = parsed.error.issues
+			.filter((i) => i.path.some((p) => p === "owner" || p === "repo"))
+			.map((i) => i.message)
+			.filter(Boolean);
+		const msg =
+			missing.length > 0
+				? `Missing required fields: ${missing.join("; ")}. Pass owner/repo explicitly or configure MCP workspace roots so they can be auto-inferred.`
+				: `Validation error: ${parsed.error.message}`;
+		return { content: [{ type: "text" as const, text: msg }], isError: true };
+	}
+	const validated = parsed.data;
 	const { owner, repo, status, from_agent, to_agent, limit, offset, structured } = validated;
 
 	const handoffs = storage.handoffs.listHandoffs({

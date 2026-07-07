@@ -2,9 +2,22 @@ import { MemoryRecapSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
+import { ZodError } from "zod";
 
 export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promise<McpResponse> {
-	const validated = MemoryRecapSchema.parse(params);
+	const parsed = MemoryRecapSchema.safeParse(params);
+	if (!parsed.success) {
+		const missing = parsed.error.issues
+			.filter((i) => i.path.some((p) => p === "owner" || p === "repo"))
+			.map((i) => i.message)
+			.filter(Boolean);
+		const msg =
+			missing.length > 0
+				? `Missing required fields: ${missing.join("; ")}. Pass owner/repo explicitly or configure MCP workspace roots so they can be auto-inferred.`
+				: `Validation error: ${parsed.error.message}`;
+		return { content: [{ type: "text" as const, text: msg }], isError: true };
+	}
+	const validated = parsed.data;
 
 	logger.info("[Tool] memory.recap", { repo: validated.repo, limit: validated.limit, offset: validated.offset });
 

@@ -104,8 +104,11 @@ export const MemoryAcknowledgeSchema = z
 	});
 
 export const MemoryRecapSchema = z.object({
-	owner: z.string().min(1),
-	repo: z.string().min(1).transform(normalizeRepo),
+	owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
+	repo: z
+		.string()
+		.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
+		.transform(normalizeRepo),
 	limit: z.number().min(1).max(50).default(20),
 	offset: z.number().min(0).default(0),
 	structured: z.boolean().default(false)

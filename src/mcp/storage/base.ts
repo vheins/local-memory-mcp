@@ -67,7 +67,15 @@ export abstract class BaseEntity {
 			status: (r.status as "active" | "archived") || "active",
 			is_global: r.is_global === 1,
 			tags: this.safeJSONParse<string[]>(r.tags as string, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {})
+			metadata: (() => {
+				const meta = this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {});
+				delete meta.structuredData;
+				return meta;
+			})(),
+			structuredData: (() => {
+				const meta = this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {});
+				return (meta.structuredData as Record<string, unknown>) ?? undefined;
+			})()
 		};
 	}
 

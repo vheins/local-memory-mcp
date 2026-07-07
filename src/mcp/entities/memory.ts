@@ -22,6 +22,7 @@ const VALID_COLUMNS = new Set([
 
 export class MemoryEntity extends BaseEntity {
 	insert(entry: MemoryEntry): void {
+		const mergedMeta = this.mergeStructuredData(entry.metadata, entry.structuredData);
 		this.run(
 			`INSERT INTO memories (
 				id, code, repo, owner, type, title, content, importance, folder, language,
@@ -46,13 +47,20 @@ export class MemoryEntity extends BaseEntity {
 				entry.status || "active",
 				entry.is_global ? 1 : 0,
 				entry.tags ? JSON.stringify(entry.tags) : null,
-				entry.metadata ? JSON.stringify(entry.metadata) : null,
+				mergedMeta ? JSON.stringify(mergedMeta) : null,
 				entry.agent || "unknown",
 				entry.role || "unknown",
 				entry.model || "unknown",
 				entry.completed_at || null
 			]
 		);
+	}
+
+	private mergeStructuredData(
+		metadata: Record<string, unknown>,
+		structuredData?: Record<string, unknown>
+	): Record<string, unknown> {
+		return { ...metadata, structuredData: structuredData ?? {} };
 	}
 
 	update(id: string, updates: Partial<MemoryEntry>): void {
@@ -81,6 +89,12 @@ export class MemoryEntity extends BaseEntity {
 						fields.push("language = ?");
 						values.push(scope.language);
 					}
+				} else if (k === "structuredData") {
+					const existingRow = this.get<{ metadata: string }>("SELECT metadata FROM memories WHERE id = ?", [id]);
+					const existingMeta = existingRow ? this.safeJSONParse<Record<string, unknown>>(existingRow.metadata, {}) : {};
+					const merged = { ...existingMeta, structuredData: val };
+					fields.push("metadata = ?");
+					values.push(JSON.stringify(merged));
 				} else if (k === "tags" || k === "metadata") {
 					fields.push(`${k} = ?`);
 					values.push(JSON.stringify(val));
@@ -204,6 +218,7 @@ export class MemoryEntity extends BaseEntity {
 		return this.transaction(() => {
 			let count = 0;
 			for (const entry of entries) {
+				const mergedMeta = this.mergeStructuredData(entry.metadata, entry.structuredData);
 				this.run(
 					`INSERT INTO memories (
 						id, repo, owner, type, title, content, importance, folder, language,
@@ -227,7 +242,7 @@ export class MemoryEntity extends BaseEntity {
 						entry.status || "active",
 						entry.is_global ? 1 : 0,
 						entry.tags ? JSON.stringify(entry.tags) : null,
-						entry.metadata ? JSON.stringify(entry.metadata) : null,
+						mergedMeta ? JSON.stringify(mergedMeta) : null,
 						entry.agent || "unknown",
 						entry.role || "unknown",
 						entry.model || "unknown",

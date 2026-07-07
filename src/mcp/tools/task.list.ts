@@ -2,6 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { Task } from "../types";
 import { createMcpResponse } from "../utils/mcp-response";
 import { TaskListSchema } from "./schemas";
+import { ZodError } from "zod";
 
 function describeTaskListFilter(status?: string) {
 	if (!status) return "active";
@@ -72,7 +73,19 @@ function capitalize(str: string): string {
 }
 
 export async function handleTaskList(args: unknown, storage: SQLiteStore) {
-	const validated = TaskListSchema.parse(args);
+	const parsed = TaskListSchema.safeParse(args);
+	if (!parsed.success) {
+		const missing = parsed.error.issues
+			.filter((i) => i.path.some((p) => p === "owner" || p === "repo"))
+			.map((i) => i.message)
+			.filter(Boolean);
+		const msg =
+			missing.length > 0
+				? `Missing required fields: ${missing.join("; ")}. Pass owner/repo explicitly or configure MCP workspace roots so they can be auto-inferred.`
+				: `Validation error: ${parsed.error.message}`;
+		return { content: [{ type: "text" as const, text: msg }], isError: true };
+	}
+	const validated = parsed.data;
 	const { owner, repo, status, phase, query, limit, offset, structured: isStructuredRequest = false } = validated;
 
 	let statuses: string[] = [];
