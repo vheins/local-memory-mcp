@@ -16,11 +16,11 @@ export const AGENT_TOOL_DEFINITIONS = [
 			properties: {
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username). Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				objective: {
 					type: "string",
@@ -128,11 +128,11 @@ export const AGENT_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",
@@ -188,11 +188,11 @@ export const AGENT_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",
@@ -224,8 +224,14 @@ export const AGENT_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Auto-detected from session." },
-				repo: { type: "string", description: "Auto-detected from session." },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
 				title: { type: "string", description: "Title for the fact/memory." },
 				content: { type: "string", description: "The fact content to store." },
 				type: { type: "string", default: "code_fact" },
@@ -247,8 +253,14 @@ export const AGENT_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string" },
-				repo: { type: "string" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
 				facts: { type: "array", items: { type: "object" }, description: "Array of fact objects." }
 			},
 			required: ["facts"]
@@ -263,8 +275,14 @@ export const AGENT_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string" },
-				repo: { type: "string" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
 				query: { type: "string", description: "Search query." },
 				type: { type: "string", description: "Filter by memory type." },
 				limit: { type: "number", default: 10 }
@@ -281,8 +299,14 @@ export const AGENT_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string" },
-				repo: { type: "string" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
 				id: { type: "string", description: "Memory ID to delete." },
 				code: { type: "string", description: "Memory code to delete." }
 			},

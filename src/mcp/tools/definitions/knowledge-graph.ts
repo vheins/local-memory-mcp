@@ -30,11 +30,11 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",
@@ -81,11 +81,11 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",
@@ -131,11 +131,11 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",
@@ -188,11 +188,11 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",
@@ -230,11 +230,11 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace. Auto-detected from session when omitted."
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name. Auto-detected from session when omitted."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				structured: {
 					type: "boolean",

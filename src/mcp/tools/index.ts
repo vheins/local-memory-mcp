@@ -142,30 +142,39 @@ function normalizeToolArgs(args: Record<string, unknown>, session: SessionContex
 	if (!nextArgs.owner) {
 		const repoVal = (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
-		nextArgs.owner = parsed.owner || inferOwnerFromSession(session) || "";
-		if (nextArgs.owner && !repoVal.includes("/")) {
-			logger.warn(
-				`[tools] owner inferred from session (${nextArgs.owner}) — may be incorrect. Agents should pass explicit owner/repo.`
-			);
+		const inferredOwner = parsed.owner || inferOwnerFromSession(session);
+		if (inferredOwner !== undefined) {
+			nextArgs.owner = inferredOwner;
+			if (!repoVal.includes("/")) {
+				logger.warn(
+					`[tools] owner inferred from session (${nextArgs.owner}) — may be incorrect. Agents should pass explicit owner/repo.`
+				);
+			}
 		}
 	}
 
 	if (scope && !scope.owner) {
 		const repoVal = (scope.repo as string) || (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
-		scope.owner = parsed.owner || (nextArgs.owner as string) || inferOwnerFromSession(session) || "";
+		const inferredOwner = parsed.owner || (nextArgs.owner as string) || inferOwnerFromSession(session);
+		if (inferredOwner !== undefined) {
+			scope.owner = inferredOwner;
+		}
 	}
 
-	const ownerVal = (nextArgs.owner as string) || inferOwnerFromSession(session) || "";
-	const repoVal = (nextArgs.repo as string) || inferRepoFromSession(session) || "";
+	const ownerVal = (nextArgs.owner as string) || inferOwnerFromSession(session) || undefined;
+	const repoVal = (nextArgs.repo as string) || inferRepoFromSession(session) || undefined;
 	const memories = nextArgs.memories as Array<Record<string, unknown>> | undefined;
 	if (memories) {
 		for (const mem of memories) {
 			const memScope = mem.scope as Record<string, unknown> | undefined;
 			if (memScope) {
-				if (!memScope.owner)
-					memScope.owner = ownerVal || parseRepoInput((memScope.repo as string) || repoVal, undefined).owner || "";
-				if (!memScope.repo) memScope.repo = repoVal;
+				if (!memScope.owner) {
+					const inferredMemOwner =
+						ownerVal || parseRepoInput((memScope.repo as string) || repoVal || "", undefined).owner;
+					if (inferredMemOwner) memScope.owner = inferredMemOwner;
+				}
+				if (!memScope.repo && repoVal) memScope.repo = repoVal;
 			}
 		}
 	}

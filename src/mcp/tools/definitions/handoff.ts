@@ -15,8 +15,8 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				from_agent: { type: "string", description: "Agent creating the handoff" },
 				to_agent: { type: "string", description: "Optional target agent" },
 				task_id: { type: "string", format: "uuid", description: "Optional task id to associate" },
@@ -93,8 +93,8 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
 				from_agent: { type: "string" },
 				to_agent: { type: "string" },
@@ -146,8 +146,8 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				task_id: {
 					type: "string",
 					format: "uuid",
@@ -191,8 +191,8 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				agent: { type: "string", description: "Optional agent filter" },
 				active_only: { type: "boolean", description: "When true, return only unreleased claims" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
@@ -240,8 +240,8 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				task_id: {
 					type: "string",
 					format: "uuid",

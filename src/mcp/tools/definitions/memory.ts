@@ -19,9 +19,12 @@ export const MEMORY_TOOL_DEFINITIONS = [
 			properties: {
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username)"
+					description: "Organization/namespace (e.g., GitHub org or username)."
 				},
-				repo: { type: "string", description: "Repository/project name. Optional when a single MCP root is active." },
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Optional when a single MCP root is active."
+				},
 				objective: { type: "string", minLength: 5, description: "Question or synthesis objective." },
 				current_file_path: {
 					type: "string",
@@ -77,7 +80,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					properties: {
 						code: { type: "string", description: "Short memory code." },
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
 					}
 				}
@@ -142,7 +145,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							type: "object",
 							properties: {
 								owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-								repo: { type: "string", description: "Repository/project name" },
+								repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 								branch: { type: "string", description: "Git branch this memory relates to" },
 								folder: { type: "string", description: "Subdirectory within the repo" },
 								language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" }
@@ -200,7 +203,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 										type: "object",
 										properties: {
 											owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-											repo: { type: "string", description: "Repository/project name" },
+											repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 											branch: { type: "string", description: "Git branch this memory relates to" },
 											folder: { type: "string", description: "Subdirectory within the repo" },
 											language: { type: "string", description: "Programming language" }
@@ -291,8 +294,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					title: "By ID",
 					required: ["owner", "repo", "id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						id: { type: "string", format: "uuid", description: "Memory entry ID." },
 						type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
 						title: { type: "string", minLength: 3, maxLength: 100 },
@@ -317,8 +320,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					title: "By code",
 					required: ["owner", "repo", "code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						code: { type: "string", maxLength: 20, description: "Short memory code." },
 						type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
 						title: { type: "string", minLength: 3, maxLength: 100 },
@@ -375,8 +378,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					description: "Search keyword to match against memory titles and content"
 				},
 				prompt: { type: "string", description: "Natural language prompt for semantic search" },
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				current_tags: {
 					type: "array",
 					items: { type: "string" },
@@ -404,7 +407,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					type: "object",
 					properties: {
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository/project name" },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 						branch: { type: "string", description: "Git branch filter" },
 						folder: { type: "string", description: "Subdirectory filter" },
 						language: { type: "string", description: "Programming language filter" }
@@ -459,8 +462,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				signals: {
 					type: "array",
 					items: { type: "string", maxLength: 200 },
@@ -499,8 +502,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					title: "By single ID",
 					required: ["owner", "repo", "id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						id: { type: "string", format: "uuid", description: "Memory entry ID to delete." },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
@@ -509,8 +512,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					title: "By bulk IDs",
 					required: ["owner", "repo", "ids"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						ids: {
 							type: "array",
 							items: { type: "string", format: "uuid" },
@@ -524,8 +527,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					title: "By single code",
 					required: ["owner", "repo", "code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						code: { type: "string", maxLength: 20, description: "Short memory code." },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
@@ -534,8 +537,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					title: "By bulk codes",
 					required: ["owner", "repo", "codes"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						codes: {
 							type: "array",
 							items: { type: "string", maxLength: 20 },
@@ -574,8 +577,8 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name (required)" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 				limit: {
 					type: "number",
 					minimum: 1,

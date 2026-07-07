@@ -139,6 +139,10 @@ export function inferRepoFromSession(session?: SessionContext): string | undefin
 	if (roots.length === 1) {
 		return path.basename(roots[0]);
 	}
+	if (roots.length === 0) {
+		const cwd = process.cwd();
+		return path.basename(cwd);
+	}
 	return undefined;
 }
 
@@ -146,6 +150,13 @@ export function inferOwnerFromSession(session?: SessionContext): string | undefi
 	const roots = getFilesystemRoots(session);
 	if (roots.length === 1) {
 		const parts = roots[0].split(path.sep).filter(Boolean);
+		if (parts.length >= 2) {
+			return parts[parts.length - 2];
+		}
+	}
+	if (roots.length === 0) {
+		const cwd = process.cwd();
+		const parts = cwd.split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
 			return parts[parts.length - 2];
 		}

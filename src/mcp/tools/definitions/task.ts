@@ -15,10 +15,13 @@ export const TASK_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
 				repo: {
 					type: "string",
-					description: "Repository name. Optional when it can be inferred from MCP roots or elicited from the user."
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				task_code: { type: "string" },
 				phase: { type: "string" },
@@ -42,7 +45,7 @@ export const TASK_TOOL_DEFINITIONS = [
 				doc_path: { type: "string" },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["owner"]
+			required: []
 		},
 		outputSchema: {
 			type: "object",
@@ -67,10 +70,18 @@ export const TASK_TOOL_DEFINITIONS = [
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["owner", "repo", "id"],
+					required: ["id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						id: { type: "string", format: "uuid", description: "Task ID" },
 						structured: {
 							type: "boolean",
@@ -81,10 +92,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By task_code",
-					required: ["owner", "repo", "task_code"],
+					required: ["task_code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						task_code: {
 							type: "string",
 							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
@@ -98,10 +117,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By task_codes",
-					required: ["owner", "repo", "task_codes"],
+					required: ["task_codes"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						task_codes: {
 							type: "array",
 							items: { type: "string" },
@@ -132,8 +159,14 @@ export const TASK_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
 				task_code: { type: "string", description: "Unique task code (e.g. TASK-001) (Required for single task)" },
 				phase: { type: "string", description: "Project phase (Required for single task)" },
 				title: {
@@ -219,7 +252,7 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["owner", "repo"]
+			required: []
 		},
 		outputSchema: {
 			type: "object",
@@ -253,10 +286,18 @@ export const TASK_TOOL_DEFINITIONS = [
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["owner", "repo", "id"],
+					required: ["id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						id: { type: "string", format: "uuid", description: "Task ID (for single update)" },
 						phase: { type: "string" },
 						title: { type: "string", minLength: 3, maxLength: 100 },
@@ -321,10 +362,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By IDs",
-					required: ["owner", "repo", "ids"],
+					required: ["ids"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						ids: {
 							type: "array",
 							items: { type: "string", format: "uuid" },
@@ -394,10 +443,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By task_code",
-					required: ["owner", "repo", "task_code"],
+					required: ["task_code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						task_code: { type: "string" },
 						phase: { type: "string" },
 						title: { type: "string", minLength: 3, maxLength: 100 },
@@ -462,10 +519,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By task_codes",
-					required: ["owner", "repo", "task_codes"],
+					required: ["task_codes"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						task_codes: {
 							type: "array",
 							items: { type: "string" },
@@ -569,20 +634,36 @@ export const TASK_TOOL_DEFINITIONS = [
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["owner", "repo", "id"],
+					required: ["id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						id: { type: "string", format: "uuid", description: "Task ID (for single deletion)" },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
 				},
 				{
 					title: "By IDs",
-					required: ["owner", "repo", "ids"],
+					required: ["ids"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						ids: {
 							type: "array",
 							items: { type: "string", format: "uuid" },
@@ -594,10 +675,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By task_code",
-					required: ["owner", "repo", "task_code"],
+					required: ["task_code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						task_code: {
 							type: "string",
 							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
@@ -607,10 +696,18 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				{
 					title: "By task_codes",
-					required: ["owner", "repo", "task_codes"],
+					required: ["task_codes"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: {
+							type: "string",
+							description:
+								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+						},
+						repo: {
+							type: "string",
+							description:
+								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+						},
 						task_codes: {
 							type: "array",
 							items: { type: "string" },
@@ -649,10 +746,13 @@ export const TASK_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (required)"
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
 				status: {
 					type: "string",
@@ -687,7 +787,7 @@ export const TASK_TOOL_DEFINITIONS = [
 					description: "If true, returns structured JSON without the text content summary."
 				}
 			},
-			required: ["owner", "repo"]
+			required: []
 		},
 		outputSchema: {
 			type: "object",
@@ -729,8 +829,14 @@ export const TASK_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-				repo: { type: "string", description: "Repository/project name" },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
 				query: {
 					type: "string",
 					minLength: 1,
@@ -743,7 +849,7 @@ export const TASK_TOOL_DEFINITIONS = [
 				offset: { type: "number", minimum: 0, default: 0 },
 				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 			},
-			required: ["owner", "repo", "query"]
+			required: ["query"]
 		},
 		outputSchema: {
 			type: "object",

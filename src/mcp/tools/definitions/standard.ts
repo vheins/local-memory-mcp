@@ -23,7 +23,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					properties: {
 						code: { type: "string", description: "Short standard code (e.g. 'A3KPQ2')." },
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
 					}
 				}
@@ -47,8 +47,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					title: "By single ID",
 					required: ["owner", "repo", "id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						id: { type: "string", format: "uuid", description: "Coding standard ID to delete." },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
@@ -57,8 +57,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					title: "By bulk IDs",
 					required: ["owner", "repo", "ids"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						ids: {
 							type: "array",
 							items: { type: "string", format: "uuid" },
@@ -72,8 +72,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					title: "By single code",
 					required: ["owner", "repo", "code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						code: { type: "string", maxLength: 20, description: "Short standard code." },
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
@@ -82,8 +82,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					title: "By bulk codes",
 					required: ["owner", "repo", "codes"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name." },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						codes: {
 							type: "array",
 							items: { type: "string", maxLength: 20 },
@@ -123,7 +123,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 				name: { type: "string", minLength: 3, maxLength: 255, description: "Human-readable standard name" },
 				content: {
 					type: "string",
@@ -144,7 +144,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 				},
 				repo: {
 					type: "string",
-					description: "Repository name for repo-specific standards. Omit only for global standards."
+					description:
+						"Repository/project name (e.g., 'local-memory-mcp'). Required for repo-specific standards. Omit only for global standards."
 				},
 				is_global: { type: "boolean", description: "Whether standard applies globally or repo-specific" },
 				tags: {
@@ -248,8 +249,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					title: "By ID",
 					required: ["owner", "repo", "id"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						id: { type: "string", format: "uuid", description: "Standard ID to update." },
 						code: { type: "string", maxLength: 20, description: "Short standard code." },
 						name: { type: "string", minLength: 3, maxLength: 255 },
@@ -271,8 +272,8 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					title: "By code",
 					required: ["owner", "repo", "code"],
 					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-						repo: { type: "string", description: "Repository name" },
+						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
+						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						code: { type: "string", maxLength: 20, description: "Short standard code." },
 						id: { type: "string", format: "uuid", description: "Standard ID." },
 						name: { type: "string", minLength: 3, maxLength: 255 },
@@ -315,6 +316,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
+				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 				query: { type: "string", description: "Search query (optional, searches title/content)" },
 				stack: {
 					type: "array",
@@ -329,7 +331,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 				language: { type: "string", description: "Programming language filter" },
 				context: { type: "string", description: "Context/category filter" },
 				version: { type: "string", description: "Version filter" },
-				repo: { type: "string", description: "Repository filter (optional)" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp'). Optional filter." },
 				is_global: { type: "boolean", description: "Filter by global/repo-specific" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
