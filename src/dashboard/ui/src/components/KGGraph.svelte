@@ -23,6 +23,9 @@
 	let isZeroEdgeOverview = false;
 	let hiddenZeroEdgeNodeCount = 0;
 
+	// Limit nodes for force layout to prevent browser freeze
+	const MAX_FORCE_NODES = 300;
+
 	// Layout state
 	let layoutNodes: LayoutNode[] = [];
 	let layoutEdges: LayoutEdge[] = [];
@@ -153,8 +156,11 @@
 			return;
 		}
 
+		const cappedNodes = nodes.slice(0, MAX_FORCE_NODES);
+		const cappedNodeNames = new Set(cappedNodes.map((n) => n.name));
+
 		layoutNodes = initializeLayout(
-			nodes.map((n) => ({
+			cappedNodes.map((n) => ({
 				id: n.id,
 				name: n.name,
 				type: n.type,
@@ -170,12 +176,14 @@
 			canvasHeight
 		);
 
-		layoutEdges = edges.map((e) => ({
-			source: e.source,
-			target: e.target,
-			relation_type: e.relation_type
-		}));
-		hiddenZeroEdgeNodeCount = 0;
+		layoutEdges = edges
+			.filter((e) => cappedNodeNames.has(e.source) && cappedNodeNames.has(e.target))
+			.map((e) => ({
+				source: e.source,
+				target: e.target,
+				relation_type: e.relation_type
+			}));
+		hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - cappedNodes.length);
 
 		nodeLookup = buildNodeLookup(layoutNodes);
 		runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
@@ -432,7 +440,7 @@
 		onRefresh={() => loadGraph(true)}
 	/>
 
-	<!-- Loading / Empty / Canvas -->
+	<!-- Loading / Empty / Canvas (canvas always in DOM for context) -->
 	{#if isLoading}
 		<div class="kg-loading">
 			<div
@@ -447,21 +455,20 @@
 			<div>No knowledge graph data found</div>
 			<div class="text-xs" style="color:var(--color-text-muted);">Add entities and relations to build your graph.</div>
 		</div>
-	{:else}
-		<div class="kg-canvas-wrap">
-			<canvas
-				bind:this={canvas}
-				on:click={handleCanvasClick}
-				on:dblclick={handleCanvasDblClick}
-				on:contextmenu={handleCanvasRightClick}
-				on:mousemove={handleCanvasMove}
-				aria-label={isZeroEdgeOverview
-					? `Knowledge Graph zero-relation overview showing ${layoutNodes.length} of ${nodes.length} entities`
-					: "Knowledge Graph visualization"}
-				tabindex="0"
-			></canvas>
-		</div>
 	{/if}
+	<div class="kg-canvas-wrap" class:kg-hidden={isLoading || layoutNodes.length === 0}>
+		<canvas
+			bind:this={canvas}
+			on:click={handleCanvasClick}
+			on:dblclick={handleCanvasDblClick}
+			on:contextmenu={handleCanvasRightClick}
+			on:mousemove={handleCanvasMove}
+			aria-label={isZeroEdgeOverview
+				? `Knowledge Graph zero-relation overview showing ${layoutNodes.length} of ${nodes.length} entities`
+				: "Knowledge Graph visualization"}
+			tabindex="0"
+		></canvas>
+	</div>
 
 	<!-- Modals -->
 	<KGModal

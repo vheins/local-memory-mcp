@@ -31,6 +31,13 @@
 		position: relative;
 	}
 
+	:global(.kg-canvas-wrap.kg-hidden) {
+		opacity: 0;
+		pointer-events: none;
+		position: absolute;
+		inset: 0;
+	}
+
 	:global(.kg-canvas-wrap canvas) {
 		display: block;
 		width: 100%;
