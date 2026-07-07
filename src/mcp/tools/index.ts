@@ -284,12 +284,16 @@ function logToolAction(
 }
 
 // ── Public input schema for registerTool ─────────────────────────────────
-// Uses a minimal schema that accepts any object. The handlers validate
+// Uses a minimal schema that accepts any input. The handlers validate
 // internally with their own Zod schemas (which include refinements and
 // normalized transformations).
+//
+// NOTE: z.any() produces JSON Schema `{}` (any value), preventing MCP
+// clients from stripping parameters that aren't explicitly listed.
+// Individual tool handlers are responsible for validating their own params.
 
 function makePublicSchema(): z.ZodSchema {
-	return z.object({}).catchall(z.unknown());
+	return z.any();
 }
 
 // ── Response conversion (McpResponse → CallToolResult) ──────────────────
