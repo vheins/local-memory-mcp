@@ -95,7 +95,7 @@ export const AGENT_TOOL_DEFINITIONS = [
 		name: "decision-log",
 		title: "Decision Logger",
 		description:
-			"Logs a structured decision as a memory entry. Accepts a summary of what was decided, the context/situation, the rationale, and optional alternatives considered. Internally reuses the memory-store handler with type='decision' and importance=4. Owner and repo are auto-inferred from session when omitted.",
+			"Logs a structured decision as a memory entry (type='decision', importance=4). Fields: summary (max 255 chars — becomes the memory title), context (situation/background, min 10 chars), rationale (why it was decided, min 10 chars), and alternatives (ARRAY of strings, NOT a single string — e.g. ['option A', 'option B']). Do NOT pass 'title' — that field does not exist on this tool. Owner and repo are auto-inferred from session when omitted.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,

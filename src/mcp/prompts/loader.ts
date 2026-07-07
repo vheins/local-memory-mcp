@@ -32,6 +32,8 @@ function findPromptDir(): string {
 
 const PROMPT_DIR = findPromptDir();
 
+const promptCache = new Map<string, LoadedPrompt>();
+
 export function listPromptFiles(): string[] {
 	if (!fs.existsSync(PROMPT_DIR)) return [];
 	return fs
@@ -42,6 +44,9 @@ export function listPromptFiles(): string[] {
 }
 
 export function loadPromptFromMarkdown(name: string): LoadedPrompt {
+	const cached = promptCache.get(name);
+	if (cached) return cached;
+
 	const filePath = path.join(PROMPT_DIR, `${name}.md`);
 	if (!fs.existsSync(filePath)) {
 		throw new Error(`Prompt file not found: ${filePath}`);
@@ -49,13 +54,16 @@ export function loadPromptFromMarkdown(name: string): LoadedPrompt {
 	const fileContent = fs.readFileSync(filePath, "utf-8");
 	const { data, content } = matter(fileContent);
 
-	return {
+	const result = {
 		name: data.name || name,
 		description: data.description || "",
 		arguments: data.arguments || [],
 		agent: data.agent,
 		content: content.trim()
 	};
+
+	promptCache.set(name, result);
+	return result;
 }
 
 function findServerInstructionsDir(): string {
@@ -83,12 +91,17 @@ function findServerInstructionsDir(): string {
 
 const SERVER_DIR = findServerInstructionsDir();
 
+let serverInstructionsCache: string | null = null;
+
 export function loadServerInstructions(): string {
+	if (serverInstructionsCache !== null) return serverInstructionsCache;
+
 	const filePath = path.join(SERVER_DIR, "instructions.md");
 	if (!fs.existsSync(filePath)) {
 		throw new Error(`Server instructions file not found: ${filePath}`);
 	}
 	const fileContent = fs.readFileSync(filePath, "utf-8");
 	const { content } = matter(fileContent);
-	return content.trim();
+	serverInstructionsCache = content.trim();
+	return serverInstructionsCache;
 }

@@ -1,6 +1,8 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
+export const SCHEMA_VERSION = 2;
+
 export class MigrationManager {
 	constructor(private db: Database.Database) {}
 
@@ -20,7 +22,28 @@ export class MigrationManager {
 		return this.db.prepare(sql).get() as Record<string, unknown> | undefined;
 	}
 
+	private getSchemaVersion(): number {
+		try {
+			const row = this.get("SELECT version FROM _schema_version LIMIT 1");
+			return row ? (row.version as number) : 0;
+		} catch {
+			return 0;
+		}
+	}
+
+	private setSchemaVersion(version: number): void {
+		this.exec(`CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER NOT NULL)`);
+		this.run("DELETE FROM _schema_version");
+		this.run("INSERT INTO _schema_version (version) VALUES (?)", version);
+	}
+
 	public migrate() {
+		const currentVersion = this.getSchemaVersion();
+		if (currentVersion >= SCHEMA_VERSION) {
+			logger.debug(`[Migration] Schema already at version ${SCHEMA_VERSION}, skipping`);
+			return;
+		}
+
 		this.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
@@ -487,6 +510,9 @@ export class MigrationManager {
 		} catch {
 			// Ignore if column doesn't exist
 		}
+
+		this.setSchemaVersion(SCHEMA_VERSION);
+		logger.info(`[Migration] Schema upgraded to version ${SCHEMA_VERSION}`);
 	}
 
 	private ensureMemoryTypeConstraint(): void {

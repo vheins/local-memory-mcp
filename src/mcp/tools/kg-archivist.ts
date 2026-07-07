@@ -1,5 +1,4 @@
 import { randomUUID } from "crypto";
-import nlp from "compromise";
 import { SQLiteStore } from "../storage/sqlite";
 import { logger } from "../utils/logger";
 
@@ -251,9 +250,10 @@ function isExcludedNoun(candidate: string): boolean {
  * Deduplication is case-insensitive (first occurrence wins).
  * Very long content (>5000 chars) is truncated for performance.
  */
-export function extractEntities(content: string): ExtractedEntity[] {
+export async function extractEntities(content: string): Promise<ExtractedEntity[]> {
 	if (!content || content.trim().length === 0) return [];
 
+	const { default: nlp } = await import("compromise");
 	const text = content.length > MAX_CONTENT_LENGTH ? content.slice(0, MAX_CONTENT_LENGTH) : content;
 	const doc = nlp(text);
 	const seen = new Set<string>();
@@ -310,12 +310,18 @@ export function extractEntities(content: string): ExtractedEntity[] {
  * - Failures are logged at `warn` level but never thrown — the caller's
  *   memory-store operation is never blocked.
  */
-export function saveExtractions(content: string, title: string, owner: string, repo: string, db: SQLiteStore): void {
+export async function saveExtractions(
+	content: string,
+	title: string,
+	owner: string,
+	repo: string,
+	db: SQLiteStore
+): Promise<void> {
 	if (!content || content.trim().length === 0) return;
 
 	let entities: ExtractedEntity[];
 	try {
-		entities = extractEntities(content);
+		entities = await extractEntities(content);
 	} catch (err) {
 		logger.warn("[KG-Archivist] Entity extraction failed, skipping", {
 			error: String(err)

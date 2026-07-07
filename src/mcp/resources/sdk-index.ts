@@ -118,9 +118,26 @@ export function registerAllResources(
 		}
 	);
 
-	// ── Helper: build completable repos list ──────────────────────────
-	const repos = getRepos();
-	const tags = getTags();
+	// ── Helper: lazy completable repos/tags (deferred until first completion request) ──
+
+	function reposLazy(): () => string[] {
+		let cached: string[] | null = null;
+		return () => {
+			if (cached === null) cached = getRepos();
+			return cached;
+		};
+	}
+
+	function tagsLazy(): () => string[] {
+		let cached: string[] | null = null;
+		return () => {
+			if (cached === null) cached = getTags();
+			return cached;
+		};
+	}
+
+	const reposFn = reposLazy();
+	const tagsFn = tagsLazy();
 
 	// ── Template: Repository Memories ─────────────────────────────────
 
@@ -129,8 +146,8 @@ export function registerAllResources(
 		new ResourceTemplate("repository://{name}/memories{?search,type,tag,limit,offset}", {
 			list: undefined,
 			complete: {
-				name: async (value) => rankCompletionValues(repos, value as string),
-				tag: async (value) => rankCompletionValues(tags, value as string)
+				name: async (value) => rankCompletionValues(reposFn(), value as string),
+				tag: async (value) => rankCompletionValues(tagsFn(), value as string)
 			}
 		}),
 		{
@@ -201,7 +218,7 @@ export function registerAllResources(
 		new ResourceTemplate("repository://{name}/tasks{?status,priority,limit,offset}", {
 			list: undefined,
 			complete: {
-				name: async (value) => rankCompletionValues(repos, value as string)
+				name: async (value) => rankCompletionValues(reposFn(), value as string)
 			}
 		}),
 		{
@@ -279,7 +296,7 @@ export function registerAllResources(
 		new ResourceTemplate("repository://{name}/summary", {
 			list: undefined,
 			complete: {
-				name: async (value) => rankCompletionValues(repos, value as string)
+				name: async (value) => rankCompletionValues(reposFn(), value as string)
 			}
 		}),
 		{
@@ -310,7 +327,7 @@ export function registerAllResources(
 		new ResourceTemplate("repository://{name}/actions{?limit,offset}", {
 			list: undefined,
 			complete: {
-				name: async (value) => rankCompletionValues(repos, value as string)
+				name: async (value) => rankCompletionValues(reposFn(), value as string)
 			}
 		}),
 		{

@@ -131,7 +131,7 @@ async function storeSingleMemory(
 
 	// Auto-extract entities and observations via NLP archivist
 	try {
-		saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
+		await saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
 	} catch (error) {
 		logger.warn("[KG-Archivist] NLP extraction failed, memory stored without KG enrichment", {
 			error: String(error)
@@ -260,7 +260,7 @@ export async function handleMemoryStore(
 
 			// Auto-extract entities and observations via NLP archivist
 			try {
-				saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
+				await saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
 			} catch (error) {
 				logger.warn("[KG-Archivist] NLP extraction failed, memory stored without KG enrichment", {
 					error: String(error)

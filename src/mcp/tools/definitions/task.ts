@@ -85,7 +85,10 @@ export const TASK_TOOL_DEFINITIONS = [
 					properties: {
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 						repo: { type: "string", description: "Repository name" },
-						task_code: { type: "string", description: "Task code (e.g. TASK-001)" },
+						task_code: {
+							type: "string",
+							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
+						},
 						structured: {
 							type: "boolean",
 							default: false,
@@ -103,7 +106,8 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "array",
 							items: { type: "string" },
 							minItems: 1,
-							description: "Array of task codes (e.g. TASK-001)"
+							description:
+								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
 						},
 						structured: {
 							type: "boolean",
@@ -238,7 +242,7 @@ export const TASK_TOOL_DEFINITIONS = [
 		name: "task-update",
 		title: "Task Update",
 		description:
-			"Update one or more tasks. Supports single update via 'id' or bulk update via 'ids'. Provide only the fields that need to be changed. MANDATORY WORKFLOW: You cannot move a task from 'pending' or 'blocked' directly to 'completed'. You MUST move it to 'in_progress' first. When changing status to 'completed', include 'est_tokens' with the estimated total tokens actually used for the task. You may also include 'commit_id' (git commit hash) and 'changed_files' (list of files changed) for traceability.",
+			"Update one or more tasks. Supports single update via 'id' (UUID) or 'task_code' (e.g. PERF-1), bulk via 'ids' (UUID array) or 'task_codes' (string array). Use 'task_code'/'task_codes' for human-readable identifiers, 'id'/'ids' for UUID lookups. Provide only the fields that need to be changed. MANDATORY WORKFLOW: Cannot move 'pending'/'blocked' → 'completed' directly; MUST go through 'in_progress' first. Include 'est_tokens' when moving to 'completed'.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -324,7 +328,8 @@ export const TASK_TOOL_DEFINITIONS = [
 						ids: {
 							type: "array",
 							items: { type: "string", format: "uuid" },
-							description: "Task IDs (for bulk update)"
+							description:
+								"Task UUIDs (for bulk update). NOT task codes — use 'task_codes' for PERF-1 style identifiers."
 						},
 						phase: { type: "string" },
 						title: { type: "string", minLength: 3, maxLength: 100 },
@@ -465,7 +470,8 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "array",
 							items: { type: "string" },
 							minItems: 1,
-							description: "Array of task codes (e.g. TASK-001)"
+							description:
+								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
 						},
 						phase: { type: "string" },
 						title: { type: "string", minLength: 3, maxLength: 100 },
@@ -580,7 +586,8 @@ export const TASK_TOOL_DEFINITIONS = [
 						ids: {
 							type: "array",
 							items: { type: "string", format: "uuid" },
-							description: "Task IDs (for bulk deletion)"
+							description:
+								"Task UUIDs (for bulk deletion). NOT task codes — use 'task_codes' for PERF-1 style identifiers."
 						},
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
@@ -591,7 +598,10 @@ export const TASK_TOOL_DEFINITIONS = [
 					properties: {
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
 						repo: { type: "string", description: "Repository name" },
-						task_code: { type: "string", description: "Task code (e.g. TASK-001)" },
+						task_code: {
+							type: "string",
+							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
+						},
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}
 				},
@@ -605,7 +615,8 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "array",
 							items: { type: "string" },
 							minItems: 1,
-							description: "Array of task codes (e.g. TASK-001)"
+							description:
+								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
 						},
 						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
 					}

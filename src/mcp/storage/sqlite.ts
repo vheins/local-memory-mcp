@@ -75,9 +75,13 @@ export class SQLiteStore {
 		this.db.pragma("foreign_keys = ON");
 		this.db.pragma("wal_autocheckpoint = 100"); // more frequent: every 100 pages
 
-		// Run integrity check and WAL checkpoint on startup
+		// Lightweight WAL checkpoint on startup (passive — does not block readers)
 		if (finalPath !== ":memory:") {
-			this._startupChecks(finalPath);
+			try {
+				this.db.pragma("wal_checkpoint(PASSIVE)");
+			} catch (err) {
+				logger.warn("[SQLiteStore] WAL checkpoint failed on startup", { error: String(err) });
+			}
 		}
 
 		const migrator = new MigrationManager(this.db);

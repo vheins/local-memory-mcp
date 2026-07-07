@@ -154,7 +154,10 @@ export const TaskUpdateSchema = z
 	.refine(
 		(data) =>
 			data.id !== undefined || data.ids !== undefined || data.task_code !== undefined || data.task_codes !== undefined,
-		{ message: "Either 'id', 'ids', 'task_code', or 'task_codes' must be provided for update" }
+		{
+			message:
+				"Either 'id' (UUID), 'ids' (array of UUIDs), 'task_code' (string code like PERF-1), or 'task_codes' (array of string codes) must be provided. Note: 'ids' expects UUID format, not task codes — use 'task_code'/'task_codes' for string identifiers."
+		}
 	)
 	.refine((data) => Object.keys(data).length > 2, {
 		message: "At least one field besides repo and id/ids must be provided for update"
