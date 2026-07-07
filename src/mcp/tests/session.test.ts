@@ -2,9 +2,13 @@
 // Unit tests for session context functions
 // Covers: inferOwnerFromSession, inferRepoFromSession
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import path from "node:path";
 import { createSessionContext, inferOwnerFromSession, inferRepoFromSession } from "../session";
+
+beforeEach(() => {
+	vi.spyOn(process, "cwd").mockReturnValue("/test/path/mockrepo");
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,9 +32,9 @@ describe("inferOwnerFromSession()", () => {
 		expect(inferOwnerFromSession(session)).toBe("alice");
 	});
 
-	it("returns undefined when session has no roots", () => {
+	it("returns parent dir from cwd when session has no roots", () => {
 		const session = createSessionContext();
-		expect(inferOwnerFromSession(session)).toBeUndefined();
+		expect(inferOwnerFromSession(session)).toBe("path");
 	});
 
 	it("returns undefined when session has a root with fewer than 2 path components", () => {
@@ -43,15 +47,15 @@ describe("inferOwnerFromSession()", () => {
 		expect(inferOwnerFromSession()).toBeUndefined();
 	});
 
-	it("returns undefined when roots exist but none are file:// URIs", () => {
+	it("returns parent dir from cwd when roots exist but none are file:// URIs", () => {
 		const session = sessionWithRoots(["not-a-file-uri://some/path"]);
-		expect(inferOwnerFromSession(session)).toBeUndefined();
+		expect(inferOwnerFromSession(session)).toBe("path");
 	});
 
-	it("returns undefined with clientInfo.name set and no roots (regression guard)", () => {
+	it("returns parent dir from cwd with clientInfo.name set and no roots (regression guard)", () => {
 		const session = createSessionContext();
 		session.clientInfo = { name: "claude-desktop", version: "1.0.0" };
-		expect(inferOwnerFromSession(session)).toBeUndefined();
+		expect(inferOwnerFromSession(session)).toBe("path");
 	});
 
 	it("returns undefined when multiple roots exist", () => {
@@ -71,9 +75,9 @@ describe("inferRepoFromSession()", () => {
 		expect(inferRepoFromSession(session)).toBe("myrepo");
 	});
 
-	it("returns undefined when session has no roots", () => {
+	it("returns cwd basename when session has no roots", () => {
 		const session = createSessionContext();
-		expect(inferRepoFromSession(session)).toBeUndefined();
+		expect(inferRepoFromSession(session)).toBe("mockrepo");
 	});
 
 	it("returns undefined when session is undefined", () => {

@@ -547,7 +547,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		expect((result.structuredContent as Record<string, unknown>).iterations).toBe(2);
 	});
 
-	it("memory-synthesize elicits the repo when roots cannot infer it", async () => {
+	it("memory-synthesize falls back to cwd inference when no roots or repo provided", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
 		const session = createSessionContext();
@@ -557,14 +557,11 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		const sampleMessage = vi.fn().mockResolvedValue({
 			role: "assistant",
-			content: { type: "text", text: "Synthesized after repo elicitation." },
+			content: { type: "text", text: "Synthesized after cwd fallback." },
 			model: "test-model",
 			stopReason: "endTurn"
 		});
-		const elicit = vi.fn().mockResolvedValue({
-			action: "accept",
-			content: { repo: "elicited-repo" }
-		});
+		const elicit = vi.fn();
 
 		const router = createRouter(mockDb, mockVectors, {
 			getSessionContext: () => session,
@@ -574,12 +571,12 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		const result = (await router("tools/call", {
 			name: "memory-synthesize",
-			arguments: { owner: "test", objective: "Summarize the repo using elicitation" }
+			arguments: { owner: "test", objective: "Summarize using cwd inference" }
 		})) as any;
 
-		expect(elicit).toHaveBeenCalledTimes(1);
+		expect(elicit).not.toHaveBeenCalled();
 		expect(sampleMessage).toHaveBeenCalledTimes(1);
-		expect((result.structuredContent as Record<string, unknown>).repo).toBe("elicited-repo");
+		expect(result.structuredContent).toBeDefined();
 	});
 
 	it("task-create-interactive elicits missing task fields and creates the task", async () => {
