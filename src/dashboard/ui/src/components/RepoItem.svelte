@@ -44,7 +44,6 @@
 		(item.inProgressCount || 0) + (item.pendingCount || 0) + (item.blockedCount || 0) + (item.backlogCount || 0) > 0;
 </script>
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
 <div
 	class="repo-item"
 	class:active={selected}

@@ -40,25 +40,23 @@ describe("SDK Client integration", () => {
 	});
 
 	it("InMemoryTransport can connect a client to a server", async () => {
-		const server = new McpServer(
-			{ name: "test-server", version: "1.0.0" },
-			{ capabilities: { tools: {} } }
-		);
+		const server = new McpServer({ name: "test-server", version: "1.0.0" }, { capabilities: { tools: {} } });
 
-		server.registerTool("greet", {
-			description: "Greet someone",
-			inputSchema: z.object({ name: z.string() })
-		}, async (args: any) => ({
-			content: [{ type: "text" as const, text: `Hello, ${args.name}!` }]
-		}));
+		server.registerTool(
+			"greet",
+			{
+				description: "Greet someone",
+				inputSchema: z.object({ name: z.string() })
+			},
+			async (args: any) => ({
+				content: [{ type: "text" as const, text: `Hello, ${args.name}!` }]
+			})
+		);
 
 		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 		const client = new Client({ name: "test-client", version: "1.0.0" });
 
-		await Promise.all([
-			server.connect(serverTransport),
-			client.connect(clientTransport)
-		]);
+		await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
 		const tools = await client.listTools();
 		expect(tools.tools).toBeDefined();
@@ -74,30 +72,21 @@ describe("SDK Client integration", () => {
 	});
 
 	it("Client readResource integration with InMemoryTransport", async () => {
-		const server = new McpServer(
-			{ name: "test-server", version: "1.0.0" },
-			{ capabilities: { resources: {} } }
-		);
+		const server = new McpServer({ name: "test-server", version: "1.0.0" }, { capabilities: { resources: {} } });
 
-		server.registerResource(
-			"config",
-			"config://app",
-			{ mimeType: "application/json" },
-			async (_uri: unknown) => ({
-				contents: [{
+		server.registerResource("config", "config://app", { mimeType: "application/json" }, async (_uri: unknown) => ({
+			contents: [
+				{
 					uri: "config://app",
 					text: JSON.stringify({ debug: true })
-				}]
-			})
-		);
+				}
+			]
+		}));
 
 		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 		const client = new Client({ name: "test-client", version: "1.0.0" });
 
-		await Promise.all([
-			server.connect(serverTransport),
-			client.connect(clientTransport)
-		]);
+		await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
 		const resources = await client.listResources();
 		expect(resources.resources).toBeDefined();
@@ -111,25 +100,23 @@ describe("SDK Client integration", () => {
 	});
 
 	it("Client can list prompts", async () => {
-		const server = new McpServer(
-			{ name: "test-server", version: "1.0.0" },
-			{ capabilities: { prompts: {} } }
-		);
+		const server = new McpServer({ name: "test-server", version: "1.0.0" }, { capabilities: { prompts: {} } });
 
-		server.registerPrompt("review", {
-			description: "Review code",
-			argsSchema: z.object({ code: z.string() })
-		}, async (args: any) => ({
-			messages: [{ role: "user" as const, content: { type: "text" as const, text: `Review: ${args.code}` } }]
-		}));
+		server.registerPrompt(
+			"review",
+			{
+				description: "Review code",
+				argsSchema: z.object({ code: z.string() })
+			},
+			async (args: any) => ({
+				messages: [{ role: "user" as const, content: { type: "text" as const, text: `Review: ${args.code}` } }]
+			})
+		);
 
 		const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 		const client = new Client({ name: "test-client", version: "1.0.0" });
 
-		await Promise.all([
-			server.connect(serverTransport),
-			client.connect(clientTransport)
-		]);
+		await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
 		const prompts = await client.listPrompts();
 		expect(prompts.prompts).toBeDefined();

@@ -95,9 +95,11 @@ export function createMcpResponse(
 	} else if (summary && summary.trim().length > 0) {
 		let text = summary.trim();
 		if (includeSerializedStructuredContent) {
-			text += ` ${structuredContentPathHint
-				? `Read structuredContent.${structuredContentPathHint} for details.`
-				: `Read structuredContent for machine-readable results.`}`;
+			text += ` ${
+				structuredContentPathHint
+					? `Read structuredContent.${structuredContentPathHint} for details.`
+					: `Read structuredContent for machine-readable results.`
+			}`;
 		}
 		content.push({
 			type: "text",

@@ -302,7 +302,8 @@ describe("KG Archivist — saveExtractions", () => {
 		// Every observation should reference an entity that exists
 		for (const obs of observations) {
 			const entity = db.db.prepare("SELECT name FROM entities WHERE name = ?").get(obs.entity_name) as
-				{ name: string } | undefined;
+				| { name: string }
+				| undefined;
 			expect(entity).toBeDefined();
 		}
 	});

@@ -1,12 +1,15 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { onMount, onDestroy } from "svelte";
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
-	import { initializeLayout, runForceLayout } from "$lib/kg/KGForceLayout";
+	import { initializeLayout, initializeZeroEdgeOverviewLayout, runForceLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import { NODE_RADIUS, resizeCanvas as resizeCanvasFn, renderGraph } from "$lib/kg/KGCanvasRenderer";
 	import type { RenderState } from "$lib/kg/KGCanvasRenderer";
+	import KGGraphHeader from "./KGGraphHeader.svelte";
+	import KGGraphShell from "./KGGraphShell.svelte";
 	import KGModal from "./KGModal.svelte";
 
 	export let repo: string;
@@ -16,20 +19,26 @@
 	let edges: KGEdge[] = [];
 	let isLoading = true;
 	let errorMsg = "";
+	let loadedRepo = "";
+	let isZeroEdgeOverview = false;
+	let hiddenZeroEdgeNodeCount = 0;
 
 	// Layout state
 	let layoutNodes: LayoutNode[] = [];
 	let layoutEdges: LayoutEdge[] = [];
 
 	// O(1) node lookup map (rebuilt after layout init)
-	let nodeMap = new Map<string, LayoutNode>();
+	let nodeLookup = new Map<string, LayoutNode>();
+
+	function getNodeByKey(key: string): LayoutNode | undefined {
+		return nodeLookup.get(key);
+	}
 
 	// Canvas refs
 	let canvas: HTMLCanvasElement;
 	let ctx: CanvasRenderingContext2D;
 	let canvasWidth = 800;
 	let canvasHeight = 600;
-	let dpr = 1;
 
 	// Interaction state
 	let graphState: RenderState = {
@@ -44,44 +53,105 @@
 	let showAddEntityModal = false;
 	let showAddRelationModal = false;
 	let showDeleteConfirm = false;
-	let deleteTarget: { type: "node" | "edge"; name?: string } | null = null;
+	type DeleteTarget = { type: "node"; name: string } | { type: "edge"; name: string; edge: LayoutEdge };
+	let deleteTarget: DeleteTarget | null = null;
 
 	// ─── Helpers ────────────────────────────────────────────────────────────────
 
-	function buildNodeMap(layoutNodes: LayoutNode[]): Map<string, LayoutNode> {
-		const map = new Map<string, LayoutNode>();
+	const EMPTY_NODE_LOOKUP = new Map<string, LayoutNode>();
+
+	function buildNodeLookup(layoutNodes: LayoutNode[]): Map<string, LayoutNode> {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Lookup is built once and treated as immutable.
+		const lookup = new Map<string, LayoutNode>();
 		for (const n of layoutNodes) {
-			map.set(n.id, n);
-			map.set(n.name, n);
+			lookup.set(n.id, n);
+			lookup.set(n.name, n);
 		}
-		return map;
+		return lookup;
 	}
 
 	function scheduleRender() {
 		if (ctx) {
-			renderGraph(ctx, canvasWidth, canvasHeight, layoutNodes, layoutEdges, graphState);
+			renderGraph(ctx, canvasWidth, canvasHeight, layoutNodes, layoutEdges, {
+				...graphState,
+				hiddenNodeCount: hiddenZeroEdgeNodeCount
+			});
 		}
 	}
 
 	// ─── Load graph data ────────────────────────────────────────────────────────
-	async function loadGraph() {
+	async function loadGraph(forceReload = false) {
 		if (!repo) return;
+		const requestedRepo = repo;
+		// Guard: skip if already loaded for this repo (unless force reload)
+		if (!forceReload && loadedRepo === requestedRepo && layoutNodes.length > 0) return;
 		isLoading = true;
 		errorMsg = "";
+		clearGraph();
 		try {
-			const data = await api.kgGraph(repo);
+			const data = await api.kgGraph(requestedRepo);
+			if (repo !== requestedRepo) return;
 			nodes = data.nodes || [];
 			edges = data.edges || [];
+			// eslint-disable-next-line svelte/infinite-reactive-loop -- load result is guarded by requestedRepo snapshot.
+			loadedRepo = requestedRepo;
 			initLayout();
 		} catch (e: unknown) {
+			if (repo !== requestedRepo) return;
+			// eslint-disable-next-line svelte/infinite-reactive-loop -- failed load clears guard to allow retry for the same repo.
+			loadedRepo = "";
 			errorMsg = e instanceof Error ? e.message : "Failed to load graph";
 		} finally {
-			isLoading = false;
+			if (repo === requestedRepo) {
+				isLoading = false;
+			}
 		}
+	}
+
+	function clearGraph() {
+		nodes = [];
+		edges = [];
+		layoutNodes = [];
+		layoutEdges = [];
+		nodeLookup = EMPTY_NODE_LOOKUP;
+		isZeroEdgeOverview = false;
+		hiddenZeroEdgeNodeCount = 0;
+		graphState.selectedNode = null;
+		graphState.selectedEdge = null;
+		graphState.hoveredNode = null;
+		graphState.showTooltip = false;
+		scheduleRender();
 	}
 
 	function initLayout() {
 		if (!ctx) return;
+
+		isZeroEdgeOverview = edges.length === 0 && nodes.length > 0;
+
+		if (isZeroEdgeOverview) {
+			const result = initializeZeroEdgeOverviewLayout(
+				nodes.map((n) => ({
+					id: n.id,
+					name: n.name,
+					type: n.type,
+					description: n.description,
+					memoryCount: n.memoryCount,
+					x: 0,
+					y: 0,
+					vx: 0,
+					vy: 0,
+					pinned: false
+				})),
+				canvasWidth,
+				canvasHeight
+			);
+			layoutNodes = result;
+			hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - result.length);
+			layoutEdges = [];
+			nodeLookup = buildNodeLookup(layoutNodes);
+			scheduleRender();
+			return;
+		}
 
 		layoutNodes = initializeLayout(
 			nodes.map((n) => ({
@@ -105,8 +175,9 @@
 			target: e.target,
 			relation_type: e.relation_type
 		}));
+		hiddenZeroEdgeNodeCount = 0;
 
-		nodeMap = buildNodeMap(layoutNodes);
+		nodeLookup = buildNodeLookup(layoutNodes);
 		runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
 		scheduleRender();
 	}
@@ -118,9 +189,12 @@
 		const result = resizeCanvasFn(canvas);
 		canvasWidth = result.width;
 		canvasHeight = result.height;
-		dpr = result.dpr;
 		ctx = result.ctx;
 		if (layoutNodes.length > 0) {
+			if (isZeroEdgeOverview) {
+				initLayout();
+				return;
+			}
 			runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
 			scheduleRender();
 		}
@@ -150,8 +224,8 @@
 
 		// Check edges (distance to line segment)
 		for (const e of layoutEdges) {
-			const a = nodeMap.get(e.source);
-			const b = nodeMap.get(e.target);
+			const a = getNodeByKey(e.source);
+			const b = getNodeByKey(e.target);
 			if (!a || !b) continue;
 			const dist = distToSegment(mx, my, a.x, a.y, b.x, b.y);
 			if (dist < 10) {
@@ -195,13 +269,16 @@
 
 		// Check edges
 		for (const e of layoutEdges) {
-			const a = nodeMap.get(e.source);
-			const b = nodeMap.get(e.target);
+			const a = getNodeByKey(e.source);
+			const b = getNodeByKey(e.target);
 			if (!a || !b) continue;
 			const dist = distToSegment(mx, my, a.x, a.y, b.x, b.y);
 			if (dist < 10) {
-				deleteTarget = { type: "edge", name: `${e.source} → ${e.target} (${e.relation_type})` };
+				deleteTarget = { type: "edge", name: `${e.source} → ${e.target} (${e.relation_type})`, edge: e };
+				graphState.selectedEdge = e;
+				graphState.selectedNode = null;
 				showDeleteConfirm = true;
+				scheduleRender();
 				return;
 			}
 		}
@@ -247,7 +324,7 @@
 		try {
 			await api.kgCreateEntity({ name, type, description, repo });
 			showAddEntityModal = false;
-			await loadGraph();
+			await loadGraph(true);
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Failed to create entity";
 		}
@@ -260,7 +337,7 @@
 		try {
 			await api.kgCreateRelation({ from_entity, to_entity, relation_type, repo });
 			showAddRelationModal = false;
-			await loadGraph();
+			await loadGraph(true);
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Failed to create relation";
 		}
@@ -269,24 +346,22 @@
 	async function handleDelete() {
 		if (!deleteTarget) return;
 		try {
-			if (deleteTarget.type === "node" && deleteTarget.name) {
+			if (deleteTarget.type === "node") {
 				await api.kgDeleteEntity(deleteTarget.name);
 			} else if (deleteTarget.type === "edge") {
-				const e = graphState.selectedEdge;
-				if (e) {
-					await api.kgDeleteRelation({
-						from_entity: e.source,
-						to_entity: e.target,
-						relation_type: e.relation_type
-					});
-				}
+				const e = deleteTarget.edge;
+				await api.kgDeleteRelation({
+					from_entity: e.source,
+					to_entity: e.target,
+					relation_type: e.relation_type
+				});
 			}
 			showDeleteConfirm = false;
 			deleteTarget = null;
 			graphState.selectedEdge = null;
 			graphState.selectedNode = null;
 			graphState.showTooltip = false;
-			await loadGraph();
+			await loadGraph(true);
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Failed to delete";
 		}
@@ -319,7 +394,6 @@
 			const result = resizeCanvasFn(canvas);
 			canvasWidth = result.width;
 			canvasHeight = result.height;
-			dpr = result.dpr;
 			ctx = result.ctx;
 		}
 
@@ -335,49 +409,28 @@
 		resizeObserver?.disconnect();
 	});
 
-	// Re-load when repo changes
-	$: if (repo && canvas) {
-		loadGraph();
+	// Re-load when repo changes (guarded inside loadGraph against noop)
+	$: if (repo && canvas && loadedRepo !== repo) {
+		// eslint-disable-next-line svelte/infinite-reactive-loop -- loadGraph updates loadedRepo to satisfy this repo-change guard.
+		untrack(() => loadGraph());
 	}
 </script>
 
 <svelte:window on:keydown={onKeyDown} />
 
-<div class="kg-container">
-	<!-- Toolbar -->
-	<div class="kg-toolbar">
-		<div class="kg-toolbar-left">
-			<span class="section-label" style="font-size:0.68rem;">
-				<Icon name="share-2" size={12} strokeWidth={1.75} />
-				Knowledge Graph
-			</span>
-			<span class="kg-stats">
-				{nodes.length} nodes · {edges.length} edges
-			</span>
-		</div>
-		<div class="kg-toolbar-right">
-			<button class="btn btn-ghost btn-sm" on:click={() => (showAddEntityModal = true)}>
-				<Icon name="plus" size={12} strokeWidth={2} />
-				Add Entity
-			</button>
-			<button class="btn btn-ghost btn-sm" on:click={() => (showAddRelationModal = true)}>
-				<Icon name="link" size={12} strokeWidth={2} />
-				Add Relation
-			</button>
-			<button class="btn btn-ghost btn-sm" on:click={loadGraph} disabled={isLoading}>
-				<Icon name="refresh-cw" size={12} strokeWidth={2} className={isLoading ? "animate-spin" : ""} />
-				Refresh
-			</button>
-		</div>
-	</div>
-
-	<!-- Error -->
-	{#if errorMsg}
-		<div class="kg-error">
-			<Icon name="triangle-alert" size={14} strokeWidth={1.75} />
-			{errorMsg}
-		</div>
-	{/if}
+<KGGraphShell>
+	<KGGraphHeader
+		nodeCount={nodes.length}
+		edgeCount={edges.length}
+		{isLoading}
+		{errorMsg}
+		{isZeroEdgeOverview}
+		visibleNodeCount={layoutNodes.length}
+		hiddenNodeCount={hiddenZeroEdgeNodeCount}
+		onAddEntity={() => (showAddEntityModal = true)}
+		onAddRelation={() => (showAddRelationModal = true)}
+		onRefresh={() => loadGraph(true)}
+	/>
 
 	<!-- Loading / Empty / Canvas -->
 	{#if isLoading}
@@ -402,7 +455,9 @@
 				on:dblclick={handleCanvasDblClick}
 				on:contextmenu={handleCanvasRightClick}
 				on:mousemove={handleCanvasMove}
-				aria-label="Knowledge Graph visualization"
+				aria-label={isZeroEdgeOverview
+					? `Knowledge Graph zero-relation overview showing ${layoutNodes.length} of ${nodes.length} entities`
+					: "Knowledge Graph visualization"}
 				tabindex="0"
 			></canvas>
 		</div>
@@ -431,97 +486,4 @@
 		on:delete={handleDelete}
 		on:close={cancelDelete}
 	/>
-</div>
-
-<style>
-	.kg-container {
-		display: flex;
-		flex-direction: column;
-		height: calc(100vh - 180px);
-		border-radius: 24px;
-		overflow: hidden;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		box-shadow: var(--glass-shadow);
-		backdrop-filter: var(--glass-blur);
-		-webkit-backdrop-filter: var(--glass-blur);
-	}
-
-	:global(.dark) .kg-container {
-		background: var(--panel-dark);
-		border-color: var(--panel-dark-border);
-		box-shadow: var(--panel-dark-shadow);
-	}
-
-	.kg-toolbar {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 12px 16px;
-		border-bottom: 1px solid var(--color-border);
-		background: rgba(255, 255, 255, 0.05);
-		flex-shrink: 0;
-	}
-
-	:global(.dark) .kg-toolbar {
-		border-color: rgba(148, 163, 184, 0.1);
-	}
-
-	.kg-toolbar-left {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-	}
-
-	.kg-toolbar-right {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.kg-stats {
-		font-size: 0.72rem;
-		color: var(--color-text-muted);
-		font-weight: 600;
-	}
-
-	.kg-canvas-wrap {
-		flex: 1;
-		overflow: hidden;
-		position: relative;
-	}
-
-	.kg-canvas-wrap canvas {
-		display: block;
-		width: 100%;
-		height: 100%;
-	}
-
-	.kg-error {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 16px;
-		background: rgba(239, 68, 68, 0.08);
-		color: var(--color-danger);
-		font-size: 0.8rem;
-		font-weight: 600;
-		border-bottom: 1px solid rgba(239, 68, 68, 0.15);
-	}
-
-	.kg-loading,
-	.kg-empty {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 12px;
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-	}
-
-	.kg-empty :global(svg) {
-		opacity: 0.3;
-	}
-</style>
+</KGGraphShell>

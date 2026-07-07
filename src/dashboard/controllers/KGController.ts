@@ -39,7 +39,8 @@ export class KGController {
 			const name = req.params.name;
 
 			const entity = db.db.prepare("SELECT * FROM entities WHERE name = ?").get(name) as
-				Record<string, unknown> | undefined;
+				| Record<string, unknown>
+				| undefined;
 			if (!entity) return res.status(404).json(jsonApiError("Entity not found", 404));
 
 			const relations = db.db

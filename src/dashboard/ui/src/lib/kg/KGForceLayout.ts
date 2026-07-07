@@ -30,9 +30,18 @@ export interface ForceLayoutConfig {
 	margin?: number;
 }
 
+export interface GridLayoutConfig {
+	maxVisibleNodes?: number;
+	margin?: number;
+	nodeGap?: number;
+	minCanvasWidth?: number;
+	minCanvasHeight?: number;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const NODE_RADIUS = 18;
+export const DEFAULT_ZERO_EDGE_VISIBLE_NODE_LIMIT = 240;
 
 const DEFAULT_CONFIG: Required<ForceLayoutConfig> = {
 	nodeRadius: 18,
@@ -60,6 +69,49 @@ export function initializeLayout(nodes: LayoutNode[], width: number, height: num
 			...n,
 			x: cx + Math.cos(angle) * r,
 			y: cy + Math.sin(angle) * r,
+			vx: 0,
+			vy: 0,
+			pinned: false
+		};
+	});
+}
+
+// ─── Initialize Zero-Edge Overview Layout ────────────────────────────────────
+
+export function initializeZeroEdgeOverviewLayout(
+	nodes: LayoutNode[],
+	width: number,
+	height: number,
+	config?: GridLayoutConfig
+): LayoutNode[] {
+	const cfg = {
+		maxVisibleNodes: DEFAULT_ZERO_EDGE_VISIBLE_NODE_LIMIT,
+		margin: 48,
+		nodeGap: NODE_RADIUS * 3,
+		minCanvasWidth: NODE_RADIUS * 6,
+		minCanvasHeight: NODE_RADIUS * 6,
+		...config
+	};
+	const visibleNodes = nodes.slice(0, cfg.maxVisibleNodes);
+	const safeWidth = Math.max(cfg.minCanvasWidth, width);
+	const safeHeight = Math.max(cfg.minCanvasHeight, height);
+	const safeMargin = Math.min(cfg.margin, Math.max(0, (Math.min(safeWidth, safeHeight) - NODE_RADIUS * 2) / 2));
+	const usableWidth = Math.max(cfg.nodeGap, safeWidth - safeMargin * 2);
+	const usableHeight = Math.max(cfg.nodeGap, safeHeight - safeMargin * 2);
+	const columns = Math.max(1, Math.floor(usableWidth / cfg.nodeGap));
+	const rows = Math.max(1, Math.ceil(visibleNodes.length / columns));
+	const rowGap = Math.min(cfg.nodeGap, usableHeight / rows);
+	const renderedColumns = Math.min(columns, visibleNodes.length || 1);
+	const startX = Math.max(NODE_RADIUS, (safeWidth - (renderedColumns - 1) * cfg.nodeGap) / 2);
+	const startY = Math.max(NODE_RADIUS, Math.max(safeMargin, (safeHeight - (rows - 1) * rowGap) / 2));
+
+	return visibleNodes.map((node, index) => {
+		const column = index % columns;
+		const row = Math.floor(index / columns);
+		return {
+			...node,
+			x: startX + column * cfg.nodeGap,
+			y: startY + row * rowGap,
 			vx: 0,
 			vy: 0,
 			pinned: false
@@ -96,8 +148,8 @@ export function runForceLayout(
 			for (let j = i + 1; j < nodes.length; j++) {
 				const a = nodes[i];
 				const b = nodes[j];
-				let dx = a.x - b.x;
-				let dy = a.y - b.y;
+				const dx = a.x - b.x;
+				const dy = a.y - b.y;
 				let dist = Math.hypot(dx, dy);
 				if (dist < 1) dist = 1;
 				const force = cfg.repulsionStrength / (dist * dist);

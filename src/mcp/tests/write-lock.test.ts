@@ -7,18 +7,17 @@ vi.mock("proper-lockfile", () => ({
 	default: {
 		lock: vi.fn(),
 		unlock: vi.fn(),
-		checkSync: vi.fn(),
-	},
+		checkSync: vi.fn()
+	}
 }));
 
 vi.mock("fs", () => ({
 	default: {
 		existsSync: vi.fn(),
 		mkdirSync: vi.fn(),
-		writeFileSync: vi.fn(),
-	},
+		writeFileSync: vi.fn()
+	}
 }));
-
 
 describe("WriteLock", () => {
 	const dbPath = "/test/db/path/memory.db";
@@ -62,9 +61,9 @@ describe("WriteLock", () => {
 				retries: {
 					retries: 250,
 					minTimeout: 200,
-					maxTimeout: 200,
+					maxTimeout: 200
 				},
-				realpath: false,
+				realpath: false
 			});
 			// Can't directly access private 'locked', but we can infer it works if release tries to unlock
 		});

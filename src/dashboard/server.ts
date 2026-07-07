@@ -141,11 +141,13 @@ app.use((req, res, next) => {
 });
 
 // --- Error Handler ---
-app.use((err: Error & { status?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-	if ((err as { status?: number }).status === 404) return res.status(404).end();
-	logger.error("Unhandled error", { error: err.message });
-	res.status(500).end();
-});
+app.use(
+	(err: Error & { status?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+		if ((err as { status?: number }).status === 404) return res.status(404).end();
+		logger.error("Unhandled error", { error: err.message });
+		res.status(500).end();
+	}
+);
 
 // --- Start Server ---
 if (process.env.DASHBOARD_ENABLE_MCP === "true") {

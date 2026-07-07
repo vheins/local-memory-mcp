@@ -431,19 +431,6 @@ export class MemoryEntity extends BaseEntity {
 		} = options;
 		let sortBy = options.sortBy ?? "created_at";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 		const ALLOWED_SORT_COLUMNS = new Set([
 			"created_at",
 			"updated_at",

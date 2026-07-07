@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { icons, type IconElement } from "./icons/iconData";
+	import { icons } from "./icons/iconData";
 	// Lucide-style icon component — inline SVG, zero runtime overhead
 	export let name: string;
 	export let size: number = 16;

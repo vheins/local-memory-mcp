@@ -8,6 +8,7 @@ export interface RenderState {
 	selectedEdge: LayoutEdge | null;
 	showTooltip: boolean;
 	tooltipPos: { x: number; y: number };
+	hiddenNodeCount?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -247,6 +248,29 @@ function drawTooltip(
 	}
 }
 
+function drawOverflowNotice(ctx: CanvasRenderingContext2D, width: number, hiddenNodeCount: number, isDark: boolean) {
+	const label = `+${hiddenNodeCount} hidden`;
+	ctx.font = "bold 11px system-ui,sans-serif";
+	ctx.textAlign = "right";
+	ctx.textBaseline = "top";
+	const padX = 10;
+	const padY = 7;
+	const noticeWidth = ctx.measureText(label).width + padX * 2;
+	const noticeHeight = 26;
+	const x = Math.max(8, width - noticeWidth - 12);
+	const y = 12;
+
+	ctx.fillStyle = isDark ? "rgba(15,23,42,0.88)" : "rgba(255,255,255,0.9)";
+	roundRect(ctx, x, y, noticeWidth, noticeHeight, 999);
+	ctx.fill();
+	ctx.strokeStyle = isDark ? "rgba(148,163,184,0.28)" : "rgba(59,130,246,0.22)";
+	ctx.lineWidth = 1;
+	roundRect(ctx, x, y, noticeWidth, noticeHeight, 999);
+	ctx.stroke();
+	ctx.fillStyle = isDark ? "#bfdbfe" : "#1d4ed8";
+	ctx.fillText(label, x + noticeWidth - padX, y + padY);
+}
+
 // ─── Full render pass ────────────────────────────────────────────────────────
 
 export function renderGraph(
@@ -288,6 +312,10 @@ export function renderGraph(
 		const isHovered = state.hoveredNode === n;
 		const isSelected = state.selectedNode === n;
 		drawNode(ctx, n, isHovered, isSelected, isDark);
+	}
+
+	if (state.hiddenNodeCount && state.hiddenNodeCount > 0) {
+		drawOverflowNotice(ctx, width, state.hiddenNodeCount, isDark);
 	}
 
 	// Tooltip

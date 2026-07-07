@@ -20,27 +20,15 @@
 	<div class="std-form-grid">
 		<label>
 			<span class="std-field-label">From agent *</span>
-			<input
-				class="form-input"
-				placeholder="agent-a"
-				bind:value={$handler.handoffForm.from_agent}
-			/>
+			<input class="form-input" placeholder="agent-a" bind:value={$handler.handoffForm.from_agent} />
 		</label>
 		<label>
 			<span class="std-field-label">To agent</span>
-			<input
-				class="form-input"
-				placeholder="recipient agent (optional)"
-				bind:value={$handler.handoffForm.to_agent}
-			/>
+			<input class="form-input" placeholder="recipient agent (optional)" bind:value={$handler.handoffForm.to_agent} />
 		</label>
 		<label>
 			<span class="std-field-label">Task code</span>
-			<input
-				class="form-input"
-				placeholder="TASK-123"
-				bind:value={$handler.handoffForm.task_code}
-			/>
+			<input class="form-input" placeholder="TASK-123" bind:value={$handler.handoffForm.task_code} />
 		</label>
 	</div>
 	<label style="display:block;margin-top:12px;">
@@ -100,7 +88,9 @@
 		<button
 			class="btn"
 			style="background:#64748b;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
-			disabled={$handler.handoffUpdating || $handler.handoff.status === "expired" || $handler.handoff.status === "accepted"}
+			disabled={$handler.handoffUpdating ||
+				$handler.handoff.status === "expired" ||
+				$handler.handoff.status === "accepted"}
 			on:click={() => handler.updateHandoffStatus("expired", onHandoffUpdated)}
 		>
 			Mark Expired
@@ -109,24 +99,20 @@
 
 	<div style="margin-bottom:16px;">
 		<div class="section-label">Status</div>
-		<span class="status-chip" class:status-pending={$handler.handoff.status === "pending"}
+		<span
+			class="status-chip"
+			class:status-pending={$handler.handoff.status === "pending"}
 			class:status-accepted={$handler.handoff.status === "accepted"}
 			class:status-rejected={$handler.handoff.status === "rejected"}
 			class:status-expired={$handler.handoff.status === "expired"}
-			style="font-size:0.85rem;padding:4px 10px;display:inline-block;">
+			style="font-size:0.85rem;padding:4px 10px;display:inline-block;"
+		>
 			{$handler.handoff.status.toUpperCase()}
 		</span>
 	</div>
 
 	<div class="meta-grid" style="margin-bottom:16px;">
-		{#each [
-			{ label: "From", val: $handler.handoff.from_agent },
-			{ label: "To", val: $handler.handoff.to_agent || "unassigned" },
-			{ label: "Task", val: $handler.handoff.task_code || $handler.handoff.task_id || "—" },
-			{ label: "Created", val: formatDate($handler.handoff.created_at) },
-			{ label: "Updated", val: formatDate($handler.handoff.updated_at) },
-			{ label: "Expires", val: $handler.handoff.expires_at ? formatDate($handler.handoff.expires_at) : "—" }
-		] as m (m.label)}
+		{#each [{ label: "From", val: $handler.handoff.from_agent }, { label: "To", val: $handler.handoff.to_agent || "unassigned" }, { label: "Task", val: $handler.handoff.task_code || $handler.handoff.task_id || "—" }, { label: "Created", val: formatDate($handler.handoff.created_at) }, { label: "Updated", val: formatDate($handler.handoff.updated_at) }, { label: "Expires", val: $handler.handoff.expires_at ? formatDate($handler.handoff.expires_at) : "—" }] as m (m.label)}
 			<div class="meta-cell">
 				<div class="meta-label">{m.label}</div>
 				<div class="meta-value">{m.val}</div>

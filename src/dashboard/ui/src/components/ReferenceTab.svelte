@@ -241,38 +241,43 @@
 
 				<!-- Ecosystem -->
 				{#if state.referenceFilter === "all" || state.referenceFilter === "ecosystem"}
-				<div class="eco-section">
-					<div class="ref-section-header">
-						<Icon name="zap" size={13} strokeWidth={1.75} />
-						<span>Ecosystem</span>
+					<div class="eco-section">
+						<div class="ref-section-header">
+							<Icon name="zap" size={13} strokeWidth={1.75} />
+							<span>Ecosystem</span>
+						</div>
+						<div class="eco-grid">
+							{#each ECOSYSTEM_ITEMS as item (item.name)}
+								<a href={item.url} target="_blank" rel="noopener noreferrer" class="eco-card animate-fade-in">
+									<div class="eco-card-icon">
+										<Icon name={item.icon} size={18} strokeWidth={1.5} />
+									</div>
+									<div class="eco-card-body">
+										<div class="eco-card-name">{item.name}</div>
+										<div class="eco-card-desc">{item.description}</div>
+									</div>
+									<div class="eco-card-link">
+										<svg
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											aria-hidden="true"
+										>
+											<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+											<polyline points="15 3 21 3 21 9" />
+											<line x1="10" y1="14" x2="21" y2="3" />
+										</svg>
+									</div>
+								</a>
+							{/each}
+						</div>
 					</div>
-					<div class="eco-grid">
-						{#each ECOSYSTEM_ITEMS as item (item.name)}
-							<a
-								href={item.url}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="eco-card animate-fade-in"
-							>
-								<div class="eco-card-icon">
-									<Icon name={item.icon} size={18} strokeWidth={1.5} />
-								</div>
-								<div class="eco-card-body">
-									<div class="eco-card-name">{item.name}</div>
-									<div class="eco-card-desc">{item.description}</div>
-								</div>
-								<div class="eco-card-link">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-										<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-										<polyline points="15 3 21 3 21 9" />
-										<line x1="10" y1="14" x2="21" y2="3" />
-									</svg>
-								</div>
-							</a>
-						{/each}
-					</div>
-				</div>
-			{/if}
+				{/if}
 			{/if}
 		</div>
 	</div>
@@ -593,7 +598,7 @@
 	}
 
 	:global(html.dark) .eco-section {
-		border-top-color: rgba(148, 163, 184, 0.10);
+		border-top-color: rgba(148, 163, 184, 0.1);
 	}
 
 	.eco-grid {
@@ -624,12 +629,16 @@
 	.eco-card:hover {
 		transform: translateY(-2px);
 		border-color: rgba(14, 165, 233, 0.25);
-		box-shadow: 0 8px 24px rgba(14, 165, 233, 0.08), var(--glass-shadow-elevated);
+		box-shadow:
+			0 8px 24px rgba(14, 165, 233, 0.08),
+			var(--glass-shadow-elevated);
 	}
 
 	:global(html.dark) .eco-card:hover {
 		border-color: rgba(56, 189, 248, 0.25);
-		box-shadow: 0 8px 24px rgba(14, 165, 233, 0.12), var(--panel-dark-shadow);
+		box-shadow:
+			0 8px 24px rgba(14, 165, 233, 0.12),
+			var(--panel-dark-shadow);
 	}
 
 	.eco-card-icon {
@@ -665,7 +674,9 @@
 	.eco-card-link {
 		color: var(--color-text-muted);
 		opacity: 0.5;
-		transition: opacity 0.2s, color 0.2s;
+		transition:
+			opacity 0.2s,
+			color 0.2s;
 		flex-shrink: 0;
 	}
 
