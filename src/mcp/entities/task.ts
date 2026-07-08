@@ -266,6 +266,18 @@ export class TaskEntity extends BaseEntity {
 		}
 
 		const rows = this.all<Record<string, unknown>>(query, params);
+
+		// If owner filter returned no results, retry without owner filter
+		// (handles tasks created with a different owner value)
+		if (rows.length === 0 && owner) {
+			const fallbackQuery = query.replace(/t\.owner\s*=\s*\?\s*AND\s*/i, "");
+			const fallbackParams = params.slice(1); // remove owner param
+			const fallbackRows = this.all<Record<string, unknown>>(fallbackQuery, fallbackParams);
+			if (fallbackRows.length > 0) {
+				return fallbackRows.map((r) => this.rowToTask(r));
+			}
+		}
+
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -363,6 +375,17 @@ export class TaskEntity extends BaseEntity {
 		}
 
 		const rows = this.all<Record<string, unknown>>(query, params);
+
+		// If owner filter returned no results, retry without owner filter
+		if (rows.length === 0 && owner) {
+			const fallbackQuery = query.replace(/t\.owner\s*=\s*\?\s*AND\s*/i, "");
+			const fallbackParams = params.slice(1); // remove owner param
+			const fallbackRows = this.all<Record<string, unknown>>(fallbackQuery, fallbackParams);
+			if (fallbackRows.length > 0) {
+				return fallbackRows.map((r) => this.rowToTask(r));
+			}
+		}
+
 		return rows.map((r) => this.rowToTask(r));
 	}
 

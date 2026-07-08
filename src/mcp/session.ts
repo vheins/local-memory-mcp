@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -147,8 +148,46 @@ export function inferRepoFromSession(session?: SessionContext): string | undefin
 	return undefined;
 }
 
+/**
+ * Attempts to extract the GitHub owner (username or organization) from
+ * the git remote origin URL in the given working directory.
+ */
+function inferOwnerFromGit(cwd: string): string | undefined {
+	try {
+		const gitConfigPath = path.join(cwd, ".git", "config");
+		if (!fs.existsSync(gitConfigPath)) return undefined;
+		const content = fs.readFileSync(gitConfigPath, "utf-8");
+
+		// Match SSH: url = git@github.com:owner/repo.git
+		// Match HTTPS: url = https://github.com/owner/repo.git
+		// Match git:  url = git://github.com/owner/repo.git
+		const match = content.match(
+			/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^\/\s]+)/
+		);
+		return match?.[1] || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function inferOwnerFromSession(session?: SessionContext): string | undefined {
 	const roots = getFilesystemRoots(session);
+
+	// Determine the working directory to check git remote
+	let cwd: string | undefined;
+	if (roots.length === 1) {
+		cwd = roots[0];
+	} else if (roots.length === 0 && session) {
+		cwd = process.cwd();
+	}
+
+	// Primary: infer from git remote origin
+	if (cwd) {
+		const gitOwner = inferOwnerFromGit(cwd);
+		if (gitOwner) return gitOwner;
+	}
+
+	// Fallback: infer from parent directory name of the root/cwd
 	if (roots.length === 1) {
 		const parts = roots[0].split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
@@ -157,8 +196,8 @@ export function inferOwnerFromSession(session?: SessionContext): string | undefi
 	}
 	if (roots.length === 0) {
 		if (!session) return undefined;
-		const cwd = process.cwd();
-		const parts = cwd.split(path.sep).filter(Boolean);
+		const workdir = process.cwd();
+		const parts = workdir.split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
 			return parts[parts.length - 2];
 		}
