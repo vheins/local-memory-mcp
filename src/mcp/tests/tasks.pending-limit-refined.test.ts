@@ -37,25 +37,30 @@ describe("Task Pending Limit Refined Validation", () => {
 		}
 	}
 
-	it("should block creating the 11th pending task", async () => {
-		await createManyPending(10);
+	it("should auto-downgrade 12th pending task to backlog", async () => {
+		await createManyPending(11);
 
-		await expect(
-			handleTaskCreate(
-				{
-					repo: REPO,
-					owner: "test",
-					task_code: "TASK-11",
-					phase: "test",
-					title: "11th Task",
-					description: "Should fail",
-					status: "pending",
-					agent: "test-agent",
-					role: "test-role"
-				},
-				db
-			)
-		).rejects.toThrow(/Maximum of 10 pending tasks reached/);
+		await handleTaskCreate(
+			{
+				repo: REPO,
+				owner: "test",
+				task_code: "TASK-12",
+				phase: "test",
+				title: "12th Task",
+				description: "Should be auto-downgraded",
+				status: "pending",
+				agent: "test-agent",
+				role: "test-role"
+			},
+			db
+		);
+
+		const task = db.tasks.getTaskByCode("test", REPO, "TASK-12");
+		expect(task).not.toBeNull();
+		expect(task!.status).toBe("backlog");
+
+		const stats = db.taskStats.getTaskStats("test", REPO);
+		expect(stats.todo).toBe(11);
 	});
 
 	it("should ALLOW moving from backlog to pending even if limit reached", async () => {

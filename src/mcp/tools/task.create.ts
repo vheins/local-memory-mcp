@@ -51,16 +51,14 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			}
 			codesInRequest.add(code);
 
-			const normalizedStatus = (taskData.status as TaskStatus) || "backlog";
+			let normalizedStatus = (taskData.status as TaskStatus) || "backlog";
 			if (normalizedStatus !== "backlog" && normalizedStatus !== "pending") {
 				throw new Error(`New tasks must be 'backlog' or 'pending'. Task '${code}' has status '${normalizedStatus}'.`);
 			}
 
 			if (normalizedStatus === "pending") {
-				if (initialStats.todo + pendingInRequestCount >= 10) {
-					throw new Error(
-						`Cannot create task '${code}' as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`
-					);
+				if (initialStats.todo + pendingInRequestCount > 10) {
+					normalizedStatus = "backlog" as TaskStatus;
 				}
 			}
 
@@ -121,7 +119,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		phase,
 		title,
 		description,
-		status,
+		status: requestedStatus,
 		priority,
 		agent,
 		role,
@@ -136,6 +134,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		throw new Error("Missing required fields for single task creation (phase, title, description)");
 	}
 
+	let effectiveStatus: TaskStatus = (requestedStatus || "backlog") as TaskStatus;
+
 	// Auto-generate task_code if not provided
 	const resolvedCode = task_code || generateNextCode(owner ?? "", repo, "task", storage);
 
@@ -143,22 +143,20 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		throw new Error(`Duplicate task_code: '${resolvedCode}' already exists in repository '${repo}'`);
 	}
 
-	if (status !== "backlog" && status !== "pending" && status !== undefined) {
+	if (requestedStatus !== "backlog" && requestedStatus !== "pending" && requestedStatus !== undefined) {
 		throw new Error("New tasks must be created with status 'backlog' or 'pending'.");
 	}
 
-	if (status === "pending") {
+	if (requestedStatus === "pending") {
 		const stats = storage.taskStats.getTaskStats(owner, repo);
-		if (stats.todo >= 10) {
-			throw new Error(
-				`Cannot create task as 'pending'. Maximum of 10 pending tasks reached. Please use status 'backlog' for new tasks instead.`
-			);
+		if (stats.todo > 10) {
+			effectiveStatus = "backlog" as TaskStatus;
 		}
 	}
 
 	const taskId = randomUUID();
 	const now = new Date().toISOString();
-	const statusTimestamps = deriveTaskStatusTimestamps((status || "backlog") as TaskStatus, now);
+	const statusTimestamps = deriveTaskStatusTimestamps(effectiveStatus, now);
 	const finalTags = [...(singleTask.tags || [])];
 	const phaseTag = `phase:${phase}`;
 	if (!finalTags.includes(phaseTag)) {
@@ -173,7 +171,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		phase,
 		title,
 		description,
-		status: (status || "backlog") as TaskStatus,
+		status: effectiveStatus,
 		priority: (priority as TaskPriority) || 3,
 		agent: agent || "unknown",
 		role: role || "unknown",
