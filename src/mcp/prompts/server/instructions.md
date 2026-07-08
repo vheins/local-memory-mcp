@@ -23,7 +23,19 @@ The `owner` field MUST be the GitHub username or organization that OWNS the repo
 
 NEVER use the agent's name (e.g., `sentinel`, `test-executor`, `claude`) as the owner.
 NEVER guess the owner from the working directory path.
-If unsure, use `owner/repo` format for the `repo` parameter (e.g., `repo='vheins/sentinel-agent'`) — the server will extract the owner automatically.
+
+If unsure, run `git remote -v` in the project directory — the remote URL (e.g., `git@github.com:vheins/sentinel-agent.git`) gives you both `owner` and `repo`.
+
+**Two ways to provide owner/repo:**
+
+1. **Explicit** (preferred — most reliable):
+   ```json
+   { "owner": "vheins", "repo": "sentinel-agent" }
+   ```
+2. **Shorthand** — use `owner/repo` format for `repo`; the server auto-extracts `owner`:
+   ```json
+   { "repo": "vheins/sentinel-agent" }
+   ```
 
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
 
@@ -62,7 +74,7 @@ S2 | continue to task or respond | S1✅ | ready | —
 - Create ONLY for unfinished work (concrete next owner/steps)
 - NO handoff for completion summaries → use task-update comments
 
-**Knowledge Graph**: create-entity | create-relation → delete-entity | delete-relation | delete-observation
+**Knowledge Graph**: create_entity | create_relation → delete_entity | delete_relation | delete_observation
 
 - Structured entity-relationship storage for domain concepts
 - Auto-extracted via NLP Archivist on every memory-store (people, places, orgs, concepts)

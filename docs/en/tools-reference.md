@@ -2,6 +2,8 @@
 
 A practical guide to the tools this MCP server exposes to AI agents. Each tool is grouped by domain with usage patterns and examples.
 
+> **`owner` & `repo` — critical requirement:** Most tools require `owner` (GitHub org/username) and `repo` (project name). If omitted, the server tries to infer them from workspace roots — but this is unreliable. **Always pass both explicitly** to avoid failures. As a shortcut, you can use `"owner/repo-name"` format for `repo` and the server will auto-extract `owner`.
+
 ---
 
 ## Memory Tools (Durable Knowledge)
@@ -20,7 +22,7 @@ Store what you learn so it persists across sessions.
 	"importance": 4,
 	"agent": "assistant",
 	"model": "gpt-4",
-	"scope": { "repo": "my-project" },
+	"scope": { "owner": "my-org", "repo": "my-project" },
 	"tags": ["database", "architecture"]
 }
 ```
@@ -28,8 +30,8 @@ Store what you learn so it persists across sessions.
 **Fields:**
 
 - `type` (`code_fact`, `decision`, `mistake`, `pattern`, `task_archive`) — what kind of knowledge this is
-- `importance` (1-5) — how critical this is; higher = slower to decay
-- `scope.repo` — which project this belongs to
+- `importance` (number 1-5) — how critical this is; higher = slower to decay
+- `scope` — **object** with `owner` (GitHub org/username) and `repo` (project name) — both required
 - `tags` — technology labels for cross-project discoverability
 - `code` (optional) — if omitted, auto-generated as `MEM-001`, `MEM-002`, etc. (sequential per repo)
 
@@ -420,6 +422,7 @@ Used when multiple agents need to transfer context.
 | Task         | create, list, detail, update, delete                                                | Work item lifecycle         |
 | Standard     | store, search, detail, update, delete                                               | Reusable coding rules       |
 | Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Multi-agent orchestration   |
+| Knowledge    | create_entity, delete_entity, create_relation, delete_relation, delete_observation  | Entity-relationship graph   |
 
 ---
 
@@ -427,7 +430,7 @@ Used when multiple agents need to transfer context.
 
 These tools manage structured entity-relationship data for mapping domain concepts.
 
-### `create-entity` — Create a Knowledge Graph Entity
+### `create_entity` — Create a Knowledge Graph Entity
 
 ```json
 {
@@ -438,7 +441,7 @@ These tools manage structured entity-relationship data for mapping domain concep
 }
 ```
 
-### `delete-entity` — Delete an Entity (Cascades)
+### `delete_entity` — Delete an Entity (Cascades)
 
 Cascades to delete all related relations and observations.
 
@@ -446,7 +449,7 @@ Cascades to delete all related relations and observations.
 { "name": "PaymentService" }
 ```
 
-### `create-relation` — Link Two Entities
+### `create_relation` — Link Two Entities
 
 ```json
 {
@@ -457,7 +460,7 @@ Cascades to delete all related relations and observations.
 }
 ```
 
-### `delete-relation` — Remove a Relation
+### `delete_relation` — Remove a Relation
 
 ```json
 {
@@ -467,7 +470,7 @@ Cascades to delete all related relations and observations.
 }
 ```
 
-### `delete-observation` — Delete an Observation
+### `delete_observation` — Delete an Observation
 
 ```json
 { "id": "<observation-uuid>" }
@@ -483,6 +486,7 @@ Returns relevant memories, active tasks, and recent decisions for the current se
 
 ```json
 {
+	"owner": "my-org",
 	"repo": "my-project",
 	"objective": "implement auth",
 	"limit": 5

@@ -22,9 +22,9 @@ S5 | verify: confirm acknowledge called after code gen, no duplicate memories cr
 
 ## Knowledge Graph Tools
 
-- `create-entity(key, name, entity_type, observations)`, `delete-entity(key)`
-- `create-relation(source_key, target_key, relation_type)`, `delete-relation(source_key, target_key, relation_type)`
-- `delete-observation(key, observation)`
+- `create_entity(name, type?, description?, owner?, repo?)`, `delete_entity(name, owner?, repo?)`
+- `create_relation(from_entity, to_entity, relation_type, owner?, repo?)`, `delete_relation(from_entity, to_entity, relation_type, owner?, repo?)`
+- `delete_observation(id, owner?, repo?)`
 - Specialized for structured data workflows only (entity-relationship modeling). Not part of standard memory/task flow.
 
 ## Standards Flow

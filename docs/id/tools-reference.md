@@ -2,6 +2,8 @@
 
 Panduan praktis untuk alat-alat yang diekspos server MCP ini kepada agen AI. Setiap alat dikelompokkan berdasarkan domain dengan pola penggunaan dan contoh.
 
+> **`owner` & `repo` — persyaratan penting:** Sebagian besar alat memerlukan `owner` (organisasi/username GitHub) dan `repo` (nama proyek). Jika tidak disertakan, server akan mencoba menentukannya dari workspace roots — tetapi ini tidak dapat diandalkan. **Selalu berikan keduanya secara eksplisit** untuk menghindari kegagalan. Sebagai jalan pintas, Anda dapat menggunakan format `"owner/nama-repo"` untuk `repo` dan server akan mengekstrak `owner` secara otomatis.
+
 ---
 
 ## Alat Memori (Pengetahuan Tahan Lama)
@@ -20,7 +22,7 @@ Simpan apa yang Anda pelajari agar tetap ada di seluruh sesi.
 	"importance": 4,
 	"agent": "assistant",
 	"model": "gpt-4",
-	"scope": { "repo": "my-project" },
+	"scope": { "owner": "my-org", "repo": "my-project" },
 	"tags": ["database", "architecture"]
 }
 ```
@@ -28,8 +30,8 @@ Simpan apa yang Anda pelajari agar tetap ada di seluruh sesi.
 **Bidang:**
 
 - `type` (`code_fact`, `decision`, `mistake`, `pattern`, `task_archive`) — jenis pengetahuan ini
-- `importance` (1-5) — seberapa kritis ini; semakin tinggi = semakin lambat meluruh
-- `scope.repo` — proyek tempat ini berada
+- `importance` (angka 1-5) — seberapa kritis ini; semakin tinggi = semakin lambat meluruh
+- `scope` — **objek** dengan `owner` (organisasi/username GitHub) dan `repo` (nama proyek) — keduanya wajib
 - `tags` — label teknologi untuk kemudahan ditemukan lintas proyek
 - `code` (opsional) — jika tidak diisi, akan dibuat otomatis sebagai `MEM-001`, `MEM-002`, dst. (berurutan per repo)
 
@@ -479,6 +481,7 @@ Menggabungkan memori relevan, tugas aktif, dan keputusan terbaru dalam satu pang
 
 ```json
 {
+	"owner": "my-org",
 	"repo": "my-project",
 	"objective": "authentication flow",
 	"limit": 5
