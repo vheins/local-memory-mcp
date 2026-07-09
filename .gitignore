@@ -9,6 +9,8 @@ pnpm-lock.yaml
 dist/
 build/
 out/
+package/
+*.tgz
 
 # Environment variables
 .env

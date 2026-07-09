@@ -54,8 +54,40 @@ S2 | continue to task or respond | S1✅ | ready | —
 - Durable only (arch, patterns, decisions, fixes)
 - memory-acknowledge after code gen from memory
 - Global scope = cross-repo only; prefer repo-specific
-- decision-log = shortcut for storing decision-type memories (auto-sets type=decision, importance=4)
+- decision-log = shortcut for storing decision-type memories (auto-sets type=decision, importance=4, agent=current, model=current, scope=current)
 - session-summarize = archive session as task_archive memory (type=task_archive, importance=3)
+
+### memory-store required fields
+
+Every `memory-store` call MUST include these fields:
+
+| Field        | Type                                                                | Description                                                         |
+| :----------- | :------------------------------------------------------------------ | :------------------------------------------------------------------ |
+| `type`       | enum: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive` | Memory category                                                     |
+| `title`      | string (3-255 chars)                                                | Concise title, no metadata                                          |
+| `content`    | string (min 10 chars)                                               | Body of the memory                                                  |
+| `importance` | number (1-5)                                                        | 1=low, 5=critical                                                   |
+| `agent`      | string                                                              | Identity of the calling agent (e.g., `explore`, `sentinel`, `main`) |
+| `model`      | string                                                              | Model identifier (e.g., `opencode-go/deepseek-v4-flash`)            |
+| `scope`      | object `{ owner, repo }`                                            | `owner`=GitHub org/username, `repo`=repo name                       |
+
+Example:
+
+```json
+{
+	"type": "code_fact",
+	"title": "Auth uses JWT",
+	"content": "Authentication system uses JWT tokens with 1h expiry.",
+	"importance": 3,
+	"agent": "explore",
+	"model": "opencode-go/deepseek-v4-flash",
+	"scope": { "owner": "vheins", "repo": "sentinel-agent" }
+}
+```
+
+### memory-update optional fields
+
+`memory-update` accepts the same fields as `memory-store` but all are optional (only provide the fields to change). Either `id` (UUID) or `code` (string) is required to identify the target memory.
 
 **Tasks**: task-list → task-claim(auto → in_progress) → task-update(completed)
 
