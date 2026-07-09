@@ -27,13 +27,23 @@ Store what you learn so it persists across sessions.
 }
 ```
 
-**Fields:**
+**Fields (all required unless noted):**
 
-- `type` (`code_fact`, `decision`, `mistake`, `pattern`, `task_archive`) — what kind of knowledge this is
-- `importance` (number 1-5) — how critical this is; higher = slower to decay
+- `type` — `code_fact`, `decision`, `mistake`, `pattern`, or `task_archive`
+- `title` — short human-readable title (3-255 chars)
+- `content` — the memory content (min 10 chars)
+- `importance` — number 1-5; how critical this is (higher = slower decay)
+- `agent` — name of the agent creating this memory
+- `model` — AI model used by the agent
 - `scope` — **object** with `owner` (GitHub org/username) and `repo` (project name) — both required
-- `tags` — technology labels for cross-project discoverability
-- `code` (optional) — if omitted, auto-generated as `MEM-001`, `MEM-002`, etc. (sequential per repo)
+- `tags` (optional) — technology labels for cross-project discoverability
+- `code` (optional) — auto-generated as `MEM-001`, `MEM-002`, etc. if omitted (sequential per repo)
+- `role` (optional, default `"unknown"`) — role of the agent creating this memory
+- `metadata` (optional) — structured auxiliary context
+- `ttlDays` (optional) — time-to-live in days; after this the memory expires
+- `supersedes` (optional) — memory code or UUID this entry replaces
+- `is_global` (optional, default `false`) — if true, shared across all repositories
+- `structured` (optional, default `false`) — if true, returns structured JSON of the stored memory
 
 ### `memory-search` — Find Relevant Memories
 

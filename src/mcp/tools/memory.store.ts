@@ -37,7 +37,7 @@ async function storeSingleMemory(
 		agent: string;
 		role: string;
 		model: string;
-		scope: { owner?: string; repo: string; branch?: string; folder?: string; language?: string };
+		scope: { owner: string; repo: string; branch?: string; folder?: string; language?: string };
 		ttlDays?: number;
 		supersedes?: string;
 		tags?: string[];
@@ -106,7 +106,7 @@ async function storeSingleMemory(
 		agent: params.agent,
 		role: params.role,
 		model: params.model,
-		scope: { ...params.scope, owner: params.scope.owner! },
+		scope: { ...params.scope, owner: params.scope.owner },
 		created_at: now,
 		updated_at: now,
 		completed_at: null,
@@ -230,7 +230,7 @@ export async function handleMemoryStore(
 				agent: mem.agent,
 				role: mem.role as string,
 				model: mem.model,
-				scope: { ...mem.scope, owner: mem.scope.owner! },
+				scope: { ...mem.scope, owner: mem.scope.owner },
 				created_at: now,
 				updated_at: now,
 				completed_at: null,

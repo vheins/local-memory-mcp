@@ -2,35 +2,24 @@ import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
 import { MemoryScopeSchema, MemoryTypeSchema, SingleMemorySchema } from "./shared";
 
-export const MemoryStoreSchema = z
-	.object({
-		code: z.string().max(20).optional(),
-		type: MemoryTypeSchema.optional(),
-		title: z.string().min(3).max(255).optional(),
-		content: z.string().min(10).optional(),
-		importance: z.number().min(1).max(5).optional(),
-		agent: z.string().min(1).optional(),
-		role: z.string().optional().default("unknown"),
-		model: z.string().min(1).optional(),
-		scope: MemoryScopeSchema.optional(),
-		ttlDays: z.number().min(1).optional(),
-		supersedes: z.string().optional(),
-		tags: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.unknown()).optional(),
-		is_global: z.boolean().default(false),
-		structured: z.boolean().default(false),
-		memories: z.array(SingleMemorySchema).min(1).optional()
-	})
-	.refine(
-		(data) => {
-			if (data.memories) return true;
-			return !!(data.type && data.title && data.content && data.importance && data.agent && data.model && data.scope);
-		},
-		{
-			message:
-				"Either 'memories' array or single memory fields (type, title, content, importance, agent, model, scope) must be provided"
-		}
-	);
+export const MemoryStoreSchema = z.object({
+	code: z.string().max(20).optional(),
+	type: MemoryTypeSchema,
+	title: z.string().min(3).max(255),
+	content: z.string().min(10),
+	importance: z.number().min(1).max(5),
+	agent: z.string().min(1),
+	role: z.string().optional().default("unknown"),
+	model: z.string().min(1),
+	scope: MemoryScopeSchema,
+	ttlDays: z.number().min(1).optional(),
+	supersedes: z.string().optional(),
+	tags: z.array(z.string()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
+	is_global: z.boolean().default(false),
+	structured: z.boolean().default(false),
+	memories: z.array(SingleMemorySchema).min(1).optional()
+});
 
 export const MemoryUpdateSchema = z
 	.object({

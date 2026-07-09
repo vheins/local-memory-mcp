@@ -122,9 +122,16 @@ function validateRootBoundPath(value: unknown, field: string, session?: SessionC
  */
 function normalizeToolArgs(args: Record<string, unknown>, session: SessionContext): Record<string, unknown> {
 	const anyArgs = args as Record<string, unknown>;
+	const scopeVal = anyArgs.scope;
 	const nextArgs: Record<string, unknown> = {
 		...anyArgs,
-		scope: anyArgs.scope ? { ...(anyArgs.scope as Record<string, unknown>) } : undefined
+		// Handle string scope gracefully: "my-repo" → { repo: "my-repo" }
+		scope:
+			typeof scopeVal === "string"
+				? { repo: scopeVal }
+				: scopeVal
+					? { ...(scopeVal as Record<string, unknown>) }
+					: undefined
 	};
 
 	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);

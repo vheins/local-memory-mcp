@@ -114,7 +114,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						title: {
 							type: "string",
 							minLength: 3,
-							maxLength: 100,
+							maxLength: 255,
 							description:
 								"Short human-readable title for the memory. Do not embed bracketed metadata like agent/role/date prefixes here."
 						},
@@ -135,6 +135,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						},
 						role: {
 							type: "string",
+							default: "unknown",
 							description: "Role of the agent creating this memory"
 						},
 						model: {
@@ -162,7 +163,11 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							type: "object",
 							description: "Structured metadata for non-title context such as source agent, claim fields, or timestamps"
 						},
-						is_global: { type: "boolean", description: "If true, this memory is shared across all repositories" },
+						is_global: {
+							type: "boolean",
+							default: false,
+							description: "If true, this memory is shared across all repositories"
+						},
 						ttlDays: {
 							type: "number",
 							minimum: 1,
@@ -193,7 +198,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 										enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"],
 										description: "Type of durable knowledge being stored"
 									},
-									title: { type: "string", minLength: 3, maxLength: 100, description: "Short human-readable title" },
+									title: { type: "string", minLength: 3, maxLength: 255, description: "Short human-readable title" },
 									content: { type: "string", minLength: 10, description: "The memory content" },
 									importance: { type: "number", minimum: 1, maximum: 5, description: "Importance score (1-5)" },
 									agent: { type: "string", description: "Name of the agent creating this memory" },
