@@ -177,4 +177,84 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 			})
 		).rejects.toThrow(`Coding standard not found: ${fakeId}`);
 	});
+
+	it("should fetch memory details by code passed as id", async () => {
+		const storeRes = await router("tools/call", {
+			name: "memory-store",
+			arguments: {
+				code: "MEM-601",
+				type: "code_fact",
+				title: "Test Memory By Code",
+				content: "Memory accessible via code as id param.",
+				importance: 3,
+				agent: "TestAgent",
+				model: "test-model",
+				scope: { owner: "test", repo: REPO }
+			}
+		});
+		const memoryId = storeRes.structuredContent.id;
+
+		const detailRes = await router("tools/call", {
+			name: "memory-detail",
+			arguments: { id: "MEM-601", owner: "test", repo: REPO }
+		});
+
+		expect(detailRes.structuredContent.id).toBe(memoryId);
+		expect(detailRes.structuredContent.code).toBe("MEM-601");
+		expect(detailRes.structuredContent.title).toBe("Test Memory By Code");
+	});
+
+	it("should fetch standard details by code passed as id", async () => {
+		const storeRes = await router("tools/call", {
+			name: "standard-store",
+			arguments: {
+				owner: "test",
+				name: "Code As Id Standard",
+				content: "Standard accessible via code as id param.",
+				language: "typescript",
+				stack: ["node"],
+				tags: ["test"],
+				metadata: { source: "detail-test-code-as-id" },
+				repo: REPO,
+				is_global: false
+			}
+		});
+		const standardCode = storeRes.structuredContent.standard.code;
+		const standardId = storeRes.structuredContent.standard.id;
+
+		const detailRes = await router("tools/call", {
+			name: "standard-detail",
+			arguments: { id: standardCode, owner: "test", repo: REPO }
+		});
+
+		expect(detailRes.structuredContent.id).toBe(standardId);
+		expect(detailRes.structuredContent.code).toBe(standardCode);
+		expect(detailRes.structuredContent.title).toBe("Code As Id Standard");
+	});
+
+	it("should fetch task details by task_code passed as id", async () => {
+		const createRes = await router("tools/call", {
+			name: "task-create",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "TASK-CODE-AS-ID",
+				phase: "test",
+				title: "Task By Code As Id",
+				description: "Task accessible via task_code as id param.",
+				status: "pending",
+				priority: 3
+			}
+		});
+		const taskId = createRes.structuredContent.id;
+
+		const detailRes = await router("tools/call", {
+			name: "task-detail",
+			arguments: { repo: REPO, owner: "test", id: "TASK-CODE-AS-ID" }
+		});
+
+		expect(detailRes.structuredContent.id).toBe(taskId);
+		expect(detailRes.structuredContent.task_code).toBe("TASK-CODE-AS-ID");
+		expect(detailRes.structuredContent.title).toBe("Task By Code As Id");
+	});
 });

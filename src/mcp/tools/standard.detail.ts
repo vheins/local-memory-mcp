@@ -1,16 +1,21 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
+import { UUID_REGEX } from "../utils/uuid";
 import { StandardDetailSchema } from "./schemas";
 
 export async function handleStandardDetail(args: Record<string, unknown>, storage: SQLiteStore) {
 	const validated = StandardDetailSchema.parse(args);
+	const { id, code, owner, repo } = validated;
 
-	const standard = validated.id
-		? storage.standards.getById(validated.id)
-		: storage.standards.getByCode(validated.code!, validated.owner, validated.repo);
+	let standard;
+	if (id) {
+		standard = UUID_REGEX.test(id) ? storage.standards.getById(id) : storage.standards.getByCode(id, owner, repo);
+	} else if (code) {
+		standard = storage.standards.getByCode(code, owner, repo);
+	}
 
 	if (!standard) {
-		const identifier = validated.id ?? validated.code;
+		const identifier = id ?? code;
 		throw new Error(`Coding standard not found: ${identifier}`);
 	}
 

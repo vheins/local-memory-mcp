@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
+import { UUID_REGEX } from "../utils/uuid";
 import { TaskGetSchema } from "./schemas";
 
 export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
@@ -8,7 +9,7 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 
 	let task;
 	if (id) {
-		task = storage.tasks.getTaskById(id);
+		task = UUID_REGEX.test(id) ? storage.tasks.getTaskById(id) : storage.tasks.getTaskByCode(owner, repo, id);
 	} else if (task_code) {
 		task = storage.tasks.getTaskByCode(owner, repo, task_code);
 	} else {

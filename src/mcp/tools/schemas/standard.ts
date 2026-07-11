@@ -37,7 +37,7 @@ export const StandardStoreSchema = z
 
 export const StandardUpdateSchema = z
 	.object({
-		id: z.string().uuid().optional(),
+		id: z.string().optional(),
 		code: z.string().max(20).optional(),
 		name: z.string().min(3).max(255).optional(),
 		content: z.string().min(10).optional(),
@@ -101,8 +101,8 @@ export const StandardDeleteSchema = z
 	.object({
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().uuid().optional(),
-		ids: z.array(z.string().uuid()).min(1).optional(),
+		id: z.string().optional(),
+		ids: z.array(z.string()).min(1).optional(),
 		code: z.string().max(20).optional(),
 		codes: z.array(z.string().max(20)).min(1).optional(),
 		structured: z.boolean().default(false)
@@ -116,7 +116,7 @@ export const StandardDeleteSchema = z
 
 export const StandardDetailSchema = z
 	.object({
-		id: z.string().uuid().optional(),
+		id: z.string().optional(),
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),

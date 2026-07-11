@@ -5,9 +5,8 @@ import { CodingStandardEntry, VectorStore } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildStandardVectorText, toContextSlug } from "./standard.shared";
+import { UUID_REGEX } from "../utils/uuid";
 import { generateNextCode } from "../utils/code-generator";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function resolveStandardParentId(
 	value: string | null | undefined,

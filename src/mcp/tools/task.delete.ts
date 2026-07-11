@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
+import { UUID_REGEX } from "../utils/uuid";
 import { TaskDeleteSchema } from "./schemas";
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
@@ -8,8 +9,26 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 
 	// Resolve task_code to id if needed
 	const resolvedIds: string[] = [];
-	if (ids) resolvedIds.push(...ids);
-	if (id) resolvedIds.push(id);
+	if (ids) {
+		for (const item of ids) {
+			if (UUID_REGEX.test(item)) {
+				resolvedIds.push(item);
+			} else {
+				const task = storage.tasks.getTaskByCode(owner, repo, item);
+				if (!task) throw new Error(`Task not found: ${item}`);
+				resolvedIds.push(task.id);
+			}
+		}
+	}
+	if (id) {
+		if (!UUID_REGEX.test(id)) {
+			const task = storage.tasks.getTaskByCode(owner, repo, id);
+			if (!task) throw new Error(`Task not found: ${id}`);
+			resolvedIds.push(task.id);
+		} else {
+			resolvedIds.push(id);
+		}
+	}
 	if (task_code) {
 		const task = storage.tasks.getTaskByCode(owner, repo, task_code);
 		if (!task) throw new Error(`Task not found: ${task_code}`);

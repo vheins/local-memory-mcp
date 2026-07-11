@@ -9,7 +9,7 @@ import {
 	HandoffUpdateSchema,
 	TaskClaimSchema
 } from "./schemas";
-import { ZodError } from "zod";
+import { UUID_REGEX } from "../utils/uuid";
 
 function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
 	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -48,6 +48,13 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 	const { owner, repo, from_agent, to_agent, task_id, task_code, summary, context, expires_at, structured } = validated;
 
 	let resolvedTaskId = task_id ?? null;
+	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {
+		const task = storage.tasks.getTaskByCode(owner, repo, resolvedTaskId);
+		if (!task) {
+			throw new Error(`Task not found: ${resolvedTaskId} in repo ${repo}`);
+		}
+		resolvedTaskId = task.id;
+	}
 	if (!resolvedTaskId && task_code) {
 		const task = storage.tasks.getTaskByCode(owner, repo, task_code);
 		if (!task) {
@@ -188,6 +195,13 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	const { owner, repo, task_id, task_code, agent, role, metadata, structured } = validated;
 
 	let taskId = task_id;
+	if (taskId && !UUID_REGEX.test(taskId)) {
+		const task = storage.tasks.getTaskByCode(owner, repo, taskId);
+		if (!task) {
+			throw new Error(`Task not found: ${taskId} in repo ${repo}`);
+		}
+		taskId = task.id;
+	}
 	let resolvedTaskCode: string;
 	let task: import("../types").Task | null;
 
@@ -309,6 +323,13 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 	const { owner, repo, task_id, task_code, agent, structured } = validated;
 
 	let resolvedTaskId = task_id;
+	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {
+		const task = storage.tasks.getTaskByCode(owner, repo, resolvedTaskId);
+		if (!task) {
+			throw new Error(`Task not found: ${resolvedTaskId} in repo ${repo}`);
+		}
+		resolvedTaskId = task.id;
+	}
 	let resolvedTaskCode: string | null = task_code ?? null;
 
 	if (resolvedTaskId) {

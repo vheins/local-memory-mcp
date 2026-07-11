@@ -54,5 +54,10 @@ export async function handleDecisionLog(
 		structured: validated.structured
 	};
 
+	const conflict = await db.memoryVectors.checkConflicts(formattedContent, owner, repo, "decision", vectors, 0.55);
+	if (conflict) {
+		memoryStoreParams.supersedes = conflict.id;
+	}
+
 	return handleMemoryStore(memoryStoreParams, db, vectors);
 }

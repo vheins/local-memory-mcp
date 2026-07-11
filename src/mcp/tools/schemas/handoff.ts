@@ -11,7 +11,7 @@ export const HandoffCreateSchema = z
 			.transform(normalizeRepo),
 		from_agent: z.string().min(1),
 		to_agent: z.string().min(1).optional(),
-		task_id: z.string().uuid().optional(),
+		task_id: z.string().optional(),
 		task_code: z.string().optional(),
 		summary: z.string().min(1),
 		context: z.record(z.string(), z.unknown()).optional(),
@@ -62,7 +62,7 @@ export const TaskClaimSchema = z
 			.string()
 			.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
 			.transform(normalizeRepo),
-		task_id: z.string().uuid().optional(),
+		task_id: z.string().optional(),
 		task_code: z.string().optional(),
 		agent: z.string().min(1),
 		role: z.string().optional(),
@@ -93,7 +93,7 @@ export const ClaimReleaseSchema = z
 			.string()
 			.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
 			.transform(normalizeRepo),
-		task_id: z.string().uuid().optional(),
+		task_id: z.string().optional(),
 		task_code: z.string().optional(),
 		agent: z.string().min(1).optional(),
 		structured: z.boolean().default(false)

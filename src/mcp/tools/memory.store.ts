@@ -5,9 +5,8 @@ import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { generateNextCode } from "../utils/code-generator";
+import { UUID_REGEX } from "../utils/uuid";
 import { saveExtractions } from "./kg-archivist";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function hasMetadataLikeTitle(title: string): boolean {
 	const normalized = title.trim();

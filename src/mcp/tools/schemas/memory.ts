@@ -23,7 +23,7 @@ export const MemoryStoreSchema = z.object({
 
 export const MemoryUpdateSchema = z
 	.object({
-		id: z.string().uuid().optional(),
+		id: z.string().optional(),
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
@@ -80,7 +80,7 @@ export const MemorySearchSchema = z.object({
 
 export const MemoryAcknowledgeSchema = z
 	.object({
-		memory_id: z.string().uuid().optional(),
+		memory_id: z.string().optional(),
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
@@ -107,8 +107,8 @@ export const MemoryDeleteSchema = z
 	.object({
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().uuid().optional(),
-		ids: z.array(z.string().uuid()).min(1).optional(),
+		id: z.string().optional(),
+		ids: z.array(z.string()).min(1).optional(),
 		code: z.string().max(20).optional(),
 		codes: z.array(z.string().max(20)).min(1).optional(),
 		structured: z.boolean().default(false)
@@ -122,7 +122,7 @@ export const MemoryDeleteSchema = z
 
 export const MemoryDetailSchema = z
 	.object({
-		id: z.string().uuid().optional(),
+		id: z.string().optional(),
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),

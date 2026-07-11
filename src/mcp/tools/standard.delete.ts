@@ -2,6 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
+import { UUID_REGEX } from "../utils/uuid";
 import { StandardDeleteSchema } from "./schemas";
 
 export async function handleStandardDelete(
@@ -14,8 +15,26 @@ export async function handleStandardDelete(
 
 	// Resolve code(s) to id(s)
 	const resolvedIds: string[] = [];
-	if (ids) resolvedIds.push(...ids);
-	if (id) resolvedIds.push(id);
+	if (ids) {
+		for (const item of ids) {
+			if (UUID_REGEX.test(item)) {
+				resolvedIds.push(item);
+			} else {
+				const entry = db.standards.getByCode(item, owner, repo);
+				if (!entry) throw new Error(`Coding standard not found: ${item}`);
+				resolvedIds.push(entry.id);
+			}
+		}
+	}
+	if (id) {
+		if (!UUID_REGEX.test(id)) {
+			const entry = db.standards.getByCode(id, owner, repo);
+			if (!entry) throw new Error(`Coding standard not found: ${id}`);
+			resolvedIds.push(entry.id);
+		} else {
+			resolvedIds.push(id);
+		}
+	}
 	if (code) {
 		const entry = db.standards.getByCode(code, owner, repo);
 		if (!entry) throw new Error(`Coding standard not found: ${code}`);
@@ -47,7 +66,7 @@ export async function handleStandardDelete(
 			db.standards.delete(targetId);
 			await vectors.remove(targetId, "standard");
 			deletedCount++;
-		} else if (id) {
+		} else {
 			throw new Error(`Coding standard not found: ${targetId}`);
 		}
 	}

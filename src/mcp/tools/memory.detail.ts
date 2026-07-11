@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
+import { UUID_REGEX } from "../utils/uuid";
 import { MemoryDetailSchema } from "./schemas";
 
 export async function handleMemoryDetail(args: Record<string, unknown>, storage: SQLiteStore) {
@@ -8,7 +9,7 @@ export async function handleMemoryDetail(args: Record<string, unknown>, storage:
 
 	let memory;
 	if (id) {
-		memory = storage.memories.getById(id);
+		memory = UUID_REGEX.test(id) ? storage.memories.getById(id) : storage.memories.getByCode(id, owner, repo);
 	} else if (code) {
 		memory = storage.memories.getByCode(code, owner, repo);
 	}

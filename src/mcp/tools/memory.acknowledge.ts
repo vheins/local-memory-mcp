@@ -1,6 +1,7 @@
 import { MemoryAcknowledgeSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { logger } from "../utils/logger";
+import { UUID_REGEX } from "../utils/uuid";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 
 export async function handleMemoryAcknowledge(params: unknown, db: SQLiteStore): Promise<McpResponse> {
@@ -9,6 +10,11 @@ export async function handleMemoryAcknowledge(params: unknown, db: SQLiteStore):
 
 	// Resolve code to id
 	let memoryId = validated.memory_id;
+	if (memoryId && !UUID_REGEX.test(memoryId)) {
+		const byCode = db.memories.getByCode(memoryId, validated.owner, validated.repo);
+		if (!byCode) throw new Error(`Memory not found: ${memoryId}`);
+		memoryId = byCode.id;
+	}
 	if (!memoryId && validated.code) {
 		const byCode = db.memories.getByCode(validated.code, validated.owner, validated.repo);
 		if (!byCode) throw new Error(`Memory not found: ${validated.code}`);

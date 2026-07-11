@@ -126,8 +126,8 @@ export const TaskUpdateSchema = z
 	.object({
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().uuid().optional(),
-		ids: z.array(z.string().uuid()).min(1).optional(),
+		id: z.string().optional(),
+		ids: z.array(z.string()).min(1).optional(),
 		task_code: z.string().optional(),
 		task_codes: z.array(z.string().min(1)).min(1).optional(),
 		phase: z.string().optional(),
@@ -156,7 +156,7 @@ export const TaskUpdateSchema = z
 			data.id !== undefined || data.ids !== undefined || data.task_code !== undefined || data.task_codes !== undefined,
 		{
 			message:
-				"Either 'id' (UUID), 'ids' (array of UUIDs), 'task_code' (string code like PERF-1), or 'task_codes' (array of string codes) must be provided. Note: 'ids' expects UUID format, not task codes — use 'task_code'/'task_codes' for string identifiers."
+				"Either 'id' (UUID), 'ids' (array of UUIDs or codes), 'task_code' (string code like PERF-1), or 'task_codes' (array of string codes) must be provided."
 		}
 	)
 	.refine((data) => Object.keys(data).length > 2, {
@@ -193,8 +193,8 @@ export const TaskDeleteSchema = z
 	.object({
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().uuid().optional(),
-		ids: z.array(z.string().uuid()).min(1).optional(),
+		id: z.string().optional(),
+		ids: z.array(z.string()).min(1).optional(),
 		task_code: z.string().optional(),
 		task_codes: z.array(z.string().min(1)).min(1).optional(),
 		structured: z.boolean().default(false)
@@ -204,7 +204,7 @@ export const TaskDeleteSchema = z
 			data.id !== undefined || data.ids !== undefined || data.task_code !== undefined || data.task_codes !== undefined,
 		{
 			message:
-				"Either 'id' (UUID), 'ids' (array of UUIDs), 'task_code' (string code like PERF-1), or 'task_codes' (array of string codes) must be provided. Note: 'ids' expects UUID format, not task codes — use 'task_code'/'task_codes' for string identifiers."
+				"Either 'id' (UUID), 'ids' (array of UUIDs or codes), 'task_code' (string code like PERF-1), or 'task_codes' (array of string codes) must be provided."
 		}
 	);
 
@@ -212,7 +212,7 @@ export const TaskGetSchema = z
 	.object({
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().uuid().optional(),
+		id: z.string().optional(),
 		task_code: z.string().optional(),
 		task_codes: z.array(z.string().min(1)).min(1).optional(),
 		structured: z.boolean().default(false)

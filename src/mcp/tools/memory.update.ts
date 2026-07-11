@@ -1,10 +1,9 @@
+import { UUID_REGEX } from "../utils/uuid";
 import { MemoryUpdateSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { Memory, VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function hasMetadataLikeTitle(title: string): boolean {
 	const normalized = title.trim();
@@ -34,6 +33,11 @@ export async function handleMemoryUpdate(
 
 	// Resolve code to id if needed
 	let resolvedId = validated.id;
+	if (resolvedId && !UUID_REGEX.test(resolvedId)) {
+		const byCode = db.memories.getByCode(resolvedId, validated.owner, validated.repo);
+		if (!byCode) throw new Error(`Memory not found: ${resolvedId}`);
+		resolvedId = byCode.id;
+	}
 	if (!resolvedId && validated.code) {
 		const byCode = db.memories.getByCode(validated.code, validated.owner, validated.repo);
 		if (!byCode) throw new Error(`Memory not found: ${validated.code}`);

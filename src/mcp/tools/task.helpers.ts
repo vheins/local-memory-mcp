@@ -1,9 +1,8 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { type TaskStatus, type VectorStore } from "../types";
 import { logger } from "../utils/logger";
+import { UUID_REGEX } from "../utils/uuid";
 import { handleMemoryStore } from "./memory.store";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Resolves a parent_id value that is either a UUID or a task_code string.

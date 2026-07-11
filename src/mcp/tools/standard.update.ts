@@ -1,11 +1,10 @@
+import { UUID_REGEX } from "../utils/uuid";
 import { StandardUpdateSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { CodingStandardEntry, VectorStore } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildStandardVectorText } from "./standard.shared";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function resolveStandardParentId(
 	value: string | null | undefined,
@@ -29,6 +28,11 @@ export async function handleStandardUpdate(
 
 	// Resolve code to id if needed
 	let resolvedId = validated.id;
+	if (resolvedId && !UUID_REGEX.test(resolvedId)) {
+		const byCode = db.standards.getByCode(resolvedId, validated.owner, validated.repo);
+		if (!byCode) throw new Error(`Coding standard not found: ${resolvedId}`);
+		resolvedId = byCode.id;
+	}
 	if (!resolvedId && validated.code) {
 		const byCode = db.standards.getByCode(validated.code, validated.owner, validated.repo);
 		if (!byCode) throw new Error(`Coding standard not found: ${validated.code}`);

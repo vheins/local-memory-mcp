@@ -2,6 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
+import { UUID_REGEX } from "../utils/uuid";
 import { MemoryDeleteSchema } from "./schemas";
 
 export async function handleMemoryDelete(
@@ -16,8 +17,26 @@ export async function handleMemoryDelete(
 
 	// Resolve code(s) to id(s)
 	const resolvedIds: string[] = [];
-	if (ids) resolvedIds.push(...ids);
-	if (id) resolvedIds.push(id);
+	if (ids) {
+		for (const item of ids) {
+			if (UUID_REGEX.test(item)) {
+				resolvedIds.push(item);
+			} else {
+				const entry = db.memories.getByCode(item, owner, repo);
+				if (!entry) throw new Error(`Memory not found: ${item}`);
+				resolvedIds.push(entry.id);
+			}
+		}
+	}
+	if (id) {
+		if (!UUID_REGEX.test(id)) {
+			const entry = db.memories.getByCode(id, owner, repo);
+			if (!entry) throw new Error(`Memory not found: ${id}`);
+			resolvedIds.push(entry.id);
+		} else {
+			resolvedIds.push(id);
+		}
+	}
 	if (code) {
 		const entry = db.memories.getByCode(code, owner, repo);
 		if (!entry) throw new Error(`Memory not found: ${code}`);
@@ -54,7 +73,7 @@ export async function handleMemoryDelete(
 			lastRepo = existing.scope.repo;
 			deletedCodes.push(existing.code || existing.id);
 			validIdsToDelete.push(targetId);
-		} else if (id) {
+		} else {
 			throw new Error(`Memory not found: ${targetId}`);
 		}
 	}

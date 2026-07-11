@@ -4,6 +4,7 @@ import { TaskStatus, VectorStore } from "../types";
 import { createMcpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 import { TaskUpdateSchema } from "./schemas";
+import { UUID_REGEX } from "../utils/uuid";
 import { resolveParentId, resolveDependsOn, archiveTaskToMemory } from "./task.helpers";
 
 export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vectors: VectorStore) {
@@ -12,13 +13,30 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 
 	// Resolve task_code to id if needed
 	let resolvedId = id;
+	if (resolvedId && !UUID_REGEX.test(resolvedId)) {
+		const found = storage.tasks.getTaskByCode(owner, repo, resolvedId);
+		if (!found) throw new Error(`Task not found: ${resolvedId}`);
+		resolvedId = found.id;
+	}
 	if (!resolvedId && !ids && updates.task_code) {
 		const found = storage.tasks.getTaskByCode(owner, repo, updates.task_code);
 		if (!found) throw new Error(`Task not found: ${updates.task_code}`);
 		resolvedId = found.id;
 	}
 
-	const targetIds = ids || (resolvedId ? [resolvedId] : []);
+	const resolvedIdsArray: string[] = [];
+	if (ids) {
+		for (const item of ids) {
+			if (UUID_REGEX.test(item)) {
+				resolvedIdsArray.push(item);
+			} else {
+				const task = storage.tasks.getTaskByCode(owner, repo, item);
+				if (!task) throw new Error(`Task not found: ${item}`);
+				resolvedIdsArray.push(task.id);
+			}
+		}
+	}
+	const targetIds = resolvedIdsArray.length > 0 ? resolvedIdsArray : resolvedId ? [resolvedId] : [];
 
 	if (targetIds.length === 0) {
 		throw new Error("Either 'id' or 'ids' must be provided for update");
