@@ -92,8 +92,8 @@ export const StandardSearchSchema = z.object({
 	owner: z.string().optional().default(""),
 	repo: z.string().transform(normalizeRepo).optional(),
 	is_global: z.boolean().optional(),
-	limit: z.number().min(1).max(100).default(20),
-	offset: z.number().min(0).default(0),
+	limit: z.coerce.number().min(1).max(100).default(20),
+	offset: z.coerce.number().min(0).default(0),
 	structured: z.boolean().default(false)
 });
 

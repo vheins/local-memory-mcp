@@ -5,7 +5,7 @@ export const AgentContextSchema = z.object({
 	repo: z.string().min(1),
 	objective: z.string().optional(),
 	type_filter: z.enum(["code_fact", "decision", "mistake", "pattern", "task_archive"]).optional(),
-	limit: z.number().min(1).max(100).default(5),
+	limit: z.coerce.number().min(1).max(100).default(5),
 	structured: z.boolean().default(false)
 });
 

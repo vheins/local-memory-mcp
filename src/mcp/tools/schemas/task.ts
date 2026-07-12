@@ -66,7 +66,7 @@ const SingleTaskCreateSchema = z.object({
 	metadata: TaskMetadataSchema,
 	parent_id: z.string().optional(),
 	depends_on: z.string().optional(),
-	est_tokens: z.number().int().min(0).optional()
+	est_tokens: z.coerce.number().int().min(0).optional()
 });
 
 const TaskStatusListSchema = z.string().refine(
@@ -103,7 +103,7 @@ export const TaskCreateSchema = z
 		metadata: z.record(z.string(), z.unknown()).optional(),
 		parent_id: z.string().optional(),
 		depends_on: z.string().optional(),
-		est_tokens: z.number().int().min(0).optional(),
+		est_tokens: z.coerce.number().int().min(0).optional(),
 		// Allow bulk tasks
 		tasks: z.array(SingleTaskCreateSchema).min(1).optional(),
 		structured: z.boolean().default(false)
@@ -145,7 +145,7 @@ export const TaskUpdateSchema = z
 		suggested_skills: z.array(z.string()).optional(),
 		parent_id: z.string().optional(),
 		depends_on: z.string().optional(),
-		est_tokens: z.number().int().min(0).optional(),
+		est_tokens: z.coerce.number().int().min(0).optional(),
 		commit_id: z.string().optional(),
 		changed_files: z.array(z.string()).optional(),
 		force: z.boolean().optional(),
@@ -172,8 +172,8 @@ export const TaskListSchema = z.object({
 	status: TaskStatusListSchema.default("backlog,pending,in_progress,blocked"),
 	phase: z.string().optional(),
 	query: z.string().optional(),
-	limit: z.number().min(1).max(100).default(15),
-	offset: z.number().min(0).default(0),
+	limit: z.coerce.number().min(1).max(100).default(15),
+	offset: z.coerce.number().min(0).default(0),
 	structured: z.boolean().default(false)
 });
 
@@ -183,9 +183,9 @@ export const TaskSearchSchema = z.object({
 	query: z.string().min(1),
 	status: z.string().optional(),
 	phase: z.string().optional(),
-	priority: z.number().min(1).max(5).optional(),
-	limit: z.number().min(1).max(100).default(10),
-	offset: z.number().min(0).default(0),
+	priority: z.coerce.number().min(1).max(5).optional(),
+	limit: z.coerce.number().min(1).max(100).default(10),
+	offset: z.coerce.number().min(0).default(0),
 	structured: z.boolean().default(false)
 });
 

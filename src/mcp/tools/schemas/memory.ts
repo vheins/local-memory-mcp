@@ -7,12 +7,12 @@ export const MemoryStoreSchema = z.object({
 	type: MemoryTypeSchema,
 	title: z.string().min(3).max(255),
 	content: z.string().min(10),
-	importance: z.number().min(1).max(5),
+	importance: z.coerce.number().min(1).max(5),
 	agent: z.string().min(1),
 	role: z.string().optional().default("unknown"),
 	model: z.string().min(1),
 	scope: MemoryScopeSchema,
-	ttlDays: z.number().min(1).optional(),
+	ttlDays: z.coerce.number().min(1).optional(),
 	supersedes: z.string().optional(),
 	tags: z.array(z.string()).optional(),
 	metadata: z.record(z.string(), z.unknown()).optional(),
@@ -30,7 +30,7 @@ export const MemoryUpdateSchema = z
 		type: MemoryTypeSchema.optional(),
 		title: z.string().min(3).max(255).optional(),
 		content: z.string().min(10).optional(),
-		importance: z.number().min(1).max(5).optional(),
+		importance: z.coerce.number().min(1).max(5).optional(),
 		agent: z.string().optional(),
 		role: z.string().optional(),
 		status: z.enum(["active", "archived"]).optional(),
@@ -67,9 +67,9 @@ export const MemorySearchSchema = z.object({
 	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	types: z.array(MemoryTypeSchema).optional(),
-	minImportance: z.number().min(1).max(5).optional(),
-	limit: z.number().min(1).max(100).default(5),
-	offset: z.number().min(0).default(0),
+	minImportance: z.coerce.number().min(1).max(5).optional(),
+	limit: z.coerce.number().min(1).max(100).default(5),
+	offset: z.coerce.number().min(0).default(0),
 	includeRecap: z.boolean().default(false),
 	current_file_path: z.string().optional(),
 	include_archived: z.boolean().default(false),
@@ -98,8 +98,8 @@ export const MemoryRecapSchema = z.object({
 		.string()
 		.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
 		.transform(normalizeRepo),
-	limit: z.number().min(1).max(50).default(20),
-	offset: z.number().min(0).default(0),
+	limit: z.coerce.number().min(1).max(50).default(20),
+	offset: z.coerce.number().min(0).default(0),
 	structured: z.boolean().default(false)
 });
 
@@ -147,7 +147,7 @@ export const MemorySynthesizeSchema = z.object({
 	include_summary: z.boolean().default(true),
 	include_tasks: z.boolean().default(true),
 	use_tools: z.boolean().default(true),
-	max_iterations: z.number().int().min(1).max(5).default(3),
-	max_tokens: z.number().int().min(128).max(4000).default(1200),
+	max_iterations: z.coerce.number().int().min(1).max(5).default(3),
+	max_tokens: z.coerce.number().int().min(128).max(4000).default(1200),
 	structured: z.boolean().default(false)
 });

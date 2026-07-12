@@ -13,7 +13,7 @@ export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pat
 
 export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
 
-export const TaskPrioritySchema = z.number().min(1).max(5);
+export const TaskPrioritySchema = z.coerce.number().min(1).max(5);
 
 export const HandoffStatusSchema = z.enum(["pending", "accepted", "rejected", "expired"]);
 
@@ -22,12 +22,12 @@ export const SingleMemorySchema = z.object({
 	type: MemoryTypeSchema,
 	title: z.string().min(3).max(255),
 	content: z.string().min(10),
-	importance: z.number().min(1).max(5),
+	importance: z.coerce.number().min(1).max(5),
 	agent: z.string().min(1),
 	role: z.string().optional().default("unknown"),
 	model: z.string().min(1),
 	scope: MemoryScopeSchema,
-	ttlDays: z.number().min(1).optional(),
+	ttlDays: z.coerce.number().min(1).optional(),
 	supersedes: z.string().optional(),
 	tags: z.array(z.string()).optional(),
 	metadata: z.record(z.string(), z.unknown()).optional(),
