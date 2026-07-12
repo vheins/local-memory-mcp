@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.17] - 2026-07-12
+
+### Fixed
+
+- **memory-acknowledge tool description**: Added explicit usage example (`{ code: "MEM-123", status: "used" }`) to tool description and Zod schema `.describe()` to prevent agents from inventing incorrect parameter names like `relevant=false`.
+
+### Changed
+
+- **Tool definitions type-check**: Minor.
+
 ## [0.19.16] - 2026-07-12
 
 ### Fixed

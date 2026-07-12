@@ -254,7 +254,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		name: "memory-acknowledge",
 		title: "Memory Acknowledge",
 		description:
-			"Acknowledge the use of a memory or report its irrelevance/contradiction. Mandatory after using memory to generate code.",
+			'Acknowledge the use of a memory or report its irrelevance/contradiction. Mandatory after using memory to generate code. Example: { code: "MEM-123", status: "used" } or { code: "MEM-123", status: "irrelevant" }.',
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,

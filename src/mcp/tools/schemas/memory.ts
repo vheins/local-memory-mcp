@@ -84,7 +84,11 @@ export const MemoryAcknowledgeSchema = z
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		status: z.enum(["used", "irrelevant", "contradictory"]),
+		status: z
+			.enum(["used", "irrelevant", "contradictory"])
+			.describe(
+				'Usage status. Use "used" after generating code from a memory, "irrelevant" if the memory didn\'t help, or "contradictory" if it conflicts with current understanding.'
+			),
 		application_context: z.string().min(10).optional(),
 		structured: z.boolean().default(false)
 	})
