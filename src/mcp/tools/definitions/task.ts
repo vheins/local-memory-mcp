@@ -167,7 +167,10 @@ export const TASK_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				task_code: { type: "string", description: "Unique task code (e.g. TASK-001) (Required for single task)" },
+				task_code: {
+					type: "string",
+					description: "Unique task code (e.g. TASK-001, REFACTOR-2). Optional — auto-generated as TASK-xxx if omitted."
+				},
 				phase: { type: "string", description: "Project phase (Required for single task)" },
 				title: {
 					type: "string",

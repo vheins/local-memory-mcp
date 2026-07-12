@@ -65,7 +65,7 @@ export class TaskEntity extends BaseEntity {
 	private handleDuplicateTaskCode(err: unknown, taskCode: string, repo: string): void {
 		if (isSqliteError(err) && err.code === "SQLITE_CONSTRAINT_UNIQUE") {
 			throw new Error(
-				`Duplicate task_code: '${taskCode}' already exists in repository '${repo}'. The task_code must be unique within the repository.`
+				`Duplicate task_code: '${taskCode}' already exists in repository '${repo}'. The task_code must be unique within the repository. Omit task_code to auto-generate a new unique code.`
 			);
 		}
 		// For any other SQLITE_CONSTRAINT (FK, PK) or non-SQLite errors, re-throw

@@ -47,7 +47,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				throw new Error(`Duplicate task_code in request: '${code}'`);
 			}
 			if (existingCodes.has(code)) {
-				throw new Error(`Duplicate task_code: '${code}' already exists in repository '${repo}'`);
+				throw new Error(
+					`Duplicate task_code: '${code}' already exists in repository '${repo}'. Omit task_code to auto-generate, or use task-list/task-search to find available codes.`
+				);
 			}
 			codesInRequest.add(code);
 
@@ -140,7 +142,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 	const resolvedCode = task_code || generateNextCode(owner ?? "", repo, "task", storage);
 
 	if (storage.tasks.isTaskCodeDuplicate(owner, repo, resolvedCode)) {
-		throw new Error(`Duplicate task_code: '${resolvedCode}' already exists in repository '${repo}'`);
+		throw new Error(
+			`Duplicate task_code: '${resolvedCode}' already exists in repository '${repo}'. Omit task_code to auto-generate, or use task-list/task-search to find available codes.`
+		);
 	}
 
 	if (requestedStatus !== "backlog" && requestedStatus !== "pending" && requestedStatus !== undefined) {
