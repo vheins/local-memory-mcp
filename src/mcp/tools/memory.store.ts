@@ -4,7 +4,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { generateNextCode } from "../utils/code-generator";
+import { generateNextCode, resolveEntityCode } from "../utils/code-generator";
 import { UUID_REGEX } from "../utils/uuid";
 import { saveExtractions } from "./kg-archivist";
 
@@ -97,7 +97,7 @@ async function storeSingleMemory(
 
 	const entry: MemoryEntry = {
 		id: randomUUID(),
-		code: params.code || generateNextCode(params.scope.owner ?? "", params.scope.repo, "memory", db),
+		code: resolveEntityCode(params.code, params.scope.owner ?? "", params.scope.repo, "memory", db),
 		type: params.type as MemoryEntry["type"],
 		title: params.title,
 		content: params.content,
@@ -217,8 +217,9 @@ export async function handleMemoryStore(
 				tags.push(mem.scope.language.toLowerCase());
 			}
 
-			const code = mem.code || generateNextCode(mem.scope.owner ?? "", mem.scope.repo, "memory", db, batchCodes);
-			batchCodes.add(code);
+			const code = resolveEntityCode(mem.code || null, mem.scope.owner ?? "", mem.scope.repo, "memory", db, {
+				batchCodes
+			});
 			entries.push({
 				id: randomUUID(),
 				code,

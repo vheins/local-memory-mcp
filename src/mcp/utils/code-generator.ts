@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 
 export type EntityType = "task" | "memory" | "standard";
@@ -49,4 +50,64 @@ export function generateNextCode(
 	}
 
 	return `${config.prefix}-${String(nextSeq).padStart(3, "0")}`;
+}
+
+/**
+ * Resolves an entity code with automatic fallback when the preferred code already exists.
+ *
+ * - If `preferredCode` is null/undefined → delegates to `generateNextCode` for sequential auto-generation
+ * - If `preferredCode` is provided and unique → returns it as-is
+ * - If `preferredCode` is already taken → generates `{preferredCode}-{random4hex}` (retries up to 20 times)
+ *
+ * The optional `batchCodes` set accounts for codes already earmarked in the current batch
+ * but not yet persisted to the database.
+ */
+export function resolveEntityCode(
+	preferredCode: string | null | undefined,
+	owner: string,
+	repo: string,
+	entityType: EntityType,
+	storage: SQLiteStore,
+	options?: { batchCodes?: Set<string> }
+): string {
+	const { batchCodes } = options ?? {};
+
+	// Auto-generate if no preferred code
+	if (!preferredCode) {
+		const code = generateNextCode(owner, repo, entityType, storage, batchCodes);
+		if (batchCodes) batchCodes.add(code);
+		return code;
+	}
+
+	// Helper: check if a code is already taken (batch set + database)
+	const isTaken = (code: string): boolean => {
+		if (batchCodes?.has(code)) return true;
+		switch (entityType) {
+			case "task":
+				return storage.tasks.isTaskCodeDuplicate(owner, repo, code);
+			case "memory":
+				return storage.memories.getByCode(code, owner, repo) !== null;
+			case "standard":
+				return storage.standards.getByCode(code, owner, repo) !== null;
+		}
+	};
+
+	// Return the preferred code if it's available
+	if (!isTaken(preferredCode)) {
+		if (batchCodes) batchCodes.add(preferredCode);
+		return preferredCode;
+	}
+
+	// Generate with random suffix — retry until unique
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const suffix = randomBytes(2).toString("hex");
+		const candidate = `${preferredCode}-${suffix}`;
+		if (!isTaken(candidate)) {
+			if (batchCodes) batchCodes.add(candidate);
+			return candidate;
+		}
+	}
+
+	// Last resort: sequential fallback
+	return generateNextCode(owner, repo, entityType, storage, batchCodes);
 }

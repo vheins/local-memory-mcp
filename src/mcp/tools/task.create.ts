@@ -4,7 +4,7 @@ import { Task, TaskStatus, TaskPriority } from "../types";
 import { inferRepoFromSession } from "../session";
 import { extractAcceptedElicitationContent } from "../elicitation";
 import { createMcpResponse } from "../utils/mcp-response";
-import { generateNextCode } from "../utils/code-generator";
+import { generateNextCode, resolveEntityCode } from "../utils/code-generator";
 import { TaskCreateSchema, TaskCreateInteractiveSchema } from "./schemas";
 import { type TaskCreateInteractiveOptions } from "../interfaces/mcp";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from "./task.helpers";
@@ -19,18 +19,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		const now = new Date().toISOString();
 		const codesInRequest = new Set<string>();
 
-		// First pass: auto-generate sequential codes for tasks missing a task_code
 		const batchCodes = new Set<string>();
-		for (const taskData of bulkTasks) {
-			if (!taskData.task_code) {
-				taskData.task_code = generateNextCode(owner ?? "", repo, "task", storage, batchCodes);
-			}
-			batchCodes.add(taskData.task_code);
-		}
-
-		// Batch duplicate check: single query instead of N
-		const allCodes = bulkTasks.map((t) => t.task_code as string);
-		const existingCodes = storage.tasks.getExistingTaskCodes(owner, repo, allCodes);
 
 		const initialStats = storage.taskStats.getTaskStats(owner, repo);
 		let pendingInRequestCount = 0;
@@ -42,14 +31,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		}
 
 		for (const taskData of bulkTasks) {
-			const code = taskData.task_code!;
+			const code = resolveEntityCode(taskData.task_code ?? null, owner ?? "", repo, "task", storage, { batchCodes });
 			if (codesInRequest.has(code)) {
 				throw new Error(`Duplicate task_code in request: '${code}'`);
-			}
-			if (existingCodes.has(code)) {
-				throw new Error(
-					`Duplicate task_code: '${code}' already exists in repository '${repo}'. Omit task_code to auto-generate, or use task-list/task-search to find available codes.`
-				);
 			}
 			codesInRequest.add(code);
 
@@ -138,14 +122,8 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 	let effectiveStatus: TaskStatus = (requestedStatus || "backlog") as TaskStatus;
 
-	// Auto-generate task_code if not provided
-	const resolvedCode = task_code || generateNextCode(owner ?? "", repo, "task", storage);
-
-	if (storage.tasks.isTaskCodeDuplicate(owner, repo, resolvedCode)) {
-		throw new Error(
-			`Duplicate task_code: '${resolvedCode}' already exists in repository '${repo}'. Omit task_code to auto-generate, or use task-list/task-search to find available codes.`
-		);
-	}
+	// Auto-generate or resolve task_code (with random fallback if duplicate)
+	const resolvedCode = resolveEntityCode(task_code, owner ?? "", repo, "task", storage);
 
 	if (requestedStatus !== "backlog" && requestedStatus !== "pending" && requestedStatus !== undefined) {
 		throw new Error("New tasks must be created with status 'backlog' or 'pending'.");

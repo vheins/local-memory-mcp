@@ -267,8 +267,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(getTextContent(result)).toContain("See task-detail with task_code for details.");
 	});
 
-	it("should prevent duplicate task_codes in the same request", async () => {
-		const promise = router("tools/call", {
+	it("should auto-resolve duplicate task_codes in the same request", async () => {
+		const result = await router("tools/call", {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
@@ -280,11 +280,13 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		await expect(promise).rejects.toThrow("Duplicate task_code in request");
+		expect(getTextContent(result)).toContain("Created 2 tasks");
+		expect(getTextContent(result)).toContain("DUP-001");
+		expect(getTextContent(result)).toMatch(/DUP-001-[a-f0-9]{4}/);
 	});
 
-	it("should prevent duplicate task_codes against existing tasks", async () => {
-		// Create first task
+	it("should auto-resolve duplicate task_codes against existing tasks", async () => {
+		// Create first task with code EXISTING-001
 		await router("tools/call", {
 			name: "task-create",
 			arguments: {
@@ -299,8 +301,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		// Try to create another one with same code (via bulk)
-		const bulkPromise = router("tools/call", {
+		// Bulk create with same code — should auto-resolve to EXISTING-001-{random}
+		const bulkResult = await router("tools/call", {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
@@ -317,10 +319,11 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 				]
 			}
 		});
-		await expect(bulkPromise).rejects.toThrow("already exists");
+		expect(getTextContent(bulkResult)).toContain("Created 1 tasks");
+		expect(getTextContent(bulkResult)).toMatch(/EXISTING-001-[a-f0-9]{4}/);
 
-		// Try via single create
-		const singlePromise = router("tools/call", {
+		// Single create with same code — should also auto-resolve
+		const singleResult = await router("tools/call", {
 			name: "task-create",
 			arguments: {
 				repo: REPO,
@@ -333,7 +336,8 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 				est_tokens: 30
 			}
 		});
-		await expect(singlePromise).rejects.toThrow("already exists");
+		expect(getTextContent(singleResult)).toContain("Created task [");
+		expect(getTextContent(singleResult)).toMatch(/EXISTING-001-[a-f0-9]{4}/);
 	});
 
 	it("should bulk delete tasks", async () => {
