@@ -53,7 +53,7 @@
 				<div style="font-size:0.875rem;opacity:0.7;">Events will appear here as they happen.</div>
 			</div>
 		{:else}
-			{#each $groupedActions as group (group.date)}
+			{#each $groupedActions as group, i (`${group.date}-${i}`)}
 				<div class="date-header">
 					<span>{group.date}</span>
 				</div>

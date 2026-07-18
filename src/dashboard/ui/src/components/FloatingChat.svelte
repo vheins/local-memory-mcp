@@ -124,7 +124,7 @@
 						<div>Events appear here as they happen.</div>
 					</div>
 				{:else}
-					{#each $groupedActions as group (group.date)}
+					{#each $groupedActions as group, i (`${group.date}-${i}`)}
 						<div class="popup-date-header"><span>{group.date}</span></div>
 						{#each group.items as action (action.id)}
 							{@const label = handler.getLabel(action)}

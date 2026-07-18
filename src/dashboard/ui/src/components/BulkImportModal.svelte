@@ -129,7 +129,7 @@
 								<table>
 									<thead>
 										<tr>
-											{#each currentHeaders as h (h)}
+											{#each currentHeaders as h, headerIndex (`${headerIndex}-${h}`)}
 												<th>{h}</th>
 											{/each}
 										</tr>
@@ -137,7 +137,7 @@
 									<tbody>
 										{#each currentCsvData.slice(0, 5) as row, rowIndex (`${rowIndex}-${JSON.stringify(row)}`)}
 											<tr>
-												{#each currentHeaders as h (h)}
+												{#each currentHeaders as h, headerIndex (`${headerIndex}-${h}`)}
 													<td>{row[h.toLowerCase().replace(/[^a-z0-9_]/g, "_")] || ""}</td>
 												{/each}
 											</tr>
