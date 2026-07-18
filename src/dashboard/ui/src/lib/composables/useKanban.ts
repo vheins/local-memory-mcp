@@ -113,7 +113,10 @@ export function createKanbanHandler() {
 			});
 
 			update((s) => {
-				const nextTasks = p.page === 1 ? data.tasks || [] : [...(s.columnTasks[status] || []), ...(data.tasks || [])];
+				const nextTasks =
+					p.page === 1
+						? data.tasks || []
+						: [...new Map([...(s.columnTasks[status] || []), ...(data.tasks || [])].map((t) => [t.id, t])).values()];
 				const totalItems = data.pagination?.totalItems ?? nextTasks.length;
 				const totalPages = data.pagination?.totalPages ?? Math.ceil(totalItems / p.pageSize);
 
@@ -214,7 +217,7 @@ export function createKanbanHandler() {
 			const nextCols = { ...s.columnTasks };
 			nextCols[sourceCol] = nextCols[sourceCol].filter((t) => t.id !== draggedTask.id);
 			const updatedTask = { ...draggedTask, status: targetCol };
-			nextCols[targetCol] = [updatedTask, ...(nextCols[targetCol] || [])];
+			nextCols[targetCol] = [updatedTask, ...(nextCols[targetCol] || []).filter((t) => t.id !== updatedTask.id)];
 			return { ...s, columnTasks: nextCols };
 		});
 
