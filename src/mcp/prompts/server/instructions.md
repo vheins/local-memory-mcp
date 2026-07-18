@@ -39,17 +39,11 @@ If unsure, run `git remote -v` in the project directory — the remote URL (e.g.
 
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
 
-## Session Start Mode
-
-Entry=orient → hydrate → ready Guard: S(N) req S(N-1)✅
-
-S0 | agent-context (one-call context: memories + tasks + decisions) OR task-list + handoff-list + memory-search | session start? | active context | —
-S1 | standard-search(MANDATORY before code/test/refactor/migrate — task intent, lang, stack, repo filters) | S0✅ | hydrated context | —
-S2 | continue to task or respond | S1✅ | ready | —
+> **Workflow**: This server provides tools for memory, tasks, standards, and handoffs. The canonical workflow is defined in `AGENTS.md` (WORKFLOW section: S0→Synthesize→S1→S2→Execute→Close). These MCP tools are the mechanism — the AGENTS.md workflow is the orchestration.
 
 ## Core Workflows
 
-**Memory**: memory-search → memory-detail → memory-store | memory-update
+**Memory**: memory-search → memory-detail → memory-store | memory-update | memory-synthesize
 
 - Durable only (arch, patterns, decisions, fixes)
 - memory-acknowledge after code gen from memory
