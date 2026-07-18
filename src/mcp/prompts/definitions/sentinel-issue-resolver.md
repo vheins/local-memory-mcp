@@ -21,7 +21,7 @@ S0 | fetch: issue_read body + ALL comments (get_comments) | issue_url provided? 
 S1 | analyze comments: extract requirements, hints, root cause clues, reproduction steps, error details | S0✅ | comment analysis | —
 S2 | detect attachments: parse all comments for image/video markdown URLs, linked assets | S1✅ | attachment URL list | —
 S3 | download: gh CLI (gh issue view, gh api) to fetch each attachment — private repo, NO curl | S2✅ & attachments exist? | local files | —
-S4 | analyze attachments: inspect screenshots/videos for UI bugs, error states, configs, visual hints | S3✅ | attachment analysis | —
+S4 | delegate: pass attachments to vision sub-agent via task tool for analysis (UI bugs, error states, configs, visual hints) | S3✅ | attachment analysis | —
 S5 | research: agent-context(supplementary) OR memory-search + standard-search + codebase exploration (trace call sites, read docs) | S0-4✅ | full context | —
 S6 | register: task-create (link issue URL) + task-claim + task-update→in_progress | S5✅ | MCP task | —
 S7 | implement fix + validate: tests, linters, e2e | S6✅ | verified changes | —

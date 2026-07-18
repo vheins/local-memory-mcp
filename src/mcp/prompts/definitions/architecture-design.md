@@ -21,10 +21,10 @@ Guard: S(N) req S(N-1)✅
 
 S0 | review tech_stack & requirements | — | component list, data flow map | —
 S1 | design: component diagram(blocks+responsibilities) + data flow(information movement) + ADRs(rationale) + scalability/reliability(growth+failure) + security(identity,protection,boundaries) | S0✅ | design decisions | —
-S2 | document artifacts | S1✅ | architecture docs | design/architecture/
+S2 | document artifacts | S1✅ | architecture docs | .agents/documents/design/architecture/
 S3 | verify: validate component completeness, data flow coherence, ADR traceability, security coverage, scalability assumptions | S2✅ | verified | —
 
 ## Chain
 
 ← N/A
-→ architecture-documentation: design/architecture/ → as-built architecture doc
+→ architecture-documentation: .agents/documents/design/architecture/ → as-built architecture doc

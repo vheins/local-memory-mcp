@@ -43,7 +43,7 @@ S0 | categorize: type + tech tags; NEVER store coordination state (claims, file 
 S1 | store: memory-store(type+title+content+importance+agent+model+scope) or decision-log(structured decisions) or standard-store(normative rules) or handoff-create(transfer ctx) | S0✅ | stored | —
 S2 | verify: confirm stored entity matches category, no forbidden types mixed in | S1✅ | verified | —
 
-**⚠️ `memory-store` requires ALL 7 fields**: `type`, `title`, `content`, `importance`, `agent`, `model`, `scope` (with `scope.owner` + `scope.repo`). Or use `memories[]` array for bulk.
+**⚠️ \`memory-store\` requires ALL 8 fields**: \`type\`, \`title\`, \`content\`, \`importance\`, \`agent\`, \`model\`, \`scope.owner\`, \`scope.repo\`. Never omit \`model\` or \`scope\`.
 
 ## Notes
 
