@@ -58,7 +58,7 @@
 					<span>{group.date}</span>
 				</div>
 
-				{#each group.items as action (action.id)}
+				{#each group.items as action, i (`${action.id}-${i}`)}
 					{@const label = handler.getLabel(action)}
 					{@const cfg = handler.getConfig(action.action)}
 

@@ -166,7 +166,7 @@
 						</td>
 					</tr>
 				{:else}
-					{#each $memories as mem (mem.id)}
+					{#each $memories as mem, i (`${mem.id}-${i}`)}
 						<tr class="mem-row" class:selected={$selectedMemoryIds.has(mem.id)} on:click={() => onMemoryClick(mem)}>
 							<td class="mem-td" on:click|stopPropagation>
 								<input

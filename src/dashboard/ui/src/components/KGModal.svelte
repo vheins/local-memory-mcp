@@ -132,7 +132,7 @@
 					<label class="form-label" for="rel-from">From Entity *</label>
 					<select id="rel-from" class="form-select" bind:value={relFrom}>
 						<option value="">Select entity...</option>
-						{#each entityNodes as n (n.id)}
+						{#each entityNodes as n, i (`${n.id}-${i}`)}
 							<option value={n.name}>{n.name}</option>
 						{/each}
 					</select>
@@ -141,7 +141,7 @@
 					<label class="form-label" for="rel-to">To Entity *</label>
 					<select id="rel-to" class="form-select" bind:value={relTo}>
 						<option value="">Select entity...</option>
-						{#each entityNodes as n (n.id)}
+						{#each entityNodes as n, i (`${n.id}-${i}`)}
 							<option value={n.name}>{n.name}</option>
 						{/each}
 					</select>

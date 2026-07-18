@@ -113,10 +113,8 @@ export function createKanbanHandler() {
 			});
 
 			update((s) => {
-				const nextTasks =
-					p.page === 1
-						? data.tasks || []
-						: [...new Map([...(s.columnTasks[status] || []), ...(data.tasks || [])].map((t) => [t.id, t])).values()];
+				const rawTasks = p.page === 1 ? data.tasks || [] : [...(s.columnTasks[status] || []), ...(data.tasks || [])];
+				const nextTasks = [...new Map(rawTasks.map((t) => [t.id, t])).values()];
 				const totalItems = data.pagination?.totalItems ?? nextTasks.length;
 				const totalPages = data.pagination?.totalPages ?? Math.ceil(totalItems / p.pageSize);
 

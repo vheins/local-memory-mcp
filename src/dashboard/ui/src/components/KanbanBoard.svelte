@@ -81,7 +81,7 @@
 							</div>
 						{/if}
 					{:else}
-						{#each $kanbanState.columnTasks[col.status] as task (task.id)}
+						{#each $kanbanState.columnTasks[col.status] as task, i (`${task.id}-${i}`)}
 							<!-- svelte-ignore a11y-no-static-element-interactions -->
 							<div
 								draggable="true"

@@ -235,7 +235,7 @@
 						</td>
 					</tr>
 				{:else}
-					{#each handoffs as handoff (handoff.id)}
+					{#each handoffs as handoff, i (`${handoff.id}-${i}`)}
 						<tr
 							class="mem-row"
 							on:click={() => openViewDrawer(handoff)}
@@ -306,7 +306,7 @@
 			</div>
 		{:else}
 			<div class="claim-list">
-				{#each claims as claim (claim.id)}
+				{#each claims as claim, i (`${claim.id}-${i}`)}
 					<div class="claim-row">
 						<div>
 							<div class="row-title">{claim.task_code || claim.task_id}</div>

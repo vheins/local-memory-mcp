@@ -15,7 +15,7 @@
 {#if $handler.task}
 	{#if STATUS_FLOW[$handler.task.status]?.length}
 		<div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
-			{#each STATUS_FLOW[$handler.task.status] as action (action.next)}
+			{#each STATUS_FLOW[$handler.task.status] as action, i (`${action.next}-${i}`)}
 				<button
 					class="btn"
 					style="background:{action.color};color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
@@ -165,7 +165,7 @@
 
 		{#if $handler.task?.comments?.length}
 			<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-				{#each $handler.task.comments as c (c.id)}
+				{#each $handler.task.comments as c, i (`${c.id}-${i}`)}
 					<div class="comment-card">
 						<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
 							<div style="display:flex;align-items:center;gap:6px;">

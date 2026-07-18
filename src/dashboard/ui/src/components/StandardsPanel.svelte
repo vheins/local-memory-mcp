@@ -275,7 +275,7 @@
 						</td>
 					</tr>
 				{:else}
-					{#each standards as std (std.id)}
+					{#each standards as std, i (`${std.id}-${i}`)}
 						<tr
 							class="mem-row"
 							on:click={() => openEditDrawer(std)}

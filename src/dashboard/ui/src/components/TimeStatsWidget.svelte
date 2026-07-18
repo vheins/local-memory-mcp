@@ -138,7 +138,7 @@
 			<div style="font-size:0.75rem;color:var(--color-text-muted);">Execution throughput</div>
 		</div>
 		<div class="flex gap-1" style="background:rgba(241,245,249,0.5);padding:3px;border-radius:10px;">
-			{#each periods as p (p.id)}
+			{#each periods as p, i (`${p.id}-${i}`)}
 				<button
 					class="tab-btn"
 					class:active={$activePeriod === p.id}

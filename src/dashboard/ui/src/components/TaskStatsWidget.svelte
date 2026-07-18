@@ -86,7 +86,7 @@
 
 			{#if isExpanded}
 				<div style="display:flex;flex-direction:column;gap:6px;" class="animate-fade-in">
-					{#each $activeTasks as task (task.id)}
+					{#each $activeTasks as task, i (`${task.id}-${i}`)}
 						<div
 							style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid var(--color-border);"
 						>
