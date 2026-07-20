@@ -55,7 +55,9 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 				tags.push(phaseTag);
 			}
 
-			const taskId = localCodeMap.get(code)!;
+			const taskId = localCodeMap.get(code) ?? randomUUID();
+			// Ensure the resolved code (which may differ from original after dedup) is mapped
+			localCodeMap.set(code, taskId);
 			const task: Task = {
 				id: taskId,
 				owner,
