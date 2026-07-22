@@ -55,9 +55,15 @@
 		sidebarOpen = !sidebarOpen;
 	}
 
-	function startIndexing() {
-		// Placeholder — will be wired to backend indexing API
-		void 0;
+	async function startIndexing() {
+		if (!repo) return;
+		try {
+			await api.codebaseReindex(repo);
+			// After triggering, reload the index status
+			await loadCodebaseIndex();
+		} catch (err) {
+			error = err instanceof Error ? err.message : "Failed to start indexing";
+		}
 	}
 
 	function handleSymbolSelect(symbol: CodeSymbol) {

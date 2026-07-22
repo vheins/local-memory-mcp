@@ -1,4 +1,6 @@
 import express from "express";
+import fs from "node:fs";
+import path from "node:path";
 import { db } from "../lib/context";
 import {
 	handleGetArchitecture,
@@ -35,6 +37,42 @@ const noopVectors: VectorStore = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Resolve the filesystem path for a repo when `repoPath` is not provided
+ * by the UI. The dashboard doesn't know filesystem paths, so we attempt
+ * to derive it from the environment:
+ *   1. CODEBASE_REPOS_DIR env var (explicit base directory)
+ *   2. The repo name as a relative directory (for repo-only names like "local-memory-mcp")
+ *   3. The repo short-name (after "/") relative to CWD's parent
+ */
+function resolveRepoPath(repo: string, repoPath?: string): string | null {
+	if (repoPath) return repoPath;
+
+	const baseDir = process.env.CODEBASE_REPOS_DIR || path.resolve("..");
+	const candidates: string[] = [];
+
+	// Try the base directory directly (e.g., /home/user/Projects/local-memory-mcp)
+	candidates.push(path.resolve(baseDir, repo));
+	// Try as a subdirectory of the base (e.g., /home/user/Projects/owner/local-memory-mcp)
+	const parts = repo.split("/");
+	const shortName = parts[parts.length - 1];
+	if (shortName !== repo) {
+		candidates.push(path.resolve(baseDir, shortName));
+	}
+	// Try CWD itself (for the current project)
+	candidates.push(path.resolve(repo));
+	candidates.push(path.resolve(shortName));
+
+	for (const candidate of candidates) {
+		try {
+			if (fs.statSync(candidate).isDirectory()) return candidate;
+		} catch {
+			// Not found at this path, continue
+		}
+	}
+	return null;
+}
 
 function errorCodeToHttp(code: string): number {
 	switch (code) {
@@ -217,14 +255,25 @@ export class CodebaseController {
 	}
 
 	// POST /api/codebase/index
-	// Body: { repo, repoPath, force?, includeGlobs?, excludeGlobs? }
+	// Body: { repo, repoPath?, force?, includeGlobs?, excludeGlobs? }
 	static async startIndex(req: express.Request, res: express.Response) {
 		try {
 			const repo = (req.body.repo as string)?.trim();
-			const repoPath = (req.body.repoPath as string)?.trim();
+			const reqRepoPath = (req.body.repoPath as string)?.trim();
 
 			if (!repo) return respondError(res, 400, "repo is required in body", "MISSING_REPO");
-			if (!repoPath) return respondError(res, 400, "repoPath is required in body", "MISSING_REPO_PATH");
+
+			// Resolve repoPath server-side if not provided (UI doesn't know filesystem paths)
+			const repoPath = resolveRepoPath(repo, reqRepoPath);
+			if (!repoPath) {
+				return respondError(
+					res,
+					400,
+					`repoPath is required and could not be resolved automatically for "${repo}". ` +
+						"Set CODEBASE_REPOS_DIR env var or provide repoPath in the request body.",
+					"MISSING_REPO_PATH"
+				);
+			}
 
 			const params: Record<string, unknown> = { repo, repoPath };
 			if (req.body.force !== undefined) params.force = req.body.force;
@@ -254,14 +303,23 @@ export class CodebaseController {
 	}
 
 	// POST /api/codebase/auto-index
-	// Body: { repo, repoPath }
+	// Body: { repo, repoPath? }
 	static async autoIndex(req: express.Request, res: express.Response) {
 		try {
 			const repo = (req.body.repo as string)?.trim();
-			const repoPath = (req.body.repoPath as string)?.trim();
+			const reqRepoPath = (req.body.repoPath as string)?.trim();
 
 			if (!repo) return respondError(res, 400, "repo is required in body", "MISSING_REPO");
-			if (!repoPath) return respondError(res, 400, "repoPath is required in body", "MISSING_REPO_PATH");
+
+			const repoPath = resolveRepoPath(repo, reqRepoPath);
+			if (!repoPath) {
+				return respondError(
+					res,
+					400,
+					`repoPath is required and could not be resolved automatically for "${repo}"`,
+					"MISSING_REPO_PATH"
+				);
+			}
 
 			const pool = getParserPool();
 			const result = await autoIndexIfStale(repo, repoPath, db, pool);
