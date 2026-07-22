@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.20.0] — In Development
+## [0.20.1] — 2026-07-22
+
+### Fixed
+
+- **Dashboard "Index Now" button**: Was a no-op placeholder; now calls `codebaseReindex` API and reloads index status after triggering.
+- **search_symbols registration**: MCP tool `search_symbols` was missing proper tool definition in server registration — added with correct schema.
+- **repoPath auto-resolution**: `repoPath` no longer required from the UI. Server resolves it automatically from `CODEBASE_REPOS_DIR`, CWD parent, or candidate directory checks.
+
+## [0.20.0] — 2026-07-22
 
 ### Added
 
