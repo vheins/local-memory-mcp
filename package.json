@@ -64,6 +64,9 @@
 		"proper-lockfile": "^4.1.2",
 		"qs": "^6.15.0",
 		"sweetalert2": "^11.26.25",
+		"tree-sitter-javascript": "^0.25.0",
+		"tree-sitter-typescript": "^0.23.2",
+		"web-tree-sitter": "^0.26.11",
 		"zod": "^4.3.5"
 	},
 	"devDependencies": {
