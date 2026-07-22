@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.3] — 2026-07-22
+
+### Fixed
+
+- **Dashboard file tree**: Replaced static placeholder with live `CodebaseFileTree` component wired to `/api/codebase/architecture` endpoint.
+- **Zod schema coercion**: `includeSymbolCounts` query param now correctly coerces string to boolean (`z.coerce.boolean()`) — was causing HTTP 500.
+- **Symbol count badges**: Fixed property name mismatch (`symbolCount` → `symbolCounts` dict with summed values) so file counts display correctly in tree.
+- **isIndexed gate**: Corrected field name from `isIndexed` to `indexed` in `CodebaseIndexStatus` check — was preventing tree render on first load.
+
+### Added
+
+- **`codebaseArchitecture` API method**: New method in dashboard API client for typed access to `/api/codebase/architecture`.
+- **Typed `ArchitectureData` interface**: Replaces opaque `Record<string, unknown>` casts with a properly typed state interface.
+- **Separate file/symbol selection**: File tree selection and search bar selection now use independent state (`selectedFile` vs `selectedSymbol`).
+
 ## [0.20.1] — 2026-07-22
 
 ### Fixed
