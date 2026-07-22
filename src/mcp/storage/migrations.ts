@@ -318,7 +318,36 @@ export class MigrationManager {
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_codebase_files_repo_path ON codebase_files(repo, file_path);
       CREATE INDEX IF NOT EXISTS idx_codebase_files_repo_indexed ON codebase_files(repo, last_indexed_at);
+
+      CREATE TABLE IF NOT EXISTS codebase_symbols (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        exported INTEGER NOT NULL DEFAULT 0,
+        default_export INTEGER NOT NULL DEFAULT 0,
+        start_line INTEGER,
+        start_col INTEGER,
+        end_line INTEGER,
+        end_col INTEGER,
+        signature TEXT,
+        doc_comment TEXT,
+        parent_symbol_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (parent_symbol_id) REFERENCES codebase_symbols(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_cs_repo_name ON codebase_symbols(repo, name);
+      CREATE INDEX IF NOT EXISTS idx_cs_repo_file ON codebase_symbols(repo, file_path);
+      CREATE INDEX IF NOT EXISTS idx_cs_repo_kind ON codebase_symbols(repo, kind);
+      CREATE INDEX IF NOT EXISTS idx_cs_name ON codebase_symbols(name);
+      CREATE INDEX IF NOT EXISTS idx_cs_parent ON codebase_symbols(parent_symbol_id);
     `);
+
+		// FTS5 virtual table for codebase_symbols (defensive: only create if missing)
+		this.ensureCodebaseSymbolsFts();
 
 		const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
 			{ name: "title", table: "memories", definition: "ALTER TABLE memories ADD COLUMN title TEXT" },
@@ -673,5 +702,34 @@ export class MigrationManager {
 			this.run("CREATE INDEX IF NOT EXISTS idx_coding_standards_code ON coding_standards(code)");
 			this.run("CREATE INDEX IF NOT EXISTS idx_coding_standards_repo_code ON coding_standards(repo, code)");
 		}
+	}
+
+	private ensureCodebaseSymbolsFts(): void {
+		// Check if FTS table already exists
+		const exists = this.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codebase_symbols_fts'");
+		if (exists) return;
+
+		this.exec(`
+			CREATE VIRTUAL TABLE codebase_symbols_fts USING fts5(
+				name, doc_comment, content='codebase_symbols', content_rowid='rowid'
+			);
+
+			CREATE TRIGGER codebase_symbols_ai AFTER INSERT ON codebase_symbols BEGIN
+				INSERT INTO codebase_symbols_fts(rowid, name, doc_comment)
+				VALUES (new.rowid, new.name, new.doc_comment);
+			END;
+
+			CREATE TRIGGER codebase_symbols_ad AFTER DELETE ON codebase_symbols BEGIN
+				INSERT INTO codebase_symbols_fts(codebase_symbols_fts, rowid, name, doc_comment)
+				VALUES('delete', old.rowid, old.name, old.doc_comment);
+			END;
+
+			CREATE TRIGGER codebase_symbols_au AFTER UPDATE ON codebase_symbols BEGIN
+				INSERT INTO codebase_symbols_fts(codebase_symbols_fts, rowid, name, doc_comment)
+				VALUES('delete', old.rowid, old.name, old.doc_comment);
+				INSERT INTO codebase_symbols_fts(rowid, name, doc_comment)
+				VALUES (new.rowid, new.name, new.doc_comment);
+			END;
+		`);
 	}
 }

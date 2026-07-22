@@ -15,6 +15,7 @@ import { SummaryEntity } from "../entities/summary";
 import { StandardEntity } from "../entities/standard";
 import { HandoffEntity } from "../entities/handoff";
 import { CodebaseFileEntity } from "../entities/codebase-file";
+import { CodebaseSymbolEntity } from "../entities/codebase-symbol";
 import { WriteLock } from "./write-lock";
 import { logger } from "../utils/logger";
 
@@ -56,6 +57,7 @@ export class SQLiteStore {
 	public standards: StandardEntity;
 	public handoffs: HandoffEntity;
 	public codebaseFiles: CodebaseFileEntity;
+	public codebaseSymbols: CodebaseSymbolEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
 
@@ -103,6 +105,7 @@ export class SQLiteStore {
 		this.standards = new StandardEntity(this.db);
 		this.handoffs = new HandoffEntity(this.db);
 		this.codebaseFiles = new CodebaseFileEntity(this.db);
+		this.codebaseSymbols = new CodebaseSymbolEntity(this.db);
 		this.lock = new WriteLock(finalPath);
 	}
 

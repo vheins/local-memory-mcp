@@ -6,6 +6,7 @@ export * from "./common";
 export * from "./test";
 export * from "./handoff";
 export * from "./codebase-file";
+export * from "./codebase-symbol";
 
 import { MemoryEntry } from "./memory";
 export type Memory = MemoryEntry;
