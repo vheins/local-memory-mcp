@@ -101,7 +101,7 @@ export async function handleMemoryUpdate(
 			repo: existing.scope.repo,
 			updatedFields: Object.keys(updates)
 		},
-		`Updated memory [${existing.code}] in repo "${existing.scope.repo}". Fields: ${Object.keys(updates).join(", ") || "none"}.`,
+		`Updated [${existing.code}] "${existing.title}" in repo "${existing.scope.repo}": fields ${Object.keys(updates).join(", ") || "none"}.`,
 		{
 			structuredContentPathHint: "updatedFields",
 			includeJson: validated.json

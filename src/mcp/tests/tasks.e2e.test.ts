@@ -21,7 +21,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		router = async (method, params) => {
 			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
 			if (method === "tools/call" && args) {
-				args.structured = true;
+				args.json = true;
 			}
 			return rawRouter(method, params as any) as any;
 		};

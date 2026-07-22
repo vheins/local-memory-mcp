@@ -22,7 +22,7 @@ vi.mock("../../dashboard/lib/context", async () => {
 			callTool: vi.fn(async (name: string, args: Record<string, unknown>) =>
 				router("tools/call", {
 					name,
-					arguments: { owner: "test", ...args, structured: true }
+					arguments: { owner: "test", ...args, json: true }
 				})
 			)
 		},

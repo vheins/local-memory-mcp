@@ -37,6 +37,17 @@ If unsure, run `git remote -v` in the project directory — the remote URL (e.g.
    { "repo": "vheins/sentinel-agent" }
    ```
 
+**Session-wide defaults (can be omitted):** `owner`, `repo`, `agent`, and `model` are auto-populated from the session context and environment when not explicitly provided:
+
+| Field   | Fallback chain                                                                                |
+| :------ | :-------------------------------------------------------------------------------------------- |
+| `owner` | tool arg → `session.owner` (git remote) → `inferOwnerFromSession`                             |
+| `repo`  | tool arg → `session.repo` (directory basename) → `inferRepoFromSession`                       |
+| `agent` | tool arg → `session.lastSeenAgent` → `session.clientName` (handshake) → `MCP_CLIENT_NAME` env |
+| `model` | tool arg → `session.lastSeenModel` → `MCP_MODEL` env                                          |
+
+Setting these explicitly in the tool call always takes priority over session defaults.
+
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
 
 > **Workflow**: This server provides tools for memory, tasks, standards, and handoffs. The canonical workflow is defined in `AGENTS.md` (WORKFLOW section: S0→Synthesize→S1→S2→Execute→Close). These MCP tools are the mechanism — the AGENTS.md workflow is the orchestration.
@@ -55,17 +66,15 @@ Violation: tasks created with a wrong owner will be invisible to other agents qu
 
 Every `memory-store` call MUST include these fields:
 
-| Field        | Type                                                                | Description                                                         |
-| :----------- | :------------------------------------------------------------------ | :------------------------------------------------------------------ |
-| `type`       | enum: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive` | Memory category                                                     |
-| `title`      | string (3-255 chars)                                                | Concise title, no metadata                                          |
-| `content`    | string (min 10 chars)                                               | Body of the memory                                                  |
-| `importance` | number (1-5)                                                        | 1=low, 5=critical                                                   |
-| `agent`      | string                                                              | Identity of the calling agent (e.g., `explore`, `sentinel`, `main`) |
-| `model`      | string                                                              | Model identifier (e.g., `opencode-go/deepseek-v4-flash`)            |
-| `scope`      | object `{ owner, repo }`                                            | `owner`=GitHub org/username, `repo`=repo name                       |
+| Field        | Type                                                                | Description                                   |
+| :----------- | :------------------------------------------------------------------ | :-------------------------------------------- |
+| `type`       | enum: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive` | Memory category                               |
+| `title`      | string (3-255 chars)                                                | Concise title, no metadata                    |
+| `content`    | string (min 10 chars)                                               | Body of the memory                            |
+| `importance` | number (1-5)                                                        | 1=low, 5=critical                             |
+| `scope`      | object `{ owner, repo }`                                            | `owner`=GitHub org/username, `repo`=repo name |
 
-Example:
+`agent` and `model` are optional — auto-populated from session context when omitted:
 
 ```json
 {
@@ -73,8 +82,6 @@ Example:
 	"title": "Auth uses JWT",
 	"content": "Authentication system uses JWT tokens with 1h expiry.",
 	"importance": 3,
-	"agent": "explore",
-	"model": "opencode-go/deepseek-v4-flash",
 	"scope": { "owner": "vheins", "repo": "sentinel-agent" }
 }
 ```

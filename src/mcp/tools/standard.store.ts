@@ -115,7 +115,7 @@ async function storeSingleStandard(
 			standard: entry,
 			message: `Coding standard [${entry.code}] "${entry.title}" saved successfully.`
 		},
-		`Saved coding standard [${entry.code}]: ${entry.title}`,
+		`Stored [${entry.code}] "${entry.title}" in repo "${entry.repo || "global"}".`,
 		{
 			structuredContentPathHint: "standard",
 			includeJson: params.json
@@ -212,10 +212,11 @@ export async function handleStandardStore(
 			}
 		}
 
-		const codesStr = storedCodes.length > 0 ? `: ${storedCodes.join(", ")}` : "";
+		const codesStr = storedCodes.length > 0 ? storedCodes.map((c) => `[${c}]`).join(", ") : "";
+		const scopeRepo = validated.repo || "global";
 		return createMcpResponse(
 			{ success: true, createdCount: validated.standards.length, codes: storedCodes },
-			`Saved ${validated.standards.length} coding standards${codesStr}.`,
+			`Stored ${validated.standards.length} standards in repo "${scopeRepo}": ${codesStr}.`,
 			{ includeJson: validated.json }
 		);
 	}

@@ -82,7 +82,7 @@ export async function handleStandardDelete(
 			deletedCount,
 			deletedTitles: deletedTitles.length > 10 ? [...deletedTitles.slice(0, 10), "..."] : deletedTitles
 		},
-		`Deleted ${deletedCount} coding standard(s) from "${lastRepo}".`,
+		`Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeJson: json

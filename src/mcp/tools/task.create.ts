@@ -102,10 +102,10 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 		storage.tasks.bulkInsertTasks(tasksToInsert);
 
-		const taskCodesStr = createdTasks.length > 0 ? `: ${createdTasks.join(", ")}` : "";
+		const createdTasksStr = createdTasks.map((c) => `[${c}]`).join(", ");
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
-			`Created ${bulkTasks.length} tasks in repo "${repo}"${taskCodesStr}.`,
+			`Created ${bulkTasks.length} tasks in repo "${repo}": ${createdTasksStr}.`,
 			{ includeJson: (parsed as { json?: boolean }).json || false }
 		);
 	}
@@ -202,7 +202,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			priority: task.priority,
 			depends_on: task.depends_on
 		},
-		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
+		`Created [${task.task_code}] "${task.title}" in repo "${task.repo}" (status: ${task.status}).`,
 		{ includeJson: (parsed as { json?: boolean }).json || false }
 	);
 }

@@ -177,7 +177,7 @@ describe("Property 8: TTL stores correct expires_at", () => {
 						agent: "test-agent",
 						model: "test-model",
 						ttlDays,
-						structured: true
+						json: true
 					},
 					db,
 					mockVectors

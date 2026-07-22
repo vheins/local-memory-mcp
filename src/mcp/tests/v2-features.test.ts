@@ -58,7 +58,7 @@ describe("V2 Enhanced Memory Features", () => {
 						scope: { owner: "test", repo },
 						agent: "test-agent",
 						model: "test-model",
-						structured: true
+						json: true
 					},
 					db,
 					mockVectors
@@ -86,7 +86,7 @@ describe("V2 Enhanced Memory Features", () => {
 						source_role: "rules-optimizer",
 						source_timestamp: "2026-04-03T00:00:00.000Z"
 					},
-					structured: true
+					json: true
 				},
 				db,
 				mockVectors
@@ -190,7 +190,7 @@ describe("V2 Enhanced Memory Features", () => {
 				{ id: "00000000-0000-4000-a000-000000000003", score: 0.1 }
 			]);
 
-			const params = { query: "Target", owner: "test", repo, structured: true };
+			const params = { query: "Target", owner: "test", repo, json: true };
 			const response = await handleMemorySearch(params, db, mockVectors);
 
 			// New tabular format
@@ -214,7 +214,7 @@ describe("V2 Enhanced Memory Features", () => {
 				search: vi.fn().mockRejectedValue(new Error("Vector store connection failed"))
 			};
 
-			const params = { query: "Test", owner: "test", repo, structured: true };
+			const params = { query: "Test", owner: "test", repo, json: true };
 			const response = await handleMemorySearch(params, db, errorMockVectors);
 
 			// Should fallback to similarity and still return results

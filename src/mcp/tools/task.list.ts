@@ -44,11 +44,13 @@ function buildTaskListSummary(
 		for (const [taskStatus, items] of Object.entries(tasksByStatus)) {
 			if (items.length > 0) {
 				parts.push("");
-				parts.push(`${capitalize(taskStatus)}:`);
-				parts.push("- code|status|priority|phase|last_updated|title");
+				parts.push(`### ${capitalize(taskStatus)}`);
+				parts.push("");
+				parts.push("| code | status | priority | phase | last_updated | title |");
+				parts.push("|------|--------|----------|-------|--------------|-------|");
 				for (const t of items) {
 					const lastUpdated = t.updated_at ? t.updated_at.slice(0, 16).replace("T", " ") : "never";
-					parts.push(`- ${t.task_code}|${t.status}|${t.priority}|${t.phase}|${lastUpdated}|${t.title}`);
+					parts.push(`| ${t.task_code} | ${t.status} | ${t.priority} | ${t.phase} | ${lastUpdated} | ${t.title} |`);
 				}
 			}
 		}

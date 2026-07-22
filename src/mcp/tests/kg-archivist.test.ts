@@ -346,7 +346,7 @@ describe("KG Archivist — integration with handleMemoryStore", () => {
 						model: "test"
 					}
 				],
-				structured: false
+				json: false
 			},
 			db,
 			vectors
@@ -386,7 +386,7 @@ describe("KG Archivist — integration with handleMemoryStore", () => {
 						model: "test"
 					}
 				],
-				structured: false
+				json: false
 			},
 			db,
 			vectors
@@ -436,7 +436,7 @@ describe("KG Archivist — integration with handleMemoryStore", () => {
 						model: "test"
 					}
 				],
-				structured: false
+				json: false
 			},
 			db,
 			vectors
@@ -471,7 +471,7 @@ describe("KG Archivist — integration with handleMemoryStore", () => {
 						model: "test"
 					}
 				],
-				structured: false
+				json: false
 			},
 			db,
 			vectors

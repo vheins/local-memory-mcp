@@ -74,15 +74,7 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 		expires_at
 	});
 
-	const contentSummary = [
-		`Created handoff ${handoff.id}.`,
-		`Repo: ${handoff.repo}`,
-		`From: ${handoff.from_agent}`,
-		`To: ${handoff.to_agent || "unassigned"}`,
-		`Status: ${handoff.status}`,
-		`Task ID: ${handoff.task_id || "-"}`,
-		`Summary: ${handoff.summary}`
-	].join("\n");
+	const contentSummary = `Created handoff [${handoff.id.slice(0, 8)}] in repo "${handoff.repo}": from=${handoff.from_agent}, to=${handoff.to_agent || "unassigned"}, status=${handoff.status}.`;
 
 	return createMcpResponse(handoff, contentSummary, {
 		contentSummary,
@@ -182,7 +174,7 @@ export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 		status,
 		handoff: updated
 	};
-	const contentSummary = [`Updated handoff ${id}.`, `Status: ${status}`].join("\n");
+	const contentSummary = `Updated handoff [${id.slice(0, 8)}] to "${status}" in repo "${existing.repo}".`;
 
 	return createMcpResponse(result, contentSummary, {
 		contentSummary,
@@ -254,14 +246,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 		task_code: resolvedTaskCode
 	};
 
-	const contentSummary = [
-		`Claimed task ${resolvedTaskCode || claim.task_id}.`,
-		`Repo: ${claim.repo}`,
-		`Task ID: ${claim.task_id}`,
-		`Agent: ${claim.agent}`,
-		`Role: ${claim.role}`,
-		`Claimed At: ${claim.claimed_at}`
-	].join("\n");
+	const contentSummary = `Claimed [${resolvedTaskCode || claim.task_id.slice(0, 8)}] in repo "${claim.repo}": agent=${claim.agent}, role=${claim.role}.`;
 
 	return createMcpResponse(responseData, contentSummary, {
 		contentSummary,
@@ -353,11 +338,7 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 		task_code: resolvedTaskCode,
 		agent: agent ?? null
 	};
-	const contentSummary = [
-		`Released claim for task ${resolvedTaskCode || resolvedTaskId}.`,
-		`Repo: ${repo}`,
-		agent ? `Agent: ${agent}` : "Agent: any active claimant"
-	].join("\n");
+	const contentSummary = `Released claim for [${resolvedTaskCode || resolvedTaskId?.slice(0, 8)}] in repo "${repo}": agent=${agent || "any"}.`;
 
 	return createMcpResponse(result, contentSummary, {
 		contentSummary,

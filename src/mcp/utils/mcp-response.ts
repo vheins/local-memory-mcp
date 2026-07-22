@@ -136,8 +136,6 @@ function pruneMetadata(item: Record<string, unknown>): Record<string, unknown> {
 		"recall_count",
 		"last_used_at",
 		"expires_at",
-		"agent",
-		"role",
 		"model",
 		"recall_rate",
 		"vector_version",

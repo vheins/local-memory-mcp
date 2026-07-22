@@ -72,11 +72,13 @@ export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promi
 
 		for (const [memType, items] of Object.entries(memoriesByType)) {
 			parts.push("");
-			parts.push(`${capitalize(memType)}:`);
-			parts.push("- code|importance|title");
+			parts.push(`### ${capitalize(memType)}`);
+			parts.push("");
+			parts.push("| code | importance | title |");
+			parts.push("|------|------------|-------|");
 			for (const row of items) {
 				const code = row.code || "-";
-				parts.push(`- ${code}|${row.importance}|${row.title}`);
+				parts.push(`| ${code} | ${row.importance} | ${row.title} |`);
 			}
 		}
 		parts.push("");

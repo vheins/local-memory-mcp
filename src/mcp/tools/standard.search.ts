@@ -257,13 +257,15 @@ export async function handleStandardSearch(
 	let contentSummary: string;
 	if (paginatedResults.length > 0) {
 		const parts = [
-			"Standards:",
-			"- code|confidence|matched_terms|title|context|language|scope",
+			"### Standards",
+			"",
+			"| code | confidence | matched_terms | title | context | language | scope |",
+			"|------|------------|---------------|-------|---------|----------|-------|",
 			...paginatedResults.map(
 				({ standard, confidence, matchedTerms }) =>
-					`- ${standard.code ?? "-"}|${confidence}|${matchedTerms.join(", ")}|${standard.title}|${standard.context}|${standard.language || "-"}|${
+					`| ${standard.code ?? "-"} | ${confidence} | ${matchedTerms.join(", ")} | ${standard.title} | ${standard.context} | ${standard.language || "-"} | ${
 						standard.is_global ? "global" : standard.repo || "-"
-					}`
+					} |`
 			),
 			"",
 			"Use standard-detail with code for full content."

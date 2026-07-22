@@ -18,7 +18,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		router = async (method, params) => {
 			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
 			if (method === "tools/call" && args) {
-				args.structured = true;
+				args.json = true;
 			}
 			return rawRouter(method, params);
 		};

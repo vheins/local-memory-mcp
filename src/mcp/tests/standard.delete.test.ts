@@ -57,7 +57,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
-		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 coding standard(s)");
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 standards from repo");
 		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
 	});
 });

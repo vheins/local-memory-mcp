@@ -144,11 +144,13 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	if (paginatedResults.length > 0) {
 		const parts: string[] = [];
 		for (const [memType, items] of Object.entries(memoriesByType)) {
-			parts.push(`${capitalize(memType)}:`);
-			parts.push("- code|importance|title");
+			parts.push(`### ${capitalize(memType)}`);
+			parts.push("");
+			parts.push("| code | importance | title |");
+			parts.push("|------|------------|-------|");
 			for (const m of items) {
 				const code = m.code || "-";
-				parts.push(`- ${code}|${m.importance}|${m.title}`);
+				parts.push(`| ${code} | ${m.importance} | ${m.title} |`);
 			}
 			parts.push("");
 		}

@@ -161,15 +161,20 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 		updatedCount++;
 	}
 
-	const taskCodesStr = updatedTasks.length > 0 ? ` Tasks: ${updatedTasks.map((t) => t.code).join(", ")}.` : "";
-	const fieldsStr = Object.keys(updates).length > 0 ? ` Fields: ${Object.keys(updates).join(", ")}.` : "";
+	const fieldsStr = Object.keys(updates).length > 0 ? Object.keys(updates).join(", ") : "none";
 	const isCompleted = updates.status === "completed" && updatedCount > 0;
-	let summaryText = isCompleted
-		? `Updated ${updatedCount} task(s) in repo "${repo}". Task marked as completed with commit ${updates.commit_id} (${(updates.changed_files || []).length} files changed).`
-		: `Updated ${updatedCount} task(s) in repo "${repo}".`;
-	summaryText += `${taskCodesStr}${fieldsStr}`;
+	let summaryText: string;
+	if (updatedCount === 1 && updatedTasks.length === 1) {
+		const extra = isCompleted
+			? ` (completed with commit ${updates.commit_id}, ${(updates.changed_files || []).length} files changed)`
+			: "";
+		summaryText = `Updated [${updatedTasks[0].code}] in repo "${repo}": fields ${fieldsStr}.${extra}`;
+	} else {
+		const tasksStr = updatedTasks.map((t) => `[${t.code}]`).join(", ");
+		summaryText = `Updated ${updatedCount} tasks in repo "${repo}": ${tasksStr}.`;
+	}
 	if (releasedClaims || expiredHandoffs) {
-		summaryText += ` Auto-closed coordination: released ${releasedClaims} claim(s), expired ${expiredHandoffs} handoff(s).`;
+		summaryText += ` Auto-closed coordination: released ${releasedClaims} ${releasedClaims === 1 ? "claim" : "claims"}, expired ${expiredHandoffs} ${expiredHandoffs === 1 ? "handoff" : "handoffs"}.`;
 	}
 
 	const response = createMcpResponse(

@@ -77,10 +77,16 @@ export async function handleCodebaseIndexRepository(
 			excludeGlobs: validated.excludeGlobs
 		});
 
+		const errorLines =
+			result.errors.length > 0
+				? `\nErrors:\n${result.errors.map((err) => `- ${err.filePath}: ${err.error}`).join("\n")}`
+				: "";
+		const contentSummary = `Indexed ${repo}: ${result.totalSymbols} symbols across ${result.totalFiles} files in ${result.durationMs}ms\nParsed: ${result.parsedFiles} | Skipped: ${result.skippedFiles} | Errors: ${result.failedFiles}${errorLines}`;
+
 		return createMcpResponse(
 			result,
 			`Indexed ${result.totalSymbols} symbols across ${result.totalFiles} files in ${result.durationMs}ms`,
-			{ includeJson: true }
+			{ includeJson: true, contentSummary }
 		);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
@@ -106,6 +112,7 @@ export async function handleCodebaseIndexStatus(
 	const status = await service.getIndexStatus(repo, repoPath);
 
 	let summary = `Status for ${repo}: ${status.totalFiles} files, ${status.totalSymbols} symbols`;
+	if (status.lastIndexedAt) summary += ` (last indexed: ${status.lastIndexedAt})`;
 	if (status.stale !== undefined) {
 		summary += status.stale
 			? ` — INDEX STALE (${Math.round((status.staleRatio ?? 0) * 100)}% of files changed)`
@@ -130,10 +137,28 @@ export async function handleGetArchitecture(
 
 	const result = buildArchitecture(files, symbols, validated.depth);
 
+	const langEntries = Object.entries(result.summary.languageBreakdown);
+	let archSummary = `Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${langEntries.length} languages`;
+
+	if (langEntries.length > 0) {
+		archSummary += `\n\n### Languages\n\n| Language | Files |\n|----------|------|\n`;
+		archSummary += langEntries.map(([lang, count]) => `| ${lang} | ${count} |`).join("\n");
+	}
+
+	const topExports = result.summary.topLevelExports;
+	if (topExports && topExports.length > 0) {
+		archSummary += `\n\n### Top Exports\n\n| name | kind | file |\n|------|------|------|\n`;
+		archSummary += topExports
+			.slice(0, 10)
+			.map((s) => `| ${s.name} | ${s.kind} | ${s.file_path} |`)
+			.join("\n");
+		if (topExports.length > 10) archSummary += `\n... and ${topExports.length - 10} more`;
+	}
+
 	return createMcpResponse(
 		result,
 		`Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${Object.keys(result.summary.languageBreakdown).length} languages`,
-		{ includeJson: true }
+		{ includeJson: true, contentSummary: archSummary }
 	);
 }
 
@@ -157,6 +182,16 @@ export async function handleGetFileSymbols(
 
 	const symbols = db.codebaseSymbols.getSymbolsByFile(repo, filePath);
 
+	const symTable =
+		symbols.length > 0
+			? `\n\n| kind | line | name | exported |\n|------|------|------|----------|\n${symbols
+					.slice(0, 30)
+					.map((s) => `| ${s.kind} | ${s.start_line ?? "-"} | ${s.name} | ${s.exported ? "yes" : "no"} |`)
+					.join("\n")}`
+			: "";
+
+	const contentSummary = `Found ${symbols.length} symbols in ${filePath}${symTable}${symbols.length > 30 ? `\n... and ${symbols.length - 30} more` : ""}`;
+
 	return createMcpResponse(
 		{
 			file: {
@@ -171,7 +206,7 @@ export async function handleGetFileSymbols(
 			total: symbols.length
 		},
 		`Found ${symbols.length} symbols in ${filePath}`,
-		{ includeJson: true }
+		{ includeJson: true, contentSummary }
 	);
 }
 
@@ -196,11 +231,21 @@ export async function handleTraceSymbol(
 	try {
 		const result = traceSymbol(name, repo, symbols, validated.includeReferences);
 
+		const refTable =
+			result.references.length > 0
+				? `\n\n### References (${result.references.length})\n\n| file | line |\n|------|------|\n${result.references
+						.slice(0, 20)
+						.map((r) => `| ${r.filePath} | ${r.startLine} |`)
+						.join("\n")}${result.references.length > 20 ? `\n... and ${result.references.length - 20} more` : ""}`
+				: "";
+
+		const contentSummary = `Symbol "${name}"\nDefined: ${result.definition.file}:${result.definition.line}${refTable}`;
+
 		return createMcpResponse(
 			result,
 			`Symbol "${name}": defined in ${result.definition.file}:${result.definition.line}, ` +
 				`${result.references.length} references found`,
-			{ includeJson: true }
+			{ includeJson: true, contentSummary }
 		);
 	} catch (err) {
 		if (err instanceof Error && err.name === "SymbolNotFoundError") {
@@ -290,6 +335,11 @@ export async function handleSearchSymbols(
 
 	const total = ranked.length;
 
+	const summary =
+		`| kind | file | score | symbol |\n` +
+		`|------|------|-------|--------|\n` +
+		results.map((s) => `| ${s.kind} | ${s.file_path} | ${s.score?.toFixed(2) || "-"} | ${s.name} |`).join("\n");
+
 	return createMcpResponse(
 		{
 			symbols: results,
@@ -298,7 +348,7 @@ export async function handleSearchSymbols(
 			offset: validated.offset,
 			limit: validated.limit
 		},
-		`Found ${total} matching symbols${query ? ` for "${query}"` : ""} (returning ${results.length})`,
-		{ includeJson: true }
+		`Found ${total} matching symbols${query ? ` for "${query}"` : ""} (showing ${results.length}).`,
+		{ includeJson: true, contentSummary: summary }
 	);
 }

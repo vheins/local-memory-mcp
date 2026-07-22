@@ -105,7 +105,7 @@ export async function handleMemoryDelete(
 			deletedCount,
 			deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes
 		},
-		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
+		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeJson: json

@@ -48,7 +48,6 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 		storage.tasks.deleteTask(targetId);
 	}
 
-	const deletedCodesStr = deletedCodes.length > 0 ? `: ${deletedCodes.join(", ")}` : "";
 	return createMcpResponse(
 		{
 			success: true,
@@ -58,7 +57,7 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 			deletedCount: targetIds.length,
 			deletedCodes
 		},
-		`Deleted ${targetIds.length} task(s) from repo "${repo}"${deletedCodesStr}.`,
+		`Deleted ${targetIds.length} ${targetIds.length === 1 ? "task" : "tasks"} from repo "${repo}".`,
 		{ includeJson: validated.json }
 	);
 }

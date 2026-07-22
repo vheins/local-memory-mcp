@@ -268,15 +268,16 @@ export async function handleMemoryStore(
 			}
 		}
 
-		const codesStr = storedCodes.length > 0 ? `: ${storedCodes.join(", ")}` : "";
+		const storedCodesStr = storedCodes.map((c) => `[${c}]`).join(", ");
+		const lastRepo = validated.memories[0]?.scope.repo || "unknown";
 		return createMcpResponse(
 			{
 				success: true,
-				repo: validated.memories[0]?.scope.repo,
+				repo: lastRepo,
 				createdCount: validated.memories.length,
 				codes: storedCodes
 			},
-			`Stored ${validated.memories.length} memories${codesStr}.`,
+			`Stored ${validated.memories.length} memories in repo "${lastRepo}": ${storedCodesStr}.`,
 			{ includeJson: validated.json }
 		);
 	}

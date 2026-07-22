@@ -22,7 +22,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		router = async (method, params) => {
 			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
 			if (method === "tools/call" && args) {
-				args.structured = true;
+				args.json = true;
 			}
 			return rawRouter(method, params);
 		};

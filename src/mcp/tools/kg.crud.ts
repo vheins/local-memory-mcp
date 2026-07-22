@@ -58,7 +58,7 @@ export async function handleCreateEntity(
 			success: true,
 			entity: { name, type, description, repo: repo ?? "", owner: owner ?? "" }
 		},
-		`Created entity '${name}' (${type}) in repo "${repo ?? ""}".`,
+		`Created entity "${name}" (${type}) in repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "entity",
 			includeJson: json
@@ -133,7 +133,7 @@ export async function handleDeleteEntity(
 			success: true,
 			deletedCount: changes
 		},
-		`Deleted entity '${name}' and its cascade (relations, observations).`,
+		`Deleted entity "${name}" from repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeJson: json
@@ -250,7 +250,7 @@ export async function handleCreateRelation(
 			success: true,
 			relation: { from_entity, to_entity, relation_type }
 		},
-		`Created relation '${from_entity} —[${relation_type}]→ ${to_entity}' in repo "${repo ?? ""}".`,
+		`Created relation "${from_entity} —[${relation_type}]→ ${to_entity}" in repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "relation",
 			includeJson: json
@@ -318,7 +318,7 @@ export async function handleDeleteRelation(
 			success: true,
 			deletedCount: changes
 		},
-		`Deleted relation '${from_entity} —[${relation_type}]→ ${to_entity}'.`,
+		`Deleted relation "${from_entity} —[${relation_type}]→ ${to_entity}" from repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeJson: json
@@ -378,7 +378,7 @@ export async function handleDeleteObservation(
 			success: true,
 			deletedCount: changes
 		},
-		`Deleted observation '${id}'.`,
+		`Deleted observation [${id.slice(0, 8)}] from repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeJson: json

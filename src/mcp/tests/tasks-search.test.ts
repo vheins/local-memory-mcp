@@ -32,7 +32,7 @@ describe("Task Search and Filtering", () => {
 				title: "Implement authentication",
 				description: "Setup JWT and OAuth2",
 				status: "pending",
-				structured: true,
+				json: true,
 				agent: "test-agent",
 				role: "test-role"
 			},
@@ -64,7 +64,7 @@ describe("Task Search and Filtering", () => {
 				title: "Write unit tests",
 				description: "Cover all auth edge cases",
 				status: "pending",
-				structured: true,
+				json: true,
 				agent: "test-agent",
 				role: "test-role"
 			},
@@ -81,7 +81,7 @@ describe("Task Search and Filtering", () => {
 				title: "Fix database leak",
 				description: "Connections not closing properly",
 				status: "pending",
-				structured: true,
+				json: true,
 				agent: "test-agent",
 				role: "test-role"
 			},
@@ -110,7 +110,7 @@ describe("Task Search and Filtering", () => {
 				repo: REPO,
 				owner: "test",
 				query: "authentication",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -126,7 +126,7 @@ describe("Task Search and Filtering", () => {
 				repo: REPO,
 				owner: "test",
 				query: "edge cases",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -142,7 +142,7 @@ describe("Task Search and Filtering", () => {
 				repo: REPO,
 				owner: "test",
 				query: "DB-FIX",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -158,7 +158,7 @@ describe("Task Search and Filtering", () => {
 				repo: REPO,
 				owner: "test",
 				status: "in_progress,blocked",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -176,7 +176,7 @@ describe("Task Search and Filtering", () => {
 				repo: REPO,
 				owner: "test",
 				status: "all",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -192,7 +192,7 @@ describe("Task Search and Filtering", () => {
 				owner: "test",
 				query: "auth",
 				status: "pending",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -208,7 +208,7 @@ describe("Task Search and Filtering", () => {
 				repo: REPO,
 				owner: "test",
 				query: "non-existent-task",
-				structured: true
+				json: true
 			},
 			db
 		);
@@ -219,7 +219,7 @@ describe("Task Search and Filtering", () => {
 
 	describe("Unified task-list", () => {
 		it("should provide same discovery as old task-search", async () => {
-			const args = { repo: REPO, owner: "test", query: "authentication", status: "all", structured: true };
+			const args = { repo: REPO, owner: "test", query: "authentication", status: "all", json: true };
 			const result = await handleTaskList(args, db);
 			const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 			expect(tasks.rows).toHaveLength(1);

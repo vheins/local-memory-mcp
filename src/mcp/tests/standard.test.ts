@@ -31,7 +31,7 @@ describe("CSL (Coding Standards Library)", () => {
 					metadata: { source: "internal-docs", owner: "platform" },
 					agent: "test-agent",
 					model: "gpt-4",
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -71,7 +71,7 @@ describe("CSL (Coding Standards Library)", () => {
 					stack: ["react"],
 					tags: ["react", "hooks"],
 					metadata: { source: "styleguide" },
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -89,7 +89,7 @@ describe("CSL (Coding Standards Library)", () => {
 					content: "Follow hook rules consistently.",
 					tags: ["react", "hooks"],
 					metadata: { source: "react-docs" },
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -104,7 +104,7 @@ describe("CSL (Coding Standards Library)", () => {
 					parent_id: parentId,
 					tags: ["react", "hooks", "effects"],
 					metadata: { source: "react-docs" },
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -125,7 +125,7 @@ describe("CSL (Coding Standards Library)", () => {
 					stack: ["node"],
 					tags: ["node", "errors"],
 					metadata: { source: "guide-v1" },
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -160,7 +160,7 @@ describe("CSL (Coding Standards Library)", () => {
 					content: "Parent guidance.",
 					tags: ["architecture"],
 					metadata: { source: "guide" },
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -172,7 +172,7 @@ describe("CSL (Coding Standards Library)", () => {
 					content: "Child guidance.",
 					tags: ["architecture", "child"],
 					metadata: { source: "guide" },
-					structured: true
+					json: true
 				},
 				db,
 				vectors
@@ -286,7 +286,7 @@ describe("CSL (Coding Standards Library)", () => {
 			expect(data.count).toBeGreaterThan(0);
 			expect(result.content?.[0]?.type).toBe("text");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("code|confidence|matched_terms|title|context|language|scope");
+			expect(text).toContain("| code | confidence | matched_terms | title | context | language | scope |");
 			expect(text).toContain("Use standard-detail with code for full content.");
 		});
 
@@ -321,7 +321,7 @@ describe("CSL (Coding Standards Library)", () => {
 					stack: ["react"],
 					tags: ["react", "effects"],
 					metadata: { source: "react-docs" },
-					structured: true
+					json: true
 				},
 				vectorOnlyDb,
 				mockVectors
@@ -395,7 +395,7 @@ describe("CSL (Coding Standards Library)", () => {
 			expect(String(data.results.rows[0][9])).toContain("singleton");
 			expect(String(data.results.rows[0][9])).toContain("scoped");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("code|confidence|matched_terms|title|context|language|scope");
+			expect(text).toContain("| code | confidence | matched_terms | title | context | language | scope |");
 		});
 	});
 });

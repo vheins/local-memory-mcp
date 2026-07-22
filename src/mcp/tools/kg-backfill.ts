@@ -117,7 +117,7 @@ export async function handleKGBackfill(args: unknown, db: SQLiteStore) {
 	logger.info(`[kg-backfill] Complete: ${summary}`);
 
 	return createMcpResponse(stats, summary, {
-		contentSummary: `Backfill complete: ${summary}`,
+		contentSummary: `Backfill complete for repo "${repo}": ${stats.entitiesCreated} entities, ${stats.observationsCreated} observations in ${stats.itemsProcessed} items.`,
 		includeJson: json
 	});
 }

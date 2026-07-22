@@ -26,7 +26,7 @@ describe("MCP Spec Compliance", () => {
 
 		expect(sc.id).toBe("mem_1");
 		expect(sc.title).toBe("Test");
-		expect(sc.agent).toBeUndefined();
+		expect(sc.agent).toBe("test-agent");
 		expect(sc.model).toBeUndefined();
 		expect(sc.hit_count).toBeUndefined();
 		expect(sc._summary).toBeUndefined();
@@ -43,7 +43,7 @@ describe("MCP Spec Compliance", () => {
 		const sc = response.structuredContent as any;
 
 		expect(sc.results[0].id).toBe("1");
-		expect(sc.results[0].agent).toBeUndefined();
+		expect(sc.results[0].agent).toBe("a");
 		expect(sc.results[1].id).toBe("2");
 		expect(sc.results[1].model).toBeUndefined();
 	});
