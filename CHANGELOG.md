@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **search_symbols registration**: MCP tool `search_symbols` was missing proper tool definition in server registration — added with correct schema.
 - **repoPath auto-resolution**: `repoPath` no longer required from the UI. Server resolves it automatically from `CODEBASE_REPOS_DIR`, CWD parent, or candidate directory checks.
 
+## [0.20.2] — 2026-07-22
+
+### Fixed
+
+- **Codebase tab**: Now correctly shows indexed data (was calling wrong API method).
+- **Dashboard index-status check**: Now uses correct gate (was checking truthy object instead of `isIndexed` flag).
+
 ## [0.20.0] — 2026-07-22
 
 ### Added

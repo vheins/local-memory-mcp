@@ -32,18 +32,15 @@
 		loading = true;
 		error = "";
 		try {
-			// Attempt to fetch codebase index from the API
-			// Endpoint may not exist yet — handle gracefully
-			const result = await (api as Record<string, (...args: unknown[]) => Promise<unknown>>).codebaseIndex?.(repo);
-			if (result && typeof result === "object") {
+			const result = await api.codebaseIndexStatus(repo);
+			if (result?.isIndexed === true) {
 				hasIndex = true;
-				indexData = result as Record<string, unknown>;
+				indexData = result as unknown as Record<string, unknown>;
 			} else {
 				hasIndex = false;
 				indexData = null;
 			}
 		} catch {
-			// API endpoint may not exist yet — treat as "no index"
 			hasIndex = false;
 			indexData = null;
 		} finally {
