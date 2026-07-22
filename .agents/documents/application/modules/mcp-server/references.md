@@ -1,123 +1,176 @@
 # Module Documentation: Reference Catalog (Resources & Prompts)
 
+## Header & Navigation
+
+- [Module Overview](overview.md)
+- [Core API](../../api/mcp-server/api-core.md)
+
 ## Responsibility
+
 The Reference Catalog exposes the internal knowledge and templates of the system through standard MCP primitives. This allows agents to "self-discover" project status and follow established behavioral patterns.
 
 ## 1. Resources
-Resources provide read-only access to specialized data views and global knowledge using a repository-scoped URI scheme.
+
+Resources provide read-only access to specialized data views and global knowledge using a repository-scoped URI scheme (`repository://{owner}/{name}/...`).
 
 ### Global Resources
+
 - **URI**: `repository://index`
-    - **Description**: List of all available repositories in the system, including memory counts, task counts, and last activity timestamps.
-- **URI**: `session://roots`
-    - **Description**: List of active workspace roots provided by the current client session.
+  - List of all available repositories including memory counts, task counts, and last activity timestamps.
 
 ### Knowledge Resources
-- **URI**: `repository://{name}/memories`
-    - **Description**: Paginated list of all active memories for the specified repository.
-- **URI**: `repository://{name}/memories?search={search}&type={type}&tag={tag}`
-    - **Description**: Filtered list of memories scoped to a repository, filterable by text search, entry type, or technology tag.
+
+- **URI**: `repository://{owner}/{name}/memories`
+  - Paginated list of active memories for a repository. Supports `?search=`, `?type=`, `?tag=` filters.
 - **URI**: `memory://{id}`
-    - **Description**: Direct access to a specific memory entry (full details and statistics) by its UUID.
-- **URI**: `repository://{name}/summary`
-    - **Description**: Retrieves the high-level global summary/signal for the specified repository (updated via `memory.summarize`).
+  - Direct access to a specific memory entry (full details and statistics).
+- **URI**: `repository://{owner}/{name}/summary`
+  - High-level global summary for a repository (updated via `memory-summarize`).
 
 ### Task Resources
-- **URI**: `repository://{name}/tasks`
-    - **Description**: Paginated list of all tasks for the specified repository.
-- **URI**: `repository://{name}/tasks?status={status}&priority={priority}`
-    - **Description**: Scoped task list for a repository with filtering by Kanban status or priority level.
+
+- **URI**: `repository://{owner}/{name}/tasks`
+  - Paginated list of tasks for a repository. Supports `?status=`, `?priority=` filters.
 - **URI**: `task://{id}`
-    - **Description**: Direct access to a specific task (full description and comments) by its UUID.
+  - Direct access to a specific task (full description and comments).
+
+### Standard Resources
+
+- **URI**: `repository://{owner}/{name}/standards`
+  - Paginated list of coding standards for a repository.
 
 ### Audit Resources
-- **URI**: `repository://{name}/actions`
-    - **Description**: Paginated stream of all agent tool actions logged within the specified repository.
+
+- **URI**: `repository://{owner}/{name}/actions`
+  - Paginated stream of all agent tool actions logged within a repository.
 - **URI**: `action://{id}`
-    - **Description**: Direct access to a specific action audit log entry by its integer ID.
+  - Direct access to a specific action audit log entry.
 
 ## 2. Tools (Methods)
-Tools are the primary operational interface for agents, allowing for structured interaction with the memory and task systems.
+
+Tools are the primary operational interface for agents. The server registers ~34 tools across 7 categories:
 
 ### Discovery & Control
-- **Method**: `tools/list`
-    - **Description**: Returns all registered tool definitions, including their standard MCP `inputSchema`. Supports pagination via `limit` and `cursor`.
-- **Method**: `tools/call`
-    - **Description**: The core gateway for all modifications and complex queries. It accepts a tool `name` and an `arguments` object.
-- **Method**: `completion/complete`
-    - **Description**: Provides completion suggestions for tool arguments, such as repository names or task codes.
+
+- **`tools/list`**: Returns all registered tool definitions with input schemas. Supports pagination.
+- **`tools/call`**: Core gateway for all modifications and complex queries.
+- **`completion/complete`**: Provides completion suggestions for tool arguments (repos, tags, task codes, file paths).
 
 ### Knowledge Management (Memory)
-- **Tool**: `memory-synthesize`
-    - **Description**: Advanced reasoning tool that uses client sampling to synthesize a grounded answer from local memory and tasks.
-- **Tool**: `memory-store`
-    - **Description**: Store a new human-auditable knowledge entry. Supported types: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive`.
-- **Tool**: `memory-search`
-    - **Description**: NAVIGATION LAYER: Returns a pointer table of matching memory IDs. Returns `[id, title, type, importance]`.
-- **Tool**: `memory-detail`
-    - **Description**: Fetch full content for a specific memory by its ID.
-- **Tool**: `memory-acknowledge`
-    - **Description**: (MANDATORY) Acknowledge the use of a memory or report its irrelevance/contradiction after generating code.
-- **Tool**: `memory-update`
-    - **Description**: Update an existing memory entry (e.g., status, importance, or metadata).
-- **Tool**: `memory-delete`
-    - **Description**: Soft-delete one or more memory entries. Supports single `id` or bulk deletion via `ids`.
-- **Tool**: `memory-summarize`
-    - **Description**: Update the high-level global summary for a repository.
-- **Tool**: `memory-recap`
-    - **Description**: AGGREGATED OVERVIEW: Returns stats and a pointer table of the top memories in a repo.
-- **Tool**: `handoff-create`
-    - **Description**: Create a structured handoff record for another agent, optionally attached to a task.
-- **Tool**: `handoff-list`
-    - **Description**: List handoffs by repository and agent/status filters.
-- **Tool**: `task-claim`
-    - **Description**: Record task ownership in the dedicated claims table instead of encoding claims as memory.
+
+| Tool                 | Description                                                                                       |
+| :------------------- | :------------------------------------------------------------------------------------------------ |
+| `memory-store`       | Store a new knowledge entry. Types: `code_fact`, `decision`, `mistake`, `pattern`, `task_archive` |
+| `memory-search`      | NAVIGATION LAYER: Returns pointer table `[id, title, type, importance]`                           |
+| `memory-detail`      | Fetch full content for a specific memory by ID/code                                               |
+| `memory-acknowledge` | (MANDATORY) Mark memory as used/irrelevant after code gen                                         |
+| `memory-update`      | Update an existing memory entry                                                                   |
+| `memory-delete`      | Soft-delete one or more memory entries                                                            |
+| `memory-summarize`   | Update per-repo global summary                                                                    |
+| `memory-recap`       | AGGREGATED OVERVIEW: Stats + top memories pointer table                                           |
+| `memory-synthesize`  | Advanced reasoning using client sampling                                                          |
+
+### Upstream Compatibility (Aliases)
+
+| Alias            | Maps To                 |
+| :--------------- | :---------------------- |
+| `remember_fact`  | `memory-store` (single) |
+| `remember_facts` | `memory-store` (bulk)   |
+| `recall`         | `memory-search`         |
+| `forget`         | `memory-delete`         |
 
 ### Task Management
-- **Tool**: `task-list`
-    - **Description**: PRIMARY navigation and search tool. Returns a tabular list of tasks.
-    - **Default**: Filters for `in_progress` and `pending` tasks if no status is specified.
-    - **Capabilities**: Supports filtering by `status` (comma-separated), `phase`, and keyword `query`.
-- **Tool**: `task-create` / `task-create-interactive`
-    - **Description**: Register one or more new tasks. Supports single task object or an array of tasks for bulk creation. The interactive version supports MCP elicitation fallbacks for missing required fields.
-- **Tool**: `task-detail`
-    - **Description**: Fetch full description, phase, priority, and all comments for a specific task.
-- **Tool**: `task-update`
-    - **Description**: Update one or more tasks. Supports single update via `id` or bulk update via `ids`. Progress tasks through their lifecycle (Backlog → Pending → In Progress → Completed).
-- **Tool**: `task-delete`
-    - **Description**: Hard deletion of task records. Supports single `id` or an array of `ids` for bulk deletion.
+
+| Tool                      | Description                                                      |
+| :------------------------ | :--------------------------------------------------------------- |
+| `task-list`               | PRIMARY navigation: tabular list with status/phase/query filters |
+| `task-create`             | Register one or more tasks (single or bulk)                      |
+| `task-create-interactive` | Guided creation via elicitation fallback                         |
+| `task-detail`             | Fetch full task with comments                                    |
+| `task-update`             | Update task(s) with transition validation                        |
+| `task-delete`             | Hard delete task(s)                                              |
+| `task-search`             | Dedicated search by title/code                                   |
+
+### Coding Standards
+
+| Tool              | Description                        |
+| :---------------- | :--------------------------------- |
+| `standard-store`  | Store an atomic coding standard    |
+| `standard-search` | MANDATORY pre-implementation check |
+| `standard-update` | Update existing standard           |
+| `standard-delete` | Delete standard(s)                 |
+| `standard-detail` | Fetch full standard detail         |
+
+### Coordination (Handoffs & Claims)
+
+| Tool             | Description                                   |
+| :--------------- | :-------------------------------------------- |
+| `handoff-create` | Create a pending handoff for context transfer |
+| `handoff-list`   | List handoffs by repo/status/agent            |
+| `handoff-update` | Close or reclassify a handoff                 |
+| `task-claim`     | Record task ownership in claims table         |
+| `claim-list`     | List active claims                            |
+| `claim-release`  | Release a claim                               |
+
+### Knowledge Graph
+
+| Tool                 | Description                                        |
+| :------------------- | :------------------------------------------------- |
+| `create-entity`      | Create a KG entity node                            |
+| `delete-entity`      | Delete entity (cascades to relations/observations) |
+| `create-relation`    | Create a directed edge between entities            |
+| `delete-relation`    | Delete a relation                                  |
+| `delete-observation` | Delete an observation by ID                        |
+| `kg-backfill`        | Scan memories to auto-extract entities             |
+
+### Agent Tools
+
+| Tool                | Description                            |
+| :------------------ | :------------------------------------- |
+| `agent-context`     | Contextual recall for active session   |
+| `decision-log`      | Structured decision recording          |
+| `session-summarize` | Persist session as task_archive memory |
 
 ### Internal Handling Logic
-- **Normalization**: Automatically maps dot-notation names (e.g., `memory.store`) to internal hyphenated IDs (`memory-store`).
-- **Audit Logs**: Every successful tool invocation is recorded in the Audit Actions resource for accountability.
-- **Reactivity**: Mutating calls automatically trigger Resource Change notifications for any affected URIs (e.g., `repository://{name}/memories` after a store operation).
+
+- **Write Lock**: All mutation tools run under `WriteLock.withLock()` using `proper-lockfile`.
+- **Audit Logs**: Every successful tool invocation is recorded in `action_log`.
+- **Scope Injection**: `owner`, `repo`, `folder` auto-injected from session context.
+- **Response Pattern**: All tools return `structuredContent` for machine parsing + `content` for LLM text.
 
 ## 3. Prompts
-Prompts provide reusable templates that guide agent behavior for specific workflows, integrating tightly with the memory and task systems.
+
+The server provides 31 prompt templates that guide agent behavior for specific workflows.
 
 ### Core Lifecycle Prompts
-- **Name**: `memory-agent-core`
-    - **Role**: Essential behavioral contract for any memory-aware agent.
-    - **Behavior**: Instructs the agent on how to use `memory-search` with `current_file_path`, when to call `memory-acknowledge`, and how to handle knowledge conflicts via `supersedes`.
 
-- **Name**: `project-briefing`
-    - **Role**: Onboarding template for starting a new session in a repository.
-    - **Behavior**: Guides the agent to discover recent knowledge, pending tasks, and key architectural decisions to establish rapid situational awareness.
+- **`memory-agent-core`**: Essential behavioral contract for memory-aware agents. Instructs on `memory-search`, `memory-acknowledge`, and conflict handling.
+- **`project-briefing`**: Onboarding template for new sessions. Guides agents to discover recent knowledge, pending tasks, and key decisions.
+- **`tool-usage-guidelines`**: Standards for tool usage and data integrity.
 
-### Specialized Workflow Prompts
-- **Name**: `task-orchestrator`
-    - **Role**: Specialized for managing complex multi-task initiatives.
-    - **Behavior**: Provides instructions on using `parent_id` for hierarchical task decomposition and status tracking.
+### Engineering Role Prompts
 
-- **Name**: `senior-code-review`
-    - **Role**: High-standard review template focused on project-specific patterns.
-    - **Behavior**: Ensures reviews align with stored decisions and avoid previously documented mistakes.
+- **`architecture-design`**: System architect for ADR generation and component planning.
+- **`business-analyst`**: Bridge business needs with technical solutions.
+- **`senior-code-review`**: Principal reviewer for code compliance against stored standards.
+- **`security-analyst`**: Security assessment and threat modeling.
+- **`qa-analyst`**: Test strategy design and quality assurance.
+- **`data-analyst`**: Data analysis and insight generation.
+- **`scrum-master`**: Scrum ceremony facilitation and blocker removal.
 
-- **Name**: `root-cause-analysis`
-    - **Role**: Debugging template for tracing bugs back to their origin.
-    - **Behavior**: Uses memory of past mistakes and patterns to accelerate the identification of causal chains.
+### Workflow Prompts
+
+- **`task-memory-executor`**: Execute tasks with memory and standard enforcement.
+- **`fix-suggestion`**: Propose and validate fixes with before/after code.
+- **`root-cause-analysis`**: Structured bug/incident investigation.
+- **`learning-retrospective`**: Capture lessons and update memory.
+- **`technical-planning`**: Feature planning with task decomposition.
+- **`session-planner`**: Break objectives into atomic tasks.
+- **`sentinel-issue-resolver`**: Autonomous GitHub issue resolution.
 
 ## 4. Subscription & Observability
-The server supports the `resources/subscribe` capability.
-- When an agent calls a mutating tool (e.g., `memory-store` or `task-update`), the server automatically emits `notifications/resources/list_changed` or `notifications/resources/updated` for the affected URIs.
+
+The server supports `resources/subscribe` capability.
+
+- When an agent calls a mutating tool (e.g., `memory-store` or `task-update`), the server automatically emits resource change notifications for affected URIs.
 - This allows real-time UI updates in the client (IDE) when the background knowledge base changes.

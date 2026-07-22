@@ -1,47 +1,67 @@
 # COMPARATIVE ANALYSIS REPORT: LOCAL VS. UPSTREAM MCP LOCAL MEMORY
 
 ## 1. Upstream Repository Overview
-* **Repository**: [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory)
-* **Status**: Highly active, lightweight, local-first Model Context Protocol (MCP) server for long-term memory.
-* **Core Design**: Focused on natural language entity/observation extraction, knowledge graph relations, and biological-like memory lifecycle decay.
+
+- **Repository**: [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory)
+- **Status**: Active, lightweight, local-first Model Context Protocol (MCP) server for long-term memory.
+- **Core Design**: Focused on natural language entity/observation extraction, knowledge graph relations, and biological-like memory lifecycle decay.
 
 ---
 
 ## 2. Local Codebase Overview
-* **Project**: `@vheins/local-memory-mcp` (v0.18.9)
-* **Core Design**: Extends the local memory concept into a complete software engineering project lifecycle tool. It adds multi-owner repository scoping, a task-tracking/issue system, a multi-agent handoff/claim model, local coding standards, and a Svelte 5 + Vite-powered visualization dashboard.
+
+- **Project**: `@vheins/local-memory-mcp` (v0.19.24+)
+- **Core Design**: Extends the local memory concept into a complete software engineering project lifecycle tool. It adds multi-owner repository scoping, a task-tracking/issue system, a multi-agent handoff/claim model, local coding standards, a Knowledge Graph, NLP Archivist, Soul Maintenance, and a Svelte 5 + Vite-powered visualization dashboard.
 
 ---
 
-## 3. Detailed Gaps & Missing Features
+## 3. Feature Comparison (Implemented vs. Upstream)
 
-| Feature | Upstream (`Beledarian`) | Local (`@vheins`) | Gap / Impact |
-| :--- | :--- | :--- | :--- |
-| **Knowledge Graph** | Full support with cascading entity deletion and relations (`create_entity`, `delete_observation`, `create_relation`, `delete_relation`, `delete_entity`). | None (flat memories only). | Agents cannot map complex structured context or cross-entity relationships locally. |
-| **Archivist Auto-Ingestion** | `ARCHIVIST_STRATEGY` configuration with `nlp` (fast, offline entity extraction via `compromise` library) and `llm` (Ollama/Llama 3 deep relation extraction & importance scoring). | Passive manual ingestion only (requires explicit tool calls to `memory-store`). | Higher agent overhead as agents must explicitly structure and save facts instead of automated, non-blocking ingestion. |
-| **Time Tunnel (Temporal Recall)** | Supports natural language date filtering (e.g., "last week", "yesterday") in queries. | Vector + Tag similarity search only; no natural language temporal parsing. | Search cannot easily filter by chronological context or relative date queries. |
-| **Soul Maintenance** | Bundled extension (`soul_maintenance.ts`) implementing a biological decay model where memories decay unless used or immunized. | Hardcoded startup database archiving for expired/low-utility memories. | Memory lifecycle is rigid, non-modular, and lacks tag immunization. |
-| **Extension Framework** | Modular extensions architecture using the `EXTENSIONS_PATH` environment variable. | No runtime extension framework. | Custom logic cannot be injected without modifying the core server code. |
-| **Tool Interface** | Standardized routes: `remember_fact`, `remember_facts`, `recall`, `forget`. | Highly customized schemas: `memory-store`, `memory-update`, `memory-delete`, `memory-search`, etc. | Loss of drop-in compatibility with generic MCP clients expecting the upstream schema. |
+| Feature                           | Upstream (`Beledarian`)                               | Local (`@vheins`)   | Notes                                                                                                                                    |
+| :-------------------------------- | :---------------------------------------------------- | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| **SQLite Persistence**            | Full support                                          | Full support        | Both use better-sqlite3                                                                                                                  |
+| **FTS5 Full-Text Search**         | Full support                                          | Full support        | Enhanced with hybrid ranking                                                                                                             |
+| **Vector Embeddings (ONNX)**      | Full support                                          | Full support        | Same all-MiniLM-L6-v2 model                                                                                                              |
+| **Knowledge Graph**               | Full support (entities, relations, observations)      | **Implemented**     | Entities, Relations, Observations tables with CASCADE deletes. Exposed via KG CRUD tools + dashboard visualization                       |
+| **NLP Archivist**                 | Automatic entity extraction via `compromise`          | **Implemented**     | `kg-archivist.ts` auto-extracts entities from memory content using `compromise`. Runs on every `memory-store`                            |
+| **Time Tunnel (Temporal Recall)** | Natural language date filtering                       | **Implemented**     | `compromise-dates` integration for relative date parsing ("yesterday", "last week")                                                      |
+| **Soul Maintenance**              | Biological decay model with tag immunization          | **Implemented**     | `memory.archive.ts` with configurable decay rate (0.5), min importance (1), inactivity period (7 days). Tag-based immunization supported |
+| **Upstream Tool Aliases**         | `remember_fact`, `remember_facts`, `recall`, `forget` | **Implemented**     | SDK alias layer maps upstream tool names to local handlers                                                                               |
+| **Task Management**               | None                                                  | Full support        | 6-state lifecycle, claims, handoffs, token budgeting                                                                                     |
+| **Coding Standards**              | None                                                  | Full support        | Dedicated `coding_standards` table with vector search                                                                                    |
+| **Dashboard UI**                  | None                                                  | Full support        | Svelte 5 + Vite with KG visualization                                                                                                    |
+| **Multi-Agent Coordination**      | None                                                  | Full support        | Claims table, handoff system                                                                                                             |
+| **Action Audit Trail**            | Implicit                                              | Full support        | Dedicated `action_log` table                                                                                                             |
+| **Extension Framework**           | `EXTENSIONS_PATH`                                     | **Not implemented** | Rejected for security reasons                                                                                                            |
+| **Ollama LLM Archivist**          | Optional                                              | **Not implemented** | Rejected (violates zero-dependency principle)                                                                                            |
 
 ---
 
-## 4. Recommendations & Feasibility Analysis
+## 4. Implementation Status Summary
 
-We recommend a hybrid adoption strategy to reconcile the upstream features with our local codebase's focus on software engineering agent workflows:
+### Implemented (Gaps Closed)
 
-### High Priority (Adopt)
-1. **Implement Upstream Tool Schema Compatibility (Alias Layer)**:
-   Add alias routes mapping upstream tools (`remember_fact`, `remember_facts`, `recall`, `forget`) directly to our corresponding database operations (`memory-store`, `memory-search`, `memory-delete`). This preserves drop-in client compatibility.
-2. **Adopt Knowledge Graph System**:
-   Integrate the `create_entity`, `delete_observation`, `create_relation`, `delete_relation`, and `delete_entity` database tables and tools. We will expose these structured relationships on the Svelte dashboard.
-3. **Adopt NLP Archivist Strategy**:
-   Add the lightweight, offline `compromise` library and implement the `nlp` strategy. This enables automated, zero-dependency, local-first entity extraction.
-4. **Implement Time Tunnel Temporal Recall**:
-   Add natural language date parsing to `memory-search` (using a lightweight helper) to filter results chronologically based on `created_at`.
+1. ✅ **Upstream Tool Schema Compatibility (Alias Layer)**: `remember_fact`, `remember_facts`, `recall`, `forget` aliases registered via SDK `registerTool()`.
+2. ✅ **Knowledge Graph System**: `entities`, `relations`, `observations` tables with CRUD tools (`create-entity`, `delete-entity`, `create-relation`, `delete-relation`, `delete-observation`, `kg-backfill`).
+3. ✅ **NLP Archivist Strategy**: `compromise` library integrated in `kg-archivist.ts` for automated entity extraction from memory content.
+4. ✅ **Time Tunnel Temporal Recall**: Natural language date parsing in `memory-search` using `compromise-dates`.
+5. ✅ **Soul Maintenance**: Memory decay algorithm with tag immunization, runs at startup and periodically.
 
-### Rejected (Do Not Adopt)
-1. **Ollama LLM Archivist Strategy**:
-   Requires a running Ollama server, violating the zero-dependency, local-first startup reliability contract.
-2. **Dynamic Extension Framework (`EXTENSIONS_PATH`)**:
-   Avoid loading dynamic runtime extensions to prevent security vulnerabilities and dashboard desynchronization. Instead, port the "Soul Maintenance" memory decay and tag immunization features directly into the core engine.
+### Not Implemented (Intentional)
+
+1. ❌ **Ollama LLM Archivist Strategy**: Requires running Ollama server, violates zero-dependency local-first contract.
+2. ❌ **Dynamic Extension Framework (`EXTENSIONS_PATH`)**: Security risk and dashboard desynchronization concern.
+
+---
+
+## 5. Local Differentiators (Not in Upstream)
+
+1. **Task Management**: Full 6-state lifecycle (`backlog` → `pending` → `in_progress` → `completed`, with `blocked`/`canceled`), hierarchical via `parent_id`, token budgeting via `est_tokens`.
+2. **Coding Standards**: Dedicated `coding_standards` table with vector similarity search and language/stack scoping.
+3. **Multi-Agent Coordination**: Dedicated `claims` table for task ownership, `handoffs` for context transfer between agents.
+4. **Action Audit Trail**: Every tool invocation logged to `action_log` with full query/response tracking.
+5. **Svelte 5 Dashboard**: Rich web UI with KG force-directed graph, Kanban board, stats widgets, and reference catalog.
+6. **Write Locking**: Cross-process cooperative locking via `proper-lockfile` for safe concurrent access.
+7. **Scope Injection**: Automatic `owner`/`repo`/`folder` injection from MCP session context (roots).
+8. **Decision Log**: Dedicated `decision-log` tool for structured architectural decision capture.
+9. **Session Summarization**: `session-summarize` tool archives session context as searchable memory.

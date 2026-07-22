@@ -1,271 +1,308 @@
 # API Specification: Dashboard Tasks
 
+## Header & Navigation
+
+- [Dashboard Module Overview](../../modules/dashboard/overview.md)
+- [Dashboard UI Feature](../../modules/dashboard/dashboard-ui.md)
+- [Dashboard Tests](../../testing/dashboard/test-dashboard.md)
+
 This document describes the task management and Kanban synchronization interfaces for the dashboard.
 
 ## 1. Task Lifecycle
 
 ### 1.1 `GET /api/tasks`
+
 Lists tasks for a specific repository with optional status filtering.
 
 **Query Parameters**
-| Parameter | Type | Required | Default | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `repo` | string | Yes | - | Repository scope. |
-| `status` | string | No | - | Single status OR comma-separated statuses (e.g., `in_progress,completed`). |
-| `search` | string | No | - | Search tasks by title or task code. |
-| `page` | number | No | `1` | Current page number. |
-| `pageSize` | number | No | `20` | Items per page (max 100). |
+
+| Parameter  | Type   | Required | Default | Description                                                                |
+| :--------- | :----- | :------- | :------ | :------------------------------------------------------------------------- |
+| `repo`     | string | Yes      | -       | Repository scope.                                                          |
+| `status`   | string | No       | -       | Single status OR comma-separated statuses (e.g., `in_progress,completed`). |
+| `search`   | string | No       | -       | Search tasks by title or task code.                                        |
+| `page`     | number | No       | `1`     | Current page number.                                                       |
+| `pageSize` | number | No       | `20`    | Items per page (max 100).                                                  |
 
 **Response**
+
 ```json
 {
-  "jsonapi": { "version": "1.1" },
-  "data": [
-    {
-      "type": "task",
-      "id": "uuid-123",
-      "attributes": {
-        "task_code": "TASK-001",
-        "title": "Fix Auth Flow",
-        "status": "in_progress",
-        "repo": "my-project"
-      }
-    }
-  ],
-  "meta": { "page": 1, "pageSize": 20, "totalItems": 5 }
+	"jsonapi": { "version": "1.1" },
+	"data": [
+		{
+			"type": "task",
+			"id": "uuid-123",
+			"attributes": {
+				"task_code": "TASK-001",
+				"title": "Fix Auth Flow",
+				"status": "in_progress",
+				"priority": 3,
+				"phase": "Implementation",
+				"repo": "my-project"
+			}
+		}
+	],
+	"meta": { "page": 1, "pageSize": 20, "totalItems": 5 }
 }
 ```
 
 ### 1.2 `POST /api/tasks`
+
 Adds one or more tasks to the repository's kanban. Supports single task or bulk import.
 
 **Request Body (Single)**
+
 ```json
 {
-  "data": {
-    "type": "task",
-    "attributes": {
-      "repo": "my-project",
-      "task_code": "UI-001",
-      "title": "Design Sidebar",
-      "description": "Create a responsive sidebar component."
-    }
-  }
+	"data": {
+		"type": "task",
+		"attributes": {
+			"repo": "my-project",
+			"task_code": "UI-001",
+			"title": "Design Sidebar",
+			"description": "Create a responsive sidebar component."
+		}
+	}
 }
 ```
 
 **Request Body (Bulk)**
+
 ```json
 {
-  "data": {
-    "type": "bulk-import",
-    "attributes": {
-      "repo": "my-project",
-      "items": [
-        { "task_code": "T1", "title": "...", "description": "..." },
-        { "task_code": "T2", "title": "...", "description": "..." }
-      ]
-    }
-  }
+	"data": {
+		"type": "bulk-import",
+		"attributes": {
+			"repo": "my-project",
+			"items": [
+				{ "task_code": "T1", "title": "Task 1", "description": "..." },
+				{ "task_code": "T2", "title": "Task 2", "description": "..." }
+			]
+		}
+	}
 }
 ```
 
 **Response**
+
 ```json
 {
-  "jsonapi": { "version": "1.1" },
-  "data": {
-    "type": "status",
-    "id": "system",
-    "attributes": { "count": 1 }
-  }
+	"jsonapi": { "version": "1.1" },
+	"data": {
+		"type": "status",
+		"id": "system",
+		"attributes": { "count": 1 }
+	}
 }
 ```
 
 ### 1.3 `PATCH /api/tasks`
+
 Updates one or more tasks.
 
 **URL Pattern**: `/api/tasks` (for bulk) or `/api/tasks/:id` (for single).
 
-**Special Logic**: 
+**Special Logic**:
+
 - If `status` changes and a `comment` is provided, it is used for the audit trail.
 - If `status` changes via UI drag-and-drop (where `comment` is omitted), an automatic comment is generated (e.g., "Status updated via dashboard").
-- For all other manual or programmatic updates, a `comment` SHOULD be provided to ensure traceability.
+- `est_tokens` is required when moving to `completed`.
 
 **Request Body (Bulk)**
+
 ```json
 {
-  "data": {
-    "type": "bulk-update",
-    "attributes": {
-      "ids": ["uuid-1", "uuid-2"],
-      "status": "completed",
-      "comment": "Completed all verified tests.",
-      "force": true
-    }
-  }
+	"data": {
+		"type": "bulk-update",
+		"attributes": {
+			"ids": ["uuid-1", "uuid-2"],
+			"status": "completed",
+			"comment": "Completed all verified tests.",
+			"est_tokens": 1200,
+			"force": true
+		}
+	}
 }
 ```
 
 **Request Body (Single - via `:id`)**
+
 ```json
 {
-  "data": {
-    "type": "task",
-    "id": "uuid-123",
-    "attributes": {
-      "status": "completed",
-      "comment": "Implementation verified and merged.",
-      "est_tokens": 1200
-    }
-  }
+	"data": {
+		"type": "task",
+		"id": "uuid-123",
+		"attributes": {
+			"status": "completed",
+			"comment": "Implementation verified and merged.",
+			"est_tokens": 1200
+		}
+	}
 }
 ```
 
 **Response**
+
 ```json
 {
-  "jsonapi": { "version": "1.1" },
-  "data": {
-    "type": "status",
-    "id": "system",
-    "attributes": { "message": "Updated", "count": 1 }
-  }
+	"jsonapi": { "version": "1.1" },
+	"data": {
+		"type": "status",
+		"id": "system",
+		"attributes": { "message": "Updated", "count": 1 }
+	}
 }
 ```
 
 ### 1.4 `DELETE /api/tasks/:id`
+
 Hard deletes a single task and all its associated comments.
 
 **Response**
+
 ```json
 {
-  "jsonapi": { "version": "1.1" },
-  "data": {
-    "type": "status",
-    "id": "system",
-    "attributes": { "message": "Deleted" }
-  }
+	"jsonapi": { "version": "1.1" },
+	"data": {
+		"type": "status",
+		"id": "system",
+		"attributes": { "message": "Deleted" }
+	}
 }
 ```
-
----
 
 ## 2. Bulk Operations
 
 ### 2.1 `POST /api/tasks/delete`
+
 Deletes multiple tasks by their IDs.
 
 **Request Body**
+
 ```json
 {
-  "data": {
-    "attributes": {
-      "ids": ["uuid-1", "uuid-2"]
-    }
-  }
+	"data": {
+		"attributes": { "ids": ["uuid-1", "uuid-2"] }
+	}
 }
 ```
 
 **Response**
+
 ```json
 {
-  "jsonapi": { "version": "1.1" },
-  "data": {
-    "type": "status",
-    "id": "system",
-    "attributes": { "deletedCount": 2 }
-  }
+	"jsonapi": { "version": "1.1" },
+	"data": {
+		"type": "status",
+		"id": "system",
+		"attributes": { "deletedCount": 2 }
+	}
 }
 ```
-
----
 
 ## 3. Relationships: Comments
 
 ### 3.1 `GET /api/tasks/:taskId/comments`
+
 Retrieves all comments associated with a specific task.
 
 ### 3.2 `POST /api/tasks/:taskId/comments`
+
 Adds a new manual comment to a task.
 
 **Request Body**
+
 ```json
 {
-  "data": {
-    "type": "task-comment",
-    "attributes": {
-      "comment": "New progress update."
-    }
-  }
+	"data": {
+		"type": "task-comment",
+		"attributes": { "comment": "New progress update." }
+	}
 }
 ```
 
 ### 3.3 `PATCH /api/tasks/:taskId/comments/:id`
+
 Edits an existing comment entry.
 
-**Request Body**
-```json
-{
-  "data": {
-    "type": "task-comment",
-    "id": "uuid-comment",
-    "attributes": {
-      "comment": "Revised progress update."
-    }
-  }
-}
-```
-
-**Response**
-```json
-{
-  "jsonapi": { "version": "1.1" },
-  "data": {
-    "type": "task-comment",
-    "id": "uuid-comment",
-    "attributes": { "comment": "Revised progress update." }
-  }
-}
-```
-
 ### 3.4 `DELETE /api/tasks/:taskId/comments/:id`
-Deletes a specific comment from the task's history.
 
----
+Deletes a specific comment from the task's history.
 
 ## 4. Analytics
 
 ### 4.1 `GET /api/tasks/stats/time`
+
 Returns performance metrics for task completion across different time intervals.
 
 **Query Parameters**
-| Parameter | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `repo` | string | Yes | Repository scope. |
+
+| Parameter | Type   | Required | Description       |
+| :-------- | :----- | :------- | :---------------- |
+| `repo`    | string | Yes      | Repository scope. |
 
 **Response**
+
 ```json
 {
-  "jsonapi": { "version": "1.1" },
-  "data": {
-    "type": "performance-stats",
-    "id": "system",
-    "attributes": {
-      "daily": { 
-        "completed": 5, 
-        "tokens": 5400, 
-        "avgDuration": 3600, 
-        "added": 8,
-        "history": [
-          { "label": "09:00", "created": 2, "completed": 1 },
-          { "label": "10:00", "created": 1, "completed": 3 }
-        ]
-      },
-      "weekly": { "completed": 20, "tokens": 25000, "avgDuration": 14400, "added": 25, "history": [] },
-      "monthly": { "completed": 85, "tokens": 120000, "avgDuration": 43200, "added": 100, "history": [] },
-      "overall": { "completed": 500, "tokens": 800000, "avgDuration": 86400, "added": 600, "history": [] }
-    }
-  }
+	"jsonapi": { "version": "1.1" },
+	"data": {
+		"type": "performance-stats",
+		"id": "system",
+		"attributes": {
+			"daily": {
+				"completed": 5,
+				"tokens": 5400,
+				"avgDuration": 3600,
+				"added": 8,
+				"history": [
+					{ "label": "09:00", "created": 2, "completed": 1 },
+					{ "label": "10:00", "created": 1, "completed": 3 }
+				]
+			},
+			"weekly": { "completed": 20, "tokens": 25000, "avgDuration": 14400, "added": 25 },
+			"monthly": { "completed": 85, "tokens": 120000, "avgDuration": 43200, "added": 100 },
+			"overall": { "completed": 500, "tokens": 800000, "avgDuration": 86400, "added": 600 }
+		}
+	}
 }
 ```
+
+### 4.2 `GET /api/tasks/stats`
+
+Returns aggregated task statistics for a repository.
+
+**Query Parameters**: `repo` (required)
+
+## 5. State Machine Compliance
+
+The dashboard enforces the same 6-state lifecycle as the MCP server:
+
+```mermaid
+stateDiagram-v2
+    [*] --> backlog
+    backlog --> pending
+    pending --> in_progress
+    in_progress --> completed
+    in_progress --> blocked
+    blocked --> in_progress
+    in_progress --> canceled
+    pending --> canceled
+```
+
+**Transition Rules**:
+
+- Tasks cannot move directly from `pending`/`backlog`/`blocked` to `completed` — MUST go through `in_progress`.
+- Moving to `completed` requires `est_tokens`.
+- All status changes are logged with comments in `task_comments`.
+
+## 6. Error Codes
+
+| Code      | HTTP Status | Description                                                                           |
+| :-------- | :---------: | :------------------------------------------------------------------------------------ |
+| `ERR-001` |     400     | Validation Error — request body failed JSON:API schema validation                     |
+| `ERR-002` |     404     | Not Found — task with specified ID does not exist                                     |
+| `ERR-003` |     409     | Conflict — transition violation (e.g., `pending` → `completed` without `in_progress`) |
+| `ERR-004` |     422     | Unprocessable — missing required field (e.g., `est_tokens` on completion)             |
+| `ERR-005` |     500     | Internal Server Error — unexpected database error                                     |
