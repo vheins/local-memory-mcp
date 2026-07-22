@@ -42,5 +42,50 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			},
 			required: ["repo"]
 		}
+	},
+	{
+		name: "get_architecture",
+		title: "Get Architecture",
+		description:
+			"Returns a high-level overview of the indexed codebase structure: directory tree, language breakdown, file counts, and top-level exports.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				depth: { type: "number", description: "Directory tree depth limit (1-5, default 2)", default: 2 },
+				includeSymbolCounts: {
+					type: "boolean",
+					description: "Include per-file symbol kind counts (default true)",
+					default: true
+				}
+			},
+			required: ["repo"]
+		}
+	},
+	{
+		name: "get_file_symbols",
+		title: "Get File Symbols",
+		description:
+			"Returns all indexed symbols declared in a specific file. Symbols are returned in declaration order with their locations, signatures, and doc comments.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				filePath: { type: "string", description: "Relative file path from repo root" }
+			},
+			required: ["repo", "filePath"]
+		}
 	}
 ];

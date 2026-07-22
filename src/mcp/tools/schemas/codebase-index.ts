@@ -11,3 +11,14 @@ export const IndexRepoSchema = z.object({
 export const IndexStatusSchema = z.object({
 	repo: z.string().min(1, "repo is required")
 });
+
+export const GetArchitectureSchema = z.object({
+	repo: z.string().min(1, "repo is required"),
+	depth: z.coerce.number().min(1).max(5).default(2),
+	includeSymbolCounts: z.boolean().default(true)
+});
+
+export const GetFileSymbolsSchema = z.object({
+	repo: z.string().min(1, "repo is required"),
+	filePath: z.string().min(1, "filePath is required")
+});

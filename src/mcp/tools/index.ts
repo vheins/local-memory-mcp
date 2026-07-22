@@ -55,7 +55,12 @@ import {
 	handleDeleteObservation
 } from "./kg.crud";
 import { handleKGBackfill } from "./kg-backfill";
-import { handleCodebaseIndexRepository, handleCodebaseIndexStatus } from "./codebase-index";
+import {
+	handleCodebaseIndexRepository,
+	handleCodebaseIndexStatus,
+	handleGetArchitecture,
+	handleGetFileSymbols
+} from "./codebase-index";
 import { McpResponse } from "../utils/mcp-response";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -400,7 +405,9 @@ function buildExecutors(
 		"kg-backfill": (args, db, _vectors, _extra) => handleKGBackfill(args, db),
 		// Codebase index tools
 		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndexRepository(args, db, _vectors),
-		index_status: (args, db, _vectors, _extra) => handleCodebaseIndexStatus(args, db, _vectors)
+		index_status: (args, db, _vectors, _extra) => handleCodebaseIndexStatus(args, db, _vectors),
+		get_architecture: (args, db, _vectors, _extra) => handleGetArchitecture(args, db, _vectors),
+		get_file_symbols: (args, db, _vectors, _extra) => handleGetFileSymbols(args, db, _vectors)
 	};
 }
 
