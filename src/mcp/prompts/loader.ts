@@ -32,15 +32,43 @@ function findPromptDir(): string {
 
 const PROMPT_DIR = findPromptDir();
 
+// ── Cache ──────────────────────────────────────────────────────────────
+// Per-prompt cache: maps prompt name → parsed LoadedPrompt.
+// Populated on first call to loadPromptFromMarkdown().
 const promptCache = new Map<string, LoadedPrompt>();
 
+// File-list cache: populated on first call to listPromptFiles().
+let fileListCache: string[] | null = null;
+
+/**
+ * Lists all available prompt names (without .md extension).
+ * Results are cached in-memory after the first call.
+ */
 export function listPromptFiles(): string[] {
-	if (!fs.existsSync(PROMPT_DIR)) return [];
-	return fs
+	if (fileListCache !== null) return fileListCache;
+
+	if (!fs.existsSync(PROMPT_DIR)) {
+		fileListCache = [];
+		return [];
+	}
+
+	fileListCache = fs
 		.readdirSync(PROMPT_DIR)
 		.filter((file) => file.endsWith(".md"))
 		.map((file) => file.replace(/\.md$/, ""))
 		.sort();
+
+	return fileListCache;
+}
+
+/**
+ * Clears both prompt content and file-list caches.
+ * Useful in tests or when prompt files change at runtime.
+ */
+export function refreshPromptCache(): void {
+	promptCache.clear();
+	fileListCache = null;
+	serverInstructionsCache = null;
 }
 
 export function loadPromptFromMarkdown(name: string): LoadedPrompt {

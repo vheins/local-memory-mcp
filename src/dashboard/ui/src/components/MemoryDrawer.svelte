@@ -113,7 +113,7 @@
 					<div class="section-block">
 						<div class="field-label">Tags</div>
 						<div class="tags-row">
-							{#each [...new Set(memory.tags)] as tag}
+							{#each memory.tags as tag (tag)}
 								<span class="tag-chip">{tag}</span>
 							{/each}
 						</div>

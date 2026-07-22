@@ -16,7 +16,7 @@ import {
 	memoriesTotalPages
 } from "../stores";
 import { api } from "../api";
-import { debounce, exportToJSON, exportToCSV } from "../utils";
+import { debounce, exportToJSON, exportToCSV, dedupeTags } from "../utils";
 import type { Memory } from "../stores";
 
 export function createMemoryHandler() {
@@ -43,7 +43,7 @@ export function createMemoryHandler() {
 				page: get(memoriesPage),
 				pageSize: get(memoriesPageSize)
 			});
-			memories.set(data.memories || []);
+			memories.set((data.memories || []).map((m) => ({ ...m, tags: dedupeTags(m.tags) })));
 			memoriesTotal.set(data.pagination?.totalItems || 0);
 		} catch (e) {
 			console.error("Failed to load memories:", e);

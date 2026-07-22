@@ -139,6 +139,12 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 	}
 }
 
+/** Deduplicate a string array (e.g. tags) while preserving order. */
+export function dedupeTags(tags: string[] | undefined): string[] {
+	if (!tags || tags.length === 0) return [];
+	return [...new Set(tags)];
+}
+
 export function chatTitle(): string {
 	const now = new Date();
 	const hh = String(now.getHours()).padStart(2, "0");

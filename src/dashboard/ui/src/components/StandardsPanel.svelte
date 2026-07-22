@@ -4,7 +4,7 @@
 	import Icon from "../lib/Icon.svelte";
 
 	import type { CodingStandard } from "../lib/stores";
-	import { formatDate } from "../lib/utils";
+	import { formatDate, dedupeTags } from "../lib/utils";
 	import { confirmDelete } from "../lib/confirm";
 	import DetailDrawer from "./DetailDrawer.svelte";
 
@@ -50,7 +50,7 @@
 				page,
 				pageSize
 			});
-			standards = result.standards || [];
+			standards = (result.standards || []).map((s) => ({ ...s, tags: dedupeTags(s.tags) }));
 			totalItems = result.pagination?.totalItems || 0;
 			totalPages = result.pagination?.totalPages || 1;
 		} catch (e) {
@@ -287,7 +287,7 @@
 								<div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{std.title}</div>
 								{#if std.tags?.length}
 									<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
-										{#each [...new Set(std.tags)].slice(0, 4) as tag}
+										{#each std.tags.slice(0, 4) as tag (tag)}
 											<span
 												style="font-size:0.6rem;background:rgba(99,102,241,0.1);color:#6366f1;padding:1px 5px;border-radius:9999px;"
 												>{tag}</span

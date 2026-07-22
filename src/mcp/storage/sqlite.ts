@@ -90,8 +90,6 @@ export class SQLiteStore {
 
 		const migrator = new MigrationManager(this.db);
 		migrator.migrate();
-		migrator.addMemoryCodeColumn();
-		migrator.addStandardCodeColumn();
 
 		this.memories = new MemoryEntity(this.db);
 		this.memoryVectors = new MemoryVectorEntity(this.db);
@@ -163,7 +161,7 @@ export class SQLiteStore {
 	close(): void {
 		if (this.db && this.db.open) {
 			try {
-				this.db.pragma("wal_checkpoint(TRUNCATE)");
+				this.db.pragma("wal_checkpoint(PASSIVE)");
 			} catch {
 				// best effort
 			}

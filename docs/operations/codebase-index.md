@@ -345,11 +345,16 @@ After every successful write operation, the system creates a backup by atomicall
 
 ### Corruption Recovery
 
-On startup, the system runs `PRAGMA integrity_check;` on the database. If corruption is detected:
+The database uses WAL journaling with automatic checkpointing, backed by nightly backup
+(see "Automatic Backup" below). If corruption is suspected, run the recovery procedure
+manually:
 
-1. The corrupt database is saved as `memory.db.corrupt_<timestamp>`.
-2. The most recent `memory.db.backup` is restored to `memory.db`.
-3. The process is logged at WARN level.
+1. Stop the server.
+2. Run `sqlite3 memory.db "PRAGMA integrity_check;"` to verify corruption.
+3. If corruption is found, restore from `memory.db.backup`:
+   ```bash
+   cp memory.db.backup memory.db
+   ```
 
 ### Manual Backup
 
