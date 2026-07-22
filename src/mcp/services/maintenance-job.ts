@@ -1,12 +1,20 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { logger } from "../utils/logger";
-import { applyDecay, type SoulMaintenanceOptions, type DecayResult } from "./soul-maintenance";
+import {
+	applyDecay,
+	pruneActionLog,
+	pruneObservations,
+	type SoulMaintenanceOptions,
+	type DecayResult
+} from "./soul-maintenance";
 
 export interface MaintenanceResult {
 	decay: DecayResult;
 	expiredArchived: number;
 	lowScoreArchived: number;
 	skipped: boolean;
+	prunedActionLogRows: number;
+	prunedObservationsRows: number;
 }
 
 const MAINTENANCE_OWNER = "__soul__";
@@ -72,7 +80,9 @@ export async function runStartupMaintenance(
 			decay: { decayed: 0, archived: 0, immunizedSkipped: 0 },
 			expiredArchived: 0,
 			lowScoreArchived: 0,
-			skipped: true
+			skipped: true,
+			prunedActionLogRows: 0,
+			prunedObservationsRows: 0
 		};
 	}
 
@@ -87,6 +97,12 @@ export async function runStartupMaintenance(
 	// 3. Archive low-score memories (force=true)
 	const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories(true);
 
+	// 4. Prune stale action log entries (30-day retention)
+	const prunedActionLogResult = pruneActionLog(db.db, 30);
+
+	// 5. Prune stale observations (7-day retention)
+	const prunedObservationsResult = pruneObservations(db.db, 7);
+
 	// Record the maintenance run
 	recordMaintenanceRun(db);
 
@@ -98,13 +114,17 @@ export async function runStartupMaintenance(
 		expiredArchived,
 		lowScoreArchived,
 		decayArchived: decay.archived,
-		totalArchived
+		totalArchived,
+		prunedActionLogRows: prunedActionLogResult.deleted,
+		prunedObservationsRows: prunedObservationsResult.deleted
 	});
 
 	return {
 		decay,
 		expiredArchived: expiredArchived || 0,
 		lowScoreArchived: lowScoreArchived || 0,
-		skipped: false
+		skipped: false,
+		prunedActionLogRows: prunedActionLogResult.deleted,
+		prunedObservationsRows: prunedObservationsResult.deleted
 	};
 }

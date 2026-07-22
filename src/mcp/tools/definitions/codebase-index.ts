@@ -93,10 +93,10 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		}
 	},
 	{
-		name: "get_file_symbols",
-		title: "Get File Symbols",
+		name: "search_symbols",
+		title: "Search Symbols",
 		description:
-			"Returns all indexed symbols declared in a specific file. Symbols are returned in declaration order with their locations, signatures, and doc comments.",
+			"Searches indexed codebase symbols by name with ranked results. Supports filtering by kind, file path, and export status. Uses a 5-tier ranking algorithm: exact > camelCase > prefix > substring > FTS5.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -106,10 +106,18 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository identifier (owner/repo)" },
-				filePath: { type: "string", description: "Relative file path from repo root" }
+				query: { type: "string", description: "Symbol name or partial name to search" },
+				repo: { type: "string", description: "Repository identifier (owner/repo) to scope search" },
+				kind: {
+					type: "string",
+					description: "Filter by symbol kind: function, class, interface, type, enum, variable"
+				},
+				filePath: { type: "string", description: "Filter results to a specific file path" },
+				exportedOnly: { type: "boolean", description: "Only return exported symbols" },
+				limit: { type: "number", default: 50, description: "Maximum results (max 200)" },
+				offset: { type: "number", default: 0, description: "Results offset for pagination" }
 			},
-			required: ["repo", "filePath"]
+			required: []
 		}
 	},
 	{

@@ -1,5 +1,15 @@
 import { logger } from "../utils/logger";
 
+export interface PruneActionLogResult {
+	/** Number of action_log rows deleted */
+	deleted: number;
+}
+
+export interface PruneObservationsResult {
+	/** Number of observations rows deleted */
+	deleted: number;
+}
+
 export interface SoulMaintenanceOptions {
 	/** Immunity tags — memories with these tags won't decay */
 	immunizedTags?: string[];
@@ -117,4 +127,60 @@ export function applyDecay(
 	}
 
 	return { decayed, archived: archivedCount, immunizedSkipped };
+}
+
+/**
+ * Delete action_log entries older than a specified number of days.
+ *
+ * Action logs accumulate rapidly (one row per MCP call) and serve no purpose
+ * beyond recent diagnostics. Stale entries waste disk space and slow down queries.
+ *
+ * @param db - The SQLite store's raw database handle (db.db from SQLiteStore)
+ * @param retentionDays - Entries older than this many days are deleted (default: 30)
+ * @returns Number of rows deleted
+ */
+export function pruneActionLog(
+	db: { prepare: (sql: string) => import("better-sqlite3").Statement },
+	retentionDays = 30
+): PruneActionLogResult {
+	const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+
+	const result = db.prepare("DELETE FROM action_log WHERE created_at < ?").run(cutoff);
+
+	if (result.changes > 0) {
+		logger.info("[SoulMaintenance] Pruned stale action_log entries", {
+			deleted: result.changes,
+			cutoff
+		});
+	}
+
+	return { deleted: result.changes };
+}
+
+/**
+ * Delete observations older than a specified number of days.
+ *
+ * Observations are transient knowledge graph annotations that lose relevance
+ * quickly. Stale observations bloat the KG and degrade query performance.
+ *
+ * @param db - The SQLite store's raw database handle (db.db from SQLiteStore)
+ * @param retentionDays - Entries older than this many days are deleted (default: 7)
+ * @returns Number of rows deleted
+ */
+export function pruneObservations(
+	db: { prepare: (sql: string) => import("better-sqlite3").Statement },
+	retentionDays = 7
+): PruneObservationsResult {
+	const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+
+	const result = db.prepare("DELETE FROM observations WHERE created_at < ?").run(cutoff);
+
+	if (result.changes > 0) {
+		logger.info("[SoulMaintenance] Pruned stale observations", {
+			deleted: result.changes,
+			cutoff
+		});
+	}
+
+	return { deleted: result.changes };
 }

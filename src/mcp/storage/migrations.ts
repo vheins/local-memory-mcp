@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export class MigrationManager {
 	constructor(private db: Database.Database) {}
@@ -556,8 +556,43 @@ export class MigrationManager {
 			// Ignore if column doesn't exist
 		}
 
+		// Schema v4: Drop obsolete memories_fts (unused, consumes ~2.3 GB on large DBs)
+		this.dropObsoleteMemoriesFts();
+
 		this.setSchemaVersion(SCHEMA_VERSION);
 		logger.info(`[Migration] Schema upgraded to version ${SCHEMA_VERSION}`);
+	}
+
+	/**
+	 * Drop the unused memories_fts FTS5 virtual table and its sync triggers.
+	 *
+	 * This FTS index was introduced in commit 0556850 but the application code
+	 * that used it was subsequently removed. The triggers (memories_ai, memories_ad,
+	 * memories_au) continued to fire on every INSERT/UPDATE/DELETE on the memories
+	 * table, silently bloating the database with no benefit.
+	 *
+	 * On large databases this table can consume >2 GB of disk space.
+	 * This migration is a one-time cleanup; new databases never create this table.
+	 */
+	private dropObsoleteMemoriesFts(): void {
+		try {
+			const exists = this.get("SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'");
+			if (!exists) return;
+
+			// Drop sync triggers first (they reference the FTS table)
+			this.exec("DROP TRIGGER IF EXISTS memories_ai");
+			this.exec("DROP TRIGGER IF EXISTS memories_ad");
+			this.exec("DROP TRIGGER IF EXISTS memories_au");
+
+			// Drop the FTS virtual table (cascades to shadow tables)
+			this.exec("DROP TABLE IF EXISTS memories_fts");
+
+			logger.info("[Migration] Dropped obsolete memories_fts FTS5 table and sync triggers");
+		} catch (err) {
+			logger.warn("[Migration] Failed to drop memories_fts — may have been dropped already", {
+				error: String(err)
+			});
+		}
 	}
 
 	private ensureMemoryTypeConstraint(): void {

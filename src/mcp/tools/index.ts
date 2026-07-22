@@ -135,10 +135,22 @@ function normalizeToolArgs(args: Record<string, unknown>, session: SessionContex
 	const scopeVal = anyArgs.scope;
 	const nextArgs: Record<string, unknown> = {
 		...anyArgs,
-		// Handle string scope gracefully: "my-repo" → { repo: "my-repo" }
+		// Handle string scope gracefully:
+		//   "my-repo" → { repo: "my-repo" }
+		//   '{"owner":"vheins","repo":"my-repo"}' → { owner: "vheins", repo: "my-repo" }
 		scope:
 			typeof scopeVal === "string"
-				? { repo: scopeVal }
+				? (() => {
+						try {
+							const parsed = JSON.parse(scopeVal);
+							if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+								return parsed as Record<string, unknown>;
+							}
+						} catch {
+							/* not JSON, treat as plain repo name */
+						}
+						return { repo: scopeVal };
+					})()
 				: scopeVal
 					? { ...(scopeVal as Record<string, unknown>) }
 					: undefined
