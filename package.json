@@ -42,7 +42,8 @@
 		"type-check": "tsc --noEmit && svelte-check --tsconfig ./src/dashboard/ui/tsconfig.json",
 		"lint": "eslint . --ext .ts,.svelte",
 		"lint:fix": "eslint . --ext .ts,.svelte --fix",
-		"format": "prettier --write \"src/**/*.{ts,js,svelte}\""
+		"format": "prettier --write \"src/**/*.{ts,js,svelte}\"",
+		"publish:npm": "npm publish --access public"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/client": "^2.0.0-beta.2",
