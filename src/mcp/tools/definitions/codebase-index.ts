@@ -87,5 +87,50 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			},
 			required: ["repo", "filePath"]
 		}
+	},
+	{
+		name: "get_file_symbols",
+		title: "Get File Symbols",
+		description:
+			"Returns all indexed symbols declared in a specific file. Symbols are returned in declaration order with their locations, signatures, and doc comments.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				filePath: { type: "string", description: "Relative file path from repo root" }
+			},
+			required: ["repo", "filePath"]
+		}
+	},
+	{
+		name: "trace_symbol",
+		title: "Trace Symbol",
+		description:
+			"Traces a symbol's definition and usage across the codebase. Returns the definition location, file references, and export status.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				name: { type: "string", description: "Symbol name to trace (exact match)" },
+				repo: { type: "string", description: "Repository identifier (owner/repo) for scoped search" },
+				includeReferences: {
+					type: "boolean",
+					description: "Include usage references from other symbols",
+					default: true
+				}
+			},
+			required: ["name"]
+		}
 	}
 ];

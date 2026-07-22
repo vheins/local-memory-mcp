@@ -62,4 +62,11 @@ export {
 	KGBackfillSchema
 } from "./knowledge-graph";
 
-export { IndexRepoSchema, IndexStatusSchema, GetArchitectureSchema, GetFileSymbolsSchema } from "./codebase-index";
+export {
+	IndexRepoSchema,
+	IndexStatusSchema,
+	GetArchitectureSchema,
+	GetFileSymbolsSchema,
+	SearchSymbolsSchema,
+	TraceSymbolSchema
+} from "./codebase-index";

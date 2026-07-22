@@ -83,6 +83,12 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		).map((r) => this.rowToSymbol(r));
 	}
 
+	getAllSymbols(): CodebaseSymbol[] {
+		return this.all<CodebaseSymbol>(
+			"SELECT * FROM codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC"
+		).map((r) => this.rowToSymbol(r));
+	}
+
 	deleteSymbolsByRepo(repo: string): number {
 		const result = this.run("DELETE FROM codebase_symbols WHERE repo = ?", [repo]);
 		return result.changes;

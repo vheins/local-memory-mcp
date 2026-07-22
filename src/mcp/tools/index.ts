@@ -59,7 +59,9 @@ import {
 	handleCodebaseIndexRepository,
 	handleCodebaseIndexStatus,
 	handleGetArchitecture,
-	handleGetFileSymbols
+	handleGetFileSymbols,
+	handleSearchSymbols,
+	handleTraceSymbol
 } from "./codebase-index";
 import { McpResponse } from "../utils/mcp-response";
 
@@ -407,7 +409,9 @@ function buildExecutors(
 		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndexRepository(args, db, _vectors),
 		index_status: (args, db, _vectors, _extra) => handleCodebaseIndexStatus(args, db, _vectors),
 		get_architecture: (args, db, _vectors, _extra) => handleGetArchitecture(args, db, _vectors),
-		get_file_symbols: (args, db, _vectors, _extra) => handleGetFileSymbols(args, db, _vectors)
+		get_file_symbols: (args, db, _vectors, _extra) => handleGetFileSymbols(args, db, _vectors),
+		trace_symbol: (args, db, _vectors, _extra) => handleTraceSymbol(args, db, _vectors),
+		search_symbols: (args, db, _vectors, _extra) => handleSearchSymbols(args, db, _vectors)
 	};
 }
 
