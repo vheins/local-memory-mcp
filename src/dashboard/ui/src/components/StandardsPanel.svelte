@@ -287,7 +287,7 @@
 								<div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{std.title}</div>
 								{#if std.tags?.length}
 									<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
-										{#each std.tags.slice(0, 4) as tag, tagIndex (`${tag}-${tagIndex}`)}
+										{#each [...new Set(std.tags)].slice(0, 4) as tag}
 											<span
 												style="font-size:0.6rem;background:rgba(99,102,241,0.1);color:#6366f1;padding:1px 5px;border-radius:9999px;"
 												>{tag}</span

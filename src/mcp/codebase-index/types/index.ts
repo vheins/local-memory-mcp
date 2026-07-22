@@ -36,6 +36,12 @@ export interface FileDiscoveryOptions {
 	 * are applied. Defaults to true.
 	 */
 	respectGitignore?: boolean;
+	/**
+	 * Maximum number of source files to discover before stopping the scan.
+	 * Useful for capping memory usage on very large repositories.
+	 * When omitted, all matching files are discovered.
+	 */
+	maxFiles?: number;
 }
 
 /** Aggregate result from a discovery run. */
@@ -48,6 +54,10 @@ export interface DiscoverFilesResult {
 	supportedFiles: number;
 	/** Files skipped (symlinks, unsupported extensions, gitignore/exclude matches, errors). */
 	skippedFiles: number;
+	/** Files skipped due to unsupported extension (no language detection). */
+	skippedByExtension: number;
+	/** Files skipped due to gitignore rule match. */
+	skippedByGitignore: number;
 	/** Wall-clock duration of the discovery in milliseconds. */
 	durationMs: number;
 	/** Non-fatal per-file errors (e.g. permission denied). */

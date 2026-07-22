@@ -110,55 +110,6 @@ export class SQLiteStore {
 	}
 
 	/**
-	 * Run on startup: checkpoint WAL and verify integrity.
-	 * If integrity check fails, attempt to restore from backup.
-	 */
-	private _startupChecks(dbPath: string): void {
-		try {
-			// Flush any pending WAL data into the main DB file
-			this.db.pragma("wal_checkpoint(TRUNCATE)");
-			logger.debug("[SQLiteStore] WAL checkpoint completed on startup");
-		} catch (err) {
-			logger.warn("[SQLiteStore] WAL checkpoint failed on startup", { error: String(err) });
-		}
-
-		try {
-			const result = this.db.pragma("integrity_check") as { integrity_check: string }[];
-			const ok = result.length === 1 && result[0].integrity_check === "ok";
-			if (!ok) {
-				logger.error("[SQLiteStore] Integrity check FAILED", { result });
-				this._attemptRecovery(dbPath);
-			} else {
-				logger.debug("[SQLiteStore] Integrity check passed");
-			}
-		} catch (err) {
-			logger.error("[SQLiteStore] Integrity check threw error", { error: String(err) });
-			this._attemptRecovery(dbPath);
-		}
-	}
-
-	/**
-	 * Attempt to recover from a corrupt DB by restoring the latest backup.
-	 */
-	private _attemptRecovery(dbPath: string): void {
-		const backupPath = dbPath + ".backup";
-		if (fs.existsSync(backupPath)) {
-			logger.warn("[SQLiteStore] Attempting recovery from backup", { backupPath });
-			try {
-				// Mark current file as corrupt before overwriting
-				const corruptPath = `${dbPath}.corrupt_${new Date().toISOString().replace(/[:.]/g, "").slice(0, 15)}`;
-				fs.copyFileSync(dbPath, corruptPath);
-				fs.copyFileSync(backupPath, dbPath);
-				logger.warn("[SQLiteStore] Recovery successful. Corrupt file saved to", { corruptPath });
-			} catch (err) {
-				logger.error("[SQLiteStore] Recovery failed", { error: String(err) });
-			}
-		} else {
-			logger.error("[SQLiteStore] No backup found for recovery. DB may be corrupt.");
-		}
-	}
-
-	/**
 	 * Create a timestamped backup of the DB file.
 	 * Called automatically after successful writes (via withWrite).
 	 */

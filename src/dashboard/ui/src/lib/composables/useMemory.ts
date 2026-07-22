@@ -71,10 +71,14 @@ export function createMemoryHandler(props: UseMemoryProps) {
 	}
 
 	function parseTags(raw: string): string[] {
-		return raw
-			.split(",")
-			.map((t) => t.trim())
-			.filter(Boolean);
+		return [
+			...new Set(
+				raw
+					.split(",")
+					.map((t) => t.trim())
+					.filter(Boolean)
+			)
+		];
 	}
 
 	async function save() {

@@ -23,6 +23,7 @@
 	import ReferenceTab from "./components/ReferenceTab.svelte";
 	import FloatingChat from "./components/FloatingChat.svelte";
 	import StandardsPanel from "./components/StandardsPanel.svelte";
+	import CodebasePage from "./components/CodebasePage.svelte";
 	import HandoffsPanel from "./components/HandoffsPanel.svelte";
 	import KGGraph from "./components/KGGraph.svelte";
 	import AgentArena from "./components/AgentArena.svelte";
@@ -155,6 +156,17 @@
 						>
 							<Icon name="clipboard-list" size={14} strokeWidth={1.75} />
 							<span>Tasks</span>
+						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "codebase"}
+							on:click={() => app.onTabChange("codebase")}
+							id="tab-codebase"
+							role="tab"
+							aria-selected={$activeTab === "codebase"}
+						>
+							<Icon name="code" size={14} strokeWidth={1.75} />
+							<span>Codebase</span>
 						</button>
 						<button
 							class="tab-btn"
@@ -303,6 +315,11 @@
 				<!-- ════ STANDARDS TAB ════ -->
 				{#if $activeTab === "standards"}
 					<StandardsPanel repo={$currentRepo || ""} />
+				{/if}
+
+				<!-- ════ CODEBASE TAB ════ -->
+				{#if $activeTab === "codebase"}
+					<CodebasePage repo={$currentRepo || ""} />
 				{/if}
 
 				<!-- ════ HANDOFFS TAB ════ -->

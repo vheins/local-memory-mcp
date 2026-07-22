@@ -9,7 +9,8 @@ export const IndexRepoSchema = z.object({
 });
 
 export const IndexStatusSchema = z.object({
-	repo: z.string().min(1, "repo is required")
+	repo: z.string().min(1, "repo is required"),
+	repoPath: z.string().optional()
 });
 
 export const GetArchitectureSchema = z.object({

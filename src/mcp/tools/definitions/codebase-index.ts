@@ -28,7 +28,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "index_status",
 		title: "Index Status",
 		description:
-			"Returns the current indexing status for a repository: whether it has been indexed, when it was last indexed, file/symbol counts, and any ongoing indexing progress.",
+			"Returns the current indexing status for a repository: whether it has been indexed, when it was last indexed, file/symbol counts, any ongoing indexing progress, and optionally staleness detection. Pass repoPath to enable staleness checks (>= 5% stale files triggers stale flag).",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -38,7 +38,11 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository identifier (owner/repo)" }
+				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				repoPath: {
+					type: "string",
+					description: "Absolute filesystem path to the repository (optional — enables staleness detection)"
+				}
 			},
 			required: ["repo"]
 		}

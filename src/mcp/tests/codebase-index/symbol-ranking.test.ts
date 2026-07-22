@@ -375,4 +375,38 @@ describe("Edge cases", () => {
 		expect(ranked).toHaveLength(1);
 		expect(ranked[0].rankTier).toBe(RankTier.FTS5);
 	});
+
+	it("query with special characters (regex chars)", () => {
+		const symbols = [
+			makeSymbol({ name: "doSomething", file_path: "src/x.ts" }),
+			makeSymbol({ name: "other", file_path: "src/y.ts" })
+		];
+
+		// Special regex chars should not crash rankSymbols
+		const ranked = rankSymbols(symbols, "(test)");
+		expect(ranked).toHaveLength(2);
+		// All end up in FTS5 since nothing matches the literal "(test)"
+		expect(ranked.every((r) => r.rankTier === RankTier.FTS5)).toBe(true);
+	});
+
+	it("query with dots and asterisks (wildcard-like)", () => {
+		const symbols = [makeSymbol({ name: "mylib.core.config", file_path: "src/config.ts" })];
+
+		const ranked = rankSymbols(symbols, "*.core");
+		expect(ranked).toHaveLength(1);
+		// Should not crash — falls to appropriate tier
+		expect(ranked[0].rankTier).toBeDefined();
+	});
+
+	it("single symbol bucket scoring produces valid score", () => {
+		const symbols = [makeSymbol({ name: "onlyOne", file_path: "src/sole.ts", exported: true })];
+
+		const ranked = rankSymbols(symbols, "onlyOne");
+		expect(ranked).toHaveLength(1);
+		// When range is computed as `maxScore - minScore || 1` for a single item,
+		// the score may be normalized to 0.0. Score is always between 0 and 1.
+		expect(ranked[0].score).toBeGreaterThanOrEqual(0);
+		expect(ranked[0].score).toBeLessThanOrEqual(1);
+		expect(ranked[0].rankTier).toBe(RankTier.Exact);
+	});
 });

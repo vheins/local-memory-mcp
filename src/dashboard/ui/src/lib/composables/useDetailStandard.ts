@@ -7,10 +7,14 @@ import type { DetailState, DetailUpdate } from "./useDetailTypes";
 import { INITIAL_STANDARD_FORM as INIT_STD } from "./useDetailTypes";
 
 function splitList(value: string) {
-	return value
-		.split(",")
-		.map((item) => item.trim())
-		.filter(Boolean);
+	return [
+		...new Set(
+			value
+				.split(",")
+				.map((item) => item.trim())
+				.filter(Boolean)
+		)
+	];
 }
 
 function parseMetadata(value: string): Record<string, unknown> | null {

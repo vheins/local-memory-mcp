@@ -113,7 +113,7 @@
 					<div class="section-block">
 						<div class="field-label">Tags</div>
 						<div class="tags-row">
-							{#each memory.tags as tag, tagIndex (`${tag}-${tagIndex}`)}
+							{#each [...new Set(memory.tags)] as tag}
 								<span class="tag-chip">{tag}</span>
 							{/each}
 						</div>

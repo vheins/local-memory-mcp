@@ -1,7 +1,7 @@
 /**
  * CLI Index Tests — argument parsing and error handling.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { parseIndexArgs } from "../../codebase-index/cli";
 
 describe("parseIndexArgs", () => {
@@ -156,5 +156,79 @@ describe("parseIndexArgs", () => {
 		if ("error" in result) throw new Error("Expected success");
 		expect(result.includeGlobs).toEqual([]);
 		expect(result.excludeGlobs).toEqual(["**/*.test.ts"]);
+	});
+
+	it("skips --exclude without a value (next arg is a flag)", () => {
+		const result = parseIndexArgs([
+			"node",
+			"server.js",
+			"--index",
+			"--repo",
+			"owner/repo",
+			"--path",
+			"/tmp/test",
+			"--exclude",
+			"--include",
+			"src/**/*.ts"
+		]);
+
+		expect(result).not.toHaveProperty("error");
+		if ("error" in result) throw new Error("Expected success");
+		expect(result.excludeGlobs).toEqual([]);
+		expect(result.includeGlobs).toEqual(["src/**/*.ts"]);
+	});
+
+	it("handles include at the end of argv with no next value", () => {
+		const result = parseIndexArgs([
+			"node",
+			"server.js",
+			"--index",
+			"--repo",
+			"owner/repo",
+			"--path",
+			"/tmp/test",
+			"--include"
+		]);
+
+		expect(result).not.toHaveProperty("error");
+		if ("error" in result) throw new Error("Expected success");
+		expect(result.includeGlobs).toEqual([]);
+	});
+
+	it("handles exclude at the end of argv with no next value", () => {
+		const result = parseIndexArgs([
+			"node",
+			"server.js",
+			"--index",
+			"--repo",
+			"owner/repo",
+			"--path",
+			"/tmp/test",
+			"--exclude"
+		]);
+
+		expect(result).not.toHaveProperty("error");
+		if ("error" in result) throw new Error("Expected success");
+		expect(result.excludeGlobs).toEqual([]);
+	});
+
+	it("handles both missing repo and missing path", () => {
+		const result = parseIndexArgs(["node", "server.js"]);
+
+		expect(result).toHaveProperty("error");
+		if (!("error" in result)) throw new Error("Expected error");
+		expect(result.error).toContain("--repo");
+	});
+
+	it("returns error when --repo value is empty string", () => {
+		const result = parseIndexArgs(["node", "server.js", "--index", "--repo", "", "--path", "/tmp/test"]);
+
+		expect(result).toHaveProperty("error");
+	});
+
+	it("returns error when --path value is empty string", () => {
+		const result = parseIndexArgs(["node", "server.js", "--index", "--repo", "owner/repo", "--path", ""]);
+
+		expect(result).toHaveProperty("error");
 	});
 });

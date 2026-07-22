@@ -100,11 +100,19 @@ export async function handleCodebaseIndexStatus(
 ): Promise<McpResponse> {
 	const validated = IndexStatusSchema.parse(params);
 	const repo = validated.repo.trim();
+	const repoPath = validated.repoPath?.trim();
 
 	const service = createCodebaseIndexService(db, getParserPool());
-	const status = await service.getIndexStatus(repo);
+	const status = await service.getIndexStatus(repo, repoPath);
 
-	return createMcpResponse(status, `Status for ${repo}: ${status.totalFiles} files, ${status.totalSymbols} symbols`, {
+	let summary = `Status for ${repo}: ${status.totalFiles} files, ${status.totalSymbols} symbols`;
+	if (status.stale !== undefined) {
+		summary += status.stale
+			? ` — INDEX STALE (${Math.round((status.staleRatio ?? 0) * 100)}% of files changed)`
+			: " — up to date";
+	}
+
+	return createMcpResponse(status, summary, {
 		includeSerializedStructuredContent: true
 	});
 }

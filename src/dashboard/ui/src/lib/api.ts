@@ -91,6 +91,16 @@ function deserialize(body: JsonApiBody | unknown): unknown {
 	return processItem(data as JsonApiItem);
 }
 
+// ─── Codebase Search ─────────────────────────────────────────────────────────
+
+export interface CodeSymbol {
+	name: string;
+	kind: "function" | "class" | "interface" | "type" | "enum" | "variable";
+	signature?: string;
+	filePath?: string;
+	line?: number;
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -340,5 +350,45 @@ export const api = {
 			method: "DELETE",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body)
-		})
+		}),
+
+	// ─── Codebase Search ────────────────────────────────────────────────────────
+
+	codebaseSearch: (repo: string, query: string, limit: number = 10) => {
+		const q = new URLSearchParams({
+			repo,
+			query,
+			limit: String(limit)
+		});
+		return apiFetch<{ results: CodeSymbol[] }>(`/api/codebase/search?${q}`);
+	},
+
+	// ─── Codebase Index Status ──────────────────────────────────────────────────
+
+	codebaseIndexStatus: (repo: string) => {
+		const q = new URLSearchParams({ repo });
+		return apiFetch<CodebaseIndexStatus>(`/api/codebase/index-status?${q}`);
+	},
+
+	codebaseReindex: (repo: string) => {
+		return apiFetch<{ success: boolean; message: string }>("/api/codebase/index", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ repo })
+		});
+	}
 };
+
+// ─── Codebase Index Types ──────────────────────────────────────────────────────
+
+export interface CodebaseIndexStatus {
+	indexed: boolean;
+	symbol_count: number;
+	file_count: number;
+	last_indexed_at: string | null;
+	indexing?: {
+		in_progress: boolean;
+		files_parsed: number;
+		total_files: number;
+	};
+}

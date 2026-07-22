@@ -76,6 +76,16 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		return result.changes;
 	}
 
+	transferSymbolsFilePath(repo: string, oldPath: string, newPath: string): number {
+		const now = new Date().toISOString();
+		const result = this.run(
+			`UPDATE codebase_symbols SET file_path = ?, updated_at = ?
+			 WHERE repo = ? AND file_path = ?`,
+			[newPath, now, repo, oldPath]
+		);
+		return result.changes;
+	}
+
 	getSymbolsByRepo(repo: string): CodebaseSymbol[] {
 		return this.all<CodebaseSymbol>(
 			"SELECT * FROM codebase_symbols WHERE repo = ? ORDER BY file_path ASC, start_line ASC",

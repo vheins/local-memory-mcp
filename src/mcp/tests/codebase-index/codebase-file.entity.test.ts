@@ -121,4 +121,52 @@ describe("CodebaseFile Entity", () => {
 		expect(second.id).toBe(first.id);
 		expect(entity.getFilesByRepo("repo-u").length).toBe(1);
 	});
+
+	it("getFilesByStatus: indexed returns files with last_indexed_at", () => {
+		entity.upsertFile({ repo: "repo-status", file_path: "indexed.ts", checksum: "abc" });
+		// This file was just upserted so last_indexed_at is set
+		const indexed = entity.getFilesByStatus("repo-status", "indexed");
+		expect(indexed.length).toBe(1);
+		expect(indexed[0].file_path).toBe("indexed.ts");
+	});
+
+	it("getFilesByStatus: unknown status returns all files", () => {
+		entity.upsertFile({ repo: "repo-unknown", file_path: "file.ts" });
+		const result = entity.getFilesByStatus("repo-unknown", "unknown");
+		expect(result.length).toBe(1);
+	});
+
+	it("transferFile: moves file from old to new path", () => {
+		entity.upsertFile({ repo: "repo-transfer", file_path: "old/path.ts", checksum: "abc" });
+
+		const result = entity.transferFile("repo-transfer", "old/path.ts", "new/path.ts");
+		expect(result).toBe(true);
+
+		// Old path no longer exists
+		expect(entity.getFile("repo-transfer", "old/path.ts")).toBeUndefined();
+
+		// New path exists
+		const moved = entity.getFile("repo-transfer", "new/path.ts");
+		expect(moved).toBeDefined();
+		expect(moved!.file_path).toBe("new/path.ts");
+	});
+
+	it("transferFile: returns false for non-existent file", () => {
+		const result = entity.transferFile("repo-transfer", "ghost.ts", "moved.ts");
+		expect(result).toBe(false);
+	});
+
+	it("upsertFile: handles null language, checksum, and missing lines/size", () => {
+		const result = entity.upsertFile({
+			repo: "repo-minimal",
+			file_path: "src/minimal.ts",
+			language: null,
+			checksum: null
+		});
+
+		expect(result.language).toBeNull();
+		expect(result.checksum).toBeNull();
+		expect(result.lines).toBe(0);
+		expect(result.size_bytes).toBe(0);
+	});
 });

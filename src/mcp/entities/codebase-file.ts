@@ -97,6 +97,16 @@ export class CodebaseFileEntity extends BaseEntity {
 		return result.changes > 0;
 	}
 
+	transferFile(repo: string, oldPath: string, newPath: string): boolean {
+		const now = new Date().toISOString();
+		const result = this.run(
+			`UPDATE codebase_files SET file_path = ?, last_indexed_at = ?, updated_at = ?
+			 WHERE repo = ? AND file_path = ?`,
+			[newPath, now, now, repo, oldPath]
+		);
+		return result.changes > 0;
+	}
+
 	deleteFilesByRepo(repo: string): number {
 		const result = this.run("DELETE FROM codebase_files WHERE repo = ?", [repo]);
 		return result.changes;

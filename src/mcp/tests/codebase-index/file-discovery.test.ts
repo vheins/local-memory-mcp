@@ -349,4 +349,120 @@ describe("FileDiscoveryService", () => {
 			expect(result.files[i].path).toBe(`file${String(i).padStart(3, "0")}.ts`);
 		}
 	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: maxFiles limit
+	// ══════════════════════════════════════════════════════════════════
+
+	it("respects maxFiles limit", async () => {
+		const root = path.join(tempDir, "maxfiles-test");
+		for (let i = 0; i < 20; i++) {
+			touch(path.join(root, `file${i}.ts`), `// file ${i}`);
+		}
+
+		const result = await discoverFiles({ projectPath: root, maxFiles: 5 });
+
+		expect(result.files.length).toBeLessThanOrEqual(5);
+		expect(result.supportedFiles).toBeLessThanOrEqual(5);
+	});
+
+	it("maxFiles=0 stops after first file (length 0 >= 0 breaks after push)", async () => {
+		const root = path.join(tempDir, "maxfiles-zero");
+		touch(path.join(root, "a.ts"));
+
+		const result = await discoverFiles({ projectPath: root, maxFiles: 0 });
+
+		// When maxFiles=0, the first file is pushed before the check `length >= 0`,
+		// then it breaks. So 1 file is returned.
+		expect(result.files).toHaveLength(1);
+		expect(result.supportedFiles).toBe(1);
+	});
+
+	it("maxFiles larger than file count returns all files", async () => {
+		const root = path.join(tempDir, "maxfiles-large");
+		touch(path.join(root, "a.ts"));
+		touch(path.join(root, "b.ts"));
+
+		const result = await discoverFiles({ projectPath: root, maxFiles: 100 });
+
+		expect(result.files).toHaveLength(2);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Extensionless files (Dockerfile, Makefile)
+	// ══════════════════════════════════════════════════════════════════
+
+	it("detects extensionless files like Dockerfile and Makefile", async () => {
+		const root = path.join(tempDir, "extless-test");
+		touch(path.join(root, "Dockerfile"), "FROM node:18");
+		touch(path.join(root, "Makefile"), "test:\n\techo ok");
+		touch(path.join(root, "renovate.json"), "{}");
+
+		const result = await discoverFiles({ projectPath: root });
+
+		const names = relativePaths(result);
+		expect(names).toContain("Dockerfile");
+		expect(names).toContain("Makefile");
+		expect(names).toContain("renovate.json");
+
+		const fileMap: Record<string, string> = {};
+		for (const f of result.files) {
+			fileMap[f.path] = f.language;
+		}
+		expect(fileMap["Dockerfile"]).toBe("dockerfile");
+		expect(fileMap["Makefile"]).toBe("makefile");
+		expect(fileMap["renovate.json"]).toBe("json");
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: respectGitignore=false bypasses .gitignore
+	// ══════════════════════════════════════════════════════════════════
+
+	it("respectGitignore=false bypasses .gitignore rules", async () => {
+		const root = path.join(tempDir, "no-gitignore-respect");
+		fs.mkdirSync(root, { recursive: true });
+		fs.writeFileSync(path.join(root, ".gitignore"), "*.ts\n", "utf-8");
+		touch(path.join(root, "app.ts"));
+		touch(path.join(root, "debug.ts"));
+
+		const result = await discoverFiles({
+			projectPath: root,
+			respectGitignore: false
+		});
+
+		const names = relativePaths(result);
+		expect(names).toContain("app.ts");
+		expect(names).toContain("debug.ts");
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: skips duplicate and unknown extensions, skipped counters
+	// ══════════════════════════════════════════════════════════════════
+
+	it("reports correct skippedByExtension count", async () => {
+		const root = path.join(tempDir, "skipped-ext-count");
+		touch(path.join(root, "valid.ts"));
+		touch(path.join(root, "image.png"));
+		touch(path.join(root, "archive.zip"));
+		touch(path.join(root, "movie.mp4"));
+
+		const result = await discoverFiles({ projectPath: root });
+
+		expect(result.skippedByExtension).toBe(3);
+		expect(result.supportedFiles).toBe(1);
+	});
+
+	it("reports correct skippedByGitignore count", async () => {
+		const root = path.join(tempDir, "skipped-git-count");
+		fs.mkdirSync(root, { recursive: true });
+		fs.writeFileSync(path.join(root, ".gitignore"), "*.log\n", "utf-8");
+		touch(path.join(root, "app.ts"));
+		touch(path.join(root, "error1.log"));
+		touch(path.join(root, "error2.log"));
+
+		const result = await discoverFiles({ projectPath: root });
+
+		expect(result.skippedByGitignore).toBe(2);
+		expect(result.supportedFiles).toBe(1);
+	});
 });

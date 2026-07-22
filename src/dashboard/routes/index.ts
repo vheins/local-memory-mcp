@@ -5,6 +5,7 @@ import taskRoutes from "./task.routes";
 import standardRoutes from "./standard.routes";
 import coordinationRoutes from "./coordination.routes";
 import kgRoutes from "./kg.routes";
+import codebaseRoutes from "./codebase.routes";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/tasks", taskRoutes);
 router.use("/standards", standardRoutes);
 router.use("/coordination", coordinationRoutes);
 router.use("/", kgRoutes);
+router.use("/codebase", codebaseRoutes);
 
 export default router;

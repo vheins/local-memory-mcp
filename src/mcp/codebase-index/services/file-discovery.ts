@@ -108,7 +108,7 @@ export interface FileDiscoveryService {
 export async function discoverFiles(options: FileDiscoveryOptions): Promise<DiscoverFilesResult> {
 	const startTime = performance.now();
 	const errors: DiscoveryError[] = [];
-	const { projectPath, includeGlobs, excludeGlobs = [], respectGitignore = true } = options;
+	const { projectPath, includeGlobs, excludeGlobs = [], respectGitignore = true, maxFiles } = options;
 
 	// Resolve projectPath to an absolute, normalized path
 	const root = path.resolve(projectPath);
@@ -149,6 +149,8 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 	let totalFiles = 0;
 	let supportedFiles = 0;
 	let skippedFiles = 0;
+	let skippedByExtension = 0;
+	let skippedByGitignore = 0;
 
 	for await (const absolutePath of stream) {
 		totalFiles++;
@@ -167,6 +169,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 			// 2. Check gitignore rules
 			if (gitignoreFilter && gitignoreFilter.ignores(relativePath)) {
 				skippedFiles++;
+				skippedByGitignore++;
 				continue;
 			}
 
@@ -174,6 +177,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 			const language = detectLanguage(relativePath);
 			if (language === null) {
 				skippedFiles++;
+				skippedByExtension++;
 				continue;
 			}
 
@@ -184,6 +188,11 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 				sizeBytes: stat.size
 			});
 			supportedFiles++;
+
+			// 4. Early exit if maxFiles limit reached
+			if (maxFiles !== undefined && discovered.length >= maxFiles) {
+				break;
+			}
 		} catch (err) {
 			skippedFiles++;
 			const message = err instanceof Error ? err.message : String(err);
@@ -204,6 +213,8 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		totalFiles,
 		supportedFiles,
 		skippedFiles,
+		skippedByExtension,
+		skippedByGitignore,
 		durationMs,
 		errorCount: errors.length
 	});
@@ -213,6 +224,8 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		totalFiles,
 		supportedFiles,
 		skippedFiles,
+		skippedByExtension,
+		skippedByGitignore,
 		durationMs,
 		errors
 	};

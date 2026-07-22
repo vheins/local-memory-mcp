@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] — In Development
+
+### Added
+
+- **Codebase Index**: tree-sitter WASM parser for TypeScript/JavaScript/TSX/JSX with language-specific visitors extracting functions, methods, classes, interfaces, types, enums, and variables.
+- **Codebase Index**: file discovery with gitignore and glob support — `fast-glob` stream mode, custom include/exclude patterns, default exclusions for build artifacts.
+- **Codebase Index**: SQLite-backed symbol storage with FTS5 full-text search — two new tables (`codebase_files`, `codebase_symbols`) with auto-synchronized FTS5 virtual table via database triggers.
+- **MCP Tools**: 6 new tools — `index_repository` (incremental with SHA-256 checksums), `search_symbols` (5-tier ranked search), `get_file_symbols` (per-file declarations), `get_architecture` (directory tree + language breakdown), `trace_symbol` (definition + references), `index_status` (index state check).
+- **Dashboard**: Codebase tab with file tree, symbol explorer, search bar, and index status.
+- **CLI**: `--index` flag for server startup indexing with progress output.
+- **Docs**: API reference, feature guide, and operations guide for Codebase Index.
+
 ## [0.19.24] - 2026-07-20
 
 ### Fixed

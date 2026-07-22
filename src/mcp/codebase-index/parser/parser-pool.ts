@@ -3,8 +3,9 @@
  *
  * Key design decisions:
  * - Lazy initialization: WASM loads on first parseFile call, not at module import.
- * - Sequential access: tree-sitter parsers are NOT reentrant, so we use a simple
- *   promise-based mutex to serialize parse operations.
+ * - Concurrent access: tree-sitter Parser is NOT reentrant, so we use a semaphore
+ *   to limit concurrent parse operations. Each concurrent slot creates its own
+ *   Parser instance, sharing the Language objects loaded once at init.
  * - Per-file timeout: each file parse has a configurable deadline (default 10s).
  * - Graceful degradation: parse errors are captured in ParseResult.error, never thrown.
  */
@@ -18,6 +19,7 @@ import type { Tree, Node } from "web-tree-sitter";
 import type { ParseResult, ParserPool } from "./language-visitor.js";
 import { TypeScriptVisitor } from "./typescript-visitor.js";
 import { logger } from "../../utils/logger.js";
+import { FatalError } from "../types/errors.js";
 
 // ── Path resolution ──────────────────────────────────────────────────
 
@@ -57,19 +59,24 @@ function getTsxGrammarPath(): string {
 	throw new Error(`TSX grammar WASM not found`);
 }
 
-// ── Mutex ────────────────────────────────────────────────────────────
+// ── Semaphore ────────────────────────────────────────────────────────
 
 /**
- * Simple promise-based mutex for serializing parser access.
- * tree-sitter Parser is NOT reentrant — concurrent parse calls corrupt state.
+ * Simple promise-based semaphore for limiting concurrent parser access.
+ * tree-sitter Parser is NOT reentrant, so each concurrent slot creates its
+ * own Parser instance while sharing the Language objects loaded once at init.
  */
-class Mutex {
-	private _locked = false;
+class Semaphore {
+	private _count: number;
 	private _queue: Array<() => void> = [];
 
-	async lock(): Promise<void> {
-		if (!this._locked) {
-			this._locked = true;
+	constructor(concurrency: number) {
+		this._count = concurrency;
+	}
+
+	async acquire(): Promise<void> {
+		if (this._count > 0) {
+			this._count--;
 			return;
 		}
 		return new Promise<void>((resolve) => {
@@ -77,12 +84,12 @@ class Mutex {
 		});
 	}
 
-	unlock(): void {
+	release(): void {
 		if (this._queue.length > 0) {
 			const next = this._queue.shift()!;
 			next();
 		} else {
-			this._locked = false;
+			this._count++;
 		}
 	}
 }
@@ -92,11 +99,30 @@ class Mutex {
 export interface ParserPoolOptions {
 	/** Maximum time per file parse in milliseconds (default: 10_000). */
 	parseTimeoutMs?: number;
+	/** Number of concurrent parse operations (default: 4). Each slot gets its own Parser instance. */
+	concurrency?: number;
 }
 
 // ── Implementation ───────────────────────────────────────────────────
 
 const DEFAULT_PARSE_TIMEOUT_MS = 10_000;
+const DEFAULT_CONCURRENCY = 4;
+
+/** Read the parse timeout from environment, falling back to the programmatic default. */
+function resolveParseTimeoutMs(override?: number): number {
+	if (override !== undefined) return override;
+	const env = parseInt(process.env.CODEBASE_INDEX_PARSE_TIMEOUT_MS ?? "", 10);
+	if (!isNaN(env) && env > 0) return env;
+	return DEFAULT_PARSE_TIMEOUT_MS;
+}
+
+/** Read concurrency from environment, falling back to the programmatic default. */
+function resolveConcurrency(override?: number): number {
+	if (override !== undefined && override > 0) return override;
+	const env = parseInt(process.env.CODEBASE_INDEX_PARSE_CONCURRENCY ?? "", 10);
+	if (!isNaN(env) && env > 0) return env;
+	return DEFAULT_CONCURRENCY;
+}
 
 /** Maps file extensions to the appropriate tree-sitter language. */
 const EXTENSION_LANGUAGE_MAP: Record<string, "typescript" | "tsx"> = {
@@ -113,7 +139,7 @@ const EXTENSION_LANGUAGE_MAP: Record<string, "typescript" | "tsx"> = {
 export class TreeSitterParserPool implements ParserPool {
 	private initialized = false;
 	private initPromise: Promise<void> | null = null;
-	private mutex = new Mutex();
+	private semaphore: Semaphore;
 	private parseTimeoutMs: number;
 
 	// Loaded languages
@@ -121,7 +147,8 @@ export class TreeSitterParserPool implements ParserPool {
 	private tsxLanguage: Language | null = null;
 
 	constructor(options: ParserPoolOptions = {}) {
-		this.parseTimeoutMs = options.parseTimeoutMs ?? DEFAULT_PARSE_TIMEOUT_MS;
+		this.parseTimeoutMs = resolveParseTimeoutMs(options.parseTimeoutMs);
+		this.semaphore = new Semaphore(resolveConcurrency(options.concurrency));
 	}
 
 	// ── ParserPool contract ───────────────────────────────────────
@@ -151,13 +178,13 @@ export class TreeSitterParserPool implements ParserPool {
 		// Lazy-init on first call
 		await this.initialize();
 
-		// Serialize parser access
-		await this.mutex.lock();
+		// Acquire a concurrency slot
+		await this.semaphore.acquire();
 
 		try {
 			return await this._parseWithTimeout(filePath, sourceCode, startTime);
 		} finally {
-			this.mutex.unlock();
+			this.semaphore.release();
 		}
 	}
 
@@ -167,18 +194,46 @@ export class TreeSitterParserPool implements ParserPool {
 		const wasmPath = getWasmPath();
 		logger.debug("[ParserPool] Initializing web-tree-sitter", { wasmPath });
 
-		await Parser.init({
-			locateFile(): string {
-				return wasmPath;
-			}
-		});
+		try {
+			await Parser.init({
+				locateFile(): string {
+					return wasmPath;
+				}
+			});
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			logger.error("[ParserPool] WASM init failed", { wasmPath, error: message });
+			throw new FatalError(`WASM initialization failed: ${message}`, {
+				operation: "Parser.init",
+				wasmPath
+			});
+		}
 
 		// Load grammars
 		const tsWasmPath = getTypescriptGrammarPath();
 		const tsxWasmPath = getTsxGrammarPath();
 
-		this.tsLanguage = await Language.load(tsWasmPath);
-		this.tsxLanguage = await Language.load(tsxWasmPath);
+		try {
+			this.tsLanguage = await Language.load(tsWasmPath);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			logger.error("[ParserPool] TypeScript grammar load failed", { tsWasmPath, error: message });
+			throw new FatalError(`Failed to load TypeScript grammar: ${message}`, {
+				operation: "Language.load",
+				path: tsWasmPath
+			});
+		}
+
+		try {
+			this.tsxLanguage = await Language.load(tsxWasmPath);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			logger.error("[ParserPool] TSX grammar load failed", { tsxWasmPath, error: message });
+			throw new FatalError(`Failed to load TSX grammar: ${message}`, {
+				operation: "Language.load",
+				path: tsxWasmPath
+			});
+		}
 
 		logger.info("[ParserPool] Tree-sitter initialized", {
 			tsVersion: this.tsLanguage.metadata

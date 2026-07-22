@@ -21,7 +21,7 @@
 		<div style="margin-bottom:16px;">
 			<div class="section-label">Tags</div>
 			<div style="display:flex;flex-wrap:wrap;gap:6px;">
-				{#each $handler.memory.tags as tag, tagIndex (`${tag}-${tagIndex}`)}
+				{#each [...new Set($handler.memory.tags)] as tag}
 					<span class="tag-chip">{tag}</span>
 				{/each}
 			</div>

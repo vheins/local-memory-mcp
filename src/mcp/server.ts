@@ -10,6 +10,8 @@ import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runCliIndex } from "./codebase-index/cli";
+import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
+import { TreeSitterParserPool } from "./codebase-index/parser/parser-pool";
 import fs from "fs";
 import path from "path";
 
@@ -69,6 +71,30 @@ runStartupMaintenance(db).then((result) => {
 		});
 	}
 });
+
+// Run startup auto-index: triggers codebase indexing for the current working directory
+// if the index has never been built or is older than TTL (default 24h).
+// Respects CODEBASE_AUTO_INDEX env var. The parser pool is initialized asynchronously
+// and indexing runs in the background; the dashboard polls /api/codebase/index-status.
+{
+	const repoName = path.basename(process.cwd());
+	const repoPath = process.cwd();
+	const parserPool = new TreeSitterParserPool();
+	void parserPool
+		.initialize()
+		.then(() => {
+			void autoIndexIfStale(repoName, repoPath, db, parserPool).then((result) => {
+				logger.info("[Server] Auto-index check complete", {
+					repo: repoName,
+					status: result.status,
+					reason: result.reason
+				});
+			});
+		})
+		.catch((err) => {
+			logger.warn("[Server] Auto-index parser pool initialization failed", { error: String(err) });
+		});
+}
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
 process.stdout.on("error", (err: unknown) => {
