@@ -159,6 +159,11 @@ function normalizeToolArgs(args: Record<string, unknown>, session: SessionContex
 	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
 	validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
 
+	// ── Session-wide defaults for owner/repo ─────────────────────────────
+	// Prefer session-wide values over re-deriving every call
+	if (!nextArgs.repo && session.repo) {
+		nextArgs.repo = session.repo;
+	}
 	if (!nextArgs.repo) {
 		nextArgs.repo = inferRepoFromSession(session);
 	}
@@ -166,6 +171,10 @@ function normalizeToolArgs(args: Record<string, unknown>, session: SessionContex
 	const scope = nextArgs.scope as Record<string, unknown> | undefined;
 	if (scope && !scope.repo) {
 		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
+	}
+
+	if (!nextArgs.owner && session.owner) {
+		nextArgs.owner = session.owner;
 	}
 
 	if (!nextArgs.owner) {
@@ -221,6 +230,13 @@ function normalizeToolArgs(args: Record<string, unknown>, session: SessionContex
 			}
 		}
 	}
+
+	// ── Lazy capture model & agent ───────────────────────────────────────
+	// Fall back to session-wide values when args are not provided.
+	// lastSeenAgent/lastSeenModel are set once at oninitialized and never mutated afterward.
+	nextArgs.agent ??= session.lastSeenAgent ?? session.clientName ?? process.env.MCP_CLIENT_NAME;
+	nextArgs.model ??= session.lastSeenModel ?? process.env.MCP_MODEL;
+	// ─────────────────────────────────────────────────────────────────────
 
 	return nextArgs;
 }

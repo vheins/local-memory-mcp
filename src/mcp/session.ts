@@ -20,9 +20,34 @@ export type SessionContext = {
 	supportsElicitation: boolean;
 	supportsElicitationForm: boolean;
 	supportsElicitationUrl: boolean;
+
+	// Session-wide resolved defaults (populated once at startup)
+	owner?: string;
+	repo?: string;
+	projectPath?: string;
+
+	// From initialize handshake (per-connection)
+	clientName?: string;
+	clientVersion?: string;
+
+	// Lazy-captured from args — fallback for subsequent tool calls
+	lastSeenModel?: string;
+	lastSeenAgent?: string;
 };
 
 export function createSessionContext(): SessionContext {
+	const cwd = process.cwd();
+	const repo = path.basename(cwd);
+	const projectPath = cwd;
+
+	let owner: string | undefined = inferOwnerFromGit(cwd);
+	if (!owner) {
+		const parts = cwd.split(path.sep).filter(Boolean);
+		if (parts.length >= 2) {
+			owner = parts[parts.length - 2];
+		}
+	}
+
 	return {
 		roots: [],
 		supportsRoots: false,
@@ -30,7 +55,15 @@ export function createSessionContext(): SessionContext {
 		supportsSamplingTools: false,
 		supportsElicitation: false,
 		supportsElicitationForm: false,
-		supportsElicitationUrl: false
+		supportsElicitationUrl: false,
+		// NEW
+		owner,
+		repo,
+		projectPath,
+		clientName: undefined,
+		clientVersion: undefined,
+		lastSeenModel: undefined,
+		lastSeenAgent: undefined
 	};
 }
 
@@ -149,6 +182,16 @@ export function inferRepoFromSession(session?: SessionContext): string | undefin
 }
 
 /**
+ * Validates that a string is a legal GitHub username per GitHub's validation rules:
+ * - 1-39 characters
+ * - Starts and ends with alphanumeric
+ * - May contain single hyphens internally
+ */
+function isValidGitHubUsername(username: string): boolean {
+	return /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(username);
+}
+
+/**
  * Attempts to extract the GitHub owner (username or organization) from
  * the git remote origin URL in the given working directory.
  */
@@ -164,7 +207,8 @@ function inferOwnerFromGit(cwd: string): string | undefined {
 		const match = content.match(
 			/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^\/\s]+)/
 		);
-		return match?.[1] || undefined;
+		const rawOwner = match?.[1];
+		return rawOwner && isValidGitHubUsername(rawOwner) ? rawOwner : undefined;
 	} catch {
 		return undefined;
 	}

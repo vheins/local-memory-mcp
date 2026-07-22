@@ -4,6 +4,7 @@ process.env.MCP_SERVER = "true";
 
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createMcpServer } from "./mcp-server";
+import { updateSessionFromInitialize } from "./session";
 import { SQLiteStore } from "./storage/sqlite";
 import { RealVectorStore } from "./storage/vectors";
 import { CAPABILITIES } from "./capabilities";
@@ -119,4 +120,30 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 // Start the MCP stdio server using the SDK
-const handle = serveStdio(() => createMcpServer(db, vectors));
+const handle = serveStdio(() => {
+	const { server, ctx } = createMcpServer(db, vectors);
+
+	// Wire oninitialized to capture client info from the initialize handshake
+	server.server.oninitialized = () => {
+		try {
+			const clientVer = server.server.getClientVersion();
+			if (clientVer) {
+				ctx.clientName = clientVer.name;
+				ctx.clientVersion = clientVer.version;
+				ctx.lastSeenAgent = clientVer.name;
+			}
+			ctx.lastSeenModel ??= process.env.MCP_MODEL;
+			ctx.lastSeenAgent ??= process.env.MCP_CLIENT_NAME;
+
+			updateSessionFromInitialize(ctx, {
+				clientInfo: clientVer,
+				capabilities: server.server.getClientCapabilities()
+			} as Record<string, unknown>);
+		} catch (error) {
+			// Non-fatal — just logging
+			logger.warn("[session] Failed to capture client info", { error: String(error) });
+		}
+	};
+
+	return server;
+});

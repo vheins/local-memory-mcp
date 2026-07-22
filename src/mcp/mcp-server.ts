@@ -19,7 +19,11 @@ import type { CompletionRequest } from "./completion";
  * @param session - Optional session context for owner/repo inference
  * @returns A fully configured McpServer instance with all tools registered
  */
-export function createMcpServer(store: SQLiteStore, vectors: VectorStore, session?: SessionContext): McpServer {
+export function createMcpServer(
+	store: SQLiteStore,
+	vectors: VectorStore,
+	session?: SessionContext
+): { server: McpServer; ctx: SessionContext } {
 	const instructions = loadServerInstructions();
 	const ctx = session ?? createSessionContext();
 
@@ -91,5 +95,5 @@ export function createMcpServer(store: SQLiteStore, vectors: VectorStore, sessio
 		};
 	});
 
-	return server;
+	return { server, ctx };
 }

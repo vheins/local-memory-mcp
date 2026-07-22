@@ -106,6 +106,15 @@ Example:
 - Auto-extracted via NLP Archivist on every memory-store (people, places, orgs, concepts)
 - Visualize in Dashboard → Knowledge Graph tab (force-directed graph)
 
+**Codebase Index**: index_repository → index_status | get_architecture → get_file_symbols | search_symbols | trace_symbol
+
+- **index_repository** — Scans a repository directory, parses source files (TypeScript/JavaScript) via tree-sitter, and stores extracted symbols (functions, classes, interfaces, types, enums) in a SQLite knowledge graph. Supports incremental indexing via checksum comparison.
+- **index_status** — Returns the current indexing status: whether indexed, last indexed time, file/symbol counts, ongoing progress, and optional staleness detection (≥5% stale files triggers stale flag when `repoPath` is provided).
+- **get_architecture** — Returns a high-level overview: directory tree, language breakdown, file counts, and top-level exports.
+- **get_file_symbols** — Returns all indexed symbols declared in a specific file, in declaration order with locations, signatures, and doc comments.
+- **search_symbols** — Searches indexed symbols by name with ranked results. Supports filtering by kind, file path, and export status. Uses 5-tier ranking: exact → camelCase → prefix → substring → FTS5.
+- **trace_symbol** — Traces a symbol's definition and usage across the codebase. Returns definition location, file references, and export status.
+
 ## Available Prompts (slash commands)
 
 ### Engineering Roles
