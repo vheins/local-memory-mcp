@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export class MigrationManager {
 	constructor(private db: Database.Database) {}
@@ -302,6 +302,22 @@ export class MigrationManager {
       CREATE INDEX IF NOT EXISTS idx_observations_entity ON observations(entity_name);
       CREATE INDEX IF NOT EXISTS idx_observations_repo ON observations(repo);
       CREATE INDEX IF NOT EXISTS idx_observations_created_at ON observations(created_at);
+
+      CREATE TABLE IF NOT EXISTS codebase_files (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        language TEXT,
+        checksum TEXT,
+        lines INTEGER DEFAULT 0,
+        size_bytes INTEGER DEFAULT 0,
+        last_indexed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_codebase_files_repo_path ON codebase_files(repo, file_path);
+      CREATE INDEX IF NOT EXISTS idx_codebase_files_repo_indexed ON codebase_files(repo, last_indexed_at);
     `);
 
 		const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [

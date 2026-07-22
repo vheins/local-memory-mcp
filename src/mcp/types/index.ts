@@ -5,6 +5,7 @@ export * from "./vector";
 export * from "./common";
 export * from "./test";
 export * from "./handoff";
+export * from "./codebase-file";
 
 import { MemoryEntry } from "./memory";
 export type Memory = MemoryEntry;
