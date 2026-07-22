@@ -416,39 +416,35 @@ const x: string = 123; // type mismatch but syntactically ok
 
 	// ── Test 10: Parse timeout ────────────────────────────────────
 
-	it(
-		"respects parse timeout for huge files",
-		{ timeout: 15_000 },
-		async () => {
-			if (!wasmAvailable) {
-				console.warn("  Skipped: WASM not available");
-				return;
+	it("respects parse timeout for huge files", { timeout: 15_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		// Short timeout pool
+		const pool = new TreeSitterParserPool({ parseTimeoutMs: 200 });
+
+		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cbi-parser-"));
+		try {
+			const filePath = path.join(tempDir, "big.ts");
+
+			// Generate a massive file that should take a while to parse
+			const hugeSource = "export const huge = {\n" + "value: 1,\n".repeat(50_000) + "};\n";
+			touch(filePath, hugeSource);
+
+			const result = await pool.parseFile(filePath, hugeSource);
+
+			// Should either complete or timeout gracefully
+			if (result.error) {
+				expect(result.error).toMatch(/timeout/i);
+			} else {
+				expect(result.symbols.length).toBeGreaterThanOrEqual(0);
 			}
-
-			// Short timeout pool
-			const pool = new TreeSitterParserPool({ parseTimeoutMs: 200 });
-
-			const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cbi-parser-"));
-			try {
-				const filePath = path.join(tempDir, "big.ts");
-
-				// Generate a massive file that should take a while to parse
-				const hugeSource = "export const huge = {\n" + "value: 1,\n".repeat(50_000) + "};\n";
-				touch(filePath, hugeSource);
-
-				const result = await pool.parseFile(filePath, hugeSource);
-
-				// Should either complete or timeout gracefully
-				if (result.error) {
-					expect(result.error).toMatch(/timeout/i);
-				} else {
-					expect(result.symbols.length).toBeGreaterThanOrEqual(0);
-				}
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
-		},
-	);
+		} finally {
+			fs.rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
 
 	// ── Test 11: Generic types ────────────────────────────────────
 
@@ -528,5 +524,240 @@ export { IConfig };
 		expect(iConfig!.kind).toBe(SymbolKind.Interface);
 		// `export { IConfig }` marks it exported even though it's an interface
 		expect(iConfig!.exported).toBe(true);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Empty file returns empty symbol array
+	// ══════════════════════════════════════════════════════════════════
+
+	it("empty file: returns empty symbol array", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		const { tsLang } = await initTreeSitter();
+
+		const source = "";
+
+		const symbols = parseSource(source, tsLang);
+		expect(symbols).toEqual([]);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: File with only comments returns no symbols
+	// ══════════════════════════════════════════════════════════════════
+
+	it("only comments: returns no symbols", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		const { tsLang } = await initTreeSitter();
+
+		const source = `
+// Single line comment
+
+/* Multi-line
+   comment block */
+
+/** JSDoc comment
+ * @param x - value
+ */
+`;
+
+		const symbols = parseSource(source, tsLang);
+		expect(symbols).toEqual([]);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Deeply nested — class with method with arrow function
+	// ══════════════════════════════════════════════════════════════════
+
+	it("deeply nested: class with method with arrow function callback", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		const { tsLang } = await initTreeSitter();
+
+		const source = `
+class PipelineService {
+  process(items: string[]): number[] {
+    const mapper = (item: string): number => {
+      const doubled = item.length * 2;
+      return doubled;
+    };
+    return items.map(mapper);
+  }
+}
+`;
+
+		const symbols = parseSource(source, tsLang);
+
+		// Top-level class
+		const cls = symbols.find((s) => s.name === "PipelineService");
+		expect(cls).toBeDefined();
+		expect(cls!.kind).toBe(SymbolKind.Class);
+
+		// Method
+		const method = symbols.find((s) => s.name === "process");
+		expect(method).toBeDefined();
+		expect(method!.kind).toBe(SymbolKind.Method);
+		expect(method!.parentName).toBe("PipelineService");
+
+		// The arrow function inside method body is NOT extracted because the
+		// visitor only recurses into class_body for method definitions, not
+		// into method bodies themselves. Inner variables/arrows are excluded.
+		const mapper = symbols.find((s) => s.name === "mapper");
+		expect(mapper).toBeUndefined();
+
+		// Verify only the 2 top-level symbols are returned (class + method)
+		expect(symbols.length).toBe(2);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Type-only imports should not create symbols
+	// ══════════════════════════════════════════════════════════════════
+
+	it("type-only imports: does not create symbols for imports", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		const { tsLang } = await initTreeSitter();
+
+		const source = `
+import type { Foo } from "./types";
+import { Bar } from "./utils";
+
+export function doThing(): void {
+  // uses Foo and Bar
+}
+`;
+
+		const symbols = parseSource(source, tsLang);
+
+		// Foo should NOT appear as a symbol (it's a type-only import)
+		const foo = symbols.find((s) => s.name === "Foo");
+		expect(foo).toBeUndefined();
+
+		// Bar should NOT appear as a symbol (it's an import, not a declaration)
+		const bar = symbols.find((s) => s.name === "Bar");
+		expect(bar).toBeUndefined();
+
+		// doThing SHOULD appear (it's declared here)
+		const doThing = symbols.find((s) => s.name === "doThing");
+		expect(doThing).toBeDefined();
+		expect(doThing!.kind).toBe(SymbolKind.Function);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Multiple exports compound export statement
+	// ══════════════════════════════════════════════════════════════════
+
+	it("multiple exports: compound export { A, B, C }", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		const { tsLang } = await initTreeSitter();
+
+		const source = `
+function fnA(): void {}
+function fnB(): void {}
+function fnC(): void {}
+
+export { fnA, fnB, fnC };
+`;
+
+		const symbols = parseSource(source, tsLang);
+
+		const fnA = symbols.find((s) => s.name === "fnA");
+		expect(fnA).toBeDefined();
+		expect(fnA!.kind).toBe(SymbolKind.Function);
+		expect(fnA!.exported).toBe(true);
+
+		const fnB = symbols.find((s) => s.name === "fnB");
+		expect(fnB).toBeDefined();
+		expect(fnB!.exported).toBe(true);
+
+		const fnC = symbols.find((s) => s.name === "fnC");
+		expect(fnC).toBeDefined();
+		expect(fnC!.exported).toBe(true);
+
+		// All 3 should be present
+		const exportedSymbols = symbols.filter((s) => s.exported);
+		expect(exportedSymbols.length).toBeGreaterThanOrEqual(3);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Parse .tsx file with JSX elements
+	// ══════════════════════════════════════════════════════════════════
+
+	it("JSX file: parses .tsx with JSX elements", { timeout: 30_000 }, async () => {
+		if (!wasmAvailable) {
+			console.warn("  Skipped: WASM not available");
+			return;
+		}
+
+		// For .tsx we need the TSX grammar
+		if (!wasmPaths || !fs.existsSync(wasmPaths.tsxGrammar)) {
+			console.warn("  Skipped: TSX grammar WASM not available");
+			return;
+		}
+
+		const { tsLang } = await initTreeSitter();
+		// Also load TSX grammar
+		const tsxLang = await Language.load(wasmPaths.tsxGrammar);
+
+		const source = `
+import React from "react";
+
+interface Props {
+  name: string;
+}
+
+export const Greeting: React.FC<Props> = ({ name }) => {
+  return <div className="greeting">Hello, {name}!</div>;
+};
+
+export default function Header(): JSX.Element {
+  return <h1>Header</h1>;
+}
+`;
+
+		const parser = new Parser();
+		parser.setLanguage(tsxLang);
+
+		const tree = parser.parse(source);
+		expect(tree).not.toBeNull();
+
+		const visitor = new TypeScriptVisitor();
+		const symbols = visitor.extractSymbols(tree!, source);
+
+		// Interface should be extracted
+		const props = symbols.find((s) => s.name === "Props");
+		expect(props).toBeDefined();
+		expect(props!.kind).toBe(SymbolKind.Interface);
+
+		// Greeting component
+		const greeting = symbols.find((s) => s.name === "Greeting");
+		expect(greeting).toBeDefined();
+		expect(greeting!.exported).toBe(true);
+
+		// Header component (default export)
+		const header = symbols.find((s) => s.name === "Header");
+		expect(header).toBeDefined();
+		expect(header!.kind).toBe(SymbolKind.Function);
+		expect(header!.exported).toBe(true);
+		expect(header!.defaultExport).toBe(true);
+
+		tree?.delete();
+		parser.delete();
 	});
 });

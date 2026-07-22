@@ -9,6 +9,7 @@ import { RealVectorStore } from "./storage/vectors";
 import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { runStartupMaintenance } from "./services/maintenance-job";
+import { runCliIndex } from "./codebase-index/cli";
 import fs from "fs";
 import path from "path";
 
@@ -38,6 +39,12 @@ if (process.argv.includes("doctor")) {
 
 	process.stderr.write("\n✨ Diagnosis complete.\n\n");
 	process.exit(0);
+}
+
+// --- CLI Index Mode ---
+if (process.argv.includes("--index")) {
+	await runCliIndex();
+	// runCliIndex always calls process.exit(0|1) — unreachable
 }
 
 // Create storage instances

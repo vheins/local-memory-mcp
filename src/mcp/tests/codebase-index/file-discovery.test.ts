@@ -230,4 +230,123 @@ describe("FileDiscoveryService", () => {
 		expect(filesByName["small.ts"]).toBe(3);
 		expect(filesByName["big.ts"]).toBe(100);
 	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Nested gitignore in subdirectory overrides parent
+	// ══════════════════════════════════════════════════════════════════
+
+	it("nested .gitignore in subdirectory exists but only root is honored", async () => {
+		const root = path.join(tempDir, "nested-gitignore");
+		fs.mkdirSync(root, { recursive: true });
+		// Root gitignore ignores all *.ts
+		fs.writeFileSync(path.join(root, ".gitignore"), "*.ts\n", "utf-8");
+		touch(path.join(root, "ignored.ts"));
+		// Subdirectory has its own .gitignore (not honored — only root .gitignore is read)
+		fs.mkdirSync(path.join(root, "sub"), { recursive: true });
+		fs.writeFileSync(path.join(root, "sub", ".gitignore"), "!*.ts\n", "utf-8");
+		touch(path.join(root, "sub", "allowed.ts"));
+		touch(path.join(root, "sub", "also.ts"));
+
+		const result = await discoverFiles({ projectPath: root });
+
+		const names = relativePaths(result);
+		// Only root .gitignore is parsed — all *.ts files are ignored including subdir
+		expect(names).not.toContain("ignored.ts");
+		// Subdirectory files are also ignored because root gitignore blocks *.ts globally
+		// (implementation uses single root-level .gitignore via `ignore` library)
+		expect(names).not.toContain("sub/allowed.ts");
+		expect(names).not.toContain("sub/also.ts");
+		expect(result.skippedFiles).toBe(3);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Negation patterns in gitignore
+	// ══════════════════════════════════════════════════════════════════
+
+	it("negation patterns overrides previous ignore rule", async () => {
+		const root = path.join(tempDir, "negate-pattern");
+		fs.mkdirSync(root, { recursive: true });
+		fs.writeFileSync(path.join(root, ".gitignore"), "important/*\n!important/*.ts\n", "utf-8");
+		touch(path.join(root, "important", "config.json"));
+		touch(path.join(root, "important", "config.ts"));
+		touch(path.join(root, "important", "util.ts"));
+		touch(path.join(root, "src", "app.ts"));
+
+		const result = await discoverFiles({ projectPath: root });
+
+		const names = relativePaths(result);
+		// Negation un-ignores *.ts in important/
+		expect(names).toContain("important/config.ts");
+		expect(names).toContain("important/util.ts");
+		// important/config.json is NOT un-ignored — still ignored
+		expect(names).not.toContain("important/config.json");
+		// Other dirs unaffected
+		expect(names).toContain("src/app.ts");
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Empty .gitignore file does not cause errors
+	// ══════════════════════════════════════════════════════════════════
+
+	it("empty .gitignore file does not cause errors", async () => {
+		const root = path.join(tempDir, "empty-gitignore");
+		fs.mkdirSync(root, { recursive: true });
+		fs.writeFileSync(path.join(root, ".gitignore"), "", "utf-8");
+		touch(path.join(root, "app.ts"));
+		touch(path.join(root, "lib.ts"));
+
+		const result = await discoverFiles({ projectPath: root });
+
+		expect(result.files.length).toBe(2);
+		expect(result.errors).toEqual([]);
+		const names = relativePaths(result);
+		expect(names).toContain("app.ts");
+		expect(names).toContain("lib.ts");
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: No .gitignore — falls back to defaults correctly
+	// ══════════════════════════════════════════════════════════════════
+
+	it("no .gitignore falls back to defaults correctly", async () => {
+		const root = path.join(tempDir, "no-gitignore");
+		fs.mkdirSync(root, { recursive: true });
+		// No .gitignore file at all
+		touch(path.join(root, "src", "index.ts"));
+		touch(path.join(root, "src", "legacy.ts"));
+		// node_modules should still be skipped by default
+		touch(path.join(root, "node_modules", "dep.ts"));
+
+		const result = await discoverFiles({ projectPath: root });
+
+		const names = relativePaths(result);
+		expect(names).toContain("src/index.ts");
+		expect(names).toContain("src/legacy.ts");
+		expect(names).not.toContain("node_modules/dep.ts");
+		expect(result.errors).toEqual([]);
+	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Edge Case: Large directory — 100 files, verify all discovered
+	// ══════════════════════════════════════════════════════════════════
+
+	it("large directory: 100 files in flat structure, all discovered", async () => {
+		const root = path.join(tempDir, "large-dir");
+		fs.mkdirSync(root, { recursive: true });
+		for (let i = 0; i < 100; i++) {
+			touch(path.join(root, `file${String(i).padStart(3, "0")}.ts`), `// file ${i}`);
+		}
+
+		const result = await discoverFiles({ projectPath: root });
+
+		expect(result.totalFiles).toBe(100);
+		expect(result.supportedFiles).toBe(100);
+		expect(result.skippedFiles).toBe(0);
+		expect(result.files).toHaveLength(100);
+		expect(result.errors).toEqual([]);
+		// Verify all files are present and sorted
+		for (let i = 0; i < 100; i++) {
+			expect(result.files[i].path).toBe(`file${String(i).padStart(3, "0")}.ts`);
+		}
+	});
 });
