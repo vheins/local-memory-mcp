@@ -6,7 +6,7 @@ import { extractEntities } from "./kg-archivist";
 import { KGBackfillSchema } from "./schemas";
 
 export async function handleKGBackfill(args: unknown, db: SQLiteStore) {
-	const { repo, owner, source } = KGBackfillSchema.parse(args);
+	const { repo, owner, source, json } = KGBackfillSchema.parse(args);
 
 	const stats = {
 		reposScanned: 0,
@@ -117,6 +117,7 @@ export async function handleKGBackfill(args: unknown, db: SQLiteStore) {
 	logger.info(`[kg-backfill] Complete: ${summary}`);
 
 	return createMcpResponse(stats, summary, {
-		contentSummary: `Backfill complete: ${summary}`
+		contentSummary: `Backfill complete: ${summary}`,
+		includeJson: json
 	});
 }

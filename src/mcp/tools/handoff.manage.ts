@@ -45,7 +45,7 @@ function buildClaimListSummary(repo: string, count: number, agent?: string, acti
 
 export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 	const validated = HandoffCreateSchema.parse(args);
-	const { owner, repo, from_agent, to_agent, task_id, task_code, summary, context, expires_at, structured } = validated;
+	const { owner, repo, from_agent, to_agent, task_id, task_code, summary, context, expires_at, json } = validated;
 
 	let resolvedTaskId = task_id ?? null;
 	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {
@@ -86,7 +86,7 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(handoff, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: structured
+		includeJson: json
 	});
 }
 
@@ -104,7 +104,7 @@ export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 		return { content: [{ type: "text" as const, text: msg }], isError: true };
 	}
 	const validated = parsed.data;
-	const { owner, repo, status, from_agent, to_agent, limit, offset, structured } = validated;
+	const { owner, repo, status, from_agent, to_agent, limit, offset, json } = validated;
 
 	const handoffs = storage.handoffs.listHandoffs({
 		owner: owner,
@@ -157,13 +157,13 @@ export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: structured
+		includeJson: json
 	});
 }
 
 export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 	const validated = HandoffUpdateSchema.parse(args);
-	const { id, status, structured } = validated;
+	const { id, status, json } = validated;
 
 	const existing = storage.handoffs.getHandoffById(id);
 	if (!existing) {
@@ -186,13 +186,13 @@ export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(result, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: structured
+		includeJson: json
 	});
 }
 
 export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	const validated = TaskClaimSchema.parse(args);
-	const { owner, repo, task_id, task_code, agent, role, metadata, structured } = validated;
+	const { owner, repo, task_id, task_code, agent, role, metadata, json } = validated;
 
 	let taskId = task_id;
 	if (taskId && !UUID_REGEX.test(taskId)) {
@@ -263,21 +263,15 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 		`Claimed At: ${claim.claimed_at}`
 	].join("\n");
 
-	const response = createMcpResponse(responseData, contentSummary, {
+	return createMcpResponse(responseData, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: structured
+		includeJson: json
 	});
-
-	if (structured) {
-		response.structuredContent = responseData;
-	}
-
-	return response;
 }
 
 export async function handleClaimList(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimListSchema.parse(args);
-	const { owner, repo, agent, active_only, limit, offset, structured } = validated;
+	const { owner, repo, agent, active_only, limit, offset, json } = validated;
 
 	const claims = storage.handoffs.listClaims({
 		owner: owner,
@@ -314,13 +308,13 @@ export async function handleClaimList(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: structured
+		includeJson: json
 	});
 }
 
 export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimReleaseSchema.parse(args);
-	const { owner, repo, task_id, task_code, agent, structured } = validated;
+	const { owner, repo, task_id, task_code, agent, json } = validated;
 
 	let resolvedTaskId = task_id;
 	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {
@@ -367,6 +361,6 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(result, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: structured
+		includeJson: json
 	});
 }

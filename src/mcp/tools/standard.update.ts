@@ -98,7 +98,7 @@ export async function handleStandardUpdate(
 		`Updated coding standard [${existing.code}] in repo "${existing.repo || "global"}". Fields: ${Object.keys(updates).join(", ") || "none"}.`,
 		{
 			structuredContentPathHint: "updatedFields",
-			includeSerializedStructuredContent: true
+			includeJson: true
 		}
 	);
 }

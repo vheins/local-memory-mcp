@@ -86,7 +86,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 		return { content: [{ type: "text" as const, text: msg }], isError: true };
 	}
 	const validated = parsed.data;
-	const { owner, repo, status, phase, query, limit, offset, structured: isStructuredRequest = false } = validated;
+	const { owner, repo, status, phase, query, limit, offset, json: isJsonRequest = false } = validated;
 
 	let statuses: string[] = [];
 	if (status !== "all") {
@@ -121,7 +121,7 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 	};
 
 	let contentSummary: string | undefined;
-	if (!isStructuredRequest) {
+	if (!isJsonRequest) {
 		const tasksByStatus: Record<string, Task[]> = {};
 		for (const t of filteredTasks) {
 			const statusLabel = t.status === "in_progress" ? "In Progress" : capitalize(t.status);
@@ -135,6 +135,6 @@ export async function handleTaskList(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: isStructuredRequest
+		includeJson: isJsonRequest
 	});
 }

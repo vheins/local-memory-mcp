@@ -290,7 +290,7 @@ export async function handleStandardSearch(
 		{
 			contentSummary,
 			structuredContentPathHint: "results",
-			includeSerializedStructuredContent: true
+			includeJson: true
 		}
 	);
 }

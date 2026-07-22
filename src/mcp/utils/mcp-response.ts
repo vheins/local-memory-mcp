@@ -48,12 +48,12 @@ export function createMcpResponse(
 		results?: unknown[];
 		structuredContentPathHint?: string;
 		contentSummary?: string;
-		includeSerializedStructuredContent?: boolean;
+		includeJson?: boolean;
 	}
 ): McpResponse {
-	const { structuredContentPathHint, contentSummary, includeSerializedStructuredContent = false } = options || {};
-	// includeSerializedStructuredContent is reserved for future use in protocol negotiation
-	void includeSerializedStructuredContent;
+	const { structuredContentPathHint, contentSummary, includeJson = false } = options || {};
+	// includeJson is reserved for future use in protocol negotiation
+	void includeJson;
 
 	// Pruning logic to save tokens for the agent
 	let finalData = data;
@@ -94,7 +94,7 @@ export function createMcpResponse(
 		});
 	} else if (summary && summary.trim().length > 0) {
 		let text = summary.trim();
-		if (includeSerializedStructuredContent) {
+		if (includeJson) {
 			text += ` ${
 				structuredContentPathHint
 					? `Read structuredContent.${structuredContentPathHint} for details.`
@@ -112,7 +112,7 @@ export function createMcpResponse(
 		isError: false
 	};
 
-	if (includeSerializedStructuredContent === false) {
+	if (includeJson === false) {
 		delete response.structuredContent;
 	}
 

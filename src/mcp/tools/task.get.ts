@@ -5,7 +5,7 @@ import { TaskGetSchema } from "./schemas";
 
 export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 	const validated = TaskGetSchema.parse(args);
-	const { owner, repo, id, task_code, structured: isStructuredRequest } = validated;
+	const { owner, repo, id, task_code, json: isJsonRequest } = validated;
 
 	let task;
 	if (id) {
@@ -25,7 +25,7 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 	const depended_by = storage.tasks.getDependedByTaskId(task.id);
 
 	let contentSummary: string | undefined;
-	if (!isStructuredRequest) {
+	if (!isJsonRequest) {
 		const lines: string[] = [
 			`Task: ${task.title}`,
 			`Code: ${task.task_code}`,
@@ -102,6 +102,6 @@ export async function handleTaskGet(args: unknown, storage: SQLiteStore) {
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: isStructuredRequest
+		includeJson: isJsonRequest
 	});
 }

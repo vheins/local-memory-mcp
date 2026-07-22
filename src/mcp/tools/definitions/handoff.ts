@@ -28,7 +28,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 						"Structured handoff context. Include next_steps, blockers, or remaining_work unless a target agent or task is provided."
 				},
 				expires_at: { type: "string", description: "Optional expiration timestamp" },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["owner", "repo", "from_agent", "summary"]
 		},
@@ -66,7 +66,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 			properties: {
 				id: { type: "string", format: "uuid", description: "Handoff ID" },
 				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["id", "status"]
 		},
@@ -100,7 +100,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 				to_agent: { type: "string" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["owner", "repo"]
 		},
@@ -157,7 +157,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 				agent: { type: "string", description: "Claiming agent name" },
 				role: { type: "string", description: "Claiming agent role" },
 				metadata: { type: "object", description: "Optional claim metadata" },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["owner", "repo", "agent"]
 		},
@@ -197,7 +197,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 				active_only: { type: "boolean", description: "When true, return only unreleased claims" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["owner", "repo"]
 		},
@@ -249,7 +249,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 				},
 				task_code: { type: "string", description: "Task code to release. Optional if task_id is provided." },
 				agent: { type: "string", description: "Optional agent name to release only that claim" },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["repo", "owner"]
 		},

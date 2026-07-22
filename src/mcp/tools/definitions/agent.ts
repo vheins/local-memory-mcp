@@ -37,10 +37,10 @@ export const AGENT_TOOL_DEFINITIONS = [
 					default: 5,
 					description: "Maximum number of memories to return."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			}
 		},
@@ -134,10 +134,10 @@ export const AGENT_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["summary", "context", "rationale"]
@@ -194,10 +194,10 @@ export const AGENT_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["summary"]

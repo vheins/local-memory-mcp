@@ -18,7 +18,7 @@ export async function handleCreateEntity(
 	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = CreateEntitySchema.parse(params);
-	const { name, type, description, owner, repo, structured } = validated;
+	const { name, type, description, owner, repo, json } = validated;
 
 	const now = new Date().toISOString();
 
@@ -42,7 +42,7 @@ export async function handleCreateEntity(
 					message: `Entity '${name}' already exists in this repo.`
 				},
 				`Entity '${name}' already exists.`,
-				{ includeSerializedStructuredContent: structured }
+				{ includeJson: json }
 			);
 			response.isError = true;
 			return response;
@@ -61,7 +61,7 @@ export async function handleCreateEntity(
 		`Created entity '${name}' (${type}) in repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "entity",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }
@@ -74,7 +74,7 @@ export async function handleDeleteEntity(
 	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = DeleteEntitySchema.parse(params);
-	const { name, owner: _owner, repo, structured } = validated;
+	const { name, owner: _owner, repo, json } = validated;
 
 	let changes = 0;
 	try {
@@ -95,7 +95,7 @@ export async function handleDeleteEntity(
 					message: `Entity '${name}' is referenced by existing relations and cannot be deleted.`
 				},
 				`Entity '${name}' is in use and cannot be deleted.`,
-				{ includeSerializedStructuredContent: structured }
+				{ includeJson: json }
 			);
 			response.isError = true;
 			return response;
@@ -108,7 +108,7 @@ export async function handleDeleteEntity(
 				message: `Failed to delete entity '${name}'.`
 			},
 			`Failed to delete entity '${name}'.`,
-			{ includeSerializedStructuredContent: structured }
+			{ includeJson: json }
 		);
 		response.isError = true;
 		return response;
@@ -124,7 +124,7 @@ export async function handleDeleteEntity(
 				message: `Entity '${name}' not found.`
 			},
 			`Entity '${name}' not found.`,
-			{ includeSerializedStructuredContent: structured }
+			{ includeJson: json }
 		);
 	}
 
@@ -136,7 +136,7 @@ export async function handleDeleteEntity(
 		`Deleted entity '${name}' and its cascade (relations, observations).`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }
@@ -149,7 +149,7 @@ export async function handleCreateRelation(
 	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = CreateRelationSchema.parse(params);
-	const { from_entity, to_entity, relation_type, owner, repo, structured } = validated;
+	const { from_entity, to_entity, relation_type, owner, repo, json } = validated;
 
 	const now = new Date().toISOString();
 
@@ -185,7 +185,7 @@ export async function handleCreateRelation(
 					message: `Source entity '${from_entity}' not found. Create it first.`
 				},
 				`Source entity '${from_entity}' not found.`,
-				{ includeSerializedStructuredContent: structured }
+				{ includeJson: json }
 			);
 			response.isError = true;
 			return response;
@@ -199,7 +199,7 @@ export async function handleCreateRelation(
 					message: `Target entity '${to_entity}' not found. Create it first.`
 				},
 				`Target entity '${to_entity}' not found.`,
-				{ includeSerializedStructuredContent: structured }
+				{ includeJson: json }
 			);
 			response.isError = true;
 			return response;
@@ -213,7 +213,7 @@ export async function handleCreateRelation(
 					message: `Relation '${from_entity} →[${relation_type}]→ ${to_entity}' already exists.`
 				},
 				`Relation already exists.`,
-				{ includeSerializedStructuredContent: structured }
+				{ includeJson: json }
 			);
 			response.isError = true;
 			return response;
@@ -228,7 +228,7 @@ export async function handleCreateRelation(
 					message: `Entity not found — cannot create relation.`
 				},
 				`Entity not found — cannot create relation.`,
-				{ includeSerializedStructuredContent: structured }
+				{ includeJson: json }
 			);
 			response.isError = true;
 			return response;
@@ -253,7 +253,7 @@ export async function handleCreateRelation(
 		`Created relation '${from_entity} —[${relation_type}]→ ${to_entity}' in repo "${repo ?? ""}".`,
 		{
 			structuredContentPathHint: "relation",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }
@@ -266,7 +266,7 @@ export async function handleDeleteRelation(
 	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = DeleteRelationSchema.parse(params);
-	const { from_entity, to_entity, relation_type, owner: _owner, repo, structured } = validated;
+	const { from_entity, to_entity, relation_type, owner: _owner, repo, json } = validated;
 
 	let changes = 0;
 	try {
@@ -287,7 +287,7 @@ export async function handleDeleteRelation(
 				message: `Failed to delete relation '${from_entity} →[${relation_type}]→ ${to_entity}'.`
 			},
 			`Failed to delete relation.`,
-			{ includeSerializedStructuredContent: structured }
+			{ includeJson: json }
 		);
 		response.isError = true;
 		return response;
@@ -309,7 +309,7 @@ export async function handleDeleteRelation(
 				message: `Relation '${from_entity} →[${relation_type}]→ ${to_entity}' not found.`
 			},
 			`Relation not found.`,
-			{ includeSerializedStructuredContent: structured }
+			{ includeJson: json }
 		);
 	}
 
@@ -321,7 +321,7 @@ export async function handleDeleteRelation(
 		`Deleted relation '${from_entity} —[${relation_type}]→ ${to_entity}'.`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }
@@ -334,7 +334,7 @@ export async function handleDeleteObservation(
 	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = DeleteObservationSchema.parse(params);
-	const { id, owner: _owner, repo, structured } = validated;
+	const { id, owner: _owner, repo, json } = validated;
 
 	let changes = 0;
 	try {
@@ -353,7 +353,7 @@ export async function handleDeleteObservation(
 				message: `Failed to delete observation '${id}'.`
 			},
 			`Failed to delete observation '${id}'.`,
-			{ includeSerializedStructuredContent: structured }
+			{ includeJson: json }
 		);
 		response.isError = true;
 		return response;
@@ -369,7 +369,7 @@ export async function handleDeleteObservation(
 				message: `Observation '${id}' not found.`
 			},
 			`Observation '${id}' not found.`,
-			{ includeSerializedStructuredContent: structured }
+			{ includeJson: json }
 		);
 	}
 
@@ -381,7 +381,7 @@ export async function handleDeleteObservation(
 		`Deleted observation '${id}'.`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }

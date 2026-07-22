@@ -106,7 +106,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		return createMcpResponse(
 			{ success: true, repo, createdCount: bulkTasks.length, taskCodes: createdTasks },
 			`Created ${bulkTasks.length} tasks in repo "${repo}"${taskCodesStr}.`,
-			{ includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false }
+			{ includeJson: (parsed as { json?: boolean }).json || false }
 		);
 	}
 
@@ -203,7 +203,7 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 			depends_on: task.depends_on
 		},
 		`Created task [${task.task_code}] ${task.title} in repo "${task.repo}" with status "${task.status}".`,
-		{ includeSerializedStructuredContent: (parsed as { structured?: boolean }).structured || false }
+		{ includeJson: (parsed as { json?: boolean }).json || false }
 	);
 }
 
@@ -246,7 +246,7 @@ export async function handleTaskCreateInteractive(
 			...completedDraft,
 			status: completedDraft.status ?? "backlog",
 			priority: completedDraft.priority ?? 3,
-			structured: true
+			json: true
 		},
 		storage
 	);

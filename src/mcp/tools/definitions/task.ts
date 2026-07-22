@@ -43,7 +43,7 @@ export const TASK_TOOL_DEFINITIONS = [
 				agent: { type: "string" },
 				role: { type: "string" },
 				doc_path: { type: "string" },
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 			},
 			required: []
 		},
@@ -83,10 +83,10 @@ export const TASK_TOOL_DEFINITIONS = [
 								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 						},
 						id: { type: "string", format: "uuid", description: "Task ID" },
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON without the text content details."
+							description: "If true, returns JSON without the text content details."
 						}
 					}
 				},
@@ -108,10 +108,10 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "string",
 							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
 						},
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON without the text content details."
+							description: "If true, returns JSON without the text content details."
 						}
 					}
 				},
@@ -136,10 +136,10 @@ export const TASK_TOOL_DEFINITIONS = [
 							description:
 								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
 						},
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON without the text content details."
+							description: "If true, returns JSON without the text content details."
 						}
 					}
 				}
@@ -253,7 +253,7 @@ export const TASK_TOOL_DEFINITIONS = [
 					},
 					description: "Array of tasks for bulk creation"
 				},
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 			},
 			required: []
 		},
@@ -360,7 +360,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "boolean",
 							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -441,7 +441,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "boolean",
 							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -517,7 +517,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "boolean",
 							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -599,7 +599,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "boolean",
 							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				}
 			]
@@ -650,7 +650,7 @@ export const TASK_TOOL_DEFINITIONS = [
 								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 						},
 						id: { type: "string", format: "uuid", description: "Task ID (for single deletion)" },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -673,7 +673,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							description:
 								"Task UUIDs (for bulk deletion). NOT task codes — use 'task_codes' for PERF-1 style identifiers."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -694,7 +694,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							type: "string",
 							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -718,7 +718,7 @@ export const TASK_TOOL_DEFINITIONS = [
 							description:
 								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				}
 			]
@@ -784,10 +784,10 @@ export const TASK_TOOL_DEFINITIONS = [
 					default: 0,
 					description: "Offset for pagination"
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON without the text content summary."
+					description: "If true, returns JSON without the text content summary."
 				}
 			},
 			required: []
@@ -850,7 +850,7 @@ export const TASK_TOOL_DEFINITIONS = [
 				priority: { type: "number", minimum: 1, maximum: 5, description: "Filter by priority (1-5)" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 10 },
 				offset: { type: "number", minimum: 0, default: 0 },
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 			},
 			required: ["query"]
 		},

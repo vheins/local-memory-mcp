@@ -59,6 +59,6 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 			deletedCodes
 		},
 		`Deleted ${targetIds.length} task(s) from repo "${repo}"${deletedCodesStr}.`,
-		{ includeSerializedStructuredContent: validated.structured }
+		{ includeJson: validated.json }
 	);
 }

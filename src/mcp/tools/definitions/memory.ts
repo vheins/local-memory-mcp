@@ -40,7 +40,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 				},
 				max_iterations: { type: "number", minimum: 1, maximum: 5, default: 3 },
 				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 },
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON results." }
+				json: { type: "boolean", default: false, description: "If true, returns JSON results." }
 			},
 			required: ["owner", "objective"]
 		},
@@ -71,7 +71,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					required: ["id"],
 					properties: {
 						id: { type: "string", format: "uuid", description: "Memory entry ID." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
 					}
 				},
 				{
@@ -81,7 +81,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						code: { type: "string", description: "Short memory code." },
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
 					}
 				}
 			]
@@ -177,10 +177,10 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							type: "string",
 							description: "Optional memory ID (UUID) or memory code to supersede. Resolved before storing."
 						},
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON of the stored memory."
+							description: "If true, returns JSON of the stored memory."
 						}
 					}
 				},
@@ -226,10 +226,10 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							},
 							description: "Array of memories for bulk creation"
 						},
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON of the stored memory."
+							description: "If true, returns JSON of the stored memory."
 						}
 					}
 				}
@@ -267,7 +267,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 				code: { type: "string", maxLength: 20, description: "Short memory code. Optional if memory_id is provided." },
 				status: { type: "string", enum: ["used", "irrelevant", "contradictory"] },
 				application_context: { type: "string", minLength: 10 },
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 			},
 			required: ["status"]
 		},
@@ -314,10 +314,10 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						metadata: { type: "object" },
 						is_global: { type: "boolean" },
 						completed_at: { type: "string" },
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON of the updated memory."
+							description: "If true, returns JSON of the updated memory."
 						}
 					}
 				},
@@ -340,10 +340,10 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						metadata: { type: "object" },
 						is_global: { type: "boolean" },
 						completed_at: { type: "string" },
-						structured: {
+						json: {
 							type: "boolean",
 							default: false,
-							description: "If true, returns structured JSON of the updated memory."
+							description: "If true, returns JSON of the updated memory."
 						}
 					}
 				}
@@ -418,10 +418,10 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						language: { type: "string", description: "Programming language filter" }
 					}
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON without the text content summary."
+					description: "If true, returns JSON without the text content summary."
 				}
 			},
 			required: ["owner", "query", "repo"]
@@ -475,7 +475,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					minItems: 1,
 					description: "High-level signals to include in summary"
 				},
-				structured: { type: "boolean", default: false, description: "If true, returns structured JSON of the summary." }
+				json: { type: "boolean", default: false, description: "If true, returns JSON of the summary." }
 			},
 			required: ["owner", "repo", "signals"]
 		},
@@ -510,7 +510,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						id: { type: "string", format: "uuid", description: "Memory entry ID to delete." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -525,7 +525,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							minItems: 1,
 							description: "Array of memory IDs to delete"
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -535,7 +535,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						code: { type: "string", maxLength: 20, description: "Short memory code." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -550,7 +550,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							minItems: 1,
 							description: "Array of memory codes to delete"
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				}
 			]
@@ -597,10 +597,10 @@ export const MEMORY_TOOL_DEFINITIONS = [
 					default: 0,
 					description: "Number of memories to skip for pagination (optional, default 0)"
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON without the text content summary."
+					description: "If true, returns JSON without the text content summary."
 				}
 			},
 			required: ["owner", "repo"]

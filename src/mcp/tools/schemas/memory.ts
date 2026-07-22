@@ -17,7 +17,7 @@ export const MemoryStoreSchema = z.object({
 	tags: z.array(z.string()).optional(),
 	metadata: z.record(z.string(), z.unknown()).optional(),
 	is_global: z.boolean().default(false),
-	structured: z.boolean().default(false),
+	json: z.boolean().default(false),
 	memories: z.array(SingleMemorySchema).min(1).optional()
 });
 
@@ -39,7 +39,7 @@ export const MemoryUpdateSchema = z
 		metadata: z.record(z.string(), z.unknown()).optional(),
 		is_global: z.boolean().optional(),
 		completed_at: z.string().optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
 		message: "Either id or code must be provided"
@@ -75,7 +75,7 @@ export const MemorySearchSchema = z.object({
 	include_archived: z.boolean().default(false),
 	current_tags: z.array(z.string()).optional(),
 	scope: MemoryScopeSchema.partial().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const MemoryAcknowledgeSchema = z
@@ -90,7 +90,7 @@ export const MemoryAcknowledgeSchema = z
 				'Usage status. Use "used" after generating code from a memory, "irrelevant" if the memory didn\'t help, or "contradictory" if it conflicts with current understanding.'
 			),
 		application_context: z.string().min(10).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.memory_id !== undefined || data.code !== undefined, {
 		message: "Either memory_id or code must be provided"
@@ -104,7 +104,7 @@ export const MemoryRecapSchema = z.object({
 		.transform(normalizeRepo),
 	limit: z.coerce.number().min(1).max(50).default(20),
 	offset: z.coerce.number().min(0).default(0),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const MemoryDeleteSchema = z
@@ -115,7 +115,7 @@ export const MemoryDeleteSchema = z
 		ids: z.array(z.string()).min(1).optional(),
 		code: z.string().max(20).optional(),
 		codes: z.array(z.string().max(20)).min(1).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine(
 		(data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined,
@@ -130,7 +130,7 @@ export const MemoryDetailSchema = z
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
 		message: "Either id or code must be provided"
@@ -140,7 +140,7 @@ export const MemorySummarizeSchema = z.object({
 	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
 	signals: z.array(z.string().max(200)).min(1),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const MemorySynthesizeSchema = z.object({
@@ -153,5 +153,5 @@ export const MemorySynthesizeSchema = z.object({
 	use_tools: z.boolean().default(true),
 	max_iterations: z.coerce.number().int().min(1).max(5).default(3),
 	max_tokens: z.coerce.number().int().min(128).max(4000).default(1200),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });

@@ -37,7 +37,7 @@ async function storeSingleStandard(
 		metadata: Record<string, unknown>;
 		agent?: string;
 		model?: string;
-		structured: boolean;
+		json: boolean;
 	},
 	db: SQLiteStore,
 	vectors: VectorStore
@@ -118,7 +118,7 @@ async function storeSingleStandard(
 		`Saved coding standard [${entry.code}]: ${entry.title}`,
 		{
 			structuredContentPathHint: "standard",
-			includeSerializedStructuredContent: params.structured
+			includeJson: params.json
 		}
 	);
 }
@@ -216,7 +216,7 @@ export async function handleStandardStore(
 		return createMcpResponse(
 			{ success: true, createdCount: validated.standards.length, codes: storedCodes },
 			`Saved ${validated.standards.length} coding standards${codesStr}.`,
-			{ includeSerializedStructuredContent: validated.structured }
+			{ includeJson: validated.json }
 		);
 	}
 
@@ -237,7 +237,7 @@ export async function handleStandardStore(
 			metadata: validated.metadata!,
 			agent: validated.agent,
 			model: validated.model,
-			structured: validated.structured
+			json: validated.json
 		},
 		db,
 		vectors

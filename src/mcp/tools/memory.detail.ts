@@ -39,6 +39,6 @@ export async function handleMemoryDetail(args: Record<string, unknown>, storage:
 
 	return createMcpResponse(memory, content, {
 		contentSummary: content,
-		includeSerializedStructuredContent: validated.structured
+		includeJson: validated.json
 	});
 }

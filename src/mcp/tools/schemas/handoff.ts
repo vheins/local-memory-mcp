@@ -16,7 +16,7 @@ export const HandoffCreateSchema = z
 		summary: z.string().min(1),
 		context: z.record(z.string(), z.unknown()).optional(),
 		expires_at: z.string().optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => !(data.task_id && data.task_code), {
 		message: "Provide either task_id or task_code, not both"
@@ -38,7 +38,7 @@ export const HandoffCreateSchema = z
 export const HandoffUpdateSchema = z.object({
 	id: z.string().uuid(),
 	status: HandoffStatusSchema,
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const HandoffListSchema = z.object({
@@ -52,7 +52,7 @@ export const HandoffListSchema = z.object({
 	to_agent: z.string().min(1).optional(),
 	limit: z.coerce.number().min(1).max(100).default(20),
 	offset: z.coerce.number().min(0).default(0),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const TaskClaimSchema = z
@@ -67,7 +67,7 @@ export const TaskClaimSchema = z
 		agent: z.string().min(1),
 		role: z.string().optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.task_id !== undefined || data.task_code !== undefined, {
 		message: "Either task_id or task_code must be provided"
@@ -83,7 +83,7 @@ export const ClaimListSchema = z.object({
 	active_only: z.boolean().default(true),
 	limit: z.coerce.number().min(1).max(100).default(20),
 	offset: z.coerce.number().min(0).default(0),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const ClaimReleaseSchema = z
@@ -96,7 +96,7 @@ export const ClaimReleaseSchema = z
 		task_id: z.string().optional(),
 		task_code: z.string().optional(),
 		agent: z.string().min(1).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.task_id !== undefined || data.task_code !== undefined, {
 		message: "Either task_id or task_code must be provided"

@@ -36,10 +36,10 @@ export const KG_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["name"]
@@ -87,10 +87,10 @@ export const KG_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["name"]
@@ -137,10 +137,10 @@ export const KG_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["from_entity", "to_entity", "relation_type"]
@@ -194,10 +194,10 @@ export const KG_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["from_entity", "to_entity", "relation_type"]
@@ -236,10 +236,10 @@ export const KG_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
 				},
-				structured: {
+				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns structured JSON results."
+					description: "If true, returns JSON results."
 				}
 			},
 			required: ["id"]
@@ -277,6 +277,11 @@ export const KG_TOOL_DEFINITIONS = [
 					type: "string",
 					enum: ["memories", "standards", "both"],
 					description: "Source to scan."
+				},
+				json: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns JSON results."
 				}
 			}
 		}

@@ -4,7 +4,7 @@ import { createMcpResponse, getPrimaryTextContent } from "../utils/mcp-response"
 describe("MCP Spec Compliance", () => {
 	it("should return content, structuredContent, and not data", () => {
 		const mockData = { id: "mem_1", title: "Test" };
-		const response = createMcpResponse(mockData, "Summary", { includeSerializedStructuredContent: true });
+		const response = createMcpResponse(mockData, "Summary", { includeJson: true });
 
 		expect(response).toHaveProperty("content");
 		expect(getPrimaryTextContent(response)).toBe("Summary Read structuredContent for machine-readable results.");
@@ -21,7 +21,7 @@ describe("MCP Spec Compliance", () => {
 			model: "test-model",
 			hit_count: 10
 		};
-		const response = createMcpResponse(mockData, "Summary", { includeSerializedStructuredContent: true });
+		const response = createMcpResponse(mockData, "Summary", { includeJson: true });
 		const sc = response.structuredContent as any;
 
 		expect(sc.id).toBe("mem_1");
@@ -39,7 +39,7 @@ describe("MCP Spec Compliance", () => {
 				{ id: "2", model: "m" }
 			]
 		};
-		const response = createMcpResponse(mockData, "Summary", { includeSerializedStructuredContent: true });
+		const response = createMcpResponse(mockData, "Summary", { includeJson: true });
 		const sc = response.structuredContent as any;
 
 		expect(sc.results[0].id).toBe("1");
@@ -50,7 +50,7 @@ describe("MCP Spec Compliance", () => {
 
 	it("should include a text content entry for text-only responses", () => {
 		const response = createMcpResponse({ ok: true }, "Completed", {
-			includeSerializedStructuredContent: true
+			includeJson: true
 		});
 
 		expect(getPrimaryTextContent(response)).toBe("Completed Read structuredContent for machine-readable results.");
@@ -59,7 +59,7 @@ describe("MCP Spec Compliance", () => {
 	it("should support structured content path hints in summary text", () => {
 		const response = createMcpResponse({ results: [{ id: "1" }] }, "Found 1 memory.", {
 			structuredContentPathHint: "results",
-			includeSerializedStructuredContent: true
+			includeJson: true
 		});
 
 		expect(getPrimaryTextContent(response)).toBe("Found 1 memory. Read structuredContent.results for details.");
@@ -67,7 +67,7 @@ describe("MCP Spec Compliance", () => {
 
 	it("should NOT include redundant JSON string in content - agent must read structuredContent", () => {
 		const response = createMcpResponse({ id: "mem_1", title: "Test" }, "Summary", {
-			includeSerializedStructuredContent: true
+			includeJson: true
 		});
 		const textItems = response.content?.filter((item) => item.type === "text") ?? [];
 

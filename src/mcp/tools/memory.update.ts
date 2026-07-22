@@ -104,7 +104,7 @@ export async function handleMemoryUpdate(
 		`Updated memory [${existing.code}] in repo "${existing.scope.repo}". Fields: ${Object.keys(updates).join(", ") || "none"}.`,
 		{
 			structuredContentPathHint: "updatedFields",
-			includeSerializedStructuredContent: validated.structured
+			includeJson: validated.json
 		}
 	);
 }

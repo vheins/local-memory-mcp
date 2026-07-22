@@ -51,7 +51,7 @@ export async function handleCodebaseIndexRepository(
 		return createMcpResponse(
 			{ success: false, error: "PATH_NOT_FOUND", message: `Repository path not found: ${resolvedPath}` },
 			`Repository path not found: ${resolvedPath}`,
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	}
 
@@ -63,7 +63,7 @@ export async function handleCodebaseIndexRepository(
 				message: `Repository path is not a directory: ${resolvedPath}`
 			},
 			`Repository path is not a directory: ${resolvedPath}`,
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	}
 
@@ -80,7 +80,7 @@ export async function handleCodebaseIndexRepository(
 		return createMcpResponse(
 			result,
 			`Indexed ${result.totalSymbols} symbols across ${result.totalFiles} files in ${result.durationMs}ms`,
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
@@ -88,7 +88,7 @@ export async function handleCodebaseIndexRepository(
 		return createMcpResponse(
 			{ success: false, error: "INDEX_FAILED", message },
 			`Index failed for ${repo}: ${message}`,
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	}
 }
@@ -113,7 +113,7 @@ export async function handleCodebaseIndexStatus(
 	}
 
 	return createMcpResponse(status, summary, {
-		includeSerializedStructuredContent: true
+		includeJson: true
 	});
 }
 
@@ -133,7 +133,7 @@ export async function handleGetArchitecture(
 	return createMcpResponse(
 		result,
 		`Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${Object.keys(result.summary.languageBreakdown).length} languages`,
-		{ includeSerializedStructuredContent: true }
+		{ includeJson: true }
 	);
 }
 
@@ -151,7 +151,7 @@ export async function handleGetFileSymbols(
 		return createMcpResponse(
 			{ error: "File not indexed. Run index_repository first.", code: "FILE_NOT_INDEXED" },
 			`File '${filePath}' not found in index`,
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	}
 
@@ -171,7 +171,7 @@ export async function handleGetFileSymbols(
 			total: symbols.length
 		},
 		`Found ${symbols.length} symbols in ${filePath}`,
-		{ includeSerializedStructuredContent: true }
+		{ includeJson: true }
 	);
 }
 
@@ -200,12 +200,12 @@ export async function handleTraceSymbol(
 			result,
 			`Symbol "${name}": defined in ${result.definition.file}:${result.definition.line}, ` +
 				`${result.references.length} references found`,
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	} catch (err) {
 		if (err instanceof Error && err.name === "SymbolNotFoundError") {
 			return createMcpResponse({ error: err.message, code: "SYMBOL_NOT_FOUND" }, err.message, {
-				includeSerializedStructuredContent: true
+				includeJson: true
 			});
 		}
 
@@ -223,14 +223,14 @@ export async function handleTraceSymbol(
 					}))
 				},
 				err.message,
-				{ includeSerializedStructuredContent: true }
+				{ includeJson: true }
 			);
 		}
 
 		const message = err instanceof Error ? err.message : String(err);
 		logger.error("[handleTraceSymbol] Unexpected error", { name, repo, error: message });
 		return createMcpResponse({ error: message, code: "TRACE_FAILED" }, message, {
-			includeSerializedStructuredContent: true
+			includeJson: true
 		});
 	}
 }
@@ -250,7 +250,7 @@ export async function handleSearchSymbols(
 			query.length === 0
 				? "Empty query — provide at least 2 characters to search"
 				: "Search query too short (minimum 2 characters)",
-			{ includeSerializedStructuredContent: true }
+			{ includeJson: true }
 		);
 	}
 
@@ -299,6 +299,6 @@ export async function handleSearchSymbols(
 			limit: validated.limit
 		},
 		`Found ${total} matching symbols${query ? ` for "${query}"` : ""} (returning ${results.length})`,
-		{ includeSerializedStructuredContent: true }
+		{ includeJson: true }
 	);
 }

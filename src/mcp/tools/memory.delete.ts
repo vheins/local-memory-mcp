@@ -13,7 +13,7 @@ export async function handleMemoryDelete(
 ): Promise<McpResponse> {
 	// Validate input
 	const validated = MemoryDeleteSchema.parse(params);
-	const { id, ids, code, codes, owner, repo, structured } = validated;
+	const { id, ids, code, codes, owner, repo, json } = validated;
 
 	// Resolve code(s) to id(s)
 	const resolvedIds: string[] = [];
@@ -108,7 +108,7 @@ export async function handleMemoryDelete(
 		`Deleted ${deletedCount} memory entry(ies) from repo "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }

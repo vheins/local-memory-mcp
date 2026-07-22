@@ -106,7 +106,7 @@ export const TaskCreateSchema = z
 		est_tokens: z.coerce.number().int().min(0).optional(),
 		// Allow bulk tasks
 		tasks: z.array(SingleTaskCreateSchema).min(1).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine(
 		(data) => {
@@ -119,7 +119,7 @@ export const TaskCreateSchema = z
 export const TaskCreateInteractiveSchema = SingleTaskCreateSchema.partial().extend({
 	owner: z.string().optional().default(""),
 	repo: z.string().min(1).transform(normalizeRepo).optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const TaskUpdateSchema = z
@@ -149,7 +149,7 @@ export const TaskUpdateSchema = z
 		commit_id: z.string().optional(),
 		changed_files: z.array(z.string()).optional(),
 		force: z.boolean().optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine(
 		(data) =>
@@ -174,7 +174,7 @@ export const TaskListSchema = z.object({
 	query: z.string().optional(),
 	limit: z.coerce.number().min(1).max(100).default(15),
 	offset: z.coerce.number().min(0).default(0),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const TaskSearchSchema = z.object({
@@ -186,7 +186,7 @@ export const TaskSearchSchema = z.object({
 	priority: z.coerce.number().min(1).max(5).optional(),
 	limit: z.coerce.number().min(1).max(100).default(10),
 	offset: z.coerce.number().min(0).default(0),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const TaskDeleteSchema = z
@@ -197,7 +197,7 @@ export const TaskDeleteSchema = z
 		ids: z.array(z.string()).min(1).optional(),
 		task_code: z.string().optional(),
 		task_codes: z.array(z.string().min(1)).min(1).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine(
 		(data) =>
@@ -215,7 +215,7 @@ export const TaskGetSchema = z
 		id: z.string().optional(),
 		task_code: z.string().optional(),
 		task_codes: z.array(z.string().min(1)).min(1).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.task_code !== undefined || data.task_codes !== undefined, {
 		message: "Either 'id', 'task_code', or 'task_codes' must be provided"

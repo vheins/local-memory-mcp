@@ -102,7 +102,7 @@ export async function handleMemoryRecap(params: unknown, db: SQLiteStore): Promi
 
 	return createMcpResponse(structuredData, contentSummary || "", {
 		contentSummary,
-		includeSerializedStructuredContent: validated.structured
+		includeJson: validated.json
 	});
 }
 

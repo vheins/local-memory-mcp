@@ -6,14 +6,14 @@ export const CreateEntitySchema = z.object({
 	description: z.string().optional(),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const DeleteEntitySchema = z.object({
 	name: z.string().min(1),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const CreateRelationSchema = z.object({
@@ -22,7 +22,7 @@ export const CreateRelationSchema = z.object({
 	relation_type: z.string().min(1),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const DeleteRelationSchema = z.object({
@@ -31,18 +31,19 @@ export const DeleteRelationSchema = z.object({
 	relation_type: z.string().min(1),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const DeleteObservationSchema = z.object({
 	id: z.string().min(1),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const KGBackfillSchema = z.object({
 	repo: z.string().optional(),
 	owner: z.string().optional().default(""),
-	source: z.enum(["memories", "standards", "both"]).optional().default("both")
+	source: z.enum(["memories", "standards", "both"]).optional().default("both"),
+	json: z.boolean().default(false)
 });

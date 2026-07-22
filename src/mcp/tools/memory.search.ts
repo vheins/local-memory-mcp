@@ -174,7 +174,7 @@ export async function handleMemorySearch(params: unknown, db: SQLiteStore, vecto
 	return createMcpResponse(structuredData, contentSummary || `Found ${total} memories for "${validated.query}".`, {
 		contentSummary,
 		structuredContentPathHint: "results",
-		includeSerializedStructuredContent: validated.structured
+		includeJson: validated.json
 	});
 }
 

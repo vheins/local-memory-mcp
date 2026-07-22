@@ -11,7 +11,7 @@ export async function handleStandardDelete(
 	vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = StandardDeleteSchema.parse(params);
-	const { id, ids, code, codes, owner, repo, structured } = validated;
+	const { id, ids, code, codes, owner, repo, json } = validated;
 
 	// Resolve code(s) to id(s)
 	const resolvedIds: string[] = [];
@@ -85,7 +85,7 @@ export async function handleStandardDelete(
 		`Deleted ${deletedCount} coding standard(s) from "${lastRepo}".`,
 		{
 			structuredContentPathHint: "deletedCount",
-			includeSerializedStructuredContent: structured
+			includeJson: json
 		}
 	);
 }

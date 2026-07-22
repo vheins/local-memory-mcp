@@ -12,7 +12,7 @@ export async function handleAgentContext(
 	_vectors: unknown
 ): Promise<McpResponse> {
 	const validated = AgentContextSchema.parse(args);
-	const { owner, repo, objective, type_filter, limit, structured: isStructuredRequest } = validated;
+	const { owner, repo, objective, type_filter, limit, json: isJsonRequest } = validated;
 
 	// 1. Search for relevant memories
 	let memories: MemoryEntry[];
@@ -121,6 +121,6 @@ export async function handleAgentContext(
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
-		includeSerializedStructuredContent: isStructuredRequest
+		includeJson: isJsonRequest
 	});
 }

@@ -51,7 +51,7 @@ export async function handleDecisionLog(
 			repo
 		},
 		tags,
-		structured: validated.structured
+		json: validated.json
 	};
 
 	const conflict = await db.memoryVectors.checkConflicts(formattedContent, owner, repo, "decision", vectors, 0.55);

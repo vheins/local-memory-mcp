@@ -6,7 +6,7 @@ export const AgentContextSchema = z.object({
 	objective: z.string().optional(),
 	type_filter: z.enum(["code_fact", "decision", "mistake", "pattern", "task_archive"]).optional(),
 	limit: z.coerce.number().min(1).max(100).default(5),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const DecisionLogSchema = z.object({
@@ -24,7 +24,7 @@ export const DecisionLogSchema = z.object({
 	tags: z.array(z.string()).optional(),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const SessionSummarizeSchema = z.object({
@@ -34,5 +34,5 @@ export const SessionSummarizeSchema = z.object({
 	tags: z.array(z.string()).optional(),
 	owner: z.string().optional(),
 	repo: z.string().optional(),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });

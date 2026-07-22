@@ -42,7 +42,7 @@ async function storeSingleMemory(
 		tags?: string[];
 		metadata?: Record<string, unknown>;
 		is_global: boolean;
-		structured: boolean;
+		json: boolean;
 	},
 	db: SQLiteStore,
 	vectors: VectorStore
@@ -150,7 +150,7 @@ async function storeSingleMemory(
 		{
 			contentSummary: `Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
 			structuredContentPathHint: "code",
-			includeSerializedStructuredContent: params.structured
+			includeJson: params.json
 		}
 	);
 }
@@ -277,7 +277,7 @@ export async function handleMemoryStore(
 				codes: storedCodes
 			},
 			`Stored ${validated.memories.length} memories${codesStr}.`,
-			{ includeSerializedStructuredContent: validated.structured }
+			{ includeJson: validated.json }
 		);
 	}
 
@@ -298,7 +298,7 @@ export async function handleMemoryStore(
 			tags: validated.tags,
 			metadata: validated.metadata,
 			is_global: validated.is_global,
-			structured: validated.structured
+			json: validated.json
 		},
 		db,
 		vectors

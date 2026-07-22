@@ -45,6 +45,6 @@ export async function handleStandardDetail(args: Record<string, unknown>, storag
 
 	return createMcpResponse(standard, content, {
 		contentSummary: content,
-		includeSerializedStructuredContent: validated.structured
+		includeJson: validated.json
 	});
 }

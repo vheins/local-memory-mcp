@@ -61,7 +61,7 @@ export async function handleSessionSummarize(
 			repo
 		},
 		tags,
-		structured: validated.structured
+		json: validated.json
 	};
 
 	return handleMemoryStore(memoryStoreParams, db, vectors);

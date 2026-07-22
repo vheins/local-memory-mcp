@@ -21,7 +21,7 @@ export const StandardStoreSchema = z
 			.optional(),
 		agent: z.string().optional(),
 		model: z.string().optional(),
-		structured: z.boolean().default(false),
+		json: z.boolean().default(false),
 		standards: z.array(SingleStandardSchema).min(1).optional()
 	})
 	.refine(
@@ -56,7 +56,7 @@ export const StandardUpdateSchema = z
 			.optional(),
 		agent: z.string().optional(),
 		model: z.string().optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
 		message: "Either id or code must be provided"
@@ -94,7 +94,7 @@ export const StandardSearchSchema = z.object({
 	is_global: z.boolean().optional(),
 	limit: z.coerce.number().min(1).max(100).default(20),
 	offset: z.coerce.number().min(0).default(0),
-	structured: z.boolean().default(false)
+	json: z.boolean().default(false)
 });
 
 export const StandardDeleteSchema = z
@@ -105,7 +105,7 @@ export const StandardDeleteSchema = z
 		ids: z.array(z.string()).min(1).optional(),
 		code: z.string().max(20).optional(),
 		codes: z.array(z.string().max(20)).min(1).optional(),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine(
 		(data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined,
@@ -120,7 +120,7 @@ export const StandardDetailSchema = z
 		code: z.string().max(20).optional(),
 		owner: z.string().min(1),
 		repo: z.string().min(1).transform(normalizeRepo),
-		structured: z.boolean().default(false)
+		json: z.boolean().default(false)
 	})
 	.refine((data) => data.id !== undefined || data.code !== undefined, {
 		message: "Either id or code must be provided"

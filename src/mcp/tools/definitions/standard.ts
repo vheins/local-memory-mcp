@@ -14,7 +14,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					required: ["id"],
 					properties: {
 						id: { type: "string", format: "uuid", description: "Coding standard ID." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
 					}
 				},
 				{
@@ -24,7 +24,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 						code: { type: "string", description: "Short standard code (e.g. 'A3KPQ2')." },
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON details." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
 					}
 				}
 			]
@@ -50,7 +50,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						id: { type: "string", format: "uuid", description: "Coding standard ID to delete." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -65,7 +65,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 							minItems: 1,
 							description: "Array of coding standard IDs to delete"
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -75,7 +75,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
 						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
 						code: { type: "string", maxLength: 20, description: "Short standard code." },
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				},
 				{
@@ -90,7 +90,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 							minItems: 1,
 							description: "Array of standard codes to delete"
 						},
-						structured: { type: "boolean", default: false, description: "If true, returns structured JSON result." }
+						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 					}
 				}
 			]
@@ -181,7 +181,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					},
 					description: "Array of standards for bulk creation"
 				},
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: ["owner"]
 		},
@@ -265,7 +265,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 						metadata: { type: "object" },
 						agent: { type: "string" },
 						model: { type: "string" },
-						structured: { type: "boolean", default: false }
+						json: { type: "boolean", default: false }
 					}
 				},
 				{
@@ -288,7 +288,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 						metadata: { type: "object" },
 						agent: { type: "string" },
 						model: { type: "string" },
-						structured: { type: "boolean", default: false }
+						json: { type: "boolean", default: false }
 					}
 				}
 			]
@@ -335,7 +335,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 				is_global: { type: "boolean", description: "Filter by global/repo-specific" },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
-				structured: { type: "boolean", default: false }
+				json: { type: "boolean", default: false }
 			},
 			required: []
 		},

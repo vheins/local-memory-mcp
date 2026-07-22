@@ -187,7 +187,7 @@ export async function handleTaskUpdate(args: unknown, storage: SQLiteStore, vect
 			}
 		},
 		summaryText,
-		{ includeSerializedStructuredContent: updateData.structured }
+		{ includeJson: updateData.json }
 	);
 
 	// Archive completed tasks AFTER releasing write lock (vector embedding is slow)

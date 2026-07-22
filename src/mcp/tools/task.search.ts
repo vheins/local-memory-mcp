@@ -6,17 +6,7 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 
 export async function handleTaskSearch(args: unknown, storage: SQLiteStore): Promise<McpResponse> {
 	const validated = TaskSearchSchema.parse(args);
-	const {
-		owner,
-		repo,
-		query,
-		status,
-		limit,
-		offset,
-		structured: isStructuredRequest = false,
-		phase,
-		priority
-	} = validated;
+	const { owner, repo, query, status, limit, offset, json: isJsonRequest = false, phase, priority } = validated;
 
 	let tasks: Task[];
 	if (status) {
@@ -68,7 +58,7 @@ export async function handleTaskSearch(args: unknown, storage: SQLiteStore): Pro
 	};
 
 	let contentSummary: string | undefined;
-	if (!isStructuredRequest) {
+	if (!isJsonRequest) {
 		contentSummary =
 			paginated.length > 0
 				? `Found ${total} tasks matching "${query}" in repo "${repo}". Use task-detail to fetch full task content.`
@@ -86,6 +76,6 @@ export async function handleTaskSearch(args: unknown, storage: SQLiteStore): Pro
 	return createMcpResponse(structuredData, contentSummary || `Found ${total} tasks for "${query}".`, {
 		contentSummary,
 		structuredContentPathHint: "results",
-		includeSerializedStructuredContent: isStructuredRequest
+		includeJson: isJsonRequest
 	});
 }
