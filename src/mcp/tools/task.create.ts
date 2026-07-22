@@ -31,10 +31,18 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 		}
 
 		for (const taskData of bulkTasks) {
-			const code = resolveEntityCode(taskData.task_code ?? null, owner ?? "", repo, "task", storage, { batchCodes });
-			if (codesInRequest.has(code)) {
-				throw new Error(`Duplicate task_code in request: '${code}'`);
+			// FIX-1: Reject duplicate task_code in the same request BEFORE resolution
+			if (taskData.task_code && codesInRequest.has(taskData.task_code)) {
+				throw new Error(`Duplicate task_code in request: '${taskData.task_code}'`);
 			}
+
+			const code = resolveEntityCode(taskData.task_code ?? null, owner ?? "", repo, "task", storage, { batchCodes });
+
+			// FIX-2: Reject if resolveEntityCode modified the code (conflict with DB)
+			if (taskData.task_code && code !== taskData.task_code) {
+				throw new Error(`Task code '${taskData.task_code}' already exists`);
+			}
+
 			codesInRequest.add(code);
 
 			let normalizedStatus = (taskData.status as TaskStatus) || "backlog";
@@ -124,8 +132,13 @@ export async function handleTaskCreate(args: unknown, storage: SQLiteStore) {
 
 	let effectiveStatus: TaskStatus = (requestedStatus || "backlog") as TaskStatus;
 
-	// Auto-generate or resolve task_code (with random fallback if duplicate)
+	// Auto-generate or resolve task_code
 	const resolvedCode = resolveEntityCode(task_code, owner ?? "", repo, "task", storage);
+
+	// FIX-2: Reject if resolveEntityCode modified the code (conflict with DB)
+	if (task_code && resolvedCode !== task_code) {
+		throw new Error(`Task code '${task_code}' already exists`);
+	}
 
 	if (requestedStatus !== "backlog" && requestedStatus !== "pending" && requestedStatus !== undefined) {
 		throw new Error("New tasks must be created with status 'backlog' or 'pending'.");
