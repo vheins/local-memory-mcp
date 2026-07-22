@@ -61,3 +61,5 @@ export {
 	DeleteObservationSchema,
 	KGBackfillSchema
 } from "./knowledge-graph";
+
+export { IndexRepoSchema, IndexStatusSchema } from "./codebase-index";

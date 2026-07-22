@@ -55,6 +55,7 @@ import {
 	handleDeleteObservation
 } from "./kg.crud";
 import { handleKGBackfill } from "./kg-backfill";
+import { handleCodebaseIndexRepository, handleCodebaseIndexStatus } from "./codebase-index";
 import { McpResponse } from "../utils/mcp-response";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -102,7 +103,9 @@ const WRITE_TOOLS = new Set([
 	"create_relation",
 	"delete_relation",
 	"delete_observation",
-	"kg-backfill"
+	"kg-backfill",
+	// Codebase index tools (write)
+	"index_repository"
 ]);
 
 // ── Session / argument middleware ─────────────────────────────────────────
@@ -394,7 +397,10 @@ function buildExecutors(
 		create_relation: (args, db, _vectors, _extra) => handleCreateRelation(args, db, _vectors),
 		delete_relation: (args, db, _vectors, _extra) => handleDeleteRelation(args, db, _vectors),
 		delete_observation: (args, db, _vectors, _extra) => handleDeleteObservation(args, db, _vectors),
-		"kg-backfill": (args, db, _vectors, _extra) => handleKGBackfill(args, db)
+		"kg-backfill": (args, db, _vectors, _extra) => handleKGBackfill(args, db),
+		// Codebase index tools
+		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndexRepository(args, db, _vectors),
+		index_status: (args, db, _vectors, _extra) => handleCodebaseIndexStatus(args, db, _vectors)
 	};
 }
 
