@@ -376,6 +376,19 @@ export const api = {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ repo })
 		});
+	},
+
+	// ─── Codebase Architecture ─────────────────────────────────────────────────
+
+	codebaseArchitecture: (repo: string, depth: number = 3, includeSymbolCounts: boolean = true) => {
+		const q = new URLSearchParams({
+			repo,
+			depth: String(depth),
+			includeSymbolCounts: String(includeSymbolCounts)
+		});
+		return apiFetch<{ root: Record<string, unknown>; summary: Record<string, unknown> }>(
+			`/api/codebase/architecture?${q}`
+		);
 	}
 };
 

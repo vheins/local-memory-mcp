@@ -16,7 +16,7 @@ export const IndexStatusSchema = z.object({
 export const GetArchitectureSchema = z.object({
 	repo: z.string().min(1, "repo is required"),
 	depth: z.coerce.number().min(1).max(5).default(2),
-	includeSymbolCounts: z.boolean().default(true)
+	includeSymbolCounts: z.coerce.boolean().default(true)
 });
 
 export const GetFileSymbolsSchema = z.object({

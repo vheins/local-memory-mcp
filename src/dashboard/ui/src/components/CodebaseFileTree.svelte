@@ -61,8 +61,11 @@
 				symbols += sub.symbols;
 			} else {
 				files += 1;
-				if (typeof child.symbolCount === "number") {
-					symbols += child.symbolCount;
+				if (child.symbolCounts && typeof child.symbolCounts === "object") {
+					symbols += Object.values(child.symbolCounts as Record<string, number>).reduce(
+						(a: number, b: number) => a + b,
+						0
+					);
 				}
 			}
 		}
@@ -285,8 +288,11 @@
 																		{leafExt}
 																	</span>
 																{/if}
-																{#if typeof leaf.symbolCount === "number"}
-																	<span class="filetree-symcount">{leaf.symbolCount}</span>
+																{#if leaf.symbolCounts && typeof leaf.symbolCounts === "object"}
+																	{@const totalSymbolCount = Object.values(
+																		leaf.symbolCounts as Record<string, number>
+																	).reduce((a: number, b: number) => a + b, 0)}
+																	<span class="filetree-symcount">{totalSymbolCount}</span>
 																{/if}
 															</button>
 														</li>
@@ -317,8 +323,12 @@
 														{fileExt}
 													</span>
 												{/if}
-												{#if typeof child.symbolCount === "number"}
-													<span class="filetree-symcount">{child.symbolCount}</span>
+												{#if child.symbolCounts && typeof child.symbolCounts === "object"}
+													{@const totalSymbolCount = Object.values(child.symbolCounts as Record<string, number>).reduce(
+														(a: number, b: number) => a + b,
+														0
+													)}
+													<span class="filetree-symcount">{totalSymbolCount}</span>
 												{/if}
 											</button>
 										</li>
@@ -348,8 +358,12 @@
 									{fileExt}
 								</span>
 							{/if}
-							{#if typeof node.symbolCount === "number"}
-								<span class="filetree-symcount">{node.symbolCount}</span>
+							{#if node.symbolCounts && typeof node.symbolCounts === "object"}
+								{@const totalSymbolCount = Object.values(node.symbolCounts as Record<string, number>).reduce(
+									(a: number, b: number) => a + b,
+									0
+								)}
+								<span class="filetree-symcount">{totalSymbolCount}</span>
 							{/if}
 						</button>
 					</li>

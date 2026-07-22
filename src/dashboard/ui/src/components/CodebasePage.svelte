@@ -5,8 +5,20 @@
 	import CodebaseSymbolDetail from "./CodebaseSymbolDetail.svelte";
 	import CodebaseIndexStatus from "./CodebaseIndexStatus.svelte";
 	import CodebaseSearchBar from "./CodebaseSearchBar.svelte";
+	import CodebaseFileTree from "./CodebaseFileTree.svelte";
 
 	let { repo = "" }: { repo: string } = $props();
+
+	// --- Types ---
+	interface ArchitectureData {
+		root: {
+			path: string;
+			name: string;
+			type: string;
+			children?: Array<Record<string, unknown>>;
+		};
+		summary: Record<string, unknown>;
+	}
 
 	// --- State ---
 	let loading = $state(false);
@@ -15,6 +27,10 @@
 	let indexData = $state<Record<string, unknown> | null>(null);
 	let sidebarOpen = $state(true);
 	let selectedSymbol = $state<CodeSymbol | null>(null);
+	let selectedFile = $state<string | null>(null);
+	let architectureData = $state<ArchitectureData | null>(null);
+	let architectureLoading = $state(false);
+	let architectureError = $state("");
 
 	// --- Reactive: load index when repo changes ---
 	$effect(() => {
@@ -33,18 +49,39 @@
 		error = "";
 		try {
 			const result = await api.codebaseIndexStatus(repo);
-			if (result?.isIndexed === true) {
+			if (result?.indexed === true) {
 				hasIndex = true;
 				indexData = result as unknown as Record<string, unknown>;
+				void loadArchitecture();
 			} else {
 				hasIndex = false;
 				indexData = null;
+				architectureData = null;
 			}
 		} catch {
 			hasIndex = false;
 			indexData = null;
+			architectureData = null;
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadArchitecture() {
+		if (!repo) {
+			architectureData = null;
+			return;
+		}
+		architectureLoading = true;
+		architectureError = "";
+		try {
+			const result = await api.codebaseArchitecture(repo);
+			architectureData = result as ArchitectureData;
+		} catch (err) {
+			architectureError = err instanceof Error ? err.message : "Failed to load file tree";
+			architectureData = null;
+		} finally {
+			architectureLoading = false;
 		}
 	}
 
@@ -56,7 +93,7 @@
 		if (!repo) return;
 		try {
 			await api.codebaseReindex(repo);
-			// After triggering, reload the index status
+			// After triggering, reload the index status (loadCodebaseIndex also loads architecture)
 			await loadCodebaseIndex();
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to start indexing";
@@ -139,9 +176,16 @@
 					<span class="section-label">File Tree</span>
 				</div>
 				<div class="sidebar-content">
-					<div class="muted-text" style="padding:12px;font-size:0.78rem;">
-						File tree will be rendered here once the backend provides directory data.
-					</div>
+					<CodebaseFileTree
+						architecture={architectureData?.root?.children ?? null}
+						loading={architectureLoading}
+						error={architectureError || null}
+						onFileSelect={(filePath) => {
+							selectedSymbol = null;
+							selectedFile = filePath;
+						}}
+						onRetry={() => void loadArchitecture()}
+					/>
 				</div>
 			</aside>
 
@@ -162,6 +206,10 @@
 
 					{#if selectedSymbol}
 						<CodebaseSymbolDetail symbol={selectedSymbol} references={[]} loading={false} />
+					{:else if selectedFile}
+						<div class="muted-text">
+							Selected file: <code>{selectedFile}</code>
+						</div>
 					{:else if indexData}
 						<div class="muted-text">
 							Index loaded with {Object.keys(indexData).length} top-level entries. Select a file from the sidebar to view
