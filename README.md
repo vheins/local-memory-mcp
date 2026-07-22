@@ -19,6 +19,8 @@ Built with a **Local-First** philosophy, this service stores architectural decis
 - 📉 **Soul Maintenance:** Biological-style memory decay with tag immunization — automatically archives obsolete memories.
 - 🤖 **Agentic Tools:** Agent-context recall, structured decision logging, session summarization.
 - 📊 **Glassy Dashboard:** Visualize memories, tasks, handoffs, knowledge graph, and interaction logs through a modern Svelte 5 interface.
+- 🔍 **Codebase Index:** Index and query source code structure — search for functions, classes, interfaces, types, and enums across your projects. Uses tree-sitter WASM for fast parsing with incremental updates.
+- 🧭 **Codebase Search & Trace:** Search indexed symbols with ranked results (`search_symbols`), inspect file-level declarations (`get_file_symbols`), explore architecture overviews (`get_architecture`), and trace symbol definitions across your codebase (`trace_symbol`).
 
 ### Drop-In Upstream Compatibility
 
@@ -127,6 +129,8 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 - [Features & How It Works](docs/en/features.md) — Semantic search, anti-hallucination, memory decay
 - [Hybrid Search Logic](docs/en/hybrid-search.md) — How search scoring works
 - [Dashboard Guide](docs/en/dashboard-guide.md) — Web UI for memory & task management
+- [Codebase Index — Feature Overview](docs/features/codebase-index.md) — Index, search, and trace source code symbols
+- [Codebase Index — API Reference](docs/api/codebase-index.md) — Complete MCP tool documentation for all 6 Codebase Index tools
 - [MCP Protocol Reference](docs/en/mcp-concepts.md) — Technical protocol details
 - [Claude Code Integration](docs/en/claude-code-integration.md) — Setup for Claude Code CLI
 - [Codex (OpenAI) Integration](docs/en/codex-integration.md) — Setup for Codex CLI
