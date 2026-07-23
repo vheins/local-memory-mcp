@@ -365,9 +365,22 @@ export const api = {
 
 	// ─── Codebase Index Status ──────────────────────────────────────────────────
 
-	codebaseIndexStatus: (repo: string) => {
+	codebaseIndexStatus: async (repo: string) => {
 		const q = new URLSearchParams({ repo });
-		return apiFetch<CodebaseIndexStatus>(`/api/codebase/index-status?${q}`);
+		const raw = await apiFetch<Record<string, unknown>>(`/api/codebase/index-status?${q}`);
+		const progress = raw.progress as Record<string, unknown> | undefined;
+		// Normalize backend camelCase → frontend snake_case
+		return {
+			indexed: (raw.isIndexed as boolean) ?? false,
+			file_count: (raw.totalFiles as number) ?? 0,
+			symbol_count: (raw.totalSymbols as number) ?? 0,
+			last_indexed_at: (raw.lastIndexedAt as string) ?? null,
+			indexing: {
+				in_progress: (raw.isIndexing as boolean) ?? false,
+				files_parsed: (progress?.current as number) ?? 0,
+				total_files: (progress?.total as number) ?? 0
+			}
+		} as CodebaseIndexStatus;
 	},
 
 	codebaseReindex: (repo: string) => {

@@ -10,26 +10,6 @@
 	let error = $state("");
 	let reindexing = $state(false);
 
-	/**
-	 * Normalize backend response to the UI-friendly shape.
-	 * Backend returns camelCase: isIndexed, totalFiles, totalSymbols, lastIndexedAt, isIndexing, progress
-	 * UI expects: indexed, file_count, symbol_count, last_indexed_at, indexing.in_progress
-	 */
-	function normalizeStatus(raw: Record<string, unknown>) {
-		const progress = raw.progress as Record<string, unknown> | undefined;
-		return {
-			indexed: (raw.isIndexed as boolean) ?? false,
-			file_count: (raw.totalFiles as number) ?? 0,
-			symbol_count: (raw.totalSymbols as number) ?? 0,
-			last_indexed_at: (raw.lastIndexedAt as string) ?? null,
-			indexing: {
-				in_progress: (raw.isIndexing as boolean) ?? false,
-				files_parsed: (progress?.current as number) ?? (raw.isIndexing ? 0 : 0),
-				total_files: (progress?.total as number) ?? 0
-			}
-		};
-	}
-
 	// --- Derived: status color ---
 	let statusColor = $derived.by(() => {
 		if (!status || !status.indexed) return "red";
@@ -85,8 +65,7 @@
 		loading = true;
 		error = "";
 		try {
-			const raw = await api.codebaseIndexStatus(repo);
-			status = normalizeStatus(raw as unknown as Record<string, unknown>) as CodebaseIndexStatus;
+			status = await api.codebaseIndexStatus(repo);
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to fetch index status";
 			status = null;
@@ -123,8 +102,7 @@
 			}
 			polls++;
 			try {
-				const raw = await api.codebaseIndexStatus(repo);
-				status = normalizeStatus(raw as unknown as Record<string, unknown>) as CodebaseIndexStatus;
+				status = await api.codebaseIndexStatus(repo);
 				if (status.indexing?.in_progress) {
 					setTimeout(tick, POLL_INTERVAL);
 				} else {
