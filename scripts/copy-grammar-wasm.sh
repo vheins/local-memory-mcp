@@ -19,7 +19,15 @@ copy_wasm() {
 	local src="$ROOT_DIR/node_modules/$pkg/$file"
 	local dest="$DEST_DIR/$pkg/$file"
 
-	if [ -f "$src" ]; then
+	if [ "$pkg" = "tree-sitter-dart" ]; then
+		mkdir -p "$(dirname "$dest")"
+		echo "  → rebuilding $pkg/$file (prebuilt is incompatible ABI)"
+		if ! npx --yes tree-sitter build --wasm -o "$dest" "$ROOT_DIR/node_modules/$pkg" 2>&1; then
+			echo "  ✗ $pkg/$file REBUILD FAILED"
+			return 1
+		fi
+		echo "  ✓ $pkg/$file (rebuilt)"
+	elif [ -f "$src" ]; then
 		mkdir -p "$(dirname "$dest")"
 		cp "$src" "$dest"
 		echo "  ✓ $pkg/$file"
