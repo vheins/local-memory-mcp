@@ -1,8 +1,16 @@
 /**
- * ParserPool — manages the lifecycle of tree-sitter WASM parsers.
+ * ParserPool — manages the lifecycle of tree-sitter WASM parsers for multiple
+ * languages.
+ *
+ * Architecture (v2):
+ * - Language registry: declarative config per language (extensions, WASM paths,
+ *   visitor factory). Adding a new language = adding one entry to createRegistry().
+ * - Reverse maps: extension → config (O(1) lookup), grammar path → loaded Language.
+ * - All grammars are loaded eagerly during _doInitialize().
+ * - _doParse() looks up the config by file extension, finds the loaded grammar,
+ *   instantiates the visitor, and calls extractSymbols(tree, sourceCode).
  *
  * Key design decisions:
- * - Lazy initialization: WASM loads on first parseFile call, not at module import.
  * - Concurrent access: tree-sitter Parser is NOT reentrant, so we use a semaphore
  *   to limit concurrent parse operations. Each concurrent slot creates its own
  *   Parser instance, sharing the Language objects loaded once at init.
@@ -15,9 +23,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { Parser, Language } from "web-tree-sitter";
-import type { Tree, Node } from "web-tree-sitter";
-import type { ParseResult, ParserPool } from "./language-visitor.js";
+import type { ParseResult, ParserPool, LanguageVisitor } from "./language-visitor.js";
 import { TypeScriptVisitor } from "./typescript-visitor.js";
+import { GoVisitor } from "./visitors/go-visitor.js";
+import { PythonVisitor } from "./visitors/python-visitor.js";
+import { PhpVisitor } from "./visitors/php-visitor.js";
+import { DartVisitor } from "./visitors/dart-visitor.js";
+import { RustVisitor } from "./visitors/rust-visitor.js";
+import { JavaVisitor } from "./visitors/java-visitor.js";
+import { RubyVisitor } from "./visitors/ruby-visitor.js";
+import { KotlinVisitor } from "./visitors/kotlin-visitor.js";
+import { SwiftVisitor } from "./visitors/swift-visitor.js";
+import { CVisitor } from "./visitors/c-visitor.js";
+import { CppVisitor } from "./visitors/cpp-visitor.js";
 import { logger } from "../../utils/logger.js";
 import { FatalError } from "../types/errors.js";
 
@@ -42,21 +60,20 @@ function getWasmPath(): string {
 	return path.join(root, "node_modules", "web-tree-sitter", "web-tree-sitter.wasm");
 }
 
-/** Path to tree-sitter-typescript WASM file. */
-function getTypescriptGrammarPath(): string {
+/**
+ * Resolve a tree-sitter grammar WASM file path.
+ * Searches: {packageDir}/{wasmFilename}, then {packageDir}/wasm/{wasmFilename}.
+ */
+function getGrammarPath(packageName: string, wasmFilename: string): string {
 	const root = resolveProjectRoot();
-	const tsDir = path.join(root, "node_modules", "tree-sitter-typescript");
-	const directWasm = path.join(tsDir, "tree-sitter-typescript.wasm");
-	if (fs.existsSync(directWasm)) return directWasm;
-	throw new Error(`TypeScript grammar WASM not found in ${tsDir}`);
-}
+	const pkgDir = path.join(root, "node_modules", packageName);
+	const directPath = path.join(pkgDir, wasmFilename);
+	if (fs.existsSync(directPath)) return directPath;
 
-/** Path to tree-sitter-tsx WASM file. */
-function getTsxGrammarPath(): string {
-	const root = resolveProjectRoot();
-	const tsxWasm = path.join(root, "node_modules", "tree-sitter-typescript", "tree-sitter-tsx.wasm");
-	if (fs.existsSync(tsxWasm)) return tsxWasm;
-	throw new Error(`TSX grammar WASM not found`);
+	const altPath = path.join(pkgDir, "wasm", wasmFilename);
+	if (fs.existsSync(altPath)) return altPath;
+
+	throw new Error(`Grammar WASM not found: ${wasmFilename} in ${pkgDir}`);
 }
 
 // ── Semaphore ────────────────────────────────────────────────────────
@@ -103,6 +120,19 @@ export interface ParserPoolOptions {
 	concurrency?: number;
 }
 
+// ── Language config ──────────────────────────────────────────────────
+
+interface LanguageConfig {
+	/** Unique identifier for this language entry (e.g. "typescript", "go"). */
+	languageId: string;
+	/** File extensions this config handles. */
+	extensions: string[];
+	/** WASM grammar file paths (some languages need multiple, e.g. TS + TSX). */
+	grammarWasms: string[];
+	/** Factory function to create a new visitor instance. */
+	createVisitor: () => LanguageVisitor;
+}
+
 // ── Implementation ───────────────────────────────────────────────────
 
 const DEFAULT_PARSE_TIMEOUT_MS = 10_000;
@@ -124,31 +154,138 @@ function resolveConcurrency(override?: number): number {
 	return DEFAULT_CONCURRENCY;
 }
 
-/** Maps file extensions to the appropriate tree-sitter language. */
-const EXTENSION_LANGUAGE_MAP: Record<string, "typescript" | "tsx"> = {
-	".ts": "typescript",
-	".tsx": "tsx",
-	".mts": "typescript",
-	".cts": "typescript",
-	".js": "typescript",
-	".jsx": "tsx",
-	".mjs": "typescript",
-	".cjs": "typescript"
-};
-
 export class TreeSitterParserPool implements ParserPool {
 	private initialized = false;
 	private initPromise: Promise<void> | null = null;
+	private initError: Error | null = null;
 	private semaphore: Semaphore;
 	private parseTimeoutMs: number;
 
-	// Loaded languages
-	private tsLanguage: Language | null = null;
-	private tsxLanguage: Language | null = null;
+	// Grammar cache: WASM file path → loaded Language
+	private loadedGrammars = new Map<string, Language>();
+
+	// Cached registry built once at construction time
+	private readonly registry: LanguageConfig[] = TreeSitterParserPool.createRegistry();
+
+	// Reverse maps
+	private extToConfig = new Map<string, LanguageConfig>();
 
 	constructor(options: ParserPoolOptions = {}) {
 		this.parseTimeoutMs = resolveParseTimeoutMs(options.parseTimeoutMs);
 		this.semaphore = new Semaphore(resolveConcurrency(options.concurrency));
+		this.buildRegistryMaps();
+	}
+
+	// ── Registry construction ─────────────────────────────────────
+
+	private static createRegistry(): LanguageConfig[] {
+		const tsGrammar = getGrammarPath("tree-sitter-typescript", "tree-sitter-typescript.wasm");
+		const tsxGrammar = getGrammarPath("tree-sitter-typescript", "tree-sitter-tsx.wasm");
+
+		return [
+			{
+				languageId: "typescript",
+				extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"],
+				grammarWasms: [tsGrammar],
+				createVisitor: () => new TypeScriptVisitor()
+			},
+			{
+				languageId: "tsx",
+				extensions: [".tsx", ".jsx"],
+				grammarWasms: [tsxGrammar],
+				createVisitor: () => new TypeScriptVisitor()
+			},
+			{
+				languageId: "go",
+				extensions: [".go"],
+				grammarWasms: [getGrammarPath("tree-sitter-go", "tree-sitter-go.wasm")],
+				createVisitor: () => new GoVisitor()
+			},
+			{
+				languageId: "python",
+				extensions: [".py"],
+				grammarWasms: [getGrammarPath("tree-sitter-python", "tree-sitter-python.wasm")],
+				createVisitor: () => new PythonVisitor()
+			},
+			{
+				languageId: "php",
+				extensions: [".php"],
+				grammarWasms: [getGrammarPath("tree-sitter-php", "tree-sitter-php_only.wasm")],
+				createVisitor: () => new PhpVisitor()
+			},
+			{
+				languageId: "dart",
+				extensions: [".dart"],
+				grammarWasms: [getGrammarPath("tree-sitter-dart", "tree-sitter-dart.wasm")],
+				createVisitor: () => new DartVisitor()
+			},
+			{
+				languageId: "rust",
+				extensions: [".rs"],
+				grammarWasms: [getGrammarPath("tree-sitter-rust", "tree-sitter-rust.wasm")],
+				createVisitor: () => new RustVisitor()
+			},
+			{
+				languageId: "java",
+				extensions: [".java"],
+				grammarWasms: [getGrammarPath("tree-sitter-java", "tree-sitter-java.wasm")],
+				createVisitor: () => new JavaVisitor()
+			},
+			{
+				languageId: "ruby",
+				extensions: [".rb"],
+				grammarWasms: [getGrammarPath("tree-sitter-ruby", "tree-sitter-ruby.wasm")],
+				createVisitor: () => new RubyVisitor()
+			},
+			{
+				languageId: "kotlin",
+				extensions: [".kt", ".kts"],
+				grammarWasms: [getGrammarPath("tree-sitter-kotlin", "tree-sitter-kotlin.wasm")],
+				createVisitor: () => new KotlinVisitor()
+			},
+			{
+				languageId: "swift",
+				extensions: [".swift"],
+				grammarWasms: [getGrammarPath("tree-sitter-swift", "tree-sitter-swift.wasm")],
+				createVisitor: () => new SwiftVisitor()
+			},
+			{
+				languageId: "c",
+				extensions: [".c", ".h"],
+				grammarWasms: [getGrammarPath("tree-sitter-c", "tree-sitter-c.wasm")],
+				createVisitor: () => new CVisitor()
+			},
+			{
+				languageId: "cpp",
+				extensions: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
+				grammarWasms: [getGrammarPath("tree-sitter-cpp", "tree-sitter-cpp.wasm")],
+				createVisitor: () => new CppVisitor()
+			}
+		];
+	}
+
+	/** Build the O(1) extension → config and languageId → visitor factory maps. */
+	private buildRegistryMaps(): void {
+		for (const config of this.registry) {
+			for (const ext of config.extensions) {
+				if (this.extToConfig.has(ext)) {
+					logger.warn(`[ParserPool] Duplicate extension mapping: ${ext}`);
+				}
+				this.extToConfig.set(ext, config);
+			}
+		}
+	}
+
+	/**
+	 * Remove all extension → config mappings that reference a failed WASM path.
+	 * Called when a grammar fails to load — prevents runtime errors on parse.
+	 */
+	private removeConfigsForWasm(wasmPath: string): void {
+		for (const [ext, config] of this.extToConfig.entries()) {
+			if (config.grammarWasms.includes(wasmPath)) {
+				this.extToConfig.delete(ext);
+			}
+		}
 	}
 
 	// ── ParserPool contract ───────────────────────────────────────
@@ -159,6 +296,7 @@ export class TreeSitterParserPool implements ParserPool {
 
 	async initialize(): Promise<void> {
 		if (this.initialized) return;
+		if (this.initError) throw this.initError;
 
 		if (this.initPromise) {
 			return this.initPromise;
@@ -167,6 +305,9 @@ export class TreeSitterParserPool implements ParserPool {
 		this.initPromise = this._doInitialize();
 		try {
 			await this.initPromise;
+		} catch (err) {
+			this.initError = err instanceof Error ? err : new Error(String(err));
+			throw err;
 		} finally {
 			this.initPromise = null;
 		}
@@ -209,37 +350,64 @@ export class TreeSitterParserPool implements ParserPool {
 			});
 		}
 
-		// Load grammars
-		const tsWasmPath = getTypescriptGrammarPath();
-		const tsxWasmPath = getTsxGrammarPath();
-
-		try {
-			this.tsLanguage = await Language.load(tsWasmPath);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			logger.error("[ParserPool] TypeScript grammar load failed", { tsWasmPath, error: message });
-			throw new FatalError(`Failed to load TypeScript grammar: ${message}`, {
-				operation: "Language.load",
-				path: tsWasmPath
-			});
+		// Collect all unique WASM paths from the registry
+		const uniqueWasms = new Set<string>();
+		for (const config of this.registry) {
+			for (const w of config.grammarWasms) {
+				uniqueWasms.add(w);
+			}
 		}
 
-		try {
-			this.tsxLanguage = await Language.load(tsxWasmPath);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			logger.error("[ParserPool] TSX grammar load failed", { tsxWasmPath, error: message });
-			throw new FatalError(`Failed to load TSX grammar: ${message}`, {
+		// Load all grammars in parallel (graceful degradation: skip incompatible WASMs)
+		let loadedCount = 0;
+		let skippedCount = 0;
+		const results = await Promise.allSettled(
+			Array.from(uniqueWasms).map(async (wasmPath) => {
+				try {
+					const lang = await Language.load(wasmPath);
+					return { wasmPath, lang, ok: true as const };
+				} catch (err) {
+					const message = err instanceof Error ? err.message : String(err);
+					return { wasmPath, error: message, ok: false as const };
+				}
+			})
+		);
+
+		for (const result of results) {
+			if (result.status === "fulfilled" && result.value.ok) {
+				this.loadedGrammars.set(result.value.wasmPath, result.value.lang);
+				loadedCount++;
+				logger.debug("[ParserPool] Grammar loaded", { wasmPath: result.value.wasmPath });
+			} else {
+				skippedCount++;
+				const wasmPath = result.status === "fulfilled" ? result.value.wasmPath : "unknown";
+				const message =
+					result.status === "fulfilled"
+						? result.value.error
+						: result.reason instanceof Error
+							? result.reason.message
+							: String(result.reason);
+				logger.warn("[ParserPool] Grammar load failed — skipping language", {
+					wasmPath,
+					error: message
+				});
+				// Remove configs that depend on this WASM from the extension map
+				if (result.status === "fulfilled") {
+					this.removeConfigsForWasm(result.value.wasmPath);
+				}
+			}
+		}
+
+		if (loadedCount === 0) {
+			throw new FatalError("No grammars could be loaded. Check WASM compatibility.", {
 				operation: "Language.load",
-				path: tsxWasmPath
+				attempted: Array.from(uniqueWasms)
 			});
 		}
 
 		logger.info("[ParserPool] Tree-sitter initialized", {
-			tsVersion: this.tsLanguage.metadata
-				? `${this.tsLanguage.metadata.major_version}.${this.tsLanguage.metadata.minor_version}.${this.tsLanguage.metadata.patch_version}`
-				: "unknown",
-			abiVersion: this.tsLanguage.abiVersion
+			grammarCount: uniqueWasms.size,
+			languageCount: this.registry.length
 		});
 
 		this.initialized = true;
@@ -247,15 +415,7 @@ export class TreeSitterParserPool implements ParserPool {
 
 	private async _parseWithTimeout(filePath: string, sourceCode: string, startTime: number): Promise<ParseResult> {
 		try {
-			const result = await Promise.race([
-				this._doParse(filePath, sourceCode),
-				new Promise<ParseResult>((_, reject) => {
-					setTimeout(() => {
-						reject(new Error(`Parse timeout after ${this.parseTimeoutMs}ms for: ${filePath}`));
-					}, this.parseTimeoutMs);
-				})
-			]);
-
+			const result = this._doParse(filePath, sourceCode);
 			const durationMs = Math.round(performance.now() - startTime);
 			result.durationMs = durationMs;
 			return result;
@@ -273,29 +433,46 @@ export class TreeSitterParserPool implements ParserPool {
 
 	private _doParse(filePath: string, sourceCode: string): ParseResult {
 		const ext = path.extname(filePath).toLowerCase();
-		const langType = EXTENSION_LANGUAGE_MAP[ext];
+		const config = this.extToConfig.get(ext);
 
-		if (!langType) {
+		if (!config) {
 			return { symbols: [], error: `Unsupported extension: ${ext}`, durationMs: 0 };
 		}
 
-		const language = langType === "tsx" ? this.tsxLanguage : this.tsLanguage;
+		// Find the grammar WASM that was loaded for this config
+		// (pick the first one — works for single-grammar languages; for TS, both
+		// TS and TSX grammars are loaded separately as distinct configs)
+		const wasmPath = config.grammarWasms[0];
+		if (!wasmPath) {
+			return { symbols: [], error: `No grammar configured for: ${config.languageId}`, durationMs: 0 };
+		}
+
+		const language = this.loadedGrammars.get(wasmPath);
 		if (!language) {
-			return { symbols: [], error: `Language not loaded for: ${langType}`, durationMs: 0 };
+			return { symbols: [], error: `Language not loaded for: ${config.languageId}`, durationMs: 0 };
 		}
 
 		const parser = new Parser();
 		parser.setLanguage(language);
 
-		const tree = parser.parse(sourceCode);
+		const parseStart = Date.now();
+		const tree = parser.parse(sourceCode, null, {
+			progressCallback: (): boolean => {
+				return Date.now() - parseStart > this.parseTimeoutMs;
+			}
+		});
 		if (!tree) {
 			parser.delete();
-			return { symbols: [], error: "Parser returned null tree", durationMs: 0 };
+			return {
+				symbols: [],
+				error: "Parse timeout or parser returned null tree",
+				durationMs: 0
+			};
 		}
 
 		const hasErrors = tree.rootNode.hasError;
 
-		const visitor = new TypeScriptVisitor();
+		const visitor = config.createVisitor();
 		const symbols = visitor.extractSymbols(tree, sourceCode);
 
 		tree.delete();

@@ -425,15 +425,25 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 			// Phase 1 batch size: files read+parsed concurrently.
 			// Phase 2 (checksum skip, rename detection, state mutation) runs
 			// sequentially per batch to avoid data races on stalePaths / renameMap.
-			const CONCURRENT_PARSE_BATCH = 20;
+			const CONCURRENT_PARSE_BATCH = 4;
 
 			for (let i = 0; i < parseTasks.length; i += CONCURRENT_PARSE_BATCH) {
 				const batch = parseTasks.slice(i, i + CONCURRENT_PARSE_BATCH);
 
 				// ── Phase 1: concurrent immutable reads ──
+				const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 				const batchResults = await Promise.all(
 					batch.map(async (plan) => {
 						try {
+							if (plan.sizeBytes > MAX_FILE_SIZE_BYTES) {
+								return {
+									plan,
+									checksum: null as string | null,
+									lineCount: 0,
+									parseResult: null as ParseResult | null,
+									error: `File exceeds max size (${plan.sizeBytes} bytes > ${MAX_FILE_SIZE_BYTES} bytes)`
+								};
+							}
 							const content = fs.readFileSync(plan.absolutePath, "utf-8");
 							const checksum = computeChecksum(content);
 							const lineCount = countLines(content);
@@ -662,18 +672,22 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 					message: `Cleaning ${stalePaths.size} stale files...`
 				});
 
-				let cleanedCount = 0;
-				for (const fp of stalePaths) {
-					this.db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
-					this.db.codebaseFiles.deleteFile(repo, fp);
-					cleanedCount++;
-					this.emitProgress(options, {
-						stage: "cleaning",
-						current: cleanedCount,
-						total: stalePaths.size,
-						message: `Cleaned ${cleanedCount}/${stalePaths.size}: ${fp}`
+				await retryDbWrite(async () => {
+					await this.db.withWrite(async () => {
+						let cleanedCount = 0;
+						for (const fp of stalePaths) {
+							this.db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
+							this.db.codebaseFiles.deleteFile(repo, fp);
+							cleanedCount++;
+							this.emitProgress(options, {
+								stage: "cleaning",
+								current: cleanedCount,
+								total: stalePaths.size,
+								message: `Cleaned ${cleanedCount}/${stalePaths.size}: ${fp}`
+							});
+						}
 					});
-				}
+				}, "stale-cleanup");
 			}
 
 			// ── Build final report ───────────────────────────────
@@ -769,10 +783,7 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 		const totalFiles = this.db.codebaseFiles.getFileCountByRepo(repo);
 		const existingFiles = this.db.codebaseFiles.getFilesByRepo(repo);
 
-		let totalSymbols = 0;
-		for (const f of existingFiles) {
-			totalSymbols += this.db.codebaseSymbols.getSymbolsByFile(repo, f.file_path).length;
-		}
+		let totalSymbols = this.db.codebaseSymbols.getSymbolCountByRepo(repo);
 
 		let lastIndexedAt: string | null = null;
 		if (existingFiles.length > 0) {

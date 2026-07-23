@@ -1,4 +1,15 @@
 export { TreeSitterParserPool } from "./parser-pool.js";
-export { LanguageVisitor, ParsedSymbol, SymbolKind, ParseResult } from "./language-visitor.js";
-export type { ParserPool } from "./language-visitor.js";
+export { SymbolKind } from "./language-visitor.js";
+export type { LanguageVisitor, ParsedSymbol, ParseResult, ParserPool } from "./language-visitor.js";
 export { TypeScriptVisitor } from "./typescript-visitor.js";
+export { GoVisitor } from "./visitors/go-visitor.js";
+export { PythonVisitor } from "./visitors/python-visitor.js";
+export { PhpVisitor } from "./visitors/php-visitor.js";
+export { DartVisitor } from "./visitors/dart-visitor.js";
+export { RustVisitor } from "./visitors/rust-visitor.js";
+export { JavaVisitor } from "./visitors/java-visitor.js";
+export { RubyVisitor } from "./visitors/ruby-visitor.js";
+export { KotlinVisitor } from "./visitors/kotlin-visitor.js";
+export { SwiftVisitor } from "./visitors/swift-visitor.js";
+export { CVisitor } from "./visitors/c-visitor.js";
+export { CppVisitor } from "./visitors/cpp-visitor.js";

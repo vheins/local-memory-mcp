@@ -93,6 +93,11 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		).map((r) => this.rowToSymbol(r));
 	}
 
+	getSymbolCountByRepo(repo: string): number {
+		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM codebase_symbols WHERE repo = ?", [repo]);
+		return row?.count ?? 0;
+	}
+
 	getAllSymbols(): CodebaseSymbol[] {
 		return this.all<CodebaseSymbol>(
 			"SELECT * FROM codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC"

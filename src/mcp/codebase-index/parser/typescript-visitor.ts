@@ -196,20 +196,6 @@ const TOP_LEVEL_TYPES = new Set([
 ]);
 
 export class TypeScriptVisitor implements LanguageVisitor {
-	supportedExtensions(): string[] {
-		return [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"];
-	}
-
-	/**
-	 * Parse source by extracting symbols from a pre-parsed tree.
-	 * The ParserPool handles WASM, parser construction, and calling this.
-	 */
-	parse(sourceCode: string, filePath: string): ParsedSymbol[] {
-		// This method is called with a tree passed to the pool.
-		// Direct calls construct their own parser — used in tests.
-		return [];
-	}
-
 	/** Walk a parsed tree and extract all symbols. */
 	extractSymbols(tree: TSTree, sourceCode: string): ParsedSymbol[] {
 		const root = tree.rootNode;

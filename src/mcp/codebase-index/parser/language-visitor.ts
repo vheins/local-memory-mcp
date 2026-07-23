@@ -5,6 +5,8 @@
  * structured symbol information (functions, classes, interfaces, etc.).
  */
 
+import type { Tree } from "web-tree-sitter";
+
 /** Classification of a parsed symbol. */
 export enum SymbolKind {
 	Function = "function",
@@ -45,11 +47,8 @@ export interface ParsedSymbol {
 
 /** Contract that every language parser must implement. */
 export interface LanguageVisitor {
-	/** File extensions this visitor can handle (e.g. [".ts", ".tsx"]). */
-	supportedExtensions(): string[];
-
-	/** Parse source code and return discovered symbols. */
-	parse(sourceCode: string, filePath: string): ParsedSymbol[];
+	/** Extract symbols from a pre-parsed tree-sitter AST. */
+	extractSymbols(tree: Tree, sourceCode: string): ParsedSymbol[];
 }
 
 /** Result of a single parse operation. */

@@ -74,21 +74,31 @@ Database records for files that no longer exist on disk are removed, keeping the
 
 ## Supported Languages
 
-| Language   | File Extensions | Status     |
-| :--------- | :-------------- | :--------- |
-| TypeScript | `.ts`, `.tsx`   | ✅ Full    |
-| JavaScript | `.js`, `.jsx`   | ✅ Full    |
-| Python     | `.py`           | 🔄 Planned |
-| Rust       | `.rs`           | 🔄 Planned |
-| Go         | `.go`           | 🔄 Planned |
-| PHP        | `.php`          | 🔄 Planned |
+| Language   | File Extensions                              | Status   |
+| :--------- | :------------------------------------------- | :------- |
+| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts`                | ✅ Full  |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs`                | ✅ Full  |
+| Go         | `.go`                                        | ✅ Full  |
+| Python     | `.py`                                        | ✅ Full  |
+| PHP        | `.php`                                       | ✅ Full  |
+| Rust       | `.rs`                                        | ✅ Full  |
+| Java       | `.java`                                      | ✅ Full  |
+| Dart       | `.dart`                                      | ✅ Full* |
+| Kotlin     | `.kt`, `.kts`                                | ✅ Full  |
+| Ruby       | `.rb`                                        | ✅ Full  |
+| Swift      | `.swift`                                     | ✅ Full  |
+| C          | `.c`, `.h`                                   | ✅ Full  |
+| C++        | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx` | ✅ Full  |
 
-The parser architecture is designed for extensibility. Supporting a new language requires:
+> _\* Dart requires a compatible tree-sitter grammar WASM — see ABI compatibility notes in operational guide._
 
-1. Loading the tree-sitter grammar WASM file for that language
-2. Implementing the `LanguageVisitor` interface (walk AST nodes, extract `ParsedSymbol` records)
+The parser architecture uses a registry pattern. Each language is defined by a `LanguageConfig` entry in the parser pool's `createRegistry()` method, which maps file extensions to a tree-sitter grammar WASM and a `LanguageVisitor` implementation. Adding a new language requires:
 
-See [ADR-002 §Decision 4](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for the phased delivery plan.
+1. Installing the tree-sitter grammar npm package (must include or support WASM build)
+2. Adding a `LanguageConfig` entry to `createRegistry()` in `parser-pool.ts`
+3. Implementing the `LanguageVisitor` interface in a new visitor file under `parser/visitors/`
+
+See [ADR-002 §Decision 4](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for architecture details.
 
 ---
 

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] — 2026-07-23
+
+### Added
+
+- **Multi-language parsing (codebase-index)**: Full tree-sitter AST parsing for 11 new languages — Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, and C++. Each language has a dedicated visitor that extracts functions, classes, interfaces, enums, methods, and type aliases from source code.
+- **Registry-based parser architecture**: `TreeSitterParserPool` now uses a `LanguageConfig` registry pattern — adding a new language requires one entry in `createRegistry()` and one visitor file. Extension-to-config and grammar-to-visitor maps are built at construction for O(1) lookup.
+- **30 visitor tests**: New `visitors.test.ts` with positive-extraction tests covering all 11 new languages (functions, structs/classes, interfaces, methods).
+- **`getSymbolCountByRepo` aggregate method**: Single `COUNT(*)` query replaces N+1 per-file symbol counting in `getIndexStatus()`.
+- **Parallel WASM loading**: All grammar WASM files loaded concurrently via `Promise.allSettled`, reducing startup latency.
+- **`parser.setTimeoutMicros()`**: Native tree-sitter cancellation replaces non-functional `Promise.race` timeout mechanism.
+- **10MB file size guard**: Files exceeding 10MB are skipped before `readFileSync` to prevent OOM.
+- **Atomic stale cleanup**: Stale file deletion (symbols + files) now wrapped in a single `withWrite` transaction.
+- **File discovery extensions**: Added `.dart`, `.kts`, `.cc`, `.cxx`, `.hh`, `.hxx` to the extension-to-language map.
+
+### Changed
+
+- `LanguageVisitor` interface: replaced `parse()` with `extractSymbols(tree, sourceCode)` — visitors receive pre-parsed tree-sitter AST trees instead of raw source. `supportedExtensions()` removed from interface (registry is the single source of truth for extension mapping).
+- `CONCURRENT_PARSE_BATCH` reduced from 20 to 4 to match the semaphore concurrency limit, eliminating uncontrolled queuing pressure.
+
 ## [0.20.3] — 2026-07-22
 
 ### Fixed
