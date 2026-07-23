@@ -41,31 +41,56 @@ import { FatalError } from "../types/errors.js";
 
 // ── Path resolution ──────────────────────────────────────────────────
 
-/** Resolve the project root at runtime (handles both tsx and compiled contexts). */
+/**
+ * Resolve the project root at runtime.
+ *
+ * Search order:
+ * 1. Walk up from this file's directory looking for `dist/grammars/` (bundled package).
+ * 2. Walk up looking for `node_modules` (development / npx cache install).
+ */
 function resolveProjectRoot(): string {
 	const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 	let dir = moduleDir;
 	while (dir !== path.parse(dir).root) {
+		if (fs.existsSync(path.join(dir, "dist", "grammars"))) {
+			return dir;
+		}
 		if (fs.existsSync(path.join(dir, "node_modules"))) {
 			return dir;
 		}
 		dir = path.dirname(dir);
 	}
-	throw new Error("Cannot locate project root (node_modules not found)");
+	throw new Error("Cannot locate project root (dist/grammars or node_modules not found)");
 }
 
 /** Path to the web-tree-sitter WASM file. */
 function getWasmPath(): string {
 	const root = resolveProjectRoot();
+
+	// First try: bundled WASM in dist/grammars/web-tree-sitter/
+	const bundledPath = path.join(root, "dist", "grammars", "web-tree-sitter", "web-tree-sitter.wasm");
+	if (fs.existsSync(bundledPath)) return bundledPath;
+
+	// Fallback: node_modules
 	return path.join(root, "node_modules", "web-tree-sitter", "web-tree-sitter.wasm");
 }
 
 /**
  * Resolve a tree-sitter grammar WASM file path.
- * Searches: {packageDir}/{wasmFilename}, then {packageDir}/wasm/{wasmFilename}.
+ *
+ * Search order:
+ * 1. Bundled grammar in dist/grammars/<packageName>/<wasmFilename>
+ * 2. Direct path in node_modules/<packageName>/<wasmFilename>
+ * 3. Alternate path in node_modules/<packageName>/wasm/<wasmFilename>
  */
 function getGrammarPath(packageName: string, wasmFilename: string): string {
 	const root = resolveProjectRoot();
+
+	// Try bundled path first (grammars shipped with the package itself)
+	const bundledPath = path.join(root, "dist", "grammars", packageName, wasmFilename);
+	if (fs.existsSync(bundledPath)) return bundledPath;
+
+	// Fallback to node_modules paths (for local development or if bundled was removed)
 	const pkgDir = path.join(root, "node_modules", packageName);
 	const directPath = path.join(pkgDir, wasmFilename);
 	if (fs.existsSync(directPath)) return directPath;
@@ -73,7 +98,7 @@ function getGrammarPath(packageName: string, wasmFilename: string): string {
 	const altPath = path.join(pkgDir, "wasm", wasmFilename);
 	if (fs.existsSync(altPath)) return altPath;
 
-	throw new Error(`Grammar WASM not found: ${wasmFilename} in ${pkgDir}`);
+	throw new Error(`Grammar WASM not found: ${wasmFilename} (searched: ${bundledPath}, ${directPath}, ${altPath})`);
 }
 
 // ── Semaphore ────────────────────────────────────────────────────────
