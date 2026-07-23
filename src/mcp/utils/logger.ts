@@ -12,6 +12,25 @@ type LogSinkPayload = {
 
 type LogSink = (payload: LogSinkPayload) => void;
 
+/**
+ * Returns ISO 8601 timestamp in the system's local timezone.
+ * Respects OS timezone setting (e.g., Asia/Jakarta = UTC+7).
+ */
+function toLocalISOString(date: Date = new Date()): string {
+	const y = date.getFullYear();
+	const mo = String(date.getMonth() + 1).padStart(2, "0");
+	const d = String(date.getDate()).padStart(2, "0");
+	const h = String(date.getHours()).padStart(2, "0");
+	const mi = String(date.getMinutes()).padStart(2, "0");
+	const s = String(date.getSeconds()).padStart(2, "0");
+	const ms = String(date.getMilliseconds()).padStart(3, "0");
+	const offset = -date.getTimezoneOffset();
+	const sign = offset >= 0 ? "+" : "-";
+	const offHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
+	const offMins = String(Math.abs(offset) % 60).padStart(2, "0");
+	return `${y}-${mo}-${d}T${h}:${mi}:${s}.${ms}${sign}${offHours}:${offMins}`;
+}
+
 const LEVELS: Record<LogLevel, number> = {
 	debug: 0,
 	info: 1,
@@ -62,7 +81,7 @@ function emitToStderr(level: LogLevel, message: string, context?: Record<string,
 		return;
 	}
 
-	const timestamp = new Date().toISOString();
+	const timestamp = toLocalISOString();
 	const levelStr = level.toUpperCase().padEnd(9);
 	process.stderr.write(`${timestamp} [${levelStr}] ${message}${formatContextForStderr(context)}\n`);
 }
@@ -176,11 +195,11 @@ export function createFileSink(logDir: string, maxFiles = 5): LogSink {
 		}
 	}
 
-	const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+	const date = toLocalISOString().slice(0, 10).replace(/-/g, "");
 	const logFile = `${logDir}/mcp-${date}.log`;
 
 	return (payload) => {
-		const line = `${new Date().toISOString()} [${payload.level.toUpperCase()}] [pid:${process.pid}] ${JSON.stringify(payload.data)}\n`;
+		const line = `${toLocalISOString()} [${payload.level.toUpperCase()}] [pid:${process.pid}] ${JSON.stringify(payload.data)}\n`;
 		try {
 			fs.appendFileSync(logFile, line);
 		} catch {
