@@ -105,7 +105,7 @@
 	<div class="glass card panel-card">
 		<div class="panel-header">
 			<div>
-				<div class="section-label">Global Command Center</div>
+				<h2 class="section-label">Global Command Center</h2>
 				<div class="panel-copy">Cross-repository orchestration view for workload, coordination, and pressure.</div>
 			</div>
 			{#if highlightedRepo}
@@ -131,7 +131,7 @@
 
 	<div class="grid-two">
 		<div class="glass card panel-card">
-			<div class="subheading">Coordination</div>
+			<h2 class="subheading">Coordination</h2>
 			<div class="mini-grid">
 				{#each $coordinationCards as card (card.label)}
 					<div class="mini-card">
@@ -143,7 +143,7 @@
 		</div>
 
 		<div class="glass card panel-card">
-			<div class="subheading">Throughput</div>
+			<h2 class="subheading">Throughput</h2>
 			<div class="mini-grid">
 				{#each $throughputCards as card (card.label)}
 					<div class="mini-card">
@@ -161,7 +161,7 @@
 	<div class="glass card panel-card">
 		<div class="panel-header">
 			<div>
-				<div class="subheading">Attention Board</div>
+				<h2 class="subheading">Attention Board</h2>
 				<div class="panel-copy">
 					Repos sorted by operational pressure: blocked work, active execution, pending queue, and coordination load.
 				</div>

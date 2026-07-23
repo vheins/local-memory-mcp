@@ -39,3 +39,11 @@ storage/*.db-*
 .playwright-mcp/:memory:
 .playwright-mcp/
 :memory:
+
+# Audit screenshots
+audit-screenshots/
+
+# Sibling screenshots
+dashboard-codebase-screenshot.png
+dashboard-memories-screenshot.png
+tasks-view-check.png

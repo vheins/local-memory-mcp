@@ -133,7 +133,7 @@
 					rel="noopener noreferrer"
 					class="ext-link-btn ext-link-npm"
 					title="View on npm"
-					aria-label="npm package"
+					aria-label={$npmDownloads !== null ? `npm package: ${formatDownloads($npmDownloads)}/mo` : "npm package"}
 					id="npmLink"
 				>
 					<!-- npm SVG wordmark -->
@@ -174,7 +174,7 @@
 					rel="noopener noreferrer"
 					class="ext-link-btn ext-link-donate"
 					title="Support this project"
-					aria-label="Donation"
+					aria-label="Donate"
 					id="donateLink"
 				>
 					<svg
@@ -465,6 +465,11 @@
 		font-size: 0.7rem;
 	}
 
+	/* Fix: Color contrast on Ecosystem button text (WCAG AA 4.5:1) */
+	.ext-links-group :global(.ext-link-label) {
+		color: #556f8a;
+	}
+
 	/* npm download badge */
 	.npm-dl-badge {
 		display: flex;
@@ -482,15 +487,7 @@
 		animation: skeleton-pulse 1.4s ease-in-out infinite;
 	}
 
-	@keyframes skeleton-pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.4;
-		}
-	}
+	/* Fix 13: skeleton-pulse keyframe removed — defined globally in app.css */
 
 	/* ── Countdown ── */
 	.countdown-bar {
@@ -526,7 +523,7 @@
 	}
 
 	.countdown-label {
-		font-size: 0.65rem;
+		font-size: 0.7rem;
 		font-weight: 600;
 		width: 26px;
 		transition: color 0.3s;

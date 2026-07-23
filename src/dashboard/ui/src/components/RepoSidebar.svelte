@@ -25,7 +25,13 @@
 	$: collapsed = $isRepoSidebarCollapsed;
 </script>
 
-<aside class="sidebar glass-strong flex flex-col" class:collapsed style="border-right: 1px solid var(--color-border);">
+<aside
+	class="sidebar glass-strong flex flex-col"
+	class:collapsed
+	style="border-right: 1px solid var(--color-border);"
+	role="complementary"
+	aria-label="Repository sidebar"
+>
 	<!-- Header -->
 	<div class="sidebar-header" style="border-bottom: 1px solid var(--color-border);">
 		{#if !collapsed}

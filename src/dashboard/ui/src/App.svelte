@@ -98,8 +98,7 @@
 		<!-- Mobile overlay -->
 		{#if $appState.mobileMenuOpen}
 			<div
-				class="drawer-overlay"
-				style="z-index:38;"
+				class="drawer-overlay mobile-overlay"
 				on:click={() => app.toggleMobileMenu()}
 				on:keydown={(e) => e.key === "Escape" && app.toggleMobileMenu()}
 				role="button"
@@ -112,7 +111,7 @@
 		{/if}
 
 		<!-- Content Shell -->
-		<div id="dashboardShell" class="dashboard-shell" aria-live="polite">
+		<main id="dashboardShell" class="dashboard-shell" aria-live="polite">
 			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena"}
 				<div class="empty-state animate-fade-in">
 					<div class="empty-state-icon animate-float">
@@ -202,7 +201,7 @@
 							{#if $currentRepo}
 								<div class="glass card hover-glow card-body">
 									<div class="flex items-center justify-between card-section-title">
-										<div class="section-label">Selected Repo Pulse</div>
+										<h2 class="section-label">Selected Repo Pulse</h2>
 										<div class="repo-badge">
 											{$currentRepo}
 										</div>
@@ -212,11 +211,11 @@
 										style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;"
 									>
 										<div class="glass card card-body">
-											<div class="section-label card-section-title">Memory Overview</div>
+											<h2 class="section-label card-section-title">Memory Overview</h2>
 											<StatsWidget />
 										</div>
 										<div class="glass card card-body">
-											<div class="section-label card-section-title">Task Overview</div>
+											<h2 class="section-label card-section-title">Task Overview</h2>
 											<TaskStatsWidget />
 										</div>
 									</div>
@@ -224,7 +223,7 @@
 								<TimeStatsWidget />
 							{:else}
 								<div class="glass card hover-glow card-body">
-									<div class="section-label card-section-title">Per-Repository Pulse</div>
+									<h2 class="section-label card-section-title">Per-Repository Pulse</h2>
 									<div class="muted-text">
 										Select a repository from the sidebar to inspect repo-specific memory, task, and execution metrics.
 									</div>
@@ -283,7 +282,7 @@
 					<div class="glass card hover-glow animate-fade-in">
 						<div class="flex items-center gap-2" style="margin-bottom:16px;">
 							<Icon name="brain" size={14} strokeWidth={1.75} />
-							<div class="section-label">Memory Explorer</div>
+							<h2 class="section-label">Memory Explorer</h2>
 						</div>
 						<MemoryList
 							bind:this={memoryList}
@@ -300,7 +299,7 @@
 						<div class="glass card hover-glow" style="margin-bottom:20px;">
 							<div class="flex items-center gap-2" style="margin-bottom:16px;">
 								<Icon name="columns" size={14} strokeWidth={1.75} />
-								<div class="stat-label">Task Overview</div>
+								<h2 class="stat-label">Task Overview</h2>
 							</div>
 							<KanbanBoard
 								bind:this={kanbanBoard}
@@ -344,7 +343,7 @@
 					<ReferenceTab handler={app} {appState} {filteredTools} {filteredPrompts} {filteredResources} />
 				{/if}
 			{/if}
-		</div>
+		</main>
 	</div>
 </div>
 
@@ -468,6 +467,7 @@
 		margin-left: -20px;
 		margin-right: -20px;
 		width: calc(100% + 40px);
+		overflow-y: auto;
 	}
 
 	@media (max-width: 1024px) {

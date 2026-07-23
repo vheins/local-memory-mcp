@@ -1,5 +1,6 @@
 /* ─── Agentic Glass Design System v2.0 ──────────────────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+/* Fix 7: Duplicate Google Fonts @import removed — kept only in index.html <link> */
 
 :root {
 	/* ── Glass Surface Tokens ─── */
@@ -31,7 +32,7 @@
 	/* ── Layout ─── */
 	--sidebar-width: 280px;
 	--sidebar-collapsed-width: 72px;
-	--header-height: 60px;
+	--header-height: 61px;
 	--radius-sm: 8px;
 	--radius-md: 12px;
 	--radius-lg: 16px;
@@ -242,7 +243,7 @@ a:hover {
 	overflow-y: auto;
 	scrollbar-width: thin;
 	transition: width 0.3s var(--ease-smooth);
-	z-index: 40;
+	z-index: var(--z-sidebar, 40);
 }
 
 .sidebar.collapsed {
@@ -258,7 +259,7 @@ a:hover {
 
 .dashboard-shell {
 	padding: 20px;
-	min-height: 100vh;
+	min-height: calc(100vh - var(--header-height, 61px));
 	min-width: 0;
 }
 
@@ -281,7 +282,7 @@ a:hover {
 	inset: 0 auto 0 0;
 	width: min(320px, 86vw);
 	height: 100dvh;
-	z-index: 39;
+	z-index: var(--z-mobile-shell, 39);
 	display: flex;
 	flex-direction: column;
 }
@@ -296,7 +297,7 @@ a:hover {
 .top-bar {
 	position: sticky;
 	top: 0;
-	z-index: 30;
+	z-index: var(--z-topbar, 30);
 }
 
 /* ─── Tabs ──────────────────────────────────────────────────────────────────── */
@@ -590,7 +591,7 @@ a:hover {
 	gap: 4px;
 	padding: 0.2rem 0.6rem;
 	border-radius: 9999px;
-	font-size: 0.62rem;
+	font-size: 0.68rem;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
@@ -847,7 +848,7 @@ a:hover {
 }
 
 .stat-label {
-	font-size: 0.68rem;
+	font-size: 0.75rem;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
@@ -1170,7 +1171,7 @@ a:hover {
 	height: 36px;
 	border-radius: 50%;
 	border: none;
-	background: #00a884;
+	background: var(--color-primary);
 	color: white;
 	cursor: pointer;
 	display: flex;
@@ -1195,7 +1196,7 @@ a:hover {
 }
 
 .dark .chat-send-btn {
-	background: #00a884;
+	background: var(--color-primary);
 }
 
 /* ─── Skeleton ─────────────────────────────────────────────────────────────── */
@@ -1354,9 +1355,13 @@ a:hover {
 	position: fixed;
 	inset: 0;
 	background: rgba(1, 12, 30, 0.55);
-	z-index: 50;
+	z-index: var(--z-overlay, 50);
 	backdrop-filter: blur(6px);
 	-webkit-backdrop-filter: blur(6px);
+}
+
+.mobile-overlay {
+	z-index: var(--z-mobile-overlay, 38);
 }
 
 .drawer-panel {
@@ -1371,7 +1376,7 @@ a:hover {
 	box-shadow:
 		-20px 0 60px rgba(0, 0, 0, 0.14),
 		-1px 0 0 rgba(14, 165, 233, 0.08);
-	z-index: 51;
+	z-index: var(--z-drawer, 51);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -1430,7 +1435,7 @@ a:hover {
 
 /* ─── Section Headers ─────────────────────────────────────────────────────── */
 .section-label {
-	font-size: 0.68rem;
+	font-size: 0.75rem;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -1751,7 +1756,7 @@ a:hover {
 	transform: scale(1.1);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
 	html,
 	body,
 	#app,
@@ -1783,4 +1788,33 @@ a:hover {
 		border-radius: var(--radius-lg);
 		padding: 14px;
 	}
+}
+
+/* ─── Z-Index Tokens (Fix 15) ────────────────────────────────────────────── */
+:root {
+	--z-topbar: 30;
+	--z-mobile-shell: 39;
+	--z-mobile-overlay: 38;
+	--z-sidebar: 40;
+	--z-overlay: 50;
+	--z-drawer: 51;
+}
+
+/* ─── Focus-Visible (Fix 10) ─────────────────────────────────────────────── */
+*:focus-visible {
+	outline: 2px solid var(--color-primary, #0ea5e9);
+	outline-offset: 2px;
+}
+
+/* Chat input needs focus-visible ring (its outline:none removes browser default) */
+.chat-input-row input:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.3);
+}
+
+/* Form inputs already have custom :focus box-shadow ring; suppress double-outline */
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible {
+	outline: none;
 }
