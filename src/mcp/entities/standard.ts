@@ -1,5 +1,6 @@
 import { BaseEntity } from "../storage/base";
 import { CodingStandardEntry, CodingStandardRow } from "../types/memory";
+import { sanitizeFtsTerm } from "../utils/fts";
 
 export class StandardEntity extends BaseEntity {
 	insert(entry: CodingStandardEntry): void {
@@ -102,6 +103,14 @@ export class StandardEntity extends BaseEntity {
 	}): CodingStandardEntry[] {
 		const { query, context, version, language, stack, tag, owner, repo, is_global, limit = 20, offset = 0 } = options;
 
+		if (query) {
+			try {
+				return this.ftsSearch({ ...options, query });
+			} catch {
+				// Fall through to LIKE search
+			}
+		}
+
 		const where: string[] = [];
 		const params: (string | number | null)[] = [];
 
@@ -151,6 +160,76 @@ export class StandardEntity extends BaseEntity {
 		return rows.map((r) => this.rowToEntry(r));
 	}
 
+	private ftsSearch(options: {
+		query: string;
+		context?: string;
+		version?: string;
+		language?: string;
+		stack?: string;
+		tag?: string;
+		owner?: string;
+		repo?: string;
+		is_global?: boolean;
+		limit?: number;
+		offset?: number;
+	}): CodingStandardEntry[] {
+		const { query, context, version, language, stack, tag, owner, repo, is_global, limit = 20, offset = 0 } = options;
+
+		const safeTerm = sanitizeFtsTerm(query);
+		if (!safeTerm) throw new Error("Invalid FTS5 query");
+
+		const conditions: string[] = ["coding_standards_fts MATCH ?"];
+		const params: unknown[] = [safeTerm];
+
+		if (context) {
+			conditions.push("cs.context = ?");
+			params.push(context);
+		}
+		if (version) {
+			conditions.push("cs.version = ?");
+			params.push(version);
+		}
+		if (language) {
+			conditions.push("cs.language = ?");
+			params.push(language);
+		}
+		if (stack) {
+			conditions.push("cs.stack LIKE ?");
+			params.push(`%${stack}%`);
+		}
+		if (tag) {
+			conditions.push("cs.tags LIKE ?");
+			params.push(`%${tag}%`);
+		}
+		if (repo !== undefined) {
+			if (owner !== undefined) {
+				conditions.push("((cs.owner = ? AND cs.repo = ?) OR cs.is_global = 1)");
+				params.push(owner, repo);
+			} else {
+				conditions.push("(cs.repo = ? OR cs.is_global = 1)");
+				params.push(repo);
+			}
+		}
+		if (is_global !== undefined) {
+			conditions.push("cs.is_global = ?");
+			params.push(is_global ? 1 : 0);
+		}
+
+		params.push(limit, offset);
+
+		const sql = `
+			SELECT cs.*
+			FROM coding_standards_fts fts
+			JOIN coding_standards cs ON cs.rowid = fts.rowid
+			WHERE ${conditions.join(" AND ")}
+			ORDER BY rank
+			LIMIT ? OFFSET ?
+		`;
+
+		const rows = this.all<CodingStandardRow>(sql, params);
+		return rows.map((r) => this.rowToEntry(r));
+	}
+
 	searchBySimilarity(
 		query: string,
 		options: {
@@ -159,10 +238,12 @@ export class StandardEntity extends BaseEntity {
 			language?: string;
 			stack?: string[];
 			tags?: string[];
+			owner?: string;
 			repo?: string;
 			is_global?: boolean;
 			limit?: number;
 			offset?: number;
+			minScore?: number;
 		}
 	): Array<CodingStandardEntry & { similarity: number }> {
 		const candidates = this.search({
@@ -171,6 +252,7 @@ export class StandardEntity extends BaseEntity {
 			language: options.language,
 			stack: options.stack?.[0],
 			tag: options.tags?.[0],
+			owner: options.owner,
 			repo: options.repo,
 			is_global: options.is_global,
 			limit: options.limit ?? 60,
@@ -178,7 +260,7 @@ export class StandardEntity extends BaseEntity {
 		});
 
 		const queryVector = this.computeVector(query);
-		return candidates
+		const scored = candidates
 			.map((standard) => {
 				const haystack = [
 					standard.title,
@@ -196,6 +278,12 @@ export class StandardEntity extends BaseEntity {
 				return { ...standard, similarity };
 			})
 			.sort((a, b) => b.similarity - a.similarity);
+
+		const { minScore } = options;
+		if (minScore !== undefined) {
+			return scored.filter((s) => s.similarity >= minScore);
+		}
+		return scored;
 	}
 
 	/**
@@ -220,16 +308,17 @@ export class StandardEntity extends BaseEntity {
 		incomingStack: string[],
 		threshold = 0.82
 	): (CodingStandardEntry & { similarity: number }) | null {
-		// Pull broad candidates without any dimension filter so we compare across all
-		const candidates = this.search({ repo, owner, limit: 80, offset: 0 });
-		if (candidates.length === 0) return null;
-
-		const queryVector = this.computeVector(content);
+		// Delegate vector scoring to searchBySimilarity — push threshold
+		// filtering into the search so we never iterate below-threshold rows.
+		const candidates = this.searchBySimilarity(content, {
+			owner,
+			repo,
+			limit: 80,
+			offset: 0,
+			minScore: threshold
+		});
 
 		for (const standard of candidates) {
-			const similarity = this.cosineSimilarity(queryVector, this.computeVector(standard.content));
-			if (similarity < threshold) continue;
-
 			// ---- Guard: exempt if ANY identifying dimension differs ----
 
 			// 1. Version guard
@@ -253,7 +342,7 @@ export class StandardEntity extends BaseEntity {
 			}
 
 			// All guards passed — this is a genuine duplicate
-			return { ...standard, similarity };
+			return standard;
 		}
 
 		return null;
@@ -332,7 +421,7 @@ export class StandardEntity extends BaseEntity {
 		return this.all<{ standard_id: string; vector: string }>(sql, params);
 	}
 
-	upsertVectorEmbedding(standardId: string, vector: number[]): void {
+	upsertVectorEmbedding(standardId: string, vector: unknown): void {
 		this.run(
 			`INSERT INTO standard_vectors (standard_id, vector, updated_at)
 			VALUES (?, ?, ?)
