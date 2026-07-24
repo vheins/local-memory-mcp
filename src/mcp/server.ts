@@ -58,10 +58,16 @@ const vectors = new RealVectorStore(db);
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
 logger.info("[Server] startup", { pid: process.pid, version: CAPABILITIES.serverInfo.version, db: db.getDbPath() });
 
-// Pre-load vector model in background to avoid initial request timeout
-vectors.initialize().catch((err) => {
-	logger.warn("[Server] Initial vector model loading failed. Will retry on first use.", { error: String(err) });
-});
+// Pre-load vector model — block startup until ready or timeout (30s)
+try {
+	await Promise.race([
+		vectors.initialize(),
+		new Promise((_, reject) => setTimeout(() => reject(new Error("Vector model init timed out after 30s")), 30000))
+	]);
+	logger.info("[Server] Vector model loaded (384-dim)");
+} catch (err) {
+	logger.warn("[Server] Vector model init failed. Will retry on first use.", { error: String(err) });
+}
 
 // Run startup maintenance: memory decay, expired archiving, and low-score archiving
 runStartupMaintenance(db).then((result) => {
