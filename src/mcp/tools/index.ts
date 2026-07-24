@@ -1,17 +1,10 @@
-import path from "node:path";
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
-import {
-	SessionContext,
-	findContainingRoot,
-	inferOwnerFromSession,
-	inferRepoFromSession,
-	isPathWithinRoots
-} from "../session";
+import { SessionContext } from "../session";
 import { logger } from "../utils/logger";
-import { parseRepoInput } from "../utils/normalize";
+import { normalizeToolArguments } from "../utils/normalize-args";
 import { SamplingRequestHandler } from "../sampling";
 import { ElicitationRequestHandler } from "../elicitation";
 
@@ -61,7 +54,8 @@ import {
 	handleGetArchitecture,
 	handleGetFileSymbols,
 	handleSearchSymbols,
-	handleTraceSymbol
+	handleTraceSymbol,
+	handleCodebaseSearch
 } from "./codebase-index";
 import { McpResponse } from "../utils/mcp-response";
 
@@ -82,7 +76,6 @@ export type RegisterAllOptions = {
 // ── Tools that mutate the DB — must run under write lock ──────────────────
 const WRITE_TOOLS = new Set([
 	"memory-store",
-	"memory-acknowledge",
 	"memory-update",
 	"memory-delete",
 	"memory-bulk-delete",
@@ -114,132 +107,6 @@ const WRITE_TOOLS = new Set([
 	// Codebase index tools (write)
 	"index_repository"
 ]);
-
-// ── Session / argument middleware ─────────────────────────────────────────
-
-function validateRootBoundPath(value: unknown, field: string, session?: SessionContext): void {
-	if (typeof value !== "string" || !path.isAbsolute(value)) {
-		return;
-	}
-	if (!isPathWithinRoots(value, session)) {
-		throw new Error(`${field} must stay within the active MCP roots`);
-	}
-}
-
-/**
- * Injects owner/repo from session context when not provided in args.
- * Extracted from router.ts normalizeToolArguments().
- */
-function normalizeToolArgs(args: Record<string, unknown>, session: SessionContext): Record<string, unknown> {
-	const anyArgs = args as Record<string, unknown>;
-	const scopeVal = anyArgs.scope;
-	const nextArgs: Record<string, unknown> = {
-		...anyArgs,
-		// Handle string scope gracefully:
-		//   "my-repo" → { repo: "my-repo" }
-		//   '{"owner":"vheins","repo":"my-repo"}' → { owner: "vheins", repo: "my-repo" }
-		scope:
-			typeof scopeVal === "string"
-				? (() => {
-						try {
-							const parsed = JSON.parse(scopeVal);
-							if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-								return parsed as Record<string, unknown>;
-							}
-						} catch {
-							/* not JSON, treat as plain repo name */
-						}
-						return { repo: scopeVal };
-					})()
-				: scopeVal
-					? { ...(scopeVal as Record<string, unknown>) }
-					: undefined
-	};
-
-	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
-	validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
-
-	// ── Session-wide defaults for owner/repo ─────────────────────────────
-	// Prefer session-wide values over re-deriving every call
-	if (!nextArgs.repo && session.repo) {
-		nextArgs.repo = session.repo;
-	}
-	if (!nextArgs.repo) {
-		nextArgs.repo = inferRepoFromSession(session);
-	}
-
-	const scope = nextArgs.scope as Record<string, unknown> | undefined;
-	if (scope && !scope.repo) {
-		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
-	}
-
-	if (!nextArgs.owner && session.owner) {
-		nextArgs.owner = session.owner;
-	}
-
-	if (!nextArgs.owner) {
-		const repoVal = (nextArgs.repo as string) || "";
-		const parsed = parseRepoInput(repoVal, undefined);
-		const inferredOwner = parsed.owner || inferOwnerFromSession(session);
-		if (inferredOwner !== undefined) {
-			nextArgs.owner = inferredOwner;
-			if (!repoVal.includes("/")) {
-				logger.warn(
-					`[tools] owner inferred from session (${nextArgs.owner}) — may be incorrect. Agents should pass explicit owner/repo.`
-				);
-			}
-		}
-	}
-
-	if (scope && !scope.owner) {
-		const repoVal = (scope.repo as string) || (nextArgs.repo as string) || "";
-		const parsed = parseRepoInput(repoVal, undefined);
-		const inferredOwner = parsed.owner || (nextArgs.owner as string) || inferOwnerFromSession(session);
-		if (inferredOwner !== undefined) {
-			scope.owner = inferredOwner;
-		}
-	}
-
-	const ownerVal = (nextArgs.owner as string) || inferOwnerFromSession(session) || undefined;
-	const repoVal = (nextArgs.repo as string) || inferRepoFromSession(session) || undefined;
-	const memories = nextArgs.memories as Array<Record<string, unknown>> | undefined;
-	if (memories) {
-		for (const mem of memories) {
-			const memScope = mem.scope as Record<string, unknown> | undefined;
-			if (memScope) {
-				if (!memScope.owner) {
-					const inferredMemOwner =
-						ownerVal || parseRepoInput((memScope.repo as string) || repoVal || "", undefined).owner;
-					if (inferredMemOwner) memScope.owner = inferredMemOwner;
-				}
-				if (!memScope.repo && repoVal) memScope.repo = repoVal;
-			}
-		}
-	}
-
-	if (typeof nextArgs.current_file_path === "string" && scope) {
-		const containingRoot = path.isAbsolute(nextArgs.current_file_path)
-			? findContainingRoot(nextArgs.current_file_path, session)
-			: null;
-
-		if (containingRoot) {
-			const relativePath = path.relative(containingRoot, path.resolve(nextArgs.current_file_path));
-			const relativeFolder = path.dirname(relativePath);
-			if (relativeFolder && relativeFolder !== "." && !scope.folder) {
-				scope.folder = relativeFolder;
-			}
-		}
-	}
-
-	// ── Lazy capture model & agent ───────────────────────────────────────
-	// Fall back to session-wide values when args are not provided.
-	// lastSeenAgent/lastSeenModel are set once at oninitialized and never mutated afterward.
-	nextArgs.agent ??= session.lastSeenAgent ?? session.clientName ?? process.env.MCP_CLIENT_NAME;
-	nextArgs.model ??= session.lastSeenModel ?? process.env.MCP_MODEL;
-	// ─────────────────────────────────────────────────────────────────────
-
-	return nextArgs;
-}
 
 // ── Resource mutation URIs ───────────────────────────────────────────────
 
@@ -439,7 +306,8 @@ function buildExecutors(
 		get_architecture: (args, db, _vectors, _extra) => handleGetArchitecture(args, db, _vectors),
 		get_file_symbols: (args, db, _vectors, _extra) => handleGetFileSymbols(args, db, _vectors),
 		trace_symbol: (args, db, _vectors, _extra) => handleTraceSymbol(args, db, _vectors),
-		search_symbols: (args, db, _vectors, _extra) => handleSearchSymbols(args, db, _vectors)
+		search_symbols: (args, db, _vectors, _extra) => handleSearchSymbols(args, db, _vectors),
+		codebase_search: (args, db, _vectors, _extra) => handleCodebaseSearch(args, db, _vectors)
 	};
 }
 
@@ -486,7 +354,7 @@ export function registerAllTools(
 			},
 			async (args, extra) => {
 				const rawArgs = (args ?? {}) as Record<string, unknown>;
-				const normalizedArgs = normalizeToolArgs(rawArgs, session);
+				const normalizedArgs = normalizeToolArguments(rawArgs, session) as Record<string, unknown>;
 
 				logger.info(`[Tool] ${toolName}`, {
 					repo: (normalizedArgs?.repo as string) || "unknown",

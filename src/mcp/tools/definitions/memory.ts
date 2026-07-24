@@ -103,7 +103,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 			oneOf: [
 				{
 					title: "Single memory",
-					required: ["type", "title", "content", "importance", "agent", "model", "scope"],
+					required: ["type", "title", "content", "importance"],
 					properties: {
 						type: {
 							type: "string",
@@ -222,7 +222,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 									metadata: { type: "object", description: "Structured metadata for non-title context" },
 									is_global: { type: "boolean", default: false, description: "If true, shared across all repositories" }
 								},
-								required: ["type", "title", "content", "importance", "agent", "model", "scope"]
+								required: ["type", "title", "content", "importance"]
 							},
 							description: "Array of memories for bulk creation"
 						},

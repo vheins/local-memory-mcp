@@ -4,7 +4,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { generateNextCode, resolveEntityCode } from "../utils/code-generator";
+import { resolveEntityCode } from "../utils/code-generator";
 import { UUID_REGEX } from "../utils/uuid";
 import { saveExtractions } from "./kg-archivist";
 
@@ -162,6 +162,13 @@ export async function handleMemoryStore(
 ): Promise<McpResponse> {
 	const validated = MemoryStoreSchema.parse(params);
 
+	// Inject fallback defaults for optional model and scope.
+	// normalizeToolArgs already tries to fill these from session context,
+	// but if the session fallback chain fails (no lastSeenModel, no MCP_MODEL env),
+	// they can still be undefined. Provide safe defaults here.
+	const defaultedModel = validated.model ?? "unknown";
+	const defaultedScope = validated.scope ?? { owner: "unknown", repo: "unknown" };
+
 	// Bulk mode — collect entries first, then batch insert
 	if (validated.memories) {
 		const now = new Date().toISOString();
@@ -169,7 +176,14 @@ export async function handleMemoryStore(
 		const storedCodes: string[] = [];
 		const batchCodes = new Set<string>();
 
-		for (const mem of validated.memories) {
+		for (const raw of validated.memories) {
+			// Provide defaults for optional model/scope that may not be filled by normalizeToolArgs
+			const mem = {
+				...raw,
+				model: raw.model ?? "unknown",
+				scope: raw.scope ?? { owner: "unknown", repo: "unknown" }
+			};
+
 			if (hasMetadataLikeTitle(mem.title)) {
 				throw new Error(
 					"Title appears to contain metadata. Keep title concise and move agent/role/date details into metadata or dedicated fields."
@@ -184,7 +198,7 @@ export async function handleMemoryStore(
 			if (!resolvedSupersedes && mem.type !== "task_archive") {
 				const conflict = await db.memoryVectors.checkConflicts(
 					mem.content,
-					mem.scope.owner!,
+					mem.scope.owner,
 					mem.scope.repo,
 					mem.type,
 					vectors,
@@ -269,7 +283,7 @@ export async function handleMemoryStore(
 		}
 
 		const storedCodesStr = storedCodes.map((c) => `[${c}]`).join(", ");
-		const lastRepo = validated.memories[0]?.scope.repo || "unknown";
+		const lastRepo = defaultedScope.repo;
 		return createMcpResponse(
 			{
 				success: true,
@@ -282,7 +296,7 @@ export async function handleMemoryStore(
 		);
 	}
 
-	// Single mode
+	// Single mode — use defaults for model and scope that may not have been filled
 	return storeSingleMemory(
 		{
 			code: validated.code,
@@ -292,8 +306,8 @@ export async function handleMemoryStore(
 			importance: validated.importance!,
 			agent: validated.agent!,
 			role: validated.role!,
-			model: validated.model!,
-			scope: validated.scope!,
+			model: defaultedModel,
+			scope: defaultedScope,
 			ttlDays: validated.ttlDays,
 			supersedes: validated.supersedes,
 			tags: validated.tags,

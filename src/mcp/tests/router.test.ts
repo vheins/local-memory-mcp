@@ -4,7 +4,7 @@ import * as fc from "fast-check";
 import { createSessionContext, updateSessionRoots } from "../session";
 import path from "node:path";
 import { createRouter } from "../router";
-import { validateRootBoundPath } from "../router";
+import { validateRootBoundPath } from "../utils/normalize-args";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 

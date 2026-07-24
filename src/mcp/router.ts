@@ -1,17 +1,10 @@
-import path from "node:path";
 import { listResources, listResourceTemplates, readResource } from "./resources/index";
-import {
-	SessionContext,
-	findContainingRoot,
-	inferOwnerFromSession,
-	inferRepoFromSession,
-	isPathWithinRoots
-} from "./session";
+import { SessionContext } from "./session";
 import { logger } from "./utils/logger";
 import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
-import { parseRepoInput } from "./utils/normalize";
+import { normalizeToolArguments, validateRootBoundPath } from "./utils/normalize-args";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
 import { handleMemoryStore } from "./tools/memory.store";
@@ -152,7 +145,6 @@ export function createRouter(
 	// Tools that mutate the DB — must run under write lock
 	const WRITE_TOOLS = new Set([
 		"memory-store",
-		"memory-acknowledge",
 		"memory-update",
 		"memory-delete",
 		"memory-bulk-delete",
@@ -399,87 +391,6 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 	}
 
 	return [...uris];
-}
-
-function normalizeToolArguments(args: unknown, session?: SessionContext): Record<string, unknown> | unknown {
-	if (!args || typeof args !== "object") {
-		return args;
-	}
-
-	const anyArgs = args as Record<string, unknown>;
-	const nextArgs: Record<string, unknown> = {
-		...anyArgs,
-		scope: anyArgs.scope ? { ...(anyArgs.scope as Record<string, unknown>) } : undefined
-	};
-
-	validateRootBoundPath(nextArgs.current_file_path, "current_file_path", session);
-	validateRootBoundPath(nextArgs.doc_path, "doc_path", session);
-
-	if (!nextArgs.repo) {
-		nextArgs.repo = inferRepoFromSession(session);
-	}
-
-	const scope = nextArgs.scope as Record<string, unknown> | undefined;
-	if (scope && !scope.repo) {
-		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
-	}
-
-	if (!nextArgs.owner) {
-		const repoVal = (nextArgs.repo as string) || "";
-		const parsed = parseRepoInput(repoVal, undefined);
-		nextArgs.owner = parsed.owner || inferOwnerFromSession(session) || "";
-		if (nextArgs.owner && !repoVal.includes("/")) {
-			logger.warn(
-				`[router] owner inferred from session (${nextArgs.owner}) — may be incorrect. Agents should pass explicit owner/repo.`
-			);
-		}
-	}
-
-	if (scope && !scope.owner) {
-		const repoVal = (scope.repo as string) || (nextArgs.repo as string) || "";
-		const parsed = parseRepoInput(repoVal, undefined);
-		scope.owner = parsed.owner || (nextArgs.owner as string) || inferOwnerFromSession(session) || "";
-	}
-
-	const ownerVal = (nextArgs.owner as string) || inferOwnerFromSession(session) || "";
-	const repoVal = (nextArgs.repo as string) || inferRepoFromSession(session) || "";
-	const memories = nextArgs.memories as Array<Record<string, unknown>> | undefined;
-	if (memories) {
-		for (const mem of memories) {
-			const memScope = mem.scope as Record<string, unknown> | undefined;
-			if (memScope) {
-				if (!memScope.owner)
-					memScope.owner = ownerVal || parseRepoInput((memScope.repo as string) || repoVal, undefined).owner || "";
-				if (!memScope.repo) memScope.repo = repoVal;
-			}
-		}
-	}
-
-	if (typeof nextArgs.current_file_path === "string" && scope) {
-		const containingRoot = path.isAbsolute(nextArgs.current_file_path)
-			? findContainingRoot(nextArgs.current_file_path, session)
-			: null;
-
-		if (containingRoot) {
-			const relativePath = path.relative(containingRoot, path.resolve(nextArgs.current_file_path));
-			const relativeFolder = path.dirname(relativePath);
-			if (relativeFolder && relativeFolder !== "." && !scope.folder) {
-				scope.folder = relativeFolder;
-			}
-		}
-	}
-
-	return nextArgs;
-}
-
-export function validateRootBoundPath(value: unknown, field: string, session?: SessionContext): void {
-	if (typeof value !== "string" || !path.isAbsolute(value)) {
-		return;
-	}
-
-	if (!isPathWithinRoots(value, session)) {
-		throw new Error(`${field} must stay within the active MCP roots`);
-	}
 }
 
 function normalizePageLimit(value: unknown, fallback: number) {
