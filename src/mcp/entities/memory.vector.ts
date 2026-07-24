@@ -18,7 +18,7 @@ export class MemoryVectorEntity extends BaseEntity {
 		return this.all<MemoryIdVector>(sql, params);
 	}
 
-	upsertVectorEmbedding(memoryId: string, vector: number[]): void {
+	upsertVectorEmbedding(memoryId: string, vector: unknown): void {
 		this.run(
 			`INSERT INTO memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)
 			ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,

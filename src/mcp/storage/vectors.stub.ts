@@ -61,22 +61,15 @@ export class StubVectorStore implements VectorStore {
 
 	async upsert(id: string, text: string, kind: VectorEntityKind = "memory"): Promise<void> {
 		try {
-			// Generate simple vector from text tokens
 			const tokens = this.generateTextVector(text);
-
+			const freqVector = this.computeFrequencyVector(tokens);
 			if (kind === "standard") {
-				this.db.standards.upsertVectorEmbedding(
-					id,
-					tokens.map(() => 0)
-				);
+				this.db.standards.upsertVectorEmbedding(id, freqVector);
 			} else {
-				this.db.memoryVectors.upsertVectorEmbedding(
-					id,
-					tokens.map(() => 0)
-				);
+				this.db.memoryVectors.upsertVectorEmbedding(id, freqVector);
 			}
-		} catch {
-			// Silently fail - vector is optional for search fallback
+		} catch (err) {
+			logger.debug("StubVectorStore.upsert failed", { id, kind, error: String(err) });
 		}
 	}
 
@@ -97,34 +90,32 @@ export class StubVectorStore implements VectorStore {
 		try {
 			const queryTokens = this.generateTextVector(query);
 			if (queryTokens.length === 0) return [];
-
 			const queryFreq = this.computeFrequencyVector(queryTokens);
 
-			// Get candidate vectors from DB (memory_vectors or coding_standards)
-			const candidates = (
-				kind === "standard"
-					? this.db.standards.getVectorCandidates(repo, 100)
-					: this.db.memoryVectors.getVectorCandidates("", repo, 100)
-			).map((c: Record<string, unknown>) => ({
-				id: (c.standard_id ?? c.memory_id) as string
+			const rawCandidates = (kind === "standard"
+				? this.db.standards.getVectorCandidates(repo, 100)
+				: this.db.memoryVectors.getVectorCandidates("", repo, 100)) as unknown as {
+				standard_id?: string;
+				memory_id?: string;
+				vector: string;
+			}[];
+
+			const candidates = rawCandidates.map((c) => ({
+				id: (c.standard_id ?? c.memory_id ?? "") as string,
+				vector: c.vector
 			}));
 
 			if (candidates.length === 0) return [];
 
-			const ids = candidates.map((c) => c.id);
-			const entries = (kind === "standard" ? this.db.standards.getByIds(ids) : this.db.memories.getByIds(ids)) as {
-				id: string;
-				title: string;
-				content: string;
-			}[];
-
 			const results: VectorResult[] = [];
-			for (const entry of entries) {
-				const text = `${entry.title} ${entry.content}`;
-				const entryTokens = this.generateTextVector(text);
-				const entryFreq = this.computeFrequencyVector(entryTokens);
-				const score = this.cosineSimilarity(queryFreq, entryFreq);
-				results.push({ id: entry.id, score });
+			for (const candidate of candidates) {
+				try {
+					const storedVector = JSON.parse(candidate.vector) as Record<string, number>;
+					const score = this.cosineSimilarity(queryFreq, storedVector);
+					results.push({ id: candidate.id, score });
+				} catch {
+					continue;
+				}
 			}
 
 			return results.sort((a, b) => b.score - a.score).slice(0, limit);
