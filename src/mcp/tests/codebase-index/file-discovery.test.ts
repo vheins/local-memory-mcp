@@ -157,10 +157,10 @@ describe("FileDiscoveryService", () => {
 
 		const names = relativePaths(result);
 		expect(names).toEqual(["real.ts"]);
-		// symlink should be skipped, not appear as a duplicate
+		// symlink should be excluded entirely by fast-glob (followSymbolicLinks: false + onlyFiles: true)
 		expect(names).not.toContain("link.ts");
 		expect(result.supportedFiles).toBe(1);
-		expect(result.skippedFiles).toBe(1); // the symlink was counted and skipped
+		expect(result.skippedFiles).toBe(0);
 	});
 
 	// ──────────────────────────────────────────────────────────────────
@@ -235,13 +235,13 @@ describe("FileDiscoveryService", () => {
 	// Edge Case: Nested gitignore in subdirectory overrides parent
 	// ══════════════════════════════════════════════════════════════════
 
-	it("nested .gitignore in subdirectory exists but only root is honored", async () => {
+	it("nested .gitignore in subdirectory overrides parent rules", async () => {
 		const root = path.join(tempDir, "nested-gitignore");
 		fs.mkdirSync(root, { recursive: true });
 		// Root gitignore ignores all *.ts
 		fs.writeFileSync(path.join(root, ".gitignore"), "*.ts\n", "utf-8");
 		touch(path.join(root, "ignored.ts"));
-		// Subdirectory has its own .gitignore (not honored — only root .gitignore is read)
+		// Subdirectory has its own .gitignore overriding parent with negation
 		fs.mkdirSync(path.join(root, "sub"), { recursive: true });
 		fs.writeFileSync(path.join(root, "sub", ".gitignore"), "!*.ts\n", "utf-8");
 		touch(path.join(root, "sub", "allowed.ts"));
@@ -250,13 +250,12 @@ describe("FileDiscoveryService", () => {
 		const result = await discoverFiles({ projectPath: root });
 
 		const names = relativePaths(result);
-		// Only root .gitignore is parsed — all *.ts files are ignored including subdir
+		// Root *.ts rule still applies to root-level files
 		expect(names).not.toContain("ignored.ts");
-		// Subdirectory files are also ignored because root gitignore blocks *.ts globally
-		// (implementation uses single root-level .gitignore via `ignore` library)
-		expect(names).not.toContain("sub/allowed.ts");
-		expect(names).not.toContain("sub/also.ts");
-		expect(result.skippedFiles).toBe(3);
+		// Nested !*.ts overrides root for subdirectory files
+		expect(names).toContain("sub/allowed.ts");
+		expect(names).toContain("sub/also.ts");
+		expect(result.skippedFiles).toBe(1);
 	});
 
 	// ══════════════════════════════════════════════════════════════════

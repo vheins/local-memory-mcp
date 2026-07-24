@@ -8,6 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { discoverFiles } from "./file-discovery.js";
@@ -425,7 +426,7 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 			// Phase 1 batch size: files read+parsed concurrently.
 			// Phase 2 (checksum skip, rename detection, state mutation) runs
 			// sequentially per batch to avoid data races on stalePaths / renameMap.
-			const CONCURRENT_PARSE_BATCH = 4;
+			const CONCURRENT_PARSE_BATCH = Math.max(4, os.cpus().length);
 
 			for (let i = 0; i < parseTasks.length; i += CONCURRENT_PARSE_BATCH) {
 				const batch = parseTasks.slice(i, i + CONCURRENT_PARSE_BATCH);

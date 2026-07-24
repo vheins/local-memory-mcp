@@ -95,6 +95,108 @@ const DEFAULT_EXCLUDE_PATTERNS: readonly string[] = Object.freeze([
 	"**/.DS_Store"
 ]);
 
+// ── Nested .gitignore collection ──────────────────────────────────────
+
+/**
+ * Recursively locate all `.gitignore` files under `root`, sorted by
+ * directory depth (parent before child) so the `ignore` library
+ * applies overrides correctly.
+ */
+function findGitignoreFiles(root: string): string[] {
+	try {
+		const files: string[] = fg.sync("**/.gitignore", {
+			cwd: root,
+			dot: true,
+			absolute: false,
+			onlyFiles: true,
+			ignore: ["**/node_modules/**", "**/.git/**"]
+		});
+		// Sort by depth: root first, then shallow descendents, then deeper
+		files.sort((a, b) => a.split("/").length - b.split("/").length);
+		return files;
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Git determines whether a pattern is "anchored" (matches only relative
+ * to the .gitignore directory) by the presence of a non-trailing `/`
+ * or a leading `/`.
+ *
+ * We transform each pattern's scope so the root-aware `ignore` library
+ * correctly applies it from the project root. Anchored patterns get
+ * `scopePrefix/pattern`; unanchored become `scopePrefix/**&#47;pattern`.
+ *
+ * Negation (`!`) and directory-only trailing `/` are preserved.
+ */
+function transformGitignorePatterns(content: string, scopePrefix: string): string[] {
+	const output: string[] = [];
+	for (const rawLine of content.split("\n")) {
+		const line = rawLine.trim();
+		// Skip blanks and comments
+		if (line === "" || line.startsWith("#")) continue;
+
+		let isNegation = false;
+		let pattern = line;
+		if (line.startsWith("!")) {
+			isNegation = true;
+			pattern = line.slice(1).trim();
+			if (pattern === "") continue; // bare "!" — skip
+		}
+
+		// git determines anchoring by presence of a non-trailing `/`
+		// or a leading `/` (which we strip before scoping).
+		const withoutTrailing = pattern.replace(/\/+$/, "");
+		const isAnchored = withoutTrailing.includes("/") || pattern.startsWith("/");
+
+		const clean = pattern.startsWith("/") ? pattern.slice(1) : pattern;
+
+		let scoped: string;
+		if (isAnchored) {
+			scoped = scopePrefix ? `${scopePrefix}/${clean}` : clean;
+		} else {
+			scoped = scopePrefix ? `${scopePrefix}/**/${clean}` : `**/${clean}`;
+		}
+
+		// Preserve trailing `/` for directory-only patterns
+		if (pattern.endsWith("/") && !scoped.endsWith("/")) {
+			scoped += "/";
+		}
+
+		output.push(isNegation ? `!${scoped}` : scoped);
+	}
+	return output;
+}
+
+/**
+ * Walk the repository to discover every `.gitignore` file (root + nested),
+ * parse their rules, scope patterns correctly, and return a flat array of
+ * root-relative ignore patterns ready for the `ignore` library.
+ *
+ * @returns All gitignore patterns across the repo, parent-before-child ordered.
+ */
+function collectAllGitignoreRules(root: string): string[] {
+	const files = findGitignoreFiles(root);
+	const allPatterns: string[] = [];
+
+	for (const relativePath of files) {
+		const scope = path.posix.dirname(relativePath);
+		const scopePrefix = scope === "." ? "" : scope;
+		const absPath = path.join(root, relativePath);
+		let content: string;
+		try {
+			content = fs.readFileSync(absPath, "utf-8");
+		} catch {
+			continue;
+		}
+		const scoped = transformGitignorePatterns(content, scopePrefix);
+		allPatterns.push(...scoped);
+	}
+
+	return allPatterns;
+}
+
 // ── Service implementation ────────────────────────────────────────────
 
 /**
@@ -119,16 +221,16 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 	// Resolve projectPath to an absolute, normalized path
 	const root = path.resolve(projectPath);
 
-	// ── Parse .gitignore ──────────────────────────────────────────
+	// ── Parse .gitignore (root + nested) ──────────────────────────
 	let gitignoreFilter: ReturnType<typeof ignoreLib> | null = null;
 	if (respectGitignore) {
-		const gitignorePath = path.join(root, ".gitignore");
-		try {
-			const gitignoreContent = fs.readFileSync(gitignorePath, "utf-8");
-			gitignoreFilter = ignoreLib().add(gitignoreContent);
-			logger.debug("[FileDiscovery] Parsed .gitignore", { path: gitignorePath });
-		} catch {
-			// No .gitignore present — that's fine; defaults handle common exclusions
+		const allPatterns = collectAllGitignoreRules(root);
+		if (allPatterns.length > 0) {
+			gitignoreFilter = ignoreLib().add(allPatterns as unknown as string);
+			logger.debug("[FileDiscovery] Parsed .gitignore files", {
+				patternCount: allPatterns.length
+			});
+		} else {
 			logger.debug("[FileDiscovery] No .gitignore found — using defaults only");
 		}
 	}
@@ -147,6 +249,8 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 		absolute: true,
 		dot: false,
 		onlyFiles: true,
+		stats: true,
+		followSymbolicLinks: false,
 		ignore: allExcludeGlobs
 	});
 
@@ -158,19 +262,19 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 	let skippedByExtension = 0;
 	let skippedByGitignore = 0;
 
-	for await (const absolutePath of stream) {
+	for await (const entry of stream) {
 		totalFiles++;
-		const entryPath = absolutePath as string;
+		const item = entry as unknown as { path: string; stats: fs.Stats; dirent: fs.Dirent };
+		const absolutePath = item.path;
 
 		try {
-			// 1. Skip symlinks (fast-glob may follow them)
-			const stat = fs.lstatSync(entryPath);
-			if (stat.isSymbolicLink()) {
+			// 1. Skip symlinks (safety check — fast-glob already filters with onlyFiles)
+			if (item.dirent.isSymbolicLink()) {
 				skippedFiles++;
 				continue;
 			}
 
-			const relativePath = path.relative(root, entryPath);
+			const relativePath = path.relative(root, absolutePath);
 
 			// 2. Check gitignore rules
 			if (gitignoreFilter && gitignoreFilter.ignores(relativePath)) {
@@ -189,9 +293,9 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 
 			discovered.push({
 				path: relativePath,
-				absolutePath: entryPath,
+				absolutePath,
 				language,
-				sizeBytes: stat.size
+				sizeBytes: item.stats.size
 			});
 			supportedFiles++;
 
@@ -203,7 +307,7 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 			skippedFiles++;
 			const message = err instanceof Error ? err.message : String(err);
 			errors.push({
-				path: entryPath,
+				path: absolutePath,
 				error: message
 			});
 		}
