@@ -6,7 +6,7 @@
  * - Language registry: declarative config per language (extensions, WASM paths,
  *   visitor factory). Adding a new language = adding one entry to createRegistry().
  * - Reverse maps: extension → config (O(1) lookup), grammar path → loaded Language.
- * - All grammars are loaded eagerly during _doInitialize().
+ * - Grammars are loaded lazily on first use via getOrLoadGrammar().
  * - _doParse() looks up the config by file extension, finds the loaded grammar,
  *   instantiates the visitor, and calls extractSymbols(tree, sourceCode).
  *
@@ -375,72 +375,35 @@ export class TreeSitterParserPool implements ParserPool {
 			});
 		}
 
-		// Collect all unique WASM paths from the registry
-		const uniqueWasms = new Set<string>();
-		for (const config of this.registry) {
-			for (const w of config.grammarWasms) {
-				uniqueWasms.add(w);
-			}
-		}
-
-		// Load all grammars in parallel (graceful degradation: skip incompatible WASMs)
-		let loadedCount = 0;
-		let skippedCount = 0;
-		const results = await Promise.allSettled(
-			Array.from(uniqueWasms).map(async (wasmPath) => {
-				try {
-					const lang = await Language.load(wasmPath);
-					return { wasmPath, lang, ok: true as const };
-				} catch (err) {
-					const message = err instanceof Error ? err.message : String(err);
-					return { wasmPath, error: message, ok: false as const };
-				}
-			})
-		);
-
-		for (const result of results) {
-			if (result.status === "fulfilled" && result.value.ok) {
-				this.loadedGrammars.set(result.value.wasmPath, result.value.lang);
-				loadedCount++;
-				logger.debug("[ParserPool] Grammar loaded", { wasmPath: result.value.wasmPath });
-			} else {
-				skippedCount++;
-				const wasmPath = result.status === "fulfilled" ? result.value.wasmPath : "unknown";
-				const message =
-					result.status === "fulfilled"
-						? result.value.error
-						: result.reason instanceof Error
-							? result.reason.message
-							: String(result.reason);
-				logger.warn("[ParserPool] Grammar load failed — skipping language", {
-					wasmPath,
-					error: message
-				});
-				// Remove configs that depend on this WASM from the extension map
-				if (result.status === "fulfilled") {
-					this.removeConfigsForWasm(result.value.wasmPath);
-				}
-			}
-		}
-
-		if (loadedCount === 0) {
-			throw new FatalError("No grammars could be loaded. Check WASM compatibility.", {
-				operation: "Language.load",
-				attempted: Array.from(uniqueWasms)
-			});
-		}
-
-		logger.info("[ParserPool] Tree-sitter initialized", {
-			grammarCount: uniqueWasms.size,
-			languageCount: this.registry.length
-		});
+		logger.debug("[ParserPool] WASM initialized, grammars will be loaded lazily");
 
 		this.initialized = true;
 	}
 
+	/**
+	 * Lazy-load a tree-sitter grammar WASM on first use.
+	 * Subsequent calls for the same WASM path return the cached Language.
+	 */
+	private async getOrLoadGrammar(wasmPath: string): Promise<Language> {
+		const existing = this.loadedGrammars.get(wasmPath);
+		if (existing) return existing;
+
+		try {
+			const lang = await Language.load(wasmPath);
+			this.loadedGrammars.set(wasmPath, lang);
+			logger.debug("[ParserPool] Grammar loaded", { wasmPath });
+			return lang;
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			logger.warn("[ParserPool] Grammar load failed — skipping language", { wasmPath, error: message });
+			this.removeConfigsForWasm(wasmPath);
+			throw new Error(`Failed to load grammar: ${wasmPath} — ${message}`);
+		}
+	}
+
 	private async _parseWithTimeout(filePath: string, sourceCode: string, startTime: number): Promise<ParseResult> {
 		try {
-			const result = this._doParse(filePath, sourceCode);
+			const result = await this._doParse(filePath, sourceCode);
 			const durationMs = Math.round(performance.now() - startTime);
 			result.durationMs = durationMs;
 			return result;
@@ -456,7 +419,7 @@ export class TreeSitterParserPool implements ParserPool {
 		}
 	}
 
-	private _doParse(filePath: string, sourceCode: string): ParseResult {
+	private async _doParse(filePath: string, sourceCode: string): Promise<ParseResult> {
 		const ext = path.extname(filePath).toLowerCase();
 		const config = this.extToConfig.get(ext);
 
@@ -464,7 +427,7 @@ export class TreeSitterParserPool implements ParserPool {
 			return { symbols: [], error: `Unsupported extension: ${ext}`, durationMs: 0 };
 		}
 
-		// Find the grammar WASM that was loaded for this config
+		// Find the grammar WASM for this config
 		// (pick the first one — works for single-grammar languages; for TS, both
 		// TS and TSX grammars are loaded separately as distinct configs)
 		const wasmPath = config.grammarWasms[0];
@@ -472,9 +435,13 @@ export class TreeSitterParserPool implements ParserPool {
 			return { symbols: [], error: `No grammar configured for: ${config.languageId}`, durationMs: 0 };
 		}
 
-		const language = this.loadedGrammars.get(wasmPath);
-		if (!language) {
-			return { symbols: [], error: `Language not loaded for: ${config.languageId}`, durationMs: 0 };
+		// Lazy-load the grammar on first use
+		let language: Language;
+		try {
+			language = await this.getOrLoadGrammar(wasmPath);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return { symbols: [], error: message, durationMs: 0 };
 		}
 
 		const parser = new Parser();
