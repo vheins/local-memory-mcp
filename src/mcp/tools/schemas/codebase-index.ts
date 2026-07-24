@@ -39,3 +39,12 @@ export const SearchSymbolsSchema = z.object({
 	limit: z.coerce.number().min(1).max(200).default(50),
 	offset: z.coerce.number().min(0).default(0)
 });
+
+export const CodebaseSearchSchema = z.object({
+	query: z.string().min(2, "query is required"),
+	repo: z.string().optional(),
+	kind: z.string().optional(),
+	filePath: z.string().optional(),
+	limit: z.coerce.number().min(1).max(100).default(20),
+	offset: z.coerce.number().min(0).default(0)
+});

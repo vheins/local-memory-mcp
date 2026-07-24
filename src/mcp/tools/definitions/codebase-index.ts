@@ -96,7 +96,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "search_symbols",
 		title: "Search Symbols",
 		description:
-			"Searches indexed codebase symbols by name with ranked results. Supports filtering by kind, file path, and export status. Uses a 5-tier ranking algorithm: exact > camelCase > prefix > substring > FTS5.",
+			"Searches indexed codebase symbols by name or file path with ranked results. Also searches file paths for matching names. Supports filtering by kind, file path, and export status. Uses a 5-tier ranking algorithm: exact > camelCase > prefix > substring > FTS5.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -118,6 +118,33 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 				offset: { type: "number", default: 0, description: "Results offset for pagination" }
 			},
 			required: []
+		}
+	},
+	{
+		name: "codebase_search",
+		title: "Codebase Search",
+		description:
+			"Search across the entire indexed codebase using natural language queries. Uses FTS5 full-text search combined with in-memory ranking (exact, camelCase, prefix, substring, FTS5). Accepts a natural language prompt — does not require exact symbol name matching. Supports filtering by repo, symbol kind, and file path.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Natural language search query (min 2 characters)" },
+				repo: { type: "string", description: "Repository identifier (owner/repo) to scope search" },
+				kind: {
+					type: "string",
+					description: "Filter by symbol kind: function, class, interface, type, enum, variable"
+				},
+				filePath: { type: "string", description: "Filter results to a specific file path" },
+				limit: { type: "number", default: 20, description: "Maximum results (max 100)" },
+				offset: { type: "number", default: 0, description: "Results offset for pagination" }
+			},
+			required: ["query"]
 		}
 	},
 	{

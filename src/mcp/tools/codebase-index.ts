@@ -6,7 +6,8 @@ import {
 	GetArchitectureSchema,
 	GetFileSymbolsSchema,
 	SearchSymbolsSchema,
-	TraceSymbolSchema
+	TraceSymbolSchema,
+	CodebaseSearchSchema
 } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
@@ -349,6 +350,62 @@ export async function handleSearchSymbols(
 			limit: validated.limit
 		},
 		`Found ${total} matching symbols${query ? ` for "${query}"` : ""} (showing ${results.length}).`,
+		{ includeJson: true, contentSummary: summary }
+	);
+}
+
+export async function handleCodebaseSearch(
+	params: Record<string, unknown>,
+	db: SQLiteStore,
+	_vectors: VectorStore
+): Promise<McpResponse> {
+	const validated = CodebaseSearchSchema.parse(params);
+	const query = validated.query.trim();
+
+	if (query.length < 2) {
+		return createMcpResponse(
+			{ symbols: [], total: 0, hasMore: false },
+			"Search query too short (minimum 2 characters)",
+			{ includeJson: true }
+		);
+	}
+
+	const dbResult = db.codebaseSymbols.searchSymbols({
+		query,
+		repo: validated.repo,
+		kind: validated.kind,
+		filePath: validated.filePath,
+		limit: Math.min(200, validated.limit * 2),
+		offset: 0
+	});
+
+	const ranked = rankSymbols(dbResult.symbols, query);
+	const total = ranked.length;
+	const paginated = ranked.slice(validated.offset, validated.offset + validated.limit);
+
+	const results = paginated.map((r) => ({
+		...r.symbol,
+		rankTier: r.rankTier,
+		score: r.score
+	}));
+
+	const summary =
+		`| rankTier | kind | file | score | symbol |\n` +
+		`|----------|------|------|-------|--------|\n` +
+		results
+			.map((s) => `| ${s.rankTier} | ${s.kind} | ${s.file_path} | ${s.score?.toFixed(2) ?? "-"} | ${s.name} |`)
+			.join("\n");
+
+	return createMcpResponse(
+		{
+			symbols: results,
+			total,
+			hasMore: validated.offset + validated.limit < total,
+			offset: validated.offset,
+			limit: validated.limit,
+			query
+		},
+		`Found ${total} results for "${query}" (showing ${results.length}).`,
 		{ includeJson: true, contentSummary: summary }
 	);
 }

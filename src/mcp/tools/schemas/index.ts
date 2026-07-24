@@ -68,5 +68,6 @@ export {
 	GetArchitectureSchema,
 	GetFileSymbolsSchema,
 	SearchSymbolsSchema,
-	TraceSymbolSchema
+	TraceSymbolSchema,
+	CodebaseSearchSchema
 } from "./codebase-index";

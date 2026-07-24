@@ -1,6 +1,13 @@
 import { BaseEntity } from "../storage/base";
-import { CodebaseSymbol, CodebaseSymbolInsert, SymbolSearchQuery, SymbolSearchResult } from "../types/codebase-symbol";
+import {
+	CodebaseSymbol,
+	CodebaseSymbolInsert,
+	CodebaseSymbolVector,
+	SymbolSearchQuery,
+	SymbolSearchResult
+} from "../types/codebase-symbol";
 import { randomUUID } from "crypto";
+import { sanitizeFtsTerm } from "../utils/fts";
 
 export class CodebaseSymbolEntity extends BaseEntity {
 	bulkUpsertSymbols(symbols: CodebaseSymbolInsert[]): number {
@@ -86,11 +93,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		return result.changes;
 	}
 
-	getSymbolsByRepo(repo: string): CodebaseSymbol[] {
-		return this.all<CodebaseSymbol>(
-			"SELECT * FROM codebase_symbols WHERE repo = ? ORDER BY file_path ASC, start_line ASC",
-			[repo]
-		).map((r) => this.rowToSymbol(r));
+	getSymbolsByRepo(repo: string, limit?: number): CodebaseSymbol[] {
+		let sql = "SELECT * FROM codebase_symbols WHERE repo = ? ORDER BY file_path ASC, start_line ASC";
+		const params: (string | number)[] = [repo];
+		if (limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(limit);
+		}
+		return this.all<CodebaseSymbol>(sql, params).map((r) => this.rowToSymbol(r));
 	}
 
 	getSymbolCountByRepo(repo: string): number {
@@ -98,10 +108,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		return row?.count ?? 0;
 	}
 
-	getAllSymbols(): CodebaseSymbol[] {
-		return this.all<CodebaseSymbol>(
-			"SELECT * FROM codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC"
-		).map((r) => this.rowToSymbol(r));
+	getAllSymbols(limit?: number): CodebaseSymbol[] {
+		let sql = "SELECT * FROM codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC";
+		const params: (string | number)[] = [];
+		if (limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(limit);
+		}
+		return this.all<CodebaseSymbol>(sql, params).map((r) => this.rowToSymbol(r));
 	}
 
 	deleteSymbolsByRepo(repo: string): number {
@@ -109,9 +123,38 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		return result.changes;
 	}
 
+	upsertSymbolVector(symbolId: string, vector: number[]): void {
+		this.run(
+			`INSERT OR REPLACE INTO codebase_symbol_vectors (symbol_id, vector, updated_at)
+			 VALUES (?, ?, datetime('now'))`,
+			[symbolId, JSON.stringify(vector)]
+		);
+	}
+
+	getSymbolVectorsByRepo(repo: string, limit: number = 100): CodebaseSymbolVector[] {
+		return this.all<CodebaseSymbolVector>(
+			`SELECT csv.* FROM codebase_symbol_vectors csv
+			 JOIN codebase_symbols cs ON cs.id = csv.symbol_id
+			 WHERE cs.repo = ?
+			 ORDER BY csv.updated_at DESC
+			 LIMIT ?`,
+			[repo, limit]
+		);
+	}
+
+	deleteSymbolVectorsByFile(repo: string, filePath: string): number {
+		const result = this.run(
+			`DELETE FROM codebase_symbol_vectors WHERE symbol_id IN (
+				SELECT id FROM codebase_symbols WHERE repo = ? AND file_path = ?
+			)`,
+			[repo, filePath]
+		);
+		return result.changes;
+	}
+
 	private tryFtsSearch(query: SymbolSearchQuery, limit: number, offset: number): SymbolSearchResult | null {
 		try {
-			const safeTerm = query.query.replace(/[^\w\s."']/g, "").trim();
+			const safeTerm = sanitizeFtsTerm(query.query);
 			if (!safeTerm) return null;
 
 			const parts: string[] = [];
@@ -173,8 +216,8 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 	private likeSearch(query: SymbolSearchQuery, limit: number, offset: number): SymbolSearchResult {
 		const likeTerm = `%${query.query}%`;
-		const conditions: string[] = ["(cs.name LIKE ? OR cs.doc_comment LIKE ?)"];
-		const params: unknown[] = [likeTerm, likeTerm];
+		const conditions: string[] = ["(cs.name LIKE ? OR cs.doc_comment LIKE ? OR cs.file_path LIKE ?)"];
+		const params: unknown[] = [likeTerm, likeTerm, likeTerm];
 
 		if (query.repo) {
 			conditions.push("cs.repo = ?");
