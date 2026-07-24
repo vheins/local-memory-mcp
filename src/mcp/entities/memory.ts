@@ -392,12 +392,24 @@ export class MemoryEntity extends BaseEntity {
 		return row;
 	}
 
-	getAllMemoriesWithStats(owner: string, repo: string): (MemoryEntry & { recall_rate: number })[] {
+	getAllMemoriesWithStats(
+		owner: string,
+		repo: string,
+		limit?: number,
+		offset?: number
+	): (MemoryEntry & { recall_rate: number })[] {
 		const ownerClause = owner ? "owner = ? AND " : "";
-		const rows = this.all<MemoryRow & { recall_rate: number }>(
-			`SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${ownerClause}repo = ? ORDER BY created_at DESC`,
-			owner ? [owner, repo] : [repo]
-		);
+		let sql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${ownerClause}repo = ? ORDER BY created_at DESC`;
+		const params: unknown[] = owner ? [owner, repo] : [repo];
+		if (limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(limit);
+			if (offset !== undefined) {
+				sql += " OFFSET ?";
+				params.push(offset);
+			}
+		}
+		const rows = this.all<MemoryRow & { recall_rate: number }>(sql, params);
 		return rows.map((row) => ({
 			...this.rowToMemoryEntry(row),
 			recall_rate: row.recall_rate || 0

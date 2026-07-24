@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { db, mcpClient, startTime } from "../lib/context";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
 import { condenseRecentActions } from "../lib/helpers";
+import { parseRepoInput } from "../../mcp/utils/normalize";
 import { TOOL_DEFINITIONS } from "../../mcp/tools/tool-definitions";
 import { listResources } from "../../mcp/resources/index";
 import { PROMPTS } from "../../mcp/prompts/registry";
@@ -79,7 +80,12 @@ export class SystemController {
 		try {
 			await db.refresh();
 			const repo = req.query.repo as string | undefined;
-			const stats = repo ? db.system.getDashboardStats("", repo) : db.system.getGlobalDashboardStats();
+			let owner = req.query.owner as string | undefined;
+			if (!owner && repo && repo.includes("/")) {
+				const parsed = parseRepoInput(repo, undefined);
+				owner = parsed.owner;
+			}
+			const stats = repo ? db.system.getDashboardStats(owner || "", repo) : db.system.getGlobalDashboardStats();
 			res.json(jsonApiRes(stats, "system-stats"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -142,37 +148,79 @@ export class SystemController {
 	static async getExport(req: express.Request, res: express.Response) {
 		try {
 			await db.refresh();
-			const { repo } = req.query;
+			const repo = req.query.repo as string;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
-			const memories = db.memories.getAllMemoriesWithStats("", repo as string);
-			const tasks = db.tasks.getTasksByRepo("", repo as string);
+			let owner = req.query.owner as string | undefined;
+			if (!owner && repo.includes("/")) {
+				const parsed = parseRepoInput(repo, undefined);
+				owner = parsed.owner;
+			}
+			if (!owner)
+				return res.status(400).json(jsonApiError("owner is required when repo is not in owner/repo format", 400));
 
-			const allComments = db.taskComments.getAllTaskCommentsByRepo("", repo as string);
-			const commentsByTaskId = allComments.reduce(
-				(acc, comment) => {
-					if (!acc[comment.task_id]) acc[comment.task_id] = [];
-					acc[comment.task_id].push(comment);
-					return acc;
-				},
-				{} as Record<string, unknown[]>
+			const PAGE_SIZE = 500;
+
+			res.setHeader("Content-Type", "application/json");
+			res.write(
+				`{\n  "data": {\n    "type": "export",\n    "id": "export-${repo}",\n    "attributes": {\n      "repo": ${JSON.stringify(repo)},\n      "exported_at": ${JSON.stringify(new Date().toISOString())},\n      "memories": [\n`
 			);
 
-			const tasksWithComments = tasks.map((t) => ({
-				...t,
-				comments: commentsByTaskId[t.id] || []
-			}));
+			let offset = 0;
+			let first = true;
 
-			const exportData = {
-				repo,
-				exported_at: new Date().toISOString(),
-				memories,
-				tasks: tasksWithComments
-			};
-			res.json(jsonApiRes(exportData, "export"));
+			while (true) {
+				const page = db.memories.getAllMemoriesWithStats(owner, repo, PAGE_SIZE, offset);
+				if (page.length === 0) break;
+				for (const mem of page) {
+					if (!first) res.write(",\n");
+					res.write(JSON.stringify(mem));
+					first = false;
+				}
+				offset += PAGE_SIZE;
+				await new Promise((r) => setImmediate(r));
+			}
+
+			res.write(`\n      ],\n      "tasks": [\n`);
+			offset = 0;
+			first = true;
+
+			while (true) {
+				const page = db.tasks.getTasksByRepo(owner, repo, undefined, PAGE_SIZE, offset);
+				if (page.length === 0) break;
+				for (const task of page) {
+					if (!first) res.write(",\n");
+					res.write(JSON.stringify(task));
+					first = false;
+				}
+				offset += PAGE_SIZE;
+				await new Promise((r) => setImmediate(r));
+			}
+
+			res.write(`\n      ],\n      "comments": [\n`);
+			offset = 0;
+			first = true;
+
+			while (true) {
+				const page = db.taskComments.getAllTaskCommentsByRepo(owner, repo, PAGE_SIZE, offset);
+				if (page.length === 0) break;
+				for (const comment of page) {
+					if (!first) res.write(",\n");
+					res.write(JSON.stringify(comment));
+					first = false;
+				}
+				offset += PAGE_SIZE;
+				await new Promise((r) => setImmediate(r));
+			}
+
+			res.write(`\n      ]\n    }\n  }\n}\n`);
+			res.end();
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
+			if (!res.headersSent) {
+				res.status(500).json(jsonApiError(message));
+			}
+			res.end();
 		}
 	}
 

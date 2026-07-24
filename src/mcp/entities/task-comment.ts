@@ -66,10 +66,17 @@ export class TaskCommentEntity extends BaseEntity {
 		]);
 	}
 
-	getAllTaskCommentsByRepo(owner: string, repo: string): TaskComment[] {
-		return this.all<TaskComment>(
-			`SELECT * FROM task_comments WHERE owner = ? AND repo = ? ORDER BY created_at DESC, id DESC`,
-			[owner, repo]
-		);
+	getAllTaskCommentsByRepo(owner: string, repo: string, limit?: number, offset?: number): TaskComment[] {
+		let sql = `SELECT * FROM task_comments WHERE owner = ? AND repo = ? ORDER BY created_at DESC, id DESC`;
+		const params: (string | number)[] = [owner, repo];
+		if (limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(limit);
+			if (offset !== undefined) {
+				sql += " OFFSET ?";
+				params.push(offset);
+			}
+		}
+		return this.all<TaskComment>(sql, params);
 	}
 }
