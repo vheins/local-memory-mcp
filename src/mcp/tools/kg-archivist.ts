@@ -190,7 +190,31 @@ const STOPWORDS = new Set([
 	"title",
 	"description",
 	"status",
-	"time"
+	"time",
+	"dan",
+	"yang",
+	"di",
+	"ke",
+	"dari",
+	"dengan",
+	"ini",
+	"itu",
+	"ada",
+	"akan",
+	"bisa",
+	"telah",
+	"sudah",
+	"juga",
+	"atau",
+	"karena",
+	"untuk",
+	"pada",
+	"sebagai",
+	"oleh",
+	"saat",
+	"setelah",
+	"antara",
+	"tentang"
 ]);
 
 const DETERMINERS = /^(a|an|the)\s+/i;

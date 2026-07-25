@@ -89,7 +89,12 @@ export class KGController {
 
 			const edges = db.db
 				.prepare(
-					"SELECT from_entity as source, to_entity as target, relation_type FROM relations WHERE repo = ? ORDER BY from_entity, to_entity"
+					`SELECT r.from_entity as source, r.to_entity as target, r.relation_type 
+					 FROM relations r 
+					 INNER JOIN entities e1 ON r.from_entity = e1.name AND r.repo = e1.repo
+					 INNER JOIN entities e2 ON r.to_entity = e2.name AND r.repo = e2.repo
+					 WHERE r.repo = ? 
+					 ORDER BY r.from_entity, r.to_entity`
 				)
 				.all(repo);
 

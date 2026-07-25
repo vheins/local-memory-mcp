@@ -29,7 +29,7 @@ const PARTICLE_IMPORTANT_RADIUS = 5;
 const PARTICLE_SUBTLE_MIN = 0.8;
 
 // Edges — very thin
-const EDGE_BASE_WIDTH = 0.35;
+const EDGE_BASE_WIDTH = 0.5;
 
 // Camera
 const CAMERA_DISTANCE = 500;
@@ -226,7 +226,7 @@ function drawEdge3D(
 ) {
 	const avgDepth = (from.depth + to.depth) / 2;
 	const fog = fogFactor(avgDepth);
-	const alpha = edgeAlpha * fog * 0.15;
+	const alpha = edgeAlpha * fog * 0.4;
 
 	if (alpha < 0.005) return;
 
