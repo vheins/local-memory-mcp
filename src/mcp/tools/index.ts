@@ -1,5 +1,4 @@
-import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import { McpServer, CallToolResult, fromJsonSchema } from "@modelcontextprotocol/server";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { SessionContext } from "../session";
@@ -195,19 +194,6 @@ function logToolAction(
 	}
 }
 
-// ── Public input schema for registerTool ─────────────────────────────────
-// Uses a minimal schema that accepts any input. The handlers validate
-// internally with their own Zod schemas (which include refinements and
-// normalized transformations).
-//
-// NOTE: z.any() produces JSON Schema `{}` (any value), preventing MCP
-// clients from stripping parameters that aren't explicitly listed.
-// Individual tool handlers are responsible for validating their own params.
-
-function makePublicSchema(): z.ZodSchema {
-	return z.any();
-}
-
 // ── Response conversion (McpResponse → CallToolResult) ──────────────────
 
 function toCallToolResult(response: McpResponse): CallToolResult {
@@ -333,8 +319,6 @@ export function registerAllTools(
 		return true;
 	});
 
-	const publicSchema = makePublicSchema();
-
 	for (const def of definitions) {
 		const toolName = def.name;
 		const executor = executors[toolName];
@@ -350,7 +334,7 @@ export function registerAllTools(
 			toolName,
 			{
 				description: def.description ?? "",
-				inputSchema: publicSchema
+				inputSchema: def.inputSchema ? fromJsonSchema(def.inputSchema as never) : undefined
 			},
 			async (args, extra) => {
 				const rawArgs = (args ?? {}) as Record<string, unknown>;
