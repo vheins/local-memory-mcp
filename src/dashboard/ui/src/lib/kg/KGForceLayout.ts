@@ -8,6 +8,7 @@ export interface LayoutNode {
 	memoryCount?: number;
 	x: number;
 	y: number;
+	z: number;
 	vx: number;
 	vy: number;
 	pinned: boolean;
@@ -17,6 +18,7 @@ export interface LayoutEdge {
 	source: string;
 	target: string;
 	relation_type: string;
+	color?: string;
 }
 
 export interface ForceLayoutConfig {
@@ -69,6 +71,7 @@ export function initializeLayout(nodes: LayoutNode[], width: number, height: num
 			...n,
 			x: cx + Math.cos(angle) * r,
 			y: cy + Math.sin(angle) * r,
+			z: 0,
 			vx: 0,
 			vy: 0,
 			pinned: false
@@ -112,6 +115,7 @@ export function initializeZeroEdgeOverviewLayout(
 			...node,
 			x: startX + column * cfg.nodeGap,
 			y: startY + row * rowGap,
+			z: 0,
 			vx: 0,
 			vy: 0,
 			pinned: false
@@ -230,4 +234,70 @@ export function runForceLayout(
 	}
 
 	return nodes;
+}
+
+// ─── Volumetric Sphere Layout (3D holographic) ──────────────────────────────
+
+export interface SphereLayoutConfig {
+	sphereRadius?: number;
+	centerBias?: number;
+	minRadius?: number;
+	jitter?: number;
+}
+
+export function initializeSphereLayout(
+	nodes: LayoutNode[],
+	edges: LayoutEdge[],
+	width: number,
+	height: number,
+	config?: SphereLayoutConfig
+): LayoutNode[] {
+	const cfg = {
+		sphereRadius: Math.min(width, height) * 0.35,
+		centerBias: 0.6,
+		minRadius: 0.05,
+		jitter: 0.15,
+		...config
+	};
+
+	// Count degrees from edges
+	const degreeMap = new Map<string, number>();
+	for (const e of edges) {
+		degreeMap.set(e.source, (degreeMap.get(e.source) ?? 0) + 1);
+		degreeMap.set(e.target, (degreeMap.get(e.target) ?? 0) + 1);
+	}
+
+	const maxDegree = Math.max(1, ...degreeMap.values());
+
+	return nodes.map((n, i) => {
+		const degree = degreeMap.get(n.id) ?? degreeMap.get(n.name) ?? 0;
+		const normalizedDegree = degree / maxDegree; // 0..1
+
+		// High-degree → center (small r), low-degree → shell (large r)
+		const r = cfg.sphereRadius * (cfg.minRadius + (1 - cfg.minRadius) * (1 - normalizedDegree * cfg.centerBias));
+
+		// Golden-angle spiral for even distribution
+		const theta = Math.acos(1 - (2 * (i + 0.5)) / nodes.length);
+		const phi = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+
+		// Add random jitter for organic feel
+		const jitterR = r * (1 + (Math.random() - 0.5) * cfg.jitter);
+		const jitterTheta = theta + (Math.random() - 0.5) * cfg.jitter * 0.5;
+		const jitterPhi = phi + (Math.random() - 0.5) * cfg.jitter * 0.5;
+
+		// Convert to cartesian
+		const x = jitterR * Math.sin(jitterTheta) * Math.cos(jitterPhi) + width / 2;
+		const y = jitterR * Math.sin(jitterTheta) * Math.sin(jitterPhi) + height / 2;
+		const z = jitterR * Math.cos(jitterTheta);
+
+		return {
+			...n,
+			x,
+			y,
+			z,
+			vx: 0,
+			vy: 0,
+			pinned: false
+		};
+	});
 }

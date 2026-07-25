@@ -4,12 +4,7 @@
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
-	import {
-		NODE_RADIUS,
-		initializeLayout,
-		initializeZeroEdgeOverviewLayout,
-		runForceLayout
-	} from "$lib/kg/KGForceLayout";
+	import { NODE_RADIUS, initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import {
 		startNeuralAnimation,
@@ -155,6 +150,7 @@
 					memoryCount: n.memoryCount,
 					x: 0,
 					y: 0,
+					z: 0,
 					vx: 0,
 					vy: 0,
 					pinned: false
@@ -184,7 +180,16 @@
 		const cappedNodes = nodes.slice(0, MAX_FORCE_NODES);
 		const cappedNodeNames = new Set(cappedNodes.map((n) => n.name));
 
-		layoutNodes = initializeLayout(
+		layoutEdges = edges
+			.filter((e) => cappedNodeNames.has(e.source) && cappedNodeNames.has(e.target))
+			.map((e) => ({
+				source: e.source,
+				target: e.target,
+				relation_type: e.relation_type
+			}));
+
+		// Use volumetric sphere layout instead of force-directed
+		layoutNodes = initializeSphereLayout(
 			cappedNodes.map((n) => ({
 				id: n.id,
 				name: n.name,
@@ -193,25 +198,19 @@
 				memoryCount: n.memoryCount,
 				x: 0,
 				y: 0,
+				z: 0,
 				vx: 0,
 				vy: 0,
 				pinned: false
 			})),
+			layoutEdges,
 			canvasWidth,
 			canvasHeight
 		);
 
-		layoutEdges = edges
-			.filter((e) => cappedNodeNames.has(e.source) && cappedNodeNames.has(e.target))
-			.map((e) => ({
-				source: e.source,
-				target: e.target,
-				relation_type: e.relation_type
-			}));
 		hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - cappedNodes.length);
 
 		nodeLookup = buildNodeLookup(layoutNodes);
-		runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
 
 		// Start or update animation
 		if (animationCleanup) {
@@ -235,8 +234,8 @@
 				initLayout();
 				return;
 			}
-			runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
-			updateAnimationData(layoutNodes, layoutEdges);
+			// Rebuild sphere layout for new dimensions
+			initLayout();
 		}
 	}
 

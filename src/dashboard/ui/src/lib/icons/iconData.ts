@@ -1718,5 +1718,32 @@ export const icons: Record<string, IconElement[]> = {
 			tag: "line",
 			attrs: { x1: "15.41", y1: "6.51", x2: "8.59", y2: "10.49" }
 		}
+	],
+	folder: [
+		{
+			tag: "path",
+			attrs: {
+				d: "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
+			}
+		}
+	],
+	lock: [
+		{
+			tag: "rect",
+			attrs: {
+				width: "18",
+				height: "11",
+				x: "3",
+				y: "11",
+				rx: "2",
+				ry: "2"
+			}
+		},
+		{
+			tag: "path",
+			attrs: {
+				d: "M7 11V7a5 5 0 0 1 10 0v4"
+			}
+		}
 	]
 };

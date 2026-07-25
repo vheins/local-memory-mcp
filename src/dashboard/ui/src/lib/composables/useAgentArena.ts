@@ -4,6 +4,9 @@ import { availableRepos } from "../stores";
 import type { Task, TaskClaim, Handoff, HandoffListResult, McpToolResponse } from "../interfaces";
 import { buildArenaScene } from "../arena/arenaTransform";
 import type { ArenaScene, ArenaLayoutConfig } from "../arena/arenaTypes";
+import { eventCoordinator } from "../arena/arenaEventCoordinator";
+import { arenaStateManager } from "../arena/arenaStateManager";
+import type { ArenaState } from "../arena/arenaEvents";
 
 export interface ArenaData {
 	scene: ArenaScene | null;
@@ -100,14 +103,21 @@ export function createArenaHandler() {
 			// Deduplicate tasks by id
 			const uniqueTasks = Array.from(new Map(allTasks.map((t) => [t.id, t])).values());
 
+			const scene = buildArenaScene(uniqueTasks, allClaims, allHandoffs, get(store).scene, layoutConfig!);
+
 			store.update((s) => ({
 				...s,
-				scene: buildArenaScene(uniqueTasks, allClaims, allHandoffs, s.scene, layoutConfig!),
+				scene,
 				loading: false,
 				error: null,
 				lastUpdated: Date.now(),
 				repoCount: repos.length
 			}));
+
+			// Sync the state manager with the latest scene snapshot.
+			// This primes the state manager for future event-driven updates
+			// while the rendering continues to use the existing store.
+			arenaStateManager.initFromScene(scene);
 		} catch (e) {
 			store.update((s) => ({
 				...s,
@@ -123,10 +133,25 @@ export function createArenaHandler() {
 		layoutConfig = config;
 	}
 
+	/** Expose the arenaStateManager's reactive ArenaState store. */
+	function getStateStore() {
+		return arenaStateManager.getStore();
+	}
+
 	function start(config: ArenaLayoutConfig): void {
 		layoutConfig = config;
 		store.update((s) => ({ ...s, loading: true }));
+
+		// Register fetchData as the fallback fetch for the EventCoordinator.
+		// When SSE is unavailable, the coordinator will poll via fetchData().
+		eventCoordinator.setFallbackFetch(fetchData);
+
+		// Trigger initial data load
 		void fetchData();
+
+		// Periodic polling via the existing mechanism.
+		// The EventCoordinator is now primed and ready for SSE-driven events
+		// when the backend event stream becomes available.
 		if (intervalId !== null) clearInterval(intervalId);
 		intervalId = setInterval(() => void fetchData(), 2500);
 	}
@@ -136,11 +161,13 @@ export function createArenaHandler() {
 			clearInterval(intervalId);
 			intervalId = null;
 		}
+		eventCoordinator.destroy();
 		fetchInProgress = false;
 	}
 
 	return {
 		subscribe: store.subscribe,
+		getStateStore,
 		start,
 		stop,
 		setLayout,

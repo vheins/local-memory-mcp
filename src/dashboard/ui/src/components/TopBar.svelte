@@ -2,7 +2,9 @@
 	import { healthData, currentRepo, availableRepos, theme, themePreference, chatRefreshSignal } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
 	import { onMount, onDestroy } from "svelte";
+	import { derived } from "svelte/store";
 	import { createTopBarHandler, GITHUB_URL, NPM_URL, DONATION_URL } from "../lib/composables/useTopBar";
+	import { arenaStateManager } from "../lib/arena/arenaStateManager";
 
 	export let onRefresh: () => void = () => {};
 	export let onToggleMobileMenu: () => void = () => {};
@@ -22,6 +24,11 @@
 		getRepoInitials,
 		destroy
 	} = handler;
+
+	const arenaMetrics = derived(arenaStateManager.getStore(), ($state) => {
+		if ($state.metrics.successRate === 0 && $state.metrics.throughput === 0) return null;
+		return $state.metrics;
+	});
 
 	$: countdownPct = ($countdownSeconds / 30) * 100;
 	$: countdownColor = $countdownSeconds <= 5 ? "#ef4444" : $countdownSeconds <= 10 ? "#f97316" : "#0ea5e9";
@@ -225,6 +232,38 @@
 			<!-- Separator -->
 			<div class="top-separator"></div>
 
+			<!-- Arena Metrics (only when arena data available) -->
+			{#if $arenaMetrics}
+				<div class="arena-metrics">
+					<div class="metric-tile">
+						<span
+							class="metric-value"
+							class:text-green={$arenaMetrics.successRate > 90}
+							class:text-yellow={$arenaMetrics.successRate >= 70 && $arenaMetrics.successRate <= 90}
+							class:text-red={$arenaMetrics.successRate < 70}
+						>
+							{$arenaMetrics.successRate.toFixed(1)}%
+						</span>
+						<span class="metric-label">Success</span>
+					</div>
+					<div class="metric-divider"></div>
+					<div class="metric-tile">
+						<span class="metric-value">{$arenaMetrics.throughput.toFixed(1)}</span>
+						<span class="metric-label">Tasks/min</span>
+					</div>
+					<div class="metric-divider"></div>
+					<div class="metric-tile">
+						<span class="metric-value">{$arenaMetrics.agentUtilization.toFixed(0)}%</span>
+						<span class="metric-label">Agents</span>
+					</div>
+					<div class="metric-divider"></div>
+					<div class="metric-tile">
+						<span class="metric-value">{$arenaMetrics.queueDepth}</span>
+						<span class="metric-label">Queue</span>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Connection status -->
 			{#if $healthData}
 				<div class="top-status">
@@ -355,7 +394,8 @@
 		.ext-links-group,
 		.top-separator,
 		.db-path-label,
-		.top-status span {
+		.top-status span,
+		.arena-metrics {
 			display: none !important;
 		}
 
@@ -554,5 +594,65 @@
 		.countdown-label {
 			display: none;
 		}
+	}
+
+	/* ── Arena Metrics ── */
+	.arena-metrics {
+		display: flex;
+		align-items: center;
+		gap: 0;
+		background: rgba(241, 245, 249, 0.75);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+		padding: 4px 8px;
+		backdrop-filter: blur(8px);
+	}
+
+	:global(html.dark) .arena-metrics {
+		background: rgba(15, 23, 42, 0.75);
+		border-color: rgba(148, 163, 184, 0.12);
+	}
+
+	.metric-tile {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2px 8px;
+		min-width: 48px;
+	}
+
+	.metric-value {
+		font-size: 0.82rem;
+		font-weight: 800;
+		font-family: "JetBrains Mono", monospace;
+		color: var(--color-text);
+		line-height: 1.2;
+	}
+
+	.metric-label {
+		font-size: 0.55rem;
+		font-weight: 700;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.metric-divider {
+		width: 1px;
+		height: 24px;
+		background: var(--color-border);
+		opacity: 0.5;
+	}
+
+	.text-green {
+		color: #22c55e;
+	}
+
+	.text-yellow {
+		color: #eab308;
+	}
+
+	.text-red {
+		color: #ef4444;
 	}
 </style>

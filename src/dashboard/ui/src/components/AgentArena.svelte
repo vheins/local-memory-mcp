@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
+	import { derived } from "svelte/store";
 	import { theme } from "../lib/stores";
 	import { createArenaHandler } from "../lib/composables/useAgentArena";
 	import { ArenaRenderer } from "../lib/arena/arenaRenderer";
 	import type { ArenaLayoutConfig } from "../lib/arena/arenaTypes";
+	import { arenaStateManager } from "../lib/arena/arenaStateManager";
+	import RepositoryCluster from "./RepositoryCluster.svelte";
 	import Icon from "../lib/Icon.svelte";
+	import EventTimeline from "./EventTimeline.svelte";
 
 	let canvas: HTMLCanvasElement;
 	let wrapEl: HTMLDivElement;
@@ -14,6 +18,7 @@
 	let tooltipPos: { x: number; y: number } | null = null;
 
 	const arena = createArenaHandler();
+	const repos = derived(arenaStateManager.getStore(), ($state) => $state.repositories);
 
 	function initCanvas(): void {
 		if (!canvas || !wrapEl) return;
@@ -139,13 +144,95 @@
 				<div class="tip-name">
 					<span class="tip-dot" style="background:{hoveredAgent.color}"></span>
 					{hoveredAgent.name}
+					{#if hoveredAgent.model}
+						<span class="tip-model">{hoveredAgent.model}</span>
+					{/if}
 				</div>
-				<div class="tip-row"><span class="tip-key">Role</span><span>{hoveredAgent.role || "—"}</span></div>
+
+				<!-- Status row -->
 				<div class="tip-row">
 					<span class="tip-key">State</span>
 					<span class="tip-state {hoveredAgent.state}">{hoveredAgent.state.replace(/_/g, " ")}</span>
 				</div>
-				<div class="tip-row"><span class="tip-key">Tasks</span><span>{hoveredAgent.claimedTaskIds.length}</span></div>
+
+				{#if hoveredAgent.currentAction && hoveredAgent.currentAction !== "idle"}
+					<div class="tip-row">
+						<span class="tip-key">Action</span>
+						<span>{hoveredAgent.currentAction}</span>
+					</div>
+				{/if}
+
+				{#if hoveredAgent.currentTool}
+					<div class="tip-row">
+						<span class="tip-key">Tool</span>
+						<span class="tip-tool">{hoveredAgent.currentTool}</span>
+					</div>
+				{/if}
+
+				{#if hoveredAgent.progress !== undefined && hoveredAgent.progress > 0}
+					<div class="tip-progress-row">
+						<span class="tip-key">Progress</span>
+						<div class="tip-progress-bar">
+							<div class="tip-progress-fill" style="width:{(hoveredAgent.progress * 100).toFixed(0)}%"></div>
+						</div>
+						<span class="tip-progress-text">{(hoveredAgent.progress * 100).toFixed(0)}%</span>
+					</div>
+				{/if}
+
+				<!-- Health -->
+				<div class="tip-row">
+					<span class="tip-key">Health</span>
+					<span class="tip-health {hoveredAgent.health}">{hoveredAgent.health}</span>
+				</div>
+
+				<!-- Telemetry section -->
+				<div class="tip-telemetry">
+					{#if hoveredAgent.confidence !== undefined && hoveredAgent.confidence > 0}
+						<div class="tip-row">
+							<span class="tip-key">Confidence</span>
+							<span>{(hoveredAgent.confidence * 100).toFixed(0)}%</span>
+						</div>
+					{/if}
+					{#if hoveredAgent.tokenUsage > 0}
+						<div class="tip-row">
+							<span class="tip-key">Tokens</span>
+							<span
+								>{hoveredAgent.tokenUsage >= 1000
+									? (hoveredAgent.tokenUsage / 1000).toFixed(1) + "k"
+									: hoveredAgent.tokenUsage}</span
+							>
+						</div>
+					{/if}
+					{#if hoveredAgent.cost > 0}
+						<div class="tip-row">
+							<span class="tip-key">Cost</span>
+							<span>${hoveredAgent.cost.toFixed(4)}</span>
+						</div>
+					{/if}
+					{#if hoveredAgent.toolCalls > 0}
+						<div class="tip-row">
+							<span class="tip-key">Tool Calls</span>
+							<span>{hoveredAgent.toolCalls}</span>
+						</div>
+					{/if}
+					{#if hoveredAgent.memoryOps > 0}
+						<div class="tip-row">
+							<span class="tip-key">Memory Ops</span>
+							<span>{hoveredAgent.memoryOps}</span>
+						</div>
+					{/if}
+					{#if hoveredAgent.queueLength > 0}
+						<div class="tip-row">
+							<span class="tip-key">Queue</span>
+							<span>{hoveredAgent.queueLength} waiting</span>
+						</div>
+					{/if}
+				</div>
+
+				<div class="tip-row">
+					<span class="tip-key">Tasks</span>
+					<span>{hoveredAgent.claimedTaskIds.length}</span>
+				</div>
 				{#if hoveredAgent.repos.length > 0}
 					<div class="tip-row">
 						<span class="tip-key">Repos</span>
@@ -186,6 +273,8 @@
 			</div>
 		</div>
 	</div>
+
+	<RepositoryCluster repositories={$repos} collapsed={true} />
 </div>
 
 <style>
@@ -365,6 +454,73 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.tip-model {
+		font-size: 0.62rem;
+		color: var(--color-text-muted);
+		background: rgba(100, 116, 139, 0.1);
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-weight: 600;
+		margin-left: auto;
+	}
+	.tip-tool {
+		font-family: "JetBrains Mono", monospace;
+		font-size: 0.68rem;
+		max-width: 120px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.tip-health {
+		font-weight: 700;
+		text-transform: uppercase;
+		font-size: 0.65rem;
+	}
+	.tip-health.healthy {
+		color: #22c55e;
+	}
+	.tip-health.degraded {
+		color: #eab308;
+	}
+	.tip-health.critical {
+		color: #ef4444;
+		animation: status-blink 1s ease-in-out infinite;
+	}
+	.tip-health.offline {
+		color: #9ca3af;
+	}
+	.tip-progress-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 1px 0;
+		color: var(--color-text-muted);
+		font-size: 0.73rem;
+	}
+	.tip-progress-bar {
+		flex: 1;
+		height: 4px;
+		background: rgba(148, 163, 184, 0.2);
+		border-radius: 9999px;
+		overflow: hidden;
+	}
+	.tip-progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #3b82f6, #22c55e);
+		border-radius: 9999px;
+		transition: width 0.3s ease;
+	}
+	.tip-progress-text {
+		font-size: 0.65rem;
+		font-weight: 700;
+		min-width: 28px;
+		text-align: right;
+	}
+	.tip-telemetry {
+		border-top: 1px solid rgba(148, 163, 184, 0.15);
+		margin-top: 4px;
+		padding-top: 4px;
 	}
 
 	.arena-footer {

@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "marked": "^18.0.2"
+    "marked": "^18.0.2",
+    "svelte": "^5.56.8"
   }
 }

@@ -13,6 +13,7 @@ function createNode(index: number): LayoutNode {
 		type: "concept",
 		x: 0,
 		y: 0,
+		z: 0,
 		vx: 0,
 		vy: 0,
 		pinned: false

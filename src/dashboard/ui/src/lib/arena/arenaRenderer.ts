@@ -53,6 +53,27 @@ function tileNoise(x: number, y: number): number {
 	return Math.abs(Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1;
 }
 
+// ─── Blocked reason visual helpers ──────────────────────────────────────────
+const BLOCKED_REASON_COLORS: Record<string, string> = {
+	dependency: "#F59E0B",
+	"rate-limit": "#F97316",
+	human: "#3B82F6",
+	conflict: "#EF4444",
+	token: "#A855F7",
+	memory: "#EC4899",
+	tool: "#6B7280"
+};
+
+const BLOCKED_REASON_ICONS: Record<string, string> = {
+	dependency: "🔗",
+	"rate-limit": "⏱",
+	human: "👤",
+	conflict: "🔀",
+	token: "💰",
+	memory: "🧠",
+	tool: "⚙"
+};
+
 // ─── Canvas helpers ────────────────────────────────────────────────────────
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
 	r = Math.min(r, w / 2, h / 2);
@@ -399,6 +420,7 @@ export class ArenaRenderer {
 				this.drawDirtFloor(ctx, x, y, w, h, "#8b2a2a", isDark);
 				break;
 			case "burnout":
+			case "recovery":
 				this.drawCleanTileFloor(ctx, x, y, w, h, isDark);
 				break;
 			case "completed":
@@ -772,7 +794,8 @@ export class ArenaRenderer {
 				this.decorIssues(ctx, x, y, w, h);
 				break;
 			case "burnout":
-				this.decorTherapy(ctx, x, y, w, h, isDark);
+			case "recovery":
+				this.decorRecovery(ctx, x, y, w, h, isDark);
 				break;
 		}
 	}
@@ -1280,16 +1303,21 @@ export class ArenaRenderer {
 		ctx.fill();
 	}
 
-	private decorTherapy(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isDark: boolean) {
-		const zone: ZoneRect = { id: "burnout", label: "Therapy Room", x, y, w, h, color: "#14b8a6" };
-		// Draw beds under the agents
+	private decorRecovery(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isDark: boolean) {
+		const zone: ZoneRect = { id: "recovery", label: "Recovery Center", x, y, w, h, color: "#14b8a6" };
+		const { ts } = this;
+		// Draw beds under the agents with cooldown rings
 		for (let idx = 0; idx < 6; idx++) {
 			const bed = therapySlotPosition(zone, idx);
 			this.drawHospitalBed(ctx, bed.x, bed.y, isDark);
+			// Cooldown countdown ring on each bed (ambient decorative pulse)
+			this.drawCooldownRing(ctx, bed.x, bed.y - 2, 0.5 + 0.5 * Math.sin(ts * 0.001 + idx * 1.2), ts);
 		}
-		// Add some therapy room decor
+		// Recovery center decor
 		this.drawPotPlant(ctx, x + w - 20, y + 20, isDark);
 		this.drawFlowerVase(ctx, x + 20, y + 20, isDark);
+		// Cross / medical symbol on wall
+		this.drawMedicalCross(ctx, x + w / 2, y + 12, isDark);
 	}
 
 	private drawMonitorActivity(
@@ -1394,52 +1422,75 @@ export class ArenaRenderer {
 	// ── Workstations ──────────────────────────────────────────────────────────
 	private drawWorkstation(task: VisualTask, isDark: boolean, ts: number) {
 		const { ctx } = this;
-		const { x, y, status, taskCode, title, claimedByAgentId, hasPendingHandoff, repo } = task;
+		const { x, y, status, taskCode, title, claimedByAgentId, hasPendingHandoff, repo, blockedReason } = task;
 		const color = STATUS_COLORS[status] ?? "#64748b";
 		const active = !!claimedByAgentId;
+		const blocked = !!blockedReason;
 		const DW = 50,
 			DH = 14,
 			SW = 34,
 			SH = 20;
 
+		// Shake animation for blocked tasks
+		const drawX = x + (blocked ? Math.sin(ts * 0.003) * 2 : 0);
+
 		// Chair behind desk
 		const chairY = y + DH / 2 + 4;
 		ctx.fillStyle = isDark ? "#1e2d3a" : "#7a98b5";
 		ctx.beginPath();
-		ctx.arc(x, chairY + 3, 8, 0, Math.PI * 2);
+		ctx.arc(drawX, chairY + 3, 8, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.fillStyle = isDark ? "#162435" : "#6888a8";
-		ctx.fillRect(x - 6, chairY - 2, 12, 8);
+		ctx.fillRect(drawX - 6, chairY - 2, 12, 8);
 		// Chair back
-		rr(ctx, x - 5, chairY - 9, 10, 9, 2);
+		rr(ctx, drawX - 5, chairY - 9, 10, 9, 2);
 		ctx.fill();
+
+		// ── Retry stacking (offset cards behind main desk) ──
+		const needsRetryStack = task.retryCount > 0;
+		if (needsRetryStack) {
+			for (let ri = task.retryCount; ri > 0; ri--) {
+				const offX = ri * 3;
+				const offY = ri * 3;
+				const stackAlpha = 0.15 - ri * 0.025;
+				// Stacked card background
+				ctx.fillStyle = rgba(isDark ? "#1e2840" : "#b0bcc8", Math.max(0, stackAlpha));
+				rr(ctx, drawX - DW / 2 + offX, y - DH / 2 + offY, DW, DH, 4);
+				ctx.fill();
+				// Stacked card border
+				ctx.strokeStyle = rgba(color, 0.2 - ri * 0.03);
+				ctx.lineWidth = 0.75;
+				rr(ctx, drawX - DW / 2 + offX, y - DH / 2 + offY, DW, DH, 4);
+				ctx.stroke();
+			}
+		}
 
 		// Desk shadow
 		ctx.fillStyle = "rgba(0,0,0,0.18)";
-		rr(ctx, x - DW / 2 + 3, y - DH / 2 + 5, DW, DH + 2, 4);
+		rr(ctx, drawX - DW / 2 + 3, y - DH / 2 + 5, DW, DH + 2, 4);
 		ctx.fill();
 
 		// Desk surface
-		const deskGrd = ctx.createLinearGradient(x - DW / 2, y - DH / 2, x + DW / 2, y + DH / 2);
+		const deskGrd = ctx.createLinearGradient(drawX - DW / 2, y - DH / 2, drawX + DW / 2, y + DH / 2);
 		deskGrd.addColorStop(0, isDark ? "#1e2840" : "#d4dce8");
 		deskGrd.addColorStop(1, isDark ? "#18202e" : "#c0ccd8");
 		ctx.fillStyle = deskGrd;
-		rr(ctx, x - DW / 2, y - DH / 2, DW, DH, 4);
+		rr(ctx, drawX - DW / 2, y - DH / 2, DW, DH, 4);
 		ctx.fill();
 		ctx.strokeStyle = isDark ? "#2d3a50" : "#a0b0c0";
 		ctx.lineWidth = 1;
-		rr(ctx, x - DW / 2, y - DH / 2, DW, DH, 4);
+		rr(ctx, drawX - DW / 2, y - DH / 2, DW, DH, 4);
 		ctx.stroke();
 
 		// Keyboard
 		ctx.fillStyle = isDark ? "#0d1520" : "#8090a8";
-		rr(ctx, x - 10, y - 2, 20, 5, 2);
+		rr(ctx, drawX - 10, y - 2, 20, 5, 2);
 		ctx.fill();
 		// Key rows
 		ctx.fillStyle = isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.3)";
 		[
-			[x - 9, y - 1, 18, 1.5],
-			[x - 8, y + 1.5, 16, 1.5]
+			[drawX - 9, y - 1, 18, 1.5],
+			[drawX - 8, y + 1.5, 16, 1.5]
 		].forEach(([kx, ky, kw, kh]) => {
 			for (let ki = 0; ki < 5; ki++) {
 				rr(ctx, kx + ki * (kw / 5) + 0.5, ky, kw / 5 - 1, kh, 0.5);
@@ -1449,28 +1500,28 @@ export class ArenaRenderer {
 		// Mouse
 		ctx.fillStyle = isDark ? "#0d1520" : "#8090a8";
 		ctx.beginPath();
-		ctx.ellipse(x + 14, y, 3, 4, 0, 0, Math.PI * 2);
+		ctx.ellipse(drawX + 14, y, 3, 4, 0, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.strokeStyle = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.1)";
 		ctx.lineWidth = 0.5;
 		ctx.beginPath();
-		ctx.moveTo(x + 14, y - 2);
-		ctx.lineTo(x + 14, y + 2);
+		ctx.moveTo(drawX + 14, y - 2);
+		ctx.lineTo(drawX + 14, y + 2);
 		ctx.stroke();
 
 		// Monitor stand
 		ctx.fillStyle = isDark ? "#2d3a50" : "#8090a8";
-		ctx.fillRect(x - 1.5, y - DH / 2 - 7, 3, 8);
+		ctx.fillRect(drawX - 1.5, y - DH / 2 - 7, 3, 8);
 
 		// Monitor frame
 		const mY = y - DH / 2 - SH - 6;
 		ctx.fillStyle = isDark ? "#111827" : "#1f2937";
-		rr(ctx, x - SW / 2 - 3, mY - 3, SW + 6, SH + 6, 5);
+		rr(ctx, drawX - SW / 2 - 3, mY - 3, SW + 6, SH + 6, 5);
 		ctx.fill();
 
 		// Screen content
 		if (active) {
-			const sGrd = ctx.createLinearGradient(x - SW / 2, mY, x + SW / 2, mY + SH);
+			const sGrd = ctx.createLinearGradient(drawX - SW / 2, mY, drawX + SW / 2, mY + SH);
 			sGrd.addColorStop(0, lighten(color, 50));
 			sGrd.addColorStop(1, color);
 			ctx.fillStyle = sGrd;
@@ -1481,34 +1532,205 @@ export class ArenaRenderer {
 		} else {
 			ctx.fillStyle = isDark ? "#0f1929" : "#1e2d3a";
 		}
-		rr(ctx, x - SW / 2, mY, SW, SH, 3);
+		rr(ctx, drawX - SW / 2, mY, SW, SH, 3);
 		ctx.fill();
 		ctx.shadowBlur = 0;
 
+		// ── Blocked tint overlay ──────────────────────────────────────────
+		if (blocked) {
+			const blockColor = BLOCKED_REASON_COLORS[blockedReason!] ?? "#EF4444";
+			const pulseAlpha = 0.06 + 0.03 * Math.sin(ts * 0.002);
+			ctx.fillStyle = rgba(blockColor, pulseAlpha);
+			rr(ctx, drawX - DW / 2, y - DH / 2, DW, DH, 4);
+			ctx.fill();
+		}
+
 		// Screen shine
 		ctx.fillStyle = "rgba(255,255,255,0.12)";
-		rr(ctx, x - SW / 2, mY, SW, SH / 2.5, 3);
+		rr(ctx, drawX - SW / 2, mY, SW, SH / 2.5, 3);
 		ctx.fill();
 
-		this.drawMonitorActivity(task, x - SW / 2, mY, SW, SH, color, isDark, ts);
+		this.drawMonitorActivity(task, drawX - SW / 2, mY, SW, SH, color, isDark, ts);
+
+		// ── Blocked reason badge on monitor ────────────────────────────────
+		if (blocked) {
+			const blockColor = BLOCKED_REASON_COLORS[blockedReason!] ?? "#EF4444";
+			const icon = BLOCKED_REASON_ICONS[blockedReason!] ?? "⛔";
+			const reasonText = blockedReason!.length > 10 ? blockedReason!.slice(0, 9) + "…" : blockedReason!;
+			const badgeText = `${icon} ${reasonText}`;
+			const badgeLen = ctx.measureText(badgeText).width + 8;
+			const badgeW = Math.max(badgeLen, 10);
+			const badgeH = 8;
+			const badgeX = drawX + SW / 2 - badgeW + 3;
+			const badgeY = mY;
+			const badgePulse = 0.8 + 0.2 * Math.sin(ts * 0.004);
+
+			ctx.save();
+			ctx.globalAlpha = badgePulse;
+			// Badge background
+			ctx.fillStyle = blockColor;
+			rr(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+			ctx.fill();
+			// Glow
+			ctx.shadowColor = blockColor;
+			ctx.shadowBlur = 4 + 2 * Math.sin(ts * 0.005);
+			rr(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+			ctx.fill();
+			ctx.shadowBlur = 0;
+			// Border
+			ctx.strokeStyle = rgba(blockColor, 0.6);
+			ctx.lineWidth = 0.5;
+			rr(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+			ctx.stroke();
+			// Text
+			ctx.fillStyle = "#ffffff";
+			ctx.font = "5px monospace";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText(badgeText, badgeX + badgeW / 2, badgeY + badgeH / 2);
+			ctx.restore();
+		}
+
+		// ── Retry count badge ──────────────────────────────────────────────
+		if (needsRetryStack) {
+			const retryText = `🔄 ${task.retryCount}`;
+			const retryBadgeW = ctx.measureText(retryText).width + 8;
+			const retryBadgeH = 9;
+			const retryBadgeX = drawX - SW / 2 - retryBadgeW + 2;
+			const retryBadgeY = mY + 5;
+			ctx.save();
+			ctx.fillStyle = rgba("#06B6D4", 0.9);
+			rr(ctx, retryBadgeX, retryBadgeY, retryBadgeW, retryBadgeH, 4);
+			ctx.fill();
+			ctx.fillStyle = "#ffffff";
+			ctx.font = "5.5px monospace";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText(retryText, retryBadgeX + retryBadgeW / 2, retryBadgeY + retryBadgeH / 2);
+			ctx.restore();
+		}
+
+		// ── Human review attention badge ──────────────────────────────────
+		if (task.blockedReason === "human") {
+			const pulse = 0.6 + 0.4 * Math.sin(ts * 0.005);
+			const dotR = 4 + pulse * 1.5;
+			const dotX = drawX + SW / 2 + 6;
+			const dotY = mY - 2;
+			ctx.save();
+			// Pulsing glow
+			ctx.shadowColor = "#f97316";
+			ctx.shadowBlur = 8 + pulse * 6;
+			ctx.fillStyle = `rgba(249, 115, 22, ${0.6 + pulse * 0.4})`;
+			ctx.beginPath();
+			ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.shadowBlur = 0;
+			// Inner dot
+			ctx.fillStyle = "#ef4444";
+			ctx.beginPath();
+			ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2);
+			ctx.fill();
+			// 👤 icon next to dot
+			ctx.fillStyle = "#ffffff";
+			ctx.font = "6px system-ui,sans-serif";
+			ctx.textAlign = "left";
+			ctx.textBaseline = "middle";
+			ctx.fillText("👤", dotX + 5, dotY + 0.5);
+			ctx.restore();
+		}
 
 		// Task code label
 		ctx.fillStyle = active ? "rgba(255,255,255,0.9)" : isDark ? "#374151" : "#6b7280";
 		ctx.font = "bold 5.5px monospace";
 		ctx.textAlign = "center";
 		ctx.textBaseline = "bottom";
-		ctx.fillText(`${repo.split("/").pop()?.slice(0, 5)}·${taskCode}`.slice(0, 12), x, mY + SH - 1);
+		ctx.fillText(`${repo.split("/").pop()?.slice(0, 5)}·${taskCode}`.slice(0, 12), drawX, mY + SH - 1);
 
 		// Task title below desk
 		ctx.fillStyle = isDark ? "rgba(148,163,184,0.65)" : "rgba(71,85,105,0.65)";
 		ctx.font = "5.5px system-ui,sans-serif";
 		ctx.textAlign = "center";
 		ctx.textBaseline = "top";
-		ctx.fillText(title.slice(0, 12), x, y + DH / 2 + 2);
+		ctx.fillText(title.slice(0, 12), drawX, y + DH / 2 + 2);
+
+		// ── Progress bar ──
+		if (active && task.progress !== undefined && task.progress > 0) {
+			const barW = 44;
+			const barH = 3;
+			const barX = drawX - barW / 2;
+			const barY = y + DH / 2 + 10;
+			const prog = Math.min(1, Math.max(0, task.progress));
+			// Background
+			ctx.fillStyle = isDark ? "#1e293b" : "#cbd5e1";
+			rr(ctx, barX, barY, barW, barH, 1.5);
+			ctx.fill();
+			// Fill color: red→yellow→green
+			let progColor: string;
+			if (prog > 0.7) progColor = "#22C55E";
+			else if (prog >= 0.3) progColor = "#EAB308";
+			else progColor = "#EF4444";
+			ctx.fillStyle = progColor;
+			rr(ctx, barX, barY, barW * prog, barH, 1.5);
+			ctx.fill();
+		}
+
+		// ── Token usage ──
+		if (active) {
+			const tokens = task.tokenCost ?? task.estimatedCost;
+			if (tokens && tokens > 0) {
+				const tokenY = y + DH / 2 + 16;
+				const tokText = tokens >= 1000 ? `💰 ${(tokens / 1000).toFixed(1)}k` : `💰 ${tokens}`;
+				ctx.fillStyle = isDark ? "rgba(148,163,184,0.55)" : "rgba(71,85,105,0.55)";
+				ctx.font = "5px monospace";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "top";
+				ctx.fillText(tokText, drawX, tokenY);
+			}
+		}
+
+		// ── Tool name label ──
+		if (active) {
+			const agent = this.scene?.agents.get(claimedByAgentId!);
+			if (agent?.currentTool) {
+				const toolY = y + DH / 2 + ((task.tokenCost ?? task.estimatedCost) ? 22 : 16);
+				ctx.fillStyle = isDark ? "#94a3b8" : "#64748b";
+				ctx.font = "4.5px monospace";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "top";
+				ctx.fillText(`🔧 ${agent.currentTool}`, drawX, toolY);
+			}
+		}
+
+		// ── Duration badge ──
+		if (active) {
+			const started = task.startedAt ?? task.createdAt;
+			if (started) {
+				const elapsed = Date.now() - started * 1000;
+				const mins = Math.floor(elapsed / 60000);
+				const secs = Math.floor((elapsed % 60000) / 1000);
+				const durText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+				const badgeX = drawX + SW / 2 - 1;
+				const badgeY = mY - 1;
+				const badgeW = ctx.measureText(durText).width + 6;
+				const badgeH = 7;
+				ctx.fillStyle = isDark ? "rgba(15,23,42,0.85)" : "rgba(255,255,255,0.85)";
+				rr(ctx, badgeX - badgeW, badgeY - badgeH / 2, badgeW, badgeH, 2);
+				ctx.fill();
+				ctx.strokeStyle = isDark ? "rgba(148,163,184,0.3)" : "rgba(0,0,0,0.15)";
+				ctx.lineWidth = 0.5;
+				rr(ctx, badgeX - badgeW, badgeY - badgeH / 2, badgeW, badgeH, 2);
+				ctx.stroke();
+				ctx.fillStyle = isDark ? "#cbd5e1" : "#334155";
+				ctx.font = "5px monospace";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle";
+				ctx.fillText(durText, badgeX - badgeW / 2, badgeY);
+			}
+		}
 
 		// Handoff badge
 		if (hasPendingHandoff) {
-			const bx = x + SW / 2;
+			const bx = drawX + SW / 2;
 			const by = mY - 1;
 			ctx.fillStyle = "#f59e0b";
 			ctx.shadowColor = "#f59e0b";
@@ -2034,7 +2256,17 @@ export class ArenaRenderer {
 		ctx.textAlign = "center";
 		ctx.textBaseline = "top";
 		const lbl = agent.name.length > 12 ? agent.name.slice(0, 12) + "…" : agent.name;
-		ctx.fillText(lbl, x, y + (h.vehicle === "stretcher" ? 14 : 12));
+		const nameY = y + (h.vehicle === "stretcher" ? 14 : 12);
+		ctx.fillText(lbl, x, nameY);
+
+		// ─ Tool name label ─
+		if (agent.currentTool) {
+			ctx.fillStyle = isDark ? "#94a3b8" : "#64748b";
+			ctx.font = "7px monospace";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "top";
+			ctx.fillText(`🔧 ${agent.currentTool}`, x, nameY + 8);
+		}
 
 		// Rolling SFX indicator (small animated lines near wheels when moving)
 		if (h.phase === "moving") {
@@ -2227,6 +2459,9 @@ export class ArenaRenderer {
 			ctx.setLineDash([]);
 		}
 
+		// Health ring (behind/below character)
+		this.drawHealthRing(ctx, x, y, agent.healthRing, agent.health, ts);
+
 		ctx.save();
 		ctx.translate(x, y);
 		if (state === "burnout") {
@@ -2348,6 +2583,29 @@ export class ArenaRenderer {
 
 		ctx.restore(); // end translate(x,y) + scale
 
+		// ─ Role-colored outline ─
+		if (agent.coloredOutline) {
+			const outlineAlpha = hovered ? 0.9 : agent.health === "critical" ? 0.6 : 0.45;
+			ctx.save();
+			ctx.globalAlpha = outlineAlpha;
+			ctx.strokeStyle = agent.coloredOutline;
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.ellipse(x, y - 20 + headBob, 12, 20, 0, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.restore();
+		}
+
+		// ─ Status icon (above head) ─
+		if (agent.statusIcon && agent.statusIcon !== "default") {
+			this.drawStatusIcon(ctx, x, y, headBob, agent.statusIcon, agent.currentAction);
+		}
+
+		// ─ Speech bubble (above status icon) ─
+		if (agent.speechBubble) {
+			this.drawSpeechBubble(ctx, x, y, agent.speechBubble, color, isDark, agent.speechBubbleTs, id);
+		}
+
 		// ─ State badges ─
 		if (state !== "idle" && state !== "burnout") {
 			const dotColor =
@@ -2422,6 +2680,11 @@ export class ArenaRenderer {
 			}
 		}
 
+		// ─ Self-healing spinner ─
+		if (state === "self_healing") {
+			this.drawSelfHealingSpinner(ctx, x + 14, y - 34, ts);
+		}
+
 		// ─ Name label ─
 		ctx.fillStyle = isDark ? "rgba(226,232,240,0.82)" : "rgba(15,23,42,0.7)";
 		ctx.font = "7px system-ui,sans-serif";
@@ -2429,6 +2692,312 @@ export class ArenaRenderer {
 		ctx.textBaseline = "top";
 		const lbl = name.length > 12 ? name.slice(0, 12) + "…" : name;
 		ctx.fillText(lbl, x, y + 12);
+
+		// ─ Tool name label ─
+		if (agent.currentTool) {
+			ctx.fillStyle = isDark ? "#94a3b8" : "#64748b";
+			ctx.font = "7px monospace";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "top";
+			const toolText = `🔧 ${agent.currentTool}`;
+			ctx.fillText(toolText, x, y + 20);
+		}
+	}
+
+	// ─ Health ring ─
+	private drawHealthRing(
+		ctx: CanvasRenderingContext2D,
+		x: number,
+		y: number,
+		healthRing: number,
+		health: string,
+		ts: number
+	) {
+		const radius = 20;
+		const ringY = y + 7;
+		const strokeWidth = 3;
+
+		// Color map
+		const colorMap: Record<string, string> = {
+			healthy: "#22C55E",
+			degraded: "#EAB308",
+			critical: "#EF4444",
+			offline: "#9CA3AF"
+		};
+		const ringColor = colorMap[health] || "#9CA3AF";
+
+		// Background ring (full circle, dim)
+		ctx.strokeStyle = rgba(ringColor, 0.15);
+		ctx.lineWidth = strokeWidth;
+		ctx.beginPath();
+		ctx.arc(x, ringY, radius, 0, Math.PI * 2);
+		ctx.stroke();
+
+		// Progress arc
+		const clamped = Math.max(0, Math.min(100, healthRing));
+		const startAngle = -Math.PI / 2; // top
+		const endAngle = startAngle + (clamped / 100) * Math.PI * 2;
+
+		// Glow for critical
+		if (health === "critical") {
+			const pulse = 0.5 + 0.5 * Math.sin(ts * 0.006);
+			ctx.save();
+			ctx.shadowColor = "#EF4444";
+			ctx.shadowBlur = 8 + pulse * 6;
+			ctx.strokeStyle = `${ringColor}`;
+			ctx.lineWidth = strokeWidth;
+			ctx.beginPath();
+			ctx.arc(x, ringY, radius, startAngle, endAngle);
+			ctx.stroke();
+			ctx.restore();
+		} else {
+			ctx.strokeStyle = ringColor;
+			ctx.lineWidth = strokeWidth;
+			ctx.beginPath();
+			ctx.arc(x, ringY, radius, startAngle, endAngle);
+			ctx.stroke();
+		}
+
+		// Health value text
+		ctx.fillStyle = ringColor;
+		ctx.globalAlpha = 0.85;
+		ctx.font = "bold 6px system-ui,monospace";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(`${Math.round(clamped)}`, x, ringY);
+		ctx.globalAlpha = 1;
+	}
+
+	// ─ Cooldown countdown ring (cyan, decreasing arc) ─
+	private drawCooldownRing(ctx: CanvasRenderingContext2D, x: number, y: number, progress: number, ts: number) {
+		const radius = 18;
+		const strokeWidth = 3;
+		const color = "#06B6D4";
+
+		// Background ring (full circle, dim)
+		ctx.strokeStyle = rgba(color, 0.12);
+		ctx.lineWidth = strokeWidth;
+		ctx.lineCap = "round";
+		ctx.beginPath();
+		ctx.arc(x, y, radius, 0, Math.PI * 2);
+		ctx.stroke();
+
+		// Progress arc (decreasing: 1.0 = full circle, 0.0 = empty)
+		const clamped = Math.max(0, Math.min(1, progress));
+		const startAngle = -Math.PI / 2;
+		const endAngle = startAngle + clamped * Math.PI * 2;
+
+		// Glow
+		ctx.save();
+		ctx.shadowColor = color;
+		ctx.shadowBlur = 8;
+		ctx.strokeStyle = color;
+		ctx.lineWidth = strokeWidth;
+		ctx.lineCap = "round";
+		ctx.beginPath();
+		ctx.arc(x, y, radius, startAngle, endAngle);
+		ctx.stroke();
+		ctx.restore();
+
+		// Percentage text
+		ctx.fillStyle = color;
+		ctx.globalAlpha = 0.8;
+		ctx.font = "bold 5px system-ui,monospace";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(`${Math.round(clamped * 100)}%`, x, y + 1);
+		ctx.globalAlpha = 1;
+	}
+
+	// ─ Medical cross (on recovery room wall) ─
+	private drawMedicalCross(ctx: CanvasRenderingContext2D, x: number, y: number, isDark: boolean) {
+		ctx.save();
+		ctx.translate(x, y);
+		// White cross on teal background
+		ctx.fillStyle = rgba("#14b8a6", isDark ? 0.5 : 0.35);
+		rr(ctx, -9, -8, 18, 16, 3);
+		ctx.fill();
+		ctx.strokeStyle = rgba("#14b8a6", 0.7);
+		ctx.lineWidth = 0.75;
+		rr(ctx, -9, -8, 18, 16, 3);
+		ctx.stroke();
+		// Cross
+		ctx.fillStyle = isDark ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.9)";
+		ctx.fillRect(-2, -6, 4, 12);
+		ctx.fillRect(-6, -2, 12, 4);
+		ctx.restore();
+	}
+
+	// ─ Self-healing spinner (rotating arc) ─
+	private drawSelfHealingSpinner(ctx: CanvasRenderingContext2D, x: number, y: number, ts: number) {
+		const radius = 7;
+		const strokeWidth = 2.5;
+		const color = "#06B6D4";
+		const rotation = (ts * 0.005) % (Math.PI * 2);
+
+		// 3/4 circle arc rotates continuously
+		const startAngle = rotation;
+		const endAngle = rotation + Math.PI * 1.5;
+
+		ctx.save();
+		ctx.lineCap = "round";
+		// Glow
+		ctx.shadowColor = color;
+		ctx.shadowBlur = 6;
+		ctx.strokeStyle = color;
+		ctx.lineWidth = strokeWidth;
+		ctx.beginPath();
+		ctx.arc(x, y, radius, startAngle, endAngle);
+		ctx.stroke();
+		ctx.restore();
+	}
+
+	// ─ Status icon ─
+	private drawStatusIcon(
+		ctx: CanvasRenderingContext2D,
+		x: number,
+		y: number,
+		headBob: number,
+		statusIcon: string,
+		currentAction: string
+	) {
+		const iconY = y - 42 + headBob;
+
+		// Action→icon fallback map
+		const actionIcons: Record<string, string> = {
+			coding: "⚡",
+			testing: "🧪",
+			reviewing: "👁",
+			searching: "🔍",
+			"memory-syncing": "🧠",
+			thinking: "💭",
+			retrying: "🔄",
+			waiting: "●",
+			idle: "●"
+		};
+
+		let icon = statusIcon;
+		// If statusIcon is empty/placeholder, try action icon
+		if (!icon || icon === "" || icon === "default") {
+			icon = actionIcons[currentAction] || "";
+		}
+		if (!icon) return;
+
+		// Subtle background pill
+		const metrics = ctx.measureText(icon);
+		ctx.fillStyle = "rgba(0,0,0,0.25)";
+		ctx.beginPath();
+		const pw = Math.max(12, metrics.width + 8);
+		rr(ctx, x - pw / 2, iconY - 4, pw, 10, 4);
+		ctx.fill();
+
+		ctx.font = "8px system-ui,sans-serif";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(icon, x, iconY + 1);
+	}
+
+	// ─ Speech bubble ─
+	private drawSpeechBubble(
+		ctx: CanvasRenderingContext2D,
+		x: number,
+		y: number,
+		text: string,
+		color: string,
+		isDark: boolean,
+		speechBubbleTs: number,
+		agentId: string
+	): void {
+		const SPEECH_DURATION_MS = 3000;
+		const now = Date.now();
+
+		// Auto-clear: skip if older than 3s
+		if (!speechBubbleTs || now - speechBubbleTs > SPEECH_DURATION_MS) {
+			return;
+		}
+
+		// Calculate remaining life for fade-out in last 300ms
+		const age = now - speechBubbleTs;
+		const remaining = Math.max(0, SPEECH_DURATION_MS - age);
+		const fadeOutAlpha = Math.min(1, remaining / 300); // linear fade over last 300ms
+
+		const maxCharsPerLine = 20;
+		const lines: string[] = [];
+		let remaining2 = text;
+		while (remaining2.length > 0) {
+			lines.push(remaining2.slice(0, maxCharsPerLine));
+			remaining2 = remaining2.slice(maxCharsPerLine);
+		}
+
+		const fontSize = 9;
+		ctx.font = `${fontSize}px system-ui,sans-serif`;
+
+		const lineHeight = fontSize + 3;
+		const paddingX = 8;
+		const paddingY = 5;
+		const tailHeight = 6;
+		const tailWidth = 6;
+		const borderRadius = 6;
+
+		// Measure max line width
+		let maxLineW = 0;
+		for (const line of lines) {
+			const m = ctx.measureText(line).width;
+			if (m > maxLineW) maxLineW = m;
+		}
+
+		const bubbleW = Math.max(maxLineW + paddingX * 2, 30);
+		const bubbleH = lines.length * lineHeight + paddingY * 2;
+
+		// Position: centered above agent, float above status icon area
+		const bubbleX = x - bubbleW / 2;
+		const bubbleY = y - bubbleH - tailHeight - 52;
+
+		const bubbleAlpha = 0.9 * fadeOutAlpha;
+
+		ctx.save();
+		ctx.globalAlpha = bubbleAlpha;
+
+		// Background
+		ctx.fillStyle = isDark ? "#1e293b" : "#ffffff";
+		rr(ctx, bubbleX, bubbleY, bubbleW, bubbleH, borderRadius);
+		ctx.fill();
+
+		// Border
+		ctx.strokeStyle = color;
+		ctx.lineWidth = 1.5;
+		rr(ctx, bubbleX, bubbleY, bubbleW, bubbleH, borderRadius);
+		ctx.stroke();
+
+		// Tail (triangle pointing down toward agent)
+		const tailX = x;
+		const tailY = bubbleY + bubbleH;
+		ctx.fillStyle = isDark ? "#1e293b" : "#ffffff";
+		ctx.beginPath();
+		ctx.moveTo(tailX - tailWidth / 2, tailY);
+		ctx.lineTo(tailX + tailWidth / 2, tailY);
+		ctx.lineTo(tailX, tailY + tailHeight);
+		ctx.closePath();
+		ctx.fill();
+
+		// Tail border (two sides, no bottom — the triangle's base is flush with bubble)
+		ctx.strokeStyle = color;
+		ctx.lineWidth = 1.5;
+		ctx.beginPath();
+		ctx.moveTo(tailX - tailWidth / 2, tailY);
+		ctx.lineTo(tailX, tailY + tailHeight);
+		ctx.lineTo(tailX + tailWidth / 2, tailY);
+		ctx.stroke();
+
+		// Text
+		ctx.fillStyle = isDark ? "#e2e8f0" : "#1e293b";
+		ctx.textAlign = "left";
+		ctx.textBaseline = "top";
+		for (let i = 0; i < lines.length; i++) {
+			ctx.fillText(lines[i], bubbleX + paddingX, bubbleY + paddingY + i * lineHeight);
+		}
+
+		ctx.restore();
 	}
 
 	// ─ Hair styles ─

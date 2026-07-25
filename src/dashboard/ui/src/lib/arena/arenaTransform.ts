@@ -6,7 +6,9 @@ import type {
 	AgentState,
 	HandoffAnimData,
 	HandoffVehicle,
-	HelperVariant
+	HelperVariant,
+	VisualAgent,
+	VisualRepository
 } from "./arenaTypes";
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -40,6 +42,17 @@ const AGENT_COLORS = [
 	"#8b5cf6",
 	"#84cc16"
 ];
+
+export const ROLE_COLORS: Record<string, string> = {
+	backend: "#3B82F6",
+	frontend: "#10B981",
+	debugger: "#F59E0B",
+	devops: "#8B5CF6",
+	"data-engineer": "#14B8A6",
+	explore: "#06B6D4",
+	documentation: "#6B7280",
+	general: "#F9FAFB"
+};
 
 const MAX_TASKS_PER_ZONE = 16;
 const TASK_INNER_PAD = 22;
@@ -89,7 +102,10 @@ function nameHash(name: string): number {
 	return h;
 }
 
-export function agentColor(name: string): string {
+export function agentColor(name: string, role?: string | null): string {
+	if (role && ROLE_COLORS[role]) {
+		return ROLE_COLORS[role];
+	}
 	let h = 5381;
 	for (let i = 0; i < name.length; i++) h = ((h << 5) + h + name.charCodeAt(i)) >>> 0;
 	return AGENT_COLORS[h % AGENT_COLORS.length];
@@ -113,8 +129,8 @@ export function computeZones(cw: number, ch: number): ZoneRect[] {
 		{ id: "backlog", label: "Backlog", x: M, y: M + topH + G, w: colW3, h: bottomH, color: "#8b5cf6" },
 		{ id: "blocked", label: "Blocked", x: M + colW3 + G, y: M + topH + G, w: colW3, h: bottomH, color: "#ef4444" },
 		{
-			id: "burnout",
-			label: "Therapy Room",
+			id: "recovery",
+			label: "Recovery Center",
 			x: M + colW3 * 2 + G * 2,
 			y: M + topH + G,
 			w: iw - colW3 * 2 - G * 2,
@@ -169,6 +185,83 @@ function placeTasksInZones(tasks: Task[], zones: ZoneRect[]): Map<string, { x: n
 	return positions;
 }
 
+function priorityToLevel(p: number): "p0" | "p1" | "p2" | "p3" {
+	if (p <= 1) return "p0";
+	if (p === 2) return "p1";
+	if (p === 3) return "p2";
+	return "p3";
+}
+
+function inferTaskType(code: string): "feature" | "fix" | "refactor" | "chore" | "docs" | "test" {
+	const prefix = code.split("-")[0]?.toUpperCase() ?? "";
+	const typeMap: Record<string, "feature" | "fix" | "refactor" | "chore" | "docs" | "test"> = {
+		FEAT: "feature",
+		FIX: "fix",
+		REFACTOR: "refactor",
+		CHORE: "chore",
+		DOCS: "docs",
+		TEST: "test"
+	};
+	return typeMap[prefix] ?? "feature";
+}
+
+// ── Agent Telemetry Helpers ────────────────────────────────────────────────
+
+function stateToAction(state: AgentState): VisualAgent["currentAction"] {
+	const map: Record<AgentState, VisualAgent["currentAction"]> = {
+		processing: "coding",
+		idle: "idle",
+		blocked: "waiting",
+		burnout: "retrying",
+		claiming: "thinking",
+		handoff_out: "waiting",
+		handoff_in: "waiting",
+		recovering: "retrying",
+		cooldown: "idle",
+		retrying: "retrying",
+		self_healing: "retrying"
+	};
+	return map[state] ?? "idle";
+}
+
+function stateToHealth(state: AgentState): VisualAgent["health"] {
+	if (state === "burnout" || state === "blocked") return "degraded";
+	return "healthy";
+}
+
+function healthToRing(health: VisualAgent["health"]): number {
+	const map: Record<VisualAgent["health"], number> = {
+		healthy: 100,
+		degraded: 60,
+		critical: 25,
+		offline: 0
+	};
+	return map[health];
+}
+
+function stateToIcon(state: AgentState): string {
+	const map: Record<AgentState, string> = {
+		processing: "⚡",
+		idle: "●",
+		blocked: "⚠",
+		burnout: "🔄",
+		claiming: "●",
+		handoff_out: "●",
+		handoff_in: "●",
+		recovering: "🔄",
+		cooldown: "●",
+		retrying: "🔄",
+		self_healing: "🔄"
+	};
+	return map[state] ?? "";
+}
+
+function computeAgentProgress(tasks: Array<{ progress: number }>): number {
+	if (tasks.length === 0) return 0;
+	const sum = tasks.reduce((acc, t) => acc + t.progress, 0);
+	return sum / tasks.length;
+}
+
 export function buildArenaScene(
 	tasks: Task[],
 	claims: TaskClaim[],
@@ -180,13 +273,29 @@ export function buildArenaScene(
 	const taskPositions = placeTasksInZones(tasks, zones);
 	const idleZone = zones.find((z) => z.id === "in_progress") || zones[0];
 
-	const scene: ArenaScene = { agents: new Map(), tasks: new Map(), handoffs: [] };
+	const scene: ArenaScene = { agents: new Map(), tasks: new Map(), handoffs: [], repositories: new Map() };
 
 	// --- Tasks ---
+	const now = Date.now();
+
 	for (const task of tasks) {
 		const pos = taskPositions.get(task.id);
 		if (!pos) continue;
-		// const prev = existingScene?.tasks.get(task.id);
+		const prev = existingScene?.tasks.get(task.id);
+		const createdAt = task.created_at ? new Date(task.created_at).getTime() : now;
+		const startedAt = task.in_progress_at ? new Date(task.in_progress_at).getTime() : null;
+		const waitTime = Math.max(0, (now - createdAt) / 1000);
+		const estDuration = task.est_tokens ? task.est_tokens * 2 : 300;
+
+		let progress: number;
+		if (task.status === "completed") {
+			progress = 1.0;
+		} else if (task.status === "in_progress" && startedAt) {
+			progress = Math.min(1.0, (now - startedAt) / (estDuration * 1000));
+		} else {
+			progress = prev?.progress ?? 0;
+		}
+
 		scene.tasks.set(task.id, {
 			id: task.id,
 			taskCode: task.task_code,
@@ -194,18 +303,44 @@ export function buildArenaScene(
 			repo: task.repo,
 			status: task.status,
 			priority: task.priority ?? 3,
+			priorityLevel: priorityToLevel(task.priority ?? 3),
+			claimedByAgentId: task.coordination?.active_claim_agent ?? null,
+			ownerId: task.agent ?? "",
+			repositoryId: task.repo,
+			createdAt,
+			startedAt,
+			estimatedDuration: estDuration,
+			actualDuration: null,
+			waitTime,
+			progress,
+			retryCount: prev?.retryCount ?? 0,
+			maxRetries: prev?.maxRetries ?? 3,
+			failureReason: null,
+			blockedReason: null,
+			blockedById: null,
+			tokenCost: 0,
+			estimatedCost: 0,
+			labels: [],
+			tags: task.tags ?? [],
+			taskType: inferTaskType(task.task_code),
+			hasPendingHandoff: (task.coordination?.pending_handoff_count ?? 0) > 0,
 			x: pos.x,
 			y: pos.y,
-			claimedByAgentId: task.coordination?.active_claim_agent ?? null,
-			hasPendingHandoff: (task.coordination?.pending_handoff_count ?? 0) > 0
+			animationState: prev ? "idle" : "entering"
 		});
 	}
 
 	// --- Agents (from claims + task coordination) ---
-	const agentMap = new Map<string, { tasks: Set<string>; role: string; repos: Set<string> }>();
+	const agentMap = new Map<string, { tasks: Set<string>; role: string; repos: Set<string>; model: string }>();
 
 	for (const claim of claims) {
-		if (!agentMap.has(claim.agent)) agentMap.set(claim.agent, { tasks: new Set(), role: claim.role, repos: new Set() });
+		if (!agentMap.has(claim.agent))
+			agentMap.set(claim.agent, {
+				tasks: new Set(),
+				role: claim.role,
+				repos: new Set(),
+				model: (claim.metadata?.model as string) ?? ""
+			});
 		const e = agentMap.get(claim.agent)!;
 		e.tasks.add(claim.task_id);
 		e.repos.add(claim.repo);
@@ -214,7 +349,12 @@ export function buildArenaScene(
 		const a = task.coordination?.active_claim_agent;
 		if (!a) continue;
 		if (!agentMap.has(a))
-			agentMap.set(a, { tasks: new Set(), role: task.coordination?.active_claim_role ?? "agent", repos: new Set() });
+			agentMap.set(a, {
+				tasks: new Set(),
+				role: task.coordination?.active_claim_role ?? "agent",
+				repos: new Set(),
+				model: ""
+			});
 		const e = agentMap.get(a)!;
 		e.tasks.add(task.id);
 		e.repos.add(task.repo);
@@ -223,8 +363,10 @@ export function buildArenaScene(
 	const agentNames = Array.from(agentMap.keys());
 
 	agentNames.forEach((name, idx) => {
-		const { tasks: claimedIds, role, repos } = agentMap.get(name)!;
+		const { tasks: claimedIds, role, repos, model } = agentMap.get(name)!;
 		const prev = existingScene?.agents.get(name);
+
+		const roleColor = ROLE_COLORS[role] ?? agentColor(name);
 
 		// Initial spawn in idle zone centre (spread out)
 		const spawnX = idleZone.x + idleZone.w / 2 + ((idx % 3) - 1) * 30;
@@ -258,7 +400,7 @@ export function buildArenaScene(
 		let handoffAnim: HandoffAnimData | null = prev?.handoffAnim ?? null;
 		if (isStale) {
 			state = "burnout";
-			const burnoutZone = zones.find((z) => z.id === "burnout") || idleZone;
+			const burnoutZone = zones.find((z) => z.id === "recovery") || idleZone;
 			// Place them inside the therapy room, aligned with the rendered beds.
 			const therapySlot = therapySlotPosition(burnoutZone, idx);
 			targetX = therapySlot.x;
@@ -291,11 +433,18 @@ export function buildArenaScene(
 			handoffAnim = null;
 		}
 
+		// ── Compute telemetry & health based on state ──────────────────────
+		const curAction = stateToAction(state);
+		const curHealth = stateToHealth(state);
+		const curHealthRing = healthToRing(curHealth);
+		const curIcon = stateToIcon(state);
+		const avgProgress = computeAgentProgress(visibleClaimedTasks);
+
 		scene.agents.set(name, {
 			id: name,
 			name,
 			role,
-			color: agentColor(name),
+			color: roleColor,
 			x: prev?.x ?? spawnX,
 			y: prev?.y ?? spawnY,
 			targetX,
@@ -308,7 +457,33 @@ export function buildArenaScene(
 			claimedTaskIds: Array.from(claimedIds),
 			repos: Array.from(repos),
 			lastUpdateTs,
-			handoffAnim
+			model,
+			handoffAnim,
+
+			// ── Health & Status (computed from state) ───────────────────────
+			health: curHealth,
+			currentAction: curAction,
+			currentTool: prev?.currentTool ?? "",
+			confidence: 1.0,
+			progress: avgProgress,
+
+			// ── Telemetry (carried forward; updated by animations) ──────────
+			tokenUsage: prev?.tokenUsage ?? 0,
+			tokenBurnRate: prev?.tokenBurnRate ?? 0,
+			cost: prev?.cost ?? 0,
+			latency: prev?.latency ?? 0,
+			contextUsage: prev?.contextUsage ?? 0,
+			queueLength: prev?.queueLength ?? claimedIds.size,
+			memoryOps: prev?.memoryOps ?? 0,
+			toolCalls: prev?.toolCalls ?? 0,
+
+			// ── Visual Enhancements (computed from state) ──────────────────
+			statusIcon: curIcon,
+			speechBubble: null,
+			speechBubbleTs: 0,
+			activityAnimation: prev?.activityAnimation ?? "",
+			healthRing: curHealthRing,
+			coloredOutline: roleColor
 		});
 	});
 
@@ -321,6 +496,85 @@ export function buildArenaScene(
 			toAgentId: h.to_agent,
 			taskId: h.task_id,
 			summary: h.summary
+		});
+	}
+
+	// --- Repositories ---
+	const repoIds = new Set<string>();
+	if (existingScene?.repositories) {
+		for (const id of existingScene.repositories.keys()) {
+			repoIds.add(id);
+		}
+	}
+	for (const task of tasks) {
+		if (task.repo) {
+			repoIds.add(task.repo);
+		}
+	}
+	for (const claim of claims) {
+		if (claim.repo) {
+			repoIds.add(claim.repo);
+		}
+	}
+
+	for (const repoId of repoIds) {
+		const prev = existingScene?.repositories?.get(repoId);
+		const fullName = repoId;
+		const name = repoId.split("/").pop() || repoId;
+
+		let tasksInProgress = 0;
+		let tasksPending = 0;
+		let tasksBlocked = 0;
+		for (const task of scene.tasks.values()) {
+			if (task.repo === repoId) {
+				if (task.status === "in_progress") {
+					tasksInProgress++;
+				} else if (task.status === "pending") {
+					tasksPending++;
+				} else if (task.status === "blocked") {
+					tasksBlocked++;
+				}
+			}
+		}
+
+		let activeAgents = 0;
+		for (const agent of scene.agents.values()) {
+			if (agent.repos.includes(repoId)) {
+				activeAgents++;
+			}
+		}
+
+		let health: "healthy" | "degraded" | "critical" = prev?.health ?? "healthy";
+		if (!prev?.health) {
+			if (tasksBlocked > 0) {
+				health = "degraded";
+			}
+			for (const agent of scene.agents.values()) {
+				if (agent.repos.includes(repoId)) {
+					if (agent.state === "blocked" || agent.state === "burnout") {
+						health = "degraded";
+					}
+				}
+			}
+		}
+
+		scene.repositories.set(repoId, {
+			id: repoId,
+			name,
+			fullName,
+			health,
+			activeBranches: prev?.activeBranches ?? 1,
+			lockedFiles: prev?.lockedFiles ?? [],
+			mergeQueueLength: prev?.mergeQueueLength ?? 0,
+			activePRs: prev?.activePRs ?? 0,
+			runningWorkflows: prev?.runningWorkflows ?? (tasksInProgress > 0 ? 1 : 0),
+			activeAgents,
+			tasksInProgress,
+			tasksPending,
+			tasksBlocked,
+			utilizationPercent: prev?.utilizationPercent ?? (activeAgents > 0 ? 100 : 0),
+			avgTaskDuration: prev?.avgTaskDuration ?? 0,
+			recentFailures: prev?.recentFailures ?? 0
 		});
 	}
 

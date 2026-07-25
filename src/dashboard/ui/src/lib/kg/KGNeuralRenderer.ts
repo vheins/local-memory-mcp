@@ -1,9 +1,9 @@
 /**
- * 3D Neural Animation Renderer for the Knowledge Graph.
+ * 3D Holographic Particle Renderer for the Knowledge Graph.
  *
- * Projects 2D force-layout positions into 3D with perspective projection,
- * orbiting rotation, depth sorting, and glowing neural aesthetics inspired
- * by the sentinel-agent login page animation.
+ * Cinematic JARVIS / Ultron-inspired neural interface visualization.
+ * True 3D spherical layout with dual-axis rotation, volumetric fog,
+ * tiny star-like particles, and signal propagation along edges.
  *
  * Self-contained — all animation state lives in module-level variables.
  */
@@ -23,72 +23,68 @@ export interface NeuralRenderState {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// Particle sizes (tiny!)
+const PARTICLE_BASE_RADIUS = 1.5;
+const PARTICLE_IMPORTANT_RADIUS = 5;
+const PARTICLE_SUBTLE_MIN = 0.8;
+
+// Edges — very thin
+const EDGE_BASE_WIDTH = 0.35;
+
+// Camera
+const CAMERA_DISTANCE = 500;
+const CAMERA_ROTATION_SPEED = 0.00008;
+const CAMERA_TILT_AMOUNT = 0.08;
 const FOCAL_LENGTH = 300;
-const MAX_Z_OFFSET = 100;
-const MAX_ROTATION_DEG = 15;
-const ROTATION_SPEED = 0.0003; // radians per ms
-const HUB_DEGREE_THRESHOLD = 3;
-const BASE_NODE_RADIUS = 9;
-const HUB_NODE_RADIUS = 13;
-const MAX_SIGNALS = 50;
-const SIGNAL_SPEED = 0.0018; // progress per ms
-const SIGNAL_SPAWN_INTERVAL = 600; // ms between hub signal spawns
-const NODE_PULSE_SPEED = 0.002;
-const HUB_FLASH_DURATION = 300; // ms
 
-const TYPE_COLORS: Record<string, string> = {
-	person: "#22c55e",
-	place: "#3b82f6",
-	organization: "#f97316",
-	concept: "#a855f7",
-	unknown: "#6b7280"
+// Depth / Fog
+const FOG_NEAR = 150;
+const FOG_FAR = 700;
+
+// Breathing
+const BREATHE_SPEED = 0.0002;
+const BREATHE_AMOUNT = 0.015;
+
+// Twinkle
+const TWINKLE_SPEED = 0.001;
+const TWINKLE_AMOUNT = 0.3;
+
+// Signals
+const MAX_SIGNALS = 30;
+const SIGNAL_SPEED = 0.0008;
+const SIGNAL_SPAWN_INTERVAL = 800;
+
+// ─── Colors — Cyberpunk / Holographic ────────────────────────────────────────
+
+const PALETTE = [
+	{ r: 0, g: 212, b: 255 }, // electric cyan
+	{ r: 139, g: 92, b: 246 }, // violet
+	{ r: 79, g: 70, b: 229 }, // indigo
+	{ r: 236, g: 72, b: 153 }, // soft magenta
+	{ r: 100, g: 180, b: 255 } // light blue
+];
+
+const TYPE_COLOR_INDEX: Record<string, number> = {
+	person: 1,
+	place: 2,
+	organization: 3,
+	concept: 0,
+	unknown: 4
 };
 
-const TYPE_GLOWS: Record<string, string> = {
-	person: "rgba(34,197,94,0.35)",
-	place: "rgba(59,130,246,0.35)",
-	organization: "rgba(249,115,22,0.35)",
-	concept: "rgba(168,85,247,0.35)",
-	unknown: "rgba(107,114,128,0.25)"
-};
-
-const BG_DARK = "#0a0e1a";
-const BG_LIGHT = "#f0f4ff";
-
-// ─── Color Helpers ───────────────────────────────────────────────────────────
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-	const s = hex.replace("#", "");
-	const n = parseInt(s.length === 3 ? s[0] + s[0] + s[1] + s[1] + s[2] + s[2] : s, 16);
-	return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-}
-
-function getNodeColor(type: string): string {
-	return TYPE_COLORS[type] ?? TYPE_COLORS.unknown;
-}
-
-function getNodeRgb(type: string): { r: number; g: number; b: number } {
-	return hexToRgb(getNodeColor(type));
-}
-
-function lighten(hex: string, amt: number): string {
-	const { r, g, b } = hexToRgb(hex);
-	return `rgb(${Math.min(255, r + amt)},${Math.min(255, g + amt)},${Math.min(255, b + amt)})`;
-}
-
-function isDarkMode(): boolean {
-	return document.documentElement.classList.contains("dark");
-}
+const BG_DARK = "#050a1a";
 
 // ─── Internal 3D Types ──────────────────────────────────────────────────────
 
 interface Node3D {
 	node: LayoutNode;
-	z: number; // z-offset assigned at init
-	phaseOffset: number; // per-node pulse phase
+	x: number;
+	y: number;
+	z: number;
+	phaseOffset: number;
 	isHub: boolean;
 	degree: number;
-	// Hub flash state
+	color: { r: number; g: number; b: number };
 	firing: boolean;
 	fireTimer: number;
 	fireStartTime: number;
@@ -98,8 +94,8 @@ interface Signal {
 	fromIdx: number;
 	toIdx: number;
 	progress: number;
-	speed: number;
 	createdAt: number;
+	color: { r: number; g: number; b: number };
 }
 
 interface ProjectedNode {
@@ -107,6 +103,7 @@ interface ProjectedNode {
 	sy: number;
 	z: number;
 	scale: number;
+	depth: number;
 	node3d: Node3D;
 }
 
@@ -115,14 +112,10 @@ interface ProjectedNode {
 let animationId: number | null = null;
 let currentCleanup: (() => void) | null = null;
 
-// Mutable references to the current nodes/edges arrays.
-// Updated externally via `updateAnimationData` without restarting the loop.
 let animNodes: LayoutNode[] = [];
 let animEdges: LayoutEdge[] = [];
 let animDataDirty = false;
 
-// ─── Module-Level Canvas Dimensions ───────────────────────────────────────
-// Updated by `startNeuralAnimation` and the exported `updateNeuralDimensions`.
 let width = 0;
 let height = 0;
 let cx = 0;
@@ -137,19 +130,161 @@ export function resizeNeuralCanvas(canvas: HTMLCanvasElement): {
 	ctx: CanvasRenderingContext2D;
 } {
 	const rect = canvas.parentElement?.getBoundingClientRect();
-	const width = rect ? rect.width : 800;
-	const height = rect ? rect.height : 600;
+	const w = rect ? rect.width : 800;
+	const h = rect ? rect.height : 600;
 	const dpr = window.devicePixelRatio || 1;
-	canvas.width = width * dpr;
-	canvas.height = height * dpr;
-	canvas.style.width = width + "px";
-	canvas.style.height = height + "px";
+	canvas.width = w * dpr;
+	canvas.height = h * dpr;
+	canvas.style.width = w + "px";
+	canvas.style.height = h + "px";
 	const ctx = canvas.getContext("2d")!;
 	ctx.scale(dpr, dpr);
-	return { width, height, dpr, ctx };
+	return { width: w, height: h, dpr, ctx };
 }
 
-// ─── Drawing Primitives ─────────────────────────────────────────────────────
+// ─── Color Helpers ───────────────────────────────────────────────────────────
+
+function getNodeColor(type: string): { r: number; g: number; b: number } {
+	const idx = TYPE_COLOR_INDEX[type] ?? 4;
+	return PALETTE[idx];
+}
+
+// ─── 3D Projection — Dual-Axis Rotation ──────────────────────────────────────
+
+function project3D(
+	x: number,
+	y: number,
+	z: number,
+	width: number,
+	height: number,
+	rotY: number,
+	rotX: number,
+	focalLength: number
+): { sx: number; sy: number; z: number; scale: number; depth: number } {
+	// Rotate around Y axis
+	const cosY = Math.cos(rotY);
+	const sinY = Math.sin(rotY);
+	const rx = x * cosY + z * sinY;
+	const rz = -x * sinY + z * cosY;
+
+	// Rotate around X axis
+	const cosX = Math.cos(rotX);
+	const sinX = Math.sin(rotX);
+	const ry = y * cosX - rz * sinX;
+	const finalZ = y * sinX + rz * cosX;
+
+	// Perspective projection
+	const denom = focalLength + finalZ;
+	const scale = denom > 1 ? focalLength / denom : 1;
+
+	const halfW = width / 2;
+	const halfH = height / 2;
+
+	return {
+		sx: rx * scale + halfW,
+		sy: ry * scale + halfH,
+		z: finalZ,
+		scale,
+		depth: finalZ
+	};
+}
+
+// ─── Background ──────────────────────────────────────────────────────────────
+
+function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
+	const centerX = w / 2;
+	const centerY = h / 2;
+	const maxR = Math.hypot(centerX, centerY);
+
+	// Dark navy
+	ctx.fillStyle = BG_DARK;
+	ctx.fillRect(0, 0, w, h);
+
+	// Vignette overlay
+	const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxR);
+	grad.addColorStop(0, "rgba(10,14,42,0)");
+	grad.addColorStop(0.6, "rgba(10,14,42,0.1)");
+	grad.addColorStop(1, "rgba(2,4,12,0.6)");
+	ctx.fillStyle = grad;
+	ctx.fillRect(0, 0, w, h);
+}
+
+// ─── Fog Calculation ─────────────────────────────────────────────────────────
+
+function fogFactor(z: number): number {
+	const depth = (z + FOG_FAR) / (FOG_FAR * 2);
+	return Math.max(0.05, Math.min(1, 1 - depth));
+}
+
+// ─── Edge Drawing — Very Thin, Semi-Transparent ──────────────────────────────
+
+function drawEdge3D(
+	ctx: CanvasRenderingContext2D,
+	from: { sx: number; sy: number; depth: number },
+	to: { sx: number; sy: number; depth: number },
+	edgeAlpha: number
+) {
+	const avgDepth = (from.depth + to.depth) / 2;
+	const fog = fogFactor(avgDepth);
+	const alpha = edgeAlpha * fog * 0.15;
+
+	if (alpha < 0.005) return;
+
+	ctx.save();
+	ctx.globalAlpha = alpha;
+	ctx.strokeStyle = `rgba(120, 200, 255, ${alpha})`;
+	ctx.lineWidth = EDGE_BASE_WIDTH;
+	ctx.beginPath();
+	ctx.moveTo(from.sx, from.sy);
+	ctx.lineTo(to.sx, to.sy);
+	ctx.stroke();
+	ctx.restore();
+}
+
+// ─── Particle Drawing — Tiny Star with Soft Bloom ────────────────────────────
+
+function drawParticle(
+	ctx: CanvasRenderingContext2D,
+	sx: number,
+	sy: number,
+	depth: number,
+	color: { r: number; g: number; b: number },
+	radius: number,
+	baseAlpha: number,
+	twinkle: number
+) {
+	const fog = fogFactor(depth);
+	const finalAlpha = baseAlpha * fog * twinkle;
+
+	if (finalAlpha < 0.01) return;
+
+	ctx.save();
+
+	// Soft bloom glow (additive)
+	ctx.globalCompositeOperation = "lighter";
+	const glowR = radius * 5;
+	const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+	grad.addColorStop(0, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.2})`);
+	grad.addColorStop(0.5, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.05})`);
+	grad.addColorStop(1, `rgba(${color.r},${color.g},${color.b},0)`);
+	ctx.fillStyle = grad;
+	ctx.beginPath();
+	ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+	ctx.fill();
+
+	// Core particle (tiny bright dot)
+	const br = Math.min(255, color.r + 60);
+	const bg = Math.min(255, color.g + 60);
+	const bb = Math.min(255, color.b + 60);
+	ctx.beginPath();
+	ctx.arc(sx, sy, Math.max(0.5, radius), 0, Math.PI * 2);
+	ctx.fillStyle = `rgba(${br},${bg},${bb},${finalAlpha * 0.9})`;
+	ctx.fill();
+
+	ctx.restore();
+}
+
+// ─── Tooltip Drawing ─────────────────────────────────────────────────────────
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
 	r = Math.min(r, w / 2, h / 2);
@@ -166,292 +301,6 @@ function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number,
 	c.closePath();
 }
 
-// ─── Perspective Projection ──────────────────────────────────────────────────
-
-function project3D(
-	x: number,
-	y: number,
-	z: number,
-	cx: number,
-	cy: number,
-	rotAngle: number
-): { sx: number; sy: number; scale: number; rz: number } {
-	const cosA = Math.cos(rotAngle);
-	const sinA = Math.sin(rotAngle);
-	// Rotate around Y axis
-	const rx = x * cosA + z * sinA;
-	const ry = y;
-	const rz = -x * sinA + z * cosA;
-
-	const denom = FOCAL_LENGTH + rz;
-	const scale = denom > 1 ? FOCAL_LENGTH / denom : FOCAL_LENGTH;
-	return { sx: rx * scale + cx, sy: ry * scale + cy, scale, rz };
-}
-
-// ─── Background ──────────────────────────────────────────────────────────────
-
-function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
-	const dark = isDarkMode();
-	const cx = width / 2;
-	const cy = height / 2;
-	const maxR = Math.hypot(cx, cy);
-
-	// Base fill
-	ctx.fillStyle = dark ? BG_DARK : BG_LIGHT;
-	ctx.fillRect(0, 0, width, height);
-
-	// Subtle radial gradient overlay for depth
-	const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-	if (dark) {
-		grad.addColorStop(0, "rgba(15,23,42,0.0)");
-		grad.addColorStop(0.7, "rgba(2,6,23,0.15)");
-		grad.addColorStop(1, "rgba(2,6,23,0.4)");
-	} else {
-		grad.addColorStop(0, "rgba(200,220,255,0.0)");
-		grad.addColorStop(0.7, "rgba(180,200,240,0.08)");
-		grad.addColorStop(1, "rgba(160,180,220,0.15)");
-	}
-	ctx.fillStyle = grad;
-	ctx.fillRect(0, 0, width, height);
-}
-
-// ─── Edge Drawing ────────────────────────────────────────────────────────────
-
-function drawEdge3D(
-	ctx: CanvasRenderingContext2D,
-	from: { sx: number; sy: number; scale: number },
-	to: { sx: number; sy: number; scale: number },
-	edge: LayoutEdge,
-	isSelectedEdge: boolean,
-	isHubA: boolean,
-	isHubB: boolean,
-	avgDepthAlpha: number
-) {
-	const dark = isDarkMode();
-	const lineWidth = isSelectedEdge ? 2.5 : isHubA || isHubB ? 1.8 : 1.0;
-
-	let strokeColor: string;
-	if (isSelectedEdge) {
-		strokeColor = `rgba(245,158,11,${avgDepthAlpha * 1.0})`;
-	} else if (isHubA || isHubB) {
-		const baseAlpha = avgDepthAlpha * 0.5;
-		strokeColor = dark ? `rgba(148,163,184,${baseAlpha})` : `rgba(100,116,139,${baseAlpha})`;
-	} else {
-		const baseAlpha = avgDepthAlpha * 0.25;
-		strokeColor = dark ? `rgba(148,163,184,${baseAlpha})` : `rgba(100,116,139,${baseAlpha})`;
-	}
-
-	ctx.save();
-	if (isHubA || isHubB) {
-		ctx.globalCompositeOperation = "lighter";
-	}
-
-	ctx.beginPath();
-	ctx.moveTo(from.sx, from.sy);
-	ctx.lineTo(to.sx, to.sy);
-	ctx.strokeStyle = strokeColor;
-	ctx.lineWidth = lineWidth;
-	ctx.stroke();
-
-	ctx.restore();
-}
-
-// ─── Signal Drawing ──────────────────────────────────────────────────────────
-
-function drawSignal(
-	ctx: CanvasRenderingContext2D,
-	sx: number,
-	sy: number,
-	scale: number,
-	signalBrightness: number,
-	color: { r: number; g: number; b: number }
-) {
-	const size = Math.max(0.5, (1.5 + signalBrightness * 1.2) * Math.min(scale, 1.5));
-
-	// Outer glow (additive blending)
-	ctx.save();
-	ctx.globalCompositeOperation = "lighter";
-	ctx.beginPath();
-	ctx.arc(sx, sy, size * 3, 0, Math.PI * 2);
-	ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${signalBrightness * 0.15})`;
-	ctx.fill();
-	ctx.restore();
-
-	// Inner glow
-	ctx.beginPath();
-	ctx.arc(sx, sy, size * 1.5, 0, Math.PI * 2);
-	ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${signalBrightness * 0.3})`;
-	ctx.fill();
-
-	// Core
-	const bright = Math.min(255, color.r + 80);
-	const bg = Math.min(255, color.g + 80);
-	const bb = Math.min(255, color.b + 80);
-	ctx.beginPath();
-	ctx.arc(sx, sy, size, 0, Math.PI * 2);
-	ctx.fillStyle = `rgba(${bright},${bg},${bb},${signalBrightness * 0.9})`;
-	ctx.fill();
-}
-
-// ─── Node Drawing ────────────────────────────────────────────────────────────
-
-function drawNode3D(
-	ctx: CanvasRenderingContext2D,
-	p: ProjectedNode,
-	now: number,
-	isHovered: boolean,
-	isSelected: boolean
-) {
-	const dark = isDarkMode();
-	const n3d = p.node3d;
-	const node = n3d.node;
-	const color = getNodeColor(node.type);
-	const colorRgb = getNodeRgb(node.type);
-
-	// Depth-based sizing
-	const baselineScale = FOCAL_LENGTH / (FOCAL_LENGTH + MAX_Z_OFFSET);
-	const normalizedScale = p.scale / baselineScale;
-	const depthAlpha = Math.max(0.25, Math.min(1, (normalizedScale - 0.15) / 0.85));
-
-	// Pulse animation
-	const pulse = 1 + Math.sin(now * NODE_PULSE_SPEED + n3d.phaseOffset) * 0.15;
-	const hubBoost = n3d.isHub ? 1.35 : 1.0;
-	const colorBoost = n3d.isHub ? (colorRgb.b > colorRgb.r ? 1.5 : 1.35) : 1.0;
-	const hoverBoost = isHovered || isSelected ? 1.2 : 1.0;
-	const radius =
-		(n3d.isHub ? HUB_NODE_RADIUS : BASE_NODE_RADIUS) *
-		pulse *
-		hubBoost *
-		colorBoost *
-		hoverBoost *
-		Math.min(normalizedScale, 1.3) *
-		0.9;
-
-	if (radius < 0.3 || p.scale < 0.05) return;
-
-	const alpha = depthAlpha;
-
-	// Hub outer glow (additive blending for stronger glow)
-	if (n3d.isHub && alpha > 0.08) {
-		ctx.save();
-		ctx.globalCompositeOperation = "lighter";
-		const glowRadius = radius * 6;
-		const glowGrad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, glowRadius);
-		glowGrad.addColorStop(0, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.35})`);
-		glowGrad.addColorStop(0.4, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.08})`);
-		glowGrad.addColorStop(1, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},0)`);
-		ctx.fillStyle = glowGrad;
-		ctx.beginPath();
-		ctx.arc(p.sx, p.sy, glowRadius, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
-	}
-
-	// Hub firing flash (additive blending)
-	if (n3d.firing) {
-		const elapsed = now - n3d.fireStartTime;
-		const flashProgress = Math.min(1, elapsed / HUB_FLASH_DURATION);
-		const flashAlpha = (1 - flashProgress) * 0.4 * alpha;
-		if (flashAlpha > 0.01) {
-			ctx.save();
-			ctx.globalCompositeOperation = "lighter";
-			const flashR = radius * 5;
-			const flashGrad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, flashR);
-			const brightR = Math.min(255, colorRgb.r + 120);
-			const brightG = Math.min(255, colorRgb.g + 120);
-			const brightB = Math.min(255, colorRgb.b + 120);
-			flashGrad.addColorStop(0, `rgba(${brightR},${brightG},${brightB},${flashAlpha})`);
-			flashGrad.addColorStop(1, `rgba(${brightR},${brightG},${brightB},0)`);
-			ctx.fillStyle = flashGrad;
-			ctx.beginPath();
-			ctx.arc(p.sx, p.sy, flashR, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.restore();
-		}
-	}
-
-	// Hover/select glow ring (additive blending for neural web glow)
-	if (isHovered || isSelected) {
-		ctx.save();
-		ctx.globalCompositeOperation = "lighter";
-		const glowRadius = radius * 6;
-		const ringGrad = ctx.createRadialGradient(p.sx, p.sy, radius * 0.5, p.sx, p.sy, glowRadius);
-		const glowRgb = hexToRgb(getNodeColor(node.type));
-		ringGrad.addColorStop(0, `rgba(${glowRgb.r},${glowRgb.g},${glowRgb.b},0.35)`);
-		ringGrad.addColorStop(1, `rgba(${glowRgb.r},${glowRgb.g},${glowRgb.b},0)`);
-		ctx.fillStyle = ringGrad;
-		ctx.beginPath();
-		ctx.arc(p.sx, p.sy, glowRadius, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
-	}
-
-	// Main node body — radial gradient
-	const grad = ctx.createRadialGradient(
-		p.sx - radius * 0.1,
-		p.sy - radius * 0.1,
-		radius * 0.05,
-		p.sx,
-		p.sy,
-		radius * 1.2
-	);
-	grad.addColorStop(0, dark ? lighten(color, 80) : lighten(color, 100));
-	grad.addColorStop(0.5, color);
-	grad.addColorStop(1, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},0.2)`);
-	ctx.fillStyle = grad;
-	ctx.globalAlpha = alpha;
-	ctx.beginPath();
-	ctx.arc(p.sx, p.sy, radius, 0, Math.PI * 2);
-	ctx.fill();
-	ctx.globalAlpha = 1;
-
-	// Border
-	ctx.strokeStyle = isSelected ? "#f59e0b" : dark ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)";
-	ctx.lineWidth = isSelected ? 2.5 : 1.2;
-	ctx.stroke();
-
-	// Label — only on hover or selection, not always
-	if ((isHovered || isSelected) && normalizedScale > 0.15) {
-		const labelAlpha = Math.max(0, (normalizedScale - 0.15) / 0.85) * alpha;
-		if (labelAlpha > 0.05) {
-			ctx.globalAlpha = labelAlpha;
-
-			// Background pill for readability
-			const name = node.name;
-			ctx.font = `bold 10px system-ui,sans-serif`;
-			const tw = ctx.measureText(name).width;
-			const pillPad = 6;
-			const pillH = 18;
-			const pillY = p.sy + radius + 6;
-
-			ctx.fillStyle = dark ? "rgba(2,6,23,0.85)" : "rgba(255,255,255,0.9)";
-			ctx.shadowColor = "rgba(0,0,0,0.3)";
-			ctx.shadowBlur = 8;
-			roundRect(ctx, p.sx - tw / 2 - pillPad, pillY, tw + pillPad * 2, pillH, 4);
-			ctx.fill();
-			ctx.shadowBlur = 0;
-
-			// Name text
-			ctx.textAlign = "center";
-			ctx.textBaseline = "middle";
-			ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
-			ctx.fillText(name, p.sx, pillY + pillH / 2);
-
-			// Type subtitle below pill
-			if (node.type) {
-				ctx.font = `8px system-ui,sans-serif`;
-				ctx.fillStyle = dark ? "rgba(148,163,184,0.7)" : "rgba(100,116,139,0.7)";
-				ctx.textBaseline = "top";
-				ctx.fillText(node.type, p.sx, pillY + pillH + 2);
-			}
-
-			ctx.globalAlpha = 1;
-		}
-	}
-}
-
-// ─── Tooltip Drawing ─────────────────────────────────────────────────────────
-
 function drawTooltip(
 	ctx: CanvasRenderingContext2D,
 	node: LayoutNode,
@@ -459,7 +308,7 @@ function drawTooltip(
 	canvasWidth: number,
 	canvasHeight: number
 ) {
-	const dark = isDarkMode();
+	ctx.save();
 	const lines = [
 		node.name,
 		`Type: ${node.type}`,
@@ -480,13 +329,13 @@ function drawTooltip(
 	if (ty + th > canvasHeight) ty = canvasHeight - th - 4;
 	if (ty < 4) ty = 4;
 
-	ctx.fillStyle = dark ? "rgba(2,6,23,0.92)" : "rgba(255,255,255,0.95)";
+	ctx.fillStyle = "rgba(2,6,23,0.92)";
 	ctx.shadowColor = "rgba(0,0,0,0.2)";
 	ctx.shadowBlur = 12;
 	roundRect(ctx, tx, ty, tw, th, 8);
 	ctx.fill();
 	ctx.shadowBlur = 0;
-	ctx.strokeStyle = dark ? "rgba(148,163,184,0.2)" : "rgba(0,0,0,0.08)";
+	ctx.strokeStyle = "rgba(148,163,184,0.2)";
 	ctx.lineWidth = 1;
 	roundRect(ctx, tx, ty, tw, th, 8);
 	ctx.stroke();
@@ -496,15 +345,16 @@ function drawTooltip(
 	for (let i = 0; i < lines.length; i++) {
 		const isTitle = i === 0;
 		ctx.font = isTitle ? "bold 12px system-ui,sans-serif" : "10px system-ui,sans-serif";
-		ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
+		ctx.fillStyle = "#e2e8f0";
 		ctx.fillText(lines[i], tx + pad, ty + pad + i * lh);
 	}
+	ctx.restore();
 }
 
 // ─── Overflow Notice ─────────────────────────────────────────────────────────
 
-function drawOverflowNotice(ctx: CanvasRenderingContext2D, width: number, hiddenNodeCount: number) {
-	const dark = isDarkMode();
+function drawOverflowNotice(ctx: CanvasRenderingContext2D, w: number, hiddenNodeCount: number) {
+	ctx.save();
 	const label = `+${hiddenNodeCount} hidden`;
 	ctx.font = "bold 11px system-ui,sans-serif";
 	ctx.textAlign = "right";
@@ -513,18 +363,19 @@ function drawOverflowNotice(ctx: CanvasRenderingContext2D, width: number, hidden
 	const padY = 7;
 	const noticeWidth = ctx.measureText(label).width + padX * 2;
 	const noticeHeight = 26;
-	const x = Math.max(8, width - noticeWidth - 12);
+	const x = Math.max(8, w - noticeWidth - 12);
 	const y = 12;
 
-	ctx.fillStyle = dark ? "rgba(15,23,42,0.88)" : "rgba(255,255,255,0.9)";
+	ctx.fillStyle = "rgba(15,23,42,0.88)";
 	roundRect(ctx, x, y, noticeWidth, noticeHeight, 999);
 	ctx.fill();
-	ctx.strokeStyle = dark ? "rgba(148,163,184,0.28)" : "rgba(59,130,246,0.22)";
+	ctx.strokeStyle = "rgba(148,163,184,0.28)";
 	ctx.lineWidth = 1;
 	roundRect(ctx, x, y, noticeWidth, noticeHeight, 999);
 	ctx.stroke();
-	ctx.fillStyle = dark ? "#bfdbfe" : "#1d4ed8";
+	ctx.fillStyle = "#bfdbfe";
 	ctx.fillText(label, x + noticeWidth - padX, y + padY);
+	ctx.restore();
 }
 
 // ─── Main Animation Entry Point ──────────────────────────────────────────────
@@ -537,16 +388,13 @@ export function startNeuralAnimation(
 	edges: LayoutEdge[],
 	state: NeuralRenderState
 ): () => void {
-	// Stop any previous animation
 	stopNeuralAnimation();
 
-	// Initialise module-level dimensions from caller-provided values
 	width = initialWidth;
 	height = initialHeight;
 	cx = width / 2;
 	cy = height / 2;
 
-	// Store references in module-level variables for external updates
 	animNodes = nodes;
 	animEdges = edges;
 	animDataDirty = false;
@@ -561,13 +409,10 @@ export function startNeuralAnimation(
 	// Animation time tracking
 	let startTime = performance.now();
 	let lastTimestamp = startTime;
-	let totalElapsed = 0; // ms
-	let rotationAngle = 0;
-	let lastSignalSpawn = 0;
+	let totalElapsed = 0;
 
 	// ── Derived data (rebuilt when animNodes/animEdges change) ──
 	let degreeMap = new Map<string, number>();
-	let nodeById = new Map<string, LayoutNode>();
 	let nodes3d: Node3D[] = [];
 	let nodeIndexById = new Map<string, number>();
 
@@ -578,18 +423,15 @@ export function startNeuralAnimation(
 			degreeMap.set(e.target, (degreeMap.get(e.target) ?? 0) + 1);
 		}
 
-		nodeById = new Map<string, LayoutNode>();
-		for (const n of animNodes) {
-			nodeById.set(n.id, n);
-			nodeById.set(n.name, n);
-		}
-
 		nodes3d = animNodes.map((node) => ({
 			node,
-			z: (Math.random() - 0.5) * 2 * MAX_Z_OFFSET,
+			x: node.x,
+			y: node.y,
+			z: (node as any).z ?? 0, // use actual 3D position from sphere layout
 			phaseOffset: Math.random() * Math.PI * 2,
-			isHub: (degreeMap.get(node.id) ?? 0) >= HUB_DEGREE_THRESHOLD,
+			isHub: (degreeMap.get(node.id) ?? 0) >= 5,
 			degree: degreeMap.get(node.id) ?? 0,
+			color: getNodeColor(node.type),
 			firing: false,
 			fireTimer: Math.random() * 2000 + 500,
 			fireStartTime: 0
@@ -606,6 +448,7 @@ export function startNeuralAnimation(
 
 	// Signals array
 	const signals: Signal[] = [];
+	let lastSignalSpawn = 0;
 
 	// ── Hub signal spawning ──
 	function spawnSignals(now: number) {
@@ -621,7 +464,6 @@ export function startNeuralAnimation(
 			const hubEdges = animEdges.filter((e) => e.source === n3d.node.id || e.target === n3d.node.id);
 			if (hubEdges.length === 0) continue;
 
-			// Randomly pick one edge to fire a signal along
 			const edge = hubEdges[Math.floor(Math.random() * hubEdges.length)];
 			const fromId = edge.source === n3d.node.id ? edge.source : edge.target;
 			const toId = edge.source === n3d.node.id ? edge.target : edge.source;
@@ -630,44 +472,23 @@ export function startNeuralAnimation(
 			const toIdx = nodeIndexById.get(toId);
 			if (fromIdx === undefined || toIdx === undefined) continue;
 
-			// Random 40% chance per spawn interval
 			if (Math.random() > 0.4) continue;
 
 			signals.push({
 				fromIdx,
 				toIdx,
 				progress: 0,
-				speed: SIGNAL_SPEED * (0.7 + Math.random() * 0.6),
-				createdAt: now
+				createdAt: now,
+				color: n3d.color
 			});
-		}
-	}
-
-	// ── Hub flash updating ──
-	function updateHubs(now: number) {
-		for (const n3d of nodes3d) {
-			if (!n3d.isHub) continue;
-			if (n3d.firing) {
-				if (now - n3d.fireStartTime >= HUB_FLASH_DURATION) {
-					n3d.firing = false;
-					n3d.fireTimer = 1500 + Math.random() * 2500;
-				}
-			} else {
-				n3d.fireTimer -= 16; // approximate ms per frame
-				if (n3d.fireTimer <= 0) {
-					n3d.firing = true;
-					n3d.fireStartTime = now;
-				}
-			}
 		}
 	}
 
 	// ── Signal update ──
 	function updateSignals() {
 		for (let i = signals.length - 1; i >= 0; i--) {
-			const sig = signals[i];
-			sig.progress += sig.speed;
-			if (sig.progress >= 1) {
+			signals[i].progress += SIGNAL_SPEED;
+			if (signals[i].progress >= 1) {
 				signals.splice(i, 1);
 			}
 		}
@@ -678,7 +499,7 @@ export function startNeuralAnimation(
 		// Rebuild derived data if nodes/edges were updated externally
 		if (animDataDirty) {
 			animDataDirty = false;
-			signals.length = 0; // clear stale signals
+			signals.length = 0;
 			rebuildDerived();
 		}
 
@@ -686,71 +507,77 @@ export function startNeuralAnimation(
 		lastTimestamp = now;
 		totalElapsed += dt;
 
-		// Subtle Y-axis rotation oscillation
-		rotationAngle = Math.sin(totalElapsed * ROTATION_SPEED) * ((MAX_ROTATION_DEG * Math.PI) / 180);
+		// Camera rotation
+		const isZeroEdge = animEdges.length === 0;
+		const rotY = isZeroEdge ? 0 : totalElapsed * CAMERA_ROTATION_SPEED;
+		const rotX = isZeroEdge ? 0 : Math.sin(totalElapsed * 0.00004) * CAMERA_TILT_AMOUNT;
 
-		// Update hubs and signals
-		updateHubs(now);
-		spawnSignals(now);
-		updateSignals();
+		// Breathing
+		const breathe = isZeroEdge ? 1 : 1 + Math.sin(totalElapsed * BREATHE_SPEED) * BREATHE_AMOUNT;
 
 		// Clear and draw background
 		ctx.clearRect(0, 0, width, height);
 		drawBackground(ctx, width, height);
 
-		// Project all nodes to 2D
+		// Update signals
+		spawnSignals(now);
+		updateSignals();
+
+		// Project all nodes (3D → 2D) with sphere breathing
 		const projected: ProjectedNode[] = nodes3d.map((n3d) => {
-			const { sx, sy, scale, rz } = project3D(n3d.node.x - cx, n3d.node.y - cy, n3d.z, cx, cy, rotationAngle);
-			return { sx, sy, z: rz, scale, node3d: n3d };
+			const bx = (n3d.x - cx) * breathe + cx;
+			const by = (n3d.y - cy) * breathe + cy;
+			const bz = n3d.z * breathe;
+			const proj = project3D(bx - cx, by - cy, bz, width, height, rotY, rotX, FOCAL_LENGTH);
+			return {
+				...proj,
+				node3d: n3d
+			};
 		});
 
-		// Depth sort: far to near (largest z first)
-		projected.sort((a, b) => b.z - a.z);
+		// Write projected screen coordinates back to the original LayoutNode objects
+		for (const p of projected) {
+			p.node3d.node.x = p.sx;
+			p.node3d.node.y = p.sy;
+		}
+
+		// Depth sort (far to near)
+		projected.sort((a, b) => b.depth - a.depth);
 
 		// Build projected lookup by original index
 		const projByIndex = new Map<number, ProjectedNode>();
 		projected.forEach((p) => {
-			const idx = animNodes.indexOf(p.node3d.node);
-			if (idx >= 0) projByIndex.set(idx, p);
+			const idx = nodeIndexById.get(p.node3d.node.id) ?? nodeIndexById.get(p.node3d.node.name);
+			if (idx !== undefined && idx >= 0) projByIndex.set(idx, p);
 		});
 
 		// ── Draw edges (far to near) ──
-		const drawnEdges = new Set<string>();
-		for (const p of projected) {
-			const nIdx = animNodes.indexOf(p.node3d.node);
-			if (nIdx < 0) continue;
-
-			for (const e of animEdges) {
+		const renderedEdges = animEdges
+			.map((e) => {
 				const srcIdx = nodeIndexById.get(e.source);
 				const tgtIdx = nodeIndexById.get(e.target);
-				if (srcIdx === undefined || tgtIdx === undefined) continue;
-
-				// Only draw once per edge
-				const key = srcIdx < tgtIdx ? `${srcIdx}-${tgtIdx}` : `${tgtIdx}-${srcIdx}`;
-				if (drawnEdges.has(key)) continue;
-				if (srcIdx !== nIdx && tgtIdx !== nIdx) continue;
-				drawnEdges.add(key);
-
+				if (srcIdx === undefined || tgtIdx === undefined) return null;
 				const fromP = projByIndex.get(srcIdx);
 				const toP = projByIndex.get(tgtIdx);
-				if (!fromP || !toP) continue;
-				if (fromP.scale < 0.05 || toP.scale < 0.05) continue;
+				if (!fromP || !toP) return null;
+				if (fromP.scale < 0.05 || toP.scale < 0.05) return null;
 
-				const avgZ = (fromP.z + toP.z) / 2;
-				const maxZ = MAX_Z_OFFSET * 1.5;
-				const depthAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
+				const avgZ = (fromP.depth + toP.depth) / 2;
+				const maxZ = FOG_FAR * 1.5;
+				const edgeAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
 
-				const srcNode = nodes3d[srcIdx];
-				const tgtNode = nodes3d[tgtIdx];
+				return { from: fromP, to: toP, edgeAlpha, avgDepth: avgZ };
+			})
+			.filter((x): x is { from: ProjectedNode; to: ProjectedNode; edgeAlpha: number; avgDepth: number } => x !== null);
 
-				const isSelected = state.selectedEdge === e;
+		// Sort edges by depth (far to near)
+		renderedEdges.sort((a, b) => b.avgDepth - a.avgDepth);
 
-				drawEdge3D(ctx, fromP, toP, e, isSelected, srcNode?.isHub ?? false, tgtNode?.isHub ?? false, depthAlpha);
-			}
+		for (const re of renderedEdges) {
+			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha);
 		}
 
 		// ── Draw signals ──
-		const colorCache = new Map<string, { r: number; g: number; b: number }>();
 		for (const sig of signals) {
 			const fromN = animNodes[sig.fromIdx];
 			const toN = animNodes[sig.toIdx];
@@ -761,31 +588,111 @@ export function startNeuralAnimation(
 			if (!fromN3d || !toN3d) continue;
 
 			// Interpolate 3D position
-			const ix = fromN.x + (toN.x - fromN.x) * sig.progress;
-			const iy = fromN.y + (toN.y - fromN.y) * sig.progress;
-			const iz = fromN3d.z + (toN3d.z - fromN3d.z) * sig.progress;
+			const ix = (fromN.x + (toN.x - fromN.x) * sig.progress - cx) * breathe + cx;
+			const iy = (fromN.y + (toN.y - fromN.y) * sig.progress - cy) * breathe + cy;
+			const iz = (fromN3d.z + (toN3d.z - fromN3d.z) * sig.progress) * breathe;
 
-			const { sx, sy, scale } = project3D(ix, iy, iz, cx, cy, rotationAngle);
+			const proj = project3D(ix - cx, iy - cy, iz, width, height, rotY, rotX, FOCAL_LENGTH);
 
 			const brightness = Math.sin(sig.progress * Math.PI);
-			if (brightness <= 0 || scale < 0.05) continue;
+			if (brightness <= 0 || proj.scale < 0.05) continue;
 
-			// Use source node's color for the signal
-			const colorKey = fromN.type;
-			let signalColor = colorCache.get(colorKey);
-			if (!signalColor) {
-				signalColor = getNodeRgb(fromN.type);
-				colorCache.set(colorKey, signalColor);
-			}
+			// Draw signal as a tiny bright particle
+			const sigFog = fogFactor(proj.depth);
+			const sigAlpha = brightness * sigFog;
+			const size = Math.max(0.5, (1.5 + brightness * 1.2) * Math.min(proj.scale, 1.5));
 
-			drawSignal(ctx, sx, sy, scale, brightness, signalColor);
+			ctx.save();
+			ctx.globalCompositeOperation = "lighter";
+
+			// Outer glow
+			ctx.beginPath();
+			ctx.arc(proj.sx, proj.sy, size * 3, 0, Math.PI * 2);
+			ctx.fillStyle = `rgba(${sig.color.r},${sig.color.g},${sig.color.b},${sigAlpha * 0.15})`;
+			ctx.fill();
+
+			// Core
+			const br = Math.min(255, sig.color.r + 80);
+			const bg = Math.min(255, sig.color.g + 80);
+			const bb = Math.min(255, sig.color.b + 80);
+			ctx.beginPath();
+			ctx.arc(proj.sx, proj.sy, size, 0, Math.PI * 2);
+			ctx.fillStyle = `rgba(${br},${bg},${bb},${sigAlpha * 0.9})`;
+			ctx.fill();
+
+			ctx.restore();
 		}
 
 		// ── Draw nodes (far to near — already sorted) ──
 		for (const p of projected) {
-			const isHovered = state.hoveredNode === p.node3d.node;
-			const isSelected = state.selectedNode === p.node3d.node;
-			drawNode3D(ctx, p, now, isHovered, isSelected);
+			const n3d = p.node3d;
+			const node = n3d.node;
+			const isHovered = state.hoveredNode === node;
+			const isSelected = state.selectedNode === node;
+
+			// Twinkle
+			const twinkle = 0.7 + 0.3 * Math.sin(now * TWINKLE_SPEED + n3d.phaseOffset);
+
+			// Radius: important nodes (degree >= 5 or memoryCount > 0) get larger
+			const isImportant = n3d.isHub || (node.memoryCount != null && node.memoryCount > 0);
+			const baseR = isImportant ? PARTICLE_IMPORTANT_RADIUS : PARTICLE_BASE_RADIUS;
+			const radius = baseR * Math.min(p.scale, 1.3);
+
+			if (radius < 0.3 || p.scale < 0.05) continue;
+
+			// Base alpha from depth
+			const baselineScale = FOCAL_LENGTH / (FOCAL_LENGTH + FOG_FAR);
+			const normalizedScale = p.scale / baselineScale;
+			const depthAlpha = Math.max(0.25, Math.min(1, (normalizedScale - 0.15) / 0.85));
+
+			// Hover/select boost
+			const hoverBoost = isHovered || isSelected ? 1.5 : 1.0;
+			const finalRadius = radius * hoverBoost;
+
+			// Subtle minimum for deep particles
+			const drawRadius = Math.max(PARTICLE_SUBTLE_MIN, finalRadius);
+
+			drawParticle(ctx, p.sx, p.sy, p.depth, n3d.color, drawRadius, depthAlpha, twinkle);
+
+			// Hover/select label
+			if ((isHovered || isSelected) && normalizedScale > 0.15) {
+				const labelAlpha = Math.max(0, (normalizedScale - 0.15) / 0.85) * depthAlpha;
+				if (labelAlpha > 0.05) {
+					ctx.save();
+					ctx.globalAlpha = labelAlpha;
+
+					// Background pill for readability
+					const name = node.name;
+					ctx.font = "bold 10px system-ui,sans-serif";
+					const tw = ctx.measureText(name).width;
+					const pillPad = 6;
+					const pillH = 18;
+					const pillY = p.sy + drawRadius + 6;
+
+					ctx.fillStyle = "rgba(2,6,23,0.85)";
+					ctx.shadowColor = "rgba(0,0,0,0.3)";
+					ctx.shadowBlur = 8;
+					roundRect(ctx, p.sx - tw / 2 - pillPad, pillY, tw + pillPad * 2, pillH, 4);
+					ctx.fill();
+					ctx.shadowBlur = 0;
+
+					// Name text
+					ctx.textAlign = "center";
+					ctx.textBaseline = "middle";
+					ctx.fillStyle = "#e2e8f0";
+					ctx.fillText(name, p.sx, pillY + pillH / 2);
+
+					// Type subtitle below pill
+					if (node.type) {
+						ctx.font = "8px system-ui,sans-serif";
+						ctx.fillStyle = "rgba(148,163,184,0.7)";
+						ctx.textBaseline = "top";
+						ctx.fillText(node.type, p.sx, pillY + pillH + 2);
+					}
+
+					ctx.restore();
+				}
+			}
 		}
 
 		// ── Tooltip ──
@@ -801,7 +708,6 @@ export function startNeuralAnimation(
 
 	// ── Animation loop ──
 	function animate(timestamp: number) {
-		// Frame skipping on low-end devices
 		if (isLowEnd && frameCount++ % 2 !== 0) {
 			animationId = requestAnimationFrame(animate);
 			return;
@@ -844,11 +750,6 @@ export function stopNeuralAnimation(): void {
 
 // ─── External Dimension Update ─────────────────────────────────────────────
 
-/**
- * Recalculate canvas dimensions and update the module-level state.
- * Call this from the parent component's ResizeObserver so that only one
- * ResizeObserver owns the canvas (avoids the duplicate-observer conflict).
- */
 export function updateNeuralDimensions(canvas: HTMLCanvasElement): void {
 	const { width: w, height: h } = resizeNeuralCanvas(canvas);
 	width = w;
