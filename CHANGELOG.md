@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] — 2026-07-25
+
+### Added
+
+- **3D Neural KG visualization**: Knowledge Graph canvas now renders nodes as glowing neural dots with perspective projection, signal pulses, and hover/selection label pills.
+- **Generic text visitor**: `GenericTextVisitor` supports 80+ file extensions for codebase indexing — any text-based file with a registered extension gets parsed for symbol extraction.
+- **Markdown visitor**: New visitor extracts headings from `.md`/`.mdx` files as indexable symbols.
+- **Extended language support**: `.svelte`, `.vue`, and `.astro` files now parsed via the TypeScript parser.
+- **`trace_symbol` dual input**: Now accepts either `name` or `symbol` parameter (previously `name` only).
+- **`index_status` markdown output**: Status report now includes a rich markdown summary table.
+- **`search_symbols` NL fallback**: Falls back to natural language fuzzy matching when exact/camelCase/prefix searches find no results.
+
+### Fixed
+
+- **KG neural dot rendering**: Nodes reduced from 18/26px to 5/8px radii for a cleaner neural aesthetic. Labels hidden by default, shown only on hover or selection.
+
 ## [0.21.0] — 2026-07-25
 
 ### Added
