@@ -18,23 +18,26 @@ Pass both `owner` and `repo` whenever a tool requires them. The `owner/repo` pai
 
 The `owner` field MUST be the GitHub username or organization that OWNS the repository. For example:
 
-- Repo `vheins/sentinel-agent` → owner=`vheins`
+- Repo `vheins/local-memory-mcp` → owner=`vheins`
 - Repo `my-org/my-project` → owner=`my-org`
 
 NEVER use the agent's name (e.g., `sentinel`, `test-executor`, `claude`) as the owner.
 NEVER guess the owner from the working directory path.
 
-If unsure, run `git remote -v` in the project directory — the remote URL (e.g., `git@github.com:vheins/sentinel-agent.git`) gives you both `owner` and `repo`.
+If unsure, run `git remote -v` in the project directory — the remote URL (e.g., `git@github.com:vheins/local-memory-mcp.git`) gives you both `owner` and `repo`.
 
 **Two ways to provide owner/repo:**
 
 1. **Explicit** (preferred — most reliable):
+
    ```json
-   { "owner": "vheins", "repo": "sentinel-agent" }
+   { "owner": "vheins", "repo": "local-memory-mcp" }
    ```
+
 2. **Shorthand** — use `owner/repo` format for `repo`; the server auto-extracts `owner`:
+
    ```json
-   { "repo": "vheins/sentinel-agent" }
+   { "repo": "vheins/local-memory-mcp" }
    ```
 
 **Session-wide defaults (can be omitted):** `owner`, `repo`, `agent`, and `model` are auto-populated from the session context and environment when not explicitly provided:
@@ -82,7 +85,7 @@ Every `memory-store` call MUST include these fields:
 	"title": "Auth uses JWT",
 	"content": "Authentication system uses JWT tokens with 1h expiry.",
 	"importance": 3,
-	"scope": { "owner": "vheins", "repo": "sentinel-agent" }
+	"scope": { "owner": "vheins", "repo": "local-memory-mcp" }
 }
 ```
 
@@ -94,7 +97,7 @@ Every `memory-store` call MUST include these fields:
 
 - Register via task-create before execution
 - NEVER skip in_progress
-- Commit: `type(scope): [task-code] message` + `- [Title]` + `  [Summary]`
+- Commit: `type(scope): [task-code] message` + `- [Title]` + `[Summary]`
 - Complete auto-releases claims + expires linked handoffs
 
 **Standards**: standard-search → standard-store
@@ -107,53 +110,7 @@ Every `memory-store` call MUST include these fields:
 - Create ONLY for unfinished work (concrete next owner/steps)
 - NO handoff for completion summaries → use task-update comments
 
-**Knowledge Graph**: create_entity | create_relation → delete_entity | delete_relation | delete_observation
+**Codebase Index**: index_status → index_repository → search_symbols / codebase_search / trace_symbol / get_architecture / get_file_symbols
 
-- Structured entity-relationship storage for domain concepts
-- Auto-extracted via NLP Archivist on every memory-store (people, places, orgs, concepts)
-- Visualize in Dashboard → Knowledge Graph tab (force-directed graph)
-
-**Codebase Index**: index_repository → index_status | get_architecture → get_file_symbols | search_symbols | trace_symbol
-
-- **index_repository** — Scans a repository directory, parses source files (TypeScript/JavaScript) via tree-sitter, and stores extracted symbols (functions, classes, interfaces, types, enums) in a SQLite knowledge graph. Supports incremental indexing via checksum comparison.
-- **index_status** — Returns the current indexing status: whether indexed, last indexed time, file/symbol counts, ongoing progress, and optional staleness detection (≥5% stale files triggers stale flag when `repoPath` is provided).
-- **get_architecture** — Returns a high-level overview: directory tree, language breakdown, file counts, and top-level exports.
-- **get_file_symbols** — Returns all indexed symbols declared in a specific file, in declaration order with locations, signatures, and doc comments.
-- **search_symbols** — Searches indexed symbols by name with ranked results. Supports filtering by kind, file path, and export status. Uses 5-tier ranking: exact → camelCase → prefix → substring → FTS5.
-- **trace_symbol** — Traces a symbol's definition and usage across the codebase. Returns definition location, file references, and export status.
-
-## Available Prompts (slash commands)
-
-### Engineering Roles
-
-- `architecture-design` — architectural planning and ADR generation (System Architect)
-- `business-analyst` — bridge business needs with technical solutions (Business Analyst)
-- `create-task` — create structured, atomic tasks in Local Memory MCP (Task Planner)
-- `csl-from-docs` — create atomic CSL coding standards entries from a local file or directory path (Documentation Processor)
-- `csl-scrapper` — scrape trusted documentation from a URL into atomic CSL coding standards entries (Documentation Scraper)
-- `data-analyst` — analyze data and generate insights for decision making (Data Analyst)
-- `documentation-sync` — sync docs with current codebase state
-- `export-task-to-github` — export local tasks to GitHub Issues
-- `fix-suggestion` — propose and validate fixes
-- `import-github-issues` — import GitHub Issues as local tasks
-- `learning-retrospective` — capture lessons and update memory (Knowledge Harvester)
-- `memory-agent-core` — behavioral contract for memory-aware agents (Memory Guardian)
-- `memory-guided-review` — review using project memory as context
-- `memory-index-policy` — strict memory storage criteria
-- `project-briefing` — generate repository briefing from memory (Session Concierge)
-- `qa-analyst` — design test strategies and ensure software quality (QA Analyst)
-- `review-and-audit` — audit documentation against implementation; generate local tasks for gaps
-- `review-and-post-issue` — audit documentation against implementation; generate GitHub issues for gaps
-- `root-cause-analysis` — structured bug / incident investigation (Diagnostic Lead)
-- `scrum-master` — facilitate Scrum ceremonies and remove blockers (Scrum Master)
-- `security-analyst` — perform security assessments and threat modeling (Security Analyst)
-- `security-triage` — security risk assessment (Security Engineer)
-- `senior-code-review` — full code review against stored standards (Principal Reviewer)
-- `sentinel-issue-resolver` — autonomous GitHub issue resolution (SENTINEL identity)
-- `session-planner` — orient and plan at session start (Strategy Lead)
-- `system-analyst` — analyze technical systems and design solution specs (System Analyst)
-- `task-management-guidelines` — task tracking and progress management standards
-- `task-memory-executor` — execute tasks with memory and standard enforcement
-- `tech-affinity-scout` — scout best practices from similar tech projects
-- `technical-planning` — feature planning with task decomposition (Technical Architect)
-- `tool-usage-guidelines` — tool usage standards and data integrity
+- Always check index_status first. If stale, trigger index_repository before querying.
+- Agents: use codebase index tools FIRST, fall back to explore sub-agent only when index can't answer.

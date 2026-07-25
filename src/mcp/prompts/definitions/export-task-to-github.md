@@ -12,20 +12,12 @@ arguments:
     description: Local task ID
     required: true
 agent: Integration Architect
-category: workflows
-version: "1.0.0"
-tags: [workflow, github, task-sync, mcp]
 ---
 
 ## Export Task to GitHub
 
-Entry=S0 → S1 → G1 → S2 → S3 → S4 → S5 Exit=exported|skipped
-Guard: S(N) req S(N-1)✅; MCP + GitHub tools ONLY
+Fetch task via task-detail. Sync check via search_issues for task_code — if exists, update metadata with URL; skip re-creation. Create issue via issue_write (match content). Post comments. Link task-update with GitHub URL. Verify issue exists.
 
-S0 | fetch task via task-detail | task_id exists? | task data | —
-S1 | sync check via search_issues for task_code | S0✅ | existing issue? | —
-G1 | dedup gate — if exists→update local task metadata with URL, DO NOT re-create | S1✅ | exists→skip+link / new→S2 | —
-S2 | create issue via issue_write (match title/body, append task_code+id) | G1→new | GitHub issue created | —
-S3 | post comments via add_issue_comment | S2✅ | comments transferred | —
-S4 | link: task-update with GitHub URL + comment | S3✅ | task updated | —
-S5 | verify: confirm issue exists on GitHub, check URL in task metadata | S4✅ | verified | —
+MCP + GitHub tools ONLY.
+
+For detailed FSM execution (S0→S5 with guards), load the `export-task-to-github` skill.

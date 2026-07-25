@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRouter } from "../router";
 
-describe("csl-scrapper prompt", () => {
+describe("csl-scraper prompt", () => {
 	it("is listed through prompts/list", async () => {
 		const router = createRouter({} as never, {} as never);
 
@@ -9,14 +9,14 @@ describe("csl-scrapper prompt", () => {
 			prompts: Array<{ name: string; description: string }>;
 		};
 
-		expect(result.prompts.some((prompt) => prompt.name === "csl-scrapper")).toBe(true);
+		expect(result.prompts.some((prompt) => prompt.name === "csl-scraper")).toBe(true);
 	});
 
 	it("returns substituted prompt text through prompts/get", async () => {
 		const router = createRouter({} as never, {} as never);
 
 		const result = (await router("prompts/get", {
-			name: "csl-scrapper",
+			name: "csl-scraper",
 			arguments: {
 				source_url: "https://react.dev/reference/rules/rules-of-hooks"
 			}
@@ -28,15 +28,15 @@ describe("csl-scrapper prompt", () => {
 		expect(result.description).toContain("atomic CSL");
 		expect(result.messages[0].content.text).toContain("https://react.dev/reference/rules/rules-of-hooks");
 		expect(result.messages[0].content.text).toContain("standard-store");
-		expect(result.messages[0].content.text).toContain("parent_id");
-		expect(result.messages[0].content.text).toContain("parent first");
+		expect(result.messages[0].content.text).toContain("Fetch URL");
+		expect(result.messages[0].content.text).toContain("standard-search");
 	});
 
-	it("includes explicit refusal guidance for unverifiable sources", async () => {
+	it("includes refusal guidance for unverifiable sources", async () => {
 		const router = createRouter({} as never, {} as never);
 
 		const result = (await router("prompts/get", {
-			name: "csl-scrapper",
+			name: "csl-scraper",
 			arguments: {
 				source_url: "https://example.com/unknown"
 			}
@@ -45,8 +45,7 @@ describe("csl-scrapper prompt", () => {
 		};
 
 		const promptText = result.messages[0].content.text;
-		expect(promptText).toContain("/ refuse");
-		expect(promptText).toContain("content reachable + normative?");
-		expect(promptText).toContain("Exit=stored|refused");
+		expect(promptText).toContain("Refuse if");
+		expect(promptText).toContain("standard-store");
 	});
 });

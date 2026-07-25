@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] — 2026-07-25
+
+### Added
+
+- **`codebase_search` MCP tool**: Natural language FTS5 full-text search across indexed codebase. Accepts natural language prompts — no exact symbol name required. Supports filtering by repo, kind, and file path. Complements `search_symbols` (5-tier name ranking) with semantic content search.
+- **`codebase_search` symbol vectors**: Symbol-level TF-IDF vector embeddings enable ranked relevance search alongside name-based matching.
+- **Knowledge graph API endpoint**: New unified `/api/graph` endpoint for structured entity-relationship visualization in the dashboard.
+- **FTS5 full-text search for `coding_standards`**: Standards registry now indexed via FTS5, enabling full-text search across stored coding standards.
+
+### Fixed
+
+- **Stub vector TF-IDF storage**: `memory-stub-vector` now stores actual TF-IDF vectors instead of zeroed placeholders, enabling meaningful similarity search.
+- **Logger local timezone**: Log timestamps now use local timezone offset (`+07:00`) instead of UTC `Z`, matching local environment expectations.
+- **Tree-sitter-dart WASM ABI**: Rebuilt from source for ABI compatibility with current tree-sitter grammar API.
+- **`memory_summary` PK migration**: Schema version 2→3 migration rebuilds `memory_summary` primary key to fix `ON CONFLICT` errors.
+
+### Performance
+
+- **Dashboard export streaming**: Paginated queries with owner scoping for large dataset exports — reduces memory pressure.
+- **Nested gitignore discovery**: Recursive `.gitignore` resolution with symlink-safe `stat()` calls and dynamic concurrency throttling for indexing.
+- **Lazy-load tree-sitter grammars**: WASM grammars loaded on first use instead of at startup — reduces initial memory footprint by ~80%.
+- **MCP startup timeout**: Vector model initialization now awaited with 30s timeout — prevents silent startup failures.
+
+### Refactored
+
+- **`normalizeToolArguments` deduplication**: Shared utility replaces duplicated normalization logic across tool handlers.
+
+### Dependencies
+
+- **Tree-sitter-dart grammar**: Compiled WASM grammar added for Dart language parsing support.
+
 ## [0.20.4] — 2026-07-23
 
 ### Added

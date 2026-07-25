@@ -23,9 +23,9 @@ describe("task-memory-executor prompt", () => {
 		};
 
 		const promptText = result.messages[0].content.text;
-		expect(promptText).toContain("dependency-ready filter");
-		expect(promptText).toContain("depends_on");
-		expect(promptText).toContain("parent_id");
-		expect(promptText).toContain("suggested_skills");
+		expect(promptText).toContain("dependency readiness");
+		expect(promptText).toContain("memory-search");
+		expect(promptText).toContain("standard-search");
+		expect(promptText).toContain("blocker");
 	});
 });

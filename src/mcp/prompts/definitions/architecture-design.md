@@ -9,22 +9,12 @@ arguments:
     description: Key requirements
     required: true
 agent: System Architect
-version: "1.0.0"
-category: planning
-tags: [architecture, system-design, components, data-flow, adr]
 ---
 
 ## Architecture Design
 
-Entry=S0 → S1 → S2 → S3 Exit=done
-Guard: S(N) req S(N-1)✅
+Review tech_stack & requirements. Design component diagram, data flow, ADRs, scalability/reliability, security. Document artifacts to `.agents/documents/design/architecture/`. Validate component completeness, data flow coherence, ADR traceability, security coverage.
 
-S0 | review tech_stack & requirements | — | component list, data flow map | —
-S1 | design: component diagram(blocks+responsibilities) + data flow(information movement) + ADRs(rationale) + scalability/reliability(growth+failure) + security(identity,protection,boundaries) | S0✅ | design decisions | —
-S2 | document artifacts | S1✅ | architecture docs | .agents/documents/design/architecture/
-S3 | verify: validate component completeness, data flow coherence, ADR traceability, security coverage, scalability assumptions | S2✅ | verified | —
+For detailed FSM execution (S0→S3 with guards), load the `architecture-design` skill.
 
-## Chain
-
-← N/A
-→ architecture-documentation: .agents/documents/design/architecture/ → as-built architecture doc
+Stack: {{tech_stack}} Requirements: {{requirements}}

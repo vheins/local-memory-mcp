@@ -50,10 +50,12 @@ describe("Property 20: StructuredLogger output adalah JSON valid dengan field wa
 					const lastOutput = stderrOutput[stderrOutput.length - 1];
 
 					// Must be text with timestamp, level, and message
-					expect(lastOutput).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[.*?\] /);
+					expect(lastOutput).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2} \[.*?\] /);
 
 					// Extract parts
-					const match = lastOutput.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) \[\s*(.*?)\s*\] ([\s\S]*)$/);
+					const match = lastOutput.match(
+						/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}) \[\s*(.*?)\s*\] ([\s\S]*)$/
+					);
 					expect(match).not.toBeNull();
 
 					if (match) {

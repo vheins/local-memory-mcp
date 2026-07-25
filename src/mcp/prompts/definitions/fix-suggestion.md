@@ -12,27 +12,12 @@ arguments:
     description: Identified root cause.
     required: true
 agent: Debugging Expert
-version: "1.1.0"
-category: debugging
-tags: [fix, patch, bug-fix, code-change, test-case, debugging]
 ---
 
 ## Fix Suggestion
 
-Entry=S0 → S1 → S2 Exit=suggestion
-Guard: S(N) req S(N-1)✅
+Analyze inputs (tech_stack, bug_description, root_cause). Produce: explanation + before/after diff + meta checklist (config/migrations/deps) + regression test. Verify fix addresses root cause and test covers regression.
 
-S0 | analyze inputs (tech_stack, bug_description, root_cause) | all req provided? | diagnosis | —
-S1 | produce: explanation + before/after diff(`diff ... `) + meta checklist + regression test | S0✅ | fix suggestion | —
-S2 | verify: confirm fix addresses root cause, test covers regression | S1✅ | verified | —
+For detailed FSM execution (S0→S2 with guards), load the `fix-suggestion` skill.
 
-## Output Format (S1)
-
-- Explanation: Why bug happens + how fix works (prose)
-- Before/After: `diff blocks` with line comments
-- Meta checklist: config changes, migrations, dependencies
-- Verification: regression test case (code block)
-
-## I/O
-
-tech_stack + bug_description + root_cause → diagnosis report + fix suggestion
+Stack: {{tech_stack}} Bug: {{bug_description}} Root cause: {{root_cause}}
