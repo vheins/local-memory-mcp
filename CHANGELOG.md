@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.2] — 2026-07-25
+
+### Fixed
+
+- **KG double-centering**: `project3D()` was adding `(cx,cy)` on top of force-layout centering, pushing all nodes bottom-right. Now subtracts center offset before projection.
+- **KG neural rendering**: Additive blending (`globalCompositeOperation='lighter'`) applied to node glows, hub flashes, hub outer glows, and hub edges — creating neural web glow effect.
+- **KG node visibility**: Increased `BASE_NODE_RADIUS` (5→9) and `HUB_NODE_RADIUS` (8→13). Lowered label threshold (0.3→0.15) so labels appear sooner.
+- **KG node softness**: Radial gradients changed to 3-stop fade (bright center → color → transparent edge) for point-sprite-style soft dots.
+- **Entity quality filter**: Added `isValidEntityName()` in `kg-archivist.ts` — rejects garbage NLP fragments (punctuation, code snippets, size refs, pure-symbol names).
+- **Graph edge sparsity**: Co-occurrence `co_mentioned` relations now created between entities extracted from the same memory content, increasing edge count.
+
 ## [0.22.1] — 2026-07-25
 
 ### Added
