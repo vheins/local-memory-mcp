@@ -73,7 +73,7 @@ const TYPE_COLOR_INDEX: Record<string, number> = {
 };
 
 const BG_DARK = "#050a1a";
-const BG_LIGHT = "#eff6ff";
+const BG_LIGHT = "#e2e8f0";
 
 // ─── Theme Detection ─────────────────────────────────────────────────────────
 
@@ -214,9 +214,9 @@ function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
 		grad.addColorStop(0.6, "rgba(10,14,42,0.1)");
 		grad.addColorStop(1, "rgba(2,4,12,0.6)");
 	} else {
-		grad.addColorStop(0, "rgba(255,255,255,0)");
-		grad.addColorStop(0.6, "rgba(240,244,255,0.2)");
-		grad.addColorStop(1, "rgba(220,230,250,0.4)");
+		grad.addColorStop(0, "rgba(226,232,240,0)");
+		grad.addColorStop(0.5, "rgba(203,213,225,0.15)");
+		grad.addColorStop(1, "rgba(148,163,184,0.3)");
 	}
 	ctx.fillStyle = grad;
 	ctx.fillRect(0, 0, w, h);
@@ -235,24 +235,35 @@ function drawEdge3D(
 	ctx: CanvasRenderingContext2D,
 	from: { sx: number; sy: number; depth: number },
 	to: { sx: number; sy: number; depth: number },
-	edgeAlpha: number
+	edgeAlpha: number,
+	isActive: boolean,
+	time: number
 ) {
 	const dark = isDarkMode();
 	const avgDepth = (from.depth + to.depth) / 2;
 	const fog = fogFactor(avgDepth);
-	const alpha = Math.min(0.8, edgeAlpha * fog);
+	const alpha = dark ? Math.min(0.8, edgeAlpha * fog) : Math.min(0.9, Math.max(0.08, edgeAlpha * fog));
 
 	if (alpha < 0.01) return;
 
-	const edgeWidth = dark ? 1.5 : 2.0;
-	const r = dark ? 0 : 79;
-	const g = dark ? 212 : 70;
-	const b = dark ? 255 : 229;
+	const edgeWidth = dark ? 1.5 : 1.8;
+	// Dark mode: cyan glow; Light mode: deeper indigo for contrast
+	const r = dark ? 0 : 55;
+	const g = dark ? 212 : 48;
+	const b = dark ? 255 : 163;
 
 	ctx.save();
 	ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
-	ctx.lineWidth = edgeWidth;
+	ctx.lineWidth = isActive ? edgeWidth * 1.6 : edgeWidth;
 	ctx.lineCap = "round";
+
+	if (isActive) {
+		ctx.setLineDash([6, 6]);
+		ctx.lineDashOffset = -time * 0.04;
+		ctx.shadowColor = `rgba(${r},${g},${b},0.6)`;
+		ctx.shadowBlur = 6;
+	}
+
 	ctx.beginPath();
 	ctx.moveTo(from.sx, from.sy);
 	ctx.lineTo(to.sx, to.sy);
@@ -277,28 +288,65 @@ function drawParticle(
 
 	if (finalAlpha < 0.01) return;
 
+	const dark = isDarkMode();
+
 	ctx.save();
 
-	// Soft bloom glow (additive)
-	ctx.globalCompositeOperation = "lighter";
-	const glowR = radius * 5;
-	const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
-	grad.addColorStop(0, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.2})`);
-	grad.addColorStop(0.5, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.05})`);
-	grad.addColorStop(1, `rgba(${color.r},${color.g},${color.b},0)`);
-	ctx.fillStyle = grad;
-	ctx.beginPath();
-	ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
-	ctx.fill();
+	if (dark) {
+		// Dark mode: additive glow (original cinematic look)
+		ctx.globalCompositeOperation = "lighter";
+		const glowR = radius * 5;
+		const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+		grad.addColorStop(0, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.2})`);
+		grad.addColorStop(0.5, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.05})`);
+		grad.addColorStop(1, `rgba(${color.r},${color.g},${color.b},0)`);
+		ctx.fillStyle = grad;
+		ctx.beginPath();
+		ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+		ctx.fill();
 
-	// Core particle (tiny bright dot)
-	const br = Math.min(255, color.r + 60);
-	const bg = Math.min(255, color.g + 60);
-	const bb = Math.min(255, color.b + 60);
-	ctx.beginPath();
-	ctx.arc(sx, sy, Math.max(0.5, radius), 0, Math.PI * 2);
-	ctx.fillStyle = `rgba(${br},${bg},${bb},${finalAlpha * 0.9})`;
-	ctx.fill();
+		// Core particle
+		const br = Math.min(255, color.r + 60);
+		const bg = Math.min(255, color.g + 60);
+		const bb = Math.min(255, color.b + 60);
+		ctx.beginPath();
+		ctx.arc(sx, sy, Math.max(0.5, radius), 0, Math.PI * 2);
+		ctx.fillStyle = `rgba(${br},${bg},${bb},${finalAlpha * 0.9})`;
+		ctx.fill();
+	} else {
+		// Light mode: darken colors for contrast against light background
+		const darken = (v: number) => Math.round(v * 0.65);
+		const cr = darken(color.r);
+		const cg = darken(color.g);
+		const cb = darken(color.b);
+
+		// Light mode: normal blending with soft shadow + solid core
+		const glowR = radius * 4;
+		const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+		grad.addColorStop(0, `rgba(${cr},${cg},${cb},${finalAlpha * 0.18})`);
+		grad.addColorStop(0.4, `rgba(${cr},${cg},${cb},${finalAlpha * 0.07})`);
+		grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+		ctx.fillStyle = grad;
+		ctx.beginPath();
+		ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+		ctx.fill();
+
+		// Core particle — full color, solid
+		ctx.beginPath();
+		ctx.arc(sx, sy, Math.max(1.0, radius), 0, Math.PI * 2);
+		ctx.fillStyle = `rgba(${cr},${cg},${cb},${finalAlpha})`;
+		ctx.fill();
+
+		// Inner bright core
+		const ir = Math.max(0.5, radius * 0.45);
+		const br = Math.min(255, cr + 80);
+		const bg = Math.min(255, cg + 80);
+		const bb = Math.min(255, cb + 80);
+		ctx.beginPath();
+		ctx.arc(sx, sy, ir, 0, Math.PI * 2);
+		ctx.fillStyle = `rgba(${br},${bg},${bb},${finalAlpha})`;
+		ctx.fill();
+	}
 
 	ctx.restore();
 }
@@ -460,8 +508,8 @@ export function startNeuralAnimation(
 
 		nodeIndexById = new Map<string, number>();
 		animNodes.forEach((n, i) => {
-			nodeIndexById.set(n.id, i);
-			nodeIndexById.set(n.name, i);
+			if (n.id) nodeIndexById.set(n.id, i);
+			if (n.name) nodeIndexById.set(n.name, i);
 		});
 	}
 
@@ -524,6 +572,7 @@ export function startNeuralAnimation(
 			rebuildDerived();
 		}
 
+		const dark = isDarkMode();
 		const dt = now - lastTimestamp;
 		lastTimestamp = now;
 		totalElapsed += dt;
@@ -568,9 +617,11 @@ export function startNeuralAnimation(
 		// Build projected lookup by original index
 		const projByIndex = new Map<number, ProjectedNode>();
 		projected.forEach((p) => {
-			const idx = nodeIndexById.get(p.node3d.node.id) ?? nodeIndexById.get(p.node3d.node.name);
+			const idx = (p.node3d.node.id ? nodeIndexById.get(p.node3d.node.id) : undefined) ?? nodeIndexById.get(p.node3d.node.name);
 			if (idx !== undefined && idx >= 0) projByIndex.set(idx, p);
 		});
+
+		const hasFocus = !!(state.hoveredNode || state.selectedNode);
 
 		// ── Draw edges (far to near) ──
 		const renderedEdges = animEdges
@@ -583,19 +634,41 @@ export function startNeuralAnimation(
 				if (!fromP || !toP) return null;
 				if (fromP.scale < 0.02 || toP.scale < 0.02) return null;
 
+				const isHovered = state.hoveredNode && (
+					e.source === state.hoveredNode.id || 
+					e.source === state.hoveredNode.name || 
+					e.target === state.hoveredNode.id || 
+					e.target === state.hoveredNode.name
+				);
+				const isSelected = state.selectedNode && (
+					e.source === state.selectedNode.id || 
+					e.source === state.selectedNode.name || 
+					e.target === state.selectedNode.id || 
+					e.target === state.selectedNode.name
+				);
+				const isRelated = !!(isHovered || isSelected);
+
+				let alphaMultiplier = 1.0;
+				if (hasFocus) {
+					alphaMultiplier = isRelated ? 1.0 : 0.05;
+				} else {
+					alphaMultiplier = 0.20; // lower default opacity when no hover to avoid cluttered look
+				}
+
 				const avgZ = (fromP.depth + toP.depth) / 2;
 				const maxZ = FOG_FAR * 1.5;
-				const edgeAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
+				const baseAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
+				const edgeAlpha = baseAlpha * alphaMultiplier;
 
-				return { from: fromP, to: toP, edgeAlpha, avgDepth: avgZ };
+				return { from: fromP, to: toP, edgeAlpha, isRelated, avgDepth: avgZ };
 			})
-			.filter((x): x is { from: ProjectedNode; to: ProjectedNode; edgeAlpha: number; avgDepth: number } => x !== null);
+			.filter((x): x is { from: ProjectedNode; to: ProjectedNode; edgeAlpha: number; isRelated: boolean; avgDepth: number } => x !== null);
 
 		// Sort edges by depth (far to near)
 		renderedEdges.sort((a, b) => b.avgDepth - a.avgDepth);
 
 		for (const re of renderedEdges) {
-			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha);
+			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, re.isRelated, totalElapsed);
 		}
 
 		// ── Draw signals ──
@@ -624,22 +697,47 @@ export function startNeuralAnimation(
 			const size = Math.max(0.5, (1.5 + brightness * 1.2) * Math.min(proj.scale, 1.5));
 
 			ctx.save();
-			ctx.globalCompositeOperation = "lighter";
 
-			// Outer glow
-			ctx.beginPath();
-			ctx.arc(proj.sx, proj.sy, size * 3, 0, Math.PI * 2);
-			ctx.fillStyle = `rgba(${sig.color.r},${sig.color.g},${sig.color.b},${sigAlpha * 0.15})`;
-			ctx.fill();
+			if (dark) {
+				ctx.globalCompositeOperation = "lighter";
 
-			// Core
-			const br = Math.min(255, sig.color.r + 80);
-			const bg = Math.min(255, sig.color.g + 80);
-			const bb = Math.min(255, sig.color.b + 80);
-			ctx.beginPath();
-			ctx.arc(proj.sx, proj.sy, size, 0, Math.PI * 2);
-			ctx.fillStyle = `rgba(${br},${bg},${bb},${sigAlpha * 0.9})`;
-			ctx.fill();
+				// Outer glow
+				ctx.beginPath();
+				ctx.arc(proj.sx, proj.sy, size * 3, 0, Math.PI * 2);
+				ctx.fillStyle = `rgba(${sig.color.r},${sig.color.g},${sig.color.b},${sigAlpha * 0.15})`;
+				ctx.fill();
+
+				// Core
+				const br = Math.min(255, sig.color.r + 80);
+				const bg = Math.min(255, sig.color.g + 80);
+				const bb = Math.min(255, sig.color.b + 80);
+				ctx.beginPath();
+				ctx.arc(proj.sx, proj.sy, size, 0, Math.PI * 2);
+				ctx.fillStyle = `rgba(${br},${bg},${bb},${sigAlpha * 0.9})`;
+				ctx.fill();
+			} else {
+				// Light mode: darken signal colors for contrast
+				const darken = (v: number) => Math.round(v * 0.65);
+				const sr = darken(sig.color.r);
+				const sg = darken(sig.color.g);
+				const sb = darken(sig.color.b);
+
+				// Normal blending with soft halo
+				const outerR = size * 2.5;
+				const grad = ctx.createRadialGradient(proj.sx, proj.sy, 0, proj.sx, proj.sy, outerR);
+				grad.addColorStop(0, `rgba(${sr},${sg},${sb},${sigAlpha * 0.25})`);
+				grad.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
+				ctx.fillStyle = grad;
+				ctx.beginPath();
+				ctx.arc(proj.sx, proj.sy, outerR, 0, Math.PI * 2);
+				ctx.fill();
+
+				// Core
+				ctx.beginPath();
+				ctx.arc(proj.sx, proj.sy, Math.max(1.2, size), 0, Math.PI * 2);
+				ctx.fillStyle = `rgba(${sr},${sg},${sb},${sigAlpha})`;
+				ctx.fill();
+			}
 
 			ctx.restore();
 		}

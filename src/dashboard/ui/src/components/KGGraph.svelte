@@ -143,7 +143,7 @@
 		if (isZeroEdgeOverview) {
 			const result = initializeZeroEdgeOverviewLayout(
 				nodes.map((n) => ({
-					id: n.id,
+					id: n.id || n.name,
 					name: n.name,
 					type: n.type,
 					description: n.description,
@@ -232,7 +232,7 @@
 		// Use volumetric sphere layout instead of force-directed
 		layoutNodes = initializeSphereLayout(
 			cappedNodes.map((n) => ({
-				id: n.id,
+				id: n.id || n.name,
 				name: n.name,
 				type: n.type,
 				description: n.description,
