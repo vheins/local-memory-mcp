@@ -4,13 +4,24 @@
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
-	import { initializeLayout, initializeZeroEdgeOverviewLayout, runForceLayout } from "$lib/kg/KGForceLayout";
+	import {
+		NODE_RADIUS,
+		initializeLayout,
+		initializeZeroEdgeOverviewLayout,
+		runForceLayout
+	} from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
-	import { NODE_RADIUS, resizeCanvas as resizeCanvasFn, renderGraph } from "$lib/kg/KGCanvasRenderer";
-	import type { RenderState } from "$lib/kg/KGCanvasRenderer";
+	import {
+		startNeuralAnimation,
+		stopNeuralAnimation,
+		updateAnimationData,
+		updateNeuralDimensions
+	} from "$lib/kg/KGNeuralRenderer";
+	import type { NeuralRenderState } from "$lib/kg/KGNeuralRenderer";
 	import KGGraphHeader from "./KGGraphHeader.svelte";
 	import KGGraphShell from "./KGGraphShell.svelte";
 	import KGModal from "./KGModal.svelte";
+	import KGEntityDetail from "./KGEntityDetail.svelte";
 
 	export let repo: string;
 
@@ -44,13 +55,25 @@
 	let canvasHeight = 600;
 
 	// Interaction state
-	let graphState: RenderState = {
+	let graphState: NeuralRenderState = {
 		hoveredNode: null,
 		selectedNode: null,
 		selectedEdge: null,
 		tooltipPos: { x: 0, y: 0 },
-		showTooltip: false
+		showTooltip: false,
+		hiddenNodeCount: 0
 	};
+
+	// Entity detail panel state
+	let showDetail = false;
+	let detailLoading = false;
+	let detailEntity: Record<string, any> | null = null;
+	let detailRelations: Array<{ from_entity: string; to_entity: string; relation_type: string }> = [];
+	let detailObservations: Array<{ id: string; content: string; created_at: string }> = [];
+	let detailError = "";
+
+	// Animation tracking
+	let animationCleanup: (() => void) | null = null;
 
 	// Modal state
 	let showAddEntityModal = false;
@@ -71,15 +94,6 @@
 			lookup.set(n.name, n);
 		}
 		return lookup;
-	}
-
-	function scheduleRender() {
-		if (ctx) {
-			renderGraph(ctx, canvasWidth, canvasHeight, layoutNodes, layoutEdges, {
-				...graphState,
-				hiddenNodeCount: hiddenZeroEdgeNodeCount
-			});
-		}
 	}
 
 	// ─── Load graph data ────────────────────────────────────────────────────────
@@ -123,7 +137,7 @@
 		graphState.selectedEdge = null;
 		graphState.hoveredNode = null;
 		graphState.showTooltip = false;
-		scheduleRender();
+		showDetail = false;
 	}
 
 	function initLayout() {
@@ -152,7 +166,18 @@
 			hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - result.length);
 			layoutEdges = [];
 			nodeLookup = buildNodeLookup(layoutNodes);
-			scheduleRender();
+			if (animationCleanup) {
+				updateAnimationData(layoutNodes, layoutEdges);
+			} else if (ctx) {
+				animationCleanup = startNeuralAnimation(
+					canvas,
+					canvasWidth,
+					canvasHeight,
+					layoutNodes,
+					layoutEdges,
+					graphState
+				);
+			}
 			return;
 		}
 
@@ -187,35 +212,65 @@
 
 		nodeLookup = buildNodeLookup(layoutNodes);
 		runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
-		scheduleRender();
+
+		// Start or update animation
+		if (animationCleanup) {
+			updateAnimationData(layoutNodes, layoutEdges);
+		} else if (ctx) {
+			animationCleanup = startNeuralAnimation(canvas, canvasWidth, canvasHeight, layoutNodes, layoutEdges, graphState);
+		}
 	}
 
 	// ─── Canvas lifecycle ──────────────────────────────────────────────────────
 
 	function handleResize() {
 		if (!canvas) return;
-		const result = resizeCanvasFn(canvas);
-		canvasWidth = result.width;
-		canvasHeight = result.height;
-		ctx = result.ctx;
+		updateNeuralDimensions(canvas);
+		const dpr = window.devicePixelRatio || 1;
+		canvasWidth = canvas.width / dpr;
+		canvasHeight = canvas.height / dpr;
+		ctx = canvas.getContext("2d")!;
 		if (layoutNodes.length > 0) {
 			if (isZeroEdgeOverview) {
 				initLayout();
 				return;
 			}
 			runForceLayout(layoutNodes, layoutEdges, canvasWidth, canvasHeight);
-			scheduleRender();
+			updateAnimationData(layoutNodes, layoutEdges);
 		}
 	}
 
 	// ─── Interaction handlers ───────────────────────────────────────────────────
+
+	async function loadEntityDetail(name: string) {
+		showDetail = true;
+		detailLoading = true;
+		detailError = "";
+		detailEntity = null;
+		detailRelations = [];
+		detailObservations = [];
+		try {
+			const data = await api.kgEntityDetail(name);
+			detailEntity = data.entity || null;
+			detailRelations = (data.relations || []) as Array<{
+				from_entity: string;
+				to_entity: string;
+				relation_type: string;
+			}>;
+			detailObservations = (data.observations || []) as Array<{ id: string; content: string; created_at: string }>;
+		} catch (e: unknown) {
+			detailError = e instanceof Error ? e.message : "Failed to load entity details";
+		} finally {
+			detailLoading = false;
+		}
+	}
 
 	function handleCanvasClick(e: MouseEvent) {
 		const rect = canvas.getBoundingClientRect();
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 
-		// Check nodes first (rendered on top)
+		// Check nodes first
 		for (const n of layoutNodes) {
 			const r = NODE_RADIUS + 4;
 			const dx = mx - n.x;
@@ -223,14 +278,13 @@
 			if (dx * dx + dy * dy <= r * r) {
 				graphState.selectedNode = n;
 				graphState.selectedEdge = null;
-				graphState.tooltipPos = { x: mx, y: my };
-				graphState.showTooltip = true;
-				scheduleRender();
+				graphState.showTooltip = false;
+				loadEntityDetail(n.name);
 				return;
 			}
 		}
 
-		// Check edges (distance to line segment)
+		// Check edges
 		for (const e of layoutEdges) {
 			const a = getNodeByKey(e.source);
 			const b = getNodeByKey(e.target);
@@ -240,7 +294,8 @@
 				graphState.selectedEdge = e;
 				graphState.selectedNode = null;
 				graphState.showTooltip = false;
-				scheduleRender();
+				// Close detail panel when clicking an edge
+				showDetail = false;
 				return;
 			}
 		}
@@ -249,7 +304,7 @@
 		graphState.selectedNode = null;
 		graphState.selectedEdge = null;
 		graphState.showTooltip = false;
-		scheduleRender();
+		showDetail = false;
 	}
 
 	function handleCanvasDblClick(e: MouseEvent) {
@@ -262,6 +317,8 @@
 			const dx = mx - n.x;
 			const dy = my - n.y;
 			if (dx * dx + dy * dy <= r * r) {
+				graphState.selectedNode = n;
+				showDetail = false; // close detail panel
 				deleteTarget = { type: "node", name: n.name };
 				showDeleteConfirm = true;
 				return;
@@ -286,7 +343,6 @@
 				graphState.selectedEdge = e;
 				graphState.selectedNode = null;
 				showDeleteConfirm = true;
-				scheduleRender();
 				return;
 			}
 		}
@@ -311,7 +367,6 @@
 		if (found !== graphState.hoveredNode) {
 			graphState.hoveredNode = found;
 			canvas.style.cursor = found ? "pointer" : "default";
-			scheduleRender();
 		}
 	}
 
@@ -390,7 +445,7 @@
 			showDeleteConfirm = false;
 			showAddEntityModal = false;
 			showAddRelationModal = false;
-			scheduleRender();
+			showDetail = false;
 		}
 	}
 
@@ -399,10 +454,11 @@
 
 	onMount(() => {
 		if (canvas) {
-			const result = resizeCanvasFn(canvas);
-			canvasWidth = result.width;
-			canvasHeight = result.height;
-			ctx = result.ctx;
+			updateNeuralDimensions(canvas);
+			const dpr = window.devicePixelRatio || 1;
+			canvasWidth = canvas.width / dpr;
+			canvasHeight = canvas.height / dpr;
+			ctx = canvas.getContext("2d")!;
 		}
 
 		if (repo) loadGraph();
@@ -415,12 +471,23 @@
 
 	onDestroy(() => {
 		resizeObserver?.disconnect();
+		stopNeuralAnimation();
+		animationCleanup = null;
 	});
 
 	// Re-load when repo changes (guarded inside loadGraph against noop)
 	$: if (repo && canvas && loadedRepo !== repo) {
 		// eslint-disable-next-line svelte/infinite-reactive-loop -- loadGraph updates loadedRepo to satisfy this repo-change guard.
 		untrack(() => loadGraph());
+	}
+
+	function handleNavigateToEntity(event: CustomEvent<{ name: string }>) {
+		const { name } = event.detail;
+		const foundNode = layoutNodes.find((n) => n.name === name);
+		if (foundNode) {
+			graphState.selectedNode = foundNode;
+			loadEntityDetail(name);
+		}
 	}
 </script>
 
@@ -468,6 +535,19 @@
 				: "Knowledge Graph visualization"}
 			tabindex="0"
 		></canvas>
+		<KGEntityDetail
+			show={showDetail}
+			loading={detailLoading}
+			entity={detailEntity}
+			relations={detailRelations}
+			observations={detailObservations}
+			error={detailError}
+			on:close={() => {
+				showDetail = false;
+				graphState.selectedNode = null;
+			}}
+			on:navigateTo={handleNavigateToEntity}
+		/>
 	</div>
 
 	<!-- Modals -->

@@ -18,46 +18,126 @@ import type { DiscoveredFile, DiscoverFilesResult, DiscoveryError, FileDiscovery
 
 /** File extension → language identifier mapping. */
 const EXTENSION_LANGUAGE_MAP: Record<string, string> = Object.freeze({
+	// TypeScript / JavaScript (tree-sitter)
 	".ts": "typescript",
+	".mts": "typescript",
+	".cts": "typescript",
 	".tsx": "typescriptreact",
 	".js": "javascript",
+	".mjs": "javascript",
+	".cjs": "javascript",
 	".jsx": "javascriptreact",
-	".json": "json",
+	".vue": "vue",
+	".svelte": "svelte",
+	".astro": "astro",
+	// Markdown
 	".md": "markdown",
-	".css": "css",
-	".scss": "scss",
-	".less": "less",
-	".html": "html",
-	".sql": "sql",
-	".graphql": "graphql",
-	".yaml": "yaml",
-	".yml": "yaml",
-	".xml": "xml",
-	".sh": "shellscript",
-	".bash": "shellscript",
+	".mdx": "markdown",
+	// Tree-sitter languages
 	".py": "python",
-	".rb": "ruby",
+	".php": "php",
 	".go": "go",
 	".rs": "rust",
 	".java": "java",
+	".rb": "ruby",
 	".kt": "kotlin",
 	".kts": "kotlin",
 	".swift": "swift",
+	".dart": "dart",
 	".c": "c",
+	".h": "c",
 	".cpp": "cpp",
 	".cc": "cpp",
 	".cxx": "cpp",
-	".h": "c",
 	".hpp": "cpp",
 	".hh": "cpp",
 	".hxx": "cpp",
-	".php": "php",
-	".dart": "dart",
-	".vue": "vue",
-	".svelte": "svelte",
+	// Web (generic)
+	".html": "html",
+	".htm": "html",
+	".xhtml": "html",
+	".css": "css",
+	".scss": "scss",
+	".sass": "sass",
+	".less": "less",
+	// Config & Data (generic)
+	".json": "json",
+	".yaml": "yaml",
+	".yml": "yaml",
 	".toml": "toml",
 	".ini": "ini",
+	".cfg": "ini",
+	".conf": "ini",
 	".env": "env",
+	".xml": "xml",
+	".svg": "xml",
+	// Shell & Scripts (generic)
+	".sh": "shellscript",
+	".bash": "shellscript",
+	".zsh": "shellscript",
+	".fish": "shellscript",
+	".ps1": "powershell",
+	".bat": "batch",
+	".cmd": "batch",
+	// Backend / Scripting (generic)
+	".scala": "scala",
+	".cs": "csharp",
+	".fs": "fsharp",
+	".zig": "zig",
+	".erl": "erlang",
+	".ex": "elixir",
+	".exs": "elixir",
+	".clj": "clojure",
+	".lua": "lua",
+	".pl": "perl",
+	".pm": "perl",
+	".t": "perl",
+	".r": "r",
+	".jl": "julia",
+	// Native / Mobile (generic)
+	".m": "objectivec",
+	".mm": "objectivecpp",
+	// Templates (generic)
+	".ejs": "ejs",
+	".hbs": "handlebars",
+	".mustache": "mustache",
+	".njk": "nunjucks",
+	".pug": "pug",
+	".haml": "haml",
+	".liquid": "liquid",
+	".twig": "twig",
+	".razor": "razor",
+	".latte": "latte",
+	".smarty": "smarty",
+	".tpl": "smarty",
+	// Framework-specific (generic)
+	".webc": "webc",
+	".wxp": "wxp",
+	".wxt": "wxt",
+	// GraphQL
+	".graphql": "graphql",
+	".gql": "graphql",
+	// Protocol (generic)
+	".proto": "protobuf",
+	".thrift": "thrift",
+	// Database
+	".sql": "sql",
+	// Apple plist / Xcode
+	".plist": "plist",
+	".xib": "xib",
+	".storyboard": "storyboard",
+	".pbxproj": "pbxproj",
+	".xcconfig": "xcconfig",
+	".entitlements": "entitlements",
+	// Gradle
+	".gradle": "gradle",
+	// Docs
+	".tex": "latex",
+	".bib": "bibtex",
+	".rst": "restructuredtext",
+	".asciidoc": "asciidoc",
+	".adoc": "asciidoc",
+	// Misc
 	".dockerfile": "dockerfile",
 	".lock": "lockfile"
 });
@@ -73,6 +153,8 @@ function detectLanguage(filePath: string): string | null {
 		const basename = path.basename(filePath).toLowerCase();
 		if (basename === "dockerfile") return "dockerfile";
 		if (basename === "makefile") return "makefile";
+		if (basename === "justfile") return "justfile";
+		if (basename === "containerfile") return "dockerfile";
 		return null;
 	}
 	return EXTENSION_LANGUAGE_MAP[ext] ?? null;

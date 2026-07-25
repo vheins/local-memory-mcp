@@ -321,6 +321,11 @@ export const api = {
 	kgGraph: (repo: string) =>
 		apiFetch<{ nodes: KGNode[]; edges: KGEdge[] }>(`/api/kg/graph?repo=${encodeURIComponent(repo)}`),
 
+	kgEntityDetail: (name: string) =>
+		apiFetch<{ entity: Record<string, unknown>; relations: unknown[]; observations: unknown[] }>(
+			`/api/kg/entities/${encodeURIComponent(name)}`
+		),
+
 	kgEntities: (repo: string, params?: { type?: string; search?: string }) => {
 		const q = new URLSearchParams({ repo });
 		if (params?.type) q.set("type", params.type);

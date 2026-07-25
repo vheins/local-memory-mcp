@@ -16,7 +16,19 @@ export enum SymbolKind {
 	Enum = "enum",
 	Variable = "variable",
 	Method = "method",
-	Property = "property"
+	Property = "property",
+	/** Markdown H1 heading. */
+	Heading1 = "heading1",
+	/** Markdown H2 heading. */
+	Heading2 = "heading2",
+	/** Markdown H3–H6 heading. */
+	Heading = "heading",
+	/** Markdown fenced code block. */
+	CodeBlock = "code_block",
+	/** Route declaration (generic regex visitor). */
+	Route = "route",
+	/** Config key-value pair (generic regex visitor). */
+	Key = "key"
 }
 
 /** A parsed symbol extracted from source code. */
@@ -47,8 +59,11 @@ export interface ParsedSymbol {
 
 /** Contract that every language parser must implement. */
 export interface LanguageVisitor {
-	/** Extract symbols from a pre-parsed tree-sitter AST. */
-	extractSymbols(tree: Tree, sourceCode: string): ParsedSymbol[];
+	/**
+	 * Extract symbols from a pre-parsed tree-sitter AST.
+	 * For non-tree-sitter visitors (e.g. markdown), the tree is unused and may be null.
+	 */
+	extractSymbols(tree: Tree | null, sourceCode: string): ParsedSymbol[];
 }
 
 /** Result of a single parse operation. */

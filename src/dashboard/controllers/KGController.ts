@@ -39,8 +39,7 @@ export class KGController {
 			const name = req.params.name;
 
 			const entity = db.db.prepare("SELECT * FROM entities WHERE name = ?").get(name) as
-				| Record<string, unknown>
-				| undefined;
+				Record<string, unknown> | undefined;
 			if (!entity) return res.status(404).json(jsonApiError("Entity not found", 404));
 
 			const relations = db.db
@@ -81,11 +80,9 @@ export class KGController {
 
 			const nodes = db.db
 				.prepare(
-					`SELECT e.name, e.type, e.description, COUNT(o.id) as memoryCount
+					`SELECT e.name, e.type
 					 FROM entities e
-					 LEFT JOIN observations o ON o.entity_name = e.name
 					 WHERE e.repo = ?
-					 GROUP BY e.name
 					 ORDER BY e.name`
 				)
 				.all(repo);

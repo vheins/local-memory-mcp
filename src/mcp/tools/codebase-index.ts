@@ -112,13 +112,39 @@ export async function handleCodebaseIndexStatus(
 	const service = createCodebaseIndexService(db, getParserPool());
 	const status = await service.getIndexStatus(repo, repoPath);
 
-	let summary = `Status for ${repo}: ${status.totalFiles} files, ${status.totalSymbols} symbols`;
-	if (status.lastIndexedAt) summary += ` (last indexed: ${status.lastIndexedAt})`;
-	if (status.stale !== undefined) {
-		summary += status.stale
-			? ` — INDEX STALE (${Math.round((status.staleRatio ?? 0) * 100)}% of files changed)`
-			: " — up to date";
+	// Build rich table output
+	const lines: string[] = [];
+	lines.push(`## Index Status: ${repo}`);
+	lines.push(``);
+	lines.push(`| Metric | Value |`);
+	lines.push(`|--------|-------|`);
+	lines.push(`| **Indexed** | ${status.isIndexed ? "✅ Yes" : "❌ No"} |`);
+	lines.push(`| **Files** | ${status.totalFiles} |`);
+	lines.push(`| **Symbols** | ${status.totalSymbols} |`);
+
+	if (status.lastIndexedAt) {
+		const date = new Date(status.lastIndexedAt);
+		lines.push(`| **Last Indexed** | ${date.toLocaleString()} |`);
 	}
+
+	if (status.isIndexing) {
+		const p = status.progress;
+		if (p) {
+			lines.push(`| **Indexing** | 🔄 ${p.stage} (${p.current}/${p.total}) |`);
+		} else {
+			lines.push(`| **Indexing** | 🔄 In progress... |`);
+		}
+	}
+
+	if (status.stale !== undefined && status.lastIndexedAt) {
+		if (status.stale) {
+			lines.push(`| **Staleness** | ⚠️ STALE — ${Math.round((status.staleRatio ?? 0) * 100)}% of files changed |`);
+		} else {
+			lines.push(`| **Staleness** | ✅ Up to date |`);
+		}
+	}
+
+	const summary = lines.join("\n");
 
 	return createMcpResponse(status, summary, {
 		includeJson: true
@@ -218,7 +244,16 @@ export async function handleTraceSymbol(
 ): Promise<McpResponse> {
 	const validated = TraceSymbolSchema.parse(params);
 
-	const name = validated.name.trim();
+	// Accept both "name" and "symbol" parameter names for flexibility
+	const name = (validated.name ?? validated.symbol ?? "").trim();
+	if (!name) {
+		return createMcpResponse(
+			{ error: "Either 'name' or 'symbol' parameter is required", code: "PARAM_REQUIRED" },
+			"Either 'name' or 'symbol' parameter is required to trace a symbol",
+			{ includeJson: true }
+		);
+	}
+
 	const repo = validated.repo?.trim();
 
 	// Fetch symbols scoped to repo if provided, otherwise global
@@ -300,9 +335,8 @@ export async function handleSearchSymbols(
 		);
 	}
 
-	// Query all matching symbols from DB (handles LIKE + FTS5 internally)
-	// Fetch up to 200 for ranking; we paginate after ranking
-	const dbResult = db.codebaseSymbols.searchSymbols({
+	// Phase 1: Symbol name search (primary — prefers exact name matches)
+	let dbResult = db.codebaseSymbols.searchSymbols({
 		query,
 		repo: validated.repo,
 		kind: validated.kind,
@@ -321,6 +355,33 @@ export async function handleSearchSymbols(
 		filePath: validated.filePath,
 		exportedOnly: validated.exportedOnly
 	});
+
+	// Phase 2: If name-based search returned 0 results AND query has spaces (natural language),
+	// try content-based search by splitting into individual words
+	if (symbols.length === 0 && query.includes(" ")) {
+		const words = query.split(/\s+/).filter((w) => w.length >= 2);
+		for (const word of words) {
+			const wordResult = db.codebaseSymbols.searchSymbols({
+				query: word,
+				repo: validated.repo,
+				kind: validated.kind,
+				filePath: validated.filePath,
+				exportedOnly: validated.exportedOnly,
+				limit: 200,
+				offset: 0
+			});
+			if (wordResult.symbols.length > 0) {
+				dbResult = wordResult;
+				symbols = filterSymbols(wordResult.symbols, {
+					kind: validated.kind ? [validated.kind] : undefined,
+					repo: validated.repo,
+					filePath: validated.filePath,
+					exportedOnly: validated.exportedOnly
+				});
+				break;
+			}
+		}
+	}
 
 	// Rank results using SymbolRankingService
 	const ranked: RankedSymbol[] = rankSymbols(symbols, query);

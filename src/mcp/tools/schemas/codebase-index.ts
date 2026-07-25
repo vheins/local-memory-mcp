@@ -25,7 +25,8 @@ export const GetFileSymbolsSchema = z.object({
 });
 
 export const TraceSymbolSchema = z.object({
-	name: z.string().min(1, "name is required"),
+	name: z.string().optional(),
+	symbol: z.string().optional(),
 	repo: z.string().optional(),
 	includeReferences: z.boolean().default(true)
 });

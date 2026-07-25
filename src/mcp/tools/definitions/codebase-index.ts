@@ -96,7 +96,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "search_symbols",
 		title: "Search Symbols",
 		description:
-			"Searches indexed codebase symbols by name or file path with ranked results. Also searches file paths for matching names. Supports filtering by kind, file path, and export status. Uses a 5-tier ranking algorithm: exact > camelCase > prefix > substring > FTS5.",
+			"Searches indexed codebase symbols by name or file path with ranked results. Also supports natural language queries — if no symbol name matches, falls back to content-based search. Uses a 5-tier ranking algorithm: exact > camelCase > prefix > substring > FTS5.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -151,7 +151,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "trace_symbol",
 		title: "Trace Symbol",
 		description:
-			"Traces a symbol's definition and usage across the codebase. Returns the definition location, file references, and export status.",
+			"Traces a symbol's definition and usage across the codebase. Returns the definition location, file references, and export status. Accepts either 'name' or 'symbol' parameter.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -162,6 +162,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				name: { type: "string", description: "Symbol name to trace (exact match)" },
+				symbol: { type: "string", description: "Alias for 'name' — symbol name to trace" },
 				repo: { type: "string", description: "Repository identifier (owner/repo) for scoped search" },
 				includeReferences: {
 					type: "boolean",
@@ -169,7 +170,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 					default: true
 				}
 			},
-			required: ["name"]
+			required: []
 		}
 	}
 ];

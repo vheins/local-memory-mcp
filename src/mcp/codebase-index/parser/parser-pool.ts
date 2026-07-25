@@ -36,6 +36,8 @@ import { KotlinVisitor } from "./visitors/kotlin-visitor.js";
 import { SwiftVisitor } from "./visitors/swift-visitor.js";
 import { CVisitor } from "./visitors/c-visitor.js";
 import { CppVisitor } from "./visitors/cpp-visitor.js";
+import { MarkdownVisitor } from "./markdown-visitor.js";
+import { GenericTextVisitor } from "./generic-visitor.js";
 import { logger } from "../../utils/logger.js";
 import { FatalError } from "../types/errors.js";
 
@@ -190,14 +192,18 @@ export class TreeSitterParserPool implements ParserPool {
 	private loadedGrammars = new Map<string, Language>();
 
 	// Cached registry built once at construction time
-	private readonly registry: LanguageConfig[] = TreeSitterParserPool.createRegistry();
+	private registry: LanguageConfig[] = TreeSitterParserPool.createRegistry();
 
 	// Reverse maps
 	private extToConfig = new Map<string, LanguageConfig>();
+	/** Fallback map for extensionless files (keyed by lowercase basename). */
+	private basenameToConfig = new Map<string, LanguageConfig>();
 
 	constructor(options: ParserPoolOptions = {}) {
 		this.parseTimeoutMs = resolveParseTimeoutMs(options.parseTimeoutMs);
 		this.semaphore = new Semaphore(resolveConcurrency(options.concurrency));
+		// Append the generic catch-all for any extension not handled by a tree-sitter grammar
+		this.registry.push(TreeSitterParserPool.buildGenericCatchAll(this.registry));
 		this.buildRegistryMaps();
 	}
 
@@ -210,7 +216,7 @@ export class TreeSitterParserPool implements ParserPool {
 		return [
 			{
 				languageId: "typescript",
-				extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"],
+				extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".svelte", ".vue", ".astro"],
 				grammarWasms: [tsGrammar],
 				createVisitor: () => new TypeScriptVisitor()
 			},
@@ -285,18 +291,158 @@ export class TreeSitterParserPool implements ParserPool {
 				extensions: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
 				grammarWasms: [getGrammarPath("tree-sitter-cpp", "tree-sitter-cpp.wasm")],
 				createVisitor: () => new CppVisitor()
+			},
+			{
+				languageId: "markdown",
+				extensions: [".md", ".mdx"],
+				grammarWasms: [],
+				createVisitor: () => new MarkdownVisitor()
 			}
 		];
 	}
 
-	/** Build the O(1) extension → config and languageId → visitor factory maps. */
+	/**
+	 * Build the catch-all generic config covering every extension not already
+	 * handled by a tree-sitter grammar.
+	 *
+	 * By appending this after all specialist configs, the earlier Map.set() calls
+	 * take priority in `extToConfig` (first-write-wins), so tree-sitter grammars
+	 * are never shadowed by the generic fallback.
+	 */
+	private static buildGenericCatchAll(registry: LanguageConfig[]): LanguageConfig {
+		const handled = new Set<string>();
+		for (const config of registry) {
+			for (const ext of config.extensions) {
+				handled.add(ext);
+			}
+		}
+
+		const allGenericExtensions = [
+			// Web
+			".html",
+			".htm",
+			".xhtml",
+			".css",
+			".scss",
+			".sass",
+			".less",
+			// Scripting & Backend
+			".rb",
+			".go",
+			".rs",
+			".java",
+			".kt",
+			".kts",
+			".scala",
+			".cs",
+			".fs",
+			".swift",
+			".zig",
+			".erl",
+			".ex",
+			".exs",
+			".clj",
+			".dart",
+			".lua",
+			".pl",
+			".pm",
+			".t",
+			".r",
+			".jl",
+			// Mobile / Native (non-tree-sitter)
+			".m",
+			".mm",
+			// Templates
+			".ejs",
+			".hbs",
+			".mustache",
+			".njk",
+			".pug",
+			".haml",
+			".liquid",
+			".twig",
+			".razor",
+			// Config & Data
+			".json",
+			".yaml",
+			".yml",
+			".toml",
+			".ini",
+			".cfg",
+			".conf",
+			".xml",
+			".svg",
+			".plist",
+			".xib",
+			".storyboard",
+			".pbxproj",
+			".xcconfig",
+			".entitlements",
+			".gradle",
+			// Shell & Scripts
+			".sh",
+			".bash",
+			".zsh",
+			".fish",
+			".ps1",
+			".bat",
+			".cmd",
+			// Framework-specific
+			".webc",
+			".wxp",
+			".wxt",
+			// Docs
+			".tex",
+			".bib",
+			".rst",
+			".asciidoc",
+			".adoc",
+			// Template engines
+			".latte",
+			".smarty",
+			".tpl",
+			// GraphQL
+			".graphql",
+			".gql",
+			// Protocol
+			".proto",
+			".thrift",
+			// Extensionless named files (detected via basename in _doParse)
+			// handled separately in detectLanguage; included here for completeness
+			"dockerfile",
+			"Dockerfile",
+			"makefile",
+			"Makefile",
+			"justfile",
+			"Justfile",
+			"Containerfile"
+		];
+
+		return {
+			languageId: "generic",
+			extensions: allGenericExtensions.filter((ext) => !handled.has(ext)),
+			grammarWasms: [],
+			createVisitor: () => new GenericTextVisitor()
+		};
+	}
+
+	/** Build the O(1) extension → config and basename → config maps. */
 	private buildRegistryMaps(): void {
 		for (const config of this.registry) {
 			for (const ext of config.extensions) {
-				if (this.extToConfig.has(ext)) {
-					logger.warn(`[ParserPool] Duplicate extension mapping: ${ext}`);
+				if (ext.startsWith(".")) {
+					if (this.extToConfig.has(ext)) {
+						logger.warn(`[ParserPool] Duplicate extension mapping: ${ext}`);
+					}
+					this.extToConfig.set(ext, config);
+				} else {
+					// Extensionless entries (e.g. "dockerfile", "Makefile") go to basename map
+					const key = ext.toLowerCase();
+					if (this.basenameToConfig.has(key)) {
+						logger.warn(`[ParserPool] Duplicate basename mapping: ${key}`);
+					}
+					this.basenameToConfig.set(key, config);
 				}
-				this.extToConfig.set(ext, config);
 			}
 		}
 	}
@@ -421,10 +567,23 @@ export class TreeSitterParserPool implements ParserPool {
 
 	private async _doParse(filePath: string, sourceCode: string): Promise<ParseResult> {
 		const ext = path.extname(filePath).toLowerCase();
-		const config = this.extToConfig.get(ext);
+		let config = this.extToConfig.get(ext);
+
+		// Fallback: extensionless files (Dockerfile, Makefile, Justfile, Containerfile)
+		if (!config && ext === "") {
+			const basename = path.basename(filePath).toLowerCase();
+			config = this.basenameToConfig.get(basename);
+		}
 
 		if (!config) {
-			return { symbols: [], error: `Unsupported extension: ${ext}`, durationMs: 0 };
+			return { symbols: [], error: `Unsupported extension: ${ext || "(none)"}`, durationMs: 0 };
+		}
+
+		// Non-tree-sitter visitors: no grammar wasm needed, create visitor directly
+		if (config.grammarWasms.length === 0) {
+			const visitor = config.createVisitor();
+			const symbols = visitor.extractSymbols(null, sourceCode);
+			return { symbols, error: null, durationMs: 0 };
 		}
 
 		// Find the grammar WASM for this config
