@@ -65,26 +65,30 @@ export const MEMORY_TOOL_DEFINITIONS = [
 			"Fetch full details of a specific memory by ID or short code. Use after memory-recap or memory-search when a pointer row is relevant and full content is needed.",
 		inputSchema: {
 			type: "object",
+			properties: {
+				id: { type: "string", format: "uuid", description: "Memory entry ID." },
+				code: { type: "string", description: "Short memory code (e.g., 'MEM-001')." },
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+				},
+				json: { type: "boolean", default: false, description: "If true, returns JSON details." }
+			},
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["id"],
-					properties: {
-						id: { type: "string", format: "uuid", description: "Memory entry ID." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
-					}
+					required: ["id"]
 				},
 				{
 					title: "By code",
-					required: ["code", "owner", "repo"],
-					properties: {
-						code: { type: "string", description: "Short memory code." },
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
-					}
+					required: ["code"]
 				}
-			]
+			],
+			description: "Provide either id (UUID) or code (short code) to fetch a memory."
 		}
 	},
 	{
@@ -100,140 +104,84 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				type: {
+					type: "string",
+					enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"],
+					description: "Type of durable knowledge being stored."
+				},
+				title: {
+					type: "string",
+					minLength: 3,
+					maxLength: 255,
+					description: "Short human-readable title for the memory."
+				},
+				content: { type: "string", minLength: 10, description: "The memory content" },
+				importance: { type: "number", minimum: 1, maximum: 5, description: "Importance score (1-5)" },
+				agent: { type: "string", description: "Name of the agent creating this memory" },
+				role: { type: "string", default: "unknown", description: "Role of the agent creating this memory" },
+				model: { type: "string", description: "AI model used by the agent" },
+				scope: {
+					type: "object",
+					properties: {
+						owner: { type: "string" },
+						repo: { type: "string" },
+						branch: { type: "string" },
+						folder: { type: "string" },
+						language: { type: "string" }
+					}
+				},
+				code: { type: "string", maxLength: 20, description: "Optional custom code. Auto-generated if omitted." },
+				tags: { type: "array", items: { type: "string" }, description: "Technology stack tags" },
+				metadata: { type: "object", description: "Structured metadata" },
+				is_global: { type: "boolean", default: false, description: "If true, shared across all repositories" },
+				ttlDays: { type: "number", minimum: 1, description: "Time-to-live in days" },
+				supersedes: { type: "string", description: "Memory ID (UUID) or code to supersede." },
+				memories: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
+							title: { type: "string", minLength: 3, maxLength: 255 },
+							content: { type: "string", minLength: 10 },
+							importance: { type: "number", minimum: 1, maximum: 5 },
+							agent: { type: "string" },
+							role: { type: "string", default: "unknown" },
+							model: { type: "string" },
+							scope: {
+								type: "object",
+								properties: {
+									owner: { type: "string" },
+									repo: { type: "string" },
+									branch: { type: "string" },
+									folder: { type: "string" },
+									language: { type: "string" }
+								}
+							},
+							code: { type: "string" },
+							ttlDays: { type: "number", minimum: 1 },
+							supersedes: { type: "string" },
+							tags: { type: "array", items: { type: "string" } },
+							metadata: { type: "object" },
+							is_global: { type: "boolean", default: false }
+						}
+					},
+					description: "Array of memories for bulk creation"
+				},
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
+			},
 			oneOf: [
 				{
 					title: "Single memory",
-					required: ["type", "title", "content", "importance"],
-					properties: {
-						type: {
-							type: "string",
-							enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"],
-							description:
-								"Type of durable knowledge being stored. Coordination types such as file_claim are intentionally unsupported."
-						},
-						title: {
-							type: "string",
-							minLength: 3,
-							maxLength: 255,
-							description:
-								"Short human-readable title for the memory. Do not embed bracketed metadata like agent/role/date prefixes here."
-						},
-						content: {
-							type: "string",
-							minLength: 10,
-							description: "The memory content"
-						},
-						importance: {
-							type: "number",
-							minimum: 1,
-							maximum: 5,
-							description: "Importance score (1-5)"
-						},
-						agent: {
-							type: "string",
-							description: "Name of the agent creating this memory"
-						},
-						role: {
-							type: "string",
-							default: "unknown",
-							description: "Role of the agent creating this memory"
-						},
-						model: {
-							type: "string",
-							description: "AI model used by the agent"
-						},
-						scope: {
-							type: "object",
-							properties: {
-								owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-								repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
-								branch: { type: "string", description: "Git branch this memory relates to" },
-								folder: { type: "string", description: "Subdirectory within the repo" },
-								language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" }
-							},
-							required: ["owner", "repo"]
-						},
-						code: { type: "string", maxLength: 20, description: "Optional custom code. Auto-generated if omitted." },
-						tags: {
-							type: "array",
-							items: { type: "string" },
-							description: "Technology stack tags (e.g., ['filament', 'laravel'])"
-						},
-						metadata: {
-							type: "object",
-							description: "Structured metadata for non-title context such as source agent, claim fields, or timestamps"
-						},
-						is_global: {
-							type: "boolean",
-							default: false,
-							description: "If true, this memory is shared across all repositories"
-						},
-						ttlDays: {
-							type: "number",
-							minimum: 1,
-							description: "Time-to-live in days. After this period, the memory expires."
-						},
-						supersedes: {
-							type: "string",
-							description: "Optional memory ID (UUID) or memory code to supersede. Resolved before storing."
-						},
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON of the stored memory."
-						}
-					}
+					required: ["type", "title", "content", "importance"]
 				},
 				{
 					title: "Bulk memories",
-					required: ["memories"],
-					properties: {
-						memories: {
-							type: "array",
-							items: {
-								type: "object",
-								properties: {
-									type: {
-										type: "string",
-										enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"],
-										description: "Type of durable knowledge being stored"
-									},
-									title: { type: "string", minLength: 3, maxLength: 255, description: "Short human-readable title" },
-									content: { type: "string", minLength: 10, description: "The memory content" },
-									importance: { type: "number", minimum: 1, maximum: 5, description: "Importance score (1-5)" },
-									agent: { type: "string", description: "Name of the agent creating this memory" },
-									role: { type: "string", default: "unknown", description: "Role of the agent creating this memory" },
-									model: { type: "string", description: "AI model used by the agent" },
-									scope: {
-										type: "object",
-										properties: {
-											owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)" },
-											repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
-											branch: { type: "string", description: "Git branch this memory relates to" },
-											folder: { type: "string", description: "Subdirectory within the repo" },
-											language: { type: "string", description: "Programming language" }
-										},
-										required: ["owner", "repo"]
-									},
-									code: { type: "string", description: "Optional custom code. Auto-generated if omitted." },
-									ttlDays: { type: "number", minimum: 1, description: "Time-to-live in days" },
-									supersedes: { type: "string", description: "UUID or code of a memory this entry replaces" },
-									tags: { type: "array", items: { type: "string" }, description: "Technology stack tags" },
-									metadata: { type: "object", description: "Structured metadata for non-title context" },
-									is_global: { type: "boolean", default: false, description: "If true, shared across all repositories" }
-								},
-								required: ["type", "title", "content", "importance"]
-							},
-							description: "Array of memories for bulk creation"
-						},
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON of the stored memory."
-						}
-					}
+					required: ["memories"]
 				}
-			]
+			],
+			description: "Provide memory fields for single storage, or 'memories' array for bulk creation."
 		},
 		outputSchema: {
 			type: "object",
@@ -294,60 +242,36 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
+				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
+				id: { type: "string", format: "uuid", description: "Memory entry ID." },
+				code: { type: "string", maxLength: 20, description: "Short memory code." },
+				type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
+				title: { type: "string", minLength: 3, maxLength: 100 },
+				content: { type: "string", minLength: 10 },
+				importance: { type: "number", minimum: 1, maximum: 5 },
+				agent: { type: "string" },
+				role: { type: "string" },
+				status: { type: "string", enum: ["active", "archived"] },
+				supersedes: { type: "string" },
+				tags: { type: "array", items: { type: "string" } },
+				metadata: { type: "object" },
+				is_global: { type: "boolean" },
+				completed_at: { type: "string" },
+				json: { type: "boolean", default: false, description: "If true, returns JSON of the updated memory." }
+			},
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["owner", "repo", "id"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						id: { type: "string", format: "uuid", description: "Memory entry ID." },
-						type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
-						title: { type: "string", minLength: 3, maxLength: 100 },
-						content: { type: "string", minLength: 10 },
-						importance: { type: "number", minimum: 1, maximum: 5 },
-						agent: { type: "string" },
-						role: { type: "string" },
-						status: { type: "string", enum: ["active", "archived"] },
-						supersedes: { type: "string" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						is_global: { type: "boolean" },
-						completed_at: { type: "string" },
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON of the updated memory."
-						}
-					}
+					required: ["id"]
 				},
 				{
 					title: "By code",
-					required: ["owner", "repo", "code"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						code: { type: "string", maxLength: 20, description: "Short memory code." },
-						type: { type: "string", enum: ["code_fact", "decision", "mistake", "pattern", "task_archive"] },
-						title: { type: "string", minLength: 3, maxLength: 100 },
-						content: { type: "string", minLength: 10 },
-						importance: { type: "number", minimum: 1, maximum: 5 },
-						agent: { type: "string" },
-						role: { type: "string" },
-						status: { type: "string", enum: ["active", "archived"] },
-						supersedes: { type: "string" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						is_global: { type: "boolean" },
-						completed_at: { type: "string" },
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON of the updated memory."
-						}
-					}
+					required: ["code"]
 				}
-			]
+			],
+			description: "Provide either id (UUID) or code (short code) to identify the memory to update."
 		},
 		outputSchema: {
 			type: "object",
@@ -502,58 +426,44 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
+				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
+				id: { type: "string", format: "uuid", description: "Single memory ID to delete." },
+				ids: {
+					type: "array",
+					items: { type: "string", format: "uuid" },
+					minItems: 1,
+					description: "Array of memory IDs to delete."
+				},
+				code: { type: "string", maxLength: 20, description: "Single memory code to delete." },
+				codes: {
+					type: "array",
+					items: { type: "string", maxLength: 20 },
+					minItems: 1,
+					description: "Array of memory codes to delete."
+				},
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
+			},
 			oneOf: [
 				{
 					title: "By single ID",
-					required: ["owner", "repo", "id"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						id: { type: "string", format: "uuid", description: "Memory entry ID to delete." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["id"]
 				},
 				{
 					title: "By bulk IDs",
-					required: ["owner", "repo", "ids"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						ids: {
-							type: "array",
-							items: { type: "string", format: "uuid" },
-							minItems: 1,
-							description: "Array of memory IDs to delete"
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["ids"]
 				},
 				{
 					title: "By single code",
-					required: ["owner", "repo", "code"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						code: { type: "string", maxLength: 20, description: "Short memory code." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["code"]
 				},
 				{
 					title: "By bulk codes",
-					required: ["owner", "repo", "codes"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						codes: {
-							type: "array",
-							items: { type: "string", maxLength: 20 },
-							minItems: 1,
-							description: "Array of memory codes to delete"
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["codes"]
 				}
-			]
+			],
+			description: "Provide id/ids (UUID) or code/codes (short code) to delete memories."
 		},
 		outputSchema: {
 			type: "object",

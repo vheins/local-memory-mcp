@@ -67,81 +67,45 @@ export const TASK_TOOL_DEFINITIONS = [
 			"Fetch full details of a specific task by ID or task code. Use this when you have a task ID or code and need to read the full description and comments.",
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: {
+					type: "string",
+					description: "Organization/namespace. Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name. Auto-inferred from session when omitted."
+				},
+				id: { type: "string", format: "uuid", description: "Task ID (UUID)." },
+				task_code: {
+					type: "string",
+					description: "Task code (e.g., PERF-1, TASK-001)."
+				},
+				task_codes: {
+					type: "array",
+					items: { type: "string" },
+					minItems: 1,
+					description: "Array of task codes (e.g., ['PERF-1', 'TASK-001'])."
+				},
+				json: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns JSON without text content details."
+				}
+			},
+			description: "Provide id (UUID), task_code, or task_codes (array) to fetch task details.",
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["id"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						id: { type: "string", format: "uuid", description: "Task ID" },
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON without the text content details."
-						}
-					}
+					required: ["id"]
 				},
 				{
 					title: "By task_code",
-					required: ["task_code"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						task_code: {
-							type: "string",
-							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
-						},
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON without the text content details."
-						}
-					}
+					required: ["task_code"]
 				},
 				{
 					title: "By task_codes",
-					required: ["task_codes"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						task_codes: {
-							type: "array",
-							items: { type: "string" },
-							minItems: 1,
-							description:
-								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
-						},
-						json: {
-							type: "boolean",
-							default: false,
-							description: "If true, returns JSON without the text content details."
-						}
-					}
+					required: ["task_codes"]
 				}
 			]
 		}
@@ -255,7 +219,16 @@ export const TASK_TOOL_DEFINITIONS = [
 				},
 				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
 			},
-			required: []
+			oneOf: [
+				{
+					title: "Single task",
+					required: ["phase", "title", "description"]
+				},
+				{
+					title: "Bulk tasks",
+					required: ["tasks"]
+				}
+			]
 		},
 		outputSchema: {
 			type: "object",
@@ -286,321 +259,104 @@ export const TASK_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: {
+					type: "string",
+					description: "Organization/namespace. Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name. Auto-inferred from session when omitted."
+				},
+				id: { type: "string", format: "uuid", description: "Task ID (for single update)." },
+				ids: {
+					type: "array",
+					items: { type: "string", format: "uuid" },
+					description: "Task UUIDs (for bulk update). NOT task codes — use 'task_codes' for PERF-1 style identifiers."
+				},
+				task_code: {
+					type: "string",
+					description: "Task code (e.g., PERF-1, TASK-001). Use instead of 'id' for string code lookup."
+				},
+				task_codes: {
+					type: "array",
+					items: { type: "string" },
+					description:
+						"Array of task codes (e.g., ['PERF-1', 'TASK-001']). Use instead of 'ids' when identifying by code rather than UUID."
+				},
+				phase: { type: "string" },
+				title: { type: "string", minLength: 3, maxLength: 100 },
+				description: {
+					type: "string",
+					description:
+						"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
+				},
+				status: {
+					type: "string",
+					enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
+					description: "New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
+				},
+				priority: {
+					type: "number",
+					minimum: 1,
+					maximum: 5,
+					description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
+				},
+				agent: { type: "string" },
+				role: { type: "string" },
+				model: { type: "string" },
+				comment: {
+					type: "string",
+					description: "REQUIRED when changing task status. Explain WHY the status is changing."
+				},
+				doc_path: { type: "string" },
+				tags: { type: "array", items: { type: "string" } },
+				metadata: { type: "object" },
+				parent_id: {
+					type: "string",
+					description: "Optional parent task ID (UUID) or task code (e.g., TASK-001)."
+				},
+				depends_on: {
+					type: "string",
+					description: "Optional task ID (UUID) or task code (e.g., TASK-001)."
+				},
+				est_tokens: {
+					type: "number",
+					minimum: 0,
+					description: "Required when status changes to 'completed'."
+				},
+				commit_id: {
+					type: "string",
+					description: "Git commit hash. Recommended when completing a task."
+				},
+				changed_files: {
+					type: "array",
+					items: { type: "string" },
+					description: "List of files changed. Recommended when completing a task."
+				},
+				force: {
+					type: "boolean",
+					description: "If true, bypasses status transition validation."
+				},
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
+			},
+			description: "Provide id/ids (UUID) or task_code/task_codes to identify the task(s) to update.",
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["id"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						id: { type: "string", format: "uuid", description: "Task ID (for single update)" },
-						phase: { type: "string" },
-						title: { type: "string", minLength: 3, maxLength: 100 },
-						description: {
-							type: "string",
-							description:
-								"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
-						},
-						status: {
-							type: "string",
-							enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
-							description:
-								"New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
-						},
-						priority: {
-							type: "number",
-							minimum: 1,
-							maximum: 5,
-							description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
-						},
-						agent: { type: "string" },
-						role: { type: "string" },
-						model: { type: "string" },
-						comment: {
-							type: "string",
-							description:
-								"REQUIRED when changing task status. Explain WHY the status is changing (e.g., 'Starting implementation', 'Blocked by missing API docs', 'Verified fix')."
-						},
-						doc_path: { type: "string" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						parent_id: {
-							type: "string",
-							description:
-								"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						depends_on: {
-							type: "string",
-							description: "Optional task ID (UUID) or task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						est_tokens: {
-							type: "number",
-							minimum: 0,
-							description:
-								"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
-						},
-						commit_id: {
-							type: "string",
-							description: "Git commit hash. Recommended when status changes to 'completed' for traceability."
-						},
-						changed_files: {
-							type: "array",
-							items: { type: "string" },
-							description: "List of files changed. Recommended when status changes to 'completed' for traceability."
-						},
-						force: {
-							type: "boolean",
-							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["id"]
 				},
 				{
 					title: "By IDs",
-					required: ["ids"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						ids: {
-							type: "array",
-							items: { type: "string", format: "uuid" },
-							description:
-								"Task UUIDs (for bulk update). NOT task codes — use 'task_codes' for PERF-1 style identifiers."
-						},
-						phase: { type: "string" },
-						title: { type: "string", minLength: 3, maxLength: 100 },
-						description: {
-							type: "string",
-							description:
-								"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
-						},
-						status: {
-							type: "string",
-							enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
-							description:
-								"New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
-						},
-						priority: {
-							type: "number",
-							minimum: 1,
-							maximum: 5,
-							description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
-						},
-						agent: { type: "string" },
-						role: { type: "string" },
-						model: { type: "string" },
-						comment: {
-							type: "string",
-							description:
-								"REQUIRED when changing task status. Explain WHY the status is changing (e.g., 'Starting implementation', 'Blocked by missing API docs', 'Verified fix')."
-						},
-						doc_path: { type: "string" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						parent_id: {
-							type: "string",
-							description:
-								"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						depends_on: {
-							type: "string",
-							description: "Optional task ID (UUID) or task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						est_tokens: {
-							type: "number",
-							minimum: 0,
-							description:
-								"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
-						},
-						commit_id: {
-							type: "string",
-							description: "Git commit hash. Recommended when status changes to 'completed' for traceability."
-						},
-						changed_files: {
-							type: "array",
-							items: { type: "string" },
-							description: "List of files changed. Recommended when status changes to 'completed' for traceability."
-						},
-						force: {
-							type: "boolean",
-							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["ids"]
 				},
 				{
 					title: "By task_code",
-					required: ["task_code"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						task_code: { type: "string" },
-						phase: { type: "string" },
-						title: { type: "string", minLength: 3, maxLength: 100 },
-						description: {
-							type: "string",
-							description:
-								"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
-						},
-						status: {
-							type: "string",
-							enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
-							description:
-								"New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
-						},
-						priority: {
-							type: "number",
-							minimum: 1,
-							maximum: 5,
-							description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
-						},
-						agent: { type: "string" },
-						role: { type: "string" },
-						model: { type: "string" },
-						comment: {
-							type: "string",
-							description:
-								"REQUIRED when changing task status. Explain WHY the status is changing (e.g., 'Starting implementation', 'Blocked by missing API docs', 'Verified fix')."
-						},
-						doc_path: { type: "string" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						parent_id: {
-							type: "string",
-							description:
-								"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						depends_on: {
-							type: "string",
-							description: "Optional task ID (UUID) or task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						est_tokens: {
-							type: "number",
-							minimum: 0,
-							description:
-								"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
-						},
-						commit_id: {
-							type: "string",
-							description: "Git commit hash. Recommended when status changes to 'completed' for traceability."
-						},
-						changed_files: {
-							type: "array",
-							items: { type: "string" },
-							description: "List of files changed. Recommended when status changes to 'completed' for traceability."
-						},
-						force: {
-							type: "boolean",
-							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["task_code"]
 				},
 				{
 					title: "By task_codes",
-					required: ["task_codes"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						task_codes: {
-							type: "array",
-							items: { type: "string" },
-							minItems: 1,
-							description:
-								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
-						},
-						phase: { type: "string" },
-						title: { type: "string", minLength: 3, maxLength: 100 },
-						description: {
-							type: "string",
-							description:
-								"Detailed description. MUST follow format: 1. Context & Analysis, 2. Step & Implementation, 3. Acceptance & Verification"
-						},
-						status: {
-							type: "string",
-							enum: ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"],
-							description:
-								"New status. Transitions from 'backlog', 'pending' or 'blocked' to 'completed' are NOT allowed."
-						},
-						priority: {
-							type: "number",
-							minimum: 1,
-							maximum: 5,
-							description: "Task priority where 1=Low, 2=Normal, 3=Medium, 4=High, 5=Critical."
-						},
-						agent: { type: "string" },
-						role: { type: "string" },
-						model: { type: "string" },
-						comment: {
-							type: "string",
-							description:
-								"REQUIRED when changing task status. Explain WHY the status is changing (e.g., 'Starting implementation', 'Blocked by missing API docs', 'Verified fix')."
-						},
-						doc_path: { type: "string" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						parent_id: {
-							type: "string",
-							description:
-								"Optional parent task ID (UUID) or parent task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						depends_on: {
-							type: "string",
-							description: "Optional task ID (UUID) or task code (e.g. TASK-001). Resolved to UUID before storing."
-						},
-						est_tokens: {
-							type: "number",
-							minimum: 0,
-							description:
-								"Estimated total tokens actually used for this task. Required when status changes to 'completed'."
-						},
-						commit_id: {
-							type: "string",
-							description: "Git commit hash. Recommended when status changes to 'completed' for traceability."
-						},
-						changed_files: {
-							type: "array",
-							items: { type: "string" },
-							description: "List of files changed. Recommended when status changes to 'completed' for traceability."
-						},
-						force: {
-							type: "boolean",
-							description: "If true, bypasses status transition validation (e.g. pending -> completed)."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["task_codes"]
 				}
 			]
 		},
@@ -634,92 +390,51 @@ export const TASK_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: {
+					type: "string",
+					description: "Organization/namespace. Auto-inferred from session when omitted."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name. Auto-inferred from session when omitted."
+				},
+				id: { type: "string", format: "uuid", description: "Single task ID to delete." },
+				ids: {
+					type: "array",
+					items: { type: "string", format: "uuid" },
+					minItems: 1,
+					description: "Array of task IDs to delete."
+				},
+				task_code: {
+					type: "string",
+					description: "Single task code to delete (e.g., PERF-1)."
+				},
+				task_codes: {
+					type: "array",
+					items: { type: "string" },
+					minItems: 1,
+					description: "Array of task codes to delete (e.g., ['PERF-1'])."
+				},
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
+			},
+			description: "Provide id/ids (UUID) or task_code/task_codes (short code) to delete tasks.",
 			oneOf: [
 				{
-					title: "By ID",
-					required: ["id"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						id: { type: "string", format: "uuid", description: "Task ID (for single deletion)" },
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					title: "By single ID",
+					required: ["id"]
 				},
 				{
-					title: "By IDs",
-					required: ["ids"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						ids: {
-							type: "array",
-							items: { type: "string", format: "uuid" },
-							description:
-								"Task UUIDs (for bulk deletion). NOT task codes — use 'task_codes' for PERF-1 style identifiers."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					title: "By bulk IDs",
+					required: ["ids"]
 				},
 				{
-					title: "By task_code",
-					required: ["task_code"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						task_code: {
-							type: "string",
-							description: "Task code (e.g. PERF-1, TASK-001). Use instead of 'id' for string code lookup."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					title: "By single code",
+					required: ["task_code"]
 				},
 				{
-					title: "By task_codes",
-					required: ["task_codes"],
-					properties: {
-						owner: {
-							type: "string",
-							description:
-								"Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
-						},
-						repo: {
-							type: "string",
-							description:
-								"Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
-						},
-						task_codes: {
-							type: "array",
-							items: { type: "string" },
-							minItems: 1,
-							description:
-								"Array of task codes (e.g. PERF-1, TASK-001). Use instead of 'ids' when identifying tasks by code rather than UUID."
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					title: "By bulk codes",
+					required: ["task_codes"]
 				}
 			]
 		},

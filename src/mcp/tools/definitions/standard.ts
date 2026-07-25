@@ -8,24 +8,22 @@ export const STANDARD_TOOL_DEFINITIONS = [
 			"Fetch full details of a specific coding standard by ID or short code. Use after standard-search when a result is relevant and full guidance is needed.",
 		inputSchema: {
 			type: "object",
+			properties: {
+				id: { type: "string", format: "uuid", description: "Coding standard ID." },
+				code: { type: "string", description: "Short standard code (e.g., 'A3KPQ2')." },
+				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
+				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
+				json: { type: "boolean", default: false, description: "If true, returns JSON details." }
+			},
+			description: "Provide either id (UUID) or code (short code) to fetch a coding standard.",
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["id"],
-					properties: {
-						id: { type: "string", format: "uuid", description: "Coding standard ID." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
-					}
+					required: ["id"]
 				},
 				{
 					title: "By code",
-					required: ["code", "owner", "repo"],
-					properties: {
-						code: { type: "string", description: "Short standard code (e.g. 'A3KPQ2')." },
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON details." }
-					}
+					required: ["code"]
 				}
 			]
 		}
@@ -42,56 +40,42 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
+				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
+				id: { type: "string", format: "uuid", description: "Single standard ID to delete." },
+				ids: {
+					type: "array",
+					items: { type: "string", format: "uuid" },
+					minItems: 1,
+					description: "Array of standard IDs to delete."
+				},
+				code: { type: "string", maxLength: 20, description: "Single standard code to delete." },
+				codes: {
+					type: "array",
+					items: { type: "string", maxLength: 20 },
+					minItems: 1,
+					description: "Array of standard codes to delete."
+				},
+				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
+			},
+			description: "Provide id/ids (UUID) or code/codes (short code) to delete standards.",
 			oneOf: [
 				{
 					title: "By single ID",
-					required: ["owner", "repo", "id"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						id: { type: "string", format: "uuid", description: "Coding standard ID to delete." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["id"]
 				},
 				{
 					title: "By bulk IDs",
-					required: ["owner", "repo", "ids"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						ids: {
-							type: "array",
-							items: { type: "string", format: "uuid" },
-							minItems: 1,
-							description: "Array of coding standard IDs to delete"
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["ids"]
 				},
 				{
 					title: "By single code",
-					required: ["owner", "repo", "code"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						code: { type: "string", maxLength: 20, description: "Short standard code." },
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["code"]
 				},
 				{
 					title: "By bulk codes",
-					required: ["owner", "repo", "codes"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						codes: {
-							type: "array",
-							items: { type: "string", maxLength: 20 },
-							minItems: 1,
-							description: "Array of standard codes to delete"
-						},
-						json: { type: "boolean", default: false, description: "If true, returns JSON result." }
-					}
+					required: ["codes"]
 				}
 			]
 		},
@@ -183,7 +167,16 @@ export const STANDARD_TOOL_DEFINITIONS = [
 				},
 				json: { type: "boolean", default: false }
 			},
-			required: ["owner"]
+			oneOf: [
+				{
+					title: "Single standard",
+					required: ["owner", "name", "content"]
+				},
+				{
+					title: "Bulk standards",
+					required: ["standards"]
+				}
+			]
 		},
 		outputSchema: {
 			type: "object",
@@ -244,52 +237,34 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		},
 		inputSchema: {
 			type: "object",
+			properties: {
+				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
+				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
+				id: { type: "string", format: "uuid", description: "Standard ID to update." },
+				code: { type: "string", maxLength: 20, description: "Short standard code." },
+				name: { type: "string", minLength: 3, maxLength: 255 },
+				content: { type: "string", minLength: 10 },
+				parent_id: { type: "string" },
+				context: { type: "string" },
+				version: { type: "string" },
+				language: { type: "string" },
+				stack: { type: "array", items: { type: "string" } },
+				is_global: { type: "boolean" },
+				tags: { type: "array", items: { type: "string" } },
+				metadata: { type: "object" },
+				agent: { type: "string" },
+				model: { type: "string" },
+				json: { type: "boolean", default: false }
+			},
+			description: "Provide either id (UUID) or code (short code) to identify the standard to update.",
 			oneOf: [
 				{
 					title: "By ID",
-					required: ["owner", "repo", "id"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						id: { type: "string", format: "uuid", description: "Standard ID to update." },
-						code: { type: "string", maxLength: 20, description: "Short standard code." },
-						name: { type: "string", minLength: 3, maxLength: 255 },
-						content: { type: "string", minLength: 10 },
-						parent_id: { type: "string", nullable: true },
-						context: { type: "string" },
-						version: { type: "string" },
-						language: { type: "string" },
-						stack: { type: "array", items: { type: "string" } },
-						is_global: { type: "boolean" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						agent: { type: "string" },
-						model: { type: "string" },
-						json: { type: "boolean", default: false }
-					}
+					required: ["id"]
 				},
 				{
 					title: "By code",
-					required: ["owner", "repo", "code"],
-					properties: {
-						owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-						repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')." },
-						code: { type: "string", maxLength: 20, description: "Short standard code." },
-						id: { type: "string", format: "uuid", description: "Standard ID." },
-						name: { type: "string", minLength: 3, maxLength: 255 },
-						content: { type: "string", minLength: 10 },
-						parent_id: { type: "string", nullable: true },
-						context: { type: "string" },
-						version: { type: "string" },
-						language: { type: "string" },
-						stack: { type: "array", items: { type: "string" } },
-						is_global: { type: "boolean" },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						agent: { type: "string" },
-						model: { type: "string" },
-						json: { type: "boolean", default: false }
-					}
+					required: ["code"]
 				}
 			]
 		},
