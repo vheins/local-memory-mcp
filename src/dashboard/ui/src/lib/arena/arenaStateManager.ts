@@ -10,6 +10,10 @@ import type {
 	EventLogEntry
 } from "./arenaEvents";
 
+// ─── Zoom constraints ──────────────────────────────────────────────────────
+const ZOOM_MIN = 0.1;
+const ZOOM_MAX = 3.0;
+
 export class ArenaStateManager {
 	private state: ArenaState;
 	private subscribers: Set<(patch: ArenaPatch) => void> = new Set();
@@ -670,6 +674,22 @@ export class ArenaStateManager {
 	setPan(panX: number, panY: number): void {
 		this.state.ui.panX = panX;
 		this.state.ui.panY = panY;
+		this.store.set(this.state);
+	}
+
+	resetView(): void {
+		this.state.ui.zoom = 1.0;
+		this.state.ui.panX = 0;
+		this.state.ui.panY = 0;
+		this.store.set(this.state);
+	}
+
+	/** Animate zoom+pan to center on a world coordinate. */
+	zoomToEntity(worldX: number, worldY: number, targetZoom: number = 2.0): void {
+		this.state.ui.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, targetZoom));
+		// Center on the entity: pan = -(worldPos * zoom - canvasCenter)
+		// The caller should compute pan based on canvas size, but we store zoom here.
+		// Pan is computed in the Svelte component where canvas dims are known.
 		this.store.set(this.state);
 	}
 

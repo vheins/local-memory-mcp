@@ -9,6 +9,14 @@ import type {
 	HelperVariant
 } from "./arenaTypes";
 import { STATUS_COLORS, computeZones, therapySlotPosition } from "./arenaTransform";
+import type { FilterState } from "./arenaEvents";
+
+// ─── Level of Detail ────────────────────────────────────────────────────────
+export const LOD_FULL = 0;
+export const LOD_NORMAL = 1;
+export const LOD_SIMPLIFIED = 2;
+export const LOD_AGGREGATE = 3;
+export type LODLevel = typeof LOD_FULL | typeof LOD_NORMAL | typeof LOD_SIMPLIFIED | typeof LOD_AGGREGATE;
 
 // ─── Motion ────────────────────────────────────────────────────────────────
 const SPEED_WALK = 85;
@@ -132,6 +140,10 @@ interface WanderState {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ─── Zoom constraints ──────────────────────────────────────────────────────
+const ZOOM_MIN = 0.1;
+const ZOOM_MAX = 3.0;
+
 export class ArenaRenderer {
 	private canvas: HTMLCanvasElement;
 	private ctx: CanvasRenderingContext2D;
@@ -139,10 +151,21 @@ export class ArenaRenderer {
 	private layout: ArenaLayoutConfig | null = null;
 	private isDark = false;
 	private hoveredId: string | null = null;
+	private selectedId: string | null = null;
+	private selectedType: "agent" | "task" | "repository" | null = null;
 	private rafId = 0;
 	private ts = 0;
 	private prevTs = 0;
 	private wander = new Map<string, WanderState>();
+	private activeFilter: FilterState = { repository: null, roles: [], priorities: [], statuses: [], search: "" };
+	private currentLod: LODLevel = LOD_NORMAL;
+	private reducedMotion = false;
+	private reducedTransparency = false;
+
+	// ── Viewport transform state ──────────────────────────────────────────
+	private viewportZoom = 1.0;
+	private viewportPanX = 0;
+	private viewportPanY = 0;
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
@@ -157,6 +180,22 @@ export class ArenaRenderer {
 	setHovered(id: string | null) {
 		this.hoveredId = id;
 	}
+	setFilter(filter: FilterState): void {
+		this.activeFilter = filter;
+	}
+	setReducedMotion(enabled: boolean): void {
+		this.reducedMotion = enabled;
+	}
+	setReducedTransparency(enabled: boolean): void {
+		this.reducedTransparency = enabled;
+	}
+	setSelected(id: string | null, type: "agent" | "task" | "repository" | null) {
+		this.selectedId = id;
+		this.selectedType = type;
+	}
+	getSelected(): { id: string | null; type: "agent" | "task" | "repository" | null } {
+		return { id: this.selectedId, type: this.selectedType };
+	}
 	start() {
 		this.rafId = requestAnimationFrame(this.loop);
 	}
@@ -164,14 +203,157 @@ export class ArenaRenderer {
 		cancelAnimationFrame(this.rafId);
 	}
 
+	/** Set viewport transform (zoom + pan). Called from the Svelte component. */
+	setViewport(zoom: number, panX: number, panY: number): void {
+		this.viewportZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom));
+		this.viewportPanX = panX;
+		this.viewportPanY = panY;
+	}
+
+	/** Get the current world-space bounding box visible in the viewport. */
+	getViewportWorldBounds(): { x: number; y: number; w: number; h: number } {
+		const cw = this.canvas.width;
+		const ch = this.canvas.height;
+		const z = this.viewportZoom || 1;
+		return {
+			x: -this.viewportPanX / z,
+			y: -this.viewportPanY / z,
+			w: cw / z,
+			h: ch / z
+		};
+	}
+
+	/** Compute culling bounds in world space with dynamic margin based on zoom level. */
+	private getViewportCullBounds(): { left: number; top: number; right: number; bottom: number } {
+		const z = this.viewportZoom || 1;
+		const margin = z < 0.5 ? 100 : 50;
+		const left = -this.viewportPanX / z;
+		const top = -this.viewportPanY / z;
+		return {
+			left: left - margin,
+			top: top - margin,
+			right: left + this.canvas.width / z + margin,
+			bottom: top + this.canvas.height / z + margin
+		};
+	}
+
+	/** Check if a world-space point is within the culling bounds. */
+	private isInViewport(
+		x: number,
+		y: number,
+		bounds: { left: number; top: number; right: number; bottom: number }
+	): boolean {
+		return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
+	}
+
+	/** Get zones for minimap rendering (exposes layout-derived zones). */
+	getZones(): ZoneRect[] {
+		if (!this.layout) return [];
+		return computeZones(this.layout.canvasWidth, this.layout.canvasHeight);
+	}
+
+	/** Get current viewport info for minimap viewport rectangle. */
+	getViewportInfo(): { zoom: number; panX: number; panY: number; canvasW: number; canvasH: number } {
+		return {
+			zoom: this.viewportZoom,
+			panX: this.viewportPanX,
+			panY: this.viewportPanY,
+			canvasW: this.canvas.width,
+			canvasH: this.canvas.height
+		};
+	}
+
+	/** Compute the current LOD level from zoom. */
+	private computeLOD(): LODLevel {
+		const z = this.viewportZoom;
+		if (z >= 1.0) return LOD_FULL;
+		if (z >= 0.5) return LOD_NORMAL;
+		if (z >= 0.25) return LOD_SIMPLIFIED;
+		return LOD_AGGREGATE;
+	}
+
+	/** Inverse-transform a screen-space point to world-space. */
+	private screenToWorld(sx: number, sy: number): { x: number; y: number } {
+		const z = this.viewportZoom || 1;
+		return {
+			x: (sx - this.viewportPanX) / z,
+			y: (sy - this.viewportPanY) / z
+		};
+	}
+
 	hitTestAgent(mx: number, my: number): string | null {
 		if (!this.scene) return null;
+		// Convert screen coords to world coords (inverse transform)
+		const world = this.screenToWorld(mx, my);
 		for (const a of this.scene.agents.values()) {
-			const dx = mx - a.x,
-				dy = my - a.y;
+			const dx = world.x - a.x,
+				dy = world.y - a.y;
 			if (dx * dx + dy * dy <= 14 * 14) return a.id;
 		}
 		return null;
+	}
+
+	/** Hit test that also returns the world-space entity position (for zoom-to). */
+	hitTestAgentWithPos(mx: number, my: number): { id: string; wx: number; wy: number } | null {
+		if (!this.scene) return null;
+		const world = this.screenToWorld(mx, my);
+		for (const a of this.scene.agents.values()) {
+			const dx = world.x - a.x,
+				dy = world.y - a.y;
+			if (dx * dx + dy * dy <= 14 * 14) return { id: a.id, wx: a.x, wy: a.y };
+		}
+		// Also test tasks (workstations have a wider hit area)
+		for (const t of this.scene.tasks.values()) {
+			const dx = world.x - t.x,
+				dy = world.y - t.y;
+			if (dx * dx + dy * dy <= 20 * 20) return { id: t.id, wx: t.x, wy: t.y };
+		}
+		return null;
+	}
+
+	/** Hit-test a task workstation at screen coords. */
+	hitTestTask(mx: number, my: number): string | null {
+		if (!this.scene) return null;
+		const world = this.screenToWorld(mx, my);
+		for (const t of this.scene.tasks.values()) {
+			const dx = world.x - t.x,
+				dy = world.y - t.y;
+			if (dx * dx + dy * dy <= 20 * 20) return t.id;
+		}
+		return null;
+	}
+
+	/** Composite hit-test: agent first, then task. */
+	hitTest(mx: number, my: number): { type: "agent" | "task"; id: string } | null {
+		const agentHit = this.hitTestAgent(mx, my);
+		if (agentHit) return { type: "agent", id: agentHit };
+		const taskHit = this.hitTestTask(mx, my);
+		if (taskHit) return { type: "task", id: taskHit };
+		return null;
+	}
+
+	/** Smoothly animate viewport to center on an entity. */
+	focusEntity(id: string, type: "agent" | "task"): void {
+		if (!this.scene || !this.layout) return;
+		let ex: number;
+		let ey: number;
+		if (type === "agent") {
+			const a = this.scene.agents.get(id);
+			if (!a) return;
+			ex = a.x;
+			ey = a.y;
+		} else {
+			const t = this.scene.tasks.get(id);
+			if (!t) return;
+			ex = t.x;
+			ey = t.y;
+		}
+		const targetZoom = 2.0;
+		const cw = this.canvas.width;
+		const ch = this.canvas.height;
+		const targetPanX = cw / 2 - ex * targetZoom;
+		const targetPanY = ch / 2 - ey * targetZoom;
+		this.setViewport(targetZoom, targetPanX, targetPanY);
 	}
 
 	// ── Loop ─────────────────────────────────────────────────────────────────
@@ -192,6 +374,22 @@ export class ArenaRenderer {
 	private updateAgents(dt: number, idleZone: ZoneRect, ts: number) {
 		if (!this.scene) return;
 		for (const a of this.scene.agents.values()) {
+			// ── Reduced motion: snap to target instantly ──
+			if (this.reducedMotion) {
+				a.x = a.targetX;
+				a.y = a.targetY;
+				a.vx = 0;
+				a.vy = 0;
+				a.walkPhase = 0;
+				if (a.handoffAnim) {
+					a.handoffAnim.phase = "resting";
+					a.handoffAnim.progress = 1;
+					a.x = a.handoffAnim.endX;
+					a.y = a.handoffAnim.endY;
+				}
+				continue;
+			}
+
 			// ── Handoff animation takes priority over normal movement ────
 			if (a.handoffAnim) {
 				this.updateHandoffAnim(a, dt, ts);
@@ -333,43 +531,155 @@ export class ArenaRenderer {
 		}
 	}
 
+	// ── Filter matching ────────────────────────────────────────────────────
+	private matchesAgentFilter(agent: VisualAgent): boolean {
+		const f = this.activeFilter;
+		// Role filter
+		if (f.roles.length > 0 && !f.roles.includes(agent.role)) return false;
+		// Repository filter: agent must have tasks/repos in the selected repo
+		if (f.repository && !agent.repos.includes(f.repository)) return false;
+		// Search: case-insensitive match on agent name
+		if (f.search) {
+			const q = f.search.toLowerCase();
+			if (!agent.name.toLowerCase().includes(q)) {
+				// Also check if any claimed task matches the search
+				const taskMatch = agent.claimedTaskIds.some((tid) => {
+					const t = this.scene?.tasks.get(tid);
+					return t && (t.title.toLowerCase().includes(q) || t.taskCode.toLowerCase().includes(q));
+				});
+				if (!taskMatch) return false;
+			}
+		}
+		return true;
+	}
+
+	private matchesTaskFilter(task: VisualTask): boolean {
+		const f = this.activeFilter;
+		// Repository filter
+		if (f.repository && task.repo !== f.repository) return false;
+		// Priority filter
+		if (f.priorities.length > 0 && !f.priorities.includes(task.priorityLevel)) return false;
+		// Status filter
+		if (f.statuses.length > 0 && !f.statuses.includes(task.status)) return false;
+		// Search: case-insensitive match on title or task code
+		if (f.search) {
+			const q = f.search.toLowerCase();
+			if (!task.title.toLowerCase().includes(q) && !task.taskCode.toLowerCase().includes(q)) return false;
+		}
+		// Role filter: if roles are active, only show tasks claimed by matching agents
+		if (f.roles.length > 0 && task.claimedByAgentId) {
+			const agent = this.scene?.agents.get(task.claimedByAgentId);
+			if (agent && !f.roles.includes(agent.role)) return false;
+		}
+		return true;
+	}
+
+	private isFilterActive(): boolean {
+		const f = this.activeFilter;
+		return (
+			f.repository !== null || f.roles.length > 0 || f.priorities.length > 0 || f.statuses.length > 0 || f.search !== ""
+		);
+	}
+
 	// ── Main render ───────────────────────────────────────────────────────────
 	private render() {
 		const { canvas, ctx, scene, layout, isDark, ts } = this;
 		if (!layout) return;
 		const zones = computeZones(layout.canvasWidth, layout.canvasHeight);
 
+		// ── Compute LOD from zoom ──
+		this.currentLod = this.computeLOD();
+		const lod = this.currentLod;
+
+		// ── Clear & draw background outside world transform ──
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		ctx.fillStyle = isDark ? "#0a0e1a" : "#dde3ed";
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+		// ── Apply viewport transform for world content ──
+		ctx.save();
+		ctx.translate(this.viewportPanX, this.viewportPanY);
+		ctx.scale(this.viewportZoom, this.viewportZoom);
+
+		// Global floor (grid) — covers the full world space
 		this.drawGlobalFloor(isDark);
 
 		for (const z of zones) this.drawRoom(z, isDark);
 
-		if (!scene) return;
+		if (!scene) {
+			ctx.restore();
+			return;
+		}
+
+		// ── LOD_AGGREGATE: zone aggregate overlays (drawn over room decorations) ──
+		if (lod === LOD_AGGREGATE) {
+			for (const z of zones) this.drawZoneAggregate(z, scene, isDark, ts);
+		}
 
 		// Sort tasks by y so closer ones render last (depth)
-		const sortedTasks = Array.from(scene.tasks.values()).sort((a, b) => a.y - b.y);
-		for (const t of sortedTasks) this.drawWorkstation(t, isDark, ts);
+		const hasFilter = this.isFilterActive();
+		const cullBounds = lod < LOD_SIMPLIFIED ? this.getViewportCullBounds() : undefined;
+		const sortedTasks = Array.from(scene.tasks.values())
+			.filter(
+				(t) =>
+					(!hasFilter || this.matchesTaskFilter(t)) &&
+					(lod >= LOD_SIMPLIFIED || this.isInViewport(t.x, t.y, cullBounds!))
+			)
+			.sort((a, b) => a.y - b.y);
 
-		this.drawClaimLinks(scene, ts);
-		this.drawHandoffBeams(scene, ts);
+		if (lod === LOD_AGGREGATE) {
+			for (const t of sortedTasks) this.drawWorkstationAggregate(t, isDark, ts);
+		} else if (lod === LOD_SIMPLIFIED) {
+			for (const t of sortedTasks) this.drawWorkstationSimplified(t, isDark, ts);
+		} else {
+			for (const t of sortedTasks) this.drawWorkstation(t, isDark, ts);
+		}
 
-		// Draw handoff path trails (before agents so they appear under)
-		for (const a of scene.agents.values()) {
-			if (a.handoffAnim) this.drawHandoffTrail(a, isDark, ts);
+		if (lod < LOD_SIMPLIFIED) {
+			this.drawClaimLinks(scene, ts, cullBounds);
+			this.drawHandoffBeams(scene, ts, cullBounds);
+
+			// Draw handoff path trails (before agents so they appear under)
+			for (const a of scene.agents.values()) {
+				if (a.handoffAnim && (!hasFilter || this.matchesAgentFilter(a)) && this.isInViewport(a.x, a.y, cullBounds!)) {
+					this.drawHandoffTrail(a, isDark, ts);
+				}
+			}
 		}
 
 		// Sort agents by y (depth order), hovered last
-		const sortedAgents = Array.from(scene.agents.values()).sort(
-			(a, b) => a.y - b.y || (a.id === this.hoveredId ? 1 : -1)
-		);
-		for (const a of sortedAgents) {
-			if (a.handoffAnim) {
-				// Draw vehicle + helper + passive agent
-				this.drawHandoffGroup(a, isDark, ts);
-			} else {
-				this.drawCharacter(a, isDark, ts);
+		const sortedAgents = Array.from(scene.agents.values())
+			.filter(
+				(a) =>
+					(!hasFilter || this.matchesAgentFilter(a)) &&
+					(lod >= LOD_SIMPLIFIED || this.isInViewport(a.x, a.y, cullBounds!))
+			)
+			.sort((a, b) => a.y - b.y || (a.id === this.hoveredId ? 1 : -1));
+
+		if (lod === LOD_AGGREGATE) {
+			for (const a of sortedAgents) {
+				this.drawCharacterAggregate(a, isDark, ts);
+			}
+		} else if (lod === LOD_SIMPLIFIED) {
+			for (const a of sortedAgents) {
+				if (a.handoffAnim) {
+					this.drawHandoffGroup(a, isDark, ts);
+				} else {
+					this.drawCharacterSimplified(a, isDark, ts);
+				}
+			}
+		} else {
+			for (const a of sortedAgents) {
+				if (a.handoffAnim) {
+					this.drawHandoffGroup(a, isDark, ts);
+				} else {
+					this.drawCharacter(a, isDark, ts);
+				}
 			}
 		}
+
+		// ── Restore screen-space transform ──
+		ctx.restore();
 	}
 
 	// ── Global floor ──────────────────────────────────────────────────────────
@@ -759,6 +1069,13 @@ export class ArenaRenderer {
 	// ── Zone label sign ───────────────────────────────────────────────────────
 	private drawZoneLabel(ctx: CanvasRenderingContext2D, zone: ZoneRect, isDark: boolean) {
 		const { x, y, w, color, label } = zone;
+		const lod = this.currentLod;
+
+		if (lod === LOD_AGGREGATE) {
+			// At LOD_AGGREGATE, the zone label is handled by drawZoneAggregate — skip duplicate
+			return;
+		}
+
 		const bw = Math.min(w - 16, 92),
 			bh = 16,
 			bx = x + 9,
@@ -1432,7 +1749,7 @@ export class ArenaRenderer {
 			SH = 20;
 
 		// Shake animation for blocked tasks
-		const drawX = x + (blocked ? Math.sin(ts * 0.003) * 2 : 0);
+		const drawX = x + (!this.reducedMotion && blocked ? Math.sin(ts * 0.003) * 2 : 0);
 
 		// Chair behind desk
 		const chairY = y + DH / 2 + 4;
@@ -1525,7 +1842,7 @@ export class ArenaRenderer {
 			sGrd.addColorStop(0, lighten(color, 50));
 			sGrd.addColorStop(1, color);
 			ctx.fillStyle = sGrd;
-			if (active) {
+			if (active && !this.reducedTransparency) {
 				ctx.shadowColor = color + "99";
 				ctx.shadowBlur = 10;
 			}
@@ -1539,7 +1856,7 @@ export class ArenaRenderer {
 		// ── Blocked tint overlay ──────────────────────────────────────────
 		if (blocked) {
 			const blockColor = BLOCKED_REASON_COLORS[blockedReason!] ?? "#EF4444";
-			const pulseAlpha = 0.06 + 0.03 * Math.sin(ts * 0.002);
+			const pulseAlpha = this.reducedMotion ? 0.08 : 0.06 + 0.03 * Math.sin(ts * 0.002);
 			ctx.fillStyle = rgba(blockColor, pulseAlpha);
 			rr(ctx, drawX - DW / 2, y - DH / 2, DW, DH, 4);
 			ctx.fill();
@@ -1572,8 +1889,10 @@ export class ArenaRenderer {
 			rr(ctx, badgeX, badgeY, badgeW, badgeH, 4);
 			ctx.fill();
 			// Glow
-			ctx.shadowColor = blockColor;
-			ctx.shadowBlur = 4 + 2 * Math.sin(ts * 0.005);
+			if (!this.reducedTransparency) {
+				ctx.shadowColor = blockColor;
+				ctx.shadowBlur = 4 + 2 * Math.sin(ts * 0.005);
+			}
 			rr(ctx, badgeX, badgeY, badgeW, badgeH, 4);
 			ctx.fill();
 			ctx.shadowBlur = 0;
@@ -1612,14 +1931,16 @@ export class ArenaRenderer {
 
 		// ── Human review attention badge ──────────────────────────────────
 		if (task.blockedReason === "human") {
-			const pulse = 0.6 + 0.4 * Math.sin(ts * 0.005);
-			const dotR = 4 + pulse * 1.5;
+			const pulse = this.reducedMotion ? 0.8 : 0.6 + 0.4 * Math.sin(ts * 0.005);
+			const dotR = this.reducedMotion ? 5 : 4 + pulse * 1.5;
 			const dotX = drawX + SW / 2 + 6;
 			const dotY = mY - 2;
 			ctx.save();
 			// Pulsing glow
-			ctx.shadowColor = "#f97316";
-			ctx.shadowBlur = 8 + pulse * 6;
+			if (!this.reducedTransparency) {
+				ctx.shadowColor = "#f97316";
+				ctx.shadowBlur = 8 + pulse * 6;
+			}
 			ctx.fillStyle = `rgba(249, 115, 22, ${0.6 + pulse * 0.4})`;
 			ctx.beginPath();
 			ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
@@ -1733,8 +2054,10 @@ export class ArenaRenderer {
 			const bx = drawX + SW / 2;
 			const by = mY - 1;
 			ctx.fillStyle = "#f59e0b";
-			ctx.shadowColor = "#f59e0b";
-			ctx.shadowBlur = 8;
+			if (!this.reducedTransparency) {
+				ctx.shadowColor = "#f59e0b";
+				ctx.shadowBlur = 8;
+			}
 			ctx.beginPath();
 			ctx.arc(bx, by, 5, 0, Math.PI * 2);
 			ctx.fill();
@@ -1753,12 +2076,22 @@ export class ArenaRenderer {
 	}
 
 	// ── Claim links ───────────────────────────────────────────────────────────
-	private drawClaimLinks(scene: ArenaScene, ts: number) {
+	private drawClaimLinks(
+		scene: ArenaScene,
+		ts: number,
+		cullBounds?: { left: number; top: number; right: number; bottom: number }
+	) {
 		const { ctx } = this;
+		const hasFilter = this.isFilterActive();
 		for (const a of scene.agents.values()) {
+			if (hasFilter && !this.matchesAgentFilter(a)) continue;
 			for (const tid of a.claimedTaskIds) {
 				const t = scene.tasks.get(tid);
 				if (!t) continue;
+				if (hasFilter && !this.matchesTaskFilter(t)) continue;
+				// Skip if neither endpoint is visible in the viewport
+				if (cullBounds && !this.isInViewport(a.x, a.y, cullBounds) && !this.isInViewport(t.x, t.y, cullBounds))
+					continue;
 				const grd = ctx.createLinearGradient(a.x, a.y, t.x, t.y);
 				grd.addColorStop(0, a.color + "cc");
 				grd.addColorStop(1, (STATUS_COLORS[t.status] ?? "#64748b") + "44");
@@ -1777,23 +2110,35 @@ export class ArenaRenderer {
 	}
 
 	// ── Handoff beams ─────────────────────────────────────────────────────────
-	private drawHandoffBeams(scene: ArenaScene, ts: number) {
+	private drawHandoffBeams(
+		scene: ArenaScene,
+		ts: number,
+		cullBounds?: { left: number; top: number; right: number; bottom: number }
+	) {
 		const { ctx } = this;
+		const hasFilter = this.isFilterActive();
 		for (const h of scene.handoffs) {
 			const from = scene.agents.get(h.fromAgentId);
 			if (!from) continue;
+			if (hasFilter && !this.matchesAgentFilter(from)) continue;
 			let toX: number, toY: number;
 			if (h.toAgentId) {
 				const to = scene.agents.get(h.toAgentId);
 				if (!to) continue;
+				if (hasFilter && !this.matchesAgentFilter(to)) continue;
 				toX = to.x;
 				toY = to.y;
 			} else if (h.taskId) {
 				const t = scene.tasks.get(h.taskId);
 				if (!t) continue;
+				if (hasFilter && !this.matchesTaskFilter(t)) continue;
 				toX = t.x;
 				toY = t.y;
 			} else continue;
+
+			// Skip if neither endpoint is visible in the viewport
+			if (cullBounds && !this.isInViewport(from.x, from.y, cullBounds) && !this.isInViewport(toX, toY, cullBounds))
+				continue;
 
 			ctx.strokeStyle = "#f59e0b88";
 			ctx.lineWidth = 2.5;
@@ -1810,8 +2155,10 @@ export class ArenaRenderer {
 			const px = from.x + (toX - from.x) * t2,
 				py = from.y + (toY - from.y) * t2;
 			ctx.fillStyle = "#f59e0b";
-			ctx.shadowColor = "#f59e0b";
-			ctx.shadowBlur = 8;
+			if (!this.reducedTransparency) {
+				ctx.shadowColor = "#f59e0b";
+				ctx.shadowBlur = 8;
+			}
 			ctx.beginPath();
 			ctx.arc(px, py, 4, 0, Math.PI * 2);
 			ctx.fill();
@@ -1847,8 +2194,10 @@ export class ArenaRenderer {
 			const dx = h.startX + (h.endX - h.startX) * dotProgress;
 			const dy = h.startY + (h.endY - h.startY) * dotProgress;
 			ctx.fillStyle = "#14b8a6";
-			ctx.shadowColor = "#14b8a6";
-			ctx.shadowBlur = 6;
+			if (!this.reducedTransparency) {
+				ctx.shadowColor = "#14b8a6";
+				ctx.shadowBlur = 6;
+			}
 			ctx.beginPath();
 			ctx.arc(dx, dy, 3, 0, Math.PI * 2);
 			ctx.fill();
@@ -2423,10 +2772,10 @@ export class ArenaRenderer {
 		const hairStyle = nh % 5;
 		const shirtHighlight = lighten(color, 30);
 
-		// Walk cycle values
+		// Walk cycle values (skip when reduced motion)
 		const working = state === "processing" && !moving;
 		const workPhase = ts * 0.018 + (nh % 20);
-		const legSwing = moving ? Math.sin(walkPhase) * 5 : 0;
+		let legSwing = moving ? Math.sin(walkPhase) * 5 : 0;
 		let armSwing = moving ? Math.sin(walkPhase + Math.PI) * 4 : 0;
 		let headBob = moving ? Math.sin(walkPhase * 2) * 1.2 : 0;
 
@@ -2440,6 +2789,13 @@ export class ArenaRenderer {
 			x += Math.sin(ts * 0.05) * 1.5;
 		} else if (state === "idle" && !moving) {
 			y += Math.sin(ts * 0.003 + nh) * 1;
+		}
+
+		// ── Reduced motion: zero out all character animations ──
+		if (this.reducedMotion) {
+			legSwing = 0;
+			armSwing = 0;
+			headBob = 0;
 		}
 
 		// Ground shadow
@@ -2639,13 +2995,15 @@ export class ArenaRenderer {
 
 		// ─ Working effect: pulse ring + thought dots ─
 		if (state === "processing") {
-			const pulse = 0.4 + 0.6 * Math.sin(ts * 0.0028);
-			ctx.strokeStyle = rgba(color, 0.18 + pulse * 0.14);
-			ctx.lineWidth = 1.5;
-			ctx.beginPath();
-			ctx.arc(x, y - 38 + headBob, 17 + pulse * 4, 0, Math.PI * 2);
-			ctx.stroke();
-			if (working) {
+			if (!this.reducedMotion) {
+				const pulse = 0.4 + 0.6 * Math.sin(ts * 0.0028);
+				ctx.strokeStyle = rgba(color, 0.18 + pulse * 0.14);
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(x, y - 38 + headBob, 17 + pulse * 4, 0, Math.PI * 2);
+				ctx.stroke();
+			}
+			if (working && !this.reducedMotion) {
 				for (let ti = 0; ti < 4; ti++) {
 					const tapPhase = (workPhase + ti * 0.9) % (Math.PI * 2);
 					const alpha = Math.max(0, Math.sin(tapPhase));
@@ -2667,7 +3025,7 @@ export class ArenaRenderer {
 		}
 
 		// ─ Burnout effect ─
-		if (state === "burnout") {
+		if (state === "burnout" && !this.reducedMotion) {
 			const zPhase = (ts * 0.002) % (Math.PI * 2);
 			for (let i = 0; i < 3; i++) {
 				const zt = (zPhase + i * ((Math.PI * 2) / 3)) % (Math.PI * 2);
@@ -2681,7 +3039,7 @@ export class ArenaRenderer {
 		}
 
 		// ─ Self-healing spinner ─
-		if (state === "self_healing") {
+		if (state === "self_healing" && !this.reducedMotion) {
 			this.drawSelfHealingSpinner(ctx, x + 14, y - 34, ts);
 		}
 
@@ -2739,7 +3097,7 @@ export class ArenaRenderer {
 		const endAngle = startAngle + (clamped / 100) * Math.PI * 2;
 
 		// Glow for critical
-		if (health === "critical") {
+		if (health === "critical" && !this.reducedMotion) {
 			const pulse = 0.5 + 0.5 * Math.sin(ts * 0.006);
 			ctx.save();
 			ctx.shadowColor = "#EF4444";
@@ -2789,8 +3147,10 @@ export class ArenaRenderer {
 
 		// Glow
 		ctx.save();
-		ctx.shadowColor = color;
-		ctx.shadowBlur = 8;
+		if (!this.reducedTransparency) {
+			ctx.shadowColor = color;
+			ctx.shadowBlur = 8;
+		}
 		ctx.strokeStyle = color;
 		ctx.lineWidth = strokeWidth;
 		ctx.lineCap = "round";
@@ -2842,8 +3202,10 @@ export class ArenaRenderer {
 		ctx.save();
 		ctx.lineCap = "round";
 		// Glow
-		ctx.shadowColor = color;
-		ctx.shadowBlur = 6;
+		if (!this.reducedTransparency) {
+			ctx.shadowColor = color;
+			ctx.shadowBlur = 6;
+		}
 		ctx.strokeStyle = color;
 		ctx.lineWidth = strokeWidth;
 		ctx.beginPath();
@@ -2919,7 +3281,7 @@ export class ArenaRenderer {
 		// Calculate remaining life for fade-out in last 300ms
 		const age = now - speechBubbleTs;
 		const remaining = Math.max(0, SPEECH_DURATION_MS - age);
-		const fadeOutAlpha = Math.min(1, remaining / 300); // linear fade over last 300ms
+		const fadeOutAlpha = this.reducedMotion ? 1 : Math.min(1, remaining / 300); // reduced motion: instant show/hide
 
 		const maxCharsPerLine = 20;
 		const lines: string[] = [];
@@ -3182,6 +3544,369 @@ export class ArenaRenderer {
 					ctx.stroke();
 				}
 			}
+		}
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// ── LOD_SIMPLIFIED RENDERING ──────────────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	/** LOD_SIMPLIFIED: Colored circle with health ring. No face, hair, speech, status icons, or activity animations. */
+	private drawCharacterSimplified(agent: VisualAgent, isDark: boolean, _ts: number) {
+		const { ctx } = this;
+		const { x, y, state, name, id } = agent;
+		const color = agent.color || "#64748b";
+		const hovered = id === this.hoveredId;
+		const spd = Math.hypot(agent.vx, agent.vy);
+		const moving = spd > 5;
+		const working = state === "processing" && !moving;
+
+		// Minimal bob for working state (no walk animation)
+		let yOff = 0;
+		if (!this.reducedMotion) {
+			if (working) {
+				yOff = Math.sin(_ts * 0.018) * 0.8;
+			} else if (state === "idle" && !moving) {
+				yOff = Math.sin(_ts * 0.003 + strHash(name)) * 1;
+			} else if (state === "blocked") {
+				yOff = Math.sin(_ts * 0.05) * 1.5;
+			}
+		}
+
+		const drawY = y + yOff;
+
+		// Ground shadow
+		ctx.fillStyle = "rgba(0,0,0,0.18)";
+		ctx.beginPath();
+		ctx.ellipse(x, drawY + 3, 9, 4, 0, 0, Math.PI * 2);
+		ctx.fill();
+
+		// Hover selection ring
+		if (hovered) {
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1.5;
+			ctx.setLineDash([3, 2]);
+			ctx.beginPath();
+			ctx.arc(x, drawY - 4, 12, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.setLineDash([]);
+		}
+
+		// Health ring (behind character)
+		this.drawHealthRing(ctx, x, drawY, agent.healthRing, agent.health, _ts);
+
+		// Simple body: colored circle with gradient
+		const bodyR = 10;
+		const bGrd = ctx.createRadialGradient(x - 2, drawY - 6, 1, x, drawY - 4, bodyR);
+		bGrd.addColorStop(0, lighten(color, 30));
+		bGrd.addColorStop(1, color);
+		ctx.fillStyle = bGrd;
+		ctx.beginPath();
+		ctx.arc(x, drawY - 4, bodyR, 0, Math.PI * 2);
+		ctx.fill();
+
+		// Border
+		ctx.strokeStyle = darken(color, 20);
+		ctx.lineWidth = 0.75;
+		ctx.beginPath();
+		ctx.arc(x, drawY - 4, bodyR, 0, Math.PI * 2);
+		ctx.stroke();
+
+		// State indicator dot (top-right of circle)
+		if (state !== "idle") {
+			const dotColor =
+				state === "blocked"
+					? "#ef4444"
+					: state === "processing"
+						? "#a855f7"
+						: state === "claiming"
+							? "#0ea5e9"
+							: state === "burnout"
+								? "#f59e0b"
+								: color;
+			ctx.fillStyle = dotColor;
+			ctx.beginPath();
+			ctx.arc(x + 7, drawY - 10, 3, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.strokeStyle = "#ffffff";
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			ctx.arc(x + 7, drawY - 10, 3, 0, Math.PI * 2);
+			ctx.stroke();
+		}
+
+		// Name label
+		ctx.fillStyle = isDark ? "rgba(226,232,240,0.82)" : "rgba(15,23,42,0.7)";
+		ctx.font = "7px system-ui,sans-serif";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "top";
+		const lbl = name.length > 12 ? name.slice(0, 12) + "…" : name;
+		ctx.fillText(lbl, x, drawY + 10);
+	}
+
+	/** LOD_SIMPLIFIED: Task card outline with priority stripe, task code label, and count badge. No monitor content, tool name, token display, or duration badge. */
+	private drawWorkstationSimplified(task: VisualTask, isDark: boolean, _ts: number) {
+		const { ctx } = this;
+		const { x, y, status, taskCode, title, claimedByAgentId, repo } = task;
+		const color = STATUS_COLORS[status] ?? "#64748b";
+		const active = !!claimedByAgentId;
+		const DW = 50,
+			DH = 14;
+
+		const drawX = x;
+
+		// Shadow
+		ctx.fillStyle = "rgba(0,0,0,0.12)";
+		rr(ctx, drawX - DW / 2 + 2, y - DH / 2 + 3, DW, DH, 4);
+		ctx.fill();
+
+		// Card background
+		const deskGrd = ctx.createLinearGradient(drawX - DW / 2, y - DH / 2, drawX + DW / 2, y + DH / 2);
+		deskGrd.addColorStop(0, isDark ? "#1e2840" : "#d4dce8");
+		deskGrd.addColorStop(1, isDark ? "#18202e" : "#c0ccd8");
+		ctx.fillStyle = deskGrd;
+		rr(ctx, drawX - DW / 2, y - DH / 2, DW, DH, 4);
+		ctx.fill();
+
+		// Card border
+		ctx.strokeStyle = isDark ? "#2d3a50" : "#a0b0c0";
+		ctx.lineWidth = 0.75;
+		rr(ctx, drawX - DW / 2, y - DH / 2, DW, DH, 4);
+		ctx.stroke();
+
+		// Priority stripe (left edge)
+		const priorityStripeColor =
+			task.priorityLevel === "p0"
+				? "#ef4444"
+				: task.priorityLevel === "p1"
+					? "#f59e0b"
+					: task.priorityLevel === "p2"
+						? "#3b82f6"
+						: "#64748b";
+		ctx.fillStyle = priorityStripeColor;
+		rr(ctx, drawX - DW / 2, y - DH / 2, 3, DH, 4);
+		ctx.fill();
+		// Patch the left corners to be square
+		ctx.fillRect(drawX - DW / 2, y - DH / 2 + 2, 3, DH - 4);
+
+		// Task code label
+		ctx.fillStyle = active ? "rgba(255,255,255,0.9)" : isDark ? "#374151" : "#6b7280";
+		ctx.font = "bold 5.5px monospace";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(`${repo.split("/").pop()?.slice(0, 5)}·${taskCode}`.slice(0, 12), drawX, y);
+
+		// Count badge for grouped tasks (if retry > 0)
+		if (task.retryCount > 0) {
+			const badgeText = `${task.retryCount + 1}`;
+			const badgeR = 5;
+			const badgeX = drawX + DW / 2 - 2;
+			const badgeY = y - DH / 2 - 2;
+			ctx.fillStyle = rgba("#06B6D4", 0.9);
+			ctx.beginPath();
+			ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.fillStyle = "#ffffff";
+			ctx.font = "bold 5px monospace";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText(badgeText, badgeX, badgeY);
+		}
+
+		// Task title below card (truncated)
+		ctx.fillStyle = isDark ? "rgba(148,163,184,0.55)" : "rgba(71,85,105,0.55)";
+		ctx.font = "5px system-ui,sans-serif";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "top";
+		ctx.fillText(title.slice(0, 12), drawX, y + DH / 2 + 2);
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// ── LOD_AGGREGATE RENDERING ───────────────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	/** LOD_AGGREGATE: Tiny colored dot (3-4px radius) with 1px health ring. No name, face, or body. */
+	private drawCharacterAggregate(agent: VisualAgent, _isDark: boolean, _ts: number) {
+		const { ctx } = this;
+		const { x, y, health, healthRing } = agent;
+		const color = agent.color || "#64748b";
+		const hovered = agent.id === this.hoveredId;
+
+		// Tiny dot
+		const dotR = 3.5;
+		ctx.fillStyle = color;
+		ctx.beginPath();
+		ctx.arc(x, y, dotR, 0, Math.PI * 2);
+		ctx.fill();
+
+		// 1px health ring
+		const colorMap: Record<string, string> = {
+			healthy: "#22C55E",
+			degraded: "#EAB308",
+			critical: "#EF4444",
+			offline: "#9CA3AF"
+		};
+		const ringColor = colorMap[health] || "#9CA3AF";
+		const clamped = Math.max(0, Math.min(100, healthRing));
+		const startAngle = -Math.PI / 2;
+		const endAngle = startAngle + (clamped / 100) * Math.PI * 2;
+
+		// Background ring
+		ctx.strokeStyle = rgba(ringColor, 0.2);
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.arc(x, y, dotR + 1.5, 0, Math.PI * 2);
+		ctx.stroke();
+
+		// Progress arc
+		ctx.strokeStyle = ringColor;
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		ctx.arc(x, y, dotR + 1.5, startAngle, endAngle);
+		ctx.stroke();
+
+		// Hover highlight
+		if (hovered) {
+			ctx.strokeStyle = "#ffffff";
+			ctx.lineWidth = 1.5;
+			ctx.setLineDash([2, 2]);
+			ctx.beginPath();
+			ctx.arc(x, y, dotR + 4, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.setLineDash([]);
+		}
+	}
+
+	/** LOD_AGGREGATE: No individual workstation drawing — zones render aggregate info instead. */
+	private drawWorkstationAggregate(_task: VisualTask, _isDark: boolean, _ts: number) {
+		// Intentionally empty — aggregate rendering is handled by drawZoneAggregate
+	}
+
+	/** LOD_AGGREGATE: Zone-level aggregate overlay showing count, ETA, and aggregate health color bar. */
+	private drawZoneAggregate(zone: ZoneRect, scene: ArenaScene, isDark: boolean, _ts: number) {
+		const { ctx } = this;
+		const { x, y, w, h, color, label, id } = zone;
+
+		// Count agents and tasks in this zone
+		let agentCount = 0;
+		let healthyCount = 0;
+		let degradedCount = 0;
+		let criticalCount = 0;
+
+		// Count agents that target this zone or are within its bounds
+		for (const a of scene.agents.values()) {
+			const inZone = a.targetX >= x && a.targetX <= x + w && a.targetY >= y && a.targetY <= y + h;
+			if (inZone) {
+				agentCount++;
+				if (a.health === "healthy") healthyCount++;
+				else if (a.health === "degraded") degradedCount++;
+				else if (a.health === "critical") criticalCount++;
+			}
+		}
+
+		// Count tasks in this zone (by status matching zone id)
+		let taskCount = 0;
+		for (const t of scene.tasks.values()) {
+			const tx = t.x;
+			const ty = t.y;
+			if (tx >= x && tx <= x + w && ty >= y && ty <= y + h) {
+				taskCount++;
+			}
+		}
+
+		const totalCount = agentCount + taskCount;
+		if (totalCount === 0) return; // Don't draw aggregate for empty zones
+
+		// ── Prominent zone header ──
+		const headerH = 20;
+		const headerY = y + 3;
+
+		// Semi-transparent background
+		ctx.fillStyle = rgba(color, isDark ? 0.35 : 0.25);
+		rr(ctx, x + 4, headerY, w - 8, headerH, 6);
+		ctx.fill();
+
+		// Border
+		ctx.strokeStyle = rgba(color, 0.6);
+		ctx.lineWidth = 1;
+		rr(ctx, x + 4, headerY, w - 8, headerH, 6);
+		ctx.stroke();
+
+		// Zone name (prominent)
+		ctx.fillStyle = color;
+		ctx.font = "bold 10px system-ui,sans-serif";
+		ctx.textAlign = "left";
+		ctx.textBaseline = "middle";
+		ctx.fillText(label.toUpperCase(), x + 10, headerY + headerH / 2);
+
+		// Count badge
+		const countText = `${totalCount}`;
+		const countW = Math.max(ctx.measureText(countText).width + 8, 16);
+		const countH = 12;
+		const countX = x + w - 12 - countW;
+		const countY = headerY + (headerH - countH) / 2;
+		ctx.fillStyle = rgba(color, 0.8);
+		rr(ctx, countX, countY, countW, countH, 6);
+		ctx.fill();
+		ctx.fillStyle = "#ffffff";
+		ctx.font = "bold 8px monospace";
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(countText, countX + countW / 2, countY + countH / 2);
+
+		// ── Health color bar ──
+		if (agentCount > 0) {
+			const barX = x + 8;
+			const barY = headerY + headerH + 4;
+			const barW = w - 16;
+			const barH = 4;
+
+			// Background
+			ctx.fillStyle = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+			rr(ctx, barX, barY, barW, barH, 2);
+			ctx.fill();
+
+			// Segments
+			const healthyW = (healthyCount / agentCount) * barW;
+			const degradedW = (degradedCount / agentCount) * barW;
+			const criticalW = (criticalCount / agentCount) * barW;
+
+			let segX = barX;
+			if (healthyCount > 0) {
+				ctx.fillStyle = "#22C55E";
+				rr(ctx, segX, barY, healthyW, barH, 2);
+				ctx.fill();
+				segX += healthyW;
+			}
+			if (degradedCount > 0) {
+				ctx.fillStyle = "#EAB308";
+				rr(ctx, segX, barY, degradedW, barH, 2);
+				ctx.fill();
+				segX += degradedW;
+			}
+			if (criticalCount > 0) {
+				ctx.fillStyle = "#EF4444";
+				rr(ctx, segX, barY, criticalW, barH, 2);
+				ctx.fill();
+			}
+
+			// Agent count label below bar
+			ctx.fillStyle = isDark ? "rgba(148,163,184,0.7)" : "rgba(71,85,105,0.7)";
+			ctx.font = "7px system-ui,sans-serif";
+			ctx.textAlign = "left";
+			ctx.textBaseline = "top";
+			ctx.fillText(`${agentCount} agents`, barX, barY + barH + 2);
+
+			// Task count
+			ctx.textAlign = "right";
+			ctx.fillText(`${taskCount} tasks`, barX + barW, barY + barH + 2);
+		} else if (taskCount > 0) {
+			// Tasks only (no agents) — just show count
+			ctx.fillStyle = isDark ? "rgba(148,163,184,0.7)" : "rgba(71,85,105,0.7)";
+			ctx.font = "7px system-ui,sans-serif";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "top";
+			ctx.fillText(`${taskCount} tasks`, x + w / 2, headerY + headerH + 4);
 		}
 	}
 }

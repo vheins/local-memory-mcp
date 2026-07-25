@@ -73,6 +73,13 @@ const TYPE_COLOR_INDEX: Record<string, number> = {
 };
 
 const BG_DARK = "#050a1a";
+const BG_LIGHT = "#eff6ff";
+
+// ─── Theme Detection ─────────────────────────────────────────────────────────
+
+function isDarkMode(): boolean {
+	return document.documentElement.classList.contains("dark");
+}
 
 // ─── Internal 3D Types ──────────────────────────────────────────────────────
 
@@ -192,19 +199,25 @@ function project3D(
 // ─── Background ──────────────────────────────────────────────────────────────
 
 function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
+	const dark = isDarkMode();
 	const centerX = w / 2;
 	const centerY = h / 2;
 	const maxR = Math.hypot(centerX, centerY);
 
-	// Dark navy
-	ctx.fillStyle = BG_DARK;
+	ctx.fillStyle = dark ? BG_DARK : BG_LIGHT;
 	ctx.fillRect(0, 0, w, h);
 
 	// Vignette overlay
 	const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxR);
-	grad.addColorStop(0, "rgba(10,14,42,0)");
-	grad.addColorStop(0.6, "rgba(10,14,42,0.1)");
-	grad.addColorStop(1, "rgba(2,4,12,0.6)");
+	if (dark) {
+		grad.addColorStop(0, "rgba(10,14,42,0)");
+		grad.addColorStop(0.6, "rgba(10,14,42,0.1)");
+		grad.addColorStop(1, "rgba(2,4,12,0.6)");
+	} else {
+		grad.addColorStop(0, "rgba(255,255,255,0)");
+		grad.addColorStop(0.6, "rgba(240,244,255,0.2)");
+		grad.addColorStop(1, "rgba(220,230,250,0.4)");
+	}
 	ctx.fillStyle = grad;
 	ctx.fillRect(0, 0, w, h);
 }
@@ -213,7 +226,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
 
 function fogFactor(z: number): number {
 	const depth = (z + FOG_FAR) / (FOG_FAR * 2);
-	return Math.max(0.05, Math.min(1, 1 - depth));
+	return Math.max(0.25, Math.min(1, 1 - depth));
 }
 
 // ─── Edge Drawing — Very Thin, Semi-Transparent ──────────────────────────────
@@ -224,16 +237,22 @@ function drawEdge3D(
 	to: { sx: number; sy: number; depth: number },
 	edgeAlpha: number
 ) {
+	const dark = isDarkMode();
 	const avgDepth = (from.depth + to.depth) / 2;
 	const fog = fogFactor(avgDepth);
-	const alpha = edgeAlpha * fog * 0.4;
+	const alpha = Math.min(0.8, edgeAlpha * fog);
 
-	if (alpha < 0.005) return;
+	if (alpha < 0.01) return;
+
+	const edgeWidth = dark ? 1.5 : 2.0;
+	const r = dark ? 0 : 79;
+	const g = dark ? 212 : 70;
+	const b = dark ? 255 : 229;
 
 	ctx.save();
-	ctx.globalAlpha = alpha;
-	ctx.strokeStyle = `rgba(120, 200, 255, ${alpha})`;
-	ctx.lineWidth = EDGE_BASE_WIDTH;
+	ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+	ctx.lineWidth = edgeWidth;
+	ctx.lineCap = "round";
 	ctx.beginPath();
 	ctx.moveTo(from.sx, from.sy);
 	ctx.lineTo(to.sx, to.sy);
@@ -308,6 +327,7 @@ function drawTooltip(
 	canvasWidth: number,
 	canvasHeight: number
 ) {
+	const dark = isDarkMode();
 	ctx.save();
 	const lines = [
 		node.name,
@@ -329,13 +349,13 @@ function drawTooltip(
 	if (ty + th > canvasHeight) ty = canvasHeight - th - 4;
 	if (ty < 4) ty = 4;
 
-	ctx.fillStyle = "rgba(2,6,23,0.92)";
+	ctx.fillStyle = dark ? "rgba(2,6,23,0.92)" : "rgba(255,255,255,0.95)";
 	ctx.shadowColor = "rgba(0,0,0,0.2)";
 	ctx.shadowBlur = 12;
 	roundRect(ctx, tx, ty, tw, th, 8);
 	ctx.fill();
 	ctx.shadowBlur = 0;
-	ctx.strokeStyle = "rgba(148,163,184,0.2)";
+	ctx.strokeStyle = dark ? "rgba(148,163,184,0.2)" : "rgba(0,0,0,0.08)";
 	ctx.lineWidth = 1;
 	roundRect(ctx, tx, ty, tw, th, 8);
 	ctx.stroke();
@@ -345,7 +365,7 @@ function drawTooltip(
 	for (let i = 0; i < lines.length; i++) {
 		const isTitle = i === 0;
 		ctx.font = isTitle ? "bold 12px system-ui,sans-serif" : "10px system-ui,sans-serif";
-		ctx.fillStyle = "#e2e8f0";
+		ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
 		ctx.fillText(lines[i], tx + pad, ty + pad + i * lh);
 	}
 	ctx.restore();
@@ -354,6 +374,7 @@ function drawTooltip(
 // ─── Overflow Notice ─────────────────────────────────────────────────────────
 
 function drawOverflowNotice(ctx: CanvasRenderingContext2D, w: number, hiddenNodeCount: number) {
+	const dark = isDarkMode();
 	ctx.save();
 	const label = `+${hiddenNodeCount} hidden`;
 	ctx.font = "bold 11px system-ui,sans-serif";
@@ -366,14 +387,14 @@ function drawOverflowNotice(ctx: CanvasRenderingContext2D, w: number, hiddenNode
 	const x = Math.max(8, w - noticeWidth - 12);
 	const y = 12;
 
-	ctx.fillStyle = "rgba(15,23,42,0.88)";
+	ctx.fillStyle = dark ? "rgba(15,23,42,0.88)" : "rgba(255,255,255,0.9)";
 	roundRect(ctx, x, y, noticeWidth, noticeHeight, 999);
 	ctx.fill();
-	ctx.strokeStyle = "rgba(148,163,184,0.28)";
+	ctx.strokeStyle = dark ? "rgba(148,163,184,0.28)" : "rgba(59,130,246,0.22)";
 	ctx.lineWidth = 1;
 	roundRect(ctx, x, y, noticeWidth, noticeHeight, 999);
 	ctx.stroke();
-	ctx.fillStyle = "#bfdbfe";
+	ctx.fillStyle = dark ? "#bfdbfe" : "#1d4ed8";
 	ctx.fillText(label, x + noticeWidth - padX, y + padY);
 	ctx.restore();
 }
@@ -560,7 +581,7 @@ export function startNeuralAnimation(
 				const fromP = projByIndex.get(srcIdx);
 				const toP = projByIndex.get(tgtIdx);
 				if (!fromP || !toP) return null;
-				if (fromP.scale < 0.05 || toP.scale < 0.05) return null;
+				if (fromP.scale < 0.02 || toP.scale < 0.02) return null;
 
 				const avgZ = (fromP.depth + toP.depth) / 2;
 				const maxZ = FOG_FAR * 1.5;
@@ -658,6 +679,7 @@ export function startNeuralAnimation(
 			if ((isHovered || isSelected) && normalizedScale > 0.15) {
 				const labelAlpha = Math.max(0, (normalizedScale - 0.15) / 0.85) * depthAlpha;
 				if (labelAlpha > 0.05) {
+					const dark = isDarkMode();
 					ctx.save();
 					ctx.globalAlpha = labelAlpha;
 
@@ -669,7 +691,7 @@ export function startNeuralAnimation(
 					const pillH = 18;
 					const pillY = p.sy + drawRadius + 6;
 
-					ctx.fillStyle = "rgba(2,6,23,0.85)";
+					ctx.fillStyle = dark ? "rgba(2,6,23,0.85)" : "rgba(255,255,255,0.9)";
 					ctx.shadowColor = "rgba(0,0,0,0.3)";
 					ctx.shadowBlur = 8;
 					roundRect(ctx, p.sx - tw / 2 - pillPad, pillY, tw + pillPad * 2, pillH, 4);
@@ -679,13 +701,13 @@ export function startNeuralAnimation(
 					// Name text
 					ctx.textAlign = "center";
 					ctx.textBaseline = "middle";
-					ctx.fillStyle = "#e2e8f0";
+					ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
 					ctx.fillText(name, p.sx, pillY + pillH / 2);
 
 					// Type subtitle below pill
 					if (node.type) {
 						ctx.font = "8px system-ui,sans-serif";
-						ctx.fillStyle = "rgba(148,163,184,0.7)";
+						ctx.fillStyle = dark ? "rgba(148,163,184,0.7)" : "rgba(100,116,139,0.7)";
 						ctx.textBaseline = "top";
 						ctx.fillText(node.type, p.sx, pillY + pillH + 2);
 					}

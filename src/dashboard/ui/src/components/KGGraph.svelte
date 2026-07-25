@@ -177,8 +177,49 @@
 			return;
 		}
 
-		const cappedNodes = nodes.slice(0, MAX_FORCE_NODES);
-		const cappedNodeNames = new Set(cappedNodes.map((n) => n.name));
+		// Select top nodes by edge connectivity (degree) to maximize edge coverage
+		const degreeMap = new Map<string, number>();
+		for (const e of edges) {
+			degreeMap.set(e.source, (degreeMap.get(e.source) ?? 0) + 1);
+			degreeMap.set(e.target, (degreeMap.get(e.target) ?? 0) + 1);
+		}
+
+		// Sort nodes by degree descending, then alphabetically for stability
+		const sortedNodes = [...nodes].sort((a, b) => {
+			const degA = degreeMap.get(a.name) ?? 0;
+			const degB = degreeMap.get(b.name) ?? 0;
+			if (degB !== degA) return degB - degA;
+			return a.name.localeCompare(b.name);
+		});
+
+		// Also include all nodes that are endpoints of any edge (up to limit)
+		const edgeNodeNames = new Set<string>();
+		for (const e of edges) {
+			edgeNodeNames.add(e.source);
+			edgeNodeNames.add(e.target);
+		}
+
+		// Merge: degree-sorted nodes first, then edge endpoints that aren't already included
+		const selectedNames = new Set<string>();
+		const selectedNodes: typeof nodes = [];
+		for (const n of sortedNodes) {
+			if (selectedNodes.length >= MAX_FORCE_NODES) break;
+			if (!selectedNames.has(n.name)) {
+				selectedNames.add(n.name);
+				selectedNodes.push(n);
+			}
+		}
+		// Add remaining edge endpoints if under cap
+		for (const n of nodes) {
+			if (selectedNodes.length >= MAX_FORCE_NODES) break;
+			if (edgeNodeNames.has(n.name) && !selectedNames.has(n.name)) {
+				selectedNames.add(n.name);
+				selectedNodes.push(n);
+			}
+		}
+
+		const cappedNodes = selectedNodes;
+		const cappedNodeNames = selectedNames;
 
 		layoutEdges = edges
 			.filter((e) => cappedNodeNames.has(e.source) && cappedNodeNames.has(e.target))
