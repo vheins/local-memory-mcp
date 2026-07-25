@@ -28,8 +28,8 @@ const MAX_Z_OFFSET = 100;
 const MAX_ROTATION_DEG = 15;
 const ROTATION_SPEED = 0.0003; // radians per ms
 const HUB_DEGREE_THRESHOLD = 3;
-const BASE_NODE_RADIUS = 18;
-const HUB_NODE_RADIUS = 26;
+const BASE_NODE_RADIUS = 5;
+const HUB_NODE_RADIUS = 8;
 const MAX_SIGNALS = 50;
 const SIGNAL_SPEED = 0.0018; // progress per ms
 const SIGNAL_SPAWN_INTERVAL = 600; // ms between hub signal spawns
@@ -318,7 +318,7 @@ function drawNode3D(
 
 	// Hub outer glow
 	if (n3d.isHub && alpha > 0.08) {
-		const glowRadius = radius * 3;
+		const glowRadius = radius * 5;
 		const glowGrad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, glowRadius);
 		glowGrad.addColorStop(0, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.25})`);
 		glowGrad.addColorStop(0.4, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.06})`);
@@ -335,7 +335,7 @@ function drawNode3D(
 		const flashProgress = Math.min(1, elapsed / HUB_FLASH_DURATION);
 		const flashAlpha = (1 - flashProgress) * 0.4 * alpha;
 		if (flashAlpha > 0.01) {
-			const flashR = radius * 3;
+			const flashR = radius * 5;
 			const flashGrad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, flashR);
 			const brightR = Math.min(255, colorRgb.r + 120);
 			const brightG = Math.min(255, colorRgb.g + 120);
@@ -351,7 +351,7 @@ function drawNode3D(
 
 	// Hover/select glow ring
 	if (isHovered || isSelected) {
-		const ringGrad = ctx.createRadialGradient(p.sx, p.sy, radius * 0.8, p.sx, p.sy, radius * 2.2);
+		const ringGrad = ctx.createRadialGradient(p.sx, p.sy, radius * 0.8, p.sx, p.sy, radius * 4);
 		const glowColor = isSelected ? "#f59e0b" : (TYPE_GLOWS[node.type] ?? TYPE_GLOWS.unknown);
 		const glowRgb = isSelected ? { r: 245, g: 158, b: 11 } : hexToRgb(glowColor.replace(/rgba?\([^)]+\)/, () => ""));
 		// Use glow color directly
@@ -359,7 +359,7 @@ function drawNode3D(
 		ringGrad.addColorStop(1, `rgba(${glowRgb.r},${glowRgb.g},${glowRgb.b},0)`);
 		ctx.fillStyle = ringGrad;
 		ctx.beginPath();
-		ctx.arc(p.sx, p.sy, radius * 2.2, 0, Math.PI * 2);
+		ctx.arc(p.sx, p.sy, radius * 4, 0, Math.PI * 2);
 		ctx.fill();
 	}
 
@@ -379,42 +379,41 @@ function drawNode3D(
 	ctx.lineWidth = isSelected ? 2.5 : 1.2;
 	ctx.stroke();
 
-	// Memory count badge
-	if (node.memoryCount && node.memoryCount > 0) {
-		const badgeX = p.sx + radius - 5;
-		const badgeY = p.sy - radius + 5;
-		const badgeR = 8 * Math.min(normalizedScale, 1.1);
-		ctx.fillStyle = dark ? "#1e293b" : "#ffffff";
-		ctx.globalAlpha = alpha;
-		ctx.beginPath();
-		ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.fillStyle = color;
-		ctx.font = `bold ${Math.max(7, 8 * Math.min(normalizedScale, 1.1))}px system-ui,sans-serif`;
-		ctx.textAlign = "center";
-		ctx.textBaseline = "middle";
-		ctx.fillText(String(node.memoryCount), badgeX, badgeY);
-		ctx.globalAlpha = 1;
-	}
-
-	// Label — depth-faded
-	if (normalizedScale > 0.3) {
+	// Label — only on hover or selection, not always
+	if ((isHovered || isSelected) && normalizedScale > 0.3) {
 		const labelAlpha = Math.max(0, (normalizedScale - 0.3) / 0.7) * alpha;
 		if (labelAlpha > 0.05) {
 			ctx.globalAlpha = labelAlpha;
-			ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
-			ctx.font = `bold ${Math.max(9, 11 * Math.min(normalizedScale, 1.1))}px system-ui,sans-serif`;
-			ctx.textAlign = "center";
-			ctx.textBaseline = "top";
-			ctx.fillText(node.name, p.sx, p.sy + radius + 4);
 
-			// Description
-			if (node.description) {
-				ctx.fillStyle = dark ? "rgba(148,163,184,0.6)" : "rgba(100,116,139,0.6)";
-				ctx.font = `${Math.max(7, 8 * Math.min(normalizedScale, 1.1))}px system-ui,sans-serif`;
-				const desc = node.description.length > 18 ? node.description.slice(0, 18) + "..." : node.description;
-				ctx.fillText(desc, p.sx, p.sy + radius + 16);
+			// Background pill for readability
+			const name = node.name;
+			ctx.font = `bold 10px system-ui,sans-serif`;
+			const tw = ctx.measureText(name).width;
+			const pillPad = 6;
+			const pillH = 18;
+			const pillY = p.sy + radius + 6;
+
+			ctx.fillStyle = dark ? "rgba(2,6,23,0.85)" : "rgba(255,255,255,0.9)";
+			ctx.shadowColor = "rgba(0,0,0,0.3)";
+			ctx.shadowBlur = 8;
+			roundRect(ctx, p.sx - tw / 2 - pillPad, pillY, tw + pillPad * 2, pillH, 4);
+			ctx.fill();
+			ctx.shadowBlur = 0;
+
+			// Name text
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
+			ctx.fillText(name, p.sx, pillY + pillH / 2);
+
+			// Type subtitle below pill
+			if (node.type) {
+				ctx.font = `8px system-ui,sans-serif`;
+				ctx.fillStyle = dark ? "rgba(148,163,184,0.7)" : "rgba(100,116,139,0.7)";
+				ctx.textBaseline = "top";
+				ctx.fillText(node.type, p.sx, pillY + pillH + 2);
 			}
+
 			ctx.globalAlpha = 1;
 		}
 	}
