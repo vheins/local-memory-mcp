@@ -28,8 +28,8 @@ const MAX_Z_OFFSET = 100;
 const MAX_ROTATION_DEG = 15;
 const ROTATION_SPEED = 0.0003; // radians per ms
 const HUB_DEGREE_THRESHOLD = 3;
-const BASE_NODE_RADIUS = 5;
-const HUB_NODE_RADIUS = 8;
+const BASE_NODE_RADIUS = 9;
+const HUB_NODE_RADIUS = 13;
 const MAX_SIGNALS = 50;
 const SIGNAL_SPEED = 0.0018; // progress per ms
 const SIGNAL_SPAWN_INTERVAL = 600; // ms between hub signal spawns
@@ -232,10 +232,18 @@ function drawEdge3D(
 
 	let strokeColor: string;
 	if (isSelectedEdge) {
-		strokeColor = `rgba(245,158,11,${avgDepthAlpha * 0.8})`;
-	} else {
-		const baseAlpha = avgDepthAlpha * 0.35;
+		strokeColor = `rgba(245,158,11,${avgDepthAlpha * 1.0})`;
+	} else if (isHubA || isHubB) {
+		const baseAlpha = avgDepthAlpha * 0.5;
 		strokeColor = dark ? `rgba(148,163,184,${baseAlpha})` : `rgba(100,116,139,${baseAlpha})`;
+	} else {
+		const baseAlpha = avgDepthAlpha * 0.25;
+		strokeColor = dark ? `rgba(148,163,184,${baseAlpha})` : `rgba(100,116,139,${baseAlpha})`;
+	}
+
+	ctx.save();
+	if (isHubA || isHubB) {
+		ctx.globalCompositeOperation = "lighter";
 	}
 
 	ctx.beginPath();
@@ -244,6 +252,8 @@ function drawEdge3D(
 	ctx.strokeStyle = strokeColor;
 	ctx.lineWidth = lineWidth;
 	ctx.stroke();
+
+	ctx.restore();
 }
 
 // ─── Signal Drawing ──────────────────────────────────────────────────────────
@@ -258,11 +268,14 @@ function drawSignal(
 ) {
 	const size = Math.max(0.5, (1.5 + signalBrightness * 1.2) * Math.min(scale, 1.5));
 
-	// Outer glow
+	// Outer glow (additive blending)
+	ctx.save();
+	ctx.globalCompositeOperation = "lighter";
 	ctx.beginPath();
 	ctx.arc(sx, sy, size * 3, 0, Math.PI * 2);
-	ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${signalBrightness * 0.1})`;
+	ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${signalBrightness * 0.15})`;
 	ctx.fill();
+	ctx.restore();
 
 	// Inner glow
 	ctx.beginPath();
@@ -303,11 +316,13 @@ function drawNode3D(
 	// Pulse animation
 	const pulse = 1 + Math.sin(now * NODE_PULSE_SPEED + n3d.phaseOffset) * 0.15;
 	const hubBoost = n3d.isHub ? 1.35 : 1.0;
+	const colorBoost = n3d.isHub ? (colorRgb.b > colorRgb.r ? 1.5 : 1.35) : 1.0;
 	const hoverBoost = isHovered || isSelected ? 1.2 : 1.0;
 	const radius =
 		(n3d.isHub ? HUB_NODE_RADIUS : BASE_NODE_RADIUS) *
 		pulse *
 		hubBoost *
+		colorBoost *
 		hoverBoost *
 		Math.min(normalizedScale, 1.3) *
 		0.9;
@@ -316,25 +331,30 @@ function drawNode3D(
 
 	const alpha = depthAlpha;
 
-	// Hub outer glow
+	// Hub outer glow (additive blending for stronger glow)
 	if (n3d.isHub && alpha > 0.08) {
-		const glowRadius = radius * 5;
+		ctx.save();
+		ctx.globalCompositeOperation = "lighter";
+		const glowRadius = radius * 6;
 		const glowGrad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, glowRadius);
-		glowGrad.addColorStop(0, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.25})`);
-		glowGrad.addColorStop(0.4, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.06})`);
+		glowGrad.addColorStop(0, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.35})`);
+		glowGrad.addColorStop(0.4, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},${alpha * 0.08})`);
 		glowGrad.addColorStop(1, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},0)`);
 		ctx.fillStyle = glowGrad;
 		ctx.beginPath();
 		ctx.arc(p.sx, p.sy, glowRadius, 0, Math.PI * 2);
 		ctx.fill();
+		ctx.restore();
 	}
 
-	// Hub firing flash
+	// Hub firing flash (additive blending)
 	if (n3d.firing) {
 		const elapsed = now - n3d.fireStartTime;
 		const flashProgress = Math.min(1, elapsed / HUB_FLASH_DURATION);
 		const flashAlpha = (1 - flashProgress) * 0.4 * alpha;
 		if (flashAlpha > 0.01) {
+			ctx.save();
+			ctx.globalCompositeOperation = "lighter";
 			const flashR = radius * 5;
 			const flashGrad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, flashR);
 			const brightR = Math.min(255, colorRgb.r + 120);
@@ -346,27 +366,38 @@ function drawNode3D(
 			ctx.beginPath();
 			ctx.arc(p.sx, p.sy, flashR, 0, Math.PI * 2);
 			ctx.fill();
+			ctx.restore();
 		}
 	}
 
-	// Hover/select glow ring
+	// Hover/select glow ring (additive blending for neural web glow)
 	if (isHovered || isSelected) {
-		const ringGrad = ctx.createRadialGradient(p.sx, p.sy, radius * 0.8, p.sx, p.sy, radius * 4);
-		const glowColor = isSelected ? "#f59e0b" : (TYPE_GLOWS[node.type] ?? TYPE_GLOWS.unknown);
-		const glowRgb = isSelected ? { r: 245, g: 158, b: 11 } : hexToRgb(glowColor.replace(/rgba?\([^)]+\)/, () => ""));
-		// Use glow color directly
-		ringGrad.addColorStop(0, `rgba(${glowRgb.r},${glowRgb.g},${glowRgb.b},0.25)`);
+		ctx.save();
+		ctx.globalCompositeOperation = "lighter";
+		const glowRadius = radius * 6;
+		const ringGrad = ctx.createRadialGradient(p.sx, p.sy, radius * 0.5, p.sx, p.sy, glowRadius);
+		const glowRgb = hexToRgb(getNodeColor(node.type));
+		ringGrad.addColorStop(0, `rgba(${glowRgb.r},${glowRgb.g},${glowRgb.b},0.35)`);
 		ringGrad.addColorStop(1, `rgba(${glowRgb.r},${glowRgb.g},${glowRgb.b},0)`);
 		ctx.fillStyle = ringGrad;
 		ctx.beginPath();
-		ctx.arc(p.sx, p.sy, radius * 4, 0, Math.PI * 2);
+		ctx.arc(p.sx, p.sy, glowRadius, 0, Math.PI * 2);
 		ctx.fill();
+		ctx.restore();
 	}
 
 	// Main node body — radial gradient
-	const grad = ctx.createRadialGradient(p.sx - radius * 0.2, p.sy - radius * 0.2, radius * 0.1, p.sx, p.sy, radius);
-	grad.addColorStop(0, dark ? lighten(color, 50) : lighten(color, 70));
-	grad.addColorStop(1, color);
+	const grad = ctx.createRadialGradient(
+		p.sx - radius * 0.1,
+		p.sy - radius * 0.1,
+		radius * 0.05,
+		p.sx,
+		p.sy,
+		radius * 1.2
+	);
+	grad.addColorStop(0, dark ? lighten(color, 80) : lighten(color, 100));
+	grad.addColorStop(0.5, color);
+	grad.addColorStop(1, `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},0.2)`);
 	ctx.fillStyle = grad;
 	ctx.globalAlpha = alpha;
 	ctx.beginPath();
@@ -380,8 +411,8 @@ function drawNode3D(
 	ctx.stroke();
 
 	// Label — only on hover or selection, not always
-	if ((isHovered || isSelected) && normalizedScale > 0.3) {
-		const labelAlpha = Math.max(0, (normalizedScale - 0.3) / 0.7) * alpha;
+	if ((isHovered || isSelected) && normalizedScale > 0.15) {
+		const labelAlpha = Math.max(0, (normalizedScale - 0.15) / 0.85) * alpha;
 		if (labelAlpha > 0.05) {
 			ctx.globalAlpha = labelAlpha;
 
@@ -669,7 +700,7 @@ export function startNeuralAnimation(
 
 		// Project all nodes to 2D
 		const projected: ProjectedNode[] = nodes3d.map((n3d) => {
-			const { sx, sy, scale, rz } = project3D(n3d.node.x, n3d.node.y, n3d.z, cx, cy, rotationAngle);
+			const { sx, sy, scale, rz } = project3D(n3d.node.x - cx, n3d.node.y - cy, n3d.z, cx, cy, rotationAngle);
 			return { sx, sy, z: rz, scale, node3d: n3d };
 		});
 

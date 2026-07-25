@@ -237,6 +237,20 @@ function isExcludedNoun(candidate: string): boolean {
 	return false;
 }
 
+const ENTITY_NAME_BAD_PATTERN = /^(~|[-→·•])|["'`[\]{}()]|→|=>|->|`|~[\d]/;
+const ENTITY_NAME_ONLY_SYMBOLS = /^[^a-zA-Z0-9]+$/;
+
+/**
+ * Reject entity names that are clearly garbage: code fragments, size
+ * references, quote/bracket pollution, or pure-symbol strings.
+ */
+function isValidEntityName(name: string): boolean {
+	if (name.length < 2) return false;
+	if (ENTITY_NAME_ONLY_SYMBOLS.test(name)) return false;
+	if (ENTITY_NAME_BAD_PATTERN.test(name)) return false;
+	return true;
+}
+
 /**
  * NLP-based entity extraction using the `compromise` library.
  *
@@ -262,6 +276,7 @@ export async function extractEntities(content: string): Promise<ExtractedEntity[
 	function add(name: string, type: ExtractedEntity["type"]): void {
 		const trimmed = name.trim();
 		if (!trimmed || trimmed.length < 2) return;
+		if (!isValidEntityName(trimmed)) return;
 		const key = trimmed.toLowerCase();
 		if (seen.has(key)) return;
 		seen.add(key);
@@ -353,6 +368,23 @@ export async function saveExtractions(
 				error: String(err),
 				entity: entity.name
 			});
+		}
+	}
+
+	// Create co-occurrence relations between entities extracted from the same content
+	if (entities.length > 1) {
+		const insertRelation = db.db.prepare(
+			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`
+		);
+		for (let i = 0; i < entities.length; i++) {
+			for (let j = i + 1; j < entities.length; j++) {
+				try {
+					insertRelation.run(entities[i].name, entities[j].name, "co_mentioned", repo, owner ?? "", now);
+				} catch (err) {
+					// Silent: relation might already exist
+				}
+			}
 		}
 	}
 }
