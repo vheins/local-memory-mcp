@@ -83,7 +83,7 @@ describe("Codebase API", () => {
 		it("returns index status for a known repo", async () => {
 			const { db } = await import("../../dashboard/lib/context");
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/test-repo",
+				repo: "test-repo",
 				file_path: "src/index.ts",
 				language: "typescript",
 				checksum: "abc123",
@@ -94,7 +94,8 @@ describe("Codebase API", () => {
 			const res = await fetch(`${baseUrl}/api/codebase/index-status?repo=test-owner/test-repo`);
 			expect(res.status).toBe(200);
 			const body = (await res.json()) as Record<string, any>;
-			expect(body.repo).toBe("test-owner/test-repo");
+			// Repo is normalized by the schema (owner prefix stripped)
+			expect(body.repo).toBe("test-repo");
 			expect(body.isIndexed).toBe(true);
 			expect(body.totalFiles).toBeGreaterThanOrEqual(1);
 		});
@@ -111,8 +112,9 @@ describe("Codebase API", () => {
 		it("returns architecture tree for indexed repo", async () => {
 			const { db } = await import("../../dashboard/lib/context");
 
+			// DB stores repo as short name (after schema normalizeRepo strips owner prefix)
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/arch-repo",
+				repo: "arch-repo",
 				file_path: "src/controllers/user.controller.ts",
 				language: "typescript",
 				checksum: "def456",
@@ -120,7 +122,7 @@ describe("Codebase API", () => {
 				size_bytes: 1200
 			});
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/arch-repo",
+				repo: "arch-repo",
 				file_path: "src/services/auth.service.ts",
 				language: "typescript",
 				checksum: "ghi789",
@@ -130,7 +132,7 @@ describe("Codebase API", () => {
 
 			db.codebaseSymbols.bulkUpsertSymbols([
 				{
-					repo: "test-owner/arch-repo",
+					repo: "arch-repo",
 					file_path: "src/controllers/user.controller.ts",
 					name: "UserController",
 					kind: "Class",
@@ -145,7 +147,7 @@ describe("Codebase API", () => {
 					parent_symbol_id: null
 				},
 				{
-					repo: "test-owner/arch-repo",
+					repo: "arch-repo",
 					file_path: "src/services/auth.service.ts",
 					name: "authenticate",
 					kind: "Function",
@@ -191,7 +193,7 @@ describe("Codebase API", () => {
 			const { db } = await import("../../dashboard/lib/context");
 
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/sym-repo",
+				repo: "sym-repo",
 				file_path: "src/lib/helpers.ts",
 				language: "typescript",
 				checksum: "sym123",
@@ -201,7 +203,7 @@ describe("Codebase API", () => {
 
 			db.codebaseSymbols.bulkUpsertSymbols([
 				{
-					repo: "test-owner/sym-repo",
+					repo: "sym-repo",
 					file_path: "src/lib/helpers.ts",
 					name: "formatDate",
 					kind: "Function",
@@ -216,7 +218,7 @@ describe("Codebase API", () => {
 					parent_symbol_id: null
 				},
 				{
-					repo: "test-owner/sym-repo",
+					repo: "sym-repo",
 					file_path: "src/lib/helpers.ts",
 					name: "parseNumber",
 					kind: "Function",
@@ -247,7 +249,7 @@ describe("Codebase API", () => {
 			const { db } = await import("../../dashboard/lib/context");
 
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/search-repo",
+				repo: "search-repo",
 				file_path: "src/main.ts",
 				language: "typescript",
 				checksum: "search123",
@@ -257,7 +259,7 @@ describe("Codebase API", () => {
 
 			db.codebaseSymbols.bulkUpsertSymbols([
 				{
-					repo: "test-owner/search-repo",
+					repo: "search-repo",
 					file_path: "src/main.ts",
 					name: "main",
 					kind: "Function",
@@ -284,7 +286,7 @@ describe("Codebase API", () => {
 			const { db } = await import("../../dashboard/lib/context");
 
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/search-repo-2",
+				repo: "search-repo-2",
 				file_path: "src/app.ts",
 				language: "typescript",
 				checksum: "srch2",
@@ -294,7 +296,7 @@ describe("Codebase API", () => {
 
 			db.codebaseSymbols.bulkUpsertSymbols([
 				{
-					repo: "test-owner/search-repo-2",
+					repo: "search-repo-2",
 					file_path: "src/app.ts",
 					name: "startServer",
 					kind: "Function",
@@ -330,7 +332,7 @@ describe("Codebase API", () => {
 			const { db } = await import("../../dashboard/lib/context");
 
 			db.codebaseFiles.upsertFile({
-				repo: "test-owner/trace-repo",
+				repo: "trace-repo",
 				file_path: "src/utils/logger.ts",
 				language: "typescript",
 				checksum: "trace001",
@@ -340,7 +342,7 @@ describe("Codebase API", () => {
 
 			db.codebaseSymbols.bulkUpsertSymbols([
 				{
-					repo: "test-owner/trace-repo",
+					repo: "trace-repo",
 					file_path: "src/utils/logger.ts",
 					name: "createLogger",
 					kind: "Function",

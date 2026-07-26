@@ -14,6 +14,7 @@ import { autoIndexIfStale } from "../../mcp/codebase-index/services/indexing-ser
 import type { ParserPool } from "../../mcp/codebase-index/parser/language-visitor";
 import { TreeSitterParserPool } from "../../mcp/codebase-index/parser/parser-pool";
 import type { VectorStore } from "../../mcp/types";
+import { parseRepoInput } from "../../mcp/utils/normalize";
 
 // ── Parser pool singleton (lazy, shared across endpoints) ─────────────
 
@@ -35,6 +36,57 @@ const noopVectors: VectorStore = {
 		return [];
 	}
 };
+
+// ── Owner injection ──────────────────────────────────────────────────
+
+/**
+ * Injects `owner` into tool handler params when not explicitly provided.
+ *
+ * The dashboard REST API receives `repo` in `owner/repo` format from the UI,
+ * but the MCP tool handler schemas require `owner` as a separate field
+ * (`z.string().min(1)`). When called via the MCP protocol, the
+ * `normalizeToolArguments()` function auto-injects `owner` from session
+ * context — but the dashboard calls handlers directly in-process, so we
+ * must inject `owner` ourselves.
+ *
+ * Strategy:
+ *  1. Extract owner from `repo` param (expects `owner/repo` format)
+ *  2. Fallback: infer from git remote origin of the current working directory
+ */
+function injectOwner(params: Record<string, unknown>): Record<string, unknown> {
+	if (params.owner && typeof params.owner === "string" && params.owner.length > 0) {
+		return params;
+	}
+
+	const repo = params.repo as string | undefined;
+	if (!repo) return params;
+
+	// Primary: extract owner from "owner/repo" format
+	const parsed = parseRepoInput(repo);
+	if (parsed.owner) {
+		return { ...params, owner: parsed.owner };
+	}
+
+	// Fallback: try to infer owner from git remote origin of CWD
+	try {
+		const gitConfigPath = path.join(process.cwd(), ".git", "config");
+		if (fs.existsSync(gitConfigPath)) {
+			const content = fs.readFileSync(gitConfigPath, "utf-8");
+			const match = content.match(
+				/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^\/\s]+)/
+			);
+			const rawOwner = match?.[1];
+			if (rawOwner && /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(rawOwner)) {
+				return { ...params, owner: rawOwner };
+			}
+		}
+	} catch {
+		// Git config not accessible — proceed without owner, schema will fail
+		// with a clear validation error
+	}
+
+	return params;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -123,7 +175,7 @@ export class CodebaseController {
 			if (req.query.depth !== undefined) params.depth = req.query.depth;
 			if (req.query.includeSymbolCounts !== undefined) params.includeSymbolCounts = req.query.includeSymbolCounts;
 
-			const result = await handleGetArchitecture(params, db, noopVectors);
+			const result = await handleGetArchitecture(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				respondSuccess(res, result.structuredContent);
@@ -145,7 +197,7 @@ export class CodebaseController {
 			if (!repo) return respondError(res, 400, "repo query parameter is required", "MISSING_REPO");
 			if (!filePath) return respondError(res, 400, "filePath query parameter is required", "MISSING_FILE_PATH");
 
-			const result = await handleGetFileSymbols({ repo, filePath }, db, noopVectors);
+			const result = await handleGetFileSymbols(injectOwner({ repo, filePath }), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
@@ -180,7 +232,7 @@ export class CodebaseController {
 			if (req.query.limit !== undefined) params.limit = req.query.limit;
 			if (req.query.offset !== undefined) params.offset = req.query.offset;
 
-			const result = await handleSearchSymbols(params, db, noopVectors);
+			const result = await handleSearchSymbols(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
@@ -212,7 +264,7 @@ export class CodebaseController {
 			if (req.query.repo !== undefined) params.repo = (req.query.repo as string).trim();
 			if (req.query.includeReferences !== undefined) params.includeReferences = req.query.includeReferences;
 
-			const result = await handleTraceSymbol(params, db, noopVectors);
+			const result = await handleTraceSymbol(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
@@ -241,7 +293,7 @@ export class CodebaseController {
 			const repo = (req.query.repo as string)?.trim();
 			if (!repo) return respondError(res, 400, "repo query parameter is required", "MISSING_REPO");
 
-			const result = await handleCodebaseIndexStatus({ repo }, db, noopVectors);
+			const result = await handleCodebaseIndexStatus(injectOwner({ repo }), db, noopVectors);
 
 			if (result.structuredContent) {
 				respondSuccess(res, result.structuredContent);
@@ -280,7 +332,7 @@ export class CodebaseController {
 			if (req.body.includeGlobs !== undefined) params.includeGlobs = req.body.includeGlobs;
 			if (req.body.excludeGlobs !== undefined) params.excludeGlobs = req.body.excludeGlobs;
 
-			const result = await handleCodebaseIndexRepository(params, db, noopVectors);
+			const result = await handleCodebaseIndexRepository(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
