@@ -78,6 +78,52 @@
 		return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
 	}
 
+	// --- Enhancement 7: Per-kind symbol count helpers ---
+	const KIND_SHORT: Record<string, string> = {
+		function: "f",
+		class: "c",
+		interface: "i",
+		type: "t",
+		enum: "e",
+		variable: "v"
+	};
+
+	const KIND_ORDER = ["function", "class", "interface", "type", "enum", "variable"];
+
+	/** Format symbolCounts object into a compact badge string like "f12 c3 i5" */
+	function formatKindCounts(counts: Record<string, number> | undefined): string {
+		if (!counts || typeof counts !== "object") return "";
+		const parts: string[] = [];
+		for (const kind of KIND_ORDER) {
+			const n = counts[kind];
+			if (n && n > 0) {
+				parts.push(`${KIND_SHORT[kind] || kind.charAt(0)}${n}`);
+			}
+		}
+		return parts.join(" ");
+	}
+
+	/** Aggregate symbolCounts from a node and all its children */
+	function aggregateSymbolCounts(node: Record<string, unknown>): Record<string, number> {
+		const result: Record<string, number> = {};
+		const direct = node.symbolCounts as Record<string, number> | undefined;
+		if (direct && typeof direct === "object") {
+			for (const [k, v] of Object.entries(direct)) {
+				result[k] = (result[k] || 0) + (v as number);
+			}
+		}
+		const children = node.children as Record<string, unknown>[] | undefined;
+		if (children && Array.isArray(children)) {
+			for (const child of children) {
+				const sub = aggregateSymbolCounts(child);
+				for (const [k, v] of Object.entries(sub)) {
+					result[k] = (result[k] || 0) + v;
+				}
+			}
+		}
+		return result;
+	}
+
 	/** Get icon name for file type */
 	function fileIcon(name: string): string {
 		const ext = getExt(name);
@@ -212,6 +258,7 @@
 					{@const counts = countChildren(node)}
 					{@const dirPath = (node.path as string) || (node.name as string) || ""}
 					{@const dirName = (node.name as string) || dirPath.split("/").filter(Boolean).pop() || dirPath}
+					{@const dirKindCounts = aggregateSymbolCounts(node)}
 					<li role="treeitem" aria-expanded={!!expandedDirs[dirPath]} aria-selected={false}>
 						<button
 							class="filetree-dir"
@@ -228,10 +275,9 @@
 							<span class="filetree-badge">
 								{counts.files}
 								{counts.files === 1 ? "file" : "files"}
-								{#if counts.symbols > 0}
+								{#if Object.keys(dirKindCounts).length > 0}
 									<span class="filetree-badge-sep">&middot;</span>
-									{counts.symbols}
-									{counts.symbols === 1 ? "symbol" : "symbols"}
+									<span class="filetree-kind-badge">{formatKindCounts(dirKindCounts)}</span>
 								{/if}
 							</span>
 						</button>
@@ -244,6 +290,7 @@
 										{@const childDirPath = (child.path as string) || (child.name as string) || ""}
 										{@const childDirName =
 											(child.name as string) || childDirPath.split("/").filter(Boolean).pop() || childDirPath}
+										{@const childKindCounts = aggregateSymbolCounts(child)}
 										<li role="treeitem" aria-expanded={!!expandedDirs[childDirPath]} aria-selected={false}>
 											<button
 												class="filetree-dir"
@@ -260,6 +307,10 @@
 												<span class="filetree-badge">
 													{childCounts.files}
 													{childCounts.files === 1 ? "file" : "files"}
+													{#if Object.keys(childKindCounts).length > 0}
+														<span class="filetree-badge-sep">&middot;</span>
+														<span class="filetree-kind-badge">{formatKindCounts(childKindCounts)}</span>
+													{/if}
 												</span>
 											</button>
 
@@ -289,10 +340,9 @@
 																	</span>
 																{/if}
 																{#if leaf.symbolCounts && typeof leaf.symbolCounts === "object"}
-																	{@const totalSymbolCount = Object.values(
-																		leaf.symbolCounts as Record<string, number>
-																	).reduce((a: number, b: number) => a + b, 0)}
-																	<span class="filetree-symcount">{totalSymbolCount}</span>
+																	<span class="filetree-kind-badge"
+																		>{formatKindCounts(leaf.symbolCounts as Record<string, number>)}</span
+																	>
 																{/if}
 															</button>
 														</li>
@@ -324,11 +374,9 @@
 													</span>
 												{/if}
 												{#if child.symbolCounts && typeof child.symbolCounts === "object"}
-													{@const totalSymbolCount = Object.values(child.symbolCounts as Record<string, number>).reduce(
-														(a: number, b: number) => a + b,
-														0
-													)}
-													<span class="filetree-symcount">{totalSymbolCount}</span>
+													<span class="filetree-kind-badge"
+														>{formatKindCounts(child.symbolCounts as Record<string, number>)}</span
+													>
 												{/if}
 											</button>
 										</li>
@@ -359,11 +407,7 @@
 								</span>
 							{/if}
 							{#if node.symbolCounts && typeof node.symbolCounts === "object"}
-								{@const totalSymbolCount = Object.values(node.symbolCounts as Record<string, number>).reduce(
-									(a: number, b: number) => a + b,
-									0
-								)}
-								<span class="filetree-symcount">{totalSymbolCount}</span>
+								<span class="filetree-kind-badge">{formatKindCounts(node.symbolCounts as Record<string, number>)}</span>
 							{/if}
 						</button>
 					</li>
@@ -621,15 +665,18 @@
 		opacity: 0.5;
 	}
 
-	/* ── Symbol Count (files) ── */
-	.filetree-symcount {
-		font-size: 0.54rem;
+	/* ── Symbol Count per Kind (Enh 7) ── */
+	.filetree-kind-badge {
+		font-size: 0.52rem;
 		font-weight: 600;
 		color: var(--color-text-muted);
-		opacity: 0.5;
+		opacity: 0.65;
 		background: rgba(255, 255, 255, 0.04);
-		padding: 1px 4px;
+		padding: 1px 5px;
 		border-radius: 3px;
 		flex-shrink: 0;
+		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
 	}
 </style>

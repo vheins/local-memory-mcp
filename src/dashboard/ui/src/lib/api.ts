@@ -380,6 +380,8 @@ export const api = {
 			file_count: (raw.totalFiles as number) ?? 0,
 			symbol_count: (raw.totalSymbols as number) ?? 0,
 			last_indexed_at: (raw.lastIndexedAt as string) ?? null,
+			stale: raw.stale as boolean | undefined,
+			staleRatio: raw.staleRatio as number | undefined,
 			indexing: {
 				in_progress: (raw.isIndexing as boolean) ?? false,
 				files_parsed: (progress?.current as number) ?? 0,
@@ -407,6 +409,27 @@ export const api = {
 		return apiFetch<{ root: Record<string, unknown>; summary: Record<string, unknown> }>(
 			`/api/codebase/architecture?${q}`
 		);
+	},
+
+	// ─── Codebase Trace ─────────────────────────────────────────────────────
+
+	codebaseTrace: (repo: string, name: string) => {
+		const q = new URLSearchParams({
+			repo,
+			name,
+			includeReferences: "true"
+		});
+		return apiFetch<TraceResult>(`/api/codebase/trace?${q}`);
+	},
+
+	// ─── Codebase File Symbols ─────────────────────────────────────────────
+
+	codebaseSymbols: (repo: string, filePath: string) => {
+		const q = new URLSearchParams({
+			repo,
+			filePath
+		});
+		return apiFetch<CodeSymbol[]>(`/api/codebase/symbols?${q}`);
 	}
 };
 
@@ -417,9 +440,36 @@ export interface CodebaseIndexStatus {
 	symbol_count: number;
 	file_count: number;
 	last_indexed_at: string | null;
+	stale?: boolean;
+	staleRatio?: number;
 	indexing?: {
 		in_progress: boolean;
 		files_parsed: number;
 		total_files: number;
+	};
+}
+
+export interface TraceReference {
+	filePath: string;
+	startLine: number;
+	startCol: number;
+	endLine: number;
+	endCol: number;
+	context: string;
+}
+
+export interface TraceResult {
+	symbol: CodeSymbol;
+	definition: {
+		file: string;
+		line: number;
+		column: number;
+		endLine: number;
+		endColumn: number;
+	};
+	references: TraceReference[];
+	exportChain: {
+		exported: boolean;
+		defaultExport: boolean;
 	};
 }

@@ -40,6 +40,11 @@
 	let indexingTotalFiles = $derived(status?.indexing?.total_files ?? 0);
 	let indexingProgressPercent = $derived(indexingTotalFiles > 0 ? (indexingFilesParsed / indexingTotalFiles) * 100 : 0);
 
+	// --- Derived: stale index (Enh 8) ---
+	let isStale = $derived(status?.stale === true);
+	let staleRatio = $derived(status?.staleRatio ?? 0);
+	let stalePercent = $derived(Math.round(staleRatio * 100));
+
 	// --- Derived: relative time ---
 	let relativeTime = $derived.by(() => {
 		if (!status?.last_indexed_at) return null;
@@ -173,6 +178,7 @@
 			</div>
 			<button
 				class="reindex-btn"
+				class:stale={isStale}
 				onclick={() => void startReindex()}
 				disabled={reindexing}
 				aria-label="Re-index repository"
@@ -186,6 +192,19 @@
 				{/if}
 			</button>
 		</div>
+
+		<!-- Enhancement 8: Stale index warning -->
+		{#if isStale}
+			<div class="stale-warning">
+				<div class="stale-row">
+					<Icon name="triangle-alert" size={13} strokeWidth={2} />
+					<span class="stale-text">Index is stale — {stalePercent}% of files have changed</span>
+				</div>
+				<div class="stale-bar-track">
+					<div class="stale-bar-fill" style="width:{stalePercent}%"></div>
+				</div>
+			</div>
+		{/if}
 
 		{#if reindexing && indexingInProgress}
 			<div class="indexing-progress">
@@ -372,6 +391,17 @@
 		cursor: not-allowed;
 	}
 
+	.reindex-btn.stale {
+		background: rgba(239, 68, 68, 0.1);
+		border-color: rgba(239, 68, 68, 0.3);
+		color: rgba(239, 68, 68, 0.9);
+	}
+
+	.reindex-btn.stale:hover:not(:disabled) {
+		background: rgba(239, 68, 68, 0.18);
+		border-color: rgba(239, 68, 68, 0.5);
+	}
+
 	.reindex-btn.primary {
 		background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
 		color: white;
@@ -382,6 +412,44 @@
 	.reindex-btn.primary:hover:not(:disabled) {
 		opacity: 0.92;
 		transform: translateY(-1px);
+	}
+
+	/* --- Stale index warning (Enh 8) --- */
+	.stale-warning {
+		margin-top: 8px;
+		padding: 8px 14px;
+		border-radius: 8px;
+		background: rgba(239, 68, 68, 0.06);
+		border: 1px solid rgba(239, 68, 68, 0.15);
+	}
+
+	.stale-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		color: rgba(239, 68, 68, 0.9);
+		font-size: 0.72rem;
+		font-weight: 600;
+		margin-bottom: 6px;
+	}
+
+	.stale-text {
+		flex: 1;
+	}
+
+	.stale-bar-track {
+		height: 4px;
+		border-radius: 999px;
+		background: rgba(239, 68, 68, 0.12);
+		overflow: hidden;
+	}
+
+	.stale-bar-fill {
+		height: 100%;
+		border-radius: 999px;
+		background: linear-gradient(90deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.9));
+		transition: width 0.4s ease;
+		min-width: 2px;
 	}
 
 	/* --- Indexing progress --- */

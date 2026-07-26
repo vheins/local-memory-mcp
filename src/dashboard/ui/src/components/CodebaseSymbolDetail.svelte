@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
+	import { api, type TraceReference } from "../lib/api";
 
 	interface CodeSymbol {
 		name: string;
@@ -17,11 +18,13 @@
 	let {
 		symbol = null,
 		references = [],
-		loading = false
+		loading = false,
+		repo = ""
 	}: {
 		symbol: CodeSymbol | null;
 		references: string[];
 		loading: boolean;
+		repo: string;
 	} = $props();
 
 	const KIND_ICONS: Record<string, string> = {
@@ -55,6 +58,51 @@
 		}
 		return loc;
 	});
+
+	// --- Trace state (Enh 6) ---
+	let traceRefs = $state<TraceReference[]>([]);
+	let traceLoading = $state(false);
+	let traceError = $state("");
+
+	// Grouped references: Map<filePath, TraceReference[]>
+	let refsByFile = $derived(() => {
+		const map = new Map<string, TraceReference[]>();
+		for (const ref of traceRefs) {
+			const existing = map.get(ref.filePath);
+			if (existing) {
+				existing.push(ref);
+			} else {
+				map.set(ref.filePath, [ref]);
+			}
+		}
+		return map;
+	});
+
+	let totalRefs = $derived(traceRefs.length + references.length);
+
+	// Fetch trace when symbol changes
+	$effect(() => {
+		const sym = symbol;
+		if (!sym || !repo) {
+			traceRefs = [];
+			return;
+		}
+		void fetchTrace(sym.name);
+	});
+
+	async function fetchTrace(name: string) {
+		traceLoading = true;
+		traceError = "";
+		try {
+			const result = await api.codebaseTrace(repo, name);
+			traceRefs = result?.references ?? [];
+		} catch {
+			traceRefs = [];
+			traceError = "Failed to load references";
+		} finally {
+			traceLoading = false;
+		}
+	}
 </script>
 
 {#if loading}
@@ -129,25 +177,57 @@
 			</div>
 		{/if}
 
-		<!-- ─── References ─── -->
+		<!-- ─── References (Enh 6: Trace-backed) ─── -->
 		<div class="detail-section">
 			<div class="detail-section-label">
 				References
-				{#if references.length > 0}
-					<span class="detail-section-count">{references.length}</span>
+				{#if traceLoading}
+					<span class="detail-section-count" style="opacity:0.5">...</span>
+				{:else if totalRefs > 0}
+					<span class="detail-section-count">{totalRefs}</span>
 				{/if}
 			</div>
-			{#if references.length === 0}
+			{#if traceLoading}
+				<div class="detail-ref-loading">
+					<Icon name="loader" size={12} strokeWidth={2} />
+					<span>Loading references...</span>
+				</div>
+			{:else if traceError}
+				<div class="detail-no-refs" style="color:rgba(239,68,68,0.7);">{traceError}</div>
+			{:else if traceRefs.length === 0 && references.length === 0}
 				<div class="detail-no-refs">No references found.</div>
 			{:else}
-				<ul class="detail-ref-list">
-					{#each references as ref (ref)}
-						<li class="detail-ref-item">
-							<Icon name="link" size={11} strokeWidth={2} />
-							<span class="detail-ref-path">{ref}</span>
-						</li>
+				<!-- Trace-backed references (grouped by file) -->
+				{#if traceRefs.length > 0}
+					{#each [...refsByFile().entries()] as [filePath, refs] (filePath)}
+						<div class="detail-ref-file-group">
+							<div class="detail-ref-file-header">
+								<Icon name="file-text" size={11} strokeWidth={2} />
+								<span class="detail-ref-file-path">{filePath}</span>
+								<span class="detail-ref-file-count">{refs.length}</span>
+							</div>
+							{#each refs as ref (`${ref.filePath}:${ref.startLine}`)}
+								<div class="detail-ref-item">
+									<span class="detail-ref-line">:{ref.startLine}</span>
+									{#if ref.context}
+										<span class="detail-ref-context">{ref.context}</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
 					{/each}
-				</ul>
+				{/if}
+				<!-- Legacy prop-based references -->
+				{#if references.length > 0}
+					<ul class="detail-ref-list">
+						{#each references as ref (ref)}
+							<li class="detail-ref-item">
+								<Icon name="link" size={11} strokeWidth={2} />
+								<span class="detail-ref-path">{ref}</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			{/if}
 		</div>
 
@@ -406,6 +486,28 @@
 	}
 
 	/* ── References ── */
+	.detail-ref-loading {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.72rem;
+		color: var(--color-text-muted);
+		padding: 4px 0;
+	}
+
+	.detail-ref-loading :global(svg) {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	.detail-no-refs {
 		font-size: 0.74rem;
 		color: var(--color-text-muted);
@@ -420,12 +522,46 @@
 		padding: 0;
 	}
 
+	.detail-ref-file-group {
+		margin-bottom: 8px;
+	}
+
+	.detail-ref-file-header {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 3px 6px;
+		font-size: 0.68rem;
+		font-weight: 700;
+		color: var(--color-text-muted);
+		border-bottom: 1px solid var(--color-border);
+		margin-bottom: 2px;
+	}
+
+	.detail-ref-file-path {
+		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.detail-ref-file-count {
+		font-size: 0.56rem;
+		font-weight: 600;
+		background: rgba(255, 255, 255, 0.06);
+		padding: 1px 5px;
+		border-radius: 4px;
+		flex-shrink: 0;
+	}
+
 	.detail-ref-item {
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		padding: 4px 8px;
-		font-size: 0.7rem;
+		padding: 3px 8px 3px 20px;
+		font-size: 0.68rem;
 		color: var(--color-text-muted);
 		border-radius: 4px;
 		transition: background 0.1s ease;
@@ -433,6 +569,21 @@
 
 	.detail-ref-item:hover {
 		background: rgba(255, 255, 255, 0.04);
+	}
+
+	.detail-ref-line {
+		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+		color: var(--color-primary);
+		font-weight: 600;
+		opacity: 0.8;
+		flex-shrink: 0;
+	}
+
+	.detail-ref-context {
+		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.detail-ref-path {
