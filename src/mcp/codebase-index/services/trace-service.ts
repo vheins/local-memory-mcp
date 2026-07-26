@@ -16,6 +16,8 @@ export interface TraceResult {
 		file: string;
 		line: number;
 		column: number;
+		endLine: number;
+		endColumn: number;
 	};
 	references: TraceReference[];
 	exportChain: {
@@ -29,6 +31,8 @@ export interface TraceReference {
 	filePath: string;
 	startLine: number;
 	startCol: number;
+	endLine: number;
+	endCol: number;
 	context: string;
 }
 
@@ -92,7 +96,9 @@ export function traceSymbol(
 		definition: {
 			file: symbol.file_path,
 			line: symbol.start_line ?? 0,
-			column: symbol.start_col ?? 0
+			column: symbol.start_col ?? 0,
+			endLine: symbol.end_line ?? 0,
+			endColumn: symbol.end_col ?? 0
 		},
 		references: [],
 		exportChain: {
@@ -132,6 +138,8 @@ function findReferences(name: string, symbols: CodebaseSymbol[], excludeId: stri
 				filePath: sym.file_path,
 				startLine: sym.start_line ?? 0,
 				startCol: sym.start_col ?? 0,
+				endLine: sym.end_line ?? 0,
+				endCol: sym.end_col ?? 0,
 				context: extractContext(docComment, searchName)
 			});
 			continue; // Don't double-add if also in signature
@@ -143,6 +151,8 @@ function findReferences(name: string, symbols: CodebaseSymbol[], excludeId: stri
 				filePath: sym.file_path,
 				startLine: sym.start_line ?? 0,
 				startCol: sym.start_col ?? 0,
+				endLine: sym.end_line ?? 0,
+				endCol: sym.end_col ?? 0,
 				context: signature
 			});
 		}

@@ -15,7 +15,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 				repoPath: { type: "string", description: "Absolute filesystem path to the repository" },
 				force: { type: "boolean", description: "Force full re-index ignoring checksums" },
 				includeGlobs: { type: "array", items: { type: "string" }, description: "Include glob patterns" },
@@ -38,7 +39,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 				repoPath: {
 					type: "string",
 					description: "Absolute filesystem path to the repository (optional — enables staleness detection)"
@@ -61,7 +63,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 				depth: { type: "number", description: "Directory tree depth limit (1-5, default 2)", default: 2 },
 				includeSymbolCounts: {
 					type: "boolean",
@@ -86,7 +89,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				repo: { type: "string", description: "Repository identifier (owner/repo)" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
 				filePath: { type: "string", description: "Relative file path from repo root" }
 			},
 			required: ["repo", "filePath"]
@@ -107,7 +111,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				query: { type: "string", description: "Symbol name or partial name to search" },
-				repo: { type: "string", description: "Repository identifier (owner/repo) to scope search" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp') to scope search" },
 				kind: {
 					type: "string",
 					description: "Filter by symbol kind: function, class, interface, type, enum, variable"
@@ -135,7 +140,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			type: "object",
 			properties: {
 				query: { type: "string", description: "Natural language search query (min 2 characters)" },
-				repo: { type: "string", description: "Repository identifier (owner/repo) to scope search" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp') to scope search" },
 				kind: {
 					type: "string",
 					description: "Filter by symbol kind: function, class, interface, type, enum, variable"
@@ -163,7 +169,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			properties: {
 				name: { type: "string", description: "Symbol name to trace (exact match)" },
 				symbol: { type: "string", description: "Alias for 'name' — symbol name to trace" },
-				repo: { type: "string", description: "Repository identifier (owner/repo) for scoped search" },
+				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
+				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp') for scoped search" },
 				includeReferences: {
 					type: "boolean",
 					description: "Include usage references from other symbols",

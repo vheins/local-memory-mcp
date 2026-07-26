@@ -145,15 +145,56 @@ function isTimeoutError(err: unknown): boolean {
 }
 
 /**
- * Retry a database write operation once if it fails.
- * Catches the error, logs it, retries after a brief wait, and rethrows
- * if the retry also fails.
+ * Retry a database write operation with lock-aware backoff.
+ *
+ * - Lock-related errors (file already held by another process):
+ *   3 retries with exponential backoff (1s, 2s, 4s). proper-lockfile already
+ *   retries internally for ~50s before surfacing, so these additional retries
+ *   act as a safety net for edge cases.
+ * - Other errors (e.g. SQL constraints): single retry at 100ms (current behavior).
  */
 async function retryDbWrite<T>(fn: () => Promise<T>, context: string): Promise<T> {
+	const MAX_LOCK_RETRIES = 3;
+	const INITIAL_LOCK_BACKOFF_MS = 1000;
+
 	try {
 		return await fn();
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
+		const isLockRelated = /lock/i.test(message) || /already being held/i.test(message) || /EBUSY/i.test(message);
+
+		if (isLockRelated) {
+			logger.warn("[IndexingService] Lock contention detected — retrying with backoff", {
+				context,
+				error: message
+			});
+			let lastError = err;
+			for (let attempt = 1; attempt <= MAX_LOCK_RETRIES; attempt++) {
+				const delay = INITIAL_LOCK_BACKOFF_MS * Math.pow(2, attempt - 1);
+				await new Promise((resolve) => setTimeout(resolve, delay));
+				try {
+					return await fn();
+				} catch (retryErr) {
+					lastError = retryErr;
+					const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+					logger.warn("[IndexingService] Lock retry attempt failed", {
+						context,
+						attempt,
+						maxRetries: MAX_LOCK_RETRIES,
+						delayMs: delay,
+						error: retryMsg
+					});
+				}
+			}
+			logger.error("[IndexingService] All lock retries exhausted", {
+				context,
+				attempts: MAX_LOCK_RETRIES,
+				error: message
+			});
+			throw lastError;
+		}
+
+		// Non-lock errors: single simple retry (preserves existing behavior)
 		logger.warn("[IndexingService] DB write failed — retrying once", { context, error: message });
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		try {
@@ -176,10 +217,14 @@ type FilePlan =
 	| { action: "skip"; filePath: string }
 	| { action: "parse"; filePath: string; absolutePath: string; language: string; sizeBytes: number };
 
-// ── Module-level auto-index tracking ─────────────────────────────────
+// ── Module-level indexing guard (shared across instances) ──────────────
 
-/** Tracks repos currently being auto-indexed to prevent duplicate triggers. */
-const autoIndexingRepos = new Set<string>();
+/**
+ * Tracks repos currently being indexed.
+ * Shared across auto-index and manual `indexRepository` calls so they
+ * can detect each other and prevent concurrent indexing of the same repo.
+ */
+const indexingRepos = new Set<string>();
 
 // ── AutoIndexOptions ──────────────────────────────────────────────────
 
@@ -225,8 +270,8 @@ export async function autoIndexIfStale(
 	}
 
 	// ── Thread-safety: prevent duplicate triggers ────────────────────
-	if (autoIndexingRepos.has(repo)) {
-		return { status: "already_indexing", reason: `Auto-index already in progress for repo: ${repo}` };
+	if (indexingRepos.has(repo)) {
+		return { status: "already_indexing", reason: `Index already in progress for repo: ${repo}` };
 	}
 
 	// ── Compute TTL ──────────────────────────────────────────────────
@@ -262,13 +307,12 @@ export async function autoIndexIfStale(
 	}
 
 	// ── Trigger background indexing ──────────────────────────────────
-	autoIndexingRepos.add(repo);
-
 	// Fire and forget — don't await the full index (it may take minutes).
-	// Errors are logged; the dashboard polls /api/codebase/index-status.
+	// The module-level `indexingRepos` set (managed by indexRepository)
+	// prevents concurrent indexing of the same repo.
 	const service = createCodebaseIndexService(db, parserPool);
-	void service.indexRepository(repo, repoPath).finally(() => {
-		autoIndexingRepos.delete(repo);
+	void service.indexRepository(repo, repoPath).catch((err) => {
+		logger.warn("[AutoIndex] indexRepository threw", { repo, error: String(err) });
 	});
 
 	return {
@@ -282,7 +326,6 @@ export async function autoIndexIfStale(
 class CodebaseIndexServiceImpl implements CodebaseIndexService {
 	private db: SQLiteStore;
 	private parserPool: ParserPool;
-	private indexingRepos = new Set<string>();
 
 	constructor(db: SQLiteStore, parserPool: ParserPool) {
 		this.db = db;
@@ -313,10 +356,10 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 		let renamedFiles = 0;
 
 		// ── Thread safety check ──────────────────────────────────
-		if (this.indexingRepos.has(repo)) {
+		if (indexingRepos.has(repo)) {
 			throw new IndexInProgressError(repo);
 		}
-		this.indexingRepos.add(repo);
+		indexingRepos.add(repo);
 
 		try {
 			// ═══════════════════════════════════════════════════════
@@ -729,7 +772,7 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 				}
 			};
 		} finally {
-			this.indexingRepos.delete(repo);
+			indexingRepos.delete(repo);
 		}
 	}
 
@@ -797,7 +840,7 @@ class CodebaseIndexServiceImpl implements CodebaseIndexService {
 		const base: IndexStatus = {
 			repo,
 			isIndexed: totalFiles > 0,
-			isIndexing: this.indexingRepos.has(repo),
+			isIndexing: indexingRepos.has(repo),
 			lastIndexedAt,
 			totalFiles,
 			totalSymbols,

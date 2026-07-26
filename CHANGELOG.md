@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] — 2026-07-26
+
+### Fixed
+
+- **Lock conflict on concurrent index requests** — shared `indexingRepos` Set prevents auto-index and manual index from competing for the same DB lock
+- **retryDbWrite now uses exponential backoff** for lock-related errors (3 retries: 1s, 2s, 4s) instead of a single 100ms retry
+
+### Added
+
+- **Line numbers in codebase index tools** — `search_symbols`, `codebase_search`, `get_file_symbols`, and `trace_symbol` now display `start_line` and `end_line` in output, showing symbol positions within files
+
+### Changed
+
+- **Consistent schema across codebase-index tools** — all tools now accept explicit `owner` parameter and `repo` is normalized via `normalizeRepo` transform, matching task/memory/standard conventions
+
 ## [0.23.0] — 2026-07-25
 
 ### Added

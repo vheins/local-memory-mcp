@@ -211,9 +211,12 @@ export async function handleGetFileSymbols(
 
 	const symTable =
 		symbols.length > 0
-			? `\n\n| kind | line | name | exported |\n|------|------|------|----------|\n${symbols
+			? `\n\n| kind | start_line | end_line | name | exported |\n|------|------------|----------|------|----------|\n${symbols
 					.slice(0, 30)
-					.map((s) => `| ${s.kind} | ${s.start_line ?? "-"} | ${s.name} | ${s.exported ? "yes" : "no"} |`)
+					.map(
+						(s) =>
+							`| ${s.kind} | ${s.start_line ?? "-"} | ${s.end_line ?? "-"} | ${s.name} | ${s.exported ? "yes" : "no"} |`
+					)
 					.join("\n")}`
 			: "";
 
@@ -269,13 +272,13 @@ export async function handleTraceSymbol(
 
 		const refTable =
 			result.references.length > 0
-				? `\n\n### References (${result.references.length})\n\n| file | line |\n|------|------|\n${result.references
+				? `\n\n### References (${result.references.length})\n\n| file | start_line | end_line |\n|------|------------|----------|\n${result.references
 						.slice(0, 20)
-						.map((r) => `| ${r.filePath} | ${r.startLine} |`)
+						.map((r) => `| ${r.filePath} | ${r.startLine} | ${r.endLine} |`)
 						.join("\n")}${result.references.length > 20 ? `\n... and ${result.references.length - 20} more` : ""}`
 				: "";
 
-		const contentSummary = `Symbol "${name}"\nDefined: ${result.definition.file}:${result.definition.line}${refTable}`;
+		const contentSummary = `Symbol "${name}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refTable}`;
 
 		return createMcpResponse(
 			result,
@@ -398,9 +401,14 @@ export async function handleSearchSymbols(
 	const total = ranked.length;
 
 	const summary =
-		`| kind | file | score | symbol |\n` +
-		`|------|------|-------|--------|\n` +
-		results.map((s) => `| ${s.kind} | ${s.file_path} | ${s.score?.toFixed(2) || "-"} | ${s.name} |`).join("\n");
+		`| kind | file | start_line | end_line | score | symbol |\n` +
+		`|------|------|------------|----------|-------|--------|\n` +
+		results
+			.map(
+				(s) =>
+					`| ${s.kind} | ${s.file_path} | ${s.start_line ?? "-"} | ${s.end_line ?? "-"} | ${s.score?.toFixed(2) || "-"} | ${s.name} |`
+			)
+			.join("\n");
 
 	return createMcpResponse(
 		{
@@ -451,10 +459,13 @@ export async function handleCodebaseSearch(
 	}));
 
 	const summary =
-		`| rankTier | kind | file | score | symbol |\n` +
-		`|----------|------|------|-------|--------|\n` +
+		`| rankTier | kind | file | start_line | end_line | score | symbol |\n` +
+		`|----------|------|------|------------|----------|-------|--------|\n` +
 		results
-			.map((s) => `| ${s.rankTier} | ${s.kind} | ${s.file_path} | ${s.score?.toFixed(2) ?? "-"} | ${s.name} |`)
+			.map(
+				(s) =>
+					`| ${s.rankTier} | ${s.kind} | ${s.file_path} | ${s.start_line ?? "-"} | ${s.end_line ?? "-"} | ${s.score?.toFixed(2) ?? "-"} | ${s.name} |`
+			)
 			.join("\n");
 
 	return createMcpResponse(
