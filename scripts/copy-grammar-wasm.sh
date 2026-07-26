@@ -29,29 +29,35 @@ copy_wasm() {
 		echo "  ✓ $pkg/$file (rebuilt)"
 	elif [ "$pkg" = "tree-sitter-vue" ]; then
 		mkdir -p "$(dirname "$dest")"
-		echo "  → rebuilding $pkg/$file (no prebuilt WASM)"
-		# tree-sitter-vue needs a package.json with tree-sitter config to build
-		BUILD_DIR="$ROOT_DIR/.tmp/ts-vue-build-$$"
-		rm -rf "$BUILD_DIR"
-		mkdir -p "$BUILD_DIR"
-		cp -r "$ROOT_DIR/node_modules/$pkg/src" "$BUILD_DIR/src"
-		cp "$ROOT_DIR/node_modules/$pkg/grammar.js" "$BUILD_DIR/"
-		node -e "
-			const pkgJson = {
-				name: 'tree-sitter-vue',
-				version: '0.2.1',
-				'tree-sitter': [{ scope: 'source.vue', 'file-types': ['vue'], 'injection-regex': '^vue$' }]
-			};
-			require('fs').writeFileSync('$BUILD_DIR/package.json', JSON.stringify(pkgJson, null, 2));
-		"
-		if ! npx tree-sitter build --wasm "$BUILD_DIR" 2>&1; then
-			echo "  ✗ $pkg/$file REBUILD FAILED"
-			rm -rf "$BUILD_DIR"
+		# tree-sitter-vue C++ scanner uses std::string — incompatible with WASM.
+		# Use the prebuilt WASM from tree-sitter-vue-wasm (pure C scanner port).
+		WASM_PACK_DIR="$ROOT_DIR/.tmp/ts-vue-wasm-$$"
+		rm -rf "$WASM_PACK_DIR"
+		mkdir -p "$WASM_PACK_DIR"
+		echo "  → fetching prebuilt WASM from tree-sitter-vue-wasm@0.1.0"
+		if npm pack tree-sitter-vue-wasm@0.1.0 --pack-destination "$WASM_PACK_DIR" >/dev/null 2>&1; then
+			TARBALL="$(ls "$WASM_PACK_DIR"/tree-sitter-vue-wasm-*.tgz 2>/dev/null | head -1)"
+			if [ -n "$TARBALL" ]; then
+				tar xzf "$TARBALL" -C "$WASM_PACK_DIR" package/tree-sitter-vue.wasm 2>/dev/null
+				if [ -f "$WASM_PACK_DIR/package/tree-sitter-vue.wasm" ]; then
+					cp "$WASM_PACK_DIR/package/tree-sitter-vue.wasm" "$dest"
+					echo "  ✓ $pkg/$file (prebuilt WASM from tree-sitter-vue-wasm)"
+				else
+					echo "  ✗ $pkg/$file — WASM not found in package"
+					rm -rf "$WASM_PACK_DIR"
+					return 1
+				fi
+			else
+				echo "  ✗ $pkg/$file — npm pack failed"
+				rm -rf "$WASM_PACK_DIR"
+				return 1
+			fi
+		else
+			echo "  ✗ $pkg/$file — npm pack failed (offline?)"
+			rm -rf "$WASM_PACK_DIR"
 			return 1
 		fi
-		cp "$BUILD_DIR"/*.wasm "$dest"
-		rm -rf "$BUILD_DIR"
-		echo "  ✓ $pkg/$file (rebuilt)"
+		rm -rf "$WASM_PACK_DIR"
 	elif [ -f "$src" ]; then
 		mkdir -p "$(dirname "$dest")"
 		cp "$src" "$dest"
