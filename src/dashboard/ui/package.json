@@ -1,4 +1,5 @@
 {
+	"type": "module",
 	"dependencies": {
 		"chart.js": "^4.5.1",
 		"dompurify": "^3.3.3",

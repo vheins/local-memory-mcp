@@ -20,7 +20,13 @@ copy_wasm() {
 	local dest="$DEST_DIR/$pkg/$file"
 
 	if [ "$pkg" = "tree-sitter-dart" ] || [ "$pkg" = "tree-sitter-kotlin" ] || [ "$pkg" = "tree-sitter-swift" ]; then
+		local cache="$ROOT_DIR/.cache/wasm/$pkg/$file"
 		mkdir -p "$(dirname "$dest")"
+		if [ -f "$cache" ]; then
+			cp "$cache" "$dest"
+			echo "  ✓ $pkg/$file (cached)"
+			return 0
+		fi
 		if [ "$pkg" = "tree-sitter-dart" ]; then
 			echo "  → rebuilding $pkg/$file (prebuilt is incompatible ABI)"
 		else
@@ -30,6 +36,8 @@ copy_wasm() {
 			echo "  ✗ $pkg/$file REBUILD FAILED"
 			return 1
 		fi
+		mkdir -p "$(dirname "$cache")"
+		cp "$dest" "$cache"
 		echo "  ✓ $pkg/$file (rebuilt)"
 	elif [ "$pkg" = "tree-sitter-vue" ]; then
 		mkdir -p "$(dirname "$dest")"

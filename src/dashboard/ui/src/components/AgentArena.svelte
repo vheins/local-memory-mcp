@@ -41,13 +41,11 @@
 	let minimapCanvas: HTMLCanvasElement;
 	let renderer: ArenaRenderer | null = null;
 	let layout: ArenaLayoutConfig | null = null;
-	let hoveredAgentId: string | null = null;
-	let tooltipPos: { x: number; y: number } | null = null;
-
-	// ── Viewport state (reactive from store, see $derived below) ──────────
+	let hoveredAgentId: string | null = $state(null);
+	let tooltipPos: { x: number; y: number } | null = $state(null);
 
 	// ── Pan drag state ────────────────────────────────────────────────────
-	let isPanning = false;
+	let isPanning = $state(false);
 	let panLastX = 0;
 	let panLastY = 0;
 
@@ -55,15 +53,15 @@
 	let minimapDragging = false;
 
 	// ── Hover tooltip state (supports agent + task) ─────────────────────
-	let hoverEntityType: "agent" | "task" | "repository" | null = null;
-	let hoverEntityId: string | null = null;
+	let hoverEntityType: "agent" | "task" | "repository" | null = $state(null);
+	let hoverEntityId: string | null = $state(null);
 
 	// ── Context menu state ────────────────────────────────────────────────
-	let ctxVisible = false;
-	let ctxX = 0;
-	let ctxY = 0;
-	let ctxEntityType: "agent" | "task" | "repository" | null = null;
-	let ctxEntityId: string | null = null;
+	let ctxVisible = $state(false);
+	let ctxX = $state(0);
+	let ctxY = $state(0);
+	let ctxEntityType: "agent" | "task" | "repository" | null = $state(null);
+	let ctxEntityId: string | null = $state(null);
 
 	// ── Keyboard navigation state ─────────────────────────────────────────
 	let focusMode: "canvas" | "controls" = "canvas";
@@ -758,16 +756,15 @@
 		<canvas
 			bind:this={canvas}
 			class="arena-canvas"
-			on:mousemove={onMouseMove}
-			on:mousedown={onMouseDown}
-			on:mouseup={onMouseUp}
-			on:mouseleave={onMouseLeave}
-			on:wheel={onWheel}
-			on:click={onCanvasClick}
-			on:contextmenu={onContextMenu}
-			on:keydown={onKeyDown}
+			onmousemove={onMouseMove}
+			onmousedown={onMouseDown}
+			onmouseup={onMouseUp}
+			onmouseleave={onMouseLeave}
+			onwheel={onWheel}
+			onclick={onCanvasClick}
+			oncontextmenu={onContextMenu}
+			onkeydown={onKeyDown}
 			tabindex="0"
-			role="application"
 			aria-label="Agent Arena canvas — use arrow keys to navigate, Enter to select, number keys 1-5 to focus zones"
 			aria-roledescription="arena"
 			style="cursor:{isPanning ? 'grabbing' : hoveredAgentId ? 'pointer' : 'default'}"
@@ -803,18 +800,18 @@
 				class="minimap-canvas"
 				width={160}
 				height={100}
-				on:mousedown={onMinimapMouseDown}
-				on:mousemove={onMinimapMouseMove}
-				on:mouseup={onMinimapMouseUp}
-				on:mouseleave={onMinimapMouseUp}
+				onmousedown={onMinimapMouseDown}
+				onmousemove={onMinimapMouseMove}
+				onmouseup={onMinimapMouseUp}
+				onmouseleave={onMinimapMouseUp}
 			></canvas>
 		</div>
 
 		<!-- Zoom controls (bottom-right) -->
 		<div class="zoom-controls">
-			<button class="zoom-btn" on:click={zoomIn} title="Zoom in" aria-label="Zoom in">+</button>
-			<button class="zoom-pct" on:click={resetView} title="Reset view" aria-label="Reset view">{zoomPercent}%</button>
-			<button class="zoom-btn" on:click={zoomOut} title="Zoom out" aria-label="Zoom out">−</button>
+			<button class="zoom-btn" onclick={zoomIn} title="Zoom in" aria-label="Zoom in">+</button>
+			<button class="zoom-pct" onclick={resetView} title="Reset view" aria-label="Reset view">{zoomPercent}%</button>
+			<button class="zoom-btn" onclick={zoomOut} title="Zoom out" aria-label="Zoom out">−</button>
 		</div>
 	</div>
 
@@ -972,144 +969,6 @@
 		max-width: 280px;
 	}
 
-	.agent-tip {
-		position: absolute;
-		z-index: 20;
-		padding: 10px 12px;
-		border-radius: 12px;
-		font-size: 0.77rem;
-		min-width: 168px;
-		pointer-events: none;
-		border: 1px solid var(--color-border);
-		background: var(--color-surface);
-		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-		backdrop-filter: blur(14px);
-	}
-	.tip-name {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-weight: 800;
-		font-size: 0.82rem;
-		color: var(--color-text);
-		margin-bottom: 7px;
-	}
-	.tip-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-	.tip-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 8px;
-		padding: 1px 0;
-		color: var(--color-text-muted);
-		font-size: 0.73rem;
-	}
-	.tip-key {
-		font-weight: 700;
-		font-size: 0.67rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		opacity: 0.65;
-	}
-	.tip-state {
-		font-weight: 700;
-	}
-	.tip-state.processing {
-		color: #a855f7;
-	}
-	.tip-state.idle {
-		color: #64748b;
-	}
-	.tip-state.claiming {
-		color: #0ea5e9;
-	}
-	.tip-state.handoff_out {
-		color: #f59e0b;
-	}
-	.tip-state.handoff_in {
-		color: #10b981;
-	}
-	.tip-repos {
-		font-size: 0.68rem;
-		text-align: right;
-		max-width: 100px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.tip-model {
-		font-size: 0.62rem;
-		color: var(--color-text-muted);
-		background: rgba(100, 116, 139, 0.1);
-		padding: 1px 6px;
-		border-radius: 4px;
-		font-weight: 600;
-		margin-left: auto;
-	}
-	.tip-tool {
-		font-family: "JetBrains Mono", monospace;
-		font-size: 0.68rem;
-		max-width: 120px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.tip-health {
-		font-weight: 700;
-		text-transform: uppercase;
-		font-size: 0.65rem;
-	}
-	.tip-health.healthy {
-		color: #22c55e;
-	}
-	.tip-health.degraded {
-		color: #eab308;
-	}
-	.tip-health.critical {
-		color: #ef4444;
-		animation: status-blink 1s ease-in-out infinite;
-	}
-	.tip-health.offline {
-		color: #9ca3af;
-	}
-	.tip-progress-row {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 1px 0;
-		color: var(--color-text-muted);
-		font-size: 0.73rem;
-	}
-	.tip-progress-bar {
-		flex: 1;
-		height: 4px;
-		background: rgba(148, 163, 184, 0.2);
-		border-radius: 9999px;
-		overflow: hidden;
-	}
-	.tip-progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #3b82f6, #22c55e);
-		border-radius: 9999px;
-		transition: width 0.3s ease;
-	}
-	.tip-progress-text {
-		font-size: 0.65rem;
-		font-weight: 700;
-		min-width: 28px;
-		text-align: right;
-	}
-	.tip-telemetry {
-		border-top: 1px solid rgba(148, 163, 184, 0.15);
-		margin-top: 4px;
-		padding-top: 4px;
-	}
-
 	.arena-footer {
 		display: flex;
 		align-items: center;
@@ -1236,8 +1095,5 @@
 	.reduced-transparency .zoom-pct {
 		backdrop-filter: none;
 		background: var(--color-surface, #1e293b);
-	}
-	.reduced-transparency .agent-tip {
-		backdrop-filter: none;
 	}
 </style>

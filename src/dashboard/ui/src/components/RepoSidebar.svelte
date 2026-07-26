@@ -29,7 +29,6 @@
 	class="sidebar glass-strong flex flex-col"
 	class:collapsed
 	style="border-right: 1px solid var(--color-border);"
-	role="complementary"
 	aria-label="Repository sidebar"
 >
 	<!-- Header -->

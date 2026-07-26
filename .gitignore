@@ -21,6 +21,7 @@ package/
 
 # Temp
 .tmp/
+.cache/
 
 # Test coverage
 coverage/
