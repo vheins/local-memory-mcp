@@ -1,6 +1,6 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.26.0",
+	"version": "0.26.1",
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
@@ -31,7 +31,7 @@
 		"build": "rm -rf dist && npm run dashboard:build && tsup --config tsup.config.ts && bash scripts/copy-grammar-wasm.sh && mkdir -p bin && cp -r src/mcp/prompts/definitions dist/prompts/ && cp -r src/mcp/prompts/server dist/prompts/ && printf \"#!/usr/bin/env node\\nimport '../dist/dashboard/server.js';\\n\" > bin/mcp-memory-dashboard.js && shx chmod +x dist/mcp/server.js dist/dashboard/server.js bin/mcp-memory-server.js bin/mcp-memory-dashboard.js",
 		"dashboard:build": "vite build --config src/dashboard/ui/vite.config.ts",
 		"dashboard:dev": "vite dev --config src/dashboard/ui/vite.config.ts",
-		"prepare": "npm run build",
+		"prepublishOnly": "npm run build",
 		"dev": "tsx watch src/mcp/server.ts",
 		"start": "node dist/mcp/server.js",
 		"start:mcp": "node dist/mcp/server.js",
