@@ -46,7 +46,7 @@
 		variable: "database"
 	};
 
-	const grouped = $derived(() => {
+	const grouped = $derived.by(() => {
 		const groups: Record<string, CodeSymbol[]> = {};
 		for (const kind of KIND_ORDER) {
 			groups[kind] = [];
@@ -106,7 +106,7 @@
 	</div>
 {:else}
 	<div class="sym-list" role="list" aria-label="File symbols">
-		{#each grouped() as group (group.kind)}
+		{#each grouped as group (group.kind)}
 			<div class="sym-group">
 				<div class="sym-group-header">
 					<Icon name={group.icon} size={12} strokeWidth={2} />

@@ -31,8 +31,9 @@ copy_wasm() {
 		mkdir -p "$(dirname "$dest")"
 		echo "  → rebuilding $pkg/$file (no prebuilt WASM)"
 		# tree-sitter-vue needs a package.json with tree-sitter config to build
-		BUILD_DIR="/tmp/ts-vue-build-$$"
+		BUILD_DIR="$ROOT_DIR/.tmp/ts-vue-build-$$"
 		rm -rf "$BUILD_DIR"
+		mkdir -p "$BUILD_DIR"
 		cp -r "$ROOT_DIR/node_modules/$pkg/src" "$BUILD_DIR/src"
 		cp "$ROOT_DIR/node_modules/$pkg/grammar.js" "$BUILD_DIR/"
 		node -e "
@@ -43,11 +44,12 @@ copy_wasm() {
 			};
 			require('fs').writeFileSync('$BUILD_DIR/package.json', JSON.stringify(pkgJson, null, 2));
 		"
-		if ! npx tree-sitter build --wasm -o "$dest" "$BUILD_DIR" 2>&1; then
+		if ! npx tree-sitter build --wasm "$BUILD_DIR" 2>&1; then
 			echo "  ✗ $pkg/$file REBUILD FAILED"
 			rm -rf "$BUILD_DIR"
 			return 1
 		fi
+		cp "$BUILD_DIR"/*.wasm "$dest"
 		rm -rf "$BUILD_DIR"
 		echo "  ✓ $pkg/$file (rebuilt)"
 	elif [ -f "$src" ]; then

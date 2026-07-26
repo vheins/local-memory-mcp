@@ -19,6 +19,9 @@ package/
 .env.test.local
 .env.production.local
 
+# Temp
+.tmp/
+
 # Test coverage
 coverage/
 
