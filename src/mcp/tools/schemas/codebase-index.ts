@@ -34,7 +34,7 @@ export const TraceSymbolSchema = z.object({
 	symbol: z.string().optional(),
 	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo).optional(),
-	includeReferences: z.boolean().default(true)
+	includeReferences: z.coerce.boolean().default(true)
 });
 
 export const SearchSymbolsSchema = z.object({
