@@ -255,7 +255,7 @@ export const KG_TOOL_DEFINITIONS = [
 	{
 		name: "kg-backfill",
 		description:
-			"Scan existing memories and standards to extract Knowledge Graph entities via NLP. If no repo specified, scans all repositories. Progress logged every 100 items.",
+			"Scan existing memories, standards, and/or codebase index to extract Knowledge Graph entities. If no repo specified, scans all repositories. Progress logged every 100 items.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -275,7 +275,7 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				source: {
 					type: "string",
-					enum: ["memories", "standards", "both"],
+					enum: ["memories", "standards", "codebase", "all"],
 					description: "Source to scan."
 				},
 				json: {
