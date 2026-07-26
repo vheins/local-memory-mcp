@@ -85,8 +85,11 @@ function getWasmPath(): string {
  * 1. Bundled grammar in dist/grammars/<packageName>/<wasmFilename>
  * 2. Direct path in node_modules/<packageName>/<wasmFilename>
  * 3. Alternate path in node_modules/<packageName>/wasm/<wasmFilename>
+ *
+ * Returns `null` if the grammar WASM is not found — the caller should skip
+ * the language entry rather than crash.
  */
-function getGrammarPath(packageName: string, wasmFilename: string): string {
+function getGrammarPath(packageName: string, wasmFilename: string): string | null {
 	const root = resolveProjectRoot();
 
 	// Try bundled path first (grammars shipped with the package itself)
@@ -101,7 +104,8 @@ function getGrammarPath(packageName: string, wasmFilename: string): string {
 	const altPath = path.join(pkgDir, "wasm", wasmFilename);
 	if (fs.existsSync(altPath)) return altPath;
 
-	throw new Error(`Grammar WASM not found: ${wasmFilename} (searched: ${bundledPath}, ${directPath}, ${altPath})`);
+	logger.warn(`[ParserPool] Grammar WASM not found: ${wasmFilename} (skipping language)`);
+	return null;
 }
 
 // ── Semaphore ────────────────────────────────────────────────────────
@@ -211,94 +215,124 @@ export class TreeSitterParserPool implements ParserPool {
 	// ── Registry construction ─────────────────────────────────────
 
 	private static createRegistry(): LanguageConfig[] {
-		const tsGrammar = getGrammarPath("tree-sitter-typescript", "tree-sitter-typescript.wasm");
-		const tsxGrammar = getGrammarPath("tree-sitter-typescript", "tree-sitter-tsx.wasm");
+		const g = (pkg: string, file: string): string | null => getGrammarPath(pkg, file);
 
-		return [
-			{
-				languageId: "typescript",
-				extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".svelte", ".astro"],
-				grammarWasms: [tsGrammar],
-				createVisitor: () => new TypeScriptVisitor()
-			},
-			{
-				languageId: "tsx",
-				extensions: [".tsx", ".jsx"],
-				grammarWasms: [tsxGrammar],
-				createVisitor: () => new TypeScriptVisitor()
-			},
-			{
-				languageId: "vue",
-				extensions: [".vue"],
-				grammarWasms: [getGrammarPath("tree-sitter-vue", "tree-sitter-vue.wasm")],
-				createVisitor: () => new VueVisitor()
-			},
-			{
-				languageId: "go",
-				extensions: [".go"],
-				grammarWasms: [getGrammarPath("tree-sitter-go", "tree-sitter-go.wasm")],
-				createVisitor: () => new GoVisitor()
-			},
-			{
-				languageId: "python",
-				extensions: [".py"],
-				grammarWasms: [getGrammarPath("tree-sitter-python", "tree-sitter-python.wasm")],
-				createVisitor: () => new PythonVisitor()
-			},
-			{
-				languageId: "php",
-				extensions: [".php"],
-				grammarWasms: [getGrammarPath("tree-sitter-php", "tree-sitter-php_only.wasm")],
-				createVisitor: () => new PhpVisitor()
-			},
-			{
-				languageId: "dart",
-				extensions: [".dart"],
-				grammarWasms: [getGrammarPath("tree-sitter-dart", "tree-sitter-dart.wasm")],
-				createVisitor: () => new DartVisitor()
-			},
-			{
-				languageId: "rust",
-				extensions: [".rs"],
-				grammarWasms: [getGrammarPath("tree-sitter-rust", "tree-sitter-rust.wasm")],
-				createVisitor: () => new RustVisitor()
-			},
-			{
-				languageId: "java",
-				extensions: [".java"],
-				grammarWasms: [getGrammarPath("tree-sitter-java", "tree-sitter-java.wasm")],
-				createVisitor: () => new JavaVisitor()
-			},
-			{
-				languageId: "ruby",
-				extensions: [".rb"],
-				grammarWasms: [getGrammarPath("tree-sitter-ruby", "tree-sitter-ruby.wasm")],
-				createVisitor: () => new RubyVisitor()
-			},
-			{
-				languageId: "kotlin",
-				extensions: [".kt", ".kts"],
-				grammarWasms: [getGrammarPath("tree-sitter-kotlin", "tree-sitter-kotlin.wasm")],
-				createVisitor: () => new KotlinVisitor()
-			},
-			{
-				languageId: "swift",
-				extensions: [".swift"],
-				grammarWasms: [getGrammarPath("tree-sitter-swift", "tree-sitter-swift.wasm")],
-				createVisitor: () => new SwiftVisitor()
-			},
-			{
-				languageId: "c",
-				extensions: [".c", ".h"],
-				grammarWasms: [getGrammarPath("tree-sitter-c", "tree-sitter-c.wasm")],
-				createVisitor: () => new CVisitor()
-			},
-			{
-				languageId: "cpp",
-				extensions: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
-				grammarWasms: [getGrammarPath("tree-sitter-cpp", "tree-sitter-cpp.wasm")],
-				createVisitor: () => new CppVisitor()
-			},
+		const entries: (LanguageConfig | null)[] = [
+			// TypeScript
+			(() => {
+				const ts = g("tree-sitter-typescript", "tree-sitter-typescript.wasm");
+				if (!ts) return null;
+				return {
+					languageId: "typescript",
+					extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".svelte", ".astro"],
+					grammarWasms: [ts],
+					createVisitor: () => new TypeScriptVisitor()
+				};
+			})(),
+			// TSX
+			(() => {
+				const tsx = g("tree-sitter-typescript", "tree-sitter-tsx.wasm");
+				if (!tsx) return null;
+				return {
+					languageId: "tsx",
+					extensions: [".tsx", ".jsx"],
+					grammarWasms: [tsx],
+					createVisitor: () => new TypeScriptVisitor()
+				};
+			})(),
+			// Vue
+			(() => {
+				const w = g("tree-sitter-vue", "tree-sitter-vue.wasm");
+				if (!w) return null;
+				return { languageId: "vue", extensions: [".vue"], grammarWasms: [w], createVisitor: () => new VueVisitor() };
+			})(),
+			// Go
+			(() => {
+				const w = g("tree-sitter-go", "tree-sitter-go.wasm");
+				if (!w) return null;
+				return { languageId: "go", extensions: [".go"], grammarWasms: [w], createVisitor: () => new GoVisitor() };
+			})(),
+			// Python
+			(() => {
+				const w = g("tree-sitter-python", "tree-sitter-python.wasm");
+				if (!w) return null;
+				return {
+					languageId: "python",
+					extensions: [".py"],
+					grammarWasms: [w],
+					createVisitor: () => new PythonVisitor()
+				};
+			})(),
+			// PHP
+			(() => {
+				const w = g("tree-sitter-php", "tree-sitter-php_only.wasm");
+				if (!w) return null;
+				return { languageId: "php", extensions: [".php"], grammarWasms: [w], createVisitor: () => new PhpVisitor() };
+			})(),
+			// Dart
+			(() => {
+				const w = g("tree-sitter-dart", "tree-sitter-dart.wasm");
+				if (!w) return null;
+				return { languageId: "dart", extensions: [".dart"], grammarWasms: [w], createVisitor: () => new DartVisitor() };
+			})(),
+			// Rust
+			(() => {
+				const w = g("tree-sitter-rust", "tree-sitter-rust.wasm");
+				if (!w) return null;
+				return { languageId: "rust", extensions: [".rs"], grammarWasms: [w], createVisitor: () => new RustVisitor() };
+			})(),
+			// Java
+			(() => {
+				const w = g("tree-sitter-java", "tree-sitter-java.wasm");
+				if (!w) return null;
+				return { languageId: "java", extensions: [".java"], grammarWasms: [w], createVisitor: () => new JavaVisitor() };
+			})(),
+			// Ruby
+			(() => {
+				const w = g("tree-sitter-ruby", "tree-sitter-ruby.wasm");
+				if (!w) return null;
+				return { languageId: "ruby", extensions: [".rb"], grammarWasms: [w], createVisitor: () => new RubyVisitor() };
+			})(),
+			// Kotlin
+			(() => {
+				const w = g("tree-sitter-kotlin", "tree-sitter-kotlin.wasm");
+				if (!w) return null;
+				return {
+					languageId: "kotlin",
+					extensions: [".kt", ".kts"],
+					grammarWasms: [w],
+					createVisitor: () => new KotlinVisitor()
+				};
+			})(),
+			// Swift
+			(() => {
+				const w = g("tree-sitter-swift", "tree-sitter-swift.wasm");
+				if (!w) return null;
+				return {
+					languageId: "swift",
+					extensions: [".swift"],
+					grammarWasms: [w],
+					createVisitor: () => new SwiftVisitor()
+				};
+			})(),
+			// C
+			(() => {
+				const w = g("tree-sitter-c", "tree-sitter-c.wasm");
+				if (!w) return null;
+				return { languageId: "c", extensions: [".c", ".h"], grammarWasms: [w], createVisitor: () => new CVisitor() };
+			})(),
+			// C++
+			(() => {
+				const w = g("tree-sitter-cpp", "tree-sitter-cpp.wasm");
+				if (!w) return null;
+				return {
+					languageId: "cpp",
+					extensions: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
+					grammarWasms: [w],
+					createVisitor: () => new CppVisitor()
+				};
+			})(),
+			// Markdown (no WASM needed)
 			{
 				languageId: "markdown",
 				extensions: [".md", ".mdx"],
@@ -306,6 +340,8 @@ export class TreeSitterParserPool implements ParserPool {
 				createVisitor: () => new MarkdownVisitor()
 			}
 		];
+
+		return entries.filter((e): e is LanguageConfig => e !== null);
 	}
 
 	/**
