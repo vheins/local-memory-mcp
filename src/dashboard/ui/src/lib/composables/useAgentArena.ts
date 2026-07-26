@@ -51,6 +51,7 @@ export function createArenaHandler() {
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let fetchInProgress = false;
 	let layoutConfig: ArenaLayoutConfig | null = null;
+	let unsubscribeRepos: (() => void) | null = null;
 
 	async function fetchData(): Promise<void> {
 		if (fetchInProgress) return;
@@ -58,9 +59,22 @@ export function createArenaHandler() {
 
 		const repos = get(availableRepos).map((r) => r.repo);
 		if (repos.length === 0) {
-			store.update((s) => ({ ...s, loading: false }));
+			// Keep loading=true; repos will populate shortly from loadRepos().
+			// Subscribe once so we re-trigger fetchData as soon as repos arrive.
+			if (!unsubscribeRepos) {
+				unsubscribeRepos = availableRepos.subscribe((list) => {
+					if (list.length > 0) {
+						unsubscribeRepos?.();
+						unsubscribeRepos = null;
+						void fetchData();
+					}
+				});
+			}
 			return;
 		}
+		// Clean up subscription once we have repos
+		unsubscribeRepos?.();
+		unsubscribeRepos = null;
 
 		fetchInProgress = true;
 
@@ -161,6 +175,8 @@ export function createArenaHandler() {
 			clearInterval(intervalId);
 			intervalId = null;
 		}
+		unsubscribeRepos?.();
+		unsubscribeRepos = null;
 		eventCoordinator.destroy();
 		fetchInProgress = false;
 	}
