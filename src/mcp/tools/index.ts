@@ -47,6 +47,7 @@ import {
 	handleDeleteObservation
 } from "./kg.crud";
 import { handleKGBackfill } from "./kg-backfill";
+import { handleQueryGraph } from "./kg.query";
 import {
 	handleCodebaseIndexRepository,
 	handleCodebaseIndexStatus,
@@ -286,6 +287,7 @@ function buildExecutors(
 		delete_relation: (args, db, _vectors, _extra) => handleDeleteRelation(args, db, _vectors),
 		delete_observation: (args, db, _vectors, _extra) => handleDeleteObservation(args, db, _vectors),
 		"kg-backfill": (args, db, _vectors, _extra) => handleKGBackfill(args, db),
+		query_graph: (args, db, _vectors, _extra) => handleQueryGraph(args, db, _vectors),
 		// Codebase index tools
 		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndexRepository(args, db, _vectors),
 		index_status: (args, db, _vectors, _extra) => handleCodebaseIndexStatus(args, db, _vectors),

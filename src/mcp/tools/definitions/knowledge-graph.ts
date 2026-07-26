@@ -253,6 +253,69 @@ export const KG_TOOL_DEFINITIONS = [
 		}
 	},
 	{
+		name: "query_graph",
+		title: "Query Graph",
+		description:
+			"Fusion query across memory KG entities/relations and codebase index (symbols + files). Returns a unified graph of entities and relations built from both sources without duplicating data. Supports optional type filtering.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			destructiveHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: {
+					type: "string",
+					description: "Organization/namespace (e.g., GitHub org or username)."
+				},
+				repo: {
+					type: "string",
+					description: "Repository/project name (e.g., 'local-memory-mcp')."
+				},
+				type_filter: {
+					type: "string",
+					description:
+						"Optional filter — partial case-insensitive match against entity type, symbol kind, or file language."
+				},
+				json: {
+					type: "boolean",
+					default: false,
+					description: "If true, returns JSON results."
+				}
+			},
+			required: ["owner", "repo"]
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				entities: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							name: { type: "string" },
+							type: { type: "string" },
+							description: { type: "string" }
+						}
+					}
+				},
+				relations: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							from: { type: "string" },
+							to: { type: "string" },
+							type: { type: "string" }
+						}
+					}
+				}
+			}
+		}
+	},
+	{
 		name: "kg-backfill",
 		description:
 			"Scan existing memories and standards to extract Knowledge Graph entities via NLP. If no repo specified, scans all repositories. Progress logged every 100 items.",

@@ -59,7 +59,8 @@ export {
 	CreateRelationSchema,
 	DeleteRelationSchema,
 	DeleteObservationSchema,
-	KGBackfillSchema
+	KGBackfillSchema,
+	QueryGraphSchema
 } from "./knowledge-graph";
 
 export {

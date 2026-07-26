@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeRepo } from "../../utils/normalize";
 
 export const CreateEntitySchema = z.object({
 	name: z.string().min(1).max(255),
@@ -45,5 +46,15 @@ export const KGBackfillSchema = z.object({
 	repo: z.string().optional(),
 	owner: z.string().optional().default(""),
 	source: z.enum(["memories", "standards", "both"]).optional().default("both"),
+	json: z.boolean().default(false)
+});
+
+export const QueryGraphSchema = z.object({
+	owner: z.string().min(1),
+	repo: z
+		.string()
+		.min(1)
+		.transform((v) => normalizeRepo(v)),
+	type_filter: z.string().optional(),
 	json: z.boolean().default(false)
 });
