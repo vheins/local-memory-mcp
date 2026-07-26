@@ -9,9 +9,13 @@
 	export let isZeroEdgeOverview: boolean;
 	export let visibleNodeCount: number;
 	export let hiddenNodeCount: number;
+	export let zoomPercent: number = 100;
 	export let onAddEntity: () => void;
 	export let onAddRelation: () => void;
 	export let onRefresh: () => void;
+	export let onZoomIn: () => void;
+	export let onZoomOut: () => void;
+	export let onResetCamera: () => void;
 </script>
 
 <div class="kg-toolbar">
@@ -25,6 +29,16 @@
 		</span>
 	</div>
 	<div class="kg-toolbar-right">
+		<!-- Zoom controls -->
+		<div class="kg-zoom-controls">
+			<button class="btn btn-ghost btn-sm kg-zoom-btn" on:click={onZoomOut} title="Zoom out"> &#8722; </button>
+			<button class="btn btn-ghost btn-sm kg-zoom-label" on:click={onResetCamera} title="Reset zoom">
+				{zoomPercent}%
+			</button>
+			<button class="btn btn-ghost btn-sm kg-zoom-btn" on:click={onZoomIn} title="Zoom in">
+				<Icon name="plus" size={12} strokeWidth={2} />
+			</button>
+		</div>
 		<button class="btn btn-ghost btn-sm" on:click={onAddEntity}>
 			<Icon name="plus" size={12} strokeWidth={2} />
 			Add Entity
@@ -75,6 +89,42 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
+	}
+
+	.kg-zoom-controls {
+		display: flex;
+		align-items: center;
+		gap: 0;
+		border: 1px solid var(--color-border);
+		border-radius: 6px;
+		overflow: hidden;
+	}
+
+	:global(.dark) .kg-zoom-controls {
+		border-color: rgba(148, 163, 184, 0.15);
+	}
+
+	.kg-zoom-btn {
+		padding: 4px 6px !important;
+		min-width: 28px;
+		justify-content: center;
+		border-radius: 0 !important;
+		border-right: 1px solid var(--color-border);
+	}
+
+	:global(.dark) .kg-zoom-btn {
+		border-right-color: rgba(148, 163, 184, 0.15);
+	}
+
+	.kg-zoom-label {
+		padding: 4px 8px !important;
+		min-width: 42px;
+		justify-content: center;
+		border-radius: 0 !important;
+		font-size: 0.68rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
 	}
 
 	.kg-stats {

@@ -128,6 +128,80 @@ let height = 0;
 let cx = 0;
 let cy = 0;
 
+// ─── Camera / Zoom / Drag State ─────────────────────────────────────────────
+
+let cameraDistance = CAMERA_DISTANCE;
+let targetCameraDistance = CAMERA_DISTANCE;
+
+let manualRotY = 0;
+let manualRotX = 0;
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// Auto-rotation
+let isAutoRotating = true;
+let autoRotAngle = 0;
+let autoTiltAngle = 0;
+let lastAutoTimestamp = 0;
+let lastInteractionTime = 0;
+
+const ZOOM_LERP = 0.12;
+const ZOOM_MIN = 150;
+const ZOOM_MAX = 2000;
+const DRAG_SENSITIVITY = 0.005;
+const AUTO_ROTATE_RESUME_MS = 3000;
+
+// ─── Camera Control API ─────────────────────────────────────────────────────
+
+export function zoomCamera(delta: number): void {
+	targetCameraDistance *= Math.pow(0.95, delta);
+	targetCameraDistance = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, targetCameraDistance));
+}
+
+export function startDragCamera(x: number, y: number): void {
+	isDragging = true;
+	lastMouseX = x;
+	lastMouseY = y;
+	isAutoRotating = false;
+}
+
+export function dragCamera(x: number, y: number): void {
+	if (!isDragging) return;
+	const dx = x - lastMouseX;
+	const dy = y - lastMouseY;
+	manualRotY += dx * DRAG_SENSITIVITY;
+	manualRotX += dy * DRAG_SENSITIVITY;
+	manualRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, manualRotX));
+	lastMouseX = x;
+	lastMouseY = y;
+	lastInteractionTime = performance.now();
+}
+
+export function endDragCamera(): void {
+	if (!isDragging) return;
+	isDragging = false;
+	lastInteractionTime = performance.now();
+}
+
+export function resetCamera(): void {
+	targetCameraDistance = CAMERA_DISTANCE;
+	manualRotY = 0;
+	manualRotX = 0;
+	isAutoRotating = true;
+	autoRotAngle = 0;
+	autoTiltAngle = 0;
+	lastAutoTimestamp = 0;
+}
+
+export function getZoomPercent(): number {
+	return Math.round((CAMERA_DISTANCE / targetCameraDistance) * 100);
+}
+
+export function isCameraDragging(): boolean {
+	return isDragging;
+}
+
 // ─── Canvas Sizing ───────────────────────────────────────────────────────────
 
 export function resizeNeuralCanvas(canvas: HTMLCanvasElement): {
@@ -577,10 +651,32 @@ export function startNeuralAnimation(
 		lastTimestamp = now;
 		totalElapsed += dt;
 
+		// Smooth zoom lerp
+		cameraDistance += (targetCameraDistance - cameraDistance) * ZOOM_LERP;
+
+		// Dynamic focal length based on camera distance
+		const effectiveFocalLength = FOCAL_LENGTH * (CAMERA_DISTANCE / cameraDistance);
+
+		// Auto-rotation resume after idle
+		if (!isAutoRotating && !isDragging && lastInteractionTime > 0) {
+			if (performance.now() - lastInteractionTime > AUTO_ROTATE_RESUME_MS) {
+				isAutoRotating = true;
+				lastAutoTimestamp = now;
+			}
+		}
+
 		// Camera rotation
 		const isZeroEdge = animEdges.length === 0;
-		const rotY = isZeroEdge ? 0 : totalElapsed * CAMERA_ROTATION_SPEED;
-		const rotX = isZeroEdge ? 0 : Math.sin(totalElapsed * 0.00004) * CAMERA_TILT_AMOUNT;
+		if (!isZeroEdge && isAutoRotating) {
+			if (lastAutoTimestamp === 0) lastAutoTimestamp = now;
+			const autoDt = now - lastAutoTimestamp;
+			autoRotAngle += autoDt * CAMERA_ROTATION_SPEED;
+			autoTiltAngle = Math.sin(totalElapsed * 0.00004) * CAMERA_TILT_AMOUNT;
+		}
+		if (isAutoRotating) lastAutoTimestamp = now;
+
+		const rotY = isZeroEdge ? 0 : autoRotAngle + manualRotY;
+		const rotX = isZeroEdge ? 0 : autoTiltAngle + manualRotX;
 
 		// Breathing
 		const breathe = isZeroEdge ? 1 : 1 + Math.sin(totalElapsed * BREATHE_SPEED) * BREATHE_AMOUNT;
@@ -598,7 +694,7 @@ export function startNeuralAnimation(
 			const bx = (n3d.x - cx) * breathe + cx;
 			const by = (n3d.y - cy) * breathe + cy;
 			const bz = n3d.z * breathe;
-			const proj = project3D(bx - cx, by - cy, bz, width, height, rotY, rotX, FOCAL_LENGTH);
+			const proj = project3D(bx - cx, by - cy, bz, width, height, rotY, rotX, effectiveFocalLength);
 			return {
 				...proj,
 				node3d: n3d
@@ -617,7 +713,8 @@ export function startNeuralAnimation(
 		// Build projected lookup by original index
 		const projByIndex = new Map<number, ProjectedNode>();
 		projected.forEach((p) => {
-			const idx = (p.node3d.node.id ? nodeIndexById.get(p.node3d.node.id) : undefined) ?? nodeIndexById.get(p.node3d.node.name);
+			const idx =
+				(p.node3d.node.id ? nodeIndexById.get(p.node3d.node.id) : undefined) ?? nodeIndexById.get(p.node3d.node.name);
 			if (idx !== undefined && idx >= 0) projByIndex.set(idx, p);
 		});
 
@@ -634,25 +731,25 @@ export function startNeuralAnimation(
 				if (!fromP || !toP) return null;
 				if (fromP.scale < 0.02 || toP.scale < 0.02) return null;
 
-				const isHovered = state.hoveredNode && (
-					e.source === state.hoveredNode.id || 
-					e.source === state.hoveredNode.name || 
-					e.target === state.hoveredNode.id || 
-					e.target === state.hoveredNode.name
-				);
-				const isSelected = state.selectedNode && (
-					e.source === state.selectedNode.id || 
-					e.source === state.selectedNode.name || 
-					e.target === state.selectedNode.id || 
-					e.target === state.selectedNode.name
-				);
+				const isHovered =
+					state.hoveredNode &&
+					(e.source === state.hoveredNode.id ||
+						e.source === state.hoveredNode.name ||
+						e.target === state.hoveredNode.id ||
+						e.target === state.hoveredNode.name);
+				const isSelected =
+					state.selectedNode &&
+					(e.source === state.selectedNode.id ||
+						e.source === state.selectedNode.name ||
+						e.target === state.selectedNode.id ||
+						e.target === state.selectedNode.name);
 				const isRelated = !!(isHovered || isSelected);
 
 				let alphaMultiplier = 1.0;
 				if (hasFocus) {
 					alphaMultiplier = isRelated ? 1.0 : 0.05;
 				} else {
-					alphaMultiplier = 0.20; // lower default opacity when no hover to avoid cluttered look
+					alphaMultiplier = 0.2; // lower default opacity when no hover to avoid cluttered look
 				}
 
 				const avgZ = (fromP.depth + toP.depth) / 2;
@@ -662,7 +759,10 @@ export function startNeuralAnimation(
 
 				return { from: fromP, to: toP, edgeAlpha, isRelated, avgDepth: avgZ };
 			})
-			.filter((x): x is { from: ProjectedNode; to: ProjectedNode; edgeAlpha: number; isRelated: boolean; avgDepth: number } => x !== null);
+			.filter(
+				(x): x is { from: ProjectedNode; to: ProjectedNode; edgeAlpha: number; isRelated: boolean; avgDepth: number } =>
+					x !== null
+			);
 
 		// Sort edges by depth (far to near)
 		renderedEdges.sort((a, b) => b.avgDepth - a.avgDepth);
@@ -686,7 +786,7 @@ export function startNeuralAnimation(
 			const iy = (fromN.y + (toN.y - fromN.y) * sig.progress - cy) * breathe + cy;
 			const iz = (fromN3d.z + (toN3d.z - fromN3d.z) * sig.progress) * breathe;
 
-			const proj = project3D(ix - cx, iy - cy, iz, width, height, rotY, rotX, FOCAL_LENGTH);
+			const proj = project3D(ix - cx, iy - cy, iz, width, height, rotY, rotX, effectiveFocalLength);
 
 			const brightness = Math.sin(sig.progress * Math.PI);
 			if (brightness <= 0 || proj.scale < 0.05) continue;
@@ -760,7 +860,7 @@ export function startNeuralAnimation(
 			if (radius < 0.3 || p.scale < 0.05) continue;
 
 			// Base alpha from depth
-			const baselineScale = FOCAL_LENGTH / (FOCAL_LENGTH + FOG_FAR);
+			const baselineScale = effectiveFocalLength / (effectiveFocalLength + FOG_FAR);
 			const normalizedScale = p.scale / baselineScale;
 			const depthAlpha = Math.max(0.25, Math.min(1, (normalizedScale - 0.15) / 0.85));
 

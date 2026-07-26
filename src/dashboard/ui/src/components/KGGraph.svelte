@@ -10,7 +10,14 @@
 		startNeuralAnimation,
 		stopNeuralAnimation,
 		updateAnimationData,
-		updateNeuralDimensions
+		updateNeuralDimensions,
+		zoomCamera,
+		startDragCamera,
+		dragCamera,
+		endDragCamera,
+		resetCamera,
+		getZoomPercent,
+		isCameraDragging
 	} from "$lib/kg/KGNeuralRenderer";
 	import type { NeuralRenderState } from "$lib/kg/KGNeuralRenderer";
 	import KGGraphHeader from "./KGGraphHeader.svelte";
@@ -69,6 +76,14 @@
 
 	// Animation tracking
 	let animationCleanup: (() => void) | null = null;
+
+	// Camera interaction tracking
+	let dragStartPos: { x: number; y: number } | null = null;
+	let didDrag = false;
+	let zoomPercent = 100;
+
+	// Touch pinch state
+	let lastPinchDist = 0;
 
 	// Modal state
 	let showAddEntityModal = false;
@@ -306,6 +321,9 @@
 	}
 
 	function handleCanvasClick(e: MouseEvent) {
+		// Skip click if user was dragging
+		if (didDrag) return;
+
 		const rect = canvas.getBoundingClientRect();
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
@@ -393,6 +411,9 @@
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 
+		// Skip hover detection while dragging
+		if (isCameraDragging()) return;
+
 		let found: LayoutNode | null = null;
 		for (const n of layoutNodes) {
 			const r = NODE_RADIUS + 4;
@@ -408,6 +429,125 @@
 			graphState.hoveredNode = found;
 			canvas.style.cursor = found ? "pointer" : "default";
 		}
+	}
+
+	// ─── Zoom & Drag handlers ───────────────────────────────────────────────
+
+	function handleWheel(e: WheelEvent) {
+		e.preventDefault();
+		zoomCamera(e.deltaY);
+		zoomPercent = getZoomPercent();
+	}
+
+	function handleMouseDown(e: MouseEvent) {
+		// Only left button
+		if (e.button !== 0) return;
+		dragStartPos = { x: e.clientX, y: e.clientY };
+		didDrag = false;
+		startDragCamera(e.clientX, e.clientY);
+	}
+
+	function handleMouseMoveForDrag(e: MouseEvent) {
+		if (!dragStartPos) return;
+		const dx = e.clientX - dragStartPos.x;
+		const dy = e.clientY - dragStartPos.y;
+		if (!didDrag && Math.hypot(dx, dy) > 3) {
+			didDrag = true;
+		}
+		if (didDrag) {
+			dragCamera(e.clientX, e.clientY);
+			canvas.style.cursor = "grabbing";
+		}
+	}
+
+	function handleMouseUp(_e: MouseEvent) {
+		if (dragStartPos) {
+			endDragCamera();
+			dragStartPos = null;
+			if (!didDrag) {
+				// It was a click, not a drag — let click handler proceed
+			}
+			didDrag = false;
+			canvas.style.cursor = "default";
+		}
+	}
+
+	function handleMouseLeave(_e: MouseEvent) {
+		if (dragStartPos) {
+			endDragCamera();
+			dragStartPos = null;
+			didDrag = false;
+			canvas.style.cursor = "default";
+		}
+	}
+
+	// ─── Touch pinch zoom ───────────────────────────────────────────────────
+
+	function getPinchDist(t1: Touch, t2: Touch): number {
+		return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+	}
+
+	function handleTouchStart(e: TouchEvent) {
+		if (e.touches.length === 2) {
+			e.preventDefault();
+			lastPinchDist = getPinchDist(e.touches[0], e.touches[1]);
+		} else if (e.touches.length === 1) {
+			const t = e.touches[0];
+			startDragCamera(t.clientX, t.clientY);
+			dragStartPos = { x: t.clientX, y: t.clientY };
+			didDrag = false;
+		}
+	}
+
+	function handleTouchMove(e: TouchEvent) {
+		if (e.touches.length === 2) {
+			e.preventDefault();
+			const dist = getPinchDist(e.touches[0], e.touches[1]);
+			if (lastPinchDist > 0) {
+				const delta = lastPinchDist - dist; // positive = pinch in = zoom in
+				zoomCamera(delta * 0.5);
+				zoomPercent = getZoomPercent();
+			}
+			lastPinchDist = dist;
+		} else if (e.touches.length === 1 && dragStartPos) {
+			const t = e.touches[0];
+			const dx = t.clientX - dragStartPos.x;
+			const dy = t.clientY - dragStartPos.y;
+			if (!didDrag && Math.hypot(dx, dy) > 3) {
+				didDrag = true;
+			}
+			if (didDrag) {
+				dragCamera(t.clientX, t.clientY);
+			}
+		}
+	}
+
+	function handleTouchEnd(e: TouchEvent) {
+		if (e.touches.length < 2) {
+			lastPinchDist = 0;
+		}
+		if (e.touches.length === 0) {
+			endDragCamera();
+			dragStartPos = null;
+			didDrag = false;
+		}
+	}
+
+	// ─── Zoom control callbacks for header ──────────────────────────────────
+
+	function handleZoomIn() {
+		zoomCamera(-10);
+		zoomPercent = getZoomPercent();
+	}
+
+	function handleZoomOut() {
+		zoomCamera(10);
+		zoomPercent = getZoomPercent();
+	}
+
+	function handleResetCamera() {
+		resetCamera();
+		zoomPercent = getZoomPercent();
 	}
 
 	function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
@@ -542,9 +682,13 @@
 		{isZeroEdgeOverview}
 		visibleNodeCount={layoutNodes.length}
 		hiddenNodeCount={hiddenZeroEdgeNodeCount}
+		{zoomPercent}
 		onAddEntity={() => (showAddEntityModal = true)}
 		onAddRelation={() => (showAddRelationModal = true)}
 		onRefresh={() => loadGraph(true)}
+		onZoomIn={handleZoomIn}
+		onZoomOut={handleZoomOut}
+		onResetCamera={handleResetCamera}
 	/>
 
 	<!-- Loading / Empty / Canvas (canvas always in DOM for context) -->
@@ -570,6 +714,14 @@
 			on:dblclick={handleCanvasDblClick}
 			on:contextmenu={handleCanvasRightClick}
 			on:mousemove={handleCanvasMove}
+			on:mousemove={handleMouseMoveForDrag}
+			on:mousedown={handleMouseDown}
+			on:mouseup={handleMouseUp}
+			on:mouseleave={handleMouseLeave}
+			on:wheel={handleWheel}
+			on:touchstart={handleTouchStart}
+			on:touchmove={handleTouchMove}
+			on:touchend={handleTouchEnd}
 			aria-label={isZeroEdgeOverview
 				? `Knowledge Graph zero-relation overview showing ${layoutNodes.length} of ${nodes.length} entities`
 				: "Knowledge Graph visualization"}
