@@ -429,7 +429,9 @@ export const api = {
 			repo,
 			filePath
 		});
-		return apiFetch<CodeSymbol[]>(`/api/codebase/symbols?${q}`);
+		return apiFetch<{ file: Record<string, unknown>; symbols: CodeSymbol[]; total: number }>(
+			`/api/codebase/symbols?${q}`
+		).then((res) => res.symbols ?? []);
 	}
 };
 
