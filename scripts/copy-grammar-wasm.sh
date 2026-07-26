@@ -27,6 +27,29 @@ copy_wasm() {
 			return 1
 		fi
 		echo "  ✓ $pkg/$file (rebuilt)"
+	elif [ "$pkg" = "tree-sitter-vue" ]; then
+		mkdir -p "$(dirname "$dest")"
+		echo "  → rebuilding $pkg/$file (no prebuilt WASM)"
+		# tree-sitter-vue needs a package.json with tree-sitter config to build
+		BUILD_DIR="/tmp/ts-vue-build-$$"
+		rm -rf "$BUILD_DIR"
+		cp -r "$ROOT_DIR/node_modules/$pkg/src" "$BUILD_DIR/src"
+		cp "$ROOT_DIR/node_modules/$pkg/grammar.js" "$BUILD_DIR/"
+		node -e "
+			const pkgJson = {
+				name: 'tree-sitter-vue',
+				version: '0.2.1',
+				'tree-sitter': [{ scope: 'source.vue', 'file-types': ['vue'], 'injection-regex': '^vue$' }]
+			};
+			require('fs').writeFileSync('$BUILD_DIR/package.json', JSON.stringify(pkgJson, null, 2));
+		"
+		if ! npx tree-sitter build --wasm -o "$dest" "$BUILD_DIR" 2>&1; then
+			echo "  ✗ $pkg/$file REBUILD FAILED"
+			rm -rf "$BUILD_DIR"
+			return 1
+		fi
+		rm -rf "$BUILD_DIR"
+		echo "  ✓ $pkg/$file (rebuilt)"
 	elif [ -f "$src" ]; then
 		mkdir -p "$(dirname "$dest")"
 		cp "$src" "$dest"
@@ -53,6 +76,7 @@ copy_wasm "tree-sitter-ruby"     "tree-sitter-ruby.wasm"
 copy_wasm "tree-sitter-swift"    "tree-sitter-swift.wasm"
 copy_wasm "tree-sitter-c"        "tree-sitter-c.wasm"
 copy_wasm "tree-sitter-cpp"      "tree-sitter-cpp.wasm"
+copy_wasm "tree-sitter-vue"     "tree-sitter-vue.wasm"
 
 # Engine WASM (web-tree-sitter itself)
 copy_wasm "web-tree-sitter"      "web-tree-sitter.wasm"

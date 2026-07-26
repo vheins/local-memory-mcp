@@ -13,3 +13,4 @@ export { KotlinVisitor } from "./visitors/kotlin-visitor.js";
 export { SwiftVisitor } from "./visitors/swift-visitor.js";
 export { CVisitor } from "./visitors/c-visitor.js";
 export { CppVisitor } from "./visitors/cpp-visitor.js";
+export { VueVisitor } from "./visitors/vue-visitor.js";

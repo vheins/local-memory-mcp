@@ -1,6 +1,6 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.25.3",
+	"version": "0.25.4",
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
@@ -78,6 +78,7 @@
 		"tree-sitter-rust": "^0.24.0",
 		"tree-sitter-swift": "^0.7.1",
 		"tree-sitter-typescript": "^0.23.2",
+		"tree-sitter-vue": "^0.2.1",
 		"web-tree-sitter": "^0.26.11",
 		"zod": "^4.3.5"
 	},

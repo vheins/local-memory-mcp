@@ -36,6 +36,7 @@ import { KotlinVisitor } from "./visitors/kotlin-visitor.js";
 import { SwiftVisitor } from "./visitors/swift-visitor.js";
 import { CVisitor } from "./visitors/c-visitor.js";
 import { CppVisitor } from "./visitors/cpp-visitor.js";
+import { VueVisitor } from "./visitors/vue-visitor.js";
 import { MarkdownVisitor } from "./markdown-visitor.js";
 import { GenericTextVisitor } from "./generic-visitor.js";
 import { logger } from "../../utils/logger.js";
@@ -216,7 +217,7 @@ export class TreeSitterParserPool implements ParserPool {
 		return [
 			{
 				languageId: "typescript",
-				extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".svelte", ".vue", ".astro"],
+				extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".svelte", ".astro"],
 				grammarWasms: [tsGrammar],
 				createVisitor: () => new TypeScriptVisitor()
 			},
@@ -225,6 +226,12 @@ export class TreeSitterParserPool implements ParserPool {
 				extensions: [".tsx", ".jsx"],
 				grammarWasms: [tsxGrammar],
 				createVisitor: () => new TypeScriptVisitor()
+			},
+			{
+				languageId: "vue",
+				extensions: [".vue"],
+				grammarWasms: [getGrammarPath("tree-sitter-vue", "tree-sitter-vue.wasm")],
+				createVisitor: () => new VueVisitor()
 			},
 			{
 				languageId: "go",

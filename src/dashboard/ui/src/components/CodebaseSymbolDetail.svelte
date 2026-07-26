@@ -47,7 +47,7 @@
 
 	let kindIcon = $derived(KIND_ICONS[symbol?.kind || "variable"] || "code");
 	let kindLabel = $derived(KIND_LABELS[symbol?.kind || "variable"] || "Symbol");
-	let locationText = $derived(() => {
+	let locationText = $derived.by(() => {
 		if (!symbol?.filePath) return null;
 		let loc = symbol.filePath;
 		if (symbol.line != null) {
@@ -65,7 +65,7 @@
 	let traceError = $state("");
 
 	// Grouped references: Map<filePath, TraceReference[]>
-	let refsByFile = $derived(() => {
+	let refsByFile = $derived.by(() => {
 		const map = new Map<string, TraceReference[]>();
 		for (const ref of traceRefs) {
 			const existing = map.get(ref.filePath);
@@ -172,7 +172,7 @@
 				<div class="detail-section-label">Location</div>
 				<div class="detail-location">
 					<Icon name="file-text" size={12} strokeWidth={1.75} />
-					<span class="detail-location-path">{locationText()}</span>
+					<span class="detail-location-path">{locationText}</span>
 				</div>
 			</div>
 		{/if}
@@ -199,7 +199,7 @@
 			{:else}
 				<!-- Trace-backed references (grouped by file) -->
 				{#if traceRefs.length > 0}
-					{#each [...refsByFile().entries()] as [filePath, refs] (filePath)}
+					{#each [...refsByFile.entries()] as [filePath, refs] (filePath)}
 						<div class="detail-ref-file-group">
 							<div class="detail-ref-file-header">
 								<Icon name="file-text" size={11} strokeWidth={2} />

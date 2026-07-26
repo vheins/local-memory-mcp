@@ -236,7 +236,7 @@
 	<!-- ═══════════════════════════════════════════════════════════════════════════ -->
 	<!-- Empty State -->
 	<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-{:else if !architecture || architecture.length === 0}
+{:else if !architecture || !Array.isArray(architecture) || architecture.length === 0}
 	<div class="filetree-state">
 		<div class="filetree-state-icon empty">
 			<Icon name="folder-open" size={20} strokeWidth={1.5} />
