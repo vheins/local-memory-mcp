@@ -44,6 +44,6 @@ export const DeleteObservationSchema = z.object({
 export const KGBackfillSchema = z.object({
 	repo: z.string().optional(),
 	owner: z.string().optional().default(""),
-	source: z.enum(["memories", "standards", "codebase", "all"]).optional().default("all"),
+	source: z.enum(["memories", "standards", "both"]).optional().default("both"),
 	json: z.boolean().default(false)
 });
