@@ -295,14 +295,14 @@
 						</div>
 
 						<!-- ─── Language Breakdown (Enh 4) ─── -->
-						{#if languageEntries.length > 0}
+						{#if (languageEntries ?? []).length > 0}
 							<div class="overview-section">
 								<div class="overview-section-label">
 									<Icon name="globe" size={12} strokeWidth={1.75} />
 									Languages
 								</div>
 								<div class="lang-grid">
-									{#each languageEntries as lang (lang.name)}
+									{#each languageEntries ?? [] as lang (lang.name)}
 										<div class="lang-badge" title="{lang.name}: {lang.count} files ({lang.percentage}%)">
 											<span class="lang-icon" style="color:{lang.color}">
 												<Icon name={LANG_ICONS[lang.name] || "file"} size={12} strokeWidth={1.75} />
@@ -320,14 +320,14 @@
 						{/if}
 
 						<!-- ─── Top-Level Exports (Enh 5) ─── -->
-						{#if topLevelExports.length > 0}
+						{#if (topLevelExports ?? []).length > 0}
 							<div class="overview-section">
 								<div class="overview-section-label">
 									<Icon name="package" size={12} strokeWidth={1.75} />
 									Top-Level Exports
 								</div>
 								<div class="export-chips">
-									{#each topLevelExports as exp (exp.name)}
+									{#each topLevelExports ?? [] as exp (exp.name)}
 										<button class="export-chip" title="{exp.kind}: {exp.name} — {exp.file_path}">
 											<span class="export-kind">{exp.kind}</span>
 											<span class="export-sep">:</span>
