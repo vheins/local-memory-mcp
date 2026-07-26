@@ -54,20 +54,27 @@ export async function handleQueryGraph(
 ): Promise<McpResponse> {
 	const validated = QueryGraphSchema.parse(params);
 	const { owner, repo, type_filter, json } = validated;
+	const ownerVal = owner ?? "";
 
 	const typeFilterPattern = type_filter ? `%${type_filter.toLowerCase()}%` : null;
 
 	// ── A. Entities from memory KG ─────────────────────────────────────
-	const entityRows = db.db
-		.prepare<unknown[], EntityRow>(`SELECT name, type, description FROM entities WHERE owner = ? AND repo = ?`)
-		.all(owner, repo);
+	const entityRows: EntityRow[] = ownerVal
+		? db.db
+				.prepare<unknown[], EntityRow>(`SELECT name, type, description FROM entities WHERE owner = ? AND repo = ?`)
+				.all(ownerVal, repo)
+		: db.db.prepare<unknown[], EntityRow>(`SELECT name, type, description FROM entities WHERE repo = ?`).all(repo);
 
 	// ── B. Relations from memory KG ────────────────────────────────────
-	const relationRows = db.db
-		.prepare<unknown[], RelationRow>(
-			`SELECT from_entity, to_entity, relation_type FROM relations WHERE owner = ? AND repo = ?`
-		)
-		.all(owner, repo);
+	const relationRows: RelationRow[] = ownerVal
+		? db.db
+				.prepare<unknown[], RelationRow>(
+					`SELECT from_entity, to_entity, relation_type FROM relations WHERE owner = ? AND repo = ?`
+				)
+				.all(ownerVal, repo)
+		: db.db
+				.prepare<unknown[], RelationRow>(`SELECT from_entity, to_entity, relation_type FROM relations WHERE repo = ?`)
+				.all(repo);
 
 	// ── C. Symbols from codebase index ─────────────────────────────────
 	let symbolRows: SymbolRow[];

@@ -50,7 +50,7 @@ export const KGBackfillSchema = z.object({
 });
 
 export const QueryGraphSchema = z.object({
-	owner: z.string().min(1),
+	owner: z.string().optional(),
 	repo: z
 		.string()
 		.min(1)
