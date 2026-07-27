@@ -26,11 +26,11 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 
 	it("creates and lists handoffs via MCP tools", async () => {
 		const task = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
-				task_code: "HANDOFF-101",
+				code: "HANDOFF-101",
 				phase: "implementation",
 				title: "Handoff target task",
 				description: "Task used to validate handoff-write.",
@@ -112,11 +112,11 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 
 	it("claims a task by task_code via MCP tool", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
-				task_code: "CLAIM-101",
+				code: "CLAIM-101",
 				phase: "implementation",
 				title: "Claimable task",
 				description: "Task used to validate claim-manage.",
@@ -158,11 +158,11 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 
 	it("releases an active claim by task_code", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
-				task_code: "CLAIM-RELEASE-101",
+				code: "CLAIM-RELEASE-101",
 				phase: "implementation",
 				title: "Releasable task",
 				description: "Task used to validate claim-manage release mode.",
@@ -199,11 +199,11 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 
 	it("auto-releases active claims and expires linked pending handoffs when a task completes", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
-				task_code: "CLEANUP-101",
+				code: "CLEANUP-101",
 				phase: "implementation",
 				title: "Cleanup coordination task",
 				description: "Task used to validate automatic coordination cleanup.",
@@ -213,11 +213,11 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 		});
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
-				task_code: "CLEANUP-101",
+				code: "CLEANUP-101",
 				status: "in_progress",
 				comment: "Starting cleanup validation.",
 				agent: "agent-claim"
@@ -248,11 +248,11 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 		});
 
 		const completeRes = await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
-				task_code: "CLEANUP-101",
+				code: "CLEANUP-101",
 				status: "completed",
 				comment: "Validated cleanup behavior.",
 				agent: "agent-claim",

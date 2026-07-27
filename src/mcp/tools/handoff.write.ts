@@ -54,6 +54,22 @@ async function coreCreate(
 		throw new Error("status is not valid for CREATE — use id + status for UPDATE");
 	}
 
+	// Transfer-context validation: reject completed-work summaries without
+	// a target agent, linked task, or context describing remaining work
+	if (
+		!params.to_agent &&
+		!params.task_id &&
+		!params.task_code &&
+		!params.context?.next_steps &&
+		!params.context?.blockers &&
+		!params.context?.remaining_work
+	) {
+		throw new Error(
+			"Handoffs must identify a target agent, linked task, next_steps, blockers, or remaining_work. " +
+				"Do not create pending handoffs for completed-work summaries."
+		);
+	}
+
 	// Resolve task_id from task_code if provided
 	let resolvedTaskId = params.task_id ?? null;
 	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {

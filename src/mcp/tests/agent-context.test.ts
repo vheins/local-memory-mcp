@@ -82,7 +82,7 @@ describe("Agent Context - handleAgentContext", () => {
 	// ─── backward compat: objective still works ──────────────────────────
 
 	it("should accept deprecated objective param as fallback for query", async () => {
-		seedMemory({ title: "DB Schema", content: "Users table with UUID primary key." });
+		seedMemory({ title: "DB Schema", content: "Database schema: Users table with UUID primary key." });
 
 		const res = await handleAgentContext(
 			{ owner: OWNER, repo: REPO, objective: "database", limit: 5, json: true },

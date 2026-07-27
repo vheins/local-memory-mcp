@@ -50,6 +50,9 @@ export async function handleAgentContext(
 	} else {
 		const excludeTypes: string[] = type_filter ? [] : ["decision"];
 		memories = db.memories.getRecentMemories(owner, repo, limit, 0, false, excludeTypes);
+		if (type_filter) {
+			memories = memories.filter((m) => m.type === type_filter);
+		}
 		if (shouldFetchDecisions) {
 			decisionMemories = db.memories.searchByRepo(owner, repo, "", "decision", limit);
 		}
