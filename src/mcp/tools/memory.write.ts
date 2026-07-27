@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { MemoryWriteSchema, MemoryWriteItemSchema } from "./schemas";
+import { MemoryWriteSchema, MemoryWriteItemSchema, MemoryTypeSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
@@ -210,7 +210,7 @@ async function checkCreateConflict(
 		repo,
 		params.type as string,
 		vectors,
-		0.55
+		0.85
 	);
 
 	if (conflict) {
@@ -391,7 +391,9 @@ async function handleUpdate(
 
 	for (const field of updatableFields) {
 		if (params[field] !== undefined) {
-			if (field === "supersedes") {
+			if (field === "type") {
+				updates[field] = MemoryTypeSchema.parse(params[field]);
+			} else if (field === "supersedes") {
 				updates[field] = resolveMemorySupersedes(
 					params[field] as string | null | undefined,
 					db,
@@ -599,7 +601,12 @@ async function handleBulk(
 
 					for (const field of updatableFields) {
 						if (raw[field] !== undefined) {
-							updates[field] = raw[field] as string | number | boolean | Record<string, unknown> | string[] | undefined;
+							if (field === "type") {
+								updates[field] = MemoryTypeSchema.parse(raw[field]);
+							} else {
+								updates[field] = raw[field] as
+									string | number | boolean | Record<string, unknown> | string[] | undefined;
+							}
 						}
 					}
 
