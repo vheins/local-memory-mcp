@@ -5,7 +5,7 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		name: "handoff-create",
 		title: "Handoff Create",
 		description:
-			"Creates a pending handoff for unfinished work between agents.",
+			"Creates pending handoff between agents.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,

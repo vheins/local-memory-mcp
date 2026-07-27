@@ -5,7 +5,7 @@ export const AGENT_TOOL_DEFINITIONS = [
 		name: "agent-context",
 		title: "Agent Context Recall",
 		description:
-			"Returns relevant agent session context with memories, tasks, and decisions.",
+			"Agent context with memories and tasks.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,

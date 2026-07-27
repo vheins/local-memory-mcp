@@ -5,7 +5,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "index_repository",
 		title: "Index Repository",
 		description:
-			"Scans a repo and stores extracted symbols via tree-sitter.",
+			"Scans repo, extracts symbols via tree-sitter.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: true,

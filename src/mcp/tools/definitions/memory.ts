@@ -5,7 +5,7 @@ export const MEMORY_TOOL_DEFINITIONS = [
 		name: "memory-synthesize",
 		title: "Memory Synthesize",
 		description:
-			"Synthesizes grounded answers from local memory and tasks via client sampling.",
+			"Synthesizes from local memory and tasks.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,

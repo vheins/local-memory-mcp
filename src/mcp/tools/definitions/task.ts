@@ -5,7 +5,7 @@ export const TASK_TOOL_DEFINITIONS = [
 		name: "task-create-interactive",
 		title: "Interactive Task Create",
 		description:
-			"Creates a task with elicitation fallback for missing fields.",
+			"Creates task with elicitation fallback.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,

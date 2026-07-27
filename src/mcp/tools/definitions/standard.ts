@@ -5,7 +5,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		name: "standard-detail",
 		title: "Standard Detail",
 		description:
-			"Fetches details of a coding standard by ID or code.",
+			"Fetches standard details by ID or code.",
 		inputSchema: {
 			type: "object",
 			properties: {
