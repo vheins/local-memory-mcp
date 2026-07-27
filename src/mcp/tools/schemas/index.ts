@@ -69,16 +69,6 @@ export type { StandardReadInput } from "./standard.read";
 export { AgentContextSchema } from "./agent";
 
 export {
-	CreateEntitySchema,
-	DeleteEntitySchema,
-	CreateRelationSchema,
-	DeleteRelationSchema,
-	DeleteObservationSchema,
-	KGBackfillSchema,
-	QueryGraphSchema
-} from "./knowledge-graph";
-
-export {
 	IndexRepoSchema,
 	IndexStatusSchema,
 	GetArchitectureSchema,

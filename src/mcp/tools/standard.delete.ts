@@ -83,7 +83,7 @@ export async function handleStandardDelete(
 				try {
 					db.db
 						.prepare(`DELETE FROM observations WHERE observation = ?`)
-						.run(`Mentioned in memory: ${standardEntry.title}`);
+						.run(`Mentioned in standard: ${standardEntry.title}`);
 					db.db.prepare(`DELETE FROM entities WHERE name NOT IN (SELECT DISTINCT entity_name FROM observations)`).run();
 				} catch (kgError) {
 					logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted standard", {
