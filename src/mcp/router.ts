@@ -140,17 +140,11 @@ export function createRouter(
 		// Handoff & Claim — new canonical names
 		"handoff-write",
 		"claim-manage",
-		// Backward-compat aliases
-		"handoff-create",
-		"handoff-update",
 		"standard-write",
 		"standard-delete",
 		"task-write",
-		"task-claim",
-		"claim-release",
 		"task-delete",
-		"codebase-index",
-		"index_repository"
+		"codebase-index"
 	]);
 
 	async function handleToolCall(
@@ -210,22 +204,7 @@ export function createRouter(
 				case "claim-manage":
 					return await handleClaimManage(args, db);
 
-				// Backward-compat aliases — old names route to new unified handlers
-				case "handoff-create":
-				case "handoff-update":
-					return await handleHandoffWrite(args, db);
-
-				case "handoff-list":
-					return await handleHandoffRead(args, db);
-
-				case "task-claim":
-				case "claim-list":
-					return await handleClaimManage(args, db);
-
-				case "claim-release":
-					return await handleClaimManage({ ...args, release: true }, db);
-
-				// Standards — 3 new canonical tools (removed old backward-compat aliases)
+				// Standards — 3 new canonical tools
 				case "standard-write":
 					return await handleStandardWrite(args, db, vectors);
 
@@ -248,19 +227,11 @@ export function createRouter(
 				case "task-delete":
 					return await handleTaskDelete(args, db);
 
-				// Codebase index tools
+				// Codebase index tools — only 2 canonical names
 				case "codebase-index":
-				case "index_repository":
 					return await handleCodebaseIndex(args, db, vectors);
 
-				// Codebase read tools (unified + backward-compat aliases)
 				case "codebase-read":
-				case "index_status":
-				case "get_architecture":
-				case "get_file_symbols":
-				case "trace_symbol":
-				case "search_symbols":
-				case "codebase_search":
 					return await handleCodebaseRead(args, db, vectors);
 
 				default:

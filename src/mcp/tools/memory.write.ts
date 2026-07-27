@@ -12,93 +12,83 @@ import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../utils/memory-u
 // ── Convenience helpers ──────────────────────────────────────────────────
 
 /**
- * If a `decision_log` block is provided (alongside type="decision"),
- * auto-generates the `content`, sets `importance=4`, and strips the
- * convenience field so the memory entry is clean.
+ * If flat decision fields (`context`, `rationale`, `alternatives`) are
+ * provided alongside type="decision", auto-generates the `content`,
+ * sets `importance=4`, and strips the convenience fields so the memory
+ * entry is clean.
  */
-function applyDecisionLog(params: Record<string, unknown>): void {
-	const dl = params.decision_log as Record<string, unknown> | undefined;
-	if (!dl) return;
+function applyDecisionFields(params: Record<string, unknown>): void {
+	const context = params.context as string | undefined;
+	const rationale = params.rationale as string | undefined;
+	const alternatives = params.alternatives as string[] | undefined;
+
+	if (!context && !rationale && !alternatives) return;
 
 	// Validate type must be "decision"
 	if (params.type !== "decision") {
-		throw new Error(`decision_log requires type="decision", got ${params.type ? `"${params.type}"` : "undefined"}.`);
+		throw new Error(
+			`context/rationale/alternatives require type="decision", got ${params.type ? `"${params.type}"` : "undefined"}.`
+		);
 	}
 
-	const { context, rationale, alternatives, tags: dlTags } = dl;
 	const lines: string[] = [];
 
-	const title = (params.title as string) ?? "Untitled";
-	lines.push(`Decision: ${title}`);
-
 	if (context) {
-		lines.push(`\n## Context\n\n${context}`);
+		lines.push(`## Context\n\n${context}`);
 	}
 	if (rationale) {
-		lines.push(`\n## Rationale\n\n${rationale}`);
+		lines.push(`## Rationale\n\n${rationale}`);
 	}
 	if (Array.isArray(alternatives) && alternatives.length > 0) {
-		lines.push(`\n## Alternatives Considered\n\n${(alternatives as string[]).map((a) => `- ${a}`).join("\n")}`);
-		lines.push(`\nAlternatives considered: ${(alternatives as string[]).join(", ")}`);
+		lines.push(`## Alternatives\n\n${(alternatives as string[]).map((a) => `- ${a}`).join("\n")}`);
 	}
 
 	params.content = lines.join("\n\n");
 	params.importance = 4;
 
-	// Merge decision tags into top-level tags if provided
-	if (Array.isArray(dlTags) && (dlTags as string[]).length > 0) {
-		const existingTags = (params.tags as string[]) ?? [];
-		const merged = new Set([...existingTags, ...(dlTags as string[])]);
-		params.tags = [...merged];
-	}
-
-	// Also inject the "decision" tag if not already present
+	// Inject the "decision" tag if not already present
 	const tags = (params.tags as string[]) ?? [];
 	if (!tags.includes("decision")) {
 		tags.push("decision");
 		params.tags = tags;
 	}
 
-	delete params.decision_log;
+	// Strip the flat fields so the memory entry is clean
+	delete params.context;
+	delete params.rationale;
+	delete params.alternatives;
 }
 
 /**
- * If a `session_summary` block is provided (alongside type="task_archive"),
- * auto-generates the `title` and `content`, sets `importance=3`, and strips
- * the convenience field so the memory entry is clean.
+ * If flat session fields (`key_decisions`, `next_steps`) are provided
+ * alongside type="task_archive", auto-generates the `content`, sets
+ * `importance=3`, and strips the convenience fields so the memory entry
+ * is clean.
  */
-function applySessionSummary(params: Record<string, unknown>): void {
-	const ss = params.session_summary as Record<string, unknown> | undefined;
-	if (!ss) return;
+function applySessionFields(params: Record<string, unknown>): void {
+	const keyDecisions = params.key_decisions as string[] | undefined;
+	const nextSteps = params.next_steps as string[] | undefined;
+
+	if (!keyDecisions && !nextSteps) return;
 
 	// Validate type must be "task_archive"
 	if (params.type !== "task_archive") {
 		throw new Error(
-			`session_summary requires type="task_archive", got ${params.type ? `"${params.type}"` : "undefined"}.`
+			`key_decisions/next_steps require type="task_archive", got ${params.type ? `"${params.type}"` : "undefined"}.`
 		);
 	}
 
-	const { summary, key_decisions, next_steps, tags: ssTags } = ss;
+	const lines: string[] = [];
 
-	params.title = ((summary as string) ?? "Summary").slice(0, 80);
-
-	const lines: string[] = [`Session Summary:`, ``, `${summary}`];
-	if (Array.isArray(key_decisions) && (key_decisions as string[]).length > 0) {
-		lines.push(`\n## Key Decisions\n\n${(key_decisions as string[]).map((d) => `- ${d}`).join("\n")}`);
+	if (Array.isArray(keyDecisions) && keyDecisions.length > 0) {
+		lines.push(`## Key Decisions\n\n${keyDecisions.map((d) => `- ${d}`).join("\n")}`);
 	}
-	if (Array.isArray(next_steps) && (next_steps as string[]).length > 0) {
-		lines.push(`\n## Next Steps\n\n${(next_steps as string[]).map((n) => `- ${n}`).join("\n")}`);
+	if (Array.isArray(nextSteps) && nextSteps.length > 0) {
+		lines.push(`## Next Steps\n\n${nextSteps.map((n) => `- ${n}`).join("\n")}`);
 	}
 
 	params.content = lines.join("\n\n");
 	params.importance = 3;
-
-	// Merge session summary tags into top-level tags if provided
-	if (Array.isArray(ssTags) && (ssTags as string[]).length > 0) {
-		const existingTags = (params.tags as string[]) ?? [];
-		const merged = new Set([...existingTags, ...(ssTags as string[])]);
-		params.tags = [...merged];
-	}
 
 	// Always tag with "session-summary"
 	const tags = (params.tags as string[]) ?? [];
@@ -107,7 +97,9 @@ function applySessionSummary(params: Record<string, unknown>): void {
 		params.tags = tags;
 	}
 
-	delete params.session_summary;
+	// Strip the flat fields so the memory entry is clean
+	delete params.key_decisions;
+	delete params.next_steps;
 }
 
 // ── Mode inference ───────────────────────────────────────────────────────
@@ -243,8 +235,8 @@ async function handleCreate(
 	json: boolean
 ): Promise<McpResponse> {
 	// Apply convenience helpers before validation
-	applyDecisionLog(params);
-	applySessionSummary(params);
+	applyDecisionFields(params);
+	applySessionFields(params);
 
 	const parsed = MemoryWriteSchema.parse(params) as Record<string, unknown>;
 
@@ -629,8 +621,8 @@ async function handleBulk(
 				case "create":
 				default: {
 					// Apply convenience helpers
-					applyDecisionLog(raw);
-					applySessionSummary(raw);
+					applyDecisionFields(raw);
+					applySessionFields(raw);
 
 					// Title metadata check
 					const rawTitle = raw.title as string | undefined;
@@ -764,8 +756,8 @@ async function handleBulk(
  * - `content` present → CREATE (single)
  *
  * **Convenience features:**
- * - `decision_log` with `type:"decision"` auto-formats content, sets importance=4
- * - `session_summary` with `type:"task_archive"` auto-formats title/content, sets importance=3
+ * - `context`/`rationale`/`alternatives` with `type:"decision"` auto-formats content, sets importance=4
+ * - `key_decisions`/`next_steps` with `type:"task_archive"` auto-formats content, sets importance=3
  */
 export async function handleMemoryWrite(
 	params: Record<string, unknown>,

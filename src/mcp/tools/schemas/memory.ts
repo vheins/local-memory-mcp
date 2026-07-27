@@ -193,31 +193,31 @@ const MemoryWriteFields = {
 	acknowledge: z.enum(["used", "irrelevant", "contradictory"]).optional(),
 	application_context: z.string().optional(),
 
-	// Decision log convenience — replaces decision-log tool
-	decision_log: z
-		.object({
-			context: z.string().min(10, { message: "Decision context must be at least 10 characters" }),
-			rationale: z.string().min(10, { message: "Rationale must be at least 10 characters" }),
-			alternatives: z.array(z.string()).optional(),
-			tags: z.array(z.string()).optional()
-		})
+	// Decision fields — flat alternative to old decision-log tool
+	context: z
+		.string()
+		.min(10, { message: "Decision context must be at least 10 characters" })
 		.optional()
-		.describe(
-			'Convenience: pass with type:"decision" to auto-format content and set importance=4. Equivalent to calling decision-log.'
-		),
+		.describe('Context for type="decision". When present with type="decision", auto-formats content.'),
+	rationale: z
+		.string()
+		.min(10, { message: "Rationale must be at least 10 characters" })
+		.optional()
+		.describe('Rationale for type="decision". When present with type="decision", auto-formats content.'),
+	alternatives: z
+		.array(z.string())
+		.optional()
+		.describe('Alternatives considered for type="decision". Displayed as a list in auto-formatted content.'),
 
-	// Session summary convenience — replaces session-summarize tool
-	session_summary: z
-		.object({
-			summary: z.string().min(10, { message: "Session summary must be at least 10 characters" }),
-			key_decisions: z.array(z.string()).optional(),
-			next_steps: z.array(z.string()).optional(),
-			tags: z.array(z.string()).optional()
-		})
+	// Session fields — flat alternative to old session-summarize tool
+	key_decisions: z
+		.array(z.string())
 		.optional()
-		.describe(
-			'Convenience: pass with type:"task_archive" to auto-format title and content. Equivalent to calling session-summarize.'
-		),
+		.describe('Key decisions for type="task_archive". Displayed as a list in auto-formatted content.'),
+	next_steps: z
+		.array(z.string())
+		.optional()
+		.describe('Next steps for type="task_archive". Displayed as a list in auto-formatted content.'),
 
 	// Standard
 	owner: z.string().optional(),

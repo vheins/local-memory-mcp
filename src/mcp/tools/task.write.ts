@@ -1063,6 +1063,42 @@ async function handleBulk(params: WriteParams, storage: SQLiteStore, vectors: Ve
 					});
 				}
 
+				// Best-effort vector embedding + KG extraction if title/description changed
+				if (itemUpdates.title !== undefined || itemUpdates.description !== undefined) {
+					const updatedTask = storage.tasks.getTaskById(resolvedId);
+					if (updatedTask) {
+						await tryVectorEmbedding(resolvedId, updatedTask.title, updatedTask.description, vectors);
+						try {
+							await saveExtractions(
+								`${updatedTask.title}\n${updatedTask.description ?? ""}`,
+								updatedTask.title,
+								owner,
+								repo,
+								storage
+							);
+						} catch (error) {
+							logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
+						}
+						try {
+							await saveTaskRelations(
+								`${updatedTask.title}\n${updatedTask.description ?? ""}`,
+								updatedTask.title,
+								owner,
+								repo,
+								storage,
+								{
+									parentId: updatedTask.parent_id,
+									decisionRefs: (updatedTask.metadata?.decision_refs as string[]) ?? undefined
+								}
+							);
+						} catch (error) {
+							logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
+								error: String(error)
+							});
+						}
+					}
+				}
+
 				// Claims/handoffs cleanup
 				if (itemUpdates.status === "completed" || itemUpdates.status === "canceled") {
 					storage.handoffs.releaseClaimsForTask(resolvedId);

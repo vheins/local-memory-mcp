@@ -32,7 +32,9 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
-		const standardCode = createRes.structuredContent.standard.code;
+		const createText = getPrimaryTextContent(createRes);
+		const codeMatch = createText.match(/\[(\w+-\d+)\]/);
+		const standardCode = codeMatch ? codeMatch[1] : null;
 
 		const delRes = await router("tools/call", {
 			name: "standard-delete",
@@ -61,7 +63,9 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
-		const stdCode = createRes.structuredContent.standard.code;
+		const createText2 = getPrimaryTextContent(createRes);
+		const codeMatch2 = createText2.match(/\[(\w+-\d+)\]/);
+		const stdCode = codeMatch2 ? codeMatch2[1] : null;
 
 		const delRes = await router("tools/call", {
 			name: "standard-delete",

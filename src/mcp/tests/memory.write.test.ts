@@ -470,9 +470,9 @@ describe("MCP Local Memory - memory-write (Create, Update, Acknowledge, Bulk)", 
 	});
 });
 
-// ─── decision_log convenience field (replaces deprecated decision-log tool) ──
+// ─── Decision fields (context/rationale/alternatives) — flat, replaces old decision_log ──
 
-describe("decision_log convenience field in memory-write", () => {
+describe("decision flat fields in memory-write", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
@@ -492,16 +492,14 @@ describe("decision_log convenience field in memory-write", () => {
 		};
 	});
 
-	it("should auto-format content and set importance=4 when decision_log is provided with type=decision", async () => {
+	it("should auto-format content and set importance=4 when context/rationale provided with type=decision", async () => {
 		const res = await router("tools/call", {
 			name: "memory-write",
 			arguments: {
 				type: "decision",
 				title: "Choose Database",
-				decision_log: {
-					context: "We needed to pick a primary database for the new service.",
-					rationale: "Postgres offers better JSON support and is more battle-tested for this workload."
-				},
+				context: "We needed to pick a primary database for the new service.",
+				rationale: "Postgres offers better JSON support and is more battle-tested for this workload.",
 				tags: ["backend"],
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
@@ -514,42 +512,40 @@ describe("decision_log convenience field in memory-write", () => {
 		expect(res.structuredContent.importance).toBe(4);
 		expect(res.structuredContent.title).toBe("Choose Database");
 
-		// Content should have been auto-generated from decision_log fields
+		// Content should have been auto-generated from context/rationale fields
 		const stored = db.memories.getById(res.structuredContent.id);
-		expect(stored?.content).toContain("Decision: Choose Database");
+		expect(stored?.content).toContain("## Context");
+		expect(stored?.content).toContain("We needed to pick");
+		expect(stored?.content).toContain("## Rationale");
 		expect(stored?.content).toContain("Postgres offers better");
 		expect(stored?.tags).toContain("decision");
 	});
 
-	it("should throw error if decision_log is provided without type=decision", async () => {
+	it("should throw error if context/rationale provided without type=decision", async () => {
 		await expect(
 			router("tools/call", {
 				name: "memory-write",
 				arguments: {
 					type: "code_fact",
 					title: "Wrong Type",
-					decision_log: {
-						context: "This should not work.",
-						rationale: "Because type is code_fact, not decision."
-					},
+					context: "This should not work.",
+					rationale: "Because type is code_fact, not decision.",
 					scope: { owner: "test", repo: REPO }
 				}
 			})
-		).rejects.toThrow("decision_log");
+		).rejects.toThrow(/type.*decision/i);
 	});
 
-	it("should include alternatives and tags in auto-generated content", async () => {
+	it("should include alternatives in auto-generated content", async () => {
 		const res = await router("tools/call", {
 			name: "memory-write",
 			arguments: {
 				type: "decision",
 				title: "Framework Choice",
-				decision_log: {
-					context: "Evaluating frontend frameworks for the dashboard.",
-					rationale: "React has the largest ecosystem and best tooling.",
-					alternatives: ["Vue", "Svelte", "Solid"],
-					tags: ["frontend", "architecture"]
-				},
+				context: "Evaluating frontend frameworks for the dashboard.",
+				rationale: "React has the largest ecosystem and best tooling.",
+				alternatives: ["Vue", "Svelte", "Solid"],
+				tags: ["frontend", "architecture"],
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model"
@@ -558,14 +554,17 @@ describe("decision_log convenience field in memory-write", () => {
 
 		expect(res.structuredContent.success).toBe(true);
 		const stored = db.memories.getById(res.structuredContent.id);
-		expect(stored?.content).toContain("Alternatives considered: Vue, Svelte, Solid");
+		expect(stored?.content).toContain("## Alternatives");
+		expect(stored?.content).toContain("- Vue");
+		expect(stored?.content).toContain("- Svelte");
+		expect(stored?.content).toContain("- Solid");
 		expect(stored?.tags).toEqual(expect.arrayContaining(["decision", "frontend", "architecture"]));
 	});
 });
 
-// ─── session_summary convenience field (replaces deprecated session-summarize tool) ──
+// ─── Session fields (key_decisions/next_steps) — flat, replaces old session_summary ──
 
-describe("session_summary convenience field in memory-write", () => {
+describe("session flat fields in memory-write", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
@@ -585,16 +584,14 @@ describe("session_summary convenience field in memory-write", () => {
 		};
 	});
 
-	it("should auto-format content when session_summary is provided with type=task_archive", async () => {
+	it("should auto-format content when key_decisions/next_steps provided with type=task_archive", async () => {
 		const res = await router("tools/call", {
 			name: "memory-write",
 			arguments: {
 				type: "task_archive",
-				session_summary: {
-					summary: "Refactored the auth module and added tests.",
-					key_decisions: ["Use JWT for tokens", "Extract auth to a service class"],
-					next_steps: ["Add refresh token rotation", "Write integration tests"]
-				},
+				title: "Auth Refactor Session",
+				key_decisions: ["Use JWT for tokens", "Extract auth to a service class"],
+				next_steps: ["Add refresh token rotation", "Write integration tests"],
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
 				model: "test-model"
@@ -605,44 +602,24 @@ describe("session_summary convenience field in memory-write", () => {
 		expect(res.structuredContent.type).toBe("task_archive");
 
 		const stored = db.memories.getById(res.structuredContent.id);
-		expect(stored?.content).toContain("Session Summary:");
-		expect(stored?.content).toContain("Refactored the auth module");
+		expect(stored?.content).toContain("## Key Decisions");
 		expect(stored?.content).toContain("Use JWT for tokens");
+		expect(stored?.content).toContain("## Next Steps");
 		expect(stored?.content).toContain("Add refresh token rotation");
 		expect(stored?.tags).toContain("session-summary");
 	});
 
-	it("should use summary as title when no explicit title is given", async () => {
-		const res = await router("tools/call", {
-			name: "memory-write",
-			arguments: {
-				type: "task_archive",
-				session_summary: {
-					summary: "Short session note."
-				},
-				scope: { owner: "test", repo: REPO },
-				agent: "test-agent",
-				model: "test-model"
-			}
-		});
-
-		const stored = db.memories.getById(res.structuredContent.id);
-		expect(stored?.title).toBe("Short session note.");
-	});
-
-	it("should throw error if session_summary is provided without type=task_archive", async () => {
+	it("should throw error if key_decisions/next_steps provided without type=task_archive", async () => {
 		await expect(
 			router("tools/call", {
 				name: "memory-write",
 				arguments: {
 					type: "code_fact",
 					title: "Wrong Type",
-					session_summary: {
-						summary: "This should not work."
-					},
+					key_decisions: ["This should not work."],
 					scope: { owner: "test", repo: REPO }
 				}
 			})
-		).rejects.toThrow("session_summary");
+		).rejects.toThrow(/type.*task_archive/i);
 	});
 });

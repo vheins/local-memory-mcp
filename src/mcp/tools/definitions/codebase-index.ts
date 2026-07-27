@@ -8,7 +8,10 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "codebase-index",
 		title: "Codebase Index",
 		description:
-			"Scans repo, extracts symbols via tree-sitter. Canonical write tool for codebase index (replaces index_repository).",
+			"Unified tool for codebase index management. " +
+			"Auto-infers mode from params: " +
+			"`repoPath` + `repo` → index (tree-sitter scan, replaces index_repository); " +
+			"`repo` saja (tanpa repoPath) → status (freshness + count, replaces index_status).",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: true,
@@ -20,12 +23,12 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			properties: {
 				owner: { type: "string", description: "Repo owner." },
 				repo: { type: "string", description: "Repo name." },
-				repoPath: { type: "string", description: "Absolute path to repo." },
+				repoPath: { type: "string", description: "Absolute path to repo. Omit for status mode." },
 				force: { type: "boolean", description: "Force full re-index." },
 				includeGlobs: { type: "array", items: { type: "string" }, description: "Include glob patterns." },
 				excludeGlobs: { type: "array", items: { type: "string" }, description: "Exclude glob patterns." }
 			},
-			required: ["repo", "repoPath"]
+			required: ["repo"]
 		}
 	},
 	{

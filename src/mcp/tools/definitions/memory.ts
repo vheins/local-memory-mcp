@@ -77,43 +77,38 @@ export const MEMORY_TOOL_DEFINITIONS = [
 				},
 				application_context: { type: "string", description: "Context for acknowledge." },
 
-				// Decision log convenience (replaces decision-log tool)
-				decision_log: {
-					type: "object",
-					properties: {
-						context: { type: "string", description: "Decision context. Min 10 chars." },
-						rationale: { type: "string", description: "Why this decision was made. Min 10 chars." },
-						alternatives: { type: "array", items: { type: "string" }, description: "Alternatives considered." },
-						tags: { type: "array", items: { type: "string" }, description: "Additional tags." }
-					},
-					required: ["context", "rationale"],
-					description:
-						'Convenience: pass with type:"decision" to auto-format content and set importance=4. Equivalent to calling decision-log.'
+				// Decision fields — flat alternative to old decision-log tool
+				context: {
+					type: "string",
+					minLength: 10,
+					description: 'Context for type="decision". When present with type="decision", auto-formats content.'
+				},
+				rationale: {
+					type: "string",
+					minLength: 10,
+					description: 'Rationale for type="decision". When present with type="decision", auto-formats content.'
+				},
+				alternatives: {
+					type: "array",
+					items: { type: "string" },
+					description: 'Alternatives considered for type="decision". Displayed as a list in auto-formatted content.'
 				},
 
-				// Session summary convenience (replaces session-summarize tool)
-				session_summary: {
-					type: "object",
-					properties: {
-						summary: { type: "string", description: "Session summary. Min 10 chars." },
-						key_decisions: {
-							type: "array",
-							items: { type: "string" },
-							description: "Key decisions made this session."
-						},
-						next_steps: {
-							type: "array",
-							items: { type: "string" },
-							description: "Next steps or follow-up actions."
-						},
-						tags: { type: "array", items: { type: "string" }, description: "Additional tags." }
-					},
-					required: ["summary"],
-					description:
-						'Convenience: pass with type:"task_archive" to auto-format title and content. Equivalent to calling session-summarize.'
+				// Session fields — flat alternative to old session-summarize tool
+				key_decisions: {
+					type: "array",
+					items: { type: "string" },
+					description: 'Key decisions for type="task_archive". Displayed as a list in auto-formatted content.'
+				},
+				next_steps: {
+					type: "array",
+					items: { type: "string" },
+					description: 'Next steps for type="task_archive". Displayed as a list in auto-formatted content.'
 				},
 
 				// BULK
+				// BULK array items — supports flat decision fields (context/rationale/alternatives)
+				// and session fields (key_decisions/next_steps)
 				memories: {
 					type: "array",
 					items: {
@@ -147,26 +142,11 @@ export const MEMORY_TOOL_DEFINITIONS = [
 							completed_at: { type: "string" },
 							acknowledge: { type: "string", enum: ["used", "irrelevant", "contradictory"] },
 							application_context: { type: "string" },
-							decision_log: {
-								type: "object",
-								properties: {
-									context: { type: "string" },
-									rationale: { type: "string" },
-									alternatives: { type: "array", items: { type: "string" } },
-									tags: { type: "array", items: { type: "string" } }
-								},
-								required: ["context", "rationale"]
-							},
-							session_summary: {
-								type: "object",
-								properties: {
-									summary: { type: "string" },
-									key_decisions: { type: "array", items: { type: "string" } },
-									next_steps: { type: "array", items: { type: "string" } },
-									tags: { type: "array", items: { type: "string" } }
-								},
-								required: ["summary"]
-							}
+							context: { type: "string", minLength: 10 },
+							rationale: { type: "string", minLength: 10 },
+							alternatives: { type: "array", items: { type: "string" } },
+							key_decisions: { type: "array", items: { type: "string" } },
+							next_steps: { type: "array", items: { type: "string" } }
 						}
 					},
 					description: "Bulk memories array — mixed create/update/acknowledge items."

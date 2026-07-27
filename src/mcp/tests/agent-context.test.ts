@@ -4,7 +4,8 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore, MemoryEntry } from "../types";
 import { AgentContextSchema } from "../tools/schemas";
-import { DecisionLogSchema, SessionSummarizeSchema } from "../tools/schemas/agent";
+// DecisionLogSchema and SessionSummarizeSchema removed per ADR-007.
+// Use memory-write with flat fields: context/rationale/alternatives, key_decisions/next_steps
 import { MemoryWriteSchema } from "../tools/schemas/memory";
 import { AGENT_TOOL_DEFINITIONS } from "../tools/definitions/agent";
 
@@ -15,9 +16,7 @@ describe("Agent Context - handleAgentContext", () => {
 	const REPO = "agent-context-test";
 	const OWNER = "test";
 
-	function seedMemory(
-		overrides: Partial<MemoryEntry> & { title: string; content: string }
-	): MemoryEntry {
+	function seedMemory(overrides: Partial<MemoryEntry> & { title: string; content: string }): MemoryEntry {
 		const entry: MemoryEntry = {
 			id: overrides.id ?? crypto.randomUUID(),
 			type: overrides.type ?? "code_fact",
@@ -75,11 +74,7 @@ describe("Agent Context - handleAgentContext", () => {
 		seedMemory({ title: "Alpha", content: "First memory content." });
 		seedMemory({ title: "Beta", content: "Second memory content." });
 
-		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, limit: 10, json: true },
-			db,
-			vectors
-		);
+		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 10, json: true }, db, vectors);
 
 		expect(res.structuredContent.memories.length).toBeGreaterThanOrEqual(2);
 	});
@@ -169,11 +164,7 @@ describe("Agent Context - handleAgentContext", () => {
 	it("should include separate decisions section when decision memories exist", async () => {
 		seedMemory({ type: "decision", title: "Use Postgres", content: "Chose Postgres over MySQL." });
 
-		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, limit: 5, json: true },
-			db,
-			vectors
-		);
+		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 5, json: true }, db, vectors);
 
 		expect(res.structuredContent.decisions.length).toBeGreaterThan(0);
 	});
@@ -195,11 +186,7 @@ describe("Agent Context - handleAgentContext", () => {
 			updated_at: new Date().toISOString()
 		});
 
-		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, limit: 5, json: true },
-			db,
-			vectors
-		);
+		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 5, json: true }, db, vectors);
 
 		expect(res.structuredContent.tasks.length).toBeGreaterThan(0);
 		const taskCodes = res.structuredContent.tasks.map((t: { task_code: string }) => t.task_code);
@@ -211,11 +198,7 @@ describe("Agent Context - handleAgentContext", () => {
 	it("should return structured JSON when json:true", async () => {
 		seedMemory({ title: "JSON Test", content: "Testing JSON output format." });
 
-		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, limit: 5, json: true },
-			db,
-			vectors
-		);
+		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 5, json: true }, db, vectors);
 
 		expect(res.structuredContent).toBeDefined();
 		expect(res.structuredContent.schema).toBe("agent-context");
@@ -232,11 +215,7 @@ describe("Agent Context - handleAgentContext", () => {
 			seedMemory({ title: `Limit Test ${i}`, content: `Content for memory ${i}.` });
 		}
 
-		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, limit: 3, json: true },
-			db,
-			vectors
-		);
+		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 3, json: true }, db, vectors);
 
 		expect(res.structuredContent.memories.length).toBeLessThanOrEqual(3);
 	});
@@ -244,15 +223,11 @@ describe("Agent Context - handleAgentContext", () => {
 
 describe("Agent Context - Schema Validation (AgentContextSchema)", () => {
 	it("should reject empty owner", () => {
-		expect(() =>
-			AgentContextSchema.parse({ owner: "", repo: "test" })
-		).toThrow();
+		expect(() => AgentContextSchema.parse({ owner: "", repo: "test" })).toThrow();
 	});
 
 	it("should reject empty repo", () => {
-		expect(() =>
-			AgentContextSchema.parse({ owner: "test", repo: "" })
-		).toThrow();
+		expect(() => AgentContextSchema.parse({ owner: "test", repo: "" })).toThrow();
 	});
 
 	it("should accept query as optional string", () => {
@@ -281,17 +256,15 @@ describe("Agent Context - Schema Validation (AgentContextSchema)", () => {
 });
 
 describe("Agent Context - decision-log and session-summarize removed", () => {
-	it("decision-log is no longer a standalone tool — replaced by decision_log field in memory-write", () => {
-		// Verify the schema still exists but as a convenience field on memory-write
+	it("decision-log/session-summarize logic replaced by flat fields in memory-write", () => {
+		// Verify the flat decision fields exist on memory-write schema
 		const shape = MemoryWriteSchema.shape || {};
 		const keys = Object.keys(shape);
-		expect(keys).toContain("decision_log");
-		expect(keys).toContain("session_summary");
-	});
-
-	it("decision_log and session_summary schemas are preserved for backward compat", () => {
-		expect(DecisionLogSchema).toBeDefined();
-		expect(SessionSummarizeSchema).toBeDefined();
+		expect(keys).toContain("context");
+		expect(keys).toContain("rationale");
+		expect(keys).toContain("alternatives");
+		expect(keys).toContain("key_decisions");
+		expect(keys).toContain("next_steps");
 	});
 
 	it("agent-context definition no longer lists decision-log or session-summarize tools", () => {

@@ -55,8 +55,7 @@ const WRITE_TOOLS = new Set([
 	"task-write",
 	"task-delete",
 	// Codebase index tools (write)
-	"codebase-index",
-	"index_repository"
+	"codebase-index"
 ]);
 
 // ── Resource mutation URIs ───────────────────────────────────────────────
@@ -218,14 +217,6 @@ function buildExecutors(
 		"handoff-write": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
 		"handoff-read": (args, db, _vectors, _extra) => handleHandoffRead(args, db),
 		"claim-manage": (args, db, _vectors, _extra) => handleClaimManage(args, db),
-		// Backward-compat aliases — old names route to new unified handlers
-		"handoff-create": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
-		"handoff-update": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
-		"handoff-list": (args, db, _vectors, _extra) => handleHandoffRead(args, db),
-		"task-claim": (args, db, _vectors, _extra) => handleClaimManage(args, db),
-		"claim-list": (args, db, _vectors, _extra) => handleClaimManage(args, db),
-		"claim-release": (args, db, _vectors, _extra) =>
-			handleClaimManage({ ...args, release: true } as Record<string, unknown>, db),
 		// New canonical handlers
 		"standard-write": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
 		"standard-read": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
@@ -237,19 +228,9 @@ function buildExecutors(
 		"task-delete": (args, db, _vectors, _extra) => handleTaskDelete(args, db),
 
 		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
-		// Codebase index tools
-		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
-		// Write tool — canonical name
+		// Codebase index tools — only 2 canonical names
 		"codebase-index": (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
-		// Backward-compat alias — routes to the same handler
-		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
-		// Backward-compat read aliases — all route through codebase-read
-		index_status: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
-		get_architecture: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
-		get_file_symbols: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
-		trace_symbol: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
-		search_symbols: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
-		codebase_search: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors)
+		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors)
 	};
 }
 
