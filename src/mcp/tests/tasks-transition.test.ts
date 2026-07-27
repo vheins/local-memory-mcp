@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { handleTaskCreate } from "../tools/task.create";
-import { handleTaskUpdate } from "../tools/task.update";
+import { handleTaskWrite } from "../tools/task.write";
 import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 
-describe("Task Status Transitions", () => {
+describe("Consolidated Task Write — Status Transitions", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let mockVectors: VectorStore;
 	const REPO = "test-repo";
@@ -19,7 +18,7 @@ describe("Task Status Transitions", () => {
 	});
 
 	async function createTask(taskCode: string, status: string) {
-		return await handleTaskCreate(
+		return await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -31,7 +30,8 @@ describe("Task Status Transitions", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 	}
 
@@ -40,7 +40,7 @@ describe("Task Status Transitions", () => {
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		await expect(
-			handleTaskUpdate(
+			handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -54,14 +54,14 @@ describe("Task Status Transitions", () => {
 				db,
 				mockVectors
 			)
-		).rejects.toThrow(/Cannot transition task .* from 'backlog' directly to 'completed'. Must be 'in_progress' first./);
+		).rejects.toThrow(/Cannot transition from 'backlog' directly to 'completed'/);
 	});
 
 	it("should allow transition from backlog to pending", async () => {
 		await createTask("TASK-001", "backlog");
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -84,7 +84,7 @@ describe("Task Status Transitions", () => {
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		await expect(
-			handleTaskUpdate(
+			handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -98,14 +98,14 @@ describe("Task Status Transitions", () => {
 				db,
 				mockVectors
 			)
-		).rejects.toThrow(/Cannot transition task .* from 'pending' directly to 'completed'. Must be 'in_progress' first./);
+		).rejects.toThrow(/Cannot transition from 'pending' directly to 'completed'/);
 	});
 
 	it("should allow transition from pending to in_progress", async () => {
 		await createTask("TASK-001", "pending");
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -128,7 +128,7 @@ describe("Task Status Transitions", () => {
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		// to in_progress first
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -142,7 +142,7 @@ describe("Task Status Transitions", () => {
 			mockVectors
 		);
 
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -166,7 +166,7 @@ describe("Task Status Transitions", () => {
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		// to in_progress first
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -181,7 +181,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		// to blocked
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -197,7 +197,7 @@ describe("Task Status Transitions", () => {
 		expect(db.tasks.getTaskById(task.id)?.status).toBe("blocked");
 
 		// back to in_progress
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -217,7 +217,7 @@ describe("Task Status Transitions", () => {
 		const task2 = db.tasks.getTaskByCode("test", REPO, "TASK-002");
 		if (!task2) throw new Error("Task TASK-002 not found");
 
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -238,7 +238,7 @@ describe("Task Status Transitions", () => {
 		const parent = db.tasks.getTaskByCode("test", REPO, "PARENT-001")!;
 
 		// Move parent to in_progress
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -253,7 +253,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		// Create child tasks
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -266,10 +266,11 @@ describe("Task Status Transitions", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -282,11 +283,12 @@ describe("Task Status Transitions", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		await expect(
-			handleTaskUpdate(
+			handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -308,7 +310,7 @@ describe("Task Status Transitions", () => {
 		const parent = db.tasks.getTaskByCode("test", REPO, "PARENT-002")!;
 
 		// Move parent to in_progress
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -323,7 +325,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		// Create child task
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -336,13 +338,14 @@ describe("Task Status Transitions", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		const child = db.tasks.getTaskByCode("test", REPO, "CHILD-003")!;
 
 		// Move child to in_progress then complete
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -356,7 +359,7 @@ describe("Task Status Transitions", () => {
 			mockVectors
 		);
 
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -372,7 +375,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		// Complete parent — should succeed now
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -396,7 +399,7 @@ describe("Task Status Transitions", () => {
 		const task = db.tasks.getTasksByRepo("test", REPO)[0];
 
 		// to blocked
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -411,7 +414,7 @@ describe("Task Status Transitions", () => {
 		);
 
 		await expect(
-			handleTaskUpdate(
+			handleTaskWrite(
 				{
 					owner: "test",
 					repo: REPO,
@@ -425,6 +428,6 @@ describe("Task Status Transitions", () => {
 				db,
 				mockVectors
 			)
-		).rejects.toThrow(/Cannot transition task .* from 'blocked' directly to 'completed'. Must be 'in_progress' first./);
+		).rejects.toThrow(/Cannot transition from 'blocked' directly to 'completed'/);
 	});
 });

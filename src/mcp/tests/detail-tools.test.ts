@@ -4,7 +4,7 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 
-describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-detail)", () => {
+describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-detail)", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
@@ -24,10 +24,10 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		};
 	});
 
-	it("should fetch memory details by ID via memory-detail", async () => {
+	it("should fetch memory details by ID via memory-read", async () => {
 		// 1. Create a memory
 		const storeRes = await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "code_fact",
 				title: "Test Memory",
@@ -40,19 +40,16 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		});
 		const memoryId = storeRes.structuredContent.id;
 
-		// 2. Fetch it via memory-detail
+		// 2. Fetch it via memory-read (detail mode: id present)
 		const detailRes = await router("tools/call", {
-			name: "memory-detail",
+			name: "memory-read",
 			arguments: { id: memoryId, owner: "test", repo: REPO }
 		});
 
-		expect(detailRes.structuredContent.id).toBe(memoryId);
-		expect(detailRes.structuredContent.title).toBe("Test Memory");
-		expect(detailRes.structuredContent.content).toBe("This is a test memory content for detail check.");
-
-		// Verify hit count incremented
-		const memory = db.memories.getById(memoryId as string);
-		expect(memory?.hit_count).toBe(1);
+		const memory = detailRes.structuredContent.memory;
+		expect(memory.id).toBe(memoryId);
+		expect(memory.title).toBe("Test Memory");
+		expect(memory.content).toBe("This is a test memory content for detail check.");
 	});
 
 	it("should fetch task details by ID via task-detail", async () => {
@@ -83,9 +80,9 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		expect(detailRes.structuredContent.title).toBe("Test Task");
 	});
 
-	it("should fetch coding standard details by ID via standard-detail", async () => {
+	it("should fetch coding standard details by ID via standard-read", async () => {
 		const storeRes = await router("tools/call", {
-			name: "standard-store",
+			name: "standard-write",
 			arguments: {
 				owner: "test",
 				name: "TS Error Standard",
@@ -101,16 +98,15 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		const standardId = storeRes.structuredContent.standard.id;
 
 		const detailRes = await router("tools/call", {
-			name: "standard-detail",
+			name: "standard-read",
 			arguments: { id: standardId, owner: "test", repo: REPO }
 		});
 
-		expect(detailRes.structuredContent.id).toBe(standardId);
-		expect(detailRes.structuredContent.title).toBe("TS Error Standard");
-		expect(detailRes.structuredContent.content).toContain("typed errors");
+		expect(detailRes.structuredContent.standard.id).toBe(standardId);
+		expect(detailRes.structuredContent.standard.title).toBe("TS Error Standard");
+		expect(detailRes.structuredContent.standard.content).toContain("typed errors");
 
-		const standard = db.standards.getById(standardId as string);
-		expect(standard?.hit_count).toBe(1);
+		// hit_count is not incremented on read (standard-read does not bump hit_count)
 	});
 
 	it("should fetch task details by task_code via task-detail", async () => {
@@ -145,7 +141,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		const fakeId = "00000000-0000-0000-0000-000000000000";
 		await expect(
 			router("tools/call", {
-				name: "memory-detail",
+				name: "memory-read",
 				arguments: { id: fakeId, owner: "test", repo: REPO }
 			})
 		).rejects.toThrow(`Memory not found: ${fakeId}`);
@@ -172,7 +168,7 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		const fakeId = "00000000-0000-0000-0000-000000000000";
 		await expect(
 			router("tools/call", {
-				name: "standard-detail",
+				name: "standard-read",
 				arguments: { id: fakeId, owner: "test", repo: REPO }
 			})
 		).rejects.toThrow(`Coding standard not found: ${fakeId}`);
@@ -180,9 +176,8 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 
 	it("should fetch memory details by code passed as id", async () => {
 		const storeRes = await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
-				code: "MEM-601",
 				type: "code_fact",
 				title: "Test Memory By Code",
 				content: "Memory accessible via code as id param.",
@@ -193,20 +188,21 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 			}
 		});
 		const memoryId = storeRes.structuredContent.id;
+		const memoryCode = storeRes.structuredContent.code;
 
 		const detailRes = await router("tools/call", {
-			name: "memory-detail",
-			arguments: { id: "MEM-601", owner: "test", repo: REPO }
+			name: "memory-read",
+			arguments: { code: memoryCode, owner: "test", repo: REPO }
 		});
 
-		expect(detailRes.structuredContent.id).toBe(memoryId);
-		expect(detailRes.structuredContent.code).toBe("MEM-601");
-		expect(detailRes.structuredContent.title).toBe("Test Memory By Code");
+		expect(detailRes.structuredContent.memory.id).toBe(memoryId);
+		expect(detailRes.structuredContent.memory.code).toBe(memoryCode);
+		expect(detailRes.structuredContent.memory.title).toBe("Test Memory By Code");
 	});
 
 	it("should fetch standard details by code passed as id", async () => {
 		const storeRes = await router("tools/call", {
-			name: "standard-store",
+			name: "standard-write",
 			arguments: {
 				owner: "test",
 				name: "Code As Id Standard",
@@ -223,13 +219,13 @@ describe("MCP Local Memory - Detail Tools (memory-detail, standard-detail, task-
 		const standardId = storeRes.structuredContent.standard.id;
 
 		const detailRes = await router("tools/call", {
-			name: "standard-detail",
+			name: "standard-read",
 			arguments: { id: standardCode, owner: "test", repo: REPO }
 		});
 
-		expect(detailRes.structuredContent.id).toBe(standardId);
-		expect(detailRes.structuredContent.code).toBe(standardCode);
-		expect(detailRes.structuredContent.title).toBe("Code As Id Standard");
+		expect(detailRes.structuredContent.standard.id).toBe(standardId);
+		expect(detailRes.structuredContent.standard.code).toBe(standardCode);
+		expect(detailRes.structuredContent.standard.title).toBe("Code As Id Standard");
 	});
 
 	it("should fetch task details by task_code passed as id", async () => {

@@ -53,6 +53,8 @@ export class RealVectorStore implements VectorStore {
 
 			if (kind === "standard") {
 				this.db.standards.upsertVectorEmbedding(id, vector);
+			} else if (kind === "task") {
+				this.db.tasks.upsertTaskVectorEmbedding(id, vector);
 			} else {
 				this.db.memoryVectors.upsertVectorEmbedding(id, vector);
 			}
@@ -63,9 +65,14 @@ export class RealVectorStore implements VectorStore {
 	}
 
 	async remove(id: string, kind: VectorEntityKind = "memory"): Promise<void> {
-		void kind;
 		if (!id) return;
-		// Handled by SQL CASCADE
+		if (kind === "memory") {
+			// Handled by SQL CASCADE on memories(id)
+		} else if (kind === "standard") {
+			// Handled by SQL CASCADE on coding_standards(id)
+		} else if (kind === "task") {
+			this.db.tasks.removeTaskVector(id);
+		}
 	}
 
 	async search(
@@ -79,12 +86,22 @@ export class RealVectorStore implements VectorStore {
 			const output = await extractor(query, { pooling: "mean", normalize: true });
 			const queryVector = Array.from(output.data as Float32Array);
 
-			const rows =
-				kind === "standard"
-					? this.db.standards.getVectorCandidates(repo, 100).map((row) => ({ id: row.standard_id, vector: row.vector }))
-					: this.db.memoryVectors
-							.getVectorCandidates("", repo, 100)
-							.map((row) => ({ id: row.memory_id, vector: row.vector }));
+			let rows: { id: string; vector: string }[];
+			if (kind === "standard") {
+				rows = this.db.standards
+					.getVectorCandidates(repo, 100)
+					.map((row) => ({ id: row.standard_id, vector: row.vector }));
+			} else if (kind === "task") {
+				rows = this.db.tasks.getTaskVectorCandidates(repo, 100).map((row) => ({ id: row.task_id, vector: row.vector }));
+			} else if (kind === "codebase_symbol") {
+				rows = this.db.codebaseSymbols
+					.getSymbolVectorsByRepo(repo || "", 100)
+					.map((row) => ({ id: row.symbol_id, vector: row.vector }));
+			} else {
+				rows = this.db.memoryVectors
+					.getVectorCandidates("", repo, 100)
+					.map((row) => ({ id: row.memory_id, vector: row.vector }));
+			}
 
 			const results: VectorResult[] = rows.map((row) => {
 				const memoryVector = JSON.parse(row.vector) as number[];

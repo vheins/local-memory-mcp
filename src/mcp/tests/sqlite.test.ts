@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from "vitest";
 import * as fc from "fast-check";
 import { SQLiteStore, createTestStore } from "../storage/sqlite";
-import { handleMemoryStore } from "../tools/memory.store";
+import { handleMemoryWrite } from "../tools/memory.write";
 import type { MemoryEntry, VectorStore } from "../types";
 
 type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
@@ -167,7 +167,7 @@ describe("Property 8: TTL stores correct expires_at", () => {
 				const db = await freshStore();
 				const repo = "p8-ttl";
 
-				const response = await handleMemoryStore(
+				const response = await handleMemoryWrite(
 					{
 						type: "code_fact",
 						title: "TTL Test Memory",

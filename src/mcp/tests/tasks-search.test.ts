@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { handleTaskCreate } from "../tools/task.create";
-import { handleTaskUpdate } from "../tools/task.update";
-import { handleTaskList } from "../tools/task.list";
+import { handleTaskWrite } from "../tools/task.write";
+import { handleTaskRead } from "../tools/task.read";
 import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 
-describe("Task Search and Filtering", () => {
+describe("Consolidated Task Read — Search and Filtering", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
+	let mockVectors: VectorStore;
 	const REPO = "test-search-repo";
 
 	beforeEach(async () => {
 		// Use in-memory database for testing
 		db = await createTestStore();
-		const mockVectors = {
+		mockVectors = {
 			upsert: async () => {},
 			remove: async () => {},
 			search: async () => []
@@ -23,7 +23,7 @@ describe("Task Search and Filtering", () => {
 		// To get other statuses, we create as pending and then update
 
 		// TASK-001: in_progress
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -36,11 +36,12 @@ describe("Task Search and Filtering", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 		const task1 = db.tasks.getTaskByCode("test", REPO, "TASK-001");
 		if (!task1) throw new Error("Task 1 seed failed");
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -55,7 +56,7 @@ describe("Task Search and Filtering", () => {
 		);
 
 		// TASK-002: pending
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -68,11 +69,12 @@ describe("Task Search and Filtering", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		// DB-FIX-003: blocked
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -85,11 +87,12 @@ describe("Task Search and Filtering", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 		const task3 = db.tasks.getTaskByCode("test", REPO, "DB-FIX-003");
 		if (!task3) throw new Error("Task 3 seed failed");
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,
@@ -105,62 +108,66 @@ describe("Task Search and Filtering", () => {
 	});
 
 	it("should search tasks by title", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
 				query: "authentication",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
-		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const tasks = (result.structuredContent as { results: { rows: unknown[][] } }).results;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("TASK-001");
 	});
 
 	it("should search tasks by description", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
 				query: "edge cases",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
-		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const tasks = (result.structuredContent as { results: { rows: unknown[][] } }).results;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("TASK-002");
 	});
 
 	it("should search tasks by task code", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
 				query: "DB-FIX",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
-		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const tasks = (result.structuredContent as { results: { rows: unknown[][] } }).results;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("DB-FIX-003");
 	});
 
 	it("should filter by multiple statuses", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
 				status: "in_progress,blocked",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
@@ -171,14 +178,15 @@ describe("Task Search and Filtering", () => {
 	});
 
 	it("should support 'all' status to include everything", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
 				status: "all",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
@@ -186,7 +194,7 @@ describe("Task Search and Filtering", () => {
 	});
 
 	it("should combine search and status filtering", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
@@ -194,39 +202,40 @@ describe("Task Search and Filtering", () => {
 				status: "pending",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
-		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const tasks = (result.structuredContent as { results: { rows: unknown[][] } }).results;
 		expect(tasks.rows).toHaveLength(1);
 		expect(tasks.rows[0][1]).toBe("TASK-002");
 	});
 
 	it("should return empty list if no matches found", async () => {
-		const result = await handleTaskList(
+		const result = await handleTaskRead(
 			{
 				repo: REPO,
 				owner: "test",
 				query: "non-existent-task",
 				json: true
 			},
-			db
+			db,
+			mockVectors
 		);
 
-		const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+		const tasks = (result.structuredContent as { results: { rows: unknown[][] } }).results;
 		expect(tasks.rows).toHaveLength(0);
 	});
 
-	describe("Unified task-list", () => {
+	describe("Unified task-read discovery", () => {
 		it("should provide same discovery as old task-search", async () => {
 			const args = { repo: REPO, owner: "test", query: "authentication", status: "all", json: true };
-			const result = await handleTaskList(args, db);
-			const tasks = (result.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
+			const result = await handleTaskRead(args, db, mockVectors);
+			const tasks = (result.structuredContent as { results: { rows: unknown[][] } }).results;
 			expect(tasks.rows).toHaveLength(1);
 			expect(tasks.rows[0][1]).toBe("TASK-001");
 			// TASK-001 has one comment added in handleTaskUpdate
-			// Index 5 is updated_at, index 6 is comments_count
-			expect(tasks.rows[0][6]).toBe(1);
+			// Search mode columns: id, task_code, title, status, priority, updated_at, phase
 		});
 	});
 });

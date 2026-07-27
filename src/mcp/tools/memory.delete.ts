@@ -79,12 +79,27 @@ export async function handleMemoryDelete(
 	}
 
 	if (validIdsToDelete.length > 0) {
-		db.memoryArchives.bulkDeleteMemories(validIdsToDelete);
+		db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
 		for (const validId of validIdsToDelete) {
 			if (onProgress) {
 				onProgress(progress, total);
 			}
-			await vectors.remove(validId);
+			await vectors.remove(validId, "memory");
+			// KG cleanup: best-effort cascade delete (REFACTOR-KG-006)
+			const memoryEntry = existingMap.get(validId);
+			if (memoryEntry) {
+				try {
+					db.db
+						.prepare(`DELETE FROM observations WHERE observation = ?`)
+						.run(`Mentioned in memory: ${memoryEntry.title}`);
+					db.db.prepare(`DELETE FROM entities WHERE name NOT IN (SELECT DISTINCT entity_name FROM observations)`).run();
+				} catch (kgError) {
+					logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted memory", {
+						memoryId: validId,
+						error: String(kgError)
+					});
+				}
+			}
 			progress++;
 		}
 		deletedCount = validIdsToDelete.length;

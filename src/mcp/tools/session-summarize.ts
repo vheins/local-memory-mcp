@@ -1,4 +1,4 @@
-import { SessionSummarizeSchema } from "./schemas";
+import { SessionSummarizeSchema } from "./schemas/agent";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";

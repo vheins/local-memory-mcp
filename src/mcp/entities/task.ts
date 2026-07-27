@@ -438,6 +438,35 @@ export class TaskEntity extends BaseEntity {
 		);
 	}
 
+	upsertTaskVectorEmbedding(taskId: string, vector: unknown): void {
+		this.run(
+			`INSERT INTO task_vectors (task_id, vector, updated_at)
+			VALUES (?, ?, ?)
+			ON CONFLICT(task_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
+			[taskId, JSON.stringify(vector), new Date().toISOString()]
+		);
+	}
+
+	getTaskVectorCandidates(repo?: string, limit = 100): { task_id: string; vector: string }[] {
+		let sql = `SELECT tv.task_id, tv.vector
+			FROM task_vectors tv
+			JOIN tasks t ON t.id = tv.task_id`;
+		const params: (string | number)[] = [];
+
+		if (repo) {
+			sql += " WHERE t.repo = ?";
+			params.push(repo);
+		}
+
+		sql += " ORDER BY tv.updated_at DESC LIMIT ?";
+		params.push(limit);
+		return this.all<{ task_id: string; vector: string }>(sql, params);
+	}
+
+	removeTaskVector(taskId: string): void {
+		this.run("DELETE FROM task_vectors WHERE task_id = ?", [taskId]);
+	}
+
 	getExistingTaskCodes(owner: string, repo: string, codes: string[]): Set<string> {
 		if (codes.length === 0) return new Set();
 		const placeholders = codes.map(() => "?").join(",");

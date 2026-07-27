@@ -1,9 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createTestStore } from "../storage/sqlite";
-import { handleMemoryStore } from "../tools/memory.store";
-import { handleMemorySearch } from "../tools/memory.search";
-import { handleMemoryAcknowledge } from "../tools/memory.acknowledge";
-import { handleMemoryUpdate } from "../tools/memory.update";
+import { handleMemoryWrite } from "../tools/memory.write";
+import { handleMemoryRead } from "../tools/memory.read";
 import { getPrimaryTextContent } from "../utils/mcp-response";
 import type { MemoryEntry, VectorStore } from "../types";
 
@@ -49,7 +47,7 @@ describe("V2 Enhanced Memory Features", () => {
 			const repo = "file-claim-repo";
 
 			await expect(
-				handleMemoryStore(
+				handleMemoryWrite(
 					{
 						type: "file_claim",
 						title: "Claim ownership of migration file",
@@ -71,7 +69,7 @@ describe("V2 Enhanced Memory Features", () => {
 			const db = await createTestStore();
 			const repo = "metadata-repo";
 
-			const response = await handleMemoryStore(
+			const response = await handleMemoryWrite(
 				{
 					type: "decision",
 					title: "JSON:API response standard restored",
@@ -105,7 +103,7 @@ describe("V2 Enhanced Memory Features", () => {
 			const db = await createTestStore();
 
 			await expect(
-				handleMemoryStore(
+				handleMemoryWrite(
 					{
 						type: "decision",
 						title: "[agent: codex | role: rules-optimizer | 2026-04-03] JSON:API response standard restored",
@@ -141,7 +139,7 @@ describe("V2 Enhanced Memory Features", () => {
 				model: "test-model"
 			};
 
-			const response = await handleMemoryStore(params, db, mockVectors);
+			const response = await handleMemoryWrite(params, db, mockVectors);
 			expect(getPrimaryTextContent(response)).toContain("conflict");
 			db.close();
 		});
@@ -162,7 +160,7 @@ describe("V2 Enhanced Memory Features", () => {
 				supersedes: VALID_UUID_1
 			};
 
-			await handleMemoryStore(params, db, mockVectors);
+			await handleMemoryWrite(params, db, mockVectors);
 
 			const old = db.memories.getById(VALID_UUID_1);
 			expect(old?.status).toBe("archived");
@@ -191,12 +189,12 @@ describe("V2 Enhanced Memory Features", () => {
 			]);
 
 			const params = { query: "Target", owner: "test", repo, json: true };
-			const response = await handleMemorySearch(params, db, mockVectors);
+			const response = await handleMemoryRead(params, db, mockVectors);
 
-			// New tabular format
+			// Pointer table format
 			const results = response.structuredContent as Record<string, unknown>;
 			expect(results.count).toBe(1);
-			expect(getPrimaryTextContent(response)).toContain("Use memory-detail with memory_id (or code) for full content.");
+			expect(getPrimaryTextContent(response)).toContain("Use memory-read with id (or code) for full content.");
 			db.close();
 		});
 	});
@@ -215,12 +213,12 @@ describe("V2 Enhanced Memory Features", () => {
 			};
 
 			const params = { query: "Test", owner: "test", repo, json: true };
-			const response = await handleMemorySearch(params, db, errorMockVectors);
+			const response = await handleMemoryRead(params, db, errorMockVectors);
 
 			// Should fallback to similarity and still return results
 			const results = response.structuredContent as Record<string, unknown>;
 			expect(results.count).toBe(1);
-			expect(getPrimaryTextContent(response)).toContain("Use memory-detail with memory_id (or code) for full content.");
+			expect(getPrimaryTextContent(response)).toContain("Use memory-read with id (or code) for full content.");
 			db.close();
 		});
 	});
@@ -231,7 +229,7 @@ describe("V2 Enhanced Memory Features", () => {
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, type: "decision" }));
 
 			await expect(
-				handleMemoryUpdate(
+				handleMemoryWrite(
 					{
 						id: VALID_UUID_1,
 						owner: "test",
@@ -252,7 +250,7 @@ describe("V2 Enhanced Memory Features", () => {
 			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, metadata: { source_agent: "old-agent" } }));
 
-			await handleMemoryUpdate(
+			await handleMemoryWrite(
 				{
 					id: VALID_UUID_1,
 					owner: "test",
@@ -279,7 +277,7 @@ describe("V2 Enhanced Memory Features", () => {
 			db.memories.insert(makeEntry({ id: VALID_UUID_1, title: "Clean title" }));
 
 			await expect(
-				handleMemoryUpdate(
+				handleMemoryWrite(
 					{
 						id: VALID_UUID_1,
 						owner: "test",
@@ -298,14 +296,15 @@ describe("V2 Enhanced Memory Features", () => {
 			const db = await createTestStore();
 			db.memories.insert(makeEntry({ id: VALID_UUID_1 }));
 
-			await handleMemoryAcknowledge(
+			await handleMemoryWrite(
 				{
-					memory_id: VALID_UUID_1,
+					id: VALID_UUID_1,
 					owner: "test",
 					repo: "test-repo",
-					status: "used"
+					acknowledge: "used"
 				},
-				db
+				db,
+				mockVectors
 			);
 
 			const updated = db.memories.getById(VALID_UUID_1);

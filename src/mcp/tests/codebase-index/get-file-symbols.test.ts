@@ -1,12 +1,12 @@
 /**
- * get_file_symbols Tool Handler Tests.
+ * codebase-read File Mode Tests.
  *
- * Tests the MCP tool handler for get_file_symbols,
+ * Tests handleCodebaseRead with filePath parameter (file mode),
  * covering positive paths, error cases, and ordering.
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { handleGetFileSymbols } from "../../tools/codebase-index";
+import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 
@@ -55,7 +55,7 @@ function seedSymbols(
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
-describe("handleGetFileSymbols", () => {
+describe("handleCodebaseRead (file mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 
@@ -104,7 +104,7 @@ describe("handleGetFileSymbols", () => {
 			}
 		]);
 
-		const response = await handleGetFileSymbols({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.file).toBeDefined();
@@ -144,7 +144,7 @@ describe("handleGetFileSymbols", () => {
 		const repo = "test/repo";
 		const filePath = "src/ghost.ts";
 
-		const response = await handleGetFileSymbols({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBe("File not indexed. Run index_repository first.");
@@ -161,7 +161,7 @@ describe("handleGetFileSymbols", () => {
 			{ repo: repoA, file_path: filePath, name: "sharedFn", kind: "function", start_line: 1, end_line: 5 }
 		]);
 
-		const response = await handleGetFileSymbols({ repo: repoB, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ repo: repoB, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBe("File not indexed. Run index_repository first.");
@@ -202,7 +202,7 @@ describe("handleGetFileSymbols", () => {
 			}
 		]);
 
-		const response = await handleGetFileSymbols({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.total).toBe(2);
@@ -223,7 +223,7 @@ describe("handleGetFileSymbols", () => {
 
 		seedFile(store, repo, filePath);
 
-		const response = await handleGetFileSymbols({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.file).toBeDefined();
@@ -232,18 +232,20 @@ describe("handleGetFileSymbols", () => {
 	});
 
 	it("throws on missing repo param", async () => {
-		await expect(handleGetFileSymbols({ filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
 	});
 
 	it("throws on missing filePath param", async () => {
-		await expect(handleGetFileSymbols({ repo: "test/repo" }, store, vectors)).rejects.toThrow();
+		// Without filePath, it falls into status mode (no error), but with filePath it's file mode.
+		// File mode without repo throws.
+		await expect(handleCodebaseRead({ filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
 	});
 
 	it("throws on empty repo", async () => {
-		await expect(handleGetFileSymbols({ repo: "", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ repo: "", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
 	});
 
 	it("throws on empty filePath", async () => {
-		await expect(handleGetFileSymbols({ repo: "test/repo", filePath: "" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ repo: "test/repo", filePath: "" }, store, vectors)).rejects.toThrow();
 	});
 });

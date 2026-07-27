@@ -10,7 +10,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 	let vectors: VectorStore;
 	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
 
-	const REPO = "bulk-standards-repo";
+	const REPO = "delete-tests-repo";
 
 	beforeEach(async () => {
 		db = await createTestStore();
@@ -18,9 +18,67 @@ describe("MCP Local Memory - Standard Delete", () => {
 		router = createRouter(db, vectors) as any;
 	});
 
+	it("should delete a single coding standard by id", async () => {
+		const createRes = await router("tools/call", {
+			name: "standard-write",
+			arguments: {
+				owner: "test",
+				name: "Single Delete Standard",
+				content: "Will be deleted individually.",
+				repo: REPO,
+				is_global: false,
+				tags: ["delete"],
+				metadata: { source: "test" }
+			}
+		});
+
+		const standardCode = createRes.structuredContent.standard.code;
+
+		const delRes = await router("tools/call", {
+			name: "standard-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				code: standardCode
+			}
+		});
+
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 1 standard from repo");
+		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
+	});
+
+	it("should delete a single coding standard by code", async () => {
+		const createRes = await router("tools/call", {
+			name: "standard-write",
+			arguments: {
+				owner: "test",
+				name: "Code Delete Standard",
+				content: "Will be deleted by code.",
+				repo: REPO,
+				is_global: false,
+				tags: ["delete"],
+				metadata: { source: "test" }
+			}
+		});
+
+		const stdCode = createRes.structuredContent.standard.code;
+
+		const delRes = await router("tools/call", {
+			name: "standard-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				code: stdCode
+			}
+		});
+
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 1 standard from repo");
+		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
+	});
+
 	it("should bulk delete coding standards", async () => {
 		await router("tools/call", {
-			name: "standard-store",
+			name: "standard-write",
 			arguments: {
 				owner: "test",
 				name: "Standard A",
@@ -33,7 +91,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 		});
 
 		await router("tools/call", {
-			name: "standard-store",
+			name: "standard-write",
 			arguments: {
 				owner: "test",
 				name: "Standard B",

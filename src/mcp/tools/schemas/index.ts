@@ -10,15 +10,20 @@ export {
 } from "./shared";
 
 export {
+	MemoryDeleteSchema,
+	MemorySummarizeSchema,
+	MemorySynthesizeSchema,
+	MemoryWriteSchema,
+	MemoryWriteItemSchema,
+	MemoryReadSchema,
+	// Legacy aliases — kept for backward-compat tool files
+	// These schemas still exist in memory.ts but had no barrel re-exports
 	MemoryStoreSchema,
 	MemoryUpdateSchema,
 	MemorySearchSchema,
 	MemoryAcknowledgeSchema,
 	MemoryRecapSchema,
-	MemoryDeleteSchema,
-	MemoryDetailSchema,
-	MemorySummarizeSchema,
-	MemorySynthesizeSchema
+	MemoryDetailSchema
 } from "./memory";
 
 export {
@@ -31,16 +36,22 @@ export {
 	TaskListSchema,
 	TaskSearchSchema,
 	TaskDeleteSchema,
-	TaskGetSchema
+	TaskGetSchema,
+	TaskReadSchema,
+	TaskWriteSchema,
+	TaskWriteItemSchema
 } from "./task";
 
 export {
 	HandoffCreateSchema,
 	HandoffUpdateSchema,
+	HandoffWriteSchema,
+	HandoffReadSchema,
 	HandoffListSchema,
 	TaskClaimSchema,
 	ClaimListSchema,
-	ClaimReleaseSchema
+	ClaimReleaseSchema,
+	ClaimManageSchema
 } from "./handoff";
 
 export {
@@ -51,7 +62,9 @@ export {
 	StandardDetailSchema
 } from "./standard";
 
-export { AgentContextSchema, DecisionLogSchema, SessionSummarizeSchema } from "./agent";
+export { StandardWriteSchema } from "./standard-write";
+
+export { AgentContextSchema } from "./agent";
 
 export {
 	CreateEntitySchema,
@@ -72,3 +85,6 @@ export {
 	TraceSymbolSchema,
 	CodebaseSearchSchema
 } from "./codebase-index";
+
+export { CodebaseReadSchema } from "./codebase.read";
+export type { CodebaseReadInput, CodebaseReadMode } from "./codebase.read";

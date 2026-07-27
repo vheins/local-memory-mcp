@@ -1,13 +1,13 @@
 /**
- * search_symbols MCP Tool Tests.
+ * codebase-read search_symbols Mode Tests.
  *
- * Tests the handleSearchSymbols handler with mock data covering
- * exact match, prefix search, kind filter, repo scope, pagination,
+ * Tests the handleCodebaseRead handler with single-term query (search_symbols mode)
+ * covering exact match, prefix search, kind filter, repo scope, pagination,
  * min-length requirement, non-existent symbols, and exported-only filter.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { handleSearchSymbols } from "../../tools/codebase-index";
+import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 
@@ -110,7 +110,7 @@ function seedSymbols(store: SQLiteStore): void {
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
-describe("handleSearchSymbols", () => {
+describe("handleCodebaseRead (search_symbols mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 
@@ -125,7 +125,7 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("returns exact match when searching by exact name", async () => {
-		const response = await handleSearchSymbols({ query: "createUser", repo: "test-owner/test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "createUser", repo: "test-owner/test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
@@ -137,20 +137,17 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("returns prefix-ranked results for partial name search", async () => {
-		const response = await handleSearchSymbols({ query: "create", repo: "test-owner/test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "create", repo: "test-owner/test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
 		expect(data.total as number).toBeGreaterThanOrEqual(2);
-		// createUser should rank above createAccount (both prefix, but exported tiebreaker resolves alphabetically)
-		// Actually they're both exported and both in src/core.ts, so alphabetical: createAccount < createUser
-		// The ranker scores them equally and breaks ties alphabetically ascending
 		expect(symbols[0].name).toBe("createAccount");
 		expect(symbols[1].name).toBe("createUser");
 	});
 
 	it("filters by kind", async () => {
-		const response = await handleSearchSymbols(
+		const response = await handleCodebaseRead(
 			{ query: "User", repo: "test-owner/test-repo", kind: "class" },
 			store,
 			vectors
@@ -164,7 +161,7 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("scopes results to the specified repo", async () => {
-		const response = await handleSearchSymbols({ query: "createUser", repo: "other-org/other-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "createUser", repo: "other-org/other-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
@@ -173,7 +170,7 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("returns empty for queries under 2 characters", async () => {
-		const response = await handleSearchSymbols({ query: "c", repo: "test-owner/test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "c", repo: "test-owner/test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
@@ -182,15 +179,14 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("returns empty for empty query string", async () => {
-		const response = await handleSearchSymbols({ query: "", repo: "test-owner/test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "", repo: "test-owner/test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.total as number).toBe(0);
 	});
 
 	it("supports pagination with offset and limit", async () => {
-		// Without filters, search for "User" — should match many
-		const response = await handleSearchSymbols(
+		const response = await handleCodebaseRead(
 			{ query: "User", repo: "test-owner/test-repo", limit: 2, offset: 1 },
 			store,
 			vectors
@@ -203,8 +199,8 @@ describe("handleSearchSymbols", () => {
 		expect(data.offset as number).toBe(1);
 		expect(data.limit as number).toBe(2);
 
-		// Second page should start at offset 3 (4 total, page 1 = indices 1-2, page 2 = index 3)
-		const response2 = await handleSearchSymbols(
+		// Second page should start at offset 3
+		const response2 = await handleCodebaseRead(
 			{ query: "User", repo: "test-owner/test-repo", limit: 2, offset: 3 },
 			store,
 			vectors
@@ -223,7 +219,7 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("returns empty result for non-existent symbol", async () => {
-		const response = await handleSearchSymbols(
+		const response = await handleCodebaseRead(
 			{ query: "NonExistentSymbol", repo: "test-owner/test-repo" },
 			store,
 			vectors
@@ -236,7 +232,7 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("filters by exportedOnly", async () => {
-		const response = await handleSearchSymbols(
+		const response = await handleCodebaseRead(
 			{ query: "Process", repo: "test-owner/test-repo", exportedOnly: true },
 			store,
 			vectors

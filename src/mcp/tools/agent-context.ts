@@ -1,6 +1,6 @@
 import { AgentContextSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
-import { MemoryEntry, Task } from "../types";
+import { MemoryEntry, Task, VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 
@@ -9,10 +9,13 @@ const ACTIVE_TASK_STATUSES = ["in_progress", "pending", "backlog", "blocked"];
 export async function handleAgentContext(
 	args: Record<string, unknown>,
 	db: SQLiteStore,
-	_vectors: unknown
+	vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = AgentContextSchema.parse(args);
-	const { owner, repo, objective, type_filter, limit, json: isJsonRequest } = validated;
+	const { owner, repo, query, objective, type_filter, limit, json: isJsonRequest } = validated;
+
+	// Backward-compat: objective → query
+	const searchQuery = query || objective;
 
 	// 1. Search for relevant memories
 	let memories: MemoryEntry[];
@@ -20,8 +23,27 @@ export async function handleAgentContext(
 
 	const shouldFetchDecisions = !type_filter || type_filter === "decision";
 
-	if (objective) {
-		memories = db.memories.searchByRepo(owner, repo, objective, type_filter, limit);
+	if (searchQuery) {
+		// Primary: vector search with keyword fallback
+		try {
+			const vectorResults = await vectors.search(searchQuery, limit, repo);
+			if (vectorResults.length > 0) {
+				const ids = vectorResults.map((r) => r.id);
+				const idSet = new Set(ids);
+				memories = ids
+					.map((id) => db.memories.getById(id))
+					.filter((m): m is MemoryEntry => m !== null && idSet.has(m.id));
+				// Apply type_filter post-hoc if set
+				if (type_filter) {
+					memories = memories.filter((m) => m.type === type_filter);
+				}
+			} else {
+				memories = db.memories.searchByRepo(owner, repo, searchQuery, type_filter, limit);
+			}
+		} catch {
+			logger.warn("[Tool] agent-context vector search failed, falling back to keyword", { repo });
+			memories = db.memories.searchByRepo(owner, repo, searchQuery, type_filter, limit);
+		}
 		if (shouldFetchDecisions) {
 			decisionMemories = db.memories.searchByRepo(owner, repo, "", "decision", limit);
 		}
@@ -90,7 +112,7 @@ export async function handleAgentContext(
 	const structuredData = {
 		schema: "agent-context" as const,
 		repo,
-		objective: objective || null,
+		query: searchQuery || null,
 		memories: memories.map((m) => ({
 			id: m.id,
 			code: m.code || null,

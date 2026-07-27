@@ -43,7 +43,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		for (const m of memories) {
 			await router("tools/call", {
-				name: "memory-store",
+				name: "memory-write",
 				arguments: {
 					type: "decision",
 					title: m.title,
@@ -59,12 +59,12 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		// QUERY: "How do I update the database?"
 		// EXPECT: "Database Migration" should be Top Match, not "Primary Database"
 		const searchRes = await router("tools/call", {
-			name: "memory-search",
+			name: "memory-read",
 			arguments: { query: "How do I update the database schema?", owner: "test", repo: REPO }
 		});
 
-		// New tabular format: results.rows[i] = [id, code, title, type, importance]
-		const results = searchRes.structuredContent.results;
+		// Pointer table format: results.rows[i] = [id, code, title, type, importance]
+		const results = searchRes.structuredContent;
 		expect(results.rows[0][2]).toBe("Database Migration"); // index 2 = title
 		expect(results.rows.length).toBeGreaterThan(1); // Should find related db facts too but lower
 	});
@@ -76,7 +76,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	it("should guide the agent away from past mistakes using supersedes and status", async () => {
 		// 1. Store a mistake
 		const mistakeRes = await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "mistake",
 				title: "Large File Upload Failure",
@@ -91,7 +91,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// 2. Store the correct pattern that replaces the mistake
 		await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "pattern",
 				title: "Streaming File Upload",
@@ -106,24 +106,23 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// 3. Search for "file upload"
 		const searchRes = await router("tools/call", {
-			name: "memory-search",
+			name: "memory-read",
 			arguments: { query: "How to handle file uploads?", owner: "test", repo: REPO }
 		});
 
 		// EXPECT: Mistake is archived and NOT in search results by default
-		// New tabular format: results.rows[i] = [id, code, title, type, importance]
-		const results = searchRes.structuredContent.results;
+		const results = searchRes.structuredContent;
 		expect(results.rows.some((r: string[]) => r[2] === "Streaming File Upload")).toBe(true);
 		expect(results.rows.some((r: string[]) => r[2] === "Large File Upload Failure")).toBe(false);
 		expect(results.rows.some((r: string[]) => r[0] === mistakeId)).toBe(false);
 
 		// 4. Audit: Verify we can still find the mistake if we EXPLICITLY ask for archived
 		const auditRes = await router("tools/call", {
-			name: "memory-search",
+			name: "memory-read",
 			arguments: { query: "file upload", owner: "test", repo: REPO, include_archived: true }
 		});
 		expect(
-			(auditRes.structuredContent.results as { rows: unknown[][] }).rows.some((r: unknown[]) => r[0] === mistakeId)
+			(auditRes.structuredContent as { rows: unknown[][] }).rows.some((r: unknown[]) => r[0] === mistakeId)
 		).toBe(true);
 	});
 
@@ -134,7 +133,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	it("should provide relevant boost when working in deep subdirectories", async () => {
 		// Memory A: Global
 		await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "code_fact",
 				title: "Global Logging",
@@ -148,7 +147,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// Memory B: Auth Specific
 		await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "code_fact",
 				title: "Auth Security Audit",
@@ -162,7 +161,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// Working in a deep auth file
 		const searchRes = await router("tools/call", {
-			name: "memory-search",
+			name: "memory-read",
 			arguments: {
 				query: "How to log data?",
 				owner: "test",
@@ -172,8 +171,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// EXPECT: Auth Specific memory should be the Top Match despite the query being generic "log"
-		// New tabular format: results.rows[i] = [id, code, title, type, importance]
-		const results = searchRes.structuredContent.results;
+		const results = searchRes.structuredContent;
 		expect(results.rows[0][2]).toBe("Auth Security Audit"); // index 2 = title
 	});
 
@@ -184,7 +182,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		// Store 15 memories about different microservices
 		for (let i = 1; i <= 15; i++) {
 			await router("tools/call", {
-				name: "memory-store",
+				name: "memory-write",
 				arguments: {
 					type: "code_fact",
 					title: `Service ${i} Specs`,
@@ -197,14 +195,14 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			});
 		}
 
-		// Call memory-recap (which uses pagination)
+		// Call memory-read with no query (recap mode) which handles pagination
 		const recapRes = await router("tools/call", {
-			name: "memory-recap",
+			name: "memory-read",
 			arguments: { owner: "test", repo: "cloud-infra", limit: 5, offset: 0 }
 		});
 
-		// Based on memory-recap implementation
-		expect(getPrimaryTextContent(recapRes)).toContain("Service 1 Specs");
+		const content = recapRes.structuredContent;
+		expect(content.top.rows.some((r: string[]) => r[2] === "Service 1 Specs")).toBe(true);
 
 		// Check Resource Pagination via URI
 		const resourceRes = await router("resources/read", {
@@ -220,8 +218,8 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	it("should strictly deny near-duplicate decisions to prevent prompt bloat", async () => {
 		const originalContent = "We use TailwindCSS for styling all components.";
 
-		await router("tools/call", {
-			name: "memory-store",
+		const storeRes = await router("tools/call", {
+			name: "memory-write",
 			arguments: {
 				type: "decision",
 				title: "Styling Standard",
@@ -233,9 +231,11 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 			}
 		});
 
+		expect(storeRes.structuredContent.success).toBe(true);
+
 		// Try to store almost the same thing with a different title
 		const duplicateRes = await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "decision",
 				title: "CSS Rule",
@@ -248,9 +248,9 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		const summaryText = getPrimaryTextContent(duplicateRes);
-		expect(summaryText).toContain("conflict");
-		expect(summaryText).toContain("Hint:");
-		expect(summaryText).toContain("delete first");
+		expect(summaryText).toContain("Rejected due to conflict");
+		expect(summaryText).toContain("memory-write");
+		expect(summaryText).toContain("supersedes");
 		expect(db.memories.getTotalCount("test", REPO)).toBe(1); // Should still be 1
 	});
 
@@ -261,7 +261,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 	it("should share knowledge across projects using tech-stack affinity tags", async () => {
 		// 1. Store Filament best practice in Repo A
 		await router("tools/call", {
-			name: "memory-store",
+			name: "memory-write",
 			arguments: {
 				type: "pattern",
 				title: "Filament Custom Action",
@@ -276,7 +276,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 
 		// 2. Search in Repo B (which is empty) with "filament" tag
 		const searchRes = await router("tools/call", {
-			name: "memory-search",
+			name: "memory-read",
 			arguments: {
 				query: "how to make safe actions?",
 				owner: "test",
@@ -286,9 +286,7 @@ describe("MCP Local Memory - High-Complexity E2E Scenarios", () => {
 		});
 
 		// EXPECT: Should find the "Filament Custom Action" from Project A
-		// New tabular format: results.rows[i] = [id, code, title, type, importance]
-		const results = searchRes.structuredContent.results;
+		const results = searchRes.structuredContent;
 		expect(results.rows[0][2]).toBe("Filament Custom Action"); // index 2 = title
-		// scope is not returned in pointer table — use memory://<id> to fetch full details
 	});
 });

@@ -2,10 +2,10 @@
 
 export const HANDOFF_TOOL_DEFINITIONS = [
 	{
-		name: "handoff-create",
-		title: "Handoff Create",
+		name: "handoff-write",
+		title: "Handoff Write",
 		description:
-			"Creates pending handoff between agents.",
+			"Creates or updates a handoff. Auto-infers operation: provide summary+from_agent (with owner, repo) for CREATE; provide id+status for UPDATE.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -15,29 +15,37 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "GitHub org or username." },
-				repo: { type: "string", description: "Repo name (e.g., 'local-memory-mcp')." },
-				from_agent: { type: "string", description: "Agent creating the handoff" },
+				owner: { type: "string", description: "GitHub org or username. Required for CREATE." },
+				repo: { type: "string", description: "Repo name. Required for CREATE." },
+				from_agent: { type: "string", description: "Agent creating the handoff. Required for CREATE." },
 				to_agent: { type: "string", description: "Optional target agent" },
 				task_id: { type: "string", format: "uuid", description: "Optional task id to associate" },
 				task_code: { type: "string", description: "Optional task code to associate" },
-				summary: { type: "string", minLength: 1, description: "Concise human-readable transfer summary" },
+				summary: {
+					type: "string",
+					minLength: 1,
+					description: "Concise human-readable transfer summary. Required for CREATE."
+				},
 				context: {
 					type: "object",
-					description:
-						"Include next_steps/blockers/remaining_work."
+					description: "Include next_steps/blockers/remaining_work."
 				},
 				expires_at: { type: "string", description: "Optional expiration timestamp" },
+				id: { type: "string", format: "uuid", description: "Handoff ID. Required for UPDATE." },
+				status: {
+					type: "string",
+					enum: ["pending", "accepted", "rejected", "expired"],
+					description: "New status. Required for UPDATE."
+				},
 				json: { type: "boolean", default: false }
-			},
-			required: ["owner", "repo", "from_agent", "summary"]
+			}
 		}
 	},
 	{
-		name: "handoff-update",
-		title: "Handoff Update",
+		name: "claim-manage",
+		title: "Claim Manage",
 		description:
-			"Closes or reclassifies a handoff.",
+			"Manages claims: CLAIM (task_id/task_code + agent), RELEASE (task_id/task_code + release:true), or LIST (query). Auto-infers operation from field presence.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -47,73 +55,48 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Handoff ID" },
-				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
-				json: { type: "boolean", default: false }
-			},
-			required: ["id", "status"]
-		}
-	},
-	{
-		name: "handoff-list",
-		title: "Handoff List",
-		description:
-			"Lists handoffs with status/agent filters.",
-		annotations: {
-			readOnlyHint: true,
-			idempotentHint: true,
-			openWorldHint: false
-		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				owner: { type: "string", description: "GitHub org or username." },
-				repo: { type: "string", description: "Repo name (e.g., 'local-memory-mcp')." },
-				status: { type: "string", enum: ["pending", "accepted", "rejected", "expired"] },
-				from_agent: { type: "string" },
-				to_agent: { type: "string" },
-				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
-				offset: { type: "number", minimum: 0, default: 0 },
-				json: { type: "boolean", default: false }
-			},
-			required: ["owner", "repo"]
-		}
-	},
-	{
-		name: "task-claim",
-		title: "Task Claim",
-		description:
-			"Claims task ownership for an agent.",
-		annotations: {
-			readOnlyHint: false,
-			idempotentHint: false,
-			destructiveHint: false,
-			openWorldHint: false
-		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				owner: { type: "string", description: "GitHub org or username." },
-				repo: { type: "string", description: "Repo name (e.g., 'local-memory-mcp')." },
+				owner: { type: "string", description: "GitHub org or username. Use with query for LIST." },
+				repo: { type: "string", description: "Repo name. Use with query for LIST." },
 				task_id: {
 					type: "string",
 					format: "uuid",
-					description: "Task ID. Optional if task_code given."
+					description: "Task ID for CLAIM or RELEASE."
 				},
-				task_code: { type: "string", description: "Task code. Optional if task_id given." },
-				agent: { type: "string", description: "Claiming agent name" },
-				role: { type: "string", description: "Claiming agent role" },
-				metadata: { type: "object", description: "Optional claim metadata" },
+				task_code: {
+					type: "string",
+					description: "Task code for CLAIM or RELEASE."
+				},
+				agent: {
+					type: "string",
+					description: "Required for CLAIM (claiming agent). Optional for RELEASE (filter) and LIST (filter)."
+				},
+				role: { type: "string", description: "Claiming agent role (CLAIM only)." },
+				metadata: { type: "object", description: "Optional claim metadata (CLAIM only)." },
+				release: {
+					type: "boolean",
+					default: false,
+					description: "Set to true for RELEASE mode."
+				},
+				query: {
+					type: "string",
+					description: "Present to trigger LIST mode. Lists active claims."
+				},
+				active_only: {
+					type: "boolean",
+					default: true,
+					description: "LIST mode: return only unreleased claims."
+				},
+				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
+				offset: { type: "number", minimum: 0, default: 0 },
 				json: { type: "boolean", default: false }
-			},
-			required: ["owner", "repo", "agent"]
+			}
 		}
 	},
 	{
-		name: "claim-list",
-		title: "Claim List",
+		name: "handoff-read",
+		title: "Handoff Read",
 		description:
-			"Lists claims, optionally filtered by agent.",
+			"Reads handoffs and claims — detail, list, or search. Auto-infers operation: id for DETAIL, claim:true or agent for LIST CLAIMS, query for SEARCH handoffs, or none for LIST HANDOFFS.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -123,43 +106,44 @@ export const HANDOFF_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "GitHub org or username." },
-				repo: { type: "string", description: "Repo name (e.g., 'local-memory-mcp')." },
-				agent: { type: "string", description: "Optional agent filter" },
-				active_only: { type: "boolean", description: "Return only unreleased claims." },
+				id: { type: "string", format: "uuid", description: "Handoff ID for DETAIL mode." },
+				claim: {
+					type: "boolean",
+					default: false,
+					description: "Set true for LIST CLAIMS mode. Also inferred from 'agent' presence."
+				},
+				query: {
+					type: "string",
+					description: "Present to trigger SEARCH handoffs mode with optional filters."
+				},
+				status: {
+					type: "string",
+					enum: ["pending", "accepted", "rejected", "expired"],
+					description: "Filter by handoff status (SEARCH / LIST HANDOFFS)."
+				},
+				from_agent: {
+					type: "string",
+					description: "Filter by originating agent (SEARCH / LIST HANDOFFS)."
+				},
+				to_agent: {
+					type: "string",
+					description: "Filter by target agent (SEARCH / LIST HANDOFFS)."
+				},
+				agent: {
+					type: "string",
+					description: "Filter by claiming agent (LIST CLAIMS). Also triggers LIST CLAIMS mode."
+				},
+				active_only: {
+					type: "boolean",
+					default: true,
+					description: "LIST CLAIMS mode: return only unreleased claims."
+				},
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
+				owner: { type: "string", description: "GitHub org or username. Auto-inferred." },
+				repo: { type: "string", description: "Repo name. Auto-inferred." },
 				json: { type: "boolean", default: false }
-			},
-			required: ["owner", "repo"]
-		}
-	},
-	{
-		name: "claim-release",
-		title: "Claim Release",
-		description:
-			"Releases an active claim for a task.",
-		annotations: {
-			readOnlyHint: false,
-			idempotentHint: false,
-			destructiveHint: false,
-			openWorldHint: false
-		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				owner: { type: "string", description: "GitHub org or username." },
-				repo: { type: "string", description: "Repo name (e.g., 'local-memory-mcp')." },
-				task_id: {
-					type: "string",
-					format: "uuid",
-					description: "Task ID. Optional if task_code given."
-				},
-				task_code: { type: "string", description: "Task code. Optional if task_id given." },
-				agent: { type: "string", description: "Agent name to release only that claim." },
-				json: { type: "boolean", default: false }
-			},
-			required: ["repo", "owner"]
+			}
 		}
 	}
 ];

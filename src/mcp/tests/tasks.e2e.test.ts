@@ -7,7 +7,7 @@ import { McpResponse } from "../utils/mcp-response";
 
 vi.setConfig({ testTimeout: 30000 });
 
-describe("MCP Local Memory - Task Management Workflow E2E", () => {
+describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (method: string, params: unknown) => Promise<McpResponse>;
@@ -37,7 +37,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		// ---- 2. PLANNING PHASE ----
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -53,7 +53,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		const taskAId = db.tasks.getTasksByRepo("test", REPO)[0].id;
 
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -76,17 +76,17 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		const plannedTasks = JSON.parse((plannedRes.content as any)[0].text);
 		expect(plannedTasks.length).toBe(2);
 
-		// Verify task-list tool works
+		// Verify task-read tool works (list all statuses)
 		const listToolRes = await router("tools/call", {
-			name: "task-list",
-			arguments: { repo: REPO, owner: "test" }
+			name: "task-read",
+			arguments: { repo: REPO, owner: "test", status: "all" }
 		});
 		const listToolTasks = (listToolRes.structuredContent as { tasks: { rows: unknown[][] } }).tasks;
 		expect(listToolTasks.rows.length).toBe(2);
 
 		// ---- 3. EXECUTION PHASE ----
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -106,7 +106,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		// ---- 4. VALIDATION PHASE (Task A) ----
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -127,7 +127,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		// ---- 5. RESUME WORKFLOW (Task B) ----
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -158,7 +158,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 	it("requires comment when status changes", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -177,7 +177,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		await expect(
 			router("tools/call", {
-				name: "task-update",
+				name: "task-write",
 				arguments: {
 					owner: "test",
 					repo: REPO,
@@ -191,9 +191,9 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		).rejects.toThrow("comment is required when changing task status");
 	});
 
-	it("allows task-create without est_tokens", async () => {
+	it("allows task-write without est_tokens", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -213,7 +213,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 	it("requires est_tokens when changing task status to completed", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -230,7 +230,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(taskId).toBeDefined();
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -244,7 +244,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		await expect(
 			router("tools/call", {
-				name: "task-update",
+				name: "task-write",
 				arguments: {
 					owner: "test",
 					repo: REPO,
@@ -260,7 +260,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 	it("stores standalone comments without mutating description", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -280,7 +280,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(taskId).toBeDefined();
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -302,9 +302,9 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(task!.comments![0].next_status).toBeNull();
 	});
 
-	it("should auto-generate task_code when not provided in single create", async () => {
+	it("should auto-generate task_code when not provided in single write", async () => {
 		const res = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -325,7 +325,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		// Second auto-generated task should increment
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -344,7 +344,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 	it("auto-populates timestamps from status so agents do not need to send them manually", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -364,7 +364,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 
 		expect(createdTask).toBeDefined();
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -381,7 +381,7 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(inProgressTask!.in_progress_at).toBeTruthy();
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -398,5 +398,136 @@ describe("MCP Local Memory - Task Management Workflow E2E", () => {
 		expect(completedTask).not.toBeNull();
 		expect(completedTask!.in_progress_at).toBeTruthy();
 		expect(completedTask!.finished_at).toBeTruthy();
+	});
+
+	it("should read task detail by id via task-read", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "DETAIL-001",
+				phase: "testing",
+				title: "Detail by ID Test",
+				description: "Testing task-read detail mode with id",
+				status: "pending",
+				priority: 3,
+				est_tokens: 50
+			}
+		});
+
+		const taskId = db.tasks.getTaskByCode("test", REPO, "DETAIL-001")?.id;
+		expect(taskId).toBeDefined();
+
+		const res = await router("tools/call", {
+			name: "task-read",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				id: taskId,
+				json: true
+			}
+		});
+
+		const data = res.structuredContent as Record<string, unknown>;
+		expect(data.task_code).toBe("DETAIL-001");
+		expect(data.title).toBe("Detail by ID Test");
+		expect(data.status).toBe("pending");
+	});
+
+	it("should read task detail by task_code via task-read", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "DETAIL-002",
+				phase: "testing",
+				title: "Detail by Code Test",
+				description: "Testing task-read detail mode with task_code",
+				status: "pending",
+				priority: 4,
+				est_tokens: 60
+			}
+		});
+
+		const res = await router("tools/call", {
+			name: "task-read",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				task_code: "DETAIL-002",
+				json: true
+			}
+		});
+
+		const data = res.structuredContent as Record<string, unknown>;
+		expect(data.task_code).toBe("DETAIL-002");
+		expect(data.title).toBe("Detail by Code Test");
+	});
+
+	it("should search tasks by query via task-read", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "SEARCH-001",
+				phase: "research",
+				title: "Unicorns and Rainbows",
+				description: "Searchable task with unique terms",
+				status: "pending",
+				priority: 3,
+				est_tokens: 40
+			}
+		});
+
+		const res = await router("tools/call", {
+			name: "task-read",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				query: "Unicorns",
+				json: true
+			}
+		});
+
+		const data = res.structuredContent as { results: { rows: unknown[][] } };
+		expect(data.results.rows.length).toBeGreaterThanOrEqual(1);
+		const codes = data.results.rows.map((r: unknown[]) => r[1]);
+		expect(codes).toContain("SEARCH-001");
+	});
+
+	it("should list tasks by phase via task-read", async () => {
+		// Create a task first so we have something to list
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "PHASE-001",
+				phase: "research",
+				title: "Phase Listing Test",
+				description: "Testing task-read phase listing",
+				status: "pending",
+				priority: 3,
+				est_tokens: 40
+			}
+		});
+
+		const res = await router("tools/call", {
+			name: "task-read",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				phase: "research",
+				status: "all",
+				json: true
+			}
+		});
+
+		const data = res.structuredContent as { tasks: { rows: unknown[][] } };
+		const codes = data.tasks.rows.map((r: unknown[]) => r[1]);
+		expect(codes).toContain("PHASE-001");
 	});
 });

@@ -27,9 +27,9 @@ describe("csl-scraper prompt", () => {
 
 		expect(result.description).toContain("atomic CSL");
 		expect(result.messages[0].content.text).toContain("https://react.dev/reference/rules/rules-of-hooks");
-		expect(result.messages[0].content.text).toContain("standard-store");
+		expect(result.messages[0].content.text).toContain("standard-write");
 		expect(result.messages[0].content.text).toContain("Fetch URL");
-		expect(result.messages[0].content.text).toContain("standard-search");
+		expect(result.messages[0].content.text).toContain("standard-read");
 	});
 
 	it("includes refusal guidance for unverifiable sources", async () => {
@@ -46,6 +46,6 @@ describe("csl-scraper prompt", () => {
 
 		const promptText = result.messages[0].content.text;
 		expect(promptText).toContain("Refuse if");
-		expect(promptText).toContain("standard-store");
+		expect(promptText).toContain("standard-write");
 	});
 });

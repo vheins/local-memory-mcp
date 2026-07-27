@@ -15,19 +15,24 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 	beforeEach(async () => {
 		db = await createTestStore();
 		vectors = new StubVectorStore(db);
-		router = createRouter(db, vectors) as any;
+		const rawRouter = createRouter(db, vectors);
+		router = async (method, params) => {
+			const args = (params as Record<string, unknown>)?.arguments as Record<string, unknown> | undefined;
+			if (method === "tools/call" && args) {
+				args.json = true;
+			}
+			return rawRouter(method, params);
+		};
 	});
 
-	it("should bulk delete memories", async () => {
-		// Create 2 memories
+	it("should bulk create memories via memory-write", async () => {
 		const m1 = {
 			type: "code_fact",
 			title: "Memory 1 Title",
 			content: "Alpha: This is a unique fact about the first component of the system.",
 			importance: 3,
 			agent: "Agent-A",
-			model: "Model-X",
-			scope: { owner: "test", repo: REPO }
+			model: "Model-X"
 		};
 		const m2 = {
 			type: "code_fact",
@@ -35,16 +40,55 @@ describe("MCP Local Memory - Bulk Memory Management", () => {
 			content: "Beta: Completely different technical detail regarding the secondary subsystem architecture.",
 			importance: 3,
 			agent: "Agent-A",
-			model: "Model-X",
-			scope: { owner: "test", repo: REPO }
+			model: "Model-X"
 		};
 
-		await router("tools/call", { name: "memory-store", arguments: m1 });
-		await router("tools/call", { name: "memory-store", arguments: m2 });
+		const bulkRes = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				memories: [m1, m2]
+			}
+		});
+
+		expect(bulkRes.structuredContent.success).toBe(true);
+		expect(bulkRes.structuredContent.processed).toBe(2);
+		expect(getPrimaryTextContent(bulkRes)).toContain("Processed 2/2");
 
 		const memories = db.memories.getRecentMemories("test", REPO, 10);
 		expect(memories.length).toBe(2);
-		const ids = memories.map((m) => m.id);
+	});
+
+	it("should bulk delete memories via memory-delete", async () => {
+		const bulkCreate = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				memories: [
+					{
+						type: "code_fact",
+						title: "Memory 1 Title",
+						content: "Alpha: This is a unique fact about the first component of the system.",
+						importance: 3,
+						agent: "Agent-A",
+						model: "Model-X"
+					},
+					{
+						type: "code_fact",
+						title: "Memory 2 Title",
+						content: "Beta: Completely different technical detail regarding the secondary subsystem architecture.",
+						importance: 3,
+						agent: "Agent-A",
+						model: "Model-X"
+					}
+				]
+			}
+		});
+
+		// Extract IDs from bulk results
+		const ids = bulkCreate.structuredContent.results.map((r: { id: string }) => r.id);
 
 		const delRes = await router("tools/call", {
 			name: "memory-delete",

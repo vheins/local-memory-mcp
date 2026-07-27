@@ -8,55 +8,28 @@ import { SamplingRequestHandler } from "../sampling";
 import { ElicitationRequestHandler } from "../elicitation";
 
 // ── Handler imports ──────────────────────────────────────────────────────
-import { handleMemoryStore } from "./memory.store";
-import { handleMemoryUpdate } from "./memory.update";
-import { handleMemorySearch } from "./memory.search";
-import { handleMemoryAcknowledge } from "./memory.acknowledge";
+import { handleMemoryWrite } from "./memory.write";
 import { handleMemorySummarize } from "./memory.summarize";
 import { handleMemorySynthesize } from "./memory.synthesize";
-import { handleMemoryRecap } from "./memory.recap";
 import { handleMemoryDelete } from "./memory.delete";
-import { handleMemoryDetail } from "./memory.detail";
-import {
-	handleClaimList,
-	handleClaimRelease,
-	handleHandoffCreate,
-	handleHandoffList,
-	handleHandoffUpdate,
-	handleTaskClaim
-} from "./handoff.manage";
-import { handleStandardStore } from "./standard.store";
-import { handleStandardSearch } from "./standard.search";
-import { handleStandardUpdate } from "./standard.update";
-import { handleStandardDetail } from "./standard.detail";
+import { handleMemoryRead } from "./memory.read";
+import { handleHandoffWrite } from "./handoff.write";
+import { handleHandoffRead } from "./handoff.read";
+import { handleClaimManage } from "./claim.manage";
 import { handleStandardDelete } from "./standard.delete";
+import { handleStandardWrite } from "./standard.write";
+import { handleStandardRead } from "./standard.read";
 import { handleTaskCreate, handleTaskCreateInteractive } from "./task.create";
 import { handleTaskUpdate } from "./task.update";
+import { handleTaskWrite } from "./task.write";
 import { handleTaskDelete } from "./task.delete";
 import { handleTaskList } from "./task.list";
 import { handleTaskGet as handleTaskDetail } from "./task.get";
 import { handleTaskSearch } from "./task.search";
+import { handleTaskRead } from "./task.read";
 import { handleAgentContext } from "./agent-context";
-import { handleDecisionLog } from "./decision-log";
-import { handleSessionSummarize } from "./session-summarize";
-import {
-	handleCreateEntity,
-	handleDeleteEntity,
-	handleCreateRelation,
-	handleDeleteRelation,
-	handleDeleteObservation
-} from "./kg.crud";
-import { handleKGBackfill } from "./kg-backfill";
-import { handleQueryGraph } from "./kg.query";
-import {
-	handleCodebaseIndexRepository,
-	handleCodebaseIndexStatus,
-	handleGetArchitecture,
-	handleGetFileSymbols,
-	handleSearchSymbols,
-	handleTraceSymbol,
-	handleCodebaseSearch
-} from "./codebase-index";
+import { handleCodebaseIndex } from "./codebase.index";
+import { handleCodebaseRead } from "./codebase.read";
 import { McpResponse } from "../utils/mcp-response";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -75,33 +48,24 @@ export type RegisterAllOptions = {
 
 // ── Tools that mutate the DB — must run under write lock ──────────────────
 const WRITE_TOOLS = new Set([
-	"memory-store",
-	"memory-update",
+	"memory-write",
 	"memory-delete",
 	"memory-bulk-delete",
 	"memory-summarize",
-	"handoff-create",
-	"handoff-update",
+	"handoff-write",
+	"claim-manage",
 	"standard-store",
 	"standard-update",
+	"standard-write",
 	"standard-delete",
 	"task-create",
 	"task-create-interactive",
-	"task-claim",
-	"claim-release",
+	"task-write",
 	"task-update",
 	"task-delete",
-	"decision-log",
-	"session-summarize",
-	// Legacy aliases removed — use memory-store/memory-delete directly
-	// Knowledge graph tools (write)
-	"create_entity",
-	"delete_entity",
-	"create_relation",
-	"delete_relation",
-	"delete_observation",
-	"kg-backfill",
+	"agent-summarize",
 	// Codebase index tools (write)
+	"codebase-index",
 	"index_repository"
 ]);
 
@@ -115,7 +79,11 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 		((res?.data as Record<string, unknown>)?.repo as string);
 	const uris = new Set<string>();
 
-	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-update" || toolName === "task-delete";
+	const touchesMemory =
+		toolName.startsWith("memory-") ||
+		toolName === "task-write" ||
+		toolName === "task-update" ||
+		toolName === "task-delete";
 	const touchesTasks = toolName.startsWith("task-");
 
 	if (touchesMemory && repo) {
@@ -236,11 +204,18 @@ function buildExecutors(
 	const elicit = options?.elicit;
 
 	return {
-		"memory-store": (args, db, vectors, _extra) => handleMemoryStore(args, db, vectors),
-		"memory-acknowledge": (args, db, _vectors, _extra) => handleMemoryAcknowledge(args, db),
-		"memory-update": (args, db, vectors, _extra) => handleMemoryUpdate(args, db, vectors),
-		"memory-recap": (args, db, _vectors, _extra) => handleMemoryRecap(args, db),
-		"memory-search": (args, db, vectors, _extra) => handleMemorySearch(args, db, vectors),
+		// New canonical handlers
+		"memory-write": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-read": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
+		"memory-delete": (args, db, vectors, extra) => handleMemoryDelete(args, db, vectors, extra?.onProgress),
+		// Backward-compat aliases — old names route to new handlers
+		"memory-store": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-update": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-acknowledge": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-search": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
+		"memory-detail": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
+		"memory-recap": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
+		// Other memory tools
 		"memory-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
 		"memory-synthesize": (args, db, vectors, _extra) =>
 			handleMemorySynthesize(args, db, vectors, {
@@ -248,46 +223,62 @@ function buildExecutors(
 				sampleMessage,
 				elicit
 			}),
-		"memory-delete": (args, db, vectors, extra) => handleMemoryDelete(args, db, vectors, extra?.onProgress),
-		"memory-detail": (args, db, _vectors, _extra) => handleMemoryDetail(args, db),
-		"handoff-create": (args, db, _vectors, _extra) => handleHandoffCreate(args, db),
-		"handoff-list": (args, db, _vectors, _extra) => handleHandoffList(args, db),
-		"handoff-update": (args, db, _vectors, _extra) => handleHandoffUpdate(args, db),
-		"task-claim": (args, db, _vectors, _extra) => handleTaskClaim(args, db),
-		"claim-list": (args, db, _vectors, _extra) => handleClaimList(args, db),
-		"claim-release": (args, db, _vectors, _extra) => handleClaimRelease(args, db),
-		"standard-store": (args, db, vectors, _extra) => handleStandardStore(args, db, vectors),
-		"standard-update": (args, db, vectors, _extra) => handleStandardUpdate(args, db, vectors),
-		"standard-detail": (args, db, _vectors, _extra) => handleStandardDetail(args, db),
+		// New canonical handlers
+		"handoff-write": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
+		"handoff-read": (args, db, _vectors, _extra) => handleHandoffRead(args, db),
+		"claim-manage": (args, db, _vectors, _extra) => handleClaimManage(args, db),
+		// Backward-compat aliases — old names route to new unified handlers
+		"handoff-create": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
+		"handoff-update": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
+		"handoff-list": (args, db, _vectors, _extra) => handleHandoffRead(args, db),
+		"task-claim": (args, db, _vectors, _extra) => handleClaimManage(args, db),
+		"claim-list": (args, db, _vectors, _extra) => handleClaimManage(args, db),
+		"claim-release": (args, db, _vectors, _extra) =>
+			handleClaimManage({ ...args, release: true } as Record<string, unknown>, db),
+		"standard-write": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
+		"standard-read": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
 		"standard-delete": (args, db, vectors, _extra) => handleStandardDelete(args, db, vectors),
-		"standard-search": (args, db, vectors, _extra) => handleStandardSearch(args, db, vectors),
-		"task-create": (args, db, _vectors, _extra) => handleTaskCreate(args, db),
-		"task-create-interactive": (args, db, _vectors, _extra) =>
-			handleTaskCreateInteractive(args, db, { session, elicit }),
-		"task-update": (args, db, vectors, _extra) => handleTaskUpdate(args, db, vectors),
+		// Backward-compat aliases — old names route to new unified handlers
+		"standard-store": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
+		"standard-update": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
+		"standard-search": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
+		"standard-detail": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
+		// New canonical handlers
+		"task-write": (args, db, vectors, _extra) =>
+			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
+		"task-read": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
 		"task-delete": (args, db, _vectors, _extra) => handleTaskDelete(args, db),
-		"task-list": (args, db, _vectors, _extra) => handleTaskList(args, db),
-		"task-search": (args, db, _vectors, _extra) => handleTaskSearch(args, db),
-		"task-detail": (args, db, _vectors, _extra) => handleTaskDetail(args, db),
+		// Backward-compat aliases — old names route to new unified handlers
+		"task-create": (args, db, vectors, _extra) =>
+			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
+		"task-create-interactive": (args, db, vectors, _extra) =>
+			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
+		"task-update": (args, db, vectors, _extra) =>
+			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
+		"task-list": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
+		"task-detail": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
+		"task-search": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
 		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
-		"decision-log": (args, db, vectors, _extra) => handleDecisionLog(args, db, vectors),
-		"session-summarize": (args, db, vectors, _extra) => handleSessionSummarize(args, db, vectors),
-		// Knowledge graph tools
-		create_entity: (args, db, _vectors, _extra) => handleCreateEntity(args, db, _vectors),
-		delete_entity: (args, db, _vectors, _extra) => handleDeleteEntity(args, db, _vectors),
-		create_relation: (args, db, _vectors, _extra) => handleCreateRelation(args, db, _vectors),
-		delete_relation: (args, db, _vectors, _extra) => handleDeleteRelation(args, db, _vectors),
-		delete_observation: (args, db, _vectors, _extra) => handleDeleteObservation(args, db, _vectors),
-		"kg-backfill": (args, db, _vectors, _extra) => handleKGBackfill(args, db),
-		query_graph: (args, db, _vectors, _extra) => handleQueryGraph(args, db, _vectors),
+		"agent-synthesize": (args, db, vectors, _extra) =>
+			handleMemorySynthesize(args, db, vectors, {
+				session,
+				sampleMessage,
+				elicit
+			}),
+		"agent-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
 		// Codebase index tools
-		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndexRepository(args, db, _vectors),
-		index_status: (args, db, _vectors, _extra) => handleCodebaseIndexStatus(args, db, _vectors),
-		get_architecture: (args, db, _vectors, _extra) => handleGetArchitecture(args, db, _vectors),
-		get_file_symbols: (args, db, _vectors, _extra) => handleGetFileSymbols(args, db, _vectors),
-		trace_symbol: (args, db, _vectors, _extra) => handleTraceSymbol(args, db, _vectors),
-		search_symbols: (args, db, _vectors, _extra) => handleSearchSymbols(args, db, _vectors),
-		codebase_search: (args, db, _vectors, _extra) => handleCodebaseSearch(args, db, _vectors)
+		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
+		// Write tool — canonical name
+		"codebase-index": (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
+		// Backward-compat alias — routes to the same handler
+		index_repository: (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
+		// Backward-compat read aliases — all route through codebase-read
+		index_status: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
+		get_architecture: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
+		get_file_symbols: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
+		trace_symbol: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
+		search_symbols: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
+		codebase_search: (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors)
 	};
 }
 
@@ -304,7 +295,7 @@ export function registerAllTools(
 
 	// Filter tool definitions by client capabilities
 	const definitions = TOOL_DEFINITIONS.filter((def) => {
-		if (def.name === "memory-synthesize" && !session.supportsSampling) {
+		if ((def.name === "memory-synthesize" || def.name === "agent-synthesize") && !session.supportsSampling) {
 			return false;
 		}
 		if (def.name === "task-create-interactive" && !session.supportsElicitationForm) {

@@ -4,7 +4,7 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 
-describe("MCP handoff and claim tools", () => {
+describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
@@ -33,14 +33,14 @@ describe("MCP handoff and claim tools", () => {
 				task_code: "HANDOFF-101",
 				phase: "implementation",
 				title: "Handoff target task",
-				description: "Task used to validate handoff-create.",
+				description: "Task used to validate handoff-write.",
 				status: "pending",
 				priority: 3
 			}
 		});
 
 		const createRes = await router("tools/call", {
-			name: "handoff-create",
+			name: "handoff-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -57,7 +57,7 @@ describe("MCP handoff and claim tools", () => {
 		expect(createRes.structuredContent.task_id).toBe(task.structuredContent.id);
 
 		const listRes = await router("tools/call", {
-			name: "handoff-list",
+			name: "handoff-read",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -75,7 +75,7 @@ describe("MCP handoff and claim tools", () => {
 	it("rejects completion-summary handoffs without transfer context", async () => {
 		await expect(
 			router("tools/call", {
-				name: "handoff-create",
+				name: "handoff-write",
 				arguments: {
 					repo: REPO,
 					owner: "test",
@@ -88,7 +88,7 @@ describe("MCP handoff and claim tools", () => {
 
 	it("updates handoff status so stale queue items can be closed", async () => {
 		const createRes = await router("tools/call", {
-			name: "handoff-create",
+			name: "handoff-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -99,7 +99,7 @@ describe("MCP handoff and claim tools", () => {
 		});
 
 		const updateRes = await router("tools/call", {
-			name: "handoff-update",
+			name: "handoff-write",
 			arguments: {
 				id: createRes.structuredContent.id,
 				status: "expired"
@@ -119,14 +119,14 @@ describe("MCP handoff and claim tools", () => {
 				task_code: "CLAIM-101",
 				phase: "implementation",
 				title: "Claimable task",
-				description: "Task used to validate task-claim.",
+				description: "Task used to validate claim-manage.",
 				status: "pending",
 				priority: 3
 			}
 		});
 
 		const claimRes = await router("tools/call", {
-			name: "task-claim",
+			name: "claim-manage",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -143,10 +143,11 @@ describe("MCP handoff and claim tools", () => {
 		expect(claimRes.structuredContent.metadata).toEqual({ lane: "handoff" });
 
 		const listRes = await router("tools/call", {
-			name: "claim-list",
+			name: "claim-manage",
 			arguments: {
 				repo: REPO,
-				owner: "test"
+				owner: "test",
+				query: ""
 			}
 		});
 
@@ -164,14 +165,14 @@ describe("MCP handoff and claim tools", () => {
 				task_code: "CLAIM-RELEASE-101",
 				phase: "implementation",
 				title: "Releasable task",
-				description: "Task used to validate claim-release.",
+				description: "Task used to validate claim-manage release mode.",
 				status: "pending",
 				priority: 3
 			}
 		});
 
 		await router("tools/call", {
-			name: "task-claim",
+			name: "claim-manage",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -182,12 +183,13 @@ describe("MCP handoff and claim tools", () => {
 		});
 
 		const releaseRes = await router("tools/call", {
-			name: "claim-release",
+			name: "claim-manage",
 			arguments: {
 				repo: REPO,
 				owner: "test",
 				task_code: "CLAIM-RELEASE-101",
-				agent: "agent-release"
+				agent: "agent-release",
+				release: true
 			}
 		});
 
@@ -223,7 +225,7 @@ describe("MCP handoff and claim tools", () => {
 		});
 
 		const claimRes = await router("tools/call", {
-			name: "task-claim",
+			name: "claim-manage",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -234,7 +236,7 @@ describe("MCP handoff and claim tools", () => {
 		});
 
 		const handoffRes = await router("tools/call", {
-			name: "handoff-create",
+			name: "handoff-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",

@@ -25,7 +25,7 @@ describe("task-memory-executor prompt", () => {
 		const promptText = result.messages[0].content.text;
 		expect(promptText).toContain("dependency readiness");
 		expect(promptText).toContain("memory-search");
-		expect(promptText).toContain("standard-search");
+		expect(promptText).toContain("standard-read");
 		expect(promptText).toContain("blocker");
 	});
 });

@@ -97,22 +97,15 @@ export const StandardSearchSchema = z.object({
 	json: z.boolean().default(false)
 });
 
-export const StandardDeleteSchema = z
-	.object({
-		owner: z.string().min(1),
-		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().optional(),
-		ids: z.array(z.string()).min(1).optional(),
-		code: z.string().max(20).optional(),
-		codes: z.array(z.string().max(20)).min(1).optional(),
-		json: z.boolean().default(false)
-	})
-	.refine(
-		(data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined,
-		{
-			message: "Either 'id', 'ids', 'code', or 'codes' must be provided for deletion"
-		}
-	);
+export const StandardDeleteSchema = z.object({
+	id: z.string().optional(),
+	code: z.string().max(20).optional(),
+	ids: z.array(z.string()).min(1).optional(),
+	codes: z.array(z.string().max(20)).min(1).optional(),
+	owner: z.string().optional(),
+	repo: z.string().transform(normalizeRepo).optional(),
+	json: z.boolean().default(false)
+});
 
 export const StandardDetailSchema = z
 	.object({

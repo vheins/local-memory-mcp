@@ -1,11 +1,11 @@
 // Tool definitions for agent-context domain
 
 export const AGENT_TOOL_DEFINITIONS = [
+	// ── Agent Context tools ────────────────────────────────────────────────
 	{
 		name: "agent-context",
 		title: "Agent Context Recall",
-		description:
-			"Agent context with memories and tasks.",
+		description: "Agent context with memories and tasks.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -22,9 +22,13 @@ export const AGENT_TOOL_DEFINITIONS = [
 					type: "string",
 					description: "Repo name. Auto-inferred."
 				},
+				query: {
+					type: "string",
+					description: "Natural language search query for context retrieval."
+				},
 				objective: {
 					type: "string",
-					description: "Agent objective for memory search."
+					description: "Deprecated: use query instead."
 				},
 				type_filter: {
 					type: "string",
@@ -45,63 +49,101 @@ export const AGENT_TOOL_DEFINITIONS = [
 			}
 		}
 	},
+	// ── Agent Synthesis (moved from memory domain per ADR-001, ADR-007) ────
+
+	// Canonical: agent-synthesize
 	{
-		name: "decision-log",
-		title: "Decision Logger",
-		description:
-			"Logs a structured decision.",
+		name: "agent-synthesize",
+		title: "Agent Context Synthesize",
+		description: "Synthesizes context from local memory and tasks using MCP sampling.",
 		annotations: {
-			readOnlyHint: false,
-			idempotentHint: false,
+			readOnlyHint: true,
+			idempotentHint: true,
 			openWorldHint: false
+		},
+		execution: {
+			taskSupport: "optional"
 		},
 		inputSchema: {
 			type: "object",
 			properties: {
-				summary: {
-					type: "string",
-					description: "What was decided. Max 255 chars."
-				},
-				context: {
-					type: "string",
-					description: "Decision context. Min 10 chars."
-				},
-				rationale: {
-					type: "string",
-					description: "Why this decision was made. Min 10 chars."
-				},
-				alternatives: {
-					type: "array",
-					items: { type: "string" },
-					description: "Alternatives considered."
-				},
-				tags: {
-					type: "array",
-					items: { type: "string" },
-					description: "Tags (auto-includes 'decision')."
-				},
 				owner: {
 					type: "string",
-					description: "GitHub org or username. Auto-inferred."
+					description: "GitHub org or username."
 				},
 				repo: {
 					type: "string",
-					description: "Repo name. Auto-inferred."
+					description: "Repo name. Optional with active root."
 				},
-				json: {
+				objective: { type: "string", minLength: 5, description: "Question or synthesis objective." },
+				current_file_path: {
+					type: "string",
+					description: "File path for workspace grounding."
+				},
+				include_summary: { type: "boolean", default: true },
+				include_tasks: { type: "boolean", default: true },
+				use_tools: {
 					type: "boolean",
-					default: false,
-					description: "Return JSON results."
-				}
+					default: true,
+					description: "Allow tool calls during synthesis."
+				},
+				max_iterations: { type: "number", minimum: 1, maximum: 5, default: 3 },
+				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 },
+				json: { type: "boolean", default: false, description: "Returns JSON if true." }
 			},
-			required: ["summary", "context", "rationale"]
+			required: ["owner", "objective"]
 		}
 	},
+
+	// Backward-compat alias for agent-synthesize
 	{
-		name: "session-summarize",
-		title: "Session Summarizer",
-		description:
-			"Persists a session summary as task_archive.",
+		name: "memory-synthesize",
+		title: "Memory Synthesize (Deprecated)",
+		description: "DEPRECATED: Use agent-synthesize instead. Synthesizes from local memory and tasks.",
+		annotations: {
+			readOnlyHint: true,
+			idempotentHint: true,
+			openWorldHint: false
+		},
+		execution: {
+			taskSupport: "optional"
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: {
+					type: "string",
+					description: "GitHub org or username."
+				},
+				repo: {
+					type: "string",
+					description: "Repo name. Optional with active root."
+				},
+				objective: { type: "string", minLength: 5, description: "Question or synthesis objective." },
+				current_file_path: {
+					type: "string",
+					description: "File path for workspace grounding."
+				},
+				include_summary: { type: "boolean", default: true },
+				include_tasks: { type: "boolean", default: true },
+				use_tools: {
+					type: "boolean",
+					default: true,
+					description: "Allow tool calls during synthesis."
+				},
+				max_iterations: { type: "number", minimum: 1, maximum: 5, default: 3 },
+				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 },
+				json: { type: "boolean", default: false, description: "Returns JSON if true." }
+			},
+			required: ["owner", "objective"]
+		}
+	},
+
+	// Canonical: agent-summarize
+	{
+		name: "agent-summarize",
+		title: "Agent Context Summarize",
+		description: "Update the repository summary with signals.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -110,40 +152,44 @@ export const AGENT_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				summary: {
-					type: "string",
-					description: "Session summary. Min 10 chars."
-				},
-				key_decisions: {
+				owner: { type: "string", description: "GitHub org or username." },
+				repo: { type: "string", description: "Repo name." },
+				signals: {
 					type: "array",
-					items: { type: "string" },
-					description: "Key decisions made this session."
+					items: { type: "string", maxLength: 200 },
+					minItems: 1,
+					description: "Signals to include in summary"
 				},
-				next_steps: {
-					type: "array",
-					items: { type: "string" },
-					description: "Next steps or follow-up actions."
-				},
-				tags: {
-					type: "array",
-					items: { type: "string" },
-					description: "Tags (auto-includes 'session-summary')."
-				},
-				owner: {
-					type: "string",
-					description: "GitHub org or username. Auto-inferred."
-				},
-				repo: {
-					type: "string",
-					description: "Repo name. Auto-inferred."
-				},
-				json: {
-					type: "boolean",
-					default: false,
-					description: "Return JSON results."
-				}
+				json: { type: "boolean", default: false, description: "Returns JSON if true." }
 			},
-			required: ["summary"]
+			required: ["owner", "repo", "signals"]
+		}
+	},
+
+	// Backward-compat alias for agent-summarize
+	{
+		name: "memory-summarize",
+		title: "Memory Summarize (Deprecated)",
+		description: "DEPRECATED: Use agent-summarize instead. Update the summary for a repository",
+		annotations: {
+			readOnlyHint: false,
+			idempotentHint: false,
+			openWorldHint: false
+		},
+		inputSchema: {
+			type: "object",
+			properties: {
+				owner: { type: "string", description: "GitHub org or username." },
+				repo: { type: "string", description: "Repo name." },
+				signals: {
+					type: "array",
+					items: { type: "string", maxLength: 200 },
+					minItems: 1,
+					description: "Signals to include in summary"
+				},
+				json: { type: "boolean", default: false, description: "Returns JSON if true." }
+			},
+			required: ["owner", "repo", "signals"]
 		}
 	}
 ];

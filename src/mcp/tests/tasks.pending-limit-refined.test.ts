@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { handleTaskCreate } from "../tools/task.create";
-import { handleTaskUpdate } from "../tools/task.update";
+import { handleTaskWrite } from "../tools/task.write";
 import { createTestStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 
-describe("Task Pending Limit Refined Validation", () => {
+describe("Consolidated Task Write — Pending Limit Refined Validation", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let mockVectors: VectorStore;
 	const REPO = "test-repo";
@@ -20,7 +19,7 @@ describe("Task Pending Limit Refined Validation", () => {
 
 	async function createManyPending(count: number) {
 		for (let i = 0; i < count; i++) {
-			await handleTaskCreate(
+			await handleTaskWrite(
 				{
 					repo: REPO,
 					owner: "test",
@@ -32,7 +31,8 @@ describe("Task Pending Limit Refined Validation", () => {
 					agent: "test-agent",
 					role: "test-role"
 				},
-				db
+				db,
+				mockVectors
 			);
 		}
 	}
@@ -40,7 +40,7 @@ describe("Task Pending Limit Refined Validation", () => {
 	it("should auto-downgrade 12th pending task to backlog", async () => {
 		await createManyPending(11);
 
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -52,7 +52,8 @@ describe("Task Pending Limit Refined Validation", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		const task = db.tasks.getTaskByCode("test", REPO, "TASK-12");
@@ -67,7 +68,7 @@ describe("Task Pending Limit Refined Validation", () => {
 		await createManyPending(10);
 
 		// Create one backlog task (allowed)
-		await handleTaskCreate(
+		await handleTaskWrite(
 			{
 				repo: REPO,
 				owner: "test",
@@ -79,14 +80,15 @@ describe("Task Pending Limit Refined Validation", () => {
 				agent: "test-agent",
 				role: "test-role"
 			},
-			db
+			db,
+			mockVectors
 		);
 
 		const task = db.tasks.getTaskByCode("test", REPO, "TASK-BACKLOG");
 		if (!task) throw new Error("Seed task not found");
 
 		// Move to pending (should be ALLOWED now)
-		await handleTaskUpdate(
+		await handleTaskWrite(
 			{
 				owner: "test",
 				repo: REPO,

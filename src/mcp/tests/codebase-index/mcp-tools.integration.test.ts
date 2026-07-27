@@ -1,22 +1,17 @@
 /**
- * MCP Tools Integration Tests — search_symbols, get_file_symbols,
- * get_architecture, trace_symbol.
+ * MCP Codebase-Read Integration Tests — unified handler covering
+ * search_symbols, file, architecture, and trace modes.
  *
  * Uses an in-memory SQLiteStore seeded with fixture data via entity methods.
- * Tests handler functions end-to-end (schema validation → entity lookup →
- * service processing → response formatting).
+ * Tests handleCodebaseRead end-to-end (schema validation → mode inference →
+ * entity lookup → service processing → response formatting).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import {
-	handleSearchSymbols,
-	handleGetFileSymbols,
-	handleGetArchitecture,
-	handleTraceSymbol
-} from "../../tools/codebase-index";
+import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import type { VectorStore } from "../../types";
 import type { CodebaseSymbolInsert } from "../../types/codebase-symbol";
@@ -39,7 +34,7 @@ const REPO = "search-test";
 
 // ── Test suite ─────────────────────────────────────────────────────────────
 
-describe("MCP Codebase-Index Tool Handlers (integration)", () => {
+describe("handleCodebaseRead (integration)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 	let tempDir: string;
@@ -431,12 +426,12 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════
-	// search_symbols integration tests
+	// codebase-read: search_symbols mode (via single-term query)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	describe("handleSearchSymbols", () => {
+	describe("handleCodebaseRead (search_symbols mode)", () => {
 		it("returns correct symbol for exact name match", async () => {
-			const resp = await handleSearchSymbols({ query: "initializeApp", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ query: "initializeApp", repo: REPO }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -447,7 +442,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("returns multiple ranked results for prefix query", async () => {
-			const resp = await handleSearchSymbols({ query: "App", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ query: "App", repo: REPO }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -455,7 +450,6 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 			expect(symbols.length).toBeGreaterThanOrEqual(2);
 
 			// Exact matches (Application, AppConfig) should be top-tier
-			// because they match "App" as a prefix
 			const names = symbols.map((s) => s.name);
 			expect(names).toContain("Application");
 			expect(names).toContain("AppConfig");
@@ -466,11 +460,10 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("kind filter returns only matching kind", async () => {
-			const resp = await handleSearchSymbols({ query: "form", repo: REPO, kind: "function" }, store, vectors);
+			const resp = await handleCodebaseRead({ query: "form", repo: REPO, kind: "function" }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
-			// Should match formatSize but NOT formatSize if no matching... wait formatSize is a function
 			expect(symbols.length).toBeGreaterThanOrEqual(1);
 			for (const s of symbols) {
 				expect(s.kind).toBe("function");
@@ -478,7 +471,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("returns empty result for non-existent symbol", async () => {
-			const resp = await handleSearchSymbols({ query: "zzzNonexistentSymbol" }, store, vectors);
+			const resp = await handleCodebaseRead({ query: "zzzNonexistentSymbol" }, store, vectors);
 			const d = data(resp);
 
 			expect(d.symbols).toEqual([]);
@@ -488,13 +481,13 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 
 		it("pagination: limit + offset works correctly", async () => {
 			// Get page 1: limit 3
-			const page1 = await handleSearchSymbols({ query: "a", repo: REPO, limit: 3, offset: 0 }, store, vectors);
+			const page1 = await handleCodebaseRead({ query: "a", repo: REPO, limit: 3, offset: 0 }, store, vectors);
 			const d1 = data(page1);
 			const symbols1 = d1.symbols as Array<Record<string, unknown>>;
 			expect(symbols1.length).toBeLessThanOrEqual(3);
 
 			// Get page 2: offset 3, limit 3
-			const page2 = await handleSearchSymbols({ query: "a", repo: REPO, limit: 3, offset: 3 }, store, vectors);
+			const page2 = await handleCodebaseRead({ query: "a", repo: REPO, limit: 3, offset: 3 }, store, vectors);
 			const d2 = data(page2);
 			const symbols2 = d2.symbols as Array<Record<string, unknown>>;
 			expect(symbols2.length).toBeLessThanOrEqual(3);
@@ -512,12 +505,12 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 	});
 
 	// ═══════════════════════════════════════════════════════════════════════
-	// get_file_symbols integration tests
+	// codebase-read: file mode (via filePath)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	describe("handleGetFileSymbols", () => {
+	describe("handleCodebaseRead (file mode)", () => {
 		it("returns all symbols in a known file", async () => {
-			const resp = await handleGetFileSymbols({ repo: REPO, filePath: "index.ts" }, store, vectors);
+			const resp = await handleCodebaseRead({ repo: REPO, filePath: "index.ts" }, store, vectors);
 			const d = data(resp);
 
 			expect(d.error).toBeUndefined();
@@ -538,7 +531,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("returns symbols in declaration order (by start_line)", async () => {
-			const resp = await handleGetFileSymbols({ repo: REPO, filePath: "index.ts" }, store, vectors);
+			const resp = await handleCodebaseRead({ repo: REPO, filePath: "index.ts" }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -551,7 +544,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("returns error for non-indexed file", async () => {
-			const resp = await handleGetFileSymbols({ repo: REPO, filePath: "nonexistent.ts" }, store, vectors);
+			const resp = await handleCodebaseRead({ repo: REPO, filePath: "nonexistent.ts" }, store, vectors);
 			const d = data(resp);
 
 			expect(d.error).toBe("File not indexed. Run index_repository first.");
@@ -560,12 +553,12 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 	});
 
 	// ═══════════════════════════════════════════════════════════════════════
-	// get_architecture integration tests
+	// codebase-read: architecture mode (via depth)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	describe("handleGetArchitecture", () => {
+	describe("handleCodebaseRead (architecture mode)", () => {
 		it("returns directory tree with correct depth", async () => {
-			const resp = await handleGetArchitecture({ repo: REPO, depth: 2 }, store, vectors);
+			const resp = await handleCodebaseRead({ repo: REPO, depth: 2 }, store, vectors);
 			const d = data(resp);
 
 			// Root
@@ -583,20 +576,15 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 			expect(fileNames).toContain("utils.ts");
 			expect(fileNames).toContain("types.ts");
 
-			// components/ directory should be collapsed with hasMoreFiles
+			// components/ directory should be expanded at depth 2
 			const compDir = children.find((c) => c.name === "components");
 			expect(compDir).toBeDefined();
 			expect(compDir!.type).toBe("directory");
-			// At depth 2, "components" is at depth 1 (root is 0, direct children are 1),
-			// so it should NOT be collapsed yet — it should still have children since currentDepth (1) < maxDepth (2)
-			// Actually, let me re-read architecture-service:
-			// root is at depth 0, its children are created with depth 1, so components/ will be at depth 1 < maxDepth 2
-			// So it should have its file children expanded.
 			expect(compDir!.children).toBeDefined();
 		});
 
 		it("symbol counts are accurate", async () => {
-			const resp = await handleGetArchitecture({ repo: REPO, depth: 2 }, store, vectors);
+			const resp = await handleCodebaseRead({ repo: REPO, depth: 2 }, store, vectors);
 			const d = data(resp);
 
 			const summary = d.summary as Record<string, unknown>;
@@ -609,7 +597,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("language breakdown shows TypeScript and TSX", async () => {
-			const resp = await handleGetArchitecture({ repo: REPO, depth: 2 }, store, vectors);
+			const resp = await handleCodebaseRead({ repo: REPO, depth: 2 }, store, vectors);
 			const d = data(resp);
 
 			const summary = d.summary as Record<string, unknown>;
@@ -621,12 +609,12 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 	});
 
 	// ═══════════════════════════════════════════════════════════════════════
-	// trace_symbol integration tests
+	// codebase-read: trace mode (via name)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	describe("handleTraceSymbol", () => {
+	describe("handleCodebaseRead (trace mode)", () => {
 		it("returns definition for a known exported function", async () => {
-			const resp = await handleTraceSymbol({ name: "formatSize", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ name: "formatSize", repo: REPO }, store, vectors);
 			const d = data(resp);
 
 			expect(d.symbol).toBeDefined();
@@ -663,7 +651,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 				}
 			]);
 
-			const resp = await handleTraceSymbol({ name: "Button", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ name: "Button", repo: REPO }, store, vectors);
 			const d = data(resp);
 
 			expect(d.code).toBe("AMBIGUOUS_SYMBOL");
@@ -787,7 +775,7 @@ describe("MCP Codebase-Index Tool Handlers (integration)", () => {
 		});
 
 		it("returns error for non-existent symbol", async () => {
-			const resp = await handleTraceSymbol({ name: "zzzNonexistentFn", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ name: "zzzNonexistentFn", repo: REPO }, store, vectors);
 			const d = data(resp);
 
 			expect(d.code).toBe("SYMBOL_NOT_FOUND");

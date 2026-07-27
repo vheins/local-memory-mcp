@@ -65,6 +65,8 @@ export class StubVectorStore implements VectorStore {
 			const freqVector = this.computeFrequencyVector(tokens);
 			if (kind === "standard") {
 				this.db.standards.upsertVectorEmbedding(id, freqVector);
+			} else if (kind === "task") {
+				this.db.tasks.upsertTaskVectorEmbedding(id, freqVector);
 			} else {
 				this.db.memoryVectors.upsertVectorEmbedding(id, freqVector);
 			}
@@ -74,9 +76,14 @@ export class StubVectorStore implements VectorStore {
 	}
 
 	async remove(id: string, kind: VectorEntityKind = "memory"): Promise<void> {
-		void kind;
 		if (!id) return;
-		// Handled by SQL CASCADE
+		if (kind === "memory") {
+			// Handled by SQL CASCADE on memories(id)
+		} else if (kind === "standard") {
+			// Handled by SQL CASCADE on coding_standards(id)
+		} else if (kind === "task") {
+			this.db.tasks.removeTaskVector(id);
+		}
 	}
 
 	async search(
@@ -92,17 +99,21 @@ export class StubVectorStore implements VectorStore {
 			if (queryTokens.length === 0) return [];
 			const queryFreq = this.computeFrequencyVector(queryTokens);
 
-			const rawCandidates = (kind === "standard"
-				? this.db.standards.getVectorCandidates(repo, 100)
-				: this.db.memoryVectors.getVectorCandidates("", repo, 100)) as unknown as {
-				standard_id?: string;
-				memory_id?: string;
-				vector: string;
-			}[];
+			let rawCandidates: Record<string, unknown>[];
+			if (kind === "standard") {
+				rawCandidates = this.db.standards.getVectorCandidates(repo, 100) as unknown as Record<string, unknown>[];
+			} else if (kind === "task") {
+				rawCandidates = this.db.tasks.getTaskVectorCandidates(repo, 100) as unknown as Record<string, unknown>[];
+			} else {
+				rawCandidates = this.db.memoryVectors.getVectorCandidates("", repo, 100) as unknown as Record<
+					string,
+					unknown
+				>[];
+			}
 
 			const candidates = rawCandidates.map((c) => ({
-				id: (c.standard_id ?? c.memory_id ?? "") as string,
-				vector: c.vector
+				id: (c.task_id ?? c.standard_id ?? c.memory_id ?? "") as string,
+				vector: c.vector as string
 			}));
 
 			if (candidates.length === 0) return [];

@@ -1,8 +1,13 @@
 /**
  * Codebase Index Tool Handler Tests.
  *
- * Tests the MCP tool handlers for index_repository and index_status,
- * focusing on input validation and error paths.
+ * Tests the MCP tool handlers for codebase-index (write) and codebase-read (read),
+ * covering input validation and error paths.
+ *
+ * Schema tests still validate the backward-compatible schemas.
+ * Handler tests now target the unified canonical handlers:
+ *   - handleCodebaseIndex  (from codebase.index.ts)
+ *   - handleCodebaseRead   (from codebase.read.ts)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -18,13 +23,10 @@ import {
 	TraceSymbolSchema
 } from "../../tools/schemas/codebase-index";
 import {
-	handleCodebaseIndexRepository,
-	handleCodebaseIndexStatus,
-	handleGetArchitecture,
-	handleGetFileSymbols,
-	handleSearchSymbols,
-	handleTraceSymbol
-} from "../../tools/codebase-index";
+	handleCodebaseIndex,
+	handleCodebaseIndexRepository
+} from "../../tools/codebase.index";
+import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 
@@ -191,7 +193,7 @@ describe("TraceSymbolSchema", () => {
 
 // ── Handler tests ───────────────────────────────────────────────────────
 
-describe("handleCodebaseIndexRepository", () => {
+describe("handleCodebaseIndex (write)", () => {
 	let vectors: VectorStore;
 
 	beforeEach(() => {
@@ -199,11 +201,9 @@ describe("handleCodebaseIndexRepository", () => {
 	});
 
 	it("returns input validation error for missing repoPath", async () => {
-		// We need a real store for the handler signature, even though it errors before using it
 		const store = await createTestStore();
 		try {
-			const response = await handleCodebaseIndexRepository({ repo: "test-repo" }, store, vectors);
-			// ZodError is thrown before returning - so this should throw
+			const response = await handleCodebaseIndex({ repo: "test-repo" }, store, vectors);
 			expect(response).toBeDefined();
 		} catch (err: unknown) {
 			expect((err as Error).message).toContain("repoPath");
@@ -215,7 +215,7 @@ describe("handleCodebaseIndexRepository", () => {
 	it("returns error for non-existent path", async () => {
 		const store = await createTestStore();
 		try {
-			const response = await handleCodebaseIndexRepository(
+			const response = await handleCodebaseIndex(
 				{ repo: "test-repo", repoPath: "/nonexistent/path/abc123xyz" },
 				store,
 				vectors
@@ -235,7 +235,7 @@ describe("handleCodebaseIndexRepository", () => {
 		fs.writeFileSync(tmpFile, "test", "utf-8");
 
 		try {
-			const response = await handleCodebaseIndexRepository({ repo: "test-repo", repoPath: tmpFile }, store, vectors);
+			const response = await handleCodebaseIndex({ repo: "test-repo", repoPath: tmpFile }, store, vectors);
 			expect(response.structuredContent).toMatchObject({
 				success: false,
 				error: "NOT_A_DIRECTORY"
@@ -247,7 +247,7 @@ describe("handleCodebaseIndexRepository", () => {
 	});
 });
 
-describe("handleCodebaseIndexStatus", () => {
+describe("handleCodebaseRead (status mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 
@@ -261,7 +261,7 @@ describe("handleCodebaseIndexStatus", () => {
 	});
 
 	it("returns status for an unindexed repo", async () => {
-		const response = await handleCodebaseIndexStatus({ repo: "unknown-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ repo: "unknown-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.repo).toBe("unknown-repo");
 		expect(data.isIndexed).toBe(false);
@@ -270,17 +270,17 @@ describe("handleCodebaseIndexStatus", () => {
 	});
 
 	it("throws on missing repo param", async () => {
-		await expect(handleCodebaseIndexStatus({}, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({}, store, vectors)).rejects.toThrow();
 	});
 
 	it("throws on empty repo", async () => {
-		await expect(handleCodebaseIndexStatus({ repo: "" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ repo: "" }, store, vectors)).rejects.toThrow();
 	});
 });
 
-// ── handleGetArchitecture tests ─────────────────────────────────────────
+// ── handleCodebaseRead (architecture mode) tests ────────────────────────
 
-describe("handleGetArchitecture", () => {
+describe("handleCodebaseRead (architecture mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 
@@ -311,7 +311,7 @@ describe("handleGetArchitecture", () => {
 			size_bytes: 200
 		});
 
-		const response = await handleGetArchitecture({ repo: "test/repo", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead({ repo: "test/repo", depth: 3 }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.root).toBeDefined();
@@ -321,7 +321,7 @@ describe("handleGetArchitecture", () => {
 	});
 
 	it("returns empty architecture for unindexed repo", async () => {
-		const response = await handleGetArchitecture({ repo: "never-indexed", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead({ repo: "never-indexed", depth: 3 }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const summary = data.summary as Record<string, unknown>;
 		expect(summary.totalFiles).toBe(0);
@@ -350,7 +350,7 @@ describe("handleGetArchitecture", () => {
 			}
 		]);
 
-		const response = await handleGetArchitecture(
+		const response = await handleCodebaseRead(
 			{ repo: "test/repo", depth: 3, includeSymbolCounts: true },
 			store,
 			vectors
@@ -361,9 +361,9 @@ describe("handleGetArchitecture", () => {
 	});
 });
 
-// ── handleGetFileSymbols tests ──────────────────────────────────────────
+// ── handleCodebaseRead (file mode) tests ────────────────────────────────
 
-describe("handleGetFileSymbols", () => {
+describe("handleCodebaseRead (file mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 
@@ -398,7 +398,7 @@ describe("handleGetFileSymbols", () => {
 			}
 		]);
 
-		const response = await handleGetFileSymbols({ repo: "test/repo", filePath: "src/auth.ts" }, store, vectors);
+		const response = await handleCodebaseRead({ repo: "test/repo", filePath: "src/auth.ts" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -408,16 +408,16 @@ describe("handleGetFileSymbols", () => {
 	});
 
 	it("returns FILE_NOT_INDEXED for unknown file", async () => {
-		const response = await handleGetFileSymbols({ repo: "test/repo", filePath: "src/ghost.ts" }, store, vectors);
+		const response = await handleCodebaseRead({ repo: "test/repo", filePath: "src/ghost.ts" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.error).toContain("File not indexed");
 		expect(data.code).toBe("FILE_NOT_INDEXED");
 	});
 });
 
-// ── handleSearchSymbols tests ───────────────────────────────────────────
+// ── handleCodebaseRead (search_symbols mode) tests ──────────────────────
 
-describe("handleSearchSymbols", () => {
+describe("handleCodebaseRead (search_symbols mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 
@@ -431,22 +431,43 @@ describe("handleSearchSymbols", () => {
 	});
 
 	it("returns empty for short query (1 character)", async () => {
-		const response = await handleSearchSymbols({ query: "a" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "a", repo: "test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 		expect(data.hasMore).toBe(false);
 	});
 
 	it("returns empty for empty query", async () => {
-		const response = await handleSearchSymbols({ query: "" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "", repo: "test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 		expect(data.hasMore).toBe(false);
 	});
 
 	it("returns empty for whitespace query", async () => {
-		const response = await handleSearchSymbols({ query: "  " }, store, vectors);
+		const response = await handleCodebaseRead({ query: "  ", repo: "test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
+	});
+});
+
+// Legacy handler backward-compat test — handleCodebaseIndexRepository still works
+describe("handleCodebaseIndexRepository (legacy, still exported)", () => {
+	let vectors: VectorStore;
+
+	beforeEach(() => {
+		vectors = noopVectorStore();
+	});
+
+	it("returns input validation error for missing repoPath", async () => {
+		const store = await createTestStore();
+		try {
+			const response = await handleCodebaseIndexRepository({ repo: "test-repo" }, store, vectors);
+			expect(response).toBeDefined();
+		} catch (err: unknown) {
+			expect((err as Error).message).toContain("repoPath");
+		} finally {
+			store.close();
+		}
 	});
 });

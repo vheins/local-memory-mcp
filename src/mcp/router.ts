@@ -7,6 +7,8 @@ import { complete, type CompletionRequest } from "./completion";
 import { normalizeToolArguments, validateRootBoundPath } from "./utils/normalize-args";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
+import { handleMemoryWrite } from "./tools/memory.write";
+import { handleMemoryRead } from "./tools/memory.read";
 import { handleMemoryStore } from "./tools/memory.store";
 import { handleMemoryUpdate } from "./tools/memory.update";
 import { handleMemorySearch } from "./tools/memory.search";
@@ -16,29 +18,27 @@ import { handleMemoryDelete } from "./tools/memory.delete";
 import { handleMemoryRecap } from "./tools/memory.recap";
 import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
 import { handleMemoryDetail } from "./tools/memory.detail";
-import {
-	handleClaimList,
-	handleClaimRelease,
-	handleHandoffCreate,
-	handleHandoffList,
-	handleHandoffUpdate,
-	handleTaskClaim
-} from "./tools/handoff.manage";
-import { handleStandardStore } from "./tools/standard.store";
-import { handleStandardSearch } from "./tools/standard.search";
-import { handleStandardUpdate } from "./tools/standard.update";
-import { handleStandardDetail } from "./tools/standard.detail";
+import { handleHandoffWrite } from "./tools/handoff.write";
+import { handleHandoffRead } from "./tools/handoff.read";
+import { handleClaimManage } from "./tools/claim.manage";
+
+import { handleStandardWrite } from "./tools/standard.write";
+import { handleStandardRead } from "./tools/standard.read";
 import { handleStandardDelete } from "./tools/standard.delete";
 import { handleTaskCreate, handleTaskCreateInteractive } from "./tools/task.create";
+import { handleTaskWrite } from "./tools/task.write";
 import { handleTaskUpdate } from "./tools/task.update";
 import { handleTaskDelete } from "./tools/task.delete";
 import { handleTaskList } from "./tools/task.list";
+import { handleTaskRead } from "./tools/task.read";
 import { handleTaskGet as handleTaskDetail } from "./tools/task.get";
 import { handleTaskSearch } from "./tools/task.search";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
 import { decodeCursor, encodeCursor } from "./utils/pagination";
+import { handleCodebaseIndex } from "./tools/codebase.index";
+import { handleCodebaseRead } from "./tools/codebase.read";
 
 type RouterOptions = {
 	getSessionContext?: () => SessionContext;
@@ -144,22 +144,33 @@ export function createRouter(
 
 	// Tools that mutate the DB — must run under write lock
 	const WRITE_TOOLS = new Set([
+		"memory-write",
 		"memory-store",
 		"memory-update",
+		"memory-acknowledge",
 		"memory-delete",
 		"memory-bulk-delete",
 		"memory-summarize",
+		"agent-summarize",
+		// Handoff & Claim — new canonical names
+		"handoff-write",
+		"claim-manage",
+		// Backward-compat aliases
 		"handoff-create",
 		"handoff-update",
 		"standard-store",
 		"standard-update",
+		"standard-write",
 		"standard-delete",
 		"task-create",
 		"task-create-interactive",
+		"task-write",
 		"task-claim",
 		"claim-release",
 		"task-update",
-		"task-delete"
+		"task-delete",
+		"codebase-index",
+		"index_repository"
 	]);
 
 	async function handleToolCall(
@@ -181,94 +192,114 @@ export function createRouter(
 
 		const executeToolLogic = async () => {
 			switch (toolName) {
+				// New canonical handlers
+				case "memory-write":
+					return await handleMemoryWrite(args, db, vectors);
+
+				case "memory-read":
+					return await handleMemoryRead(args, db, vectors);
+
+				case "memory-delete":
+				case "memory-bulk-delete": // Fallback for backward compatibility
+					return await handleMemoryDelete(args, db, vectors, onProgress);
+
+				// Backward-compat aliases — old names route to new handlers
 				case "memory-store":
-					return await handleMemoryStore(args, db, vectors);
-
-				case "memory-acknowledge":
-					return await handleMemoryAcknowledge(args, db);
-
 				case "memory-update":
-					return await handleMemoryUpdate(args, db, vectors);
-
-				case "memory-recap":
-					return await handleMemoryRecap(args, db);
+				case "memory-acknowledge":
+					return await handleMemoryWrite(args, db, vectors);
 
 				case "memory-search":
-					return await handleMemorySearch(args, db, vectors);
+				case "memory-detail":
+				case "memory-recap":
+					return await handleMemoryRead(args, db, vectors);
 
 				case "memory-summarize":
+				case "agent-summarize":
 					return await handleMemorySummarize(args, db);
 
 				case "memory-synthesize":
+				case "agent-synthesize":
 					return await handleMemorySynthesize(args, db, vectors, {
 						session: getSessionContext?.(),
 						sampleMessage: options?.sampleMessage,
 						elicit: options?.elicit
 					});
 
-				case "memory-delete":
-				case "memory-bulk-delete": // Fallback for backward compatibility
-					return await handleMemoryDelete(args, db, vectors, onProgress);
+				// New canonical handlers
+				case "handoff-write":
+					return await handleHandoffWrite(args, db);
 
-				case "memory-detail":
-					return await handleMemoryDetail(args, db);
+				case "handoff-read":
+					return await handleHandoffRead(args, db);
 
+				case "claim-manage":
+					return await handleClaimManage(args, db);
+
+				// Backward-compat aliases — old names route to new unified handlers
 				case "handoff-create":
-					return await handleHandoffCreate(args, db);
+				case "handoff-update":
+					return await handleHandoffWrite(args, db);
 
 				case "handoff-list":
-					return await handleHandoffList(args, db);
-
-				case "handoff-update":
-					return await handleHandoffUpdate(args, db);
+					return await handleHandoffRead(args, db);
 
 				case "task-claim":
-					return await handleTaskClaim(args, db);
-
 				case "claim-list":
-					return await handleClaimList(args, db);
+					return await handleClaimManage(args, db);
 
 				case "claim-release":
-					return await handleClaimRelease(args, db);
+					return await handleClaimManage({ ...args, release: true }, db);
 
+				// Standards
+				case "standard-write":
 				case "standard-store":
-					return await handleStandardStore(args, db, vectors);
-
 				case "standard-update":
-					return await handleStandardUpdate(args, db, vectors);
+					return await handleStandardWrite(args, db, vectors);
 
+				case "standard-read":
+				case "standard-search":
 				case "standard-detail":
-					return await handleStandardDetail(args, db);
+					return await handleStandardRead(args, db, vectors);
 
 				case "standard-delete":
 					return await handleStandardDelete(args, db, vectors);
 
-				case "standard-search":
-					return await handleStandardSearch(args, db, vectors);
-
+				// New canonical handlers
+				case "task-write":
 				case "task-create":
-					return await handleTaskCreate(args, db);
-
 				case "task-create-interactive":
-					return await handleTaskCreateInteractive(args, db, {
+				case "task-update":
+					return await handleTaskWrite(args, db, vectors, {
 						session: getSessionContext?.(),
 						elicit: options?.elicit
 					});
 
-				case "task-update":
-					return await handleTaskUpdate(args, db, vectors);
+				case "task-read":
+					return await handleTaskRead(args, db, vectors);
 
 				case "task-delete":
 					return await handleTaskDelete(args, db);
 
 				case "task-list":
-					return await handleTaskList(args, db);
-
-				case "task-search":
-					return await handleTaskSearch(args, db);
-
 				case "task-detail":
-					return await handleTaskDetail(args, db);
+				case "task-search":
+					return await handleTaskRead(args, db, vectors);
+
+				// Codebase index tools
+				case "codebase-index":
+				case "index_repository":
+					return await handleCodebaseIndex(args, db, vectors);
+
+				// Codebase read tools (unified + backward-compat aliases)
+				case "codebase-read":
+				case "index_status":
+				case "get_architecture":
+				case "get_file_symbols":
+				case "trace_symbol":
+				case "search_symbols":
+				case "codebase_search":
+					return await handleCodebaseRead(args, db, vectors);
 
 				default:
 					throw new Error(`Unknown tool: ${name}`);
@@ -341,7 +372,7 @@ function listTools(session: SessionContext | undefined, params: Record<string, u
 
 function getAvailableToolDefinitions(session?: SessionContext) {
 	return TOOL_DEFINITIONS.filter((tool) => {
-		if (tool.name === "memory-synthesize" && !session?.supportsSampling) {
+		if ((tool.name === "memory-synthesize" || tool.name === "agent-synthesize") && !session?.supportsSampling) {
 			return false;
 		}
 
@@ -361,7 +392,11 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 		((res?.data as Record<string, unknown>)?.repo as string);
 	const uris = new Set<string>();
 
-	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-update" || toolName === "task-delete";
+	const touchesMemory =
+		toolName.startsWith("memory-") ||
+		toolName === "task-write" ||
+		toolName === "task-update" ||
+		toolName === "task-delete";
 	const touchesTasks = toolName.startsWith("task-");
 
 	if (touchesMemory && repo) {

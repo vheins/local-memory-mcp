@@ -63,8 +63,25 @@ export async function handleStandardDelete(
 		if (existing) {
 			lastRepo = existing.repo || (existing.is_global ? "global" : lastRepo);
 			deletedTitles.push(existing.title);
+
+			// Hard-delete the standard
 			db.standards.delete(targetId);
+
+			// Remove vector embedding
 			await vectors.remove(targetId, "standard");
+
+			// KG cleanup: best-effort cascade delete (REFACTOR-KG-006)
+			try {
+				db.db.prepare(`DELETE FROM observations WHERE observation = ?`).run(`Mentioned in memory: ${existing.title}`);
+				// Orphaned entities (no remaining observations) are safe to remove
+				db.db.prepare(`DELETE FROM entities WHERE name NOT IN (SELECT DISTINCT entity_name FROM observations)`).run();
+			} catch (error) {
+				logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted standard", {
+					standardId: existing.id,
+					error: String(error)
+				});
+			}
+
 			deletedCount++;
 		} else {
 			throw new Error(`Coding standard not found: ${targetId}`);

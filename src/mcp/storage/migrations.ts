@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 interface Migration {
 	version: number;
@@ -734,6 +734,21 @@ const MIGRATIONS: Migration[] = [
 				);
 			`);
 			logger.info("[Migration] Added codebase_symbol_vectors table");
+		}
+	},
+	{
+		version: 7,
+		name: "task-vectors",
+		up: (db) => {
+			db.exec(`
+				CREATE TABLE IF NOT EXISTS task_vectors (
+					task_id TEXT PRIMARY KEY,
+					vector TEXT NOT NULL,
+					updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+					FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+				);
+			`);
+			logger.info("[Migration] Added task_vectors table");
 		}
 	}
 ];

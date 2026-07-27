@@ -1,7 +1,7 @@
 /**
- * trace_symbol Tool Handler Tests.
+ * codebase-read Trace Mode Tests.
  *
- * Tests the MCP tool handler for trace_symbol,
+ * Tests handleCodebaseRead with name parameter (trace mode),
  * covering definition lookup, disambiguation, error cases,
  * and references inclusion/exclusion.
  *
@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { handleTraceSymbol } from "../../tools/codebase-index";
+import { handleCodebaseRead } from "../../tools/codebase.read";
 import { traceSymbol, SymbolNotFoundError, AmbiguousSymbolError } from "../../codebase-index/services/trace-service";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
@@ -103,9 +103,7 @@ describe("traceSymbol (pure unit)", () => {
 	});
 
 	it("extractContext: falls back to first line when search not found", () => {
-		// This tests the internal extractContext fallback path
 		const target = makeSym({ name: "targetFn", file_path: "src/a.ts", exported: true });
-		// Symbol doc_comment doesn't contain "targetFn" — so signature fallback kicks in
 		const ref = makeSym({
 			name: "otherFn",
 			file_path: "src/b.ts",
@@ -159,7 +157,7 @@ function seedSymbols(
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
-describe("handleTraceSymbol", () => {
+describe("handleCodebaseRead (trace mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
 	const repo = "test-owner/test-repo";
@@ -186,7 +184,7 @@ describe("handleTraceSymbol", () => {
 			}
 		]);
 
-		const response = await handleTraceSymbol({ name: "authenticate", repo }, store, vectors);
+		const response = await handleCodebaseRead({ name: "authenticate", repo }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -227,7 +225,7 @@ describe("handleTraceSymbol", () => {
 			}
 		]);
 
-		const response = await handleTraceSymbol({ name: "authenticate", repo }, store, vectors);
+		const response = await handleCodebaseRead({ name: "authenticate", repo }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeDefined();
@@ -251,7 +249,7 @@ describe("handleTraceSymbol", () => {
 			}
 		]);
 
-		const response = await handleTraceSymbol({ name: "nonexistent", repo }, store, vectors);
+		const response = await handleCodebaseRead({ name: "nonexistent", repo }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toContain("nonexistent");
@@ -290,7 +288,7 @@ describe("handleTraceSymbol", () => {
 			}
 		]);
 
-		const response = await handleTraceSymbol({ name: "authenticate", repo, includeReferences: true }, store, vectors);
+		const response = await handleCodebaseRead({ name: "authenticate", repo, includeReferences: true }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -328,7 +326,7 @@ describe("handleTraceSymbol", () => {
 			}
 		]);
 
-		const response = await handleTraceSymbol({ name: "authenticate", repo, includeReferences: false }, store, vectors);
+		const response = await handleCodebaseRead({ name: "authenticate", repo, includeReferences: false }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();

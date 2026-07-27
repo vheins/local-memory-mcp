@@ -9,7 +9,7 @@ function getTextContent(result: McpResponse) {
 	return getPrimaryTextContent(result) || (result.structuredContent as { text?: string })?.text || "";
 }
 
-describe("MCP Local Memory - Bulk Task Management", () => {
+describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (
@@ -39,7 +39,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should create multiple tasks in one call", async () => {
 		const res = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -77,7 +77,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should auto-generate task_codes for bulk tasks without task_code", async () => {
 		const res = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -115,7 +115,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should allow bulk create without est_tokens", async () => {
 		const res = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -148,7 +148,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		}));
 
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -156,17 +156,17 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		// Test default limit (5)
+		// Test default limit (15)
 		const defaultRes = await router("tools/call", {
-			name: "task-list",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", json: true }
 		});
 		const defaultTasks = (defaultRes.structuredContent as any).tasks;
-		expect(defaultTasks.rows.length).toBe(15); // Default limit is 15
+		expect(defaultTasks.rows.length).toBe(5); // Default limit is 5
 
 		// Test explicit limit
 		const limitRes = await router("tools/call", {
-			name: "task-list",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", limit: 10, json: true }
 		});
 		const limitedTasks = (limitRes.structuredContent as any).tasks;
@@ -174,7 +174,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		// Test offset (last page)
 		const offsetRes = await router("tools/call", {
-			name: "task-list",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", limit: 15, offset: 15, json: true }
 		});
 		const offsetTasks = (offsetRes.structuredContent as any).tasks;
@@ -183,7 +183,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should summarize filtered task counts with pending and in-progress context", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -220,7 +220,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const inProgressId = db.tasks.getTaskByCode("test", REPO, "SUM-003")?.id;
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -234,7 +234,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -248,7 +248,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -262,7 +262,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		const result = await router("tools/call", {
-			name: "task-list",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", status: "completed" }
 		});
 
@@ -276,7 +276,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should reject duplicate task_codes in the same request", async () => {
 		const result = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -294,7 +294,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 	it("should reject duplicate task_codes against existing tasks", async () => {
 		// Create first task with code EXISTING-001
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -307,9 +307,9 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		// Bulk create with same code — should reject
+		// Bulk write with same code — should reject
 		const bulkResult = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -328,9 +328,9 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(bulkResult.isError).toBe(true);
 		expect(getTextContent(bulkResult)).toContain("Task code 'EXISTING-001' already exists");
 
-		// Single create with same code — should also reject
+		// Single write with same code — should also reject
 		const singleResult = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -346,10 +346,10 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		expect(getTextContent(singleResult)).toContain("Task code 'EXISTING-001' already exists");
 	});
 
-	it("should bulk delete tasks", async () => {
+	it("should bulk soft-delete tasks", async () => {
 		// Create 3 tasks
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -373,14 +373,15 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 			}
 		});
 
-		expect(getTextContent(delRes)).toContain(`Deleted 2 tasks from repo "${REPO}`);
+		expect(getTextContent(delRes)).toContain(`Canceled 2 tasks from repo "${REPO}`);
 		const remainingTasks = db.tasks.getTasksByRepo("test", REPO);
-		expect(remainingTasks.length).toBe(1);
+		expect(remainingTasks.length).toBe(3); // soft-delete keeps records
+		expect(remainingTasks.filter((t) => t.status !== "canceled").length).toBe(1);
 	});
 
 	it("auto-populates timestamps from status so agents do not need to send them manually", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -396,7 +397,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const ts2 = tasks.find((t) => t.task_code === "TS-2");
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -409,7 +410,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -422,7 +423,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		});
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -446,7 +447,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 	it("should bulk update tasks from pending to completed", async () => {
 		// Create 3 pending tasks
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -463,7 +464,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 		// Bulk update to completed
 		const upRes = await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -499,7 +500,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 
 	it("should bulk update statuses and record in-progress timestamps", async () => {
 		await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -510,7 +511,7 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const taskId = db.tasks.getTasksByRepo("test", REPO)[0].id;
 
 		await router("tools/call", {
-			name: "task-update",
+			name: "task-write",
 			arguments: {
 				owner: "test",
 				repo: REPO,
@@ -523,5 +524,103 @@ describe("MCP Local Memory - Bulk Task Management", () => {
 		const task = db.tasks.getTaskById(taskId);
 		expect(task?.status).toBe("in_progress");
 		expect(task?.in_progress_at).toBeTruthy();
+	});
+
+	it("should soft-delete a single task via task-delete (by task_code)", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "SDEL-001",
+				phase: "testing",
+				title: "Soft Delete Single",
+				description: "Testing single task soft delete by task_code",
+				status: "pending",
+				priority: 2,
+				est_tokens: 30
+			}
+		});
+
+		const beforeDelete = db.tasks.getTaskByCode("test", REPO, "SDEL-001");
+		expect(beforeDelete).toBeDefined();
+		expect(beforeDelete!.status).toBe("pending");
+
+		const res = await router("tools/call", {
+			name: "task-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				task_code: "SDEL-001"
+			}
+		});
+
+		expect(getTextContent(res)).toContain(`Canceled 1 task from repo "${REPO}"`);
+
+		// Verify soft-delete: task still exists but is canceled
+		const afterDelete = db.tasks.getTaskByCode("test", REPO, "SDEL-001");
+		expect(afterDelete).toBeDefined();
+		expect(afterDelete!.status).toBe("canceled");
+		expect(afterDelete!.canceled_at).toBeTruthy();
+	});
+
+	it("should soft-delete multiple tasks by task_codes array via task-delete", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [
+					{
+						task_code: "BDEL-001",
+						title: "Bulk Delete 1",
+						description: "Desc",
+						phase: "p",
+						status: "pending",
+						est_tokens: 10
+					},
+					{
+						task_code: "BDEL-002",
+						title: "Bulk Delete 2",
+						description: "Desc",
+						phase: "p",
+						status: "pending",
+						est_tokens: 10
+					},
+					{
+						task_code: "BDEL-003",
+						title: "Bulk Delete 3",
+						description: "Desc",
+						phase: "p",
+						status: "pending",
+						est_tokens: 10
+					}
+				]
+			}
+		});
+
+		const res = await router("tools/call", {
+			name: "task-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				task_codes: ["BDEL-001", "BDEL-003"]
+			}
+		});
+
+		expect(getTextContent(res)).toContain(`Canceled 2 tasks from repo "${REPO}"`);
+
+		// Verify soft-delete: tasks exist but are canceled
+		const task1 = db.tasks.getTaskByCode("test", REPO, "BDEL-001");
+		expect(task1).toBeDefined();
+		expect(task1!.status).toBe("canceled");
+
+		const task2 = db.tasks.getTaskByCode("test", REPO, "BDEL-002");
+		expect(task2).toBeDefined();
+		expect(task2!.status).toBe("pending"); // not deleted
+
+		const task3 = db.tasks.getTaskByCode("test", REPO, "BDEL-003");
+		expect(task3).toBeDefined();
+		expect(task3!.status).toBe("canceled");
 	});
 });
