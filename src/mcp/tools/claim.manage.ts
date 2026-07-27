@@ -210,42 +210,43 @@ async function handleListOp(
 /**
  * Handles all three claim operations in one unified tool.
  *
- * **Auto-infer logic:**
- * - `query` present → LIST (was claim-list)
+ * **Auto-infer logic (per ADR-004):**
  * - `release: true` + task_id/task_code → RELEASE (was claim-release)
- * - task_id/task_code + agent → CLAIM (was task-claim)
- * - fallback → LIST (default, allows listing by agent or all)
+ * - task_id/task_code + agent → CLAIM (was task-claim, auto-promote + audit)
+ * - agent only (no task_id/task_code) → LIST claims by agent
+ * - nothing → LIST all active claims
+ *
+ * All LIST modes support pagination (`limit`, `offset`) and `active_only` filter.
  */
 export async function handleClaimManage(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimManageSchema.parse(args);
-	const { owner, repo, task_id, task_code, agent, role, metadata, release, query, active_only, limit, offset, json } =
+	const { owner, repo, task_id, task_code, agent, role, metadata, release, active_only, limit, offset, json } =
 		validated;
 
 	const hasTask = !!(task_id || task_code);
 
-	// ── 1. query present → LIST ────────────────────────────────────
-	if (query !== undefined) {
-		return handleListOp(owner, repo, agent, active_only, limit, offset, json, storage);
-	}
-
-	// ── 2. release:true + task → RELEASE ──────────────────────────
+	// ── 1. release:true + task → RELEASE ──────────────────────────
 	if (release && hasTask) {
 		return handleReleaseOp(owner, repo, task_id, task_code, agent, json, storage);
 	}
 
-	// ── 3. task + agent → CLAIM ───────────────────────────────────
+	// ── 2. task + agent → CLAIM (auto-promote + audit comment) ────
 	if (hasTask && agent) {
 		return handleClaimOp(owner, repo, task_id, task_code, agent, role, metadata, json, storage);
 	}
 
-	// ── 4. Ambiguous — partial fields ──────────────────────────────
-	if (hasTask || agent) {
+	// ── 3. task only (no agent) → error ──────────────────────────
+	if (hasTask && !agent) {
 		throw new Error(
-			"Ambiguous claim-manage call: combine agent with task_id/task_code for CLAIM, " +
-				"add release:true for RELEASE, or provide query for LIST"
+			"CLAIM requires agent. Combine task_id/task_code with agent for CLAIM, " + "or add release:true for RELEASE"
 		);
 	}
 
-	// ── 5. Default → LIST (list all) ──────────────────────────────
-	return handleListOp(owner, repo, agent, active_only, limit, offset, json, storage);
+	// ── 4. agent only → LIST claims by agent ─────────────────────
+	if (agent && !hasTask) {
+		return handleListOp(owner, repo, agent, active_only, limit, offset, json, storage);
+	}
+
+	// ── 5. nothing → LIST all active claims ──────────────────────
+	return handleListOp(owner, repo, undefined, active_only, limit, offset, json, storage);
 }

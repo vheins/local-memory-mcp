@@ -6,7 +6,7 @@ import { TaskDeleteSchema } from "./schemas";
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	const validated = TaskDeleteSchema.parse(args);
-	const { owner, repo, id, code, task_code, ids, task_codes } = validated;
+	const { owner, repo, id, code, task_code, ids, codes, task_codes } = validated;
 
 	// Resolve all identifiers to UUIDs
 	const resolvedIds: string[] = [];
@@ -41,7 +41,14 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 		}
 	}
 
-	// Bulk codes: task_codes (array of string codes)
+	// Bulk codes: codes (canonical array of string codes)
+	if (codes) {
+		for (const c of codes) {
+			resolvedIds.push(resolveIdentifier(c));
+		}
+	}
+
+	// Bulk codes: task_codes (backward compat alias for codes)
 	if (task_codes) {
 		for (const tc of task_codes) {
 			resolvedIds.push(resolveIdentifier(tc));
@@ -49,7 +56,9 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	}
 
 	if (resolvedIds.length === 0) {
-		throw new Error("At least one of 'id', 'code', 'task_code', 'ids', or 'task_codes' must be provided for deletion");
+		throw new Error(
+			"At least one of 'id', 'code', 'task_code', 'ids', 'codes', or 'task_codes' must be provided for deletion"
+		);
 	}
 
 	// Fetch tasks to verify existence and collect codes for response
@@ -91,7 +100,11 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 		{
 			success: true,
 			id: id || undefined,
+			code: code || undefined,
 			ids: ids || undefined,
+			codes: codes || undefined,
+			task_code: task_code || undefined,
+			task_codes: task_codes || undefined,
 			repo,
 			canceledCount: resolvedIds.length,
 			canceledCodes: deletedCodes

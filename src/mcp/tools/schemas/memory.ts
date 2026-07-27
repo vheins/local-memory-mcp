@@ -106,20 +106,24 @@ export const MemoryRecapSchema = z.object({
 
 export const MemoryDeleteSchema = z
 	.object({
-		owner: z.string().min(1),
-		repo: z.string().min(1).transform(normalizeRepo),
-		id: z.string().optional(),
-		ids: z.array(z.string()).min(1).optional(),
-		code: z.string().max(20).optional(),
-		codes: z.array(z.string().max(20)).min(1).optional(),
-		json: z.boolean().default(false)
+		owner: z.string().min(1).describe("GitHub org or username. Auto-inferred."),
+		repo: z.string().min(1).transform(normalizeRepo).describe("Repo name. Auto-inferred."),
+		id: z
+			.string()
+			.optional()
+			.describe("Single memory UUID or code to delete (auto-inferred: UUID→direct, string→code lookup)."),
+		ids: z.array(z.string()).min(1).optional().describe("Array of memory UUIDs or codes to delete (bulk)."),
+		code: z.string().max(20).optional().describe("Single memory code to delete."),
+		codes: z.array(z.string().max(20)).min(1).optional().describe("Array of memory codes to delete (bulk)."),
+		json: z.boolean().default(false).describe("Returns JSON if true.")
 	})
 	.refine(
 		(data) => data.id !== undefined || data.ids !== undefined || data.code !== undefined || data.codes !== undefined,
 		{
 			message: "Either 'id', 'ids', 'code', or 'codes' must be provided for deletion"
 		}
-	);
+	)
+	.describe("Soft-delete memories. Single or bulk. Auto-infers: UUID→direct ID, non-UUID→code lookup.");
 
 export const MemoryDetailSchema = z
 	.object({

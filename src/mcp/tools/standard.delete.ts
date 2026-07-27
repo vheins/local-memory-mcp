@@ -13,79 +13,87 @@ export async function handleStandardDelete(
 	const validated = StandardDeleteSchema.parse(params);
 	const { id, ids, code, codes, owner, repo, json } = validated;
 
-	// Resolve code(s) to id(s)
+	// Resolve all identifiers to UUIDs
 	const resolvedIds: string[] = [];
+
+	// Helper: resolve a single identifier (UUID or code) to UUID
+	function resolveIdentifier(identifier: string): string {
+		if (UUID_REGEX.test(identifier)) return identifier;
+		const entry = db.standards.getByCode(identifier, owner, repo);
+		if (!entry) throw new Error(`Coding standard not found: ${identifier}`);
+		return entry.id;
+	}
+
+	// Single identifier: id (UUID or code — auto-inferred)
+	if (id) {
+		resolvedIds.push(resolveIdentifier(id));
+	}
+
+	// Single code
+	if (code) {
+		resolvedIds.push(resolveIdentifier(code));
+	}
+
+	// Bulk identifiers: ids (array of UUIDs or codes — auto-inferred per item)
 	if (ids) {
 		for (const item of ids) {
-			if (UUID_REGEX.test(item)) {
-				resolvedIds.push(item);
-			} else {
-				const entry = db.standards.getByCode(item, owner, repo);
-				if (!entry) throw new Error(`Coding standard not found: ${item}`);
-				resolvedIds.push(entry.id);
-			}
+			resolvedIds.push(resolveIdentifier(item));
 		}
 	}
-	if (id) {
-		if (!UUID_REGEX.test(id)) {
-			const entry = db.standards.getByCode(id, owner, repo);
-			if (!entry) throw new Error(`Coding standard not found: ${id}`);
-			resolvedIds.push(entry.id);
-		} else {
-			resolvedIds.push(id);
-		}
-	}
-	if (code) {
-		const entry = db.standards.getByCode(code, owner, repo);
-		if (!entry) throw new Error(`Coding standard not found: ${code}`);
-		resolvedIds.push(entry.id);
-	}
+
+	// Bulk codes
 	if (codes) {
 		for (const c of codes) {
-			const entry = db.standards.getByCode(c, owner, repo);
-			if (!entry) throw new Error(`Coding standard not found: ${c}`);
-			resolvedIds.push(entry.id);
+			resolvedIds.push(resolveIdentifier(c));
 		}
 	}
 
-	if (resolvedIds.length === 0) {
-		throw new Error("Either 'id', 'ids', 'code', or 'codes' must be provided for deletion");
-	}
-
-	const targetIds = resolvedIds;
-
-	let deletedCount = 0;
+	// Fetch standards to verify existence and collect metadata for response
+	const existingStandards = db.standards.getByIds(resolvedIds);
+	const standardMap = new Map(existingStandards.map((s) => [s.id, s]));
 	const deletedTitles: string[] = [];
+	const validIdsToDelete: string[] = [];
+
 	let lastRepo = repo || "unknown";
 
-	for (const targetId of targetIds) {
-		const existing = db.standards.getById(targetId);
+	for (const targetId of resolvedIds) {
+		const existing = standardMap.get(targetId);
 		if (existing) {
 			lastRepo = existing.repo || (existing.is_global ? "global" : lastRepo);
 			deletedTitles.push(existing.title);
-
-			// Hard-delete the standard
-			db.standards.delete(targetId);
-
-			// Remove vector embedding
-			await vectors.remove(targetId, "standard");
-
-			// KG cleanup: best-effort cascade delete (REFACTOR-KG-006)
-			try {
-				db.db.prepare(`DELETE FROM observations WHERE observation = ?`).run(`Mentioned in memory: ${existing.title}`);
-				// Orphaned entities (no remaining observations) are safe to remove
-				db.db.prepare(`DELETE FROM entities WHERE name NOT IN (SELECT DISTINCT entity_name FROM observations)`).run();
-			} catch (error) {
-				logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted standard", {
-					standardId: existing.id,
-					error: String(error)
-				});
-			}
-
-			deletedCount++;
+			validIdsToDelete.push(targetId);
 		} else {
 			throw new Error(`Coding standard not found: ${targetId}`);
 		}
+	}
+
+	let deletedCount = 0;
+
+	if (validIdsToDelete.length > 0) {
+		for (const validId of validIdsToDelete) {
+			// Hard-delete the standard
+			db.standards.delete(validId);
+
+			// Remove vector embedding
+			await vectors.remove(validId, "standard");
+
+			// KG cleanup: best-effort cascade delete (REFACTOR-KG-006)
+			const standardEntry = standardMap.get(validId);
+			if (standardEntry) {
+				try {
+					db.db
+						.prepare(`DELETE FROM observations WHERE observation = ?`)
+						.run(`Mentioned in memory: ${standardEntry.title}`);
+					db.db.prepare(`DELETE FROM entities WHERE name NOT IN (SELECT DISTINCT entity_name FROM observations)`).run();
+				} catch (kgError) {
+					logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted standard", {
+						standardId: validId,
+						error: String(kgError)
+					});
+				}
+			}
+		}
+		deletedCount = validIdsToDelete.length;
 	}
 
 	logger.info("[Tool] standard.delete", { repo: lastRepo, count: deletedCount });

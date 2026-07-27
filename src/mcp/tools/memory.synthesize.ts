@@ -15,7 +15,7 @@ import { MemorySynthesizeSchema } from "./schemas";
 import { normalizeRepo } from "../utils/normalize";
 import { handleMemoryRecap } from "./memory.recap";
 import { handleMemorySearch } from "./memory.search";
-import { handleTaskList } from "./task.list";
+import { handleTaskRead } from "./task.read";
 
 type SynthesizeOptions = {
 	session?: SessionContext;
@@ -47,9 +47,10 @@ export async function handleMemorySynthesize(
 	const summary = validated.include_summary ? db.summaries.getSummary(repoOwner, repo)?.summary : "";
 
 	const taskSnapshot = validated.include_tasks
-		? await handleTaskList(
+		? await handleTaskRead(
 				{ owner: repoOwner, repo, status: "backlog,pending,in_progress,blocked", limit: 15, offset: 0 },
-				db
+				db,
+				vectors
 			)
 		: null;
 	const taskText = taskSnapshot ? getPrimaryTextContent(taskSnapshot) : "";
@@ -283,16 +284,17 @@ async function executeSamplingTool(
 		}
 
 		case "task_list": {
-			const response = await handleTaskList(
+			const response = await handleTaskRead(
 				{
 					owner,
 					repo: rawInput.repo,
 					status: rawInput.status,
-					search: rawInput.search,
+					query: rawInput.search,
 					limit: rawInput.limit ?? 10,
 					offset: 0
 				},
-				db
+				db,
+				vectors
 			);
 			return getPrimaryTextContent(response);
 		}

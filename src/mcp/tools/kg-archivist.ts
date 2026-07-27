@@ -412,3 +412,156 @@ export async function saveExtractions(
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Task-specific semantic relations
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts entities from task content and creates semantic KG relations
+ * based on task metadata:
+ *
+ * - **parent_id → `depends_on`**: Links entities from the current task to
+ *   entities extracted from the parent task's title/description.
+ * - **decision_refs → `inspired_by`**: Ensures an entity exists for each
+ *   decision reference (e.g. "ADR-006") and links task entities to it.
+ *
+ * Observations: Each relation also generates an observation record to make
+ * the linkage queryable via the KG query engine.
+ * Failures are logged at `warn` level but never thrown.
+ */
+export async function saveTaskRelations(
+	content: string,
+	title: string,
+	owner: string,
+	repo: string,
+	db: SQLiteStore,
+	options?: {
+		parentId?: string | null;
+		decisionRefs?: string[];
+	}
+): Promise<void> {
+	if (!content || content.trim().length === 0) return;
+
+	// Extract entities from current task content
+	let entities: ExtractedEntity[];
+	try {
+		entities = await extractEntities(content);
+	} catch (err) {
+		logger.warn("[KG-Archivist] Entity extraction failed for task relations, skipping", {
+			error: String(err)
+		});
+		return;
+	}
+
+	if (entities.length === 0) return;
+
+	const now = new Date().toISOString();
+	const entityNames = entities.map((e) => e.name);
+
+	// Observation for current task
+	const observationText = `Mentioned in task: ${title}`;
+
+	// ── 1. parent_id → depends_on relations ──
+	if (options?.parentId) {
+		const parentTask = db.tasks.getTaskById(options.parentId);
+		if (parentTask) {
+			const parentContent = `${parentTask.title}\n${parentTask.description ?? ""}`;
+			let parentEntities: ExtractedEntity[];
+			try {
+				parentEntities = await extractEntities(parentContent);
+			} catch (err) {
+				logger.warn("[KG-Archivist] Entity extraction failed for parent task, skipping parent relations", {
+					error: String(err)
+				});
+				parentEntities = [];
+			}
+
+			if (parentEntities.length > 0) {
+				const insertRelation = db.db.prepare(
+					`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
+					 VALUES (?, ?, ?, ?, ?, ?)`
+				);
+				const insertObservation = db.db.prepare(
+					`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
+					 VALUES (?, ?, ?, ?, ?, ?)`
+				);
+
+				for (const taskEntityName of entityNames) {
+					for (const parentEntity of parentEntities) {
+						try {
+							insertRelation.run(taskEntityName, parentEntity.name, "depends_on", repo, owner ?? "", now);
+							insertObservation.run(
+								randomUUID(),
+								taskEntityName,
+								`depends_on relation: ${title} → ${parentTask.title}`,
+								repo,
+								owner ?? "",
+								now
+							);
+						} catch (err) {
+							logger.warn("[KG-Archivist] Failed to save depends_on relation", {
+								error: String(err),
+								from: taskEntityName,
+								to: parentEntity.name
+							});
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// ── 2. decision_refs → inspired_by relations ──
+	if (options?.decisionRefs && options.decisionRefs.length > 0) {
+		const insertEntity = db.db.prepare(
+			`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`
+		);
+		const insertRelation = db.db.prepare(
+			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`
+		);
+		const insertObservation = db.db.prepare(
+			`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`
+		);
+
+		for (const ref of options.decisionRefs) {
+			const decisionName = ref.trim();
+			if (!decisionName) continue;
+
+			// Ensure the decision entity exists
+			insertEntity.run(
+				decisionName,
+				"decision",
+				`Decision/ADR reference: ${decisionName}`,
+				repo,
+				owner ?? "",
+				now,
+				now
+			);
+
+			// Create inspired_by relations from task entities to this decision
+			for (const taskEntityName of entityNames) {
+				try {
+					insertRelation.run(taskEntityName, decisionName, "inspired_by", repo, owner ?? "", now);
+					insertObservation.run(
+						randomUUID(),
+						taskEntityName,
+						`inspired_by relation: ${title} → ${decisionName}`,
+						repo,
+						owner ?? "",
+						now
+					);
+				} catch (err) {
+					logger.warn("[KG-Archivist] Failed to save inspired_by relation", {
+						error: String(err),
+						from: taskEntityName,
+						to: decisionName
+					});
+				}
+			}
+		}
+	}
+}

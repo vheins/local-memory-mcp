@@ -11,64 +11,58 @@ export async function handleMemoryDelete(
 	vectors: VectorStore,
 	onProgress?: (progress: number, total?: number) => void
 ): Promise<McpResponse> {
-	// Validate input
 	const validated = MemoryDeleteSchema.parse(params);
 	const { id, ids, code, codes, owner, repo, json } = validated;
 
-	// Resolve code(s) to id(s)
+	// Resolve all identifiers to UUIDs
 	const resolvedIds: string[] = [];
+
+	// Helper: resolve a single identifier (UUID or code) to UUID
+	function resolveIdentifier(identifier: string): string {
+		if (UUID_REGEX.test(identifier)) return identifier;
+		const entry = db.memories.getByCode(identifier, owner, repo);
+		if (!entry) throw new Error(`Memory not found: ${identifier}`);
+		return entry.id;
+	}
+
+	// Single identifier: id (UUID or code — auto-inferred)
+	if (id) {
+		resolvedIds.push(resolveIdentifier(id));
+	}
+
+	// Single code
+	if (code) {
+		resolvedIds.push(resolveIdentifier(code));
+	}
+
+	// Bulk identifiers: ids (array of UUIDs or codes — auto-inferred per item)
 	if (ids) {
 		for (const item of ids) {
-			if (UUID_REGEX.test(item)) {
-				resolvedIds.push(item);
-			} else {
-				const entry = db.memories.getByCode(item, owner, repo);
-				if (!entry) throw new Error(`Memory not found: ${item}`);
-				resolvedIds.push(entry.id);
-			}
+			resolvedIds.push(resolveIdentifier(item));
 		}
 	}
-	if (id) {
-		if (!UUID_REGEX.test(id)) {
-			const entry = db.memories.getByCode(id, owner, repo);
-			if (!entry) throw new Error(`Memory not found: ${id}`);
-			resolvedIds.push(entry.id);
-		} else {
-			resolvedIds.push(id);
-		}
-	}
-	if (code) {
-		const entry = db.memories.getByCode(code, owner, repo);
-		if (!entry) throw new Error(`Memory not found: ${code}`);
-		resolvedIds.push(entry.id);
-	}
+
+	// Bulk codes
 	if (codes) {
 		for (const c of codes) {
-			const entry = db.memories.getByCode(c, owner, repo);
-			if (!entry) throw new Error(`Memory not found: ${c}`);
-			resolvedIds.push(entry.id);
+			resolvedIds.push(resolveIdentifier(c));
 		}
 	}
 
 	if (resolvedIds.length === 0) {
-		throw new Error("Either 'id', 'ids', 'code', or 'codes' must be provided for deletion");
+		throw new Error("At least one of 'id', 'code', 'ids', or 'codes' must be provided for deletion");
 	}
 
-	const targetIds = resolvedIds;
-
-	let deletedCount = 0;
+	// Fetch memories to verify existence and collect metadata for response
+	const existingMemories = db.memories.getByIds(resolvedIds);
+	const memoryMap = new Map(existingMemories.map((m) => [m.id, m]));
 	const deletedCodes: string[] = [];
-	let lastRepo = repo || "unknown";
-
-	const total = targetIds.length;
-	let progress = 0;
-
-	const existingMemories = db.memories.getByIds(targetIds);
-	const existingMap = new Map(existingMemories.map((m) => [m.id, m]));
 	const validIdsToDelete: string[] = [];
 
-	for (const targetId of targetIds) {
-		const existing = existingMap.get(targetId);
+	let lastRepo = repo || "unknown";
+
+	for (const targetId of resolvedIds) {
+		const existing = memoryMap.get(targetId);
 		if (existing) {
 			lastRepo = existing.scope.repo;
 			deletedCodes.push(existing.code || existing.id);
@@ -78,15 +72,21 @@ export async function handleMemoryDelete(
 		}
 	}
 
+	let deletedCount = 0;
+	const total = validIdsToDelete.length;
+	let progress = 0;
+
 	if (validIdsToDelete.length > 0) {
 		db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
+
 		for (const validId of validIdsToDelete) {
 			if (onProgress) {
 				onProgress(progress, total);
 			}
 			await vectors.remove(validId, "memory");
+
 			// KG cleanup: best-effort cascade delete (REFACTOR-KG-006)
-			const memoryEntry = existingMap.get(validId);
+			const memoryEntry = memoryMap.get(validId);
 			if (memoryEntry) {
 				try {
 					db.db

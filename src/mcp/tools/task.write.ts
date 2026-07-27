@@ -7,7 +7,7 @@ import { TaskWriteSchema } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
 import { resolveEntityCode } from "../utils/code-generator";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps, archiveTaskToMemory } from "./task.helpers";
-import { saveExtractions } from "./kg-archivist";
+import { saveExtractions, saveTaskRelations } from "./kg-archivist";
 import { extractAcceptedElicitationContent, type ElicitationRequestHandler } from "../elicitation";
 import { type SessionContext } from "../session";
 
@@ -237,6 +237,18 @@ async function handleCreateSingle(
 		logger.warn("[KG-Archivist] NLP extraction failed, task stored without KG enrichment", { error: String(error) });
 	}
 
+	// Best-effort KG semantic relations (parent_id→depends_on, decision_refs→inspired_by)
+	try {
+		await saveTaskRelations(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage, {
+			parentId: task.parent_id,
+			decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
+		});
+	} catch (error) {
+		logger.warn("[KG-Archivist] Task semantic relations failed, task stored without KG relations", {
+			error: String(error)
+		});
+	}
+
 	return createMcpResponse(
 		{
 			success: true,
@@ -447,6 +459,23 @@ async function coreUpdate(
 					await saveExtractions(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage);
 				} catch (error) {
 					logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
+				}
+				try {
+					await saveTaskRelations(
+						`${task.title}\n${task.description ?? ""}`,
+						task.title,
+						task.owner,
+						task.repo,
+						storage,
+						{
+							parentId: task.parent_id,
+							decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
+						}
+					);
+				} catch (error) {
+					logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
+						error: String(error)
+					});
 				}
 			}
 		}
@@ -683,6 +712,23 @@ async function handleBulkUpdateByIds(
 					await saveExtractions(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage);
 				} catch (error) {
 					logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
+				}
+				try {
+					await saveTaskRelations(
+						`${task.title}\n${task.description ?? ""}`,
+						task.title,
+						task.owner,
+						task.repo,
+						storage,
+						{
+							parentId: task.parent_id,
+							decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
+						}
+					);
+				} catch (error) {
+					logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
+						error: String(error)
+					});
 				}
 			}
 		}
@@ -1145,6 +1191,23 @@ async function handleBulk(params: WriteParams, storage: SQLiteStore, vectors: Ve
 						);
 					} catch (error) {
 						logger.warn("[KG-Archivist] NLP extraction failed", { error: String(error) });
+					}
+					try {
+						await saveTaskRelations(
+							`${task.title}\n${task.description ?? ""}`,
+							task.title,
+							task.owner,
+							task.repo,
+							storage,
+							{
+								parentId: task.parent_id,
+								decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
+							}
+						);
+					} catch (error) {
+						logger.warn("[KG-Archivist] Task semantic relations failed for bulk task", {
+							error: String(error)
+						});
 					}
 				});
 

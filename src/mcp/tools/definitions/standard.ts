@@ -112,7 +112,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 	{
 		name: "standard-delete",
 		title: "Standard Delete",
-		description: "Deletes coding standards by ID or code.",
+		description: "Deletes coding standards. Single or bulk. Auto-infers: UUID→direct ID, non-UUID→code lookup.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -122,19 +122,22 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Standard ID to delete." },
-				code: { type: "string", maxLength: 20, description: "Standard code to delete." },
+				id: {
+					type: "string",
+					description: "Single standard UUID or code to delete (auto-inferred: UUID→direct, string→code lookup)."
+				},
+				code: { type: "string", maxLength: 20, description: "Single standard code to delete." },
 				ids: {
 					type: "array",
-					items: { type: "string", format: "uuid" },
+					items: { type: "string" },
 					minItems: 1,
-					description: "Bulk standard IDs to delete."
+					description: "Array of standard UUIDs or codes to delete (bulk, auto-inferred per item)."
 				},
 				codes: {
 					type: "array",
 					items: { type: "string", maxLength: 20 },
 					minItems: 1,
-					description: "Bulk standard codes to delete."
+					description: "Array of standard codes to delete (bulk)."
 				},
 				owner: { type: "string", description: "GitHub org or username. Auto-inferred." },
 				repo: { type: "string", description: "Repo name. Auto-inferred." },

@@ -19,13 +19,8 @@ import { handleClaimManage } from "./claim.manage";
 import { handleStandardDelete } from "./standard.delete";
 import { handleStandardWrite } from "./standard.write";
 import { handleStandardRead } from "./standard.read";
-import { handleTaskCreate, handleTaskCreateInteractive } from "./task.create";
-import { handleTaskUpdate } from "./task.update";
 import { handleTaskWrite } from "./task.write";
 import { handleTaskDelete } from "./task.delete";
-import { handleTaskList } from "./task.list";
-import { handleTaskGet as handleTaskDetail } from "./task.get";
-import { handleTaskSearch } from "./task.search";
 import { handleTaskRead } from "./task.read";
 import { handleAgentContext } from "./agent-context";
 import { handleCodebaseIndex } from "./codebase.index";
@@ -50,20 +45,15 @@ export type RegisterAllOptions = {
 const WRITE_TOOLS = new Set([
 	"memory-write",
 	"memory-delete",
-	"memory-bulk-delete",
 	"memory-summarize",
+	"repo-summarize",
+	"agent-summarize",
 	"handoff-write",
 	"claim-manage",
-	"standard-store",
-	"standard-update",
 	"standard-write",
 	"standard-delete",
-	"task-create",
-	"task-create-interactive",
 	"task-write",
-	"task-update",
 	"task-delete",
-	"agent-summarize",
 	// Codebase index tools (write)
 	"codebase-index",
 	"index_repository"
@@ -79,11 +69,7 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 		((res?.data as Record<string, unknown>)?.repo as string);
 	const uris = new Set<string>();
 
-	const touchesMemory =
-		toolName.startsWith("memory-") ||
-		toolName === "task-write" ||
-		toolName === "task-update" ||
-		toolName === "task-delete";
+	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-write" || toolName === "task-delete";
 	const touchesTasks = toolName.startsWith("task-");
 
 	if (touchesMemory && repo) {
@@ -137,11 +123,7 @@ function logToolAction(
 			taskId?: string;
 			resultCount?: number;
 		} = {
-			query:
-				(args?.query as string) ||
-				(args?.title as string) ||
-				(args?.task_code as string) ||
-				(toolName === "memory-recap" ? `Offset: ${args?.offset || 0}` : undefined),
+			query: (args?.query as string) || (args?.title as string) || (args?.task_code as string) || undefined,
 			response: res,
 			memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
 			taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
@@ -208,21 +190,30 @@ function buildExecutors(
 		"memory-write": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
 		"memory-read": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
 		"memory-delete": (args, db, vectors, extra) => handleMemoryDelete(args, db, vectors, extra?.onProgress),
-		// Backward-compat aliases — old names route to new handlers
-		"memory-store": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
-		"memory-update": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
-		"memory-acknowledge": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
-		"memory-search": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
-		"memory-detail": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
-		"memory-recap": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
-		// Other memory tools
-		"memory-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
+		// New canonical names per ADR-001
+		synthesize: (args, db, vectors, _extra) =>
+			handleMemorySynthesize(args, db, vectors, {
+				session,
+				sampleMessage,
+				elicit
+			}),
+		"repo-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
+		// Backward-compat aliases for synthesize
+		"agent-synthesize": (args, db, vectors, _extra) =>
+			handleMemorySynthesize(args, db, vectors, {
+				session,
+				sampleMessage,
+				elicit
+			}),
 		"memory-synthesize": (args, db, vectors, _extra) =>
 			handleMemorySynthesize(args, db, vectors, {
 				session,
 				sampleMessage,
 				elicit
 			}),
+		// Backward-compat aliases for repo-summarize
+		"agent-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
+		"memory-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
 		// New canonical handlers
 		"handoff-write": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
 		"handoff-read": (args, db, _vectors, _extra) => handleHandoffRead(args, db),
@@ -235,37 +226,17 @@ function buildExecutors(
 		"claim-list": (args, db, _vectors, _extra) => handleClaimManage(args, db),
 		"claim-release": (args, db, _vectors, _extra) =>
 			handleClaimManage({ ...args, release: true } as Record<string, unknown>, db),
+		// New canonical handlers
 		"standard-write": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
 		"standard-read": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
 		"standard-delete": (args, db, vectors, _extra) => handleStandardDelete(args, db, vectors),
-		// Backward-compat aliases — old names route to new unified handlers
-		"standard-store": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
-		"standard-update": (args, db, vectors, _extra) => handleStandardWrite(args, db, vectors),
-		"standard-search": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
-		"standard-detail": (args, db, vectors, _extra) => handleStandardRead(args, db, vectors),
 		// New canonical handlers
 		"task-write": (args, db, vectors, _extra) =>
 			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
 		"task-read": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
 		"task-delete": (args, db, _vectors, _extra) => handleTaskDelete(args, db),
-		// Backward-compat aliases — old names route to new unified handlers
-		"task-create": (args, db, vectors, _extra) =>
-			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
-		"task-create-interactive": (args, db, vectors, _extra) =>
-			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
-		"task-update": (args, db, vectors, _extra) =>
-			handleTaskWrite(args, db, vectors, { session, elicit: options?.elicit }),
-		"task-list": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
-		"task-detail": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
-		"task-search": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
+
 		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
-		"agent-synthesize": (args, db, vectors, _extra) =>
-			handleMemorySynthesize(args, db, vectors, {
-				session,
-				sampleMessage,
-				elicit
-			}),
-		"agent-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
 		// Codebase index tools
 		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors),
 		// Write tool — canonical name
@@ -295,7 +266,10 @@ export function registerAllTools(
 
 	// Filter tool definitions by client capabilities
 	const definitions = TOOL_DEFINITIONS.filter((def) => {
-		if ((def.name === "memory-synthesize" || def.name === "agent-synthesize") && !session.supportsSampling) {
+		if (
+			(def.name === "synthesize" || def.name === "agent-synthesize" || def.name === "memory-synthesize") &&
+			!session.supportsSampling
+		) {
 			return false;
 		}
 		if (def.name === "task-create-interactive" && !session.supportsElicitationForm) {

@@ -137,7 +137,7 @@ async function coreCreate(
 		version: params.version || "1.0.0",
 		language: params.language || null,
 		stack: params.stack || [],
-		is_global: params.is_global !== false,
+		is_global: params.is_global === true,
 		owner: params.owner!,
 		repo: params.repo || null,
 		tags: params.tags,
@@ -194,6 +194,46 @@ async function coreUpdate(
 	const existing = db.standards.getById(resolvedId);
 	if (!existing) {
 		throw new Error(`Coding standard not found: ${resolvedId}`);
+	}
+
+	// Conflict detection on content change (also in update mode, per ADR-003)
+	if (params.content !== undefined && params.content !== existing.content) {
+		const conflict = db.standards.checkConflicts(
+			params.content,
+			params.version || existing.version,
+			params.owner || existing.owner,
+			(params.repo || existing.repo) ?? undefined,
+			params.language ?? existing.language,
+			params.stack ?? existing.stack,
+			0.82
+		);
+		if (conflict && conflict.id !== existing.id) {
+			const err = new Error("STANDARD_CONFLICT") as Error & {
+				structured: {
+					success: false;
+					error: string;
+					message: string;
+					conflicting_standard: Record<string, unknown>;
+					instruction: string;
+				};
+			};
+			err.structured = {
+				success: false,
+				error: "STANDARD_CONFLICT",
+				message: `This updated standard content conflicts with an existing standard (ID: ${conflict.id}, similarity: ${(conflict.similarity * 100).toFixed(1)}%).`,
+				conflicting_standard: {
+					id: conflict.id,
+					title: conflict.title,
+					version: conflict.version,
+					language: conflict.language,
+					stack: conflict.stack,
+					content: conflict.content
+				},
+				instruction: "Differentiate by 'version', 'language', or non-overlapping 'stack' to avoid conflict."
+			};
+			err.name = "StandardConflictError";
+			throw err;
+		}
 	}
 
 	const updates: Partial<CodingStandardEntry> = {};
@@ -295,20 +335,30 @@ async function handleCreateSingle(params: WriteParams, db: SQLiteStore, vectors:
 }
 
 async function handleUpdateSingle(params: WriteParams, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
-	const data = await coreUpdate(params, db, vectors);
-	return createMcpResponse(
-		{
-			success: true,
-			id: data.id,
-			code: data.code,
-			updatedFields: data.updatedFields
-		},
-		`Updated [${data.code}] "${data.title}" in repo "${data.repo}": fields ${data.updatedFields.join(", ") || "none"}.`,
-		{
-			structuredContentPathHint: "updatedFields",
-			includeJson: params.json
+	try {
+		const data = await coreUpdate(params, db, vectors);
+		return createMcpResponse(
+			{
+				success: true,
+				id: data.id,
+				code: data.code,
+				updatedFields: data.updatedFields
+			},
+			`Updated [${data.code}] "${data.title}" in repo "${data.repo}": fields ${data.updatedFields.join(", ") || "none"}.`,
+			{
+				structuredContentPathHint: "updatedFields",
+				includeJson: params.json
+			}
+		);
+	} catch (err: unknown) {
+		const conflictErr = err as Error & { structured?: Record<string, unknown> };
+		if (conflictErr.structured) {
+			return createMcpResponse(conflictErr.structured, `Rejected: update conflicts with existing standard.`, {
+				includeJson: params.json
+			});
 		}
-	);
+		throw err;
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +421,7 @@ async function handleBulk(params: WriteParams, db: SQLiteStore, vectors: VectorS
 				language: (std.language as string) || null,
 				stack: (std.stack as string[]) || [],
 				// Bug fix: was hardcoded `null` — now propagates validated.repo
-				is_global: (std.is_global as boolean) !== false,
+				is_global: (std.is_global as boolean) === true,
 				owner: params.owner!,
 				repo: params.repo || null,
 				tags: (std.tags as string[]) || [],

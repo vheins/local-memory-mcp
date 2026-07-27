@@ -191,7 +191,8 @@ export const TaskSearchSchema = z.object({
 
 // ── Task Delete Schema (flat, zero oneOf) ──
 // All identifiers are optional at schema level; handler validates at least one provided.
-// Supports: id (UUID or task_code), code (alias for task_code), task_code, ids (array), task_codes (array).
+// Canonical identifiers per ADR-002: id (UUID), code (string), ids (UUID array), codes (string array).
+// Backward compat aliases: task_code → code, task_codes → codes.
 
 export const TaskDeleteSchema = z
 	.object({
@@ -201,6 +202,7 @@ export const TaskDeleteSchema = z
 		code: z.string().optional(),
 		task_code: z.string().optional(),
 		ids: z.array(z.string()).optional(),
+		codes: z.array(z.string().min(1)).optional(),
 		task_codes: z.array(z.string().min(1)).optional(),
 		json: z.boolean().default(false)
 	})
@@ -210,9 +212,10 @@ export const TaskDeleteSchema = z
 			data.code !== undefined ||
 			data.task_code !== undefined ||
 			data.ids !== undefined ||
+			data.codes !== undefined ||
 			data.task_codes !== undefined,
 		{
-			message: "At least one of 'id', 'code', 'task_code', 'ids', or 'task_codes' must be provided."
+			message: "At least one of 'id', 'code', 'task_code', 'ids', 'codes', or 'task_codes' must be provided."
 		}
 	);
 

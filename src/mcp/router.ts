@@ -9,15 +9,9 @@ import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
 import { handleMemoryWrite } from "./tools/memory.write";
 import { handleMemoryRead } from "./tools/memory.read";
-import { handleMemoryStore } from "./tools/memory.store";
-import { handleMemoryUpdate } from "./tools/memory.update";
-import { handleMemorySearch } from "./tools/memory.search";
 import { handleMemorySummarize } from "./tools/memory.summarize";
 import { handleMemorySynthesize } from "./tools/memory.synthesize";
 import { handleMemoryDelete } from "./tools/memory.delete";
-import { handleMemoryRecap } from "./tools/memory.recap";
-import { handleMemoryAcknowledge } from "./tools/memory.acknowledge";
-import { handleMemoryDetail } from "./tools/memory.detail";
 import { handleHandoffWrite } from "./tools/handoff.write";
 import { handleHandoffRead } from "./tools/handoff.read";
 import { handleClaimManage } from "./tools/claim.manage";
@@ -25,14 +19,9 @@ import { handleClaimManage } from "./tools/claim.manage";
 import { handleStandardWrite } from "./tools/standard.write";
 import { handleStandardRead } from "./tools/standard.read";
 import { handleStandardDelete } from "./tools/standard.delete";
-import { handleTaskCreate, handleTaskCreateInteractive } from "./tools/task.create";
 import { handleTaskWrite } from "./tools/task.write";
-import { handleTaskUpdate } from "./tools/task.update";
 import { handleTaskDelete } from "./tools/task.delete";
-import { handleTaskList } from "./tools/task.list";
 import { handleTaskRead } from "./tools/task.read";
-import { handleTaskGet as handleTaskDetail } from "./tools/task.get";
-import { handleTaskSearch } from "./tools/task.search";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
@@ -145,11 +134,7 @@ export function createRouter(
 	// Tools that mutate the DB — must run under write lock
 	const WRITE_TOOLS = new Set([
 		"memory-write",
-		"memory-store",
-		"memory-update",
-		"memory-acknowledge",
 		"memory-delete",
-		"memory-bulk-delete",
 		"memory-summarize",
 		"agent-summarize",
 		// Handoff & Claim — new canonical names
@@ -158,16 +143,11 @@ export function createRouter(
 		// Backward-compat aliases
 		"handoff-create",
 		"handoff-update",
-		"standard-store",
-		"standard-update",
 		"standard-write",
 		"standard-delete",
-		"task-create",
-		"task-create-interactive",
 		"task-write",
 		"task-claim",
 		"claim-release",
-		"task-update",
 		"task-delete",
 		"codebase-index",
 		"index_repository"
@@ -200,26 +180,20 @@ export function createRouter(
 					return await handleMemoryRead(args, db, vectors);
 
 				case "memory-delete":
-				case "memory-bulk-delete": // Fallback for backward compatibility
 					return await handleMemoryDelete(args, db, vectors, onProgress);
 
-				// Backward-compat aliases — old names route to new handlers
-				case "memory-store":
-				case "memory-update":
-				case "memory-acknowledge":
-					return await handleMemoryWrite(args, db, vectors);
-
-				case "memory-search":
-				case "memory-detail":
-				case "memory-recap":
-					return await handleMemoryRead(args, db, vectors);
-
-				case "memory-summarize":
+				// New canonical names per ADR-001
+				case "repo-summarize":
+				// Backward-compat aliases
 				case "agent-summarize":
+				case "memory-summarize":
 					return await handleMemorySummarize(args, db);
 
-				case "memory-synthesize":
+				// New canonical names per ADR-001
+				case "synthesize":
+				// Backward-compat aliases
 				case "agent-synthesize":
+				case "memory-synthesize":
 					return await handleMemorySynthesize(args, db, vectors, {
 						session: getSessionContext?.(),
 						sampleMessage: options?.sampleMessage,
@@ -251,25 +225,18 @@ export function createRouter(
 				case "claim-release":
 					return await handleClaimManage({ ...args, release: true }, db);
 
-				// Standards
+				// Standards — 3 new canonical tools (removed old backward-compat aliases)
 				case "standard-write":
-				case "standard-store":
-				case "standard-update":
 					return await handleStandardWrite(args, db, vectors);
 
 				case "standard-read":
-				case "standard-search":
-				case "standard-detail":
 					return await handleStandardRead(args, db, vectors);
 
 				case "standard-delete":
 					return await handleStandardDelete(args, db, vectors);
 
-				// New canonical handlers
+				// New canonical task handlers — ADR-002: no backward compat
 				case "task-write":
-				case "task-create":
-				case "task-create-interactive":
-				case "task-update":
 					return await handleTaskWrite(args, db, vectors, {
 						session: getSessionContext?.(),
 						elicit: options?.elicit
@@ -280,11 +247,6 @@ export function createRouter(
 
 				case "task-delete":
 					return await handleTaskDelete(args, db);
-
-				case "task-list":
-				case "task-detail":
-				case "task-search":
-					return await handleTaskRead(args, db, vectors);
 
 				// Codebase index tools
 				case "codebase-index":
@@ -318,11 +280,7 @@ export function createRouter(
 			const res = result as Record<string, unknown> | undefined;
 			const sc = res?.structuredData as Record<string, unknown> | undefined;
 			const logOptions = {
-				query:
-					(args?.query as string) ||
-					(args?.title as string) ||
-					(args?.task_code as string) ||
-					(toolName === "memory-recap" ? `Offset: ${args?.offset || 0}` : undefined),
+				query: (args?.query as string) || (args?.title as string) || (args?.task_code as string) || undefined,
 				response: result as Record<string, unknown>,
 				memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
 				taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
@@ -372,7 +330,10 @@ function listTools(session: SessionContext | undefined, params: Record<string, u
 
 function getAvailableToolDefinitions(session?: SessionContext) {
 	return TOOL_DEFINITIONS.filter((tool) => {
-		if ((tool.name === "memory-synthesize" || tool.name === "agent-synthesize") && !session?.supportsSampling) {
+		if (
+			(tool.name === "synthesize" || tool.name === "agent-synthesize" || tool.name === "memory-synthesize") &&
+			!session?.supportsSampling
+		) {
 			return false;
 		}
 
@@ -392,11 +353,7 @@ function collectAffectedResourceUris(toolName: string, args: Record<string, unkn
 		((res?.data as Record<string, unknown>)?.repo as string);
 	const uris = new Set<string>();
 
-	const touchesMemory =
-		toolName.startsWith("memory-") ||
-		toolName === "task-write" ||
-		toolName === "task-update" ||
-		toolName === "task-delete";
+	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-write" || toolName === "task-delete";
 	const touchesTasks = toolName.startsWith("task-");
 
 	if (touchesMemory && repo) {
