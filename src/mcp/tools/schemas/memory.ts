@@ -66,11 +66,8 @@ export const MemorySearchSchema = z.object({
 	prompt: z.string().optional(),
 	owner: z.string().min(1),
 	repo: z.string().min(1).transform(normalizeRepo),
-	types: z.array(MemoryTypeSchema).optional(),
-	minImportance: z.coerce.number().min(1).max(5).optional(),
 	limit: z.coerce.number().min(1).max(100).default(5),
 	offset: z.coerce.number().min(0).default(0),
-	includeRecap: z.boolean().default(false),
 	current_file_path: z.string().optional(),
 	include_archived: z.boolean().default(false),
 	current_tags: z.array(z.string()).optional(),
@@ -141,6 +138,98 @@ export const MemorySummarizeSchema = z.object({
 	repo: z.string().min(1).transform(normalizeRepo),
 	signals: z.array(z.string().max(200)).min(1),
 	json: z.boolean().default(false)
+});
+
+export const MemoryReadSchema = z
+	.object({
+		query: z.string().optional().describe("Search keyword for memory titles"),
+		id: z.string().optional().describe("Memory UUID (detail mode)"),
+		code: z.string().max(20).optional().describe("Short memory code (detail mode)"),
+		ids: z.array(z.string()).optional().describe("Array of memory UUIDs (bulk detail)"),
+		codes: z.array(z.string().max(20)).optional().describe("Array of memory codes (bulk detail)"),
+		owner: z.string().min(1),
+		repo: z.string().min(1).transform(normalizeRepo),
+		current_tags: z.array(z.string()).optional().describe("Tech stack tags for filtering"),
+		current_file_path: z.string().optional().describe("File path for workspace grounding"),
+		scope: MemoryScopeSchema.partial().optional(),
+		include_archived: z.boolean().default(false).describe("Include archived memories"),
+		limit: z.coerce.number().min(1).max(100).default(5).describe("Max results (1-100)"),
+		offset: z.coerce.number().min(0).default(0).describe("Pagination offset"),
+		json: z.boolean().default(false).describe("Returns JSON if true.")
+	})
+	.describe("Auto-infers mode: search (query present), detail (id/code/ids/codes present), or recap (none)");
+
+// ── Memory Write Schema (replaces memory-store, memory-update, memory-acknowledge) ──
+// Single flat schema — no oneOf. The handler uses auto-infer logic to determine
+// the operation (CREATE, UPDATE, ACKNOWLEDGE, or BULK) from the field combination.
+
+const MemoryWriteFields = {
+	// Create fields
+	type: MemoryTypeSchema.optional(),
+	title: z.string().min(3).max(255).optional(),
+	content: z.string().min(10).optional(),
+	importance: z.coerce.number().min(1).max(5).optional(),
+	code: z.string().max(20).optional(),
+	ttlDays: z.coerce.number().min(1).optional(),
+	supersedes: z.string().optional(),
+	tags: z.array(z.string()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
+	is_global: z.boolean().optional(),
+	scope: MemoryScopeSchema.optional(),
+
+	// Update fields
+	id: z.string().optional(),
+	agent: z.string().optional(),
+	role: z.string().optional(),
+	model: z.string().optional(),
+	status: z.enum(["active", "archived"]).optional(),
+	completed_at: z.string().optional(),
+
+	// Acknowledge discriminator (separate from entity status)
+	acknowledge: z.enum(["used", "irrelevant", "contradictory"]).optional(),
+	application_context: z.string().optional(),
+
+	// Decision log convenience — replaces decision-log tool
+	decision_log: z
+		.object({
+			context: z.string().min(10, { message: "Decision context must be at least 10 characters" }),
+			rationale: z.string().min(10, { message: "Rationale must be at least 10 characters" }),
+			alternatives: z.array(z.string()).optional(),
+			tags: z.array(z.string()).optional()
+		})
+		.optional()
+		.describe(
+			'Convenience: pass with type:"decision" to auto-format content and set importance=4. Equivalent to calling decision-log.'
+		),
+
+	// Session summary convenience — replaces session-summarize tool
+	session_summary: z
+		.object({
+			summary: z.string().min(10, { message: "Session summary must be at least 10 characters" }),
+			key_decisions: z.array(z.string()).optional(),
+			next_steps: z.array(z.string()).optional(),
+			tags: z.array(z.string()).optional()
+		})
+		.optional()
+		.describe(
+			'Convenience: pass with type:"task_archive" to auto-format title and content. Equivalent to calling session-summarize.'
+		),
+
+	// Standard
+	owner: z.string().optional(),
+	repo: z.string().optional(),
+	json: z.boolean().default(false)
+} as const;
+
+/** Schema for a single item in the memories[] bulk array. */
+export const MemoryWriteItemSchema = z.object({ ...MemoryWriteFields });
+
+/** Schema for memory-write: single CREATE/UPDATE/ACKNOWLEDGE or BULK via memories[]. */
+export const MemoryWriteSchema = z.object({
+	...MemoryWriteFields,
+
+	// Bulk: if present, switches to bulk mode
+	memories: z.array(MemoryWriteItemSchema).optional()
 });
 
 export const MemorySynthesizeSchema = z.object({

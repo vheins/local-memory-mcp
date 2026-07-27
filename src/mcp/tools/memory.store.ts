@@ -5,26 +5,8 @@ import { VectorStore, MemoryEntry } from "../types";
 import { logger } from "../utils/logger";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { resolveEntityCode } from "../utils/code-generator";
-import { UUID_REGEX } from "../utils/uuid";
 import { saveExtractions } from "./kg-archivist";
-
-function hasMetadataLikeTitle(title: string): boolean {
-	const normalized = title.trim();
-	return /^\[[^\]]{0,200}(agent:|role:|model:|\d{4}-\d{2}-\d{2}|source_)[^\]]*\]/i.test(normalized);
-}
-
-function resolveMemorySupersedes(
-	value: string | null | undefined,
-	db: SQLiteStore,
-	owner?: string,
-	repo?: string
-): string | null {
-	if (!value) return null;
-	if (UUID_REGEX.test(value)) return value;
-	const memory = db.memories.getByCode(value, owner, repo);
-	if (!memory) throw new Error(`supersedes: memory with code '${value}' not found`);
-	return memory.id;
-}
+import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../utils/memory-utils";
 
 async function storeSingleMemory(
 	params: {
