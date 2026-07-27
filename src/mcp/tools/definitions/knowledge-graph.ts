@@ -5,7 +5,7 @@ export const KG_TOOL_DEFINITIONS = [
 		name: "create_entity",
 		title: "KG Create Entity",
 		description:
-			"Creates a new knowledge graph entity. Entities represent nodes in the knowledge graph (e.g., concepts, people, systems). Name must be unique per repo. Owner and repo are auto-inferred from session when omitted.",
+			"Creates a new knowledge graph entity node.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -17,55 +17,39 @@ export const KG_TOOL_DEFINITIONS = [
 			properties: {
 				name: {
 					type: "string",
-					description: "Unique entity name (acts as primary key per repo)."
+					description: "Unique entity name."
 				},
 				type: {
 					type: "string",
 					default: "unknown",
-					description: "Entity type for categorization (e.g., 'person', 'system', 'concept')."
+					description: "Entity type for categorization."
 				},
 				description: {
 					type: "string",
-					description: "Optional description of the entity."
+					description: "Optional entity description."
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+					description: "GitHub org or username. Auto-inferred."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+					description: "Repo name. Auto-inferred."
 				},
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			},
 			required: ["name"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				entity: {
-					type: "object",
-					properties: {
-						name: { type: "string" },
-						type: { type: "string" },
-						description: { type: "string" },
-						repo: { type: "string" },
-						owner: { type: "string" }
-					}
-				}
-			}
 		}
 	},
 	{
 		name: "delete_entity",
 		title: "KG Delete Entity",
 		description:
-			"Deletes a knowledge graph entity by name. All related relations and observations are automatically removed via CASCADE. Owner and repo are auto-inferred from session when omitted.",
+			"Deletes a KG entity with CASCADE.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -77,37 +61,30 @@ export const KG_TOOL_DEFINITIONS = [
 			properties: {
 				name: {
 					type: "string",
-					description: "Name of the entity to delete."
+					description: "Entity name to delete."
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+					description: "GitHub org or username. Auto-inferred."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+					description: "Repo name. Auto-inferred."
 				},
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			},
 			required: ["name"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				deletedCount: { type: "number" }
-			}
 		}
 	},
 	{
 		name: "create_relation",
 		title: "KG Create Relation",
 		description:
-			"Creates a directed relation between two existing knowledge graph entities. Both from_entity and to_entity must already exist. The composite key (from_entity, to_entity, relation_type) must be unique. Owner and repo are auto-inferred from session when omitted.",
+			"Creates directed KG relation.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -119,52 +96,38 @@ export const KG_TOOL_DEFINITIONS = [
 			properties: {
 				from_entity: {
 					type: "string",
-					description: "Source entity name (must exist)."
+					description: "Source entity name."
 				},
 				to_entity: {
 					type: "string",
-					description: "Target entity name (must exist)."
+					description: "Target entity name."
 				},
 				relation_type: {
 					type: "string",
-					description: "Type of relation (e.g., 'depends_on', 'implements', 'part_of')."
+					description: "Relation type."
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+					description: "GitHub org or username. Auto-inferred."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+					description: "Repo name. Auto-inferred."
 				},
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			},
 			required: ["from_entity", "to_entity", "relation_type"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				relation: {
-					type: "object",
-					properties: {
-						from_entity: { type: "string" },
-						to_entity: { type: "string" },
-						relation_type: { type: "string" }
-					}
-				}
-			}
 		}
 	},
 	{
 		name: "delete_relation",
 		title: "KG Delete Relation",
 		description:
-			"Deletes a relation by its composite key (from_entity, to_entity, relation_type). Owner and repo are auto-inferred from session when omitted.",
+			"Deletes a relation by its composite key.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -188,33 +151,26 @@ export const KG_TOOL_DEFINITIONS = [
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+					description: "GitHub org or username. Auto-inferred."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+					description: "Repo name. Auto-inferred."
 				},
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			},
 			required: ["from_entity", "to_entity", "relation_type"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				deletedCount: { type: "number" }
-			}
 		}
 	},
 	{
 		name: "delete_observation",
 		title: "KG Delete Observation",
 		description:
-			"Deletes an observation by its ID. Observation IDs are UUIDs returned when observations are created. Owner and repo are auto-inferred from session when omitted.",
+			"Deletes an observation by its UUID ID.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -226,37 +182,30 @@ export const KG_TOOL_DEFINITIONS = [
 			properties: {
 				id: {
 					type: "string",
-					description: "UUID of the observation to delete."
+					description: "Observation UUID to delete."
 				},
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username). Auto-inferred from session when omitted."
+					description: "GitHub org or username. Auto-inferred."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (e.g., 'local-memory-mcp'). Auto-inferred from session when omitted."
+					description: "Repo name. Auto-inferred."
 				},
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			},
 			required: ["id"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				deletedCount: { type: "number" }
-			}
 		}
 	},
 	{
 		name: "query_graph",
 		title: "Query Graph",
 		description:
-			"Fusion query across memory KG entities/relations and codebase index (symbols + files). Returns a unified graph of entities and relations built from both sources without duplicating data. Supports optional type filtering.",
+			"Fusion query across KG + codebase index.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -268,57 +217,30 @@ export const KG_TOOL_DEFINITIONS = [
 			properties: {
 				owner: {
 					type: "string",
-					description: "Organization/namespace (e.g., GitHub org or username)."
+					description: "GitHub org or username."
 				},
 				repo: {
 					type: "string",
-					description: "Repository/project name (e.g., 'local-memory-mcp')."
+					description: "Repo name."
 				},
 				type_filter: {
 					type: "string",
 					description:
-						"Optional filter — partial case-insensitive match against entity type, symbol kind, or file language."
+						"Filter by entity type or symbol kind."
 				},
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			},
 			required: ["owner", "repo"]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				entities: {
-					type: "array",
-					items: {
-						type: "object",
-						properties: {
-							name: { type: "string" },
-							type: { type: "string" },
-							description: { type: "string" }
-						}
-					}
-				},
-				relations: {
-					type: "array",
-					items: {
-						type: "object",
-						properties: {
-							from: { type: "string" },
-							to: { type: "string" },
-							type: { type: "string" }
-						}
-					}
-				}
-			}
 		}
 	},
 	{
 		name: "kg-backfill",
 		description:
-			"Scan existing memories and standards to extract Knowledge Graph entities via NLP. If no repo specified, scans all repositories. Progress logged every 100 items.",
+			"Scans memories/standards for KG entities.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -330,11 +252,11 @@ export const KG_TOOL_DEFINITIONS = [
 			properties: {
 				repo: {
 					type: "string",
-					description: "Optional repo filter. If omitted, scans all repos."
+					description: "Optional repo filter."
 				},
 				owner: {
 					type: "string",
-					description: "Optional owner."
+					description: "Optional owner filter."
 				},
 				source: {
 					type: "string",
@@ -344,7 +266,7 @@ export const KG_TOOL_DEFINITIONS = [
 				json: {
 					type: "boolean",
 					default: false,
-					description: "If true, returns JSON results."
+					description: "Return JSON results."
 				}
 			}
 		}

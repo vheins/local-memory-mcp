@@ -5,17 +5,17 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		name: "standard-detail",
 		title: "Standard Detail",
 		description:
-			"Fetch full details of a specific coding standard by ID or short code. Use after standard-search when a result is relevant and full guidance is needed.",
+			"Fetches details of a coding standard by ID or code.",
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", format: "uuid", description: "Coding standard ID." },
-				code: { type: "string", description: "Short standard code (e.g., 'A3KPQ2')." },
-				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
-				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
-				json: { type: "boolean", default: false, description: "If true, returns JSON details." }
+				id: { type: "string", format: "uuid", description: "Standard ID." },
+				code: { type: "string", description: "Short standard code." },
+				owner: { type: "string", description: "GitHub org or username. Auto-inferred." },
+				repo: { type: "string", description: "Repo name. Auto-inferred." },
+				json: { type: "boolean", default: false, description: "Return JSON details." }
 			},
-			description: "Provide either id (UUID) or code (short code) to fetch a coding standard.",
+			description: "Provide id or code to fetch a standard.",
 			oneOf: [
 				{
 					title: "By ID",
@@ -31,7 +31,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 	{
 		name: "standard-delete",
 		title: "Standard Delete",
-		description: "Delete one or more coding standards. Supports single 'id' or bulk 'ids'.",
+		description: "Deletes coding standards by ID or code.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -41,25 +41,25 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
-				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
-				id: { type: "string", format: "uuid", description: "Single standard ID to delete." },
+				owner: { type: "string", description: "GitHub org or username. Auto-inferred." },
+				repo: { type: "string", description: "Repo name. Auto-inferred." },
+				id: { type: "string", format: "uuid", description: "Standard ID to delete." },
 				ids: {
 					type: "array",
 					items: { type: "string", format: "uuid" },
 					minItems: 1,
-					description: "Array of standard IDs to delete."
+					description: "Bulk standard IDs to delete."
 				},
-				code: { type: "string", maxLength: 20, description: "Single standard code to delete." },
+				code: { type: "string", maxLength: 20, description: "Standard code to delete." },
 				codes: {
 					type: "array",
 					items: { type: "string", maxLength: 20 },
 					minItems: 1,
-					description: "Array of standard codes to delete."
+					description: "Bulk standard codes to delete."
 				},
-				json: { type: "boolean", default: false, description: "If true, returns JSON result." }
+				json: { type: "boolean", default: false, description: "Return JSON result." }
 			},
-			description: "Provide id/ids (UUID) or code/codes (short code) to delete standards.",
+			description: "Provide id/ids or code/codes to delete.",
 			oneOf: [
 				{
 					title: "By single ID",
@@ -78,26 +78,13 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					required: ["codes"]
 				}
 			]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				id: { type: "string" },
-				code: { type: "string" },
-				ids: { type: "array", items: { type: "string" } },
-				codes: { type: "array", items: { type: "string" } },
-				repo: { type: "string" },
-				deletedCount: { type: "number" }
-			},
-			required: ["success"]
 		}
 	},
 	{
 		name: "standard-store",
 		title: "Standard Store",
 		description:
-			"Store one atomic coding standard. Use for durable implementation rules with explicit context, stack/language filters, and repo/global scope.",
+			"Stores a coding standard.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -107,42 +94,42 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-				name: { type: "string", minLength: 3, maxLength: 255, description: "Human-readable standard name" },
+				owner: { type: "string", description: "GitHub org or username." },
+				name: { type: "string", minLength: 3, maxLength: 255, description: "Standard name" },
 				content: {
 					type: "string",
 					minLength: 10,
-					description: "One atomic, actionable standard written as concise Markdown"
+					description: "Atomic standard content in Markdown"
 				},
 				parent_id: {
 					type: "string",
-					description: "Optional parent standard ID (UUID) or standard code. Resolved to UUID before storing."
+					description: "Parent standard ID or code."
 				},
-				context: { type: "string", description: "Context or category (e.g., 'error-handling', 'security')" },
-				version: { type: "string", description: "Version of the standard (e.g., '1.0.0')" },
-				language: { type: "string", description: "Programming language (e.g., 'typescript', 'python')" },
+				context: { type: "string", description: "Context or category." },
+				version: { type: "string", description: "Standard version." },
+				language: { type: "string", description: "Programming language." },
 				stack: {
 					type: "array",
 					items: { type: "string" },
-					description: "Technology stack (e.g., ['react', 'nextjs'])"
+					description: "Tech stack filters."
 				},
 				repo: {
 					type: "string",
 					description:
-						"Repository/project name (e.g., 'local-memory-mcp'). Required for repo-specific standards. Omit only for global standards."
+						"Repo name for repo-specific standards."
 				},
-				is_global: { type: "boolean", description: "Whether standard applies globally or repo-specific" },
+				is_global: { type: "boolean", description: "Global or repo-specific flag." },
 				tags: {
 					type: "array",
 					items: { type: "string" },
-					description: "Tags for categorization"
+					description: "Categorization tags."
 				},
 				metadata: {
 					type: "object",
-					description: "Additional metadata"
+					description: "Additional metadata."
 				},
-				agent: { type: "string", description: "Agent creating the standard" },
-				model: { type: "string", description: "AI model used" },
+				agent: { type: "string", description: "Agent creating standard." },
+				model: { type: "string", description: "AI model used." },
 				standards: {
 					type: "array",
 					items: {
@@ -163,7 +150,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 						},
 						required: ["name", "content", "tags", "metadata"]
 					},
-					description: "Array of standards for bulk creation"
+					description: "Bulk standards array."
 				},
 				json: { type: "boolean", default: false }
 			},
@@ -177,58 +164,13 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					required: ["standards"]
 				}
 			]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				standard: {
-					type: "object",
-					properties: {
-						id: { type: "string" },
-						title: { type: "string" },
-						content: { type: "string" },
-						parent_id: { type: "string", nullable: true },
-						context: { type: "string" },
-						version: { type: "string" },
-						language: { type: "string", nullable: true },
-						stack: { type: "array", items: { type: "string" } },
-						is_global: { type: "boolean" },
-						repo: { type: "string", nullable: true },
-						tags: { type: "array", items: { type: "string" } },
-						metadata: { type: "object" },
-						created_at: { type: "string" },
-						updated_at: { type: "string" },
-						agent: { type: "string" },
-						model: { type: "string" }
-					},
-					required: [
-						"id",
-						"title",
-						"content",
-						"parent_id",
-						"context",
-						"version",
-						"stack",
-						"is_global",
-						"tags",
-						"metadata",
-						"created_at",
-						"updated_at",
-						"agent",
-						"model"
-					]
-				},
-				message: { type: "string" }
-			},
-			required: ["success", "standard", "message"]
 		}
 	},
 	{
 		name: "standard-update",
 		title: "Standard Update",
 		description:
-			"Update an existing coding standard. Use this when the rule changes, expands scope, or metadata/tags need correction.",
+			"Updates an existing coding standard.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: false,
@@ -238,10 +180,10 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace. Auto-inferred from session when omitted." },
-				repo: { type: "string", description: "Repository/project name. Auto-inferred from session when omitted." },
-				id: { type: "string", format: "uuid", description: "Standard ID to update." },
-				code: { type: "string", maxLength: 20, description: "Short standard code." },
+				owner: { type: "string", description: "GitHub org or username. Auto-inferred." },
+				repo: { type: "string", description: "Repo name. Auto-inferred." },
+				id: { type: "string", format: "uuid", description: "Standard ID." },
+				code: { type: "string", maxLength: 20, description: "Short code." },
 				name: { type: "string", minLength: 3, maxLength: 255 },
 				content: { type: "string", minLength: 10 },
 				parent_id: { type: "string" },
@@ -256,7 +198,7 @@ export const STANDARD_TOOL_DEFINITIONS = [
 				model: { type: "string" },
 				json: { type: "boolean", default: false }
 			},
-			description: "Provide either id (UUID) or code (short code) to identify the standard to update.",
+			description: "Provide id or code to update standard.",
 			oneOf: [
 				{
 					title: "By ID",
@@ -267,22 +209,13 @@ export const STANDARD_TOOL_DEFINITIONS = [
 					required: ["code"]
 				}
 			]
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				success: { type: "boolean" },
-				id: { type: "string" },
-				updatedFields: { type: "array", items: { type: "string" } }
-			},
-			required: ["success", "id", "updatedFields"]
 		}
 	},
 	{
 		name: "standard-search",
 		title: "Standard Search",
 		description:
-			"MANDATORY PRE-IMPLEMENTATION CHECK: Call before any code edit, test edit, refactor, migration, or implementation decision to find applicable coding standards. Returns a compact pointer table; use `standard-detail` for relevant results. If no relevant standards are returned, continue and state that no applicable standards were found.",
+			"Finds applicable standards before code edit.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -291,55 +224,28 @@ export const STANDARD_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Organization/namespace (e.g., GitHub org or username)." },
-				query: { type: "string", description: "Search query (optional, searches title/content)" },
+				owner: { type: "string", description: "GitHub org or username." },
+				query: { type: "string", description: "Search query." },
 				stack: {
 					type: "array",
 					items: { type: "string" },
-					description: "Technology stack to filter by (e.g., ['react', 'nextjs'])"
+					description: "Tech stack filters."
 				},
 				tags: {
 					type: "array",
 					items: { type: "string" },
-					description: "Tag filter"
+					description: "Tag filter."
 				},
-				language: { type: "string", description: "Programming language filter" },
-				context: { type: "string", description: "Context/category filter" },
-				version: { type: "string", description: "Version filter" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp'). Optional filter." },
-				is_global: { type: "boolean", description: "Filter by global/repo-specific" },
+				language: { type: "string", description: "Language filter." },
+				context: { type: "string", description: "Context filter." },
+				version: { type: "string", description: "Version filter." },
+				repo: { type: "string", description: "Repo name filter." },
+				is_global: { type: "boolean", description: "Global flag filter." },
 				limit: { type: "number", minimum: 1, maximum: 100, default: 20 },
 				offset: { type: "number", minimum: 0, default: 0 },
 				json: { type: "boolean", default: false }
 			},
 			required: []
-		},
-		outputSchema: {
-			type: "object",
-			properties: {
-				schema: { type: "string", enum: ["standard-search"] },
-				query: { type: "string" },
-				count: { type: "number", description: "Number of rows returned" },
-				total: { type: "number", description: "Total number of matches before pagination" },
-				offset: { type: "number" },
-				limit: { type: "number" },
-				results: {
-					type: "object",
-					properties: {
-						columns: {
-							type: "array",
-							items: { type: "string" }
-						},
-						rows: {
-							type: "array",
-							items: { type: "array" },
-							description: "Each row includes standard id and pointer metadata. Fetch full content via standard-detail."
-						}
-					},
-					required: ["columns", "rows"]
-				}
-			},
-			required: ["schema", "query", "count", "total", "offset", "limit", "results"]
 		}
 	}
 ];

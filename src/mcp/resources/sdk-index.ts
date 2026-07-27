@@ -74,7 +74,7 @@ export function registerAllResources(
 		"repository://index",
 		{
 			title: "Repository Index",
-			description: "List of all known repositories with memory/task counts and last activity",
+			description: "All known repos with memory/task counts",
 			mimeType: "application/json"
 		},
 		async (uri, _extra) => {
@@ -152,7 +152,7 @@ export function registerAllResources(
 		}),
 		{
 			title: "Repository Memories",
-			description: "All active memory entries for a specific repository, optionally filtered by search, type, or tag",
+			description: "Active memory entries for a repo, filtered by search/type/tag",
 			mimeType: "application/json"
 		},
 		async (uri, variables, _extra) => {
@@ -189,7 +189,7 @@ export function registerAllResources(
 		new ResourceTemplate("memory://{id}", { list: undefined }),
 		{
 			title: "Memory Detail",
-			description: "Full content and statistics for a specific memory UUID",
+			description: "Full content and stats for a memory UUID",
 			mimeType: "application/json"
 		},
 		async (uri, variables, _extra) => {
@@ -223,7 +223,7 @@ export function registerAllResources(
 		}),
 		{
 			title: "Repository Tasks",
-			description: "All active tasks for a specific repository, optionally filtered by status or priority",
+			description: "Active tasks for a repo, filtered by status/priority",
 			mimeType: "application/json"
 		},
 		async (uri, variables, _extra) => {
@@ -267,7 +267,7 @@ export function registerAllResources(
 		new ResourceTemplate("task://{id}", { list: undefined }),
 		{
 			title: "Task Detail",
-			description: "Full content and comments for a specific task UUID",
+			description: "Full content and comments for a task UUID",
 			mimeType: "application/json"
 		},
 		async (uri, variables, _extra) => {
@@ -301,7 +301,7 @@ export function registerAllResources(
 		}),
 		{
 			title: "Repository Summary",
-			description: "High-level architectural summary for a repository",
+			description: "Architectural summary for a repo",
 			mimeType: "text/plain"
 		},
 		async (uri, variables, _extra) => {
@@ -332,7 +332,7 @@ export function registerAllResources(
 		}),
 		{
 			title: "Repository Actions",
-			description: "Audit log of agent tool actions scoped to a repository",
+			description: "Audit log of tool actions for a repo",
 			mimeType: "application/json"
 		},
 		async (uri, variables, _extra) => {
@@ -358,7 +358,7 @@ export function registerAllResources(
 		new ResourceTemplate("action://{id}", { list: undefined }),
 		{
 			title: "Action Detail",
-			description: "Full details of a specific audit log entry by integer ID",
+			description: "Full details of an audit log entry",
 			mimeType: "application/json"
 		},
 		async (uri, variables, _extra) => {

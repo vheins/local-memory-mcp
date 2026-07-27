@@ -15,7 +15,7 @@ export function listResources(session?: SessionContext, params?: { cursor?: stri
 			uri: "repository://index",
 			name: "Repository Index",
 			title: "Repository Index",
-			description: "List of all known repositories with memory/task counts and last activity",
+			description: "All known repos with memory/task counts",
 			mimeType: "application/json",
 			annotations: {
 				audience: ["assistant"],
@@ -50,7 +50,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "repository://{name}/memories",
 			name: "Repository Memories",
 			title: "Repository Memories",
-			description: "All active memory entries for a specific repository",
+			description: "Active memory entries for a repo",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.85 }
 		},
@@ -58,7 +58,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "repository://{name}/memories?search={search}&type={type}&tag={tag}",
 			name: "Filtered Repository Memories",
 			title: "Filtered Repository Memories",
-			description: "Filter or search memories within a repository by keyword, type, or tag",
+			description: "Filter memories in a repo by keyword, type, or tag",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.8 }
 		},
@@ -66,7 +66,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "memory://{id}",
 			name: "Memory Detail",
 			title: "Memory Detail",
-			description: "Full content and statistics for a specific memory UUID",
+			description: "Full content and stats for a memory UUID",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.75 }
 		},
@@ -75,7 +75,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "repository://{name}/tasks",
 			name: "Repository Tasks",
 			title: "Repository Tasks",
-			description: "All active tasks for a specific repository",
+			description: "Active tasks for a repo",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.9 }
 		},
@@ -83,7 +83,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "repository://{name}/tasks?status={status}&priority={priority}",
 			name: "Filtered Repository Tasks",
 			title: "Filtered Repository Tasks",
-			description: "Filter tasks within a repository by status or priority level",
+			description: "Filter tasks by status or priority",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.85 }
 		},
@@ -91,7 +91,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "task://{id}",
 			name: "Task Detail",
 			title: "Task Detail",
-			description: "Full content and comments for a specific task UUID",
+			description: "Full content and comments for a task UUID",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.8 }
 		},
@@ -100,7 +100,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "repository://{name}/summary",
 			name: "Repository Summary",
 			title: "Repository Summary",
-			description: "High-level architectural summary for a repository",
+			description: "Architectural summary for a repo",
 			mimeType: "text/plain",
 			annotations: { audience: ["assistant"], priority: 0.95 }
 		},
@@ -108,7 +108,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "repository://{name}/actions",
 			name: "Repository Actions",
 			title: "Repository Actions",
-			description: "Audit log of agent tool actions scoped to a repository",
+			description: "Audit log of tool actions for a repo",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.6 }
 		},
@@ -117,7 +117,7 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			uriTemplate: "action://{id}",
 			name: "Action Detail",
 			title: "Action Detail",
-			description: "Full details of a specific audit log entry by integer ID",
+			description: "Full details of an audit log entry",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.55 }
 		}

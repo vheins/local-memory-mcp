@@ -93,10 +93,7 @@ const WRITE_TOOLS = new Set([
 	"task-delete",
 	"decision-log",
 	"session-summarize",
-	// Upstream alias tools (write)
-	"remember_fact",
-	"remember_facts",
-	"forget",
+	// Legacy aliases removed — use memory-store/memory-delete directly
 	// Knowledge graph tools (write)
 	"create_entity",
 	"delete_entity",
@@ -275,11 +272,6 @@ function buildExecutors(
 		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
 		"decision-log": (args, db, vectors, _extra) => handleDecisionLog(args, db, vectors),
 		"session-summarize": (args, db, vectors, _extra) => handleSessionSummarize(args, db, vectors),
-		// Upstream alias tools
-		remember_fact: (args, db, vectors, _extra) => handleMemoryStore(args, db, vectors),
-		remember_facts: (args, db, vectors, _extra) => handleMemoryStore(args, db, vectors),
-		recall: (args, db, vectors, _extra) => handleMemorySearch(args, db, vectors),
-		forget: (args, db, vectors, _extra) => handleMemoryDelete(args, db, vectors),
 		// Knowledge graph tools
 		create_entity: (args, db, _vectors, _extra) => handleCreateEntity(args, db, _vectors),
 		delete_entity: (args, db, _vectors, _extra) => handleDeleteEntity(args, db, _vectors),

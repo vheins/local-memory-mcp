@@ -5,7 +5,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "index_repository",
 		title: "Index Repository",
 		description:
-			"Scans a repository directory, parses source files (TypeScript/JavaScript) using tree-sitter, and stores extracted symbols (functions, classes, interfaces, types, enums) in a SQLite knowledge graph. Supports incremental indexing via checksum comparison.",
+			"Scans a repo and stores extracted symbols via tree-sitter.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: true,
@@ -15,12 +15,12 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
-				repoPath: { type: "string", description: "Absolute filesystem path to the repository" },
-				force: { type: "boolean", description: "Force full re-index ignoring checksums" },
-				includeGlobs: { type: "array", items: { type: "string" }, description: "Include glob patterns" },
-				excludeGlobs: { type: "array", items: { type: "string" }, description: "Exclude glob patterns" }
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name." },
+				repoPath: { type: "string", description: "Absolute path to repo." },
+				force: { type: "boolean", description: "Force full re-index." },
+				includeGlobs: { type: "array", items: { type: "string" }, description: "Include glob patterns." },
+				excludeGlobs: { type: "array", items: { type: "string" }, description: "Exclude glob patterns." }
 			},
 			required: ["repo", "repoPath"]
 		}
@@ -29,7 +29,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "index_status",
 		title: "Index Status",
 		description:
-			"Returns the current indexing status for a repository: whether it has been indexed, when it was last indexed, file/symbol counts, any ongoing indexing progress, and optionally staleness detection. Pass repoPath to enable staleness checks (>= 5% stale files triggers stale flag).",
+			"Returns indexing status for a repository.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -39,11 +39,11 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name." },
 				repoPath: {
 					type: "string",
-					description: "Absolute filesystem path to the repository (optional — enables staleness detection)"
+					description: "Absolute path for staleness detection."
 				}
 			},
 			required: ["repo"]
@@ -53,7 +53,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "get_architecture",
 		title: "Get Architecture",
 		description:
-			"Returns a high-level overview of the indexed codebase structure: directory tree, language breakdown, file counts, and top-level exports.",
+			"Returns codebase structure overview.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -63,12 +63,12 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
-				depth: { type: "number", description: "Directory tree depth limit (1-5, default 2)", default: 2 },
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name." },
+				depth: { type: "number", description: "Tree depth limit (1-5).", default: 2 },
 				includeSymbolCounts: {
 					type: "boolean",
-					description: "Include per-file symbol kind counts (default true)",
+					description: "Include symbol counts.",
 					default: true
 				}
 			},
@@ -79,7 +79,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "get_file_symbols",
 		title: "Get File Symbols",
 		description:
-			"Returns all indexed symbols declared in a specific file. Symbols are returned in declaration order with their locations, signatures, and doc comments.",
+			"Returns indexed symbols in a file.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -89,9 +89,9 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp')" },
-				filePath: { type: "string", description: "Relative file path from repo root" }
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name." },
+				filePath: { type: "string", description: "Relative file path." }
 			},
 			required: ["repo", "filePath"]
 		}
@@ -100,7 +100,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "search_symbols",
 		title: "Search Symbols",
 		description:
-			"Searches indexed codebase symbols by name or file path with ranked results. Also supports natural language queries — if no symbol name matches, falls back to content-based search. Uses a 5-tier ranking algorithm: exact > camelCase > prefix > substring > FTS5.",
+			"Searches indexed symbols with ranking.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -110,17 +110,17 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				query: { type: "string", description: "Symbol name or partial name to search" },
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp') to scope search" },
+				query: { type: "string", description: "Symbol name or partial name." },
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name to scope." },
 				kind: {
 					type: "string",
-					description: "Filter by symbol kind: function, class, interface, type, enum, variable"
+					description: "Filter by symbol kind."
 				},
-				filePath: { type: "string", description: "Filter results to a specific file path" },
-				exportedOnly: { type: "boolean", description: "Only return exported symbols" },
-				limit: { type: "number", default: 50, description: "Maximum results (max 200)" },
-				offset: { type: "number", default: 0, description: "Results offset for pagination" }
+				filePath: { type: "string", description: "Filter by file path." },
+				exportedOnly: { type: "boolean", description: "Only exported symbols." },
+				limit: { type: "number", default: 50, description: "Max results (200)." },
+				offset: { type: "number", default: 0, description: "Pagination offset." }
 			},
 			required: []
 		}
@@ -129,7 +129,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "codebase_search",
 		title: "Codebase Search",
 		description:
-			"Search across the entire indexed codebase using natural language queries. Uses FTS5 full-text search combined with in-memory ranking (exact, camelCase, prefix, substring, FTS5). Accepts a natural language prompt — does not require exact symbol name matching. Supports filtering by repo, symbol kind, and file path.",
+			"Searches codebase via NL queries.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -139,16 +139,16 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				query: { type: "string", description: "Natural language search query (min 2 characters)" },
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp') to scope search" },
+				query: { type: "string", description: "NL search query (min 2 chars)." },
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name to scope." },
 				kind: {
 					type: "string",
-					description: "Filter by symbol kind: function, class, interface, type, enum, variable"
+					description: "Filter by symbol kind."
 				},
-				filePath: { type: "string", description: "Filter results to a specific file path" },
-				limit: { type: "number", default: 20, description: "Maximum results (max 100)" },
-				offset: { type: "number", default: 0, description: "Results offset for pagination" }
+				filePath: { type: "string", description: "Filter by file path." },
+				limit: { type: "number", default: 20, description: "Max results (100)." },
+				offset: { type: "number", default: 0, description: "Pagination offset." }
 			},
 			required: ["query"]
 		}
@@ -157,7 +157,7 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		name: "trace_symbol",
 		title: "Trace Symbol",
 		description:
-			"Traces a symbol's definition and usage across the codebase. Returns the definition location, file references, and export status. Accepts either 'name' or 'symbol' parameter.",
+			"Traces symbol definition and usage.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,
@@ -167,13 +167,13 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 		inputSchema: {
 			type: "object",
 			properties: {
-				name: { type: "string", description: "Symbol name to trace (exact match)" },
-				symbol: { type: "string", description: "Alias for 'name' — symbol name to trace" },
-				owner: { type: "string", description: "Repository owner (e.g., 'vheins')" },
-				repo: { type: "string", description: "Repository/project name (e.g., 'local-memory-mcp') for scoped search" },
+				name: { type: "string", description: "Symbol name to trace." },
+				symbol: { type: "string", description: "Alias for name param." },
+				owner: { type: "string", description: "Repo owner." },
+				repo: { type: "string", description: "Repo name to scope." },
 				includeReferences: {
 					type: "boolean",
-					description: "Include usage references from other symbols",
+					description: "Include usage references.",
 					default: true
 				}
 			},
