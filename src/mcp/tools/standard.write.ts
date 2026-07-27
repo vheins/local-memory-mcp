@@ -7,7 +7,7 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildStandardVectorText, toContextSlug } from "./standard.shared";
 import { UUID_REGEX } from "../utils/uuid";
 import { generateNextCode } from "../utils/code-generator";
-import { saveExtractions } from "./kg-archivist";
+import { saveExtractions, saveStandardRelations } from "./kg-archivist";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -168,6 +168,15 @@ async function coreCreate(
 		});
 	}
 
+	// KG semantic relations (parent_id→extends, similarity→related_to, per REFACTOR-KG-002)
+	try {
+		await saveStandardRelations(entry, db);
+	} catch (error) {
+		logger.warn("[KG-Archivist] Standard KG relations failed, saved without KG relations", {
+			error: String(error)
+		});
+	}
+
 	return { id: entry.id, code: entry.code!, title: entry.title, repo: entry.repo || "global" };
 }
 
@@ -285,6 +294,15 @@ async function coreUpdate(
 			await saveExtractions(merged.content, merged.title, merged.owner, merged.repo ?? "", db);
 		} catch (error) {
 			logger.warn("[KG-Archivist] Standard KG extraction failed on update", {
+				error: String(error)
+			});
+		}
+
+		// KG semantic relations (parent_id→extends, similarity→related_to, per REFACTOR-KG-002)
+		try {
+			await saveStandardRelations(merged, db);
+		} catch (error) {
+			logger.warn("[KG-Archivist] Standard KG relations failed on update", {
 				error: String(error)
 			});
 		}
@@ -448,6 +466,13 @@ async function handleBulk(params: WriteParams, db: SQLiteStore, vectors: VectorS
 				await saveExtractions(entry.content, entry.title, entry.owner, entry.repo ?? "", db);
 			} catch (error) {
 				logger.warn("[KG-Archivist] Standard KG extraction failed", { error: String(error) });
+			}
+
+			// KG semantic relations (parent_id→extends, similarity→related_to, per REFACTOR-KG-002)
+			try {
+				await saveStandardRelations(entry, db);
+			} catch (error) {
+				logger.warn("[KG-Archivist] Standard KG relations failed", { error: String(error) });
 			}
 
 			results.push({ index: i, operation: "create", success: true, id: entry.id, code, title: std.name });

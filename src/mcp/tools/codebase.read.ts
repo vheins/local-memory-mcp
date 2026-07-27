@@ -2,64 +2,24 @@
  * codebase-read — unified read-only access to the codebase index.
  *
  * Replaces 5 individual read-only tools with auto-inferred modes.
- * Old tool names still work as backward-compatible aliases (routed in index.ts).
+ * Per ADR-005: "Zero oneOf — auto-infer dari parameter mana yang diisi"
  *
- * Modes (auto-inferred or explicit via `action` param):
- *   STATUS        → index_status
- *   TRACE         → trace_symbol
- *   FILE          → get_file_symbols
- *   ARCHITECTURE  → get_architecture
- *   SEARCH_SYMBOLS → search_symbols
- *   NL_SEARCH     → codebase_search
+ * Modes (auto-inferred from mutual-exclusive params):
+ *   name     → TRACE  (was trace_symbol)
+ *   filePath → FILE   (was get_file_symbols)
+ *   query    → SEARCH (unified: was search_symbols + codebase_search)
+ *   nothing  → ARCHITECTURE (was get_architecture — tree overview)
  */
 
 import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } from "./schemas/codebase.read";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { createCodebaseIndexService } from "../codebase-index/services/indexing-service";
 import { buildArchitecture } from "../codebase-index/services/architecture-service";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError, SymbolNotFoundError } from "../codebase-index/services/trace-service";
 import type { CodebaseSymbol } from "../types/codebase-symbol";
 import { logger } from "../utils/logger";
-import { TreeSitterParserPool } from "../codebase-index/parser/parser-pool";
-import type { ParserPool } from "../codebase-index/parser/language-visitor";
-
-// ── Parser pool singleton (required by indexing service for status checks) ──
-
-let parserPool: ParserPool | null = null;
-
-function getParserPool(): ParserPool {
-	if (!parserPool) {
-		parserPool = new TreeSitterParserPool();
-	}
-	return parserPool;
-}
-
-// ── Mode inference ───────────────────────────────────────────────────────
-
-/**
- * Determine which mode to run based on the provided parameters.
- *
- * Priority order (first match wins):
- * 1. Explicit `action` param
- * 2. `filePath` → FILE
- * 3. `depth` → ARCHITECTURE
- * 4. `query` → NL_SEARCH (multi-word) or SEARCH_SYMBOLS (single term)
- * 5. `name` / `symbol` → TRACE
- * 6. Default → STATUS
- */
-function inferMode(params: CodebaseReadInput): CodebaseReadMode {
-	if (params.action) return params.action;
-	if (params.filePath) return "file";
-	if (params.depth !== undefined) return "architecture";
-	if (params.query) {
-		return params.query.includes(" ") ? "nl_search" : "search_symbols";
-	}
-	if (params.name || params.symbol) return "trace";
-	return "status";
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VECTOR BLENDING
@@ -127,65 +87,33 @@ async function blendVectorRanking(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MODE HANDLERS
+// MODE INFERENCE
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── STATUS ───────────────────────────────────────────────────────────────
-
-async function handleStatusMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
-	const repo = validated.repo.trim();
-	const repoPath = validated.repoPath?.trim();
-
-	const service = createCodebaseIndexService(db, getParserPool());
-	const status = await service.getIndexStatus(repo, repoPath);
-
-	const lines: string[] = [];
-	lines.push(`## Index Status: ${repo}`);
-	lines.push(``);
-	lines.push(`| Metric | Value |`);
-	lines.push(`|--------|-------|`);
-	lines.push(`| **Indexed** | ${status.isIndexed ? "✅ Yes" : "❌ No"} |`);
-	lines.push(`| **Files** | ${status.totalFiles} |`);
-	lines.push(`| **Symbols** | ${status.totalSymbols} |`);
-
-	if (status.lastIndexedAt) {
-		const date = new Date(status.lastIndexedAt);
-		lines.push(`| **Last Indexed** | ${date.toLocaleString()} |`);
-	}
-
-	if (status.isIndexing) {
-		const p = status.progress;
-		if (p) {
-			lines.push(`| **Indexing** | 🔄 ${p.stage} (${p.current}/${p.total}) |`);
-		} else {
-			lines.push(`| **Indexing** | 🔄 In progress... |`);
-		}
-	}
-
-	if (status.stale !== undefined && status.lastIndexedAt) {
-		if (status.stale) {
-			lines.push(`| **Staleness** | ⚠️ STALE — ${Math.round((status.staleRatio ?? 0) * 100)}% of files changed |`);
-		} else {
-			lines.push(`| **Staleness** | ✅ Up to date |`);
-		}
-	}
-
-	const summary = lines.join("\n");
-
-	return createMcpResponse({ ...status, mode: "status" }, summary, { includeJson: true });
+/**
+ * Determine which mode to run based on the provided parameters.
+ *
+ * ADR-005 auto-infer rules (first match wins):
+ * 1. `name`     → TRACE
+ * 2. `filePath` → FILE
+ * 3. `query`    → SEARCH (unified — code-like→5-tier ranking, NL→semantic)
+ * 4. (nothing)  → ARCHITECTURE (tree overview)
+ */
+function inferMode(params: CodebaseReadInput): CodebaseReadMode {
+	if (params.name) return "trace";
+	if (params.filePath) return "file";
+	if (params.query) return "search";
+	return "architecture";
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODE HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
 
 // ── TRACE ────────────────────────────────────────────────────────────────
 
 async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
-	const name = (validated.name ?? validated.symbol ?? "").trim();
-	if (!name) {
-		return createMcpResponse(
-			{ error: "Either 'name' or 'symbol' parameter is required", code: "PARAM_REQUIRED" },
-			"Either 'name' or 'symbol' parameter is required to trace a symbol",
-			{ includeJson: true }
-		);
-	}
+	const name = validated.name!.trim();
 
 	const repo = validated.repo?.trim();
 
@@ -332,9 +260,19 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 	);
 }
 
-// ── SYMBOL SEARCH ────────────────────────────────────────────────────────
+// ── UNIFIED SEARCH ───────────────────────────────────────────────────────
 
-async function handleSearchSymbolsMode(
+/**
+ * Unified search handler combining code-like 5-tier ranking with NL semantic search.
+ *
+ * Strategy:
+ * 1. DB-level name search via getSymbolByName / LIKE
+ * 2. If name search returns 0 AND query has spaces, try word-split content search
+ * 3. Text ranking via SymbolRankingService (5 tiers: Exact → CamelCase → Prefix → Substring → FTS5)
+ * 4. Vector similarity tiebreaker within each rank tier (semantic blending)
+ * 5. Apply filters (kind, exportedOnly) + pagination
+ */
+async function handleSearchMode(
 	validated: CodebaseReadInput,
 	db: SQLiteStore,
 	vectors: VectorStore
@@ -342,13 +280,13 @@ async function handleSearchSymbolsMode(
 	const query = (validated.query ?? "").trim();
 	if (query.length < 2) {
 		return createMcpResponse(
-			{ symbols: [], total: 0, hasMore: false, mode: "search_symbols" },
+			{ symbols: [], total: 0, hasMore: false, mode: "search" },
 			"Search query too short (minimum 2 characters)",
 			{ includeJson: true }
 		);
 	}
 
-	// Phase 1: DB-level name search
+	// Phase 1: DB-level name search (LIKE on symbol name + kind/filePath filtering)
 	let dbResult = db.codebaseSymbols.searchSymbols({
 		query,
 		repo: validated.repo,
@@ -361,7 +299,7 @@ async function handleSearchSymbolsMode(
 
 	let symbols: CodebaseSymbol[] = dbResult.symbols;
 
-	// Apply in-memory filters
+	// Apply in-memory filters as complement
 	symbols = filterSymbols(symbols, {
 		kind: validated.kind ? [validated.kind] : undefined,
 		repo: validated.repo,
@@ -395,7 +333,7 @@ async function handleSearchSymbolsMode(
 		}
 	}
 
-	// Phase 3: Text ranking via SymbolRankingService
+	// Phase 3: Text ranking via SymbolRankingService (5 tiers)
 	let ranked: RankedSymbol[] = rankSymbols(symbols, query);
 
 	// Phase 4: Vector similarity tiebreaker within each rank tier
@@ -429,73 +367,10 @@ async function handleSearchSymbolsMode(
 			hasMore: validated.offset + validated.limit < total,
 			offset: validated.offset,
 			limit: validated.limit,
-			mode: "search_symbols"
-		},
-		`Found ${total} matching symbols${query ? ` for "${query}"` : ""} (showing ${results.length}).`,
-		{ includeJson: true, contentSummary: summary }
-	);
-}
-
-// ── NL SEARCH ────────────────────────────────────────────────────────────
-
-async function handleNLSearchMode(
-	validated: CodebaseReadInput,
-	db: SQLiteStore,
-	vectors: VectorStore
-): Promise<McpResponse> {
-	const query = (validated.query ?? "").trim();
-	if (query.length < 2) {
-		return createMcpResponse(
-			{ symbols: [], total: 0, hasMore: false, mode: "nl_search" },
-			"Search query too short (minimum 2 characters)",
-			{ includeJson: true }
-		);
-	}
-
-	const dbResult = db.codebaseSymbols.searchSymbols({
-		query,
-		repo: validated.repo,
-		kind: validated.kind,
-		filePath: validated.filePath,
-		limit: Math.min(200, validated.limit * 2),
-		offset: 0
-	});
-
-	let ranked = rankSymbols(dbResult.symbols, query);
-
-	// Vector similarity tiebreaker within each rank tier
-	ranked = await blendVectorRanking(ranked, query, validated.repo, vectors);
-
-	const total = ranked.length;
-	const paginated = ranked.slice(validated.offset, validated.offset + validated.limit);
-
-	const results = paginated.map((r) => ({
-		...r.symbol,
-		rankTier: r.rankTier,
-		score: r.score
-	}));
-
-	const summary =
-		`| rankTier | kind | file | start_line | end_line | score | symbol |\n` +
-		`|----------|------|------|------------|----------|-------|--------|\n` +
-		results
-			.map(
-				(s) =>
-					`| ${s.rankTier} | ${s.kind} | ${s.file_path} | ${s.start_line ?? "-"} | ${s.end_line ?? "-"} | ${s.score?.toFixed(2) ?? "-"} | ${s.name} |`
-			)
-			.join("\n");
-
-	return createMcpResponse(
-		{
-			symbols: results,
-			total,
-			hasMore: validated.offset + validated.limit < total,
-			offset: validated.offset,
-			limit: validated.limit,
 			query,
-			mode: "nl_search"
+			mode: "search"
 		},
-		`Found ${total} results for "${query}" (showing ${results.length}).`,
+		`Found ${total} matching symbols for "${query}" (showing ${results.length}).`,
 		{ includeJson: true, contentSummary: summary }
 	);
 }
@@ -507,12 +382,13 @@ async function handleNLSearchMode(
 /**
  * Unified codebase-read handler.
  *
- * Auto-infers the mode from the provided parameters (see `inferMode`),
- * then dispatches to the appropriate mode handler.
+ * Auto-infers the mode from the provided parameters per ADR-005 rules:
+ * - `name`     → TRACE (exact symbol match with disambiguation)
+ * - `filePath` → FILE (symbols in a file)
+ * - `query`    → SEARCH (unified: 5-tier ranking + semantic vector blending)
+ * - (nothing)  → ARCHITECTURE (tree overview of the codebase)
  *
- * All old tool names (`index_status`, `get_architecture`, `get_file_symbols`,
- * `trace_symbol`, `search_symbols`, `codebase_search`) route here for
- * backward compatibility.
+ * All old tool names route here for backward compatibility (REFACTOR-CI-003).
  */
 export async function handleCodebaseRead(
 	params: Record<string, unknown>,
@@ -528,19 +404,13 @@ export async function handleCodebaseRead(
 	});
 
 	switch (mode) {
-		case "status":
-			return handleStatusMode(validated, db);
 		case "trace":
 			return handleTraceMode(validated, db);
 		case "file":
 			return handleFileMode(validated, db);
+		case "search":
+			return handleSearchMode(validated, db, _vectors);
 		case "architecture":
 			return handleArchitectureMode(validated, db);
-		case "search_symbols":
-			return handleSearchSymbolsMode(validated, db, _vectors);
-		case "nl_search":
-			return handleNLSearchMode(validated, db, _vectors);
-		default:
-			return handleStatusMode(validated, db);
 	}
 }
