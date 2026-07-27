@@ -31,6 +31,12 @@ function computeDomainScore(task: Task, queryTerms: string[]): number {
 	return Math.min(1, matches / Math.max(queryTerms.length, 1));
 }
 
+function computeConfidence(score: number): "high" | "medium" | "low" {
+	if (score >= 0.7) return "high";
+	if (score >= 0.4) return "medium";
+	return "low";
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function capitalize(str: string): string {
@@ -246,24 +252,60 @@ async function handleSearchMode(
 	// 3. Sort by hybrid score
 	scoredTasks.sort((a: ScoredTask, b: ScoredTask) => b.finalScore - a.finalScore);
 
-	let allTasks = scoredTasks.map((st: ScoredTask) => st.task);
+	// 4. Adaptive threshold (SPEC-001)
+	const threshold = scoredTasks.length <= 5 ? 0.08 : 0.2;
+	let eligible = scoredTasks.filter((st: ScoredTask) => st.finalScore >= threshold);
+	// Guarantee at least 1 result
+	if (eligible.length === 0 && scoredTasks.length > 0) {
+		eligible = [scoredTasks[0]];
+	}
 
-	// 4. In-memory phase filter
+	// 5. FTS5 fallback — if eligible results are fewer than requested limit,
+	// supplement with keyword-only scored results (tasks that matched SQL LIKE)
+	if (eligible.length < offset + limit) {
+		const eligibleIdSet = new Set(eligible.map((st: ScoredTask) => st.task.id));
+		const fallbackTasks = scoredTasks
+			.filter((st: ScoredTask) => !eligibleIdSet.has(st.task.id) && st.keywordScore > 0)
+			.slice(0, offset + limit - eligible.length);
+		eligible = [...eligible, ...fallbackTasks];
+	}
+
+	// 6. In-memory phase filter
 	if (phase) {
 		const phaseLower = phase.toLowerCase();
-		allTasks = allTasks.filter((t: Task) => t.phase && t.phase.toLowerCase() === phaseLower);
+		eligible = eligible.filter((st: ScoredTask) => st.task.phase && st.task.phase.toLowerCase() === phaseLower);
 	}
 
-	// 5. In-memory priority filter
+	// 7. In-memory priority filter
 	if (priority !== undefined) {
-		allTasks = allTasks.filter((t: Task) => t.priority === priority);
+		eligible = eligible.filter((st: ScoredTask) => st.task.priority === priority);
 	}
 
-	const total = allTasks.length;
-	const paginated = allTasks.slice(offset, offset + limit);
+	const total = eligible.length;
+	const paginated = eligible.slice(offset, offset + limit);
 
-	const COLUMNS = ["id", "task_code", "title", "status", "priority", "updated_at", "phase"] as const;
-	const rows = paginated.map((t: Task) => [t.id, t.task_code, t.title, t.status, t.priority, t.updated_at, t.phase]);
+	const COLUMNS = [
+		"id",
+		"task_code",
+		"title",
+		"status",
+		"priority",
+		"score",
+		"confidence",
+		"updated_at",
+		"phase"
+	] as const;
+	const rows = paginated.map((st: ScoredTask) => [
+		st.task.id,
+		st.task.task_code,
+		st.task.title,
+		st.task.status,
+		st.task.priority,
+		Number(st.finalScore.toFixed(4)),
+		computeConfidence(st.finalScore),
+		st.task.updated_at,
+		st.task.phase
+	]);
 
 	const structuredData = {
 		schema: "task-read/search" as const,
