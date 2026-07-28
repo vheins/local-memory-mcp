@@ -399,6 +399,7 @@
 			onDeleteEdgeRequest={handleDeleteEdgeRequest}
 			onResize={handleCanvasResize}
 			onZoomPercentChange={(pct) => (zoomPercent = pct)}
+			on:ready={handleCanvasReady}
 			bind:this={kgCanvasRef}
 		/>
 		<KGEntityDrawer

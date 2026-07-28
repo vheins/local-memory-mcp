@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from "svelte";
+	import { onMount, onDestroy, createEventDispatcher } from "svelte";
 	import { NODE_RADIUS } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import {
@@ -34,6 +34,7 @@
 
 	// Canvas state
 	let canvas: HTMLCanvasElement;
+	const dispatch = createEventDispatcher();
 	let ctx: CanvasRenderingContext2D | null = null;
 	let canvasWidth = 800;
 	let canvasHeight = 600;
@@ -59,6 +60,7 @@
 		canvasHeight = canvas.height / dpr;
 		ctx = canvas.getContext("2d");
 		canvasReady = true;
+		dispatch("ready");
 
 		resizeObserver = new ResizeObserver(() => handleResize());
 		if (canvas.parentElement) {
