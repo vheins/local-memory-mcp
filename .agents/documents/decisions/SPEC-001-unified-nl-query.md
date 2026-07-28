@@ -153,22 +153,22 @@ Kedua domain sudah punya hybrid scoring, tapi formulanya perlu diseragamkan:
 
 ### Task Domain (REFACTOR-TASK)
 
-- **TASK-007:** Generate vector embedding di task-write (title + description → vectors.upsert)
-- **TASK-008:** Upgrade task-read ke hybrid search (vector + FTS5 + formula unified)
+- ~~**TASK-007:** Generate vector embedding di task-write (title + description → vectors.upsert)~~ ✅
+- ~~**TASK-008:** Upgrade task-read ke hybrid search (vector + FTS5 + formula unified)~~ ✅
 
 ### Codebase Index Domain (REFACTOR-CI)
 
-- **CI-005:** Add vector tier to codebase-read ranking (5-tier existing + vector)
+- ~~**CI-005:** Add vector tier to codebase-read ranking (5-tier existing + vector)~~ ✅
 
 ### Agent Context Domain (REFACTOR-AC)
 
-- **AC-005:** Rename objective→query, upgrade ke vector search hybrid
+- ~~**AC-005:** Rename objective→query, upgrade ke vector search hybrid~~ ✅
 
 ### Memory & Standard (REFACTOR-MEM, REFACTOR-STD)
 
-- **MEM-009:** Standarisasi formula hybrid memory-read ke unified formula
-- **STD-006:** Standarisasi formula hybrid standard-read ke unified formula
+- **MEM-009:** Standarisasi formula hybrid memory-read ke unified formula (backlog — priority 3)
+- **STD-006:** Standarisasi formula hybrid standard-read ke unified formula (backlog — priority 3)
 
 ### Testing
 
-- **INTEGRATION-001:** Test hybrid search di semua domain — konsistensi formula
+- **INTEGRATION-001:** Test hybrid search di semua domain — konsistensi formula ✅ (5 tests added)

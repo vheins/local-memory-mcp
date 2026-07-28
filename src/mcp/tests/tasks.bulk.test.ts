@@ -564,6 +564,58 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 		expect(afterDelete!.canceled_at).toBeTruthy();
 	});
 
+	// ─── Partial execution: skip failures, continue with remaining items ───
+
+	it("task-write bulk handles partial failure — continues on individual item errors", async () => {
+		const res: any = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [
+					{ phase: "dev", title: "Partial 1", description: "First partial task.", status: "pending", priority: 2 },
+					{ phase: "dev", title: "Partial 2", description: "Second partial task.", status: "pending", priority: 2 },
+					// Invalid item (missing required fields): should be skipped
+					{ phase: "dev", status: "pending" }
+				]
+			}
+		});
+		// Partial failure returns isError with structuredContent containing results
+		expect(res.isError).toBe(true);
+		expect(res.structuredContent.createdCount).toBe(2);
+		expect(res.structuredContent.total).toBe(3);
+		expect(res.structuredContent.errors).toBeDefined();
+		expect(res.structuredContent.errors.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("task-write bulk all succeed — no errors", async () => {
+		const res: any = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				json: true,
+				tasks: [
+					{ phase: "dev", title: "Surviving Task", description: "Should be created.", status: "pending", priority: 2 },
+					{
+						phase: "dev",
+						title: "Also Surviving",
+						description: "Should also be created.",
+						status: "pending",
+						priority: 2
+					}
+				]
+			}
+		});
+		// Content text confirms success
+		expect(getTextContent(res)).toContain("Created 2 tasks");
+		// Verify tasks exist in the database
+		const allTasks = db.tasks.getTasksByRepo("test", REPO);
+		expect(allTasks.length).toBe(2);
+	});
+
+	// ─────────────────────────────────────────────────────────────────────
+
 	it("should soft-delete multiple tasks by task_codes array via task-delete", async () => {
 		await router("tools/call", {
 			name: "task-write",

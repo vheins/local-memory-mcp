@@ -196,7 +196,11 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 
 			const parentId = (parent.structuredContent as any).standard.id;
 			const childId = (child.structuredContent as any).standard.id;
-			await handleStandardWrite({ id: childId, parent_id: parentId, owner: "test", repo: "test-repo", json: true }, db, vectors);
+			await handleStandardWrite(
+				{ id: childId, parent_id: parentId, owner: "test", repo: "test-repo", json: true },
+				db,
+				vectors
+			);
 
 			expect(db.standards.getById(childId)?.parent_id).toBe(parentId);
 		});
@@ -306,9 +310,9 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 
 			const data = result.structuredContent as any;
 			expect(data.schema).toBe("standard-read");
-			expect(data.mode).toBe("search");
+			expect(data.mode).toBe("list");
 			expect(data.count).toBeGreaterThan(0);
-			expect(data.results.rows.find((row: any[]) => String(row[2]).includes("React"))).toBeDefined();
+			expect(data.standards.rows.find((row: any[]) => String(row[2]).includes("React"))).toBeDefined();
 		});
 
 		it("returns relevant results for specific languages", async () => {
@@ -321,7 +325,7 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 			)) as McpResponse;
 
 			const data = result.structuredContent as any;
-			expect(data.results.rows.find((row: any[]) => row[4] === "python")).toBeDefined();
+			expect(data.standards.rows.find((row: any[]) => row[4] === "python")).toBeDefined();
 		});
 
 		it("returns empty array for invalid language", async () => {
@@ -334,7 +338,7 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 			)) as McpResponse;
 
 			const data = result.structuredContent as any;
-			expect(data.results.rows).toEqual([]);
+			expect(data.standards.rows).toEqual([]);
 			expect(data.count).toBe(0);
 		});
 
@@ -366,7 +370,7 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 
 			const data = result.structuredContent as any;
 			expect(data.count).toBe(1);
-			expect(data.results.rows[0][2]).toBe("Python Testing");
+			expect(data.standards.rows[0][2]).toBe("Python Testing");
 		});
 
 		it("can return vector-only matches when lexical overlap is weak", async () => {
@@ -603,6 +607,93 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 			expect(data.standards.columns).toContain("code");
 			expect(data.standards.columns).toContain("title");
 			expect(data.standards.rows).toHaveLength(3);
+		});
+	});
+
+	// =========================================================================
+	// standard-read — Auto-infer mode detection
+	// =========================================================================
+
+	describe("standard-read — auto-infer", () => {
+		beforeEach(async () => {
+			await handleStandardWrite(
+				{
+					owner: "test",
+					repo: "auto-infer-repo",
+					name: "Auto Infer Standard",
+					content: "Content for auto-infer testing.",
+					language: "typescript",
+					stack: ["node"],
+					tags: ["auto-infer"],
+					metadata: { source: "auto-infer-test" },
+					json: true
+				},
+				db,
+				vectors
+			);
+		});
+
+		it("standard-read auto-infers DETAIL when id is present", async () => {
+			const entry = db.standards.search({ repo: "auto-infer-repo", limit: 1, offset: 0 })[0];
+			expect(entry).toBeDefined();
+
+			const result = (await handleStandardRead(
+				{ id: entry.id, owner: "test", repo: "auto-infer-repo", json: true },
+				db,
+				vectors
+			)) as any;
+			expect(result.structuredContent.schema).toBe("standard-read");
+			expect(result.structuredContent.mode).toBe("detail");
+			expect(result.structuredContent.standard.id).toBe(entry.id);
+		});
+
+		it("standard-read auto-infers DETAIL when code is present", async () => {
+			const entry = db.standards.search({ repo: "auto-infer-repo", limit: 1, offset: 0 })[0];
+			expect(entry).toBeDefined();
+			expect(entry.code).toBeDefined();
+
+			const result = (await handleStandardRead(
+				{ code: entry.code, owner: "test", repo: "auto-infer-repo", json: true },
+				db,
+				vectors
+			)) as any;
+			expect(result.structuredContent.schema).toBe("standard-read");
+			expect(result.structuredContent.mode).toBe("detail");
+			expect(result.structuredContent.standard.code).toBe(entry.code);
+		});
+
+		it("standard-read auto-infers SEARCH when query is present", async () => {
+			const result = (await handleStandardRead(
+				{ query: "auto-infer", owner: "test", repo: "auto-infer-repo", json: true },
+				db,
+				vectors
+			)) as any;
+			expect(result.structuredContent.schema).toBe("standard-read");
+			expect(result.structuredContent.count).toBeGreaterThanOrEqual(1);
+		});
+
+		it("standard-read auto-infers LIST when no id/code/query present", async () => {
+			const result = (await handleStandardRead(
+				{ owner: "test", repo: "auto-infer-repo", json: true },
+				db,
+				vectors
+			)) as any;
+			expect(result.structuredContent.schema).toBe("standard-read");
+			expect(result.structuredContent.mode).toBe("list");
+			expect(result.structuredContent.count).toBeGreaterThanOrEqual(1);
+		});
+
+		it("standard-read auto-infers DETAIL BULK when ids array is present", async () => {
+			const entries = db.standards.search({ repo: "auto-infer-repo", limit: 3, offset: 0 });
+			const ids = entries.map((e: any) => e.id);
+
+			const result = (await handleStandardRead(
+				{ ids, owner: "test", repo: "auto-infer-repo", json: true },
+				db,
+				vectors
+			)) as any;
+			expect(result.structuredContent.schema).toBe("standard-read");
+			expect(result.structuredContent.count).toBe(ids.length);
 		});
 	});
 

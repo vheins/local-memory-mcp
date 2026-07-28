@@ -133,9 +133,16 @@ export function createRouter(
 
 	// Tools that mutate the DB — must run under write lock
 	const WRITE_TOOLS = new Set([
+		// Canonical memory tools
 		"memory-write",
 		"memory-delete",
+		// Backward-compat memory aliases
+		"memory-store",
+		"memory-update",
+		"memory-acknowledge",
+		// Summarize tools
 		"memory-summarize",
+		"repo-summarize",
 		"agent-summarize",
 		// Handoff & Claim — new canonical names
 		"handoff-write",
@@ -166,10 +173,19 @@ export function createRouter(
 
 		const executeToolLogic = async () => {
 			switch (toolName) {
+				// Backward-compat memory aliases (old names → new handlers)
+				case "memory-store":
+				case "memory-update":
+				case "memory-acknowledge":
 				// New canonical handlers
 				case "memory-write":
 					return await handleMemoryWrite(args, db, vectors);
 
+				// Backward-compat memory aliases (old names → new handlers)
+				case "memory-search":
+				case "memory-detail":
+				case "memory-recap":
+				// New canonical handlers
 				case "memory-read":
 					return await handleMemoryRead(args, db, vectors);
 
@@ -305,10 +321,6 @@ function getAvailableToolDefinitions(session?: SessionContext) {
 			(tool.name === "synthesize" || tool.name === "agent-synthesize" || tool.name === "memory-synthesize") &&
 			!session?.supportsSampling
 		) {
-			return false;
-		}
-
-		if (tool.name === "task-create-interactive" && !session?.supportsElicitationForm) {
 			return false;
 		}
 

@@ -166,60 +166,71 @@ const LIST_COLUMNS = ["code", "id", "title", "context", "language", "scope", "ta
 interface KgEntityResult {
 	name: string;
 	type: string;
-	description?: string;
+	source_domain: string;
 }
 
-interface KgObservationResult {
-	id: string;
-	entity_name: string;
-	observation: string;
+interface KgRelationResult {
+	from: string;
+	to: string;
+	type: string;
 }
 
-interface KgContextResult {
+interface KgResult {
 	entities: KgEntityResult[];
-	observations: KgObservationResult[];
+	relations: KgRelationResult[];
 }
 
 /**
- * Fetch KG entities and observations related to a standard by matching
- * observation text `"Mentioned in standard: <title>"`. Best-effort —
- * returns null on failure (never throws).
+ * Query entities + relations for a given set of entity names.
+ * Best-effort — never throws.
  */
-function fetchKgContext(
-	db: SQLiteStore,
-	owner: string | undefined,
-	repo: string | undefined,
-	standardTitle: string
-): KgContextResult | null {
+function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], sourceDomain: string): KgResult | null {
 	try {
-		const observationPattern = `Mentioned in standard: ${standardTitle}`;
+		if (entityNames.length === 0) return { entities: [], relations: [] };
+
+		const uniqueNames = [...new Set(entityNames)];
+		const placeholders = uniqueNames.map(() => "?").join(",");
+
+		const entities = db.db
+			.prepare<unknown[], KgEntityResult>(
+				`SELECT name, type, ? AS source_domain FROM entities WHERE name IN (${placeholders}) AND repo = ?`
+			)
+			.all(sourceDomain, ...uniqueNames, repo) as KgEntityResult[];
+
+		const relations = db.db
+			.prepare<unknown[], KgRelationResult>(
+				`SELECT from_entity AS "from", to_entity AS "to", relation_type AS type
+				 FROM relations WHERE (from_entity IN (${placeholders}) OR to_entity IN (${placeholders})) AND repo = ?`
+			)
+			.all(...uniqueNames, ...uniqueNames, repo) as KgRelationResult[];
+
+		return { entities, relations };
+	} catch (error) {
+		logger.warn("[Standard.Read] KG query failed", { error: String(error), repo });
+		return null;
+	}
+}
+
+/**
+ * Fetch KG entities + relations related to a standard by matching
+ * observation text `"Mentioned in standard: {title}"`.
+ */
+function fetchKgContext(db: SQLiteStore, repo: string | undefined, standardTitle: string): KgResult | null {
+	try {
 		const entityRows = db.db
 			.prepare<unknown[], { entity_name: string }>(
 				`SELECT DISTINCT entity_name FROM observations WHERE observation = ? AND repo = ?`
 			)
-			.all(observationPattern, repo) as { entity_name: string }[];
+			.all(`Mentioned in standard: ${standardTitle}`, repo) as { entity_name: string }[];
 
-		if (entityRows.length === 0) return { entities: [], observations: [] };
+		if (entityRows.length === 0) return { entities: [], relations: [] };
 
-		const entityNames = entityRows.map((r) => r.entity_name);
-		const placeholders = entityNames.map(() => "?").join(",");
-
-		const entities = db.db
-			.prepare<unknown[], KgEntityResult>(
-				`SELECT name, type, description FROM entities WHERE name IN (${placeholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgEntityResult[];
-
-		const observations = db.db
-			.prepare<unknown[], KgObservationResult>(
-				`SELECT id, entity_name, observation FROM observations WHERE entity_name IN (${placeholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgObservationResult[];
-
-		return {
-			entities: entities.map((e) => ({ ...e, description: e.description ?? undefined })),
-			observations
-		};
+		return kgQuery(
+			db,
+			repo ?? "",
+			entityRows.map((r) => r.entity_name),
+			"standard"
+		);
 	} catch (error) {
 		logger.warn("[Standard.Read] KG context fetch failed", { error: String(error), title: standardTitle });
 		return null;
@@ -227,17 +238,11 @@ function fetchKgContext(
 }
 
 /**
- * Aggregate KG context across multiple standard titles. Runs a single
- * batched query. Best-effort — never throws.
+ * Aggregate KG context across multiple standard titles.
  */
-function fetchAggregatedKgContext(
-	db: SQLiteStore,
-	owner: string | undefined,
-	repo: string | undefined,
-	titles: string[]
-): KgContextResult | null {
+function fetchAggregatedKgContext(db: SQLiteStore, repo: string | undefined, titles: string[]): KgResult | null {
 	try {
-		if (titles.length === 0) return { entities: [], observations: [] };
+		if (titles.length === 0) return { entities: [], relations: [] };
 
 		const patterns = titles.map((t) => `Mentioned in standard: ${t}`);
 		const patternPlaceholders = patterns.map(() => "?").join(",");
@@ -248,27 +253,9 @@ function fetchAggregatedKgContext(
 			)
 			.all(...patterns, repo) as { entity_name: string }[];
 
-		if (entityRows.length === 0) return { entities: [], observations: [] };
+		if (entityRows.length === 0) return { entities: [], relations: [] };
 
-		const entityNames = [...new Set(entityRows.map((r) => r.entity_name))];
-		const namePlaceholders = entityNames.map(() => "?").join(",");
-
-		const entities = db.db
-			.prepare<unknown[], KgEntityResult>(
-				`SELECT name, type, description FROM entities WHERE name IN (${namePlaceholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgEntityResult[];
-
-		const observations = db.db
-			.prepare<unknown[], KgObservationResult>(
-				`SELECT id, entity_name, observation FROM observations WHERE entity_name IN (${namePlaceholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgObservationResult[];
-
-		return {
-			entities: entities.map((e) => ({ ...e, description: e.description ?? undefined })),
-			observations
-		};
+		return kgQuery(db, repo ?? "", [...new Set(entityRows.map((r) => r.entity_name))], "standard");
 	} catch (error) {
 		logger.warn("[Standard.Read] Aggregated KG context fetch failed", {
 			error: String(error),
@@ -471,27 +458,35 @@ async function handleSearchMode(
 		contentSummary = "No matching coding standards found.";
 	}
 
-	return createMcpResponse(
-		{
-			schema: "standard-read" as const,
-			mode: "search" as const,
-			query: validated.query || "",
-			count: paginatedResults.length,
-			total: results.length,
-			offset: validated.offset,
-			limit: validated.limit,
-			results: {
-				columns: [...SEARCH_COLUMNS],
-				rows
-			}
-		},
-		`Found ${results.length} coding standards matching your query`,
-		{
-			contentSummary,
-			structuredContentPathHint: "results",
-			includeJson: true
+	const responseData: Record<string, unknown> = {
+		schema: "standard-read",
+		mode: "search",
+		query: validated.query || "",
+		count: paginatedResults.length,
+		total: results.length,
+		offset: validated.offset,
+		limit: validated.limit,
+		results: {
+			columns: [...SEARCH_COLUMNS],
+			rows
 		}
-	);
+	};
+
+	// Best-effort KG context (REFACTOR-KG-005)
+	if (paginatedResults.length > 0) {
+		const kgData = fetchAggregatedKgContext(
+			db,
+			validated.repo,
+			paginatedResults.map((r) => r.standard.title)
+		);
+		if (kgData) responseData.kg = kgData;
+	}
+
+	return createMcpResponse(responseData, `Found ${results.length} coding standards matching your query`, {
+		contentSummary,
+		structuredContentPathHint: "results",
+		includeJson: true
+	});
 }
 
 async function handleDetailMode(validated: StandardReadInput, db: SQLiteStore): Promise<McpResponse> {
@@ -507,12 +502,11 @@ async function handleDetailMode(validated: StandardReadInput, db: SQLiteStore): 
 
 		const kgContext = fetchAggregatedKgContext(
 			db,
-			owner,
 			repo,
 			standards.map((s) => s.title)
 		);
 		const data: Record<string, unknown> = { standards, count: standards.length };
-		if (kgContext) data.kg_context = kgContext;
+		if (kgContext) data.kg = kgContext;
 
 		return createMcpResponse(
 			{
@@ -537,12 +531,11 @@ async function handleDetailMode(validated: StandardReadInput, db: SQLiteStore): 
 
 		const kgContext = fetchAggregatedKgContext(
 			db,
-			owner,
 			repo,
 			standards.map((s) => s.title)
 		);
 		const data: Record<string, unknown> = { standards, count: standards.length };
-		if (kgContext) data.kg_context = kgContext;
+		if (kgContext) data.kg = kgContext;
 
 		return createMcpResponse(
 			{
@@ -592,9 +585,9 @@ async function handleDetailMode(validated: StandardReadInput, db: SQLiteStore): 
 
 	const content = lines.join("\n");
 
-	const kgContext = fetchKgContext(db, owner, repo, standard.title);
+	const kgContext = fetchKgContext(db, repo, standard.title);
 	const data: Record<string, unknown> = { standard };
-	if (kgContext) data.kg_context = kgContext;
+	if (kgContext) data.kg = kgContext;
 
 	return createMcpResponse(
 		{
@@ -646,24 +639,32 @@ async function handleListMode(validated: StandardReadInput, db: SQLiteStore): Pr
 		resultCount: standards.length
 	});
 
-	return createMcpResponse(
-		{
-			schema: "standard-read" as const,
-			mode: "list" as const,
-			standards: {
-				columns: [...LIST_COLUMNS],
-				rows
-			},
-			count: standards.length,
-			offset: validated.offset
+	const responseData: Record<string, unknown> = {
+		schema: "standard-read",
+		mode: "list",
+		standards: {
+			columns: [...LIST_COLUMNS],
+			rows
 		},
+		count: standards.length,
+		offset: validated.offset
+	};
+
+	// Best-effort KG context (REFACTOR-KG-005)
+	if (standards.length > 0) {
+		const kgData = fetchAggregatedKgContext(
+			db,
+			validated.repo,
+			standards.map((s) => s.title)
+		);
+		if (kgData) responseData.kg = kgData;
+	}
+
+	return createMcpResponse(responseData, contentSummary, {
 		contentSummary,
-		{
-			contentSummary,
-			structuredContentPathHint: "standards",
-			includeJson: true
-		}
-	);
+		structuredContentPathHint: "standards",
+		includeJson: true
+	});
 }
 
 // ── Main entry point ─────────────────────────────────────────────────────

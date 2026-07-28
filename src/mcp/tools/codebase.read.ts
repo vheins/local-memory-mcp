@@ -26,10 +26,12 @@ import { logger } from "../utils/logger";
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Blend vector similarity scores into existing ranking as a tiebreaker.
+ * Apply SPEC-001 hybrid scoring to ranking results.
  *
- * Within each rank tier, re-sorts by (existing score desc, vector similarity desc)
- * so semantically similar symbols rank higher within their tier.
+ * Blends vector similarity (cosine) with the existing 5-tier text ranking score:
+ *   final = (vector × 0.30) + (tier_score × 0.70)
+ *
+ * Within each rank tier, symbols are re-sorted by their blended score.
  * Falls back gracefully if vector search fails or returns nothing.
  */
 async function blendVectorRanking(
@@ -61,20 +63,29 @@ async function blendVectorRanking(
 			}
 		}
 
-		// Re-sort within each tier using vector similarity as tiebreaker
+		// Re-score within each tier using SPEC-001 hybrid formula
+		// final = (vector × 0.30) + (tier_score × 0.70)
 		const result: RankedSymbol[] = [];
 		for (const tier of [RankTier.Exact, RankTier.CamelCase, RankTier.Prefix, RankTier.Substring, RankTier.FTS5]) {
 			const group = tierGroups.get(tier);
 			if (!group || group.length === 0) continue;
 
-			group.sort((a, b) => {
-				if (b.score !== a.score) return b.score - a.score;
-				const vecA = vectorMap.get(a.symbol.id) ?? 0;
-				const vecB = vectorMap.get(b.symbol.id) ?? 0;
-				return vecB - vecA;
+			// Compute blended score, sort by it descending
+			const withBlend = group.map((rs) => {
+				const vecScore = vectorMap.get(rs.symbol.id) ?? 0;
+				const blended = vecScore * 0.3 + rs.score * 0.7;
+				return { ...rs, blended };
 			});
 
-			result.push(...group);
+			withBlend.sort((a, b) => b.blended - a.blended);
+
+			// Write blended score back for output consistency
+			for (const item of withBlend) {
+				item.score = parseFloat(item.blended.toFixed(4));
+				delete (item as Record<string, unknown>).blended;
+			}
+
+			result.push(...withBlend);
 		}
 
 		return result;

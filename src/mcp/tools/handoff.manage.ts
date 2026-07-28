@@ -136,7 +136,7 @@ export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 	]);
 
 	const structuredData = {
-		schema: "handoff-list" as const,
+		schema: "handoff-read" as const,
 		handoffs: {
 			columns: [...COLUMNS],
 			rows

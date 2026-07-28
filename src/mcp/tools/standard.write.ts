@@ -395,7 +395,7 @@ async function handleBulk(params: WriteParams, db: SQLiteStore, vectors: VectorS
 		const std = {
 			...raw,
 			owner: (raw.owner as string) ?? params.owner,
-			repo: params.repo, // propagate top-level repo to each item (bug fix)
+			repo: (raw.repo as string) ?? params.repo, // propagate top-level repo to each item, but respect per-item repo
 			json: params.json
 		} as unknown as WriteParams;
 

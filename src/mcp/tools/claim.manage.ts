@@ -188,7 +188,7 @@ async function handleListOp(
 	]);
 
 	const structuredData = {
-		schema: "claim-list" as const,
+		schema: "claim-manage" as const,
 		claims: {
 			columns: [...COLUMNS],
 			rows

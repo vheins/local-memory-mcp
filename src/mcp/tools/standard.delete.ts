@@ -55,6 +55,8 @@ export async function handleStandardDelete(
 	const validIdsToDelete: string[] = [];
 
 	let lastRepo = repo || "unknown";
+	const deleteErrors: { identifier: string; error: string }[] = [];
+	const isBulk = (ids && ids.length > 1) || (codes && codes.length > 1);
 
 	for (const targetId of resolvedIds) {
 		const existing = standardMap.get(targetId);
@@ -62,6 +64,8 @@ export async function handleStandardDelete(
 			lastRepo = existing.repo || (existing.is_global ? "global" : lastRepo);
 			deletedTitles.push(existing.title);
 			validIdsToDelete.push(targetId);
+		} else if (isBulk) {
+			deleteErrors.push({ identifier: targetId, error: "Coding standard not found" });
 		} else {
 			throw new Error(`Coding standard not found: ${targetId}`);
 		}
@@ -96,18 +100,31 @@ export async function handleStandardDelete(
 		deletedCount = validIdsToDelete.length;
 	}
 
-	logger.info("[Tool] standard.delete", { repo: lastRepo, count: deletedCount });
+	const allOk = deleteErrors.length === 0;
+
+	logger.info("[Tool] standard.delete", {
+		repo: lastRepo,
+		count: deletedCount,
+		...(deleteErrors.length > 0 ? { errors: deleteErrors.length } : {})
+	});
+
+	const responseData: Record<string, unknown> = {
+		success: allOk,
+		id: id || undefined,
+		ids: ids || undefined,
+		repo: lastRepo,
+		deletedCount,
+		deletedTitles: deletedTitles.length > 10 ? [...deletedTitles.slice(0, 10), "..."] : deletedTitles
+	};
+
+	if (deleteErrors.length > 0) {
+		responseData.errors = deleteErrors;
+		responseData.totalAttempted = resolvedIds.length;
+	}
 
 	return createMcpResponse(
-		{
-			success: true,
-			id: id || undefined,
-			ids: ids || undefined,
-			repo: lastRepo,
-			deletedCount,
-			deletedTitles: deletedTitles.length > 10 ? [...deletedTitles.slice(0, 10), "..."] : deletedTitles
-		},
-		`Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from repo "${lastRepo}".`,
+		responseData,
+		`Deleted ${deletedCount}/${resolvedIds.length} standards from repo "${lastRepo}".${deleteErrors.length > 0 ? ` ${deleteErrors.length} failed.` : ""}`,
 		{
 			structuredContentPathHint: "deletedCount",
 			includeJson: json

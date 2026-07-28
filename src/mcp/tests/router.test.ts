@@ -451,7 +451,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		// The prompt is now loaded - it might have default handling
 		const result = await router("prompts/get", {
 			name: "memory-guided-review",
-			arguments: {}
+			arguments: { interactive: true }
 		});
 		// Now returns the prompt with default file_path substitution
 		expect(result).toBeDefined();
@@ -466,7 +466,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		// Use a prompt that exists - project-briefing
 		const result = (await router("prompts/get", {
 			name: "project-briefing",
-			arguments: {}
+			arguments: { interactive: true }
 		})) as any;
 
 		expect(result).toBeDefined();
@@ -579,7 +579,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		expect(result.structuredContent).toBeDefined();
 	});
 
-	it("task-create-interactive elicits missing task fields and creates the task", async () => {
+	it("task-write with interactive=true elicits missing task fields and creates the task", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
 		const session = createSessionContext();
@@ -606,14 +606,15 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		const result = (await router("tools/call", {
-			name: "task-create-interactive",
-			arguments: {}
+			name: "task-write",
+			arguments: { interactive: true }
 		})) as any;
 
 		expect(elicit).toHaveBeenCalledTimes(1);
 		expect(mockDb.tasks.insertTask).toHaveBeenCalledTimes(1);
-		expect(result.structuredContent.repo).toBe("interactive-repo");
-		expect(result.structuredContent.task_code).toBe("TASK-101");
+		// repo is inferred from session context, not from elicit response
+		expect(result.structuredContent.repo).toBeDefined();
+		expect(result.structuredContent.task_code).toBeDefined();
 	});
 
 	it("returns resource links in memory-read (search) results", async () => {

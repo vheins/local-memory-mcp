@@ -10,7 +10,7 @@ agent: Task Executor
 
 ## Main Loop
 
-Sync identity, tasks, handoffs. Hydrate task details (cache once). Check dependency readiness. Claim task. Load required skills (if metadata.required_skills set). Research via memory-search + standard-search. Execute changes. Validate (tests, linters, type-check, UI check). Finalize: task-update + memory-store + decision-log + commit.
+Sync identity, tasks, handoffs. Hydrate task details (cache once). Check dependency readiness. Claim task. Load required skills (if metadata.required_skills set). Research via memory-read + standard-read. Execute changes. Validate (tests, linters, type-check, UI check). Finalize: task-write (with status=completed) + memory-write + commit.
 
 Infinite loop until queue exhausted. Max 2 parallel sub-agents. Blocker handling: classify as internal (auto-create fix task) or external (keep blocked).
 

@@ -35,7 +35,7 @@ import { TOOL_DEFINITIONS } from "./tool-definitions";
 export type RegisterAllOptions = {
 	/** Client sampling handler (required for memory-synthesize) */
 	sampleMessage?: SamplingRequestHandler;
-	/** Client elicitation handler (required for task-create-interactive) */
+	/** Client elicitation handler (required for interactive task creation via task-write) */
 	elicit?: ElicitationRequestHandler;
 	/** Called after write tools with the set of affected resource URIs */
 	onResourcesMutated?: (uris: string[]) => void;
@@ -43,15 +43,24 @@ export type RegisterAllOptions = {
 
 // ── Tools that mutate the DB — must run under write lock ──────────────────
 const WRITE_TOOLS = new Set([
+	// Canonical memory tools
 	"memory-write",
 	"memory-delete",
+	// Backward-compat memory aliases (old names → memory-write)
+	"memory-store",
+	"memory-update",
+	"memory-acknowledge",
+	// Summarize tools
 	"memory-summarize",
 	"repo-summarize",
 	"agent-summarize",
+	// Handoff & Claim
 	"handoff-write",
 	"claim-manage",
+	// Standards
 	"standard-write",
 	"standard-delete",
+	// Tasks
 	"task-write",
 	"task-delete",
 	// Codebase index tools (write)
@@ -189,6 +198,13 @@ function buildExecutors(
 		"memory-write": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
 		"memory-read": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
 		"memory-delete": (args, db, vectors, extra) => handleMemoryDelete(args, db, vectors, extra?.onProgress),
+		// Backward-compat aliases (old names → new handlers)
+		"memory-store": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-update": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-acknowledge": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
+		"memory-search": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
+		"memory-detail": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
+		"memory-recap": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
 		// New canonical names per ADR-001
 		synthesize: (args, db, vectors, _extra) =>
 			handleMemorySynthesize(args, db, vectors, {
@@ -251,9 +267,6 @@ export function registerAllTools(
 			(def.name === "synthesize" || def.name === "agent-synthesize" || def.name === "memory-synthesize") &&
 			!session.supportsSampling
 		) {
-			return false;
-		}
-		if (def.name === "task-create-interactive" && !session.supportsElicitationForm) {
 			return false;
 		}
 		return true;

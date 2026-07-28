@@ -163,7 +163,7 @@ function coreListHandoffs(
 	]);
 
 	const structuredData = {
-		schema: "handoff-list" as const,
+		schema: "handoff-read" as const,
 		handoffs: {
 			columns: [...COLUMNS],
 			rows

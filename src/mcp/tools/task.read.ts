@@ -71,60 +71,117 @@ function describeStatusFilter(status?: string): string {
 interface KgEntityResult {
 	name: string;
 	type: string;
-	description?: string;
+	source_domain: string;
 }
 
-interface KgObservationResult {
-	id: string;
-	entity_name: string;
-	observation: string;
+interface KgRelationResult {
+	from: string;
+	to: string;
+	type: string;
 }
 
-interface KgContextResult {
+interface KgResult {
 	entities: KgEntityResult[];
-	observations: KgObservationResult[];
+	relations: KgRelationResult[];
 }
 
 /**
- * Fetch KG entities and observations related to a task by matching task
- * title/description text against entity names. Best-effort — returns null
- * on failure (never throws).
+ * Query entities + relations for a given set of entity names.
+ * Best-effort — never throws.
+ */
+function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], sourceDomain: string): KgResult | null {
+	try {
+		if (entityNames.length === 0) return { entities: [], relations: [] };
+
+		const uniqueNames = [...new Set(entityNames)];
+		const placeholders = uniqueNames.map(() => "?").join(",");
+
+		const entities = db.db
+			.prepare<unknown[], KgEntityResult>(
+				`SELECT name, type, ? AS source_domain FROM entities WHERE name IN (${placeholders}) AND repo = ?`
+			)
+			.all(sourceDomain, ...uniqueNames, repo) as KgEntityResult[];
+
+		const relations = db.db
+			.prepare<unknown[], KgRelationResult>(
+				`SELECT from_entity AS "from", to_entity AS "to", relation_type AS type
+				 FROM relations WHERE (from_entity IN (${placeholders}) OR to_entity IN (${placeholders})) AND repo = ?`
+			)
+			.all(...uniqueNames, ...uniqueNames, repo) as KgRelationResult[];
+
+		return { entities, relations };
+	} catch (error) {
+		logger.warn("[Task.Read] KG query failed", { error: String(error), repo });
+		return null;
+	}
+}
+
+/**
+ * Fetch KG entities + relations related to a task by matching task
+ * title/description text against entity names. Best-effort — never throws.
  */
 function fetchTaskKgContext(
 	db: SQLiteStore,
-	owner: string | undefined,
 	repo: string,
 	taskTitle: string,
 	taskDescription: string
-): KgContextResult | null {
+): KgResult | null {
 	try {
 		const searchText = [taskTitle, taskDescription].filter(Boolean).join(" ");
-		if (!searchText.trim()) return { entities: [], observations: [] };
+		if (!searchText.trim()) return { entities: [], relations: [] };
 
-		// Find entities whose name appears anywhere in the task text
 		const entityRows = db.db
-			.prepare<unknown[], KgEntityResult>(
-				`SELECT name, type, description FROM entities WHERE repo = ? AND INSTR(?, name) > 0`
-			)
-			.all(repo, searchText) as KgEntityResult[];
+			.prepare<unknown[], { name: string }>(`SELECT name FROM entities WHERE repo = ? AND INSTR(?, name) > 0`)
+			.all(repo, searchText) as { name: string }[];
 
-		if (entityRows.length === 0) return { entities: [], observations: [] };
+		if (entityRows.length === 0) return { entities: [], relations: [] };
 
-		const entityNames = entityRows.map((r) => r.name);
-		const placeholders = entityNames.map(() => "?").join(",");
-
-		const observations = db.db
-			.prepare<unknown[], KgObservationResult>(
-				`SELECT id, entity_name, observation FROM observations WHERE entity_name IN (${placeholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgObservationResult[];
-
-		return {
-			entities: entityRows.map((e) => ({ ...e, description: e.description ?? undefined })),
-			observations
-		};
+		return kgQuery(
+			db,
+			repo,
+			entityRows.map((r) => r.name),
+			"task"
+		);
 	} catch (error) {
 		logger.warn("[Task.Read] KG context fetch failed", { error: String(error), title: taskTitle });
+		return null;
+	}
+}
+
+/**
+ * Aggregate KG context across multiple task titles + descriptions.
+ */
+function fetchAggregatedTaskKgContext(
+	db: SQLiteStore,
+	repo: string,
+	tasks: Array<{ title: string; description?: string | null }>
+): KgResult | null {
+	try {
+		if (tasks.length === 0) return { entities: [], relations: [] };
+
+		const searchText = tasks
+			.map((t) => [t.title, t.description ?? ""].filter(Boolean).join(" "))
+			.filter(Boolean)
+			.join(" ");
+		if (!searchText.trim()) return { entities: [], relations: [] };
+
+		const entityRows = db.db
+			.prepare<unknown[], { name: string }>(`SELECT DISTINCT name FROM entities WHERE repo = ? AND INSTR(?, name) > 0`)
+			.all(repo, searchText) as { name: string }[];
+
+		if (entityRows.length === 0) return { entities: [], relations: [] };
+
+		return kgQuery(
+			db,
+			repo,
+			entityRows.map((r) => r.name),
+			"task"
+		);
+	} catch (error) {
+		logger.warn("[Task.Read] Aggregated KG context fetch failed", {
+			error: String(error),
+			count: tasks.length
+		});
 		return null;
 	}
 }
@@ -307,8 +364,8 @@ async function handleSearchMode(
 		st.task.phase
 	]);
 
-	const structuredData = {
-		schema: "task-read/search" as const,
+	const structuredData: Record<string, unknown> = {
+		schema: "task-read/search",
 		query,
 		count: paginated.length,
 		total,
@@ -319,6 +376,16 @@ async function handleSearchMode(
 			rows
 		}
 	};
+
+	// Best-effort KG context (REFACTOR-KG-004)
+	if (paginated.length > 0) {
+		const kgData = fetchAggregatedTaskKgContext(
+			storage,
+			repo,
+			paginated.map((st: ScoredTask) => st.task)
+		);
+		if (kgData) structuredData.kg = kgData;
+	}
 
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {
@@ -444,7 +511,7 @@ async function handleDetailMode(
 		}
 
 		// Best-effort KG context fetch based on task title + description
-		const kgContext = fetchTaskKgContext(storage, owner, repo, task.title, task.description || "");
+		const kgContext = fetchTaskKgContext(storage, repo, task.title, task.description || "");
 
 		const data: Record<string, unknown> = {
 			...task,
@@ -452,7 +519,7 @@ async function handleDetailMode(
 			children,
 			depended_by
 		};
-		if (kgContext) data.kg_context = kgContext;
+		if (kgContext) data.kg = kgContext;
 
 		return createMcpResponse(data, contentSummary || "", {
 			contentSummary,
@@ -489,7 +556,7 @@ async function handleDetailMode(
 		.map((t) => t.description || "")
 		.filter(Boolean)
 		.join(" ");
-	const kgContext = fetchTaskKgContext(storage, owner, repo, combinedTitle, combinedDesc);
+	const kgContext = fetchTaskKgContext(storage, repo, combinedTitle, combinedDesc);
 
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {
@@ -507,7 +574,7 @@ async function handleDetailMode(
 		count: enriched.length,
 		tasks: enriched
 	};
-	if (kgContext) data.kg_context = kgContext;
+	if (kgContext) data.kg = kgContext;
 
 	return createMcpResponse(data, contentSummary || `Found ${enriched.length} tasks.`, {
 		contentSummary,
@@ -554,8 +621,8 @@ async function handleListMode(
 		t.comments_count || 0
 	]);
 
-	const structuredData = {
-		schema: "task-read/list" as const,
+	const structuredData: Record<string, unknown> = {
+		schema: "task-read/list",
 		tasks: {
 			columns: [...COLUMNS],
 			rows
@@ -563,6 +630,12 @@ async function handleListMode(
 		count: rows.length,
 		offset
 	};
+
+	// Best-effort KG context (REFACTOR-KG-004)
+	if (filteredTasks.length > 0) {
+		const kgData = fetchAggregatedTaskKgContext(storage, repo, filteredTasks);
+		if (kgData) structuredData.kg = kgData;
+	}
 
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {

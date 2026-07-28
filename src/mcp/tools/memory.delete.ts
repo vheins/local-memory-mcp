@@ -58,6 +58,7 @@ export async function handleMemoryDelete(
 	const memoryMap = new Map(existingMemories.map((m) => [m.id, m]));
 	const deletedCodes: string[] = [];
 	const validIdsToDelete: string[] = [];
+	const skippedErrors: { identifier: string; error: string }[] = [];
 
 	let lastRepo = repo || "unknown";
 
@@ -68,7 +69,10 @@ export async function handleMemoryDelete(
 			deletedCodes.push(existing.code || existing.id);
 			validIdsToDelete.push(targetId);
 		} else {
-			throw new Error(`Memory not found: ${targetId}`);
+			const msg = `Memory not found: ${targetId}`;
+			// Partial execution for bulk — warn and skip instead of throw
+			logger.warn("[Tool] memory.delete — skipping not found", { targetId });
+			skippedErrors.push({ identifier: targetId, error: msg });
 		}
 	}
 
@@ -111,18 +115,23 @@ export async function handleMemoryDelete(
 
 	logger.info("[Tool] memory.delete", { repo: lastRepo, count: deletedCount });
 
+	const skippedCount = skippedErrors.length;
+	// success is false only when nothing was deleted and there were errors
+	const overallSuccess = deletedCount > 0 || skippedCount === 0;
+
 	return createMcpResponse(
 		{
-			success: true,
+			success: overallSuccess,
 			id: id || undefined,
 			ids: ids || undefined,
 			repo: lastRepo,
 			deletedCount,
-			deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes
+			deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes,
+			...(skippedCount > 0 ? { skippedCount, errors: skippedErrors } : {})
 		},
-		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from repo "${lastRepo}".`,
+		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from repo "${lastRepo}"${skippedCount > 0 ? ` (${skippedCount} skipped).` : "."}`,
 		{
-			structuredContentPathHint: "deletedCount",
+			structuredContentPathHint: deletedCount > 0 ? "deletedCount" : "errors",
 			includeJson: json
 		}
 	);

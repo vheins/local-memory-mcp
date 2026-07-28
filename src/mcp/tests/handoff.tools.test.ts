@@ -65,7 +65,7 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 			}
 		});
 
-		expect(listRes.structuredContent.schema).toBe("handoff-list");
+		expect(listRes.structuredContent.schema).toBe("handoff-read");
 		expect(listRes.structuredContent.count).toBe(1);
 		expect(listRes.structuredContent.handoffs.rows[0][1]).toBe("agent-a");
 		expect(listRes.structuredContent.handoffs.rows[0][4]).toBe("HANDOFF-101");
@@ -151,7 +151,7 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 			}
 		});
 
-		expect(listRes.structuredContent.schema).toBe("claim-list");
+		expect(listRes.structuredContent.schema).toBe("claim-manage");
 		expect(listRes.structuredContent.count).toBe(1);
 		expect(listRes.structuredContent.claims.rows[0][2]).toBe("CLAIM-101");
 	});

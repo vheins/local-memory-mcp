@@ -54,65 +54,76 @@ const HYBRID_WEIGHTS = {
 
 const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
 
-// ── KG Context Types & Helpers ──────────────────────────────────────────
+// ── KG Types & Helpers ─────────────────────────────────────────────────
 
 interface KgEntityResult {
 	name: string;
 	type: string;
-	description?: string;
+	source_domain: string;
 }
 
-interface KgObservationResult {
-	id: string;
-	entity_name: string;
-	observation: string;
+interface KgRelationResult {
+	from: string;
+	to: string;
+	type: string;
 }
 
-interface KgContextResult {
+interface KgResult {
 	entities: KgEntityResult[];
-	observations: KgObservationResult[];
+	relations: KgRelationResult[];
 }
 
 /**
- * Fetch KG entities and observations related to a memory by matching
- * observation text `"Mentioned in memory: <title>"`. Best-effort —
- * returns null on failure (never throws).
+ * Query entities + relations for a given set of entity names.
+ * Best-effort — never throws.
  */
-function fetchKgContext(
-	db: SQLiteStore,
-	owner: string | undefined,
-	repo: string,
-	memoryTitle: string
-): KgContextResult | null {
+function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], sourceDomain: string): KgResult | null {
 	try {
-		const observationPattern = `Mentioned in memory: ${memoryTitle}`;
+		if (entityNames.length === 0) return { entities: [], relations: [] };
+
+		const uniqueNames = [...new Set(entityNames)];
+		const placeholders = uniqueNames.map(() => "?").join(",");
+
+		const entities = db.db
+			.prepare<unknown[], KgEntityResult>(
+				`SELECT name, type, ? AS source_domain FROM entities WHERE name IN (${placeholders}) AND repo = ?`
+			)
+			.all(sourceDomain, ...uniqueNames, repo) as KgEntityResult[];
+
+		const relations = db.db
+			.prepare<unknown[], KgRelationResult>(
+				`SELECT from_entity AS "from", to_entity AS "to", relation_type AS type
+				 FROM relations WHERE (from_entity IN (${placeholders}) OR to_entity IN (${placeholders})) AND repo = ?`
+			)
+			.all(...uniqueNames, ...uniqueNames, repo) as KgRelationResult[];
+
+		return { entities, relations };
+	} catch (error) {
+		logger.warn("[Memory.Read] KG query failed", { error: String(error), repo });
+		return null;
+	}
+}
+
+/**
+ * Fetch KG entities + relations related to a memory by matching
+ * observation text `"Mentioned in memory: {title}"`.
+ */
+function fetchKgContext(db: SQLiteStore, repo: string, memoryTitle: string): KgResult | null {
+	try {
 		const entityRows = db.db
 			.prepare<unknown[], { entity_name: string }>(
 				`SELECT DISTINCT entity_name FROM observations WHERE observation = ? AND repo = ?`
 			)
-			.all(observationPattern, repo) as { entity_name: string }[];
+			.all(`Mentioned in memory: ${memoryTitle}`, repo) as { entity_name: string }[];
 
-		if (entityRows.length === 0) return { entities: [], observations: [] };
+		if (entityRows.length === 0) return { entities: [], relations: [] };
 
-		const entityNames = entityRows.map((r) => r.entity_name);
-		const placeholders = entityNames.map(() => "?").join(",");
-
-		const entities = db.db
-			.prepare<unknown[], KgEntityResult>(
-				`SELECT name, type, description FROM entities WHERE name IN (${placeholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgEntityResult[];
-
-		const observations = db.db
-			.prepare<unknown[], KgObservationResult>(
-				`SELECT id, entity_name, observation FROM observations WHERE entity_name IN (${placeholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgObservationResult[];
-
-		return {
-			entities: entities.map((e) => ({ ...e, description: e.description ?? undefined })),
-			observations
-		};
+		return kgQuery(
+			db,
+			repo,
+			entityRows.map((r) => r.entity_name),
+			"memory"
+		);
 	} catch (error) {
 		logger.warn("[Memory.Read] KG context fetch failed", { error: String(error), title: memoryTitle });
 		return null;
@@ -120,17 +131,11 @@ function fetchKgContext(
 }
 
 /**
- * Aggregate KG context across multiple memory titles. Runs a single
- * batched query. Best-effort — never throws.
+ * Aggregate KG context across multiple memory titles.
  */
-function fetchAggregatedKgContext(
-	db: SQLiteStore,
-	owner: string | undefined,
-	repo: string,
-	titles: string[]
-): KgContextResult | null {
+function fetchAggregatedKgContext(db: SQLiteStore, repo: string, titles: string[]): KgResult | null {
 	try {
-		if (titles.length === 0) return { entities: [], observations: [] };
+		if (titles.length === 0) return { entities: [], relations: [] };
 
 		const patterns = titles.map((t) => `Mentioned in memory: ${t}`);
 		const patternPlaceholders = patterns.map(() => "?").join(",");
@@ -141,27 +146,9 @@ function fetchAggregatedKgContext(
 			)
 			.all(...patterns, repo) as { entity_name: string }[];
 
-		if (entityRows.length === 0) return { entities: [], observations: [] };
+		if (entityRows.length === 0) return { entities: [], relations: [] };
 
-		const entityNames = [...new Set(entityRows.map((r) => r.entity_name))];
-		const namePlaceholders = entityNames.map(() => "?").join(",");
-
-		const entities = db.db
-			.prepare<unknown[], KgEntityResult>(
-				`SELECT name, type, description FROM entities WHERE name IN (${namePlaceholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgEntityResult[];
-
-		const observations = db.db
-			.prepare<unknown[], KgObservationResult>(
-				`SELECT id, entity_name, observation FROM observations WHERE entity_name IN (${namePlaceholders}) AND repo = ?`
-			)
-			.all(...entityNames, repo) as KgObservationResult[];
-
-		return {
-			entities: entities.map((e) => ({ ...e, description: e.description ?? undefined })),
-			observations
-		};
+		return kgQuery(db, repo, [...new Set(entityRows.map((r) => r.entity_name))], "memory");
 	} catch (error) {
 		logger.warn("[Memory.Read] Aggregated KG context fetch failed", {
 			error: String(error),
@@ -412,7 +399,7 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		contentSummary = `No memories found for "${params.query}" in repo "${params.repo}".`;
 	}
 
-	const structuredData = {
+	const structuredData: Record<string, unknown> = {
 		columns: [...SEARCH_COLUMNS],
 		rows,
 		count: paginatedResults.length,
@@ -420,6 +407,16 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		offset: params.offset,
 		limit: params.limit
 	};
+
+	// Best-effort KG context (REFACTOR-KG-003)
+	if (paginatedResults.length > 0) {
+		const kgData = fetchAggregatedKgContext(
+			db,
+			params.repo,
+			paginatedResults.map((m: MemoryEntry) => m.title)
+		);
+		if (kgData) structuredData.kg = kgData;
+	}
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
@@ -442,12 +439,11 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 			memories.length > 0 ? `Found ${memories.length} memory/memories by ids.` : "No memories found for given ids.";
 		const kgContext = fetchAggregatedKgContext(
 			db,
-			owner,
 			repo,
 			memories.map((m: MemoryEntry) => m.title)
 		);
 		const data: Record<string, unknown> = { memories };
-		if (kgContext) data.kg_context = kgContext;
+		if (kgContext) data.kg = kgContext;
 		return createMcpResponse(data, contentSummary, {
 			contentSummary,
 			includeJson: params.json
@@ -463,12 +459,11 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 			memories.length > 0 ? `Found ${memories.length} memory/memories by codes.` : "No memories found for given codes.";
 		const kgContext = fetchAggregatedKgContext(
 			db,
-			owner,
 			repo,
 			memories.map((m: MemoryEntry) => m.title)
 		);
 		const data: Record<string, unknown> = { memories };
-		if (kgContext) data.kg_context = kgContext;
+		if (kgContext) data.kg = kgContext;
 		return createMcpResponse(data, contentSummary, {
 			contentSummary,
 			includeJson: params.json
@@ -501,9 +496,9 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 
 	const content = lines.join("\n");
 
-	const kgContext = fetchKgContext(db, owner, repo, memory.title);
+	const kgContext = fetchKgContext(db, repo, memory.title);
 	const data: Record<string, unknown> = { memory };
-	if (kgContext) data.kg_context = kgContext;
+	if (kgContext) data.kg = kgContext;
 
 	return createMcpResponse(data, content, {
 		contentSummary: content,
@@ -571,7 +566,7 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 		contentSummary = `No memories found for repo "${params.repo}".`;
 	}
 
-	const structuredData = {
+	const structuredData: Record<string, unknown> = {
 		stats: { byType },
 		top: {
 			columns: [...TOP_COLUMNS],
@@ -582,6 +577,16 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 		offset: params.offset,
 		limit: recapLimit
 	};
+
+	// Best-effort KG context (REFACTOR-KG-003)
+	if (rows.length > 0) {
+		const kgData = fetchAggregatedKgContext(
+			db,
+			params.repo,
+			rows.map((m: MemoryEntry) => m.title)
+		);
+		if (kgData) structuredData.kg = kgData;
+	}
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,

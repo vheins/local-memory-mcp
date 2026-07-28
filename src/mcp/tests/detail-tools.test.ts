@@ -4,7 +4,7 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
 
-describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-detail)", () => {
+describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-read)", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
 	let vectors: VectorStore;
 	let router: (method: string, params: Record<string, unknown>) => Promise<any>;
@@ -52,10 +52,10 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 		expect(memory.content).toBe("This is a test memory content for detail check.");
 	});
 
-	it("should fetch task details by ID via task-detail", async () => {
+	it("should fetch task details by ID via task-read", async () => {
 		// 1. Create a task
 		const createRes = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -69,9 +69,9 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 		});
 		const taskId = createRes.structuredContent.id;
 
-		// 2. Fetch it via task-detail by ID
+		// 2. Fetch it via task-read by ID
 		const detailRes = await router("tools/call", {
-			name: "task-detail",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", id: taskId }
 		});
 
@@ -109,10 +109,10 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 		// hit_count is not incremented on read (standard-read does not bump hit_count)
 	});
 
-	it("should fetch task details by task_code via task-detail", async () => {
+	it("should fetch task details by task_code via task-read", async () => {
 		// 1. Create a task
 		const createRes = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -126,9 +126,9 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 		});
 		const taskId = createRes.structuredContent.id;
 
-		// 2. Fetch it via task-detail by task_code
+		// 2. Fetch it via task-read by task_code
 		const detailRes = await router("tools/call", {
-			name: "task-detail",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", task_code: "TASK-102" }
 		});
 
@@ -151,14 +151,14 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 		const fakeId = "00000000-0000-0000-0000-000000000000";
 		await expect(
 			router("tools/call", {
-				name: "task-detail",
+				name: "task-read",
 				arguments: { repo: REPO, owner: "test", id: fakeId }
 			})
 		).rejects.toThrow(`Task not found: ${fakeId}`);
 
 		await expect(
 			router("tools/call", {
-				name: "task-detail",
+				name: "task-read",
 				arguments: { repo: REPO, owner: "test", task_code: "NON-EXISTENT" }
 			})
 		).rejects.toThrow(`Task not found: NON-EXISTENT in repo ${REPO}`);
@@ -230,7 +230,7 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 
 	it("should fetch task details by task_code passed as id", async () => {
 		const createRes = await router("tools/call", {
-			name: "task-create",
+			name: "task-write",
 			arguments: {
 				repo: REPO,
 				owner: "test",
@@ -245,7 +245,7 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-deta
 		const taskId = createRes.structuredContent.id;
 
 		const detailRes = await router("tools/call", {
-			name: "task-detail",
+			name: "task-read",
 			arguments: { repo: REPO, owner: "test", id: "TASK-CODE-AS-ID" }
 		});
 

@@ -498,6 +498,103 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 		expect(codes).toContain("SEARCH-001");
 	});
 
+	// ─── task-read auto-infer mode detection ──────────────────────────
+
+	it("task-read auto-infers DETAIL when id is present", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "AUTO-ID",
+				phase: "testing",
+				title: "Auto-infer detail by id",
+				description: "Testing auto-infer detail mode.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+		const task = db.tasks.getTaskByCode("test", REPO, "AUTO-ID")!;
+		expect(task).toBeDefined();
+
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, id: task.id }
+		});
+		expect(res.structuredContent.id).toBe(task.id);
+		expect(res.structuredContent.task_code).toBe("AUTO-ID");
+	});
+
+	it("task-read auto-infers DETAIL when code is present", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "AUTO-CODE",
+				phase: "testing",
+				title: "Auto-infer detail by code",
+				description: "Testing auto-infer by code.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, code: "AUTO-CODE" }
+		});
+		expect(res.structuredContent.task_code).toBe("AUTO-CODE");
+	});
+
+	it("task-read auto-infers SEARCH when query is present", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "SEARCH-ME",
+				phase: "testing",
+				title: "Searchable auto-infer task",
+				description: "This task should be found by auto-infer search.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, query: "auto-infer" }
+		});
+		expect(res.structuredContent.results.rows.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("task-read auto-infers LIST when no id/code/query present", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "LIST-ME",
+				phase: "testing",
+				title: "List auto-infer task",
+				description: "This task appears in list mode.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, status: "all" }
+		});
+		expect(res.structuredContent.tasks).toBeDefined();
+		expect(res.structuredContent.tasks.rows.length).toBeGreaterThanOrEqual(1);
+	});
+
+	// ───────────────────────────────────────────────────────────────────
+
 	it("should list tasks by phase via task-read", async () => {
 		// Create a task first so we have something to list
 		await router("tools/call", {
