@@ -205,7 +205,6 @@
 		{loading}
 		{totalPages}
 		{page}
-		{totalItems}
 		onOpenEditDrawer={openEditDrawer}
 		onDeleteRow={handleDeleteRow}
 		onGoToPage={goToPage}

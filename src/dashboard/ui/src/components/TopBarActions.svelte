@@ -163,8 +163,6 @@
 	}
 
 	@media (max-width: 760px) {
-		.ext-links-group,
-		.top-separator,
 		.db-path-label,
 		.top-status span,
 		.arena-metrics {

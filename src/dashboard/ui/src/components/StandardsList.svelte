@@ -8,7 +8,6 @@
 	export let loading = false;
 	export let totalPages = 1;
 	export let page = 1;
-	export let totalItems = 0;
 	export let onOpenEditDrawer: (std: CodingStandard) => void = () => {};
 	export let onDeleteRow: (std: CodingStandard) => void = () => {};
 	export let onGoToPage: (p: number) => void = () => {};

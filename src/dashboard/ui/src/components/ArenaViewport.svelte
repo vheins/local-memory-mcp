@@ -27,9 +27,9 @@
 	} = $props();
 
 	// ── Shared state ────────────────────────────────────────────────────────
-	let renderer: ArenaRenderer | null = null;
-	let layout: ArenaLayoutConfig | null = null;
-	let arenaCanvas: HTMLCanvasElement | null = null;
+	let renderer: ArenaRenderer | null = $state(null);
+	let layout: ArenaLayoutConfig | null = $state(null);
+	let arenaCanvas: HTMLCanvasElement | null = $state(null);
 	let hoverEntityType: "agent" | "task" | "repository" | null = $state(null);
 	let hoverEntityId: string | null = $state(null);
 	let tooltipPos: { x: number; y: number } | null = $state(null);

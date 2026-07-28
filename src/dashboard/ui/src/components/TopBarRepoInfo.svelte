@@ -4,8 +4,6 @@
 
 	export let currentRepo: string | null = null;
 	export let repoData: RepoMeta | undefined = undefined;
-	export let availableRepos: RepoMeta[] = [];
-	export let onRepoChange: (repo: string) => void = () => {};
 	export let getRepoInitials: (repo: string) => string = () => "RP";
 </script>
 

@@ -50,13 +50,7 @@
 <header class="top-bar glass-strong" style="border-bottom: 1px solid var(--color-border); z-index: 30;">
 	<div class="top-bar-inner">
 		<!-- Left: Mobile menu + current repo -->
-		<TopBarRepoInfo
-			currentRepo={$currentRepo}
-			repoData={currentRepoData}
-			availableRepos={$availableRepos}
-			onRepoChange={() => {}}
-			{getRepoInitials}
-		/>
+		<TopBarRepoInfo currentRepo={$currentRepo} repoData={currentRepoData} {getRepoInitials} />
 
 		<!-- Right: external links, status, countdown, theme toggle -->
 		<div class="top-actions">
