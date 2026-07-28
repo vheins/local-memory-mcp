@@ -100,6 +100,7 @@
 		"eslint-plugin-svelte": "^3.17.0",
 		"fast-check": "^4.6.0",
 		"globals": "^17.5.0",
+		"jsdom": "^30.0.0",
 		"prettier": "^3.8.2",
 		"prettier-plugin-svelte": "^3.5.1",
 		"shx": "^0.4.0",
