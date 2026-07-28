@@ -12,6 +12,7 @@ export default defineConfig({
 		pool: "forks",
 		// Support ESM
 		environment: "node",
-		exclude: ["dist/**", "node_modules/**"]
+		exclude: ["dist/**", "node_modules/**"],
+		testTimeout: 30_000
 	}
 });
