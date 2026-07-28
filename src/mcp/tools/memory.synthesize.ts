@@ -15,7 +15,7 @@ import { MemorySynthesizeSchema } from "./schemas";
 import { normalizeRepo } from "../utils/normalize";
 import { handleMemoryRecap } from "./memory.recap";
 import { handleMemorySearch } from "./memory.search";
-import { handleTaskRead } from "./task.read";
+import { handleTaskRead } from "./task-read";
 
 type SynthesizeOptions = {
 	session?: SessionContext;

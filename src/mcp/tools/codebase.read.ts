@@ -11,7 +11,7 @@
  *   nothing  → ARCHITECTURE (was get_architecture — tree overview)
  */
 
-import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } from "./schemas/codebase.read";
+import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } from "./schemas/codebase-read";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";

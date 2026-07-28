@@ -11,7 +11,7 @@ import { logger } from "../../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { expandQuery } from "../../utils/query-expander.js";
 import { fetchAggregatedKgContext } from "../kg-archivist/query.js";
-import { StandardReadInput } from "../schemas/standard.read.js";
+import { StandardReadInput } from "../schemas/standard-read.js";
 
 // ── SPEC-001 Hybrid weights ──────────────────────────────────────────────
 // All 3 scoring paths (similarity main, vector-only fallback, error fallback)

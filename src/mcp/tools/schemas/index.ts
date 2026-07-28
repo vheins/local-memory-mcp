@@ -63,8 +63,8 @@ export {
 } from "./standard";
 
 export { StandardWriteSchema } from "./standard-write";
-export { StandardReadSchema } from "./standard.read";
-export type { StandardReadInput } from "./standard.read";
+export { StandardReadSchema } from "./standard-read";
+export type { StandardReadInput } from "./standard-read";
 
 export { AgentContextSchema } from "./agent";
 
@@ -78,5 +78,5 @@ export {
 	CodebaseSearchSchema
 } from "./codebase-index";
 
-export { CodebaseReadSchema } from "./codebase.read";
-export type { CodebaseReadInput, CodebaseReadMode } from "./codebase.read";
+export { CodebaseReadSchema } from "./codebase-read";
+export type { CodebaseReadInput, CodebaseReadMode } from "./codebase-read";

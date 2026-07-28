@@ -8,7 +8,7 @@ import { SamplingRequestHandler } from "../sampling";
 import { ElicitationRequestHandler } from "../elicitation";
 
 // ── Handler imports ──────────────────────────────────────────────────────
-import { handleMemoryWrite } from "./memory.write";
+import { handleMemoryWrite } from "./memory-write";
 import { handleMemorySummarize } from "./memory.summarize";
 import { handleMemorySynthesize } from "./memory.synthesize";
 import { handleMemoryDelete } from "./memory.delete";
@@ -17,11 +17,11 @@ import { handleHandoffWrite } from "./handoff.write";
 import { handleHandoffRead } from "./handoff.read";
 import { handleClaimManage } from "./claim.manage";
 import { handleStandardDelete } from "./standard.delete";
-import { handleStandardWrite } from "./standard.write";
-import { handleStandardRead } from "./standard.read";
+import { handleStandardWrite } from "./standard-write";
+import { handleStandardRead } from "./standard-read";
 import { handleTaskWrite } from "./task-write";
 import { handleTaskDelete } from "./task.delete";
-import { handleTaskRead } from "./task.read";
+import { handleTaskRead } from "./task-read";
 import { handleAgentContext } from "./agent-context";
 import { handleCodebaseIndex } from "./codebase.index";
 import { handleCodebaseRead } from "./codebase.read";

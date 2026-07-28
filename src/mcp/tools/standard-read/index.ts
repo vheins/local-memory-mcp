@@ -7,7 +7,7 @@
  * - none                    → LIST   (paginated list of all standards)
  */
 
-import { StandardReadSchema, StandardReadInput } from "../schemas/standard.read.js";
+import { StandardReadSchema, StandardReadInput } from "../schemas/standard-read.js";
 import { SQLiteStore } from "../../storage/sqlite.js";
 import { VectorStore } from "../../types/index.js";
 import { McpResponse, createMcpResponse } from "../../utils/mcp-response.js";

@@ -11,7 +11,7 @@ import { SQLiteStore } from "../../storage/sqlite.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { UUID_REGEX } from "../../utils/uuid.js";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query.js";
-import { StandardReadInput } from "../schemas/standard.read.js";
+import { StandardReadInput } from "../schemas/standard-read.js";
 
 // ── Detail handler ──────────────────────────────────────────────────────
 

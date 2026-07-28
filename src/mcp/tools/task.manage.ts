@@ -10,6 +10,6 @@
  */
 
 export { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps, archiveTaskToMemory } from "./task.helpers";
-export { handleTaskWrite } from "./task.write";
-export { handleTaskRead } from "./task.read";
+export { handleTaskWrite } from "./task-write";
+export { handleTaskRead } from "./task-read";
 export { handleTaskDelete } from "./task.delete";
