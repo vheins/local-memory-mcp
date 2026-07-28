@@ -125,7 +125,9 @@ export class SystemController {
 	}
 
 	static getCapabilities(req: express.Request, res: express.Response) {
-		const tools = (TOOL_DEFINITIONS || []).map((tool) => ({
+		const canonical = (tool: { title?: string; description?: string }) =>
+			!tool.title?.includes("(Deprecated)") && !tool.description?.startsWith("DEPRECATED");
+		const tools = (TOOL_DEFINITIONS || []).filter(canonical).map((tool) => ({
 			type: "tool",
 			id: tool.name,
 			attributes: tool
