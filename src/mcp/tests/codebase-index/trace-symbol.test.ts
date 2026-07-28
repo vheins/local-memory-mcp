@@ -33,7 +33,7 @@ function noopVectorStore(): VectorStore {
 function makeSym(overrides: Partial<CodebaseSymbol> & Pick<CodebaseSymbol, "name" | "file_path">): CodebaseSymbol {
 	return {
 		id: `sym-${overrides.name}-${Math.random().toString(36).slice(2, 6)}`,
-		repo: "test/repo",
+		repo: "test-repo",
 		kind: "function",
 		exported: false,
 		default_export: false,
@@ -160,7 +160,7 @@ function seedSymbols(
 describe("handleCodebaseRead (trace mode)", () => {
 	let store: SQLiteStore;
 	let vectors: VectorStore;
-	const repo = "test-owner/test-repo";
+	const repo = "test-repo";
 
 	beforeEach(async () => {
 		store = await createTestStore();
@@ -184,7 +184,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "authenticate", repo }, store, vectors);
+		const response = await handleCodebaseRead({ name: "authenticate", repo, owner: "vheins" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -193,7 +193,9 @@ describe("handleCodebaseRead (trace mode)", () => {
 		expect(data.definition).toEqual({
 			file: "src/services/auth.ts",
 			line: 42,
-			column: 0
+			column: 0,
+			endLine: 55,
+			endColumn: 1
 		});
 		expect(data.exportChain).toEqual({
 			exported: true,
@@ -225,7 +227,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "authenticate", repo }, store, vectors);
+		const response = await handleCodebaseRead({ name: "authenticate", repo, owner: "vheins" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeDefined();
@@ -249,7 +251,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "nonexistent", repo }, store, vectors);
+		const response = await handleCodebaseRead({ name: "nonexistent", repo, owner: "vheins" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toContain("nonexistent");
@@ -288,7 +290,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "authenticate", repo, includeReferences: true }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ name: "authenticate", repo, owner: "vheins", includeReferences: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -326,7 +332,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "authenticate", repo, includeReferences: false }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ name: "authenticate", repo, owner: "vheins", includeReferences: false },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();

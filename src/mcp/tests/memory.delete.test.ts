@@ -100,7 +100,7 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 			arguments: {
 				type: "code_fact",
 				title: "Bulk Delete A",
-				content: "First memory to be bulk deleted.",
+				content: "First memory to be bulk deleted by ID array.",
 				importance: 3,
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
@@ -110,9 +110,9 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 		const m2 = await router("tools/call", {
 			name: "memory-write",
 			arguments: {
-				type: "code_fact",
+				type: "mistake",
 				title: "Bulk Delete B",
-				content: "Second memory to be bulk deleted.",
+				content: "Second memory is about database indexing strategy for bulk operations.",
 				importance: 3,
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
@@ -148,7 +148,7 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 			arguments: {
 				type: "code_fact",
 				title: "Bulk Code Delete A",
-				content: "First memory to be deleted by code.",
+				content: "First memory to be deleted by code array.",
 				importance: 3,
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
@@ -158,9 +158,9 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 		const m2 = await router("tools/call", {
 			name: "memory-write",
 			arguments: {
-				type: "code_fact",
+				type: "pattern",
 				title: "Bulk Code Delete B",
-				content: "Second memory to be deleted by code.",
+				content: "Second memory describes authentication token refresh flow.",
 				importance: 3,
 				scope: { owner: "test", repo: REPO },
 				agent: "test-agent",
@@ -182,18 +182,21 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 
 	// ─── Error cases ─────────────────────────────────────────────────────
 
-	it("should throw error when deleting non-existent memory", async () => {
+	it("should return error when deleting non-existent memory", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "memory-delete",
-				arguments: {
-					id: fakeId,
-					owner: "test",
-					repo: REPO
-				}
-			})
-		).rejects.toThrow("Memory not found");
+		const delRes = await router("tools/call", {
+			name: "memory-delete",
+			arguments: {
+				id: fakeId,
+				owner: "test",
+				repo: REPO
+			}
+		});
+
+		expect(delRes.structuredContent.success).toBe(false);
+		expect(delRes.structuredContent.deletedCount).toBe(0);
+		expect(delRes.structuredContent.errors).toBeDefined();
+		expect(delRes.structuredContent.errors[0].error).toContain("Memory not found");
 	});
 
 	it("should throw error when no identifier provided", async () => {

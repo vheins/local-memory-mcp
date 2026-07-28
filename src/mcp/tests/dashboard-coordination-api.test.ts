@@ -111,7 +111,8 @@ describe("Dashboard Coordination API", () => {
 			body: JSON.stringify({
 				repo: "dashboard-coordination",
 				task_code: "COORD-101",
-				agent: "agent-a"
+				agent: "agent-a",
+				release: true
 			})
 		});
 		expect(releaseRes.ok).toBe(true);

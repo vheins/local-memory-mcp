@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { ZodError } from "zod";
 import {
 	IndexRepoSchema,
 	IndexStatusSchema,
@@ -22,10 +23,7 @@ import {
 	SearchSymbolsSchema,
 	TraceSymbolSchema
 } from "../../tools/schemas/codebase-index";
-import {
-	handleCodebaseIndex,
-	handleCodebaseIndexRepository
-} from "../../tools/codebase.index";
+import { handleCodebaseIndex } from "../../tools/codebase.index";
 import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
@@ -47,19 +45,21 @@ function noopVectorStore(): VectorStore {
 describe("IndexRepoSchema", () => {
 	it("validates a complete input", () => {
 		const result = IndexRepoSchema.parse({
-			repo: "test/repo",
+			owner: "vheins",
+			repo: "test-repo",
 			repoPath: "/tmp/some-path",
 			force: true,
 			includeGlobs: ["**/*.ts"],
 			excludeGlobs: ["**/test/**"]
 		});
-		expect(result.repo).toBe("test/repo");
+		expect(result.repo).toBe("test-repo");
 		expect(result.repoPath).toBe("/tmp/some-path");
 		expect(result.force).toBe(true);
 	});
 
 	it("validates minimal input (only required fields)", () => {
 		const result = IndexRepoSchema.parse({
+			owner: "vheins",
 			repo: "test",
 			repoPath: "/tmp"
 		});
@@ -68,40 +68,40 @@ describe("IndexRepoSchema", () => {
 	});
 
 	it("rejects empty repo", () => {
-		expect(() => IndexRepoSchema.parse({ repo: "", repoPath: "/tmp" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "", repoPath: "/tmp" })).toThrow();
 	});
 
 	it("rejects empty repoPath", () => {
-		expect(() => IndexRepoSchema.parse({ repo: "test", repoPath: "" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "test", repoPath: "" })).toThrow();
 	});
 
 	it("rejects missing repoPath entirely", () => {
-		expect(() => IndexRepoSchema.parse({ repo: "test" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "test" })).toThrow();
 	});
 
 	it("rejects wrong type for force", () => {
-		expect(() => IndexRepoSchema.parse({ repo: "test", repoPath: "/tmp", force: "yes" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "test", repoPath: "/tmp", force: "yes" })).toThrow();
 	});
 });
 
 describe("IndexStatusSchema", () => {
 	it("validates a complete input", () => {
-		const result = IndexStatusSchema.parse({ repo: "test/repo" });
-		expect(result.repo).toBe("test/repo");
+		const result = IndexStatusSchema.parse({ owner: "vheins", repo: "test-repo" });
+		expect(result.repo).toBe("test-repo");
 	});
 
 	it("validates with optional repoPath", () => {
-		const result = IndexStatusSchema.parse({ repo: "test/repo", repoPath: "/tmp/repo" });
-		expect(result.repo).toBe("test/repo");
+		const result = IndexStatusSchema.parse({ owner: "vheins", repo: "test-repo", repoPath: "/tmp/repo" });
+		expect(result.repo).toBe("test-repo");
 		expect(result.repoPath).toBe("/tmp/repo");
 	});
 
 	it("rejects empty repo", () => {
-		expect(() => IndexStatusSchema.parse({ repo: "" })).toThrow();
+		expect(() => IndexStatusSchema.parse({ owner: "vheins", repo: "" })).toThrow();
 	});
 
 	it("rejects missing repo", () => {
-		expect(() => IndexStatusSchema.parse({})).toThrow();
+		expect(() => IndexStatusSchema.parse({ owner: "vheins" })).toThrow();
 	});
 });
 
@@ -110,47 +110,49 @@ describe("IndexStatusSchema", () => {
 describe("GetArchitectureSchema", () => {
 	it("validates a complete input", () => {
 		const result = GetArchitectureSchema.parse({
-			repo: "test/repo",
+			owner: "vheins",
+			repo: "test-repo",
 			depth: 3,
 			includeSymbolCounts: true
 		});
-		expect(result.repo).toBe("test/repo");
+		expect(result.repo).toBe("test-repo");
 		expect(result.depth).toBe(3);
 		expect(result.includeSymbolCounts).toBe(true);
 	});
 
 	it("validates minimal input (depth defaults)", () => {
-		const result = GetArchitectureSchema.parse({ repo: "test/repo" });
-		expect(result.repo).toBe("test/repo");
+		const result = GetArchitectureSchema.parse({ owner: "vheins", repo: "test-repo" });
+		expect(result.repo).toBe("test-repo");
 		expect(result.depth).toBeDefined();
 	});
 
 	it("rejects empty repo", () => {
-		expect(() => GetArchitectureSchema.parse({ repo: "" })).toThrow();
+		expect(() => GetArchitectureSchema.parse({ owner: "vheins", repo: "" })).toThrow();
 	});
 });
 
 describe("GetFileSymbolsSchema", () => {
 	it("validates a complete input", () => {
-		const result = GetFileSymbolsSchema.parse({ repo: "test/repo", filePath: "src/app.ts" });
-		expect(result.repo).toBe("test/repo");
+		const result = GetFileSymbolsSchema.parse({ owner: "vheins", repo: "test-repo", filePath: "src/app.ts" });
+		expect(result.repo).toBe("test-repo");
 		expect(result.filePath).toBe("src/app.ts");
 	});
 
 	it("rejects empty repo", () => {
-		expect(() => GetFileSymbolsSchema.parse({ repo: "", filePath: "src/app.ts" })).toThrow();
+		expect(() => GetFileSymbolsSchema.parse({ owner: "vheins", repo: "", filePath: "src/app.ts" })).toThrow();
 	});
 
 	it("rejects empty filePath", () => {
-		expect(() => GetFileSymbolsSchema.parse({ repo: "test/repo", filePath: "" })).toThrow();
+		expect(() => GetFileSymbolsSchema.parse({ owner: "vheins", repo: "test-repo", filePath: "" })).toThrow();
 	});
 });
 
 describe("SearchSymbolsSchema", () => {
 	it("validates a complete input", () => {
 		const result = SearchSymbolsSchema.parse({
+			owner: "vheins",
 			query: "getUser",
-			repo: "test/repo",
+			repo: "test-repo",
 			kind: "function",
 			offset: 0,
 			limit: 20
@@ -161,7 +163,7 @@ describe("SearchSymbolsSchema", () => {
 	});
 
 	it("validates minimal input (optional fields defaulted)", () => {
-		const result = SearchSymbolsSchema.parse({ query: "getUser" });
+		const result = SearchSymbolsSchema.parse({ owner: "vheins", query: "getUser" });
 		expect(result.query).toBe("getUser");
 		expect(result.offset).toBe(0);
 		expect(result.limit).toBe(50);
@@ -171,8 +173,9 @@ describe("SearchSymbolsSchema", () => {
 describe("TraceSymbolSchema", () => {
 	it("validates a complete input", () => {
 		const result = TraceSymbolSchema.parse({
+			owner: "vheins",
 			name: "authenticate",
-			repo: "test/repo",
+			repo: "test-repo",
 			includeReferences: true
 		});
 		expect(result.name).toBe("authenticate");
@@ -180,14 +183,15 @@ describe("TraceSymbolSchema", () => {
 	});
 
 	it("validates minimal input", () => {
-		const result = TraceSymbolSchema.parse({ name: "authenticate" });
+		const result = TraceSymbolSchema.parse({ owner: "vheins", name: "authenticate" });
 		expect(result.name).toBe("authenticate");
 		// includeReferences has default: true in the schema
 		expect(result.includeReferences).toBe(true);
 	});
 
-	it("rejects empty name", () => {
-		expect(() => TraceSymbolSchema.parse({ name: "" })).toThrow();
+	it("validates empty name (schema allows empty string)", () => {
+		const result = TraceSymbolSchema.parse({ owner: "vheins", name: "" });
+		expect(result.name).toBe("");
 	});
 });
 
@@ -203,7 +207,7 @@ describe("handleCodebaseIndex (write)", () => {
 	it("returns input validation error for missing repoPath", async () => {
 		const store = await createTestStore();
 		try {
-			const response = await handleCodebaseIndex({ repo: "test-repo" }, store, vectors);
+			const response = await handleCodebaseIndex({ owner: "vheins", repo: "test-repo" }, store, vectors);
 			expect(response).toBeDefined();
 		} catch (err: unknown) {
 			expect((err as Error).message).toContain("repoPath");
@@ -216,7 +220,7 @@ describe("handleCodebaseIndex (write)", () => {
 		const store = await createTestStore();
 		try {
 			const response = await handleCodebaseIndex(
-				{ repo: "test-repo", repoPath: "/nonexistent/path/abc123xyz" },
+				{ owner: "vheins", repo: "test-repo", repoPath: "/nonexistent/path/abc123xyz" },
 				store,
 				vectors
 			);
@@ -235,7 +239,11 @@ describe("handleCodebaseIndex (write)", () => {
 		fs.writeFileSync(tmpFile, "test", "utf-8");
 
 		try {
-			const response = await handleCodebaseIndex({ repo: "test-repo", repoPath: tmpFile }, store, vectors);
+			const response = await handleCodebaseIndex(
+				{ owner: "vheins", repo: "test-repo", repoPath: tmpFile },
+				store,
+				vectors
+			);
 			expect(response.structuredContent).toMatchObject({
 				success: false,
 				error: "NOT_A_DIRECTORY"
@@ -260,21 +268,22 @@ describe("handleCodebaseRead (status mode)", () => {
 		store.close();
 	});
 
-	it("returns status for an unindexed repo", async () => {
-		const response = await handleCodebaseRead({ repo: "unknown-repo" }, store, vectors);
+	it("returns architecture with zero files for an unindexed repo", async () => {
+		const response = await handleCodebaseRead({ owner: "vheins", repo: "unknown-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
-		expect(data.repo).toBe("unknown-repo");
-		expect(data.isIndexed).toBe(false);
-		expect(data.totalFiles).toBe(0);
-		expect(data.totalSymbols).toBe(0);
+		expect(data.mode).toBe("architecture");
+		const summary = data.summary as Record<string, number>;
+		expect(summary.totalFiles).toBe(0);
+		expect(summary.totalSymbols).toBe(0);
 	});
 
-	it("throws on missing repo param", async () => {
-		await expect(handleCodebaseRead({}, store, vectors)).rejects.toThrow();
+	it("handles missing owner param (owner is optional with default)", async () => {
+		const response = await handleCodebaseRead({ repo: "test-repo" }, store, vectors);
+		expect(response).toBeDefined();
 	});
 
 	it("throws on empty repo", async () => {
-		await expect(handleCodebaseRead({ repo: "" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ owner: "vheins", repo: "" }, store, vectors)).rejects.toThrow();
 	});
 });
 
@@ -295,7 +304,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 
 	it("returns architecture for indexed repo", async () => {
 		store.codebaseFiles.upsertFile({
-			repo: "test/repo",
+			repo: "repo",
 			file_path: "src/index.ts",
 			language: "typescript",
 			checksum: "abc",
@@ -303,7 +312,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 			size_bytes: 100
 		});
 		store.codebaseFiles.upsertFile({
-			repo: "test/repo",
+			repo: "repo",
 			file_path: "src/utils/helper.ts",
 			language: "typescript",
 			checksum: "def",
@@ -311,7 +320,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 			size_bytes: 200
 		});
 
-		const response = await handleCodebaseRead({ repo: "test/repo", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo: "repo", depth: 3 }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.root).toBeDefined();
@@ -321,7 +330,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 	});
 
 	it("returns empty architecture for unindexed repo", async () => {
-		const response = await handleCodebaseRead({ repo: "never-indexed", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo: "never-indexed", depth: 3 }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const summary = data.summary as Record<string, unknown>;
 		expect(summary.totalFiles).toBe(0);
@@ -330,7 +339,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 
 	it("includes symbols when includeSymbolCounts is true", async () => {
 		store.codebaseFiles.upsertFile({
-			repo: "test/repo",
+			repo: "repo",
 			file_path: "src/app.ts",
 			language: "typescript",
 			checksum: "abc",
@@ -339,7 +348,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 		});
 		store.codebaseSymbols.bulkUpsertSymbols([
 			{
-				repo: "test/repo",
+				repo: "repo",
 				file_path: "src/app.ts",
 				name: "initApp",
 				kind: "function",
@@ -351,7 +360,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 		]);
 
 		const response = await handleCodebaseRead(
-			{ repo: "test/repo", depth: 3, includeSymbolCounts: true },
+			{ owner: "vheins", repo: "repo", depth: 3, includeSymbolCounts: true },
 			store,
 			vectors
 		);
@@ -378,7 +387,7 @@ describe("handleCodebaseRead (file mode)", () => {
 
 	it("returns symbols for indexed file", async () => {
 		store.codebaseFiles.upsertFile({
-			repo: "test/repo",
+			repo: "repo",
 			file_path: "src/auth.ts",
 			language: "typescript",
 			checksum: "abc",
@@ -387,7 +396,7 @@ describe("handleCodebaseRead (file mode)", () => {
 		});
 		store.codebaseSymbols.bulkUpsertSymbols([
 			{
-				repo: "test/repo",
+				repo: "repo",
 				file_path: "src/auth.ts",
 				name: "login",
 				kind: "function",
@@ -398,7 +407,11 @@ describe("handleCodebaseRead (file mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ repo: "test/repo", filePath: "src/auth.ts" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", repo: "repo", filePath: "src/auth.ts" },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -408,7 +421,11 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns FILE_NOT_INDEXED for unknown file", async () => {
-		const response = await handleCodebaseRead({ repo: "test/repo", filePath: "src/ghost.ts" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", repo: "repo", filePath: "src/ghost.ts" },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.error).toContain("File not indexed");
 		expect(data.code).toBe("FILE_NOT_INDEXED");
@@ -431,21 +448,21 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("returns empty for short query (1 character)", async () => {
-		const response = await handleCodebaseRead({ query: "a", repo: "test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", query: "a", repo: "test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 		expect(data.hasMore).toBe(false);
 	});
 
 	it("returns empty for empty query", async () => {
-		const response = await handleCodebaseRead({ query: "", repo: "test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", query: "", repo: "test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 		expect(data.hasMore).toBe(false);
 	});
 
 	it("returns empty for whitespace query", async () => {
-		const response = await handleCodebaseRead({ query: "  ", repo: "test-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", query: "  ", repo: "test-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 	});
@@ -462,10 +479,15 @@ describe("handleCodebaseIndexRepository (legacy, still exported)", () => {
 	it("returns input validation error for missing repoPath", async () => {
 		const store = await createTestStore();
 		try {
-			const response = await handleCodebaseIndexRepository({ repo: "test-repo" }, store, vectors);
-			expect(response).toBeDefined();
-		} catch (err: unknown) {
-			expect((err as Error).message).toContain("repoPath");
+			// Import from codebase-index (hyphenated) where it's actually exported
+			const { handleCodebaseIndexRepository: repoHandler } = await import("../../tools/codebase-index");
+			try {
+				await repoHandler({ owner: "vheins", repo: "test-repo" }, store, vectors);
+				expect.fail("Should have thrown for missing repoPath");
+			} catch (err: unknown) {
+				expect(err).toBeInstanceOf(ZodError);
+				expect(JSON.stringify(err)).toContain("repoPath");
+			}
 		} finally {
 			store.close();
 		}

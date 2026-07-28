@@ -65,7 +65,7 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns symbols for a known file in declaration order", async () => {
-		const repo = "test/repo";
+		const repo = "test-repo";
 		const filePath = "src/services/order.ts";
 
 		seedFile(store, repo, filePath);
@@ -104,7 +104,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.file).toBeDefined();
@@ -141,10 +141,10 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns error for a non-indexed file", async () => {
-		const repo = "test/repo";
+		const repo = "test-repo";
 		const filePath = "src/ghost.ts";
 
-		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBe("File not indexed. Run index_repository first.");
@@ -152,8 +152,8 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns error for a file in a different repo", async () => {
-		const repoA = "repo/a";
-		const repoB = "repo/b";
+		const repoA = "repo-a";
+		const repoB = "repo-b";
 		const filePath = "src/shared.ts";
 
 		seedFile(store, repoA, filePath);
@@ -161,7 +161,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			{ repo: repoA, file_path: filePath, name: "sharedFn", kind: "function", start_line: 1, end_line: 5 }
 		]);
 
-		const response = await handleCodebaseRead({ repo: repoB, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo: repoB, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBe("File not indexed. Run index_repository first.");
@@ -169,7 +169,7 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns symbols with parent_symbol_id for nested declarations", async () => {
-		const repo = "test/repo";
+		const repo = "test-repo";
 		const filePath = "src/container.ts";
 
 		seedFile(store, repo, filePath);
@@ -202,7 +202,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.total).toBe(2);
@@ -218,12 +218,12 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns empty symbols array for file with no symbols", async () => {
-		const repo = "test/repo";
+		const repo = "test-repo";
 		const filePath = "src/empty.ts";
 
 		seedFile(store, repo, filePath);
 
-		const response = await handleCodebaseRead({ repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.file).toBeDefined();
@@ -232,20 +232,24 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("throws on missing repo param", async () => {
-		await expect(handleCodebaseRead({ filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
 	});
 
 	it("throws on missing filePath param", async () => {
 		// Without filePath, it falls into status mode (no error), but with filePath it's file mode.
 		// File mode without repo throws.
-		await expect(handleCodebaseRead({ filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
 	});
 
 	it("throws on empty repo", async () => {
-		await expect(handleCodebaseRead({ repo: "", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+		await expect(
+			handleCodebaseRead({ owner: "vheins", repo: "", filePath: "src/test.ts" }, store, vectors)
+		).rejects.toThrow();
 	});
 
-	it("throws on empty filePath", async () => {
-		await expect(handleCodebaseRead({ repo: "test/repo", filePath: "" }, store, vectors)).rejects.toThrow();
+	it("falls back to architecture mode when filePath is empty", async () => {
+		const response = await handleCodebaseRead({ owner: "vheins", repo: "test-repo", filePath: "" }, store, vectors);
+		const data = response.structuredContent as Record<string, unknown>;
+		expect(data.mode).toBe("architecture");
 	});
 });

@@ -69,10 +69,11 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 			).rejects.toThrow();
 		});
 
-		it("stores standards with global scope by default", async () => {
+		it("stores standards with repo-specific scope by default", async () => {
 			const result = (await handleStandardWrite(
 				{
 					owner: "test",
+					repo: "test-repo",
 					name: "React Hooks Standard",
 					content: "Use hooks for state management. Never call hooks conditionally.",
 					language: "typescript",
@@ -87,7 +88,7 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 
 			const data = result.structuredContent as any;
 			const entry = db.standards.getByCode(data.standard.code, "test");
-			expect(entry?.is_global).toBe(true);
+			expect(entry?.is_global).toBe(false);
 		});
 
 		it("stores child standards linked to a parent", async () => {
@@ -119,8 +120,8 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 				vectors
 			)) as McpResponse;
 
-			const childCode = (child.structuredContent as any).standard.code;
-			const childEntry = db.standards.getByCode(childCode, "test");
+			const childEntryId = (child.structuredContent as any).standard.id;
+			const childEntry = db.standards.getById(childEntryId);
 			expect(childEntry?.parent_id).toBe(parentId);
 		});
 	});

@@ -11,7 +11,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { createCodebaseIndexService, IndexInProgressError } from "../../codebase-index/services/indexing-service";
+import {
+	createCodebaseIndexService,
+	IndexInProgressError,
+	clearIndexingRepos
+} from "../../codebase-index/services/indexing-service";
 import { autoIndexIfStale } from "../../codebase-index/services/indexing-service";
 import type { IndexOptions, IndexResult } from "../../codebase-index/services/indexing-service";
 import type { ParserPool, ParseResult, ParsedSymbol } from "../../codebase-index/parser/language-visitor";
@@ -130,6 +134,7 @@ describe("CodebaseIndexService", () => {
 	});
 
 	afterEach(() => {
+		clearIndexingRepos();
 		store.close();
 		fs.rmSync(tempDir, { recursive: true, force: true });
 	});
@@ -891,7 +896,7 @@ describe("CodebaseIndexService", () => {
 		// Second call should see it's already indexing (module-level guard)
 		const second = await autoIndexIfStale("test-repo", repoDir, store, parserPool);
 		expect(second.status).toBe("already_indexing");
-		expect(second.reason).toContain("Auto-index already in progress");
+		expect(second.reason).toContain("Index already in progress");
 
 		// Wait for background indexing to complete
 		await new Promise((resolve) => setTimeout(resolve, 200));

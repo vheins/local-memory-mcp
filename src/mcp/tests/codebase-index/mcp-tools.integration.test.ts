@@ -431,7 +431,7 @@ describe("handleCodebaseRead (integration)", () => {
 
 	describe("handleCodebaseRead (search_symbols mode)", () => {
 		it("returns correct symbol for exact name match", async () => {
-			const resp = await handleCodebaseRead({ query: "initializeApp", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", query: "initializeApp", repo: REPO }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -442,7 +442,7 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("returns multiple ranked results for prefix query", async () => {
-			const resp = await handleCodebaseRead({ query: "App", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", query: "App", repo: REPO }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -460,7 +460,11 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("kind filter returns only matching kind", async () => {
-			const resp = await handleCodebaseRead({ query: "form", repo: REPO, kind: "function" }, store, vectors);
+			const resp = await handleCodebaseRead(
+				{ owner: "vheins", query: "form", repo: REPO, kind: "function" },
+				store,
+				vectors
+			);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -471,7 +475,11 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("returns empty result for non-existent symbol", async () => {
-			const resp = await handleCodebaseRead({ query: "zzzNonexistentSymbol" }, store, vectors);
+			const resp = await handleCodebaseRead(
+				{ owner: "vheins", query: "zzzNonexistentSymbol", repo: REPO },
+				store,
+				vectors
+			);
 			const d = data(resp);
 
 			expect(d.symbols).toEqual([]);
@@ -481,13 +489,21 @@ describe("handleCodebaseRead (integration)", () => {
 
 		it("pagination: limit + offset works correctly", async () => {
 			// Get page 1: limit 3
-			const page1 = await handleCodebaseRead({ query: "a", repo: REPO, limit: 3, offset: 0 }, store, vectors);
+			const page1 = await handleCodebaseRead(
+				{ owner: "vheins", query: "a", repo: REPO, limit: 3, offset: 0 },
+				store,
+				vectors
+			);
 			const d1 = data(page1);
 			const symbols1 = d1.symbols as Array<Record<string, unknown>>;
 			expect(symbols1.length).toBeLessThanOrEqual(3);
 
 			// Get page 2: offset 3, limit 3
-			const page2 = await handleCodebaseRead({ query: "a", repo: REPO, limit: 3, offset: 3 }, store, vectors);
+			const page2 = await handleCodebaseRead(
+				{ owner: "vheins", query: "a", repo: REPO, limit: 3, offset: 3 },
+				store,
+				vectors
+			);
 			const d2 = data(page2);
 			const symbols2 = d2.symbols as Array<Record<string, unknown>>;
 			expect(symbols2.length).toBeLessThanOrEqual(3);
@@ -510,7 +526,7 @@ describe("handleCodebaseRead (integration)", () => {
 
 	describe("handleCodebaseRead (file mode)", () => {
 		it("returns all symbols in a known file", async () => {
-			const resp = await handleCodebaseRead({ repo: REPO, filePath: "index.ts" }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, filePath: "index.ts" }, store, vectors);
 			const d = data(resp);
 
 			expect(d.error).toBeUndefined();
@@ -531,7 +547,7 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("returns symbols in declaration order (by start_line)", async () => {
-			const resp = await handleCodebaseRead({ repo: REPO, filePath: "index.ts" }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, filePath: "index.ts" }, store, vectors);
 			const d = data(resp);
 			const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -544,7 +560,11 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("returns error for non-indexed file", async () => {
-			const resp = await handleCodebaseRead({ repo: REPO, filePath: "nonexistent.ts" }, store, vectors);
+			const resp = await handleCodebaseRead(
+				{ owner: "vheins", repo: REPO, filePath: "nonexistent.ts" },
+				store,
+				vectors
+			);
 			const d = data(resp);
 
 			expect(d.error).toBe("File not indexed. Run index_repository first.");
@@ -558,7 +578,7 @@ describe("handleCodebaseRead (integration)", () => {
 
 	describe("handleCodebaseRead (architecture mode)", () => {
 		it("returns directory tree with correct depth", async () => {
-			const resp = await handleCodebaseRead({ repo: REPO, depth: 2 }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, depth: 2 }, store, vectors);
 			const d = data(resp);
 
 			// Root
@@ -584,7 +604,7 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("symbol counts are accurate", async () => {
-			const resp = await handleCodebaseRead({ repo: REPO, depth: 2 }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, depth: 2 }, store, vectors);
 			const d = data(resp);
 
 			const summary = d.summary as Record<string, unknown>;
@@ -597,7 +617,7 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("language breakdown shows TypeScript and TSX", async () => {
-			const resp = await handleCodebaseRead({ repo: REPO, depth: 2 }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, depth: 2 }, store, vectors);
 			const d = data(resp);
 
 			const summary = d.summary as Record<string, unknown>;
@@ -614,7 +634,7 @@ describe("handleCodebaseRead (integration)", () => {
 
 	describe("handleCodebaseRead (trace mode)", () => {
 		it("returns definition for a known exported function", async () => {
-			const resp = await handleCodebaseRead({ name: "formatSize", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", name: "formatSize", repo: REPO }, store, vectors);
 			const d = data(resp);
 
 			expect(d.symbol).toBeDefined();
@@ -651,7 +671,7 @@ describe("handleCodebaseRead (integration)", () => {
 				}
 			]);
 
-			const resp = await handleCodebaseRead({ name: "Button", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", name: "Button", repo: REPO }, store, vectors);
 			const d = data(resp);
 
 			expect(d.code).toBe("AMBIGUOUS_SYMBOL");
@@ -775,7 +795,7 @@ describe("handleCodebaseRead (integration)", () => {
 		});
 
 		it("returns error for non-existent symbol", async () => {
-			const resp = await handleCodebaseRead({ name: "zzzNonexistentFn", repo: REPO }, store, vectors);
+			const resp = await handleCodebaseRead({ owner: "vheins", name: "zzzNonexistentFn", repo: REPO }, store, vectors);
 			const d = data(resp);
 
 			expect(d.code).toBe("SYMBOL_NOT_FOUND");

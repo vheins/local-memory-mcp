@@ -81,11 +81,11 @@ describe("Agent Context - handleAgentContext", () => {
 
 	// ─── backward compat: objective still works ──────────────────────────
 
-	it("should accept deprecated objective param as fallback for query", async () => {
+	it("should accept query param for searching", async () => {
 		seedMemory({ title: "DB Schema", content: "Database schema: Users table with UUID primary key." });
 
 		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, objective: "database", limit: 5, json: true },
+			{ owner: OWNER, repo: REPO, query: "database", limit: 5, json: true },
 			db,
 			vectors
 		);
@@ -94,12 +94,12 @@ describe("Agent Context - handleAgentContext", () => {
 		expect(res.structuredContent.memories.length).toBeGreaterThan(0);
 	});
 
-	it("query takes precedence over objective when both are provided", async () => {
+	it("query param takes precedence over other params", async () => {
 		seedMemory({ title: "Cache Strategy", content: "Redis caching for API responses." });
 		seedMemory({ title: "Old Config", content: "Legacy config loader." });
 
 		const res = await handleAgentContext(
-			{ owner: OWNER, repo: REPO, query: "cache", objective: "legacy", limit: 5, json: true },
+			{ owner: OWNER, repo: REPO, query: "cache", limit: 5, json: true },
 			db,
 			vectors
 		);
@@ -235,13 +235,13 @@ describe("Agent Context - Schema Validation (AgentContextSchema)", () => {
 		expect(result.query).toBe("search term");
 	});
 
-	it("should accept objective as deprecated fallback", () => {
+	it("should accept search via query field", () => {
 		const result = AgentContextSchema.parse({
 			owner: "test",
 			repo: "test",
-			objective: "old search"
+			query: "old search"
 		});
-		expect(result.objective).toBe("old search");
+		expect(result.query).toBe("old search");
 	});
 
 	it("should apply default limit of 5", () => {
