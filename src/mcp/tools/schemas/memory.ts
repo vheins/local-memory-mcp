@@ -2,108 +2,6 @@ import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
 import { MemoryScopeSchema, MemoryTypeSchema, SingleMemorySchema } from "./shared";
 
-export const MemoryStoreSchema = z.object({
-	code: z.string().max(20).optional(),
-	type: MemoryTypeSchema,
-	title: z.string().min(3).max(255),
-	content: z.string().min(10),
-	importance: z.coerce.number().min(1).max(5),
-	agent: z.string().min(1),
-	role: z.string().optional().default("unknown"),
-	model: z.string().optional(),
-	scope: MemoryScopeSchema.optional(),
-	ttlDays: z.coerce.number().min(1).optional(),
-	supersedes: z.string().optional(),
-	tags: z.array(z.string()).optional(),
-	metadata: z.record(z.string(), z.unknown()).optional(),
-	is_global: z.boolean().default(false),
-	json: z.boolean().default(false),
-	memories: z.array(SingleMemorySchema).min(1).optional()
-});
-
-export const MemoryUpdateSchema = z
-	.object({
-		id: z.string().optional(),
-		code: z.string().max(20).optional(),
-		owner: z.string().min(1),
-		repo: z.string().min(1).transform(normalizeRepo),
-		type: MemoryTypeSchema.optional(),
-		title: z.string().min(3).max(255).optional(),
-		content: z.string().min(10).optional(),
-		importance: z.coerce.number().min(1).max(5).optional(),
-		agent: z.string().optional(),
-		role: z.string().optional(),
-		status: z.enum(["active", "archived"]).optional(),
-		supersedes: z.string().optional(),
-		tags: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.unknown()).optional(),
-		is_global: z.boolean().optional(),
-		completed_at: z.string().optional(),
-		json: z.boolean().default(false)
-	})
-	.refine((data) => data.id !== undefined || data.code !== undefined, {
-		message: "Either id or code must be provided"
-	})
-	.refine(
-		(data) =>
-			data.type !== undefined ||
-			data.content !== undefined ||
-			data.title !== undefined ||
-			data.importance !== undefined ||
-			data.status !== undefined ||
-			data.supersedes !== undefined ||
-			data.tags !== undefined ||
-			data.metadata !== undefined ||
-			data.is_global !== undefined ||
-			data.agent !== undefined ||
-			data.role !== undefined ||
-			data.completed_at !== undefined,
-		{ message: "At least one field must be provided for update" }
-	);
-
-export const MemorySearchSchema = z.object({
-	query: z.string().min(3),
-	prompt: z.string().optional(),
-	owner: z.string().min(1),
-	repo: z.string().min(1).transform(normalizeRepo),
-	limit: z.coerce.number().min(1).max(100).default(5),
-	offset: z.coerce.number().min(0).default(0),
-	current_file_path: z.string().optional(),
-	include_archived: z.boolean().default(false),
-	current_tags: z.array(z.string()).optional(),
-	scope: MemoryScopeSchema.partial().optional(),
-	json: z.boolean().default(false)
-});
-
-export const MemoryAcknowledgeSchema = z
-	.object({
-		memory_id: z.string().optional(),
-		code: z.string().max(20).optional(),
-		owner: z.string().min(1),
-		repo: z.string().min(1).transform(normalizeRepo),
-		status: z
-			.enum(["used", "irrelevant", "contradictory"])
-			.describe(
-				'Usage status. Use "used" after generating code from a memory, "irrelevant" if the memory didn\'t help, or "contradictory" if it conflicts with current understanding.'
-			),
-		application_context: z.string().min(10).optional(),
-		json: z.boolean().default(false)
-	})
-	.refine((data) => data.memory_id !== undefined || data.code !== undefined, {
-		message: "Either memory_id or code must be provided"
-	});
-
-export const MemoryRecapSchema = z.object({
-	owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
-	repo: z
-		.string()
-		.min(1, "repo is required — provide it explicitly or configure MCP workspace roots")
-		.transform(normalizeRepo),
-	limit: z.coerce.number().min(1).max(50).default(20),
-	offset: z.coerce.number().min(0).default(0),
-	json: z.boolean().default(false)
-});
-
 export const MemoryDeleteSchema = z
 	.object({
 		owner: z.string().min(1).describe("GitHub org or username. Auto-inferred."),
@@ -124,18 +22,6 @@ export const MemoryDeleteSchema = z
 		}
 	)
 	.describe("Soft-delete memories. Single or bulk. Auto-infers: UUID→direct ID, non-UUID→code lookup.");
-
-export const MemoryDetailSchema = z
-	.object({
-		id: z.string().optional(),
-		code: z.string().max(20).optional(),
-		owner: z.string().min(1),
-		repo: z.string().min(1).transform(normalizeRepo),
-		json: z.boolean().default(false)
-	})
-	.refine((data) => data.id !== undefined || data.code !== undefined, {
-		message: "Either id or code must be provided"
-	});
 
 export const MemorySummarizeSchema = z.object({
 	owner: z.string().min(1),

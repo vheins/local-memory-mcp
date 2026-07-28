@@ -136,21 +136,18 @@ export function createRouter(
 		// Canonical memory tools
 		"memory-write",
 		"memory-delete",
-		// Backward-compat memory aliases
-		"memory-store",
-		"memory-update",
-		"memory-acknowledge",
 		// Summarize tools
-		"memory-summarize",
 		"repo-summarize",
-		"agent-summarize",
-		// Handoff & Claim — new canonical names
+		// Handoff & Claim
 		"handoff-write",
 		"claim-manage",
+		// Standards
 		"standard-write",
 		"standard-delete",
+		// Tasks
 		"task-write",
 		"task-delete",
+		// Codebase index tools (write)
 		"codebase-index"
 	]);
 
@@ -173,18 +170,10 @@ export function createRouter(
 
 		const executeToolLogic = async () => {
 			switch (toolName) {
-				// Backward-compat memory aliases (old names → new handlers)
-				case "memory-store":
-				case "memory-update":
-				case "memory-acknowledge":
 				// New canonical handlers
 				case "memory-write":
 					return await handleMemoryWrite(args, db, vectors);
 
-				// Backward-compat memory aliases (old names → new handlers)
-				case "memory-search":
-				case "memory-detail":
-				case "memory-recap":
 				// New canonical handlers
 				case "memory-read":
 					return await handleMemoryRead(args, db, vectors);
@@ -194,16 +183,10 @@ export function createRouter(
 
 				// New canonical names per ADR-001
 				case "repo-summarize":
-				// Backward-compat aliases
-				case "agent-summarize":
-				case "memory-summarize":
 					return await handleMemorySummarize(args, db);
 
 				// New canonical names per ADR-001
 				case "synthesize":
-				// Backward-compat aliases
-				case "agent-synthesize":
-				case "memory-synthesize":
 					return await handleMemorySynthesize(args, db, vectors, {
 						session: getSessionContext?.(),
 						sampleMessage: options?.sampleMessage,
@@ -319,10 +302,7 @@ function listTools(session: SessionContext | undefined, params: Record<string, u
 
 function getAvailableToolDefinitions(session?: SessionContext) {
 	return TOOL_DEFINITIONS.filter((tool) => {
-		if (
-			(tool.name === "synthesize" || tool.name === "agent-synthesize" || tool.name === "memory-synthesize") &&
-			!session?.supportsSampling
-		) {
+		if (tool.name === "synthesize" && !session?.supportsSampling) {
 			return false;
 		}
 

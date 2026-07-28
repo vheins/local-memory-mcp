@@ -204,8 +204,15 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
 		const validId = "123e4567-e89b-12d3-a456-426614174000";
-		(mockDb.memories.getByIds as any).mockReturnValue([{ id: validId, code: "ABC123", scope: { repo: "test-repo" }, title: "Test" }]);
-		(mockDb.memories.getById as any).mockReturnValue({ id: validId, code: "ABC123", scope: { repo: "test-repo" }, title: "Test" });
+		(mockDb.memories.getByIds as any).mockReturnValue([
+			{ id: validId, code: "ABC123", scope: { repo: "test-repo" }, title: "Test" }
+		]);
+		(mockDb.memories.getById as any).mockReturnValue({
+			id: validId,
+			code: "ABC123",
+			scope: { repo: "test-repo" },
+			title: "Test"
+		});
 		const router = createRouter(mockDb, mockVectors);
 
 		await router("tools/call", {
@@ -387,7 +394,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		const result = (await router("tools/list", {})) as any;
 		const toolNames = result.tools.map((tool: Record<string, unknown>) => tool.name);
 
-		expect(toolNames).not.toContain("memory-synthesize");
+		expect(toolNames).not.toContain("synthesize");
 		expect(toolNames).not.toContain("task-create-interactive");
 	});
 
@@ -473,7 +480,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		expect(result.description).toBeDefined();
 	});
 
-	it("memory-synthesize uses sampling when the client supports it", async () => {
+	it("synthesize uses sampling when the client supports it", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
 		const session = createSessionContext();
@@ -491,7 +498,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		const result = (await router("tools/call", {
-			name: "memory-synthesize",
+			name: "synthesize",
 			arguments: { owner: "test", repo: "test-repo", objective: "Summarize the project state" }
 		})) as any;
 
@@ -499,7 +506,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		expect((result.structuredContent as Record<string, unknown>).answer).toContain("Grounded answer");
 	});
 
-	it("memory-synthesize supports a multi-turn sampling tool loop", async () => {
+	it("synthesize supports a multi-turn sampling tool loop", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
 		const session = createSessionContext();
@@ -533,7 +540,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		const result = (await router("tools/call", {
-			name: "memory-synthesize",
+			name: "synthesize",
 			arguments: {
 				owner: "test",
 				repo: "test-repo",
@@ -547,7 +554,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		expect((result.structuredContent as Record<string, unknown>).iterations).toBe(2);
 	});
 
-	it("memory-synthesize falls back to cwd inference when no roots or repo provided", async () => {
+	it("synthesize falls back to cwd inference when no roots or repo provided", async () => {
 		const mockDb = makeMockDb();
 		const mockVectors = makeMockVectors();
 		const session = createSessionContext();
@@ -570,7 +577,7 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 		});
 
 		const result = (await router("tools/call", {
-			name: "memory-synthesize",
+			name: "synthesize",
 			arguments: { owner: "test", objective: "Summarize using cwd inference" }
 		})) as any;
 

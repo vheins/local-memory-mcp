@@ -46,14 +46,8 @@ const WRITE_TOOLS = new Set([
 	// Canonical memory tools
 	"memory-write",
 	"memory-delete",
-	// Backward-compat memory aliases (old names → memory-write)
-	"memory-store",
-	"memory-update",
-	"memory-acknowledge",
 	// Summarize tools
-	"memory-summarize",
 	"repo-summarize",
-	"agent-summarize",
 	// Handoff & Claim
 	"handoff-write",
 	"claim-manage",
@@ -198,13 +192,6 @@ function buildExecutors(
 		"memory-write": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
 		"memory-read": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
 		"memory-delete": (args, db, vectors, extra) => handleMemoryDelete(args, db, vectors, extra?.onProgress),
-		// Backward-compat aliases (old names → new handlers)
-		"memory-store": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
-		"memory-update": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
-		"memory-acknowledge": (args, db, vectors, _extra) => handleMemoryWrite(args, db, vectors),
-		"memory-search": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
-		"memory-detail": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
-		"memory-recap": (args, db, vectors, _extra) => handleMemoryRead(args, db, vectors),
 		// New canonical names per ADR-001
 		synthesize: (args, db, vectors, _extra) =>
 			handleMemorySynthesize(args, db, vectors, {
@@ -213,22 +200,6 @@ function buildExecutors(
 				elicit
 			}),
 		"repo-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
-		// Backward-compat aliases for synthesize
-		"agent-synthesize": (args, db, vectors, _extra) =>
-			handleMemorySynthesize(args, db, vectors, {
-				session,
-				sampleMessage,
-				elicit
-			}),
-		"memory-synthesize": (args, db, vectors, _extra) =>
-			handleMemorySynthesize(args, db, vectors, {
-				session,
-				sampleMessage,
-				elicit
-			}),
-		// Backward-compat aliases for repo-summarize
-		"agent-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
-		"memory-summarize": (args, db, _vectors, _extra) => handleMemorySummarize(args, db),
 		// New canonical handlers
 		"handoff-write": (args, db, _vectors, _extra) => handleHandoffWrite(args, db),
 		"handoff-read": (args, db, _vectors, _extra) => handleHandoffRead(args, db),
@@ -263,10 +234,7 @@ export function registerAllTools(
 
 	// Filter tool definitions by client capabilities
 	const definitions = TOOL_DEFINITIONS.filter((def) => {
-		if (
-			(def.name === "synthesize" || def.name === "agent-synthesize" || def.name === "memory-synthesize") &&
-			!session.supportsSampling
-		) {
+		if (def.name === "synthesize" && !session.supportsSampling) {
 			return false;
 		}
 		return true;

@@ -15,15 +15,7 @@ export {
 	MemorySynthesizeSchema,
 	MemoryWriteSchema,
 	MemoryWriteItemSchema,
-	MemoryReadSchema,
-	// Legacy aliases — kept for backward-compat tool files
-	// These schemas still exist in memory.ts but had no barrel re-exports
-	MemoryStoreSchema,
-	MemoryUpdateSchema,
-	MemorySearchSchema,
-	MemoryAcknowledgeSchema,
-	MemoryRecapSchema,
-	MemoryDetailSchema
+	MemoryReadSchema
 } from "./memory";
 
 export {

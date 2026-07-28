@@ -13,8 +13,7 @@ import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/
 import { logger } from "../utils/logger";
 import { MemorySynthesizeSchema } from "./schemas";
 import { normalizeRepo } from "../utils/normalize";
-import { handleMemoryRecap } from "./memory.recap";
-import { handleMemorySearch } from "./memory.search";
+import { handleMemoryRead } from "./memory.read";
 import { handleTaskRead } from "./task-read";
 
 type SynthesizeOptions = {
@@ -42,7 +41,7 @@ export async function handleMemorySynthesize(
 	}
 
 	const repoOwner = validated.owner;
-	const recap = await handleMemoryRecap({ owner: repoOwner, repo, limit: 8, offset: 0 }, db);
+	const recap = await handleMemoryRead({ owner: repoOwner, repo, limit: 8, offset: 0 }, db, vectors);
 	const recapText = getPrimaryTextContent(recap);
 	const summary = validated.include_summary ? db.summaries.getSummary(repoOwner, repo)?.summary : "";
 
@@ -257,7 +256,7 @@ async function executeSamplingTool(
 ) {
 	switch (toolName) {
 		case "memory_search": {
-			const response = await handleMemorySearch(
+			const response = await handleMemoryRead(
 				{
 					owner,
 					repo: rawInput.repo,
@@ -271,14 +270,15 @@ async function executeSamplingTool(
 		}
 
 		case "memory_recap": {
-			const response = await handleMemoryRecap(
+			const response = await handleMemoryRead(
 				{
 					owner,
 					repo: rawInput.repo,
 					limit: rawInput.limit ?? 8,
 					offset: 0
 				},
-				db
+				db,
+				vectors
 			);
 			return getPrimaryTextContent(response);
 		}

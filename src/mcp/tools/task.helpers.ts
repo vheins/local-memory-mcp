@@ -2,7 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { type TaskStatus, type VectorStore } from "../types";
 import { logger } from "../utils/logger";
 import { UUID_REGEX } from "../utils/uuid";
-import { handleMemoryStore } from "./memory.store";
+import { handleMemoryWrite } from "./memory-write/index";
 
 /**
  * Resolves a parent_id value that is either a UUID or a task_code string.
@@ -100,7 +100,7 @@ export async function archiveTaskToMemory(taskId: string, repo: string, storage:
 	const truncatedTitle = title.length > 100 ? title.substring(0, 97) + "..." : title;
 
 	try {
-		await handleMemoryStore(
+		await handleMemoryWrite(
 			{
 				type: "task_archive",
 				title: truncatedTitle,
