@@ -472,7 +472,7 @@ interface Drawable {
 		guardEmpty(result);
 		const iface = result.symbols.find((s) => s.name === "Drawable");
 		if (!iface) return;
-		expect(iface.kind).toBe("class");
+		expect(iface.kind).toBe("interface");
 	});
 });
 
@@ -525,7 +525,7 @@ protocol Drawable {
 		guardEmpty(result);
 		const p = result.symbols.find((s) => s.name === "Drawable");
 		if (!p) return;
-		expect(p.kind).toBe("class");
+		expect(p.kind).toBe("interface");
 	});
 });
 
