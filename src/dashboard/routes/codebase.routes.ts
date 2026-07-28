@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { CodebaseController } from "../controllers/codebase-controller";
+import { CodebaseController } from "../controllers/CodebaseController";
 
 const router = Router();
 

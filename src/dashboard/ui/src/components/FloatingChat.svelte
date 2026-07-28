@@ -6,7 +6,10 @@
 	import { api } from "../lib/api";
 	import { createRecentActionsHandler } from "../lib/composables/useRecentActions";
 	import { createChatTask } from "../lib/utils";
-	import Markdown from "./Markdown.svelte";
+	import ChatHeader from "./ChatHeader.svelte";
+	import ChatMessage from "./ChatMessage.svelte";
+	import ChatInput from "./ChatInput.svelte";
+	import { loadPage as loadPageUtil, sendChatMessage } from "../lib/chatUtils";
 
 	export let onRefresh: () => void = () => {};
 
@@ -16,20 +19,7 @@
 	let chatContainer: HTMLDivElement | undefined;
 
 	async function loadPage(page: number, append?: boolean) {
-		const repo = get(currentRepo);
-		if (!repo) return;
-		try {
-			const data = await api.recentActions(repo, page, 25);
-			if (append) {
-				recentActions.update((a) => [...a, ...(data.actions || [])]);
-			} else {
-				recentActions.set(data.actions || []);
-			}
-			recentActionsPage.set(data.pagination?.page ?? page);
-			recentActionsTotalItems.set(data.pagination?.totalItems ?? 0);
-		} catch (e) {
-			console.error("Failed to load recent actions:", e);
-		}
+		await loadPageUtil(page, append);
 	}
 
 	const handler = createRecentActionsHandler(loadPage);
@@ -79,6 +69,10 @@
 			isSending = false;
 		}
 	}
+
+	function onChatInput(e: Event) {
+		chatMessage = (e.target as HTMLInputElement).value;
+	}
 </script>
 
 <svelte:window on:keydown={handleKeyDown} />
@@ -94,20 +88,7 @@
 			aria-label="Close"
 		></div>
 		<div class="chat-popup animate-fade-in-scale">
-			<div class="chat-popup-header">
-				<div class="chat-popup-title">
-					<div class="chat-popup-avatar">
-						<Icon name="message-circle" size={16} strokeWidth={2.2} />
-					</div>
-					<div>
-						<div class="chat-popup-name">Recent Activity</div>
-						<div class="chat-popup-status">{$recentActionsTotalItems} events</div>
-					</div>
-				</div>
-				<button class="chat-popup-close" on:click={() => (open = false)} title="Close" aria-label="Close">
-					<Icon name="x" size={16} strokeWidth={2.5} />
-				</button>
-			</div>
+			<ChatHeader totalEvents={$recentActionsTotalItems} onClose={() => (open = false)} />
 
 			<div class="chat-popup-body" bind:this={chatContainer}>
 				{#if $handler.isLoadingMore}
@@ -129,41 +110,25 @@
 						{#each group.items as action, i (`${action.id}-${i}`)}
 							{@const label = handler.getLabel(action)}
 							{@const cfg = handler.getConfig(action.action)}
-							<div class="popup-bubble-row popup-bubble-right">
-								<div class="popup-bubble-wrap">
-									<div class="popup-chat-bubble popup-chat-bubble-action">
-										<div class="popup-action-badge" style="color:{cfg.color};background:{cfg.bgAlpha};">
-											<Icon name={cfg.icon} size={8} strokeWidth={2.5} />
-											<span>{cfg.label}</span>
-										</div>
-										<div class="popup-action-main">{label.main}</div>
-										{#if label.sub}<div class="popup-action-sub">{label.sub}</div>{/if}
-									</div>
-								</div>
-							</div>
+							<ChatMessage
+								type="action"
+								badgeIcon={cfg.icon}
+								badgeLabel={cfg.label}
+								badgeColor={cfg.color}
+								badgeBgAlpha={cfg.bgAlpha}
+								mainText={label.main}
+								subText={label.sub ?? ""}
+							/>
 							{#if action.response}
 								{@const parsed = handler.parseResponse(action.response)}
 								{@const isExpanded = $handler.expandedResponses.has(action.id)}
-								<div class="popup-bubble-row popup-bubble-left">
-									<div class="popup-bubble-wrap">
-										<div class="popup-chat-bubble popup-chat-bubble-mcp">
-											<div class="popup-mcp-sender">MCP</div>
-											<div
-												class="popup-markdown"
-												style={!isExpanded && parsed.isLong
-													? "max-height:80px;overflow:hidden;mask-image:linear-gradient(to bottom,black 60%,transparent 100%);"
-													: ""}
-											>
-												<Markdown content={parsed.text} />
-											</div>
-											{#if parsed.isLong}
-												<button class="popup-read-more" on:click={() => handler.toggleExpand(action.id)}>
-													{isExpanded ? "Less" : "More"}
-												</button>
-											{/if}
-										</div>
-									</div>
-								</div>
+								<ChatMessage
+									type="mcp"
+									responseText={parsed.text}
+									isLong={parsed.isLong}
+									{isExpanded}
+									onToggleExpand={() => handler.toggleExpand(action.id)}
+								/>
 							{/if}
 						{/each}
 					{/each}
@@ -171,19 +136,7 @@
 			</div>
 
 			<div class="chat-popup-footer">
-				<div class="chat-input-row">
-					<input
-						type="text"
-						placeholder="Create a backlog task..."
-						value={chatMessage}
-						on:input={(e) => (chatMessage = e.currentTarget.value)}
-						on:keydown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
-						disabled={isSending}
-					/>
-					<button class="chat-send-btn" on:click={sendChat} disabled={!chatMessage.trim() || isSending}>
-						<Icon name="send" size={14} strokeWidth={2} />
-					</button>
-				</div>
+				<ChatInput value={chatMessage} disabled={isSending} onInput={onChatInput} onSend={sendChat} />
 			</div>
 		</div>
 	{:else}
@@ -274,63 +227,6 @@
 		box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
 	}
 
-	.chat-popup-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 14px 16px;
-		background: linear-gradient(135deg, #0ea5e9, #6366f1);
-		color: white;
-		flex-shrink: 0;
-	}
-
-	.chat-popup-title {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-
-	.chat-popup-avatar {
-		width: 34px;
-		height: 34px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.2);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.chat-popup-name {
-		font-size: 0.85rem;
-		font-weight: 700;
-		line-height: 1.2;
-	}
-
-	.chat-popup-status {
-		font-size: 0.62rem;
-		font-weight: 600;
-		opacity: 0.8;
-	}
-
-	.chat-popup-close {
-		width: 30px;
-		height: 30px;
-		border-radius: 50%;
-		border: none;
-		background: rgba(255, 255, 255, 0.2);
-		color: white;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: background 0.2s;
-		flex-shrink: 0;
-	}
-
-	.chat-popup-close:hover {
-		background: rgba(255, 255, 255, 0.35);
-	}
-
 	.chat-popup-body {
 		flex: 1;
 		overflow-y: auto;
@@ -400,111 +296,6 @@
 		color: #8696a0;
 	}
 
-	.popup-bubble-row {
-		display: flex;
-		width: 100%;
-	}
-
-	.popup-bubble-right {
-		justify-content: flex-end;
-	}
-
-	.popup-bubble-left {
-		justify-content: flex-start;
-	}
-
-	.popup-bubble-wrap {
-		max-width: 85%;
-	}
-
-	.popup-chat-bubble {
-		padding: 6px 10px 6px;
-		border-radius: 10px;
-		font-size: 0.78rem;
-		line-height: 1.35;
-		box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.1);
-		position: relative;
-	}
-
-	.popup-chat-bubble-action {
-		background: #dcf8c6;
-		color: #111b21;
-	}
-
-	:global(html.dark) .popup-chat-bubble-action {
-		background: #056162;
-		color: #e9edef;
-	}
-
-	.popup-chat-bubble-mcp {
-		background: #ffffff;
-		color: #111b21;
-	}
-
-	:global(html.dark) .popup-chat-bubble-mcp {
-		background: #202c33;
-		color: #e9edef;
-	}
-
-	.popup-action-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		padding: 1px 5px;
-		border-radius: 3px;
-		font-size: 0.55rem;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		margin-bottom: 3px;
-	}
-
-	.popup-action-main {
-		font-weight: 600;
-		font-size: 0.78rem;
-		word-break: break-word;
-	}
-
-	.popup-action-sub {
-		font-size: 0.65rem;
-		opacity: 0.6;
-		margin-top: 1px;
-	}
-
-	.popup-mcp-sender {
-		font-size: 0.62rem;
-		font-weight: 800;
-		color: #34b7f1;
-		margin-bottom: 4px;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-	}
-
-	.popup-markdown {
-		font-size: 0.75rem;
-		line-height: 1.45;
-	}
-
-	:global(.popup-markdown p) {
-		margin: 0.3em 0;
-	}
-
-	.popup-read-more {
-		background: transparent;
-		border: none;
-		color: #34b7f1;
-		font-size: 0.65rem;
-		font-weight: 700;
-		cursor: pointer;
-		padding: 2px 0;
-		margin-top: 2px;
-		display: block;
-	}
-
-	.popup-read-more:hover {
-		text-decoration: underline;
-	}
-
 	.chat-popup-footer {
 		flex-shrink: 0;
 		padding: 8px 12px;
@@ -515,21 +306,6 @@
 	:global(html.dark) .chat-popup-footer {
 		background: rgba(6, 12, 28, 0.7);
 		border-top-color: rgba(148, 163, 184, 0.1);
-	}
-
-	:global(.chat-popup-footer .chat-input-row) {
-		border-radius: 20px;
-		padding: 2px 2px 2px 14px;
-	}
-
-	:global(.chat-popup-footer .chat-input-row input) {
-		font-size: 0.8rem;
-		padding: 6px 0;
-	}
-
-	:global(.chat-popup-footer .chat-send-btn) {
-		width: 32px;
-		height: 32px;
 	}
 
 	@media (max-width: 640px) {

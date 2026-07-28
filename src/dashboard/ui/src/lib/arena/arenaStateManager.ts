@@ -9,10 +9,30 @@ import type {
 	FilterState,
 	EventLogEntry
 } from "./arenaEvents";
-
-// ─── Zoom constraints ──────────────────────────────────────────────────────
-const ZOOM_MIN = 0.1;
-const ZOOM_MAX = 3.0;
+import {
+	buildAgentConnectedPatch,
+	buildAgentDisconnectedPatch,
+	buildAgentHealthChangedPatch,
+	buildAgentActionChangedPatch,
+	buildAgentMemoryPatch
+} from "./arena-state/agents";
+import {
+	buildTaskCreatedPatch,
+	buildTaskAssignedPatch,
+	buildTaskStartedPatch,
+	buildTaskProgressedPatch,
+	buildTaskBlockedPatch,
+	buildTaskUnblockedPatch,
+	buildTaskRetryScheduledPatch,
+	buildTaskCompletedPatch,
+	buildTaskFailedPatch,
+	buildRepoLockedPatch,
+	buildRepoUnlockedPatch,
+	buildRepoHealthChangedPatch,
+	buildMetricsUpdatedPatch,
+	recomputeZones,
+	recomputeMetrics
+} from "./arena-state/connections";
 
 export class ArenaStateManager {
 	private state: ArenaState;
@@ -85,7 +105,6 @@ export class ArenaStateManager {
 
 	// ── Public API ──────────────────────────────────────────────────────────
 
-	/** Subscribe to state patches emitted on every event. */
 	subscribe(cb: (patch: ArenaPatch) => void): () => void {
 		this.subscribers.add(cb);
 		return () => {
@@ -93,568 +112,130 @@ export class ArenaStateManager {
 		};
 	}
 
-	/** Get the Svelte store for reactive bindings. */
 	getStore(): Writable<ArenaState> {
 		return this.store;
 	}
 
-	/** Get a shallow snapshot of the current state. */
 	getSnapshot(): ArenaState {
 		return { ...this.state };
 	}
 
-	/** Apply a domain event and produce a differential patch. */
 	applyEvent(event: DomainEvent): ArenaPatch {
 		this.logDomainEvent(event);
 		const patch = this.processEvent(event);
-		if (patch) {
-			this.applyPatch(patch);
-		}
+		if (patch) this.applyPatch(patch);
 		return patch;
 	}
 
-	/** Apply a pre-computed patch directly. */
 	applyPatch(patch: ArenaPatch): void {
 		this.state.version++;
-
-		// Apply entity changes
 		if (patch.entities.agents) {
 			for (const [id, changes] of patch.entities.agents) {
 				const existing = this.state.agents.get(id);
-				if (existing) {
-					Object.assign(existing, changes);
-				} else {
-					this.state.agents.set(id, changes as VisualAgent);
-				}
+				if (existing) Object.assign(existing, changes);
+				else this.state.agents.set(id, changes as VisualAgent);
 			}
 		}
 		if (patch.entities.tasks) {
 			for (const [id, changes] of patch.entities.tasks) {
 				const existing = this.state.tasks.get(id);
-				if (existing) {
-					Object.assign(existing, changes);
-				} else {
-					this.state.tasks.set(id, changes as VisualTask);
-				}
+				if (existing) Object.assign(existing, changes);
+				else this.state.tasks.set(id, changes as VisualTask);
 			}
 		}
 		if (patch.entities.repositories) {
 			for (const [id, changes] of patch.entities.repositories) {
 				const existing = this.state.repositories.get(id);
-				if (existing) {
-					Object.assign(existing, changes);
-				} else {
-					this.state.repositories.set(id, changes as VisualRepository);
-				}
+				if (existing) Object.assign(existing, changes);
+				else this.state.repositories.set(id, changes as VisualRepository);
 			}
 		}
-
-		// Recompute zone aggregates if needed
-		if (patch.invalidatedZones.length > 0) {
-			this.recomputeZones(patch.invalidatedZones);
-		}
-
-		// Recompute metrics if needed
-		if (patch.metricsChanged) {
-			this.recomputeMetrics();
-		}
-
-		// Push to Svelte store + notify external subscribers
+		if (patch.invalidatedZones.length > 0) recomputeZones(this.state, patch.invalidatedZones);
+		if (patch.metricsChanged) recomputeMetrics(this.state);
 		this.store.set(this.state);
-
-		for (const cb of this.subscribers) {
-			cb(patch);
-		}
+		for (const cb of this.subscribers) cb(patch);
 	}
 
-	// ── Event Processors ────────────────────────────────────────────────────
+	// ── Event Processing ────────────────────────────────────────────────────
 
 	private processEvent(event: DomainEvent): ArenaPatch {
-		const patch: ArenaPatch = {
-			entities: {},
-			invalidatedZones: [],
-			effects: [],
-			metricsChanged: false
-		};
+		const patch: ArenaPatch = { entities: {}, invalidatedZones: [], effects: [], metricsChanged: false };
+		let partial: Partial<ArenaPatch> = {};
 
 		switch (event.type) {
-			case "agent-connected": {
-				const agent: VisualAgent = {
-					id: event.agentId,
-					name: event.name,
-					role: event.role,
-					model: event.model,
-					color: "#8b5cf6",
-					x: 100,
-					y: 100,
-					targetX: 100,
-					targetY: 100,
-					vx: 0,
-					vy: 0,
-					walkPhase: 0,
-					facing: "down",
-					state: "idle",
-					claimedTaskIds: [],
-					repos: [],
-					lastUpdateTs: event.timestamp,
-					handoffAnim: null,
-					health: "healthy",
-					currentAction: "idle",
-					currentTool: "",
-					confidence: 1.0,
-					progress: 0,
-					tokenUsage: 0,
-					tokenBurnRate: 0,
-					cost: 0,
-					latency: 0,
-					contextUsage: 0,
-					queueLength: 0,
-					memoryOps: 0,
-					toolCalls: 0,
-					statusIcon: "●",
-					speechBubble: null,
-					speechBubbleTs: 0,
-					activityAnimation: "idle",
-					healthRing: 100,
-					coloredOutline: "#8b5cf6"
-				};
-				patch.entities.agents = new Map([[event.agentId, agent]]);
-				patch.invalidatedZones = ["inProgress"];
+			case "agent-connected":
+				partial = buildAgentConnectedPatch(event);
 				break;
-			}
-
-			case "agent-disconnected": {
-				patch.entities.agents = new Map([
-					[event.agentId, { state: "burnout", health: "offline" } as Partial<VisualAgent>]
-				]);
-				patch.invalidatedZones = ["inProgress", "recovery"];
+			case "agent-disconnected":
+				partial = buildAgentDisconnectedPatch(event);
 				break;
-			}
-
-			case "agent-health-changed": {
-				patch.entities.agents = new Map([
-					[
-						event.agentId,
-						{
-							health: event.health,
-							healthRing: event.health === "healthy" ? 100 : event.health === "degraded" ? 60 : 25,
-							speechBubble: `Health: ${event.reason}`,
-							speechBubbleTs: Date.now()
-						}
-					]
-				]);
-				if (event.health === "critical") {
-					patch.effects.push({
-						type: "error-flash",
-						entityId: event.agentId,
-						entityType: "agent",
-						intensity: 1,
-						duration: 500
-					});
-				}
+			case "agent-health-changed":
+				partial = buildAgentHealthChangedPatch(event);
 				break;
-			}
-
-			case "agent-action-changed": {
-				patch.entities.agents = new Map([
-					[
-						event.agentId,
-						{
-							currentAction: event.action as VisualAgent["currentAction"],
-							currentTool: event.tool || ""
-						}
-					]
-				]);
+			case "agent-action-changed":
+				partial = buildAgentActionChangedPatch(event);
 				break;
-			}
-
-			case "task-created": {
-				const task: VisualTask = {
-					id: event.taskId,
-					taskCode: event.taskId,
-					title: event.title,
-					repo: event.repositoryId,
-					status: "pending",
-					priority: 2,
-					x: 0,
-					y: 0,
-					claimedByAgentId: null,
-					hasPendingHandoff: false,
-					priorityLevel: "p2",
-					ownerId: "",
-					repositoryId: event.repositoryId,
-					createdAt: event.timestamp,
-					startedAt: null,
-					estimatedDuration: 0,
-					actualDuration: null,
-					waitTime: 0,
-					progress: 0,
-					retryCount: 0,
-					maxRetries: 3,
-					failureReason: null,
-					blockedReason: null,
-					blockedById: null,
-					tokenCost: 0,
-					estimatedCost: 0,
-					labels: [],
-					tags: [],
-					taskType: "feature",
-					animationState: "entering"
-				};
-				patch.entities.tasks = new Map([[event.taskId, task]]);
-				patch.invalidatedZones = ["pending"];
-				patch.metricsChanged = true;
+			case "task-created":
+				partial = buildTaskCreatedPatch(event);
 				break;
-			}
-
-			case "task-assigned": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							claimedByAgentId: event.agentId,
-							ownerId: event.agentId,
-							status: "pending",
-							animationState: "pulse"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.invalidatedZones = ["pending", "inProgress"];
+			case "task-assigned":
+				partial = buildTaskAssignedPatch(event);
 				break;
-			}
-
-			case "task-started": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							status: "in_progress",
-							startedAt: event.timestamp,
-							progress: 0,
-							animationState: "pulse"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.entities.agents = new Map([
-					[
-						event.agentId,
-						{
-							state: "processing",
-							currentAction: "coding"
-						} as Partial<VisualAgent>
-					]
-				]);
-				patch.invalidatedZones = ["pending", "inProgress"];
+			case "task-started":
+				partial = buildTaskStartedPatch(event);
 				break;
-			}
-
-			case "task-progressed": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							progress: event.progress,
-							tokenCost: event.tokenUsage
-						}
-					]
-				]);
+			case "task-progressed":
+				partial = buildTaskProgressedPatch(event);
 				break;
-			}
-
-			case "task-blocked": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							status: "blocked",
-							blockedReason: event.reason as VisualTask["blockedReason"],
-							blockedById: event.blockedById,
-							failureReason: event.detail,
-							animationState: "shake"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.invalidatedZones = ["inProgress", "blocked"];
-				patch.effects.push({
-					type: "blocked-pulse",
-					entityId: event.taskId,
-					entityType: "task",
-					intensity: 0.5,
-					duration: 800
-				});
+			case "task-blocked":
+				partial = buildTaskBlockedPatch(event);
 				break;
-			}
-
-			case "task-unblocked": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							status: "pending",
-							blockedReason: null,
-							blockedById: null,
-							failureReason: null,
-							animationState: "entering"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.invalidatedZones = ["blocked", "pending"];
+			case "task-unblocked":
+				partial = buildTaskUnblockedPatch(event);
 				break;
-			}
-
-			case "task-retry-scheduled": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							retryCount: event.attempt,
-							maxRetries: event.maxRetries,
-							status: "pending",
-							animationState: "pulse"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.invalidatedZones = ["recovery", "pending"];
-				patch.effects.push({
-					type: "cooldown",
-					entityId: event.taskId,
-					entityType: "task",
-					intensity: 0.3,
-					duration: event.backoffSeconds * 1000
-				});
+			case "task-retry-scheduled":
+				partial = buildTaskRetryScheduledPatch(event);
 				break;
-			}
-
-			case "task-completed": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							status: "completed",
-							actualDuration: event.duration,
-							tokenCost: event.tokenCost,
-							progress: 1,
-							animationState: "celebration"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.entities.agents = new Map([
-					[
-						event.agentId,
-						{
-							state: "idle",
-							currentAction: "idle",
-							progress: 0
-						} as Partial<VisualAgent>
-					]
-				]);
-				patch.invalidatedZones = ["inProgress"];
-				patch.metricsChanged = true;
-				patch.effects.push({
-					type: "celebration",
-					entityId: event.taskId,
-					entityType: "task",
-					intensity: 1,
-					duration: 1500
-				});
+			case "task-completed":
+				partial = buildTaskCompletedPatch(event);
 				break;
-			}
-
-			case "task-failed": {
-				patch.entities.tasks = new Map([
-					[
-						event.taskId,
-						{
-							status: "blocked",
-							failureReason: event.error,
-							retryCount: event.canRetry ? 1 : 0,
-							animationState: "shake"
-						} as Partial<VisualTask>
-					]
-				]);
-				patch.entities.agents = new Map([
-					[
-						event.agentId,
-						{
-							state: "burnout",
-							currentAction: "retrying"
-						} as Partial<VisualAgent>
-					]
-				]);
-				patch.invalidatedZones = ["inProgress", "blocked", "recovery"];
-				patch.metricsChanged = true;
-				patch.effects.push({
-					type: "error-flash",
-					entityId: event.taskId,
-					entityType: "task",
-					intensity: 1,
-					duration: 600
-				});
+			case "task-failed":
+				partial = buildTaskFailedPatch(event);
 				break;
-			}
-
 			case "memory-created":
-			case "memory-updated": {
-				const memEvent = event as { agentId: string; summary: string };
-				if (memEvent.agentId && this.state.agents.has(memEvent.agentId)) {
-					patch.entities.agents = new Map([
-						[
-							memEvent.agentId,
-							{
-								memoryOps: (this.state.agents.get(memEvent.agentId)?.memoryOps || 0) + 1,
-								speechBubble: `Memory: ${memEvent.summary || "synced"}`,
-								speechBubbleTs: Date.now()
-							}
-						]
-					]);
-					patch.effects.push({
-						type: "memory-sync",
-						entityId: memEvent.agentId,
-						entityType: "agent",
-						intensity: 0.4,
-						duration: 2000
-					});
-				}
+			case "memory-updated":
+				partial = buildAgentMemoryPatch(event, this.state);
 				break;
-			}
-
-			case "repository-locked": {
-				patch.entities.repositories = new Map([
-					[event.repositoryId, { lockedFiles: [event.file] } as Partial<VisualRepository>]
-				]);
+			case "repository-locked":
+				partial = buildRepoLockedPatch(event);
 				break;
-			}
-
-			case "repository-unlocked": {
-				patch.entities.repositories = new Map([[event.repositoryId, { lockedFiles: [] } as Partial<VisualRepository>]]);
+			case "repository-unlocked":
+				partial = buildRepoUnlockedPatch(event);
 				break;
-			}
-
-			case "repository-health-changed": {
-				patch.entities.repositories = new Map([
-					[
-						event.repositoryId,
-						{
-							health: event.health,
-							utilizationPercent: event.metrics.utilizationPercent || 0
-						} as Partial<VisualRepository>
-					]
-				]);
+			case "repository-health-changed":
+				partial = buildRepoHealthChangedPatch(event);
 				break;
-			}
-
-			case "metrics-updated": {
-				patch.metricsChanged = true;
+			case "metrics-updated":
+				partial = buildMetricsUpdatedPatch();
 				break;
-			}
 		}
 
+		if (partial.entities) Object.assign(patch.entities, partial.entities);
+		if (partial.invalidatedZones) patch.invalidatedZones.push(...partial.invalidatedZones);
+		if (partial.effects) patch.effects.push(...partial.effects);
+		if (partial.metricsChanged) patch.metricsChanged = true;
 		return patch;
 	}
 
-	// ── Zone Recomputations ─────────────────────────────────────────────────
+	// ── Initialization ──────────────────────────────────────────────────────
 
-	private recomputeZones(zoneNames: string[]): void {
-		const tasks = Array.from(this.state.tasks.values());
-		const agents = Array.from(this.state.agents.values());
-		const now = Date.now();
-
-		for (const zoneName of zoneNames) {
-			let zoneTasks: VisualTask[];
-			switch (zoneName) {
-				case "pending":
-					zoneTasks = tasks.filter((t) => t.status === "pending" && !t.claimedByAgentId);
-					break;
-				case "inProgress":
-					zoneTasks = tasks.filter((t) => t.status === "in_progress" || (t.status === "pending" && t.claimedByAgentId));
-					break;
-				case "backlog":
-					zoneTasks = tasks.filter((t) => t.status === "backlog");
-					break;
-				case "blocked":
-					zoneTasks = tasks.filter((t) => t.status === "blocked");
-					break;
-				case "recovery":
-					zoneTasks = tasks.filter((t) => t.retryCount > 0 || t.failureReason !== null);
-					break;
-				default:
-					zoneTasks = [];
-			}
-
-			const aggregate = this.emptyZone();
-			aggregate.count = zoneTasks.length;
-
-			if (zoneTasks.length > 0) {
-				const waits = zoneTasks.map((t) => (t.createdAt ? (now - t.createdAt) / 1000 : 0));
-				aggregate.oldestWait = Math.max(...waits);
-				aggregate.averageWait = waits.reduce((a, b) => a + b, 0) / waits.length;
-
-				// Priority distribution
-				const dist: Record<string, number> = {};
-				for (const t of zoneTasks) {
-					const p = `p${t.priority}`;
-					dist[p] = (dist[p] || 0) + 1;
-				}
-				aggregate.priorityDistribution = dist;
-
-				// ETA rough estimate
-				const activeAgents = agents.filter((a) => a.state === "processing").length;
-				if (activeAgents > 0 && zoneTasks.length > 0) {
-					const avgDuration = 30; // rough 30s default
-					aggregate.eta = (zoneTasks.length * avgDuration) / activeAgents;
-				}
-
-				// Blocked by distribution (blocked zone only)
-				if (zoneName === "blocked") {
-					const blockedDist: Record<string, number> = {};
-					for (const t of zoneTasks) {
-						const reason = t.blockedReason || "unknown";
-						blockedDist[reason] = (blockedDist[reason] || 0) + 1;
-					}
-					aggregate.blockedByDistribution = blockedDist;
-				}
-			}
-
-			(this.state.zones as Record<string, ZoneAggregate>)[zoneName] = aggregate;
-		}
-	}
-
-	// ── Metrics Recomputations ──────────────────────────────────────────────
-
-	private recomputeMetrics(): void {
-		const tasks = Array.from(this.state.tasks.values());
-		const agents = Array.from(this.state.agents.values());
-		const completed = tasks.filter((t) => t.status === "completed").length;
-		const failed = tasks.filter((t) => t.status === "blocked" && t.failureReason !== null).length;
-		const total = completed + failed + tasks.filter((t) => t.status === "in_progress").length;
-
-		this.state.metrics = {
-			successRate: total > 0 ? (completed / total) * 100 : 100,
-			failureRate: total > 0 ? (failed / total) * 100 : 0,
-			retryRate: (tasks.filter((t) => t.retryCount > 0).length / Math.max(1, total)) * 100,
-			throughput: completed / Math.max(1, (Date.now() - (tasks[0]?.createdAt || Date.now())) / 60000),
-			avgDuration:
-				completed > 0
-					? tasks.filter((t) => t.actualDuration !== null).reduce((s, t) => s + (t.actualDuration || 0), 0) / completed
-					: 0,
-			tokenConsumption: tasks.reduce((s, t) => s + (t.tokenCost || 0), 0),
-			cost: tasks.reduce((s, t) => s + (t.estimatedCost || 0), 0),
-			agentUtilization:
-				agents.length > 0 ? (agents.filter((a) => a.state === "processing").length / agents.length) * 100 : 0,
-			queueDepth: tasks.filter((t) => t.status === "pending").length
-		};
-	}
-
-	// ── Initialization from Scene ───────────────────────────────────────────
-
-	/** Populate the full state from an existing ArenaScene snapshot. */
 	initFromScene(scene: ArenaScene): void {
 		this.state.agents = new Map(scene.agents);
 		this.state.tasks = new Map(scene.tasks);
 		this.state.handoffs = scene.handoffs;
 		this.state.repositories = new Map(scene.repositories);
-		this.recomputeZones(["pending", "inProgress", "backlog", "blocked", "recovery"]);
-		this.recomputeMetrics();
+		recomputeZones(this.state, ["pending", "inProgress", "backlog", "blocked", "recovery"]);
+		recomputeMetrics(this.state);
 		this.store.set(this.state);
 	}
 
@@ -684,12 +265,8 @@ export class ArenaStateManager {
 		this.store.set(this.state);
 	}
 
-	/** Animate zoom+pan to center on a world coordinate. */
-	zoomToEntity(worldX: number, worldY: number, targetZoom: number = 2.0): void {
-		this.state.ui.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, targetZoom));
-		// Center on the entity: pan = -(worldPos * zoom - canvasCenter)
-		// The caller should compute pan based on canvas size, but we store zoom here.
-		// Pan is computed in the Svelte component where canvas dims are known.
+	zoomToEntity(_worldX: number, _worldY: number, targetZoom: number = 2.0): void {
+		this.state.ui.zoom = Math.max(0.1, Math.min(3.0, targetZoom));
 		this.store.set(this.state);
 	}
 
@@ -724,7 +301,6 @@ export class ArenaStateManager {
 		this.store.set(this.state);
 	}
 
-	/** Clear an agent's speech bubble after display duration expires. */
 	clearSpeechBubble(agentId: string): void {
 		const agent = this.state.agents.get(agentId);
 		if (agent) {
@@ -789,7 +365,7 @@ export class ArenaStateManager {
 			case "task-unblocked":
 				entityType = "task";
 				entityId = event.taskId;
-				detail = `Task unblocked`;
+				detail = "Task unblocked";
 				break;
 			case "task-retry-scheduled":
 				entityType = "task";
@@ -824,7 +400,7 @@ export class ArenaStateManager {
 			case "repository-unlocked":
 				entityType = "repository";
 				entityId = event.repositoryId;
-				detail = `Repository unlocked`;
+				detail = "Repository unlocked";
 				break;
 			case "repository-health-changed":
 				entityType = "repository";
@@ -834,10 +410,10 @@ export class ArenaStateManager {
 			case "metrics-updated":
 				entityType = "repository";
 				entityId = "metrics";
-				detail = `Metrics updated`;
+				detail = "Metrics updated";
 				break;
 			default:
-				detail = `Event: ${(event as any).type}`;
+				detail = `Event: ${(event as { type: string }).type}`;
 		}
 
 		const entry: EventLogEntry = {
@@ -846,13 +422,12 @@ export class ArenaStateManager {
 			entityId,
 			entityType,
 			action,
-			timestamp: (event as any).timestamp || Date.now(),
+			timestamp: (event as { timestamp?: number }).timestamp || Date.now(),
 			detail,
 			event
 		};
 
 		this.state.ui.eventLog = [...this.state.ui.eventLog, entry];
-		// Limit to 200 entries to prevent memory grow
 		if (this.state.ui.eventLog.length > 200) {
 			this.state.ui.eventLog = this.state.ui.eventLog.slice(this.state.ui.eventLog.length - 200);
 		}

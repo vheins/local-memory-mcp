@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
 	import Icon from "$lib/Icon.svelte";
+	import KGEntityInfo from "./KGEntityInfo.svelte";
+	import KGEntityRelations from "./KGEntityRelations.svelte";
+	import KGEntityObservations from "./KGEntityObservations.svelte";
 
 	export let show = false;
 	export let loading = false;
@@ -21,34 +24,6 @@
 		close: void;
 		navigateTo: { name: string };
 	}>();
-
-	const TYPE_COLORS: Record<string, string> = {
-		person: "#22c55e",
-		place: "#3b82f6",
-		organization: "#f97316",
-		concept: "#a855f7",
-		unknown: "#6b7280"
-	};
-
-	function getTypeColor(type: string): string {
-		return TYPE_COLORS[type?.toLowerCase()] ?? TYPE_COLORS.unknown;
-	}
-
-	function formatTimestamp(ts: string): string {
-		if (!ts) return "";
-		try {
-			const d = new Date(ts);
-			return d.toLocaleDateString(undefined, {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-				hour: "2-digit",
-				minute: "2-digit"
-			});
-		} catch {
-			return ts;
-		}
-	}
 
 	function handleOverlayClick() {
 		dispatch("close");
@@ -93,95 +68,16 @@
 			</div>
 		{:else if entity}
 			<div class="detail-scroll">
-				<!-- Header -->
-				<div class="detail-header">
-					<h2 class="entity-name">{entity.name ?? "Unnamed"}</h2>
-					{#if entity.type}
-						<span
-							class="type-badge"
-							style="background:{getTypeColor(entity.type)}20;color:{getTypeColor(
-								entity.type
-							)};border-color:{getTypeColor(entity.type)}40"
-						>
-							{entity.type}
-						</span>
-					{/if}
-				</div>
-
-				<!-- Description -->
-				{#if entity.description}
-					<div class="detail-section">
-						<p class="entity-description">{entity.description}</p>
-					</div>
-				{/if}
-
-				<!-- Stats -->
-				<div class="detail-section stats-row">
-					{#if entity.created_at}
-						<div class="stat">
-							<span class="stat-label">Created</span>
-							<span class="stat-value">{formatTimestamp(entity.created_at)}</span>
-						</div>
-					{/if}
-					{#if entity.updated_at}
-						<div class="stat">
-							<span class="stat-label">Updated</span>
-							<span class="stat-value">{formatTimestamp(entity.updated_at)}</span>
-						</div>
-					{/if}
-				</div>
+				<KGEntityInfo {entity} />
 
 				<!-- Relations -->
 				{#if relations.length > 0}
-					<div class="detail-section">
-						<h3 class="section-title">
-							<Icon name="link" size={13} strokeWidth={1.75} />
-							Relations ({relations.length})
-						</h3>
-						<ul class="relation-list">
-							{#each relations as rel, i (`${rel.from_entity}-${rel.to_entity}-${rel.relation_type}-${i}`)}
-								<li class="relation-item">
-									<!-- svelte-ignore a11y-click-events-have-key-events -->
-									<span
-										class="relation-entity"
-										role="button"
-										tabindex="0"
-										on:click={() => handleNavigate(rel.from_entity)}
-										on:keydown={(e) => e.key === "Enter" && handleNavigate(rel.from_entity)}>{rel.from_entity}</span
-									>
-									<span class="relation-type-badge">{rel.relation_type}</span>
-									<!-- svelte-ignore a11y-click-events-have-key-events -->
-									<span
-										class="relation-entity"
-										role="button"
-										tabindex="0"
-										on:click={() => handleNavigate(rel.to_entity)}
-										on:keydown={(e) => e.key === "Enter" && handleNavigate(rel.to_entity)}>{rel.to_entity}</span
-									>
-								</li>
-							{/each}
-						</ul>
-					</div>
+					<KGEntityRelations {relations} onNavigate={handleNavigate} />
 				{/if}
 
 				<!-- Observations -->
 				{#if observations.length > 0}
-					<div class="detail-section">
-						<h3 class="section-title">
-							<Icon name="file-text" size={13} strokeWidth={1.75} />
-							Observations ({observations.length})
-						</h3>
-						<ul class="observation-list">
-							{#each observations as obs (obs.id)}
-								<li class="observation-card">
-									<p class="observation-content">{obs.content}</p>
-									{#if obs.created_at}
-										<span class="observation-time">{formatTimestamp(obs.created_at)}</span>
-									{/if}
-								</li>
-							{/each}
-						</ul>
-					</div>
+					<KGEntityObservations {observations} />
 				{/if}
 
 				{#if relations.length === 0 && observations.length === 0}
@@ -344,198 +240,6 @@
 	.detail-scroll::-webkit-scrollbar-thumb {
 		background: var(--color-border);
 		border-radius: 3px;
-	}
-
-	/* Header */
-	.detail-header {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		flex-wrap: wrap;
-		padding-bottom: 14px;
-		border-bottom: 1px solid var(--color-border);
-		margin-bottom: 4px;
-		padding-right: 36px;
-	}
-
-	:global(.dark) .detail-header {
-		border-bottom-color: rgba(148, 163, 184, 0.1);
-	}
-
-	.entity-name {
-		margin: 0;
-		font-size: 1.05rem;
-		font-weight: 800;
-		color: var(--color-text);
-		line-height: 1.3;
-		word-break: break-word;
-	}
-
-	.type-badge {
-		display: inline-flex;
-		align-items: center;
-		padding: 2px 8px;
-		border-radius: 6px;
-		border: 1px solid;
-		font-size: 0.68rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		white-space: nowrap;
-		flex-shrink: 0;
-	}
-
-	/* Description */
-	.detail-section {
-		padding: 12px 0;
-	}
-
-	.entity-description {
-		margin: 0;
-		font-size: 0.82rem;
-		line-height: 1.55;
-		color: var(--color-text-muted);
-	}
-
-	/* Stats */
-	.stats-row {
-		display: flex;
-		gap: 20px;
-		flex-wrap: wrap;
-	}
-
-	.stat {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.stat-label {
-		font-size: 0.66rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-	}
-
-	.stat-value {
-		font-size: 0.78rem;
-		color: var(--color-text);
-		font-variant-numeric: tabular-nums;
-	}
-
-	/* Section titles */
-	.section-title {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		margin: 0 0 10px;
-		font-size: 0.75rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-	}
-
-	/* Relations */
-	.relation-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.relation-item {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 7px 10px;
-		border-radius: 8px;
-		background: rgba(148, 163, 184, 0.06);
-		border: 1px solid var(--color-border);
-		font-size: 0.78rem;
-		color: var(--color-text);
-		overflow: hidden;
-	}
-
-	:global(.dark) .relation-item {
-		background: rgba(148, 163, 184, 0.04);
-		border-color: rgba(148, 163, 184, 0.08);
-	}
-
-	.relation-entity {
-		cursor: pointer;
-		color: #60a5fa;
-		font-weight: 600;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		transition: color 0.15s;
-		background: none;
-		border: none;
-		padding: 0;
-	}
-
-	.relation-entity:hover {
-		color: #93c5fd;
-		text-decoration: underline;
-	}
-
-	.relation-entity:focus-visible {
-		outline: 2px solid #60a5fa;
-		outline-offset: 2px;
-		border-radius: 2px;
-	}
-
-	.relation-type-badge {
-		flex-shrink: 0;
-		padding: 1px 6px;
-		border-radius: 4px;
-		font-size: 0.66rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		color: var(--color-text-muted);
-		background: rgba(148, 163, 184, 0.1);
-		border: 1px solid var(--color-border);
-	}
-
-	/* Observations */
-	.observation-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.observation-card {
-		padding: 10px 12px;
-		border-radius: 8px;
-		background: rgba(148, 163, 184, 0.06);
-		border: 1px solid var(--color-border);
-	}
-
-	:global(.dark) .observation-card {
-		background: rgba(148, 163, 184, 0.04);
-		border-color: rgba(148, 163, 184, 0.08);
-	}
-
-	.observation-content {
-		margin: 0 0 6px;
-		font-size: 0.8rem;
-		line-height: 1.5;
-		color: var(--color-text);
-		word-break: break-word;
-	}
-
-	.observation-time {
-		font-size: 0.68rem;
-		color: var(--color-text-muted);
-		font-variant-numeric: tabular-nums;
 	}
 
 	/* Empty state */

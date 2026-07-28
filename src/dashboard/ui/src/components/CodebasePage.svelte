@@ -7,6 +7,8 @@
 	import CodebaseSearchBar from "./CodebaseSearchBar.svelte";
 	import CodebaseFileTree from "./CodebaseFileTree.svelte";
 	import CodebaseSymbolList from "./CodebaseSymbolList.svelte";
+	import CodebaseEmptyState from "./CodebaseEmptyState.svelte";
+	import CodebaseLanguageBreakdown from "./CodebaseLanguageBreakdown.svelte";
 
 	let { repo = "" }: { repo: string } = $props();
 
@@ -49,32 +51,6 @@
 	let architectureLoading = $state(false);
 	let architectureError = $state("");
 
-	// --- Language color map ---
-	const LANG_COLORS: Record<string, string> = {
-		TypeScript: "#3178c6",
-		JavaScript: "#f7df1e",
-		Svelte: "#ff3e00",
-		JSON: "#a8b1c4",
-		Markdown: "#22c55e",
-		CSS: "#cc6699",
-		HTML: "#e34c26",
-		YAML: "#cb171e",
-		XML: "#0060ac",
-		Shell: "#89e051",
-		Python: "#3572A5"
-	};
-
-	const LANG_ICONS: Record<string, string> = {
-		TypeScript: "file-text",
-		JavaScript: "file-code",
-		Svelte: "flame",
-		JSON: "braces",
-		Markdown: "book-open",
-		CSS: "palette",
-		HTML: "globe",
-		YAML: "settings"
-	};
-
 	// --- Derived: language breakdown ---
 	let languageEntries = $derived.by<LanguageEntry[]>(() => {
 		const summary = architectureData?.summary;
@@ -88,7 +64,7 @@
 				name,
 				count,
 				percentage: Math.round((count / total) * 100),
-				color: LANG_COLORS[name] || "var(--color-text-muted)"
+				color: ""
 			}))
 			.sort((a, b) => b.count - a.count);
 	});
@@ -194,57 +170,15 @@
 </script>
 
 <div class="codebase-page animate-fade-in">
-	<!-- ─── No Repo Selected ─── -->
-	{#if !repo}
-		<div class="codebase-empty">
-			<div class="codebase-empty-icon animate-float">
-				<Icon name="code" size={32} strokeWidth={1.5} />
-			</div>
-			<div class="codebase-empty-title">Select a repository to view its codebase index.</div>
-			<div class="codebase-empty-text">
-				Choose a repository from the sidebar to browse its file structure and indexed content.
-			</div>
-		</div>
-	{:else if loading}
-		<!-- ─── Loading State ─── -->
-		<div class="codebase-empty">
-			<div class="codebase-empty-icon animate-float">
-				<Icon name="refresh-cw" size={28} strokeWidth={1.5} />
-			</div>
-			<div class="codebase-empty-title">Loading codebase index...</div>
-		</div>
-	{:else if error}
-		<!-- ─── Error State ─── -->
-		<div class="codebase-empty">
-			<div
-				class="codebase-empty-icon animate-float"
-				style="background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(220,38,38,0.15));border-color:rgba(239,68,68,0.2);"
-			>
-				<Icon name="triangle-alert" size={28} strokeWidth={1.5} />
-			</div>
-			<div class="codebase-empty-title">Failed to load codebase</div>
-			<div class="codebase-empty-text">{error}</div>
-			<button class="codebase-action-btn" onclick={() => void loadCodebaseIndex()}>
-				<Icon name="refresh-cw" size={14} strokeWidth={2} />
-				<span>Retry</span>
-			</button>
-		</div>
-	{:else if !hasIndex}
-		<!-- ─── No Index State ─── -->
-		<div class="codebase-empty">
-			<div class="codebase-empty-icon animate-float">
-				<Icon name="file-text" size={32} strokeWidth={1.5} />
-			</div>
-			<div class="codebase-empty-title">No codebase index found</div>
-			<div class="codebase-empty-text">
-				This repository hasn't been indexed yet. Create an index to browse its file structure and enable codebase-aware
-				features.
-			</div>
-			<button class="codebase-action-btn primary" onclick={startIndexing}>
-				<Icon name="upload-cloud" size={14} strokeWidth={2} />
-				<span>Index Now</span>
-			</button>
-		</div>
+	{#if !repo || loading || error || !hasIndex}
+		<CodebaseEmptyState
+			{repo}
+			{hasIndex}
+			{loading}
+			{error}
+			onRetry={() => void loadCodebaseIndex()}
+			onStartIndexing={startIndexing}
+		/>
 	{:else}
 		<!-- ─── Indexed Content (Sidebar + Content) ─── -->
 		<div class="codebase-layout" class:sidebar-collapsed={!sidebarOpen}>
@@ -294,30 +228,8 @@
 							<div class="repo-badge">{$currentRepo}</div>
 						</div>
 
-						<!-- ─── Language Breakdown (Enh 4) ─── -->
-						{#if (languageEntries ?? []).length > 0}
-							<div class="overview-section">
-								<div class="overview-section-label">
-									<Icon name="globe" size={12} strokeWidth={1.75} />
-									Languages
-								</div>
-								<div class="lang-grid">
-									{#each languageEntries ?? [] as lang (lang.name)}
-										<div class="lang-badge" title="{lang.name}: {lang.count} files ({lang.percentage}%)">
-											<span class="lang-icon" style="color:{lang.color}">
-												<Icon name={LANG_ICONS[lang.name] || "file"} size={12} strokeWidth={1.75} />
-											</span>
-											<span class="lang-name">{lang.name}</span>
-											<span class="lang-count">{lang.count}</span>
-											<div class="lang-bar">
-												<div class="lang-bar-fill" style="width:{lang.percentage}%;background:{lang.color}"></div>
-											</div>
-											<span class="lang-pct">{lang.percentage}%</span>
-										</div>
-									{/each}
-								</div>
-							</div>
-						{/if}
+						<!-- ─── Language Breakdown ─── -->
+						<CodebaseLanguageBreakdown {languageEntries} />
 
 						<!-- ─── Top-Level Exports (Enh 5) ─── -->
 						{#if (topLevelExports ?? []).length > 0}
@@ -374,74 +286,6 @@
 	.codebase-page {
 		height: 100%;
 		min-height: 400px;
-	}
-
-	/* ── Empty / Loading / Error states ── */
-	.codebase-empty {
-		text-align: center;
-		padding: 80px 20px;
-	}
-
-	.codebase-empty-icon {
-		display: inline-flex;
-		width: 72px;
-		height: 72px;
-		border-radius: 20px;
-		background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(99, 102, 241, 0.15));
-		border: 1px solid rgba(14, 165, 233, 0.2);
-		align-items: center;
-		justify-content: center;
-		margin-bottom: 20px;
-		color: var(--color-primary);
-	}
-
-	.codebase-empty-title {
-		font-size: 1.15rem;
-		font-weight: 800;
-		color: var(--color-text);
-		margin-bottom: 8px;
-		letter-spacing: -0.02em;
-	}
-
-	.codebase-empty-text {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		max-width: 420px;
-		margin: 0 auto 20px;
-		line-height: 1.5;
-	}
-
-	/* ── Action buttons ── */
-	.codebase-action-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 8px 18px;
-		border-radius: 10px;
-		border: 1px solid var(--color-border);
-		background: rgba(255, 255, 255, 0.06);
-		color: var(--color-text);
-		font-size: 0.8rem;
-		font-weight: 700;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.codebase-action-btn:hover {
-		background: rgba(255, 255, 255, 0.1);
-		border-color: var(--color-primary);
-	}
-
-	.codebase-action-btn.primary {
-		background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-		color: white;
-		border: none;
-		box-shadow: 0 4px 16px var(--glow-primary);
-	}
-
-	.codebase-action-btn.primary:hover {
-		opacity: 0.92;
-		transform: translateY(-1px);
 	}
 
 	/* ── Layout: sidebar + content ── */
@@ -547,92 +391,6 @@
 		border: 1px solid rgba(99, 102, 241, 0.16);
 		padding: 4px 8px;
 		border-radius: 999px;
-	}
-
-	/* ── Overview sections: Language Breakdown + Top Exports ── */
-	.overview-section {
-		margin-bottom: 20px;
-	}
-
-	.overview-section-label {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 0.66rem;
-		font-weight: 700;
-		color: var(--color-text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		margin-bottom: 8px;
-	}
-
-	/* Language badge grid */
-	.lang-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
-
-	.lang-badge {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 6px 10px;
-		border-radius: 8px;
-		border: 1px solid var(--color-border);
-		background: rgba(255, 255, 255, 0.03);
-		transition: background 0.12s ease;
-		min-width: 140px;
-	}
-
-	.lang-badge:hover {
-		background: rgba(255, 255, 255, 0.06);
-	}
-
-	.lang-icon {
-		display: flex;
-		align-items: center;
-		flex-shrink: 0;
-	}
-
-	.lang-name {
-		font-size: 0.72rem;
-		font-weight: 600;
-		color: var(--color-text);
-		white-space: nowrap;
-	}
-
-	.lang-count {
-		font-size: 0.62rem;
-		font-weight: 700;
-		color: var(--color-text-muted);
-		min-width: 18px;
-		text-align: right;
-	}
-
-	.lang-bar {
-		flex: 1;
-		height: 4px;
-		border-radius: 999px;
-		background: rgba(255, 255, 255, 0.06);
-		overflow: hidden;
-		min-width: 40px;
-		max-width: 80px;
-	}
-
-	.lang-bar-fill {
-		height: 100%;
-		border-radius: 999px;
-		transition: width 0.4s ease;
-		min-width: 2px;
-	}
-
-	.lang-pct {
-		font-size: 0.58rem;
-		font-weight: 600;
-		color: var(--color-text-muted);
-		min-width: 28px;
-		text-align: right;
 	}
 
 	/* Top-level export chips */

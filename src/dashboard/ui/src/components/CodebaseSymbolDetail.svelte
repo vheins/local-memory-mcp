@@ -1,6 +1,9 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
 	import { api, type TraceReference } from "../lib/api";
+	import SymbolDetailHeader from "./SymbolDetailHeader.svelte";
+	import SymbolDetailCodePreview from "./SymbolDetailCodePreview.svelte";
+	import { getKindIcon, getKindLabel, buildLocationText, groupRefsByFile } from "../lib/symbolDetailUtils";
 
 	interface CodeSymbol {
 		name: string;
@@ -27,37 +30,9 @@
 		repo: string;
 	} = $props();
 
-	const KIND_ICONS: Record<string, string> = {
-		function: "zap",
-		class: "layers",
-		interface: "terminal",
-		type: "hash",
-		enum: "list",
-		variable: "database"
-	};
-
-	const KIND_LABELS: Record<string, string> = {
-		function: "Function",
-		class: "Class",
-		interface: "Interface",
-		type: "Type",
-		enum: "Enum",
-		variable: "Variable"
-	};
-
-	let kindIcon = $derived(KIND_ICONS[symbol?.kind || "variable"] || "code");
-	let kindLabel = $derived(KIND_LABELS[symbol?.kind || "variable"] || "Symbol");
-	let locationText = $derived.by(() => {
-		if (!symbol?.filePath) return null;
-		let loc = symbol.filePath;
-		if (symbol.line != null) {
-			loc += `:${symbol.line}`;
-			if (symbol.column != null) {
-				loc += `:${symbol.column}`;
-			}
-		}
-		return loc;
-	});
+	let kindIcon = $derived(getKindIcon(symbol?.kind || "variable"));
+	let kindLabel = $derived(getKindLabel(symbol?.kind || "variable"));
+	let locationText = $derived(buildLocationText(symbol?.filePath, symbol?.line, symbol?.column));
 
 	// --- Trace state (Enh 6) ---
 	let traceRefs = $state<TraceReference[]>([]);
@@ -65,18 +40,7 @@
 	let traceError = $state("");
 
 	// Grouped references: Map<filePath, TraceReference[]>
-	let refsByFile = $derived.by(() => {
-		const map = new Map<string, TraceReference[]>();
-		for (const ref of traceRefs) {
-			const existing = map.get(ref.filePath);
-			if (existing) {
-				existing.push(ref);
-			} else {
-				map.set(ref.filePath, [ref]);
-			}
-		}
-		return map;
-	});
+	let refsByFile = $derived(groupRefsByFile(traceRefs));
 
 	let totalRefs = $derived(traceRefs.length + references.length);
 
@@ -132,29 +96,9 @@
 	</div>
 {:else}
 	<div class="detail-panel">
-		<!-- ─── Header: Kind icon + Name + Export badge ─── -->
-		<div class="detail-header">
-			<div class="detail-header-icon">
-				<Icon name={kindIcon} size={18} strokeWidth={1.75} />
-			</div>
-			<div class="detail-header-info">
-				<div class="detail-header-row">
-					<span class="detail-name">{symbol.name}</span>
-					{#if symbol.exported}
-						<span class="detail-export-badge">export</span>
-					{/if}
-				</div>
-				<div class="detail-kind-label">{kindLabel}</div>
-			</div>
-		</div>
+		<SymbolDetailHeader {symbol} {kindIcon} {kindLabel} />
 
-		<!-- ─── Signature ─── -->
-		{#if symbol.signature}
-			<div class="detail-section">
-				<div class="detail-section-label">Signature</div>
-				<pre class="detail-signature"><code>{symbol.signature}</code></pre>
-			</div>
-		{/if}
+		<SymbolDetailCodePreview {symbol} />
 
 		<!-- ─── Documentation ─── -->
 		<div class="detail-section">
@@ -347,64 +291,6 @@
 		padding: 16px;
 	}
 
-	/* ── Header ── */
-	.detail-header {
-		display: flex;
-		align-items: flex-start;
-		gap: 12px;
-		margin-bottom: 16px;
-	}
-
-	.detail-header-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: 36px;
-		border-radius: 10px;
-		background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(14, 165, 233, 0.15));
-		border: 1px solid rgba(99, 102, 241, 0.2);
-		color: var(--color-primary);
-		flex-shrink: 0;
-	}
-
-	.detail-header-info {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.detail-header-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex-wrap: wrap;
-	}
-
-	.detail-name {
-		font-size: 1rem;
-		font-weight: 800;
-		color: var(--color-text);
-		letter-spacing: -0.01em;
-	}
-
-	.detail-export-badge {
-		font-size: 0.56rem;
-		font-weight: 700;
-		color: #22c55e;
-		background: rgba(34, 197, 94, 0.1);
-		border: 1px solid rgba(34, 197, 94, 0.15);
-		padding: 2px 6px;
-		border-radius: 4px;
-		letter-spacing: 0.02em;
-	}
-
-	.detail-kind-label {
-		font-size: 0.72rem;
-		font-weight: 600;
-		color: var(--color-text-muted);
-		margin-top: 2px;
-	}
-
 	/* ── Sections ── */
 	.detail-section {
 		margin-bottom: 16px;
@@ -428,26 +314,6 @@
 		background: rgba(255, 255, 255, 0.06);
 		padding: 1px 5px;
 		border-radius: 4px;
-	}
-
-	/* ── Signature ── */
-	.detail-signature {
-		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-		font-size: 0.72rem;
-		line-height: 1.6;
-		color: var(--color-text);
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid var(--color-border);
-		border-radius: 8px;
-		padding: 10px 12px;
-		overflow-x: auto;
-		white-space: pre;
-		margin: 0;
-	}
-
-	.detail-signature code {
-		font-family: inherit;
-		font-size: inherit;
 	}
 
 	/* ── Documentation ── */

@@ -4,26 +4,14 @@
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
-	import { NODE_RADIUS, initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
+	import { initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
-	import {
-		startNeuralAnimation,
-		stopNeuralAnimation,
-		updateAnimationData,
-		updateNeuralDimensions,
-		zoomCamera,
-		startDragCamera,
-		dragCamera,
-		endDragCamera,
-		resetCamera,
-		getZoomPercent,
-		isCameraDragging
-	} from "$lib/kg/KGNeuralRenderer";
-	import type { NeuralRenderState } from "$lib/kg/KGNeuralRenderer";
+	import { handleGraphKeyDown } from "$lib/kg/kgKeyboardShortcuts";
 	import KGGraphHeader from "./KGGraphHeader.svelte";
 	import KGGraphShell from "./KGGraphShell.svelte";
+	import KGGraphCanvas from "./KGGraphCanvas.svelte";
 	import KGModal from "./KGModal.svelte";
-	import KGEntityDetail from "./KGEntityDetail.svelte";
+	import KGEntityDrawer from "./KGEntityDrawer.svelte";
 
 	export let repo: string;
 
@@ -50,40 +38,26 @@
 		return nodeLookup.get(key);
 	}
 
-	// Canvas refs
-	let canvas: HTMLCanvasElement;
-	let ctx: CanvasRenderingContext2D;
+	// Canvas dimensions (managed by KGGraphCanvas, used by initLayout)
 	let canvasWidth = 800;
 	let canvasHeight = 600;
+	let canvasReady = false;
 
-	// Interaction state
-	let graphState: NeuralRenderState = {
-		hoveredNode: null,
-		selectedNode: null,
-		selectedEdge: null,
+	// Interaction state (shared with KGGraphCanvas via reference)
+	let graphState = {
+		hoveredNode: null as LayoutNode | null,
+		selectedNode: null as LayoutNode | null,
+		selectedEdge: null as LayoutEdge | null,
 		tooltipPos: { x: 0, y: 0 },
 		showTooltip: false,
 		hiddenNodeCount: 0
 	};
 
-	// Entity detail panel state
-	let showDetail = false;
-	let detailLoading = false;
-	let detailEntity: Record<string, any> | null = null;
-	let detailRelations: Array<{ from_entity: string; to_entity: string; relation_type: string }> = [];
-	let detailObservations: Array<{ id: string; content: string; created_at: string }> = [];
-	let detailError = "";
+	// Entity detail panel state (managed by KGEntityDrawer)
+	let detailEntityName = "";
 
-	// Animation tracking
-	let animationCleanup: (() => void) | null = null;
-
-	// Camera interaction tracking
-	let dragStartPos: { x: number; y: number } | null = null;
-	let didDrag = false;
+	// Tracked to sync zoom percent from canvas to header
 	let zoomPercent = 100;
-
-	// Touch pinch state
-	let lastPinchDist = 0;
 
 	// Modal state
 	let showAddEntityModal = false;
@@ -91,6 +65,38 @@
 	let showDeleteConfirm = false;
 	type DeleteTarget = { type: "node"; name: string } | { type: "edge"; name: string; edge: LayoutEdge };
 	let deleteTarget: DeleteTarget | null = null;
+
+	// KGGraphCanvas component reference for exported functions
+	let kgCanvasRef: KGGraphCanvas;
+
+	// ─── Canvas callbacks ───────────────────────────────────────────────────────
+
+	function handleCanvasReady() {
+		canvasReady = true;
+	}
+
+	function handleCanvasResize(w: number, h: number) {
+		canvasWidth = w;
+		canvasHeight = h;
+	}
+
+	function handleDetailEntityChange(name: string) {
+		detailEntityName = name;
+	}
+
+	function handleDeleteNodeRequest(name: string) {
+		deleteTarget = { type: "node", name };
+		showDeleteConfirm = true;
+	}
+
+	function handleDeleteEdgeRequest(source: string, target: string, relationType: string) {
+		deleteTarget = {
+			type: "edge",
+			name: `${source} → ${target} (${relationType})`,
+			edge: { source, target, relation_type: relationType }
+		};
+		showDeleteConfirm = true;
+	}
 
 	// ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -110,7 +116,6 @@
 	async function loadGraph(forceReload = false) {
 		if (!repo) return;
 		const requestedRepo = repo;
-		// Guard: skip if already loaded for this repo (unless force reload)
 		if (!forceReload && loadedRepo === requestedRepo && layoutNodes.length > 0) return;
 		isLoading = true;
 		errorMsg = "";
@@ -147,12 +152,10 @@
 		graphState.selectedEdge = null;
 		graphState.hoveredNode = null;
 		graphState.showTooltip = false;
-		showDetail = false;
+		detailEntityName = "";
 	}
 
 	function initLayout() {
-		if (!ctx) return;
-
 		isZeroEdgeOverview = edges.length === 0 && nodes.length > 0;
 
 		if (isZeroEdgeOverview) {
@@ -177,18 +180,6 @@
 			hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - result.length);
 			layoutEdges = [];
 			nodeLookup = buildNodeLookup(layoutNodes);
-			if (animationCleanup) {
-				updateAnimationData(layoutNodes, layoutEdges);
-			} else if (ctx) {
-				animationCleanup = startNeuralAnimation(
-					canvas,
-					canvasWidth,
-					canvasHeight,
-					layoutNodes,
-					layoutEdges,
-					graphState
-				);
-			}
 			return;
 		}
 
@@ -199,7 +190,6 @@
 			degreeMap.set(e.target, (degreeMap.get(e.target) ?? 0) + 1);
 		}
 
-		// Sort nodes by degree descending, then alphabetically for stability
 		const sortedNodes = [...nodes].sort((a, b) => {
 			const degA = degreeMap.get(a.name) ?? 0;
 			const degB = degreeMap.get(b.name) ?? 0;
@@ -207,14 +197,12 @@
 			return a.name.localeCompare(b.name);
 		});
 
-		// Also include all nodes that are endpoints of any edge (up to limit)
 		const edgeNodeNames = new Set<string>();
 		for (const e of edges) {
 			edgeNodeNames.add(e.source);
 			edgeNodeNames.add(e.target);
 		}
 
-		// Merge: degree-sorted nodes first, then edge endpoints that aren't already included
 		const selectedNames = new Set<string>();
 		const selectedNodes: typeof nodes = [];
 		for (const n of sortedNodes) {
@@ -224,7 +212,6 @@
 				selectedNodes.push(n);
 			}
 		}
-		// Add remaining edge endpoints if under cap
 		for (const n of nodes) {
 			if (selectedNodes.length >= MAX_FORCE_NODES) break;
 			if (edgeNodeNames.has(n.name) && !selectedNames.has(n.name)) {
@@ -244,7 +231,6 @@
 				relation_type: e.relation_type
 			}));
 
-		// Use volumetric sphere layout instead of force-directed
 		layoutNodes = initializeSphereLayout(
 			cappedNodes.map((n) => ({
 				id: n.id || n.name,
@@ -265,299 +251,7 @@
 		);
 
 		hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - cappedNodes.length);
-
 		nodeLookup = buildNodeLookup(layoutNodes);
-
-		// Start or update animation
-		if (animationCleanup) {
-			updateAnimationData(layoutNodes, layoutEdges);
-		} else if (ctx) {
-			animationCleanup = startNeuralAnimation(canvas, canvasWidth, canvasHeight, layoutNodes, layoutEdges, graphState);
-		}
-	}
-
-	// ─── Canvas lifecycle ──────────────────────────────────────────────────────
-
-	function handleResize() {
-		if (!canvas) return;
-		updateNeuralDimensions(canvas);
-		const dpr = window.devicePixelRatio || 1;
-		canvasWidth = canvas.width / dpr;
-		canvasHeight = canvas.height / dpr;
-		ctx = canvas.getContext("2d")!;
-		if (layoutNodes.length > 0) {
-			if (isZeroEdgeOverview) {
-				initLayout();
-				return;
-			}
-			// Rebuild sphere layout for new dimensions
-			initLayout();
-		}
-	}
-
-	// ─── Interaction handlers ───────────────────────────────────────────────────
-
-	async function loadEntityDetail(name: string) {
-		showDetail = true;
-		detailLoading = true;
-		detailError = "";
-		detailEntity = null;
-		detailRelations = [];
-		detailObservations = [];
-		try {
-			const data = await api.kgEntityDetail(name);
-			detailEntity = data.entity || null;
-			detailRelations = (data.relations || []) as Array<{
-				from_entity: string;
-				to_entity: string;
-				relation_type: string;
-			}>;
-			detailObservations = (data.observations || []) as Array<{ id: string; content: string; created_at: string }>;
-		} catch (e: unknown) {
-			detailError = e instanceof Error ? e.message : "Failed to load entity details";
-		} finally {
-			detailLoading = false;
-		}
-	}
-
-	function handleCanvasClick(e: MouseEvent) {
-		// Skip click if user was dragging
-		if (didDrag) return;
-
-		const rect = canvas.getBoundingClientRect();
-		const mx = e.clientX - rect.left;
-		const my = e.clientY - rect.top;
-
-		// Check nodes first
-		for (const n of layoutNodes) {
-			const r = NODE_RADIUS + 4;
-			const dx = mx - n.x;
-			const dy = my - n.y;
-			if (dx * dx + dy * dy <= r * r) {
-				graphState.selectedNode = n;
-				graphState.selectedEdge = null;
-				graphState.showTooltip = false;
-				loadEntityDetail(n.name);
-				return;
-			}
-		}
-
-		// Check edges
-		for (const e of layoutEdges) {
-			const a = getNodeByKey(e.source);
-			const b = getNodeByKey(e.target);
-			if (!a || !b) continue;
-			const dist = distToSegment(mx, my, a.x, a.y, b.x, b.y);
-			if (dist < 10) {
-				graphState.selectedEdge = e;
-				graphState.selectedNode = null;
-				graphState.showTooltip = false;
-				// Close detail panel when clicking an edge
-				showDetail = false;
-				return;
-			}
-		}
-
-		// Click on empty space
-		graphState.selectedNode = null;
-		graphState.selectedEdge = null;
-		graphState.showTooltip = false;
-		showDetail = false;
-	}
-
-	function handleCanvasDblClick(e: MouseEvent) {
-		const rect = canvas.getBoundingClientRect();
-		const mx = e.clientX - rect.left;
-		const my = e.clientY - rect.top;
-
-		for (const n of layoutNodes) {
-			const r = NODE_RADIUS + 4;
-			const dx = mx - n.x;
-			const dy = my - n.y;
-			if (dx * dx + dy * dy <= r * r) {
-				graphState.selectedNode = n;
-				showDetail = false; // close detail panel
-				deleteTarget = { type: "node", name: n.name };
-				showDeleteConfirm = true;
-				return;
-			}
-		}
-	}
-
-	function handleCanvasRightClick(e: MouseEvent) {
-		e.preventDefault();
-		const rect = canvas.getBoundingClientRect();
-		const mx = e.clientX - rect.left;
-		const my = e.clientY - rect.top;
-
-		// Check edges
-		for (const e of layoutEdges) {
-			const a = getNodeByKey(e.source);
-			const b = getNodeByKey(e.target);
-			if (!a || !b) continue;
-			const dist = distToSegment(mx, my, a.x, a.y, b.x, b.y);
-			if (dist < 10) {
-				deleteTarget = { type: "edge", name: `${e.source} → ${e.target} (${e.relation_type})`, edge: e };
-				graphState.selectedEdge = e;
-				graphState.selectedNode = null;
-				showDeleteConfirm = true;
-				return;
-			}
-		}
-	}
-
-	function handleCanvasMove(e: MouseEvent) {
-		const rect = canvas.getBoundingClientRect();
-		const mx = e.clientX - rect.left;
-		const my = e.clientY - rect.top;
-
-		// Skip hover detection while dragging
-		if (isCameraDragging()) return;
-
-		let found: LayoutNode | null = null;
-		for (const n of layoutNodes) {
-			const r = NODE_RADIUS + 4;
-			const dx = mx - n.x;
-			const dy = my - n.y;
-			if (dx * dx + dy * dy <= r * r) {
-				found = n;
-				break;
-			}
-		}
-
-		if (found !== graphState.hoveredNode) {
-			graphState.hoveredNode = found;
-			canvas.style.cursor = found ? "pointer" : "default";
-		}
-	}
-
-	// ─── Zoom & Drag handlers ───────────────────────────────────────────────
-
-	function handleWheel(e: WheelEvent) {
-		e.preventDefault();
-		zoomCamera(e.deltaY);
-		zoomPercent = getZoomPercent();
-	}
-
-	function handleMouseDown(e: MouseEvent) {
-		// Only left button
-		if (e.button !== 0) return;
-		dragStartPos = { x: e.clientX, y: e.clientY };
-		didDrag = false;
-		startDragCamera(e.clientX, e.clientY);
-	}
-
-	function handleMouseMoveForDrag(e: MouseEvent) {
-		if (!dragStartPos) return;
-		const dx = e.clientX - dragStartPos.x;
-		const dy = e.clientY - dragStartPos.y;
-		if (!didDrag && Math.hypot(dx, dy) > 3) {
-			didDrag = true;
-		}
-		if (didDrag) {
-			dragCamera(e.clientX, e.clientY);
-			canvas.style.cursor = "grabbing";
-		}
-	}
-
-	function handleMouseUp(_e: MouseEvent) {
-		if (dragStartPos) {
-			endDragCamera();
-			dragStartPos = null;
-			if (!didDrag) {
-				// It was a click, not a drag — let click handler proceed
-			}
-			didDrag = false;
-			canvas.style.cursor = "default";
-		}
-	}
-
-	function handleMouseLeave(_e: MouseEvent) {
-		if (dragStartPos) {
-			endDragCamera();
-			dragStartPos = null;
-			didDrag = false;
-			canvas.style.cursor = "default";
-		}
-	}
-
-	// ─── Touch pinch zoom ───────────────────────────────────────────────────
-
-	function getPinchDist(t1: Touch, t2: Touch): number {
-		return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-	}
-
-	function handleTouchStart(e: TouchEvent) {
-		if (e.touches.length === 2) {
-			e.preventDefault();
-			lastPinchDist = getPinchDist(e.touches[0], e.touches[1]);
-		} else if (e.touches.length === 1) {
-			const t = e.touches[0];
-			startDragCamera(t.clientX, t.clientY);
-			dragStartPos = { x: t.clientX, y: t.clientY };
-			didDrag = false;
-		}
-	}
-
-	function handleTouchMove(e: TouchEvent) {
-		if (e.touches.length === 2) {
-			e.preventDefault();
-			const dist = getPinchDist(e.touches[0], e.touches[1]);
-			if (lastPinchDist > 0) {
-				const delta = lastPinchDist - dist; // positive = pinch in = zoom in
-				zoomCamera(delta * 0.5);
-				zoomPercent = getZoomPercent();
-			}
-			lastPinchDist = dist;
-		} else if (e.touches.length === 1 && dragStartPos) {
-			const t = e.touches[0];
-			const dx = t.clientX - dragStartPos.x;
-			const dy = t.clientY - dragStartPos.y;
-			if (!didDrag && Math.hypot(dx, dy) > 3) {
-				didDrag = true;
-			}
-			if (didDrag) {
-				dragCamera(t.clientX, t.clientY);
-			}
-		}
-	}
-
-	function handleTouchEnd(e: TouchEvent) {
-		if (e.touches.length < 2) {
-			lastPinchDist = 0;
-		}
-		if (e.touches.length === 0) {
-			endDragCamera();
-			dragStartPos = null;
-			didDrag = false;
-		}
-	}
-
-	// ─── Zoom control callbacks for header ──────────────────────────────────
-
-	function handleZoomIn() {
-		zoomCamera(-10);
-		zoomPercent = getZoomPercent();
-	}
-
-	function handleZoomOut() {
-		zoomCamera(10);
-		zoomPercent = getZoomPercent();
-	}
-
-	function handleResetCamera() {
-		resetCamera();
-		zoomPercent = getZoomPercent();
-	}
-
-	function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-		const dx = x2 - x1;
-		const dy = y2 - y1;
-		const len2 = dx * dx + dy * dy;
-		if (len2 === 0) return Math.hypot(px - x1, py - y1);
-		let t = ((px - x1) * dx + (py - y1) * dy) / len2;
-		t = Math.max(0, Math.min(1, t));
-		return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 	}
 
 	// ─── Modal event handlers ──────────────────────────────────────────────────
@@ -617,56 +311,41 @@
 
 	// ─── Keyboard dismiss ──────────────────────────────────────────────────────
 
+	function clearSelectionAndCloseAll() {
+		graphState.showTooltip = false;
+		graphState.selectedNode = null;
+		graphState.selectedEdge = null;
+		showDeleteConfirm = false;
+		showAddEntityModal = false;
+		showAddRelationModal = false;
+		detailEntityName = "";
+	}
+
 	function onKeyDown(e: KeyboardEvent) {
-		if (e.key === "Escape") {
-			graphState.showTooltip = false;
-			graphState.selectedNode = null;
-			graphState.selectedEdge = null;
-			showDeleteConfirm = false;
-			showAddEntityModal = false;
-			showAddRelationModal = false;
-			showDetail = false;
-		}
+		handleGraphKeyDown(e, { clearSelectionAndCloseAll });
 	}
 
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────
-	let resizeObserver: ResizeObserver | null = null;
 
 	onMount(() => {
-		if (canvas) {
-			updateNeuralDimensions(canvas);
-			const dpr = window.devicePixelRatio || 1;
-			canvasWidth = canvas.width / dpr;
-			canvasHeight = canvas.height / dpr;
-			ctx = canvas.getContext("2d")!;
-		}
-
-		if (repo) loadGraph();
-
-		resizeObserver = new ResizeObserver(() => handleResize());
-		if (canvas?.parentElement) {
-			resizeObserver.observe(canvas.parentElement);
-		}
+		// Canvas init is handled by KGGraphCanvas — it fires handleCanvasReady
 	});
 
 	onDestroy(() => {
-		resizeObserver?.disconnect();
-		stopNeuralAnimation();
-		animationCleanup = null;
+		// Animation cleanup is handled by KGGraphCanvas
 	});
 
 	// Re-load when repo changes (guarded inside loadGraph against noop)
-	$: if (repo && canvas && loadedRepo !== repo) {
+	$: if (repo && canvasReady && loadedRepo !== repo) {
 		// eslint-disable-next-line svelte/infinite-reactive-loop -- loadGraph updates loadedRepo to satisfy this repo-change guard.
 		untrack(() => loadGraph());
 	}
 
-	function handleNavigateToEntity(event: CustomEvent<{ name: string }>) {
-		const { name } = event.detail;
+	function handleNavigateToEntity(name: string) {
 		const foundNode = layoutNodes.find((n) => n.name === name);
 		if (foundNode) {
 			graphState.selectedNode = foundNode;
-			loadEntityDetail(name);
+			detailEntityName = name;
 		}
 	}
 </script>
@@ -686,12 +365,12 @@
 		onAddEntity={() => (showAddEntityModal = true)}
 		onAddRelation={() => (showAddRelationModal = true)}
 		onRefresh={() => loadGraph(true)}
-		onZoomIn={handleZoomIn}
-		onZoomOut={handleZoomOut}
-		onResetCamera={handleResetCamera}
+		onZoomIn={() => kgCanvasRef?.handleZoomIn()}
+		onZoomOut={() => kgCanvasRef?.handleZoomOut()}
+		onResetCamera={() => kgCanvasRef?.handleResetCamera()}
 	/>
 
-	<!-- Loading / Empty / Canvas (canvas always in DOM for context) -->
+	<!-- Loading / Empty / Canvas -->
 	{#if isLoading}
 		<div class="kg-loading">
 			<div
@@ -708,37 +387,27 @@
 		</div>
 	{/if}
 	<div class="kg-canvas-wrap" class:kg-hidden={isLoading || layoutNodes.length === 0}>
-		<canvas
-			bind:this={canvas}
-			on:click={handleCanvasClick}
-			on:dblclick={handleCanvasDblClick}
-			on:contextmenu={handleCanvasRightClick}
-			on:mousemove={handleCanvasMove}
-			on:mousemove={handleMouseMoveForDrag}
-			on:mousedown={handleMouseDown}
-			on:mouseup={handleMouseUp}
-			on:mouseleave={handleMouseLeave}
-			on:wheel={handleWheel}
-			on:touchstart={handleTouchStart}
-			on:touchmove={handleTouchMove}
-			on:touchend={handleTouchEnd}
-			aria-label={isZeroEdgeOverview
-				? `Knowledge Graph zero-relation overview showing ${layoutNodes.length} of ${nodes.length} entities`
-				: "Knowledge Graph visualization"}
-			tabindex="0"
-		></canvas>
-		<KGEntityDetail
-			show={showDetail}
-			loading={detailLoading}
-			entity={detailEntity}
-			relations={detailRelations}
-			observations={detailObservations}
-			error={detailError}
-			on:close={() => {
-				showDetail = false;
+		<KGGraphCanvas
+			{layoutNodes}
+			{layoutEdges}
+			{getNodeByKey}
+			{graphState}
+			{isZeroEdgeOverview}
+			nodeCount={nodes.length}
+			onDetailEntityChange={handleDetailEntityChange}
+			onDeleteNodeRequest={handleDeleteNodeRequest}
+			onDeleteEdgeRequest={handleDeleteEdgeRequest}
+			onResize={handleCanvasResize}
+			onZoomPercentChange={(pct) => (zoomPercent = pct)}
+			bind:this={kgCanvasRef}
+		/>
+		<KGEntityDrawer
+			entityName={detailEntityName}
+			onclose={() => {
+				detailEntityName = "";
 				graphState.selectedNode = null;
 			}}
-			on:navigateTo={handleNavigateToEntity}
+			onnavigate={handleNavigateToEntity}
 		/>
 	</div>
 

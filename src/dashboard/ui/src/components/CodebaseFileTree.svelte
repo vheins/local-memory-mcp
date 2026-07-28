@@ -1,5 +1,16 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
+	import {
+		countChildren,
+		getFileIcon,
+		extLabel,
+		extColor,
+		formatKindCounts,
+		aggregateSymbolCounts,
+		isDir
+	} from "../lib/fileTreeUtils";
+	import FileTreeNode from "./FileTreeNode.svelte";
+	import FileTreeHeader from "./FileTreeHeader.svelte";
 
 	/** Directory/file tree data from codebase index */
 	export let architecture: Record<string, unknown>[] | null = null;
@@ -39,163 +50,45 @@
 		}
 	}
 
-	/** Count files and symbols in a directory node */
-	function countChildren(node: Record<string, unknown>): { files: number; symbols: number } {
-		const children = node.children as Record<string, unknown>[] | undefined;
-		if (!children || !Array.isArray(children)) {
-			return { files: 0, symbols: 0 };
-		}
-		let files = 0;
-		let symbols = 0;
-		for (const child of children) {
-			const t = child.type as string | undefined;
-			const childPath = (child.path as string) || "";
-			const isDir =
-				t === "directory" ||
-				t === "dir" ||
-				(!t && childPath.endsWith("/")) ||
-				(!t && Array.isArray(child.children) && child.children.length > 0);
-			if (isDir) {
-				const sub = countChildren(child);
-				files += sub.files;
-				symbols += sub.symbols;
-			} else {
-				files += 1;
-				if (child.symbolCounts && typeof child.symbolCounts === "object") {
-					symbols += Object.values(child.symbolCounts as Record<string, number>).reduce(
-						(a: number, b: number) => a + b,
-						0
-					);
+	/** Count total files in the entire tree */
+	function countTotalFiles(nodes: Record<string, unknown>[]): number {
+		return nodes.reduce((sum, node) => sum + countChildren(node).files, 0);
+	}
+
+	/** Toggle all directories expanded/collapsed */
+	function toggleAll() {
+		if (!architecture || !Array.isArray(architecture)) return;
+		const allExpanded = areAllExpanded(architecture);
+		const newState: Record<string, boolean> = {};
+		function visit(nodes: Record<string, unknown>[]) {
+			for (const node of nodes) {
+				if (isDir(node)) {
+					const p = (node.path as string) || (node.name as string) || "";
+					newState[p] = !allExpanded;
+					if (Array.isArray(node.children)) {
+						visit(node.children);
+					}
 				}
 			}
 		}
-		return { files, symbols };
+		visit(architecture);
+		expandedDirs = newState;
 	}
 
-	/** Get file extension for icon/label */
-	function getExt(name: string): string {
-		const dot = name.lastIndexOf(".");
-		return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
-	}
-
-	// --- Enhancement 7: Per-kind symbol count helpers ---
-	const KIND_SHORT: Record<string, string> = {
-		function: "f",
-		class: "c",
-		interface: "i",
-		type: "t",
-		enum: "e",
-		variable: "v"
-	};
-
-	const KIND_ORDER = ["function", "class", "interface", "type", "enum", "variable"];
-
-	/** Format symbolCounts object into a compact badge string like "f12 c3 i5" */
-	function formatKindCounts(counts: Record<string, number> | undefined): string {
-		if (!counts || typeof counts !== "object") return "";
-		const parts: string[] = [];
-		for (const kind of KIND_ORDER) {
-			const n = counts[kind];
-			if (n && n > 0) {
-				parts.push(`${KIND_SHORT[kind] || kind.charAt(0)}${n}`);
+	/** Check if all directories are expanded */
+	function areAllExpanded(nodes: Record<string, unknown>[]): boolean {
+		for (const node of nodes) {
+			if (isDir(node)) {
+				const p = (node.path as string) || (node.name as string) || "";
+				if (!expandedDirs[p]) return false;
+				if (Array.isArray(node.children) && !areAllExpanded(node.children)) return false;
 			}
 		}
-		return parts.join(" ");
+		return true;
 	}
 
-	/** Aggregate symbolCounts from a node and all its children */
-	function aggregateSymbolCounts(node: Record<string, unknown>): Record<string, number> {
-		const result: Record<string, number> = {};
-		const direct = node.symbolCounts as Record<string, number> | undefined;
-		if (direct && typeof direct === "object") {
-			for (const [k, v] of Object.entries(direct)) {
-				result[k] = (result[k] || 0) + (v as number);
-			}
-		}
-		const children = node.children as Record<string, unknown>[] | undefined;
-		if (children && Array.isArray(children)) {
-			for (const child of children) {
-				const sub = aggregateSymbolCounts(child);
-				for (const [k, v] of Object.entries(sub)) {
-					result[k] = (result[k] || 0) + v;
-				}
-			}
-		}
-		return result;
-	}
-
-	/** Get icon name for file type */
-	function fileIcon(name: string): string {
-		const ext = getExt(name);
-		switch (ext) {
-			case "ts":
-			case "tsx":
-				return "file-text";
-			case "js":
-			case "jsx":
-				return "file-code";
-			case "json":
-				return "braces";
-			case "md":
-				return "book-open";
-			case "css":
-			case "scss":
-			case "tailwind":
-				return "palette";
-			case "svelte":
-				return "flame";
-			case "html":
-				return "globe";
-			case "yaml":
-			case "yml":
-				return "settings";
-			default:
-				return "file";
-		}
-	}
-
-	/** Map extension to label for suffix badge */
-	function extLabel(name: string): string {
-		const ext = getExt(name);
-		if (ext) return `.${ext}`;
-		return "";
-	}
-
-	/** Color for extension badge */
-	function extColor(name: string): string {
-		const ext = getExt(name);
-		switch (ext) {
-			case "ts":
-				return "#3178c6";
-			case "tsx":
-				return "#3178c6";
-			case "js":
-				return "#f7df1e";
-			case "jsx":
-				return "#61dafb";
-			case "svelte":
-				return "#ff3e00";
-			case "css":
-			case "scss":
-				return "#cc6699";
-			case "json":
-				return "#a8b1c4";
-			case "md":
-				return "#755838";
-			default:
-				return "var(--color-text-muted)";
-		}
-	}
-
-	/** Check if node is a directory */
-	function isDir(node: Record<string, unknown>): boolean {
-		const t = node.type as string | undefined;
-		const p = (node.path as string) || "";
-		if (t === "directory" || t === "dir") return true;
-		if (Array.isArray(node.children) && node.children.length > 0) return true;
-		if (!t && p.endsWith("/")) return true;
-		return false;
-	}
+	$: totalFiles = architecture && Array.isArray(architecture) ? countTotalFiles(architecture) : 0;
+	$: allExpanded = architecture && Array.isArray(architecture) ? areAllExpanded(architecture) : false;
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════ -->
@@ -251,167 +144,18 @@
 	<!-- File Tree -->
 	<!-- ═══════════════════════════════════════════════════════════════════════════ -->
 {:else}
+	<FileTreeHeader {allExpanded} onToggleAll={toggleAll} fileCount={totalFiles} />
 	<nav class="filetree" aria-label="File tree">
 		<ul class="filetree-list" role="tree">
 			{#each architecture as node (node.path || node.name)}
-				{#if isDir(node)}
-					{@const counts = countChildren(node)}
-					{@const dirPath = (node.path as string) || (node.name as string) || ""}
-					{@const dirName = (node.name as string) || dirPath.split("/").filter(Boolean).pop() || dirPath}
-					{@const dirKindCounts = aggregateSymbolCounts(node)}
-					<li role="treeitem" aria-expanded={!!expandedDirs[dirPath]} aria-selected={false}>
-						<button
-							class="filetree-dir"
-							on:click={() => toggleDir(dirPath)}
-							on:keydown={(e) => handleKeyDown(e, () => toggleDir(dirPath))}
-							style="padding-left:12px;"
-							aria-label="{expandedDirs[dirPath] ? 'Collapse' : 'Expand'} directory {dirName}"
-						>
-							<span class="filetree-chevron" class:expanded={!!expandedDirs[dirPath]}>
-								<Icon name="chevron-right" size={12} strokeWidth={2} />
-							</span>
-							<Icon name="folder" size={14} strokeWidth={1.75} />
-							<span class="filetree-name">{dirName}</span>
-							<span class="filetree-badge">
-								{counts.files}
-								{counts.files === 1 ? "file" : "files"}
-								{#if Object.keys(dirKindCounts).length > 0}
-									<span class="filetree-badge-sep">&middot;</span>
-									<span class="filetree-kind-badge">{formatKindCounts(dirKindCounts)}</span>
-								{/if}
-							</span>
-						</button>
-
-						{#if expandedDirs[dirPath] && Array.isArray(node.children)}
-							<ul class="filetree-list filetree-children" role="group">
-								{#each node.children as child (child.path || child.name)}
-									{#if isDir(child)}
-										{@const childCounts = countChildren(child)}
-										{@const childDirPath = (child.path as string) || (child.name as string) || ""}
-										{@const childDirName =
-											(child.name as string) || childDirPath.split("/").filter(Boolean).pop() || childDirPath}
-										{@const childKindCounts = aggregateSymbolCounts(child)}
-										<li role="treeitem" aria-expanded={!!expandedDirs[childDirPath]} aria-selected={false}>
-											<button
-												class="filetree-dir"
-												on:click={() => toggleDir(childDirPath)}
-												on:keydown={(e) => handleKeyDown(e, () => toggleDir(childDirPath))}
-												style="padding-left:28px;"
-												aria-label="{expandedDirs[childDirPath] ? 'Collapse' : 'Expand'} directory {childDirName}"
-											>
-												<span class="filetree-chevron" class:expanded={!!expandedDirs[childDirPath]}>
-													<Icon name="chevron-right" size={12} strokeWidth={2} />
-												</span>
-												<Icon name="folder" size={14} strokeWidth={1.75} />
-												<span class="filetree-name">{childDirName}</span>
-												<span class="filetree-badge">
-													{childCounts.files}
-													{childCounts.files === 1 ? "file" : "files"}
-													{#if Object.keys(childKindCounts).length > 0}
-														<span class="filetree-badge-sep">&middot;</span>
-														<span class="filetree-kind-badge">{formatKindCounts(childKindCounts)}</span>
-													{/if}
-												</span>
-											</button>
-
-											{#if expandedDirs[childDirPath] && Array.isArray(child.children)}
-												<ul class="filetree-list filetree-children" role="group">
-													{#each child.children as leaf (leaf.path || leaf.name)}
-														{@const leafName =
-															(leaf.name as string) ||
-															((leaf.path as string) || "").split("/").filter(Boolean).pop() ||
-															"file"}
-														{@const leafPath = (leaf.path as string) || leafName}
-														{@const leafExt = extLabel(leafName)}
-														<li role="treeitem" aria-selected={activeFile === leafPath}>
-															<button
-																class="filetree-file"
-																class:active={activeFile === leafPath}
-																on:click={() => selectFile(leafPath)}
-																on:keydown={(e) => handleKeyDown(e, () => selectFile(leafPath))}
-																style="padding-left:44px;"
-																aria-label="Open file {leafName}"
-															>
-																<Icon name={fileIcon(leafName)} size={13} strokeWidth={1.75} />
-																<span class="filetree-name">{leafName}</span>
-																{#if leafExt}
-																	<span class="filetree-ext" style="color:{extColor(leafName)};">
-																		{leafExt}
-																	</span>
-																{/if}
-																{#if leaf.symbolCounts && typeof leaf.symbolCounts === "object"}
-																	<span class="filetree-kind-badge"
-																		>{formatKindCounts(leaf.symbolCounts as Record<string, number>)}</span
-																	>
-																{/if}
-															</button>
-														</li>
-													{/each}
-												</ul>
-											{/if}
-										</li>
-									{:else}
-										{@const fileName =
-											(child.name as string) ||
-											((child.path as string) || "").split("/").filter(Boolean).pop() ||
-											"file"}
-										{@const filePath = (child.path as string) || fileName}
-										{@const fileExt = extLabel(fileName)}
-										<li role="treeitem" aria-selected={activeFile === filePath}>
-											<button
-												class="filetree-file"
-												class:active={activeFile === filePath}
-												on:click={() => selectFile(filePath)}
-												on:keydown={(e) => handleKeyDown(e, () => selectFile(filePath))}
-												style="padding-left:28px;"
-												aria-label="Open file {fileName}"
-											>
-												<Icon name={fileIcon(fileName)} size={13} strokeWidth={1.75} />
-												<span class="filetree-name">{fileName}</span>
-												{#if fileExt}
-													<span class="filetree-ext" style="color:{extColor(fileName)};">
-														{fileExt}
-													</span>
-												{/if}
-												{#if child.symbolCounts && typeof child.symbolCounts === "object"}
-													<span class="filetree-kind-badge"
-														>{formatKindCounts(child.symbolCounts as Record<string, number>)}</span
-													>
-												{/if}
-											</button>
-										</li>
-									{/if}
-								{/each}
-							</ul>
-						{/if}
-					</li>
-				{:else}
-					{@const fileName =
-						(node.name as string) || ((node.path as string) || "").split("/").filter(Boolean).pop() || "file"}
-					{@const filePath = (node.path as string) || fileName}
-					{@const fileExt = extLabel(fileName)}
-					<li role="treeitem" aria-selected={activeFile === filePath}>
-						<button
-							class="filetree-file"
-							class:active={activeFile === filePath}
-							on:click={() => selectFile(filePath)}
-							on:keydown={(e) => handleKeyDown(e, () => selectFile(filePath))}
-							style="padding-left:12px;"
-							aria-label="Open file {fileName}"
-						>
-							<Icon name={fileIcon(fileName)} size={13} strokeWidth={1.75} />
-							<span class="filetree-name">{fileName}</span>
-							{#if fileExt}
-								<span class="filetree-ext" style="color:{extColor(fileName)};">
-									{fileExt}
-								</span>
-							{/if}
-							{#if node.symbolCounts && typeof node.symbolCounts === "object"}
-								<span class="filetree-kind-badge">{formatKindCounts(node.symbolCounts as Record<string, number>)}</span>
-							{/if}
-						</button>
-					</li>
-				{/if}
+				<FileTreeNode
+					{node}
+					depth={0}
+					bind:expandedDirs
+					bind:activeFile
+					onToggleDir={toggleDir}
+					onSelectFile={selectFile}
+				/>
 			{/each}
 		</ul>
 	</nav>
@@ -529,154 +273,5 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
-	}
-
-	.filetree-children {
-		border-left: 1px solid rgba(255, 255, 255, 0.06);
-		margin-left: 18px;
-	}
-
-	:global(html.dark) .filetree-children {
-		border-left-color: rgba(255, 255, 255, 0.08);
-	}
-
-	/* ── Directory Row ── */
-	.filetree-dir {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-		border: none;
-		background: transparent;
-		color: var(--color-text);
-		font-size: 0.76rem;
-		font-weight: 600;
-		padding: 5px 12px;
-		cursor: pointer;
-		transition: background 0.12s ease;
-		border-radius: 6px;
-		margin: 1px 6px;
-		text-align: left;
-	}
-
-	.filetree-dir:hover {
-		background: rgba(255, 255, 255, 0.06);
-	}
-
-	:global(html.dark) .filetree-dir:hover {
-		background: rgba(255, 255, 255, 0.04);
-	}
-
-	.filetree-dir:focus-visible {
-		outline: 2px solid var(--color-primary);
-		outline-offset: -2px;
-	}
-
-	/* ── Chevron ── */
-	.filetree-chevron {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 14px;
-		height: 14px;
-		transition: transform 0.15s ease;
-		color: var(--color-text-muted);
-		flex-shrink: 0;
-	}
-
-	.filetree-chevron.expanded {
-		transform: rotate(90deg);
-	}
-
-	/* ── File Row ── */
-	.filetree-file {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-		border: none;
-		background: transparent;
-		color: var(--color-text-muted);
-		font-size: 0.74rem;
-		font-weight: 500;
-		padding: 4px 12px;
-		cursor: pointer;
-		transition:
-			background 0.12s ease,
-			color 0.12s ease;
-		border-radius: 6px;
-		margin: 1px 6px;
-		text-align: left;
-	}
-
-	.filetree-file:hover {
-		background: rgba(255, 255, 255, 0.06);
-		color: var(--color-text);
-	}
-
-	:global(html.dark) .filetree-file:hover {
-		background: rgba(255, 255, 255, 0.04);
-	}
-
-	.filetree-file.active {
-		background: rgba(14, 165, 233, 0.1);
-		color: var(--color-primary);
-		border: 1px solid rgba(14, 165, 233, 0.15);
-	}
-
-	.filetree-file:focus-visible {
-		outline: 2px solid var(--color-primary);
-		outline-offset: -2px;
-	}
-
-	/* ── File Name ── */
-	.filetree-name {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		flex: 1;
-		min-width: 0;
-	}
-
-	/* ── Extension Badge ── */
-	.filetree-ext {
-		font-size: 0.58rem;
-		font-weight: 700;
-		padding: 1px 5px;
-		border-radius: 4px;
-		background: rgba(255, 255, 255, 0.06);
-		flex-shrink: 0;
-		letter-spacing: 0.02em;
-	}
-
-	/* ── Directory Badge ── */
-	.filetree-badge {
-		font-size: 0.58rem;
-		font-weight: 600;
-		color: var(--color-text-muted);
-		opacity: 0.7;
-		margin-left: auto;
-		flex-shrink: 0;
-		white-space: nowrap;
-	}
-
-	.filetree-badge-sep {
-		margin: 0 2px;
-		opacity: 0.5;
-	}
-
-	/* ── Symbol Count per Kind (Enh 7) ── */
-	.filetree-kind-badge {
-		font-size: 0.52rem;
-		font-weight: 600;
-		color: var(--color-text-muted);
-		opacity: 0.65;
-		background: rgba(255, 255, 255, 0.04);
-		padding: 1px 5px;
-		border-radius: 3px;
-		flex-shrink: 0;
-		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-		letter-spacing: 0.02em;
-		white-space: nowrap;
 	}
 </style>
