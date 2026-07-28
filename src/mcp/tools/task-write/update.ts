@@ -2,16 +2,25 @@ import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { TaskStatus, VectorStore } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
-import { logger } from "../../utils/logger";
 import { UUID_REGEX } from "../../utils/uuid";
-import { resolveParentId, resolveDependsOn, archiveTaskToMemory } from "../task.helpers";
-import { saveExtractions, saveTaskRelations } from "../kg-archivist";
-import { tryVectorEmbedding } from "./effects";
+import { resolveParentId, resolveDependsOn } from "../task.helpers";
 import { validateStatusTransition } from "./state-machine";
 import { WriteParams } from "./types";
+import {
+	buildUpdatesFromParams,
+	applyPhaseTagSync,
+	applyDecisionRefsToUpdates,
+	enrichUpdatedTasks
+} from "./update-field";
+import {
+	applyStatusTimestamps,
+	insertStatusComment,
+	handleCoordinationCleanup,
+	archiveCompletedTasks
+} from "./update-status";
 
 // ---------------------------------------------------------------------------
-// Single UPDATE
+// Single UPDATE — shared core logic
 // ---------------------------------------------------------------------------
 
 async function coreUpdate(
@@ -29,17 +38,7 @@ async function coreUpdate(
 	const { owner, repo, id, comment, force } = params;
 
 	// Build the set of updates (exclude identification/control fields)
-	const { status, phase, tags, agent, role, model, est_tokens, commit_id, changed_files, ...restUpdates } = params;
-	const updates: Record<string, unknown> = { ...restUpdates };
-	if (status !== undefined) updates.status = status;
-	if (phase !== undefined) updates.phase = phase;
-	if (tags !== undefined) updates.tags = tags;
-	if (agent !== undefined) updates.agent = agent;
-	if (role !== undefined) updates.role = role;
-	if (model !== undefined) updates.model = model;
-	if (est_tokens !== undefined) updates.est_tokens = est_tokens;
-	if (commit_id !== undefined) updates.commit_id = commit_id;
-	if (changed_files !== undefined) updates.changed_files = changed_files;
+	const updates = buildUpdatesFromParams(params);
 
 	// Resolve task identifier to UUID: prefer id, fall back to code
 	let resolvedId: string | undefined;
@@ -124,55 +123,18 @@ async function coreUpdate(
 		}
 
 		// Phase tag sync
-		if (updates.phase !== undefined || updates.tags !== undefined) {
-			let currentTags = (updates.tags as string[]) || (existingTask.tags as string[]) || [];
-			currentTags = currentTags.filter((t: string) => !t.startsWith("phase:"));
-			const finalPhase = updates.phase !== undefined ? (updates.phase as string) : existingTask.phase;
-			if (finalPhase) {
-				const phaseTag = `phase:${finalPhase}`;
-				if (!currentTags.includes(phaseTag)) {
-					currentTags.push(phaseTag);
-				}
-			}
-			finalUpdates.tags = currentTags;
-		}
+		applyPhaseTagSync(updates, existingTask, finalUpdates);
 
 		// decision_refs → metadata injection
-		if (params.decision_refs !== undefined) {
-			const currentMetadata = { ...(existingTask.metadata ?? {}) };
-			currentMetadata.decision_refs = params.decision_refs;
-			finalUpdates.metadata = currentMetadata;
-		}
+		applyDecisionRefsToUpdates(params, existingTask, finalUpdates);
 
 		// Status timestamp management
-		if (updates.status === "completed") {
-			finalUpdates.finished_at = now;
-			finalUpdates.commit_id = updates.commit_id;
-			finalUpdates.changed_files = updates.changed_files;
-		} else if (updates.status === "canceled") {
-			finalUpdates.canceled_at = now;
-		} else if (updates.status === "in_progress" && existingTask.status !== "in_progress") {
-			finalUpdates.in_progress_at = now;
-		}
+		applyStatusTimestamps(updates, existingTask, now, finalUpdates);
 
 		storage.tasks.updateTask(targetId, finalUpdates);
 
 		// Insert comment if status changed or comment provided
-		if (comment !== undefined || isStatusChanging) {
-			storage.taskComments.insertTaskComment({
-				id: randomUUID(),
-				task_id: targetId,
-				owner,
-				repo,
-				comment: comment || `Status updated to ${updates.status}`,
-				agent: (updates.agent as string) || existingTask.agent || "unknown",
-				role: (updates.role as string) || existingTask.role || "unknown",
-				model: (updates.model as string) || "unknown",
-				previous_status: isStatusChanging ? (existingTask.status as TaskStatus) : null,
-				next_status: isStatusChanging ? (updates.status as TaskStatus) : null,
-				created_at: now
-			});
-		}
+		insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
 
 		// Track completed tasks for later archival
 		if (updates.status === "completed" && existingTask.status !== "completed") {
@@ -180,10 +142,14 @@ async function coreUpdate(
 		}
 
 		// Auto-release claims and expire handoffs on completion/cancellation
-		if (isStatusChanging && (updates.status === "completed" || updates.status === "canceled")) {
-			releasedClaims += storage.handoffs.releaseClaimsForTask(targetId);
-			expiredHandoffs += storage.handoffs.updatePendingHandoffsForTask(targetId, "expired");
-		}
+		const cleanup = handleCoordinationCleanup(
+			storage,
+			targetId,
+			isStatusChanging,
+			updates.status as TaskStatus | undefined
+		);
+		releasedClaims += cleanup.releasedClaims;
+		expiredHandoffs += cleanup.expiredHandoffs;
 
 		updatedTasks.push({
 			id: targetId,
@@ -194,34 +160,7 @@ async function coreUpdate(
 
 	// Best-effort vector embedding + KG extraction for updated tasks (if title/description changed)
 	if ((params.title !== undefined || params.description !== undefined) && updatedCount > 0) {
-		for (const { id: taskId } of updatedTasks) {
-			const task = storage.tasks.getTaskById(taskId);
-			if (task) {
-				await tryVectorEmbedding(taskId, task.title, task.description, vectors);
-				try {
-					await saveExtractions(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage);
-				} catch (error) {
-					logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
-				}
-				try {
-					await saveTaskRelations(
-						`${task.title}\n${task.description ?? ""}`,
-						task.title,
-						task.owner,
-						task.repo,
-						storage,
-						{
-							parentId: task.parent_id,
-							decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
-						}
-					);
-				} catch (error) {
-					logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
-						error: String(error)
-					});
-				}
-			}
-		}
+		await enrichUpdatedTasks(updatedTasks, storage, vectors);
 	}
 
 	return {
@@ -276,17 +215,7 @@ export async function handleUpdate(
 	);
 
 	// Archive completed tasks AFTER returning response (vector embedding is slow, non-blocking)
-	if (completedTaskIds.length > 0) {
-		setImmediate(async () => {
-			for (const taskId of completedTaskIds) {
-				try {
-					await archiveTaskToMemory(taskId, params.repo, storage, vectors);
-				} catch (err) {
-					logger.error("Failed to archive task to memory", { taskId, error: String(err) });
-				}
-			}
-		});
-	}
+	archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
 
 	return response;
 }
@@ -311,17 +240,7 @@ export async function handleBulkUpdateByIds(
 	}
 
 	// Build the set of updates (exclude identification/control fields)
-	const { status, phase, tags, agent, role, model, est_tokens, commit_id, changed_files, ...restUpdates } = params;
-	const updates: Record<string, unknown> = { ...restUpdates };
-	if (status !== undefined) updates.status = status;
-	if (phase !== undefined) updates.phase = phase;
-	if (tags !== undefined) updates.tags = tags;
-	if (agent !== undefined) updates.agent = agent;
-	if (role !== undefined) updates.role = role;
-	if (model !== undefined) updates.model = model;
-	if (est_tokens !== undefined) updates.est_tokens = est_tokens;
-	if (commit_id !== undefined) updates.commit_id = commit_id;
-	if (changed_files !== undefined) updates.changed_files = changed_files;
+	const updates = buildUpdatesFromParams(params);
 
 	// Validate all IDs exist before mutating
 	const existingTasks = storage.tasks.getTasksByIds(ids);
@@ -372,25 +291,10 @@ export async function handleBulkUpdateByIds(
 		const finalUpdates: Record<string, unknown> = { ...updates };
 
 		// Phase tag sync
-		if (updates.phase !== undefined || updates.tags !== undefined) {
-			let currentTags = (updates.tags as string[]) || (existingTask.tags as string[]) || [];
-			currentTags = currentTags.filter((t: string) => !t.startsWith("phase:"));
-			const finalPhase = updates.phase !== undefined ? (updates.phase as string) : existingTask.phase;
-			if (finalPhase) {
-				const phaseTag = `phase:${finalPhase}`;
-				if (!currentTags.includes(phaseTag)) {
-					currentTags.push(phaseTag);
-				}
-			}
-			finalUpdates.tags = currentTags;
-		}
+		applyPhaseTagSync(updates, existingTask, finalUpdates);
 
 		// decision_refs → metadata injection
-		if (params.decision_refs !== undefined) {
-			const currentMetadata = { ...(existingTask.metadata ?? {}) };
-			currentMetadata.decision_refs = params.decision_refs;
-			finalUpdates.metadata = currentMetadata;
-		}
+		applyDecisionRefsToUpdates(params, existingTask, finalUpdates);
 
 		// Remove identification fields that should not be persisted
 		delete finalUpdates.ids;
@@ -405,32 +309,12 @@ export async function handleBulkUpdateByIds(
 		delete finalUpdates.force;
 
 		// Status timestamp management
-		if (updates.status === "completed") {
-			finalUpdates.finished_at = now;
-		} else if (updates.status === "canceled") {
-			finalUpdates.canceled_at = now;
-		} else if (updates.status === "in_progress" && existingTask.status !== "in_progress") {
-			finalUpdates.in_progress_at = now;
-		}
+		applyStatusTimestamps(updates, existingTask, now, finalUpdates);
 
 		storage.tasks.updateTask(targetId, finalUpdates);
 
 		// Insert comment if status changed or comment provided
-		if (comment !== undefined || isStatusChanging) {
-			storage.taskComments.insertTaskComment({
-				id: randomUUID(),
-				task_id: targetId,
-				owner,
-				repo,
-				comment: comment || `Status updated to ${updates.status}`,
-				agent: (updates.agent as string) || existingTask.agent || "unknown",
-				role: (updates.role as string) || existingTask.role || "unknown",
-				model: (updates.model as string) || "unknown",
-				previous_status: isStatusChanging ? (existingTask.status as TaskStatus) : null,
-				next_status: isStatusChanging ? (updates.status as TaskStatus) : null,
-				created_at: now
-			});
-		}
+		insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
 
 		// Track completed tasks for later archival
 		if (updates.status === "completed" && existingTask.status !== "completed") {
@@ -438,10 +322,14 @@ export async function handleBulkUpdateByIds(
 		}
 
 		// Auto-release claims and expire handoffs on completion/cancellation
-		if (isStatusChanging && (updates.status === "completed" || updates.status === "canceled")) {
-			releasedClaims += storage.handoffs.releaseClaimsForTask(targetId);
-			expiredHandoffs += storage.handoffs.updatePendingHandoffsForTask(targetId, "expired");
-		}
+		const cleanup = handleCoordinationCleanup(
+			storage,
+			targetId,
+			isStatusChanging,
+			updates.status as TaskStatus | undefined
+		);
+		releasedClaims += cleanup.releasedClaims;
+		expiredHandoffs += cleanup.expiredHandoffs;
 
 		updatedTasks.push({
 			id: targetId,
@@ -451,34 +339,7 @@ export async function handleBulkUpdateByIds(
 
 	// Best-effort vector embedding + KG extraction for updated tasks (if title/description changed)
 	if ((params.title !== undefined || params.description !== undefined) && updatedTasks.length > 0) {
-		for (const { id: taskId } of updatedTasks) {
-			const task = storage.tasks.getTaskById(taskId);
-			if (task) {
-				await tryVectorEmbedding(taskId, task.title, task.description, vectors);
-				try {
-					await saveExtractions(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage);
-				} catch (error) {
-					logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
-				}
-				try {
-					await saveTaskRelations(
-						`${task.title}\n${task.description ?? ""}`,
-						task.title,
-						task.owner,
-						task.repo,
-						storage,
-						{
-							parentId: task.parent_id,
-							decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
-						}
-					);
-				} catch (error) {
-					logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
-						error: String(error)
-					});
-				}
-			}
-		}
+		await enrichUpdatedTasks(updatedTasks, storage, vectors);
 	}
 
 	// Build response
@@ -516,17 +377,7 @@ export async function handleBulkUpdateByIds(
 	);
 
 	// Archive completed tasks AFTER returning response
-	if (completedTaskIds.length > 0) {
-		setImmediate(async () => {
-			for (const taskId of completedTaskIds) {
-				try {
-					await archiveTaskToMemory(taskId, params.repo, storage, vectors);
-				} catch (err) {
-					logger.error("Failed to archive task to memory", { taskId, error: String(err) });
-				}
-			}
-		});
-	}
+	archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
 
 	return response;
 }
