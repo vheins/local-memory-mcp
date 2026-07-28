@@ -1,15 +1,41 @@
 import type { Task, TaskClaim, Handoff } from "../interfaces";
-import type {
-	ArenaScene,
-	ArenaLayoutConfig,
-	ZoneRect,
-	AgentState,
-	HandoffAnimData,
-	HandoffVehicle,
-	HelperVariant,
-	VisualAgent,
-	VisualRepository
-} from "./arenaTypes";
+import type { ArenaScene, ArenaLayoutConfig, ZoneRect, AgentState, VisualAgent } from "./arenaTypes";
+import {
+	STATUS_TO_ZONE,
+	ACTIVE_TASK_STATUSES,
+	ROLE_COLORS,
+	agentColor,
+	nameHash,
+	pickVehicle,
+	pickHelper,
+	priorityToLevel,
+	inferTaskType,
+	stateToAction,
+	stateToHealth,
+	healthToRing,
+	stateToIcon,
+	computeAgentProgress
+} from "./arenaTransform-utils";
+import { computeZones, placeTasksInZones, therapySlotPosition } from "./arenaTransform-layout";
+
+// Re-export all public symbols from split files for backward compatibility
+export {
+	STATUS_TO_ZONE,
+	ACTIVE_TASK_STATUSES,
+	ROLE_COLORS,
+	agentColor,
+	nameHash,
+	pickVehicle,
+	pickHelper,
+	priorityToLevel,
+	inferTaskType,
+	stateToAction,
+	stateToHealth,
+	healthToRing,
+	stateToIcon,
+	computeAgentProgress
+} from "./arenaTransform-utils";
+export { computeZones, therapySlotPosition, placeTasksInZones } from "./arenaTransform-layout";
 
 export const STATUS_COLORS: Record<string, string> = {
 	backlog: "#64748b",
@@ -19,248 +45,6 @@ export const STATUS_COLORS: Record<string, string> = {
 	completed: "#10b981",
 	canceled: "#94a3b8"
 };
-
-// Maps task status → zone id
-const STATUS_TO_ZONE: Record<string, string> = {
-	backlog: "backlog",
-	pending: "pending",
-	in_progress: "in_progress",
-	blocked: "blocked",
-	completed: "completed",
-	canceled: "canceled"
-};
-
-const AGENT_COLORS = [
-	"#06b6d4",
-	"#f59e0b",
-	"#ec4899",
-	"#10b981",
-	"#3b82f6",
-	"#f97316",
-	"#14b8a6",
-	"#e11d48",
-	"#8b5cf6",
-	"#84cc16"
-];
-
-export const ROLE_COLORS: Record<string, string> = {
-	backend: "#3B82F6",
-	frontend: "#10B981",
-	debugger: "#F59E0B",
-	devops: "#8B5CF6",
-	"data-engineer": "#14B8A6",
-	explore: "#06B6D4",
-	documentation: "#6B7280",
-	general: "#F9FAFB"
-};
-
-const MAX_TASKS_PER_ZONE = 16;
-const TASK_INNER_PAD = 22;
-const TASK_TOP_PAD = 28; // below zone label
-const ACTIVE_TASK_STATUSES = new Set(["in_progress", "pending"]);
-const THERAPY_SLOT_PAD_X = 34;
-const THERAPY_SLOT_PAD_TOP = 54;
-const THERAPY_SLOT_PAD_BOTTOM = 28;
-const THERAPY_SLOT_MIN_GAP_X = 58;
-const THERAPY_SLOT_MIN_GAP_Y = 42;
-
-function clamp(n: number, min: number, max: number): number {
-	return Math.min(max, Math.max(min, n));
-}
-
-export function therapySlotPosition(zone: ZoneRect, idx: number): { x: number; y: number } {
-	const availableW = Math.max(1, zone.w - THERAPY_SLOT_PAD_X * 2);
-	const availableH = Math.max(1, zone.h - THERAPY_SLOT_PAD_TOP - THERAPY_SLOT_PAD_BOTTOM);
-	const cols = clamp(Math.floor(availableW / THERAPY_SLOT_MIN_GAP_X) + 1, 1, 3);
-	const rows = Math.max(1, Math.floor(availableH / THERAPY_SLOT_MIN_GAP_Y) + 1);
-	const slot = idx % (cols * rows);
-	const col = slot % cols;
-	const row = Math.floor(slot / cols);
-	const colGap = cols > 1 ? availableW / (cols - 1) : 0;
-	const rowGap = rows > 1 ? availableH / (rows - 1) : 0;
-
-	return {
-		x: zone.x + THERAPY_SLOT_PAD_X + col * colGap,
-		y: zone.y + THERAPY_SLOT_PAD_TOP + row * rowGap
-	};
-}
-
-// ── Handoff Animation Helpers ──────────────────────────────────────────────
-const HELPER_VARIANTS: HelperVariant[] = ["male_nurse", "female_nurse", "staff1", "staff2"];
-
-function pickVehicle(nameHash: number): HandoffVehicle {
-	return nameHash % 2 === 0 ? "wheelchair" : "stretcher";
-}
-
-function pickHelper(nameHash: number): HelperVariant {
-	return HELPER_VARIANTS[(nameHash >>> 4) % HELPER_VARIANTS.length];
-}
-
-function nameHash(name: string): number {
-	let h = 5381;
-	for (let i = 0; i < name.length; i++) h = ((h << 5) + h + name.charCodeAt(i)) >>> 0;
-	return h;
-}
-
-export function agentColor(name: string, role?: string | null): string {
-	if (role && ROLE_COLORS[role]) {
-		return ROLE_COLORS[role];
-	}
-	let h = 5381;
-	for (let i = 0; i < name.length; i++) h = ((h << 5) + h + name.charCodeAt(i)) >>> 0;
-	return AGENT_COLORS[h % AGENT_COLORS.length];
-}
-
-export function computeZones(cw: number, ch: number): ZoneRect[] {
-	const M = 16;
-	const G = 16;
-	const iw = cw - M * 2;
-	const ih = ch - M * 2;
-
-	const topH = Math.floor((ih - G) / 2);
-	const bottomH = ih - topH - G;
-
-	const colW2 = Math.floor((iw - G) / 2);
-	const colW3 = Math.floor((iw - G * 2) / 3);
-
-	return [
-		{ id: "pending", label: "Pending", x: M, y: M, w: colW2, h: topH, color: "#f59e0b" },
-		{ id: "in_progress", label: "In Progress", x: M + colW2 + G, y: M, w: iw - colW2 - G, h: topH, color: "#3b82f6" },
-		{ id: "backlog", label: "Backlog", x: M, y: M + topH + G, w: colW3, h: bottomH, color: "#8b5cf6" },
-		{ id: "blocked", label: "Blocked", x: M + colW3 + G, y: M + topH + G, w: colW3, h: bottomH, color: "#ef4444" },
-		{
-			id: "recovery",
-			label: "Recovery Center",
-			x: M + colW3 * 2 + G * 2,
-			y: M + topH + G,
-			w: iw - colW3 * 2 - G * 2,
-			h: bottomH,
-			color: "#14b8a6"
-		}
-	];
-}
-
-/** Spreads tasks as workstations within their zone. */
-function placeTasksInZones(tasks: Task[], zones: ZoneRect[]): Map<string, { x: number; y: number }> {
-	const zoneById = new Map(zones.map((z) => [z.id, z]));
-	const byZone = new Map<string, Task[]>();
-	zones.forEach((z) => byZone.set(z.id, []));
-
-	for (const task of tasks) {
-		const zid = STATUS_TO_ZONE[task.status] ?? "pending";
-		if (!byZone.has(zid)) continue;
-		const bucket = byZone.get(zid)!;
-		if (bucket.length < MAX_TASKS_PER_ZONE) bucket.push(task);
-	}
-
-	const positions = new Map<string, { x: number; y: number }>();
-
-	for (const [zid, zoneTasks] of byZone) {
-		const zone = zoneById.get(zid);
-		if (!zone || zoneTasks.length === 0) continue;
-
-		const innerW = zone.w - TASK_INNER_PAD * 2;
-		const innerH = zone.h - TASK_INNER_PAD - TASK_TOP_PAD;
-		let cols = Math.max(1, Math.floor(innerW / 65));
-		let rows = Math.ceil(zoneTasks.length / cols);
-
-		while (innerH / rows < 55 && cols < zoneTasks.length) {
-			cols++;
-			rows = Math.ceil(zoneTasks.length / cols);
-		}
-
-		const cellW = innerW / cols;
-		const cellH = Math.max(55, Math.min(75, innerH / rows));
-
-		zoneTasks.forEach((t, i) => {
-			const col = i % cols;
-			const row = Math.floor(i / cols);
-			positions.set(t.id, {
-				x: zone.x + TASK_INNER_PAD + col * cellW + cellW / 2,
-				y: zone.y + TASK_TOP_PAD + row * cellH + cellH / 2
-			});
-		});
-	}
-
-	return positions;
-}
-
-function priorityToLevel(p: number): "p0" | "p1" | "p2" | "p3" {
-	if (p <= 1) return "p0";
-	if (p === 2) return "p1";
-	if (p === 3) return "p2";
-	return "p3";
-}
-
-function inferTaskType(code: string): "feature" | "fix" | "refactor" | "chore" | "docs" | "test" {
-	const prefix = code.split("-")[0]?.toUpperCase() ?? "";
-	const typeMap: Record<string, "feature" | "fix" | "refactor" | "chore" | "docs" | "test"> = {
-		FEAT: "feature",
-		FIX: "fix",
-		REFACTOR: "refactor",
-		CHORE: "chore",
-		DOCS: "docs",
-		TEST: "test"
-	};
-	return typeMap[prefix] ?? "feature";
-}
-
-// ── Agent Telemetry Helpers ────────────────────────────────────────────────
-
-function stateToAction(state: AgentState): VisualAgent["currentAction"] {
-	const map: Record<AgentState, VisualAgent["currentAction"]> = {
-		processing: "coding",
-		idle: "idle",
-		blocked: "waiting",
-		burnout: "retrying",
-		claiming: "thinking",
-		handoff_out: "waiting",
-		handoff_in: "waiting",
-		recovering: "retrying",
-		cooldown: "idle",
-		retrying: "retrying",
-		self_healing: "retrying"
-	};
-	return map[state] ?? "idle";
-}
-
-function stateToHealth(state: AgentState): VisualAgent["health"] {
-	if (state === "burnout" || state === "blocked") return "degraded";
-	return "healthy";
-}
-
-function healthToRing(health: VisualAgent["health"]): number {
-	const map: Record<VisualAgent["health"], number> = {
-		healthy: 100,
-		degraded: 60,
-		critical: 25,
-		offline: 0
-	};
-	return map[health];
-}
-
-function stateToIcon(state: AgentState): string {
-	const map: Record<AgentState, string> = {
-		processing: "⚡",
-		idle: "●",
-		blocked: "⚠",
-		burnout: "🔄",
-		claiming: "●",
-		handoff_out: "●",
-		handoff_in: "●",
-		recovering: "🔄",
-		cooldown: "●",
-		retrying: "🔄",
-		self_healing: "🔄"
-	};
-	return map[state] ?? "";
-}
-
-function computeAgentProgress(tasks: Array<{ progress: number }>): number {
-	if (tasks.length === 0) return 0;
-	const sum = tasks.reduce((acc, t) => acc + t.progress, 0);
-	return sum / tasks.length;
-}
 
 export function buildArenaScene(
 	tasks: Task[],
@@ -397,7 +181,7 @@ export function buildArenaScene(
 		}
 
 		// Detect burnout and start handoff animation
-		let handoffAnim: HandoffAnimData | null = prev?.handoffAnim ?? null;
+		let handoffAnim = prev?.handoffAnim ?? null;
 		if (isStale) {
 			state = "burnout";
 			const burnoutZone = zones.find((z) => z.id === "recovery") || idleZone;

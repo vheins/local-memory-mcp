@@ -113,7 +113,7 @@ async function blendVectorRanking(
 function inferMode(params: CodebaseReadInput): CodebaseReadMode {
 	if (params.name) return "trace";
 	if (params.filePath) return "file";
-	if (params.query) return "search";
+	if (params.query !== undefined) return "search";
 	return "architecture";
 }
 

@@ -3,12 +3,11 @@
  * languages.
  *
  * Architecture (v2):
- * - Language registry: declarative config per language (extensions, WASM paths,
- *   visitor factory). Adding a new language = adding one entry to createRegistry().
- * - Reverse maps: extension → config (O(1) lookup), grammar path → loaded Language.
- * - Grammars are loaded lazily on first use via getOrLoadGrammar().
- * - _doParse() looks up the config by file extension, finds the loaded grammar,
- *   instantiates the visitor, and calls extractSymbols(tree, sourceCode).
+ * - Language registry lives in language-routing.ts (declarative config per
+ *   language).
+ * - Worker pool / concurrency control lives in worker-pool.ts.
+ * - This file owns the TreeSitterParserPool class: lazy init, grammar caching,
+ *   parse dispatch, and timeout enforcement.
  *
  * Key design decisions:
  * - Concurrent access: tree-sitter Parser is NOT reentrant, so we use a semaphore
@@ -18,130 +17,21 @@
  * - Graceful degradation: parse errors are captured in ParseResult.error, never thrown.
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
+import path from "node:path";
 import { Parser, Language } from "web-tree-sitter";
-import type { ParseResult, ParserPool, LanguageVisitor } from "./language-visitor.js";
-import { TypeScriptVisitor } from "./typescript-visitor.js";
-import { GoVisitor } from "./visitors/go-visitor.js";
-import { PythonVisitor } from "./visitors/python-visitor.js";
-import { PhpVisitor } from "./visitors/php-visitor.js";
-import { DartVisitor } from "./visitors/dart-visitor.js";
-import { RustVisitor } from "./visitors/rust-visitor.js";
-import { JavaVisitor } from "./visitors/java-visitor.js";
-import { RubyVisitor } from "./visitors/ruby-visitor.js";
-import { KotlinVisitor } from "./visitors/kotlin-visitor.js";
-import { SwiftVisitor } from "./visitors/swift-visitor.js";
-import { CVisitor } from "./visitors/c-visitor.js";
-import { CppVisitor } from "./visitors/cpp-visitor.js";
-import { VueVisitor } from "./visitors/vue-visitor.js";
-import { MarkdownVisitor } from "./markdown-visitor.js";
-import { GenericTextVisitor } from "./generic-visitor.js";
+import type { ParseResult, ParserPool } from "./language-visitor.js";
+import {
+	type LanguageConfig,
+	getWasmPath,
+	createRegistry,
+	buildGenericCatchAll,
+	buildRegistryMaps,
+	removeConfigsForWasm
+} from "./language-routing.js";
+import { Semaphore, resolveParseTimeoutMs, resolveConcurrency } from "./worker-pool.js";
 import { logger } from "../../utils/logger.js";
 import { FatalError } from "../types/errors.js";
-
-// ── Path resolution ──────────────────────────────────────────────────
-
-/**
- * Resolve the project root at runtime.
- *
- * Search order:
- * 1. Walk up from this file's directory looking for `dist/grammars/` (bundled package).
- * 2. Walk up looking for `node_modules` (development / npx cache install).
- */
-function resolveProjectRoot(): string {
-	const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-	let dir = moduleDir;
-	while (dir !== path.parse(dir).root) {
-		if (fs.existsSync(path.join(dir, "dist", "grammars"))) {
-			return dir;
-		}
-		if (fs.existsSync(path.join(dir, "node_modules"))) {
-			return dir;
-		}
-		dir = path.dirname(dir);
-	}
-	throw new Error("Cannot locate project root (dist/grammars or node_modules not found)");
-}
-
-/** Path to the web-tree-sitter WASM file. */
-function getWasmPath(): string {
-	const root = resolveProjectRoot();
-
-	// First try: bundled WASM in dist/grammars/web-tree-sitter/
-	const bundledPath = path.join(root, "dist", "grammars", "web-tree-sitter", "web-tree-sitter.wasm");
-	if (fs.existsSync(bundledPath)) return bundledPath;
-
-	// Fallback: node_modules
-	return path.join(root, "node_modules", "web-tree-sitter", "web-tree-sitter.wasm");
-}
-
-/**
- * Resolve a tree-sitter grammar WASM file path.
- *
- * Search order:
- * 1. Bundled grammar in dist/grammars/<packageName>/<wasmFilename>
- * 2. Direct path in node_modules/<packageName>/<wasmFilename>
- * 3. Alternate path in node_modules/<packageName>/wasm/<wasmFilename>
- *
- * Returns `null` if the grammar WASM is not found — the caller should skip
- * the language entry rather than crash.
- */
-function getGrammarPath(packageName: string, wasmFilename: string): string | null {
-	const root = resolveProjectRoot();
-
-	// Try bundled path first (grammars shipped with the package itself)
-	const bundledPath = path.join(root, "dist", "grammars", packageName, wasmFilename);
-	if (fs.existsSync(bundledPath)) return bundledPath;
-
-	// Fallback to node_modules paths (for local development or if bundled was removed)
-	const pkgDir = path.join(root, "node_modules", packageName);
-	const directPath = path.join(pkgDir, wasmFilename);
-	if (fs.existsSync(directPath)) return directPath;
-
-	const altPath = path.join(pkgDir, "wasm", wasmFilename);
-	if (fs.existsSync(altPath)) return altPath;
-
-	logger.warn(`[ParserPool] Grammar WASM not found: ${wasmFilename} (skipping language)`);
-	return null;
-}
-
-// ── Semaphore ────────────────────────────────────────────────────────
-
-/**
- * Simple promise-based semaphore for limiting concurrent parser access.
- * tree-sitter Parser is NOT reentrant, so each concurrent slot creates its
- * own Parser instance while sharing the Language objects loaded once at init.
- */
-class Semaphore {
-	private _count: number;
-	private _queue: Array<() => void> = [];
-
-	constructor(concurrency: number) {
-		this._count = concurrency;
-	}
-
-	async acquire(): Promise<void> {
-		if (this._count > 0) {
-			this._count--;
-			return;
-		}
-		return new Promise<void>((resolve) => {
-			this._queue.push(resolve);
-		});
-	}
-
-	release(): void {
-		if (this._queue.length > 0) {
-			const next = this._queue.shift()!;
-			next();
-		} else {
-			this._count++;
-		}
-	}
-}
 
 // ── Pool options ─────────────────────────────────────────────────────
 
@@ -152,39 +42,7 @@ export interface ParserPoolOptions {
 	concurrency?: number;
 }
 
-// ── Language config ──────────────────────────────────────────────────
-
-interface LanguageConfig {
-	/** Unique identifier for this language entry (e.g. "typescript", "go"). */
-	languageId: string;
-	/** File extensions this config handles. */
-	extensions: string[];
-	/** WASM grammar file paths (some languages need multiple, e.g. TS + TSX). */
-	grammarWasms: string[];
-	/** Factory function to create a new visitor instance. */
-	createVisitor: () => LanguageVisitor;
-}
-
 // ── Implementation ───────────────────────────────────────────────────
-
-const DEFAULT_PARSE_TIMEOUT_MS = 10_000;
-const DEFAULT_CONCURRENCY = 4;
-
-/** Read the parse timeout from environment, falling back to the programmatic default. */
-function resolveParseTimeoutMs(override?: number): number {
-	if (override !== undefined) return override;
-	const env = parseInt(process.env.CODEBASE_INDEX_PARSE_TIMEOUT_MS ?? "", 10);
-	if (!isNaN(env) && env > 0) return env;
-	return DEFAULT_PARSE_TIMEOUT_MS;
-}
-
-/** Read concurrency from environment, falling back to the programmatic default. */
-function resolveConcurrency(override?: number): number {
-	if (override !== undefined && override > 0) return override;
-	const env = parseInt(process.env.CODEBASE_INDEX_PARSE_CONCURRENCY ?? "", 10);
-	if (!isNaN(env) && env > 0) return env;
-	return DEFAULT_CONCURRENCY;
-}
 
 export class TreeSitterParserPool implements ParserPool {
 	private initialized = false;
@@ -197,7 +55,7 @@ export class TreeSitterParserPool implements ParserPool {
 	private loadedGrammars = new Map<string, Language>();
 
 	// Cached registry built once at construction time
-	private registry: LanguageConfig[] = TreeSitterParserPool.createRegistry();
+	private registry: LanguageConfig[] = createRegistry();
 
 	// Reverse maps
 	private extToConfig = new Map<string, LanguageConfig>();
@@ -208,298 +66,10 @@ export class TreeSitterParserPool implements ParserPool {
 		this.parseTimeoutMs = resolveParseTimeoutMs(options.parseTimeoutMs);
 		this.semaphore = new Semaphore(resolveConcurrency(options.concurrency));
 		// Append the generic catch-all for any extension not handled by a tree-sitter grammar
-		this.registry.push(TreeSitterParserPool.buildGenericCatchAll(this.registry));
-		this.buildRegistryMaps();
-	}
-
-	// ── Registry construction ─────────────────────────────────────
-
-	private static createRegistry(): LanguageConfig[] {
-		const g = (pkg: string, file: string): string | null => getGrammarPath(pkg, file);
-
-		const entries: (LanguageConfig | null)[] = [
-			// TypeScript
-			(() => {
-				const ts = g("tree-sitter-typescript", "tree-sitter-typescript.wasm");
-				if (!ts) return null;
-				return {
-					languageId: "typescript",
-					extensions: [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".svelte", ".astro"],
-					grammarWasms: [ts],
-					createVisitor: () => new TypeScriptVisitor()
-				};
-			})(),
-			// TSX
-			(() => {
-				const tsx = g("tree-sitter-typescript", "tree-sitter-tsx.wasm");
-				if (!tsx) return null;
-				return {
-					languageId: "tsx",
-					extensions: [".tsx", ".jsx"],
-					grammarWasms: [tsx],
-					createVisitor: () => new TypeScriptVisitor()
-				};
-			})(),
-			// Vue
-			(() => {
-				const w = g("tree-sitter-vue", "tree-sitter-vue.wasm");
-				if (!w) return null;
-				return { languageId: "vue", extensions: [".vue"], grammarWasms: [w], createVisitor: () => new VueVisitor() };
-			})(),
-			// Go
-			(() => {
-				const w = g("tree-sitter-go", "tree-sitter-go.wasm");
-				if (!w) return null;
-				return { languageId: "go", extensions: [".go"], grammarWasms: [w], createVisitor: () => new GoVisitor() };
-			})(),
-			// Python
-			(() => {
-				const w = g("tree-sitter-python", "tree-sitter-python.wasm");
-				if (!w) return null;
-				return {
-					languageId: "python",
-					extensions: [".py"],
-					grammarWasms: [w],
-					createVisitor: () => new PythonVisitor()
-				};
-			})(),
-			// PHP
-			(() => {
-				const w = g("tree-sitter-php", "tree-sitter-php_only.wasm");
-				if (!w) return null;
-				return { languageId: "php", extensions: [".php"], grammarWasms: [w], createVisitor: () => new PhpVisitor() };
-			})(),
-			// Dart
-			(() => {
-				const w = g("tree-sitter-dart", "tree-sitter-dart.wasm");
-				if (!w) return null;
-				return { languageId: "dart", extensions: [".dart"], grammarWasms: [w], createVisitor: () => new DartVisitor() };
-			})(),
-			// Rust
-			(() => {
-				const w = g("tree-sitter-rust", "tree-sitter-rust.wasm");
-				if (!w) return null;
-				return { languageId: "rust", extensions: [".rs"], grammarWasms: [w], createVisitor: () => new RustVisitor() };
-			})(),
-			// Java
-			(() => {
-				const w = g("tree-sitter-java", "tree-sitter-java.wasm");
-				if (!w) return null;
-				return { languageId: "java", extensions: [".java"], grammarWasms: [w], createVisitor: () => new JavaVisitor() };
-			})(),
-			// Ruby
-			(() => {
-				const w = g("tree-sitter-ruby", "tree-sitter-ruby.wasm");
-				if (!w) return null;
-				return { languageId: "ruby", extensions: [".rb"], grammarWasms: [w], createVisitor: () => new RubyVisitor() };
-			})(),
-			// Kotlin
-			(() => {
-				const w = g("tree-sitter-kotlin", "tree-sitter-kotlin.wasm");
-				if (!w) return null;
-				return {
-					languageId: "kotlin",
-					extensions: [".kt", ".kts"],
-					grammarWasms: [w],
-					createVisitor: () => new KotlinVisitor()
-				};
-			})(),
-			// Swift
-			(() => {
-				const w = g("tree-sitter-swift", "tree-sitter-swift.wasm");
-				if (!w) return null;
-				return {
-					languageId: "swift",
-					extensions: [".swift"],
-					grammarWasms: [w],
-					createVisitor: () => new SwiftVisitor()
-				};
-			})(),
-			// C
-			(() => {
-				const w = g("tree-sitter-c", "tree-sitter-c.wasm");
-				if (!w) return null;
-				return { languageId: "c", extensions: [".c", ".h"], grammarWasms: [w], createVisitor: () => new CVisitor() };
-			})(),
-			// C++
-			(() => {
-				const w = g("tree-sitter-cpp", "tree-sitter-cpp.wasm");
-				if (!w) return null;
-				return {
-					languageId: "cpp",
-					extensions: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
-					grammarWasms: [w],
-					createVisitor: () => new CppVisitor()
-				};
-			})(),
-			// Markdown (no WASM needed)
-			{
-				languageId: "markdown",
-				extensions: [".md", ".mdx"],
-				grammarWasms: [],
-				createVisitor: () => new MarkdownVisitor()
-			}
-		];
-
-		return entries.filter((e): e is LanguageConfig => e !== null);
-	}
-
-	/**
-	 * Build the catch-all generic config covering every extension not already
-	 * handled by a tree-sitter grammar.
-	 *
-	 * By appending this after all specialist configs, the earlier Map.set() calls
-	 * take priority in `extToConfig` (first-write-wins), so tree-sitter grammars
-	 * are never shadowed by the generic fallback.
-	 */
-	private static buildGenericCatchAll(registry: LanguageConfig[]): LanguageConfig {
-		const handled = new Set<string>();
-		for (const config of registry) {
-			for (const ext of config.extensions) {
-				handled.add(ext);
-			}
-		}
-
-		const allGenericExtensions = [
-			// Web
-			".html",
-			".htm",
-			".xhtml",
-			".css",
-			".scss",
-			".sass",
-			".less",
-			// Scripting & Backend
-			".rb",
-			".go",
-			".rs",
-			".java",
-			".kt",
-			".kts",
-			".scala",
-			".cs",
-			".fs",
-			".swift",
-			".zig",
-			".erl",
-			".ex",
-			".exs",
-			".clj",
-			".dart",
-			".lua",
-			".pl",
-			".pm",
-			".t",
-			".r",
-			".jl",
-			// Mobile / Native (non-tree-sitter)
-			".m",
-			".mm",
-			// Templates
-			".ejs",
-			".hbs",
-			".mustache",
-			".njk",
-			".pug",
-			".haml",
-			".liquid",
-			".twig",
-			".razor",
-			// Config & Data
-			".json",
-			".yaml",
-			".yml",
-			".toml",
-			".ini",
-			".cfg",
-			".conf",
-			".xml",
-			".svg",
-			".plist",
-			".xib",
-			".storyboard",
-			".pbxproj",
-			".xcconfig",
-			".entitlements",
-			".gradle",
-			// Shell & Scripts
-			".sh",
-			".bash",
-			".zsh",
-			".fish",
-			".ps1",
-			".bat",
-			".cmd",
-			// Framework-specific
-			".webc",
-			".wxp",
-			".wxt",
-			// Docs
-			".tex",
-			".bib",
-			".rst",
-			".asciidoc",
-			".adoc",
-			// Template engines
-			".latte",
-			".smarty",
-			".tpl",
-			// GraphQL
-			".graphql",
-			".gql",
-			// Protocol
-			".proto",
-			".thrift",
-			// Extensionless named files (detected via basename in _doParse)
-			// handled separately in detectLanguage; included here for completeness
-			"dockerfile",
-			"Dockerfile",
-			"makefile",
-			"Makefile",
-			"justfile",
-			"Justfile",
-			"Containerfile"
-		];
-
-		return {
-			languageId: "generic",
-			extensions: allGenericExtensions.filter((ext) => !handled.has(ext)),
-			grammarWasms: [],
-			createVisitor: () => new GenericTextVisitor()
-		};
-	}
-
-	/** Build the O(1) extension → config and basename → config maps. */
-	private buildRegistryMaps(): void {
-		for (const config of this.registry) {
-			for (const ext of config.extensions) {
-				if (ext.startsWith(".")) {
-					if (this.extToConfig.has(ext)) {
-						logger.warn(`[ParserPool] Duplicate extension mapping: ${ext}`);
-					}
-					this.extToConfig.set(ext, config);
-				} else {
-					// Extensionless entries (e.g. "dockerfile", "Makefile") go to basename map
-					const key = ext.toLowerCase();
-					if (this.basenameToConfig.has(key)) {
-						logger.warn(`[ParserPool] Duplicate basename mapping: ${key}`);
-					}
-					this.basenameToConfig.set(key, config);
-				}
-			}
-		}
-	}
-
-	/**
-	 * Remove all extension → config mappings that reference a failed WASM path.
-	 * Called when a grammar fails to load — prevents runtime errors on parse.
-	 */
-	private removeConfigsForWasm(wasmPath: string): void {
-		for (const [ext, config] of this.extToConfig.entries()) {
-			if (config.grammarWasms.includes(wasmPath)) {
-				this.extToConfig.delete(ext);
-			}
-		}
+		this.registry.push(buildGenericCatchAll(this.registry));
+		const maps = buildRegistryMaps(this.registry);
+		this.extToConfig = maps.extToConfig;
+		this.basenameToConfig = maps.basenameToConfig;
 	}
 
 	// ── ParserPool contract ───────────────────────────────────────
@@ -585,7 +155,7 @@ export class TreeSitterParserPool implements ParserPool {
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			logger.warn("[ParserPool] Grammar load failed — skipping language", { wasmPath, error: message });
-			this.removeConfigsForWasm(wasmPath);
+			removeConfigsForWasm(this.extToConfig, wasmPath);
 			throw new Error(`Failed to load grammar: ${wasmPath} — ${message}`);
 		}
 	}

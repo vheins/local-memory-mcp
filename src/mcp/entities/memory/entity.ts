@@ -1,0 +1,497 @@
+import { BaseEntity } from "../../storage/base";
+import { MemoryEntry, MemoryRow, MemoryType } from "../../types/index";
+import { CountResult, TypeCountResult } from "../../types/common";
+import { VALID_COLUMNS, mergeStructuredData } from "./validation";
+
+export class MemoryEntity extends BaseEntity {
+	insert(entry: MemoryEntry): void {
+		const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
+		this.run(
+			`INSERT INTO memories (
+				id, code, repo, owner, type, title, content, importance, folder, language,
+				created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+				supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			[
+				entry.id,
+				entry.code || null,
+				entry.scope.repo,
+				entry.scope.owner,
+				entry.type,
+				entry.title || null,
+				entry.content,
+				entry.importance,
+				entry.scope.folder || null,
+				entry.scope.language || null,
+				entry.created_at,
+				entry.updated_at,
+				entry.expires_at ?? null,
+				entry.supersedes ?? null,
+				entry.status || "active",
+				entry.is_global ? 1 : 0,
+				entry.tags ? JSON.stringify(entry.tags) : null,
+				mergedMeta ? JSON.stringify(mergedMeta) : null,
+				entry.agent || "unknown",
+				entry.role || "unknown",
+				entry.model || "unknown",
+				entry.completed_at || null
+			]
+		);
+	}
+
+	update(id: string, updates: Partial<MemoryEntry>): void {
+		const fields: string[] = [];
+		const values: unknown[] = [];
+
+		Object.keys(updates).forEach((key) => {
+			const k = key as keyof MemoryEntry;
+			const val = updates[k];
+			if (val !== undefined) {
+				if (k === "scope") {
+					const scope = updates.scope;
+					if (scope?.owner !== undefined) {
+						fields.push("owner = ?");
+						values.push(scope.owner);
+					}
+					if (scope?.repo) {
+						fields.push("repo = ?");
+						values.push(scope.repo);
+					}
+					if (scope?.folder !== undefined) {
+						fields.push("folder = ?");
+						values.push(scope.folder);
+					}
+					if (scope?.language !== undefined) {
+						fields.push("language = ?");
+						values.push(scope.language);
+					}
+				} else if (k === "structuredData") {
+					const existingRow = this.get<{ metadata: string }>("SELECT metadata FROM memories WHERE id = ?", [id]);
+					const existingMeta = existingRow ? this.safeJSONParse<Record<string, unknown>>(existingRow.metadata, {}) : {};
+					const merged = { ...existingMeta, structuredData: val };
+					fields.push("metadata = ?");
+					values.push(JSON.stringify(merged));
+				} else if (k === "tags" || k === "metadata") {
+					fields.push(`${k} = ?`);
+					values.push(JSON.stringify(val));
+				} else if (k === "is_global") {
+					fields.push(`${k} = ?`);
+					values.push(val ? 1 : 0);
+				} else if (VALID_COLUMNS.has(k)) {
+					fields.push(`${k} = ?`);
+					values.push(val);
+				}
+			}
+		});
+
+		if (fields.length === 0) return;
+
+		fields.push("updated_at = ?");
+		values.push(new Date().toISOString());
+		values.push(id);
+
+		this.run(`UPDATE memories SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+	}
+
+	delete(id: string): void {
+		this.run("DELETE FROM memories WHERE id = ?", [id]);
+	}
+
+	getById(id: string): MemoryEntry | null {
+		const row = this.get<MemoryRow>("SELECT * FROM memories WHERE id = ?", [id]);
+		return row ? this.rowToMemoryEntry(row) : null;
+	}
+
+	getByCode(code: string, owner?: string, repo?: string): MemoryEntry | null {
+		let sql = "SELECT * FROM memories WHERE code = ?";
+		const params: (string | null)[] = [code];
+		if (owner && repo) {
+			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
+			params.push(owner, repo);
+		}
+		const row = this.get<MemoryRow>(sql, params);
+		return row ? this.rowToMemoryEntry(row) : null;
+	}
+
+	getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
+		const row = this.get<MemoryRow & { recall_rate: number }>(
+			`SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE id = ?`,
+			[id]
+		);
+		if (!row) return null;
+		return {
+			...this.rowToMemoryEntry(row),
+			recall_rate: row.recall_rate ?? 0
+		};
+	}
+
+	getByIds(ids: string[], options: { type?: string; status?: string } = {}): MemoryEntry[] {
+		if (ids.length === 0) return [];
+		let sql = `SELECT * FROM memories WHERE id IN (${ids.map(() => "?").join(",")})`;
+		const params: (string | number)[] = [...ids];
+
+		if (options.type) {
+			sql += " AND type = ?";
+			params.push(options.type);
+		}
+		if (options.status) {
+			sql += " AND status = ?";
+			params.push(options.status);
+		}
+
+		const rows = this.all<MemoryRow>(sql, params);
+		return rows.map((row) => this.rowToMemoryEntry(row));
+	}
+
+	getStats(owner?: string, repo?: string): { total: number; byType: Record<string, number> } {
+		let sql = "SELECT type, COUNT(*) as count FROM memories";
+		const params: unknown[] = [];
+		if (owner) {
+			sql += " WHERE owner = ?";
+			params.push(owner);
+			if (repo) {
+				sql += " AND repo = ?";
+				params.push(repo);
+			}
+		} else if (repo) {
+			sql += " WHERE repo = ?";
+			params.push(repo);
+		}
+		sql += " GROUP BY type";
+
+		const rows = this.all<TypeCountResult>(sql, params);
+		const byType: Record<string, number> = {};
+		let total = 0;
+		rows.forEach((row) => {
+			byType[row.type] = row.count;
+			total += row.count;
+		});
+
+		return { total, byType };
+	}
+
+	searchByRepo(owner: string, repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
+		const now = new Date().toISOString();
+		const ownerClause = owner ? "owner = ? AND " : "";
+		let sql = `SELECT * FROM memories WHERE ${ownerClause}repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)`;
+		const params: (string | number)[] = owner
+			? [owner, repo, `%${query}%`, `%${query}%`, `%${query}%`, now]
+			: [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
+
+		if (type) {
+			sql += " AND type = ?";
+			params.push(type);
+		}
+
+		sql += " ORDER BY importance DESC, created_at DESC LIMIT ?";
+		params.push(limit);
+
+		const rows = this.all<MemoryRow>(sql, params);
+		return rows.map((row) => this.rowToMemoryEntry(row));
+	}
+
+	bulkInsertMemories(entries: MemoryEntry[]): number {
+		return this.transaction(() => {
+			let count = 0;
+			for (const entry of entries) {
+				const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
+				this.run(
+					`INSERT INTO memories (
+						id, code, repo, owner, type, title, content, importance, folder, language,
+						created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
+						supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					[
+						entry.id,
+						entry.code || null,
+						entry.scope.repo,
+						entry.scope.owner,
+						entry.type,
+						entry.title || null,
+						entry.content,
+						entry.importance,
+						entry.scope.folder || null,
+						entry.scope.language || null,
+						entry.created_at,
+						entry.updated_at,
+						entry.expires_at ?? null,
+						entry.supersedes ?? null,
+						entry.status || "active",
+						entry.is_global ? 1 : 0,
+						entry.tags ? JSON.stringify(entry.tags) : null,
+						mergedMeta ? JSON.stringify(mergedMeta) : null,
+						entry.agent || "unknown",
+						entry.role || "unknown",
+						entry.model || "unknown",
+						entry.completed_at || null
+					]
+				);
+				count++;
+			}
+			return count;
+		});
+	}
+
+	bulkUpdateMemories(ids: string[], updates: Partial<MemoryEntry>): number {
+		if (ids.length === 0) return 0;
+
+		const fields: string[] = [];
+		const values: unknown[] = [];
+
+		(Object.keys(updates) as (keyof MemoryEntry)[]).forEach((key) => {
+			const value = updates[key];
+			if (value !== undefined) {
+				if (key === "scope") {
+					const scope = updates.scope;
+					if (scope?.owner !== undefined) {
+						fields.push("owner = ?");
+						values.push(scope.owner);
+					}
+					if (scope?.repo) {
+						fields.push("repo = ?");
+						values.push(scope.repo);
+					}
+					if (scope?.folder !== undefined) {
+						fields.push("folder = ?");
+						values.push(scope.folder);
+					}
+					if (scope?.language !== undefined) {
+						fields.push("language = ?");
+						values.push(scope.language);
+					}
+				} else if (key === "tags" || key === "metadata") {
+					fields.push(`${key} = ?`);
+					values.push(JSON.stringify(value));
+				} else if (key === "is_global") {
+					fields.push(`${key} = ?`);
+					values.push(value ? 1 : 0);
+				} else if (VALID_COLUMNS.has(key)) {
+					fields.push(`${key} = ?`);
+					values.push(value);
+				}
+			}
+		});
+
+		if (fields.length === 0) return 0;
+
+		fields.push("updated_at = ?");
+		values.push(new Date().toISOString());
+
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const result = this.run(
+					`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
+					[...values, ...chunk] as (string | number)[]
+				);
+				count += result.changes;
+			}
+			return count;
+		});
+	}
+
+	getRecentMemories(
+		owner: string,
+		repo: string,
+		limit: number,
+		offset: number = 0,
+		includeArchived: boolean = false,
+		excludeTypes: string[] = [],
+		sortOrder: "ASC" | "DESC" = "DESC"
+	): MemoryEntry[] {
+		const ownerClause = owner ? "owner = ? AND " : "";
+		let query = `SELECT * FROM memories WHERE ${ownerClause}repo = ?`;
+		const params: (string | number)[] = owner ? [owner, repo] : [repo];
+
+		if (!includeArchived) {
+			query += " AND status = 'active'";
+		}
+
+		if (excludeTypes.length > 0) {
+			query += ` AND type NOT IN (${excludeTypes.map(() => "?").join(",")})`;
+			params.push(...excludeTypes);
+		}
+
+		query += ` ORDER BY importance DESC, created_at ${sortOrder} LIMIT ? OFFSET ?`;
+		params.push(limit, offset);
+
+		const rows = this.all<MemoryRow>(query, params);
+		return rows.map((row) => this.rowToMemoryEntry(row));
+	}
+
+	getTotalCount(owner: string, repo: string, includeArchived = false, excludeTypes: string[] = []): number {
+		const ownerClause = owner ? "owner = ? AND " : "";
+		let sql = `SELECT COUNT(*) as count FROM memories WHERE ${ownerClause}repo = ?`;
+		const params: (string | number)[] = owner ? [owner, repo] : [repo];
+
+		if (!includeArchived) sql += " AND status = 'active'";
+
+		if (excludeTypes.length > 0) {
+			sql += ` AND type NOT IN (${excludeTypes.map(() => "?").join(",")})`;
+			params.push(...excludeTypes);
+		}
+
+		const row = this.get<CountResult>(sql, params);
+		return row?.count ?? 0;
+	}
+
+	incrementHitCount(id: string): void {
+		this.run("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?", [
+			new Date().toISOString(),
+			id
+		]);
+	}
+
+	incrementHitCounts(ids: string[]): void {
+		if (!ids || ids.length === 0) return;
+		const now = new Date().toISOString();
+		const placeholders = ids.map(() => "?").join(",");
+		this.run(`UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`, [
+			now,
+			...ids
+		]);
+	}
+
+	incrementRecallCount(id: string): void {
+		this.run("UPDATE memories SET recall_count = recall_count + 1, last_used_at = ? WHERE id = ?", [
+			new Date().toISOString(),
+			id
+		]);
+	}
+
+	getSummary(owner: string, repo: string): { summary: string; updated_at: string } | undefined {
+		const row = this.get<{ summary: string; updated_at: string }>(
+			"SELECT summary, updated_at FROM memory_summary WHERE owner = ? AND repo = ?",
+			[owner, repo]
+		);
+		return row;
+	}
+
+	getAllMemoriesWithStats(
+		owner: string,
+		repo: string,
+		limit?: number,
+		offset?: number
+	): (MemoryEntry & { recall_rate: number })[] {
+		const ownerClause = owner ? "owner = ? AND " : "";
+		let sql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${ownerClause}repo = ? ORDER BY created_at DESC`;
+		const params: unknown[] = owner ? [owner, repo] : [repo];
+		if (limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(limit);
+			if (offset !== undefined) {
+				sql += " OFFSET ?";
+				params.push(offset);
+			}
+		}
+		const rows = this.all<MemoryRow & { recall_rate: number }>(sql, params);
+		return rows.map((row) => ({
+			...this.rowToMemoryEntry(row),
+			recall_rate: row.recall_rate || 0
+		}));
+	}
+
+	upsertSummary(owner: string, repo: string, summary: string): void {
+		this.run(
+			`INSERT INTO memory_summary (owner, repo, summary, updated_at) VALUES (?, ?, ?, ?)
+			ON CONFLICT(owner, repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
+			[owner, repo, summary, new Date().toISOString()]
+		);
+	}
+
+	listMemoriesForDashboard(options: {
+		owner?: string;
+		repo?: string;
+		type?: MemoryType;
+		tag?: string;
+		isGlobal?: boolean;
+		minImportance?: number;
+		maxImportance?: number;
+		search?: string;
+		offset?: number;
+		limit?: number;
+		sortBy?: string;
+		sortOrder?: "ASC" | "DESC";
+	}): {
+		items: (MemoryEntry & { recall_rate: number })[];
+		total: number;
+		limit: number;
+		offset: number;
+	} {
+		const {
+			owner,
+			repo,
+			type,
+			tag,
+			isGlobal,
+			minImportance,
+			maxImportance,
+			search,
+			offset = 0,
+			limit = 50,
+			sortOrder = "DESC"
+		} = options;
+		let sortBy = options.sortBy ?? "created_at";
+
+		const ALLOWED_SORT_COLUMNS = new Set([
+			"created_at",
+			"updated_at",
+			"importance",
+			"hit_count",
+			"title",
+			"recall_rate"
+		]);
+		if (!ALLOWED_SORT_COLUMNS.has(sortBy)) {
+			sortBy = "created_at";
+		}
+		const where = ["1=1"];
+		const params: (string | number)[] = [];
+		if (owner) {
+			where.push("owner = ?");
+			params.push(owner);
+		}
+		if (repo) {
+			where.push("repo = ?");
+			params.push(repo);
+		}
+		if (type) {
+			where.push("type = ?");
+			params.push(type);
+		}
+		if (tag) {
+			where.push("tags LIKE ?");
+			params.push(`%${tag}%`);
+		}
+		if (isGlobal !== undefined) {
+			where.push("is_global = ?");
+			params.push(isGlobal ? 1 : 0);
+		}
+		if (minImportance !== undefined) {
+			where.push("importance >= ?");
+			params.push(minImportance);
+		}
+		if (maxImportance !== undefined) {
+			where.push("importance <= ?");
+			params.push(maxImportance);
+		}
+		if (search) {
+			where.push("(title LIKE ? OR content LIKE ?)");
+			params.push(`%${search}%`, `%${search}%`);
+		}
+
+		const countSql = `SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`;
+		const totalRow = this.get<CountResult>(countSql, params);
+		const total = totalRow?.count ?? 0;
+
+		const dataSql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${where.join(" AND ")} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
+		const rows = this.all<MemoryRow & { recall_rate: number }>(dataSql, [...params, limit, offset]);
+		const items = rows.map((row) => ({
+			...this.rowToMemoryEntry(row),
+			recall_rate: row.recall_rate || 0
+		}));
+
+		return { items, total, limit, offset };
+	}
+}

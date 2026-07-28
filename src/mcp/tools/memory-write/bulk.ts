@@ -1,0 +1,264 @@
+import { MemoryTypeSchema } from "../schemas";
+import { SQLiteStore } from "../../storage/sqlite";
+import { VectorStore, MemoryEntry } from "../../types";
+import { logger } from "../../utils/logger";
+import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { UUID_REGEX } from "../../utils/uuid";
+import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
+import { saveExtractions } from "../kg-archivist";
+import {
+	applyDecisionFields,
+	applySessionFields,
+	buildMemoryEntry,
+	checkCreateConflict,
+	inferWriteMode
+} from "./helpers";
+
+// ── BULK ─────────────────────────────────────────────────────────────────
+
+export async function handleBulk(
+	items: Record<string, unknown>[],
+	db: SQLiteStore,
+	vectors: VectorStore,
+	json: boolean,
+	parentParams?: Record<string, unknown>
+): Promise<McpResponse> {
+	const results: Record<string, unknown>[] = [];
+	const errors: { index: number; error: string }[] = [];
+	const createdEntries: MemoryEntry[] = [];
+	const now = new Date().toISOString();
+	const batchCodes = new Set<string>();
+
+	// Session defaults carried from top-level — inherit from parent if not set per-item
+	const parentOwner = (parentParams?.owner as string) ?? "";
+	const parentRepo = (parentParams?.repo as string) ?? "";
+	const defaultOwner = parentOwner;
+	const defaultRepo = parentRepo;
+
+	for (let i = 0; i < items.length; i++) {
+		try {
+			const raw = { ...items[i] };
+
+			// Infer per-item operation
+			const itemMode = inferWriteMode(raw);
+
+			switch (itemMode) {
+				case "acknowledge": {
+					// Acknowledge inline within bulk — run against the DB directly
+					const idOrCode = (raw.id ?? raw.code) as string | undefined;
+					if (!idOrCode) throw new Error("Either id or code must be provided for acknowledge");
+
+					let memId = idOrCode;
+					if (!UUID_REGEX.test(memId)) {
+						const scope = (raw.scope as Record<string, unknown>) ?? {};
+						const owner = (raw.owner as string) ?? (scope.owner as string);
+						const repo = (raw.repo as string) ?? (scope.repo as string);
+						const byCode = db.memories.getByCode(memId, owner, repo);
+						if (!byCode) throw new Error(`Memory not found: ${memId}`);
+						memId = byCode.id;
+					}
+
+					const mem = db.memories.getById(memId);
+					if (!mem) throw new Error(`Memory with ID ${memId} not found.`);
+
+					const ackStatus = raw.acknowledge as string;
+					if (ackStatus === "used") {
+						db.memories.incrementRecallCount(mem.id);
+					}
+
+					results.push({
+						operation: "acknowledge",
+						success: true,
+						id: mem.id,
+						code: mem.code,
+						status: ackStatus
+					});
+					break;
+				}
+
+				case "update": {
+					// Update inline within bulk
+					const idOrCode = (raw.id ?? raw.code) as string | undefined;
+					if (!idOrCode) throw new Error("Either id or code must be provided for update");
+
+					let memId = idOrCode;
+					if (!UUID_REGEX.test(memId)) {
+						const scope = (raw.scope as Record<string, unknown>) ?? {};
+						const owner = (raw.owner as string) ?? (scope.owner as string);
+						const repo = (raw.repo as string) ?? (scope.repo as string);
+						const byCode = db.memories.getByCode(memId, owner, repo);
+						if (!byCode) throw new Error(`Memory not found: ${memId}`);
+						memId = byCode.id;
+					}
+
+					const existing = db.memories.getById(memId);
+					if (!existing) throw new Error(`Memory with ID ${memId} not found.`);
+
+					const updates: Record<string, unknown> = {};
+					const updatableFields = [
+						"type",
+						"title",
+						"content",
+						"importance",
+						"agent",
+						"role",
+						"status",
+						"supersedes",
+						"tags",
+						"metadata",
+						"is_global",
+						"completed_at"
+					] as const;
+
+					for (const field of updatableFields) {
+						if (raw[field] !== undefined) {
+							if (field === "type") {
+								updates[field] = MemoryTypeSchema.parse(raw[field]);
+							} else {
+								updates[field] = raw[field] as
+									string | number | boolean | Record<string, unknown> | string[] | undefined;
+							}
+						}
+					}
+
+					db.memories.update(memId, updates);
+
+					if (raw.content !== undefined) {
+						await vectors.upsert(memId, raw.content as string);
+					}
+
+					results.push({
+						operation: "update",
+						success: true,
+						id: memId,
+						code: existing.code,
+						updatedFields: Object.keys(updates)
+					});
+					break;
+				}
+
+				case "create":
+				default: {
+					// Apply convenience helpers
+					applyDecisionFields(raw);
+					applySessionFields(raw);
+
+					// Title metadata check
+					const rawTitle = raw.title as string | undefined;
+					if (rawTitle && hasMetadataLikeTitle(rawTitle)) {
+						throw new Error(
+							"Title appears to contain metadata. Keep title concise and move agent/role/date details into metadata or dedicated fields."
+						);
+					}
+
+					const isTaskArchive = raw.type === "task_archive";
+
+					// Fill scope defaults from item or parent params
+					const itemScope = (raw.scope as Record<string, unknown>) ?? {};
+					const itemOwner = (raw.owner as string) ?? (itemScope.owner as string) ?? defaultOwner;
+					const itemRepo = (raw.repo as string) ?? (itemScope.repo as string) ?? defaultRepo;
+
+					// Propagate owner/repo to the item so buildMemoryEntry picks them up
+					if (!raw.owner && defaultOwner) raw.owner = defaultOwner;
+					if (!raw.repo && defaultRepo) raw.repo = defaultRepo;
+					if (!raw.scope) {
+						raw.scope = { owner: defaultOwner || undefined, repo: defaultRepo || undefined };
+					} else {
+						const scope = raw.scope as Record<string, unknown>;
+						if (!scope.owner) scope.owner = defaultOwner || undefined;
+						if (!scope.repo) scope.repo = defaultRepo || undefined;
+					}
+
+					// Conflict check
+					const resolvedS = resolveMemorySupersedes(
+						raw.supersedes as string | null | undefined,
+						db,
+						itemOwner,
+						itemRepo
+					);
+					const { conflict, response: conflictResponse } = await checkCreateConflict(
+						raw,
+						db,
+						vectors,
+						isTaskArchive,
+						resolvedS,
+						json
+					);
+					if (conflict) {
+						throw new Error((conflictResponse!.content?.[0] as { text?: string })?.text ?? "Conflict detected");
+					}
+
+					// Archive superseded
+					if (resolvedS) {
+						const oldMemory = db.memories.getById(resolvedS);
+						if (oldMemory) {
+							db.memories.update(oldMemory.id, { status: "archived" });
+						}
+					}
+
+					const entry = buildMemoryEntry(raw, db, vectors, now, batchCodes);
+					createdEntries.push(entry);
+
+					results.push({
+						operation: "create",
+						success: true,
+						id: entry.id,
+						code: entry.code,
+						title: entry.title,
+						type: entry.type
+					});
+					break;
+				}
+			}
+		} catch (error) {
+			errors.push({ index: i, error: (error as Error).message });
+			logger.warn("[Tool] memory.write — bulk item failed", { index: i, error: String(error) });
+		}
+	}
+
+	// Batch insert all created entries in a single transaction
+	if (createdEntries.length > 0) {
+		db.memories.bulkInsertMemories(createdEntries);
+
+		// Non-critical post-insert operations
+		for (const entry of createdEntries) {
+			try {
+				await vectors.upsert(entry.id, entry.content);
+			} catch (error) {
+				logger.warn("Failed to generate vector embedding", { error: String(error) });
+			}
+
+			try {
+				await saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
+			} catch (error) {
+				logger.warn("[KG-Archivist] NLP extraction failed", { error: String(error) });
+			}
+		}
+	}
+
+	const successCount = results.length;
+	const errorCount = errors.length;
+
+	const summaryParts: string[] = [];
+	if (successCount > 0) {
+		summaryParts.push(`${successCount} succeeded`);
+	}
+	if (errorCount > 0) {
+		summaryParts.push(`${errorCount} failed`);
+	}
+
+	return createMcpResponse(
+		{
+			success: errorCount === 0,
+			total: items.length,
+			processed: successCount,
+			results,
+			...(errorCount > 0 ? { errors } : {})
+		},
+		`Processed ${successCount}/${items.length}${errorCount > 0 ? ` (${errorCount} failed)` : ""}.`,
+		{
+			structuredContentPathHint: "results",
+			includeJson: json
+		}
+	);
+}

@@ -19,7 +19,7 @@ import { handleClaimManage } from "./claim.manage";
 import { handleStandardDelete } from "./standard.delete";
 import { handleStandardWrite } from "./standard.write";
 import { handleStandardRead } from "./standard.read";
-import { handleTaskWrite } from "./task.write";
+import { handleTaskWrite } from "./task-write";
 import { handleTaskDelete } from "./task.delete";
 import { handleTaskRead } from "./task.read";
 import { handleAgentContext } from "./agent-context";

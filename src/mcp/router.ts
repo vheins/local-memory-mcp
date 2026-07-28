@@ -217,6 +217,7 @@ export function createRouter(
 				case "handoff-read":
 					return await handleHandoffRead(args, db);
 
+				case "claim-release": // backward compat
 				case "claim-manage":
 					return await handleClaimManage(args, db);
 
@@ -231,6 +232,7 @@ export function createRouter(
 					return await handleStandardDelete(args, db, vectors);
 
 				// New canonical task handlers — ADR-002: no backward compat
+				case "task-update": // backward compat
 				case "task-write":
 					return await handleTaskWrite(args, db, vectors, {
 						session: getSessionContext?.(),
