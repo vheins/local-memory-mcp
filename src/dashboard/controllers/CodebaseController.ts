@@ -314,8 +314,9 @@ export class CodebaseController {
 			const reqRepoPath = (req.body.repoPath as string)?.trim();
 
 			if (!repo) return respondError(res, 400, "repo is required in body", "MISSING_REPO");
+			if (!reqRepoPath) return respondError(res, 400, "repoPath is required in body", "MISSING_REPO_PATH");
 
-			// Resolve repoPath server-side if not provided (UI doesn't know filesystem paths)
+			// Verify the provided repoPath actually exists
 			const repoPath = resolveRepoPath(repo, reqRepoPath);
 			if (!repoPath) {
 				return respondError(
