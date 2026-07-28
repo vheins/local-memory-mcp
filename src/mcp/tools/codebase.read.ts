@@ -134,32 +134,76 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 
 	const symbols = allSymbols.length > 0 ? allSymbols : [];
 
-	try {
-		const result = traceSymbol(name, repo, symbols, validated.includeReferences);
+	function tryTrace(traceName: string): McpResponse | null {
+		try {
+			const result = traceSymbol(traceName, repo, symbols, validated.includeReferences);
 
-		const refTable =
-			result.references.length > 0
-				? `\n\n### References (${result.references.length})\n\n| file | start_line | end_line |\n|------|------------|----------|\n${result.references
-						.slice(0, 20)
-						.map((r) => `| ${r.filePath} | ${r.startLine} | ${r.endLine} |`)
-						.join("\n")}${result.references.length > 20 ? `\n... and ${result.references.length - 20} more` : ""}`
-				: "";
+			const refTable =
+				result.references.length > 0
+					? `\n\n### References (${result.references.length})\n\n| file | start_line | end_line |\n|------|------------|----------|\n${result.references
+							.slice(0, 20)
+							.map((r) => `| ${r.filePath} | ${r.startLine} | ${r.endLine} |`)
+							.join("\n")}${result.references.length > 20 ? `\n... and ${result.references.length - 20} more` : ""}`
+					: "";
 
-		const contentSummary = `Symbol "${name}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refTable}`;
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refTable}`;
 
-		return createMcpResponse(
-			{ ...result, mode: "trace" },
-			`Symbol "${name}": defined in ${result.definition.file}:${result.definition.line}, ` +
-				`${result.references.length} references found`,
-			{ includeJson: true, contentSummary }
-		);
-	} catch (err) {
-		if (err instanceof SymbolNotFoundError) {
-			return createMcpResponse({ error: err.message, code: "SYMBOL_NOT_FOUND" }, err.message, {
-				includeJson: true
-			});
+			return createMcpResponse(
+				{ ...result, mode: "trace", originalName: traceName !== name ? name : undefined },
+				`Symbol "${traceName}": defined in ${result.definition.file}:${result.definition.line}, ` +
+					`${result.references.length} references found`,
+				{ includeJson: true, contentSummary }
+			);
+		} catch (err) {
+			// Re-throw ambiguous errors — they should propagate, not fall through
+			if (err instanceof AmbiguousSymbolError) throw err;
+			return null;
 		}
+	}
 
+	function camelCaseFromHyphens(s: string): string {
+		return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+	}
+
+	// Try exact name first, then fallback variants
+	const nameVariants = [name];
+
+	// Variant 1: hyphens → dots (e.g., memory-write → memory.write)
+	if (name.includes("-")) {
+		nameVariants.push(name.replace(/-/g, "."));
+	}
+
+	// Variant 2: hyphens → camelCase (e.g., memory-write → memoryWrite)
+	if (name.includes("-")) {
+		nameVariants.push(camelCaseFromHyphens(name));
+	}
+
+	// Variant 3: dots → hyphens (e.g., memory.write → memory-write)
+	if (name.includes(".")) {
+		nameVariants.push(name.replace(/\./g, "-"));
+	}
+
+	// Variant 4: underscores → hyphens
+	if (name.includes("_")) {
+		nameVariants.push(name.replace(/_/g, "-"));
+	}
+
+	// Deduplicate
+	const seen = new Set<string>();
+	const uniqueVariants: string[] = [];
+	for (const v of nameVariants) {
+		if (!seen.has(v)) {
+			seen.add(v);
+			uniqueVariants.push(v);
+		}
+	}
+
+	try {
+		for (const v of uniqueVariants) {
+			const result = tryTrace(v);
+			if (result) return result;
+		}
+	} catch (err) {
 		if (err instanceof AmbiguousSymbolError) {
 			return createMcpResponse(
 				{
@@ -177,13 +221,19 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 				{ includeJson: true }
 			);
 		}
-
 		const message = err instanceof Error ? err.message : String(err);
 		logger.error("[handleCodebaseRead:trace] Unexpected error", { name, repo, error: message });
 		return createMcpResponse({ error: message, code: "TRACE_FAILED" }, message, {
 			includeJson: true
 		});
 	}
+
+	// All variants failed — return SymbolNotFoundError for the original name
+	return createMcpResponse(
+		{ error: `Symbol "${name}" not found`, code: "SYMBOL_NOT_FOUND" },
+		`Symbol "${name}" not found`,
+		{ includeJson: true }
+	);
 }
 
 // ── FILE SYMBOLS ─────────────────────────────────────────────────────────
@@ -297,11 +347,14 @@ async function handleSearchMode(
 		);
 	}
 
+	// Normalize kind: accept string or string[], use first if array
+	const kindFilter: string | undefined = Array.isArray(validated.kind) ? validated.kind[0] : validated.kind;
+
 	// Phase 1: DB-level name search (LIKE on symbol name + kind/filePath filtering)
 	let dbResult = db.codebaseSymbols.searchSymbols({
 		query,
 		repo: validated.repo,
-		kind: validated.kind,
+		kind: kindFilter,
 		filePath: validated.filePath,
 		exportedOnly: validated.exportedOnly,
 		limit: 200,
@@ -310,9 +363,15 @@ async function handleSearchMode(
 
 	let symbols: CodebaseSymbol[] = dbResult.symbols;
 
-	// Apply in-memory filters as complement
+	// Apply in-memory filters as complement — filterSymbols accepts string[]
+	const inMemoryKind: string[] | undefined = Array.isArray(validated.kind)
+		? validated.kind
+		: validated.kind
+			? [validated.kind]
+			: undefined;
+
 	symbols = filterSymbols(symbols, {
-		kind: validated.kind ? [validated.kind] : undefined,
+		kind: inMemoryKind,
 		repo: validated.repo,
 		filePath: validated.filePath,
 		exportedOnly: validated.exportedOnly
@@ -325,7 +384,7 @@ async function handleSearchMode(
 			const wordResult = db.codebaseSymbols.searchSymbols({
 				query: word,
 				repo: validated.repo,
-				kind: validated.kind,
+				kind: kindFilter,
 				filePath: validated.filePath,
 				exportedOnly: validated.exportedOnly,
 				limit: 200,
@@ -334,7 +393,7 @@ async function handleSearchMode(
 			if (wordResult.symbols.length > 0) {
 				dbResult = wordResult;
 				symbols = filterSymbols(wordResult.symbols, {
-					kind: validated.kind ? [validated.kind] : undefined,
+					kind: inMemoryKind,
 					repo: validated.repo,
 					filePath: validated.filePath,
 					exportedOnly: validated.exportedOnly

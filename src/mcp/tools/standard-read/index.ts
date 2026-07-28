@@ -54,8 +54,26 @@ async function handleListMode(validated: StandardReadInput, db: SQLiteStore): Pr
 		s.updated_at
 	]);
 
-	const contentSummary =
-		standards.length > 0 ? `Listed ${standards.length} coding standards` : "No coding standards found.";
+	let contentSummary: string;
+	if (standards.length > 0) {
+		const parts = [
+			"### Standards",
+			"",
+			"| code | title | context | language | scope |",
+			"|------|-------|---------|----------|-------|",
+			...standards.map(
+				(s) =>
+					`| ${s.code ?? "-"} | ${s.title} | ${s.context} | ${s.language || "-"} | ${
+						s.is_global ? "global" : s.repo || "-"
+					} |`
+			),
+			"",
+			"Use standard-read with code for full content."
+		];
+		contentSummary = parts.join("\n");
+	} else {
+		contentSummary = "No coding standards found.";
+	}
 
 	const responseData: Record<string, unknown> = {
 		schema: "standard-read",

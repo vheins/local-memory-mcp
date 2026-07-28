@@ -22,8 +22,8 @@ export const CodebaseReadSchema = z.object({
 	query: z.string().optional(),
 
 	// ── Optional filters ──────────────────────────────────────────────────
-	/** Filter by symbol kind (function, class, variable, ...). */
-	kind: z.string().optional(),
+	/** Filter by symbol kind(s) — single string or array. */
+	kind: z.union([z.string(), z.array(z.string())]).optional(),
 	/** Only exported symbols. */
 	exportedOnly: z.boolean().optional(),
 	/** Tree depth limit for ARCHITECTURE mode (1–5, default 2). */
