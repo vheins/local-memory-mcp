@@ -1,17 +1,14 @@
-import { pipeline, FeatureExtractionPipeline, env } from "@xenova/transformers";
 import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 
-// Suppress transformers.js stdout progress output — stdout is reserved for JSON-RPC in MCP mode
-if (process.env.MCP_SERVER === "true") {
-	env.backends.onnx.logLevel = "error";
-}
+type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
 
 export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
 	private extractor: FeatureExtractionPipeline | null = null;
 	private modelName = "Xenova/all-MiniLM-L6-v2";
+	private transformersModule: typeof import("@xenova/transformers") | null = null;
 
 	constructor(db: SQLiteStore) {
 		this.db = db;
@@ -25,9 +22,20 @@ export class RealVectorStore implements VectorStore {
 		await this.getExtractor();
 	}
 
+	private async getTransformers(): Promise<typeof import("@xenova/transformers")> {
+		if (!this.transformersModule) {
+			this.transformersModule = await import("@xenova/transformers");
+			if (process.env.MCP_SERVER === "true") {
+				this.transformersModule.env.backends.onnx.logLevel = "error";
+			}
+		}
+		return this.transformersModule;
+	}
+
 	private async getExtractor(): Promise<FeatureExtractionPipeline> {
 		if (!this.extractor) {
-			this.extractor = await pipeline("feature-extraction", this.modelName);
+			const tf = await this.getTransformers();
+			this.extractor = await tf.pipeline("feature-extraction", this.modelName);
 		}
 		return this.extractor;
 	}
