@@ -171,6 +171,72 @@ function countFilesAndSymbols(
 	return { fileCount, symbolCounts };
 }
 
+// ── Tree rendering ──────────────────────────────────────────────────────
+
+/**
+ * Render a DirectoryNode tree into an ASCII directory tree string.
+ *
+ * Uses UTF-8 box-drawing characters (├── , └── , │   ).
+ * Directories are shown with trailing `/`.
+ * Files include symbol counts `(N symbols)` when symbolCounts is available.
+ * Collapsed directories (hasMoreFiles) show `...` at the depth limit.
+ *
+ * @param root     - Root DirectoryNode from buildArchitecture().
+ * @param maxDepth - Maximum depth to render before stopping (default 2).
+ */
+export function renderDirTree(root: DirectoryNode, maxDepth: number = 2): string {
+	const lines: string[] = [];
+
+	function render(node: DirectoryNode, depth: number, isLast: boolean, ancestors: boolean[]): void {
+		if (depth === 0) {
+			// Root — just show name, no tree prefix
+			lines.push(`${node.name}/`);
+			const children = node.children ?? [];
+			for (let i = 0; i < children.length; i++) {
+				render(children[i], 1, i === children.length - 1, []);
+			}
+			return;
+		}
+
+		// Build indent prefix from ancestor state
+		let prefix = "";
+		for (const hasMore of ancestors) {
+			prefix += hasMore ? "│   " : "    ";
+		}
+
+		const connector = isLast ? "└── " : "├── ";
+		const dirSuffix = node.type === "directory" ? "/" : "";
+
+		let symbolInfo = "";
+		if (node.type === "file" && node.symbolCounts) {
+			const total = Object.values(node.symbolCounts).reduce((a, b) => a + b, 0);
+			if (total > 0) {
+				symbolInfo = ` (${total} symbols)`;
+			}
+		}
+
+		lines.push(`${prefix}${connector}${node.name}${dirSuffix}${symbolInfo}`);
+
+		const children = node.children ?? [];
+		const atDepthLimit = depth >= maxDepth;
+
+		if (!atDepthLimit && children.length > 0) {
+			const newAncestors = [...ancestors, !isLast];
+			for (let i = 0; i < children.length; i++) {
+				render(children[i], depth + 1, i === children.length - 1, newAncestors);
+			}
+		}
+
+		// Show ellipsis for collapsed directories at depth limit
+		if (node.hasMoreFiles && atDepthLimit) {
+			lines.push(`${prefix}    ...`);
+		}
+	}
+
+	render(root, 0, true, []);
+	return lines.join("\n");
+}
+
 // ── Public API ───────────────────────────────────────────────────────────
 
 /**

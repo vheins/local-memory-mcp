@@ -15,7 +15,7 @@ import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } fro
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { buildArchitecture } from "../codebase-index/services/architecture-service";
+import { buildArchitecture, renderDirTree } from "../codebase-index/services/architecture-service";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError, SymbolNotFoundError } from "../codebase-index/services/trace-service";
 import type { CodebaseSymbol } from "../types/codebase-symbol";
@@ -304,15 +304,8 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 		archSummary += langEntries.map(([lang, count]) => `| ${lang} | ${count} |`).join("\n");
 	}
 
-	const topExports = result.summary.topLevelExports;
-	if (topExports && topExports.length > 0) {
-		archSummary += `\n\n### Top Exports\n\n| name | kind | file |\n|------|------|------|\n`;
-		archSummary += topExports
-			.slice(0, 10)
-			.map((s) => `| ${s.name} | ${s.kind} | ${s.file_path} |`)
-			.join("\n");
-		if (topExports.length > 10) archSummary += `\n... and ${topExports.length - 10} more`;
-	}
+	const dirTreeOutput = renderDirTree(result.root, depth);
+	archSummary += `\n\n### Project Structure\n\n\`\`\`\n${dirTreeOutput}\n\`\`\``;
 
 	return createMcpResponse(
 		{ ...result, mode: "architecture" },
