@@ -119,6 +119,11 @@ export async function handleMemoryDelete(
 	// success is false only when nothing was deleted and there were errors
 	const overallSuccess = deletedCount > 0 || skippedCount === 0;
 
+	const codeSample =
+		deletedCodes.length <= 5
+			? deletedCodes.join(", ")
+			: `${deletedCodes.slice(0, 3).join(", ")}, ... (${deletedCodes.length} total)`;
+
 	return createMcpResponse(
 		{
 			success: overallSuccess,
@@ -129,7 +134,7 @@ export async function handleMemoryDelete(
 			deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes,
 			...(skippedCount > 0 ? { skippedCount, errors: skippedErrors } : {})
 		},
-		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from repo "${lastRepo}"${skippedCount > 0 ? ` (${skippedCount} skipped).` : "."}`,
+		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from "${lastRepo}"${deletedCount > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`,
 		{
 			structuredContentPathHint: deletedCount > 0 ? "deletedCount" : "errors",
 			includeJson: json

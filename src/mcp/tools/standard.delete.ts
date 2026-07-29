@@ -52,6 +52,7 @@ export async function handleStandardDelete(
 	const existingStandards = db.standards.getByIds(resolvedIds);
 	const standardMap = new Map(existingStandards.map((s) => [s.id, s]));
 	const deletedTitles: string[] = [];
+	const deletedCodes: string[] = [];
 	const validIdsToDelete: string[] = [];
 
 	let lastRepo = repo || "unknown";
@@ -63,6 +64,7 @@ export async function handleStandardDelete(
 		if (existing) {
 			lastRepo = existing.repo || (existing.is_global ? "global" : lastRepo);
 			deletedTitles.push(existing.title);
+			if (existing.code) deletedCodes.push(existing.code);
 			validIdsToDelete.push(targetId);
 		} else if (isBulk) {
 			deleteErrors.push({ identifier: targetId, error: "Coding standard not found" });
@@ -108,12 +110,18 @@ export async function handleStandardDelete(
 		...(deleteErrors.length > 0 ? { errors: deleteErrors.length } : {})
 	});
 
+	const codeSample =
+		deletedCodes.length <= 3
+			? deletedCodes.join(", ")
+			: `${deletedCodes.slice(0, 3).join(", ")}, ... (${deletedCodes.length} total)`;
+
 	const responseData: Record<string, unknown> = {
 		success: allOk,
 		id: id || undefined,
 		ids: ids || undefined,
 		repo: lastRepo,
 		deletedCount,
+		deletedCodes: deletedCodes.length > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes,
 		deletedTitles: deletedTitles.length > 10 ? [...deletedTitles.slice(0, 10), "..."] : deletedTitles
 	};
 
@@ -124,9 +132,8 @@ export async function handleStandardDelete(
 
 	return createMcpResponse(
 		responseData,
-		`Deleted ${deletedCount}/${resolvedIds.length} standards from repo "${lastRepo}".${deleteErrors.length > 0 ? ` ${deleteErrors.length} failed.` : ""}`,
+		`Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from "${lastRepo}"${deletedCodes.length > 0 ? `: ${codeSample}` : ""}${deleteErrors.length > 0 ? ` (${deleteErrors.length} failed)` : ""}.`,
 		{
-			structuredContentPathHint: "deletedCount",
 			includeJson: json
 		}
 	);

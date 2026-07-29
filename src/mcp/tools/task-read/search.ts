@@ -243,11 +243,46 @@ export async function handleSearchMode(
 
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {
-		const statusLabel = describeStatusFilter(status);
-		contentSummary =
-			paginated.length > 0
-				? `Found ${total} tasks matching "${query}" in repo "${repo}" (${statusLabel}). Use task-detail with task_code for full details.`
-				: `No tasks found for "${query}" in repo "${repo}".`;
+		if (paginated.length > 0) {
+			const statusLabel = describeStatusFilter(status);
+			const lines: string[] = [];
+			lines.push(`Search: "${query}" | ${total} results`);
+			lines.push("");
+
+			const headers = ["code", "status", "priority", "phase", "score", "title"];
+			const colWidths = headers.map((h) => h.length);
+			for (const st of paginated) {
+				colWidths[0] = Math.max(colWidths[0], st.task.task_code.length);
+				colWidths[1] = Math.max(colWidths[1], st.task.status.length);
+				colWidths[2] = Math.max(colWidths[2], String(st.task.priority).length);
+				colWidths[3] = Math.max(colWidths[3], (st.task.phase || "").length);
+				colWidths[4] = Math.max(colWidths[4], st.finalScore.toFixed(4).length);
+			}
+
+			const pad = (s: string, w: number) => s.padEnd(w);
+			const sep = colWidths.map((w) => "-".repeat(w)).join(" | ");
+
+			lines.push("| " + headers.map((h, i) => pad(h, colWidths[i])).join(" | ") + " |");
+			lines.push("|-" + sep + "-|");
+
+			for (const st of paginated) {
+				const row = [
+					st.task.task_code,
+					st.task.status,
+					String(st.task.priority),
+					st.task.phase || "",
+					st.finalScore.toFixed(4),
+					st.task.title
+				];
+				lines.push("| " + row.map((s, i) => pad(s, colWidths[i])).join(" | ") + " |");
+			}
+
+			lines.push("");
+			lines.push(`Use task-detail with task_code for full details.`);
+			contentSummary = lines.join("\n");
+		} else {
+			contentSummary = `No tasks found for "${query}" in repo "${repo}".`;
+		}
 	}
 
 	logger.info("[Tool] task-read/search", {

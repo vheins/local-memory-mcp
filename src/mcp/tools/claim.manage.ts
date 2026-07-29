@@ -7,15 +7,30 @@ import { UUID_REGEX } from "../utils/uuid";
 /**
  * Summary builder for claim list results.
  */
-function buildClaimListSummary(repo: string, count: number, agent?: string, activeOnly?: boolean) {
-	const parts = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
+function buildClaimListSummary(
+	repo: string,
+	count: number,
+	agent?: string,
+	activeOnly?: boolean,
+	sampleClaims?: Array<{ task_code?: string | null; agent: string; role: string }>
+) {
+	const parts: string[] = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
+
+	if (sampleClaims && sampleClaims.length > 0) {
+		const lines = sampleClaims.slice(0, 3).map((c) => {
+			const code = c.task_code || "?";
+			return `  [${code}] by ${c.agent} (${c.role || "unknown"})`;
+		});
+		parts.push("", ...lines);
+		if (count > 3) parts.push(`  ... and ${count - 3} more`);
+	}
 
 	if (agent) {
-		parts.push(`Agent filter: ${agent}.`);
+		parts.push(`  Agent filter: ${agent}.`);
 	}
 
 	if (activeOnly) {
-		parts.push("Showing active claims only.");
+		parts.push("  Showing active claims only.");
 	}
 
 	return parts.join("\n");
@@ -197,7 +212,7 @@ async function handleListOp(
 		offset
 	};
 
-	const contentSummary = buildClaimListSummary(repo, rows.length, agent, activeOnly);
+	const contentSummary = buildClaimListSummary(repo, rows.length, agent, activeOnly, claims);
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,

@@ -142,7 +142,7 @@ export async function handleCreateSingle(
 				standard: data,
 				message: `Coding standard [${data.code}] "${data.title}" saved successfully.`
 			},
-			`Stored [${data.code}] "${data.title}" in repo "${data.repo}".`,
+			`Stored [${data.code}] "${data.title}" in "${data.repo}".`,
 			{
 				structuredContentPathHint: "standard",
 				includeJson: params.json

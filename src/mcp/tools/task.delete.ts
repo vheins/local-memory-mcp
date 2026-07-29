@@ -109,7 +109,7 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 			canceledCount: resolvedIds.length,
 			canceledCodes: deletedCodes
 		},
-		`Canceled ${resolvedIds.length} ${resolvedIds.length === 1 ? "task" : "tasks"} from repo "${repo}".`,
+		`Deleted ${resolvedIds.length} ${resolvedIds.length === 1 ? "task" : "tasks"} from "${repo}"${deletedCodes.length > 0 ? `: ${deletedCodes.join(", ")}` : ""}.`,
 		{ includeJson: validated.json }
 	);
 }

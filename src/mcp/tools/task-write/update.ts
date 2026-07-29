@@ -34,6 +34,9 @@ async function coreUpdate(
 	releasedClaims: number;
 	expiredHandoffs: number;
 	updatedFields: string[];
+	taskTitle: string;
+	oldStatus: string;
+	newStatus: string | undefined;
 }> {
 	const { owner, repo, id, comment, force } = params;
 
@@ -163,13 +166,17 @@ async function coreUpdate(
 		await enrichUpdatedTasks(updatedTasks, storage, vectors);
 	}
 
+	const existingTask = taskMap.get(targetIds[0])!;
 	return {
 		updatedCount,
 		updatedTasks,
 		completedTaskIds,
 		releasedClaims,
 		expiredHandoffs,
-		updatedFields: Object.keys(updates)
+		updatedFields: Object.keys(updates),
+		taskTitle: (updates.title as string) || existingTask.title,
+		oldStatus: existingTask.status,
+		newStatus: updates.status as string | undefined
 	};
 }
 
@@ -178,8 +185,17 @@ export async function handleUpdate(
 	storage: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {
-	const { updatedCount, updatedTasks, completedTaskIds, releasedClaims, expiredHandoffs, updatedFields } =
-		await coreUpdate(params, storage, vectors);
+	const {
+		updatedCount,
+		updatedTasks,
+		completedTaskIds,
+		releasedClaims,
+		expiredHandoffs,
+		updatedFields,
+		taskTitle,
+		oldStatus,
+		newStatus
+	} = await coreUpdate(params, storage, vectors);
 
 	const fieldsStr = updatedFields.length > 0 ? updatedFields.join(", ") : "none";
 	let summaryText: string;
@@ -188,10 +204,11 @@ export async function handleUpdate(
 			params.status === "completed"
 				? ` (completed with commit ${params.commit_id}, ${(params.changed_files || []).length} files changed)`
 				: "";
-		summaryText = `Updated [${updatedTasks[0].code}] in repo "${params.repo}": fields ${fieldsStr}.${extra}`;
+		const transition = oldStatus && newStatus && oldStatus !== newStatus ? ` ${oldStatus} → ${newStatus}` : "";
+		summaryText = `Updated [${updatedTasks[0].code}] "${taskTitle}"${transition} in "${params.repo}" — ${fieldsStr}.${extra}`;
 	} else {
 		const tasksStr = updatedTasks.map((t) => `[${t.code}]`).join(", ");
-		summaryText = `Updated ${updatedCount} tasks in repo "${params.repo}": ${tasksStr}.`;
+		summaryText = `Updated ${updatedCount} tasks in "${params.repo}" — ${tasksStr}.`;
 	}
 	if (releasedClaims || expiredHandoffs) {
 		summaryText += ` Auto-closed coordination: released ${releasedClaims} ${releasedClaims === 1 ? "claim" : "claims"}, expired ${expiredHandoffs} ${expiredHandoffs === 1 ? "handoff" : "handoffs"}.`;

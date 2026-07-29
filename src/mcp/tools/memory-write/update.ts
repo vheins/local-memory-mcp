@@ -109,7 +109,7 @@ export async function handleUpdate(
 			repo: existing.scope.repo,
 			updatedFields: Object.keys(updates)
 		},
-		`Updated [${existing.code}] "${existing.title}" in repo "${existing.scope.repo}": fields ${Object.keys(updates).join(", ") || "none"}.`,
+		`Updated [${existing.code}] "${existing.title}" in "${existing.scope.repo}" — ${Object.keys(updates).join(", ") || "none"}.`,
 		{
 			structuredContentPathHint: "updatedFields",
 			includeJson: json
@@ -175,7 +175,7 @@ export async function handleAcknowledge(
 			code: memory.code,
 			status
 		},
-		`Acknowledged [${memory.code}] as "${status}" in repo "${memory.scope.repo}".`,
+		`Acknowledged [${memory.code}] as "${status}" in "${memory.scope.repo}".`,
 		{
 			structuredContentPathHint: "status",
 			includeJson: json

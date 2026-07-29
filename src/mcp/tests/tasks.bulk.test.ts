@@ -67,7 +67,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 		});
 
 		expect(res.isError).toBe(false);
-		expect(getTextContent(res)).toContain(`Created 2 tasks in repo "${REPO}`);
+		expect(getTextContent(res)).toContain(`Created 2 tasks in "${REPO}`);
 
 		const tasks = db.tasks.getTasksByRepo("test", REPO);
 		expect(tasks.length).toBe(2);
@@ -266,7 +266,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 			arguments: { repo: REPO, owner: "test", status: "completed" }
 		});
 
-		expect(getTextContent(result)).toContain("Current Available Tasks:");
+		expect(getTextContent(result)).toContain("Task List —");
 		expect(getTextContent(result)).toContain("### Completed");
 		expect(getTextContent(result)).toMatch(
 			/\| SUM-001 \| completed \| 3 \| implementation \| \d{4}-\d{2}-\d{2} \d{2}:\d{2} \| Completed task \|/
@@ -373,7 +373,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 			}
 		});
 
-		expect(getTextContent(delRes)).toContain(`Canceled 2 tasks from repo "${REPO}`);
+		expect(getTextContent(delRes)).toContain(`Deleted 2 tasks from "${REPO}`);
 		const remainingTasks = db.tasks.getTasksByRepo("test", REPO);
 		expect(remainingTasks.length).toBe(3); // soft-delete keeps records
 		expect(remainingTasks.filter((t) => t.status !== "canceled").length).toBe(1);
@@ -555,7 +555,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 			}
 		});
 
-		expect(getTextContent(res)).toContain(`Canceled 1 task from repo "${REPO}"`);
+		expect(getTextContent(res)).toContain(`Deleted 1 task from "${REPO}"`);
 
 		// Verify soft-delete: task still exists but is canceled
 		const afterDelete = db.tasks.getTaskByCode("test", REPO, "SDEL-001");
@@ -660,7 +660,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 			}
 		});
 
-		expect(getTextContent(res)).toContain(`Canceled 2 tasks from repo "${REPO}"`);
+		expect(getTextContent(res)).toContain(`Deleted 2 tasks from "${REPO}"`);
 
 		// Verify soft-delete: tasks exist but are canceled
 		const task1 = db.tasks.getTaskByCode("test", REPO, "BDEL-001");

@@ -79,7 +79,9 @@ export async function handleAgentContext(
 
 	// 4. Build formatted context block
 	const sections: string[] = [];
-	sections.push(`--- Active Context for ${repo} ---`);
+	sections.push(
+		`--- Active Context for "${repo}" --- (${memories.length} memories, ${activeTasks.length} tasks, ${uniqueDecisions.length} decisions)`
+	);
 	sections.push("");
 
 	// Memories section

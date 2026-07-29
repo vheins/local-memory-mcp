@@ -45,7 +45,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
-		expect(getPrimaryTextContent(delRes)).toContain("Deleted 1/1 standards from repo");
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 1 standard from");
 		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
 	});
 
@@ -76,7 +76,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
-		expect(getPrimaryTextContent(delRes)).toContain("Deleted 1/1 standards from repo");
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 1 standard from");
 		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
 	});
 
@@ -119,7 +119,7 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
-		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2/2 standards from repo");
+		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 standards from");
 		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
 	});
 });

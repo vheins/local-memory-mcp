@@ -155,7 +155,7 @@ export async function handleMemorySynthesize(
 			iterations,
 			toolCalls: totalToolCalls
 		},
-		`Synthesized answer for "${validated.objective}" using repository "${repo}".`,
+		`Synthesized answer for "${validated.objective}" in "${repo}" (${iterations} iterations, ${totalToolCalls} tool calls).`,
 		{
 			structuredContentPathHint: "answer",
 			includeJson: true

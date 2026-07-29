@@ -125,7 +125,7 @@ export async function handleCreateSingle(
 			priority: task.priority,
 			depends_on: task.depends_on
 		},
-		`Created [${task.task_code}] "${task.title}" in repo "${task.repo}" (status: ${task.status}).`,
+		`Created [${task.task_code}] "${task.title}" in "${task.repo}" (phase: ${task.phase}, priority: ${task.priority}, status: ${task.status}).`,
 		{ includeJson: params.json }
 	);
 }

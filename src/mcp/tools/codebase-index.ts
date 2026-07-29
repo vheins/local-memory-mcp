@@ -86,7 +86,7 @@ export async function handleCodebaseIndexRepository(
 
 		return createMcpResponse(
 			result,
-			`Indexed ${result.totalSymbols} symbols across ${result.totalFiles} files in ${result.durationMs}ms`,
+			`Indexed ${result.totalSymbols} symbols across ${result.totalFiles} files in ${result.durationMs}ms.`,
 			{ includeJson: true, contentSummary }
 		);
 	} catch (err) {

@@ -116,7 +116,12 @@ export async function handleBulk(
 								updates[field] = MemoryTypeSchema.parse(raw[field]);
 							} else {
 								updates[field] = raw[field] as
-									string | number | boolean | Record<string, unknown> | string[] | undefined;
+									| string
+									| number
+									| boolean
+									| Record<string, unknown>
+									| string[]
+									| undefined;
 							}
 						}
 					}
@@ -239,12 +244,21 @@ export async function handleBulk(
 	const successCount = results.length;
 	const errorCount = errors.length;
 
-	const summaryParts: string[] = [];
-	if (successCount > 0) {
-		summaryParts.push(`${successCount} succeeded`);
+	const byOp: Record<string, string[]> = { create: [], update: [], acknowledge: [] };
+	for (const r of results) {
+		const op = r.operation as string;
+		const code = r.code as string;
+		if (byOp[op]) {
+			byOp[op].push(code);
+		}
 	}
-	if (errorCount > 0) {
-		summaryParts.push(`${errorCount} failed`);
+
+	const opParts: string[] = [];
+	for (const [op, codes] of Object.entries(byOp)) {
+		if (codes.length === 0) continue;
+		const opLabel = op === "acknowledge" ? "ack" : op;
+		const sample = codes.length <= 3 ? codes.join(", ") : `${codes.slice(0, 3).join(", ")}, ... (${codes.length})`;
+		opParts.push(`${opLabel}: ${sample}`);
 	}
 
 	return createMcpResponse(
@@ -255,7 +269,7 @@ export async function handleBulk(
 			results,
 			...(errorCount > 0 ? { errors } : {})
 		},
-		`Processed ${successCount}/${items.length}${errorCount > 0 ? ` (${errorCount} failed)` : ""}.`,
+		`Processed ${successCount}/${items.length} — ${opParts.join("; ")}${errorCount > 0 ? `; ${errorCount} failed` : ""}.`,
 		{
 			structuredContentPathHint: "results",
 			includeJson: json

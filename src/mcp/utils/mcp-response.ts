@@ -52,8 +52,6 @@ export function createMcpResponse(
 	}
 ): McpResponse {
 	const { structuredContentPathHint, contentSummary, includeJson = false } = options || {};
-	// includeJson is reserved for future use in protocol negotiation
-	void includeJson;
 
 	// Pruning logic to save tokens for the agent
 	let finalData = data;
@@ -108,12 +106,12 @@ export function createMcpResponse(
 	}
 
 	const response: McpResponse = {
-		structuredContent: finalData,
 		isError: false
 	};
 
-	// structuredContent is always included so agents can access detail data.
-	// includeJson flag controls summary text hints only — data is never stripped.
+	if (includeJson) {
+		response.structuredContent = finalData;
+	}
 
 	response.content = content;
 

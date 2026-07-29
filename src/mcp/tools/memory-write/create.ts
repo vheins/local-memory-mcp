@@ -90,9 +90,9 @@ export async function handleCreate(
 			title: entry.title,
 			importance: entry.importance
 		},
-		`Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
+		`Stored [${entry.code}] "${entry.title}" (${entry.type}, imp:${entry.importance}) in "${entry.scope.repo}".`,
 		{
-			contentSummary: `Stored [${entry.code}] "${entry.title}" in repo "${entry.scope.repo}".`,
+			contentSummary: `Stored [${entry.code}] "${entry.title}" (${entry.type}, imp:${entry.importance}) in "${entry.scope.repo}".`,
 			structuredContentPathHint: "code",
 			includeJson: json
 		}

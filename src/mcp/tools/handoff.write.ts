@@ -103,7 +103,8 @@ async function coreCreate(
 		expires_at: params.expires_at ?? null
 	});
 
-	const contentSummary = `Created handoff [${handoff.id.slice(0, 8)}] in repo "${handoff.repo}": from=${handoff.from_agent}, to=${handoff.to_agent || "unassigned"}, status=${handoff.status}.`;
+	const excerpt = handoff.summary.length > 50 ? handoff.summary.slice(0, 50) + "..." : handoff.summary;
+	const contentSummary = `Created [${handoff.id.slice(0, 8)}] "${excerpt}" — ${handoff.from_agent}→${handoff.to_agent || "unassigned"} (${handoff.status}) in "${handoff.repo}".`;
 
 	return { handoff: handoff as unknown as Record<string, unknown>, contentSummary };
 }
@@ -147,7 +148,8 @@ async function coreUpdate(
 		status,
 		handoff: updated
 	};
-	const contentSummary = `Updated handoff [${params.id.slice(0, 8)}] to "${status}" in repo "${existing.repo}".`;
+	const excerpt = existing.summary.length > 50 ? existing.summary.slice(0, 50) + "..." : existing.summary;
+	const contentSummary = `Updated [${params.id.slice(0, 8)}] "${excerpt}" in "${existing.repo}" — ${existing.status} → ${status}.`;
 
 	return { result, contentSummary };
 }

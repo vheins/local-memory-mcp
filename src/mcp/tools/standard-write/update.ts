@@ -175,7 +175,7 @@ export async function handleUpdateSingle(
 				code: data.code,
 				updatedFields: data.updatedFields
 			},
-			`Updated [${data.code}] "${data.title}" in repo "${data.repo}": fields ${data.updatedFields.join(", ") || "none"}.`,
+			`Updated [${data.code}] "${data.title}" in "${data.repo}" — ${data.updatedFields.join(", ") || "none"}.`,
 			{
 				structuredContentPathHint: "updatedFields",
 				includeJson: params.json

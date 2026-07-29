@@ -12,8 +12,17 @@ export async function handleMemorySummarize(params: Record<string, unknown>, db:
 
 	const content = `Updated summary for repo "${validated.repo}" with ${validated.signals.length} signals:\n\n${fullSummary}`;
 
-	return createMcpResponse(null, content, {
-		contentSummary: content,
-		includeJson: validated.json
-	});
+	return createMcpResponse(
+		{
+			repo: validated.repo,
+			signals: validated.signals,
+			signalCount: validated.signals.length,
+			owner: validated.owner
+		},
+		content,
+		{
+			contentSummary: content,
+			includeJson: validated.json
+		}
+	);
 }

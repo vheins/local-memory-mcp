@@ -57,10 +57,6 @@ const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function capitalize(str: string): string {
-	return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
 function computeRecencyScore(createdAt: string): number {
 	const ageMs = Date.now() - new Date(createdAt).getTime();
 	if (ageMs <= 0) return 1;
@@ -83,25 +79,6 @@ function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): Mem
 		if (untilMs < Infinity && createdAtMs >= untilMs) return false;
 		return true;
 	});
-}
-
-function buildGroupedTable(rows: MemoryEntry[]): string {
-	const byType: Record<string, MemoryEntry[]> = {};
-	for (const m of rows) {
-		const t = m.type || "unknown";
-		if (!byType[t]) byType[t] = [];
-		byType[t].push(m);
-	}
-	const parts: string[] = [];
-	for (const [memType, items] of Object.entries(byType)) {
-		parts.push(`### ${capitalize(memType)}`, "");
-		parts.push("| code | importance | title |", "|------|------------|-------|");
-		for (const m of items) {
-			parts.push(`| ${m.code || "-"} | ${m.importance} | ${m.title} |`);
-		}
-		parts.push("");
-	}
-	return parts.join("\n").trim();
 }
 
 // =====================================================================
@@ -290,8 +267,29 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 
 	let contentSummary: string;
 	if (paginatedResults.length > 0) {
-		const grouped = buildGroupedTable(paginatedResults);
-		contentSummary = grouped + "\n\nUse memory-read with id (or code) for full content.";
+		const parts: string[] = [];
+
+		// Header: query + pagination
+		parts.push(
+			`Search: "${params.query}" | ${paginatedResults.length} of ${total} results | offset ${params.offset} limit ${params.limit}`
+		);
+		parts.push("");
+
+		// Compact table
+		parts.push("| code    | imp | type      | created    | tags        | title");
+		parts.push("|---------|-----|-----------|------------|-------------|------");
+		for (const m of paginatedResults) {
+			const code = (m.code || "-").padEnd(8);
+			const imp = String(m.importance).padEnd(3);
+			const type = (m.type || "").padEnd(10);
+			const created = (m.created_at.split("T")[0] || "-").padEnd(11);
+			const tags = m.tags.length > 0 ? m.tags.join(",").padEnd(12) : "-".padEnd(12);
+			parts.push(`| ${code} | ${imp} | ${type} | ${created} | ${tags} | ${m.title}`);
+		}
+		parts.push("");
+
+		parts.push("Use memory-read with id (or code) for full content.");
+		contentSummary = parts.join("\n");
 	} else {
 		contentSummary = `No memories found for "${params.query}" in repo "${params.repo}".`;
 	}
@@ -323,6 +321,33 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	});
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function formatMemoryDetail(memory: MemoryEntry, showId?: boolean): string {
+	const lines: string[] = [`Code: ${memory.code || "-"}`];
+	if (showId) lines.push(`ID: ${memory.id}`);
+	lines.push(
+		`Title: ${memory.title}`,
+		`Type: ${memory.type}`,
+		`Importance: ${memory.importance}`,
+		`Status: ${memory.status}`,
+		`Tags: ${memory.tags.length > 0 ? memory.tags.join(", ") : "-"}`,
+		`Created: ${memory.created_at}`,
+		`Updated: ${memory.updated_at}`
+	);
+	if (memory.scope?.repo) lines.push(`Repo: ${memory.scope.repo}`);
+	if (memory.scope?.folder) lines.push(`Folder: ${memory.scope.folder}`);
+	if (memory.scope?.language) lines.push(`Language: ${memory.scope.language}`);
+	if (memory.content) lines.push("", "--- Content ---", memory.content);
+	return lines.join("\n");
+}
+
+function formatBulkDetail(memories: MemoryEntry[]): string {
+	const SEPARATOR = "━".repeat(44);
+	const parts = memories.map((m) => SEPARATOR + "\n" + formatMemoryDetail(m, true));
+	return `Bulk detail — ${memories.length} memories\n\n${parts.join("\n")}\n\nUse memory-read with id (or code) for full content.`;
+}
+
 // =====================================================================
 //  GET DETAIL MODE — single or bulk by id/code
 // =====================================================================
@@ -333,8 +358,7 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 	// Bulk detail via ids array
 	if (ids !== undefined && ids.length > 0) {
 		const memories = db.memories.getByIds(ids);
-		const contentSummary =
-			memories.length > 0 ? `Found ${memories.length} memory/memories by ids.` : "No memories found for given ids.";
+		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given ids.";
 		const kgContext = fetchAggregatedKgContext(
 			db,
 			repo,
@@ -354,8 +378,7 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 		const memories: MemoryEntry[] = codes
 			.map((c: string) => db.memories.getByCode(c, owner, repo))
 			.filter((m: MemoryEntry | null): m is MemoryEntry => m !== null);
-		const contentSummary =
-			memories.length > 0 ? `Found ${memories.length} memory/memories by codes.` : "No memories found for given codes.";
+		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given codes.";
 		const kgContext = fetchAggregatedKgContext(
 			db,
 			repo,
@@ -382,19 +405,7 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 		throw new Error(`Memory not found: ${id || code}`);
 	}
 
-	const lines: string[] = [
-		`Code: ${memory.code || "-"}`,
-		`ID: ${memory.id}`,
-		`Title: ${memory.title}`,
-		`Type: ${memory.type}`,
-		`Importance: ${memory.importance}`,
-		`Created: ${memory.created_at}`
-	];
-	if (memory.scope?.repo) lines.push(`Repo: ${memory.scope.repo}`);
-	if (memory.scope?.folder) lines.push(`Folder: ${memory.scope.folder}`);
-	if (memory.content) lines.push("", "--- Content ---", memory.content);
-
-	const content = lines.join("\n");
+	const content = formatMemoryDetail(memory);
 
 	const kgContext = fetchKgContext(db, repo, memory.title, "memory");
 	const data: Record<string, unknown> = { memory };
@@ -448,17 +459,33 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 	if (total > 0) {
 		const parts: string[] = [];
 
-		// Stats by type
-		for (const [memType, count] of Object.entries(byType)) {
-			if (count > 0) {
-				parts.push(`${capitalize(memType)}: ${count}`);
-			}
-		}
+		// Header: total + inline stats
+		const statsLine = Object.entries(byType)
+			.filter(([, c]) => c > 0)
+			.map(([t, c]) => `${t}: ${c}`)
+			.join(" · ");
+		parts.push(`Memory Timeline — ${total} total${rows.length < total ? ` (showing ${rows.length})` : ""}`);
+		if (statsLine) parts.push(statsLine);
 		parts.push("");
 
-		// Grouped table
-		const grouped = buildGroupedTable(rows);
-		if (grouped) parts.push(grouped);
+		// Timeline grouped by created_at date
+		const dateGroups: Map<string, MemoryEntry[]> = new Map();
+		const sortedByDate = [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+		for (const row of sortedByDate) {
+			const dateKey = row.created_at.split("T")[0];
+			if (!dateGroups.has(dateKey)) dateGroups.set(dateKey, []);
+			dateGroups.get(dateKey)!.push(row);
+		}
+
+		for (const [date, entries] of dateGroups) {
+			parts.push(date);
+			for (const entry of entries) {
+				const code = (entry.code || "-").padEnd(8);
+				const type = (entry.type || "").padEnd(10);
+				parts.push(`  ${code} [${entry.importance}]  ${type}  ${entry.title}`);
+			}
+			parts.push("");
+		}
 
 		parts.push("Use memory-read with id (or code) for full content.");
 		contentSummary = parts.join("\n").trim();

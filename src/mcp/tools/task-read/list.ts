@@ -78,7 +78,12 @@ export async function handleListMode(
 		}
 
 		if (Object.keys(tasksByStatus).length > 0) {
-			parts.push("Current Available Tasks:");
+			const statusBreakdown = Object.entries(tasksByStatus)
+				.map(([sts, items]) => `${sts.toLowerCase()}: ${items.length}`)
+				.join(" · ");
+			parts.push(`Task List — ${rows.length} total in repo "${repo}" (showing ${rows.length})`);
+			parts.push(statusBreakdown);
+			parts.push("");
 			for (const [sts, items] of Object.entries(tasksByStatus)) {
 				if (items.length > 0) {
 					parts.push("");

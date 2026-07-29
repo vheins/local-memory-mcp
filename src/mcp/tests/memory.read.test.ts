@@ -241,7 +241,7 @@ describe("MCP Local Memory - memory-read (Search, Detail, Recap)", () => {
 		});
 
 		expect(detailRes.structuredContent.memories).toHaveLength(2);
-		expect(getPrimaryTextContent(detailRes)).toContain("Found 2");
+		expect(getPrimaryTextContent(detailRes)).toContain("Bulk detail — 2");
 	});
 
 	it("should get DETAIL bulk by codes[] via memory-read", async () => {
@@ -280,7 +280,7 @@ describe("MCP Local Memory - memory-read (Search, Detail, Recap)", () => {
 		});
 
 		expect(detailRes.structuredContent.memories).toHaveLength(2);
-		expect(getPrimaryTextContent(detailRes)).toContain("Found 2");
+		expect(getPrimaryTextContent(detailRes)).toContain("Bulk detail — 2");
 	});
 
 	it("should throw error for DETAIL of non-existent memory", async () => {

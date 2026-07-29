@@ -168,7 +168,7 @@ export async function handleBulk(
 			content: [
 				{
 					type: "text",
-					text: `Processed ${succeeded.length}/${items.length} in repo "${repo}" (${failed.length} failed). Errors: ${failed.map((r) => `[${r.index}] ${r.error}`).join("; ")}`
+					text: `Processed ${succeeded.length}/${items.length} in "${repo}" (${failed.length} failed). Errors: ${failed.map((r) => `[${r.index}] ${r.error}`).join("; ")}`
 				}
 			],
 			structuredContent: {
@@ -199,11 +199,23 @@ export async function handleBulk(
 			.filter((r) => r.operation === "create" && r.success && r.code)
 			.map((r) => `[${r.code}]`)
 			.join(", ");
-		summaryText = `Created ${createCount} ${createCount === 1 ? "task" : "tasks"} in repo "${repo}": ${createdCodes}.`;
+		summaryText = `Created ${createCount} ${createCount === 1 ? "task" : "tasks"} in "${repo}": ${createdCodes}.`;
 	} else if (createCount === 0) {
-		summaryText = `Updated ${updateCount} ${updateCount === 1 ? "task" : "tasks"} in repo "${repo}".`;
+		const codes = results
+			.filter((r) => r.operation === "update" && r.success && r.code)
+			.map((r) => r.code)
+			.join(", ");
+		summaryText = `Updated ${updateCount} ${updateCount === 1 ? "task" : "tasks"} in "${repo}": ${codes}.`;
 	} else {
-		summaryText = `Processed ${createCount} creates + ${updateCount} updates in repo "${repo}".`;
+		const createCodes = results
+			.filter((r) => r.operation === "create" && r.success && r.code)
+			.map((r) => r.code)
+			.join(", ");
+		const updateCodes = results
+			.filter((r) => r.operation === "update" && r.success && r.code)
+			.map((r) => r.code)
+			.join(", ");
+		summaryText = `Processed ${items.length} in "${repo}" — create: ${createCodes}; update: ${updateCodes}.`;
 	}
 
 	return createMcpResponse(

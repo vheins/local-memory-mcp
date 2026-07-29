@@ -89,7 +89,8 @@ function coreDetail(id: string, json: boolean, storage: SQLiteStore): McpRespons
 		throw new Error(`Handoff not found: ${id}`);
 	}
 
-	const contentSummary = `Handoff [${id.slice(0, 8)}] in repo "${handoff.repo}": from=${handoff.from_agent}, to=${handoff.to_agent || "unassigned"}, status=${handoff.status}.`;
+	const excerpt = handoff.summary.length > 60 ? handoff.summary.slice(0, 60) + "..." : handoff.summary;
+	const contentSummary = `Handoff [${id.slice(0, 8)}] "${excerpt}" — ${handoff.from_agent}→${handoff.to_agent || "unassigned"} (${handoff.status})`;
 
 	return createMcpResponse(handoff, contentSummary, {
 		contentSummary,

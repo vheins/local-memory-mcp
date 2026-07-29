@@ -13,6 +13,40 @@ import { UUID_REGEX } from "../../utils/uuid.js";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query.js";
 import { StandardReadInput } from "../schemas/standard-read.js";
 
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function formatStandardDetail(s: CodingStandardEntry): string[] {
+	const lines: string[] = [
+		...(s.code ? [`Code: ${s.code}`] : [`ID: ${s.id}`]),
+		`Title: ${s.title}`,
+		`Parent ID: ${s.parent_id || "-"}`,
+		`Context: ${s.context}`,
+		`Version: ${s.version}`,
+		`Language: ${s.language || "-"}`,
+		`Scope: ${s.is_global ? "global" : s.repo || "-"}`,
+		`Created: ${s.created_at}`,
+		`Updated: ${s.updated_at}`
+	];
+
+	if (s.stack.length > 0) lines.push(`Stack: ${s.stack.join(", ")}`);
+	if (s.tags.length > 0) lines.push(`Tags: ${s.tags.join(", ")}`);
+	if (Object.keys(s.metadata).length > 0) lines.push(`Metadata: ${JSON.stringify(s.metadata)}`);
+	if (s.content) {
+		lines.push("", "--- Content ---", s.content);
+	}
+	return lines;
+}
+
+function formatBulkDetail(standards: CodingStandardEntry[]): string {
+	const SEPARATOR = "\n" + "━".repeat(46) + "\n";
+	return (
+		standards.length +
+		" standard details\n" +
+		SEPARATOR +
+		standards.map((s) => formatStandardDetail(s).join("\n")).join(SEPARATOR)
+	);
+}
+
 // ── Detail handler ──────────────────────────────────────────────────────
 
 export async function handleDetailMode(validated: StandardReadInput, db: SQLiteStore): Promise<McpResponse> {
@@ -23,8 +57,7 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 		const standards = db.standards.getByIds(ids);
 		// NOTE: hit_count intentionally NOT incremented on read
 
-		const lines =
-			standards.length > 0 ? `Found ${standards.length} standards by IDs` : "No standards found for the given IDs";
+		const summary = standards.length > 0 ? formatBulkDetail(standards) : "No standards found for the given IDs";
 
 		const kgContext = fetchAggregatedKgContext(
 			db,
@@ -41,8 +74,8 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 				mode: "detail" as const,
 				...data
 			},
-			lines,
-			{ includeJson: validated.json, contentSummary: lines }
+			summary,
+			{ includeJson: validated.json, contentSummary: summary }
 		);
 	}
 
@@ -53,8 +86,7 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 			.filter((s): s is CodingStandardEntry => s !== null);
 		// NOTE: hit_count intentionally NOT incremented on read
 
-		const lines =
-			standards.length > 0 ? `Found ${standards.length} standards by codes` : "No standards found for the given codes";
+		const summary = standards.length > 0 ? formatBulkDetail(standards) : "No standards found for the given codes";
 
 		const kgContext = fetchAggregatedKgContext(
 			db,
@@ -71,8 +103,8 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 				mode: "detail" as const,
 				...data
 			},
-			lines,
-			{ includeJson: validated.json, contentSummary: lines }
+			summary,
+			{ includeJson: validated.json, contentSummary: summary }
 		);
 	}
 
@@ -91,27 +123,7 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 
 	// NOTE: hit_count intentionally NOT incremented on read
 
-	const lines: string[] = [
-		`ID: ${standard.id}`,
-		...(standard.code ? [`Code: ${standard.code}`] : []),
-		`Title: ${standard.title}`,
-		`Parent ID: ${standard.parent_id || "-"}`,
-		`Context: ${standard.context}`,
-		`Version: ${standard.version}`,
-		`Language: ${standard.language || "-"}`,
-		`Scope: ${standard.is_global ? "global" : standard.repo || "-"}`,
-		`Created: ${standard.created_at}`,
-		`Updated: ${standard.updated_at}`
-	];
-
-	if (standard.stack.length > 0) lines.push(`Stack: ${standard.stack.join(", ")}`);
-	if (standard.tags.length > 0) lines.push(`Tags: ${standard.tags.join(", ")}`);
-	if (Object.keys(standard.metadata).length > 0) lines.push(`Metadata: ${JSON.stringify(standard.metadata)}`);
-	if (standard.content) {
-		lines.push("", "--- Content ---", standard.content);
-	}
-
-	const content = lines.join("\n");
+	const content = formatStandardDetail(standard).join("\n");
 
 	const kgContext = fetchKgContext(db, repo ?? "", standard.title, "standard");
 	const data: Record<string, unknown> = { standard };
