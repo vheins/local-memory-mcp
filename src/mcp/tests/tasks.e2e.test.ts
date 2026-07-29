@@ -211,7 +211,7 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 		expect(task?.est_tokens).toBe(0);
 	});
 
-	it("requires est_tokens when changing task status to completed", async () => {
+	it("allows completing task without est_tokens", async () => {
 		await router("tools/call", {
 			name: "task-write",
 			arguments: {
@@ -219,8 +219,8 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 				owner: "test",
 				task_code: "TASK-003B",
 				phase: "implementation",
-				title: "Completion requires token estimate",
-				description: "Used to verify completed status analytics requirement",
+				title: "Completion without token estimate",
+				description: "Used to verify est_tokens is optional on completion",
 				status: "backlog",
 				priority: 3
 			}
@@ -242,20 +242,22 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 			}
 		});
 
-		await expect(
-			router("tools/call", {
-				name: "task-write",
-				arguments: {
-					owner: "test",
-					repo: REPO,
-					id: taskId,
-					status: "completed",
-					comment: "Finished work but forgot token estimate",
-					agent: "Agent E",
-					role: "backend"
-				}
-			})
-		).rejects.toThrow("est_tokens is required when changing task status to completed");
+		// Should succeed — est_tokens is now optional on completion
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				id: taskId,
+				status: "completed",
+				comment: "Finished work without token estimate",
+				agent: "Agent E",
+				role: "backend"
+			}
+		});
+
+		const completed = db.tasks.getTaskById(taskId!);
+		expect(completed?.status).toBe("completed");
 	});
 
 	it("stores standalone comments without mutating description", async () => {

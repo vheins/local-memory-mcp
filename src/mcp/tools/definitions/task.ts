@@ -93,7 +93,7 @@ export const TASK_TOOL_DEFINITIONS = [
 				est_tokens: {
 					type: "number",
 					minimum: 0,
-					description: "Estimated token budget. Required when completing a task."
+					description: "Estimated token budget."
 				},
 				commit_id: {
 					type: "string",

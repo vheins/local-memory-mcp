@@ -29,10 +29,6 @@ export function validateStatusTransition(
 		return `Cannot transition from '${existingStatus}' directly to 'completed'. Must go through 'in_progress' first.`;
 	}
 
-	if (newStatus === "completed" && (estTokens === undefined || estTokens < 0)) {
-		return "est_tokens is required when changing task status to completed";
-	}
-
 	return null;
 }
 
