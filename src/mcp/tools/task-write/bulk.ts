@@ -195,7 +195,11 @@ export async function handleBulk(
 	const updateCount = results.filter((r) => r.operation === "update" && r.success).length;
 	let summaryText: string;
 	if (updateCount === 0) {
-		summaryText = `Created ${createCount} ${createCount === 1 ? "task" : "tasks"} in repo "${repo}".`;
+		const createdCodes = results
+			.filter((r) => r.operation === "create" && r.success && r.code)
+			.map((r) => `[${r.code}]`)
+			.join(", ");
+		summaryText = `Created ${createCount} ${createCount === 1 ? "task" : "tasks"} in repo "${repo}": ${createdCodes}.`;
 	} else if (createCount === 0) {
 		summaryText = `Updated ${updateCount} ${updateCount === 1 ? "task" : "tasks"} in repo "${repo}".`;
 	} else {

@@ -112,9 +112,8 @@ export function createMcpResponse(
 		isError: false
 	};
 
-	if (includeJson === false) {
-		delete response.structuredContent;
-	}
+	// structuredContent is always included so agents can access detail data.
+	// includeJson flag controls summary text hints only — data is never stripped.
 
 	response.content = content;
 

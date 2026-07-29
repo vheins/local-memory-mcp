@@ -6,33 +6,71 @@ import { HandoffReadSchema } from "./schemas";
 // Summary builders
 // ---------------------------------------------------------------------------
 
-function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
-	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
+function buildHandoffListSummary(
+	repo: string,
+	count: number,
+	status?: string,
+	fromAgent?: string,
+	toAgent?: string,
+	sampleHandoffs?: Array<{ id: string; from_agent: string; to_agent: string | null; status: string; summary: string }>
+) {
+	const parts: string[] = [];
+	const header = `Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`;
+	parts.push(header);
+
+	if (sampleHandoffs && sampleHandoffs.length > 0) {
+		const lines = sampleHandoffs
+			.slice(0, 3)
+			.map(
+				(h) => `  [${h.id.slice(0, 8)}] ${h.from_agent}→${h.to_agent || "?"} (${h.status}): ${h.summary.slice(0, 60)}`
+			);
+		parts.push("", ...lines);
+		if (count > 3) parts.push(`  ... and ${count - 3} more`);
+	}
 
 	if (status) {
-		parts.push(`Status filter: ${status}.`);
+		parts.push(`  Status filter: ${status}.`);
 	}
 
 	if (fromAgent) {
-		parts.push(`From agent: ${fromAgent}.`);
+		parts.push(`  From agent: ${fromAgent}.`);
 	}
 
 	if (toAgent) {
-		parts.push(`To agent: ${toAgent}.`);
+		parts.push(`  To agent: ${toAgent}.`);
 	}
 
 	return parts.join("\n");
 }
 
-function buildClaimListSummary(repo: string, count: number, agent?: string, activeOnly?: boolean) {
-	const parts = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
+function buildClaimListSummary(
+	repo: string,
+	count: number,
+	agent?: string,
+	activeOnly?: boolean,
+	sampleClaims?: Array<{ id: string; task_id: string; agent: string; status?: string }>
+) {
+	const parts: string[] = [];
+	const header = `Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`;
+	parts.push(header);
+
+	if (sampleClaims && sampleClaims.length > 0) {
+		const lines = sampleClaims
+			.slice(0, 3)
+			.map(
+				(c) =>
+					`  [${c.id.slice(0, 8)}] task=${c.task_id?.slice(0, 8) || "?"} agent=${c.agent} (${c.status || "active"})`
+			);
+		parts.push("", ...lines);
+		if (count > 3) parts.push(`  ... and ${count - 3} more`);
+	}
 
 	if (agent) {
-		parts.push(`Agent filter: ${agent}.`);
+		parts.push(`  Agent filter: ${agent}.`);
 	}
 
 	if (activeOnly) {
-		parts.push("Showing active claims only.");
+		parts.push("  Showing active claims only.");
 	}
 
 	return parts.join("\n");
@@ -103,7 +141,7 @@ function coreListClaims(
 		offset
 	};
 
-	const contentSummary = buildClaimListSummary(repo, rows.length, agent, activeOnly);
+	const contentSummary = buildClaimListSummary(repo, rows.length, agent, activeOnly, claims);
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
@@ -172,7 +210,7 @@ function coreListHandoffs(
 		offset
 	};
 
-	const contentSummary = buildHandoffListSummary(repo, rows.length, status, fromAgent, toAgent);
+	const contentSummary = buildHandoffListSummary(repo, rows.length, status, fromAgent, toAgent, handoffs);
 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
