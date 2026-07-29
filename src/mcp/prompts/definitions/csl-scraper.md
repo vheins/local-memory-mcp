@@ -14,6 +14,6 @@ Fetch URL via web_fetch. Extract atomic rules: 1 entry=1 rule, keep code example
 
 Refuse if URL unreachable, content not normative, or no source-backed standards extractable.
 
-For detailed FSM execution (G0→S5 with guards), load the `csl-scraper` skill.
+For detailed FSM execution (G0→S5 with guards), load the `csl` skill.
 
 Source: {{source_url}} Owner: {{current_owner}} Repo: {{current_repo}}

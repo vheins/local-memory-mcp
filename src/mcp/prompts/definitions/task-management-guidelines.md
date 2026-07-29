@@ -11,4 +11,4 @@ Plan via task-create (Research→Strategy→Execution→Validation). Claim via t
 
 MUST transition backlog/pending → in_progress → completed. Never skip in_progress.
 
-For detailed FSM execution, load the `task-management-guidelines` skill.
+For detailed FSM execution, load the `task-management` skill.

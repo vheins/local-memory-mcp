@@ -14,6 +14,6 @@ Sequence: tech-stack-selection → architecture-design → domain-modeling → d
 
 Gates: approve stack+arch, approve domain+db, approve API contracts, final approval.
 
-For detailed FSM execution (A1→A6 with gates), load the `technical-planning` skill.
+For detailed FSM execution (A1→A6 with gates), load the `project-planning` skill → `rules/technical-planning`.
 
 Objective: {{objective}}

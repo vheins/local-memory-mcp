@@ -7,6 +7,6 @@ agent: Documentation Specialist
 
 ## Documentation Sync
 
-Search decision memories via agent-context OR memory-search. Read README.md + docs/**/\*.md + .agents/documents/**/*. Compare to identify gaps. Propose specific changes to align docs with current source of truth.
+Search decision memories via agent-context OR memory-search. Read README.md + docs/**/\*.md + .agents/documents/**/\*. Compare to identify gaps. Propose specific changes to align docs with current source of truth.
 
-For detailed FSM execution (S0→S4 with guards), load the `documentation-sync` skill.
+For detailed FSM execution (S0→S4 with guards), load the `doc-sync` skill.

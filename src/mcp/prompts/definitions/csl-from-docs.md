@@ -14,6 +14,6 @@ Discover path (dir→list+read each, file→read). Extract atomic rules: 1 entry
 
 Refuse if path doesn't exist, content isn't normative, or no source-backed standards can be extracted.
 
-For detailed FSM execution (G0→S4 with guards), load the `csl-from-docs` skill.
+For detailed FSM execution (G0→S4 with guards), load the `csl` skill.
 
 Path: {{path}} Owner: {{current_owner}} Repo: {{current_repo}}

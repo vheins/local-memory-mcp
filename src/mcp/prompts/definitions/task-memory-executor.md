@@ -14,4 +14,4 @@ Sync identity, tasks, handoffs. Hydrate task details (cache once). Check depende
 
 Infinite loop until queue exhausted. Max 2 parallel sub-agents. Blocker handling: classify as internal (auto-create fix task) or external (keep blocked).
 
-For detailed FSM execution (S0→S9 with guards + blocker sub-FSM + backlog maintenance), load the `task-memory-executor` skill.
+For detailed FSM execution (S0→S9 with guards + blocker sub-FSM + backlog maintenance), load the `task-management` skill → `rules/executor`.

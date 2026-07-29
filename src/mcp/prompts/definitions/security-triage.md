@@ -20,6 +20,6 @@ Classify via web_search (CVE/CVSS). Assess exploitability (reachability + attack
 
 Web search MUST be delegated to a coding subagent (general/explore). Main agent must NOT execute web_search directly.
 
-For detailed FSM execution (S0→S5 with guards), load the `security-triage` skill.
+For detailed FSM execution (S0→S5 with guards), load the `security-audit` skill → `rules/security-triage`.
 
 Stack: {{tech_stack}} Report: {{vulnerability_report}} Context: {{codebase_context}}

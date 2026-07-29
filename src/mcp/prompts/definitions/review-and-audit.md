@@ -14,6 +14,6 @@ Sequential discovery: docs → code → UI. Pre-task analysis: agent-context + m
 
 Forbidden: NO code/edit/delete — MCP tools ONLY. Description format: Context & Analysis / Step & Implementation / Acceptance & Verification.
 
-For detailed FSM execution (S0→S4 with guards), load the `review-and-audit` skill.
+For detailed FSM execution (S0→S4 with guards), load the `review-audit` skill.
 
 Target: {{target}}

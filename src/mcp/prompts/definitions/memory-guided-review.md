@@ -12,6 +12,6 @@ agent: Code Auditor
 
 Search: memory-search + standard-search for context. Hydrate relevant entries via memory-detail. Evaluate compliance vs stored patterns, decisions, mistakes, standards. Suggest fixes citing source (memory|standard).
 
-For detailed FSM execution (S0→S4 with guards), load the `memory-guided-review` skill.
+For detailed FSM execution (S0→S4 with guards), load the `code-review` skill → `rules/memory-guided`.
 
 File: {{file_path}}

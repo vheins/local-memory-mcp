@@ -20,4 +20,4 @@ Sequential discovery: docs → code → UI. Pre-issue analysis: agent-context + 
 
 Forbidden: NO code/edit/delete — GitHub+MCP tools ONLY. Issue body format: Context & Analysis / Step & Implementation / Acceptance & Verification.
 
-For detailed FSM execution (S0→S4 with guards), load the `review-and-post-issue` skill.
+For detailed FSM execution (S0→S4 with guards), load the `review-audit` skill → `rules/audit`.

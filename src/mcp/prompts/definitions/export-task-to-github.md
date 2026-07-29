@@ -20,4 +20,4 @@ Fetch task via task-detail. Sync check via search_issues for task_code — if ex
 
 MCP + GitHub tools ONLY.
 
-For detailed FSM execution (S0→S5 with guards), load the `export-task-to-github` skill.
+For detailed FSM execution (S0→S5 with guards), load the `doc-sync` skill → `rules/export`.

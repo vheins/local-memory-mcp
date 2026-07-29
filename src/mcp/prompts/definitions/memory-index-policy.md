@@ -9,4 +9,4 @@ agent: Memory Auditor
 
 Only store durable + project-specific content. Forbidden: temporary discussions, opinions, generic knowledge, coordination state, file ownership, implementation rules (use standard-store). Classify type (code_fact|decision|mistake|pattern|task_archive). Scope correctly (is_global only if cross-repo). Store via memory-store with all required fields.
 
-For detailed FSM execution (G0→S3 with guards), load the `memory-index-policy` skill.
+For detailed FSM execution (G0→S3 with guards), load the `memory-management` skill → `rules/index-policy`.

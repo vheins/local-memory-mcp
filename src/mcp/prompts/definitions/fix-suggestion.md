@@ -18,6 +18,6 @@ agent: Debugging Expert
 
 Analyze inputs (tech_stack, bug_description, root_cause). Produce: explanation + before/after diff + meta checklist (config/migrations/deps) + regression test. Verify fix addresses root cause and test covers regression.
 
-For detailed FSM execution (S0→S2 with guards), load the `fix-suggestion` skill.
+For detailed FSM execution (S0→S2 with guards), load the `analysis-rca` skill → `rules/fix-suggestion`.
 
 Stack: {{tech_stack}} Bug: {{bug_description}} Root cause: {{root_cause}}
