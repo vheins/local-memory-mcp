@@ -92,7 +92,11 @@ export function createMcpResponse(
 		});
 	} else if (summary && summary.trim().length > 0) {
 		let text = summary.trim();
-		if (includeJson) {
+		const hasStructuredContent =
+			finalData != null &&
+			typeof finalData === "object" &&
+			(Array.isArray(finalData) ? finalData.length > 0 : Object.keys(finalData).length > 0);
+		if (includeJson && hasStructuredContent) {
 			text += ` ${
 				structuredContentPathHint
 					? `Read structuredContent.${structuredContentPathHint} for details.`

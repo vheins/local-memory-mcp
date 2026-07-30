@@ -106,8 +106,10 @@ export async function handleListMode(
 			parts.push(`Phase filter: ${phase}.`);
 		}
 
-		parts.push("");
-		parts.push("See task-detail with task_code for details.");
+		if (rows.length > 0) {
+			parts.push("");
+			parts.push("See task-detail with task_code for details.");
+		}
 
 		contentSummary = parts.join("\n").trim();
 	}

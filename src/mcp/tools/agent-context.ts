@@ -122,7 +122,9 @@ export async function handleAgentContext(
 		}
 	}
 	sections.push("");
-	sections.push("Use memory-detail with a memory code for full content.");
+	if (memories.length > 0 || activeTasks.length > 0 || uniqueDecisions.length > 0) {
+		sections.push("Use memory-detail with a memory code for full content.");
+	}
 
 	const contentSummary = sections.join("\n").trim();
 
