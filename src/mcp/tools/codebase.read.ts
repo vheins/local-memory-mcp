@@ -18,84 +18,9 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildArchitecture, renderDirTree } from "../codebase-index/services/architecture-service";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError, SymbolNotFoundError } from "../codebase-index/services/trace-service";
+import { blendVectorRanking } from "../codebase-index/services/vector-ranking";
 import type { CodebaseSymbol } from "../types/codebase-symbol";
 import { logger } from "../utils/logger";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// VECTOR BLENDING
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Apply SPEC-001 hybrid scoring to ranking results.
- *
- * Blends vector similarity (cosine) with the existing 5-tier text ranking score:
- *   final = (vector × 0.30) + (tier_score × 0.70)
- *
- * Within each rank tier, symbols are re-sorted by their blended score.
- * Falls back gracefully if vector search fails or returns nothing.
- */
-async function blendVectorRanking(
-	ranked: RankedSymbol[],
-	query: string,
-	repo: string,
-	vectors: VectorStore
-): Promise<RankedSymbol[]> {
-	if (ranked.length === 0) return ranked;
-
-	try {
-		const vectorResults = await vectors.search(query, ranked.length, repo, "codebase_symbol");
-		if (vectorResults.length === 0) return ranked;
-
-		// Build symbol_id → vector_score map
-		const vectorMap = new Map<string, number>();
-		for (const vr of vectorResults) {
-			vectorMap.set(vr.id, vr.score);
-		}
-
-		// Group by rank tier, preserving tier order
-		const tierGroups = new Map<RankTier, RankedSymbol[]>();
-		for (const rs of ranked) {
-			const group = tierGroups.get(rs.rankTier);
-			if (group) {
-				group.push(rs);
-			} else {
-				tierGroups.set(rs.rankTier, [rs]);
-			}
-		}
-
-		// Re-score within each tier using SPEC-001 hybrid formula
-		// final = (vector × 0.30) + (tier_score × 0.70)
-		const result: RankedSymbol[] = [];
-		for (const tier of [RankTier.Exact, RankTier.CamelCase, RankTier.Prefix, RankTier.Substring, RankTier.FTS5]) {
-			const group = tierGroups.get(tier);
-			if (!group || group.length === 0) continue;
-
-			// Compute blended score, sort by it descending
-			const withBlend = group.map((rs) => {
-				const vecScore = vectorMap.get(rs.symbol.id) ?? 0;
-				const blended = vecScore * 0.3 + rs.score * 0.7;
-				return { ...rs, blended };
-			});
-
-			withBlend.sort((a, b) => b.blended - a.blended);
-
-			// Write blended score back for output consistency
-			for (const item of withBlend) {
-				item.score = parseFloat(item.blended.toFixed(4));
-				delete (item as Record<string, unknown>).blended;
-			}
-
-			result.push(...withBlend);
-		}
-
-		return result;
-	} catch (err) {
-		logger.warn("[blendVectorRanking] Vector search failed, falling back to text-only ranking", {
-			error: err instanceof Error ? err.message : String(err)
-		});
-		return ranked;
-	}
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODE INFERENCE
@@ -138,15 +63,15 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 		try {
 			const result = traceSymbol(traceName, repo, symbols, validated.includeReferences);
 
-			const refTable =
+			const refList =
 				result.references.length > 0
-					? `\n\n### References (${result.references.length})\n\n| file | start_line | end_line |\n|------|------------|----------|\n${result.references
+					? `\n\n### References (${result.references.length})\n\n${result.references
 							.slice(0, 20)
-							.map((r) => `| ${r.filePath} | ${r.startLine} | ${r.endLine} |`)
+							.map((r) => `- ${r.filePath}:${r.startLine}-${r.endLine}`)
 							.join("\n")}${result.references.length > 20 ? `\n... and ${result.references.length - 20} more` : ""}`
 					: "";
 
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refTable}`;
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refList}`;
 
 			return createMcpResponse(
 				{ ...result, mode: "trace", originalName: traceName !== name ? name : undefined },
@@ -253,18 +178,28 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 
 	const symbols = db.codebaseSymbols.getSymbolsByFile(repo, filePath);
 
-	const symTable =
-		symbols.length > 0
-			? `\n\n| kind | start_line | end_line | name | exported |\n|------|------------|----------|------|----------|\n${symbols
-					.slice(0, 30)
-					.map(
-						(s) =>
-							`| ${s.kind} | ${s.start_line ?? "-"} | ${s.end_line ?? "-"} | ${s.name} | ${s.exported ? "yes" : "no"} |`
-					)
-					.join("\n")}`
-			: "";
+	let symList = "";
+	if (symbols.length > 0) {
+		symList =
+			`\n\n**Symbols**\n` +
+			symbols
+				.slice(0, 30)
+				.map((s) => {
+					const lineRange =
+						s.start_line != null
+							? s.end_line != null && s.end_line !== s.start_line
+								? `L${s.start_line}-L${s.end_line}`
+								: `L${s.start_line}`
+							: "-";
+					return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}`;
+				})
+				.join("\n");
+		if (symbols.length > 30) {
+			symList += `\n... and ${symbols.length - 30} more`;
+		}
+	}
 
-	const contentSummary = `Found ${symbols.length} symbols in ${filePath}${symTable}${symbols.length > 30 ? `\n... and ${symbols.length - 30} more` : ""}`;
+	const contentSummary = `Found ${symbols.length} symbols in ${filePath}${symList}`;
 
 	return createMcpResponse(
 		{
@@ -300,8 +235,8 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 	let archSummary = `Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${langEntries.length} languages`;
 
 	if (langEntries.length > 0) {
-		archSummary += `\n\n### Languages\n\n| Language | Files |\n|----------|------|\n`;
-		archSummary += langEntries.map(([lang, count]) => `| ${lang} | ${count} |`).join("\n");
+		archSummary += `\n\n### Languages\n\n`;
+		archSummary += langEntries.map(([lang, count]) => `- ${lang}: ${count} files`).join("\n");
 	}
 
 	const dirTreeOutput = renderDirTree(result.root, depth);
@@ -315,6 +250,53 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 }
 
 // ── UNIFIED SEARCH ───────────────────────────────────────────────────────
+
+/**
+ * Build a grouped-by-file list of search results in token-efficient format.
+ *
+ * Format:
+ *   ### Results: N symbols for "query" (showing M)
+ *
+ *   **file/path.ts**
+ *   - `kind` name Lstart-Lend (score: 0.XX)
+ */
+function formatSearchResultsGrouped(
+	results: Array<CodebaseSymbol & { rankTier: RankTier; score: number }>,
+	total: number,
+	query: string
+): string {
+	if (results.length === 0) return `### Results: 0 symbols for "${query}"`;
+
+	let out = `### Results: ${total} symbols for "${query}" (showing ${results.length})\n`;
+
+	// Group by file_path, preserving result order within each file
+	const groups = new Map<string, Array<CodebaseSymbol & { rankTier: RankTier; score: number }>>();
+	const groupOrder: string[] = [];
+	for (const s of results) {
+		if (!groups.has(s.file_path)) {
+			groups.set(s.file_path, []);
+			groupOrder.push(s.file_path);
+		}
+		groups.get(s.file_path)!.push(s);
+	}
+
+	for (const filePath of groupOrder) {
+		const symbols = groups.get(filePath)!;
+		out += `\n**${filePath}**\n`;
+		for (const s of symbols) {
+			const lineRange =
+				s.start_line != null
+					? s.end_line != null && s.end_line !== s.start_line
+						? `L${s.start_line}-L${s.end_line}`
+						: `L${s.start_line}`
+					: "-";
+			const scorePart = s.score != null ? ` (score: ${s.score.toFixed(2)})` : "";
+			out += `- \`${s.kind}\` ${s.name} ${lineRange}${scorePart}\n`;
+		}
+	}
+
+	return out;
+}
 
 /**
  * Unified search handler combining code-like 5-tier ranking with NL semantic search.
@@ -413,15 +395,7 @@ async function handleSearchMode(
 
 	const total = ranked.length;
 
-	const summary =
-		`| kind | file | start_line | end_line | score | symbol |\n` +
-		`|------|------|------------|----------|-------|--------|\n` +
-		results
-			.map(
-				(s) =>
-					`| ${s.kind} | ${s.file_path} | ${s.start_line ?? "-"} | ${s.end_line ?? "-"} | ${s.score?.toFixed(2) || "-"} | ${s.name} |`
-			)
-			.join("\n");
+	const contentSummary = formatSearchResultsGrouped(results, total, query);
 
 	return createMcpResponse(
 		{
@@ -434,7 +408,7 @@ async function handleSearchMode(
 			mode: "search"
 		},
 		`Found ${total} matching symbols for "${query}" (showing ${results.length}).`,
-		{ includeJson: true, contentSummary: summary }
+		{ includeJson: true, contentSummary }
 	);
 }
 
