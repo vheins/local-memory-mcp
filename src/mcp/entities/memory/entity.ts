@@ -2,6 +2,8 @@ import { BaseEntity } from "../../storage/base";
 import { MemoryEntry, MemoryRow, MemoryType } from "../../types/index";
 import { CountResult, TypeCountResult } from "../../types/common";
 import { VALID_COLUMNS, mergeStructuredData } from "./validation";
+import { BULK_UPDATE_CHUNK_SIZE } from "../../utils/constants";
+import { buildFtsMatchQuery } from "../../utils/fts";
 
 export class MemoryEntity extends BaseEntity {
 	insert(entry: MemoryEntry): void {
@@ -143,6 +145,40 @@ export class MemoryEntity extends BaseEntity {
 		return rows.map((row) => this.rowToMemoryEntry(row));
 	}
 
+	/**
+	 * Bulk-load memories by code with the same owner/repo/global scoping as
+	 * getByCode, but in a single query. Results preserve the input code order
+	 * (first match per code, mirroring per-code getByCode lookups).
+	 */
+	getMemoriesByCodes(codes: string[], owner?: string, repo?: string): MemoryEntry[] {
+		if (codes.length === 0) return [];
+		const placeholders = codes.map(() => "?").join(",");
+		let sql = `SELECT * FROM memories WHERE code IN (${placeholders})`;
+		const params: (string | null)[] = [...codes];
+		if (owner && repo) {
+			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
+			params.push(owner, repo);
+		}
+		const rows = this.all<MemoryRow>(sql, params);
+
+		const byCode = new Map<string, MemoryEntry>();
+		for (const row of rows) {
+			const entry = this.rowToMemoryEntry(row);
+			if (entry.code && !byCode.has(entry.code)) byCode.set(entry.code, entry);
+		}
+
+		const seen = new Set<string>();
+		const result: MemoryEntry[] = [];
+		for (const code of codes) {
+			const entry = byCode.get(code);
+			if (entry && !seen.has(code)) {
+				seen.add(code);
+				result.push(entry);
+			}
+		}
+		return result;
+	}
+
 	getStats(owner?: string, repo?: string): { total: number; byType: Record<string, number> } {
 		let sql = "SELECT type, COUNT(*) as count FROM memories";
 		const params: unknown[] = [];
@@ -170,8 +206,215 @@ export class MemoryEntity extends BaseEntity {
 		return { total, byType };
 	}
 
+	/**
+	 * FTS5-first keyword search over title/content/tags (MEM-367 / TASK-014).
+	 * Filters mirror the LIKE path in {@link searchByRepo} exactly (owner/repo,
+	 * status='active', not expired, optional type); ordering is bm25 relevance
+	 * first with the historical importance/created_at tie-break preserved.
+	 * Returns [] on any FTS error or unbuildable query — callers must fall
+	 * back to the LIKE path.
+	 */
+	searchByFts(query: string, owner: string, repo: string, type?: string, limit = 5): MemoryEntry[] {
+		try {
+			const safeQuery = buildFtsMatchQuery(query);
+			if (!safeQuery) return [];
+
+			const conditions = ["memories_fts MATCH ?"];
+			const params: (string | number)[] = [safeQuery];
+			if (owner) {
+				conditions.push("m.owner = ? AND m.repo = ?");
+				params.push(owner, repo);
+			} else {
+				conditions.push("m.repo = ?");
+				params.push(repo);
+			}
+			conditions.push("m.status = 'active'", "(m.expires_at IS NULL OR m.expires_at > ?)");
+			params.push(new Date().toISOString());
+			if (type) {
+				conditions.push("m.type = ?");
+				params.push(type);
+			}
+			params.push(limit);
+
+			const rows = this.all<MemoryRow>(
+				`SELECT m.*
+				 FROM memories_fts fts
+				 JOIN memories m ON m.rowid = fts.rowid
+				 WHERE ${conditions.join(" AND ")}
+				 ORDER BY bm25(memories_fts), m.importance DESC, m.created_at DESC
+				 LIMIT ?`,
+				params
+			);
+			return rows.map((row) => this.rowToMemoryEntry(row));
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * bm25-scored FTS search (MEM-367 §6.1): matching memories with their raw
+	 * `bm25(memories_fts)` scores, ordered most-relevant first. Scope mirrors
+	 * `memoryVectors.searchBySimilarity` — `(owner AND repo) OR is_global`,
+	 * active unless includeArchived, not expired. Used by memory.read.ts to
+	 * feed a min-max-normalized bm25 into the 0.30 keyword hybrid weight.
+	 */
+	searchByFtsScored(
+		query: string,
+		owner: string,
+		repo: string,
+		options: { type?: string; limit?: number; includeArchived?: boolean } = {}
+	): Array<{ memory: MemoryEntry; bm25: number }> {
+		const { type, limit = 100, includeArchived = false } = options;
+		try {
+			const safeQuery = buildFtsMatchQuery(query);
+			if (!safeQuery) return [];
+
+			const conditions = ["memories_fts MATCH ?"];
+			const params: (string | number)[] = [safeQuery];
+			if (owner) {
+				conditions.push("((m.owner = ? AND m.repo = ?) OR m.is_global = 1)");
+				params.push(owner, repo);
+			} else if (repo) {
+				conditions.push("m.repo = ?");
+				params.push(repo);
+			}
+			if (!includeArchived) conditions.push("m.status = 'active'");
+			conditions.push("(m.expires_at IS NULL OR m.expires_at > ?)");
+			params.push(new Date().toISOString());
+			if (type) {
+				conditions.push("m.type = ?");
+				params.push(type);
+			}
+			params.push(limit);
+
+			const rows = this.all<MemoryRow & { bm25_score: number }>(
+				`SELECT m.*, bm25(memories_fts) AS bm25_score
+				 FROM memories_fts fts
+				 JOIN memories m ON m.rowid = fts.rowid
+				 WHERE ${conditions.join(" AND ")}
+				 ORDER BY bm25_score
+				 LIMIT ?`,
+				params
+			);
+			return rows.map((row) => ({ memory: this.rowToMemoryEntry(row), bm25: row.bm25_score ?? 0 }));
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * Dashboard FTS fast path (MEM-367 §5.3): search clause replaced by the
+	 * FTS5 join while every other filter stays as an `m.*` predicate; the tag
+	 * filter deliberately remains `m.tags LIKE` (exact-ish substring, unchanged
+	 * semantics). Returns null when FTS produced no matches or errored so the
+	 * caller falls back to the LIKE path (permanent fallback pattern).
+	 */
+	private tryDashboardFtsSearch(options: {
+		ftsMatch: string;
+		owner?: string;
+		repo?: string;
+		type?: MemoryType;
+		tag?: string;
+		isGlobal?: boolean;
+		minImportance?: number;
+		maxImportance?: number;
+		sortBy: string;
+		sortOrder: "ASC" | "DESC";
+		limit: number;
+		offset: number;
+	}): {
+		items: (MemoryEntry & { recall_rate: number })[];
+		total: number;
+		limit: number;
+		offset: number;
+	} | null {
+		try {
+			const {
+				ftsMatch,
+				owner,
+				repo,
+				type,
+				tag,
+				isGlobal,
+				minImportance,
+				maxImportance,
+				sortBy,
+				sortOrder,
+				limit,
+				offset
+			} = options;
+			const conditions = ["memories_fts MATCH ?"];
+			const params: (string | number)[] = [ftsMatch];
+
+			if (owner) {
+				conditions.push("m.owner = ?");
+				params.push(owner);
+			}
+			if (repo) {
+				conditions.push("m.repo = ?");
+				params.push(repo);
+			}
+			if (type) {
+				conditions.push("m.type = ?");
+				params.push(type);
+			}
+			if (tag) {
+				conditions.push("m.tags LIKE ?");
+				params.push(`%${tag}%`);
+			}
+			if (isGlobal !== undefined) {
+				conditions.push("m.is_global = ?");
+				params.push(isGlobal ? 1 : 0);
+			}
+			if (minImportance !== undefined) {
+				conditions.push("m.importance >= ?");
+				params.push(minImportance);
+			}
+			if (maxImportance !== undefined) {
+				conditions.push("m.importance <= ?");
+				params.push(maxImportance);
+			}
+
+			const whereClause = conditions.join(" AND ");
+			const totalRow = this.get<CountResult>(
+				`SELECT COUNT(*) as count FROM memories_fts fts JOIN memories m ON m.rowid = fts.rowid WHERE ${whereClause}`,
+				params
+			);
+			const total = totalRow?.count ?? 0;
+			if (total === 0) return null; // no FTS match → LIKE fallback (mid-word recall)
+
+			const rows = this.all<MemoryRow & { recall_rate: number }>(
+				`SELECT m.*, CASE WHEN m.hit_count > 0 THEN CAST(m.recall_count AS REAL) / m.hit_count ELSE 0 END AS recall_rate
+				 FROM memories_fts fts JOIN memories m ON m.rowid = fts.rowid
+				 WHERE ${whereClause}
+				 ORDER BY m.${sortBy} ${sortOrder} LIMIT ? OFFSET ?`,
+				[...params, limit, offset]
+			);
+			return {
+				items: rows.map((row) => ({
+					...this.rowToMemoryEntry(row),
+					recall_rate: row.recall_rate || 0
+				})),
+				total,
+				limit,
+				offset
+			};
+		} catch {
+			return null;
+		}
+	}
+
 	searchByRepo(owner: string, repo: string, query: string = "", type?: string, limit = 5): MemoryEntry[] {
 		const now = new Date().toISOString();
+
+		// FTS5-first keyword search (MEM-367 / TASK-014); the LIKE path stays
+		// as a permanent fallback for empty/unbuildable queries, FTS errors,
+		// and queries with no FTS match (mirrors codebase-symbol.ts).
+		if (query && query.trim()) {
+			const ftsHits = this.searchByFts(query, owner, repo, type, limit);
+			if (ftsHits.length > 0) return ftsHits;
+		}
+
 		const ownerClause = owner ? "owner = ? AND " : "";
 		let sql = `SELECT * FROM memories WHERE ${ownerClause}repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)`;
 		const params: (string | number)[] = owner
@@ -279,9 +522,8 @@ export class MemoryEntity extends BaseEntity {
 
 		return this.transaction(() => {
 			let count = 0;
-			const chunkSize = 500;
-			for (let i = 0; i < ids.length; i += chunkSize) {
-				const chunk = ids.slice(i, i + chunkSize);
+			for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
+				const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
 				const result = this.run(
 					`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
 					[...values, ...chunk] as (string | number)[]
@@ -361,14 +603,6 @@ export class MemoryEntity extends BaseEntity {
 		]);
 	}
 
-	getSummary(owner: string, repo: string): { summary: string; updated_at: string } | undefined {
-		const row = this.get<{ summary: string; updated_at: string }>(
-			"SELECT summary, updated_at FROM memory_summary WHERE owner = ? AND repo = ?",
-			[owner, repo]
-		);
-		return row;
-	}
-
 	getAllMemoriesWithStats(
 		owner: string,
 		repo: string,
@@ -391,14 +625,6 @@ export class MemoryEntity extends BaseEntity {
 			...this.rowToMemoryEntry(row),
 			recall_rate: row.recall_rate || 0
 		}));
-	}
-
-	upsertSummary(owner: string, repo: string, summary: string): void {
-		this.run(
-			`INSERT INTO memory_summary (owner, repo, summary, updated_at) VALUES (?, ?, ?, ?)
-			ON CONFLICT(owner, repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
-			[owner, repo, summary, new Date().toISOString()]
-		);
 	}
 
 	listMemoriesForDashboard(options: {
@@ -446,6 +672,32 @@ export class MemoryEntity extends BaseEntity {
 		if (!ALLOWED_SORT_COLUMNS.has(sortBy)) {
 			sortBy = "created_at";
 		}
+
+		// FTS fast path when a non-empty search term is present (MEM-367
+		// §5.3): the search clause becomes the FTS5 join while all other
+		// filters stay as m.* predicates. Used only when it returned
+		// matches; empty/error falls through to the LIKE path below.
+		if (search) {
+			const ftsMatch = buildFtsMatchQuery(search);
+			if (ftsMatch) {
+				const ftsResult = this.tryDashboardFtsSearch({
+					ftsMatch,
+					owner,
+					repo,
+					type,
+					tag,
+					isGlobal,
+					minImportance,
+					maxImportance,
+					sortBy,
+					sortOrder,
+					limit,
+					offset
+				});
+				if (ftsResult !== null) return ftsResult;
+			}
+		}
+
 		const where = ["1=1"];
 		const params: (string | number)[] = [];
 		if (owner) {

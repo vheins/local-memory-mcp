@@ -20,7 +20,11 @@ import { createMcpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 import { expandQuery } from "../utils/query-expander";
 import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
-import { kgQuery, fetchKgContext, fetchAggregatedKgContext } from "./kg-archivist/query";
+import { fetchKgContext, fetchAggregatedKgContext } from "./kg-archivist/query";
+import { scoreHybrid, computeRecencyScore, computeDomainScore, applyThreshold, HYBRID_WEIGHTS } from "../utils/scoring";
+import { SEARCH_THRESHOLDS } from "../utils/constants";
+import { renderGroupedSummary, enumOrderComparator } from "../utils/summary";
+import { FTS_CANDIDATE_CAP } from "../utils/fts";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -45,30 +49,9 @@ type MemoryReadParams = {
 
 const SEARCH_COLUMNS = ["id", "code", "title", "type", "importance"] as const;
 const TOP_COLUMNS = ["id", "code", "title", "type", "importance"] as const;
-
-const HYBRID_WEIGHTS = {
-	similarity: 0.4,
-	keyword: 0.3,
-	recency: 0.15,
-	domain: 0.15
-} as const;
-
-const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
+const TYPE_ORDER = ["code_fact", "decision", "mistake", "pattern", "task_archive"];
 
 // ── Helpers ─────────────────────────────────────────────────────────────
-
-function computeRecencyScore(createdAt: string): number {
-	const ageMs = Date.now() - new Date(createdAt).getTime();
-	if (ageMs <= 0) return 1;
-	return Math.max(0, Math.min(1, Math.pow(2, -ageMs / RECENCY_HALF_LIFE_MS)));
-}
-
-function computeDomainScore(memory: MemoryEntry, queryTerms: string[]): number {
-	if (queryTerms.length === 0 || memory.tags.length === 0) return 0;
-	const querySet = new Set(queryTerms.map((t: string) => t.toLowerCase()));
-	const matches = memory.tags.filter((t: string) => querySet.has(t.toLowerCase())).length;
-	return matches / Math.max(memory.tags.length, 1);
-}
 
 function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): MemoryEntry[] {
 	const sinceMs = tunnel.since ? new Date(tunnel.since).getTime() : 0;
@@ -131,6 +114,46 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		similarityScore: r.similarity
 	}));
 
+	// 1a. FTS bm25 keyword signal (MEM-367 §6) — feeds the 0.30 keyword
+	// hybrid weight with real lexical relevance instead of the ONNX rerank.
+	// Uses the post-time-tunnel query (NOT the expanded one — injected
+	// synonyms would wrongly restrict lexical matches). Raw bm25() is unitless
+	// and non-positive (most negative = best); min-max normalization over the
+	// top-k set maps best → 1.0, worst → ≈0 (self-contained per query, no
+	// calibration drift). FTS-only hits are merged in as extra candidates
+	// (similarity 0) so token-initial lexical recall surfaces even when vector
+	// similarity misses. Any FTS failure only disables the bm25 feed — the
+	// vector/similarity pipeline below is unaffected.
+	const ftsScoreMap = new Map<string, number>();
+	try {
+		const ftsScored = db.memories.searchByFtsScored(effectiveQuery, params.owner!, params.repo, {
+			limit: FTS_CANDIDATE_CAP,
+			includeArchived: params.include_archived
+		});
+		if (ftsScored.length > 0) {
+			let minB = Number.POSITIVE_INFINITY;
+			let maxB = Number.NEGATIVE_INFINITY;
+			for (const r of ftsScored) {
+				if (r.bm25 < minB) minB = r.bm25;
+				if (r.bm25 > maxB) maxB = r.bm25;
+			}
+			const range = maxB - minB;
+			for (const r of ftsScored) {
+				const normalized = range === 0 ? 1.0 : 1 - (r.bm25 - minB) / range;
+				ftsScoreMap.set(r.memory.id, normalized);
+			}
+			const knownIds = new Set(candidates.map((c) => c.memory.id));
+			for (const r of ftsScored) {
+				if (!knownIds.has(r.memory.id)) {
+					knownIds.add(r.memory.id);
+					candidates.push({ memory: r.memory, similarityScore: 0 });
+				}
+			}
+		}
+	} catch (error) {
+		logger.warn("FTS keyword search failed, using vector keyword only", { error: String(error) });
+	}
+
 	// 2. Workspace & Tag Affinity Boost
 	if (candidates.length > 0) {
 		const currentPath = params.current_file_path?.toLowerCase();
@@ -167,18 +190,21 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 
 	try {
 		const vectorResults = await vectors.search(searchQuery, candidates.length || 10, params.repo);
-		const vectorScoreMap = new Map(vectorResults.map((vr) => [vr.id, vr.score]));
 
 		if (candidates.length > 0) {
 			scoredMemories = candidates.map((c: Candidate) => {
-				const keywordScore = vectorScoreMap.get(c.memory.id) ?? 0;
+				// bm25 (min-max normalized) replaces the ONNX vector score in
+				// the 0.30 keyword weight (MEM-367 §6.2): lexical relevance,
+				// not vector rerank, powers the keyword signal.
+				const keywordScore = ftsScoreMap.get(c.memory.id) ?? 0;
 				const recencyScore = computeRecencyScore(c.memory.created_at);
-				const domainScore = computeDomainScore(c.memory, queryTerms);
-				const finalScore =
-					c.similarityScore * HYBRID_WEIGHTS.similarity +
-					keywordScore * HYBRID_WEIGHTS.keyword +
-					recencyScore * HYBRID_WEIGHTS.recency +
-					domainScore * HYBRID_WEIGHTS.domain;
+				const domainScore = computeDomainScore(queryTerms, c.memory.tags);
+				const finalScore = scoreHybrid({
+					similarity: c.similarityScore,
+					keyword: keywordScore,
+					recency: recencyScore,
+					domain: domainScore
+				});
 				return {
 					memory: c.memory,
 					similarityScore: c.similarityScore,
@@ -189,6 +215,10 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 				};
 			});
 		} else if (vectorResults.length > 0) {
+			// Vector-only fallback: reachable only when BOTH similarity and
+			// FTS returned no candidates, so ftsScoreMap is necessarily empty
+			// here — vr.score carries the combined similarity+keyword weight
+			// (bit-exact SPEC-001 expression preserved as-is).
 			const memoryMap = new Map(
 				db.memories.getByIds(vectorResults.map((vr) => vr.id)).map((m: MemoryEntry) => [m.id, m])
 			);
@@ -196,7 +226,7 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 				const mem = memoryMap.get(vr.id);
 				if (mem) {
 					const recencyScore = computeRecencyScore(mem.created_at);
-					const domainScore = computeDomainScore(mem, queryTerms);
+					const domainScore = computeDomainScore(queryTerms, mem.tags);
 					scoredMemories.push({
 						memory: mem,
 						similarityScore: 0,
@@ -214,27 +244,38 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	} catch (error) {
 		logger.warn("Vector search failed, using similarity only", { error: String(error) });
 		scoredMemories = candidates.map((c: Candidate) => {
+			// Error fallback: similarity-driven, but the bm25 keyword feed
+			// still applies when available (FTS runs independently of the
+			// vector store). When bm25 is absent, the SPEC-001 fold keeps the
+			// similarity+keyword weight on similarity (bit-exact parity).
+			const keywordScore = ftsScoreMap.get(c.memory.id) ?? 0;
 			const recencyScore = computeRecencyScore(c.memory.created_at);
-			const domainScore = computeDomainScore(c.memory, queryTerms);
+			const domainScore = computeDomainScore(queryTerms, c.memory.tags);
 			return {
 				memory: c.memory,
 				similarityScore: c.similarityScore,
-				keywordScore: 0,
+				keywordScore,
 				recencyScore,
 				domainScore,
 				finalScore:
-					c.similarityScore * (HYBRID_WEIGHTS.similarity + HYBRID_WEIGHTS.keyword) +
-					recencyScore * HYBRID_WEIGHTS.recency +
-					domainScore * HYBRID_WEIGHTS.domain
+					keywordScore > 0
+						? scoreHybrid({
+								similarity: c.similarityScore,
+								keyword: keywordScore,
+								recency: recencyScore,
+								domain: domainScore
+							})
+						: c.similarityScore * (HYBRID_WEIGHTS.similarity + HYBRID_WEIGHTS.keyword) +
+							recencyScore * HYBRID_WEIGHTS.recency +
+							domainScore * HYBRID_WEIGHTS.domain
 			};
 		});
 	}
 
 	// 4. Threshold & Final Selection
 	scoredMemories.sort((a: ScoredMemory, b: ScoredMemory) => b.finalScore - a.finalScore);
-	const threshold = scoredMemories.length <= 5 ? 0.1 : 0.4;
 	let allMatches = scoredMemories
-		.filter((sm: ScoredMemory) => sm.finalScore >= threshold)
+		.filter((sm: ScoredMemory) => applyThreshold(sm.finalScore, scoredMemories.length, SEARCH_THRESHOLDS.memory))
 		.map((sm: ScoredMemory) => sm.memory);
 	if (allMatches.length === 0 && scoredMemories.length > 0) allMatches = [scoredMemories[0].memory];
 
@@ -274,38 +315,16 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		parts.push("");
 
 		// Fused grouped by type (enum order), with global rank #N
-		const TYPE_ORDER = ["code_fact", "decision", "mistake", "pattern", "task_archive"];
-		const grouped = new Map<string, { m: MemoryEntry; rank: number }[]>();
-
-		paginatedResults.forEach((m, i) => {
-			const groupKey = m.type || "unknown";
-			if (!grouped.has(groupKey)) grouped.set(groupKey, []);
-			grouped.get(groupKey)!.push({ m, rank: i + 1 });
-		});
-
-		const sortedKeys = [...grouped.keys()].sort((a, b) => {
-			const ai = TYPE_ORDER.indexOf(a);
-			const bi = TYPE_ORDER.indexOf(b);
-			if (ai === -1 && bi === -1) return a.localeCompare(b);
-			if (ai === -1) return 1;
-			if (bi === -1) return -1;
-			return ai - bi;
-		});
-
-		for (const key of sortedKeys) {
-			const items = grouped.get(key)!;
-			const cap = key === "task_archive" ? 2 : 5;
-			const visible = items.slice(0, cap);
-			const hidden = items.length - visible.length;
-			parts.push(`**${key} (${items.length})**`);
-			for (const { m, rank } of visible) {
-				parts.push(`#${rank} ${m.code || "-"} [${m.importance}] ${m.title}`);
-			}
-			if (hidden > 0) parts.push(`... +${hidden} more in this group`);
-			parts.push("");
-		}
-
-		parts.push("Use memory-read with id (or code) for full content.");
+		parts.push(
+			renderGroupedSummary<MemoryEntry>({
+				items: paginatedResults,
+				getGroup: (m) => m.type || "unknown",
+				groupOrder: enumOrderComparator(TYPE_ORDER),
+				cap: (key) => (key === "task_archive" ? 2 : 5),
+				formatLine: (m, rank) => `#${rank} ${m.code || "-"} [${m.importance}] ${m.title}`,
+				footer: "Use memory-read with id (or code) for full content."
+			})
+		);
 		contentSummary = parts.join("\n");
 	} else {
 		contentSummary = `No memories found for "${params.query}" in repo "${params.repo}".`;
@@ -392,9 +411,7 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 
 	// Bulk detail via codes array
 	if (codes !== undefined && codes.length > 0) {
-		const memories: MemoryEntry[] = codes
-			.map((c: string) => db.memories.getByCode(c, owner, repo))
-			.filter((m: MemoryEntry | null): m is MemoryEntry => m !== null);
+		const memories = db.memories.getMemoriesByCodes(codes, owner, repo);
 		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given codes.";
 		const kgContext = fetchAggregatedKgContext(
 			db,
@@ -490,8 +507,12 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 		const sortedByDate = [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 		for (const row of sortedByDate) {
 			const dateKey = row.created_at.split("T")[0];
-			if (!dateGroups.has(dateKey)) dateGroups.set(dateKey, []);
-			dateGroups.get(dateKey)!.push(row);
+			const group = dateGroups.get(dateKey);
+			if (group) {
+				group.push(row);
+			} else {
+				dateGroups.set(dateKey, [row]);
+			}
 		}
 
 		for (const [date, entries] of dateGroups) {

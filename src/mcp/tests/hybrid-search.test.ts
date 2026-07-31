@@ -1,14 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import { handleMemoryRead } from "../tools/memory.read";
-import { handleStandardRead } from "../tools/standard.read";
 import { handleTaskRead } from "../tools/task.read";
 import type { VectorStore, VectorResult } from "../types";
 
 const VALID_UUID_1 = "11111111-1111-4111-a111-111111111111";
 const VALID_UUID_2 = "22222222-2222-4222-a222-222222222222";
-const VALID_UUID_3 = "33333333-3333-4333-a333-333333333333";
 
 /**
  * Factory for a mock VectorStore that returns predictable results.
