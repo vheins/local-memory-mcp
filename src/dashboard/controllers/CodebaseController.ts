@@ -248,7 +248,7 @@ export class CodebaseController {
 		}
 	}
 
-	// GET /api/codebase/trace?name=handleSearchSymbols&repo=owner/repo&includeReferences=true
+	// GET /api/codebase/trace?name=handleCodebaseRead&repo=owner/repo&includeReferences=true
 	static async traceSymbol(req: express.Request, res: express.Response) {
 		try {
 			const name = (req.query.name as string)?.trim();

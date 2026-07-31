@@ -208,7 +208,7 @@
 **Technical Notes:**
 
 - Controller path: `src/dashboard/controllers/codebase-controller.ts`
-- Internal tool invocation: call tool handlers directly (not via MCP transport) — import and call `handleSearchSymbols(params, db, vectors)`
+- Internal tool invocation: call tool handlers directly (not via MCP transport) — import and call `handleCodebaseRead(params, db, vectors)`
 
 ---
 

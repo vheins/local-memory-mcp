@@ -74,7 +74,7 @@ server.registerResource(
 	"codebase_summary",
 	new ResourceTemplate("codebase://{projectPath}/summary", { list: undefined }),
 	async (uri, { projectPath }) => {
-		const data = await handleGetArchitecture({ projectPath }, db);
+		const data = await handleCodebaseRead({ repo: projectPath }, db, undefined as never);
 		return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(data) }] };
 	}
 );
@@ -141,7 +141,7 @@ server.registerResource(
 	"codebase_file_symbols",
 	new ResourceTemplate("codebase://{projectPath}/files/{filePath*}", { list: undefined }),
 	async (uri, { projectPath, filePath }) => {
-		const data = await handleGetFileSymbols({ filePath }, db);
+		const data = await handleCodebaseRead({ repo: projectPath, filePath }, db, undefined as never);
 		return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(data) }] };
 	}
 );

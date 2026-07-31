@@ -269,8 +269,8 @@ Each handler follows the same pattern:
 
 ```typescript
 // Handler: (args, db, vectors, extra) => McpResponse
-const handleSearchSymbols: ToolHandler = (args, db, _vectors, _extra) => {
-	const input = SearchSymbolsInput.parse(args); // Zod validation
+const handleCodebaseRead: ToolHandler = (args, db, _vectors, _extra) => {
+	const input = CodebaseReadSchema.parse(args); // Zod validation (mode auto-inferred: name→trace, filePath→file, query→search, none→architecture)
 	const entity = new CodebaseIndexEntity(db);
 	const result = entity.searchSymbols(input.query, {
 		kind: input.kind,

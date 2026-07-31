@@ -402,18 +402,10 @@ All Codebase Index tools are integrated into the existing `registerAllTools()` f
 
 ```typescript
 // In buildExecutors():
-"index_repository": (args, db, _vectors, extra) =>
-    handleIndexRepository(args, db, extra?.onProgress, extra?.signal),
-"get_file_symbols": (args, db, _vectors, _extra) =>
-    handleGetFileSymbols(args, db),
-"search_symbols": (args, db, _vectors, _extra) =>
-    handleSearchSymbols(args, db),
-"get_architecture": (args, db, _vectors, _extra) =>
-    handleGetArchitecture(args, db),
-"trace_symbol": (args, db, _vectors, _extra) =>
-    handleTraceSymbol(args, db),
-"index_status": (args, db, _vectors, _extra) =>
-    handleIndexStatus(args, db),
+"codebase-index": (args, db, _vectors, _extra) =>
+    handleCodebaseIndex(args, db, _vectors),
+"codebase-read": (args, db, _vectors, _extra) =>
+    handleCodebaseRead(args, db, _vectors),
 ```
 
 Added to `WRITE_TOOLS`:
@@ -421,7 +413,7 @@ Added to `WRITE_TOOLS`:
 ```typescript
 const WRITE_TOOLS = new Set([
 	// ... existing tools
-	"index_repository"
+	"codebase-index"
 ]);
 ```
 
