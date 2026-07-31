@@ -4,7 +4,7 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { TaskStatusValues } from "../schemas";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
-import { describeStatusFilter } from "./shared";
+import { capitalize, describeStatusFilter } from "./shared";
 
 // ── Hybrid scoring constants ──────────────────────────────────────────────
 
@@ -274,7 +274,8 @@ export async function handleSearchMode(
 				const items = grouped.get(key)!;
 				const visible = items.slice(0, CAP);
 				const hidden = items.length - visible.length;
-				lines.push(`**${key} (${items.length})**`);
+				const groupLabel = key === "in_progress" ? "In Progress" : capitalize(key);
+				lines.push(`**${groupLabel} (${items.length})**`);
 				for (const { st, rank } of visible) {
 					lines.push(`#${rank} ${st.task.task_code} [${st.finalScore.toFixed(2)}] ${st.task.title}`);
 				}

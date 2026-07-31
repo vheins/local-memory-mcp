@@ -4,6 +4,8 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { HandoffWriteSchema } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
 import { HandoffStatusSchema } from "./schemas/shared";
+import { extractNextSteps } from "../utils/next-steps";
+import { logger } from "../utils/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,14 +35,7 @@ type WriteParams = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function extractNextSteps(context: Record<string, unknown> | undefined): string {
-	const steps = context?.next_steps;
-	if (!steps || !Array.isArray(steps) || steps.length === 0) {
-		return "";
-	}
-	const joined = steps.map(String).join("; ");
-	return joined.length > 300 ? joined.slice(0, 300) + "..." : joined;
-}
+// extractNextSteps imported from ../utils/next-steps
 
 // ---------------------------------------------------------------------------
 // Core: CREATE handoff
@@ -121,19 +116,30 @@ async function coreCreate(
 	if (handoff.task_id) {
 		const now = new Date().toISOString();
 		const target = handoff.to_agent || "unassigned";
-		storage.taskComments.insertTaskComment({
-			id: randomUUID(),
-			task_id: handoff.task_id,
-			owner: params.owner,
-			repo: params.repo,
-			comment: `Handoff [${handoff.id.slice(0, 8)}] created: ${handoff.from_agent} → ${target} — ${handoff.summary}`,
-			agent: handoff.from_agent,
-			role: "unknown",
-			model: "system",
-			previous_status: null,
-			next_status: null,
-			created_at: now
-		});
+		try {
+			storage.taskComments.insertTaskComment({
+				id: randomUUID(),
+				task_id: handoff.task_id,
+				owner: params.owner,
+				repo: params.repo,
+				comment: `Handoff [${handoff.id.slice(0, 8)}] created: ${handoff.from_agent} → ${target} — ${handoff.summary}`,
+				agent: handoff.from_agent,
+				role: "unknown",
+				model: "system",
+				previous_status: null,
+				next_status: null,
+				created_at: now
+			});
+		} catch (e) {
+			logger.error("[Tool] handoff.write — task comment failed (handoff already committed)", {
+				repo: params.repo,
+				handoffId: handoff.id,
+				error: String(e)
+			});
+			storage.actions.logAction("handoff-comment-fail", params.owner, params.repo, {
+				query: `handoff ${handoff.id.slice(0, 8)} — comment insert failed`
+			});
+		}
 	}
 
 	const excerpt = handoff.summary.length > 50 ? handoff.summary.slice(0, 50) + "..." : handoff.summary;
@@ -195,19 +201,31 @@ async function coreUpdate(
 		} else {
 			comment = `Handoff [${params.id.slice(0, 8)}] ${status}`;
 		}
-		storage.taskComments.insertTaskComment({
-			id: randomUUID(),
-			task_id: updated.task_id,
-			owner: updated.owner,
-			repo: updated.repo,
-			comment,
-			agent: existing.from_agent,
-			role: "unknown",
-			model: "system",
-			previous_status: null,
-			next_status: null,
-			created_at: now
-		});
+		try {
+			storage.taskComments.insertTaskComment({
+				id: randomUUID(),
+				task_id: updated.task_id,
+				owner: updated.owner,
+				repo: updated.repo,
+				comment,
+				agent: existing.from_agent,
+				role: "unknown",
+				model: "system",
+				previous_status: null,
+				next_status: null,
+				created_at: now
+			});
+		} catch (e) {
+			logger.error("[Tool] handoff.write — task comment failed (handoff already committed)", {
+				repo: updated.repo,
+				handoffId: params.id,
+				status,
+				error: String(e)
+			});
+			storage.actions.logAction("handoff-comment-fail", updated.owner, updated.repo, {
+				query: `handoff ${params.id.slice(0, 8)} — status-change comment failed`
+			});
+		}
 	}
 
 	const excerpt = existing.summary.length > 50 ? existing.summary.slice(0, 50) + "..." : existing.summary;

@@ -10,6 +10,8 @@ import {
 	TaskClaimSchema
 } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
+import { extractNextSteps } from "../utils/next-steps";
+import { logger } from "../utils/logger";
 
 function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
 	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -29,14 +31,7 @@ function buildHandoffListSummary(repo: string, count: number, status?: string, f
 	return parts.join("\n");
 }
 
-function extractNextSteps(context: Record<string, unknown> | undefined): string {
-	const steps = context?.next_steps;
-	if (!steps || !Array.isArray(steps) || steps.length === 0) {
-		return "";
-	}
-	const joined = steps.map(String).join("; ");
-	return joined.length > 300 ? joined.slice(0, 300) + "..." : joined;
-}
+// extractNextSteps imported from ../utils/next-steps
 
 function buildClaimListSummary(repo: string, count: number, agent?: string, activeOnly?: boolean) {
 	const parts = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -87,19 +82,30 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 	if (handoff.task_id) {
 		const now = new Date().toISOString();
 		const target = handoff.to_agent || "unassigned";
-		storage.taskComments.insertTaskComment({
-			id: randomUUID(),
-			task_id: handoff.task_id,
-			owner,
-			repo,
-			comment: `Handoff [${handoff.id.slice(0, 8)}] created: ${handoff.from_agent} → ${target} — ${handoff.summary}`,
-			agent: handoff.from_agent,
-			role: "unknown",
-			model: "system",
-			previous_status: null,
-			next_status: null,
-			created_at: now
-		});
+		try {
+			storage.taskComments.insertTaskComment({
+				id: randomUUID(),
+				task_id: handoff.task_id,
+				owner,
+				repo,
+				comment: `Handoff [${handoff.id.slice(0, 8)}] created: ${handoff.from_agent} → ${target} — ${handoff.summary}`,
+				agent: handoff.from_agent,
+				role: "unknown",
+				model: "system",
+				previous_status: null,
+				next_status: null,
+				created_at: now
+			});
+		} catch (e) {
+			logger.error("[Tool] handoff.manage — task comment failed (handoff already committed)", {
+				repo,
+				handoffId: handoff.id,
+				error: String(e)
+			});
+			storage.actions.logAction("handoff-comment-fail", owner, repo, {
+				query: `handoff ${handoff.id.slice(0, 8)} — comment insert failed`
+			});
+		}
 	}
 
 	const contentSummary = `Created handoff [${handoff.id.slice(0, 8)}] in repo "${handoff.repo}": from=${handoff.from_agent}, to=${handoff.to_agent || "unassigned"}, status=${handoff.status}.`;
@@ -210,19 +216,31 @@ export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 		} else {
 			comment = `Handoff [${id.slice(0, 8)}] ${status}`;
 		}
-		storage.taskComments.insertTaskComment({
-			id: randomUUID(),
-			task_id: updated.task_id,
-			owner: updated.owner,
-			repo: updated.repo,
-			comment,
-			agent: existing.from_agent,
-			role: "unknown",
-			model: "system",
-			previous_status: null,
-			next_status: null,
-			created_at: now
-		});
+		try {
+			storage.taskComments.insertTaskComment({
+				id: randomUUID(),
+				task_id: updated.task_id,
+				owner: updated.owner,
+				repo: updated.repo,
+				comment,
+				agent: existing.from_agent,
+				role: "unknown",
+				model: "system",
+				previous_status: null,
+				next_status: null,
+				created_at: now
+			});
+		} catch (e) {
+			logger.error("[Tool] handoff.manage — task comment failed (handoff already committed)", {
+				repo: updated.repo,
+				handoffId: id,
+				status,
+				error: String(e)
+			});
+			storage.actions.logAction("handoff-comment-fail", updated.owner, updated.repo, {
+				query: `handoff ${id.slice(0, 8)} — status-change comment failed`
+			});
+		}
 	}
 
 	const result = {
@@ -283,19 +301,31 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	if (task && task.status !== "completed") {
 		const now = new Date().toISOString();
 		storage.tasks.updateTask(task.id, { status: "in_progress", in_progress_at: now });
-		storage.taskComments.insertTaskComment({
-			id: randomUUID(),
-			task_id: task.id,
-			owner: owner,
-			repo,
-			comment: `Claimed by ${agent} — auto-promoted to in_progress`,
-			agent,
-			role: role || "unknown",
-			model: "system",
-			previous_status: task.status as import("../types").TaskStatus,
-			next_status: "in_progress" as import("../types").TaskStatus,
-			created_at: now
-		});
+		try {
+			storage.taskComments.insertTaskComment({
+				id: randomUUID(),
+				task_id: task.id,
+				owner: owner,
+				repo,
+				comment: `Claimed by ${agent} — auto-promoted to in_progress`,
+				agent,
+				role: role || "unknown",
+				model: "system",
+				previous_status: task.status as import("../types").TaskStatus,
+				next_status: "in_progress" as import("../types").TaskStatus,
+				created_at: now
+			});
+		} catch (e) {
+			logger.error("[Tool] handoff.manage — task comment failed (claim succeeded)", {
+				repo,
+				taskId: task.id,
+				agent,
+				error: String(e)
+			});
+			storage.actions.logAction("handoff-comment-fail", owner, repo, {
+				query: `task ${task.task_code} — claim comment failed`
+			});
+		}
 	}
 
 	const responseData = {

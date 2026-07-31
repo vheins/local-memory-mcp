@@ -356,7 +356,7 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 			expect(data.count).toBeGreaterThan(0);
 			expect(result.content?.[0]?.type).toBe("text");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("### Standards");
+			expect(text).toMatch(/^### Results: \d+ standards for "error" \(showing \d+\)$/m);
 			expect(text).toMatch(/^\*\*[\w-]+ \(\d+\)\*\*$/m);
 			expect(text).toMatch(/^#\d+ \S+ \[\d+\.\d+\] /m);
 			expect(text).toContain("Use standard-read with code for full content.");
@@ -471,7 +471,9 @@ describe("CSL (Coding Standards Library) — Unified Domain", () => {
 			expect(String(data.results.rows[0][9])).toContain("singleton");
 			expect(String(data.results.rows[0][9])).toContain("scoped");
 			const text = result.content?.[0]?.type === "text" ? result.content[0].text : "";
-			expect(text).toContain("### Standards");
+			expect(text).toMatch(
+				/^### Results: \d+ standards for "Laravel Service Container Singleton vs Scoped Binding" \(showing \d+\)$/m
+			);
 			expect(text).toMatch(/^\*\*[\w-]+ \(\d+\)\*\*$/m);
 			expect(text).toMatch(/^#\d+ \S+ \[\d+\.\d+\] /m);
 		});

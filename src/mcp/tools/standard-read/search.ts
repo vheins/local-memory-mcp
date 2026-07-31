@@ -340,7 +340,9 @@ export async function handleSearchMode(
 
 	let contentSummary: string;
 	if (paginatedResults.length > 0) {
-		const parts = ["### Standards", ""];
+		const total = results.length;
+		const displayCount = paginatedResults.length;
+		const parts = [`### Results: ${total} standards for "${validated.query || ""}" (showing ${displayCount})`, ""];
 
 		// Fused grouped by scope (global first, then repo names, then "-" for null)
 		const grouped = new Map<string, { scored: (typeof paginatedResults)[0]; rank: number }[]>();
