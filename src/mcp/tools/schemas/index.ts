@@ -63,6 +63,7 @@ export { AgentContextSchema } from "./agent";
 export {
 	IndexRepoSchema,
 	IndexStatusSchema,
+	CodebaseIndexSchema,
 	GetArchitectureSchema,
 	GetFileSymbolsSchema,
 	SearchSymbolsSchema,

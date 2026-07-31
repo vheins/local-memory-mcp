@@ -151,7 +151,7 @@ export const HandoffWriteSchema = z.object({
 
 	// UPDATE fields
 	id: z.string().optional(),
-	status: z.string().optional(),
+	status: HandoffStatusSchema.optional(),
 
 	// Metadata
 	json: z.boolean().default(false)

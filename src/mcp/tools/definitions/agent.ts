@@ -1,4 +1,14 @@
-// Tool definitions for agent-context domain
+// Tool definitions for agent-context domain.
+//
+// The `inputSchema` (JSON Schema) is DERIVED from the Zod schemas in
+// `../schemas` via `inputSchemaFromSchema` (see `../schemas/json-schema.ts`
+// for the generation + normalization rules). The Zod schemas are the single
+// source of truth for tool input contracts — edit the Zod schema, never the
+// derived `inputSchema` here.
+
+import { inputSchemaFromSchema } from "../schemas/json-schema";
+import { AgentContextSchema } from "../schemas/agent";
+import { MemorySummarizeSchema, MemorySynthesizeSchema } from "../schemas/memory";
 
 export const AGENT_TOOL_DEFINITIONS = [
 	// ── Agent Context tools ────────────────────────────────────────────────
@@ -11,43 +21,7 @@ export const AGENT_TOOL_DEFINITIONS = [
 			idempotentHint: true,
 			openWorldHint: false
 		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				owner: {
-					type: "string",
-					description: "GitHub org or username. Auto-inferred."
-				},
-				repo: {
-					type: "string",
-					description: "Repo name. Auto-inferred."
-				},
-				query: {
-					type: "string",
-					description: "Natural language search query for context retrieval."
-				},
-				objective: {
-					type: "string",
-					description: "Deprecated: use query instead."
-				},
-				type_filter: {
-					type: "string",
-					description: "Filter by memory type."
-				},
-				limit: {
-					type: "number",
-					minimum: 1,
-					maximum: 100,
-					default: 5,
-					description: "Max memories to return."
-				},
-				json: {
-					type: "boolean",
-					default: false,
-					description: "Return JSON results."
-				}
-			}
-		}
+		inputSchema: inputSchemaFromSchema(AgentContextSchema)
 	},
 	// ── Agent Synthesis (moved from memory domain per ADR-001, ADR-007) ────
 
@@ -64,35 +38,7 @@ export const AGENT_TOOL_DEFINITIONS = [
 		execution: {
 			taskSupport: "optional"
 		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				owner: {
-					type: "string",
-					description: "GitHub org or username."
-				},
-				repo: {
-					type: "string",
-					description: "Repo name. Optional with active root."
-				},
-				objective: { type: "string", minLength: 5, description: "Question or synthesis objective." },
-				current_file_path: {
-					type: "string",
-					description: "File path for workspace grounding."
-				},
-				include_summary: { type: "boolean", default: true },
-				include_tasks: { type: "boolean", default: true },
-				use_tools: {
-					type: "boolean",
-					default: true,
-					description: "Allow tool calls during synthesis."
-				},
-				max_iterations: { type: "number", minimum: 1, maximum: 5, default: 3 },
-				max_tokens: { type: "number", minimum: 128, maximum: 4000, default: 1200 },
-				json: { type: "boolean", default: false, description: "Returns JSON if true." }
-			},
-			required: ["owner", "objective"]
-		}
+		inputSchema: inputSchemaFromSchema(MemorySynthesizeSchema)
 	},
 
 	// Canonical: repo-summarize (per ADR-001)
@@ -105,20 +51,6 @@ export const AGENT_TOOL_DEFINITIONS = [
 			idempotentHint: false,
 			openWorldHint: false
 		},
-		inputSchema: {
-			type: "object",
-			properties: {
-				owner: { type: "string", description: "GitHub org or username." },
-				repo: { type: "string", description: "Repo name." },
-				signals: {
-					type: "array",
-					items: { type: "string", maxLength: 200 },
-					minItems: 1,
-					description: "Signals to include in summary"
-				},
-				json: { type: "boolean", default: false, description: "Returns JSON if true." }
-			},
-			required: ["owner", "repo", "signals"]
-		}
+		inputSchema: inputSchemaFromSchema(MemorySummarizeSchema)
 	}
 ];

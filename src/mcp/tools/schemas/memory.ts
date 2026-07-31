@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
-import { MemoryScopeSchema, MemoryTypeSchema, SingleMemorySchema } from "./shared";
+import { MemoryScopeSchema, MemoryTypeSchema } from "./shared";
 
 export const MemoryDeleteSchema = z
 	.object({
