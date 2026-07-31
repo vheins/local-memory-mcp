@@ -9,44 +9,44 @@ vi.mock("../../lib/stores", () => ({
 		subscribe: (fn: any) => {
 			fn(null);
 			return () => {};
-		},
+		}
 	},
 	currentRepo: {
 		subscribe: (fn: any) => {
 			fn("");
 			return () => {};
-		},
+		}
 	},
 	availableRepos: {
 		subscribe: (fn: any) => {
 			fn([]);
 			return () => {};
-		},
+		}
 	},
 	theme: {
 		subscribe: (fn: any) => {
 			fn("light");
 			return () => {};
-		},
+		}
 	},
 	themePreference: {
 		subscribe: (fn: any) => {
 			fn("system");
 			return () => {};
-		},
+		}
 	},
 	chatRefreshSignal: {
 		subscribe: (fn: any) => {
 			fn(0);
 			return () => {};
-		},
+		}
 	},
-	derived: (fn: any) => ({
+	derived: (_fn: any) => ({
 		subscribe: (fn2: any) => {
 			fn2(null);
 			return () => {};
-		},
-	}),
+		}
+	})
 }));
 
 // Mock sub-components — must be callable for Svelte 5
@@ -61,33 +61,33 @@ vi.mock("../../lib/composables/useTopBar", () => ({
 			subscribe: (fn: any) => {
 				fn(30);
 				return () => {};
-			},
+			}
 		},
 		refreshing: {
 			subscribe: (fn: any) => {
 				fn(false);
 				return () => {};
-			},
+			}
 		},
 		npmDownloads: {
 			subscribe: (fn: any) => {
 				fn(null);
 				return () => {};
-			},
+			}
 		},
 		npmLoading: {
 			subscribe: (fn: any) => {
 				fn(false);
 				return () => {};
-			},
+			}
 		},
-		formatDownloads: (n: any) => "0",
+		formatDownloads: (_n: any) => "0",
 		toggleTheme: () => {},
 		startCountdown: () => {},
 		manualRefresh: () => {},
 		getRepoInitials: () => "",
-		destroy: () => {},
-	}),
+		destroy: () => {}
+	})
 }));
 
 // Mock arenaStateManager
@@ -97,9 +97,9 @@ vi.mock("../../lib/arena/arenaStateManager", () => ({
 			subscribe: (fn: any) => {
 				fn({ metrics: { successRate: 0, throughput: 0 } });
 				return () => {};
-			},
-		}),
-	},
+			}
+		})
+	}
 }));
 
 describe("TopBar", () => {

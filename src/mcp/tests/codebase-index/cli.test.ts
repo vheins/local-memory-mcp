@@ -1,7 +1,7 @@
 /**
  * CLI Index Tests — argument parsing and error handling.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { parseIndexArgs } from "../../codebase-index/cli";
 
 describe("parseIndexArgs", () => {

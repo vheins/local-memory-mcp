@@ -283,7 +283,7 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 			}
 		});
 
-		const createRes = await router("tools/call", {
+		await router("tools/call", {
 			name: "handoff-write",
 			arguments: {
 				repo: REPO,
@@ -353,7 +353,7 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 			}
 		});
 
-		const updateRes = await router("tools/call", {
+		await router("tools/call", {
 			name: "handoff-write",
 			arguments: {
 				id: createRes.structuredContent.id,
@@ -396,7 +396,7 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 			}
 		});
 
-		const updateRes = await router("tools/call", {
+		await router("tools/call", {
 			name: "handoff-write",
 			arguments: {
 				id: createRes.structuredContent.id,
@@ -442,7 +442,7 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 		});
 
 		// No-op update: pending → pending
-		const updateRes = await router("tools/call", {
+		await router("tools/call", {
 			name: "handoff-write",
 			arguments: {
 				id: createRes.structuredContent.id,

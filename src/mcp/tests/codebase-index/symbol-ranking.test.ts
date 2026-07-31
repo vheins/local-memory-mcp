@@ -10,9 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
 	rankSymbols,
 	filterSymbols,
-	RankTier,
-	type RankedSymbol,
-	type SymbolFilter
+	RankTier
 } from "../../codebase-index/services/symbol-ranking";
 import type { CodebaseSymbol } from "../../types/codebase-symbol";
 
@@ -200,17 +198,9 @@ describe("Ranking — Tier 5: FTS5 fallback", () => {
 
 describe("Tiebreakers", () => {
 	it("exported > non-exported within same tier", () => {
-		const symbols = [
-			makeSymbol({ name: "alpha", file_path: "src/module.ts", exported: false }),
-			makeSymbol({ name: "beta", file_path: "src/module.ts", exported: true })
-		];
-
-		const ranked = rankSymbols(symbols, "alpha");
-
 		// Both exact match by name, but "alpha" is exact case-sensitive, "beta" is substring
 		// However if both land in same tier somehow, exported should win
 		// Let's test with prefix: both match "al" as prefix
-		const prefixRanked = rankSymbols(symbols, "prefix-nomatch");
 		// Just verify the first for exported is higher — use a query both prefix-match
 		const bothPrefix = [
 			makeSymbol({ name: "helperFunc", file_path: "src/lib.ts", exported: false }),

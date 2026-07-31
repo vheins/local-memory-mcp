@@ -12,7 +12,6 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { Parser, Language } from "web-tree-sitter";
 
-import { ParseResult } from "../../codebase-index/parser/language-visitor";
 import { SymbolKind } from "../../codebase-index/parser/language-visitor";
 import { TypeScriptVisitor } from "../../codebase-index/parser/typescript-visitor";
 import { TreeSitterParserPool } from "../../codebase-index/parser/parser-pool";
@@ -712,7 +711,7 @@ export { fnA, fnB, fnC };
 			return;
 		}
 
-		const { tsLang } = await initTreeSitter();
+		await initTreeSitter();
 		// Also load TSX grammar
 		const tsxLang = await Language.load(wasmPaths.tsxGrammar);
 

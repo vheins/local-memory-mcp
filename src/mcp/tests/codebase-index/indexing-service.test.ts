@@ -1063,7 +1063,6 @@ describe("CodebaseIndexService", () => {
 	it("parse timeout: error message detected as timeout", async () => {
 		const timeoutTextPool = createMockParserPool();
 		// Override parseFile to return a timeout error
-		const orig = timeoutTextPool.parseFile;
 		timeoutTextPool.parseFile = async (_fp, _sc) => ({
 			symbols: [],
 			error: "Parse timeout after 10000ms for: file.ts",

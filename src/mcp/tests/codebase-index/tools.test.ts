@@ -6,7 +6,7 @@
  *
  * Schema tests still validate the backward-compatible schemas.
  * Handler tests now target the unified canonical handlers:
- *   - handleCodebaseIndex  (from codebase.index.ts)
+ *   - handleCodebaseIndex  (from codebase-index-sdk.ts)
  *   - handleCodebaseRead   (from codebase.read.ts)
  */
 
@@ -23,7 +23,7 @@ import {
 	SearchSymbolsSchema,
 	TraceSymbolSchema
 } from "../../tools/schemas/codebase-index";
-import { handleCodebaseIndex } from "../../tools/codebase.index";
+import { handleCodebaseIndex } from "../../tools/codebase-index-sdk";
 import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";

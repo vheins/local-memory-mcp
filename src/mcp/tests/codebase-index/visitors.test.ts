@@ -252,7 +252,7 @@ describe("DartVisitor", () => {
 			"test.dart",
 			`
 String hello(String name) {
-  return 'Hello, \$name';
+  return 'Hello, $name';
 }
 `
 		);
@@ -434,7 +434,7 @@ describe("KotlinVisitor", () => {
 			"test.kt",
 			`
 fun hello(name: String): String {
-    return "Hello, \$name"
+    return "Hello, $name"
 }
 `
 		);

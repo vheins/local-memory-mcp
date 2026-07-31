@@ -19,8 +19,16 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 	function makeMockDb(): SQLiteStore {
 		return {
 			db: {
+				// TASK-013 outbox pattern: write handlers run inside
+				// db.db.transaction(() => { insert; enqueue... })() — the mock
+				// mirrors better-sqlite3 by returning a callable that executes
+				// the body synchronously when invoked (TASK-047).
+				transaction: (fn: () => unknown) => () => fn(),
 				prepare: vi.fn().mockReturnValue({
-					get: vi.fn().mockReturnValue({ max_seq: null })
+					get: vi.fn().mockReturnValue({ max_seq: null }),
+					// enqueueEmbeddingJob + memory.delete queue purge call
+					// prepare(...).run(...) (TASK-047).
+					run: vi.fn().mockReturnValue({ changes: 0 })
 				})
 			} as never,
 			memories: {
@@ -30,6 +38,9 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 				getByIds: vi.fn().mockReturnValue([]),
 				getByCode: vi.fn().mockReturnValue(null),
 				searchByRepo: vi.fn().mockReturnValue([]),
+				// MEM-367 FTS bm25 signal (FIX-12): stub so mock-based memory-read
+				// search mode does not log "searchByFtsScored is not a function".
+				searchByFtsScored: vi.fn().mockReturnValue([]),
 				getRecentMemories: vi.fn().mockReturnValue([]),
 				getTotalCount: vi.fn().mockReturnValue(0),
 				getSummary: vi.fn().mockReturnValue(null),
@@ -81,6 +92,17 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			summaries: {
 				getSummary: vi.fn().mockReturnValue(null),
 				upsertSummary: vi.fn()
+			},
+			// KG-archivist (FIX-12): memory.read detail/search and memory.delete
+			// KG cleanup call these — stub to avoid silent degradation warnings
+			// when a mock-based test returns results.
+			knowledgeGraph: {
+				getEntityNamesByObservations: vi.fn().mockReturnValue([]),
+				getEntityNamesByObservation: vi.fn().mockReturnValue([]),
+				getEntityNamesByText: vi.fn().mockReturnValue([]),
+				getEntitiesFor: vi.fn().mockReturnValue([]),
+				getRelationsFor: vi.fn().mockReturnValue([]),
+				deleteObservationsAndOrphans: vi.fn().mockReturnValue(0)
 			},
 			close: vi.fn(),
 			getDbPath: vi.fn().mockReturnValue(":memory:"),
