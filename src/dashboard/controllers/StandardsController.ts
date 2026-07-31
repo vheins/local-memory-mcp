@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { db, vectors } from "../lib/context";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
 import type { CodingStandardEntry } from "../../mcp/types";
-import { buildStandardVectorText } from "../../mcp/tools/standard.shared";
+import { enqueueStandard } from "../../mcp/embedding-queue";
 
 const STANDARDS_EXPORT_SCHEMA = "local-memory-mcp.standards.v1";
 
@@ -213,7 +213,7 @@ export class StandardsController {
 						if (refreshVectors) {
 							const refreshed = db.standards.getById(existing.id) || { ...standard, id: existing.id };
 							try {
-								await vectors.upsert(existing.id, buildStandardVectorText(refreshed), "standard");
+								enqueueStandard(db, refreshed);
 							} catch {
 								vectorFailures += 1;
 							}
@@ -223,7 +223,7 @@ export class StandardsController {
 						db.standards.insert(standard);
 						if (refreshVectors) {
 							try {
-								await vectors.upsert(standard.id, buildStandardVectorText(standard), "standard");
+								enqueueStandard(db, standard);
 							} catch {
 								vectorFailures += 1;
 							}
@@ -290,7 +290,10 @@ export class StandardsController {
 
 			await db.withWrite(async () => {
 				db.standards.insert(entry);
-				await vectors.upsert(entry.id, buildStandardVectorText(entry), "standard");
+
+				// Embedding/KG enrichment deferred to the outbox worker (TASK-013)
+				// — keeps the write lock hold time at ~µs.
+				enqueueStandard(db, entry);
 				db.actions.logAction("write", entry.owner, entry.repo || "global", { query: entry.title, resultCount: 1 });
 			});
 
@@ -331,7 +334,8 @@ export class StandardsController {
 					...updates,
 					updated_at: new Date().toISOString()
 				};
-				await vectors.upsert(existing.id, buildStandardVectorText(merged), "standard");
+				// Defer embedding/KG enrichment to the outbox worker (TASK-013).
+				enqueueStandard(db, merged);
 				db.actions.logAction("update", existing.owner, existing.repo || "global", {
 					query: existing.title,
 					resultCount: 1

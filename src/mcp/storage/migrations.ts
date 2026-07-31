@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 10;
 
 interface Migration {
 	version: number;
@@ -623,7 +623,6 @@ const MIGRATIONS: Migration[] = [
 			// Check if memory_summary already has composite PK (owner, repo)
 			const cols = db.prepare("PRAGMA table_info(memory_summary)").all() as Array<{ name: string; pk: number }>;
 			const ownerPk = cols.find((c) => c.name === "owner" && c.pk > 0);
-			const repoPk = cols.find((c) => c.name === "repo" && c.pk > 0);
 
 			// Only rebuild if both owner and repo are not part of PK
 			if (!ownerPk) {
@@ -749,6 +748,150 @@ const MIGRATIONS: Migration[] = [
 				);
 			`);
 			logger.info("[Migration] Added task_vectors table");
+		}
+	},
+	{
+		version: 8,
+		name: "observations-observation-index",
+		up: (db) => {
+			db.exec("CREATE INDEX IF NOT EXISTS idx_observations_observation ON observations(observation)");
+			logger.info("[Migration] Added index idx_observations_observation on observations(observation)");
+		}
+	},
+	{
+		version: 9,
+		name: "embedding-queue-jobs",
+		up: (db) => {
+			// SQLite-backed outbox for the embedding/KG worker (TASK-013 / MEM-368).
+			// One row per entity (LWW coalescing via the partial unique index):
+			// re-enqueue upserts the row, replacing the snapshot payload and
+			// resetting to `pending` — the worker always processes the newest
+			// write. `payload` carries the full enqueue-time snapshot so the
+			// worker never re-reads (and races) the entity row.
+			db.exec(`
+        CREATE TABLE IF NOT EXISTS queue_jobs (
+          id TEXT PRIMARY KEY,
+          entity_kind TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          entity_repo TEXT NOT NULL DEFAULT '',
+          payload TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'pending',
+          attempts INTEGER NOT NULL DEFAULT 0,
+          lease_until TEXT,
+          locked_by TEXT,
+          backoff_until TEXT,
+          last_error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_queue_jobs_entity ON queue_jobs(entity_kind, entity_id);
+        CREATE INDEX IF NOT EXISTS idx_queue_jobs_claim ON queue_jobs(status, backoff_until, created_at);
+        CREATE INDEX IF NOT EXISTS idx_queue_jobs_created_at ON queue_jobs(created_at);
+      `);
+
+			// Observation idempotency (P2 acceptance: zero duplicate observations).
+			// KG extraction can legitimately re-run after a crash-window lease
+			// recovery; a unique (entity_name, observation) key + INSERT OR IGNORE
+			// (see KnowledgeGraphEntity.insertObservation) makes that idempotent.
+			// Dedupe any legacy duplicates first so the unique index can be built.
+			const dup = db
+				.prepare(
+					`SELECT COUNT(*) AS c FROM (
+             SELECT entity_name, observation, COUNT(*) AS cnt
+             FROM observations
+             GROUP BY entity_name, observation
+             HAVING cnt > 1
+           )`
+				)
+				.get() as { c: number };
+			if (dup.c > 0) {
+				const removed = db
+					.prepare(
+						`DELETE FROM observations
+             WHERE id NOT IN (
+               SELECT MIN(id) FROM observations GROUP BY entity_name, observation
+             )`
+					)
+					.run();
+				logger.info(`[Migration] Deduplicated ${removed.changes} duplicate observation(s) for idempotency`);
+			}
+			db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_observations_dedup ON observations(entity_name, observation)");
+
+			logger.info("[Migration] Added queue_jobs table + observations dedup index");
+		}
+	},
+	{
+		version: 10,
+		name: "memories-fts",
+		up: (db) => {
+			// ──────────────────────────────────────────────
+			// FTS5 external-content full-text index for memories (MEM-367 /
+			// TASK-014). Mirrors the codebase_symbols_fts (v1) and
+			// coding_standards_fts (v4) pattern: virtual table + ai/ad/au sync
+			// triggers + single-statement backfill inside the migration
+			// transaction. The legacy memories_fts + triggers were dropped
+			// unconditionally in migration v1 (dropObsoleteMemoriesFts), so
+			// the names are provably free on both fresh and upgraded DBs.
+			// ──────────────────────────────────────────────
+			const ftsExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'").get();
+			if (ftsExists) {
+				logger.debug("[Migration] memories_fts already exists, skipping");
+				return;
+			}
+
+			db.exec(`
+				CREATE VIRTUAL TABLE memories_fts USING fts5(
+					title, content, tags,
+					content='memories',
+					content_rowid='rowid',
+					tokenize='unicode61'
+				);
+
+				CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
+					INSERT INTO memories_fts(rowid, title, content, tags)
+					VALUES (new.rowid, new.title, new.content, new.tags);
+				END;
+
+				CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
+					INSERT INTO memories_fts(memories_fts, rowid, title, content, tags)
+					VALUES('delete', old.rowid, old.title, old.content, old.tags);
+				END;
+
+				CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
+					INSERT INTO memories_fts(memories_fts, rowid, title, content, tags)
+					VALUES('delete', old.rowid, old.title, old.content, old.tags);
+					INSERT INTO memories_fts(rowid, title, content, tags)
+					VALUES (new.rowid, new.title, new.content, new.tags);
+				END;
+			`);
+
+			// Single-statement backfill of pre-existing rows — atomic with the
+			// table+triggers because the migration runner wraps up() in a
+			// transaction (a crash mid-migration rolls back and re-runs; the
+			// ftsExists guard keeps it idempotent).
+			try {
+				const count = db
+					.prepare(
+						"INSERT INTO memories_fts(rowid, title, content, tags) SELECT rowid, title, content, tags FROM memories"
+					)
+					.run();
+				logger.info(`[Migration] Backfilled ${count.changes} memories into FTS5 index`);
+			} catch (err) {
+				logger.warn("[Migration] memories_fts backfill may have partially failed", { error: String(err) });
+			}
+
+			// ──────────────────────────────────────────────
+			// ROLLBACK (P5 hardening doc — FTS data is derived; the memories
+			// table is the source of truth, nothing durable is lost):
+			//   DROP TRIGGER IF EXISTS memories_ai;
+			//   DROP TRIGGER IF EXISTS memories_ad;
+			//   DROP TRIGGER IF EXISTS memories_au;
+			//   DROP TABLE IF EXISTS memories_fts;
+			// Queries fall back to LIKE automatically after removal. Restore
+			// later by re-running this migration or `INSERT INTO
+			// memories_fts(memories_fts) VALUES('rebuild')` on an empty table.
+			// ──────────────────────────────────────────────
 		}
 	}
 ];

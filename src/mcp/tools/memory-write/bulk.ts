@@ -4,8 +4,8 @@ import { VectorStore, MemoryEntry } from "../../types";
 import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
+import { enqueueMemory } from "../../embedding-queue";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
-import { saveExtractions } from "../kg-archivist";
 import {
 	applyDecisionFields,
 	applySessionFields,
@@ -116,12 +116,7 @@ export async function handleBulk(
 								updates[field] = MemoryTypeSchema.parse(raw[field]);
 							} else {
 								updates[field] = raw[field] as
-									| string
-									| number
-									| boolean
-									| Record<string, unknown>
-									| string[]
-									| undefined;
+									string | number | boolean | Record<string, unknown> | string[] | undefined;
 							}
 						}
 					}
@@ -129,7 +124,8 @@ export async function handleBulk(
 					db.memories.update(memId, updates);
 
 					if (raw.content !== undefined) {
-						await vectors.upsert(memId, raw.content as string);
+						const fresh = db.memories.getById(memId);
+						if (fresh) enqueueMemory(db, fresh);
 					}
 
 					results.push({
@@ -225,20 +221,14 @@ export async function handleBulk(
 	if (createdEntries.length > 0) {
 		db.memories.bulkInsertMemories(createdEntries);
 
-		// Non-critical post-insert operations
-		for (const entry of createdEntries) {
-			try {
-				await vectors.upsert(entry.id, entry.content);
-			} catch (error) {
-				logger.warn("Failed to generate vector embedding", { error: String(error) });
+		// Enqueue embedding/KG jobs for every created entry — one atomic batch
+		// (TASK-013). Enrichment runs later via the outbox worker, off the
+		// write-lock critical path.
+		db.db.transaction(() => {
+			for (const entry of createdEntries) {
+				enqueueMemory(db, entry);
 			}
-
-			try {
-				await saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
-			} catch (error) {
-				logger.warn("[KG-Archivist] NLP extraction failed", { error: String(error) });
-			}
-		}
+		})();
 	}
 
 	const successCount = results.length;

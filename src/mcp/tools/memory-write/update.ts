@@ -4,6 +4,7 @@ import { VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
+import { enqueueMemory } from "../../embedding-queue";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
 
 // ── Single UPDATE ────────────────────────────────────────────────────────
@@ -86,15 +87,20 @@ export async function handleUpdate(
 		}
 	}
 
-	db.memories.update(resolvedId, updates);
+	// Update row + outbox job atomically when content changed. Embedding/KG
+	// enrichment is deferred to the outbox worker (TASK-013) — the enqueue is
+	// a single sync upsert, keeping lock-held time at ~µs.
+	db.db.transaction(() => {
+		db.memories.update(resolvedId, updates);
+		if (params.content !== undefined) {
+			const fresh = db.memories.getById(resolvedId);
+			if (fresh) enqueueMemory(db, fresh);
+		}
+	})();
 
-	// Update vector if content changed
-	if (params.content !== undefined) {
-		await vectors.upsert(resolvedId, params.content as string);
-	}
-
-	// Log action
-	db.actions.logAction("update", existing.scope.owner, existing.scope.repo, { memoryId: resolvedId, resultCount: 1 });
+	// Action logging happens once per tool call at the executor level
+	// (logToolAction in tools/index.ts / router.ts) — do NOT log here to
+	// guarantee exactly one action_log row per tool call.
 	logger.info("[Tool] memory.write — update", {
 		repo: existing.scope.repo,
 		id: resolvedId,

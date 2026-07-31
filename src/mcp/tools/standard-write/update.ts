@@ -7,20 +7,15 @@ import { SQLiteStore } from "../../storage/sqlite.js";
 import { logger } from "../../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { UUID_REGEX } from "../../utils/uuid.js";
-import {
-	WriteParams,
-	resolveStandardParentId,
-	buildStandardVectorText,
-	saveExtractions,
-	saveStandardRelations
-} from "./shared.js";
+import { enqueueStandard } from "../../embedding-queue/index.js";
+import { WriteParams, resolveStandardParentId } from "./shared.js";
 
 // ── Core update logic — returns plain data, does NOT wrap in McpResponse ──
 
 export async function coreUpdate(
 	params: WriteParams,
 	db: SQLiteStore,
-	vectors: VectorStore
+	_vectors: VectorStore
 ): Promise<{ id: string; code: string; title: string; repo: string; updatedFields: string[] }> {
 	// Resolve code to id if needed
 	let resolvedId = params.id;
@@ -98,15 +93,14 @@ export async function coreUpdate(
 	if (params.agent !== undefined) updates.agent = params.agent;
 	if (params.model !== undefined) updates.model = params.model;
 
-	db.standards.update(resolvedId, updates);
-
 	const merged: CodingStandardEntry = {
 		...existing,
 		...updates,
 		updated_at: new Date().toISOString()
 	};
 
-	// Re-upsert vector on content or semantic field change
+	// Re-enqueue embedding/KG on content or semantic field change — atomic
+	// with the row update, enrichment deferred to the outbox worker (TASK-013).
 	const contentRelatedFields = [
 		params.name,
 		params.content,
@@ -118,31 +112,12 @@ export async function coreUpdate(
 		params.metadata
 	];
 	if (contentRelatedFields.some((f) => f !== undefined)) {
-		try {
-			await vectors.upsert(resolvedId, buildStandardVectorText(merged), "standard");
-		} catch (error) {
-			logger.warn("Failed to update standard vector embedding", { error: String(error) });
-		}
-	}
-
-	// KG auto-population on content or name change (best-effort, per REFACTOR-KG-001)
-	if (params.content !== undefined || params.name !== undefined) {
-		try {
-			await saveExtractions(merged.content, merged.title, merged.owner, merged.repo ?? "", db);
-		} catch (error) {
-			logger.warn("[KG-Archivist] Standard KG extraction failed on update", {
-				error: String(error)
-			});
-		}
-
-		// KG semantic relations (parent_id→extends, similarity→related_to, per REFACTOR-KG-002)
-		try {
-			await saveStandardRelations(merged, db);
-		} catch (error) {
-			logger.warn("[KG-Archivist] Standard KG relations failed on update", {
-				error: String(error)
-			});
-		}
+		db.db.transaction(() => {
+			db.standards.update(resolvedId, updates);
+			enqueueStandard(db, merged);
+		})();
+	} else {
+		db.standards.update(resolvedId, updates);
 	}
 
 	logger.info("[Tool] standard.write — update", {

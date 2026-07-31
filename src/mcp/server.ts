@@ -7,6 +7,7 @@ import { createMcpServer } from "./mcp-server";
 import { updateSessionFromInitialize } from "./session";
 import { SQLiteStore } from "./storage/sqlite";
 import { RealVectorStore } from "./storage/vectors";
+import { EmbeddingWorker } from "./embedding-queue";
 import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { runStartupMaintenance } from "./services/maintenance-job";
@@ -54,6 +55,12 @@ if (process.argv.includes("--index")) {
 const db = await SQLiteStore.create();
 const vectors = new RealVectorStore(db);
 
+// Start the embedding/KG outbox worker (TASK-013): drains queue_jobs with
+// batched ONNX inference + KG extraction OUTSIDE the write lock. Startup
+// reconcile/backfill/purge run inside the worker.
+const embeddingWorker = new EmbeddingWorker(db, vectors);
+embeddingWorker.start();
+
 // Register file log sink (same dir as DB, retain last 5 files)
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
 logger.info("[Server] startup", { pid: process.pid, version: CAPABILITIES.serverInfo.version, db: db.getDbPath() });
@@ -70,14 +77,18 @@ try {
 }
 
 // Run startup maintenance: memory decay, expired archiving, and low-score archiving
-runStartupMaintenance(db).then((result) => {
-	if (!result.skipped) {
-		logger.info("[Server] Startup maintenance complete", {
-			decayed: result.decay.decayed,
-			archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived
-		});
-	}
-});
+runStartupMaintenance(db)
+	.then((result) => {
+		if (!result.skipped) {
+			logger.info("[Server] Startup maintenance complete", {
+				decayed: result.decay.decayed,
+				archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived
+			});
+		}
+	})
+	.catch((err) => {
+		logger.error("[Server] Startup maintenance failed", { error: String(err) });
+	});
 
 // Run startup auto-index: triggers codebase indexing for the current working directory
 // if the index has never been built or is older than TTL (default 24h).
@@ -90,13 +101,17 @@ runStartupMaintenance(db).then((result) => {
 	void parserPool
 		.initialize()
 		.then(() => {
-			void autoIndexIfStale(repoName, repoPath, db, parserPool).then((result) => {
-				logger.info("[Server] Auto-index check complete", {
-					repo: repoName,
-					status: result.status,
-					reason: result.reason
+			void autoIndexIfStale(repoName, repoPath, db, parserPool)
+				.then((result) => {
+					logger.info("[Server] Auto-index check complete", {
+						repo: repoName,
+						status: result.status,
+						reason: result.reason
+					});
+				})
+				.catch((err) => {
+					logger.warn("[Server] Auto-index check failed", { error: String(err) });
 				});
-			});
 		})
 		.catch((err) => {
 			logger.warn("[Server] Auto-index parser pool initialization failed", { error: String(err) });
@@ -117,13 +132,26 @@ process.stderr.on("error", (err: unknown) => {
 // Cleanup on exit
 const shutdown = async (signal: string) => {
 	logger.info("[Server] shutdown", { signal, pid: process.pid });
+	embeddingWorker.stop();
 	await handle?.close();
 	db.close();
 	process.exit(0);
 };
 
-process.on("SIGINT", () => void shutdown("SIGINT"));
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on(
+	"SIGINT",
+	() =>
+		void shutdown("SIGINT").catch((err) => {
+			logger.error("[Server] shutdown error", { error: String(err) });
+		})
+);
+process.on(
+	"SIGTERM",
+	() =>
+		void shutdown("SIGTERM").catch((err) => {
+			logger.error("[Server] shutdown error", { error: String(err) });
+		})
+);
 
 // Start the MCP stdio server using the SDK
 const handle = serveStdio(() => {

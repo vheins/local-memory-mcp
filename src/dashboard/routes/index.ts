@@ -7,6 +7,7 @@ import coordinationRoutes from "./coordination.routes";
 import kgRoutes from "./kg.routes";
 import codebaseRoutes from "./codebase.routes";
 import unifiedGraphRoutes from "./unifiedGraph.routes";
+import queueRoutes from "./queue.routes";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use("/coordination", coordinationRoutes);
 router.use("/", kgRoutes);
 router.use("/codebase", codebaseRoutes);
 router.use("/", unifiedGraphRoutes);
+router.use("/queue", queueRoutes);
 
 export default router;

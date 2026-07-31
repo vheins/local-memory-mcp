@@ -2,11 +2,10 @@ import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskStatus, TaskPriority, VectorStore } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
-import { logger } from "../../utils/logger";
 import { resolveEntityCode } from "../../utils/code-generator";
+import { enqueueTask } from "../../embedding-queue";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from "../task.helpers";
-import { saveExtractions, saveTaskRelations } from "../kg-archivist";
-import { applyDecisionRefs, tryVectorEmbedding } from "./effects";
+import { applyDecisionRefs } from "./effects";
 import { WriteParams } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -86,31 +85,15 @@ function coreCreate(params: WriteParams, storage: SQLiteStore): { task: Task; co
 export async function handleCreateSingle(
 	params: WriteParams,
 	storage: SQLiteStore,
-	vectors: VectorStore
+	_vectors: VectorStore
 ): Promise<McpResponse> {
-	const { task } = coreCreate(params, storage);
-
-	// Best-effort vector embedding on create
-	await tryVectorEmbedding(task.id, task.title, task.description, vectors);
-
-	// Best-effort KG entity/relation extraction
-	try {
-		await saveExtractions(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage);
-	} catch (error) {
-		logger.warn("[KG-Archivist] NLP extraction failed, task stored without KG enrichment", { error: String(error) });
-	}
-
-	// Best-effort KG semantic relations (parent_id→depends_on, decision_refs→inspired_by)
-	try {
-		await saveTaskRelations(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage, {
-			parentId: task.parent_id,
-			decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
-		});
-	} catch (error) {
-		logger.warn("[KG-Archivist] Task semantic relations failed, task stored without KG relations", {
-			error: String(error)
-		});
-	}
+	// Insert task + enqueue embedding/KG job atomically; enrichment (ONNX
+	// vector + compromise KG) runs via the outbox worker (TASK-013).
+	const { task } = storage.db.transaction(() => {
+		const created = coreCreate(params, storage);
+		enqueueTask(storage, created.task);
+		return created;
+	})();
 
 	return createMcpResponse(
 		{

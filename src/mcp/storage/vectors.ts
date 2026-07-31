@@ -1,6 +1,7 @@
 import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
+import { cosineSimilarityArrays } from "../utils/vector";
 
 type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
 
@@ -40,17 +41,27 @@ export class RealVectorStore implements VectorStore {
 		return this.extractor;
 	}
 
-	private cosineSimilarity(v1: number[], v2: number[]): number {
-		let dotProduct = 0;
-		let mag1 = 0;
-		let mag2 = 0;
-		for (let i = 0; i < v1.length; i++) {
-			dotProduct += v1[i] * v2[i];
-			mag1 += v1[i] * v1[i];
-			mag2 += v2[i] * v2[i];
+	/**
+	 * Batched embedding for the outbox worker (TASK-013). Runs a single ONNX
+	 * inference pass over all texts, sharing the process-wide extractor with
+	 * `upsert`/`search` so the model is loaded exactly once per process.
+	 */
+	async embed(texts: string[]): Promise<number[][]> {
+		if (texts.length === 0) return [];
+		const extractor = await this.getExtractor();
+		const output = await extractor(texts, { pooling: "mean", normalize: true });
+		const data = output.data as Float32Array;
+		const dims = output.dims;
+		const perRow =
+			Array.isArray(dims) && dims.length > 1 && typeof dims[1] === "number"
+				? dims[1]
+				: Math.floor(data.length / texts.length);
+		const result: number[][] = [];
+		for (let i = 0; i < texts.length; i++) {
+			const start = i * perRow;
+			result.push(Array.from(data.subarray(start, start + perRow)));
 		}
-		const mag = Math.sqrt(mag1) * Math.sqrt(mag2);
-		return mag === 0 ? 0 : dotProduct / mag;
+		return result;
 	}
 
 	async upsert(id: string, text: string, kind: VectorEntityKind = "memory"): Promise<void> {
@@ -90,6 +101,20 @@ export class RealVectorStore implements VectorStore {
 		kind: VectorEntityKind = "memory"
 	): Promise<VectorResult[]> {
 		try {
+			// Gate the codebase_symbol vector stage on the populated-vector row
+			// count: codebase_symbol_vectors is never populated (upsertSymbolEmbeddings
+			// has zero callers), so running a full ONNX query inference per
+			// codebase-read search is pure waste. When the table is empty we skip
+			// inference entirely and blendVectorRanking falls back to text-only
+			// ranking. The probe is a LIMIT 1 query (never loads candidate rows).
+			if (kind === "codebase_symbol") {
+				const vectorRows = this.db.codebaseSymbols.getSymbolVectorsByRepo(repo || "", 1);
+				if (vectorRows.length === 0) {
+					logger.debug("[Vectors] Skipping codebase_symbol search — no symbol vectors populated", { repo });
+					return [];
+				}
+			}
+
 			const extractor = await this.getExtractor();
 			const output = await extractor(query, { pooling: "mean", normalize: true });
 			const queryVector = Array.from(output.data as Float32Array);
@@ -115,7 +140,7 @@ export class RealVectorStore implements VectorStore {
 				const memoryVector = JSON.parse(row.vector) as number[];
 				return {
 					id: row.id,
-					score: this.cosineSimilarity(queryVector, memoryVector)
+					score: cosineSimilarityArrays(queryVector, memoryVector)
 				};
 			});
 

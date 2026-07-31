@@ -1,8 +1,6 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, VectorStore } from "../../types";
-import { logger } from "../../utils/logger";
-import { saveExtractions, saveTaskRelations } from "../kg-archivist";
-import { tryVectorEmbedding } from "./effects";
+import { enqueueTask } from "../../embedding-queue";
 import { WriteParams } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -67,39 +65,20 @@ export function applyDecisionRefsToUpdates(
 }
 
 /**
- * Best-effort vector embedding + KG extraction for updated tasks (if title/description changed).
+ * Enqueue embedding/KG jobs for updated tasks (if title/description changed).
+ * Synchronous LWW upsert — enrichment runs via the outbox worker (TASK-013),
+ * off the write-lock critical path. Signature retained for callers; the
+ * `vectors` instance is no longer used here.
  */
 export async function enrichUpdatedTasks(
 	updatedTasks: { id: string }[],
 	storage: SQLiteStore,
-	vectors: VectorStore
+	_vectors: VectorStore
 ): Promise<void> {
 	for (const { id: taskId } of updatedTasks) {
 		const task = storage.tasks.getTaskById(taskId);
 		if (task) {
-			await tryVectorEmbedding(taskId, task.title, task.description, vectors);
-			try {
-				await saveExtractions(`${task.title}\n${task.description ?? ""}`, task.title, task.owner, task.repo, storage);
-			} catch (error) {
-				logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
-			}
-			try {
-				await saveTaskRelations(
-					`${task.title}\n${task.description ?? ""}`,
-					task.title,
-					task.owner,
-					task.repo,
-					storage,
-					{
-						parentId: task.parent_id,
-						decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
-					}
-				);
-			} catch (error) {
-				logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
-					error: String(error)
-				});
-			}
+			enqueueTask(storage, task);
 		}
 	}
 }

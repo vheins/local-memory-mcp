@@ -4,9 +4,9 @@ import { Task, TaskStatus, TaskPriority, VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 import { UUID_REGEX } from "../../utils/uuid";
 import { resolveEntityCode } from "../../utils/code-generator";
+import { enqueueTask } from "../../embedding-queue";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps, archiveTaskToMemory } from "../task.helpers";
-import { saveExtractions, saveTaskRelations } from "../kg-archivist";
-import { applyDecisionRefs, tryVectorEmbedding } from "./effects";
+import { applyDecisionRefs } from "./effects";
 import { validateStatusTransition, validateBulkStatus } from "./state-machine";
 import { inferItemMode } from "./bulk-infer";
 
@@ -153,76 +153,61 @@ export async function executeBulkOperation(
 					itemUpdates.in_progress_at = now;
 				}
 
-				storage.tasks.updateTask(resolvedId, itemUpdates);
+				// ── Synchronous DB mutations, atomic (single transaction) ──
+				// updateTask + comment + claims/handoffs cleanup either all commit
+				// or all roll back — no partial state on mid-way failure.
+				storage.db.transaction(() => {
+					storage.tasks.updateTask(resolvedId, itemUpdates);
 
-				// Comment insertion
-				if (itemUpdates.status !== undefined && itemUpdates.status !== existing.status) {
-					storage.taskComments.insertTaskComment({
-						id: randomUUID(),
-						task_id: resolvedId,
-						owner,
-						repo,
-						comment: (raw.comment as string) || `Status updated to ${itemUpdates.status}`,
-						agent: (raw.agent as string) || existing.agent || "unknown",
-						role: (raw.role as string) || existing.role || "unknown",
-						model: (raw.model as string) || "unknown",
-						previous_status: existing.status as TaskStatus,
-						next_status: itemUpdates.status as TaskStatus,
-						created_at: now
-					});
-				}
+					// Comment insertion
+					if (itemUpdates.status !== undefined && itemUpdates.status !== existing.status) {
+						storage.taskComments.insertTaskComment({
+							id: randomUUID(),
+							task_id: resolvedId,
+							owner,
+							repo,
+							comment: (raw.comment as string) || `Status updated to ${itemUpdates.status}`,
+							agent: (raw.agent as string) || existing.agent || "unknown",
+							role: (raw.role as string) || existing.role || "unknown",
+							model: (raw.model as string) || "unknown",
+							previous_status: existing.status as TaskStatus,
+							next_status: itemUpdates.status as TaskStatus,
+							created_at: now
+						});
+					}
 
-				// Best-effort vector embedding + KG extraction if title/description changed
+					// Claims/handoffs cleanup
+					if (itemUpdates.status === "completed" || itemUpdates.status === "canceled") {
+						storage.handoffs.releaseClaimsForTask(resolvedId);
+						storage.handoffs.updatePendingHandoffsForTask(resolvedId, "expired");
+					}
+				})();
+
+				// Best-effort embedding/KG — enqueue to the outbox worker if
+				// title/description changed (TASK-013). Synchronous LWW upsert.
 				if (itemUpdates.title !== undefined || itemUpdates.description !== undefined) {
 					const updatedTask = storage.tasks.getTaskById(resolvedId);
 					if (updatedTask) {
-						await tryVectorEmbedding(resolvedId, updatedTask.title, updatedTask.description, vectors);
-						try {
-							await saveExtractions(
-								`${updatedTask.title}\n${updatedTask.description ?? ""}`,
-								updatedTask.title,
-								owner,
-								repo,
-								storage
-							);
-						} catch (error) {
-							logger.warn("[KG-Archivist] NLP extraction failed for updated task", { error: String(error) });
-						}
-						try {
-							await saveTaskRelations(
-								`${updatedTask.title}\n${updatedTask.description ?? ""}`,
-								updatedTask.title,
-								owner,
-								repo,
-								storage,
-								{
-									parentId: updatedTask.parent_id,
-									decisionRefs: (updatedTask.metadata?.decision_refs as string[]) ?? undefined
-								}
-							);
-						} catch (error) {
-							logger.warn("[KG-Archivist] Task semantic relations failed for updated task", {
-								error: String(error)
-							});
-						}
+						enqueueTask(storage, updatedTask);
 					}
 				}
 
-				// Claims/handoffs cleanup
-				if (itemUpdates.status === "completed" || itemUpdates.status === "canceled") {
-					storage.handoffs.releaseClaimsForTask(resolvedId);
-					storage.handoffs.updatePendingHandoffsForTask(resolvedId, "expired");
-				}
-
-				// Async archive for completed
+				// Archive for completed — awaited BEFORE the tool response resolves
+				// so the task_archive memory rows exist the moment the caller
+				// observes the write (deterministic for the bulk path, no
+				// setImmediate race). Each archive runs under withWrite: the
+				// archival performs memory INSERT + outbox enqueue via
+				// handleMemoryWrite, so it must never run unlocked. The write
+				// lock is reentrant (WriteLock.withLock), so when the router
+				// already holds the outer withWrite the inner acquisition is a
+				// no-op — no nested locking. Best-effort: a per-task archival
+				// failure is logged and does not fail the item or the batch.
 				if (itemUpdates.status === "completed" && existing.status !== "completed") {
-					setImmediate(async () => {
-						try {
-							await archiveTaskToMemory(resolvedId, repo, storage, vectors);
-						} catch (err) {
-							logger.error("Failed to archive task to memory", { taskId: resolvedId, error: String(err) });
-						}
-					});
+					try {
+						await storage.withWrite(() => archiveTaskToMemory(resolvedId, repo, storage, vectors));
+					} catch (err) {
+						logger.error("Failed to archive task to memory", { taskId: resolvedId, error: String(err) });
+					}
 				}
 
 				results.push({
@@ -313,48 +298,12 @@ export async function executeBulkOperation(
 					depends_on: resolveDependsOn(raw.depends_on as string | null | undefined, owner, repo, storage, localCodeMap)
 				};
 
-				storage.tasks.insertTask(task);
-
-				// Best-effort vector embedding (fire-and-forget to avoid sequential hang)
-				setImmediate(async () => {
-					try {
-						await tryVectorEmbedding(task.id, task.title, task.description, vectors);
-					} catch (err) {
-						logger.warn("Failed to generate vector embedding for bulk task", { taskId: task.id, error: String(err) });
-					}
-				});
-
-				// Best-effort KG extraction (fire-and-forget to avoid sequential NLP overhead)
-				setImmediate(async () => {
-					try {
-						await saveExtractions(
-							`${task.title}\n${task.description ?? ""}`,
-							task.title,
-							task.owner,
-							task.repo,
-							storage
-						);
-					} catch (error) {
-						logger.warn("[KG-Archivist] NLP extraction failed", { error: String(error) });
-					}
-					try {
-						await saveTaskRelations(
-							`${task.title}\n${task.description ?? ""}`,
-							task.title,
-							task.owner,
-							task.repo,
-							storage,
-							{
-								parentId: task.parent_id,
-								decisionRefs: (task.metadata?.decision_refs as string[]) ?? undefined
-							}
-						);
-					} catch (error) {
-						logger.warn("[KG-Archivist] Task semantic relations failed for bulk task", {
-							error: String(error)
-						});
-					}
-				});
+				// Insert + enqueue embedding/KG atomically; enrichment (ONNX +
+				// compromise KG) runs via the outbox worker (TASK-013).
+				storage.db.transaction(() => {
+					storage.tasks.insertTask(task);
+					enqueueTask(storage, task);
+				})();
 
 				results.push({
 					index: i,

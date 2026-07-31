@@ -1,4 +1,3 @@
-import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 

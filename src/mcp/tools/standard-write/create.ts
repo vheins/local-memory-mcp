@@ -5,24 +5,16 @@
 import { randomUUID } from "crypto";
 import { CodingStandardEntry, VectorStore } from "../../types/index.js";
 import { SQLiteStore } from "../../storage/sqlite.js";
-import { logger } from "../../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
-import {
-	WriteParams,
-	resolveStandardParentId,
-	toContextSlug,
-	buildStandardVectorText,
-	generateNextCode,
-	saveExtractions,
-	saveStandardRelations
-} from "./shared.js";
+import { enqueueStandard } from "../../embedding-queue/index.js";
+import { WriteParams, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
 
 // ── Core create logic — returns plain data, does NOT wrap in McpResponse ──
 
 export async function coreCreate(
 	params: WriteParams,
 	db: SQLiteStore,
-	vectors: VectorStore
+	_vectors: VectorStore
 ): Promise<{ id: string; code: string; title: string; repo: string }> {
 	if (!params.name || !params.content || !params.tags || !params.metadata) {
 		throw new Error("CREATE requires: name, content, tags, metadata");
@@ -97,32 +89,14 @@ export async function coreCreate(
 		model: params.model || "unknown"
 	};
 
-	db.standards.insert(entry);
+	db.db.transaction(() => {
+		db.standards.insert(entry);
 
-	// Vector embedding
-	try {
-		await vectors.upsert(entry.id, buildStandardVectorText(entry), "standard");
-	} catch (error) {
-		logger.warn("Failed to generate standard vector embedding", { error: String(error) });
-	}
-
-	// KG auto-population (best-effort, per REFACTOR-KG-001)
-	try {
-		await saveExtractions(entry.content, entry.title, entry.owner, entry.repo ?? "", db);
-	} catch (error) {
-		logger.warn("[KG-Archivist] Standard KG extraction failed, saved without KG enrichment", {
-			error: String(error)
-		});
-	}
-
-	// KG semantic relations (parent_id→extends, similarity→related_to, per REFACTOR-KG-002)
-	try {
-		await saveStandardRelations(entry, db);
-	} catch (error) {
-		logger.warn("[KG-Archivist] Standard KG relations failed, saved without KG relations", {
-			error: String(error)
-		});
-	}
+		// Enqueue embedding + KG enrichment (vector text, content extraction,
+		// parent/stack relations) to the outbox worker — off the write-lock
+		// critical path (TASK-013).
+		enqueueStandard(db, entry);
+	})();
 
 	return { id: entry.id, code: entry.code!, title: entry.title, repo: entry.repo || "global" };
 }

@@ -3,7 +3,8 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore, MemoryEntry } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { resolveEntityCode } from "../../utils/code-generator";
-import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
+import { resolveMemorySupersedes } from "../../utils/memory-utils";
+import { MEMORY_CONFLICT_THRESHOLD, TTL_MS_PER_DAY } from "../../utils/constants";
 
 // ── Mode inference ───────────────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ export function buildMemoryEntry(
 
 	const createdAtTime = new Date(now).getTime();
 	const expires_at =
-		params.ttlDays != null ? new Date(createdAtTime + (params.ttlDays as number) * 86400000).toISOString() : null;
+		params.ttlDays != null ? new Date(createdAtTime + (params.ttlDays as number) * TTL_MS_PER_DAY).toISOString() : null;
 
 	const resolvedSupersedes = resolveMemorySupersedes(params.supersedes as string | null | undefined, db, owner, repo);
 
@@ -200,7 +201,7 @@ export async function checkCreateConflict(
 		repo,
 		params.type as string,
 		vectors,
-		0.85
+		MEMORY_CONFLICT_THRESHOLD
 	);
 
 	if (conflict) {

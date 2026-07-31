@@ -5,22 +5,13 @@
 import { randomUUID } from "crypto";
 import { CodingStandardEntry, VectorStore } from "../../types/index.js";
 import { SQLiteStore } from "../../storage/sqlite.js";
-import { logger } from "../../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
-import {
-	WriteParams,
-	BulkResult,
-	resolveStandardParentId,
-	toContextSlug,
-	buildStandardVectorText,
-	generateNextCode,
-	saveExtractions,
-	saveStandardRelations
-} from "./shared.js";
+import { enqueueStandard } from "../../embedding-queue/index.js";
+import { WriteParams, BulkResult, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
 
 // ── Bulk handler ─────────────────────────────────────────────────────────
 
-export async function handleBulk(params: WriteParams, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
+export async function handleBulk(params: WriteParams, db: SQLiteStore, _vectors: VectorStore): Promise<McpResponse> {
 	const items = params.standards ?? [];
 	const results: BulkResult[] = [];
 	const batchCodes = new Set<string>();
@@ -88,28 +79,12 @@ export async function handleBulk(params: WriteParams, db: SQLiteStore, vectors: 
 				model: (std.model as string) || "unknown"
 			};
 
-			db.standards.insert(entry);
-
-			// Vector upsert
-			try {
-				await vectors.upsert(entry.id, buildStandardVectorText(entry), "standard");
-			} catch (error) {
-				logger.warn("Failed to generate standard vector embedding", { error: String(error) });
-			}
-
-			// KG auto-population (best-effort)
-			try {
-				await saveExtractions(entry.content, entry.title, entry.owner, entry.repo ?? "", db);
-			} catch (error) {
-				logger.warn("[KG-Archivist] Standard KG extraction failed", { error: String(error) });
-			}
-
-			// KG semantic relations (parent_id→extends, similarity→related_to, per REFACTOR-KG-002)
-			try {
-				await saveStandardRelations(entry, db);
-			} catch (error) {
-				logger.warn("[KG-Archivist] Standard KG relations failed", { error: String(error) });
-			}
+			// Insert + enqueue embedding/KG atomically; enrichment deferred to
+			// the outbox worker (TASK-013).
+			db.db.transaction(() => {
+				db.standards.insert(entry);
+				enqueueStandard(db, entry);
+			})();
 
 			results.push({ index: i, operation: "create", success: true, id: entry.id, code, title: std.name });
 		} catch (err) {

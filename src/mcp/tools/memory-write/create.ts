@@ -1,9 +1,8 @@
 import { MemoryWriteSchema } from "../schemas";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
-import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
-import { saveExtractions } from "../kg-archivist";
+import { enqueueMemory } from "../../embedding-queue";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
 import { applyDecisionFields, applySessionFields, buildMemoryEntry, checkCreateConflict } from "./helpers";
 
@@ -62,23 +61,12 @@ export async function handleCreate(
 	const now = new Date().toISOString();
 	const entry = buildMemoryEntry(parsed as unknown as Record<string, unknown>, db, vectors, now);
 
-	db.memories.insert(entry);
-
-	// Vector upsert (non-critical)
-	try {
-		await vectors.upsert(entry.id, entry.content);
-	} catch (error) {
-		logger.warn("Failed to generate vector embedding", { error: String(error) });
-	}
-
-	// NLP entity extraction (non-critical)
-	try {
-		await saveExtractions(entry.content, entry.title, entry.scope.owner, entry.scope.repo, db);
-	} catch (error) {
-		logger.warn("[KG-Archivist] NLP extraction failed, memory stored without KG enrichment", {
-			error: String(error)
-		});
-	}
+	// Row + outbox job commit atomically inside the write transaction: ONNX
+	// embedding + KG extraction run later via the outbox worker (TASK-013).
+	db.db.transaction(() => {
+		db.memories.insert(entry);
+		enqueueMemory(db, entry);
+	})();
 
 	return createMcpResponse(
 		{
