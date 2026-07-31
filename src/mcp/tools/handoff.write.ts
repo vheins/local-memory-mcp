@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { HandoffWriteSchema } from "./schemas";
@@ -27,6 +28,19 @@ type WriteParams = {
 	// Metadata
 	json: boolean;
 };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function extractNextSteps(context: Record<string, unknown> | undefined): string {
+	const steps = context?.next_steps;
+	if (!steps || !Array.isArray(steps) || steps.length === 0) {
+		return "";
+	}
+	const joined = steps.map(String).join("; ");
+	return joined.length > 300 ? joined.slice(0, 300) + "..." : joined;
+}
 
 // ---------------------------------------------------------------------------
 // Core: CREATE handoff
@@ -103,6 +117,25 @@ async function coreCreate(
 		expires_at: params.expires_at ?? null
 	});
 
+	// Auto-comment on linked task for traceability
+	if (handoff.task_id) {
+		const now = new Date().toISOString();
+		const target = handoff.to_agent || "unassigned";
+		storage.taskComments.insertTaskComment({
+			id: randomUUID(),
+			task_id: handoff.task_id,
+			owner: params.owner,
+			repo: params.repo,
+			comment: `Handoff [${handoff.id.slice(0, 8)}] created: ${handoff.from_agent} → ${target} — ${handoff.summary}`,
+			agent: handoff.from_agent,
+			role: "unknown",
+			model: "system",
+			previous_status: null,
+			next_status: null,
+			created_at: now
+		});
+	}
+
 	const excerpt = handoff.summary.length > 50 ? handoff.summary.slice(0, 50) + "..." : handoff.summary;
 	const contentSummary = `Created [${handoff.id.slice(0, 8)}] "${excerpt}" — ${handoff.from_agent}→${handoff.to_agent || "unassigned"} (${handoff.status}) in "${handoff.repo}".`;
 
@@ -148,6 +181,35 @@ async function coreUpdate(
 		status,
 		handoff: updated
 	};
+
+	// Auto-comment on status change for traceability
+	if (updated?.task_id && status !== existing.status) {
+		const now = new Date().toISOString();
+		let comment: string;
+		if (status === "accepted") {
+			const steps = extractNextSteps(existing.context as Record<string, unknown>);
+			comment = `Handoff [${params.id.slice(0, 8)}] accepted by ${updated.to_agent || existing.from_agent}.`;
+			if (steps) {
+				comment += ` Next steps: ${steps}`;
+			}
+		} else {
+			comment = `Handoff [${params.id.slice(0, 8)}] ${status}`;
+		}
+		storage.taskComments.insertTaskComment({
+			id: randomUUID(),
+			task_id: updated.task_id,
+			owner: updated.owner,
+			repo: updated.repo,
+			comment,
+			agent: existing.from_agent,
+			role: "unknown",
+			model: "system",
+			previous_status: null,
+			next_status: null,
+			created_at: now
+		});
+	}
+
 	const excerpt = existing.summary.length > 50 ? existing.summary.slice(0, 50) + "..." : existing.summary;
 	const contentSummary = `Updated [${params.id.slice(0, 8)}] "${excerpt}" in "${existing.repo}" — ${existing.status} → ${status}.`;
 

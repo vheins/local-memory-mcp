@@ -29,6 +29,15 @@ function buildHandoffListSummary(repo: string, count: number, status?: string, f
 	return parts.join("\n");
 }
 
+function extractNextSteps(context: Record<string, unknown> | undefined): string {
+	const steps = context?.next_steps;
+	if (!steps || !Array.isArray(steps) || steps.length === 0) {
+		return "";
+	}
+	const joined = steps.map(String).join("; ");
+	return joined.length > 300 ? joined.slice(0, 300) + "..." : joined;
+}
+
 function buildClaimListSummary(repo: string, count: number, agent?: string, activeOnly?: boolean) {
 	const parts = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
 
@@ -73,6 +82,25 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 		context,
 		expires_at
 	});
+
+	// Auto-comment on linked task for traceability
+	if (handoff.task_id) {
+		const now = new Date().toISOString();
+		const target = handoff.to_agent || "unassigned";
+		storage.taskComments.insertTaskComment({
+			id: randomUUID(),
+			task_id: handoff.task_id,
+			owner,
+			repo,
+			comment: `Handoff [${handoff.id.slice(0, 8)}] created: ${handoff.from_agent} → ${target} — ${handoff.summary}`,
+			agent: handoff.from_agent,
+			role: "unknown",
+			model: "system",
+			previous_status: null,
+			next_status: null,
+			created_at: now
+		});
+	}
 
 	const contentSummary = `Created handoff [${handoff.id.slice(0, 8)}] in repo "${handoff.repo}": from=${handoff.from_agent}, to=${handoff.to_agent || "unassigned"}, status=${handoff.status}.`;
 
@@ -168,6 +196,35 @@ export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 	}
 
 	const updated = storage.handoffs.getHandoffById(id);
+
+	// Auto-comment on status change for traceability
+	if (updated?.task_id && status !== existing.status) {
+		const now = new Date().toISOString();
+		let comment: string;
+		if (status === "accepted") {
+			const steps = extractNextSteps(existing.context as Record<string, unknown>);
+			comment = `Handoff [${id.slice(0, 8)}] accepted by ${updated.to_agent || existing.from_agent}.`;
+			if (steps) {
+				comment += ` Next steps: ${steps}`;
+			}
+		} else {
+			comment = `Handoff [${id.slice(0, 8)}] ${status}`;
+		}
+		storage.taskComments.insertTaskComment({
+			id: randomUUID(),
+			task_id: updated.task_id,
+			owner: updated.owner,
+			repo: updated.repo,
+			comment,
+			agent: existing.from_agent,
+			role: "unknown",
+			model: "system",
+			previous_status: null,
+			next_status: null,
+			created_at: now
+		});
+	}
+
 	const result = {
 		success,
 		id,

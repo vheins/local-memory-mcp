@@ -267,4 +267,216 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 		expect(db.handoffs.getClaim(claimRes.structuredContent.task_id)).toBeNull();
 		expect(db.handoffs.getHandoffById(handoffRes.structuredContent.id)?.status).toBe("expired");
 	});
+
+	it("auto-comments on create with task_id", async () => {
+		const task = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				code: "AUTO-001",
+				phase: "implementation",
+				title: "Auto-comment create task",
+				description: "Task for create comment test.",
+				status: "pending",
+				priority: 3
+			}
+		});
+
+		const createRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-a",
+				to_agent: "agent-b",
+				task_code: "AUTO-001",
+				summary: "Review PR for autocomplete",
+				context: { next_steps: ["Check edge cases", "Write tests"] }
+			}
+		});
+
+		const comments = db.taskComments.getTaskCommentsByTaskId(task.structuredContent.id);
+		expect(comments).toHaveLength(1);
+		expect(comments[0].comment).toContain("Handoff [");
+		expect(comments[0].comment).toContain("] created: agent-a → agent-b — Review PR for autocomplete");
+		expect(comments[0].agent).toBe("agent-a");
+		expect(comments[0].role).toBe("unknown");
+		expect(comments[0].model).toBe("system");
+		expect(comments[0].previous_status).toBeNull();
+		expect(comments[0].next_status).toBeNull();
+	});
+
+	it("does not auto-comment on create without task_id", async () => {
+		const createRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-x",
+				summary: "Blocked waiting for design review",
+				context: { blockers: ["Design review pending"] }
+			}
+		});
+
+		expect(createRes.structuredContent.task_id).toBeNull();
+		// No task ID means no comment — verify no explosion by asserting
+		// structuredContent came back clean
+		expect(createRes.structuredContent.status).toBe("pending");
+	});
+
+	it("auto-comments on accepted with next_steps payload", async () => {
+		const task = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				code: "AUTO-002",
+				phase: "implementation",
+				title: "Auto-comment accept task",
+				description: "Task for accept comment test.",
+				status: "pending",
+				priority: 3
+			}
+		});
+
+		const createRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-a",
+				to_agent: "agent-b",
+				task_code: "AUTO-002",
+				summary: "Continue API implementation",
+				context: { next_steps: ["Implement auth", "Add tests", "Update docs"] }
+			}
+		});
+
+		const updateRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				id: createRes.structuredContent.id,
+				status: "accepted"
+			}
+		});
+
+		const comments = db.taskComments.getTaskCommentsByTaskId(task.structuredContent.id);
+		expect(comments).toHaveLength(2); // create + accept
+		const acceptComment = comments.find((c) => c.comment.includes("accepted"));
+		expect(acceptComment).toBeDefined();
+		expect(acceptComment!.comment).toContain("accepted by agent-b.");
+		expect(acceptComment!.comment).toContain("Next steps: Implement auth; Add tests; Update docs");
+	});
+
+	it("auto-comments on rejected with one-line comment", async () => {
+		const task = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				code: "AUTO-003",
+				phase: "implementation",
+				title: "Auto-comment reject task",
+				description: "Task for reject comment test.",
+				status: "pending",
+				priority: 3
+			}
+		});
+
+		const createRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-a",
+				task_code: "AUTO-003",
+				summary: "Fix null pointer in parser",
+				context: { remaining_work: "Parser fix" }
+			}
+		});
+
+		const updateRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				id: createRes.structuredContent.id,
+				status: "rejected"
+			}
+		});
+
+		const comments = db.taskComments.getTaskCommentsByTaskId(task.structuredContent.id);
+		const rejectComment = comments.find((c) => c.comment.includes("rejected"));
+		expect(rejectComment).toBeDefined();
+		expect(rejectComment!.comment).toContain("Handoff [");
+		expect(rejectComment!.comment).toContain("] rejected");
+		// One-liner: should not contain "Next steps" or "accepted by"
+		expect(rejectComment!.comment).not.toContain("Next steps");
+		expect(rejectComment!.comment).not.toContain("accepted by");
+	});
+
+	it("does not auto-comment on no-op update (same status)", async () => {
+		const task = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				code: "AUTO-004",
+				phase: "implementation",
+				title: "Auto-comment noop task",
+				description: "Task for no-op comment test.",
+				status: "pending",
+				priority: 3
+			}
+		});
+
+		const createRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-a",
+				task_code: "AUTO-004",
+				summary: "Polish UI components",
+				context: { remaining_work: "UI polish" }
+			}
+		});
+
+		// No-op update: pending → pending
+		const updateRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				id: createRes.structuredContent.id,
+				status: "pending"
+			}
+		});
+
+		const comments = db.taskComments.getTaskCommentsByTaskId(task.structuredContent.id);
+		// Only the create comment, no second comment for the no-op
+		expect(comments).toHaveLength(1);
+		expect(comments[0].comment).toContain("created:");
+	});
+
+	it("does not auto-comment on update without task_id", async () => {
+		const createRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-x",
+				summary: "Stale transfer without task link",
+				context: { blockers: ["No task linked"] }
+			}
+		});
+
+		const updateRes = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				id: createRes.structuredContent.id,
+				status: "expired"
+			}
+		});
+
+		expect(updateRes.structuredContent.success).toBe(true);
+		expect(updateRes.structuredContent.status).toBe("expired");
+	});
 });
