@@ -1,7 +1,7 @@
 import type { RenderCtx } from "./utils";
 import { rr, rgba, lighten } from "./utils";
 import { STATUS_COLORS } from "../arenaTransform";
-import type { VisualTask, ArenaScene } from "../arenaTypes";
+import type { VisualTask } from "../arenaTypes";
 import { drawMonitorActivity } from "./effects";
 export { drawZoneAggregate } from "./workstation-overlay";
 

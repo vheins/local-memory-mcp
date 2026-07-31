@@ -5,7 +5,6 @@ import type {
 	ArenaState,
 	ArenaPatch,
 	ZoneAggregate,
-	ArenaMetrics,
 	FilterState,
 	EventLogEntry
 } from "./arenaEvents";
@@ -311,7 +310,7 @@ export class ArenaStateManager {
 	}
 
 	private logDomainEvent(event: DomainEvent): void {
-		let detail = "";
+		let detail: string;
 		let entityType: "agent" | "task" | "repository" = "task";
 		let entityId = "";
 		const action = event.type;

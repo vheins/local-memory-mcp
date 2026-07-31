@@ -197,7 +197,7 @@ const TOP_LEVEL_TYPES = new Set([
 
 export class TypeScriptVisitor implements LanguageVisitor {
 	/** Walk a parsed tree and extract all symbols. */
-	extractSymbols(tree: TSTree, sourceCode: string): ParsedSymbol[] {
+	extractSymbols(tree: TSTree, _sourceCode: string): ParsedSymbol[] {
 		const root = tree.rootNode;
 		const symbols: ParsedSymbol[] = [];
 
@@ -339,7 +339,7 @@ export class TypeScriptVisitor implements LanguageVisitor {
 		defaultExportNames: Set<string>
 	): ParsedSymbol {
 		// Resolve the name
-		let name = "unknown";
+		let name: string;
 		if (node.type === "variable_declarator") {
 			name = node.firstNamedChild?.text ?? "unknown";
 		} else if (kind === SymbolKind.Property || kind === SymbolKind.Method) {

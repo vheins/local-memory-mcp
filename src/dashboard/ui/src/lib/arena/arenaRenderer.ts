@@ -262,8 +262,7 @@ export class ArenaRenderer {
 			.sort((a, b) => a.y - b.y);
 
 		if (lod === LOD_AGGREGATE) {
-			for (const t of sortedTasks) {
-			}
+			// Aggregate workstations are drawn via drawZoneAggregate above.
 		} else if (lod === LOD_SIMPLIFIED) {
 			for (const t of sortedTasks) drawWorkstationSimplified(rc, t);
 		} else {

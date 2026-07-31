@@ -1,7 +1,6 @@
 // ── Shared agent rendering utilities + re-exports from sub-modules ────────
 import type { RenderCtx } from "./utils";
-import { rr, rgba, lighten, darken, strHash, HAIR_COLORS, SKIN_TONES, PANT_COLORS } from "./utils";
-import type { VisualAgent } from "../arenaTypes";
+import { rr, rgba, lighten, darken } from "./utils";
 
 // ── Re-export full & simplified LOD ───────────────────────────────────────
 export { drawCharacter } from "./agents-full";

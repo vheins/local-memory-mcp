@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { getTypeColor, formatTimestamp } from "$lib/kg/kgEntityUtils";
+	import { getTypeColor, formatTimestamp, type KgEntityDetail } from "$lib/kg/kgEntityUtils";
 
-	export let entity: Record<string, any>;
+	export let entity: KgEntityDetail;
 </script>
 
 <!-- Header -->

@@ -95,7 +95,7 @@ function extractDocComment(lines: string[], lineIndex: number): string | null {
 			continue;
 		}
 		if (trimmed.startsWith("///") || trimmed.startsWith("//!")) {
-			commentLines.unshift(trimmed.replace(/^\s*\/{2,3}[!\/]?\s*/, ""));
+			commentLines.unshift(trimmed.replace(/^\s*\/{2,3}[!/]?\s*/, ""));
 			i--;
 			continue;
 		}

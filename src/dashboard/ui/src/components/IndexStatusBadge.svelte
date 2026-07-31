@@ -8,7 +8,6 @@
 		loading,
 		error,
 		reindexing,
-		repo,
 		fetchStatus,
 		startReindex
 	}: {

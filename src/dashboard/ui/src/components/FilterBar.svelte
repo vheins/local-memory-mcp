@@ -95,7 +95,6 @@
 	$: activeCount = computeActiveCount(currentFilter);
 </script>
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="filter-bar-root" class:collapsed>
 	<!-- Toggle button -->
 	<button

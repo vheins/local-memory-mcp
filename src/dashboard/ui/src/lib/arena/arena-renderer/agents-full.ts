@@ -6,7 +6,7 @@ import { drawHealthRing, drawStatusIcon, drawSpeechBubble, drawHair, drawFace, d
 // ── RPG Character (full LOD) ────────────────────────────────────────────────
 export function drawCharacter(rc: RenderCtx, agent: VisualAgent) {
 	const { ctx, isDark, ts, reducedMotion, hoveredId } = rc;
-	const { walkPhase, facing, state, name, id, color } = agent;
+	const { walkPhase, facing, state, name, id } = agent;
 	let { x, y } = agent;
 	const agentColor = agent.color || "#64748b";
 	const hovered = id === hoveredId;

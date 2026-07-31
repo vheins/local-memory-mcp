@@ -1,5 +1,5 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba, lighten, strHash } from "./utils";
+import { rr, lighten, strHash } from "./utils";
 import type { VisualTask } from "../arenaTypes";
 
 // ── Monitor activity (code editor simulation on workstation screen) ───────

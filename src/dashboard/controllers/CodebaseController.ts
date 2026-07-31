@@ -67,7 +67,7 @@ function injectOwner(params: Record<string, unknown>): Record<string, unknown> {
 		if (fs.existsSync(gitConfigPath)) {
 			const content = fs.readFileSync(gitConfigPath, "utf-8");
 			const match = content.match(
-				/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^\/\s]+)/
+				/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+)/
 			);
 			const rawOwner = match?.[1];
 			if (rawOwner && /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(rawOwner)) {

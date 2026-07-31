@@ -3,13 +3,12 @@
 	import { get } from "svelte/store";
 	import Icon from "../lib/Icon.svelte";
 	import { currentRepo, recentActions, recentActionsPage, recentActionsTotalItems } from "../lib/stores";
-	import { api } from "../lib/api";
 	import { createRecentActionsHandler } from "../lib/composables/useRecentActions";
 	import { createChatTask } from "../lib/utils";
 	import ChatHeader from "./ChatHeader.svelte";
 	import ChatMessage from "./ChatMessage.svelte";
 	import ChatInput from "./ChatInput.svelte";
-	import { loadPage as loadPageUtil, sendChatMessage } from "../lib/chatUtils";
+	import { loadPage as loadPageUtil } from "../lib/chatUtils";
 
 	export let onRefresh: () => void = () => {};
 

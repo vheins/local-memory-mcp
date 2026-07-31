@@ -99,7 +99,7 @@ export class RustVisitor implements LanguageVisitor {
 
 		// ── Impl item: recurse for methods ──────────────────────
 		if (type === IMPL_ITEM) {
-			let implParent = parentName;
+			let implParent: string | null;
 			const forIdx = node.children.findIndex((c) => c.type === "for");
 			if (forIdx >= 0) {
 				const afterFor = node.namedChildren.find(

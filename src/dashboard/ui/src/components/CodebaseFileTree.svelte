@@ -1,14 +1,6 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
-	import {
-		countChildren,
-		getFileIcon,
-		extLabel,
-		extColor,
-		formatKindCounts,
-		aggregateSymbolCounts,
-		isDir
-	} from "../lib/fileTreeUtils";
+	import { countChildren, isDir } from "../lib/fileTreeUtils";
 	import FileTreeNode from "./FileTreeNode.svelte";
 	import FileTreeHeader from "./FileTreeHeader.svelte";
 

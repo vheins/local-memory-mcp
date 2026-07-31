@@ -5,7 +5,6 @@
 
 	let {
 		scene = null,
-		loading = false,
 		isDark = false,
 		reducedMotion = false,
 		reducedTransparency = false,

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { api } from "$lib/api";
+	import type { KgEntityDetail } from "$lib/kg/kgEntityUtils";
 	import KGEntityDetail from "./KGEntityDetail.svelte";
 
 	export interface KGEntityDrawerProps {
@@ -12,7 +13,7 @@
 
 	let show = $state(false);
 	let loading = $state(false);
-	let entity: Record<string, any> | null = $state(null);
+	let entity: KgEntityDetail | null = $state(null);
 	let relations: Array<{
 		from_entity: string;
 		to_entity: string;
@@ -44,7 +45,7 @@
 		observations = [];
 		try {
 			const data = await api.kgEntityDetail(name);
-			entity = data.entity || null;
+			entity = (data.entity as KgEntityDetail) || null;
 			relations = (data.relations || []) as Array<{
 				from_entity: string;
 				to_entity: string;

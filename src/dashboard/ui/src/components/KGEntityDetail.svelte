@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
 	import Icon from "$lib/Icon.svelte";
+	import type { KgEntityDetail } from "$lib/kg/kgEntityUtils";
 	import KGEntityInfo from "./KGEntityInfo.svelte";
 	import KGEntityRelations from "./KGEntityRelations.svelte";
 	import KGEntityObservations from "./KGEntityObservations.svelte";
 
 	export let show = false;
 	export let loading = false;
-	export let entity: Record<string, any> | null = null;
+	export let entity: KgEntityDetail | null = null;
 	export let relations: Array<{
 		from_entity: string;
 		to_entity: string;

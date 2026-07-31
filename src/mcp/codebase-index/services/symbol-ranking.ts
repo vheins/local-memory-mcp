@@ -248,7 +248,7 @@ function scoreBucket(
 	const maxScore = raw[0].score;
 	const range = maxScore - minScore || 1;
 
-	return raw.map((r, i) => ({
+	return raw.map((r) => ({
 		symbol: r.item.symbol,
 		rankTier: r.item.matchDetails.tier,
 		score: range === 0 && raw.length === 1 ? 1.0 : parseFloat(((r.score - minScore) / range).toFixed(4))

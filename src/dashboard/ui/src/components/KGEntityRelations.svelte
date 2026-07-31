@@ -21,7 +21,6 @@
 	<ul class="relation-list">
 		{#each relations as rel, i (`${rel.from_entity}-${rel.to_entity}-${rel.relation_type}-${i}`)}
 			<li class="relation-item">
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<span
 					class="relation-entity"
 					role="button"
@@ -30,7 +29,6 @@
 					on:keydown={(e) => handleKeydown(e, rel.from_entity)}>{rel.from_entity}</span
 				>
 				<span class="relation-type-badge">{rel.relation_type}</span>
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<span
 					class="relation-entity"
 					role="button"

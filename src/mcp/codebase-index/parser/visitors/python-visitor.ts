@@ -14,7 +14,6 @@ import { SymbolKind } from "../language-visitor.js";
 
 const FUNCTION_DEFINITION = "function_definition";
 const CLASS_DEFINITION = "class_definition";
-const COMMENT = "comment";
 const STRING = "string";
 const EXPRESSION_STATEMENT = "expression_statement";
 

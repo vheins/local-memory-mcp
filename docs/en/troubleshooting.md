@@ -84,11 +84,7 @@ PORT=3457 npx @vheins/local-memory-mcp dashboard
 
 ### Check 3: Dashboard Opens But Shows No Data
 
-The dashboard loads data from the same SQLite database the MCP server uses. If the MCP server never ran, there's no data yet. Create some activity first, or run the seed script:
-
-```bash
-node seed-data.mjs
-```
+The dashboard loads data from the same SQLite database the MCP server uses. If the MCP server never ran, there's no data yet. Create some activity first by using the MCP tools (e.g. memory-store).
 
 ---
 

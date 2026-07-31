@@ -1,7 +1,6 @@
 import type { Task, TaskClaim, Handoff } from "../interfaces";
-import type { ArenaScene, ArenaLayoutConfig, ZoneRect, AgentState, VisualAgent } from "./arenaTypes";
+import type { ArenaScene, ArenaLayoutConfig, AgentState } from "./arenaTypes";
 import {
-	STATUS_TO_ZONE,
 	ACTIVE_TASK_STATUSES,
 	ROLE_COLORS,
 	agentColor,

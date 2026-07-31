@@ -1,12 +1,12 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba, lighten, darken, strHash } from "./utils";
+import { rgba, lighten, darken, strHash } from "./utils";
 import type { VisualAgent } from "../arenaTypes";
 import { drawHealthRing } from "./agents";
 
 // ── LOD_SIMPLIFIED: colored circle with health ring ─────────────────────────
 export function drawCharacterSimplified(rc: RenderCtx, agent: VisualAgent) {
 	const { ctx, isDark, ts, reducedMotion, hoveredId } = rc;
-	const { x, y, state, name, id, color } = agent;
+	const { x, y, state, name, id } = agent;
 	const agentColor = agent.color || "#64748b";
 	const hovered = id === hoveredId;
 	const spd = Math.hypot(agent.vx, agent.vy);

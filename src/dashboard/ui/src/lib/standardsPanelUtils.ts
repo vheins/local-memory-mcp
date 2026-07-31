@@ -1,4 +1,3 @@
-import type { CodingStandard } from "./stores";
 
 /** Build pagination page numbers */
 export function buildPaginationPages(page: number, totalPages: number): number[] {

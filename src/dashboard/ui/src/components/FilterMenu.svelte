@@ -56,7 +56,7 @@
 			on:change={(e) => onToggleRepo((e.target as HTMLSelectElement).value || null)}
 		>
 			<option value="">All repos</option>
-			{#each $availableRepos as r}
+			{#each $availableRepos as r (r.repo)}
 				<option value={r.repo}>{r.repo.split("/").pop()}</option>
 			{/each}
 		</select>
@@ -67,7 +67,7 @@
 	<!-- Roles -->
 	<div class="filter-section toggle-group">
 		<span class="filter-label">Roles</span>
-		{#each AGENT_ROLES as role}
+		{#each AGENT_ROLES as role (role)}
 			<FilterChip
 				label={role}
 				active={currentFilter.roles.includes(role)}
@@ -82,7 +82,7 @@
 	<!-- Priority -->
 	<div class="filter-section toggle-group">
 		<span class="filter-label">Priority</span>
-		{#each PRIORITIES as p}
+		{#each PRIORITIES as p (p.key)}
 			<FilterChip
 				label={p.key}
 				active={currentFilter.priorities.includes(p.key)}
@@ -97,7 +97,7 @@
 	<!-- Status -->
 	<div class="filter-section toggle-group">
 		<span class="filter-label">Status</span>
-		{#each STATUSES as s}
+		{#each STATUSES as s (s.key)}
 			<FilterChip
 				label={s.label}
 				active={currentFilter.statuses.includes(s.key)}

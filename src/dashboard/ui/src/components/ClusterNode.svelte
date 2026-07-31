@@ -106,7 +106,7 @@
 				<div class="detail-section full-width">
 					<div class="section-title text-orange"><Icon name="lock" size={10} /> Locked Files</div>
 					<div class="locked-files-list">
-						{#each repo.lockedFiles as file}
+						{#each repo.lockedFiles as file (file)}
 							<div class="locked-file-item" title={file}>
 								<Icon name="file-text" size={10} />
 								<span class="file-path">{file}</span>

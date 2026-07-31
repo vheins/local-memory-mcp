@@ -1,4 +1,4 @@
-import type { VisualAgent, VisualTask, VisualRepository, VisualHandoff, AgentState } from "./arenaTypes";
+import type { VisualAgent, VisualTask, VisualRepository, VisualHandoff } from "./arenaTypes";
 
 // ── Domain Events ───────────────────────────────────────────────────────────
 

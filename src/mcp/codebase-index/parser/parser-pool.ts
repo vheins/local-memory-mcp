@@ -156,7 +156,7 @@ export class TreeSitterParserPool implements ParserPool {
 			const message = err instanceof Error ? err.message : String(err);
 			logger.warn("[ParserPool] Grammar load failed — skipping language", { wasmPath, error: message });
 			removeConfigsForWasm(this.extToConfig, wasmPath);
-			throw new Error(`Failed to load grammar: ${wasmPath} — ${message}`);
+			throw new Error(`Failed to load grammar: ${wasmPath} — ${message}`, { cause: err });
 		}
 	}
 
@@ -213,6 +213,9 @@ export class TreeSitterParserPool implements ParserPool {
 			language = await this.getOrLoadGrammar(wasmPath);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
+			// Error already logged (warn) by getOrLoadGrammar — this catch
+			// converts the thrown error into the graceful per-file fallback.
+			logger.debug("[ParserPool] Grammar unavailable — graceful fallback", { filePath, error: message });
 			return { symbols: [], error: message, durationMs: 0 };
 		}
 

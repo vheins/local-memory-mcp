@@ -19,7 +19,7 @@
 
 	let {
 		repo = "",
-		onSymbolSelect = (symbol: CodeSymbol) => {}
+		onSymbolSelect = (_symbol: CodeSymbol) => {}
 	}: {
 		repo: string;
 		onSymbolSelect: (symbol: CodeSymbol) => void;

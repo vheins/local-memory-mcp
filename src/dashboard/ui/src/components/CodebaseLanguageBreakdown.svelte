@@ -10,20 +10,6 @@
 
 	let { languageEntries = [] }: { languageEntries: LanguageEntry[] } = $props();
 
-	const LANG_COLORS: Record<string, string> = {
-		TypeScript: "#3178c6",
-		JavaScript: "#f7df1e",
-		Svelte: "#ff3e00",
-		JSON: "#a8b1c4",
-		Markdown: "#22c55e",
-		CSS: "#cc6699",
-		HTML: "#e34c26",
-		YAML: "#cb171e",
-		XML: "#0060ac",
-		Shell: "#89e051",
-		Python: "#3572A5"
-	};
-
 	const LANG_ICONS: Record<string, string> = {
 		TypeScript: "file-text",
 		JavaScript: "file-code",

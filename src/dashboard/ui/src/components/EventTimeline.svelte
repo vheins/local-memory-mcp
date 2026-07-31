@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
-	import Icon from "../lib/Icon.svelte";
 	import type { EventLogEntry } from "../lib/arena/arenaEvents";
 	import TimelineHeader from "./TimelineHeader.svelte";
 	import TimelineEvent from "./TimelineEvent.svelte";
@@ -15,17 +14,13 @@
 	let activeFilter = "all"; // "all" | "errors" | "tasks" | "agents"
 	let eventContainer: HTMLDivElement;
 
-	// Auto-scroll logic
+	// Auto-scroll logic — the scroll is deferred to a macrotask so the DOM has
+	// flushed before reading scrollHeight (equivalent to awaiting the next tick).
 	$: if (expanded && !paused && eventContainer && events) {
-		scrollToBottom();
-	}
-
-	async function scrollToBottom() {
-		// Wait for DOM update
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		if (eventContainer) {
-			eventContainer.scrollTop = eventContainer.scrollHeight;
-		}
+		const container = eventContainer;
+		setTimeout(() => {
+			container.scrollTop = container.scrollHeight;
+		}, 0);
 	}
 
 	function toggleExpand() {

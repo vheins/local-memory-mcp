@@ -1,5 +1,5 @@
 import type { VisualAgent, VisualTask, VisualRepository } from "../arenaTypes";
-import type { DomainEvent, ArenaPatch, ZoneAggregate, ArenaState, ArenaMetrics } from "../arenaEvents";
+import type { DomainEvent, ArenaPatch, ZoneAggregate, ArenaState } from "../arenaEvents";
 
 // ── Task event patch builders ─────────────────────────────────────────────
 

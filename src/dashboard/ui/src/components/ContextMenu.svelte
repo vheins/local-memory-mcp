@@ -91,7 +91,7 @@
 			<span class="ctx-id">{entityId.length > 16 ? entityId.slice(0, 16) + "..." : entityId}</span>
 		</div>
 		<div class="ctx-divider"></div>
-		{#each menuItems as item}
+		{#each menuItems as item (item.action)}
 			<button
 				class="ctx-item ctx-{item.variant ?? 'default'}"
 				role="menuitem"

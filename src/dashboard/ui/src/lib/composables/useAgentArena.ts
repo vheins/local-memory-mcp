@@ -6,7 +6,6 @@ import { buildArenaScene } from "../arena/arenaTransform";
 import type { ArenaScene, ArenaLayoutConfig } from "../arena/arenaTypes";
 import { eventCoordinator } from "../arena/arenaEventCoordinator";
 import { arenaStateManager } from "../arena/arenaStateManager";
-import type { ArenaState } from "../arena/arenaEvents";
 
 export interface ArenaData {
 	scene: ArenaScene | null;

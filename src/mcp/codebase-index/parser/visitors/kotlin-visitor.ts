@@ -15,7 +15,6 @@ import { SymbolKind } from "../language-visitor.js";
 
 const FUNCTION_DECLARATION = "function_declaration";
 const CLASS_DECLARATION = "class_declaration";
-const INTERFACE_DECLARATION = "interface_declaration";
 const TYPE_ALIAS = "type_alias";
 const VARIABLE_DECLARATION = "variable_declaration";
 const CLASS_BODY = "class_body";

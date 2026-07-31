@@ -84,11 +84,7 @@ PORT=3457 npx @vheins/local-memory-mcp dashboard
 
 ### Pemeriksaan 3: Dasbor Terbuka tetapi Tidak Menampilkan Data
 
-Dasbor memuat data dari basis data SQLite yang sama yang digunakan server MCP. Jika server MCP tidak pernah dijalankan, belum ada data. Buat beberapa aktivitas terlebih dahulu, atau jalankan skrip seed:
-
-```bash
-node seed-data.mjs
-```
+Dasbor memuat data dari basis data SQLite yang sama yang digunakan server MCP. Jika server MCP tidak pernah dijalankan, belum ada data. Buat beberapa aktivitas terlebih dahulu dengan menggunakan alat MCP (mis. memory-store).
 
 ---
 

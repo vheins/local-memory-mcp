@@ -53,9 +53,8 @@ export function getEventIcon(entry: EventLogEntry): string {
 }
 
 export function getEventLabel(entry: EventLogEntry): string {
-	const anyEntry = entry as any;
-	if (!anyEntry.event) return entry.detail;
-	const ev = anyEntry.event;
+	const ev = entry.event;
+	if (!ev) return entry.detail;
 	switch (ev.type) {
 		case "task-completed":
 			return `Task Completed ${ev.taskId} · by ${ev.agentId}`;

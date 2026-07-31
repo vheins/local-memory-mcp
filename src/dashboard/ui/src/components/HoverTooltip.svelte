@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { VisualAgent, VisualTask, VisualRepository } from "../lib/arena/arenaTypes";
 	import { arenaStateManager } from "../lib/arena/arenaStateManager";
 
 	export let entityType: "agent" | "task" | "repository" | null = null;

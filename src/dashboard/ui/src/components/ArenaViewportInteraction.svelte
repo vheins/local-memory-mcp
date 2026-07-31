@@ -232,12 +232,13 @@
 				e.preventDefault();
 				arenaStateManager.resetView();
 				break;
-			case "f":
+			case "f": {
 				if (e.ctrlKey || e.metaKey) break;
 				e.preventDefault();
 				const fb = document.querySelector(".filter-bar") as HTMLElement | null;
 				if (fb) fb.style.display = fb.style.display === "none" ? "" : "none";
 				break;
+			}
 			case "e":
 				if (e.ctrlKey || e.metaKey) break;
 				e.preventDefault();

@@ -205,7 +205,7 @@ function inferOwnerFromGit(cwd: string): string | undefined {
 		// Match HTTPS: url = https://github.com/owner/repo.git
 		// Match git:  url = git://github.com/owner/repo.git
 		const match = content.match(
-			/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^\/\s]+)/
+			/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+)/
 		);
 		const rawOwner = match?.[1];
 		return rawOwner && isValidGitHubUsername(rawOwner) ? rawOwner : undefined;

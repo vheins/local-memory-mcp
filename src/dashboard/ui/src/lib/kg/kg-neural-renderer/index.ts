@@ -14,14 +14,9 @@ import {
 	getNodeColor,
 	roundRect,
 	FOG_FAR,
-	CAMERA_DISTANCE,
-	FOCAL_LENGTH,
-	CAMERA_ROTATION_SPEED,
-	CAMERA_TILT_AMOUNT,
 	BREATHE_SPEED,
 	BREATHE_AMOUNT,
 	TWINKLE_SPEED,
-	TWINKLE_AMOUNT,
 	PARTICLE_BASE_RADIUS,
 	PARTICLE_IMPORTANT_RADIUS,
 	PARTICLE_SUBTLE_MIN
@@ -31,7 +26,6 @@ import { drawEdge3D } from "./edges";
 import type { Node3D, ProjectedNode } from "./layout";
 import {
 	updateCamera,
-	type CameraFrame,
 	zoomCamera,
 	startDragCamera,
 	dragCamera,
@@ -215,7 +209,7 @@ export function startNeuralAnimation(
 						e.target === state.selectedNode.name);
 				const isRelated = !!(isHovered || isSelected);
 
-				let alphaMultiplier = 1.0;
+				let alphaMultiplier: number;
 				if (hasFocus) {
 					alphaMultiplier = isRelated ? 1.0 : 0.05;
 				} else {

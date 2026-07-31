@@ -25,3 +25,16 @@ export function formatTimestamp(ts: string): string {
 		return ts;
 	}
 }
+
+/**
+ * Minimal shape of a KG entity payload rendered by the dashboard detail views.
+ * Extra fields from the API are preserved via the index signature.
+ */
+export interface KgEntityDetail {
+	name: string;
+	type?: string;
+	description?: string | null;
+	created_at?: string;
+	updated_at?: string;
+	[key: string]: unknown;
+}

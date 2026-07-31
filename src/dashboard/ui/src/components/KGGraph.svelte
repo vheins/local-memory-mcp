@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import { onMount, onDestroy } from "svelte";
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
@@ -184,7 +185,7 @@
 		}
 
 		// Select top nodes by edge connectivity (degree) to maximize edge coverage
-		const degreeMap = new Map<string, number>();
+		const degreeMap = new SvelteMap<string, number>();
 		for (const e of edges) {
 			degreeMap.set(e.source, (degreeMap.get(e.source) ?? 0) + 1);
 			degreeMap.set(e.target, (degreeMap.get(e.target) ?? 0) + 1);
@@ -197,13 +198,13 @@
 			return a.name.localeCompare(b.name);
 		});
 
-		const edgeNodeNames = new Set<string>();
+		const edgeNodeNames = new SvelteSet<string>();
 		for (const e of edges) {
 			edgeNodeNames.add(e.source);
 			edgeNodeNames.add(e.target);
 		}
 
-		const selectedNames = new Set<string>();
+		const selectedNames = new SvelteSet<string>();
 		const selectedNodes: typeof nodes = [];
 		for (const n of sortedNodes) {
 			if (selectedNodes.length >= MAX_FORCE_NODES) break;

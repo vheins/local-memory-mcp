@@ -1,4 +1,4 @@
-import type { AgentFacing, HelperVariant, HandoffVehicle, ArenaScene } from "../arenaTypes";
+import type { HelperVariant } from "../arenaTypes";
 import type { FilterState } from "../arenaEvents";
 
 // ─── Level of Detail ────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ The Codebase Index provides **2 MCP tools** for indexing and querying source cod
 
 ## 1. `codebase-index`
 
-**Handler:** `handleCodebaseIndex` in `src/mcp/tools/codebase.index.ts` → delegates to `handleCodebaseIndexRepository` / `handleCodebaseIndexStatus` in `src/mcp/tools/codebase-index.ts`
+**Handler:** `handleCodebaseIndex` in `src/mcp/tools/codebase-index-sdk.ts` → delegates to `handleCodebaseIndexRepository` / `handleCodebaseIndexStatus` in `src/mcp/tools/codebase-index.ts`
 
 ### 1.1 Purpose
 

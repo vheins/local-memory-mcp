@@ -113,9 +113,6 @@
 		}
 	}
 
-	$: pendingCount = handoffs.filter((h) => h.status === "pending").length;
-	$: resolvedCount = handoffs.filter((h) => h.status !== "pending").length;
-
 	onMount(() => {
 		void refreshCoordination();
 	});

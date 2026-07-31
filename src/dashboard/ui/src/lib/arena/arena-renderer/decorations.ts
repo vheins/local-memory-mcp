@@ -5,7 +5,6 @@
  */
 
 import type { RenderCtx } from "./utils";
-import { rr } from "./utils";
 import type { ZoneRect } from "../arenaTypes";
 import { therapySlotPosition } from "../arenaTransform";
 import {
@@ -19,16 +18,14 @@ import {
 import {
 	drawReceptionDesk,
 	drawWhiteboard,
-	drawLetterSorter,
 	drawCeilingLamp,
-	drawClock,
 	drawPowerStrip,
 	drawWaterDispenser
 } from "./office";
-import { drawHazardSign, drawTrophyShelf, drawMedicalCross } from "./props";
+import { drawHazardSign, drawMedicalCross } from "./props";
 
 // ── Cooldown ring ─────────────────────────────────────────────────────────
-export function drawCooldownRing(ctx: CanvasRenderingContext2D, x: number, y: number, progress: number, ts: number) {
+export function drawCooldownRing(ctx: CanvasRenderingContext2D, x: number, y: number, progress: number, _ts: number) {
 	const radius = 18;
 	const strokeWidth = 3;
 	const color = "#06B6D4";
@@ -82,12 +79,6 @@ function drawLobbyDecor(
 	drawCeilingLamp(ctx, x + w / 2, y + 14, isDark, ts);
 }
 
-// ── Inbox decor ───────────────────────────────────────────────────────────
-function drawInboxDecor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isDark: boolean) {
-	drawLetterSorter(ctx, x + w - 28, y + 20, isDark);
-	drawClock(ctx, x + 18, y + 20, isDark);
-}
-
 // ── Workspace decor ────────────────────────────────────────────────────────
 function drawWorkspaceDecor(
 	ctx: CanvasRenderingContext2D,
@@ -117,20 +108,6 @@ function drawIssuesDecor(ctx: CanvasRenderingContext2D, x: number, y: number, w:
 	ctx.setLineDash([]);
 	ctx.restore();
 	drawHazardSign(ctx, x + w / 2 - 10, y + 16);
-}
-
-// ── Done decor ────────────────────────────────────────────────────────────
-function drawDoneDecor(
-	ctx: CanvasRenderingContext2D,
-	x: number,
-	y: number,
-	w: number,
-	h: number,
-	isDark: boolean,
-	ts: number
-) {
-	drawTrophyShelf(ctx, x + 10, y + 20, isDark, ts);
-	drawPotPlant(ctx, x + w - 18, y + h - 20, isDark);
 }
 
 // ── Archive decor ─────────────────────────────────────────────────────────
