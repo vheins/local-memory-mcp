@@ -246,38 +246,42 @@ export async function handleSearchMode(
 		if (paginated.length > 0) {
 			const statusLabel = describeStatusFilter(status);
 			const lines: string[] = [];
-			lines.push(`Search: "${query}" | ${total} results`);
+			lines.push(`### Results: ${total} tasks for "${query}"`);
 			lines.push("");
 
-			const headers = ["code", "status", "priority", "phase", "score", "title"];
-			const colWidths = headers.map((h) => h.length);
-			for (const st of paginated) {
-				colWidths[0] = Math.max(colWidths[0], st.task.task_code.length);
-				colWidths[1] = Math.max(colWidths[1], st.task.status.length);
-				colWidths[2] = Math.max(colWidths[2], String(st.task.priority).length);
-				colWidths[3] = Math.max(colWidths[3], (st.task.phase || "").length);
-				colWidths[4] = Math.max(colWidths[4], st.finalScore.toFixed(4).length);
+			// Fused grouped by status (enum order), with global rank #N
+			const STATUS_ORDER = ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"];
+			const grouped = new Map<string, { st: ScoredTask; rank: number }[]>();
+
+			paginated.forEach((st, i) => {
+				const groupKey = st.task.status;
+				if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+				grouped.get(groupKey)!.push({ st, rank: i + 1 });
+			});
+
+			// Sort group keys by enum order, unknowns last
+			const sortedKeys = [...grouped.keys()].sort((a, b) => {
+				const ai = STATUS_ORDER.indexOf(a);
+				const bi = STATUS_ORDER.indexOf(b);
+				if (ai === -1 && bi === -1) return a.localeCompare(b);
+				if (ai === -1) return 1;
+				if (bi === -1) return -1;
+				return ai - bi;
+			});
+
+			const CAP = 5;
+			for (const key of sortedKeys) {
+				const items = grouped.get(key)!;
+				const visible = items.slice(0, CAP);
+				const hidden = items.length - visible.length;
+				lines.push(`**${key} (${items.length})**`);
+				for (const { st, rank } of visible) {
+					lines.push(`#${rank} ${st.task.task_code} [${st.finalScore.toFixed(2)}] ${st.task.title}`);
+				}
+				if (hidden > 0) lines.push(`... +${hidden} more in this group`);
+				lines.push("");
 			}
 
-			const pad = (s: string, w: number) => s.padEnd(w);
-			const sep = colWidths.map((w) => "-".repeat(w)).join(" | ");
-
-			lines.push("| " + headers.map((h, i) => pad(h, colWidths[i])).join(" | ") + " |");
-			lines.push("|-" + sep + "-|");
-
-			for (const st of paginated) {
-				const row = [
-					st.task.task_code,
-					st.task.status,
-					String(st.task.priority),
-					st.task.phase || "",
-					st.finalScore.toFixed(4),
-					st.task.title
-				];
-				lines.push("| " + row.map((s, i) => pad(s, colWidths[i])).join(" | ") + " |");
-			}
-
-			lines.push("");
 			lines.push(`Use task-detail with task_code for full details.`);
 			contentSummary = lines.join("\n");
 		} else {

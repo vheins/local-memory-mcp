@@ -270,23 +270,40 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		const parts: string[] = [];
 
 		// Header: query + pagination
-		parts.push(
-			`Search: "${params.query}" | ${paginatedResults.length} of ${total} results | offset ${params.offset} limit ${params.limit}`
-		);
+		parts.push(`### Results: ${total} memories for "${params.query}" (showing ${paginatedResults.length})`);
 		parts.push("");
 
-		// Compact table
-		parts.push("| code    | imp | type      | created    | tags        | title");
-		parts.push("|---------|-----|-----------|------------|-------------|------");
-		for (const m of paginatedResults) {
-			const code = (m.code || "-").padEnd(8);
-			const imp = String(m.importance).padEnd(3);
-			const type = (m.type || "").padEnd(10);
-			const created = (m.created_at.split("T")[0] || "-").padEnd(11);
-			const tags = m.tags.length > 0 ? m.tags.join(",").padEnd(12) : "-".padEnd(12);
-			parts.push(`| ${code} | ${imp} | ${type} | ${created} | ${tags} | ${m.title}`);
+		// Fused grouped by type (enum order), with global rank #N
+		const TYPE_ORDER = ["code_fact", "decision", "mistake", "pattern", "task_archive"];
+		const grouped = new Map<string, { m: MemoryEntry; rank: number }[]>();
+
+		paginatedResults.forEach((m, i) => {
+			const groupKey = m.type || "unknown";
+			if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+			grouped.get(groupKey)!.push({ m, rank: i + 1 });
+		});
+
+		const sortedKeys = [...grouped.keys()].sort((a, b) => {
+			const ai = TYPE_ORDER.indexOf(a);
+			const bi = TYPE_ORDER.indexOf(b);
+			if (ai === -1 && bi === -1) return a.localeCompare(b);
+			if (ai === -1) return 1;
+			if (bi === -1) return -1;
+			return ai - bi;
+		});
+
+		for (const key of sortedKeys) {
+			const items = grouped.get(key)!;
+			const cap = key === "task_archive" ? 2 : 5;
+			const visible = items.slice(0, cap);
+			const hidden = items.length - visible.length;
+			parts.push(`**${key} (${items.length})**`);
+			for (const { m, rank } of visible) {
+				parts.push(`#${rank} ${m.code || "-"} [${m.importance}] ${m.title}`);
+			}
+			if (hidden > 0) parts.push(`... +${hidden} more in this group`);
+			parts.push("");
 		}
-		parts.push("");
 
 		parts.push("Use memory-read with id (or code) for full content.");
 		contentSummary = parts.join("\n");

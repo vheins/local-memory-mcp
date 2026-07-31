@@ -56,20 +56,39 @@ async function handleListMode(validated: StandardReadInput, db: SQLiteStore): Pr
 
 	let contentSummary: string;
 	if (standards.length > 0) {
-		const parts = [
-			"### Standards",
-			"",
-			"| code | title | context | language | scope |",
-			"|------|-------|---------|----------|-------|",
-			...standards.map(
-				(s) =>
-					`| ${s.code ?? "-"} | ${s.title} | ${s.context} | ${s.language || "-"} | ${
-						s.is_global ? "global" : s.repo || "-"
-					} |`
-			),
-			"",
-			"Use standard-read with code for full content."
-		];
+		const parts = ["### Standards", ""];
+
+		// Grouped bullets by language (fallback "-" for null)
+		const grouped = new Map<string, typeof standards>();
+		const groupOrder: string[] = [];
+		for (const s of standards) {
+			const lang = s.language || "-";
+			if (!grouped.has(lang)) {
+				grouped.set(lang, []);
+				groupOrder.push(lang);
+			}
+			grouped.get(lang)!.push(s);
+		}
+
+		// Sort group keys: "-" last, others alphabetically
+		groupOrder.sort((a, b) => {
+			if (a === "-" && b === "-") return 0;
+			if (a === "-") return 1;
+			if (b === "-") return -1;
+			return a.localeCompare(b);
+		});
+
+		for (const lang of groupOrder) {
+			const items = grouped.get(lang)!;
+			parts.push(`**${lang} (${items.length})**`);
+			for (const s of items) {
+				const scopePart = s.is_global ? "" : ` — ${s.repo || "-"}`;
+				parts.push(`- ${s.code ?? "-"} ${s.title} — ${s.context}${scopePart}`);
+			}
+			parts.push("");
+		}
+
+		parts.push("Use standard-read with code for full content.");
 		contentSummary = parts.join("\n");
 	} else {
 		contentSummary = "No coding standards found.";

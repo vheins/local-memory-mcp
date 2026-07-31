@@ -81,21 +81,28 @@ export async function handleListMode(
 			const statusBreakdown = Object.entries(tasksByStatus)
 				.map(([sts, items]) => `${sts.toLowerCase()}: ${items.length}`)
 				.join(" · ");
-			parts.push(`Task List — ${rows.length} total in repo "${repo}" (showing ${rows.length})`);
+			parts.push(`### Results: ${rows.length} tasks in repo "${repo}"`);
 			parts.push(statusBreakdown);
 			parts.push("");
-			for (const [sts, items] of Object.entries(tasksByStatus)) {
-				if (items.length > 0) {
-					parts.push("");
-					parts.push(`### ${sts}`);
-					parts.push("");
-					parts.push("| code | status | priority | phase | last_updated | title |");
-					parts.push("|------|--------|----------|-------|--------------|-------|");
-					for (const t of items) {
-						const lastUpdated = t.updated_at ? t.updated_at.slice(0, 16).replace("T", " ") : "never";
-						parts.push(`| ${t.task_code} | ${t.status} | ${t.priority} | ${t.phase} | ${lastUpdated} | ${t.title} |`);
-					}
+
+			// Sort groups by status enum order, unknowns last
+			const STATUS_ORDER = ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"];
+			const sortedEntries = Object.entries(tasksByStatus).sort(([, itemsA], [, itemsB]) => {
+				const ai = STATUS_ORDER.indexOf(itemsA[0]?.status ?? "");
+				const bi = STATUS_ORDER.indexOf(itemsB[0]?.status ?? "");
+				if (ai === -1 && bi === -1) return (itemsA[0]?.status ?? "").localeCompare(itemsB[0]?.status ?? "");
+				if (ai === -1) return 1;
+				if (bi === -1) return -1;
+				return ai - bi;
+			});
+
+			for (const [statusLabel, items] of sortedEntries) {
+				parts.push(`**${statusLabel} (${items.length})**`);
+				for (const t of items) {
+					const phasePart = t.phase ? ` [${t.phase}]` : "";
+					parts.push(`- ${t.task_code} [P${t.priority}]${phasePart} ${t.title}`);
 				}
+				parts.push("");
 			}
 		} else {
 			parts.push(`Found ${rows.length} ${statusLabel} ${taskLabel} in repo "${repo}".`);

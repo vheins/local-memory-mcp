@@ -266,11 +266,9 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 			arguments: { repo: REPO, owner: "test", status: "completed" }
 		});
 
-		expect(getTextContent(result)).toContain("Task List —");
-		expect(getTextContent(result)).toContain("### Completed");
-		expect(getTextContent(result)).toMatch(
-			/\| SUM-001 \| completed \| 3 \| implementation \| \d{4}-\d{2}-\d{2} \d{2}:\d{2} \| Completed task \|/
-		);
+		expect(getTextContent(result)).toContain(`### Results: 1 tasks in repo "${REPO}"`);
+		expect(getTextContent(result)).toContain("**Completed (1)**");
+		expect(getTextContent(result)).toContain("- SUM-001 [P3] [implementation] Completed task");
 		expect(getTextContent(result)).toContain("See task-detail with task_code for details.");
 	});
 

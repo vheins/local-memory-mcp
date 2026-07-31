@@ -340,20 +340,41 @@ export async function handleSearchMode(
 
 	let contentSummary: string;
 	if (paginatedResults.length > 0) {
-		const parts = [
-			"### Standards",
-			"",
-			"| code | confidence | matched_terms | title | context | language | scope |",
-			"|------|------------|---------------|-------|---------|----------|-------|",
-			...paginatedResults.map(
-				({ standard, confidence, matchedTerms }) =>
-					`| ${standard.code ?? "-"} | ${confidence} | ${matchedTerms.join(", ")} | ${standard.title} | ${standard.context} | ${standard.language || "-"} | ${
-						standard.is_global ? "global" : standard.repo || "-"
-					} |`
-			),
-			"",
-			"Use standard-read with code for full content."
-		];
+		const parts = ["### Standards", ""];
+
+		// Fused grouped by scope (global first, then repo names, then "-" for null)
+		const grouped = new Map<string, { scored: (typeof paginatedResults)[0]; rank: number }[]>();
+		paginatedResults.forEach((scored, i) => {
+			const scopeKey = scored.standard.is_global ? "global" : scored.standard.repo || "-";
+			if (!grouped.has(scopeKey)) grouped.set(scopeKey, []);
+			grouped.get(scopeKey)!.push({ scored, rank: i + 1 });
+		});
+
+		const CAP = 5;
+		// Sort keys: global first, then repo names alphabetically, then "-" last
+		const sortedKeys = [...grouped.keys()].sort((a, b) => {
+			if (a === "global" && b !== "global") return -1;
+			if (b === "global" && a !== "global") return 1;
+			if (a === "-" && b !== "-") return 1;
+			if (b === "-" && a !== "-") return -1;
+			return a.localeCompare(b);
+		});
+
+		for (const scopeKey of sortedKeys) {
+			const items = grouped.get(scopeKey)!;
+			const visible = items.slice(0, CAP);
+			const hidden = items.length - visible.length;
+			parts.push(`**${scopeKey} (${items.length})**`);
+			for (const { scored, rank } of visible) {
+				parts.push(
+					`#${rank} ${scored.standard.code ?? "-"} [${scored.finalScore.toFixed(2)}] ${scored.standard.title}`
+				);
+			}
+			if (hidden > 0) parts.push(`... +${hidden} more in this group`);
+			parts.push("");
+		}
+
+		parts.push("Use standard-read with code for full content.");
 		contentSummary = parts.join("\n");
 	} else {
 		contentSummary = "No matching coding standards found.";
