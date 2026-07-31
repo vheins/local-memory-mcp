@@ -5,6 +5,8 @@ import { handleMemoryWrite } from "../tools/memory.write";
 import { handleMemoryRead } from "../tools/memory.read";
 import { handleTaskRead } from "../tools/task.read";
 import { handleStandardRead } from "../tools/standard.read";
+import { EmbeddingWorker } from "../embedding-queue/worker";
+import { RealVectorStore } from "../storage/vectors";
 import { createTestStore, SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types/vector";
 import type { Task } from "../types";
@@ -19,6 +21,28 @@ function makeMockVectorStore(): VectorStore {
 		remove: vi.fn().mockResolvedValue(undefined),
 		search: vi.fn().mockResolvedValue([])
 	};
+}
+
+/**
+ * Drain the embedding outbox so enqueued memory jobs run their KG extraction.
+ * memory-write enqueues (TASK-013) and the worker extracts asynchronously, so
+ * tests asserting on entities/observations must run one worker cycle first.
+ */
+function makeWorkerVectors(): RealVectorStore {
+	return { embed: vi.fn().mockResolvedValue([[0.1, 0.2]]) } as unknown as RealVectorStore;
+}
+
+async function drainOutbox(db: SQLiteStore): Promise<void> {
+	await new EmbeddingWorker(db, makeWorkerVectors(), {
+		batchSize: 32,
+		leaseMs: 60_000,
+		poisonThreshold: 3,
+		backoffBaseMs: 1_000,
+		backoffMaxMs: 60_000,
+		pollIntervalMs: 3_600_000,
+		purgeIntervalMs: 3_600_000,
+		backfillCap: 0
+	}).runOnce();
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +381,9 @@ describe("KG Archivist — integration with handleMemoryWrite", () => {
 			vectors
 		);
 
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
+
 		// Entities should have been extracted from the content
 		const entities = db.db.prepare("SELECT name, type FROM entities").all() as Array<{
 			name: string;
@@ -396,6 +423,9 @@ describe("KG Archivist — integration with handleMemoryWrite", () => {
 			db,
 			vectors
 		);
+
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
 
 		const observations = db.db.prepare("SELECT entity_name, observation FROM observations").all() as Array<{
 			entity_name: string;
@@ -447,6 +477,9 @@ describe("KG Archivist — integration with handleMemoryWrite", () => {
 			vectors
 		);
 
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
+
 		const entities = db.db.prepare("SELECT name FROM entities").all() as Array<{ name: string }>;
 		const names = entities.map((e) => e.name);
 
@@ -484,6 +517,9 @@ describe("KG Archivist — integration with handleMemoryWrite", () => {
 
 		// Memory store itself should succeed
 		expect(result.isError).toBeFalsy();
+
+		// Drain the outbox — stopword-only content still extracts nothing.
+		await drainOutbox(db);
 
 		// No entities should have been extracted
 		const entities = db.db.prepare("SELECT COUNT(*) as cnt FROM entities").get() as { cnt: number };
@@ -542,6 +578,9 @@ describe("KG Archivist — embedded KG context in memory-read", () => {
 
 		const memoryId = (writeResult.structuredContent as { results: Array<{ id: string }> }).results[0].id;
 
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
+
 		// Read it back in detail mode
 		const readResult = await handleMemoryRead({ id: memoryId, owner: "test", repo: KG_REPO, json: true }, db, vectors);
 
@@ -585,6 +624,9 @@ describe("KG Archivist — embedded KG context in memory-read", () => {
 		);
 
 		const memoryCode = (writeResult.structuredContent as { results: Array<{ code: string }> }).results[0].code;
+
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
 
 		const readResult = await handleMemoryRead(
 			{ code: memoryCode, owner: "test", repo: KG_REPO, json: true },
@@ -660,6 +702,9 @@ describe("KG Archivist — embedded KG context in memory-read", () => {
 			(m2.structuredContent as { results: Array<{ id: string }> }).results[0].id
 		];
 
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
+
 		const readResult = await handleMemoryRead({ ids, owner: "test", repo: KG_REPO, json: true }, db, vectors);
 
 		const data = readResult.structuredContent as Record<string, unknown>;
@@ -730,6 +775,9 @@ describe("KG Archivist — embedded KG context in memory-read", () => {
 			(m1.structuredContent as { results: Array<{ code: string }> }).results[0].code,
 			(m2.structuredContent as { results: Array<{ code: string }> }).results[0].code
 		];
+
+		// KG extraction is async (outbox worker, TASK-013) — drain it first.
+		await drainOutbox(db);
 
 		const readResult = await handleMemoryRead({ codes, owner: "test", repo: KG_REPO, json: true }, db, vectors);
 

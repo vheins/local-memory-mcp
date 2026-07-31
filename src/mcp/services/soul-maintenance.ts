@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger";
+import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 
 export interface PruneActionLogResult {
 	/** Number of action_log rows deleted */
@@ -163,24 +164,22 @@ export function pruneActionLog(
  * Observations are transient knowledge graph annotations that lose relevance
  * quickly. Stale observations bloat the KG and degrade query performance.
  *
- * @param db - The SQLite store's raw database handle (db.db from SQLiteStore)
+ * @param knowledgeGraph - The KnowledgeGraphEntity (sole encapsulation point
+ *   for raw SQL against the KG tables)
  * @param retentionDays - Entries older than this many days are deleted (default: 7)
  * @returns Number of rows deleted
  */
-export function pruneObservations(
-	db: { prepare: (sql: string) => import("better-sqlite3").Statement },
-	retentionDays = 7
-): PruneObservationsResult {
+export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentionDays = 7): PruneObservationsResult {
 	const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
-	const result = db.prepare("DELETE FROM observations WHERE created_at < ?").run(cutoff);
+	const deleted = knowledgeGraph.deleteObservationsOlderThan(cutoff);
 
-	if (result.changes > 0) {
+	if (deleted > 0) {
 		logger.info("[SoulMaintenance] Pruned stale observations", {
-			deleted: result.changes,
+			deleted,
 			cutoff
 		});
 	}
 
-	return { deleted: result.changes };
+	return { deleted };
 }

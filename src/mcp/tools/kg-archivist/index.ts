@@ -1,4 +1,5 @@
 export { extractEntities, saveExtractions, ExtractedEntity } from "./extract";
+export { observationText, KgObservationDomain } from "./observation-text";
 export { saveTaskRelations, saveStandardRelations } from "./relations";
 export {
 	kgQuery,

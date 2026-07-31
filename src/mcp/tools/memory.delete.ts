@@ -3,6 +3,7 @@ import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 import { UUID_REGEX } from "../utils/uuid";
+import { observationText } from "./kg-archivist";
 import { MemoryDeleteSchema } from "./schemas";
 
 export async function handleMemoryDelete(
@@ -81,7 +82,21 @@ export async function handleMemoryDelete(
 	let progress = 0;
 
 	if (validIdsToDelete.length > 0) {
-		db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
+		// Archive + purge pending embedding-queue jobs in ONE transaction — a
+		// stale queue_jobs row could otherwise re-embed the vector and re-run
+		// KG extraction for an archived memory (TASK-042 / MEM-427).
+		db.db.transaction(() => {
+			db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
+			const placeholders = validIdsToDelete.map(() => "?").join(",");
+			db.db
+				.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
+				.run("memory", ...validIdsToDelete);
+		})();
+
+		// Collect observation texts for batch KG cleanup (once per batch, not per
+		// item) — each (text, repo) pair is scoped to the memory's own repo so
+		// identical titles across repos never cross-delete (TASK-045/043).
+		const observationTexts: { text: string; repo: string }[] = [];
 
 		for (const validId of validIdsToDelete) {
 			if (onProgress) {
@@ -89,23 +104,28 @@ export async function handleMemoryDelete(
 			}
 			await vectors.remove(validId, "memory");
 
-			// KG cleanup: best-effort cascade delete (REFACTOR-KG-006)
 			const memoryEntry = memoryMap.get(validId);
 			if (memoryEntry) {
-				try {
-					db.db
-						.prepare(`DELETE FROM observations WHERE observation = ?`)
-						.run(`Mentioned in memory: ${memoryEntry.title}`);
-					db.db.prepare(`DELETE FROM entities WHERE name NOT IN (SELECT DISTINCT entity_name FROM observations)`).run();
-				} catch (kgError) {
-					logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted memory", {
-						memoryId: validId,
-						error: String(kgError)
-					});
-				}
+				observationTexts.push({
+					text: observationText("memory", memoryEntry.title),
+					repo: memoryEntry.scope.repo
+				});
 			}
 			progress++;
 		}
+
+		// KG cleanup: best-effort, atomic (single transaction), orphans checked
+		// via observations UNION relations so relation-referenced entities are
+		// KEPT; observation deletes + orphan sweep scoped to the touched
+		// repo(s) (TASK-043).
+		try {
+			db.knowledgeGraph.deleteObservationsAndOrphans(observationTexts);
+		} catch (kgError) {
+			logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted memories", {
+				error: String(kgError)
+			});
+		}
+
 		deletedCount = validIdsToDelete.length;
 	}
 

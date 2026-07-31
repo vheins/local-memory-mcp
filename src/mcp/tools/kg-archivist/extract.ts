@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { KgObservationDomain, observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -349,7 +350,10 @@ export async function extractEntities(content: string): Promise<ExtractedEntity[
  * - Entities are inserted with `INSERT OR IGNORE` so duplicate names do not
  *   cause errors.
  * - Each extraction produces an observation record linking the entity to the
- *   memory that mentioned it.
+ *   content that mentioned it. The observation text comes from the shared
+ *   `observationText(domain, title)` contract (TASK-045) — the delete tools
+ *   remove observations by the same text, so the caller MUST pass the real
+ *   domain (`memory`/`standard`/`task`), never the legacy hardcoded default.
  * - Failures are logged at `warn` level but never thrown — the caller's
  *   memory-store operation is never blocked.
  */
@@ -358,7 +362,8 @@ export async function saveExtractions(
 	title: string,
 	owner: string,
 	repo: string,
-	db: SQLiteStore
+	db: SQLiteStore,
+	domain: KgObservationDomain = "memory"
 ): Promise<void> {
 	if (!content || content.trim().length === 0) return;
 
@@ -375,22 +380,27 @@ export async function saveExtractions(
 	if (entities.length === 0) return;
 
 	const now = new Date().toISOString();
-	const observationText = `Mentioned in memory: ${title}`;
-
-	const insertEntity = db.db.prepare(
-		`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`
-	);
-
-	const insertObservation = db.db.prepare(
-		`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`
-	);
+	const observationTextValue = observationText(domain, title);
 
 	for (const entity of entities) {
 		try {
-			insertEntity.run(entity.name, entity.type, null, repo, owner ?? "", now, now);
-			insertObservation.run(randomUUID(), entity.name, observationText, repo, owner ?? "", now);
+			db.knowledgeGraph.upsertEntity({
+				name: entity.name,
+				type: entity.type,
+				description: null,
+				repo,
+				owner: owner ?? "",
+				created_at: now,
+				updated_at: now
+			});
+			db.knowledgeGraph.insertObservation({
+				id: randomUUID(),
+				entity_name: entity.name,
+				observation: observationTextValue,
+				repo,
+				owner: owner ?? "",
+				created_at: now
+			});
 		} catch (err) {
 			logger.warn("[KG-Archivist] Failed to save extraction for entity", {
 				error: String(err),
@@ -401,14 +411,17 @@ export async function saveExtractions(
 
 	// Create co-occurrence relations between entities extracted from the same content
 	if (entities.length > 1) {
-		const insertRelation = db.db.prepare(
-			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`
-		);
 		for (let i = 0; i < entities.length; i++) {
 			for (let j = i + 1; j < entities.length; j++) {
 				try {
-					insertRelation.run(entities[i].name, entities[j].name, "co_mentioned", repo, owner ?? "", now);
+					db.knowledgeGraph.upsertRelation({
+						from_entity: entities[i].name,
+						to_entity: entities[j].name,
+						relation_type: "co_mentioned",
+						repo,
+						owner: owner ?? "",
+						created_at: now
+					});
 				} catch {
 					// Silent: relation might already exist
 				}

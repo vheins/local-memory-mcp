@@ -16,6 +16,9 @@ export {
 	extractEntities,
 	saveExtractions,
 	ExtractedEntity,
+	// observation-text contract (TASK-045)
+	observationText,
+	KgObservationDomain,
 	// relations
 	saveTaskRelations,
 	saveStandardRelations,

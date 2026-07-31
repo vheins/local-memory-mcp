@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,20 +36,12 @@ export function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], so
 		if (entityNames.length === 0) return { entities: [], relations: [] };
 
 		const uniqueNames = [...new Set(entityNames)];
-		const placeholders = uniqueNames.map(() => "?").join(",");
 
-		const entities = db.db
-			.prepare<unknown[], KgEntityResult>(
-				`SELECT name, type, ? AS source_domain FROM entities WHERE name IN (${placeholders}) AND repo = ?`
-			)
-			.all(sourceDomain, ...uniqueNames, repo) as KgEntityResult[];
+		const entities = db.knowledgeGraph
+			.getEntitiesFor(uniqueNames, repo)
+			.map((e) => ({ name: e.name, type: e.type, source_domain: sourceDomain }));
 
-		const relations = db.db
-			.prepare<unknown[], KgRelationResult>(
-				`SELECT from_entity AS "from", to_entity AS "to", relation_type AS type
-				 FROM relations WHERE (from_entity IN (${placeholders}) OR to_entity IN (${placeholders})) AND repo = ?`
-			)
-			.all(...uniqueNames, ...uniqueNames, repo) as KgRelationResult[];
+		const relations = db.knowledgeGraph.getRelationsFor(uniqueNames, repo);
 
 		return { entities, relations };
 	} catch (error) {
@@ -68,20 +61,11 @@ export function fetchKgContext(
 	domain: "memory" | "standard"
 ): KgResult | null {
 	try {
-		const entityRows = db.db
-			.prepare<unknown[], { entity_name: string }>(
-				`SELECT DISTINCT entity_name FROM observations WHERE observation = ? AND repo = ?`
-			)
-			.all(`Mentioned in ${domain}: ${title}`, repo) as { entity_name: string }[];
+		const entityNames = db.knowledgeGraph.getEntityNamesByObservation(observationText(domain, title), repo);
 
-		if (entityRows.length === 0) return { entities: [], relations: [] };
+		if (entityNames.length === 0) return { entities: [], relations: [] };
 
-		return kgQuery(
-			db,
-			repo,
-			entityRows.map((r) => r.entity_name),
-			domain
-		);
+		return kgQuery(db, repo, entityNames, domain);
 	} catch (error) {
 		logger.warn(`[KG-Archivist] KG context fetch failed for ${domain}`, {
 			error: String(error),
@@ -103,18 +87,13 @@ export function fetchAggregatedKgContext(
 	try {
 		if (titles.length === 0) return { entities: [], relations: [] };
 
-		const patterns = titles.map((t) => `Mentioned in ${domain}: ${t}`);
-		const patternPlaceholders = patterns.map(() => "?").join(",");
+		const patterns = titles.map((t) => observationText(domain, t));
 
-		const entityRows = db.db
-			.prepare<unknown[], { entity_name: string }>(
-				`SELECT DISTINCT entity_name FROM observations WHERE observation IN (${patternPlaceholders}) AND repo = ?`
-			)
-			.all(...patterns, repo) as { entity_name: string }[];
+		const entityNames = db.knowledgeGraph.getEntityNamesByObservations(patterns, repo);
 
-		if (entityRows.length === 0) return { entities: [], relations: [] };
+		if (entityNames.length === 0) return { entities: [], relations: [] };
 
-		return kgQuery(db, repo, [...new Set(entityRows.map((r) => r.entity_name))], domain);
+		return kgQuery(db, repo, [...new Set(entityNames)], domain);
 	} catch (error) {
 		logger.warn(`[KG-Archivist] Aggregated KG context fetch failed for ${domain}`, {
 			error: String(error),
@@ -138,18 +117,11 @@ export function fetchTaskKgContext(
 		const searchText = [taskTitle, taskDescription].filter(Boolean).join(" ");
 		if (!searchText.trim()) return { entities: [], relations: [] };
 
-		const entityRows = db.db
-			.prepare<unknown[], { name: string }>(`SELECT name FROM entities WHERE repo = ? AND INSTR(?, name) > 0`)
-			.all(repo, searchText) as { name: string }[];
+		const entityNames = db.knowledgeGraph.getEntityNamesByText(repo, searchText);
 
-		if (entityRows.length === 0) return { entities: [], relations: [] };
+		if (entityNames.length === 0) return { entities: [], relations: [] };
 
-		return kgQuery(
-			db,
-			repo,
-			entityRows.map((r) => r.name),
-			"task"
-		);
+		return kgQuery(db, repo, entityNames, "task");
 	} catch (error) {
 		logger.warn("[KG-Archivist] Task KG context fetch failed", {
 			error: String(error),
@@ -176,18 +148,11 @@ export function fetchAggregatedTaskKgContext(
 			.join(" ");
 		if (!searchText.trim()) return { entities: [], relations: [] };
 
-		const entityRows = db.db
-			.prepare<unknown[], { name: string }>(`SELECT DISTINCT name FROM entities WHERE repo = ? AND INSTR(?, name) > 0`)
-			.all(repo, searchText) as { name: string }[];
+		const entityNames = db.knowledgeGraph.getEntityNamesByText(repo, searchText, true);
 
-		if (entityRows.length === 0) return { entities: [], relations: [] };
+		if (entityNames.length === 0) return { entities: [], relations: [] };
 
-		return kgQuery(
-			db,
-			repo,
-			entityRows.map((r) => r.name),
-			"task"
-		);
+		return kgQuery(db, repo, entityNames, "task");
 	} catch (error) {
 		logger.warn("[KG-Archivist] Aggregated task KG context fetch failed", {
 			error: String(error),

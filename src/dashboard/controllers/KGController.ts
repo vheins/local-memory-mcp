@@ -12,20 +12,7 @@ export class KGController {
 			const type = req.query.type as string | undefined;
 			const search = req.query.search as string | undefined;
 
-			let sql = "SELECT * FROM entities WHERE repo = ?";
-			const params: unknown[] = [repo];
-
-			if (type) {
-				sql += " AND type = ?";
-				params.push(type);
-			}
-			if (search) {
-				sql += " AND name LIKE ?";
-				params.push(`%${search}%`);
-			}
-			sql += " ORDER BY name";
-
-			const items = db.db.prepare(sql).all(...params);
+			const items = db.knowledgeGraph.listEntities(repo, { type, search });
 			res.json(jsonApiRes(items, "entity"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -36,19 +23,13 @@ export class KGController {
 	static async getEntity(req: express.Request, res: express.Response) {
 		try {
 			await db.refresh();
-			const name = req.params.name;
+			const name = req.params.name as string;
 
-			const entity = db.db.prepare("SELECT * FROM entities WHERE name = ?").get(name) as
-				Record<string, unknown> | undefined;
+			const entity = db.knowledgeGraph.getEntityByName(name);
 			if (!entity) return res.status(404).json(jsonApiError("Entity not found", 404));
 
-			const relations = db.db
-				.prepare("SELECT * FROM relations WHERE from_entity = ? OR to_entity = ? ORDER BY relation_type")
-				.all(name, name);
-
-			const observations = db.db
-				.prepare("SELECT * FROM observations WHERE entity_name = ? ORDER BY created_at DESC")
-				.all(name);
+			const relations = db.knowledgeGraph.getRelationsByName(name);
+			const observations = db.knowledgeGraph.getObservationsByName(name);
 
 			res.json(jsonApiRes({ id: entity.name, entity, relations, observations }, "entity"));
 		} catch (err: unknown) {
@@ -63,7 +44,7 @@ export class KGController {
 			const repo = req.query.repo as string;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
-			const items = db.db.prepare("SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity").all(repo);
+			const items = db.knowledgeGraph.listRelations(repo);
 
 			res.json(jsonApiRes(items, "relation"));
 		} catch (err: unknown) {
@@ -78,25 +59,8 @@ export class KGController {
 			const repo = req.query.repo as string;
 			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
 
-			const nodes = db.db
-				.prepare(
-					`SELECT e.name, e.type
-					 FROM entities e
-					 WHERE e.repo = ?
-					 ORDER BY e.name`
-				)
-				.all(repo);
-
-			const edges = db.db
-				.prepare(
-					`SELECT r.from_entity as source, r.to_entity as target, r.relation_type 
-					 FROM relations r 
-					 INNER JOIN entities e1 ON r.from_entity = e1.name AND r.repo = e1.repo
-					 INNER JOIN entities e2 ON r.to_entity = e2.name AND r.repo = e2.repo
-					 WHERE r.repo = ? 
-					 ORDER BY r.from_entity, r.to_entity`
-				)
-				.all(repo);
+			const nodes = db.knowledgeGraph.listGraphNodes(repo);
+			const edges = db.knowledgeGraph.listGraphEdges(repo);
 
 			res.json(jsonApiRes({ id: `graph-${repo}`, nodes, edges }, "graph"));
 		} catch (err: unknown) {
@@ -114,14 +78,17 @@ export class KGController {
 			if (!name) return res.status(400).json(jsonApiError("name is required", 400));
 
 			const now = new Date().toISOString();
-			db.db
-				.prepare(
-					`INSERT INTO entities (name, type, description, repo, owner, created_at, updated_at)
-					 VALUES (?, ?, ?, ?, ?, ?, ?)`
-				)
-				.run(name, type || "unknown", description || null, repo || "", owner || "", now, now);
+			db.knowledgeGraph.createEntity({
+				name,
+				type: type || "unknown",
+				description: description || null,
+				repo: repo || "",
+				owner: owner || "",
+				created_at: now,
+				updated_at: now
+			});
 
-			const entity = db.db.prepare("SELECT * FROM entities WHERE name = ?").get(name);
+			const entity = db.knowledgeGraph.getEntityByName(name);
 			res.json(jsonApiRes(entity, "entity"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -132,12 +99,13 @@ export class KGController {
 	static async deleteEntity(req: express.Request, res: express.Response) {
 		try {
 			await db.refresh();
-			const name = req.params.name;
+			const name = req.params.name as string;
 
-			const existing = db.db.prepare("SELECT name FROM entities WHERE name = ?").get(name);
-			if (!existing) return res.status(404).json(jsonApiError("Entity not found", 404));
+			if (!db.knowledgeGraph.entityExists(name)) {
+				return res.status(404).json(jsonApiError("Entity not found", 404));
+			}
 
-			db.db.prepare("DELETE FROM entities WHERE name = ?").run(name);
+			db.knowledgeGraph.deleteEntity(name);
 			res.json(jsonApiRes({ message: "Deleted", name }, "status"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
@@ -155,23 +123,23 @@ export class KGController {
 				return res.status(400).json(jsonApiError("from_entity, to_entity, and relation_type are required", 400));
 			}
 
-			const fromExists = db.db.prepare("SELECT 1 FROM entities WHERE name = ?").get(from_entity);
-			if (!fromExists) {
+			if (!db.knowledgeGraph.entityExists(from_entity)) {
 				return res.status(400).json(jsonApiError(`Source entity '${from_entity}' not found`, 400));
 			}
 
-			const toExists = db.db.prepare("SELECT 1 FROM entities WHERE name = ?").get(to_entity);
-			if (!toExists) {
+			if (!db.knowledgeGraph.entityExists(to_entity)) {
 				return res.status(400).json(jsonApiError(`Target entity '${to_entity}' not found`, 400));
 			}
 
 			const now = new Date().toISOString();
-			db.db
-				.prepare(
-					`INSERT INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-					 VALUES (?, ?, ?, ?, ?, ?)`
-				)
-				.run(from_entity, to_entity, relation_type, repo || "", owner || "", now);
+			db.knowledgeGraph.createRelation({
+				from_entity,
+				to_entity,
+				relation_type,
+				repo: repo || "",
+				owner: owner || "",
+				created_at: now
+			});
 
 			res.json(jsonApiRes({ from_entity, to_entity, relation_type }, "relation"));
 		} catch (err: unknown) {
@@ -194,9 +162,7 @@ export class KGController {
 				return res.status(400).json(jsonApiError("from_entity, to_entity, and relation_type are required", 400));
 			}
 
-			const result = db.db
-				.prepare("DELETE FROM relations WHERE from_entity = ? AND to_entity = ? AND relation_type = ?")
-				.run(from_entity, to_entity, relation_type);
+			const result = db.knowledgeGraph.deleteRelation(from_entity, to_entity, relation_type);
 
 			if (result.changes === 0) {
 				return res.status(404).json(jsonApiError("Relation not found", 404));
@@ -212,9 +178,9 @@ export class KGController {
 	static async deleteObservation(req: express.Request, res: express.Response) {
 		try {
 			await db.refresh();
-			const id = req.params.id;
+			const id = req.params.id as string;
 
-			const result = db.db.prepare("DELETE FROM observations WHERE id = ?").run(id);
+			const result = db.knowledgeGraph.deleteObservation(id);
 
 			if (result.changes === 0) {
 				return res.status(404).json(jsonApiError("Observation not found", 404));

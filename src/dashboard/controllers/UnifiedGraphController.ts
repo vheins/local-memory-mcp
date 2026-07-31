@@ -103,12 +103,7 @@ export class UnifiedGraphController {
 			}
 
 			if (domains.includes("entity")) {
-				const entities = repo
-					? (db.db.prepare("SELECT * FROM entities WHERE repo = ? ORDER BY name LIMIT ?").all(repo, limit) as Record<
-							string,
-							unknown
-						>[])
-					: (db.db.prepare("SELECT * FROM entities ORDER BY name LIMIT ?").all(limit) as Record<string, unknown>[]);
+				const entities = db.knowledgeGraph.listEntitiesForGraph(repo, limit);
 
 				for (const ent of entities) {
 					nodes.push({
@@ -121,14 +116,7 @@ export class UnifiedGraphController {
 					});
 				}
 
-				const relations = repo
-					? (db.db
-							.prepare("SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity")
-							.all(repo) as Record<string, unknown>[])
-					: (db.db.prepare("SELECT * FROM relations ORDER BY from_entity, to_entity").all() as Record<
-							string,
-							unknown
-						>[]);
+				const relations = db.knowledgeGraph.listRelationsForGraph(repo);
 
 				for (const rel of relations) {
 					edges.push({

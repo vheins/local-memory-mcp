@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
 import { extractEntities, ExtractedEntity } from "./extract";
+import { observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
 // Task-specific semantic relations
@@ -49,9 +50,6 @@ export async function saveTaskRelations(
 	const now = new Date().toISOString();
 	const entityNames = entities.map((e) => e.name);
 
-	// Observation for current task
-	const observationText = `Mentioned in task: ${title}`;
-
 	// ── 1. parent_id → depends_on relations ──
 	if (options?.parentId) {
 		const parentTask = db.tasks.getTaskById(options.parentId);
@@ -68,27 +66,25 @@ export async function saveTaskRelations(
 			}
 
 			if (parentEntities.length > 0) {
-				const insertRelation = db.db.prepare(
-					`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-					 VALUES (?, ?, ?, ?, ?, ?)`
-				);
-				const insertObservation = db.db.prepare(
-					`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
-					 VALUES (?, ?, ?, ?, ?, ?)`
-				);
-
 				for (const taskEntityName of entityNames) {
 					for (const parentEntity of parentEntities) {
 						try {
-							insertRelation.run(taskEntityName, parentEntity.name, "depends_on", repo, owner ?? "", now);
-							insertObservation.run(
-								randomUUID(),
-								taskEntityName,
-								`depends_on relation: ${title} → ${parentTask.title}`,
+							db.knowledgeGraph.upsertRelation({
+								from_entity: taskEntityName,
+								to_entity: parentEntity.name,
+								relation_type: "depends_on",
 								repo,
-								owner ?? "",
-								now
-							);
+								owner: owner ?? "",
+								created_at: now
+							});
+							db.knowledgeGraph.insertObservation({
+								id: randomUUID(),
+								entity_name: taskEntityName,
+								observation: `depends_on relation: ${title} → ${parentTask.title}`,
+								repo,
+								owner: owner ?? "",
+								created_at: now
+							});
 						} catch (err) {
 							logger.warn("[KG-Archivist] Failed to save depends_on relation", {
 								error: String(err),
@@ -104,46 +100,40 @@ export async function saveTaskRelations(
 
 	// ── 2. decision_refs → inspired_by relations ──
 	if (options?.decisionRefs && options.decisionRefs.length > 0) {
-		const insertEntity = db.db.prepare(
-			`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`
-		);
-		const insertRelation = db.db.prepare(
-			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`
-		);
-		const insertObservation = db.db.prepare(
-			`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`
-		);
-
 		for (const ref of options.decisionRefs) {
 			const decisionName = ref.trim();
 			if (!decisionName) continue;
 
 			// Ensure the decision entity exists
-			insertEntity.run(
-				decisionName,
-				"decision",
-				`Decision/ADR reference: ${decisionName}`,
+			db.knowledgeGraph.upsertEntity({
+				name: decisionName,
+				type: "decision",
+				description: `Decision/ADR reference: ${decisionName}`,
 				repo,
-				owner ?? "",
-				now,
-				now
-			);
+				owner: owner ?? "",
+				created_at: now,
+				updated_at: now
+			});
 
 			// Create inspired_by relations from task entities to this decision
 			for (const taskEntityName of entityNames) {
 				try {
-					insertRelation.run(taskEntityName, decisionName, "inspired_by", repo, owner ?? "", now);
-					insertObservation.run(
-						randomUUID(),
-						taskEntityName,
-						`inspired_by relation: ${title} → ${decisionName}`,
+					db.knowledgeGraph.upsertRelation({
+						from_entity: taskEntityName,
+						to_entity: decisionName,
+						relation_type: "inspired_by",
 						repo,
-						owner ?? "",
-						now
-					);
+						owner: owner ?? "",
+						created_at: now
+					});
+					db.knowledgeGraph.insertObservation({
+						id: randomUUID(),
+						entity_name: taskEntityName,
+						observation: `inspired_by relation: ${title} → ${decisionName}`,
+						repo,
+						owner: owner ?? "",
+						created_at: now
+					});
 				} catch (err) {
 					logger.warn("[KG-Archivist] Failed to save inspired_by relation", {
 						error: String(err),
@@ -211,22 +201,26 @@ export async function saveStandardRelations(
 	const owner = standard.owner ?? "";
 	const entityNames = entities.map((e) => e.name);
 
-	// Persist entities + observations
-	const insertEntity = db.db.prepare(
-		`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`
-	);
-
-	const insertObservation = db.db.prepare(
-		`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`
-	);
-
-	const observationText = `Mentioned in standard: ${standard.title}`;
+	const observationTextValue = observationText("standard", standard.title);
 	for (const entity of entities) {
 		try {
-			insertEntity.run(entity.name, entity.type, null, repo, owner, now, now);
-			insertObservation.run(randomUUID(), entity.name, observationText, repo, owner, now);
+			db.knowledgeGraph.upsertEntity({
+				name: entity.name,
+				type: entity.type,
+				description: null,
+				repo,
+				owner,
+				created_at: now,
+				updated_at: now
+			});
+			db.knowledgeGraph.insertObservation({
+				id: randomUUID(),
+				entity_name: entity.name,
+				observation: observationTextValue,
+				repo,
+				owner,
+				created_at: now
+			});
 		} catch (err) {
 			logger.warn("[KG-Archivist] Failed to save standard entity", {
 				error: String(err),
@@ -234,17 +228,6 @@ export async function saveStandardRelations(
 			});
 		}
 	}
-
-	// Helper to prepare relation statements
-	const insertRelation = db.db.prepare(
-		`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`
-	);
-
-	const insertRelObservation = db.db.prepare(
-		`INSERT INTO observations (id, entity_name, observation, repo, owner, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`
-	);
 
 	// ── 2. parent_id → extends relations ──
 	if (standard.parent_id) {
@@ -265,15 +248,22 @@ export async function saveStandardRelations(
 				for (const entityName of entityNames) {
 					for (const parentEntity of parentEntities) {
 						try {
-							insertRelation.run(entityName, parentEntity.name, "extends", repo, owner, now);
-							insertRelObservation.run(
-								randomUUID(),
-								entityName,
-								`extends relation: ${standard.title} → ${parentStandard.title}`,
+							db.knowledgeGraph.upsertRelation({
+								from_entity: entityName,
+								to_entity: parentEntity.name,
+								relation_type: "extends",
 								repo,
 								owner,
-								now
-							);
+								created_at: now
+							});
+							db.knowledgeGraph.insertObservation({
+								id: randomUUID(),
+								entity_name: entityName,
+								observation: `extends relation: ${standard.title} → ${parentStandard.title}`,
+								repo,
+								owner,
+								created_at: now
+							});
 						} catch (err) {
 							logger.warn("[KG-Archivist] Failed to save extends relation", {
 								error: String(err),
@@ -319,15 +309,22 @@ export async function saveStandardRelations(
 			for (const entityName of entityNames) {
 				for (const similarEntity of similarEntities) {
 					try {
-						insertRelation.run(entityName, similarEntity.name, "related_to", repo, owner, now);
-						insertRelObservation.run(
-							randomUUID(),
-							entityName,
-							`related_to relation: ${standard.title} ∼ ${similar.title}`,
+						db.knowledgeGraph.upsertRelation({
+							from_entity: entityName,
+							to_entity: similarEntity.name,
+							relation_type: "related_to",
 							repo,
 							owner,
-							now
-						);
+							created_at: now
+						});
+						db.knowledgeGraph.insertObservation({
+							id: randomUUID(),
+							entity_name: entityName,
+							observation: `related_to relation: ${standard.title} ∼ ${similar.title}`,
+							repo,
+							owner,
+							created_at: now
+						});
 					} catch {
 						// Silent: relation may already exist
 					}

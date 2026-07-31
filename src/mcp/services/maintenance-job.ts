@@ -101,7 +101,7 @@ export async function runStartupMaintenance(
 	const prunedActionLogResult = pruneActionLog(db.db, 30);
 
 	// 5. Prune stale observations (7-day retention)
-	const prunedObservationsResult = pruneObservations(db.db, 7);
+	const prunedObservationsResult = pruneObservations(db.knowledgeGraph, 7);
 
 	// Record the maintenance run
 	recordMaintenanceRun(db);
