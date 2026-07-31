@@ -15,20 +15,9 @@ import type { ParserPool } from "../parser/index.js";
 import { logger } from "../../utils/logger.js";
 
 // Import from sub-modules
-import {
-	CodebaseIndexServiceImpl,
-	IndexInProgressError,
-	performIndexRepository,
-	type CodebaseIndexService,
-	type IndexOptions,
-	type IndexProgress,
-	type IndexResult,
-	type IndexFileError
-} from "./indexing-repository.js";
+import { CodebaseIndexServiceImpl, type CodebaseIndexService } from "./indexing-repository.js";
 
-import { indexingRepos, getIndexFreshness, type StalenessResult } from "./indexing-cache.js";
-
-import { type IndexStatus } from "./indexing-staleness.js";
+import { indexingRepos, getIndexFreshness } from "./indexing-cache.js";
 
 // ── Re-exports (preserving existing public API) ────────────────────────
 

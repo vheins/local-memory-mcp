@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import type { SQLiteStore } from "../../storage/sqlite.js";
 import type { CodebaseFile } from "../../types/codebase-file.js";
 import { logger } from "../../utils/logger.js";
+import { INDEX_STALENESS_TTL_MS } from "../../utils/constants.js";
 
 // ── Module-level indexing guard ───────────────────────────────────────
 
@@ -139,8 +140,8 @@ export async function retryDbWrite<T>(fn: () => Promise<T>, context: string): Pr
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
-
-export const DEFAULT_BATCH_SIZE = 100;
+// Re-exported for backward compatibility with indexing-repository.ts.
+export { DEFAULT_BATCH_SIZE } from "../../utils/constants";
 
 // ── Private type for file categorization ──────────────────────────────
 
@@ -165,6 +166,44 @@ export interface StalenessResult {
 }
 
 /**
+ * Per-repo staleness cache. Staleness checks cost N filesystem stats per
+ * repo, so results are reused within INDEX_STALENESS_TTL_MS (30s default).
+ * The resolved repoPath is stored with the result so a different repoPath
+ * for the same repo always recomputes.
+ */
+interface StalenessCacheEntry {
+	repoPath: string;
+	result: StalenessResult;
+	cachedAt: number;
+}
+
+const stalenessCache = new Map<string, StalenessCacheEntry>();
+
+/**
+ * Invalidate cached staleness results — all repos, or a single repo.
+ * Called after an index run completes so index_status reflects fresh data
+ * immediately instead of waiting out the TTL.
+ */
+export function clearStalenessCache(repo?: string): void {
+	if (repo === undefined) {
+		stalenessCache.clear();
+		return;
+	}
+	stalenessCache.delete(repo);
+}
+
+/**
+ * Resolve the most recent last_indexed_at for a repo with a single
+ * SELECT MAX — avoids loading every file row just to find the newest date.
+ */
+export function getLastIndexedAt(db: SQLiteStore, repo: string): string | null {
+	const row = db.db
+		.prepare("SELECT MAX(last_indexed_at) AS last_indexed_at FROM codebase_files WHERE repo = ?")
+		.get(repo) as { last_indexed_at: string | null } | undefined;
+	return row?.last_indexed_at ?? null;
+}
+
+/**
  * Check whether a repo's index is stale by comparing file mtimes against
  * their last_indexed_at timestamps.
  *
@@ -173,51 +212,89 @@ export interface StalenessResult {
  *   - The file no longer exists on disk (was deleted)
  *
  * The repo is marked stale only if >= 5% of indexed files have changed.
+ *
+ * Caching is OPT-IN via `{ useCache: true }` (FIX-14): staleness results are
+ * cached per repo for INDEX_STALENESS_TTL_MS only for the user-facing
+ * `getIndexStatus` path, which tolerates up-to-30s staleness (TASK-018).
+ * `checkStaleness` — used as the pre-index decision and documented to reflect
+ * on-disk changes immediately — always runs live (uncached), so a file
+ * modification is never hidden behind the TTL window. File stats run
+ * asynchronously (fs.promises) with bounded concurrency so index_status
+ * no longer blocks the event loop with N sync statSync calls.
+ * INDEX_STALENESS_TTL_MS=0 disables the cache entirely (the TTL guard
+ * `elapsed < 0` is never satisfiable), forcing a live check every call.
  */
-export async function checkRepoStaleness(db: SQLiteStore, repo: string, repoPath: string): Promise<StalenessResult> {
+export async function checkRepoStaleness(
+	db: SQLiteStore,
+	repo: string,
+	repoPath: string,
+	options: { useCache?: boolean } = {}
+): Promise<StalenessResult> {
+	const { useCache = false } = options;
+	const resolvedPath = path.resolve(repoPath);
+
+	// Serve from cache only when the caller opted in AND the result is fresh
+	// AND the repo path is unchanged.
+	const cached = stalenessCache.get(repo);
+	if (useCache && cached && cached.repoPath === resolvedPath && Date.now() - cached.cachedAt < INDEX_STALENESS_TTL_MS) {
+		return cached.result;
+	}
+
 	const existingFiles = db.codebaseFiles.getFilesByRepo(repo);
 	const totalFiles = existingFiles.length;
 
 	// Nothing indexed yet — no basis for staleness comparison
 	if (totalFiles === 0) {
-		return {
+		const emptyResult: StalenessResult = {
 			stale: false,
 			staleFiles: 0,
 			totalFiles: 0,
 			staleRatio: 0,
 			lastIndexedAt: null
 		};
+		if (useCache) {
+			stalenessCache.set(repo, { repoPath: resolvedPath, result: emptyResult, cachedAt: Date.now() });
+		}
+		return emptyResult;
 	}
 
-	const resolvedPath = path.resolve(repoPath);
-	let staleCount = 0;
+	// Track max last_indexed_at across all files (cheap in-loop, no sort)
 	let maxLastIndexedAt: Date | null = null;
-
 	for (const f of existingFiles) {
-		// Track max last_indexed_at across all files
 		const fileTime = f.last_indexed_at ? new Date(f.last_indexed_at) : null;
 		if (fileTime && (!maxLastIndexedAt || fileTime > maxLastIndexedAt)) {
 			maxLastIndexedAt = fileTime;
 		}
+	}
 
-		const fullPath = path.join(resolvedPath, f.file_path);
-		try {
-			const stat = fs.statSync(fullPath);
-			const indexedTime = fileTime ? fileTime.getTime() : 0;
-			// File mtime newer than when it was last indexed → stale
-			if (stat.mtimeMs > indexedTime) {
-				staleCount++;
-			}
-		} catch {
-			// File no longer exists on disk → stale
-			staleCount++;
+	// Async stats with bounded concurrency (chunked — never N parallel stats)
+	let staleCount = 0;
+	const STAT_CONCURRENCY = 32;
+	for (let i = 0; i < existingFiles.length; i += STAT_CONCURRENCY) {
+		const chunk = existingFiles.slice(i, i + STAT_CONCURRENCY);
+		const outcomes = await Promise.all(
+			chunk.map(async (f) => {
+				const indexedTime = f.last_indexed_at ? new Date(f.last_indexed_at).getTime() : 0;
+				const fullPath = path.join(resolvedPath, f.file_path);
+				try {
+					const stat = await fs.promises.stat(fullPath);
+					// File mtime newer than when it was last indexed → stale
+					return stat.mtimeMs > indexedTime;
+				} catch {
+					// File no longer exists on disk → stale
+					return true;
+				}
+			})
+		);
+		for (const stale of outcomes) {
+			if (stale) staleCount++;
 		}
 	}
 
 	const staleRatio = Math.round((staleCount / totalFiles) * 1000) / 1000;
 	const lastIndexedAt = maxLastIndexedAt?.toISOString() ?? null;
 
-	return {
+	const result: StalenessResult = {
 		// Mark repo stale only if >= 5% of indexed files have changed
 		stale: staleRatio >= 0.05,
 		staleFiles: staleCount,
@@ -225,6 +302,11 @@ export async function checkRepoStaleness(db: SQLiteStore, repo: string, repoPath
 		staleRatio,
 		lastIndexedAt
 	};
+
+	if (useCache) {
+		stalenessCache.set(repo, { repoPath: resolvedPath, result, cachedAt: Date.now() });
+	}
+	return result;
 }
 
 // ── Freshness check (extracted from autoIndexIfStale) ──────────────────

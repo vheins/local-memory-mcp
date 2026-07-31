@@ -16,8 +16,10 @@ import { StandardEntity } from "../entities/standard";
 import { HandoffEntity } from "../entities/handoff";
 import { CodebaseFileEntity } from "../entities/codebase-file";
 import { CodebaseSymbolEntity } from "../entities/codebase-symbol";
+import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 import { WriteLock } from "./write-lock";
 import { logger } from "../utils/logger";
+import { WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
 
 function resolveDbPath(): string {
 	if (process.env.MEMORY_DB_PATH) return process.env.MEMORY_DB_PATH;
@@ -58,8 +60,11 @@ export class SQLiteStore {
 	public handoffs: HandoffEntity;
 	public codebaseFiles: CodebaseFileEntity;
 	public codebaseSymbols: CodebaseSymbolEntity;
+	public knowledgeGraph: KnowledgeGraphEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
+	/** Last wall-clock time a WAL checkpoint ran (throttles refresh()). */
+	private lastCheckpointAt = 0;
 
 	constructor(dbPath?: string) {
 		const finalPath = dbPath ?? DB_PATH;
@@ -74,7 +79,14 @@ export class SQLiteStore {
 
 		this.db = new Database(finalPath);
 		this.db.pragma("journal_mode = WAL");
-		this.db.pragma("synchronous = FULL");
+		// synchronous=NORMAL is SQLite's documented recommendation under WAL:
+		// FULL performs 2 fsyncs per commit for crash-durability of the very
+		// last transaction, which WAL already provides for all prior commits
+		// (NORMAL risks losing only the most recent commit on OS/power loss,
+		// never corruption). FULL was a rollback-journal concern; keeping it
+		// under WAL doubles write fsyncs for no integrity gain. See
+		// https://sqlite.org/wal.html#synchronous.
+		this.db.pragma("synchronous = NORMAL");
 		this.db.pragma("busy_timeout = 30000"); // increased: 30s
 		this.db.pragma("foreign_keys = ON");
 		this.db.pragma("wal_autocheckpoint = 100"); // more frequent: every 100 pages
@@ -104,23 +116,8 @@ export class SQLiteStore {
 		this.handoffs = new HandoffEntity(this.db);
 		this.codebaseFiles = new CodebaseFileEntity(this.db);
 		this.codebaseSymbols = new CodebaseSymbolEntity(this.db);
+		this.knowledgeGraph = new KnowledgeGraphEntity(this.db);
 		this.lock = new WriteLock(finalPath);
-	}
-
-	/**
-	 * Create a timestamped backup of the DB file.
-	 * Called automatically after successful writes (via withWrite).
-	 */
-	backup(): void {
-		if (this.dbPathInstance === ":memory:") return;
-		try {
-			// Checkpoint first so backup has latest data
-			this.db.pragma("wal_checkpoint(PASSIVE)");
-			const backupPath = this.dbPathInstance + ".backup";
-			fs.copyFileSync(this.dbPathInstance, backupPath);
-		} catch (err) {
-			logger.warn("[SQLiteStore] Backup failed", { error: String(err) });
-		}
 	}
 
 	/**
@@ -137,8 +134,17 @@ export class SQLiteStore {
 	/**
 	 * Checkpoint WAL so dashboard (and other readers) see latest data.
 	 * Called by dashboard controllers before reads.
+	 *
+	 * Throttled: WAL readers see committed data without any checkpoint, so a
+	 * per-request checkpoint would only pay WAL-shrink cost on every request.
+	 * Checkpoints are therefore limited to one per WAL_CHECKPOINT_INTERVAL_MS
+	 * (10s default) — the first call in each window still checkpoints, so a
+	 * long-idle server never regresses visibility.
 	 */
 	async refresh(): Promise<void> {
+		const now = Date.now();
+		if (now - this.lastCheckpointAt < WAL_CHECKPOINT_INTERVAL_MS) return;
+		this.lastCheckpointAt = now;
 		try {
 			this.db.pragma("wal_checkpoint(PASSIVE)");
 		} catch (err) {

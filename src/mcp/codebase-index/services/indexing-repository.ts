@@ -14,18 +14,18 @@ import type { ParseResult } from "../parser/language-visitor.js";
 import type { SQLiteStore } from "../../storage/sqlite.js";
 import type { CodebaseFileInsert } from "../../types/codebase-file.js";
 import type { CodebaseSymbolInsert } from "../../types/codebase-symbol.js";
-import type { DiscoveredFile } from "../types/index.js";
 import type { ErrorSummary } from "../types/errors.js";
 import { logger } from "../../utils/logger.js";
 
 // Import cache-level utilities
 import {
-	retryDbWrite,
 	isPermissionError,
 	isTimeoutError,
 	computeChecksum,
 	countLines,
 	checkRepoStaleness,
+	getLastIndexedAt,
+	clearStalenessCache,
 	DEFAULT_BATCH_SIZE,
 	type FilePlan,
 	type StalenessResult
@@ -178,7 +178,7 @@ export async function performIndexRepository(
 		const planResult = createIndexPlan(discoveredFiles, existingFiles, options);
 
 		totalFiles = planResult.totalFiles;
-		const { plans, fileMap, existingMap, checksumToOldPaths, renameMap, stalePaths } = planResult;
+		const { plans, existingMap, checksumToOldPaths, renameMap, stalePaths } = planResult;
 
 		emitProgress(options, {
 			stage: "discovering",
@@ -226,7 +226,7 @@ export async function performIndexRepository(
 								error: `File exceeds max size (${plan.sizeBytes} bytes > ${MAX_FILE_SIZE_BYTES} bytes)`
 							};
 						}
-						const content = fs.readFileSync(plan.absolutePath, "utf-8");
+						const content = await fs.promises.readFile(plan.absolutePath, "utf-8");
 						const checksum = computeChecksum(content);
 						const lineCount = countLines(content);
 						const parseResult = await parserPool.parseFile(plan.filePath, content);
@@ -279,55 +279,70 @@ export async function performIndexRepository(
 				}
 
 				// ── Rename detection ──────────────────────────
-				if (isNewFile && checksum && checksumToOldPaths.has(checksum)) {
-					const candidateOldPaths = checksumToOldPaths.get(checksum)!;
-					const matchingStalePaths = candidateOldPaths.filter((oldPath) => stalePaths.has(oldPath));
-					if (matchingStalePaths.length > 0) {
-						const oldPath = matchingStalePaths[0];
-						renameMap.set(plan.filePath, oldPath);
-						renamedFiles++;
-						skippedFiles++;
-						skippedByChecksum++;
-						stalePaths.delete(oldPath);
-						const idx = candidateOldPaths.indexOf(oldPath);
-						if (idx >= 0) candidateOldPaths.splice(idx, 1);
-						logger.info("[IndexingService] Detected file rename", {
-							repo,
-							oldPath,
-							newPath: plan.filePath,
-							checksum: checksum.substring(0, 12)
-						});
-						processedSoFar++;
-						continue;
+				if (isNewFile && checksum) {
+					const candidateOldPaths = checksumToOldPaths.get(checksum);
+					if (candidateOldPaths) {
+						const matchingStalePaths = candidateOldPaths.filter((oldPath) => stalePaths.has(oldPath));
+						if (matchingStalePaths.length > 0) {
+							const oldPath = matchingStalePaths[0];
+							renameMap.set(plan.filePath, oldPath);
+							renamedFiles++;
+							skippedFiles++;
+							skippedByChecksum++;
+							stalePaths.delete(oldPath);
+							const idx = candidateOldPaths.indexOf(oldPath);
+							if (idx >= 0) candidateOldPaths.splice(idx, 1);
+							logger.info("[IndexingService] Detected file rename", {
+								repo,
+								oldPath,
+								newPath: plan.filePath,
+								checksum: checksum.substring(0, 12)
+							});
+							processedSoFar++;
+							continue;
+						}
 					}
 				}
 
 				// ── Process parse result ─────────────────────
-				if (parseResult!.error) {
+				// Defensive guard: every batch-mapper path sets either `error`
+				// (with null parseResult/checksum) or a full result, so this is
+				// unreachable in practice — but keeps invariants explicit.
+				if (parseResult === null || checksum === null) {
 					failedFiles++;
 					errors.push({
 						filePath: plan.filePath,
-						error: parseResult!.error
+						error: "Parse produced no result"
 					});
-					if (/timeout/i.test(parseResult!.error)) {
+					processedSoFar++;
+					continue;
+				}
+
+				if (parseResult.error) {
+					failedFiles++;
+					errors.push({
+						filePath: plan.filePath,
+						error: parseResult.error
+					});
+					if (/timeout/i.test(parseResult.error)) {
 						timeoutErrors++;
 						logger.warn("[IndexingService] Parse timeout — skipped", {
 							repo,
 							filePath: plan.filePath,
-							error: parseResult!.error
+							error: parseResult.error
 						});
 					} else {
 						logger.warn("[IndexingService] Parse error", {
 							repo,
 							filePath: plan.filePath,
-							error: parseResult!.error
+							error: parseResult.error
 						});
 					}
 				} else {
 					parsedFiles++;
 				}
 
-				for (const sym of parseResult!.symbols) {
+				for (const sym of parseResult.symbols) {
 					symbolInserts.push({
 						repo,
 						file_path: plan.filePath,
@@ -350,7 +365,7 @@ export async function performIndexRepository(
 					repo,
 					file_path: plan.filePath,
 					language: plan.language,
-					checksum: checksum!,
+					checksum,
 					lines: lineCount,
 					size_bytes: plan.sizeBytes
 				});
@@ -422,6 +437,9 @@ export async function performIndexRepository(
 		};
 	} finally {
 		indexingRepos.delete(repo);
+		// Index writes landed (or failed) — drop the cached staleness result so
+		// the next index_status reflects the new last_indexed_at immediately.
+		clearStalenessCache(repo);
 	}
 }
 
@@ -447,22 +465,17 @@ export class CodebaseIndexServiceImpl implements CodebaseIndexService {
 	}
 
 	async checkStaleness(repo: string, repoPath: string): Promise<StalenessResult> {
+		// Live (uncached) — the pre-index decision must never be served from
+		// the 30s TTL cache after a file change (FIX-14).
 		return checkRepoStaleness(this.db, repo, repoPath);
 	}
 
 	async getIndexStatus(repo: string, repoPath?: string): Promise<IndexStatus> {
 		const totalFiles = this.db.codebaseFiles.getFileCountByRepo(repo);
-		const existingFiles = this.db.codebaseFiles.getFilesByRepo(repo);
 
 		const totalSymbols = this.db.codebaseSymbols.getSymbolCountByRepo(repo);
 
-		let lastIndexedAt: string | null = null;
-		if (existingFiles.length > 0) {
-			const sorted = [...existingFiles].sort(
-				(a, b) => new Date(b.last_indexed_at ?? 0).getTime() - new Date(a.last_indexed_at ?? 0).getTime()
-			);
-			lastIndexedAt = sorted[0].last_indexed_at;
-		}
+		const lastIndexedAt = getLastIndexedAt(this.db, repo);
 
 		const base: IndexStatus = {
 			repo,
@@ -476,7 +489,9 @@ export class CodebaseIndexServiceImpl implements CodebaseIndexService {
 
 		// Only compute staleness if repoPath is provided AND the repo has been indexed
 		if (repoPath && totalFiles > 0) {
-			const staleness = await checkRepoStaleness(this.db, repo, repoPath);
+			// User-facing index_status — TTL-cached within INDEX_STALENESS_TTL_MS
+			// (TASK-018). The live path is `checkStaleness` (FIX-14).
+			const staleness = await checkRepoStaleness(this.db, repo, repoPath, { useCache: true });
 			base.stale = staleness.stale;
 			base.staleRatio = staleness.staleRatio;
 		}

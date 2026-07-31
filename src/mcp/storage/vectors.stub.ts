@@ -2,6 +2,7 @@ import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
 import { STOPWORDS } from "../utils/stopwords.js";
+import { cosineSimilarity } from "../utils/vector";
 
 // Simple vector store using SQLite - lightweight embeddings without ollama
 export class StubVectorStore implements VectorStore {
@@ -36,27 +37,6 @@ export class StubVectorStore implements VectorStore {
 			vector[token] = (vector[token] || 0) + 1;
 		}
 		return vector;
-	}
-
-	// Compute cosine similarity between two frequency vectors
-	private cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
-		const keys1 = Object.keys(v1);
-		const keys2 = Object.keys(v2);
-		if (!keys1.length || !keys2.length) return 0;
-
-		let dotProduct = 0;
-		for (const key of keys1) {
-			if (v2[key]) dotProduct += v1[key] * v2[key];
-		}
-
-		let mag1 = 0;
-		for (const key of keys1) mag1 += v1[key] * v1[key];
-
-		let mag2 = 0;
-		for (const key of keys2) mag2 += v2[key] * v2[key];
-
-		const mag = Math.sqrt(mag1) * Math.sqrt(mag2);
-		return mag === 0 ? 0 : dotProduct / mag;
 	}
 
 	async upsert(id: string, text: string, kind: VectorEntityKind = "memory"): Promise<void> {
@@ -122,7 +102,7 @@ export class StubVectorStore implements VectorStore {
 			for (const candidate of candidates) {
 				try {
 					const storedVector = JSON.parse(candidate.vector) as Record<string, number>;
-					const score = this.cosineSimilarity(queryFreq, storedVector);
+					const score = cosineSimilarity(queryFreq, storedVector);
 					results.push({ id: candidate.id, score });
 				} catch {
 					continue;

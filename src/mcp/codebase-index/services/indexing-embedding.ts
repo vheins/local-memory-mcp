@@ -11,6 +11,7 @@
  */
 
 import type { CodebaseSymbolEntity } from "../../entities/codebase-symbol.js";
+import { cosineSimilarityArrays } from "../../utils/vector.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -59,18 +60,6 @@ export function computeSymbolVector(symbol: SymbolEmbeddingInput): number[] {
 
 	// Convert to dense array ordered by keys
 	return Object.values(vector);
-}
-
-/**
- * Compute cosine similarity between two vectors.
- */
-export function cosineSimilarity(a: number[], b: number[]): number {
-	if (a.length !== b.length) return 0;
-	const dot = a.reduce((sum, v, i) => sum + v * (b[i] ?? 0), 0);
-	const magA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
-	const magB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
-	if (magA === 0 || magB === 0) return 0;
-	return dot / (magA * magB);
 }
 
 // ── Embedding operations ───────────────────────────────────────────────
@@ -133,8 +122,6 @@ export async function querySymbolEmbeddings(
 
 	if (queryVector.length === 0) return [];
 
-	const vectorString = JSON.stringify(queryVector);
-
 	// Fetch all symbol vectors for this repo
 	const candidates = symbolEntity.getSymbolVectorsByRepo(repo, limit * 3);
 	if (candidates.length === 0) return [];
@@ -144,7 +131,7 @@ export async function querySymbolEmbeddings(
 	for (const c of candidates) {
 		try {
 			const storedVector = JSON.parse(c.vector) as number[];
-			const score = cosineSimilarity(queryVector, storedVector);
+			const score = cosineSimilarityArrays(queryVector, storedVector);
 			if (score > 0) {
 				scored.push({ symbolId: c.symbol_id, score });
 			}

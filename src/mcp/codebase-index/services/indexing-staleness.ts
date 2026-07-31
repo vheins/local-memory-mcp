@@ -12,7 +12,7 @@
 import type { SQLiteStore } from "../../storage/sqlite.js";
 
 // Re-export types and functions from cache layer
-import { indexingRepos, checkRepoStaleness, type StalenessResult } from "./indexing-cache.js";
+import { indexingRepos, checkRepoStaleness, getLastIndexedAt, type StalenessResult } from "./indexing-cache.js";
 
 // Re-export for consumers (also re-exported by indexing-service)
 export type { StalenessResult } from "./indexing-cache.js";
@@ -45,6 +45,11 @@ export interface IndexProgress {
 /**
  * Check whether a repo's index is stale by comparing file mtimes against
  * their last_indexed_at timestamps. Delegates to indexing-cache.
+ *
+ * Live (uncached) on purpose (FIX-14): `checkStaleness` is the pre-index
+ * decision — a stale=false served from the 30s TTL cache after a file
+ * change would suppress re-indexing. Caching is reserved for the
+ * user-facing `getIndexStatus` path only (TASK-018).
  */
 export async function checkStaleness(db: SQLiteStore, repo: string, repoPath: string): Promise<StalenessResult> {
 	return checkRepoStaleness(db, repo, repoPath);
@@ -55,17 +60,10 @@ export async function checkStaleness(db: SQLiteStore, repo: string, repoPath: st
  */
 export async function getIndexStatus(db: SQLiteStore, repo: string, repoPath?: string): Promise<IndexStatus> {
 	const totalFiles = db.codebaseFiles.getFileCountByRepo(repo);
-	const existingFiles = db.codebaseFiles.getFilesByRepo(repo);
 
 	const totalSymbols = db.codebaseSymbols.getSymbolCountByRepo(repo);
 
-	let lastIndexedAt: string | null = null;
-	if (existingFiles.length > 0) {
-		const sorted = [...existingFiles].sort(
-			(a, b) => new Date(b.last_indexed_at ?? 0).getTime() - new Date(a.last_indexed_at ?? 0).getTime()
-		);
-		lastIndexedAt = sorted[0].last_indexed_at;
-	}
+	const lastIndexedAt = getLastIndexedAt(db, repo);
 
 	const base: IndexStatus = {
 		repo,
@@ -79,7 +77,9 @@ export async function getIndexStatus(db: SQLiteStore, repo: string, repoPath?: s
 
 	// Only compute staleness if repoPath is provided AND the repo has been indexed
 	if (repoPath && totalFiles > 0) {
-		const staleness = await checkRepoStaleness(db, repo, repoPath);
+		// User-facing index_status — TTL-cached within INDEX_STALENESS_TTL_MS
+		// (TASK-018). The live path is `checkStaleness` (FIX-14).
+		const staleness = await checkRepoStaleness(db, repo, repoPath, { useCache: true });
 		base.stale = staleness.stale;
 		base.staleRatio = staleness.staleRatio;
 	}
