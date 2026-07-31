@@ -1,9 +1,28 @@
 import { BaseEntity } from "../storage/base";
 import { MemoryEntry, MemoryRow, VectorStore } from "../types/index";
 import { MemoryIdVector } from "../types/common";
+import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
+import {
+	VECTOR_CANDIDATE_CAP,
+	MIN_CANDIDATES,
+	COLD_START_RECENT_LIMIT,
+	SIMILARITY_ZERO_FALLBACK,
+	REPO_MATCH_BOOST,
+	MEMORY_CHECK_CONFLICTS_THRESHOLD
+} from "../utils/constants";
 
 export class MemoryVectorEntity extends BaseEntity {
-	getVectorCandidates(owner?: string, repo?: string, limit = 100): { memory_id: string; vector: string }[] {
+	// In-memory TF vector cache keyed by memory id and validated against
+	// memories.updated_at — self-invalidates on writes without write-path hooks.
+	private readonly tfCache = createTfVectorCache();
+	getVectorCandidates(
+		owner?: string,
+		repo?: string,
+		limit = VECTOR_CANDIDATE_CAP
+	): {
+		memory_id: string;
+		vector: string;
+	}[] {
 		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN memories m ON mv.memory_id = m.id`;
 		const params: (string | number)[] = [];
 		if (repo) {
@@ -26,6 +45,57 @@ export class MemoryVectorEntity extends BaseEntity {
 		);
 	}
 
+	/**
+	 * Build the shared scope+tags predicate list used by the primary candidate
+	 * query, where predicates join with AND consistently (TASK-009): a memory
+	 * must be in-repo/global AND tag-matched. Returns the predicate list plus
+	 * bound params in order.
+	 */
+	private buildSearchPredicates(
+		owner: string,
+		repo: string,
+		currentTags: string[]
+	): { predicates: string[]; params: (string | number)[] } {
+		const predicates = ["(owner = ? AND repo = ? OR is_global = 1)"];
+		const params: (string | number)[] = [owner, repo];
+
+		if (currentTags.length > 0) {
+			const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
+			predicates.push(`(${tagConditions})`);
+			currentTags.forEach((tag) => params.push(`%${tag}%`));
+		}
+
+		return { predicates, params };
+	}
+
+	/**
+	 * Build the cold-start fallback predicate list (FIX-13 / MEM-426): the repo
+	 * scope is OR'ed with the tag conditions OUTSIDE the scope —
+	 * `(scope) OR (tags)` — so tag-matched memories from OTHER repos re-enter
+	 * the candidate pool for the memory.read tag-affinity boost (tech-stack
+	 * affinity), while non-tag out-of-scope rows stay excluded. The primary
+	 * query keeps the strict AND-join (TASK-009); only the fallback broadens.
+	 */
+	private buildFallbackPredicates(
+		owner: string,
+		repo: string,
+		currentTags: string[]
+	): { predicates: string[]; params: (string | number)[] } {
+		const scopePredicate = "(owner = ? AND repo = ? OR is_global = 1)";
+		const params: (string | number)[] = [owner, repo];
+		const predicates: string[] = [];
+
+		if (currentTags.length > 0) {
+			const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
+			predicates.push(`(${scopePredicate} OR (${tagConditions}))`);
+			currentTags.forEach((tag) => params.push(`%${tag}%`));
+		} else {
+			predicates.push(scopePredicate);
+		}
+
+		return { predicates, params };
+	}
+
 	searchBySimilarity(
 		query: string,
 		owner: string,
@@ -34,27 +104,36 @@ export class MemoryVectorEntity extends BaseEntity {
 		includeArchived: boolean = false,
 		currentTags: string[] = []
 	): (MemoryEntry & { similarity: number })[] {
-		const queryVector = this.computeVector(query);
+		const queryVector = computeVector(query);
 		const now = new Date();
 
-		const where = ["(owner = ? AND repo = ? OR is_global = 1)"];
-		const params: (string | number)[] = [owner, repo];
+		const { predicates, params } = this.buildSearchPredicates(owner, repo, currentTags);
+		predicates.push("(expires_at IS NULL OR expires_at > ?)");
+		params.push(now.toISOString());
+		if (!includeArchived) predicates.push("status = 'active'");
 
-		if (currentTags.length > 0) {
-			const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
-			where.push(`(${tagConditions})`);
-			currentTags.forEach((tag) => params.push(`%${tag}%`));
-		}
+		// Honor the caller's fetch limit (was a hardcoded LIMIT 100) while
+		// keeping a floor so small fetches/conflict checks stay responsive.
+		const candidateLimit = Math.max(limit, MIN_CANDIDATES);
 
-		let sql = `SELECT * FROM memories WHERE (${where.join(" AND ")}) AND (expires_at IS NULL OR expires_at > ?)`;
-		if (!includeArchived) sql += " AND status = 'active'";
-		sql += ` ORDER BY CASE WHEN owner = ? AND repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT 100`;
-
-		const candidates = this.all<MemoryRow>(sql, [...params, now.toISOString(), owner, repo]);
+		const sql = `SELECT * FROM memories WHERE ${predicates.join(" AND ")}
+			ORDER BY CASE WHEN owner = ? AND repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT ?`;
+		const candidates = this.all<MemoryRow>(sql, [...params, owner, repo, candidateLimit]);
 
 		if (candidates.length < 5) {
-			const recentSql = `SELECT * FROM memories WHERE (${where.join(" OR ")}) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT 10`;
-			const recent = this.all<MemoryRow>(recentSql, [...params, now.toISOString()]);
+			// Cold-start fallback: broaden the scope for tag-affinity recall —
+			// the repo scope is OR'ed with tag matches so cross-repo tag-matched
+			// memories can re-enter candidates (MEM-426), while non-tag
+			// out-of-scope rows stay excluded. The primary path keeps the
+			// strict AND-join (TASK-009).
+			const { predicates: recentPredicates, params: recentParams } = this.buildFallbackPredicates(
+				owner,
+				repo,
+				currentTags
+			);
+			recentPredicates.push("status = 'active'", "(expires_at IS NULL OR expires_at > ?)");
+			const recentSql = `SELECT * FROM memories WHERE ${recentPredicates.join(" AND ")} ORDER BY created_at DESC LIMIT ${COLD_START_RECENT_LIMIT}`;
+			const recent = this.all<MemoryRow>(recentSql, [...recentParams, now.toISOString()]);
 			const candidateIds = new Set(candidates.map((c) => c.id));
 			for (const r of recent) {
 				if (!candidateIds.has(r.id)) {
@@ -75,13 +154,13 @@ export class MemoryVectorEntity extends BaseEntity {
 					return { ...memory, similarity: 0 };
 				}
 
-				const similarity = this.cosineSimilarity(queryVector, this.computeVector(memory.content)) || 0;
+				const similarity = cosineSimilarity(queryVector, this.tfCache.get(row.id, row.content, row.updated_at)) || 0;
 				let score = similarity;
 				if (!score) {
-					score = 0.16;
+					score = SIMILARITY_ZERO_FALLBACK;
 				}
 
-				if (row.repo === repo) score += 0.1;
+				if (row.repo === repo) score += REPO_MATCH_BOOST;
 
 				return { ...memory, similarity: score };
 			})
@@ -96,7 +175,7 @@ export class MemoryVectorEntity extends BaseEntity {
 		repo: string,
 		_type: string,
 		_vectors: VectorStore,
-		threshold: number = 0.55
+		threshold: number = MEMORY_CHECK_CONFLICTS_THRESHOLD
 	): Promise<(MemoryEntry & { similarity: number }) | null> {
 		const results = await this.searchBySimilarity(content, owner, repo, 1, false);
 		if (results.length > 0 && results[0].similarity >= threshold) {
