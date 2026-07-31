@@ -23,9 +23,11 @@ import { handleTaskWrite } from "./task-write";
 import { handleTaskDelete } from "./task.delete";
 import { handleTaskRead } from "./task-read";
 import { handleAgentContext } from "./agent-context";
-import { handleCodebaseIndex } from "./codebase.index";
+import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
 import { McpResponse } from "../utils/mcp-response";
+import { logAction } from "../utils/action-log";
+import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
 
 // ── Tool definitions ────────────────────────────────────────────────────
 import { TOOL_DEFINITIONS } from "./tool-definitions";
@@ -41,107 +43,28 @@ export type RegisterAllOptions = {
 	onResourcesMutated?: (uris: string[]) => void;
 };
 
-// ── Tools that mutate the DB — must run under write lock ──────────────────
-const WRITE_TOOLS = new Set([
-	// Canonical memory tools
-	"memory-write",
-	"memory-delete",
-	// Summarize tools
-	"repo-summarize",
-	// Handoff & Claim
-	"handoff-write",
-	"claim-manage",
-	// Standards
-	"standard-write",
-	"standard-delete",
-	// Tasks
-	"task-write",
-	"task-delete",
-	// Codebase index tools (write)
-	"codebase-index"
-]);
-
-// ── Resource mutation URIs ───────────────────────────────────────────────
-
-function collectAffectedResourceUris(toolName: string, args: Record<string, unknown>, result: unknown): string[] {
-	const res = result as Record<string, unknown> | undefined;
-	const repo =
-		(args?.repo as string) ||
-		((args?.scope as Record<string, unknown>)?.repo as string) ||
-		((res?.data as Record<string, unknown>)?.repo as string);
-	const uris = new Set<string>();
-
-	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-write" || toolName === "task-delete";
-	const touchesTasks = toolName.startsWith("task-");
-
-	if (touchesMemory && repo) {
-		uris.add(`repository://${encodeURIComponent(repo)}/memories`);
-	}
-
-	if (touchesTasks && repo) {
-		uris.add(`repository://${encodeURIComponent(repo)}/tasks`);
-	}
-
-	if (repo) {
-		uris.add("repository://index");
-	}
-
-	const memoryId =
-		(args?.id as string) || (args?.memory_id as string) || ((res?.data as Record<string, unknown>)?.id as string);
-	if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
-		uris.add(`memory://${memoryId}`);
-	}
-
-	const taskId =
-		(args?.id as string) ||
-		(args?.task_id as string) ||
-		(((res as Record<string, unknown>)?.structuredData as Record<string, unknown>)?.id as string);
-	if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
-		uris.add(`task://${taskId}`);
-	}
-
-	return [...uris];
-}
+// ── Write-lock + resource-mutation plumbing ──────────────────────────────
+// WRITE_TOOLS and collectAffectedResourceUris live in utils/tool-plumbing.ts
+// (shared with the router.ts adapter) — single source of truth.
 
 // ── Action logging ───────────────────────────────────────────────────────
 
-function logToolAction(
-	toolName: string,
-	args: Record<string, unknown>,
-	result: unknown,
-	db: SQLiteStore,
-	isWrite: boolean
-): void {
-	try {
-		const actionType = toolName.split("-")[1] || toolName;
-		const res = result as Record<string, unknown> | undefined;
-		const sc = (res as Record<string, unknown>)?.structuredData as Record<string, unknown> | undefined;
-		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
+function logToolAction(toolName: string, args: Record<string, unknown>, result: unknown, db: SQLiteStore): void {
+	const actionType = toolName.split("-")[1] || toolName;
+	const res = result as Record<string, unknown> | undefined;
+	const sc = (res as Record<string, unknown>)?.structuredData as Record<string, unknown> | undefined;
+	const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
 
-		const logOptions: {
-			query?: string;
-			response?: Record<string, unknown>;
-			memoryId?: string;
-			taskId?: string;
-			resultCount?: number;
-		} = {
-			query: (args?.query as string) || (args?.title as string) || (args?.task_code as string) || undefined,
-			response: res,
-			memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
-			taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
-			resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
-		};
-
-		if (isWrite) {
-			db.actions.logAction(actionType, "", repo, logOptions);
-		} else {
-			void db.withWrite(() => {
-				db.actions.logAction(actionType, "", repo, logOptions);
-			});
-		}
-	} catch (e) {
-		logger.error("Failed to log action", { toolName, error: String(e) });
-	}
+	// Unified policy (ActionLogService): action_log INSERTs never take the file
+	// lock — WAL + busy_timeout serialize single-row inserts. Exactly one row
+	// per tool call, read AND write tools alike.
+	logAction(db, actionType, "", repo, {
+		query: (args?.query as string) || (args?.title as string) || (args?.task_code as string) || undefined,
+		response: res,
+		memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
+		taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
+		resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
+	});
 }
 
 // ── Response conversion (McpResponse → CallToolResult) ──────────────────
@@ -170,14 +93,14 @@ function toCallToolResult(response: McpResponse): CallToolResult {
 
 // ── Executor extra context (progress / cancellation) ────────────────────
 
-type ExecutorExtra = {
+export type ExecutorExtra = {
 	onProgress?: (progress: number, total?: number) => void;
 	signal?: AbortSignal;
 };
 
 // ── Tool executor dispatch ───────────────────────────────────────────────
 
-function buildExecutors(
+export function buildExecutors(
 	session: SessionContext,
 	options?: RegisterAllOptions
 ): Record<
@@ -306,7 +229,7 @@ export function registerAllTools(
 				});
 
 				// Action logging
-				logToolAction(toolName, normalizedArgs, result, store, isWrite);
+				logToolAction(toolName, normalizedArgs, result, store);
 
 				// Resource mutation notifications
 				const affectedUris = collectAffectedResourceUris(toolName, normalizedArgs, result);

@@ -12,23 +12,11 @@ import { z } from "zod";
 import type { McpResponse } from "../utils/mcp-response";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
-import { normalizeRepo } from "../utils/normalize";
 import { handleCodebaseIndexRepository, handleCodebaseIndexStatus } from "./codebase-index";
 import { logger } from "../utils/logger";
+import { CodebaseIndexSchema } from "./schemas/codebase-index";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SCHEMA
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const CodebaseIndexSchema = z.object({
-	owner: z.string().min(1).optional(),
-	repo: z.string().min(1).transform(normalizeRepo),
-	repoPath: z.string().optional(),
-	force: z.boolean().optional(),
-	includeGlobs: z.array(z.string()).optional(),
-	excludeGlobs: z.array(z.string()).optional()
-});
-
+export { CodebaseIndexSchema };
 export type CodebaseIndexInput = z.infer<typeof CodebaseIndexSchema>;
 
 type CodebaseIndexMode = "index" | "status";

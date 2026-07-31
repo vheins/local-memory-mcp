@@ -1,39 +1,42 @@
+// MCP protocol router — thin adapter over the SDK tool dispatch core.
+//
+// Production tool dispatch lives in tools/index.ts (registerAllTools →
+// buildExecutors). This router keeps the MCP protocol envelope (tools/list,
+// resources/*, prompts/*, completion/*, logging/*) for the upstream transport
+// and delegates every tools/call to the SAME executor map, so there is exactly
+// one dispatch core and one WRITE_TOOLS / collectAffectedResourceUris
+// definition (utils/tool-plumbing.ts).
+
 import { listResources, listResourceTemplates, readResource } from "./resources/index";
 import { SessionContext } from "./session";
 import { logger } from "./utils/logger";
+import { logAction } from "./utils/action-log";
 import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
-import { normalizeToolArguments, validateRootBoundPath } from "./utils/normalize-args";
+import { normalizeToolArguments } from "./utils/normalize-args";
+import { buildExecutors } from "./tools/index";
+import { collectAffectedResourceUris, normalizePageLimit, WRITE_TOOLS } from "./utils/tool-plumbing";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
-import { handleMemoryWrite } from "./tools/memory.write";
-import { handleMemoryRead } from "./tools/memory.read";
-import { handleMemorySummarize } from "./tools/memory.summarize";
-import { handleMemorySynthesize } from "./tools/memory.synthesize";
-import { handleMemoryDelete } from "./tools/memory.delete";
-import { handleHandoffWrite } from "./tools/handoff.write";
-import { handleHandoffRead } from "./tools/handoff.read";
-import { handleClaimManage } from "./tools/claim.manage";
-
-import { handleStandardWrite } from "./tools/standard.write";
-import { handleStandardRead } from "./tools/standard.read";
-import { handleStandardDelete } from "./tools/standard.delete";
-import { handleTaskWrite } from "./tools/task.write";
-import { handleTaskDelete } from "./tools/task.delete";
-import { handleTaskRead } from "./tools/task.read";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
 import { decodeCursor, encodeCursor } from "./utils/pagination";
-import { handleCodebaseIndex } from "./tools/codebase.index";
-import { handleCodebaseRead } from "./tools/codebase.read";
 
 type RouterOptions = {
 	getSessionContext?: () => SessionContext;
 	sampleMessage?: SamplingRequestHandler;
 	elicit?: ElicitationRequestHandler;
 	onResourcesMutated?: (uris: string[]) => void;
+};
+
+// Backward-compat tool names resolved to their canonical executor keys. The
+// SDK registry (registerAllTools) only registers canonical names, so aliases
+// must be resolved here before dispatch.
+const TOOL_ALIASES: Record<string, string> = {
+	"claim-release": "claim-manage",
+	"task-update": "task-write"
 };
 
 export function createRouter(
@@ -131,26 +134,6 @@ export function createRouter(
 		}
 	}
 
-	// Tools that mutate the DB — must run under write lock
-	const WRITE_TOOLS = new Set([
-		// Canonical memory tools
-		"memory-write",
-		"memory-delete",
-		// Summarize tools
-		"repo-summarize",
-		// Handoff & Claim
-		"handoff-write",
-		"claim-manage",
-		// Standards
-		"standard-write",
-		"standard-delete",
-		// Tasks
-		"task-write",
-		"task-delete",
-		// Codebase index tools (write)
-		"codebase-index"
-	]);
-
 	async function handleToolCall(
 		params: Record<string, unknown> | undefined,
 		signal?: AbortSignal,
@@ -159,86 +142,28 @@ export function createRouter(
 		const { name } = params || {};
 		const args = normalizeToolArguments(params?.arguments, getSessionContext?.()) as Record<string, unknown>;
 		// Normalize tool naming: accept both dot (memory.store) and hyphen (memory-store)
-		const toolName = String(name).replace(/\./g, "-");
+		const rawName = String(name).replace(/\./g, "-");
+		const toolName = TOOL_ALIASES[rawName] ?? rawName;
 
-		let result: unknown;
+		// Single dispatch core shared with the production SDK path
+		// (registerAllTools). Session is resolved per call to preserve the
+		// dynamic getSessionContext semantics of the upstream transport.
+		const executors = buildExecutors(getSessionContext?.() as SessionContext, {
+			sampleMessage: options?.sampleMessage,
+			elicit: options?.elicit
+		});
+		const executor = executors[toolName];
+		if (!executor) {
+			throw new Error(`Unknown tool: ${name}`);
+		}
+
 		const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
-
 		const isWrite = WRITE_TOOLS.has(toolName);
 
 		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
 
-		const executeToolLogic = async () => {
-			switch (toolName) {
-				// New canonical handlers
-				case "memory-write":
-					return await handleMemoryWrite(args, db, vectors);
-
-				// New canonical handlers
-				case "memory-read":
-					return await handleMemoryRead(args, db, vectors);
-
-				case "memory-delete":
-					return await handleMemoryDelete(args, db, vectors, onProgress);
-
-				// New canonical names per ADR-001
-				case "repo-summarize":
-					return await handleMemorySummarize(args, db);
-
-				// New canonical names per ADR-001
-				case "synthesize":
-					return await handleMemorySynthesize(args, db, vectors, {
-						session: getSessionContext?.(),
-						sampleMessage: options?.sampleMessage,
-						elicit: options?.elicit
-					});
-
-				// New canonical handlers
-				case "handoff-write":
-					return await handleHandoffWrite(args, db);
-
-				case "handoff-read":
-					return await handleHandoffRead(args, db);
-
-				case "claim-release": // backward compat
-				case "claim-manage":
-					return await handleClaimManage(args, db);
-
-				// Standards — 3 new canonical tools
-				case "standard-write":
-					return await handleStandardWrite(args, db, vectors);
-
-				case "standard-read":
-					return await handleStandardRead(args, db, vectors);
-
-				case "standard-delete":
-					return await handleStandardDelete(args, db, vectors);
-
-				// New canonical task handlers — ADR-002: no backward compat
-				case "task-update": // backward compat
-				case "task-write":
-					return await handleTaskWrite(args, db, vectors, {
-						session: getSessionContext?.(),
-						elicit: options?.elicit
-					});
-
-				case "task-read":
-					return await handleTaskRead(args, db, vectors);
-
-				case "task-delete":
-					return await handleTaskDelete(args, db);
-
-				// Codebase index tools — only 2 canonical names
-				case "codebase-index":
-					return await handleCodebaseIndex(args, db, vectors);
-
-				case "codebase-read":
-					return await handleCodebaseRead(args, db, vectors);
-
-				default:
-					throw new Error(`Unknown tool: ${name}`);
-			}
-		};
+		let result: unknown;
+		const executeToolLogic = () => executor(args, db, vectors, { onProgress, signal });
 
 		if (isWrite) {
 			result = await db.withWrite(executeToolLogic);
@@ -246,7 +171,10 @@ export function createRouter(
 			result = await executeToolLogic();
 		}
 
-		logger.info(`[Tool] ${toolName} result`, { repo, result });
+		// Log only { repo } — never the full result payload, so memory/task
+		// content never leaks into logs at info level.
+		logger.info(`[Tool] ${toolName} result`, { repo });
+
 		try {
 			const actionType = toolName.split("-")[1] || toolName;
 			const res = result as Record<string, unknown> | undefined;
@@ -259,12 +187,10 @@ export function createRouter(
 				resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
 			};
 
-			// action_log write: if already inside withWrite (isWrite), lock is already held
-			if (isWrite) {
-				db.actions.logAction(actionType, "", repo, logOptions);
-			} else {
-				await db.withWrite(() => db.actions.logAction(actionType, "", repo, logOptions));
-			}
+			// Unified policy (ActionLogService): action_log INSERTs never take
+			// the file lock — WAL + busy_timeout serialize single-row inserts.
+			// Exactly one row per tool call, read AND write tools alike.
+			logAction(db, actionType, "", repo, logOptions);
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });
 		}
@@ -308,52 +234,4 @@ function getAvailableToolDefinitions(session?: SessionContext) {
 
 		return true;
 	});
-}
-
-function collectAffectedResourceUris(toolName: string, args: Record<string, unknown>, result: unknown): string[] {
-	const res = result as Record<string, unknown> | undefined;
-	const repo =
-		(args?.repo as string) ||
-		((args?.scope as Record<string, unknown>)?.repo as string) ||
-		((res?.data as Record<string, unknown>)?.repo as string);
-	const uris = new Set<string>();
-
-	const touchesMemory = toolName.startsWith("memory-") || toolName === "task-write" || toolName === "task-delete";
-	const touchesTasks = toolName.startsWith("task-");
-
-	if (touchesMemory && repo) {
-		uris.add(`repository://${encodeURIComponent(repo)}/memories`);
-	}
-
-	if (touchesTasks && repo) {
-		uris.add(`repository://${encodeURIComponent(repo)}/tasks`);
-	}
-
-	if (repo) {
-		uris.add("repository://index");
-	}
-
-	const memoryId =
-		(args?.id as string) || (args?.memory_id as string) || ((res?.data as Record<string, unknown>)?.id as string);
-	if (typeof memoryId === "string" && /^[0-9a-f-]{36}$/i.test(memoryId) && toolName.startsWith("memory-")) {
-		uris.add(`memory://${memoryId}`);
-	}
-
-	const taskId =
-		(args?.id as string) ||
-		(args?.task_id as string) ||
-		((res?.structuredData as Record<string, unknown>)?.id as string);
-	if (typeof taskId === "string" && /^[0-9a-f-]{36}$/i.test(taskId) && toolName.startsWith("task-")) {
-		uris.add(`task://${taskId}`);
-	}
-
-	return [...uris];
-}
-
-function normalizePageLimit(value: unknown, fallback: number) {
-	if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-		return Math.max(1, fallback);
-	}
-
-	return Math.min(value, 100);
 }
