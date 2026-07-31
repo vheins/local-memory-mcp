@@ -13,7 +13,7 @@ export function validateStatusTransition(
 	newStatus: TaskStatus,
 	comment: string | undefined,
 	force: boolean | undefined,
-	estTokens: number | undefined
+	_estTokens: number | undefined
 ): string | null {
 	if (existingStatus === newStatus) return null; // no-op
 

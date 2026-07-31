@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { TaskStatus, VectorStore } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
-import { extractAcceptedElicitationContent, type ElicitationRequestHandler } from "../../elicitation";
+import { extractAcceptedElicitationContent } from "../../elicitation";
 import { handleCreateSingle } from "./create";
 import { executeBulkOperation } from "./bulk-executor";
 import { TaskWriteOptions, WriteParams } from "./types";

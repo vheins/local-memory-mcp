@@ -58,8 +58,19 @@ export class WriteLock {
 	/**
 	 * Run a synchronous write function under the lock.
 	 * Guarantees lock is always released, even on error.
+	 *
+	 * Reentrant: if this process already holds the lock (e.g., the router wraps
+	 * the whole tool call in withWrite and a handler also wraps its archival in
+	 * withWrite), the inner call runs directly — the outer withLock keeps the
+	 * lock held until it resolves, so there is exactly one acquire/release pair
+	 * per outermost call. proper-lockfile is NOT reentrant, so without this
+	 * guard a nested withWrite would self-deadlock until the stale timeout.
 	 */
 	async withLock<T>(fn: () => Promise<T> | T): Promise<T> {
+		if (this.locked) {
+			// We already hold the lock — run inline under the outer acquisition.
+			return await fn();
+		}
 		await this.acquire();
 		try {
 			return await fn();

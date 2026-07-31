@@ -78,23 +78,33 @@ export function handleCoordinationCleanup(
 }
 
 /**
- * Schedules async archival of completed tasks (fire-and-forget via setImmediate).
+ * Archives completed tasks to memory (awaited, not fire-and-forget).
+ *
+ * Callers await this BEFORE returning the tool response so the task_archive
+ * memory rows exist the moment the caller observes the write (deterministic
+ * for tests and agents alike — no race window, no deferred work leaking into
+ * later requests). Each archive runs under withWrite: the archival performs
+ * memory INSERT + outbox enqueue via handleMemoryWrite (task.helpers.ts), so
+ * it must never run unlocked. The write lock is reentrant (WriteLock.withLock),
+ * so when the router already holds the outer withWrite the inner acquisition is
+ * a no-op — no nested locking, no deadlock.
+ *
+ * The archival is intentionally cheap: task_archive skips the conflict check
+ * (memory-write/helpers.ts) and ONNX embedding + KG extraction run later via
+ * the outbox worker (TASK-013), so awaiting it adds negligible latency to the
+ * write path.
  */
-export function archiveCompletedTasks(
+export async function archiveCompletedTasks(
 	completedTaskIds: string[],
 	repo: string,
 	storage: SQLiteStore,
 	vectors: VectorStore
-): void {
-	if (completedTaskIds.length > 0) {
-		setImmediate(async () => {
-			for (const taskId of completedTaskIds) {
-				try {
-					await archiveTaskToMemory(taskId, repo, storage, vectors);
-				} catch (err) {
-					logger.error("Failed to archive task to memory", { taskId, error: String(err) });
-				}
-			}
-		});
+): Promise<void> {
+	for (const taskId of completedTaskIds) {
+		try {
+			await storage.withWrite(() => archiveTaskToMemory(taskId, repo, storage, vectors));
+		} catch (err) {
+			logger.error("Failed to archive task to memory", { taskId, error: String(err) });
+		}
 	}
 }

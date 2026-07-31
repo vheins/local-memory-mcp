@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { TaskStatus, VectorStore } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
@@ -74,92 +73,101 @@ async function coreUpdate(
 	const existingTasks = storage.tasks.getTasksByIds(targetIds);
 	const taskMap = new Map(existingTasks.map((t) => [t.id, t]));
 
-	for (const targetId of targetIds) {
-		const existingTask = taskMap.get(targetId);
-		if (!existingTask) {
-			throw new Error(`Task not found: ${targetId}`);
-		}
-
-		const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
-
-		// Status transition validation
-		if (isStatusChanging && !force) {
-			const validationError = validateStatusTransition(
-				existingTask.status,
-				updates.status as TaskStatus,
-				comment,
-				force,
-				updates.est_tokens as number | undefined
-			);
-			if (validationError) {
-				throw new Error(validationError);
+	// All task mutations for this update run in ONE transaction — a mid-loop
+	// failure (validation, FK, etc.) rolls back the entire batch (no partial state).
+	storage.db.transaction(() => {
+		for (const targetId of targetIds) {
+			const existingTask = taskMap.get(targetId);
+			if (!existingTask) {
+				throw new Error(`Task not found: ${targetId}`);
 			}
 
-			// Children gate: cannot complete if children are incomplete
-			if (updates.status === "completed") {
-				const children = storage.tasks.getChildrenByParentId(targetId);
-				const incompleteChildren = children.filter((c) => c.status !== "completed");
-				if (incompleteChildren.length > 0) {
-					const childList = incompleteChildren.map((c) => `[${c.task_code}] ${c.title} (${c.status})`).join("; ");
-					throw new Error(
-						`Cannot complete task [${existingTask.task_code}] "${existingTask.title}" — it has ${incompleteChildren.length} incomplete child task(s). Complete the following child task(s) first: ${childList}`
-					);
+			const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
+
+			// Status transition validation
+			if (isStatusChanging && !force) {
+				const validationError = validateStatusTransition(
+					existingTask.status,
+					updates.status as TaskStatus,
+					comment,
+					force,
+					updates.est_tokens as number | undefined
+				);
+				if (validationError) {
+					throw new Error(validationError);
+				}
+
+				// Children gate: cannot complete if children are incomplete
+				if (updates.status === "completed") {
+					const children = storage.tasks.getChildrenByParentId(targetId);
+					const incompleteChildren = children.filter((c) => c.status !== "completed");
+					if (incompleteChildren.length > 0) {
+						const childList = incompleteChildren.map((c) => `[${c.task_code}] ${c.title} (${c.status})`).join("; ");
+						throw new Error(
+							`Cannot complete task [${existingTask.task_code}] "${existingTask.title}" — it has ${incompleteChildren.length} incomplete child task(s). Complete the following child task(s) first: ${childList}`
+						);
+					}
 				}
 			}
+
+			// Check for duplicate task_code if updating it
+			if (updates.task_code && storage.tasks.isTaskCodeDuplicate(owner, repo, updates.task_code as string, targetId)) {
+				throw new Error(`Duplicate task_code: '${updates.task_code}' already exists`);
+			}
+
+			const finalUpdates: Record<string, unknown> = { ...updates };
+
+			// Resolve parent_id if provided (UUID or code)
+			if (updates.parent_id !== undefined) {
+				finalUpdates.parent_id = resolveParentId(updates.parent_id as string | null | undefined, owner, repo, storage);
+			}
+
+			// Resolve depends_on if provided (UUID or code)
+			if (updates.depends_on !== undefined) {
+				finalUpdates.depends_on = resolveDependsOn(
+					updates.depends_on as string | null | undefined,
+					owner,
+					repo,
+					storage
+				);
+			}
+
+			// Phase tag sync
+			applyPhaseTagSync(updates, existingTask, finalUpdates);
+
+			// decision_refs → metadata injection
+			applyDecisionRefsToUpdates(params, existingTask, finalUpdates);
+
+			// Status timestamp management
+			applyStatusTimestamps(updates, existingTask, now, finalUpdates);
+
+			storage.tasks.updateTask(targetId, finalUpdates);
+
+			// Insert comment if status changed or comment provided
+			insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
+
+			// Track completed tasks for later archival
+			if (updates.status === "completed" && existingTask.status !== "completed") {
+				completedTaskIds.push(targetId);
+			}
+
+			// Auto-release claims and expire handoffs on completion/cancellation
+			const cleanup = handleCoordinationCleanup(
+				storage,
+				targetId,
+				isStatusChanging,
+				updates.status as TaskStatus | undefined
+			);
+			releasedClaims += cleanup.releasedClaims;
+			expiredHandoffs += cleanup.expiredHandoffs;
+
+			updatedTasks.push({
+				id: targetId,
+				code: (updates.task_code as string) || existingTask.task_code
+			});
+			updatedCount++;
 		}
-
-		// Check for duplicate task_code if updating it
-		if (updates.task_code && storage.tasks.isTaskCodeDuplicate(owner, repo, updates.task_code as string, targetId)) {
-			throw new Error(`Duplicate task_code: '${updates.task_code}' already exists`);
-		}
-
-		const finalUpdates: Record<string, unknown> = { ...updates };
-
-		// Resolve parent_id if provided (UUID or code)
-		if (updates.parent_id !== undefined) {
-			finalUpdates.parent_id = resolveParentId(updates.parent_id as string | null | undefined, owner, repo, storage);
-		}
-
-		// Resolve depends_on if provided (UUID or code)
-		if (updates.depends_on !== undefined) {
-			finalUpdates.depends_on = resolveDependsOn(updates.depends_on as string | null | undefined, owner, repo, storage);
-		}
-
-		// Phase tag sync
-		applyPhaseTagSync(updates, existingTask, finalUpdates);
-
-		// decision_refs → metadata injection
-		applyDecisionRefsToUpdates(params, existingTask, finalUpdates);
-
-		// Status timestamp management
-		applyStatusTimestamps(updates, existingTask, now, finalUpdates);
-
-		storage.tasks.updateTask(targetId, finalUpdates);
-
-		// Insert comment if status changed or comment provided
-		insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
-
-		// Track completed tasks for later archival
-		if (updates.status === "completed" && existingTask.status !== "completed") {
-			completedTaskIds.push(targetId);
-		}
-
-		// Auto-release claims and expire handoffs on completion/cancellation
-		const cleanup = handleCoordinationCleanup(
-			storage,
-			targetId,
-			isStatusChanging,
-			updates.status as TaskStatus | undefined
-		);
-		releasedClaims += cleanup.releasedClaims;
-		expiredHandoffs += cleanup.expiredHandoffs;
-
-		updatedTasks.push({
-			id: targetId,
-			code: (updates.task_code as string) || existingTask.task_code
-		});
-		updatedCount++;
-	}
+	})();
 
 	// Best-effort vector embedding + KG extraction for updated tasks (if title/description changed)
 	if ((params.title !== undefined || params.description !== undefined) && updatedCount > 0) {
@@ -231,8 +239,10 @@ export async function handleUpdate(
 		{ includeJson: params.json }
 	);
 
-	// Archive completed tasks AFTER returning response (vector embedding is slow, non-blocking)
-	archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
+	// Archive completed tasks BEFORE the response resolves so task_archive
+	// memory rows exist once the caller observes the write (deterministic —
+	// no setImmediate race). Awaited under the (reentrant) write lock.
+	await archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
 
 	return response;
 }
@@ -276,83 +286,87 @@ export async function handleBulkUpdateByIds(
 	let releasedClaims = 0;
 	let expiredHandoffs = 0;
 
-	for (const targetId of ids) {
-		const existingTask = taskMap.get(targetId)!;
-		const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
+	// All task mutations for this bulk update run in ONE transaction — a
+	// mid-loop failure rolls back the entire batch (no partial state).
+	storage.db.transaction(() => {
+		for (const targetId of ids) {
+			const existingTask = taskMap.get(targetId)!;
+			const isStatusChanging = isStatusChangingGlobal && updates.status !== existingTask.status;
 
-		// Status transition validation
-		if (isStatusChanging && !force) {
-			const validationError = validateStatusTransition(
-				existingTask.status,
-				updates.status as TaskStatus,
-				comment,
-				force,
-				updates.est_tokens as number | undefined
-			);
-			if (validationError) {
-				throw new Error(validationError);
-			}
+			// Status transition validation
+			if (isStatusChanging && !force) {
+				const validationError = validateStatusTransition(
+					existingTask.status,
+					updates.status as TaskStatus,
+					comment,
+					force,
+					updates.est_tokens as number | undefined
+				);
+				if (validationError) {
+					throw new Error(validationError);
+				}
 
-			// Children gate: cannot complete if children are incomplete
-			if (updates.status === "completed") {
-				const children = storage.tasks.getChildrenByParentId(targetId);
-				const incompleteChildren = children.filter((c) => c.status !== "completed");
-				if (incompleteChildren.length > 0) {
-					throw new Error(
-						`Cannot complete task [${existingTask.task_code}] "${existingTask.title}" — it has ${incompleteChildren.length} incomplete child task(s)`
-					);
+				// Children gate: cannot complete if children are incomplete
+				if (updates.status === "completed") {
+					const children = storage.tasks.getChildrenByParentId(targetId);
+					const incompleteChildren = children.filter((c) => c.status !== "completed");
+					if (incompleteChildren.length > 0) {
+						throw new Error(
+							`Cannot complete task [${existingTask.task_code}] "${existingTask.title}" — it has ${incompleteChildren.length} incomplete child task(s)`
+						);
+					}
 				}
 			}
+
+			const finalUpdates: Record<string, unknown> = { ...updates };
+
+			// Phase tag sync
+			applyPhaseTagSync(updates, existingTask, finalUpdates);
+
+			// decision_refs → metadata injection
+			applyDecisionRefsToUpdates(params, existingTask, finalUpdates);
+
+			// Remove identification fields that should not be persisted
+			delete finalUpdates.ids;
+			delete finalUpdates.id;
+			delete finalUpdates.code;
+			delete finalUpdates.json;
+			delete finalUpdates.owner;
+			delete finalUpdates.repo;
+			delete finalUpdates.interactive;
+			delete finalUpdates.tasks;
+			delete finalUpdates.comment;
+			delete finalUpdates.force;
+
+			// Status timestamp management
+			applyStatusTimestamps(updates, existingTask, now, finalUpdates);
+
+			storage.tasks.updateTask(targetId, finalUpdates);
+
+			// Insert comment if status changed or comment provided
+			insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
+
+			// Track completed tasks for later archival
+			if (updates.status === "completed" && existingTask.status !== "completed") {
+				completedTaskIds.push(targetId);
+			}
+
+			// Auto-release claims and expire handoffs on completion/cancellation
+			const cleanup = handleCoordinationCleanup(
+				storage,
+				targetId,
+				isStatusChanging,
+				updates.status as TaskStatus | undefined
+			);
+			releasedClaims += cleanup.releasedClaims;
+			expiredHandoffs += cleanup.expiredHandoffs;
+
+			updatedTasks.push({
+				id: targetId,
+				code: existingTask.task_code
+			});
 		}
-
-		const finalUpdates: Record<string, unknown> = { ...updates };
-
-		// Phase tag sync
-		applyPhaseTagSync(updates, existingTask, finalUpdates);
-
-		// decision_refs → metadata injection
-		applyDecisionRefsToUpdates(params, existingTask, finalUpdates);
-
-		// Remove identification fields that should not be persisted
-		delete finalUpdates.ids;
-		delete finalUpdates.id;
-		delete finalUpdates.code;
-		delete finalUpdates.json;
-		delete finalUpdates.owner;
-		delete finalUpdates.repo;
-		delete finalUpdates.interactive;
-		delete finalUpdates.tasks;
-		delete finalUpdates.comment;
-		delete finalUpdates.force;
-
-		// Status timestamp management
-		applyStatusTimestamps(updates, existingTask, now, finalUpdates);
-
-		storage.tasks.updateTask(targetId, finalUpdates);
-
-		// Insert comment if status changed or comment provided
-		insertStatusComment(storage, targetId, owner, repo, updates, existingTask, isStatusChanging, comment, now);
-
-		// Track completed tasks for later archival
-		if (updates.status === "completed" && existingTask.status !== "completed") {
-			completedTaskIds.push(targetId);
-		}
-
-		// Auto-release claims and expire handoffs on completion/cancellation
-		const cleanup = handleCoordinationCleanup(
-			storage,
-			targetId,
-			isStatusChanging,
-			updates.status as TaskStatus | undefined
-		);
-		releasedClaims += cleanup.releasedClaims;
-		expiredHandoffs += cleanup.expiredHandoffs;
-
-		updatedTasks.push({
-			id: targetId,
-			code: existingTask.task_code
-		});
-	}
+	})();
 
 	// Best-effort vector embedding + KG extraction for updated tasks (if title/description changed)
 	if ((params.title !== undefined || params.description !== undefined) && updatedTasks.length > 0) {
@@ -393,8 +407,10 @@ export async function handleBulkUpdateByIds(
 		{ includeJson: params.json }
 	);
 
-	// Archive completed tasks AFTER returning response
-	archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
+	// Archive completed tasks BEFORE the response resolves so task_archive
+	// memory rows exist once the caller observes the write (deterministic —
+	// no setImmediate race). Awaited under the (reentrant) write lock.
+	await archiveCompletedTasks(completedTaskIds, params.repo, storage, vectors);
 
 	return response;
 }

@@ -39,7 +39,8 @@ export { applyDecisionRefs, tryVectorEmbedding } from "./effects";
  *   - completed: children MUST be completed first (gate)
  *   - completed: auto-release claims + expire linked handoffs
  *   - canceled: auto-release claims + expire handoffs
- *   - Completed tasks are archived to memory (async after response)
+ *   - Completed tasks are archived to memory under the write lock, awaited
+ *     before the response resolves (deterministic for all bulk/update paths)
  *
  * **Bulk partial execution:** items that fail are skipped, errors returned in response.
  */
