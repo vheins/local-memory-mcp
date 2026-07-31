@@ -2,14 +2,8 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { db } from "../lib/context";
-import {
-	handleGetArchitecture,
-	handleGetFileSymbols,
-	handleSearchSymbols,
-	handleTraceSymbol,
-	handleCodebaseIndexStatus,
-	handleCodebaseIndexRepository
-} from "../../mcp/tools/codebase-index";
+import { handleCodebaseIndexStatus, handleCodebaseIndexRepository } from "../../mcp/tools/codebase-index";
+import { handleCodebaseRead } from "../../mcp/tools/codebase.read";
 import { autoIndexIfStale } from "../../mcp/codebase-index/services/indexing-service";
 import type { ParserPool } from "../../mcp/codebase-index/parser/language-visitor";
 import { TreeSitterParserPool } from "../../mcp/codebase-index/parser/parser-pool";
@@ -175,7 +169,7 @@ export class CodebaseController {
 			if (req.query.depth !== undefined) params.depth = req.query.depth;
 			if (req.query.includeSymbolCounts !== undefined) params.includeSymbolCounts = req.query.includeSymbolCounts;
 
-			const result = await handleGetArchitecture(injectOwner(params), db, noopVectors);
+			const result = await handleCodebaseRead(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				respondSuccess(res, result.structuredContent);
@@ -197,7 +191,7 @@ export class CodebaseController {
 			if (!repo) return respondError(res, 400, "repo query parameter is required", "MISSING_REPO");
 			if (!filePath) return respondError(res, 400, "filePath query parameter is required", "MISSING_FILE_PATH");
 
-			const result = await handleGetFileSymbols(injectOwner({ repo, filePath }), db, noopVectors);
+			const result = await handleCodebaseRead(injectOwner({ repo, filePath }), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
@@ -232,7 +226,7 @@ export class CodebaseController {
 			if (req.query.limit !== undefined) params.limit = req.query.limit;
 			if (req.query.offset !== undefined) params.offset = req.query.offset;
 
-			const result = await handleSearchSymbols(injectOwner(params), db, noopVectors);
+			const result = await handleCodebaseRead(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
@@ -264,7 +258,7 @@ export class CodebaseController {
 			if (req.query.repo !== undefined) params.repo = (req.query.repo as string).trim();
 			if (req.query.includeReferences !== undefined) params.includeReferences = req.query.includeReferences;
 
-			const result = await handleTraceSymbol(injectOwner(params), db, noopVectors);
+			const result = await handleCodebaseRead(injectOwner(params), db, noopVectors);
 
 			if (result.structuredContent) {
 				const data = result.structuredContent as Record<string, unknown>;
