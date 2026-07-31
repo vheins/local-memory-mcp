@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] — 2026-08-01
+
+### Added
+
+- **FTS5 memories search**: New `memories_fts` virtual table (schema migration v10) feeding a normalized `bm25()` score into the hybrid keyword weight of `memory-search`/`memory-read` — lexical hits now contribute a real keyword signal instead of an ONNX vector placeholder, matching the SPEC-001 hybrid blend used by standards search.
+- **Embedding/KG outbox queue**: Memory, standard, and task writes now enqueue embedding + compromise KG enrichment into a SQLite outbox (`queue_jobs`, schema migration v9) transactionally with the row write. A new in-process lease worker (`EmbeddingQueueWorker`) drains the queue off the write-lock path, so expensive ONNX inference no longer blocks the write response.
+
+### Fixed
+
+- **Cross-repo tag-affinity recall**: `memory-search` tag filtering now honors tag affinity across repositories and respects configured fetch limits instead of dropping or over-fetching matches.
+
+### Refactored
+
+- **KnowledgeGraphEntity**: All KG SQL encapsulated in a single entity with transactional cascades — entity/relation/observation deletes now cascade atomically from memory/standard/task deletion paths.
+- **Shared search utils**: Scoring, summary, vector, and constants logic extracted into shared `utils/` modules (`scoring.ts`, `summary.ts`, `vector.ts`, `constants.ts`) with bulk read methods added.
+- **Single dispatch core**: `buildExecutors` is now the one tool-dispatch core shared by the MCP-protocol adapter and the native SDK transport; `codebase.index.ts` renamed to `codebase-index-sdk.ts`. Backward-compat aliases (`claim-release`, `task-update`) resolve to canonical executor keys.
+- **Zod-derived tool contracts**: Tool `inputSchema` JSON Schema now derives from the Zod schemas via `inputSchemaFromSchema` — edit the Zod schema, never the derived schema. Removes ~700 lines of duplicated, drift-prone schema definitions.
+
+### Performance
+
+- **SQLite**: `synchronous = NORMAL` (SQLite's documented recommendation under WAL), throttled WAL checkpoints (10s interval), staleness cache for index status, and async codebase-index IO.
+- **Locking**: Reentrant write lock (`WriteLock.withLock`), lock-free action logging (append-only `action_log` INSERTs never acquire the file lock), and task archival now awaited inline before the tool response.
+- **codebase-index dispatch**: The full index run is no longer a WRITE_TOOL — heavy CPU scan work no longer holds the file lock; the indexing writer acquires the lock per DB batch instead.
+
+### Removed
+
+- **Dead code**: ~600 lines removed across 55 files — unused helpers (`memory.helpers`, `task.manage` remnants, `git-scope`, `test-path.js`, `test.mjs`), stale references to deleted codebase-index handlers, and lint/type-check findings.
+
+### Tests
+
+- **Embedding-queue coverage**: New `embedding-queue.test.ts` covering the outbox enqueue/lease worker lifecycle, plus mock updates for the dispatch refactor. Full suite green: 849 tests.
+
 ## [0.26.0] — 2026-07-26
 
 ### Added
