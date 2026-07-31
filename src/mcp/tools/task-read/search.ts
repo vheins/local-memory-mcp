@@ -4,32 +4,30 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { TaskStatusValues } from "../schemas";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
-import { capitalize, describeStatusFilter } from "./shared";
+import { capitalize } from "./shared";
+import {
+	scoreHybrid,
+	computeRecencyScore,
+	countTermOverlap,
+	applyThreshold,
+	HYBRID_WEIGHTS
+} from "../../utils/scoring";
+import { SEARCH_THRESHOLDS } from "../../utils/constants";
+import { renderGroupedSummary, enumOrderComparator } from "../../utils/summary";
 
-// ── Hybrid scoring constants ──────────────────────────────────────────────
+// ── Task-specific scoring helpers ─────────────────────────────────────
 
-const HYBRID_WEIGHTS = {
-	similarity: 0.4,
-	keyword: 0.3,
-	recency: 0.15,
-	domain: 0.15
-} as const;
-
-const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
-
-function computeRecencyScore(createdAt: string): number {
-	const ageMs = Date.now() - new Date(createdAt).getTime();
-	if (ageMs <= 0) return 1;
-	return Math.max(0, Math.min(1, Math.pow(2, -ageMs / RECENCY_HALF_LIFE_MS)));
-}
-
+/**
+ * Domain score for tasks: ratio of query terms found in the task's text
+ * fields. Unlike the memory engine (tags overlap), tasks have no tag list,
+ * so the denominator is the query term count (behavior preserved from the
+ * original per-engine implementation).
+ */
 function computeDomainScore(task: Task, queryTerms: string[]): number {
 	if (queryTerms.length === 0) return 0;
 	const textFields = [task.title, task.description, task.task_code, task.phase].filter(Boolean).join(" ").toLowerCase();
-	const querySet = new Set(queryTerms.map((t: string) => t.toLowerCase()));
 	const words = textFields.split(/\s+/);
-	const matches = words.filter((w: string) => querySet.has(w)).length;
-	return Math.min(1, matches / Math.max(queryTerms.length, 1));
+	return Math.min(1, countTermOverlap(queryTerms, words) / Math.max(queryTerms.length, 1));
 }
 
 function computeConfidence(score: number): "high" | "medium" | "low" {
@@ -106,11 +104,7 @@ export async function handleSearchMode(
 			const keywordScore = 1.0; // Task matched the SQL LIKE query
 			const recencyScore = computeRecencyScore(t.created_at);
 			const domainScore = computeDomainScore(t, queryTerms);
-			const finalScore =
-				similarity * HYBRID_WEIGHTS.similarity +
-				keywordScore * HYBRID_WEIGHTS.keyword +
-				recencyScore * HYBRID_WEIGHTS.recency +
-				domainScore * HYBRID_WEIGHTS.domain;
+			const finalScore = scoreHybrid({ similarity, keyword: keywordScore, recency: recencyScore, domain: domainScore });
 			return { task: t, similarityScore: similarity, keywordScore, recencyScore, domainScore, finalScore };
 		});
 
@@ -125,10 +119,12 @@ export async function handleSearchMode(
 					const keywordScore = 0;
 					const recencyScore = computeRecencyScore(t.created_at);
 					const domainScore = computeDomainScore(t, queryTerms);
-					const finalScore =
-						similarity * HYBRID_WEIGHTS.similarity +
-						recencyScore * HYBRID_WEIGHTS.recency +
-						domainScore * HYBRID_WEIGHTS.domain;
+					const finalScore = scoreHybrid({
+						similarity,
+						keyword: keywordScore,
+						recency: recencyScore,
+						domain: domainScore
+					});
 					scoredTasks.push({
 						task: t,
 						similarityScore: similarity,
@@ -141,7 +137,9 @@ export async function handleSearchMode(
 			}
 		}
 	} catch (error) {
-		// Graceful fallback: keyword-only with recency + domain scoring
+		// Graceful fallback: keyword-only with recency scoring.
+		// Preserves the original formula (recency carries the combined
+		// recency+domain weight; domain is deliberately not included here).
 		logger.warn("[Tool] task-read/search vector search failed, using keyword-only fallback", { error: String(error) });
 		scoredTasks = keywordTasks.map((t: Task) => {
 			const recencyScore = computeRecencyScore(t.created_at);
@@ -164,8 +162,9 @@ export async function handleSearchMode(
 	scoredTasks.sort((a: ScoredTask, b: ScoredTask) => b.finalScore - a.finalScore);
 
 	// 4. Adaptive threshold (SPEC-001)
-	const threshold = scoredTasks.length <= 5 ? 0.08 : 0.2;
-	let eligible = scoredTasks.filter((st: ScoredTask) => st.finalScore >= threshold);
+	let eligible = scoredTasks.filter((st: ScoredTask) =>
+		applyThreshold(st.finalScore, scoredTasks.length, SEARCH_THRESHOLDS.task)
+	);
 	// Guarantee at least 1 result
 	if (eligible.length === 0 && scoredTasks.length > 0) {
 		eligible = [scoredTasks[0]];
@@ -244,46 +243,22 @@ export async function handleSearchMode(
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {
 		if (paginated.length > 0) {
-			const statusLabel = describeStatusFilter(status);
 			const lines: string[] = [];
 			lines.push(`### Results: ${total} tasks for "${query}"`);
 			lines.push("");
 
 			// Fused grouped by status (enum order), with global rank #N
 			const STATUS_ORDER = ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"];
-			const grouped = new Map<string, { st: ScoredTask; rank: number }[]>();
-
-			paginated.forEach((st, i) => {
-				const groupKey = st.task.status;
-				if (!grouped.has(groupKey)) grouped.set(groupKey, []);
-				grouped.get(groupKey)!.push({ st, rank: i + 1 });
-			});
-
-			// Sort group keys by enum order, unknowns last
-			const sortedKeys = [...grouped.keys()].sort((a, b) => {
-				const ai = STATUS_ORDER.indexOf(a);
-				const bi = STATUS_ORDER.indexOf(b);
-				if (ai === -1 && bi === -1) return a.localeCompare(b);
-				if (ai === -1) return 1;
-				if (bi === -1) return -1;
-				return ai - bi;
-			});
-
-			const CAP = 5;
-			for (const key of sortedKeys) {
-				const items = grouped.get(key)!;
-				const visible = items.slice(0, CAP);
-				const hidden = items.length - visible.length;
-				const groupLabel = key === "in_progress" ? "In Progress" : capitalize(key);
-				lines.push(`**${groupLabel} (${items.length})**`);
-				for (const { st, rank } of visible) {
-					lines.push(`#${rank} ${st.task.task_code} [${st.finalScore.toFixed(2)}] ${st.task.title}`);
-				}
-				if (hidden > 0) lines.push(`... +${hidden} more in this group`);
-				lines.push("");
-			}
-
-			lines.push(`Use task-detail with task_code for full details.`);
+			lines.push(
+				renderGroupedSummary<ScoredTask>({
+					items: paginated,
+					getGroup: (st) => st.task.status,
+					groupOrder: enumOrderComparator(STATUS_ORDER),
+					formatGroupLabel: (key) => (key === "in_progress" ? "In Progress" : capitalize(key)),
+					formatLine: (st, rank) => `#${rank} ${st.task.task_code} [${st.finalScore.toFixed(2)}] ${st.task.title}`,
+					footer: "Use task-detail with task_code for full details."
+				})
+			);
 			contentSummary = lines.join("\n");
 		} else {
 			contentSummary = `No tasks found for "${query}" in repo "${repo}".`;

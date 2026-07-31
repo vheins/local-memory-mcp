@@ -1,8 +1,18 @@
 import { BaseEntity } from "../storage/base";
 import { CodingStandardEntry, CodingStandardRow } from "../types/memory";
 import { sanitizeFtsTerm } from "../utils/fts";
+import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
+import {
+	STANDARD_CONFLICT_THRESHOLD,
+	STANDARD_CONFLICT_CANDIDATES,
+	STANDARD_CANDIDATE_CAP,
+	VECTOR_CANDIDATE_CAP
+} from "../utils/constants";
 
 export class StandardEntity extends BaseEntity {
+	// In-memory TF vector cache keyed by standard id and validated against
+	// coding_standards.updated_at — self-invalidates on writes.
+	private readonly tfCache = createTfVectorCache();
 	insert(entry: CodingStandardEntry): void {
 		this.run(
 			`INSERT INTO coding_standards (
@@ -255,11 +265,11 @@ export class StandardEntity extends BaseEntity {
 			owner: options.owner,
 			repo: options.repo,
 			is_global: options.is_global,
-			limit: options.limit ?? 60,
+			limit: options.limit ?? STANDARD_CANDIDATE_CAP,
 			offset: options.offset ?? 0
 		});
 
-		const queryVector = this.computeVector(query);
+		const queryVector = computeVector(query);
 		const scored = candidates
 			.map((standard) => {
 				const haystack = [
@@ -274,7 +284,7 @@ export class StandardEntity extends BaseEntity {
 				]
 					.filter(Boolean)
 					.join(" ");
-				const similarity = this.cosineSimilarity(queryVector, this.computeVector(haystack));
+				const similarity = cosineSimilarity(queryVector, this.tfCache.get(standard.id, haystack, standard.updated_at));
 				return { ...standard, similarity };
 			})
 			.sort((a, b) => b.similarity - a.similarity);
@@ -306,14 +316,14 @@ export class StandardEntity extends BaseEntity {
 		repo: string | undefined,
 		incomingLanguage: string | null | undefined,
 		incomingStack: string[],
-		threshold = 0.82
+		threshold = STANDARD_CONFLICT_THRESHOLD
 	): (CodingStandardEntry & { similarity: number }) | null {
 		// Delegate vector scoring to searchBySimilarity — push threshold
 		// filtering into the search so we never iterate below-threshold rows.
 		const candidates = this.searchBySimilarity(content, {
 			owner,
 			repo,
-			limit: 80,
+			limit: STANDARD_CONFLICT_CANDIDATES,
 			offset: 0,
 			minScore: threshold
 		});
@@ -405,7 +415,7 @@ export class StandardEntity extends BaseEntity {
 		);
 	}
 
-	getVectorCandidates(repo?: string, limit = 100): { standard_id: string; vector: string }[] {
+	getVectorCandidates(repo?: string, limit = VECTOR_CANDIDATE_CAP): { standard_id: string; vector: string }[] {
 		let sql = `SELECT sv.standard_id, sv.vector
 			FROM standard_vectors sv
 			JOIN coding_standards cs ON cs.id = sv.standard_id`;
@@ -428,30 +438,5 @@ export class StandardEntity extends BaseEntity {
 			ON CONFLICT(standard_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
 			[standardId, JSON.stringify(vector), new Date().toISOString()]
 		);
-	}
-
-	private rowToEntry(row: CodingStandardRow): CodingStandardEntry {
-		return {
-			id: row.id,
-			code: row.code ?? undefined,
-			title: row.title,
-			content: row.content,
-			parent_id: row.parent_id ?? null,
-			context: row.context,
-			version: row.version,
-			language: row.language ?? null,
-			stack: this.safeJSONParse<string[]>(row.stack, []),
-			is_global: row.is_global === 1,
-			owner: row.owner,
-			repo: row.repo ?? null,
-			tags: this.safeJSONParse<string[]>(row.tags, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {}),
-			created_at: row.created_at,
-			updated_at: row.updated_at,
-			hit_count: row.hit_count ?? 0,
-			last_used_at: row.last_used_at ?? null,
-			agent: row.agent,
-			model: row.model
-		};
 	}
 }

@@ -5,6 +5,21 @@ import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
 import type { Task } from "../../mcp/types/index.js";
 import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
 
+/**
+ * Resolves the owner for dashboard task writes.
+ *
+ * Precedence: explicit `owner` attribute → `DASHBOARD_OWNER` env (acts as the
+ * dashboard's session owner) → "" (caller must reject empty).
+ *
+ * Normalizing owner at write time (instead of persisting "") keeps task
+ * lookups single-query: the entity layer no longer needs owner-fallback
+ * re-queries for owner-less rows (TASK-038).
+ */
+function resolveWriteOwner(owner: unknown): string {
+	const explicit = typeof owner === "string" ? owner.trim() : "";
+	return explicit || process.env.DASHBOARD_OWNER || "";
+}
+
 export class TasksController {
 	static async list(req: express.Request, res: express.Response) {
 		try {
@@ -82,19 +97,24 @@ export class TasksController {
 		try {
 			await db.refresh();
 			const attributes = getAttributes(req);
-			const { repo, task_code, title, owner } = attributes;
+			const { repo, task_code, title } = attributes;
 			if (!repo || !task_code || !title) return res.status(400).json(jsonApiError("Required fields missing", 400));
-			if (db.tasks.isTaskCodeDuplicate(owner || "", repo, task_code))
+			// Normalize owner at write time — reject empty instead of persisting ""
+			// (owner-less rows force fallback double-queries on every lookup).
+			const owner = resolveWriteOwner(attributes.owner);
+			if (!owner) return res.status(400).json(jsonApiError("owner is required (or set DASHBOARD_OWNER)", 400));
+			if (db.tasks.isTaskCodeDuplicate(owner, repo, task_code))
 				return res.status(400).json(jsonApiError("Duplicate task_code", 400));
 			const id = randomUUID();
 			await db.withWrite(() => {
 				db.tasks.insertTask({
 					...attributes,
+					owner,
 					id,
 					created_at: new Date().toISOString(),
 					updated_at: new Date().toISOString()
 				} as Task);
-				db.actions.logAction("write", "", repo, { taskId: id });
+				db.actions.logAction("write", owner, repo, { taskId: id });
 			});
 			res.json(jsonApiRes({ id }, "task"));
 		} catch (err: unknown) {
@@ -189,16 +209,21 @@ export class TasksController {
 			const tasks = items.map((item: Record<string, unknown>) => ({
 				...item,
 				id: (item.id as string) || randomUUID(),
-				owner: (item.owner as string) || "",
+				// Normalize owner at write time — reject empty instead of persisting ""
+				owner: resolveWriteOwner(item.owner),
 				repo,
 				task_code: (item.task_code as string) || randomUUID().substring(0, 8),
 				created_at: (item.created_at as string) || new Date().toISOString(),
 				updated_at: (item.updated_at as string) || new Date().toISOString()
 			}));
 
+			if (tasks.some((t) => !t.owner)) {
+				return res.status(400).json(jsonApiError("owner is required on every item (or set DASHBOARD_OWNER)", 400));
+			}
+
 			const count = await db.withWrite(() => {
 				const n = db.tasks.bulkInsertTasks(tasks as Task[]);
-				db.actions.logAction("write", "", repo, { query: `Bulk imported ${n} tasks` });
+				db.actions.logAction("write", tasks[0]?.owner ?? "", repo, { query: `Bulk imported ${n} tasks` });
 				return n;
 			});
 			res.json(jsonApiRes({ count }, "status"));

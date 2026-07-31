@@ -3,39 +3,6 @@ import { BaseEntity } from "../storage/base";
 import { Handoff, HandoffRow, Claim, ClaimRow } from "../types";
 
 export class HandoffEntity extends BaseEntity {
-	private rowToHandoff(row: HandoffRow): Handoff {
-		return {
-			id: row.id,
-			owner: row.owner,
-			repo: row.repo,
-			from_agent: row.from_agent,
-			to_agent: row.to_agent ?? null,
-			task_id: row.task_id ?? null,
-			task_code: "task_code" in row ? ((row as HandoffRow & { task_code?: string | null }).task_code ?? null) : null,
-			summary: row.summary,
-			context: this.safeJSONParse<Record<string, unknown>>(row.context, {}),
-			status: row.status as Handoff["status"],
-			created_at: row.created_at,
-			updated_at: row.updated_at,
-			expires_at: row.expires_at ?? null
-		};
-	}
-
-	private rowToClaim(row: ClaimRow): Claim {
-		return {
-			id: row.id,
-			owner: row.owner,
-			repo: row.repo,
-			task_id: row.task_id,
-			task_code: "task_code" in row ? ((row as ClaimRow & { task_code?: string | null }).task_code ?? null) : null,
-			agent: row.agent,
-			role: row.role,
-			claimed_at: row.claimed_at,
-			released_at: row.released_at ?? null,
-			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {})
-		};
-	}
-
 	createHandoff(params: {
 		owner: string;
 		repo: string;
@@ -158,23 +125,26 @@ export class HandoffEntity extends BaseEntity {
 		const now = new Date().toISOString();
 		const id = randomUUID();
 
-		// Release any existing active claim for this task
-		this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [now, params.task_id]);
+		// Release any existing active claim for this task, then insert the new
+		// claim — atomic so a failure cannot leave a stale active claim behind.
+		this.transaction(() => {
+			this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [now, params.task_id]);
 
-		this.run(
-			`INSERT INTO claims (id, owner, repo, task_id, agent, role, claimed_at, released_at, metadata)
-			VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-			[
-				id,
-				params.owner,
-				params.repo,
-				params.task_id,
-				params.agent,
-				params.role ?? "unknown",
-				now,
-				JSON.stringify(params.metadata ?? {})
-			]
-		);
+			this.run(
+				`INSERT INTO claims (id, owner, repo, task_id, agent, role, claimed_at, released_at, metadata)
+				VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+				[
+					id,
+					params.owner,
+					params.repo,
+					params.task_id,
+					params.agent,
+					params.role ?? "unknown",
+					now,
+					JSON.stringify(params.metadata ?? {})
+				]
+			);
+		});
 		return this.rowToClaim(
 			this.get<ClaimRow & { task_code?: string | null }>(
 				`SELECT c.*, t.task_code

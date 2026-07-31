@@ -8,6 +8,7 @@ import {
 } from "../types/codebase-symbol";
 import { randomUUID } from "crypto";
 import { sanitizeFtsTerm } from "../utils/fts";
+import { VECTOR_CANDIDATE_CAP } from "../utils/constants";
 
 export class CodebaseSymbolEntity extends BaseEntity {
 	bulkUpsertSymbols(symbols: CodebaseSymbolInsert[]): number {
@@ -131,7 +132,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		);
 	}
 
-	getSymbolVectorsByRepo(repo: string, limit: number = 100): CodebaseSymbolVector[] {
+	getSymbolVectorsByRepo(repo: string, limit: number = VECTOR_CANDIDATE_CAP): CodebaseSymbolVector[] {
 		return this.all<CodebaseSymbolVector>(
 			`SELECT csv.* FROM codebase_symbol_vectors csv
 			 JOIN codebase_symbols cs ON cs.id = csv.symbol_id
@@ -252,28 +253,6 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			symbols,
 			total,
 			hasMore: offset + limit < total
-		};
-	}
-
-	private rowToSymbol(row: unknown): CodebaseSymbol {
-		const r = row as Record<string, unknown>;
-		return {
-			id: r.id as string,
-			repo: r.repo as string,
-			file_path: r.file_path as string,
-			name: r.name as string,
-			kind: r.kind as string,
-			exported: (r.exported as number) === 1,
-			default_export: (r.default_export as number) === 1,
-			start_line: (r.start_line as number) ?? null,
-			start_col: (r.start_col as number) ?? null,
-			end_line: (r.end_line as number) ?? null,
-			end_col: (r.end_col as number) ?? null,
-			signature: (r.signature as string) ?? null,
-			doc_comment: (r.doc_comment as string) ?? null,
-			parent_symbol_id: (r.parent_symbol_id as string) ?? null,
-			created_at: r.created_at as string,
-			updated_at: r.updated_at as string
 		};
 	}
 }

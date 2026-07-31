@@ -2,6 +2,7 @@ import { BaseEntity } from "../../storage/base";
 import { Task, TaskChild, TaskComment } from "../../types";
 import { handleDuplicateTaskCode } from "./validation";
 import { buildCoordinationSelect, taskStatusOrderBy } from "./queries";
+import { VECTOR_CANDIDATE_CAP } from "../../utils/constants";
 
 export class TaskEntity extends BaseEntity {
 	insertTask(task: Task): void {
@@ -161,20 +162,14 @@ export class TaskEntity extends BaseEntity {
 		 LEFT JOIN tasks d ON t.depends_on = d.id 
 		 LEFT JOIN tasks p ON t.parent_id = p.id `;
 
-		// First attempt: with owner filter if owner provided
-		let row: Record<string, unknown> | undefined;
-		if (owner) {
-			row = this.get<Record<string, unknown>>(baseQuery + `WHERE t.owner = ? AND t.repo = ? AND t.task_code = ?`, [
-				owner,
-				repo,
-				taskCode
-			]);
-		}
-
-		// Fallback: without owner filter (handles tasks created via dashboard with owner="")
-		if (!row) {
-			row = this.get<Record<string, unknown>>(baseQuery + `WHERE t.repo = ? AND t.task_code = ?`, [repo, taskCode]);
-		}
+		// Single query — owner filter only when provided. Owner-less rows are
+		// normalized at write time (TASK-038), so no owner-fallback re-query.
+		const ownerClause = owner ? "t.owner = ? AND " : "";
+		const params: (string | null)[] = owner ? [owner, repo, taskCode] : [repo, taskCode];
+		const row = this.get<Record<string, unknown>>(
+			baseQuery + `WHERE ${ownerClause}t.repo = ? AND t.task_code = ?`,
+			params
+		);
 
 		return row
 			? {
@@ -230,17 +225,8 @@ export class TaskEntity extends BaseEntity {
 
 		const rows = this.all<Record<string, unknown>>(query, params);
 
-		// If owner filter returned no results, retry without owner filter
-		// (handles tasks created with a different owner value)
-		if (rows.length === 0 && owner) {
-			const fallbackQuery = query.replace(/t\.owner\s*=\s*\?\s*AND\s*/i, "");
-			const fallbackParams = params.slice(1); // remove owner param
-			const fallbackRows = this.all<Record<string, unknown>>(fallbackQuery, fallbackParams);
-			if (fallbackRows.length > 0) {
-				return fallbackRows.map((r) => this.rowToTask(r));
-			}
-		}
-
+		// NOTE: no owner-fallback re-query — owner-less rows are normalized at
+		// write time (TASK-038); the owner-filtered query is authoritative.
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -320,16 +306,8 @@ export class TaskEntity extends BaseEntity {
 
 		const rows = this.all<Record<string, unknown>>(query, params);
 
-		// If owner filter returned no results, retry without owner filter
-		if (rows.length === 0 && owner) {
-			const fallbackQuery = query.replace(/t\.owner\s*=\s*\?\s*AND\s*/i, "");
-			const fallbackParams = params.slice(1); // remove owner param
-			const fallbackRows = this.all<Record<string, unknown>>(fallbackQuery, fallbackParams);
-			if (fallbackRows.length > 0) {
-				return fallbackRows.map((r) => this.rowToTask(r));
-			}
-		}
-
+		// NOTE: no owner-fallback re-query — owner-less rows are normalized at
+		// write time (TASK-038); the owner-filtered query is authoritative.
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -382,6 +360,103 @@ export class TaskEntity extends BaseEntity {
 		);
 	}
 
+	/**
+	 * Bulk-load children (tasks whose parent_id is in `ids`) in a single query,
+	 * grouped by parent task id. Replaces N getChildrenByParentId calls (TASK-022).
+	 */
+	getChildrenByParentIds(ids: string[]): Map<string, TaskChild[]> {
+		if (ids.length === 0) return new Map();
+		const placeholders = ids.map(() => "?").join(",");
+		const rows = this.all<TaskChild & { parent_id: string }>(
+			`SELECT task_code, title, status, parent_id FROM tasks WHERE parent_id IN (${placeholders}) ORDER BY created_at ASC`,
+			ids
+		);
+		const grouped = new Map<string, TaskChild[]>();
+		for (const row of rows) {
+			if (!grouped.has(row.parent_id)) grouped.set(row.parent_id, []);
+			grouped.get(row.parent_id)!.push({ task_code: row.task_code, title: row.title, status: row.status });
+		}
+		return grouped;
+	}
+
+	/**
+	 * Bulk-load dependents (tasks whose depends_on is in `ids`) in a single query,
+	 * grouped by dependency task id. Replaces N getDependedByTaskId calls (TASK-022).
+	 */
+	getDependedByTaskIds(ids: string[]): Map<string, TaskChild[]> {
+		if (ids.length === 0) return new Map();
+		const placeholders = ids.map(() => "?").join(",");
+		const rows = this.all<TaskChild & { depends_on: string }>(
+			`SELECT task_code, title, status, depends_on FROM tasks WHERE depends_on IN (${placeholders}) ORDER BY created_at ASC`,
+			ids
+		);
+		const grouped = new Map<string, TaskChild[]>();
+		for (const row of rows) {
+			if (!grouped.has(row.depends_on)) grouped.set(row.depends_on, []);
+			grouped.get(row.depends_on)!.push({ task_code: row.task_code, title: row.title, status: row.status });
+		}
+		return grouped;
+	}
+
+	/**
+	 * Bulk-load tasks by task_code with the same row shape as getTaskByCode
+	 * (parent_code join + batched comments), in a single tasks query plus one
+	 * batched comments query. Results preserve the input code order.
+	 *
+	 * Deliberately NO owner-fallback re-query: owner-less rows are normalized at
+	 * write time (TASK-038), so the owner-filtered query is authoritative.
+	 */
+	getTasksByCodes(owner: string, repo: string, taskCodes: string[]): Task[] {
+		if (taskCodes.length === 0) return [];
+		const placeholders = taskCodes.map(() => "?").join(",");
+		const ownerClause = owner ? "t.owner = ? AND " : "";
+		const params: (string | number)[] = owner ? [owner, repo, ...taskCodes] : [repo, ...taskCodes];
+
+		const rows = this.all<Record<string, unknown>>(
+			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
+				${buildCoordinationSelect("t")},
+				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
+			 FROM tasks t 
+			 LEFT JOIN tasks d ON t.depends_on = d.id 
+			 LEFT JOIN tasks p ON t.parent_id = p.id 
+			 WHERE ${ownerClause}t.repo = ? AND t.task_code IN (${placeholders})`,
+			params
+		);
+
+		const tasks = rows.map((r) => this.rowToTask(r));
+		if (tasks.length === 0) return [];
+		const taskIds = tasks.map((t) => t.id);
+
+		const comments = this.all<TaskComment>(
+			`SELECT * FROM task_comments WHERE task_id IN (${taskIds.map(() => "?").join(",")}) ORDER BY created_at DESC, id DESC`,
+			taskIds
+		);
+		const commentsMap = new Map<string, TaskComment[]>();
+		for (const c of comments) {
+			if (!commentsMap.has(c.task_id)) commentsMap.set(c.task_id, []);
+			commentsMap.get(c.task_id)!.push(c);
+		}
+		for (const task of tasks) {
+			task.comments = commentsMap.get(task.id) || [];
+		}
+
+		// Preserve input code order, first match per code (mirrors per-code getTaskByCode)
+		const byCode = new Map<string, Task>();
+		for (const task of tasks) {
+			if (!byCode.has(task.task_code)) byCode.set(task.task_code, task);
+		}
+		const seen = new Set<string>();
+		const result: Task[] = [];
+		for (const code of taskCodes) {
+			const task = byCode.get(code);
+			if (task && !seen.has(code)) {
+				seen.add(code);
+				result.push(task);
+			}
+		}
+		return result;
+	}
+
 	upsertTaskVectorEmbedding(taskId: string, vector: unknown): void {
 		this.run(
 			`INSERT INTO task_vectors (task_id, vector, updated_at)
@@ -391,7 +466,7 @@ export class TaskEntity extends BaseEntity {
 		);
 	}
 
-	getTaskVectorCandidates(repo?: string, limit = 100): { task_id: string; vector: string }[] {
+	getTaskVectorCandidates(repo?: string, limit = VECTOR_CANDIDATE_CAP): { task_id: string; vector: string }[] {
 		let sql = `SELECT tv.task_id, tv.vector
 			FROM task_vectors tv
 			JOIN tasks t ON t.id = tv.task_id`;

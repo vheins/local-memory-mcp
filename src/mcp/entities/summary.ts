@@ -9,25 +9,16 @@ export class SummaryEntity extends BaseEntity {
 		return row || null;
 	}
 
+	/**
+	 * Atomic upsert of the repo summary. A single INSERT ... ON CONFLICT
+	 * statement (no SELECT-then-write race window); memory_summary is the
+	 * single owner of the (owner, repo) → summary row.
+	 */
 	upsertSummary(owner: string, repo: string, summary: string): void {
-		const existing = this.get<{ summary: string }>("SELECT summary FROM memory_summary WHERE owner = ? AND repo = ?", [
-			owner,
-			repo
-		]);
-		if (existing) {
-			this.run("UPDATE memory_summary SET summary = ?, updated_at = ? WHERE owner = ? AND repo = ?", [
-				summary,
-				new Date().toISOString(),
-				owner,
-				repo
-			]);
-		} else {
-			this.run("INSERT INTO memory_summary (owner, repo, summary, updated_at) VALUES (?, ?, ?, ?)", [
-				owner,
-				repo,
-				summary,
-				new Date().toISOString()
-			]);
-		}
+		this.run(
+			`INSERT INTO memory_summary (owner, repo, summary, updated_at) VALUES (?, ?, ?, ?)
+			ON CONFLICT(owner, repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`,
+			[owner, repo, summary, new Date().toISOString()]
+		);
 	}
 }

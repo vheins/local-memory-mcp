@@ -56,30 +56,31 @@ export function createMcpResponse(
 	// Pruning logic to save tokens for the agent
 	let finalData = data;
 	if (data && typeof data === "object") {
-		// Clone to avoid mutation
-		const cloned = JSON.parse(JSON.stringify(data));
-		finalData = cloned;
+		if (Array.isArray(data)) {
+			// Direct array — prune each item
+			finalData = data.map((item: unknown) => pruneMetadata(item as Record<string, unknown>));
+		} else {
+			// Shallow copy — only top-level keys are deleted/pruned below,
+			// so no deep clone is needed. pruneMetadata re-copies each item it touches.
+			const copy = { ...(data as Record<string, unknown>) };
+			finalData = copy;
 
-		// Prune known memory/task arrays if found in the data structure
-		const arrayKeys = ["results", "tasks", "memories", "items"];
-		let foundArray = false;
+			// Prune known memory/task arrays if found in the data structure
+			const arrayKeys = ["results", "tasks", "memories", "items"];
+			let foundArray = false;
 
-		for (const key of arrayKeys) {
-			const value = (cloned as Record<string, unknown>)[key];
-			if (Array.isArray(value)) {
-				(cloned as Record<string, unknown>)[key] = value.map((item: unknown) =>
-					pruneMetadata(item as Record<string, unknown>)
-				);
-				foundArray = true;
+			for (const key of arrayKeys) {
+				const value = copy[key];
+				if (Array.isArray(value)) {
+					copy[key] = value.map((item: unknown) => pruneMetadata(item as Record<string, unknown>));
+					foundArray = true;
+				}
 			}
-		}
 
-		// If it's a direct array, prune it
-		if (Array.isArray(cloned)) {
-			finalData = cloned.map((item: unknown) => pruneMetadata(item as Record<string, unknown>));
-		} else if (!foundArray) {
 			// If it's just an object (like a single memory), prune it
-			finalData = pruneMetadata(cloned as Record<string, unknown>);
+			if (!foundArray) {
+				finalData = pruneMetadata(copy);
+			}
 		}
 	}
 
@@ -128,7 +129,7 @@ export function createMcpResponse(
 function pruneMetadata(item: Record<string, unknown>): Record<string, unknown> {
 	if (!item || typeof item !== "object") return item;
 
-	// Deep clone to avoid mutating original objects (simple but safe for this context)
+	// Shallow copy to avoid mutating original objects (only top-level keys are deleted)
 	const pruned = { ...item };
 
 	// Common operational fields to remove from agent context

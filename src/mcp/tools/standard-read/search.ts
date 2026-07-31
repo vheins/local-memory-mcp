@@ -12,16 +12,14 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { expandQuery } from "../../utils/query-expander.js";
 import { fetchAggregatedKgContext } from "../kg-archivist/query.js";
 import { StandardReadInput } from "../schemas/standard-read.js";
+import { scoreHybrid, applyThreshold, HYBRID_WEIGHTS } from "../../utils/scoring.js";
+import { SEARCH_THRESHOLDS } from "../../utils/constants.js";
+import { renderGroupedSummary } from "../../utils/summary.js";
 
 // ── SPEC-001 Hybrid weights ──────────────────────────────────────────────
 // All 3 scoring paths (similarity main, vector-only fallback, error fallback)
-// now consistently use: 0.40 similarity + 0.30 keyword + 0.15 recency + 0.15 domain
-const HYBRID_WEIGHTS_SPEC001 = {
-	similarity: 0.4,
-	keyword: 0.3,
-	recency: 0.15,
-	domain: 0.15
-};
+// now consistently use the shared scorer: 0.40 similarity + 0.30 keyword +
+// 0.15 recency + 0.15 domain (HYBRID_WEIGHTS from utils/scoring).
 
 type StandardConfidence = "high" | "medium" | "low";
 
@@ -220,24 +218,28 @@ export async function handleSearchMode(
 	};
 
 	try {
-		const vectorResults = searchQuery
-			? await vectors.search(searchQuery, similarityResults.length || validated.limit, validated.repo, "standard")
+		// ONNX vector search only powers the vector-only fallback (when TF
+		// similarity produced no candidates). Skip it on the main path where
+		// its result would be discarded — saves one full inference per search.
+		const needsVectorFallback = Boolean(searchQuery) && similarityResults.length === 0;
+		const vectorResults = needsVectorFallback
+			? await vectors.search(searchQuery, validated.limit, validated.repo, "standard")
 			: [];
-		const vectorScoreMap = new Map(vectorResults.map((row) => [row.id, row.score]));
 
 		if (similarityResults.length > 0) {
 			scoredStandards = similarityResults.map((candidate) => {
-				const simFromVector = vectorScoreMap.get(candidate.id) ?? 0;
 				const keywordScore = scoreKeywordRelevance(validated.query || "", candidate);
 				const matchedTerms = collectMatchedTerms(validated.query || "", candidate);
 				const recencyScore = scoreRecency(candidate);
 				const domainScoreVal = scoreDomain(candidate, domainFilters);
-				const finalScore =
-					candidate.similarity * HYBRID_WEIGHTS_SPEC001.similarity +
-					simFromVector * 0 + // vector similarity already reflected in candidate.similarity
-					keywordScore * HYBRID_WEIGHTS_SPEC001.keyword +
-					recencyScore * HYBRID_WEIGHTS_SPEC001.recency +
-					domainScoreVal * HYBRID_WEIGHTS_SPEC001.domain;
+				// Vector similarity is already reflected in candidate.similarity
+				// (simFromVector is intentionally not part of the blend)
+				const finalScore = scoreHybrid({
+					similarity: candidate.similarity,
+					keyword: keywordScore,
+					recency: recencyScore,
+					domain: domainScoreVal
+				});
 				return {
 					standard: candidate,
 					similarityScore: candidate.similarity,
@@ -259,13 +261,14 @@ export async function handleSearchMode(
 				const matchedTerms = collectMatchedTerms(validated.query || "", standard);
 				const recencyScore = scoreRecency(standard);
 				const domainScoreVal = scoreDomain(standard, domainFilters);
-				const remainingWeight =
-					1 - HYBRID_WEIGHTS_SPEC001.keyword - HYBRID_WEIGHTS_SPEC001.recency - HYBRID_WEIGHTS_SPEC001.domain;
+				// Bit-exact SPEC-001 vector-only fallback: the vector score carries
+				// the remaining weight (expression preserved as-is)
+				const remainingWeight = 1 - HYBRID_WEIGHTS.keyword - HYBRID_WEIGHTS.recency - HYBRID_WEIGHTS.domain;
 				const finalScore =
 					row.score * remainingWeight +
-					keywordScore * HYBRID_WEIGHTS_SPEC001.keyword +
-					recencyScore * HYBRID_WEIGHTS_SPEC001.recency +
-					domainScoreVal * HYBRID_WEIGHTS_SPEC001.domain;
+					keywordScore * HYBRID_WEIGHTS.keyword +
+					recencyScore * HYBRID_WEIGHTS.recency +
+					domainScoreVal * HYBRID_WEIGHTS.domain;
 				return [
 					{
 						standard,
@@ -287,11 +290,12 @@ export async function handleSearchMode(
 			const matchedTerms = collectMatchedTerms(validated.query || "", candidate);
 			const recencyScore = scoreRecency(candidate);
 			const domainScoreVal = scoreDomain(candidate, domainFilters);
-			const finalScore =
-				candidate.similarity * HYBRID_WEIGHTS_SPEC001.similarity +
-				keywordScore * HYBRID_WEIGHTS_SPEC001.keyword +
-				recencyScore * HYBRID_WEIGHTS_SPEC001.recency +
-				domainScoreVal * HYBRID_WEIGHTS_SPEC001.domain;
+			const finalScore = scoreHybrid({
+				similarity: candidate.similarity,
+				keyword: keywordScore,
+				recency: recencyScore,
+				domain: domainScoreVal
+			});
 			return {
 				standard: candidate,
 				similarityScore: candidate.similarity,
@@ -306,8 +310,9 @@ export async function handleSearchMode(
 	}
 
 	scoredStandards.sort((a, b) => b.finalScore - a.finalScore);
-	const threshold = scoredStandards.length <= 5 ? 0.08 : 0.2;
-	let results = scoredStandards.filter((candidate) => candidate.finalScore >= threshold);
+	let results = scoredStandards.filter((candidate) =>
+		applyThreshold(candidate.finalScore, scoredStandards.length, SEARCH_THRESHOLDS.standard)
+	);
 	if (results.length === 0 && scoredStandards.length > 0) {
 		results = [scoredStandards[0]];
 	}
@@ -345,38 +350,25 @@ export async function handleSearchMode(
 		const parts = [`### Results: ${total} standards for "${validated.query || ""}" (showing ${displayCount})`, ""];
 
 		// Fused grouped by scope (global first, then repo names, then "-" for null)
-		const grouped = new Map<string, { scored: (typeof paginatedResults)[0]; rank: number }[]>();
-		paginatedResults.forEach((scored, i) => {
-			const scopeKey = scored.standard.is_global ? "global" : scored.standard.repo || "-";
-			if (!grouped.has(scopeKey)) grouped.set(scopeKey, []);
-			grouped.get(scopeKey)!.push({ scored, rank: i + 1 });
-		});
-
-		const CAP = 5;
 		// Sort keys: global first, then repo names alphabetically, then "-" last
-		const sortedKeys = [...grouped.keys()].sort((a, b) => {
+		const scopeSort = (a: string, b: string): number => {
 			if (a === "global" && b !== "global") return -1;
 			if (b === "global" && a !== "global") return 1;
 			if (a === "-" && b !== "-") return 1;
 			if (b === "-" && a !== "-") return -1;
 			return a.localeCompare(b);
-		});
+		};
 
-		for (const scopeKey of sortedKeys) {
-			const items = grouped.get(scopeKey)!;
-			const visible = items.slice(0, CAP);
-			const hidden = items.length - visible.length;
-			parts.push(`**${scopeKey} (${items.length})**`);
-			for (const { scored, rank } of visible) {
-				parts.push(
-					`#${rank} ${scored.standard.code ?? "-"} [${scored.finalScore.toFixed(2)}] ${scored.standard.title}`
-				);
-			}
-			if (hidden > 0) parts.push(`... +${hidden} more in this group`);
-			parts.push("");
-		}
-
-		parts.push("Use standard-read with code for full content.");
+		parts.push(
+			renderGroupedSummary({
+				items: paginatedResults,
+				getGroup: (scored) => (scored.standard.is_global ? "global" : scored.standard.repo || "-"),
+				groupOrder: scopeSort,
+				formatLine: (scored, rank) =>
+					`#${rank} ${scored.standard.code ?? "-"} [${scored.finalScore.toFixed(2)}] ${scored.standard.title}`,
+				footer: "Use standard-read with code for full content."
+			})
+		);
 		contentSummary = parts.join("\n");
 	} else {
 		contentSummary = "No matching coding standards found.";

@@ -3,7 +3,7 @@ import { Task, TaskChild, TaskComment } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
 import { logger } from "../../utils/logger";
-import { fetchTaskKgContext, fetchAggregatedTaskKgContext } from "../kg-archivist/query";
+import { fetchTaskKgContext } from "../kg-archivist/query";
 
 function buildTaskDetailLines(
 	task: Task,
@@ -105,7 +105,8 @@ export async function handleDetailMode(
 			throw new Error(`Task not found: ${identifier} in repo ${repo}`);
 		}
 
-		const comments = storage.taskComments.getTaskCommentsByTaskId(task.id);
+		// getTaskById / getTaskByCode already load comments (batched) — reuse them
+		const comments = task.comments ?? [];
 		const children = storage.tasks.getChildrenByParentId(task.id);
 		const depended_by = storage.tasks.getDependedByTaskId(task.id);
 
@@ -136,23 +137,24 @@ export async function handleDetailMode(
 	if (ids) {
 		tasks = storage.tasks.getTasksByIds(ids);
 	} else if (codes) {
-		for (const code of codes) {
-			const t = storage.tasks.getTaskByCode(owner, repo, code);
-			if (t) tasks.push(t);
-		}
+		tasks = storage.tasks.getTasksByCodes(owner, repo, codes);
 	}
 
 	if (tasks.length === 0) {
 		throw new Error("No tasks found for the provided identifiers");
 	}
 
-	// Enrich each task with comments, children, depended_by
-	const enriched = tasks.map((t) => {
-		const comments = storage.taskComments.getTaskCommentsByTaskId(t.id);
-		const children = storage.tasks.getChildrenByParentId(t.id);
-		const depended_by = storage.tasks.getDependedByTaskId(t.id);
-		return { ...t, comments, children, depended_by };
-	});
+	// Enrich each task with children + depended_by in O(2) batched queries
+	// (comments already attached by getTasksByIds / getTasksByCodes).
+	const taskIds = tasks.map((t) => t.id);
+	const childrenByParent = storage.tasks.getChildrenByParentIds(taskIds);
+	const dependedByTask = storage.tasks.getDependedByTaskIds(taskIds);
+	const enriched = tasks.map((t) => ({
+		...t,
+		comments: t.comments ?? [],
+		children: childrenByParent.get(t.id) ?? [],
+		depended_by: dependedByTask.get(t.id) ?? []
+	}));
 
 	// Best-effort aggregated KG context from all task titles + descriptions
 	const combinedTitle = enriched.map((t) => t.title).join(" ");

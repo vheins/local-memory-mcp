@@ -6,6 +6,19 @@ import { logger } from "../utils/logger";
 
 const ACTIVE_TASK_STATUSES = ["in_progress", "pending", "backlog", "blocked"];
 
+/**
+ * Deliberate divergence from SPEC-001 hybrid weights (see utils/scoring.ts).
+ *
+ * agent-context ranks context memories by RELEVANCE (vector score) + IMPORTANCE,
+ * not by the search-oriented keyword/recency/domain blend used by the three
+ * search engines. Kept as an explicit named constant so the divergence is
+ * visible and cannot silently drift; do NOT fold into HYBRID_WEIGHTS.
+ */
+const AGENT_CONTEXT_BLEND = {
+	vector: 0.3,
+	importance: 0.7
+} as const;
+
 export async function handleAgentContext(
 	args: Record<string, unknown>,
 	db: SQLiteStore,
@@ -32,21 +45,25 @@ export async function handleAgentContext(
 				for (const vr of vectorResults) {
 					vectorScoreMap.set(vr.id, vr.score);
 				}
+				// Bulk-fetch in a single query (TASK-023), preserving vector rank order
+				const fetched = db.memories.getByIds(ids);
+				const fetchedById = new Map(fetched.map((m) => [m.id, m]));
 				memories = ids
-					.map((id) => db.memories.getById(id))
-					.filter((m): m is MemoryEntry => m !== null && idSet.has(m.id));
+					.map((id) => fetchedById.get(id))
+					.filter((m): m is MemoryEntry => m !== undefined && idSet.has(m.id));
 				// Apply type_filter post-hoc if set
 				if (type_filter) {
 					memories = memories.filter((m) => m.type === type_filter);
 				}
 				// Apply hybrid scoring: final = (vector × 0.30) + (importance/5 × 0.70)
+				// — deliberate divergence from SPEC-001, see AGENT_CONTEXT_BLEND.
 				memories.sort((a, b) => {
 					const vecA = vectorScoreMap.get(a.id) ?? 0;
 					const vecB = vectorScoreMap.get(b.id) ?? 0;
 					const importanceA = (a.importance ?? 3) / 5;
 					const importanceB = (b.importance ?? 3) / 5;
-					const blendedA = vecA * 0.3 + importanceA * 0.7;
-					const blendedB = vecB * 0.3 + importanceB * 0.7;
+					const blendedA = vecA * AGENT_CONTEXT_BLEND.vector + importanceA * AGENT_CONTEXT_BLEND.importance;
+					const blendedB = vecB * AGENT_CONTEXT_BLEND.vector + importanceB * AGENT_CONTEXT_BLEND.importance;
 					return blendedB - blendedA;
 				});
 			} else {

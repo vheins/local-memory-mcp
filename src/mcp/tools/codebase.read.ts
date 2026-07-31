@@ -17,7 +17,7 @@ import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildArchitecture, renderDirTree } from "../codebase-index/services/architecture-service";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
-import { traceSymbol, AmbiguousSymbolError, SymbolNotFoundError } from "../codebase-index/services/trace-service";
+import { traceSymbol, AmbiguousSymbolError } from "../codebase-index/services/trace-service";
 import { blendVectorRanking } from "../codebase-index/services/vector-ranking";
 import type { CodebaseSymbol } from "../types/codebase-symbol";
 import { logger } from "../utils/logger";
@@ -326,7 +326,7 @@ async function handleSearchMode(
 	const kindFilter: string | undefined = Array.isArray(validated.kind) ? validated.kind[0] : validated.kind;
 
 	// Phase 1: DB-level name search (LIKE on symbol name + kind/filePath filtering)
-	let dbResult = db.codebaseSymbols.searchSymbols({
+	const dbResult = db.codebaseSymbols.searchSymbols({
 		query,
 		repo: validated.repo,
 		kind: kindFilter,
@@ -366,7 +366,6 @@ async function handleSearchMode(
 				offset: 0
 			});
 			if (wordResult.symbols.length > 0) {
-				dbResult = wordResult;
 				symbols = filterSymbols(wordResult.symbols, {
 					kind: inMemoryKind,
 					repo: validated.repo,

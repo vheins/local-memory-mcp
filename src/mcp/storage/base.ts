@@ -1,6 +1,18 @@
 import Database from "better-sqlite3";
-import { tokenize } from "../utils/normalize";
-import { MemoryEntry, MemoryType, Task, TaskStatus, TaskPriority } from "../types/index";
+import {
+	MemoryEntry,
+	MemoryType,
+	Task,
+	TaskStatus,
+	TaskPriority,
+	CodingStandardEntry,
+	CodingStandardRow,
+	Handoff,
+	HandoffRow,
+	Claim,
+	ClaimRow,
+	CodebaseSymbol
+} from "../types/index";
 
 export abstract class BaseEntity {
 	constructor(protected db: Database.Database) {}
@@ -40,6 +52,13 @@ export abstract class BaseEntity {
 
 	protected rowToMemoryEntry(row: unknown): MemoryEntry {
 		const r = row as Record<string, unknown>;
+
+		// Parse metadata JSON once — structuredData lives inside the same
+		// metadata blob, so a single parse is split into both fields.
+		const metadata = this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {});
+		const structuredData = (metadata.structuredData as Record<string, unknown> | undefined) ?? undefined;
+		delete metadata.structuredData;
+
 		return {
 			id: r.id as string,
 			code: (r.code as string) || undefined,
@@ -67,15 +86,8 @@ export abstract class BaseEntity {
 			status: (r.status as "active" | "archived") || "active",
 			is_global: r.is_global === 1,
 			tags: this.safeJSONParse<string[]>(r.tags as string, []),
-			metadata: (() => {
-				const meta = this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {});
-				delete meta.structuredData;
-				return meta;
-			})(),
-			structuredData: (() => {
-				const meta = this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {});
-				return (meta.structuredData as Record<string, unknown>) ?? undefined;
-			})()
+			metadata,
+			structuredData
 		};
 	}
 
@@ -124,32 +136,98 @@ export abstract class BaseEntity {
 		};
 	}
 
-	protected computeVector(text: string): Record<string, number> {
-		const tokens = tokenize(text);
-		const vector: Record<string, number> = {};
-		tokens.forEach((token) => {
-			vector[token] = (vector[token] || 0) + 1;
-		});
-		return vector;
+	/**
+	 * Row mapper for coding_standards rows (shared by StandardEntity).
+	 * Single source of truth — do not redefine in subclasses.
+	 */
+	protected rowToEntry(row: CodingStandardRow): CodingStandardEntry {
+		return {
+			id: row.id,
+			code: row.code ?? undefined,
+			title: row.title,
+			content: row.content,
+			parent_id: row.parent_id ?? null,
+			context: row.context,
+			version: row.version,
+			language: row.language ?? null,
+			stack: this.safeJSONParse<string[]>(row.stack, []),
+			is_global: row.is_global === 1,
+			owner: row.owner,
+			repo: row.repo ?? null,
+			tags: this.safeJSONParse<string[]>(row.tags, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {}),
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+			hit_count: row.hit_count ?? 0,
+			last_used_at: row.last_used_at ?? null,
+			agent: row.agent,
+			model: row.model
+		};
 	}
 
-	protected cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
-		const keys1 = Object.keys(v1);
-		const keys2 = Object.keys(v2);
-		if (!keys1.length || !keys2.length) return 0;
+	/**
+	 * Row mapper for codebase_symbols rows (shared by CodebaseSymbolEntity).
+	 */
+	protected rowToSymbol(row: unknown): CodebaseSymbol {
+		const r = row as Record<string, unknown>;
+		return {
+			id: r.id as string,
+			repo: r.repo as string,
+			file_path: r.file_path as string,
+			name: r.name as string,
+			kind: r.kind as string,
+			exported: (r.exported as number) === 1,
+			default_export: (r.default_export as number) === 1,
+			start_line: (r.start_line as number) ?? null,
+			start_col: (r.start_col as number) ?? null,
+			end_line: (r.end_line as number) ?? null,
+			end_col: (r.end_col as number) ?? null,
+			signature: (r.signature as string) ?? null,
+			doc_comment: (r.doc_comment as string) ?? null,
+			parent_symbol_id: (r.parent_symbol_id as string) ?? null,
+			created_at: r.created_at as string,
+			updated_at: r.updated_at as string
+		};
+	}
 
-		let dotProduct = 0;
-		for (const key of keys1) {
-			if (v2[key]) dotProduct += v1[key] * v2[key];
-		}
+	/**
+	 * Row mapper for handoffs rows (shared by HandoffEntity). Accepts rows
+	 * joined with tasks (task_code present) and plain handoff rows.
+	 */
+	protected rowToHandoff(row: HandoffRow): Handoff {
+		return {
+			id: row.id,
+			owner: row.owner,
+			repo: row.repo,
+			from_agent: row.from_agent,
+			to_agent: row.to_agent ?? null,
+			task_id: row.task_id ?? null,
+			task_code: "task_code" in row ? ((row as HandoffRow & { task_code?: string | null }).task_code ?? null) : null,
+			summary: row.summary,
+			context: this.safeJSONParse<Record<string, unknown>>(row.context, {}),
+			status: row.status as Handoff["status"],
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+			expires_at: row.expires_at ?? null
+		};
+	}
 
-		let mag1 = 0;
-		for (const key of keys1) mag1 += v1[key] * v1[key];
-
-		let mag2 = 0;
-		for (const key of keys2) mag2 += v2[key] * v2[key];
-
-		const mag = Math.sqrt(mag1) * Math.sqrt(mag2);
-		return mag === 0 ? 0 : dotProduct / mag;
+	/**
+	 * Row mapper for claims rows (shared by HandoffEntity). Accepts rows
+	 * joined with tasks (task_code present) and plain claim rows.
+	 */
+	protected rowToClaim(row: ClaimRow): Claim {
+		return {
+			id: row.id,
+			owner: row.owner,
+			repo: row.repo,
+			task_id: row.task_id,
+			task_code: "task_code" in row ? ((row as ClaimRow & { task_code?: string | null }).task_code ?? null) : null,
+			agent: row.agent,
+			role: row.role,
+			claimed_at: row.claimed_at,
+			released_at: row.released_at ?? null,
+			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {})
+		};
 	}
 }
