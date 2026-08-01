@@ -27,13 +27,23 @@ Simpan apa yang Anda pelajari agar tetap ada di seluruh sesi.
 }
 ```
 
-**Bidang:**
+**Bidang (semua wajib kecuali disebutkan opsional):**
 
-- `type` (`code_fact`, `decision`, `mistake`, `pattern`, `task_archive`) — jenis pengetahuan ini
-- `importance` (angka 1-5) — seberapa kritis ini; semakin tinggi = semakin lambat meluruh
+- `type` — `code_fact`, `decision`, `mistake`, `pattern`, atau `task_archive`
+- `title` — judul pendek yang dapat dibaca manusia (3-255 karakter)
+- `content` — isi memori (min 10 karakter)
+- `importance` — angka 1-5; seberapa kritis ini (semakin tinggi = semakin lambat meluruh)
+- `agent` — nama agen yang membuat memori ini
+- `model` — model AI yang digunakan oleh agen
 - `scope` — **objek** dengan `owner` (organisasi/username GitHub) dan `repo` (nama proyek) — keduanya wajib
-- `tags` — label teknologi untuk kemudahan ditemukan lintas proyek
-- `code` (opsional) — jika tidak diisi, akan dibuat otomatis sebagai `MEM-001`, `MEM-002`, dst. (berurutan per repo)
+- `tags` (opsional) — label teknologi untuk kemudahan ditemukan lintas proyek
+- `code` (opsional) — dibuat otomatis sebagai `MEM-001`, `MEM-002`, dst. jika tidak diisi (berurutan per repo)
+- `role` (opsional, default `"unknown"`) — peran agen yang membuat memori ini
+- `metadata` (opsional) — konteks tambahan terstruktur
+- `ttlDays` (opsional) — time-to-live dalam hari; setelah itu memori kedaluwarsa
+- `supersedes` (opsional) — kode memori atau UUID yang digantikan oleh entri ini
+- `is_global` (opsional, default `false`) — jika true, dibagikan ke semua repositori
+- `structured` (opsional, default `false`) — jika true, mengembalikan JSON terstruktur dari memori yang disimpan
 
 ### `memory-search` — Menemukan Memori yang Relevan
 
@@ -414,126 +424,6 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 
 ---
 
-## Alat Knowledge Graph (Graf Pengetahuan)
-
-Membangun dan menanyakan jaringan pengetahuan terstruktur: entitas, relasi antar entitas, dan observasi kontekstual.
-
-### `create_entity` — Membuat Entitas Baru
-
-```json
-{
-	"name": "SQLite",
-	"type": "concept",
-	"description": "Database engine for local persistence",
-	"repo": "my-project"
-}
-```
-
-**Tipe entitas:** `person`, `place`, `organization`, `concept`.
-
-### `delete_entity` — Menghapus Entitas
-
-Menghapus entitas beserta kaskade relasi dan observasi terkait:
-
-```json
-{ "name": "SQLite", "repo": "my-project" }
-```
-
-### `create_relation` — Membuat Relasi Antar Entitas
-
-Kedua entitas harus sudah ada sebelum membuat relasi.
-
-```json
-{
-	"from_entity": "Next.js",
-	"to_entity": "React",
-	"relation_type": "built_on",
-	"repo": "my-project"
-}
-```
-
-### `delete_relation` — Menghapus Relasi
-
-```json
-{
-	"from_entity": "Next.js",
-	"to_entity": "React",
-	"relation_type": "built_on",
-	"repo": "my-project"
-}
-```
-
-### `delete_observation` — Menghapus Observasi
-
-```json
-{ "id": "observation-uuid", "repo": "my-project" }
-```
-
----
-
-## Alat Agentic (Konteks Agen)
-
-Alat khusus yang dirancang untuk efisiensi alur kerja multi-agen dan sesi.
-
-### `agent-context` — Mengambil Konteks Aktif
-
-Menggabungkan memori relevan, tugas aktif, dan keputusan terbaru dalam satu panggilan. Ideal untuk orientasi agen cepat di awal sesi.
-
-```json
-{
-	"owner": "my-org",
-	"repo": "my-project",
-	"objective": "authentication flow",
-	"limit": 5
-}
-```
-
-### `decision-log` — Mencatat Keputusan
-
-Mencatat keputusan arsitektur dengan format terstruktur. Disimpan sebagai memori tipe `decision` dengan importance 4.
-
-```json
-{
-	"repo": "my-project",
-	"summary": "Use JWT for API authentication",
-	"context": "Need stateless auth for microservices",
-	"rationale": "JWT allows decentralized validation without DB lookup",
-	"alternatives": ["Session-based auth", "OAuth2 proxy"],
-	"tags": ["security", "architecture"]
-}
-```
-
-### `session-summarize` — Meringkas Sesi
-
-Meringkas sesi kerja ke dalam memori tipe `task_archive`. Berguna untuk checkpoint atau transfer konteks.
-
-```json
-{
-	"repo": "my-project",
-	"summary": "Implemented JWT middleware and refresh token flow",
-	"key_decisions": ["Use RS256 algorithm", "Token expiry: 15min"],
-	"next_steps": ["Add token revocation endpoint", "Write integration tests"],
-	"tags": ["security"]
-}
-```
-
----
-
-## Alias Kompatibilitas Hulu
-
-Untuk interoperabilitas dengan ekosistem alat MCP yang sudah ada, alias ini memetakan nama alat pihak ketiga ke fungsi bawaan:
-
-| Alat Hulu        | Fungsi Bawaan   | Deskripsi                              |
-| ---------------- | --------------- | -------------------------------------- |
-| `remember_fact`  | `memory-store`  | Menyimpan fakta sebagai memori baru    |
-| `remember_facts` | `memory-store`  | Menyimpan banyak fakta (massal)        |
-| `recall`         | `memory-search` | Mencari memori yang relevan            |
-| `forget`         | `memory-delete` | Menghapus memori yang tidak diperlukan |
-
-Alias ini memungkinkan kode agen yang ditulis untuk server MCP memori lain berfungsi tanpa modifikasi.
-
----
-
 ## Ringkasan Grup Alat
 
 | Grup         | Alat                                                                                | Tujuan                                     |
@@ -542,6 +432,110 @@ Alias ini memungkinkan kode agen yang ditulis untuk server MCP memori lain berfu
 | Task         | create, list, detail, update, delete                                                | Siklus hidup item pekerjaan                |
 | Standard     | store, search, detail, update, delete                                               | Aturan koding yang dapat digunakan kembali |
 | Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Orkestrasi multi-agen                      |
-| Knowledge    | create-entity, delete-entity, create-relation, delete-relation, delete-observation  | Graf pengetahuan entitas & relasi          |
-| Graph        |                                                                                     |                                            |
-| Agentic      | agent-context, decision-log, session-summarize                                      | Konteks & ringkasan sesi agen              |
+| Knowledge    | create_entity, delete_entity, create_relation, delete_relation, delete_observation  | Graf entitas & relasi                      |
+
+---
+
+## Alat Knowledge Graph (Graf Pengetahuan)
+
+Alat-alat ini mengelola data relasi entitas terstruktur untuk memetakan konsep domain.
+
+### `create_entity` — Membuat Entitas Knowledge Graph
+
+```json
+{
+	"name": "PaymentService",
+	"type": "concept",
+	"description": "Handles payment processing and invoicing",
+	"repo": "my-project"
+}
+```
+
+### `delete_entity` — Menghapus Entitas (Berkaskade)
+
+Berkaskade untuk menghapus semua relasi dan observasi terkait.
+
+```json
+{ "name": "PaymentService" }
+```
+
+### `create_relation` — Menghubungkan Dua Entitas
+
+```json
+{
+	"from_entity": "PaymentService",
+	"to_entity": "User",
+	"relation_type": "processes_payments_for",
+	"repo": "my-project"
+}
+```
+
+### `delete_relation` — Menghapus Relasi
+
+```json
+{
+	"from_entity": "PaymentService",
+	"to_entity": "User",
+	"relation_type": "processes_payments_for"
+}
+```
+
+### `delete_observation` — Menghapus Observasi
+
+```json
+{ "id": "<observation-uuid>" }
+```
+
+---
+
+## Alat Agentic (Konteks Agen)
+
+### `agent-context` — Konteks Sesi dalam Satu Panggilan
+
+Mengembalikan memori yang relevan, tugas aktif, dan keputusan terbaru untuk sesi saat ini.
+
+```json
+{
+	"owner": "my-org",
+	"repo": "my-project",
+	"objective": "implement auth",
+	"limit": 5
+}
+```
+
+### `decision-log` — Pencatatan Keputusan Terstruktur
+
+Menyimpan keputusan dengan konteks, alasan, dan alternatif.
+
+```json
+{
+	"summary": "Use SQLite over PostgreSQL",
+	"context": "We need local-first storage without server setup",
+	"rationale": "SQLite is embedded, zero-config, and sufficient for single-user agent workflows",
+	"alternatives": ["PostgreSQL", "JSON files"]
+}
+```
+
+### `session-summarize` — Mengarsipkan Ringkasan Sesi
+
+```json
+{
+	"summary": "Implemented authentication flow with JWT tokens. Updated user model.",
+	"key_decisions": ["Use JWT with 24h expiry"],
+	"next_steps": ["Add refresh token rotation"],
+	"repo": "my-project"
+}
+```
+
+---
+
+## Alias Kompatibilitas Hulu
+
+Alat-alat ini cocok dengan antarmuka `Beledarian/mcp-local-memory` untuk kompatibilitas langsung:
+
+| Hulu             | Dipetakan Ke            | Deskripsi               |
+| :--------------- | :---------------------- | :---------------------- |
+| `remember_fact`  | `memory-store`          | Menyimpan sebuah fakta  |
+| `remember_facts` | `memory-store` (massal) | Menyimpan banyak fakta  |
+| `recall`         | `memory-search`         | Mencari memori          |
+| `forget`         | `memory-delete`         | Menghapus sebuah memori |

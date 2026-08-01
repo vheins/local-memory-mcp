@@ -37,53 +37,39 @@ Seperti manusia, tidak semuanya perlu diingat selamanya.
 - **Memori Kedaluwarsa:** Memori dengan TTL (Time-To-Live) secara otomatis diarsipkan.
 - **Sistem Peluruhan:** Memori yang tidak digunakan selama 90 hari dengan kepentingan rendah dipindahkan ke arsip untuk menjaga konteks Agen tetap bersih.
 
-## 🕸️ Knowledge Graph (Graf Pengetahuan)
+## 🧩 Knowledge Graph (Graf Pengetahuan)
 
-Memungkinkan agen untuk membangun dan menanyakan jaringan entitas, relasi, dan observasi:
+Penyimpanan relasi entitas terstruktur yang memetakan pengetahuan domain yang kompleks:
 
-- **Entitas:** Orang, tempat, organisasi, atau konsep yang muncul dalam sesi agen.
-- **Relasi:** Hubungan berarah antar entitas (mis. `menggunakan`, `bergantung_pada`, `mengimplementasikan`).
-- **Observasi:** Catatan yang menghubungkan entitas ke konteks tertentu (mis. "disebutkan dalam memori: ...").
-- **Visualisasi:** Ditampilkan sebagai graf gaya-tarik (force-directed) di dashboard web.
+- **Entitas** dengan tipe (orang, tempat, organisasi, konsep) dan deskripsi
+- **Relasi** dengan koneksi ber-tipe antar entitas
+- **Observasi** yang menghubungkan konteks ke entitas
+- **Ekstraksi otomatis**: NLP Archivist secara otomatis mengekstrak entitas saat memori disimpan
+- **Dashboard**: Visualisasi graf gaya-tarik (force-directed) interaktif
 
-Data graf disimpan dalam tabel SQLite khusus (`entities`, `relations`, `observations`) dengan integritas foreign key.
+## 🕰️ Time Tunnel (Pencarian Temporal)
 
-## 🕰️ Time Tunnel (Terowongan Waktu)
+Filter pencarian memori dengan referensi waktu berbahasa alami:
 
-Filter temporal cerdas yang tertanam langsung dalam pencarian memori:
+- "hari ini", "kemarin", "minggu ini"
+- "minggu lalu", "bulan lalu"
+- "N hari terakhir", "N jam terakhir"
+- Terintegrasi mulus dengan pencarian yang ada — cukup tambahkan frasanya
 
-- **Frasa relatif:** `hari ini`, `kemarin`, `minggu ini`, `minggu lalu`, `bulan lalu`, `N hari terakhir`, `N minggu terakhir`.
-- **Cara kerja:** Saat agen memanggil `memory-search`, sistem mendeteksi frasa waktu dalam kueri, menghapusnya dari kueri, lalu menerapkan filter sejak/sampai pada hasil.
-- **Tanpa perubahan skema:** Filter diterapkan sebagai lapisan pasca-pencarian tanpa menyentuh indeks atau tabel.
+## 🧬 Soul Maintenance (Mesin Decay)
 
-## 🔮 Soul Maintenance (Pemeliharaan Jiwa)
+Manajemen siklus hidup memori bergaya biologis:
 
-Mesin decay biologis yang menjaga kualitas memori tetap tinggi:
+- **Peluruhan:** Memori yang tidak digunakan kehilangan kepentingan seiring waktu
+- **Imunisasi:** Memori yang dilindungi tag tidak akan pernah meluruh
+- **Pengarsipan:** Memori di bawah ambang batas diarsipkan secara otomatis
+- **Sapuan saat startup:** Menjalankan maintenance saat server dimulai (dedup 24 jam)
 
-- **Peluruhan Bertahap:** Memori yang tidak digunakan selama 7+ hari mengalami penurunan importance sebesar 0,5 per siklus.
-- **Arsip Otomatis:** Memori dengan importance di bawah 1 dipindahkan ke arsip.
-- **Imunitas Tag:** Tag tertentu (mis. `critical`, `never-forget`) dapat diimunisasi — memori dengan tag tersebut tidak akan pernah meluruh.
+## 🤖 Alat Produktivitas Agentic
 
-Sistem berjalan sebagai pekerjaan latar terjadwal yang terintegrasi dengan siklus maintenance server.
-
-## 🧰 Agentic Tools (Alat Khusus Agen)
-
-Tiga alat baru yang dirancang untuk alur kerja multi-agen:
-
-- **`agent-context`:** Menggabungkan memori relevan, tugas aktif, dan keputusan terbaru menjadi satu blok konteks yang dapat digunakan agen untuk orientasi cepat.
-- **`decision-log`:** Mencatat keputusan arsitektur dengan format terstruktur (ringkasan, konteks, alasan, alternatif) — disimpan sebagai memori tipe `decision`.
-- **`session-summarize`:** Meringkas sesi kerja ke dalam memori tipe `task_archive`, termasuk keputusan utama dan langkah selanjutnya.
-
-## 🔗 Upstream Aliases (Alias Hulu)
-
-Untuk kompatibilitas dengan alat pihak ketiga yang sudah ada, sistem menyediakan alias:
-
-| Alat Asli        | Tujuan                           |
-| ---------------- | -------------------------------- |
-| `remember_fact`  | Alias ke `memory-store`          |
-| `remember_facts` | Alias ke `memory-store` (massal) |
-| `recall`         | Alias ke `memory-search`         |
-| `forget`         | Alias ke `memory-delete`         |
+- **agent-context**: Konteks sesi dalam satu panggilan (memori relevan + tugas aktif + keputusan terbaru)
+- **decision-log**: Persistensi keputusan terstruktur dengan konteks/alasan/alternatif
+- **session-summarize**: Arsipkan ringkasan sesi sebagai memori `task_archive` yang dapat dicari
 
 ## ⚠️ Penyangkalan
 

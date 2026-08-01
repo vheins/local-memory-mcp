@@ -66,24 +66,19 @@ Dasbor mencerminkan alur alat MCP:
 
 Ini berarti dasbor bukan lagi jalur mutasi terpisah untuk tugas. Pembersihan koordinasi dan aturan siklus hidup tugas tetap konsisten antara UI dan pemanggil MCP.
 
-### 4. Tab Knowledge Graph
+### Tab Knowledge Graph
 
-Tab `Knowledge Graph` menyediakan visualisasi dan pengelolaan graf pengetahuan interaktif:
+Tab Knowledge Graph menyediakan visualisasi graf gaya-tarik (force-directed) interaktif dari entitas dan relasinya.
 
-- **Force-Directed Graph:** Node entitas (lingkaran) terhubung oleh tepi relasi (garis berlabel) yang dapat diseret dan dijelajahi.
-- **Warna Node:** Berdasarkan tipe entitas — orang, tempat, organisasi, konsep — dengan legenda warna.
-- **Panel Entitas:** Daftar semua entitas dalam repo yang dipilih, lengkap dengan tipe, deskripsi, dan jumlah observasi/relasi.
-- **Panel Relasi:** Daftar semua relasi berarah antar entitas.
+- **Node berkode warna** berdasarkan tipe entitas: hijau (orang), biru (tempat), oranye (organisasi), ungu (konsep)
+- **Label tepi** yang menampilkan tipe relasi antar entitas yang terhubung
+- **Klik** node untuk memeriksa detail dan observasinya di tooltip
+- **Klik dua kali** node untuk menghapusnya (berkaskade ke relasi dan observasi)
+- **Klik kanan** tepi untuk menghapus relasi
+- **Modal Tambah Entitas**: nama, dropdown tipe (orang/tempat/organisasi/konsep), deskripsi
+- **Modal Tambah Relasi**: pilih entitas asal, pilih entitas tujuan, input tipe relasi
 
-Operasi CRUD:
-
-- **Tambah Entitas:** Modal form dengan field nama, tipe (dropdown), dan deskripsi (opsional).
-- **Hapus Entitas:** Konfirmasi modal yang meruntuhkan kaskade relasi dan observasi terkait.
-- **Tambah Relasi:** Pilih entitas sumber dan target dari dropdown, masukkan tipe relasi.
-- **Hapus Relasi:** Hapus langsung dari daftar relasi.
-- **Hapus Observasi:** Hapus catatan observasi individual.
-
-Data di-backend oleh endpoint REST di `/api/kg/*` yang juga digunakan oleh alat MCP `create_entity`, `delete_entity`, `create_relation`, `delete_relation`, dan `delete_observation`.
+Gunakan tab ini untuk memetakan pengetahuan domain Anda secara visual, menemukan koneksi tersembunyi, dan mengelola Knowledge Graph tanpa menulis panggilan alat MCP.
 
 ## Catatan
 

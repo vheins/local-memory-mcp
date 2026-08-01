@@ -148,11 +148,11 @@ args = ["-y", "@vheins/local-memory-mcp"]
 default_tools_approval_mode = "prompt"
 ```
 
-| Mode | Behavior |
-|------|----------|
-| `auto` | Auto-approve semua tool |
-| `prompt` | Tanya user setiap kali (default) |
-| `approve` | Selalu approve tanpa prompt |
+| Mode      | Behavior                         |
+| --------- | -------------------------------- |
+| `auto`    | Auto-approve semua tool          |
+| `prompt`  | Tanya user setiap kali (default) |
+| `approve` | Selalu approve tanpa prompt      |
 
 ### Per-tool approval
 
@@ -221,6 +221,7 @@ codex mcp list
 ```
 
 Output:
+
 ```
 local-memory — running
   Tools: memory-store, memory-search, memory-detail, ...
@@ -230,7 +231,7 @@ Di dalam TUI Codex, buka `/mcp` untuk melihat status server.
 
 Test koneksi dengan bertanya ke Codex:
 
-> *"Cek memori lokal untuk project ini"*
+> _"Cek memori lokal untuk project ini"_
 
 Jika Codex merespon dengan "Tidak ada memori" (bukan error), koneksi berhasil.
 
@@ -318,11 +319,12 @@ codex mcp add local-memory -- npx -y @vheins/local-memory-mcp
 ### Server error / disconnect
 
 Jalankan langsung untuk lihat error:
+
 ```bash
 npx -y @vheins/local-memory-mcp
 ```
 
-### Konfigurasi tidak生效
+### Konfigurasi tidak berlaku
 
 Codex membaca `config.toml` — pastikan format TOML valid (bukan JSON).
 

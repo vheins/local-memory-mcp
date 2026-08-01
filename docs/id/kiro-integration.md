@@ -44,26 +44,27 @@ Buat file `.kiro/settings/mcp.json` di root project kamu:
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "disabled": false
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"disabled": false
+		}
+	}
 }
 ```
 
 Atau jika sudah global install:
+
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "local-memory-mcp",
-      "args": [],
-      "disabled": false
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "local-memory-mcp",
+			"args": [],
+			"disabled": false
+		}
+	}
 }
 ```
 
@@ -73,13 +74,13 @@ Buat file `~/.kiro/settings/mcp.json`:
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "disabled": false
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"disabled": false
+		}
+	}
 }
 ```
 
@@ -117,27 +118,28 @@ Agar Kiro tidak meminta konfirmasi setiap kali agent memanggil tool memory, kamu
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "autoApprove": [
-        "memory-search",
-        "memory-detail",
-        "memory-recap",
-        "task-list",
-        "task-detail",
-        "standard-search",
-        "standard-detail"
-      ]
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"autoApprove": [
+				"memory-search",
+				"memory-detail",
+				"memory-recap",
+				"task-list",
+				"task-detail",
+				"standard-search",
+				"standard-detail"
+			]
+		}
+	}
 }
 ```
 
 Tool read-only aman untuk auto-approve. Tool write (`memory-store`, `task-update`, dll.) sebaiknya tetap minta konfirmasi.
 
 Untuk auto-approve semua tool (tidak direkomendasikan):
+
 ```json
 "autoApprove": ["*"]
 ```
@@ -150,13 +152,13 @@ Jika ada tool yang tidak ingin digunakan:
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "disabledTools": ["memory-delete", "task-delete"]
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"disabledTools": ["memory-delete", "task-delete"]
+		}
+	}
 }
 ```
 
@@ -168,30 +170,31 @@ Kamu bisa menambahkan environment variable untuk server:
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "env": {
-        "PORT": "3456"
-      }
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"env": {
+				"PORT": "3456"
+			}
+		}
+	}
 }
 ```
 
 Atau pakai variable expansion dari system:
+
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "env": {
-        "STORAGE_PATH": "${HOME}/my-custom-path/memory"
-      }
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"env": {
+				"STORAGE_PATH": "${HOME}/my-custom-path/memory"
+			}
+		}
+	}
 }
 ```
 
@@ -203,13 +206,13 @@ Untuk mematikan server tanpa menghapus konfigurasi:
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "disabled": true
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"disabled": true
+		}
+	}
 }
 ```
 
@@ -221,7 +224,7 @@ Untuk mematikan server tanpa menghapus konfigurasi:
 2. Buka **Kiro Panel**
 3. Cek apakah server `local-memory` muncul dengan status **running**
 4. Coba tanyakan ke agent Kiro:
-   > *"Apa yang kamu tahu tentang project ini?"*
+   > _"Apa yang kamu tahu tentang project ini?"_
 
 Jika agent merespon dengan daftar memori atau "Belum ada memori" (bukan error), koneksi berhasil.
 
@@ -245,12 +248,14 @@ Atau minta agent Kiro untuk menjalankannya — tapi dashboard akan berjalan di t
 ### Server tidak muncul di panel
 
 **Cek JSON syntax:**
+
 ```bash
 # Validasi JSON file
 cat .kiro/settings/mcp.json | python3 -m json.tool
 ```
 
 **Cek PATH:**
+
 ```bash
 which npx
 which local-memory-mcp   # jika global install
@@ -261,13 +266,15 @@ Pastikan command bisa dijalankan dari terminal.
 ### Server error / disconnect
 
 Coba jalankan langsung untuk lihat error:
+
 ```bash
 npx -y @vheins/local-memory-mcp
 ```
 
-### Perubahan konfigurasi tidak生效
+### Perubahan konfigurasi tidak berlaku
 
 Kiro auto-reconnect saat file disimpan. Jika tidak:
+
 1. Buka command palette
 2. Cari **"Kiro: Reload Window"**
 3. Atau restart Kiro
