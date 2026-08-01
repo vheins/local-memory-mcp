@@ -364,6 +364,50 @@ describe("CodebaseIndexService", () => {
 		expect(s.staleFiles).toBe(1);
 	});
 
+	it("checkStaleness: coarse-granularity fs — modified file with clamped mtime is still stale (checksum confirmation)", async () => {
+		touch(path.join(repoDir, "amb.ts"), "export const original = 1;\n");
+
+		await index();
+
+		const file = store.codebaseFiles.getFile("test-repo", "amb.ts");
+		const indexedMs = new Date(file!.last_indexed_at!).getTime();
+
+		// Content changes, but the mtime is clamped to just BEFORE
+		// last_indexed_at — exactly what a coarse-granularity fs (ext3 1s /
+		// FAT 2s) reports for a file modified shortly after indexing. The raw
+		// `mtime > indexedTime` comparison alone would classify it fresh
+		// (false-negative — TASK-055); the ambiguous-window checksum
+		// confirmation must still flag it stale.
+		fs.writeFileSync(path.join(repoDir, "amb.ts"), "export const changed = 2;\n", "utf-8");
+		const clamped = new Date(indexedMs - 100);
+		fs.utimesSync(path.join(repoDir, "amb.ts"), clamped, clamped);
+
+		const s = await service().checkStaleness("test-repo", repoDir);
+		expect(s.stale).toBe(true);
+		expect(s.staleFiles).toBe(1);
+	});
+
+	it("checkStaleness: ambiguous mtime with unchanged content is NOT stale (no fresh-index false positive)", async () => {
+		touch(path.join(repoDir, "fresh.ts"), "export const x = 1;\n");
+
+		await index();
+
+		const file = store.codebaseFiles.getFile("test-repo", "fresh.ts");
+		const indexedMs = new Date(file!.last_indexed_at!).getTime();
+
+		// Same content, mtime clamped inside the ambiguity window (mimics a
+		// coarse-granularity fs): the checksum confirmation must prove the
+		// file unchanged → not stale. Guards against the false-positive mode
+		// where a naive margin on the raw comparison flags a just-indexed
+		// repo as 100% stale (no checksum backstop there).
+		const clamped = new Date(indexedMs - 100);
+		fs.utimesSync(path.join(repoDir, "fresh.ts"), clamped, clamped);
+
+		const s = await service().checkStaleness("test-repo", repoDir);
+		expect(s.stale).toBe(false);
+		expect(s.staleFiles).toBe(0);
+	});
+
 	it("checkStaleness: respects 5 percent threshold for stale flag", async () => {
 		// Create 20 files — 5% = 1 file
 		for (let i = 0; i < 20; i++) {

@@ -19,8 +19,8 @@
 
 import { performance } from "node:perf_hooks";
 import path from "node:path";
-import { Parser, Language } from "web-tree-sitter";
-import type { ParseResult, ParsedSymbol, ParserPool } from "./language-visitor.js";
+import { Parser, Language, type Tree } from "web-tree-sitter";
+import type { ParseResult, ParserPool } from "./language-visitor.js";
 import {
 	type LanguageConfig,
 	getWasmPath,
@@ -241,43 +241,47 @@ export class TreeSitterParserPool implements ParserPool {
 			return { symbols: [], error: message, durationMs: 0 };
 		}
 
+		// The Parser instance is created OUTSIDE the try/finally guard — if
+		// `new Parser()` itself throws there is no resource to free yet. The
+		// guard starts immediately after creation so a synchronous throw from
+		// setLanguage (invalid grammar binding), parse (WASM OOM / timeout
+		// internals), or the visitor ALWAYS releases the WASM heap: tree (when
+		// produced) and parser are deleted in finally regardless of the throw
+		// point (TASK-053). _parseWithTimeout swallows errors into a graceful
+		// ParseResult, but the resources must still be freed or the WASM heap
+		// grows monotonically.
 		const parser = new Parser();
-		parser.setLanguage(language);
+		let tree: Tree | null = null;
+		try {
+			parser.setLanguage(language);
 
-		const parseStart = Date.now();
-		const tree = parser.parse(sourceCode, null, {
-			progressCallback: (): boolean => {
-				return Date.now() - parseStart > this.parseTimeoutMs;
+			const parseStart = Date.now();
+			tree = parser.parse(sourceCode, null, {
+				progressCallback: (): boolean => {
+					return Date.now() - parseStart > this.parseTimeoutMs;
+				}
+			});
+			if (!tree) {
+				return {
+					symbols: [],
+					error: "Parse timeout or parser returned null tree",
+					durationMs: 0
+				};
 			}
-		});
-		if (!tree) {
-			parser.delete();
+
+			const hasErrors = tree.rootNode.hasError;
+
+			const visitor = config.createVisitor();
+			const symbols = visitor.extractSymbols(tree, sourceCode);
+
 			return {
-				symbols: [],
-				error: "Parse timeout or parser returned null tree",
+				symbols,
+				error: hasErrors ? "Parse errors detected (partial results returned)" : null,
 				durationMs: 0
 			};
-		}
-
-		const hasErrors = tree.rootNode.hasError;
-
-		const visitor = config.createVisitor();
-		let symbols: ParsedSymbol[];
-		try {
-			symbols = visitor.extractSymbols(tree, sourceCode);
 		} finally {
-			// Always free the WASM resources (Fix #4) — even when the visitor
-			// throws (e.g. deep-recursion RangeError). _parseWithTimeout
-			// swallows the error into a graceful ParseResult, but the tree/
-			// parser must be deleted or the WASM heap grows monotonically.
-			tree.delete();
+			tree?.delete();
 			parser.delete();
 		}
-
-		return {
-			symbols,
-			error: hasErrors ? "Parse errors detected (partial results returned)" : null,
-			durationMs: 0
-		};
 	}
 }

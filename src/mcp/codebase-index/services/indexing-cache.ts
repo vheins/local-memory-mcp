@@ -180,6 +180,24 @@ interface StalenessCacheEntry {
 const stalenessCache = new Map<string, StalenessCacheEntry>();
 
 /**
+ * Width (ms) of the mtime ambiguity window for per-file staleness checks.
+ *
+ * Filesystem mtime granularity is coarser than the ms-precision
+ * last_indexed_at on many platforms (ext3 = 1s, FAT = 2s, tmpfs/NFS ≈ ms).
+ * When a file's mtime falls inside [indexedTime − W, indexedTime + W] the
+ * stat alone cannot distinguish "modified just before the index was built"
+ * from "modified just after it" — a coarse fs can report an mtime ≤
+ * last_indexed_at for a file actually changed AFTER the index, which the raw
+ * `stat.mtimeMs > indexedTime` comparison would miss (false-negative: repo
+ * reported fresh, stale symbols kept). Files inside the window are therefore
+ * confirmed against the stored SHA-256 checksum (read + hash); files outside
+ * keep the cheap stat-only comparison. 2000ms covers the coarsest common
+ * granularity (FAT = 2s) plus small clock skew between the stat clock and
+ * the DB write clock.
+ */
+const STALENESS_AMBIGUITY_WINDOW_MS = 2000;
+
+/**
  * Invalidate cached staleness results — all repos, or a single repo.
  * Called after an index run completes so index_status reflects fresh data
  * immediately instead of waiting out the TTL.
@@ -204,11 +222,59 @@ export function getLastIndexedAt(db: SQLiteStore, repo: string): string | null {
 }
 
 /**
+ * Decide whether a single indexed file is stale on disk.
+ *
+ * Outside the ambiguity window (see STALENESS_AMBIGUITY_WINDOW_MS) the raw
+ * stat comparison is trustworthy: mtime newer than last_indexed_at ⇒ the
+ * file changed after it was indexed. Inside the window — where a coarse-
+ * granularity fs could hide a post-index modification behind an mtime ≤
+ * last_indexed_at — the stat is confirmed by content: the file is read and
+ * hashed with the same SHA-256 used at index time, and is stale iff the
+ * checksum differs from the stored one. This is bounded to the window only;
+ * steady-state freshness checks never pay the read cost. A file that no
+ * longer exists, or one whose content cannot be read inside the window, is
+ * treated as stale (conservative — never hides a real change).
+ */
+async function isFileStale(f: CodebaseFile, fullPath: string): Promise<boolean> {
+	const indexedTime = f.last_indexed_at ? new Date(f.last_indexed_at).getTime() : 0;
+
+	try {
+		const stat = await fs.promises.stat(fullPath);
+
+		// No reliable indexed-time basis or no stored checksum (legacy row):
+		// fall back to the raw comparison — nothing to confirm against.
+		if (indexedTime === 0 || f.checksum === null) {
+			return stat.mtimeMs > indexedTime;
+		}
+
+		// Ambiguous window: stat cannot distinguish pre-index vs post-index
+		// modification (coarse-granularity fs) — confirm by content.
+		if (Math.abs(stat.mtimeMs - indexedTime) <= STALENESS_AMBIGUITY_WINDOW_MS) {
+			try {
+				const content = await fs.promises.readFile(fullPath, "utf-8");
+				return computeChecksum(content) !== f.checksum;
+			} catch {
+				// Read failed — cannot confirm; treat as stale (conservative).
+				return true;
+			}
+		}
+
+		// Outside the window: raw mtime comparison is trustworthy.
+		return stat.mtimeMs > indexedTime;
+	} catch {
+		// File no longer exists on disk → stale
+		return true;
+	}
+}
+
+/**
  * Check whether a repo's index is stale by comparing file mtimes against
  * their last_indexed_at timestamps.
  *
  * A file is considered stale if:
  *   - Its mtime is newer than its last_indexed_at, OR
+ *   - Its mtime falls inside the ambiguity window AND its content checksum
+ *     differs from the stored one (coarse-granularity fs confirmation), OR
  *   - The file no longer exists on disk (was deleted)
  *
  * The repo is marked stale only if >= 5% of indexed files have changed.
@@ -274,16 +340,8 @@ export async function checkRepoStaleness(
 		const chunk = existingFiles.slice(i, i + STAT_CONCURRENCY);
 		const outcomes = await Promise.all(
 			chunk.map(async (f) => {
-				const indexedTime = f.last_indexed_at ? new Date(f.last_indexed_at).getTime() : 0;
 				const fullPath = path.join(resolvedPath, f.file_path);
-				try {
-					const stat = await fs.promises.stat(fullPath);
-					// File mtime newer than when it was last indexed → stale
-					return stat.mtimeMs > indexedTime;
-				} catch {
-					// File no longer exists on disk → stale
-					return true;
-				}
+				return isFileStale(f, fullPath);
 			})
 		);
 		for (const stale of outcomes) {
