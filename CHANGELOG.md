@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.3] — 2026-08-01
+
+### Fixed
+
+- **ensureRelation now transactional (TASK-072)**: The 2 endpoint upserts + relation insert in `ensureRelation` are wrapped in a `BEGIN IMMEDIATE` transaction — closing the residual FK window where a concurrent orphan-sweep from a second process could delete an endpoint between upsert and insert, and with it the last remaining path behind the reported "Failed to save depends_on relation" on multi-process setups. Behavior otherwise identical (all `INSERT OR IGNORE`, idempotent; nested-transaction safe via better-sqlite3 savepoints).
+- **Embedding queue backpressure (TASK-069)**: Backfill is now gated on queue depth — skipped when `pending + claimed >= EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE` (default 500, env-overridable) so a deep queue is no longer double-refilled at every restart, and the backfill inserts ONLY rows absent from `queue_jobs` (`INSERT ... ON CONFLICT DO NOTHING`) so live rows keep their `attempts`/`backoff_until` — FK-poisoned jobs now respect exponential backoff to poison instead of retrying immediately. The worker's drain cadence is size-driven: after `EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK` (default 5) consecutive non-empty batches it backs off to `pollIntervalMs`, and the maintenance log now includes queue depth (pending/claimed/done/poison/total).
+
+### Performance
+
+- **KG graph payload bounded server-side (TASK-070)**: `listGraphEdges` returns top-N edges by endpoint degree (capped at `KG_MAX_GRAPH_EDGES`, default 4000, env-overridable) via a degree CTE instead of a 3-way join + sort over ALL relations, and `listRelationsForGraph` filters edges to those whose both endpoints are in the selected node subset (empty subset → `[]`) — the dashboard payload now scales with the node cap, not total edge count. `/api/kg/graph` adds a `truncated` flag when edges are clipped; migration v12 adds the composite index `idx_relations_repo_from_to` on `relations(repo, from_entity, to_entity)` to serve the filtered joins.
+- **queue_jobs index + shorter done retention (TASK-071)**: Migration v11 adds `idx_queue_jobs_status_updated` on `queue_jobs(status, updated_at)` covering the `countByStatus` GROUP BY and the purge DELETE on `(status, updated_at)` — no more full scans; done-row retention shortened 24h → 6h (`EMBEDDING_QUEUE_DONE_TTL_MS`), poison rows stay at 7d.
+
+### Tests
+
+- **TASK-069**: 2 new backpressure regression tests (deep-queue gate prevents double-refill; backfill preserves live backoff and inserts absent rows only) — embedding-queue 10/10.
+- **TASK-070**: 5 new graph-cap tests (degree top-N cap, below-cap passthrough, node-subset filter, empty subset, legacy behavior) — kg-archivist 49/49; controllers.integration 26/26 (graph endpoints return 200 with `edges` + `truncated` field).
+- **Verification**: `tsc --noEmit` and eslint clean across all four fixes; full suite green.
+
 ## [0.31.2] — 2026-08-01
 
 ### Fixed
