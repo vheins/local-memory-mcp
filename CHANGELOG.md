@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.1] — 2026-08-01
+
+### Fixed
+
+- **Incremental reindex — parse only changed files**: `createIndexPlan` now emits `action: "skip"` for files whose mtime falls inside the pre-filter window, and every parse candidate must pass an SHA-256 checksum confirmation before the parser is invoked. An unchanged repository run now parses ZERO files instead of re-parsing the whole tree.
+- **mtime ambiguity false-skip (FIX-15)**: The mtime pre-filter now uses a 2000ms ambiguity margin (`MTIME_AMBIGUITY_MARGIN_MS`) to cover coarse-granularity filesystems (ext3 1s, FAT 2s); ambiguous mtimes fall through to read + checksum instead of being skipped, so a quick edit no longer leaves stale symbols.
+- **Staleness checksum confirmation**: `checkStaleness` confirms ambiguous mtimes with a checksum inside the window instead of trusting mtime alone (TASK-055).
+- **WASM resource leak**: `try/finally` now guarantees `tree.delete()`/`parser.delete()` run even when `extractSymbols` throws, hoisted to parser creation (TASK-053).
+- **Grammar load dedup**: Concurrent `Language.load` calls for the same grammar are deduplicated via an in-flight map, eliminating redundant WASM initializations.
+- **Crash containment at startup**: `server.ts` registers `unhandledRejection`/`uncaughtException` handlers; a failure before `serverStarted` flips true exits with code 1 instead of hanging on a half-initialized process (TASK-051).
+
+### Performance
+
+- **Incremental parse pipeline**: The 3-phase batch loop (read + checksum without parse → checksum-skip and rename detection → parse only changed/new candidates) keeps unchanged repositories at zero parse work while steady-state re-indexes touch only what actually changed.
+- **Bounded memory**: File and symbol inserts are flushed per batch via `writeParseBatch`, with the batch capped to the parser semaphore concurrency — the repository is no longer accumulated in memory before write.
+
+### Refactored
+
+- **parse-pipeline.ts extraction**: The 3-phase parse loop moved out of `indexing-repository.ts` into a dedicated `parse-pipeline.ts` module (`runParsePipeline`); `indexing-repository.ts` dropped from 599 to 323 lines and is now a thin orchestrator (discover → compare → skip-count → pipeline → renames → stale cleanup).
+
+### Tests
+
+- **New coverage**: Grammar in-flight dedup and startup `exit(1)` on pre-start failure (TASK-054), plus staleness ambiguity-window checksum confirmation. Full suite green: 853 tests.
+
 ## [0.31.0] — 2026-08-01
 
 ### Added
