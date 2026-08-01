@@ -16,7 +16,7 @@ The Codebase Index provides **2 MCP tools** for indexing and querying source cod
 
 Unified write + status tool. Mode auto-inferred from parameters per ADR-005:
 
-- **`repoPath` + `repo` → INDEX** — scans the repository directory, discovers source files, parses with tree-sitter, and stores extracted symbols in the SQLite database. Supports incremental indexing via SHA-256 checksum comparison.
+- **`repoPath` + `repo` → INDEX** — scans the repository directory, discovers source files, parses with tree-sitter, and stores extracted symbols in the SQLite database. Supports incremental indexing: an mtime pre-filter (2000ms ambiguity margin) skips unchanged files **without reading them**, and ambiguous/new files are confirmed against their stored SHA-256 checksum before parsing.
 - **`repo` only → STATUS** — returns the current indexing status for a repository (is it indexed? when? how many files/symbols? stale?).
 
 ### 1.2 Input Schema
@@ -295,28 +295,28 @@ Results are further refined by **vector similarity blending** within each tier (
 
 ---
 
-## Known Limitations (Phase 1.0)
+## Known Limitations
 
-| Limitation                          | Detail                                                                                                                                       | Planned For |
-| :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- | :---------- |
-| **Name-based reference resolution** | Symbol tracing and relation detection are name-matched only. No type-graph or semantic resolution.                                           | Phase 1.1   |
-| **Single language parsing**         | Only TypeScript, JavaScript, TSX, and JSX are supported. Other languages require grammar WASM loading and visitor implementation.            | Phase 2.0   |
-| **No relation storage**             | The `codebase_relations` table is defined in ADR-002 but not yet created. Call graphs, import graphs, and inheritance chains are not stored. | Phase 1.1   |
-| **Explicit indexing required**      | No auto-index on start or file watching. Agents must call `codebase-index` explicitly.                                                       | Phase 1.1   |
-| **No progress reporting**           | `index_status.progress` returns `null`. During long indexing operations, no granular progress is available.                                  | Phase 1.2   |
-| **Database growth**                 | Indexing large projects may add up to ~150MB to `memory.db`. WAL mode prevents write contention.                                             | N/A         |
+| Limitation                             | Detail                                                                                                                                                                                                                                                                             | Planned For |
+| :------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------- |
+| **Name-based reference resolution**    | Symbol tracing and relation detection are name-matched only. No type-graph or semantic resolution.                                                                                                                                                                                 | Phase 1.1   |
+| **Multi-language parsing**             | 14 languages supported via tree-sitter grammars (13 visitor classes; TypeScript/TSX share one) — TypeScript/TSX, JavaScript/JSX, Vue, Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, C++. Markdown and a generic text visitor cover the rest.                          | N/A         |
+| **No relation storage**                | The `codebase_relations` table is defined in ADR-002 but not yet created. Call graphs, import graphs, and inheritance chains are not stored.                                                                                                                                       | Phase 1.1   |
+| **No file watching**                   | No file watcher; freshness comes from incremental re-indexes. Indexing is triggered by the `codebase-index` tool (INDEX), the CLI `--index` flag, or the startup auto-index (`autoIndexIfStale` — on by default via `CODEBASE_AUTO_INDEX`, 24h TTL via `CODEBASE_AUTO_INDEX_TTL`). | N/A         |
+| **Progress is emitted, not persisted** | The pipeline emits per-batch progress through the `onProgress` callback (parsing/storing/cleaning stages). `index_status.progress` remains `null` — progress is not stored or surfaced through the STATUS tool.                                                                    | N/A         |
+| **Database growth**                    | Indexing large projects adds to `memory.db` (~10-50MB per 10K files). WAL mode prevents write contention.                                                                                                                                                                          | N/A         |
 
 ---
 
 ## Performance Characteristics
 
-| Tool             | Operation    | Query Complexity                | Index Strategy                                                |
-| :--------------- | :----------- | :------------------------------ | :------------------------------------------------------------ |
-| `codebase-index` | INDEX        | O(n) per file; O(1) per skipped | Checksum comparison; tree-sitter WASM per file (10s timeout). |
-| `codebase-index` | STATUS       | 3 COUNT queries                 | `idx_codebase_files_repo_path`, `idx_cs_repo_name`.           |
-| `codebase-read`  | ARCHITECTURE | 2-3 queries + tree construction | All symbols counted via `GROUP BY`.                           |
-| `codebase-read`  | FILE         | 2 SELECT queries                | `idx_codebase_files_repo_path`, `idx_cs_repo_file`.           |
-| `codebase-read`  | SEARCH       | FTS5 + LIKE + in-memory ranking | FTS5 virtual table; indexes on `name`, `kind`, `file_path`.   |
-| `codebase-read`  | TRACE        | 1-2 full scans (in-memory)      | No DB-level index needed; operates on fetched symbol array.   |
+| Tool             | Operation    | Query Complexity                | Index Strategy                                                                                                    |
+| :--------------- | :----------- | :------------------------------ | :---------------------------------------------------------------------------------------------------------------- |
+| `codebase-index` | INDEX        | O(n) per file; O(1) per skipped | mtime pre-filter (2000ms margin) + checksum confirmation; tree-sitter WASM per file (10s timeout, 10MB file cap). |
+| `codebase-index` | STATUS       | 3 COUNT queries                 | `idx_codebase_files_repo_path`, `idx_cs_repo_name`.                                                               |
+| `codebase-read`  | ARCHITECTURE | 2-3 queries + tree construction | All symbols counted via `GROUP BY`.                                                                               |
+| `codebase-read`  | FILE         | 2 SELECT queries                | `idx_codebase_files_repo_path`, `idx_cs_repo_file`.                                                               |
+| `codebase-read`  | SEARCH       | FTS5 + LIKE + in-memory ranking | FTS5 virtual table; indexes on `name`, `kind`, `file_path`.                                                       |
+| `codebase-read`  | TRACE        | 1-2 full scans (in-memory)      | No DB-level index needed; operates on fetched symbol array.                                                       |
 
 All read operations run without blocking writes (WAL mode). For projects up to 20,000 files, typical query times are <100ms for read operations.

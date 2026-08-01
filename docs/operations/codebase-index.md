@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Codebase Index subsystem discovers source files, parses them with tree-sitter WASM, and stores extracted symbols in SQLite. It supports TypeScript, JavaScript (ES6/JSX), and is designed for multi-language extensibility.
+The Codebase Index subsystem discovers source files, parses them with tree-sitter WASM, and stores extracted symbols in SQLite. It supports 14 languages via tree-sitter grammars — TypeScript/TSX, JavaScript/JSX, Vue, Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, and C++ — plus Markdown and a generic text fallback for every other extension.
 
 All codebase data lives in the same `memory.db` database as other application data. See [Backup & Recovery](#6-backup--recovery) for details.
 
@@ -18,48 +18,51 @@ All codebase data lives in the same `memory.db` database as other application da
 
 ### Benchmarks
 
-| Workload                         | Observed | Target  | Notes                                                           |
-| :------------------------------- | :------- | :------ | :-------------------------------------------------------------- |
-| **First-time index (1K files)**  | ~1.4s    | <10s    | Synthetic benchmark with mock parser (isolated pipeline).       |
-| **First-time index (10K files)** | ~30-60s  | <60s    | End-to-end: discover → parse → store → clean.                   |
-| **Incremental re-index**         | ~1-5s    | <10s    | Only changed files are re-parsed (SHA-256 checksum comparison). |
-| **Query response (read tools)**  | <100ms   | <200ms  | For projects up to 20K files.                                   |
-| **`search_symbols`**             | <100ms   | <200ms  | FTS5-backed with LIKE fallback.                                 |
-| **`get_architecture`**           | <200ms   | <500ms  | Symbol aggregation via GROUP BY.                                |
-| **Peak RSS (10K files)**         | ~160 MB  | <500 MB | See memory budget below.                                        |
+| Workload                                | Observed | Target | Notes                                                                                                                                         |
+| :-------------------------------------- | :------- | :----- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| **First-time index (1K files)**         | ~1.4s    | <10s   | Historical v0.20 synthetic benchmark with a mock parser (isolated pipeline) — no longer claimed.                                              |
+| **First-time index (10K files)**        | ~30-60s  | <60s   | End-to-end: discover → compare → parse → store → clean.                                                                                       |
+| **Incremental re-index**                | ~1-5s    | <10s   | Only changed files are parsed; an unchanged repo parses 0 files (mtime pre-filter skips without read; checksum confirms ambiguous/new files). |
+| **Query response (read tools)**         | <100ms   | <200ms | For projects up to 20K files.                                                                                                                 |
+| **`codebase-read` SEARCH**              | <100ms   | <200ms | FTS5-backed with LIKE fallback.                                                                                                               |
+| **`codebase-read` ARCHITECTURE**        | <200ms   | <500ms | Symbol aggregation via GROUP BY.                                                                                                              |
+| **Incremental re-index (steady state)** | 0 parses | —      | Unchanged files skipped by the mtime pre-filter — no file buffers loaded.                                                                     |
 
 ### Pipeline Throughput
 
-| Phase    | Typical Time (10K files) | Scaling Factor                      |
-| :------- | :----------------------- | :---------------------------------- |
-| DISCOVER | ~2-5s                    | O(n) filesystem walk                |
-| COMPARE  | ~1-3s                    | O(n) DB checksum lookups            |
-| PARSE    | ~20-40s                  | O(n) per file; 4 concurrent parsers |
-| STORE    | ~5-10s                   | O(n) bulk inserts in batches of 100 |
-| CLEAN    | ~0.5-1s                  | O(n) stale record deletion          |
+| Phase    | Typical Time (10K files) | Scaling Factor                                                                              |
+| :------- | :----------------------- | :------------------------------------------------------------------------------------------ |
+| DISCOVER | ~2-5s                    | O(n) filesystem walk                                                                        |
+| COMPARE  | ~0.5-2s                  | O(n) mtime comparisons (no reads); checksum confirmation only for mtime-ambiguous/new files |
+| PARSE    | ~varies                  | Parse only changed/new files; batch = parser concurrency (4 default)                        |
+| STORE    | ~5-10s                   | Per-batch flush via `writeParseBatch` (DEFAULT_BATCH_SIZE = 100 rows/transaction)           |
+| CLEAN    | ~0.5-1s                  | O(n) stale record deletion                                                                  |
 
 ### Key Constants
 
-| Constant                   | Value            | File                           | Role                            |
-| :------------------------- | :--------------- | :----------------------------- | :------------------------------ |
-| `DEFAULT_PARSE_TIMEOUT_MS` | 10,000 (10s)     | `parser/parser-pool.ts`        | Max time per file parse         |
-| `DEFAULT_CONCURRENCY`      | 4                | `parser/parser-pool.ts`        | Concurrent WASM parser slots    |
-| `DEFAULT_BATCH_SIZE`       | 100              | `services/indexing-service.ts` | Rows per DB transaction         |
-| `CONCURRENT_PARSE_BATCH`   | 20               | `services/indexing-service.ts` | Files per Promise.all window    |
-| `AUTO_INDEX_TTL`           | 86,400,000 (24h) | `services/indexing-service.ts` | Stale index refresh interval    |
-| `DB_RETRY_DELAY_MS`        | 100              | `services/indexing-service.ts` | Retry delay on DB write failure |
-| `STALE_THRESHOLD`          | 0.05 (5%)        | `services/indexing-service.ts` | Auto-index staleness ratio      |
+| Constant                        | Value                                            | File                           | Role                                                            |
+| :------------------------------ | :----------------------------------------------- | :----------------------------- | :-------------------------------------------------------------- |
+| `DEFAULT_PARSE_TIMEOUT_MS`      | 10,000 (10s)                                     | `parser/worker-pool.ts`        | Max time per file parse                                         |
+| `DEFAULT_CONCURRENCY`           | 4                                                | `parser/worker-pool.ts`        | Concurrent WASM parser slots                                    |
+| `CONCURRENT_PARSE_BATCH`        | 4 (default; `Math.max(1, resolveConcurrency())`) | `services/parse-pipeline.ts`   | Files per parse batch (bounded by parser concurrency)           |
+| `DEFAULT_BATCH_SIZE`            | 100 (env `DEFAULT_BATCH_SIZE`)                   | `utils/constants.ts`           | Rows per DB transaction                                         |
+| `MAX_FILE_SIZE_BYTES`           | 10,485,760 (10MB)                                | `services/parse-pipeline.ts`   | Files larger than this are rejected before parse                |
+| `MTIME_AMBIGUITY_MARGIN_MS`     | 2,000                                            | `services/indexing-planner.ts` | mtime pre-filter margin (planner)                               |
+| `STALENESS_AMBIGUITY_WINDOW_MS` | 2,000                                            | `services/indexing-cache.ts`   | Staleness ambiguity window (checksum confirmation)              |
+| `STAT_CONCURRENCY`              | 32                                               | `services/indexing-cache.ts`   | Async stat chunk size in staleness checks                       |
+| `CODEBASE_AUTO_INDEX_TTL`       | 86,400,000 (24h, inline)                         | `services/indexing-service.ts` | Stale-index refresh interval (auto-index)                       |
+| `retryDbWrite`                  | 3 retries, 1s/2s/4s backoff                      | `services/indexing-cache.ts`   | Lock-error DB write retry (non-lock errors: single 100ms retry) |
+| `staleRatio` threshold          | 0.05 (5%)                                        | `services/indexing-cache.ts`   | Repo marked stale only if ≥5% of files changed                  |
 
-### Memory Budget (approximate, ~10K files)
+### Memory Budget
 
-| Component                               | Size        |
-| :-------------------------------------- | :---------- |
-| File path strings                       | ~2 MB       |
-| File content buffers (concurrent batch) | ~20 MB      |
-| WASM parser heap (4 instances)          | ~80 MB      |
-| SQLite page cache                       | ~50 MB      |
-| Symbol inserts (buffered)               | ~10 MB      |
-| **Total peak**                          | **~160 MB** |
+Memory usage is bounded by the parse batch — it scales with concurrency and the per-file size cap, **not** with repository size:
+
+| Component                    | Bound                                                                                                 |
+| :--------------------------- | :---------------------------------------------------------------------------------------------------- |
+| In-flight file buffers       | ≤ `CONCURRENT_PARSE_BATCH` (4 default) × ≤ `MAX_FILE_SIZE_BYTES` (10MB) — ~40MB worst case per batch  |
+| DB inserts (files + symbols) | Flushed after every parse batch via `writeParseBatch` — the whole repo is never accumulated in memory |
+| WASM parser heap             | One `Parser` per concurrent slot; grammar-dependent, independent of repository size                   |
 
 ---
 
@@ -73,6 +76,8 @@ All codebase data lives in the same `memory.db` database as other application da
 | `CODEBASE_AUTO_INDEX_TTL`          | `number` | `86400000` (24h)                   | Time-to-live in milliseconds for fresh-index detection. If the last index was more than this many ms ago, the index is considered stale and a re-index is triggered. |
 | `CODEBASE_INDEX_PARSE_CONCURRENCY` | `number` | `4`                                | Number of concurrent tree-sitter WASM parser slots. Increase for faster indexing on high-CPU machines; decrease to reduce memory pressure.                           |
 | `CODEBASE_INDEX_PARSE_TIMEOUT_MS`  | `number` | `10000` (10s)                      | Maximum wall-clock time in milliseconds per single file parse. Files exceeding this are marked as failed and the pipeline continues.                                 |
+| `DEFAULT_BATCH_SIZE`               | `number` | `100`                              | Rows per DB transaction batch (file/symbol writes). Raise for fewer transaction commits; lower to reduce write-batch memory.                                         |
+| `INDEX_STALENESS_TTL_MS`           | `number` | `30000` (30s)                      | Cache TTL for user-facing `index_status` staleness results (reduces repeated filesystem stats). Set `0` to disable caching.                                          |
 
 **Override priority** (applies to all vars): explicit `options` parameter > environment variable > hardcoded default.
 
@@ -172,19 +177,18 @@ This trigger-based approach ensures the FTS index is never stale, without requir
 
 ### Initialization
 
-The tree-sitter WASM runtime and language grammars are loaded lazily — on the first `parseFile` call, not at import time:
+The tree-sitter WASM runtime and language grammars are loaded lazily — on the first `parseFile` call for each language, not at import time:
 
 1. **WASM runtime** — `web-tree-sitter.wasm` loaded via `Parser.init()`
-2. **TypeScript grammar** — `tree-sitter-typescript.wasm` loaded via `Language.load()`
-3. **TSX grammar** — `tree-sitter-tsx.wasm` loaded via `Language.load()`
+2. **Language grammars** — loaded per language on first use (e.g., `tree-sitter-typescript.wasm` + `tree-sitter-tsx.wasm`, `tree-sitter-go.wasm`, `tree-sitter-python.wasm`, …)
 
-A `this.initPromise` guard prevents duplicate initialization attempts from concurrent calls.
+A `this.initPromise` guard prevents duplicate initialization attempts from concurrent calls, and concurrent `Language.load` calls for the same grammar are deduplicated via an in-flight grammar map.
 
-**WASM file resolution** (searched upward from module location):
+**WASM file resolution** (bundled `dist/grammars/` is searched first, then `node_modules/`):
 
-- `node_modules/web-tree-sitter/web-tree-sitter.wasm`
-- `node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm`
-- `node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm`
+- `dist/grammars/web-tree-sitter/web-tree-sitter.wasm` or `node_modules/web-tree-sitter/web-tree-sitter.wasm`
+- `dist/grammars/tree-sitter-typescript/tree-sitter-typescript.wasm` or `node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm`
+- `dist/grammars/tree-sitter-typescript/tree-sitter-tsx.wasm` or `node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm`
 
 ### Per-File Parse
 
@@ -198,12 +202,13 @@ Each parse has a configurable timeout (default 10s, via `CODEBASE_INDEX_PARSE_TI
 
 ### Error Classification
 
-| Error Type                 | Class              | Impact                                         |
-| :------------------------- | :----------------- | :--------------------------------------------- |
-| WASM init failure          | `FatalError`       | Pipeline aborts; infractructure-level failure. |
-| Per-file parse timeout     | `RecoverableError` | File skipped; pipeline continues.              |
-| Per-file permission denied | `RecoverableError` | File skipped; pipeline continues.              |
-| DB write failure           | `FatalError`       | Pipeline aborts (with one automatic retry).    |
+| Error Type                 | Class              | Impact                                                                                                                                        |
+| :------------------------- | :----------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| WASM init failure          | `FatalError`       | Pipeline aborts; infrastructure-level failure.                                                                                                |
+| Per-file parse timeout     | `RecoverableError` | File skipped; pipeline continues.                                                                                                             |
+| Per-file permission denied | `RecoverableError` | File skipped; pipeline continues.                                                                                                             |
+| File > 10MB                | `RecoverableError` | Rejected before parse (`MAX_FILE_SIZE_BYTES`); pipeline continues.                                                                            |
+| DB write failure           | `RecoverableError` | Retried with backoff (`retryDbWrite`: lock errors 3× 1s/2s/4s, others 1× 100ms); counted in `errorSummary.dbWriteErrors`; pipeline continues. |
 
 ---
 
@@ -245,13 +250,15 @@ If the issue persists, check `stderr` for detailed error messages from tree-sitt
    { "includeGlobs": ["src/**/*.ts", "src/**/*.tsx"] }
    ```
 3. **Increase batch size** — Set `DEFAULT_BATCH_SIZE` to 200 for fewer transaction commits (trade-off: higher memory during write).
-4. **Extend parse timeout** — For very large files (e.g., generated code), increase `CODEBASE_INDEX_PARSE_TIMEOUT_MS=30000`.
+4. **Extend parse timeout** — For large generated files (within the 10MB cap), increase `CODEBASE_INDEX_PARSE_TIMEOUT_MS=30000`.
+
+> **File size cap:** files larger than 10MB (`MAX_FILE_SIZE_BYTES`) are rejected outright in the read phase — increasing the parse timeout does **not** allow them through.
 
 **Memory constraints:**
 
-- WASM parser heap: ~20MB per concurrent slot (4 slots = ~80MB)
-- File content buffers: ~2MB per file at 20 files/batch = ~40MB
-- Total peak: ~160MB for 10K files, ~400-500MB for 50K files
+- WASM parser heap: one `Parser` per concurrent slot (grammar-dependent; independent of repository size)
+- File content buffers: at most `CONCURRENT_PARSE_BATCH` (4 default) × `MAX_FILE_SIZE_BYTES` (10MB) in flight, flushed after every batch
+- Memory is bounded by the parse batch, not the repository size (see [Memory Budget](#memory-budget) above)
 - If memory is constrained (e.g., CI, low-resource VPS), set concurrency to 2 or 1.
 
 ### Database Growth
@@ -280,28 +287,28 @@ The FTS5 virtual table adds approximately 1-2x the raw symbol data size.
 **Minimum requirements:**
 
 - Database storage: 500 MB free for typical workloads
-- WASM files: ~15 MB (web-tree-sitter + 2 grammars)
-- Temporary index batch buffers: ~50 MB
+- WASM files: web-tree-sitter runtime + a grammar WASM per supported language (loaded from `dist/grammars/` or `node_modules/`)
+- Temporary index batch buffers: bounded to the parse batch (≤4 × 10MB in-flight)
 
 For production deployments, ensure at least 1 GB free to accommodate growth and WAL files.
 
 ### Concurrent Indexing Conflicts
 
-**Symptom:** `IndexInProgressError` when calling `index_repository`.
+**Symptom:** `IndexInProgressError` when calling `codebase-index` (INDEX mode).
 
 **Cause:** A per-repo in-memory `Set` prevents concurrent indexing of the same repository. This is intentional — running two index operations on the same repo would produce inconsistent results.
 
-**Resolution:** Wait for the in-progress index to complete (check via `index_status`) before retrying.
+**Resolution:** Wait for the in-progress index to complete (check via `codebase-index` STATUS mode) before retrying.
 
 ### Stale Index
 
-**Symptom:** `search_symbols` or `get_file_symbols` returns outdated results.
+**Symptom:** `codebase-read` (SEARCH or FILE mode) returns outdated results.
 
 **Assessment:**
 
-- Check `index_status` for the repository — `lastIndexedAt` shows when the index was last refreshed.
-- Run `index_repository` to trigger an incremental update (only changed files are re-parsed).
-- To force a full re-index: call `index_repository` with `force: true`.
+- Check `codebase-index` STATUS mode for the repository — `lastIndexedAt` shows when the index was last refreshed.
+- Run `codebase-index` (INDEX mode) to trigger an incremental update (only changed files are re-parsed).
+- To force a full re-index: call `codebase-index` with `force: true`.
 
 ### Auto-Index Not Triggering
 
@@ -315,7 +322,7 @@ For production deployments, ensure at least 1 GB free to accommodate growth and 
 
 ### Query Performance Degradation
 
-**Symptom:** `search_symbols` queries become slow (>1s) on large indexes.
+**Symptom:** `codebase-read` SEARCH queries become slow (>1s) on large indexes.
 
 **Causes and fixes:**
 
@@ -375,7 +382,7 @@ sqlite3 ~/.config/local-memory-mcp/memory.db ".backup ~/backups/memory-$(date +%
 # Replace with backup
 cp ~/backups/memory-20260722.db ~/.config/local-memory-mcp/memory.db
 # Restart the server
-# Run index_repository to ensure index integrity
+# Run codebase-index (INDEX mode) to ensure index integrity
 ```
 
 > **Note:** Restoring `memory.db` restores all entities (memories, tasks, standards, handoffs, and codebase data). There is no separate backup granularity for codebase tables — they share the same SQLite database.

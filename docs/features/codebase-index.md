@@ -13,7 +13,7 @@ Codebase Index is a source code analysis pipeline integrated into the MCP server
 1. **Discovers** source files in a repository directory
 2. **Parses** them using tree-sitter (WASM) to extract structural symbols
 3. **Stores** the results in SQLite tables alongside existing memory data
-4. **Queries** them through 6 MCP tools that agents can call at any time
+4. **Queries** them through 2 unified MCP tools (`codebase-index`, `codebase-read`) that agents can call at any time
 
 The result is a searchable, structured view of your codebase that persists across sessions and updates incrementally.
 
@@ -38,15 +38,15 @@ Custom include/exclude glob patterns can be provided per indexing run.
 
 ### Phase 2: COMPARE
 
-For each discovered file, the system checks whether it already exists in the database and whether its stored SHA-256 checksum matches the current file content. Files with matching checksums are skipped — this is the incremental indexing mechanism.
+For each discovered file, the system compares its mtime against the stored `last_indexed_at`. Files whose mtime is more than 2000ms (`MTIME_AMBIGUITY_MARGIN_MS`) before their last index are skipped **without being read** — this mtime pre-filter is the incremental indexing mechanism. The 2000ms margin covers coarse filesystem timestamp granularity (ext3 = 1s, FAT = 2s). Files that are new, or whose mtime falls inside the ambiguity window, are **not** skipped here — they fall through to read + checksum confirmation in the parse phase, so a quick edit is never falsely skipped.
 
 ### Phase 3: PARSE
 
-Each changed or new file is:
+Changed/new candidates run through a 3-phase batch loop (`runParsePipeline`), with each batch capped at the parser concurrency (`CONCURRENT_PARSE_BATCH`, 4 by default):
 
-1. Read from disk and its SHA-256 checksum computed (~1-2ms per file)
-2. Parsed with tree-sitter WASM to produce an AST (10-50ms per file)
-3. Traversed by a language-specific visitor to extract:
+1. **Read + checksum** — file content is read and its SHA-256 checksum computed, **without parsing**. Files larger than 10MB (`MAX_FILE_SIZE_BYTES`) are rejected here and marked as failed — there is no timeout fallback for oversized files.
+2. **Sequential decision** — touch-only files (checksum unchanged) are skipped, renames are detected by matching checksums against now-stale paths, and only genuinely changed/new files move on.
+3. **Parse only changed files** — each surviving file is parsed with tree-sitter WASM (10-50ms per file) and traversed by a language-specific visitor to extract:
    - **Function** declarations (named functions, async functions, generators)
    - **Method** declarations (class/object methods)
    - **Class** declarations
@@ -54,7 +54,8 @@ Each changed or new file is:
    - **Type** alias declarations
    - **Enum** declarations
    - **Variable** declarations (const/let/var at module scope)
-4. Each parse has a 10-second timeout — files exceeding this are marked as failed
+
+Each parse has a 10-second timeout — files exceeding this are marked as failed. File and symbol inserts are flushed to the database after every batch (`writeParseBatch`), so memory stays bounded regardless of repository size.
 
 ### Phase 4: STORE
 
@@ -78,6 +79,7 @@ Database records for files that no longer exist on disk are removed, keeping the
 | :--------- | :------------------------------------------- | :------- |
 | TypeScript | `.ts`, `.tsx`, `.mts`, `.cts`                | ✅ Full  |
 | JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs`                | ✅ Full  |
+| Vue        | `.vue`                                       | ✅ Full  |
 | Go         | `.go`                                        | ✅ Full  |
 | Python     | `.py`                                        | ✅ Full  |
 | PHP        | `.php`                                       | ✅ Full  |
@@ -92,10 +94,12 @@ Database records for files that no longer exist on disk are removed, keeping the
 
 > _\* Dart requires a compatible tree-sitter grammar WASM — see ABI compatibility notes in operational guide._
 
-The parser architecture uses a registry pattern. Each language is defined by a `LanguageConfig` entry in the parser pool's `createRegistry()` method, which maps file extensions to a tree-sitter grammar WASM and a `LanguageVisitor` implementation. Adding a new language requires:
+14 languages are parsed through tree-sitter grammars, implemented by **13 visitor classes** (the TypeScript visitor handles both TypeScript and TSX). Markdown uses a dedicated visitor (no grammar WASM), and a generic text visitor covers every other extension (JSON, YAML, CSS, shell scripts, etc.).
+
+The parser architecture uses a registry pattern. Each language is defined by a `LanguageConfig` entry in `createRegistry()` (`parser/language-routing.ts`), which maps file extensions to a tree-sitter grammar WASM and a `LanguageVisitor` implementation. Adding a new language requires:
 
 1. Installing the tree-sitter grammar npm package (must include or support WASM build)
-2. Adding a `LanguageConfig` entry to `createRegistry()` in `parser-pool.ts`
+2. Adding a `LanguageConfig` entry to `createRegistry()` in `parser/language-routing.ts`
 3. Implementing the `LanguageVisitor` interface in a new visitor file under `parser/visitors/`
 
 See [ADR-002 §Decision 4](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for architecture details.
@@ -136,16 +140,14 @@ Progress is printed to stderr with timestamps. Exit code is `0` on success, `1` 
 
 ### MCP Tools
 
-The 6 Codebase Index tools are available via `tools/call`:
+The Codebase Index exposes **2 unified MCP tools** via `tools/call` (mode auto-inferred from parameters per ADR-005):
 
-| Tool               | Category | Description                                          |
-| :----------------- | :------- | :--------------------------------------------------- |
-| `index_repository` | Write    | Index or re-index a repository.                      |
-| `index_status`     | Read     | Check indexing status for a repository.              |
-| `search_symbols`   | Read     | Search symbols with ranked results.                  |
-| `get_file_symbols` | Read     | Get all symbols in a specific file.                  |
-| `get_architecture` | Read     | Get directory tree, language breakdown, and exports. |
-| `trace_symbol`     | Read     | Trace a symbol's definition and references.          |
+| Tool             | Modes (auto-inferred)                     | Description                                       |
+| :--------------- | :---------------------------------------- | :------------------------------------------------ |
+| `codebase-index` | `INDEX`, `STATUS`                         | Index/re-index a repository, or check its status. |
+| `codebase-read`  | `TRACE`, `FILE`, `SEARCH`, `ARCHITECTURE` | Read-only queries of the index.                   |
+
+> **Legacy aliases:** the pre-unification tools (`index_repository`, `index_status`, `search_symbols`, `get_file_symbols`, `get_architecture`, `trace_symbol`, `codebase_search`) still route to the unified handlers for backward compatibility.
 
 See the [API Reference](../api/codebase-index.md) for complete input/output schemas and examples.
 
@@ -157,22 +159,22 @@ The Glassy Dashboard provides a visual overview of indexed repositories. Navigat
 - File and symbol counts per repository
 - Language breakdown
 
-> The Dashboard integration is read-only for now. Indexing must be triggered via CLI or MCP tools.
+> The Dashboard integration is read-only for now. Indexing can be triggered via CLI, MCP tools, or the startup auto-index.
 
 ---
 
 ## Performance Characteristics
 
-| Metric                       | Typical Value                       |
-| :--------------------------- | :---------------------------------- |
-| First-time index (10K files) | ~30-60 seconds                      |
-| Incremental re-index         | ~1-5 seconds (only changed files)   |
-| File parsing (per file)      | 10-50ms (tree-sitter WASM)          |
-| Query response (read)        | <100ms for projects up to 20K files |
-| WASM initialization          | ~500ms-1s (loaded once, cached)     |
-| Database growth (10K files)  | ~10-50MB additional                 |
+| Metric                       | Typical Value                                                                                                            |
+| :--------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
+| First-time index (10K files) | ~30-60 seconds                                                                                                           |
+| Incremental re-index         | ~1-5 seconds (only changed files parsed; an unchanged repo parses **0** files — the mtime pre-filter skips without read) |
+| File parsing (per file)      | 10-50ms (tree-sitter WASM)                                                                                               |
+| Query response (read)        | <100ms for projects up to 20K files                                                                                      |
+| WASM initialization          | ~500ms-1s (loaded once, cached)                                                                                          |
+| Database growth (10K files)  | ~10-50MB additional                                                                                                      |
 
-`index_repository` is a **write tool** — it runs under a write lock. All other tools are read-only and run without blocking.
+`codebase-index` (INDEX mode) does **not** hold the write lock during the heavy scan/parse work — the indexing writer acquires the lock per database batch. `codebase-read` is read-only and runs without blocking.
 
 ---
 
@@ -222,7 +224,7 @@ Full-text search index on `name` and `doc_comment` columns, auto-synchronized vi
 
 ---
 
-## Known Limitations (Phase 1.0)
+## Known Limitations
 
 ### Name-Based Resolution Only
 
@@ -230,21 +232,18 @@ Symbol tracing and reference detection work by exact name string matching across
 
 See [ADR-002 §Consequences](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for the full discussion of name-based vs type-based resolution.
 
-### Single Language (MVP)
-
-Only TypeScript, JavaScript, TSX, and JSX are supported. The parser architecture is designed for multi-language support — the `LanguageVisitor` interface abstracts language-specific AST traversal — but only the TypeScript visitor is implemented.
-
 ### No Relation Storage
 
 Call graphs, import graphs, and inheritance chains are not stored. The `codebase_relations` table is documented in ADR-002 but not created. Relation resolution is deferred to Phase 1.1.
 
-### Explicit Indexing Required
+### Incremental Refresh, No File Watching
 
-Agents must call `index_repository` explicitly. There is no auto-index-on-start or file watching. This means:
+The index is refreshed by an **incremental re-index** — only changed files are parsed. Indexing is triggered by:
 
-- First use requires a manual index step
-- After code changes, the index may be stale until the next explicit re-index
-- The `lastIndexedAt` field in `get_file_symbols` and `index_status` helps agents assess staleness
+- The `codebase-index` tool (INDEX mode) or the CLI `--index` flag — for an explicit, immediate re-index
+- **Startup auto-index** (`autoIndexIfStale`) — enabled by default (`CODEBASE_AUTO_INDEX`), it re-indexes the current working directory when the last index is older than 24h (`CODEBASE_AUTO_INDEX_TTL`)
+
+There is **no file watching** — after code changes, the index may be stale until the next re-index (TTL expiry, startup, or an explicit call). The `lastIndexedAt` field in `index_status`, and the `FILE` mode of `codebase-read`, help agents assess staleness.
 
 ### Database Growth
 
