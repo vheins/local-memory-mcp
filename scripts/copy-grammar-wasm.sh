@@ -47,7 +47,10 @@ copy_wasm() {
 		rm -rf "$WASM_PACK_DIR"
 		mkdir -p "$WASM_PACK_DIR"
 		echo "  → fetching prebuilt WASM from tree-sitter-vue-wasm@0.1.0"
-		if npm pack tree-sitter-vue-wasm@0.1.0 --pack-destination "$WASM_PACK_DIR" >/dev/null 2>&1; then
+		# Force the nested pack to actually write its tarball even when the outer
+		# command runs under dry-run (npm publish --dry-run / npm_config_dry_run=true
+		# inherit into lifecycle scripts and would make `npm pack` a no-op).
+		if npm_config_dry_run=false npm pack tree-sitter-vue-wasm@0.1.0 --pack-destination "$WASM_PACK_DIR" >/dev/null 2>&1; then
 			TARBALL="$(ls "$WASM_PACK_DIR"/tree-sitter-vue-wasm-*.tgz 2>/dev/null | head -1)"
 			if [ -n "$TARBALL" ]; then
 				tar xzf "$TARBALL" -C "$WASM_PACK_DIR" package/tree-sitter-vue.wasm 2>/dev/null
