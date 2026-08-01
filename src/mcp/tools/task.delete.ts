@@ -76,29 +76,35 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	const now = new Date().toISOString();
 	const observationTexts: { text: string; repo: string }[] = [];
 
-	storage.db.transaction(() => {
-		for (const targetId of resolvedIds) {
-			storage.tasks.updateTask(targetId, {
-				status: "canceled",
-				canceled_at: now
-			});
-			storage.tasks.removeTaskVector(targetId);
-			storage.handoffs.releaseClaimsForTask(targetId);
-			storage.handoffs.updatePendingHandoffsForTask(targetId, "expired");
+	storage.db
+		.transaction(() => {
+			for (const targetId of resolvedIds) {
+				storage.tasks.updateTask(targetId, {
+					status: "canceled",
+					canceled_at: now
+				});
+				// Defense-in-depth (TASK-065 / MEM-473): detach children so no
+				// future writer (incl. stale enqueued worker snapshots) re-derives
+				// KG relations from this canceled, orphan-swept document.
+				storage.tasks.clearChildrenParent(targetId);
+				storage.tasks.removeTaskVector(targetId);
+				storage.handoffs.releaseClaimsForTask(targetId);
+				storage.handoffs.updatePendingHandoffsForTask(targetId, "expired");
 
-			const taskEntry = taskMap.get(targetId);
-			if (taskEntry) {
-				observationTexts.push({ text: observationText("task", taskEntry.title), repo });
+				const taskEntry = taskMap.get(targetId);
+				if (taskEntry) {
+					observationTexts.push({ text: observationText("task", taskEntry.title), repo });
+				}
 			}
-		}
 
-		if (resolvedIds.length > 0) {
-			const placeholders = resolvedIds.map(() => "?").join(",");
-			storage.db
-				.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
-				.run("task", ...resolvedIds);
-		}
-	})();
+			if (resolvedIds.length > 0) {
+				const placeholders = resolvedIds.map(() => "?").join(",");
+				storage.db
+					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
+					.run("task", ...resolvedIds);
+			}
+		})
+		.immediate();
 
 	// KG cleanup: best-effort, atomic (single transaction), once per batch —
 	// orphans checked via observations UNION relations so relation-referenced

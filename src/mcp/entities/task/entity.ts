@@ -399,6 +399,25 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	/**
+	 * Detach every child of the given task (`parent_id → NULL`).
+	 *
+	 * Called when a parent task is soft-deleted (canceled): the parent's KG
+	 * entities are orphan-swept, so keeping children linked would let any
+	 * future writer re-derive `depends_on` relations from a document whose
+	 * entity rows no longer exist (TASK-065 / MEM-473). The embedding
+	 * worker's `entityExists` guard (worker.ts) already skips canceled tasks,
+	 * but stale enqueued snapshots still carry the parentId — detaching here
+	 * makes the skip unconditional.
+	 * Returns the number of children detached.
+	 */
+	clearChildrenParent(parentId: string): number {
+		return this.run("UPDATE tasks SET parent_id = NULL, updated_at = ? WHERE parent_id = ?", [
+			new Date().toISOString(),
+			parentId
+		]).changes;
+	}
+
+	/**
 	 * Bulk-load tasks by task_code with the same row shape as getTaskByCode
 	 * (parent_code join + batched comments), in a single tasks query plus one
 	 * batched comments query. Results preserve the input code order.

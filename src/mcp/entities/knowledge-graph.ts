@@ -92,6 +92,59 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	}
 
 	/**
+	 * Resolve-or-upsert BOTH endpoint entities (by name, global PK) then insert
+	 * the relation — the only safe way to write a relation whose endpoints were
+	 * derived on-the-fly from a DIFFERENT document (parent/similar standard)
+	 * whose entity rows may have been orphan-swept (TASK-065 / MEM-473).
+	 *
+	 * The relations FK (from_entity/to_entity → entities(name), migration v8)
+	 * is enforced (`PRAGMA foreign_keys = ON`, sqlite.ts) and `INSERT OR
+	 * IGNORE` does NOT suppress immediate FK violations, so inserting a
+	 * relation to a missing endpoint throws `FOREIGN KEY constraint failed`.
+	 * Upserting both endpoints first makes every relation write idempotent:
+	 * entity upserts and the relation insert are all `INSERT OR IGNORE`, so
+	 * re-running after a sweep re-creates the swept endpoints and the edge
+	 * with no data duplication.
+	 */
+	ensureRelation(params: {
+		from_entity: string;
+		from_type: string;
+		to_entity: string;
+		to_type: string;
+		relation_type: string;
+		repo: string;
+		owner: string;
+		created_at: string;
+	}): void {
+		this.upsertEntity({
+			name: params.from_entity,
+			type: params.from_type,
+			description: null,
+			repo: params.repo,
+			owner: params.owner,
+			created_at: params.created_at,
+			updated_at: params.created_at
+		});
+		this.upsertEntity({
+			name: params.to_entity,
+			type: params.to_type,
+			description: null,
+			repo: params.repo,
+			owner: params.owner,
+			created_at: params.created_at,
+			updated_at: params.created_at
+		});
+		this.upsertRelation({
+			from_entity: params.from_entity,
+			to_entity: params.to_entity,
+			relation_type: params.relation_type,
+			repo: params.repo,
+			owner: params.owner,
+			created_at: params.created_at
+		});
+	}
+
+	/**
 	 * Insert an observation record.
 	 *
 	 * Uses INSERT OR IGNORE against the unique (entity_name, observation)

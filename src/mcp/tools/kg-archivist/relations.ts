@@ -49,11 +49,15 @@ export async function saveTaskRelations(
 
 	const now = new Date().toISOString();
 	const entityNames = entities.map((e) => e.name);
+	const entityTypeByName = new Map(entities.map((e) => [e.name, e.type]));
 
 	// ── 1. parent_id → depends_on relations ──
 	if (options?.parentId) {
 		const parentTask = db.tasks.getTaskById(options.parentId);
-		if (parentTask) {
+		// Skip canceled parents (mirror worker.ts:241-242): a canceled parent's
+		// entities were already orphan-swept, so extracting from it would only
+		// re-create dangling relation targets (TASK-065 / MEM-473).
+		if (parentTask && parentTask.status !== "canceled") {
 			const parentContent = `${parentTask.title}\n${parentTask.description ?? ""}`;
 			let parentEntities: ExtractedEntity[];
 			try {
@@ -69,9 +73,15 @@ export async function saveTaskRelations(
 				for (const taskEntityName of entityNames) {
 					for (const parentEntity of parentEntities) {
 						try {
-							db.knowledgeGraph.upsertRelation({
+							// Upsert BOTH endpoints before the insert: the parent
+							// entities were extracted from ANOTHER document and may
+							// have been orphan-swept, so a raw relation insert would
+							// fail the FK on a missing endpoint (TASK-065 / MEM-473).
+							db.knowledgeGraph.ensureRelation({
 								from_entity: taskEntityName,
+								from_type: entityTypeByName.get(taskEntityName) ?? "concept",
 								to_entity: parentEntity.name,
+								to_type: parentEntity.type,
 								relation_type: "depends_on",
 								repo,
 								owner: owner ?? "",
@@ -200,6 +210,7 @@ export async function saveStandardRelations(
 	const repo = standard.repo ?? "";
 	const owner = standard.owner ?? "";
 	const entityNames = entities.map((e) => e.name);
+	const entityTypeByName = new Map(entities.map((e) => [e.name, e.type]));
 
 	const observationTextValue = observationText("standard", standard.title);
 	for (const entity of entities) {
@@ -248,9 +259,15 @@ export async function saveStandardRelations(
 				for (const entityName of entityNames) {
 					for (const parentEntity of parentEntities) {
 						try {
-							db.knowledgeGraph.upsertRelation({
+							// Upsert both endpoints first (parent entities come from
+							// another document and may have been swept) so the FK
+							// on relations.from_entity/to_entity cannot fail
+							// (TASK-065 / MEM-473).
+							db.knowledgeGraph.ensureRelation({
 								from_entity: entityName,
+								from_type: entityTypeByName.get(entityName) ?? "concept",
 								to_entity: parentEntity.name,
+								to_type: parentEntity.type,
 								relation_type: "extends",
 								repo,
 								owner,
@@ -309,9 +326,15 @@ export async function saveStandardRelations(
 			for (const entityName of entityNames) {
 				for (const similarEntity of similarEntities) {
 					try {
-						db.knowledgeGraph.upsertRelation({
+						// Upsert both endpoints first (similar-standard entities come
+						// from another document and may have been swept) so the FK
+						// on relations.from_entity/to_entity cannot fail
+						// (TASK-065 / MEM-473).
+						db.knowledgeGraph.ensureRelation({
 							from_entity: entityName,
+							from_type: entityTypeByName.get(entityName) ?? "concept",
 							to_entity: similarEntity.name,
+							to_type: similarEntity.type,
 							relation_type: "related_to",
 							repo,
 							owner,

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { randomUUID } from "crypto";
-import { extractEntities, saveExtractions } from "../tools/kg-archivist";
+import { extractEntities, saveExtractions, saveTaskRelations } from "../tools/kg-archivist";
+import { logger } from "../utils/logger";
 import { handleMemoryWrite } from "../tools/memory.write";
 import { handleMemoryRead } from "../tools/memory.read";
 import { handleTaskRead } from "../tools/task.read";
@@ -332,6 +333,142 @@ describe("KG Archivist — saveExtractions", () => {
 				{ name: string } | undefined;
 			expect(entity).toBeDefined();
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// saveTaskRelations — FK integrity (TASK-065 / MEM-473)
+//
+// depends_on/extends/related_to relations reference entities extracted
+// on-the-fly from ANOTHER document (the parent/similar standard). Those
+// endpoint entities can be orphan-swept while the child still points at the
+// parent, so every relation insert MUST resolve-or-upsert BOTH endpoints
+// first (KnowledgeGraphEntity.ensureRelation) or the relations FK
+// (from_entity/to_entity → entities(name), PRAGMA foreign_keys=ON) throws
+// `FOREIGN KEY constraint failed` — swallowed into a warn flood. Canceled
+// parents are skipped entirely (their entities were already swept).
+// ---------------------------------------------------------------------------
+
+describe("KG Archivist — saveTaskRelations FK integrity (TASK-065)", () => {
+	let db: SQLiteStore;
+
+	const REPO = "kg-fk-test";
+	const PARENT_TITLE = "[PARENT] Gold Standard Compliance (Aesthetics & Icons)";
+	const PARENT_DESCRIPTION = "Enforces quality standards and implementation details for the Icons theme";
+	const CHILD_TITLE = "Payroll Module";
+	const CHILD_DESCRIPTION = "Payroll Module implementation aligned with quality standards and Icons";
+	// Deterministic endpoints (verified against extractEntities): the parent
+	// document extracts "Icons theme", the child extracts "Payroll Module
+	// implementation" — the exact "missing TO endpoint" pair from the RCA.
+	const PARENT_ENTITY = "Icons theme";
+	const CHILD_ENTITY = "Payroll Module implementation";
+
+	function makeTask(overrides: Partial<Task> = {}): Task {
+		const now = new Date().toISOString();
+		return {
+			id: randomUUID(),
+			owner: "test",
+			repo: REPO,
+			task_code: `KG-${randomUUID().slice(0, 6)}`,
+			phase: "implementation",
+			title: "test task",
+			description: null,
+			status: "backlog",
+			priority: 3,
+			agent: "test",
+			role: "backend",
+			doc_path: null,
+			created_at: now,
+			updated_at: now,
+			in_progress_at: null,
+			finished_at: null,
+			canceled_at: null,
+			est_tokens: 0,
+			commit_id: null,
+			changed_files: [],
+			tags: [],
+			suggested_skills: [],
+			metadata: {},
+			parent_id: null,
+			depends_on: null,
+			...overrides
+		};
+	}
+
+	function getDependsOn(from: string, to: string): Record<string, unknown> | undefined {
+		return db.db
+			.prepare("SELECT * FROM relations WHERE from_entity = ? AND to_entity = ? AND relation_type = 'depends_on'")
+			.get(from, to) as Record<string, unknown> | undefined;
+	}
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+
+	afterEach(() => {
+		db.close();
+		vi.restoreAllMocks();
+	});
+
+	it("sweep-parents repro: re-upserts swept endpoint entities and re-inserts depends_on with no FK failure and no warn", async () => {
+		const parent = makeTask({ title: PARENT_TITLE, description: PARENT_DESCRIPTION, status: "completed" });
+		const child = makeTask({
+			title: CHILD_TITLE,
+			description: CHILD_DESCRIPTION,
+			status: "pending",
+			parent_id: parent.id
+		});
+		db.tasks.insertTask(parent);
+		db.tasks.insertTask(child);
+
+		// First pass: ensureRelation upserts BOTH endpoints and inserts the edge.
+		await saveTaskRelations(CHILD_DESCRIPTION, CHILD_TITLE, "test", REPO, db, { parentId: parent.id });
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeDefined();
+		expect(getDependsOn(CHILD_ENTITY, PARENT_ENTITY)).toBeDefined();
+
+		// Simulate the orphan sweep of the parent document's entities
+		// (deleteEntity cascades the depends_on edge away — the exact
+		// post-sweep state that used to flood FK warnings on reprocess).
+		db.knowledgeGraph.deleteEntity(PARENT_ENTITY);
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeUndefined();
+		expect(getDependsOn(CHILD_ENTITY, PARENT_ENTITY)).toBeUndefined();
+
+		// Reprocessing the child after the sweep: ensureRelation must upsert
+		// the swept endpoint and re-insert the edge — no FK failure, no warn.
+		const warnSpy = vi.spyOn(logger, "warn");
+		await saveTaskRelations(CHILD_DESCRIPTION, CHILD_TITLE, "test", REPO, db, { parentId: parent.id });
+
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeDefined();
+		expect(getDependsOn(CHILD_ENTITY, PARENT_ENTITY)).toBeDefined();
+		const fkWarns = warnSpy.mock.calls.filter((call) => String(call[0]).includes("Failed to save depends_on relation"));
+		expect(fkWarns).toHaveLength(0);
+	});
+
+	it("skips canceled parents — no depends_on relations are attempted", async () => {
+		const parent = makeTask({
+			title: PARENT_TITLE,
+			description: PARENT_DESCRIPTION,
+			status: "canceled",
+			canceled_at: new Date().toISOString()
+		});
+		const child = makeTask({
+			title: CHILD_TITLE,
+			description: CHILD_DESCRIPTION,
+			status: "pending",
+			parent_id: parent.id
+		});
+		db.tasks.insertTask(parent);
+		db.tasks.insertTask(child);
+
+		await saveTaskRelations(CHILD_DESCRIPTION, CHILD_TITLE, "test", REPO, db, { parentId: parent.id });
+
+		// No depends_on edges and no entity resurrected from the canceled
+		// parent's content (its entities were already swept).
+		const dependsOn = db.db
+			.prepare("SELECT COUNT(*) as cnt FROM relations WHERE relation_type = 'depends_on'")
+			.get() as { cnt: number };
+		expect(dependsOn.cnt).toBe(0);
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeUndefined();
 	});
 });
 
