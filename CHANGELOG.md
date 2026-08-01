@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.2] — 2026-08-01
+
+### Fixed
+
+- **SQLite write locking (TASK-064)**: All write transactions now use `BEGIN IMMEDIATE` (`db.transaction(fn).immediate()`) — read-then-write transactions can no longer fail with `SQLITE_BUSY_SNAPSHOT`, the busy_timeout-immune error behind the intermittent "database is locked" under multi-process writes (MCP servers, dashboard, CLI, outbox worker).
+- **WriteLock acquire race (TASK-064)**: `withLock` now serializes concurrent acquisitions through a promise-chain mutex — two callers can no longer both pass the `locked` check and burn minutes of `proper-lockfile` retries; exactly one holder proceeds.
+- **Embedding worker CPU spin (TASK-064)**: The 10ms tight drain loop was replaced with exponential backoff + jitter — idle delay grows `poll * 2^streak` up to `EMBEDDING_QUEUE_MAX_POLL_INTERVAL_MS` (new env var, default 10s) with 0.5–1.0 jitter, eliminating the 100% CPU spin on an empty queue.
+- **SQLite tuning (TASK-064)**: `busy_timeout` 30000 → 5000 (fail fast; correctness comes from IMMEDIATE transactions, not a long busy wait) and `wal_autocheckpoint` 100 → 1000 (~4MB checkpoints instead of ~400KB thrash).
+- **KG-Archivist FK constraint failures (TASK-065)**: `depends_on`/`extends`/`related_to` relations now route through `KnowledgeGraphEntity.ensureRelation`, which upserts BOTH endpoint entities (global name PK) before inserting the relation — relations can no longer reference orphan-swept entities and flood `FOREIGN KEY constraint failed`.
+- **Canceled-parent relation leak (TASK-065)**: `saveTaskRelations` skips parents with status `canceled` (mirroring the worker's status check), and canceling a parent now clears its children's `parent_id` (`TaskEntity.clearChildrenParent`) so reprocessed child snapshots can't re-derive relations from swept documents.
+
+### Performance
+
+- **KG graph render at 1358 nodes / 22559 edges (TASK-063)**: Non-active edges are capped at `MAX_RENDERED_EDGES = 2000` and batch-drawn in a single canvas path (1 draw call vs N); viewport frustum culling skips off-screen nodes and edges (100px margin); the background radial gradient is cached while dimensions/theme are unchanged; hub-edge lookups are pre-computed into a map (O(1) per signal spawn instead of an O(E) filter); click/move hit-testing applies an AABB rejection before distance checks.
+
+### Documentation
+
+- **docs/id ↔ docs/en sync (TASK-060)**: All 13 Indonesian docs re-synced to the English source of truth (fixing stray CJK characters and a stale Knowledge Graph section), the 2 missing optimization docs translated (FTS5 + offload-embeddings), and `README.id.md` rewritten to mirror `README.md`.
+
+### Tests
+
+- **TASK-064**: 213 real-DB tests green across storage (79/79), embedding-queue (8/8), KG-archivist, memory/standard/task suites; `router.test.ts` mock updated to expose the `transaction(fn).immediate()` API (FIX-16) matching better-sqlite3 v12.
+- **TASK-065**: 2 new KG regression tests — sweep-parents repro (endpoint + edge recreated, zero "Failed to save depends_on relation" warns) and canceled-parent skip; `tasks.entities` 11/11 covering `clearChildrenParent`.
+- **TASK-063**: Dashboard API suites 22/22; `eslint prefer-const` fix in `signals.ts` (FIX-17).
+
 ## [0.31.1] — 2026-08-01
 
 ### Fixed
