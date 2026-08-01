@@ -51,6 +51,50 @@ if (process.argv.includes("--index")) {
 	// runCliIndex always calls process.exit(0|1) — unreachable
 }
 
+// --- Process-level crash containment (Fix #2) ---
+// Node >= 15 terminates the process on ANY escaping rejection or uncaught
+// exception. The codebase-index pipeline (sync WASM parses, DB writes) can
+// throw from paths outside our try/catch reach — register handlers so a
+// single escaping error logs and continues instead of killing the MCP server.
+//
+// Startup guard (TASK-051): these handlers are installed BEFORE the top-level
+// `await SQLiteStore.create()` and vector-model init. In ESM, a rejection in a
+// top-level await aborts module evaluation — with a handler installed Node no
+// longer exits, and the process would hang with no server and no stdio
+// listener. `serverStarted` flips only when serveStdio is about to run, so any
+// pre-start failure always terminates with a clean non-zero exit.
+let serverStarted = false;
+
+process.on("unhandledRejection", (reason: unknown) => {
+	if (!serverStarted) {
+		logger.error("[Server] Unhandled promise rejection during startup — exiting", {
+			pid: process.pid,
+			error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+		});
+		process.exit(1);
+	}
+	logger.error("[Server] Unhandled promise rejection", {
+		pid: process.pid,
+		error: reason instanceof Error ? `${reason.message}\n${reason.stack ?? ""}` : String(reason)
+	});
+});
+
+process.on("uncaughtException", (err: Error) => {
+	if (!serverStarted) {
+		logger.error("[Server] Uncaught exception during startup — exiting", {
+			pid: process.pid,
+			error: err.message,
+			stack: err.stack ?? ""
+		});
+		process.exit(1);
+	}
+	logger.error("[Server] Uncaught exception", {
+		pid: process.pid,
+		error: err.message,
+		stack: err.stack ?? ""
+	});
+});
+
 // Create storage instances
 const db = await SQLiteStore.create();
 const vectors = new RealVectorStore(db);
@@ -153,7 +197,9 @@ process.on(
 		})
 );
 
-// Start the MCP stdio server using the SDK
+// Start the MCP stdio server using the SDK — startup is now complete, so a
+// runtime failure may log+continue instead of exiting (TASK-051).
+serverStarted = true;
 const handle = serveStdio(() => {
 	const { server, ctx } = createMcpServer(db, vectors);
 

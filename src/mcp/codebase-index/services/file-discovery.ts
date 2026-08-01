@@ -377,7 +377,8 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 				path: relativePath,
 				absolutePath,
 				language,
-				sizeBytes: item.stats.size
+				sizeBytes: item.stats.size,
+				mtimeMs: item.stats.mtimeMs
 			});
 			supportedFiles++;
 

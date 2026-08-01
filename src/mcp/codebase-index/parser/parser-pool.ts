@@ -20,7 +20,7 @@
 import { performance } from "node:perf_hooks";
 import path from "node:path";
 import { Parser, Language } from "web-tree-sitter";
-import type { ParseResult, ParserPool } from "./language-visitor.js";
+import type { ParseResult, ParsedSymbol, ParserPool } from "./language-visitor.js";
 import {
 	type LanguageConfig,
 	getWasmPath,
@@ -53,6 +53,11 @@ export class TreeSitterParserPool implements ParserPool {
 
 	// Grammar cache: WASM file path → loaded Language
 	private loadedGrammars = new Map<string, Language>();
+
+	// In-flight grammar loads: WASM file path → pending load promise (Fix #5).
+	// Concurrent parse slots can request the same grammar simultaneously;
+	// deduping guarantees Language.load(wasmPath) is instantiated only once.
+	private inFlightGrammars = new Map<string, Promise<Language>>();
 
 	// Cached registry built once at construction time
 	private registry: LanguageConfig[] = createRegistry();
@@ -142,11 +147,28 @@ export class TreeSitterParserPool implements ParserPool {
 	/**
 	 * Lazy-load a tree-sitter grammar WASM on first use.
 	 * Subsequent calls for the same WASM path return the cached Language.
+	 * Concurrent calls for the same path share a single in-flight load.
 	 */
 	private async getOrLoadGrammar(wasmPath: string): Promise<Language> {
 		const existing = this.loadedGrammars.get(wasmPath);
 		if (existing) return existing;
 
+		// Dedup concurrent loads of the same grammar (Fix #5): multiple parse
+		// slots may hit an uncached grammar at once — without this they would
+		// double-instantiate the WASM module.
+		const inFlight = this.inFlightGrammars.get(wasmPath);
+		if (inFlight) return inFlight;
+
+		const loading = this._loadGrammar(wasmPath);
+		this.inFlightGrammars.set(wasmPath, loading);
+		try {
+			return await loading;
+		} finally {
+			this.inFlightGrammars.delete(wasmPath);
+		}
+	}
+
+	private async _loadGrammar(wasmPath: string): Promise<Language> {
 		try {
 			const lang = await Language.load(wasmPath);
 			this.loadedGrammars.set(wasmPath, lang);
@@ -240,10 +262,17 @@ export class TreeSitterParserPool implements ParserPool {
 		const hasErrors = tree.rootNode.hasError;
 
 		const visitor = config.createVisitor();
-		const symbols = visitor.extractSymbols(tree, sourceCode);
-
-		tree.delete();
-		parser.delete();
+		let symbols: ParsedSymbol[];
+		try {
+			symbols = visitor.extractSymbols(tree, sourceCode);
+		} finally {
+			// Always free the WASM resources (Fix #4) — even when the visitor
+			// throws (e.g. deep-recursion RangeError). _parseWithTimeout
+			// swallows the error into a graceful ParseResult, but the tree/
+			// parser must be deleted or the WASM heap grows monotonically.
+			tree.delete();
+			parser.delete();
+		}
 
 		return {
 			symbols,

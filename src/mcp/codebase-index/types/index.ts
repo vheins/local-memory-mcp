@@ -12,6 +12,12 @@ export interface DiscoveredFile {
 	language: string;
 	/** File size in bytes. */
 	sizeBytes: number;
+	/**
+	 * File modification time in epoch milliseconds (from fast-glob stats).
+	 * Used as a free pre-filter: a file whose mtime is <= its last_indexed_at
+	 * is content-unchanged and can skip readFile + checksum entirely.
+	 */
+	mtimeMs: number;
 }
 
 /** Options controlling which files are discovered. */
