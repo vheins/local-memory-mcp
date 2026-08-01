@@ -108,11 +108,20 @@
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 
+		const hitRadius = NODE_RADIUS + 4;
 		for (const n of layoutNodes) {
-			const r = NODE_RADIUS + 4;
+			// Quick AABB rejection before distance check
+			if (
+				n.x < mx - hitRadius * 2 ||
+				n.x > mx + hitRadius * 2 ||
+				n.y < my - hitRadius * 2 ||
+				n.y > my + hitRadius * 2
+			) {
+				continue;
+			}
 			const dx = mx - n.x;
 			const dy = my - n.y;
-			if (dx * dx + dy * dy <= r * r) {
+			if (dx * dx + dy * dy <= hitRadius * hitRadius) {
 				graphState.selectedNode = n;
 				graphState.selectedEdge = null;
 				graphState.showTooltip = false;
@@ -186,12 +195,22 @@
 
 		if (isCameraDragging()) return;
 
+		// Viewport culling for hit testing — only test nodes near the mouse
+		const hitRadius = NODE_RADIUS + 4;
 		let found: LayoutNode | null = null;
 		for (const n of layoutNodes) {
-			const r = NODE_RADIUS + 4;
+			// Quick AABB rejection before distance check
+			if (
+				n.x < mx - hitRadius * 2 ||
+				n.x > mx + hitRadius * 2 ||
+				n.y < my - hitRadius * 2 ||
+				n.y > my + hitRadius * 2
+			) {
+				continue;
+			}
 			const dx = mx - n.x;
 			const dy = my - n.y;
-			if (dx * dx + dy * dy <= r * r) {
+			if (dx * dx + dy * dy <= hitRadius * hitRadius) {
 				found = n;
 				break;
 			}

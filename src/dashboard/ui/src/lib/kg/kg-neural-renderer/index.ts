@@ -56,6 +56,13 @@ let height = 0;
 let cx = 0;
 let cy = 0;
 
+// ─── Performance Optimization State ─────────────────────────────────────────
+const MAX_RENDERED_EDGES = 2000;
+let cachedBackgroundGradient: CanvasGradient | null = null;
+let cachedBackgroundWidth = 0;
+let cachedBackgroundHeight = 0;
+let cachedBackgroundDark = false;
+
 // ─── Main Animation Entry Point ──────────────────────────────────────────────
 
 export function startNeuralAnimation(
@@ -145,9 +152,37 @@ export function startNeuralAnimation(
 		// Breathing
 		const breathe = isZeroEdge ? 1 : 1 + Math.sin(totalElapsed * BREATHE_SPEED) * BREATHE_AMOUNT;
 
-		// Clear and draw background
+		// Clear and draw background (cached gradient)
 		ctx.clearRect(0, 0, width, height);
-		drawBackground(ctx, width, height);
+		if (
+			cachedBackgroundGradient &&
+			cachedBackgroundWidth === width &&
+			cachedBackgroundHeight === height &&
+			cachedBackgroundDark === dark
+		) {
+			ctx.fillStyle = cachedBackgroundGradient;
+			ctx.fillRect(0, 0, width, height);
+		} else {
+			drawBackground(ctx, width, height);
+			// Cache the gradient for next frame
+			const centerX = width / 2;
+			const centerY = height / 2;
+			const maxR = Math.hypot(centerX, centerY);
+			const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxR);
+			if (dark) {
+				grad.addColorStop(0, "rgba(10,14,42,0)");
+				grad.addColorStop(0.6, "rgba(10,14,42,0.1)");
+				grad.addColorStop(1, "rgba(2,4,12,0.6)");
+			} else {
+				grad.addColorStop(0, "rgba(226,232,240,0)");
+				grad.addColorStop(0.5, "rgba(203,213,225,0.15)");
+				grad.addColorStop(1, "rgba(148,163,184,0.3)");
+			}
+			cachedBackgroundGradient = grad;
+			cachedBackgroundWidth = width;
+			cachedBackgroundHeight = height;
+			cachedBackgroundDark = dark;
+		}
 
 		// Update signals
 		spawnSignals(now, nodes3d, animEdges, nodeIndexById);
@@ -185,53 +220,109 @@ export function startNeuralAnimation(
 		const hasFocus = !!(state.hoveredNode || state.selectedNode);
 
 		// ── Draw edges (far to near) ──
-		const renderedEdges = animEdges
-			.map((e) => {
-				const srcIdx = nodeIndexById.get(e.source);
-				const tgtIdx = nodeIndexById.get(e.target);
-				if (srcIdx === undefined || tgtIdx === undefined) return null;
-				const fromP = projByIndex.get(srcIdx);
-				const toP = projByIndex.get(tgtIdx);
-				if (!fromP || !toP) return null;
-				if (fromP.scale < 0.02 || toP.scale < 0.02) return null;
+		// Viewport frustum with margin for edges just outside
+		const viewMargin = 100;
+		const viewLeft = -viewMargin;
+		const viewRight = width + viewMargin;
+		const viewTop = -viewMargin;
+		const viewBottom = height + viewMargin;
 
-				const isHovered =
-					state.hoveredNode &&
-					(e.source === state.hoveredNode.id ||
-						e.source === state.hoveredNode.name ||
-						e.target === state.hoveredNode.id ||
-						e.target === state.hoveredNode.name);
-				const isSelected =
-					state.selectedNode &&
-					(e.source === state.selectedNode.id ||
-						e.source === state.selectedNode.name ||
-						e.target === state.selectedNode.id ||
-						e.target === state.selectedNode.name);
-				const isRelated = !!(isHovered || isSelected);
+		// Pre-filter: only edges with both endpoints in viewport (with margin)
+		const visibleEdges: {
+			from: ProjectedNode;
+			to: ProjectedNode;
+			edgeAlpha: number;
+			isRelated: boolean;
+			avgDepth: number;
+		}[] = [];
 
-				let alphaMultiplier: number;
-				if (hasFocus) {
-					alphaMultiplier = isRelated ? 1.0 : 0.05;
-				} else {
-					alphaMultiplier = 0.2; // lower default opacity when no hover to avoid cluttered look
-				}
+		for (const e of animEdges) {
+			if (visibleEdges.length >= MAX_RENDERED_EDGES) break;
 
-				const avgZ = (fromP.depth + toP.depth) / 2;
-				const maxZ = FOG_FAR * 1.5;
-				const baseAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
-				const edgeAlpha = baseAlpha * alphaMultiplier;
+			const srcIdx = nodeIndexById.get(e.source);
+			const tgtIdx = nodeIndexById.get(e.target);
+			if (srcIdx === undefined || tgtIdx === undefined) continue;
+			const fromP = projByIndex.get(srcIdx);
+			const toP = projByIndex.get(tgtIdx);
+			if (!fromP || !toP) continue;
+			if (fromP.scale < 0.02 || toP.scale < 0.02) continue;
 
-				return { from: fromP, to: toP, edgeAlpha, isRelated, avgDepth: avgZ };
-			})
-			.filter(
-				(x): x is { from: ProjectedNode; to: ProjectedNode; edgeAlpha: number; isRelated: boolean; avgDepth: number } =>
-					x !== null
-			);
+			// Viewport frustum culling — skip edges entirely outside viewport
+			if (
+				(fromP.sx < viewLeft && toP.sx < viewLeft) ||
+				(fromP.sx > viewRight && toP.sx > viewRight) ||
+				(fromP.sy < viewTop && toP.sy < viewTop) ||
+				(fromP.sy > viewBottom && toP.sy > viewBottom)
+			) {
+				continue;
+			}
+
+			const isHovered =
+				state.hoveredNode &&
+				(e.source === state.hoveredNode.id ||
+					e.source === state.hoveredNode.name ||
+					e.target === state.hoveredNode.id ||
+					e.target === state.hoveredNode.name);
+			const isSelected =
+				state.selectedNode &&
+				(e.source === state.selectedNode.id ||
+					e.source === state.selectedNode.name ||
+					e.target === state.selectedNode.id ||
+					e.target === state.selectedNode.name);
+			const isRelated = !!(isHovered || isSelected);
+
+			let alphaMultiplier: number;
+			if (hasFocus) {
+				alphaMultiplier = isRelated ? 1.0 : 0.05;
+			} else {
+				alphaMultiplier = 0.2; // lower default opacity when no hover to avoid cluttered look
+			}
+
+			const avgZ = (fromP.depth + toP.depth) / 2;
+			const maxZ = FOG_FAR * 1.5;
+			const baseAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
+			const edgeAlpha = baseAlpha * alphaMultiplier;
+
+			visibleEdges.push({ from: fromP, to: toP, edgeAlpha, isRelated, avgDepth: avgZ });
+		}
 
 		// Sort edges by depth (far to near)
-		renderedEdges.sort((a, b) => b.avgDepth - a.avgDepth);
+		visibleEdges.sort((a, b) => b.avgDepth - a.avgDepth);
 
-		for (const re of renderedEdges) {
+		// Batch non-active edges: draw all inactive edges in a single path for fewer ctx state changes
+		const activeEdges: typeof visibleEdges = [];
+		const inactiveEdges: typeof visibleEdges = [];
+		for (const re of visibleEdges) {
+			if (re.isRelated) {
+				activeEdges.push(re);
+			} else {
+				inactiveEdges.push(re);
+			}
+		}
+
+		if (inactiveEdges.length > 0) {
+			const edgeColor = dark ? "0,212,255" : "55,48,163";
+			const defaultAlpha = inactiveEdges[0]?.edgeAlpha ?? 0.2;
+			const fog = fogFactor(inactiveEdges[0]?.avgDepth ?? 0);
+			const alpha = dark ? Math.min(0.8, defaultAlpha * fog) : Math.min(0.9, Math.max(0.08, defaultAlpha * fog));
+
+			if (alpha >= 0.01) {
+				ctx.save();
+				ctx.strokeStyle = `rgba(${edgeColor},${alpha})`;
+				ctx.lineWidth = dark ? 1.5 : 1.8;
+				ctx.lineCap = "round";
+				ctx.beginPath();
+				for (const re of inactiveEdges) {
+					ctx.moveTo(re.from.sx, re.from.sy);
+					ctx.lineTo(re.to.sx, re.to.sy);
+				}
+				ctx.stroke();
+				ctx.restore();
+			}
+		}
+
+		// Draw active (hovered/selected) edges individually for effects
+		for (const re of activeEdges) {
 			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, re.isRelated, totalElapsed);
 		}
 
@@ -314,6 +405,11 @@ export function startNeuralAnimation(
 			const isHovered = state.hoveredNode === node;
 			const isSelected = state.selectedNode === node;
 
+			// Viewport frustum culling — skip nodes entirely outside viewport
+			if (p.sx < viewLeft || p.sx > viewRight || p.sy < viewTop || p.sy > viewBottom) {
+				continue;
+			}
+
 			// Twinkle
 			const twinkle = 0.7 + 0.3 * Math.sin(now * TWINKLE_SPEED + n3d.phaseOffset);
 
@@ -342,7 +438,7 @@ export function startNeuralAnimation(
 			if ((isHovered || isSelected) && normalizedScale > 0.15) {
 				const labelAlpha = Math.max(0, (normalizedScale - 0.15) / 0.85) * depthAlpha;
 				if (labelAlpha > 0.05) {
-					const dark = isDarkMode();
+					const darkLabel = isDarkMode();
 					ctx.save();
 					ctx.globalAlpha = labelAlpha;
 
@@ -354,7 +450,7 @@ export function startNeuralAnimation(
 					const pillH = 18;
 					const pillY = p.sy + drawRadius + 6;
 
-					ctx.fillStyle = dark ? "rgba(2,6,23,0.85)" : "rgba(255,255,255,0.9)";
+					ctx.fillStyle = darkLabel ? "rgba(2,6,23,0.85)" : "rgba(255,255,255,0.9)";
 					ctx.shadowColor = "rgba(0,0,0,0.3)";
 					ctx.shadowBlur = 8;
 					roundRect(ctx, p.sx - tw / 2 - pillPad, pillY, tw + pillPad * 2, pillH, 4);
@@ -364,13 +460,13 @@ export function startNeuralAnimation(
 					// Name text
 					ctx.textAlign = "center";
 					ctx.textBaseline = "middle";
-					ctx.fillStyle = dark ? "#e2e8f0" : "#1e293b";
+					ctx.fillStyle = darkLabel ? "#e2e8f0" : "#1e293b";
 					ctx.fillText(name, p.sx, pillY + pillH / 2);
 
 					// Type subtitle below pill
 					if (node.type) {
 						ctx.font = "8px system-ui,sans-serif";
-						ctx.fillStyle = dark ? "rgba(148,163,184,0.7)" : "rgba(100,116,139,0.7)";
+						ctx.fillStyle = darkLabel ? "rgba(148,163,184,0.7)" : "rgba(100,116,139,0.7)";
 						ctx.textBaseline = "top";
 						ctx.fillText(node.type, p.sx, pillY + pillH + 2);
 					}
