@@ -337,6 +337,86 @@ describe("KG Archivist — saveExtractions", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Server-side graph edge cap (TASK-070)
+// ---------------------------------------------------------------------------
+
+describe("KnowledgeGraphEntity — server-side graph edge cap (TASK-070)", () => {
+	let db: SQLiteStore;
+
+	const REPO = "kg-graph-cap-test";
+
+	/** Insert the node subset + edges and return the expected degree ranks. */
+	function seedGraph(): void {
+		const now = new Date().toISOString();
+		for (const name of ["A", "B", "C", "D"]) {
+			db.db
+				.prepare(
+					"INSERT INTO entities (name, type, description, repo, owner, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+				)
+				.run(name, "concept", null, REPO, "test", now, now);
+		}
+		// Edges: A→B, A→C, B→C, D→A, B→D
+		const edges: Array<[string, string]> = [
+			["A", "B"],
+			["A", "C"],
+			["B", "C"],
+			["D", "A"],
+			["B", "D"]
+		];
+		for (const [from, to] of edges) {
+			db.knowledgeGraph.upsertRelation({
+				from_entity: from,
+				to_entity: to,
+				relation_type: "related_to",
+				repo: REPO,
+				owner: "test",
+				created_at: now
+			});
+		}
+	}
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		seedGraph();
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("listGraphEdges caps to top-N by endpoint degree, not a random slice", () => {
+		// Degrees: A=3 (AB,AC,DA), B=3 (AB,BC,BD), C=2 (AC,BC), D=2 (DA,BD).
+		// A→B has the highest combined degree (3+3=6); the rest tie at 5 and
+		// fall back to (from_entity, to_entity) ordering.
+		const edges = db.knowledgeGraph.listGraphEdges(REPO, 2);
+		expect(edges).toHaveLength(2);
+		expect(edges[0]).toEqual({ source: "A", target: "B", relation_type: "related_to" });
+		expect(edges[1]).toEqual({ source: "A", target: "C", relation_type: "related_to" });
+	});
+
+	it("listGraphEdges returns everything below the cap", () => {
+		const edges = db.knowledgeGraph.listGraphEdges(REPO);
+		expect(edges.length).toBe(5); // 5 edges < default KG_MAX_GRAPH_EDGES
+	});
+
+	it("listRelationsForGraph filters edges to the node subset (both endpoints in set)", () => {
+		const rels = db.knowledgeGraph.listRelationsForGraph(REPO, ["A", "B"]);
+		expect(rels).toHaveLength(1); // only A→B has both endpoints in {A, B}
+		expect(rels[0].from_entity).toBe("A");
+		expect(rels[0].to_entity).toBe("B");
+	});
+
+	it("listRelationsForGraph with an empty node subset ships no edges", () => {
+		expect(db.knowledgeGraph.listRelationsForGraph(REPO, [])).toHaveLength(0);
+	});
+
+	it("listRelationsForGraph keeps legacy behavior when no subset is given", () => {
+		const rels = db.knowledgeGraph.listRelationsForGraph(REPO);
+		expect(rels.length).toBe(5);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // saveTaskRelations — FK integrity (TASK-065 / MEM-473)
 //
 // depends_on/extends/related_to relations reference entities extracted
@@ -469,6 +549,104 @@ describe("KG Archivist — saveTaskRelations FK integrity (TASK-065)", () => {
 			.get() as { cnt: number };
 		expect(dependsOn.cnt).toBe(0);
 		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeUndefined();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ensureRelation atomicity (TASK-072)
+//
+// ensureRelation wraps the 2 endpoint upserts + the relation insert in a
+// single BEGIN IMMEDIATE transaction (base.ts `transaction()` is immediate
+// per TASK-064 / MEM-475). These tests pin that contract: a failure anywhere
+// rolls back EVERYTHING (no half-written endpoint entities), and a nested
+// call inside an outer transaction commits atomically via savepoints
+// (better-sqlite3 reentrancy). Without the transaction wrapper the endpoint
+// upserts would autocommit and survive the failed relation insert — the
+// exact regression the rollback test guards against (TASK-078 finding).
+// ---------------------------------------------------------------------------
+
+describe("KnowledgeGraphEntity — ensureRelation atomicity (TASK-072)", () => {
+	let db: SQLiteStore;
+
+	const REPO = "kg-atomicity-test";
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+
+	afterEach(() => {
+		db.close();
+		vi.restoreAllMocks();
+	});
+
+	it("rolls back both endpoint upserts when the relation insert throws", () => {
+		const now = new Date().toISOString();
+
+		// Simulate a mid-transaction failure: the relation insert throws after
+		// the two endpoint upserts already ran inside the transaction.
+		const upsertRelationSpy = vi.spyOn(db.knowledgeGraph, "upsertRelation").mockImplementation(() => {
+			throw new Error("boom");
+		});
+
+		expect(() =>
+			db.knowledgeGraph.ensureRelation({
+				from_entity: "A",
+				from_type: "concept",
+				to_entity: "B",
+				to_type: "concept",
+				relation_type: "related_to",
+				repo: REPO,
+				owner: "test",
+				created_at: now
+			})
+		).toThrow("boom");
+
+		// The failure came from the relation insert (last step of ensureRelation).
+		expect(upsertRelationSpy).toHaveBeenCalledTimes(1);
+
+		// Rollback proof: neither endpoint survives the failed relation insert.
+		// Without the BEGIN IMMEDIATE wrapper these would have autocommitted.
+		expect(db.knowledgeGraph.getEntityByName("A")).toBeUndefined();
+		expect(db.knowledgeGraph.getEntityByName("B")).toBeUndefined();
+	});
+
+	it("nested inside an outer transaction, ensureRelation commits atomically via savepoints", () => {
+		const now = new Date().toISOString();
+
+		// Outer BEGIN IMMEDIATE; each nested ensureRelation runs inside a
+		// SAVEPOINT and releases it on success, so every write commits together
+		// when the outer transaction commits.
+		db.db
+			.transaction(() => {
+				db.knowledgeGraph.ensureRelation({
+					from_entity: "A",
+					from_type: "concept",
+					to_entity: "B",
+					to_type: "concept",
+					relation_type: "related_to",
+					repo: REPO,
+					owner: "test",
+					created_at: now
+				});
+				db.knowledgeGraph.ensureRelation({
+					from_entity: "C",
+					from_type: "concept",
+					to_entity: "D",
+					to_type: "concept",
+					relation_type: "related_to",
+					repo: REPO,
+					owner: "test",
+					created_at: now
+				});
+			})
+			.immediate();
+
+		// Both endpoint pairs and both edges committed atomically.
+		expect(db.knowledgeGraph.getEntityByName("A")).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("B")).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("C")).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("D")).toBeDefined();
+		expect(db.knowledgeGraph.listRelations(REPO)).toHaveLength(2);
 	});
 });
 
@@ -727,7 +905,7 @@ describe("KG Archivist — embedded KG context in memory-read", () => {
 		expect(kgContext.entities.length).toBeGreaterThan(0);
 		expect(kgContext.relations.length).toBeGreaterThan(0);
 		// Entities should include extracted names
-		const entityNames = kgContext.entities.map((e: { name: string }) => e.name);
+		const entityNames = (kgContext.entities as Array<{ name: string }>).map((e) => e.name);
 		expect(entityNames).toEqual(expect.arrayContaining(["Alice", "Seattle", "Acme Corp"]));
 	});
 
@@ -1018,6 +1196,11 @@ describe("KG Archivist — embedded KG context in task-read", () => {
 			owner: "test",
 			repo: TASK_REPO,
 			est_tokens: 0,
+			commit_id: null,
+			changed_files: [],
+			suggested_skills: [],
+			parent_id: null,
+			depends_on: null,
 			tags: [],
 			metadata: {},
 			doc_path: "",
@@ -1038,8 +1221,10 @@ describe("KG Archivist — embedded KG context in task-read", () => {
 				active_claim_role: null,
 				active_claim_claimed_at: null,
 				pending_handoff_count: 0,
+				pending_handoff_id: null,
 				pending_handoff_summary: null,
-				pending_handoff_to_agent: null
+				pending_handoff_to_agent: null,
+				pending_handoff_created_at: null
 			}
 		} as Task & {
 			coordination: Record<string, unknown>;
@@ -1084,6 +1269,11 @@ describe("KG Archivist — embedded KG context in task-read", () => {
 			owner: "test",
 			repo: TASK_REPO,
 			est_tokens: 0,
+			commit_id: null,
+			changed_files: [],
+			suggested_skills: [],
+			parent_id: null,
+			depends_on: null,
 			tags: [],
 			metadata: {},
 			doc_path: "",
@@ -1104,8 +1294,10 @@ describe("KG Archivist — embedded KG context in task-read", () => {
 				active_claim_role: null,
 				active_claim_claimed_at: null,
 				pending_handoff_count: 0,
+				pending_handoff_id: null,
 				pending_handoff_summary: null,
-				pending_handoff_to_agent: null
+				pending_handoff_to_agent: null,
+				pending_handoff_created_at: null
 			}
 		} as Task & {
 			coordination: Record<string, unknown>;

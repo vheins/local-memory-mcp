@@ -1,4 +1,5 @@
 import { BaseEntity } from "../storage/base";
+import { KG_MAX_GRAPH_EDGES } from "../utils/constants";
 
 // ---------------------------------------------------------------------------
 // Row shapes for the KG tables (entities / relations / observations)
@@ -105,6 +106,15 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 * entity upserts and the relation insert are all `INSERT OR IGNORE`, so
 	 * re-running after a sweep re-creates the swept endpoints and the edge
 	 * with no data duplication.
+	 *
+	 * ATOMIC (TASK-067 fix #2 / TASK-072): the two endpoint upserts + the
+	 * relation insert run inside a single BEGIN IMMEDIATE transaction (base.ts
+	 * `transaction()` is immediate per TASK-064 / MEM-475). Previously they
+	 * were 3 autocommit statements: a concurrent orphan-sweep from the second
+	 * process (dashboard worker) could delete an endpoint between the upsert
+	 * and the relation insert, failing the FK. IMMEDIATE grabs the SQLite
+	 * write lock upfront, so the endpoint stays visible to the relation insert
+	 * for the whole transaction.
 	 */
 	ensureRelation(params: {
 		from_entity: string;
@@ -116,31 +126,33 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		owner: string;
 		created_at: string;
 	}): void {
-		this.upsertEntity({
-			name: params.from_entity,
-			type: params.from_type,
-			description: null,
-			repo: params.repo,
-			owner: params.owner,
-			created_at: params.created_at,
-			updated_at: params.created_at
-		});
-		this.upsertEntity({
-			name: params.to_entity,
-			type: params.to_type,
-			description: null,
-			repo: params.repo,
-			owner: params.owner,
-			created_at: params.created_at,
-			updated_at: params.created_at
-		});
-		this.upsertRelation({
-			from_entity: params.from_entity,
-			to_entity: params.to_entity,
-			relation_type: params.relation_type,
-			repo: params.repo,
-			owner: params.owner,
-			created_at: params.created_at
+		this.transaction(() => {
+			this.upsertEntity({
+				name: params.from_entity,
+				type: params.from_type,
+				description: null,
+				repo: params.repo,
+				owner: params.owner,
+				created_at: params.created_at,
+				updated_at: params.created_at
+			});
+			this.upsertEntity({
+				name: params.to_entity,
+				type: params.to_type,
+				description: null,
+				repo: params.repo,
+				owner: params.owner,
+				created_at: params.created_at,
+				updated_at: params.created_at
+			});
+			this.upsertRelation({
+				from_entity: params.from_entity,
+				to_entity: params.to_entity,
+				relation_type: params.relation_type,
+				repo: params.repo,
+				owner: params.owner,
+				created_at: params.created_at
+			});
 		});
 	}
 
@@ -345,16 +357,38 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	/**
 	 * Graph edges for a repo (dashboard): relations joined against entities on
 	 * both ends so dangling references never surface.
+	 *
+	 * Server-side cap (TASK-068 S2 / TASK-070): returns the top-N highest-value
+	 * edges ranked by endpoint degree (degree(from) + degree(to), computed once
+	 * per node in a CTE) instead of serializing the whole relations table. The
+	 * client culls to 2,000 edges anyway (TASK-063), so shipping only the
+	 * highest-degree edges keeps the payload at a few hundred KB and avoids the
+	 * per-request 3-way join + sort over ALL relations.
 	 */
-	listGraphEdges(repo: string): Array<{ source: string; target: string; relation_type: string }> {
+	listGraphEdges(
+		repo: string,
+		limit = KG_MAX_GRAPH_EDGES
+	): Array<{ source: string; target: string; relation_type: string }> {
 		return this.all<{ source: string; target: string; relation_type: string }>(
-			`SELECT r.from_entity as source, r.to_entity as target, r.relation_type
+			`WITH degrees AS (
+			   SELECT node, COUNT(*) AS degree
+			   FROM (
+			     SELECT from_entity AS node FROM relations WHERE repo = ?
+			     UNION ALL
+			     SELECT to_entity AS node FROM relations WHERE repo = ?
+			   )
+			   GROUP BY node
+			 )
+			 SELECT r.from_entity as source, r.to_entity as target, r.relation_type
 			 FROM relations r
 			 INNER JOIN entities e1 ON r.from_entity = e1.name AND r.repo = e1.repo
 			 INNER JOIN entities e2 ON r.to_entity = e2.name AND r.repo = e2.repo
+			 LEFT JOIN degrees d1 ON d1.node = r.from_entity
+			 LEFT JOIN degrees d2 ON d2.node = r.to_entity
 			 WHERE r.repo = ?
-			 ORDER BY r.from_entity, r.to_entity`,
-			[repo]
+			 ORDER BY (COALESCE(d1.degree, 0) + COALESCE(d2.degree, 0)) DESC, r.from_entity, r.to_entity
+			 LIMIT ?`,
+			[repo, repo, repo, limit]
 		);
 	}
 
@@ -370,12 +404,45 @@ export class KnowledgeGraphEntity extends BaseEntity {
 
 	/**
 	 * Relations for the unified graph — optionally scoped to a repo.
+	 *
+	 * When `entityNames` is provided, ONLY edges whose BOTH endpoints are in
+	 * that node subset are returned (TASK-068 S2 / TASK-070): the unified
+	 * graph caps nodes at `limit` and previously fetched ALL relations, so the
+	 * payload scaled with the total edge count (~22k) instead of the node cap.
+	 * Bounded by `limit` (KG_MAX_GRAPH_EDGES) and served by the composite
+	 * index (repo, from_entity, to_entity) (migration v12).
 	 */
-	listRelationsForGraph(repo: string | undefined): KgRelationRow[] {
-		if (repo) {
-			return this.all<KgRelationRow>("SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity", [repo]);
+	listRelationsForGraph(repo: string | undefined, entityNames?: string[], limit = KG_MAX_GRAPH_EDGES): KgRelationRow[] {
+		if (entityNames) {
+			// Explicit (possibly empty) subset: empty → no edges, so a graph
+			// with zero entity nodes never ships dangling `ent-` edges.
+			if (entityNames.length === 0) return [];
+			const placeholders = entityNames.map(() => "?").join(",");
+			if (repo) {
+				return this.all<KgRelationRow>(
+					`SELECT * FROM relations
+					 WHERE repo = ? AND from_entity IN (${placeholders}) AND to_entity IN (${placeholders})
+					 ORDER BY from_entity, to_entity
+					 LIMIT ?`,
+					[repo, ...entityNames, ...entityNames, limit]
+				);
+			}
+			return this.all<KgRelationRow>(
+				`SELECT * FROM relations
+				 WHERE from_entity IN (${placeholders}) AND to_entity IN (${placeholders})
+				 ORDER BY from_entity, to_entity
+				 LIMIT ?`,
+				[...entityNames, ...entityNames, limit]
+			);
 		}
-		return this.all<KgRelationRow>("SELECT * FROM relations ORDER BY from_entity, to_entity");
+		// Legacy behavior (no subset): bounded by the same cap.
+		if (repo) {
+			return this.all<KgRelationRow>("SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity LIMIT ?", [
+				repo,
+				limit
+			]);
+		}
+		return this.all<KgRelationRow>("SELECT * FROM relations ORDER BY from_entity, to_entity LIMIT ?", [limit]);
 	}
 
 	// -----------------------------------------------------------------------
