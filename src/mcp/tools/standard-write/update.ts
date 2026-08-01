@@ -112,10 +112,12 @@ export async function coreUpdate(
 		params.metadata
 	];
 	if (contentRelatedFields.some((f) => f !== undefined)) {
-		db.db.transaction(() => {
-			db.standards.update(resolvedId, updates);
-			enqueueStandard(db, merged);
-		})();
+		db.db
+			.transaction(() => {
+				db.standards.update(resolvedId, updates);
+				enqueueStandard(db, merged);
+			})
+			.immediate();
 	} else {
 		db.standards.update(resolvedId, updates);
 	}

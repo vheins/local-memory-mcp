@@ -89,11 +89,13 @@ export async function handleCreateSingle(
 ): Promise<McpResponse> {
 	// Insert task + enqueue embedding/KG job atomically; enrichment (ONNX
 	// vector + compromise KG) runs via the outbox worker (TASK-013).
-	const { task } = storage.db.transaction(() => {
-		const created = coreCreate(params, storage);
-		enqueueTask(storage, created.task);
-		return created;
-	})();
+	const { task } = storage.db
+		.transaction(() => {
+			const created = coreCreate(params, storage);
+			enqueueTask(storage, created.task);
+			return created;
+		})
+		.immediate();
 
 	return createMcpResponse(
 		{

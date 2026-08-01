@@ -224,11 +224,13 @@ export async function handleBulk(
 		// Enqueue embedding/KG jobs for every created entry — one atomic batch
 		// (TASK-013). Enrichment runs later via the outbox worker, off the
 		// write-lock critical path.
-		db.db.transaction(() => {
-			for (const entry of createdEntries) {
-				enqueueMemory(db, entry);
-			}
-		})();
+		db.db
+			.transaction(() => {
+				for (const entry of createdEntries) {
+					enqueueMemory(db, entry);
+				}
+			})
+			.immediate();
 	}
 
 	const successCount = results.length;

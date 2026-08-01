@@ -163,6 +163,10 @@ export function createRouter(
 		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
 
 		let result: unknown;
+		// Lock-scope invariant (TASK-064 / MEM-475): write handlers must not
+		// await ONNX/async work under the lock — embeddings + KG enrichment run
+		// via the outbox worker (TASK-013); the memory conflict check is a sync
+		// TF-vector search. Lock hold time = DB work only.
 		const executeToolLogic = () => executor(args, db, vectors, { onProgress, signal });
 
 		if (isWrite) {

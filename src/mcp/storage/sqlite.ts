@@ -87,9 +87,17 @@ export class SQLiteStore {
 		// under WAL doubles write fsyncs for no integrity gain. See
 		// https://sqlite.org/wal.html#synchronous.
 		this.db.pragma("synchronous = NORMAL");
-		this.db.pragma("busy_timeout = 30000"); // increased: 30s
+		// busy_timeout = 5000 (was 30000): fail fast instead of blocking the
+		// event loop for 30s per contention. Correctness under multi-process
+		// writes comes from BEGIN IMMEDIATE transactions (base.ts) + the
+		// WriteLock mutex (write-lock.ts), NOT from a long busy wait
+		// (TASK-064 / MEM-475).
+		this.db.pragma("busy_timeout = 5000");
 		this.db.pragma("foreign_keys = ON");
-		this.db.pragma("wal_autocheckpoint = 100"); // more frequent: every 100 pages
+		// wal_autocheckpoint = 1000 (was 100): checkpoint every ~4MB instead of
+		// every ~400KB — frequent sync checkpoints on the writing connection
+		// under multi-writer traffic caused checkpoint thrash (TASK-064).
+		this.db.pragma("wal_autocheckpoint = 1000");
 
 		// Lightweight WAL checkpoint on startup (passive — does not block readers)
 		if (finalPath !== ":memory:") {

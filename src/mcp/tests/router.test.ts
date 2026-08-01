@@ -19,11 +19,22 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 	function makeMockDb(): SQLiteStore {
 		return {
 			db: {
-				// TASK-013 outbox pattern: write handlers run inside
-				// db.db.transaction(() => { insert; enqueue... })() — the mock
-				// mirrors better-sqlite3 by returning a callable that executes
-				// the body synchronously when invoked (TASK-047).
-				transaction: (fn: () => unknown) => () => fn(),
+				// TASK-013/TASK-047 outbox pattern: write handlers run inside
+				// db.db.transaction(() => { insert; enqueue... })(...). TASK-064
+				// upgraded all write sites to better-sqlite3 v12's
+				// db.transaction(fn).immediate(...) API (BEGIN IMMEDIATE). The mock
+				// mirrors that contract: a callable tx whose
+				// .immediate/.deferred/.exclusive/.default variants each execute
+				// the body synchronously with forwarded args, so the injected
+				// mock storage is used instead of the real DB.
+				transaction: (fn: (...args: unknown[]) => unknown) => {
+					const tx = (...args: unknown[]) => fn(...args);
+					tx.immediate = tx;
+					tx.deferred = tx;
+					tx.exclusive = tx;
+					tx.default = tx;
+					return tx;
+				},
 				prepare: vi.fn().mockReturnValue({
 					get: vi.fn().mockReturnValue({ max_seq: null }),
 					// enqueueEmbeddingJob + memory.delete queue purge call

@@ -90,13 +90,15 @@ export async function handleUpdate(
 	// Update row + outbox job atomically when content changed. Embedding/KG
 	// enrichment is deferred to the outbox worker (TASK-013) — the enqueue is
 	// a single sync upsert, keeping lock-held time at ~µs.
-	db.db.transaction(() => {
-		db.memories.update(resolvedId, updates);
-		if (params.content !== undefined) {
-			const fresh = db.memories.getById(resolvedId);
-			if (fresh) enqueueMemory(db, fresh);
-		}
-	})();
+	db.db
+		.transaction(() => {
+			db.memories.update(resolvedId, updates);
+			if (params.content !== undefined) {
+				const fresh = db.memories.getById(resolvedId);
+				if (fresh) enqueueMemory(db, fresh);
+			}
+		})
+		.immediate();
 
 	// Action logging happens once per tool call at the executor level
 	// (logToolAction in tools/index.ts / router.ts) — do NOT log here to

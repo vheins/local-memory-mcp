@@ -206,7 +206,16 @@ export function registerAllTools(
 					signal: extra?.mcpReq?.signal
 				};
 
-				// Execute tool logic under write lock if needed
+				// Execute tool logic under write lock if needed.
+				//
+				// Lock-scope invariant (TASK-064 / MEM-475): handlers MUST NOT
+				// await expensive ONNX/async work while holding the lock. All
+				// embeddings + KG enrichment run via the outbox worker
+				// (TASK-013) — memory/task/standard handlers only enqueue sync
+				// LWW jobs — so lock hold time stays at µs–ms DB work. The
+				// memory-write conflict check is a synchronous TF-vector search
+				// (memory.vector.checkConflicts), not ONNX. Do not reintroduce
+				// awaited model inference inside write handlers.
 				const executeFn = () => executor(normalizedArgs, store, vectors, executorExtra);
 
 				let result: McpResponse;

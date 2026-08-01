@@ -63,10 +63,12 @@ export async function handleCreate(
 
 	// Row + outbox job commit atomically inside the write transaction: ONNX
 	// embedding + KG extraction run later via the outbox worker (TASK-013).
-	db.db.transaction(() => {
-		db.memories.insert(entry);
-		enqueueMemory(db, entry);
-	})();
+	db.db
+		.transaction(() => {
+			db.memories.insert(entry);
+			enqueueMemory(db, entry);
+		})
+		.immediate();
 
 	return createMcpResponse(
 		{

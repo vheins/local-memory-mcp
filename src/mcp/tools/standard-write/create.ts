@@ -89,14 +89,16 @@ export async function coreCreate(
 		model: params.model || "unknown"
 	};
 
-	db.db.transaction(() => {
-		db.standards.insert(entry);
+	db.db
+		.transaction(() => {
+			db.standards.insert(entry);
 
-		// Enqueue embedding + KG enrichment (vector text, content extraction,
-		// parent/stack relations) to the outbox worker — off the write-lock
-		// critical path (TASK-013).
-		enqueueStandard(db, entry);
-	})();
+			// Enqueue embedding + KG enrichment (vector text, content extraction,
+			// parent/stack relations) to the outbox worker — off the write-lock
+			// critical path (TASK-013).
+			enqueueStandard(db, entry);
+		})
+		.immediate();
 
 	return { id: entry.id, code: entry.code!, title: entry.title, repo: entry.repo || "global" };
 }

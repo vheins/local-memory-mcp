@@ -85,13 +85,15 @@ export async function handleMemoryDelete(
 		// Archive + purge pending embedding-queue jobs in ONE transaction — a
 		// stale queue_jobs row could otherwise re-embed the vector and re-run
 		// KG extraction for an archived memory (TASK-042 / MEM-427).
-		db.db.transaction(() => {
-			db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
-			const placeholders = validIdsToDelete.map(() => "?").join(",");
-			db.db
-				.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
-				.run("memory", ...validIdsToDelete);
-		})();
+		db.db
+			.transaction(() => {
+				db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
+				const placeholders = validIdsToDelete.map(() => "?").join(",");
+				db.db
+					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
+					.run("memory", ...validIdsToDelete);
+			})
+			.immediate();
 
 		// Collect observation texts for batch KG cleanup (once per batch, not per
 		// item) — each (text, repo) pair is scoped to the memory's own repo so

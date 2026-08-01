@@ -20,6 +20,13 @@
  *   job it no longer owns.
  * - Lease expiry + startup reconcile + backfill cover crashes; purge sweeps
  *   finished rows.
+ *
+ * Write-lock policy (TASK-064 / MEM-475): worker writes stay OUTSIDE the
+ * proper-lockfile write lock by design. claim/complete/fail are single
+ * conditional UPDATE statements (SNAPSHOT-immune) and wait at most
+ * busy_timeout=5000 for a transient SQLite writer; the read-then-write
+ * backfill runs inside a BEGIN IMMEDIATE transaction so it grabs the SQLite
+ * write lock upfront instead of failing with SQLITE_BUSY_SNAPSHOT.
  */
 import { randomUUID } from "crypto";
 import type Database from "better-sqlite3";
@@ -317,153 +324,155 @@ export class Outbox {
 		if (cap <= 0) return 0;
 		let enqueued = 0;
 
-		this.store.db.transaction(() => {
-			const memories = this.store.db
-				.prepare(
-					`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
+		this.store.db
+			.transaction(() => {
+				const memories = this.store.db
+					.prepare(
+						`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
              FROM memories m LEFT JOIN memory_vectors mv ON mv.memory_id = m.id
              WHERE m.status = 'active' AND (mv.memory_id IS NULL OR mv.updated_at < m.updated_at)
              LIMIT ?`
-				)
-				.all(cap) as Array<{
-				id: string;
-				repo: string;
-				owner: string;
-				title: string | null;
-				content: string;
-				updated_at: string;
-			}>;
-
-			for (const m of memories) {
-				this.enqueue({
-					kind: "memory",
-					id: m.id,
-					repo: m.repo,
-					owner: m.owner,
-					payload: memoryJobPayload({
-						title: m.title,
-						content: m.content,
-						owner: m.owner,
-						repo: m.repo,
-						updatedAt: m.updated_at
-					})
-				});
-				enqueued++;
-			}
-
-			if (enqueued < cap) {
-				const standards = this.store.db
-					.prepare(
-						`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.stack, s.parent_id, s.updated_at
-               FROM coding_standards s LEFT JOIN standard_vectors sv ON sv.standard_id = s.id
-               WHERE sv.standard_id IS NULL OR sv.updated_at < s.updated_at
-               LIMIT ?`
 					)
-					.all(cap - enqueued) as Array<{
-					id: string;
-					repo: string | null;
-					owner: string;
-					title: string;
-					content: string;
-					context: string;
-					stack: string | null;
-					parent_id: string | null;
-					updated_at: string;
-				}>;
-
-				for (const s of standards) {
-					const standard: CodingStandardEntry = {
-						id: s.id,
-						code: undefined,
-						title: s.title,
-						content: s.content,
-						parent_id: s.parent_id,
-						context: s.context,
-						version: "",
-						language: null,
-						stack: this.parseStringArray(s.stack),
-						is_global: false,
-						owner: s.owner,
-						repo: s.repo,
-						tags: [],
-						metadata: {},
-						created_at: s.updated_at,
-						updated_at: s.updated_at,
-						hit_count: 0,
-						last_used_at: null,
-						agent: "backfill",
-						model: "backfill"
-					};
-					this.enqueue({
-						kind: "standard",
-						id: s.id,
-						repo: s.repo ?? "",
-						owner: s.owner,
-						payload: standardJobPayload(standard)
-					});
-					enqueued++;
-				}
-			}
-
-			if (enqueued < cap) {
-				const tasks = this.store.db
-					.prepare(
-						`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
-               FROM tasks t LEFT JOIN task_vectors tv ON tv.task_id = t.id
-               WHERE t.status != 'canceled' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
-               LIMIT ?`
-					)
-					.all(cap - enqueued) as Array<{
+					.all(cap) as Array<{
 					id: string;
 					repo: string;
 					owner: string;
-					phase: string;
-					title: string;
-					description: string | null;
-					parent_id: string | null;
-					metadata: string | null;
+					title: string | null;
+					content: string;
 					updated_at: string;
 				}>;
 
-				for (const t of tasks) {
-					const task: Task = {
-						id: t.id,
-						owner: t.owner,
-						repo: t.repo,
-						task_code: "",
-						phase: t.phase,
-						title: t.title,
-						description: t.description,
-						status: "backlog",
-						priority: 3,
-						agent: "backfill",
-						role: "backfill",
-						doc_path: null,
-						created_at: t.updated_at,
-						updated_at: t.updated_at,
-						in_progress_at: null,
-						finished_at: null,
-						canceled_at: null,
-						est_tokens: 0,
-						tags: [],
-						suggested_skills: [],
-						commit_id: null,
-						changed_files: [],
-						metadata: this.safeJson(t.metadata),
-						parent_id: t.parent_id,
-						depends_on: null
-					};
+				for (const m of memories) {
 					this.enqueue({
-						kind: "task",
-						id: t.id,
-						repo: t.repo,
-						owner: t.owner,
-						payload: taskJobPayload(task)
+						kind: "memory",
+						id: m.id,
+						repo: m.repo,
+						owner: m.owner,
+						payload: memoryJobPayload({
+							title: m.title,
+							content: m.content,
+							owner: m.owner,
+							repo: m.repo,
+							updatedAt: m.updated_at
+						})
 					});
 					enqueued++;
 				}
-			}
-		})();
+
+				if (enqueued < cap) {
+					const standards = this.store.db
+						.prepare(
+							`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.stack, s.parent_id, s.updated_at
+               FROM coding_standards s LEFT JOIN standard_vectors sv ON sv.standard_id = s.id
+               WHERE sv.standard_id IS NULL OR sv.updated_at < s.updated_at
+               LIMIT ?`
+						)
+						.all(cap - enqueued) as Array<{
+						id: string;
+						repo: string | null;
+						owner: string;
+						title: string;
+						content: string;
+						context: string;
+						stack: string | null;
+						parent_id: string | null;
+						updated_at: string;
+					}>;
+
+					for (const s of standards) {
+						const standard: CodingStandardEntry = {
+							id: s.id,
+							code: undefined,
+							title: s.title,
+							content: s.content,
+							parent_id: s.parent_id,
+							context: s.context,
+							version: "",
+							language: null,
+							stack: this.parseStringArray(s.stack),
+							is_global: false,
+							owner: s.owner,
+							repo: s.repo,
+							tags: [],
+							metadata: {},
+							created_at: s.updated_at,
+							updated_at: s.updated_at,
+							hit_count: 0,
+							last_used_at: null,
+							agent: "backfill",
+							model: "backfill"
+						};
+						this.enqueue({
+							kind: "standard",
+							id: s.id,
+							repo: s.repo ?? "",
+							owner: s.owner,
+							payload: standardJobPayload(standard)
+						});
+						enqueued++;
+					}
+				}
+
+				if (enqueued < cap) {
+					const tasks = this.store.db
+						.prepare(
+							`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
+               FROM tasks t LEFT JOIN task_vectors tv ON tv.task_id = t.id
+               WHERE t.status != 'canceled' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
+               LIMIT ?`
+						)
+						.all(cap - enqueued) as Array<{
+						id: string;
+						repo: string;
+						owner: string;
+						phase: string;
+						title: string;
+						description: string | null;
+						parent_id: string | null;
+						metadata: string | null;
+						updated_at: string;
+					}>;
+
+					for (const t of tasks) {
+						const task: Task = {
+							id: t.id,
+							owner: t.owner,
+							repo: t.repo,
+							task_code: "",
+							phase: t.phase,
+							title: t.title,
+							description: t.description,
+							status: "backlog",
+							priority: 3,
+							agent: "backfill",
+							role: "backfill",
+							doc_path: null,
+							created_at: t.updated_at,
+							updated_at: t.updated_at,
+							in_progress_at: null,
+							finished_at: null,
+							canceled_at: null,
+							est_tokens: 0,
+							tags: [],
+							suggested_skills: [],
+							commit_id: null,
+							changed_files: [],
+							metadata: this.safeJson(t.metadata),
+							parent_id: t.parent_id,
+							depends_on: null
+						};
+						this.enqueue({
+							kind: "task",
+							id: t.id,
+							repo: t.repo,
+							owner: t.owner,
+							payload: taskJobPayload(task)
+						});
+						enqueued++;
+					}
+				}
+			})
+			.immediate();
 
 		return enqueued;
 	}

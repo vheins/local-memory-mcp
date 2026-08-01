@@ -156,32 +156,34 @@ export async function executeBulkOperation(
 				// ── Synchronous DB mutations, atomic (single transaction) ──
 				// updateTask + comment + claims/handoffs cleanup either all commit
 				// or all roll back — no partial state on mid-way failure.
-				storage.db.transaction(() => {
-					storage.tasks.updateTask(resolvedId, itemUpdates);
+				storage.db
+					.transaction(() => {
+						storage.tasks.updateTask(resolvedId, itemUpdates);
 
-					// Comment insertion
-					if (itemUpdates.status !== undefined && itemUpdates.status !== existing.status) {
-						storage.taskComments.insertTaskComment({
-							id: randomUUID(),
-							task_id: resolvedId,
-							owner,
-							repo,
-							comment: (raw.comment as string) || `Status updated to ${itemUpdates.status}`,
-							agent: (raw.agent as string) || existing.agent || "unknown",
-							role: (raw.role as string) || existing.role || "unknown",
-							model: (raw.model as string) || "unknown",
-							previous_status: existing.status as TaskStatus,
-							next_status: itemUpdates.status as TaskStatus,
-							created_at: now
-						});
-					}
+						// Comment insertion
+						if (itemUpdates.status !== undefined && itemUpdates.status !== existing.status) {
+							storage.taskComments.insertTaskComment({
+								id: randomUUID(),
+								task_id: resolvedId,
+								owner,
+								repo,
+								comment: (raw.comment as string) || `Status updated to ${itemUpdates.status}`,
+								agent: (raw.agent as string) || existing.agent || "unknown",
+								role: (raw.role as string) || existing.role || "unknown",
+								model: (raw.model as string) || "unknown",
+								previous_status: existing.status as TaskStatus,
+								next_status: itemUpdates.status as TaskStatus,
+								created_at: now
+							});
+						}
 
-					// Claims/handoffs cleanup
-					if (itemUpdates.status === "completed" || itemUpdates.status === "canceled") {
-						storage.handoffs.releaseClaimsForTask(resolvedId);
-						storage.handoffs.updatePendingHandoffsForTask(resolvedId, "expired");
-					}
-				})();
+						// Claims/handoffs cleanup
+						if (itemUpdates.status === "completed" || itemUpdates.status === "canceled") {
+							storage.handoffs.releaseClaimsForTask(resolvedId);
+							storage.handoffs.updatePendingHandoffsForTask(resolvedId, "expired");
+						}
+					})
+					.immediate();
 
 				// Best-effort embedding/KG — enqueue to the outbox worker if
 				// title/description changed (TASK-013). Synchronous LWW upsert.
@@ -300,10 +302,12 @@ export async function executeBulkOperation(
 
 				// Insert + enqueue embedding/KG atomically; enrichment (ONNX +
 				// compromise KG) runs via the outbox worker (TASK-013).
-				storage.db.transaction(() => {
-					storage.tasks.insertTask(task);
-					enqueueTask(storage, task);
-				})();
+				storage.db
+					.transaction(() => {
+						storage.tasks.insertTask(task);
+						enqueueTask(storage, task);
+					})
+					.immediate();
 
 				results.push({
 					index: i,

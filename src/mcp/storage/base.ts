@@ -18,7 +18,11 @@ export abstract class BaseEntity {
 	constructor(protected db: Database.Database) {}
 
 	protected transaction<T>(fn: () => T): T {
-		return this.db.transaction(fn)();
+		// BEGIN IMMEDIATE grabs the SQLite write lock at transaction start, so a
+		// read-then-write body can never hit SQLITE_BUSY_SNAPSHOT (immediate,
+		// busy_timeout-immune) when another process commits mid-transaction
+		// (TASK-064 / MEM-475). Better-sqlite3 v12 API: transaction(fn).immediate().
+		return this.db.transaction(fn).immediate();
 	}
 
 	protected run(sql: string, params: unknown[] = []): { changes: number } {

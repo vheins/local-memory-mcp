@@ -81,10 +81,12 @@ export async function handleBulk(params: WriteParams, db: SQLiteStore, _vectors:
 
 			// Insert + enqueue embedding/KG atomically; enrichment deferred to
 			// the outbox worker (TASK-013).
-			db.db.transaction(() => {
-				db.standards.insert(entry);
-				enqueueStandard(db, entry);
-			})();
+			db.db
+				.transaction(() => {
+					db.standards.insert(entry);
+					enqueueStandard(db, entry);
+				})
+				.immediate();
 
 			results.push({ index: i, operation: "create", success: true, id: entry.id, code, title: std.name });
 		} catch (err) {

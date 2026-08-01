@@ -15,6 +15,12 @@ const LOCK_RETRY_COUNT = 250; // 250 * 200ms = 50s max wait
 export class WriteLock {
 	private lockTarget: string;
 	private locked = false;
+	/**
+	 * Intra-process acquisition queue: resolves when the previous withLock
+	 * section (acquire → fn → release) fully completes. Serializes concurrent
+	 * non-reentrant acquisitions so only one holder proceeds (TASK-064).
+	 */
+	private tail: Promise<unknown> = Promise.resolve();
 
 	constructor(dbPath: string) {
 		// Lock file is placed next to the DB
@@ -65,18 +71,39 @@ export class WriteLock {
 	 * lock held until it resolves, so there is exactly one acquire/release pair
 	 * per outermost call. proper-lockfile is NOT reentrant, so without this
 	 * guard a nested withWrite would self-deadlock until the stale timeout.
+	 *
+	 * Concurrent-safe (TASK-064 / MEM-475): two withLock calls racing before the
+	 * first acquire resolves both used to see `locked === false` and each start
+	 * their own proper-lockfile acquisition — one would win and the other would
+	 * burn the full 50s retry window and throw ELOCKED. All non-inline
+	 * acquisitions are therefore serialized through a promise chain (`tail`):
+	 * each caller waits for the previous acquire→fn→release section to fully
+	 * finish before it starts its own, so exactly one holder proceeds.
 	 */
 	async withLock<T>(fn: () => Promise<T> | T): Promise<T> {
 		if (this.locked) {
 			// We already hold the lock — run inline under the outer acquisition.
 			return await fn();
 		}
-		await this.acquire();
-		try {
-			return await fn();
-		} finally {
-			await this.release();
-		}
+
+		const run = async (): Promise<T> => {
+			await this.acquire();
+			try {
+				return await fn();
+			} finally {
+				await this.release();
+			}
+		};
+
+		const result = this.tail.then(run);
+		// Keep the chain alive on errors so a failed section never wedges
+		// subsequent callers; the caller still observes the rejection via
+		// `result`.
+		this.tail = result.then(
+			() => undefined,
+			() => undefined
+		);
+		return result;
 	}
 
 	/**

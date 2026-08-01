@@ -94,6 +94,10 @@ export const INDEX_STALENESS_TTL_MS = envInt("INDEX_STALENESS_TTL_MS", 30_000);
 export const EMBEDDING_QUEUE_BATCH_SIZE = envInt("EMBEDDING_QUEUE_BATCH_SIZE", 32);
 // Idle poll interval for the in-process lease worker.
 export const EMBEDDING_QUEUE_POLL_INTERVAL_MS = envInt("EMBEDDING_QUEUE_POLL_INTERVAL_MS", 500);
+// Idle backoff ceiling: when the queue is empty the poll interval grows
+// exponentially (with jitter) up to this cap, so two workers never busy-spin
+// or thundering-herd the same poll times (TASK-064 / MEM-475).
+export const EMBEDDING_QUEUE_MAX_POLL_INTERVAL_MS = envInt("EMBEDDING_QUEUE_MAX_POLL_INTERVAL_MS", 10_000);
 // Lease length for claimed jobs — a crash mid-batch is recovered after this
 // window via lease expiry + reconcile (crash-safe per MEM-368).
 export const EMBEDDING_QUEUE_LEASE_MS = envInt("EMBEDDING_QUEUE_LEASE_MS", 60_000);

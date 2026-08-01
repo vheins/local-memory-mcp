@@ -81,15 +81,17 @@ export async function handleStandardDelete(
 		// transaction — a stale queue_jobs row could otherwise re-embed the
 		// vector and re-run KG extraction for a deleted standard
 		// (TASK-042 / MEM-427).
-		db.db.transaction(() => {
-			for (const validId of validIdsToDelete) {
-				db.standards.delete(validId);
-			}
-			const placeholders = validIdsToDelete.map(() => "?").join(",");
-			db.db
-				.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
-				.run("standard", ...validIdsToDelete);
-		})();
+		db.db
+			.transaction(() => {
+				for (const validId of validIdsToDelete) {
+					db.standards.delete(validId);
+				}
+				const placeholders = validIdsToDelete.map(() => "?").join(",");
+				db.db
+					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
+					.run("standard", ...validIdsToDelete);
+			})
+			.immediate();
 
 		// Collect observation texts for batch KG cleanup (once per batch, not per
 		// item) — each (text, repo) pair is scoped to the standard's own repo so

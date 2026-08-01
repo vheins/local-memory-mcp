@@ -4,7 +4,7 @@
  * POLICY: action_log INSERTs NEVER acquire the file lock (WriteLock).
  *
  * Rationale:
- * - SQLite is opened with journal_mode=WAL + busy_timeout=30000 (see
+ * - SQLite is opened with journal_mode=WAL + busy_timeout=5000 (see
  *   storage/sqlite.ts), which already serializes single-row INSERTs safely
  *   across processes. action_log is append-only audit data — a concurrent
  *   INSERT only ever contends for the duration of a WAL commit (µs–ms).
@@ -60,11 +60,13 @@ export function logAction(
 export function logActions(db: SQLiteStore, entries: ActionLogEntry[]): void {
 	if (entries.length === 0) return;
 	try {
-		db.db.transaction((rows: ActionLogEntry[]) => {
-			for (const entry of rows) {
-				db.actions.logAction(entry.action, entry.owner, entry.repo, entry.options);
-			}
-		})(entries);
+		db.db
+			.transaction((rows: ActionLogEntry[]) => {
+				for (const entry of rows) {
+					db.actions.logAction(entry.action, entry.owner, entry.repo, entry.options);
+				}
+			})
+			.immediate(entries);
 	} catch (err) {
 		logger.error("Failed to log actions (batch)", { count: entries.length, error: String(err) });
 	}

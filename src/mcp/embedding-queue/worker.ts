@@ -9,6 +9,14 @@
  * claim/complete/fail — so writes stay fast while enrichment drains in the
  * background.
  *
+ * SQLITE-safety of the unlocked writes (TASK-064 / MEM-475): claim/complete/
+ * fail are single conditional UPDATE statements, which cannot hit
+ * SQLITE_BUSY_SNAPSHOT (no stale read snapshot) and wait at most
+ * busy_timeout=5000 for a transient writer; backfillMissingVectors is a
+ * read-then-write transaction and therefore runs with BEGIN IMMEDIATE
+ * (outbox.ts). The idle poll loop uses exponential backoff + jitter so two
+ * workers never busy-spin or thundering-herd the same poll times.
+ *
  * Crash-safety: a lease expires after 60s; the next claim cycle (or startup
  * reconcile) re-queues the job. KG observation inserts are idempotent
  * (unique index + INSERT OR IGNORE), so reprocessing never duplicates data.
@@ -29,6 +37,7 @@ import {
 	EMBEDDING_QUEUE_POISON_THRESHOLD,
 	EMBEDDING_QUEUE_POISON_TTL_MS,
 	EMBEDDING_QUEUE_POLL_INTERVAL_MS,
+	EMBEDDING_QUEUE_MAX_POLL_INTERVAL_MS,
 	EMBEDDING_QUEUE_PURGE_INTERVAL_MS
 } from "../utils/constants";
 import { Outbox } from "./outbox";
@@ -36,6 +45,7 @@ import { EmbeddingJobPayload, EmbeddingWorkerStats, QueueJobKind, QueueJobRow } 
 
 export interface EmbeddingWorkerOptions {
 	pollIntervalMs?: number;
+	maxPollIntervalMs?: number;
 	batchSize?: number;
 	leaseMs?: number;
 	poisonThreshold?: number;
@@ -56,6 +66,8 @@ export class EmbeddingWorker {
 	private running = false;
 	private stopped = false;
 	private modelReady = false;
+	/** Consecutive empty claim cycles — drives the idle poll backoff (TASK-064). */
+	private idleStreak = 0;
 	private readonly stats = {
 		processed: 0,
 		failed: 0,
@@ -72,6 +84,7 @@ export class EmbeddingWorker {
 		this.outbox = new Outbox(store);
 		this.opts = {
 			pollIntervalMs: options.pollIntervalMs ?? EMBEDDING_QUEUE_POLL_INTERVAL_MS,
+			maxPollIntervalMs: options.maxPollIntervalMs ?? EMBEDDING_QUEUE_MAX_POLL_INTERVAL_MS,
 			batchSize: options.batchSize ?? EMBEDDING_QUEUE_BATCH_SIZE,
 			leaseMs: options.leaseMs ?? EMBEDDING_QUEUE_LEASE_MS,
 			poisonThreshold: options.poisonThreshold ?? EMBEDDING_QUEUE_POISON_THRESHOLD,
@@ -157,14 +170,33 @@ export class EmbeddingWorker {
 		this.running = true;
 		try {
 			const processed = await this.runOnce();
-			// Drain quickly while the queue is non-empty, idle-poll otherwise.
-			this.schedule(processed > 0 ? Math.max(10, this.opts.pollIntervalMs / 2) : this.opts.pollIntervalMs);
+			// Drain while the queue is non-empty (bounded interval — never the
+			// old 10ms spin), exponential backoff + jitter while idle so two
+			// workers don't busy-poll or thundering-herd (TASK-064 / MEM-475).
+			this.schedule(this.nextDelay(processed));
 		} catch (err) {
 			logger.warn("[EmbeddingWorker] cycle failed", { error: String(err) });
 			this.schedule(this.opts.pollIntervalMs);
 		} finally {
 			this.running = false;
 		}
+	}
+
+	/**
+	 * Compute the next poll delay. A non-empty batch resets the idle streak and
+	 * polls at half the configured interval (floored at 50ms — fast drain, no
+	 * CPU spin). An empty batch grows the delay exponentially from
+	 * `pollIntervalMs` up to `maxPollIntervalMs`, with 0.5–1.0× random jitter
+	 * to decorrelate the MCP-server and dashboard workers in the same DB.
+	 */
+	private nextDelay(processed: number): number {
+		if (processed > 0) {
+			this.idleStreak = 0;
+			return Math.max(50, this.opts.pollIntervalMs / 2);
+		}
+		const base = Math.min(this.opts.pollIntervalMs * 2 ** this.idleStreak, this.opts.maxPollIntervalMs);
+		this.idleStreak = Math.min(this.idleStreak + 1, 16);
+		return base * (0.5 + Math.random() * 0.5);
 	}
 
 	/**
