@@ -32,6 +32,8 @@ import { randomUUID } from "crypto";
 import type Database from "better-sqlite3";
 import { SQLiteStore } from "../storage/sqlite";
 import { buildStandardVectorText } from "../tools/standard.shared";
+import { logger } from "../utils/logger";
+import { EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE } from "../utils/constants";
 import { MemoryEntry, Task } from "../types";
 import { CodingStandardEntry } from "../types/memory";
 import { EmbeddingJobInput, EmbeddingJobPayload, QueueCounts, QueueJobRow, QueueJobStatus } from "./types";
@@ -116,6 +118,25 @@ export function enqueueEmbeddingJob(store: SQLiteStore, input: EmbeddingJobInput
 	store.db
 		.prepare(ENQUEUE_SQL)
 		.run(randomUUID(), input.kind, input.id, input.repo ?? "", JSON.stringify(input.payload), now, now);
+}
+
+/**
+ * Insert ONLY IF the (entity_kind, entity_id) row does not exist yet — never
+ * touches an existing row. Backfill uses this so a live queued row keeps its
+ * attempts/backoff_until/last_error instead of being LWW-reset to
+ * attempts=0/backoff=NULL (TASK-068 S1 / TASK-069): FK-poisoned jobs must
+ * keep their exponential retry backoff, and a restart must not defeat it.
+ */
+export function enqueueIfAbsent(store: SQLiteStore, input: EmbeddingJobInput): boolean {
+	const now = new Date().toISOString();
+	const result = store.db
+		.prepare(
+			`INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, status, attempts, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+			 ON CONFLICT(entity_kind, entity_id) DO NOTHING`
+		)
+		.run(randomUUID(), input.kind, input.id, input.repo ?? "", JSON.stringify(input.payload), now, now);
+	return result.changes > 0;
 }
 
 /** Convenience wrappers used by the write handlers. */
@@ -316,12 +337,34 @@ export class Outbox {
 	/**
 	 * Startup backfill: enqueue rows whose vector is missing or stale (entity
 	 * updated_at newer than the vector row). Runs once per process start,
-	 * bounded by `cap`. Existing pending/claimed rows are refreshed via the
-	 * LWW upsert; rows another worker just embedded are skipped by the
-	 * freshness comparison.
+	 * bounded by `cap`.
+	 *
+	 * Backpressure (TASK-068 S1 / TASK-069):
+	 * - Gated: when pending + claimed already reach `minPendingClaimed`
+	 *   (default EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE = 500), backfill returns 0
+	 *   immediately — a deep backlog is NOT double-refilled at restart; the
+	 *   worker drains the jobs it already has.
+	 * - Insert-only: rows ABSENT from queue_jobs are inserted fresh; rows that
+	 *   already exist (pending/claimed/backoff) are NEVER touched, so their
+	 *   attempts/backoff_until survive. This preserves exponential retry
+	 *   backoff for FK-poisoned jobs instead of resetting them to retry
+	 *   immediately (the pre-fix CPU multiplier).
+	 * - Rows another worker just embedded are skipped by the freshness
+	 *   comparison (vector updated_at >= entity updated_at).
 	 */
-	backfillMissingVectors(cap: number): number {
+	backfillMissingVectors(cap: number, minPendingClaimed = EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE): number {
 		if (cap <= 0) return 0;
+
+		const counts = this.countByStatus();
+		if (counts.pending + counts.claimed >= minPendingClaimed) {
+			logger.info("[EmbeddingQueue] backfill gated by queue depth", {
+				pending: counts.pending,
+				claimed: counts.claimed,
+				gate: minPendingClaimed
+			});
+			return 0;
+		}
+
 		let enqueued = 0;
 
 		this.store.db
@@ -343,20 +386,23 @@ export class Outbox {
 				}>;
 
 				for (const m of memories) {
-					this.enqueue({
-						kind: "memory",
-						id: m.id,
-						repo: m.repo,
-						owner: m.owner,
-						payload: memoryJobPayload({
-							title: m.title,
-							content: m.content,
-							owner: m.owner,
+					if (
+						enqueueIfAbsent(this.store, {
+							kind: "memory",
+							id: m.id,
 							repo: m.repo,
-							updatedAt: m.updated_at
+							owner: m.owner,
+							payload: memoryJobPayload({
+								title: m.title,
+								content: m.content,
+								owner: m.owner,
+								repo: m.repo,
+								updatedAt: m.updated_at
+							})
 						})
-					});
-					enqueued++;
+					) {
+						enqueued++;
+					}
 				}
 
 				if (enqueued < cap) {
@@ -402,14 +448,17 @@ export class Outbox {
 							agent: "backfill",
 							model: "backfill"
 						};
-						this.enqueue({
-							kind: "standard",
-							id: s.id,
-							repo: s.repo ?? "",
-							owner: s.owner,
-							payload: standardJobPayload(standard)
-						});
-						enqueued++;
+						if (
+							enqueueIfAbsent(this.store, {
+								kind: "standard",
+								id: s.id,
+								repo: s.repo ?? "",
+								owner: s.owner,
+								payload: standardJobPayload(standard)
+							})
+						) {
+							enqueued++;
+						}
 					}
 				}
 
@@ -461,14 +510,17 @@ export class Outbox {
 							parent_id: t.parent_id,
 							depends_on: null
 						};
-						this.enqueue({
-							kind: "task",
-							id: t.id,
-							repo: t.repo,
-							owner: t.owner,
-							payload: taskJobPayload(task)
-						});
-						enqueued++;
+						if (
+							enqueueIfAbsent(this.store, {
+								kind: "task",
+								id: t.id,
+								repo: t.repo,
+								owner: t.owner,
+								payload: taskJobPayload(task)
+							})
+						) {
+							enqueued++;
+						}
 					}
 				}
 			})

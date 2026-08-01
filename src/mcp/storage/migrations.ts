@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 12;
 
 interface Migration {
 	version: number;
@@ -892,6 +892,38 @@ const MIGRATIONS: Migration[] = [
 			// later by re-running this migration or `INSERT INTO
 			// memories_fts(memories_fts) VALUES('rebuild')` on an empty table.
 			// ──────────────────────────────────────────────
+		}
+	},
+	{
+		version: 11,
+		name: "queue-jobs-status-index",
+		up: (db) => {
+			// Serve the queue_jobs full scans (TASK-068 S4 / TASK-071):
+			//   - countByStatus(): SELECT status, COUNT(*) ... GROUP BY status
+			//   - purge(): DELETE ... WHERE status = ? AND updated_at < ?
+			// idx_queue_jobs_claim(status, backoff_until, created_at) serves
+			// claim()'s pending/expired branches but NOT the updated_at-driven
+			// purge, so done/poison rows accumulated and every status poll
+			// walked the whole table. This composite index covers both.
+			db.exec("CREATE INDEX IF NOT EXISTS idx_queue_jobs_status_updated ON queue_jobs(status, updated_at)");
+			logger.info("[Migration] Added idx_queue_jobs_status_updated (status, updated_at)");
+		}
+	},
+	{
+		version: 12,
+		name: "kg-relations-composite-index",
+		up: (db) => {
+			// Serve the KG dashboard graph queries (TASK-068 S2 / TASK-070):
+			//   - listGraphEdges: relations scoped by repo joined to entities
+			//     on both endpoints (the 3-way INNER JOIN over ALL relations)
+			//   - listRelationsForGraph(repo, entityNames): filtered joins
+			//     WHERE repo = ? AND from_entity IN (...) AND to_entity IN (...)
+			// The single-column idx_relations_repo already exists; the
+			// composite (repo, from_entity, to_entity) lets SQLite satisfy the
+			// repo-scoped from/to predicates without a sort or scan of other
+			// repos' relations.
+			db.exec("CREATE INDEX IF NOT EXISTS idx_relations_repo_from_to ON relations(repo, from_entity, to_entity)");
+			logger.info("[Migration] Added idx_relations_repo_from_to (repo, from_entity, to_entity)");
 		}
 	}
 ];

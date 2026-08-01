@@ -110,8 +110,30 @@ export const EMBEDDING_QUEUE_BACKOFF_MAX_MS = 60_000;
 // start (bounds first-boot CPU; new writes are unaffected — they enqueue
 // synchronously and drain within seconds).
 export const EMBEDDING_QUEUE_BACKFILL_CAP = envInt("EMBEDDING_QUEUE_BACKFILL_CAP", 2_000);
-// Purge TTLs: completed jobs are swept after 24h, poisoned after 7d.
-export const EMBEDDING_QUEUE_DONE_TTL_MS = 24 * 60 * 60 * 1000;
+// Backfill backpressure gate (TASK-068 S1 / TASK-069): startup backfill is
+// skipped entirely when pending + claimed jobs already exceed this many —
+// with a deep backlog a restart must NOT double-refill the queue. The queue
+// drains the backlog it already has; backfill only runs when it is shallow.
+export const EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE = envInt("EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE", 500);
+// Size-driven drain cadence (TASK-068 S1 / TASK-069): after this many
+// CONSECUTIVE non-empty batches the worker backs off to `pollIntervalMs`
+// instead of the fast max(50, poll/2) — the queue is deep, so it keeps
+// draining at a bounded rate instead of polling between batches at the
+// half-interval. When the queue empties, the existing exponential idle
+// backoff applies.
+export const EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK = envInt("EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK", 5);
+// Purge TTLs: completed jobs are swept after 6h (TASK-071 — done rows are
+// pure history; 24h retention let queue_jobs scans grow needlessly), poisoned
+// after 7d (kept longer for diagnostics).
+export const EMBEDDING_QUEUE_DONE_TTL_MS = 6 * 60 * 60 * 1000;
 export const EMBEDDING_QUEUE_POISON_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // Frequency of the purge sweep.
 export const EMBEDDING_QUEUE_PURGE_INTERVAL_MS = 15 * 60 * 1000;
+
+// ── KG graph (dashboard) ─────────────────────────────────────────────────
+// Server-side edge cap for the KG graph endpoints (TASK-068 S2 / TASK-070):
+// listGraphEdges returns the top-N highest-value edges (ranked by endpoint
+// degree) instead of serializing the whole relations table (~22k edges ≈ 2MB
+// JSON per request). listRelationsForGraph filters to the capped node subset
+// and is bounded by the same limit, so payloads scale with the node cap.
+export const KG_MAX_GRAPH_EDGES = envInt("KG_MAX_GRAPH_EDGES", 4_000);

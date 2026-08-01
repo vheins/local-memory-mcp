@@ -200,6 +200,68 @@ describe("Outbox — backfill excludes canceled tasks (TASK-042)", () => {
 	});
 });
 
+describe("Outbox — backfill backpressure: gate + preserve backoff (TASK-069)", () => {
+	let db: SQLiteStore;
+	let outbox: Outbox;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		outbox = new Outbox(db);
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("backfill is gated when pending + claimed already exceed the threshold — no double-refill on a deep queue", () => {
+		// A deep queue: 3 pending jobs (all still vector-less so backfill would
+		// otherwise select them).
+		const tasks = [makeTask(), makeTask(), makeTask()];
+		for (const t of tasks) {
+			db.tasks.insertTask(t);
+			enqueueTask(db, t);
+		}
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM queue_jobs")).toBe(3);
+
+		// Gate at 2: pending+claimed (3) >= 2 → backfill must not enqueue.
+		const enqueued = outbox.backfillMissingVectors(100, 2);
+		expect(enqueued).toBe(0);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM queue_jobs")).toBe(3);
+	});
+
+	it("backfill inserts ONLY rows absent from queue_jobs — live attempts/backoff are never reset", () => {
+		// Task A is already queued and in exponential backoff (attempts=3,
+		// backoff_until in the future). Task B is vector-less and NOT queued.
+		const taskA = makeTask();
+		const taskB = makeTask({ title: "Absent task B" });
+		db.tasks.insertTask(taskA);
+		db.tasks.insertTask(taskB);
+		enqueueTask(db, taskA);
+
+		const futureBackoff = new Date(Date.now() + 60_000).toISOString();
+		db.db
+			.prepare("UPDATE queue_jobs SET attempts = 3, backoff_until = ?, last_error = 'FK failure' WHERE entity_id = ?")
+			.run(futureBackoff, taskA.id);
+
+		// Shallow queue (1 pending < default gate 500) → backfill runs.
+		const enqueued = outbox.backfillMissingVectors(100);
+		expect(enqueued).toBe(1); // only the absent task B
+
+		// Live row A: attempts/backoff/last_error/status fully preserved.
+		const rowA = getJob(db, "task", taskA.id)!;
+		expect(rowA.status).toBe("pending");
+		expect(rowA.attempts).toBe(3);
+		expect(rowA.backoff_until).toBe(futureBackoff);
+		expect(rowA.last_error).toBe("FK failure");
+
+		// Absent task B inserted fresh: attempts=0, no backoff.
+		const rowB = getJob(db, "task", taskB.id)!;
+		expect(rowB).toBeDefined();
+		expect(rowB.attempts).toBe(0);
+		expect(rowB.backoff_until).toBeNull();
+	});
+});
+
 describe("EmbeddingWorker — canceled task jobs complete as no-ops (TASK-042)", () => {
 	let db: SQLiteStore;
 	let worker: EmbeddingWorker;

@@ -104,6 +104,10 @@ export class UnifiedGraphController {
 
 			if (domains.includes("entity")) {
 				const entities = db.knowledgeGraph.listEntitiesForGraph(repo, limit);
+				// Node subset for the edge filter (TASK-070): only edges whose
+				// BOTH endpoints are among the capped entity nodes are shipped,
+				// so the payload scales with the node cap, not total edges.
+				const entityNames = entities.map((ent) => ent.name);
 
 				for (const ent of entities) {
 					nodes.push({
@@ -116,7 +120,7 @@ export class UnifiedGraphController {
 					});
 				}
 
-				const relations = db.knowledgeGraph.listRelationsForGraph(repo);
+				const relations = db.knowledgeGraph.listRelationsForGraph(repo, entityNames);
 
 				for (const rel of relations) {
 					edges.push({

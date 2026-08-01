@@ -29,11 +29,13 @@ import { saveExtractions, saveStandardRelations, saveTaskRelations } from "../to
 import { logger } from "../utils/logger";
 import {
 	EMBEDDING_QUEUE_BACKFILL_CAP,
+	EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE,
 	EMBEDDING_QUEUE_BACKOFF_BASE_MS,
 	EMBEDDING_QUEUE_BACKOFF_MAX_MS,
 	EMBEDDING_QUEUE_BATCH_SIZE,
 	EMBEDDING_QUEUE_DONE_TTL_MS,
 	EMBEDDING_QUEUE_LEASE_MS,
+	EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK,
 	EMBEDDING_QUEUE_POISON_THRESHOLD,
 	EMBEDDING_QUEUE_POISON_TTL_MS,
 	EMBEDDING_QUEUE_POLL_INTERVAL_MS,
@@ -52,6 +54,7 @@ export interface EmbeddingWorkerOptions {
 	backoffBaseMs?: number;
 	backoffMaxMs?: number;
 	backfillCap?: number;
+	backfillMinQueue?: number;
 	doneTtlMs?: number;
 	poisonTtlMs?: number;
 	purgeIntervalMs?: number;
@@ -68,6 +71,8 @@ export class EmbeddingWorker {
 	private modelReady = false;
 	/** Consecutive empty claim cycles — drives the idle poll backoff (TASK-064). */
 	private idleStreak = 0;
+	/** Consecutive non-empty claim cycles — drives the deep-queue backoff (TASK-069). */
+	private nonEmptyStreak = 0;
 	private readonly stats = {
 		processed: 0,
 		failed: 0,
@@ -91,6 +96,7 @@ export class EmbeddingWorker {
 			backoffBaseMs: options.backoffBaseMs ?? EMBEDDING_QUEUE_BACKOFF_BASE_MS,
 			backoffMaxMs: options.backoffMaxMs ?? EMBEDDING_QUEUE_BACKOFF_MAX_MS,
 			backfillCap: options.backfillCap ?? EMBEDDING_QUEUE_BACKFILL_CAP,
+			backfillMinQueue: options.backfillMinQueue ?? EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE,
 			doneTtlMs: options.doneTtlMs ?? EMBEDDING_QUEUE_DONE_TTL_MS,
 			poisonTtlMs: options.poisonTtlMs ?? EMBEDDING_QUEUE_POISON_TTL_MS,
 			purgeIntervalMs: options.purgeIntervalMs ?? EMBEDDING_QUEUE_PURGE_INTERVAL_MS
@@ -183,17 +189,28 @@ export class EmbeddingWorker {
 	}
 
 	/**
-	 * Compute the next poll delay. A non-empty batch resets the idle streak and
-	 * polls at half the configured interval (floored at 50ms — fast drain, no
-	 * CPU spin). An empty batch grows the delay exponentially from
-	 * `pollIntervalMs` up to `maxPollIntervalMs`, with 0.5–1.0× random jitter
-	 * to decorrelate the MCP-server and dashboard workers in the same DB.
+	 * Compute the next poll delay.
+	 *
+	 * Non-empty batches: the first `EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK`
+	 * (default 5) consecutive non-empty cycles poll at half the configured
+	 * interval (floored at 50ms — fast drain). Once the streak passes the
+	 * threshold the queue is provably deep, so the worker backs off to
+	 * `pollIntervalMs` — it keeps draining at a bounded rate without polling
+	 * between every batch (TASK-068 S1 / TASK-069). An empty batch resets the
+	 * streak and grows the delay exponentially from `pollIntervalMs` up to
+	 * `maxPollIntervalMs`, with 0.5–1.0× random jitter to decorrelate the
+	 * MCP-server and dashboard workers in the same DB.
 	 */
 	private nextDelay(processed: number): number {
 		if (processed > 0) {
 			this.idleStreak = 0;
+			this.nonEmptyStreak = Math.min(this.nonEmptyStreak + 1, 32);
+			if (this.nonEmptyStreak >= EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK) {
+				return this.opts.pollIntervalMs;
+			}
 			return Math.max(50, this.opts.pollIntervalMs / 2);
 		}
+		this.nonEmptyStreak = 0;
 		const base = Math.min(this.opts.pollIntervalMs * 2 ** this.idleStreak, this.opts.maxPollIntervalMs);
 		this.idleStreak = Math.min(this.idleStreak + 1, 16);
 		return base * (0.5 + Math.random() * 0.5);
@@ -332,11 +349,22 @@ export class EmbeddingWorker {
 	private async runMaintenance(): Promise<void> {
 		try {
 			const reconciled = this.outbox.reconcileExpiredLeases();
-			const backfilled = this.outbox.backfillMissingVectors(this.opts.backfillCap);
+			// Backfill is gated inside backfillMissingVectors (pending+claimed
+			// >= backfillMinQueue → 0). Log the queue depth so users can see
+			// whether the backlog is draining (TASK-069 observability).
+			const counts = this.outbox.countByStatus();
+			const backfilled = this.outbox.backfillMissingVectors(this.opts.backfillCap, this.opts.backfillMinQueue);
 			const purged = this.outbox.purge(this.opts.doneTtlMs, this.opts.poisonTtlMs);
 			logger.info("[EmbeddingWorker] startup maintenance complete", {
 				reconciled,
 				backfilled,
+				queueDepth: {
+					pending: counts.pending,
+					claimed: counts.claimed,
+					done: counts.done,
+					poison: counts.poison,
+					total: counts.total
+				},
 				purgedDone: purged.purgedDone,
 				purgedPoison: purged.purgedPoison
 			});

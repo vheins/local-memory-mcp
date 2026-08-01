@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "../lib/context";
 import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
+import { KG_MAX_GRAPH_EDGES } from "../../mcp/utils/constants";
 
 export class KGController {
 	static async listEntities(req: express.Request, res: express.Response) {
@@ -62,7 +63,12 @@ export class KGController {
 			const nodes = db.knowledgeGraph.listGraphNodes(repo);
 			const edges = db.knowledgeGraph.listGraphEdges(repo);
 
-			res.json(jsonApiRes({ id: `graph-${repo}`, nodes, edges }, "graph"));
+			// Server-side edge cap (TASK-070): the response shape stays
+			// `{ nodes, edges }`; `truncated` flags when the edge list was
+			// clipped to KG_MAX_GRAPH_EDGES (client can show "showing top N").
+			const truncated = edges.length >= KG_MAX_GRAPH_EDGES;
+
+			res.json(jsonApiRes({ id: `graph-${repo}`, nodes, edges, truncated }, "graph"));
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : "Internal server error";
 			res.status(500).json(jsonApiError(message));
