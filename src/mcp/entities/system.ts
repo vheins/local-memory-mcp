@@ -11,7 +11,14 @@ import {
 } from "../types";
 import { HANDOFF_STATUS_PENDING } from "../types";
 
+// ─── Global dashboard stats cache ────────────────────────────────────────────
+// TTL in ms. Global stats are invariant between mutations; a short TTL avoids
+// redundant full-table aggregation on every repo-select / refresh while keeping
+// stale data bounded to ≤7 s.
+const GLOBAL_STATS_CACHE_TTL_MS = 7_000;
+
 export class SystemEntity extends BaseEntity {
+	private _globalStatsCache: { data: ReturnType<SystemEntity["getGlobalDashboardStats"]>; ts: number } | null = null;
 	private buildTaskStats(rows: Array<{ status: string; count: number }>) {
 		const taskStats = {
 			total: 0,
@@ -256,6 +263,17 @@ export class SystemEntity extends BaseEntity {
 			staleClaims: number;
 		}>;
 	} {
+		const now = Date.now();
+		if (this._globalStatsCache && now - this._globalStatsCache.ts < GLOBAL_STATS_CACHE_TTL_MS) {
+			return this._globalStatsCache.data;
+		}
+
+		const data = this.computeGlobalDashboardStats();
+		this._globalStatsCache = { data, ts: now };
+		return data;
+	}
+
+	private computeGlobalDashboardStats(): ReturnType<SystemEntity["getGlobalDashboardStats"]> {
 		const totalCountRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES}`);
 		const avgImportanceRow = this.get<{ avg: number }>(`SELECT AVG(importance) as avg FROM ${TABLE_MEMORIES}`);
 		const totalHitCountRow = this.get<{ count: number }>(`SELECT SUM(hit_count) as count FROM ${TABLE_MEMORIES}`);

@@ -4,6 +4,13 @@ import { alertError } from "../confirm";
 
 const TAB_SWITCH_DEBOUNCE_MS = 50;
 const DRAWER_CLOSE_TRANSITION_MS = 300;
+
+// ─── Client-side global stats cache ──────────────────────────────────────────
+// Global dashboard stats are invariant between repo-level mutations. A short
+// client TTL avoids redundant HTTP round-trips on repo select / tab switch /
+// refresh while keeping staleness bounded to ≤5 s.
+const GLOBAL_STATS_CACHE_TTL_MS = 5_000;
+let globalStatsCache: { ts: number } | null = null;
 import {
 	activeTab,
 	currentRepo,
@@ -97,11 +104,16 @@ export function createAppHandler(refs: {
 		}
 	}
 
-	async function loadGlobalStats() {
+	async function loadGlobalStats(forceRefresh = false) {
+		const now = Date.now();
+		if (!forceRefresh && globalStatsCache && now - globalStatsCache.ts < GLOBAL_STATS_CACHE_TTL_MS) {
+			return;
+		}
 		try {
 			const [stats, timeStats] = await Promise.all([api.stats(), api.taskTimeStats()]);
 			globalDashboardStats.set(stats);
 			globalTaskTimeStats.set(timeStats);
+			globalStatsCache = { ts: now };
 		} catch (e) {
 			console.error("Failed to load global stats:", e);
 		}
@@ -142,13 +154,13 @@ export function createAppHandler(refs: {
 		}
 	}
 
-	async function loadData() {
+	async function loadData(forceRefresh = false) {
 		const repo = get(currentRepo);
 		if (repo) {
-			await Promise.all([loadGlobalStats(), loadStats(), loadRecentActions()]);
+			await Promise.all([loadGlobalStats(forceRefresh), loadStats(), loadRecentActions()]);
 			return;
 		}
-		await loadGlobalStats();
+		await loadGlobalStats(forceRefresh);
 	}
 
 	async function onRepoSelect(repo: string) {
@@ -161,7 +173,7 @@ export function createAppHandler(refs: {
 
 	async function onRefresh() {
 		await loadHealth();
-		await loadData();
+		await loadData(true);
 		const tab = get(activeTab);
 		const repo = get(currentRepo);
 		if (tab === "memories") refs.memoryList?.refresh();
