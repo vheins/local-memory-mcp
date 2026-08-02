@@ -49,7 +49,7 @@
 		"start": "node dist/mcp/server.js",
 		"start:mcp": "node dist/mcp/server.js",
 		"dashboard": "node dist/dashboard/server.js",
-		"both": "npm run start & npm run dashboard",
+		"both": "node dist/mcp/server.js & SERVER_PID=$!; node dist/dashboard/server.js & DASH_PID=$!; trap 'kill $SERVER_PID $DASH_PID 2>/dev/null' EXIT INT TERM; wait",
 		"test": "vitest --run",
 		"test:watch": "vitest",
 		"type-check": "tsc --noEmit && svelte-check --tsconfig ./src/dashboard/ui/tsconfig.json",
