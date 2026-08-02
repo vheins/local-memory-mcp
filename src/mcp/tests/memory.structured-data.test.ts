@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createTestStore } from "../storage/sqlite";
-import { StructuredDataSchema } from "../tools/schemas/shared";
 import type { MemoryEntry } from "../types";
 
 function createMemory(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -93,20 +92,5 @@ describe("Memory structuredData storage conversion", () => {
 		expect(persistedMetadata).toEqual({ source: "empty-explicit", structuredData: {} });
 		expect(stored?.structuredData).toEqual({});
 		expect(stored?.metadata).toEqual({ source: "empty-explicit" });
-	});
-
-	it("rejects non-JSON-serializable structuredData values", () => {
-		const circular: Record<string, unknown> = {};
-		circular.self = circular;
-
-		expect(StructuredDataSchema.safeParse({ valid: true }).success).toBe(true);
-		expect(StructuredDataSchema.safeParse({ invalid: undefined }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse({ invalid: () => true }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse({ invalid: Symbol("invalid") }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse({ invalid: BigInt(1) }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse({ invalid: Number.NaN }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse({ invalid: Number.POSITIVE_INFINITY }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse({ invalid: new Date() }).success).toBe(false);
-		expect(StructuredDataSchema.safeParse(circular).success).toBe(false);
 	});
 });

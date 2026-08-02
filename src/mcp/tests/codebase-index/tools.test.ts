@@ -15,14 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { ZodError } from "zod";
-import {
-	IndexRepoSchema,
-	IndexStatusSchema,
-	GetArchitectureSchema,
-	GetFileSymbolsSchema,
-	SearchSymbolsSchema,
-	TraceSymbolSchema
-} from "../../tools/schemas/codebase-index";
+import { IndexRepoSchema, IndexStatusSchema } from "../../tools/schemas/codebase-index";
 import { handleCodebaseIndex } from "../../tools/codebase-index-sdk";
 import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
@@ -102,96 +95,6 @@ describe("IndexStatusSchema", () => {
 
 	it("rejects missing repo", () => {
 		expect(() => IndexStatusSchema.parse({ owner: "vheins" })).toThrow();
-	});
-});
-
-// ── Schema validation tests for other codebase-index schemas ─────────────
-
-describe("GetArchitectureSchema", () => {
-	it("validates a complete input", () => {
-		const result = GetArchitectureSchema.parse({
-			owner: "vheins",
-			repo: "test-repo",
-			depth: 3,
-			includeSymbolCounts: true
-		});
-		expect(result.repo).toBe("test-repo");
-		expect(result.depth).toBe(3);
-		expect(result.includeSymbolCounts).toBe(true);
-	});
-
-	it("validates minimal input (depth defaults)", () => {
-		const result = GetArchitectureSchema.parse({ owner: "vheins", repo: "test-repo" });
-		expect(result.repo).toBe("test-repo");
-		expect(result.depth).toBeDefined();
-	});
-
-	it("rejects empty repo", () => {
-		expect(() => GetArchitectureSchema.parse({ owner: "vheins", repo: "" })).toThrow();
-	});
-});
-
-describe("GetFileSymbolsSchema", () => {
-	it("validates a complete input", () => {
-		const result = GetFileSymbolsSchema.parse({ owner: "vheins", repo: "test-repo", filePath: "src/app.ts" });
-		expect(result.repo).toBe("test-repo");
-		expect(result.filePath).toBe("src/app.ts");
-	});
-
-	it("rejects empty repo", () => {
-		expect(() => GetFileSymbolsSchema.parse({ owner: "vheins", repo: "", filePath: "src/app.ts" })).toThrow();
-	});
-
-	it("rejects empty filePath", () => {
-		expect(() => GetFileSymbolsSchema.parse({ owner: "vheins", repo: "test-repo", filePath: "" })).toThrow();
-	});
-});
-
-describe("SearchSymbolsSchema", () => {
-	it("validates a complete input", () => {
-		const result = SearchSymbolsSchema.parse({
-			owner: "vheins",
-			query: "getUser",
-			repo: "test-repo",
-			kind: "function",
-			offset: 0,
-			limit: 20
-		});
-		expect(result.query).toBe("getUser");
-		expect(result.offset).toBe(0);
-		expect(result.limit).toBe(20);
-	});
-
-	it("validates minimal input (optional fields defaulted)", () => {
-		const result = SearchSymbolsSchema.parse({ owner: "vheins", query: "getUser" });
-		expect(result.query).toBe("getUser");
-		expect(result.offset).toBe(0);
-		expect(result.limit).toBe(50);
-	});
-});
-
-describe("TraceSymbolSchema", () => {
-	it("validates a complete input", () => {
-		const result = TraceSymbolSchema.parse({
-			owner: "vheins",
-			name: "authenticate",
-			repo: "test-repo",
-			includeReferences: true
-		});
-		expect(result.name).toBe("authenticate");
-		expect(result.includeReferences).toBe(true);
-	});
-
-	it("validates minimal input", () => {
-		const result = TraceSymbolSchema.parse({ owner: "vheins", name: "authenticate" });
-		expect(result.name).toBe("authenticate");
-		// includeReferences has default: true in the schema
-		expect(result.includeReferences).toBe(true);
-	});
-
-	it("validates empty name (schema allows empty string)", () => {
-		const result = TraceSymbolSchema.parse({ owner: "vheins", name: "" });
-		expect(result.name).toBe("");
 	});
 });
 

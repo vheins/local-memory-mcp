@@ -4,7 +4,6 @@ export {
 	TaskStatusSchema,
 	TaskPrioritySchema,
 	HandoffStatusSchema,
-	SingleMemorySchema,
 	SingleStandardSchema,
 	TaskStatusValues
 } from "./shared";
@@ -18,21 +17,7 @@ export {
 	MemoryReadSchema
 } from "./memory";
 
-export {
-	TaskMetadataSchema,
-	SingleTaskCreateSchema,
-	TaskStatusListSchema,
-	TaskCreateSchema,
-	TaskCreateInteractiveSchema,
-	TaskUpdateSchema,
-	TaskListSchema,
-	TaskSearchSchema,
-	TaskDeleteSchema,
-	TaskGetSchema,
-	TaskReadSchema,
-	TaskWriteSchema,
-	TaskWriteItemSchema
-} from "./task";
+export { TaskDeleteSchema, TaskReadSchema, TaskWriteSchema, TaskWriteItemSchema } from "./task";
 
 export {
 	HandoffCreateSchema,
@@ -46,13 +31,7 @@ export {
 	ClaimManageSchema
 } from "./handoff";
 
-export {
-	StandardStoreSchema,
-	StandardUpdateSchema,
-	StandardSearchSchema,
-	StandardDeleteSchema,
-	StandardDetailSchema
-} from "./standard";
+export { StandardDeleteSchema } from "./standard";
 
 export { StandardWriteSchema } from "./standard-write";
 export { StandardReadSchema } from "./standard-read";
@@ -60,16 +39,7 @@ export type { StandardReadInput } from "./standard-read";
 
 export { AgentContextSchema } from "./agent";
 
-export {
-	IndexRepoSchema,
-	IndexStatusSchema,
-	CodebaseIndexSchema,
-	GetArchitectureSchema,
-	GetFileSymbolsSchema,
-	SearchSymbolsSchema,
-	TraceSymbolSchema,
-	CodebaseSearchSchema
-} from "./codebase-index";
+export { IndexRepoSchema, IndexStatusSchema, CodebaseIndexSchema } from "./codebase-index";
 
 export { CodebaseReadSchema } from "./codebase-read";
 export type { CodebaseReadInput, CodebaseReadMode } from "./codebase-read";

@@ -17,23 +17,6 @@ export const TaskPrioritySchema = z.coerce.number().min(1).max(5);
 
 export const HandoffStatusSchema = z.enum(["pending", "accepted", "rejected", "expired"]);
 
-export const SingleMemorySchema = z.object({
-	code: z.string().max(20).optional(),
-	type: MemoryTypeSchema,
-	title: z.string().min(3).max(255),
-	content: z.string().min(10),
-	importance: z.coerce.number().min(1).max(5),
-	agent: z.string().min(1),
-	role: z.string().optional().default("unknown"),
-	model: z.string().optional(),
-	scope: MemoryScopeSchema.optional(),
-	ttlDays: z.coerce.number().min(1).optional(),
-	supersedes: z.string().optional(),
-	tags: z.array(z.string()).optional(),
-	metadata: z.record(z.string(), z.unknown()).optional(),
-	is_global: z.boolean().default(false)
-});
-
 export const SingleStandardSchema = z.object({
 	name: z.string().min(3).max(255),
 	content: z.string().min(10),
@@ -52,32 +35,3 @@ export const SingleStandardSchema = z.object({
 });
 
 export const TaskStatusValues = TaskStatusSchema.options as readonly string[];
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-	return typeof v === "object" && v !== null && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
-}
-
-function isJsonSerializable(val: unknown): boolean {
-	try {
-		JSON.stringify(val);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-export const StructuredDataValue: z.ZodType<unknown> = z.lazy(() =>
-	z.union([
-		z.string(),
-		z.number().refine((v) => Number.isFinite(v), "Number must be finite"),
-		z.boolean(),
-		z.null(),
-		z.array(StructuredDataValue),
-		z.record(z.string(), StructuredDataValue).refine(isPlainObject, "Plain object required")
-	])
-);
-
-export const StructuredDataSchema = z
-	.unknown()
-	.refine(isJsonSerializable, { message: "Value must be JSON-serializable" })
-	.pipe(z.record(z.string(), StructuredDataValue));
