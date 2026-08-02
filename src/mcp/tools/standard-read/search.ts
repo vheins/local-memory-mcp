@@ -13,6 +13,7 @@ import { expandQuery } from "../../utils/query-expander";
 import { fetchAggregatedKgContext } from "../kg-archivist/query";
 import { StandardReadInput } from "../schemas";
 import type { HybridScores } from "../../utils/scoring";
+import { STANDARD_SCORING } from "../../utils/scoring";
 import { HybridSearchEngine } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
 import { renderGroupedSummary } from "../../utils/summary";
@@ -21,8 +22,10 @@ import { renderGroupedSummary } from "../../utils/summary";
 // All scoring paths now blend through the shared HybridSearchEngine
 // (utils/hybrid-search): 0.40 similarity + 0.30 keyword + 0.15 recency +
 // 0.15 domain (HYBRID_WEIGHTS from utils/scoring).
-
-type StandardConfidence = "high" | "medium" | "low";
+// Recency/domain/confidence live in STANDARD_SCORING (utils/scoring.ts,
+// OPT-DRY-04) — see its docblock for the standard-specific semantics
+// (e^(-age/180d) recency on last_used_at ?? updated_at, filter-driven
+// domain, 0.72/0.42 final-score + keyword-OR confidence buckets).
 
 // ── Search Result columns ────────────────────────────────────────────────
 
@@ -112,59 +115,6 @@ function collectMatchedTerms(query: string, standard: CodingStandardEntry): stri
 	return queryTokens.filter((token) => searchableFields.some((field) => field.includes(token)));
 }
 
-/**
- * Recency score based on last_used_at or updated_at.
- * Exponential decay: score = e^(-age_days / 180) — half-life ≈ 125 days.
- */
-function scoreRecency(standard: CodingStandardEntry): number {
-	const dateStr = standard.last_used_at ?? standard.updated_at;
-	if (!dateStr) return 0.5;
-	const ageMs = Date.now() - new Date(dateStr).getTime();
-	const ageDays = ageMs / (1000 * 60 * 60 * 24);
-	return Math.max(0, Math.exp(-ageDays / 180));
-}
-
-/**
- * Domain score: how well the standard's domain metadata matches the request filters.
- * Neutral (0.5) when no filters are present.
- */
-function scoreDomain(
-	standard: CodingStandardEntry,
-	filters: { stack?: string[]; tags?: string[]; language?: string; context?: string }
-): number {
-	let matches = 0;
-	let total = 0;
-
-	const normalizedCtx = filters.context?.toLowerCase();
-	const stdContext = standard.context?.toLowerCase() ?? "";
-
-	if (filters.stack && filters.stack.length > 0) {
-		total++;
-		if (filters.stack.some((s) => standard.stack.includes(s))) matches++;
-	}
-	if (filters.tags && filters.tags.length > 0) {
-		total++;
-		if (filters.tags.some((t) => standard.tags.includes(t))) matches++;
-	}
-	if (filters.language) {
-		total++;
-		if (standard.language === filters.language) matches++;
-	}
-	if (normalizedCtx) {
-		total++;
-		if (stdContext.includes(normalizedCtx)) matches++;
-	}
-
-	if (total === 0) return 0.5;
-	return matches / total;
-}
-
-function toConfidence(finalScore: number, keywordScore: number): StandardConfidence {
-	if (finalScore >= 0.72 || keywordScore >= 0.85) return "high";
-	if (finalScore >= 0.42 || keywordScore >= 0.45) return "medium";
-	return "low";
-}
-
 // ── Search handler ──────────────────────────────────────────────────────
 
 export async function handleSearchMode(
@@ -216,8 +166,8 @@ export async function handleSearchMode(
 	const standardSignals = (standard: CodingStandardEntry, similarity: number): HybridScores => ({
 		similarity,
 		keyword: scoreKeywordRelevance(validated.query || "", standard),
-		recency: scoreRecency(standard),
-		domain: scoreDomain(standard, domainFilters)
+		recency: STANDARD_SCORING.recency(standard),
+		domain: STANDARD_SCORING.domain(standard, domainFilters)
 	});
 
 	// ONNX vector search only powers the vector-only fallback (when TF
@@ -272,7 +222,7 @@ export async function handleSearchMode(
 		domainScore: scored.domainScore,
 		matchedTerms: collectMatchedTerms(validated.query || "", scored.entity),
 		finalScore: scored.finalScore,
-		confidence: toConfidence(scored.finalScore, scored.keywordScore)
+		confidence: STANDARD_SCORING.confidence({ finalScore: scored.finalScore, keywordScore: scored.keywordScore })
 	}));
 	// NOTE: hit_count intentionally NOT incremented on read/search
 

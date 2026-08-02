@@ -62,6 +62,18 @@ export const HYBRID_WEIGHTS = {
 // ── Recency decay ────────────────────────────────────────────────────────
 // Exponential half-life used by computeRecencyScore (default, 30 days).
 export const RECENCY_HALF_LIFE_MS = 30 * TTL_MS_PER_DAY;
+// Standard recency half-life (e^(-age/180d) — standards age slower than
+// memories/tasks; used by STANDARD_SCORING in utils/scoring.ts).
+export const STANDARD_RECENCY_HALF_LIFE_MS = 180 * TTL_MS_PER_DAY;
+
+// ── Confidence buckets (per-entity-kind) ────────────────────────────────
+// Final-score thresholds that map a blended hybrid score to a confidence
+// label (high/medium/low). Memory and task share the default bucket;
+// standard adds keyword-relevance OR conditions (see STANDARD_SCORING in
+// utils/scoring.ts).
+export const DEFAULT_CONFIDENCE_THRESHOLDS = { high: 0.7, medium: 0.4 } as const;
+export const STANDARD_CONFIDENCE_THRESHOLDS = { high: 0.72, medium: 0.42 } as const;
+export const STANDARD_KEYWORD_CONFIDENCE_THRESHOLDS = { high: 0.85, medium: 0.45 } as const;
 
 // ── Adaptive search thresholds ───────────────────────────────────────────
 // Small result sets (<= 5 candidates) use the lenient threshold so sparse

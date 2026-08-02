@@ -5,31 +5,16 @@ import { TaskStatusValues } from "../schemas";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
 import { capitalize } from "./shared";
-import { computeRecencyScore, countTermOverlap } from "../../utils/scoring";
+import { TASK_SCORING } from "../../utils/scoring";
 import { HybridSearchEngine } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
 import { renderGroupedSummary, enumOrderComparator } from "../../utils/summary";
 
 // ── Task-specific scoring helpers ─────────────────────────────────────
-
-/**
- * Domain score for tasks: ratio of query terms found in the task's text
- * fields. Unlike the memory engine (tags overlap), tasks have no tag list,
- * so the denominator is the query term count (behavior preserved from the
- * original per-engine implementation).
- */
-function computeDomainScore(task: Task, queryTerms: string[]): number {
-	if (queryTerms.length === 0) return 0;
-	const textFields = [task.title, task.description, task.task_code, task.phase].filter(Boolean).join(" ").toLowerCase();
-	const words = textFields.split(/\s+/);
-	return Math.min(1, countTermOverlap(queryTerms, words) / Math.max(queryTerms.length, 1));
-}
-
-function computeConfidence(score: number): "high" | "medium" | "low" {
-	if (score >= 0.7) return "high";
-	if (score >= 0.4) return "medium";
-	return "low";
-}
+// Task domain/recency/confidence live in TASK_SCORING (utils/scoring.ts,
+// OPT-DRY-04) — see its docblock for the task-specific semantics
+// (query-coverage domain denominator, 30-day recency half-life, 0.7/0.4
+// confidence buckets).
 
 // ── ScoredTask internal type ───────────────────────────────────────────
 
@@ -131,20 +116,20 @@ export async function handleSearchMode(
 			scoreCandidate: (task, similarity) => ({
 				similarity,
 				keyword: 1.0, // Task matched the SQL LIKE query
-				recency: computeRecencyScore(task.created_at),
-				domain: computeDomainScore(task, queryTerms)
+				recency: TASK_SCORING.recency(task),
+				domain: TASK_SCORING.domain(task, { queryTerms })
 			}),
 			scoreVectorOnly: (task, hit) => ({
 				similarity: hit.score,
 				keyword: 0,
-				recency: computeRecencyScore(task.created_at),
-				domain: computeDomainScore(task, queryTerms)
+				recency: TASK_SCORING.recency(task),
+				domain: TASK_SCORING.domain(task, { queryTerms })
 			}),
 			scoreFallback: (task, _similarity) => ({
 				similarity: 0,
 				keyword: 1.0,
-				recency: computeRecencyScore(task.created_at),
-				domain: computeDomainScore(task, queryTerms)
+				recency: TASK_SCORING.recency(task),
+				domain: TASK_SCORING.domain(task, { queryTerms })
 			})
 		},
 		thresholds: SEARCH_THRESHOLDS.task,
@@ -203,7 +188,7 @@ export async function handleSearchMode(
 		st.task.status,
 		st.task.priority,
 		Number(st.finalScore.toFixed(4)),
-		computeConfidence(st.finalScore),
+		TASK_SCORING.confidence({ finalScore: st.finalScore, keywordScore: st.keywordScore }),
 		st.task.updated_at,
 		st.task.phase
 	]);

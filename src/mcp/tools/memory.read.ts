@@ -21,7 +21,7 @@ import { logger } from "../utils/logger";
 import { expandQuery } from "../utils/query-expander";
 import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
 import { fetchKgContext, fetchAggregatedKgContext } from "./kg-archivist/query";
-import { computeRecencyScore, computeDomainScore } from "../utils/scoring";
+import { MEMORY_SCORING } from "../utils/scoring";
 import { HybridSearchEngine } from "../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../utils/constants";
 import { renderGroupedSummary, enumOrderComparator } from "../utils/summary";
@@ -217,20 +217,20 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 				// the keyword signal.
 				similarity,
 				keyword: ftsScoreMap.get(memory.id) ?? 0,
-				recency: computeRecencyScore(memory.created_at),
-				domain: computeDomainScore(terms, memory.tags)
+				recency: MEMORY_SCORING.recency(memory),
+				domain: MEMORY_SCORING.domain(memory, { queryTerms: terms })
 			}),
 			scoreVectorOnly: (memory, hit, terms) => ({
 				similarity: hit.score,
 				keyword: 0,
-				recency: computeRecencyScore(memory.created_at),
-				domain: computeDomainScore(terms, memory.tags)
+				recency: MEMORY_SCORING.recency(memory),
+				domain: MEMORY_SCORING.domain(memory, { queryTerms: terms })
 			}),
 			scoreFallback: (memory, similarity, terms) => ({
 				similarity,
 				keyword: ftsScoreMap.get(memory.id) ?? 0,
-				recency: computeRecencyScore(memory.created_at),
-				domain: computeDomainScore(terms, memory.tags)
+				recency: MEMORY_SCORING.recency(memory),
+				domain: MEMORY_SCORING.domain(memory, { queryTerms: terms })
 			})
 		},
 		thresholds: SEARCH_THRESHOLDS.memory,
