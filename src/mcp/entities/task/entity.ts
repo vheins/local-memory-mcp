@@ -1,5 +1,5 @@
 import { BaseEntity } from "../../storage/base";
-import { Task, TaskChild, TaskComment } from "../../types";
+import { Task, TaskRow, TaskChild, TaskComment } from "../../types";
 import { handleDuplicateTaskCode } from "./validation";
 import { buildCoordinationSelect, taskStatusOrderBy } from "./queries";
 import { VECTOR_CANDIDATE_CAP } from "../../utils/constants";
@@ -102,7 +102,7 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	getTaskById(id: string): Task | null {
-		const row = this.get<Record<string, unknown>>(
+		const row = this.get<TaskRow>(
 			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				${buildCoordinationSelect("t")}
 			 FROM tasks t 
@@ -125,7 +125,7 @@ export class TaskEntity extends BaseEntity {
 	getTasksByIds(ids: string[]): Task[] {
 		if (ids.length === 0) return [];
 		const placeholders = ids.map(() => "?").join(",");
-		const rows = this.all<Record<string, unknown>>(
+		const rows = this.all<TaskRow>(
 			`SELECT t.*, d.task_code as depends_on_code,
 				${buildCoordinationSelect("t")},
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
@@ -166,17 +166,14 @@ export class TaskEntity extends BaseEntity {
 		// normalized at write time (TASK-038), so no owner-fallback re-query.
 		const ownerClause = owner ? "t.owner = ? AND " : "";
 		const params: (string | null)[] = owner ? [owner, repo, taskCode] : [repo, taskCode];
-		const row = this.get<Record<string, unknown>>(
-			baseQuery + `WHERE ${ownerClause}t.repo = ? AND t.task_code = ?`,
-			params
-		);
+		const row = this.get<TaskRow>(baseQuery + `WHERE ${ownerClause}t.repo = ? AND t.task_code = ?`, params);
 
 		return row
 			? {
 					...this.rowToTask(row),
 					comments: this.all<TaskComment>(
 						"SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at DESC, id DESC",
-						[row.id as string]
+						[row.id]
 					)
 				}
 			: null;
@@ -223,7 +220,7 @@ export class TaskEntity extends BaseEntity {
 			}
 		}
 
-		const rows = this.all<Record<string, unknown>>(query, params);
+		const rows = this.all<TaskRow>(query, params);
 
 		// NOTE: no owner-fallback re-query — owner-less rows are normalized at
 		// write time (TASK-038); the owner-filtered query is authoritative.
@@ -261,7 +258,7 @@ export class TaskEntity extends BaseEntity {
 		ORDER BY ${taskStatusOrderBy()}
 		LIMIT ? OFFSET ?
 		`;
-		const rows = this.all<Record<string, unknown>>(query, [limit, offset]);
+		const rows = this.all<TaskRow>(query, [limit, offset]);
 		return rows.map((r) => this.rowToTask(r));
 	}
 
@@ -304,7 +301,7 @@ export class TaskEntity extends BaseEntity {
 			}
 		}
 
-		const rows = this.all<Record<string, unknown>>(query, params);
+		const rows = this.all<TaskRow>(query, params);
 
 		// NOTE: no owner-fallback re-query — owner-less rows are normalized at
 		// write time (TASK-038); the owner-filtered query is authoritative.
@@ -431,7 +428,7 @@ export class TaskEntity extends BaseEntity {
 		const ownerClause = owner ? "t.owner = ? AND " : "";
 		const params: (string | number)[] = owner ? [owner, repo, ...taskCodes] : [repo, ...taskCodes];
 
-		const rows = this.all<Record<string, unknown>>(
+		const rows = this.all<TaskRow>(
 			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
 				${buildCoordinationSelect("t")},
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count

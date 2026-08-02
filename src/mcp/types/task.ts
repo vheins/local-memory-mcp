@@ -107,10 +107,15 @@ export interface TaskRow {
 	parent_code?: string | null;
 	depends_on_code?: string | null;
 	comments_count: number;
+	// Coordination columns — present only when the SELECT joins claims/handoffs
+	// (buildCoordinationSelect); undefined on bare tasks.* reads.
+	active_claim_count?: number;
+	active_claim_agent?: string | null;
+	active_claim_role?: string | null;
+	active_claim_claimed_at?: string | null;
+	pending_handoff_count?: number;
+	pending_handoff_id?: string | null;
+	pending_handoff_summary?: string | null;
+	pending_handoff_to_agent?: string | null;
+	pending_handoff_created_at?: string | null;
 }
-
-export type TaskRowParsed = Omit<Task, "tags" | "metadata" | "comments_count"> & {
-	tags: string[];
-	metadata: Record<string, unknown>;
-	comments_count: number;
-};

@@ -1,6 +1,7 @@
 import { BaseEntity } from "../storage/base";
 import {
 	CodebaseSymbol,
+	CodebaseSymbolRow,
 	CodebaseSymbolInsert,
 	CodebaseSymbolVector,
 	SymbolSearchQuery,
@@ -54,14 +55,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	}
 
 	getSymbolsByFile(repo: string, filePath: string): CodebaseSymbol[] {
-		return this.all<CodebaseSymbol>(
+		return this.all<CodebaseSymbolRow>(
 			"SELECT * FROM codebase_symbols WHERE repo = ? AND file_path = ? ORDER BY start_line ASC",
 			[repo, filePath]
 		).map((r) => this.rowToSymbol(r));
 	}
 
 	getSymbolByName(repo: string, name: string): CodebaseSymbol[] {
-		return this.all<CodebaseSymbol>(
+		return this.all<CodebaseSymbolRow>(
 			"SELECT * FROM codebase_symbols WHERE repo = ? AND name = ? ORDER BY file_path ASC, start_line ASC",
 			[repo, name]
 		).map((r) => this.rowToSymbol(r));
@@ -101,7 +102,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			sql += " LIMIT ?";
 			params.push(limit);
 		}
-		return this.all<CodebaseSymbol>(sql, params).map((r) => this.rowToSymbol(r));
+		return this.all<CodebaseSymbolRow>(sql, params).map((r) => this.rowToSymbol(r));
 	}
 
 	getSymbolCountByRepo(repo: string): number {
@@ -116,7 +117,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			sql += " LIMIT ?";
 			params.push(limit);
 		}
-		return this.all<CodebaseSymbol>(sql, params).map((r) => this.rowToSymbol(r));
+		return this.all<CodebaseSymbolRow>(sql, params).map((r) => this.rowToSymbol(r));
 	}
 
 	deleteSymbolsByRepo(repo: string): number {
@@ -197,7 +198,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 				WHERE ${countPartsConditions.join(" AND ")}
 			`);
 
-			const symbols = this.all<CodebaseSymbol>(parts[0], params).map((r) => this.rowToSymbol(r));
+			const symbols = this.all<CodebaseSymbolRow>(parts[0], params).map((r) => this.rowToSymbol(r));
 
 			const countRow = this.get<{ total: number }>(
 				countParts[0],
@@ -238,7 +239,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 		const whereClause = conditions.join(" AND ");
 
-		const symbols = this.all<CodebaseSymbol>(
+		const symbols = this.all<CodebaseSymbolRow>(
 			`SELECT cs.* FROM codebase_symbols cs WHERE ${whereClause} ORDER BY cs.name ASC LIMIT ? OFFSET ?`,
 			[...params, limit, offset]
 		).map((r) => this.rowToSymbol(r));

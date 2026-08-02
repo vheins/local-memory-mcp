@@ -23,6 +23,25 @@ export interface CodebaseSymbol {
 	updated_at: string;
 }
 
+export interface CodebaseSymbolRow {
+	id: string;
+	repo: string;
+	file_path: string;
+	name: string;
+	kind: string;
+	exported: number;
+	default_export: number;
+	start_line: number | null;
+	start_col: number | null;
+	end_line: number | null;
+	end_col: number | null;
+	signature: string | null;
+	doc_comment: string | null;
+	parent_symbol_id: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface CodebaseSymbolInsert {
 	repo: string;
 	file_path: string;

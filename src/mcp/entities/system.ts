@@ -1,5 +1,5 @@
 import { BaseEntity } from "../storage/base";
-import { MemoryEntry } from "../types";
+import { MemoryEntry, MemoryRow } from "../types";
 
 export class SystemEntity extends BaseEntity {
 	private buildTaskStats(rows: Array<{ status: string; count: number }>) {
@@ -187,7 +187,7 @@ export class SystemEntity extends BaseEntity {
 
 		const taskStats = this.buildTaskStats(taskRows);
 
-		const topMemoriesRows = this.all<Record<string, unknown>>(
+		const topMemoriesRows = this.all<MemoryRow>(
 			"SELECT * FROM memories WHERE owner = ? AND repo = ? ORDER BY importance DESC, created_at DESC LIMIT 5",
 			[owner, repo]
 		);

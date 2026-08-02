@@ -1,8 +1,10 @@
 import Database from "better-sqlite3";
 import {
 	MemoryEntry,
+	MemoryRow,
 	MemoryType,
 	Task,
+	TaskRow,
 	TaskStatus,
 	TaskPriority,
 	CodingStandardEntry,
@@ -11,7 +13,8 @@ import {
 	HandoffRow,
 	Claim,
 	ClaimRow,
-	CodebaseSymbol
+	CodebaseSymbol,
+	CodebaseSymbolRow
 } from "../types/index";
 
 export abstract class BaseEntity {
@@ -54,89 +57,87 @@ export abstract class BaseEntity {
 		}
 	}
 
-	protected rowToMemoryEntry(row: unknown): MemoryEntry {
-		const r = row as Record<string, unknown>;
-
+	protected rowToMemoryEntry(row: MemoryRow): MemoryEntry {
 		// Parse metadata JSON once — structuredData lives inside the same
 		// metadata blob, so a single parse is split into both fields.
-		const metadata = this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {});
+		const metadata = this.safeJSONParse<Record<string, unknown>>(row.metadata, {});
 		const structuredData = (metadata.structuredData as Record<string, unknown> | undefined) ?? undefined;
 		delete metadata.structuredData;
 
 		return {
-			id: r.id as string,
-			code: (r.code as string) || undefined,
-			type: r.type as MemoryType,
-			title: (r.title as string) || "Untitled",
-			content: r.content as string,
-			importance: r.importance as number,
-			agent: (r.agent as string) || "unknown",
-			role: (r.role as string) || "unknown",
-			model: (r.model as string) || "unknown",
+			id: row.id,
+			code: row.code ?? undefined,
+			type: row.type,
+			title: row.title || "Untitled",
+			content: row.content,
+			importance: row.importance,
+			agent: row.agent || "unknown",
+			role: row.role || "unknown",
+			model: row.model || "unknown",
 			scope: {
-				owner: r.owner as string,
-				repo: r.repo as string,
-				folder: (r.folder as string) || undefined,
-				language: (r.language as string) || undefined
+				owner: row.owner,
+				repo: row.repo,
+				branch: row.branch ?? undefined,
+				folder: row.folder ?? undefined,
+				language: row.language ?? undefined
 			},
-			created_at: r.created_at as string,
-			updated_at: r.updated_at as string,
-			completed_at: (r.completed_at as string) || null,
-			hit_count: (r.hit_count as number) ?? 0,
-			recall_count: (r.recall_count as number) ?? 0,
-			last_used_at: (r.last_used_at as string) ?? null,
-			expires_at: (r.expires_at as string) ?? null,
-			supersedes: (r.supersedes as string) ?? null,
-			status: (r.status as "active" | "archived") || "active",
-			is_global: r.is_global === 1,
-			tags: this.safeJSONParse<string[]>(r.tags as string, []),
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+			completed_at: row.completed_at ?? null,
+			hit_count: row.hit_count ?? 0,
+			recall_count: row.recall_count ?? 0,
+			last_used_at: row.last_used_at ?? null,
+			expires_at: row.expires_at ?? null,
+			supersedes: row.supersedes ?? null,
+			status: row.status || "active",
+			is_global: row.is_global === 1,
+			tags: this.safeJSONParse<string[]>(row.tags, []),
 			metadata,
 			structuredData
 		};
 	}
 
-	protected rowToTask(row: unknown): Task {
-		const r = row as Record<string, unknown>;
+	protected rowToTask(row: TaskRow): Task {
 		return {
-			id: r.id as string,
-			owner: r.owner as string,
-			repo: r.repo as string,
-			task_code: r.task_code as string,
-			phase: (r.phase as string) || "",
-			title: r.title as string,
-			description: (r.description as string) || null,
-			status: (r.status as TaskStatus) || "backlog",
-			priority: (r.priority as TaskPriority) || 3,
-			agent: (r.agent as string) || "unknown",
-			role: (r.role as string) || "unknown",
-			doc_path: (r.doc_path as string) || null,
-			created_at: r.created_at as string,
-			updated_at: r.updated_at as string,
-			in_progress_at: (r.in_progress_at as string) || null,
-			finished_at: (r.finished_at as string) || null,
-			canceled_at: (r.canceled_at as string) || null,
-			est_tokens: (r.est_tokens as number) || 0,
-			commit_id: (r.commit_id as string) || null,
-			changed_files: this.safeJSONParse<string[]>(r.changed_files as string, []),
-			tags: this.safeJSONParse<string[]>(r.tags as string, []),
-			suggested_skills: this.safeJSONParse<string[]>(r.suggested_skills as string, []),
-			metadata: this.safeJSONParse<Record<string, unknown>>(r.metadata as string, {}),
-			parent_id: (r.parent_id as string) || null,
-			depends_on: (r.depends_on as string) || null,
-			parent_code: (r.parent_code as string) || null,
-			depends_on_code: (r.depends_on_code as string) || null,
+			id: row.id,
+			owner: row.owner,
+			repo: row.repo,
+			task_code: row.task_code,
+			phase: row.phase || "",
+			title: row.title,
+			description: row.description ?? null,
+			status: row.status || "backlog",
+			priority: row.priority || 3,
+			agent: row.agent || "unknown",
+			role: row.role || "unknown",
+			doc_path: row.doc_path ?? null,
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+			in_progress_at: row.in_progress_at ?? null,
+			finished_at: row.finished_at ?? null,
+			canceled_at: row.canceled_at ?? null,
+			est_tokens: row.est_tokens || 0,
+			commit_id: row.commit_id ?? null,
+			changed_files: this.safeJSONParse<string[]>(row.changed_files, []),
+			tags: this.safeJSONParse<string[]>(row.tags, []),
+			suggested_skills: this.safeJSONParse<string[]>(row.suggested_skills, []),
+			metadata: this.safeJSONParse<Record<string, unknown>>(row.metadata, {}),
+			parent_id: row.parent_id ?? null,
+			depends_on: row.depends_on ?? null,
+			parent_code: row.parent_code ?? null,
+			depends_on_code: row.depends_on_code ?? null,
 			coordination: {
-				active_claim_count: (r.active_claim_count as number) || 0,
-				active_claim_agent: (r.active_claim_agent as string) || null,
-				active_claim_role: (r.active_claim_role as string) || null,
-				active_claim_claimed_at: (r.active_claim_claimed_at as string) || null,
-				pending_handoff_count: (r.pending_handoff_count as number) || 0,
-				pending_handoff_id: (r.pending_handoff_id as string) || null,
-				pending_handoff_summary: (r.pending_handoff_summary as string) || null,
-				pending_handoff_to_agent: (r.pending_handoff_to_agent as string) || null,
-				pending_handoff_created_at: (r.pending_handoff_created_at as string) || null
+				active_claim_count: row.active_claim_count ?? 0,
+				active_claim_agent: row.active_claim_agent ?? null,
+				active_claim_role: row.active_claim_role ?? null,
+				active_claim_claimed_at: row.active_claim_claimed_at ?? null,
+				pending_handoff_count: row.pending_handoff_count ?? 0,
+				pending_handoff_id: row.pending_handoff_id ?? null,
+				pending_handoff_summary: row.pending_handoff_summary ?? null,
+				pending_handoff_to_agent: row.pending_handoff_to_agent ?? null,
+				pending_handoff_created_at: row.pending_handoff_created_at ?? null
 			},
-			comments_count: (r.comments_count as number) || 0
+			comments_count: row.comments_count || 0
 		};
 	}
 
@@ -172,25 +173,24 @@ export abstract class BaseEntity {
 	/**
 	 * Row mapper for codebase_symbols rows (shared by CodebaseSymbolEntity).
 	 */
-	protected rowToSymbol(row: unknown): CodebaseSymbol {
-		const r = row as Record<string, unknown>;
+	protected rowToSymbol(row: CodebaseSymbolRow): CodebaseSymbol {
 		return {
-			id: r.id as string,
-			repo: r.repo as string,
-			file_path: r.file_path as string,
-			name: r.name as string,
-			kind: r.kind as string,
-			exported: (r.exported as number) === 1,
-			default_export: (r.default_export as number) === 1,
-			start_line: (r.start_line as number) ?? null,
-			start_col: (r.start_col as number) ?? null,
-			end_line: (r.end_line as number) ?? null,
-			end_col: (r.end_col as number) ?? null,
-			signature: (r.signature as string) ?? null,
-			doc_comment: (r.doc_comment as string) ?? null,
-			parent_symbol_id: (r.parent_symbol_id as string) ?? null,
-			created_at: r.created_at as string,
-			updated_at: r.updated_at as string
+			id: row.id,
+			repo: row.repo,
+			file_path: row.file_path,
+			name: row.name,
+			kind: row.kind,
+			exported: row.exported === 1,
+			default_export: row.default_export === 1,
+			start_line: row.start_line,
+			start_col: row.start_col,
+			end_line: row.end_line,
+			end_col: row.end_col,
+			signature: row.signature,
+			doc_comment: row.doc_comment,
+			parent_symbol_id: row.parent_symbol_id,
+			created_at: row.created_at,
+			updated_at: row.updated_at
 		};
 	}
 
