@@ -3,6 +3,36 @@ import { Task, TaskRow, TaskChild, TaskComment } from "../../types";
 import { handleDuplicateTaskCode } from "./validation";
 import { buildCoordinationSelect, taskStatusOrderBy } from "./queries";
 import { VECTOR_CANDIDATE_CAP } from "../../utils/constants";
+import { buildUpdateClause } from "../../utils/sql-builder";
+
+// Writable task columns / JSON-serialized keys for the shared update-clause
+// builder (TASK-109). comment/model are accepted on the API surface but are
+// intentionally not writable columns.
+const TASK_UPDATE_COLUMNS = new Set([
+	"owner",
+	"repo",
+	"task_code",
+	"phase",
+	"title",
+	"description",
+	"status",
+	"priority",
+	"agent",
+	"role",
+	"doc_path",
+	"finished_at",
+	"canceled_at",
+	"tags",
+	"suggested_skills",
+	"metadata",
+	"parent_id",
+	"depends_on",
+	"est_tokens",
+	"in_progress_at",
+	"commit_id",
+	"changed_files"
+]);
+const TASK_JSON_KEYS = new Set(["tags", "metadata", "changed_files", "suggested_skills"]);
 
 export class TaskEntity extends BaseEntity {
 	/**
@@ -57,44 +87,9 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	updateTask(id: string, updates: Partial<Task> & { comment?: string; model?: string }): void {
-		const fields: string[] = [];
-		const values: unknown[] = [];
-		const anyUpdates = updates as Record<string, unknown>;
-		const VALID_COLUMNS = new Set([
-			"owner",
-			"repo",
-			"task_code",
-			"phase",
-			"title",
-			"description",
-			"status",
-			"priority",
-			"agent",
-			"role",
-			"doc_path",
-			"finished_at",
-			"canceled_at",
-			"tags",
-			"suggested_skills",
-			"metadata",
-			"parent_id",
-			"depends_on",
-			"est_tokens",
-			"in_progress_at",
-			"commit_id",
-			"changed_files"
-		]);
-
-		Object.keys(updates).forEach((key) => {
-			if (VALID_COLUMNS.has(key) && anyUpdates[key] !== undefined) {
-				if (key === "tags" || key === "metadata" || key === "changed_files" || key === "suggested_skills") {
-					fields.push(`${key} = ?`);
-					values.push(JSON.stringify(anyUpdates[key]));
-				} else {
-					fields.push(`${key} = ?`);
-					values.push(anyUpdates[key]);
-				}
-			}
+		const { fields, values } = buildUpdateClause(updates as Record<string, unknown>, {
+			jsonKeys: TASK_JSON_KEYS,
+			validColumns: TASK_UPDATE_COLUMNS
 		});
 
 		if (fields.length === 0) return;

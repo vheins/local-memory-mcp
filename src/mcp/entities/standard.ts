@@ -2,6 +2,7 @@ import { BaseEntity } from "../storage/base";
 import { CodingStandardEntry, CodingStandardRow } from "../types/memory";
 import { sanitizeFtsTerm } from "../utils/fts";
 import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
+import { buildUpdateClause } from "../utils/sql-builder";
 import {
 	STANDARD_CONFLICT_THRESHOLD,
 	STANDARD_CONFLICT_CANDIDATES,
@@ -9,10 +10,16 @@ import {
 	VECTOR_CANDIDATE_CAP
 } from "../utils/constants";
 
+// Int-coerced / immutable columns for the shared update-clause builder
+// (TASK-109). is_global is stored as 0/1; id/created_at are never writable.
+const STANDARD_INT_KEYS = new Set(["is_global"]);
+const STANDARD_EXCLUDE_KEYS = new Set(["id", "created_at"]);
+
 export class StandardEntity extends BaseEntity {
 	// In-memory TF vector cache keyed by standard id and validated against
 	// coding_standards.updated_at — self-invalidates on writes.
 	private readonly tfCache = createTfVectorCache();
+
 	/**
 	 * Single source of truth for the coding_standards INSERT statement
 	 * (TASK-108) — shared by insert() and bulkInsertStandards() so a column
@@ -350,27 +357,9 @@ export class StandardEntity extends BaseEntity {
 	}
 
 	update(id: string, updates: Partial<CodingStandardEntry>): void {
-		const fields: string[] = [];
-		const values: unknown[] = [];
-
-		Object.keys(updates).forEach((key) => {
-			const k = key as keyof CodingStandardEntry;
-			const val = updates[k];
-			if (val !== undefined) {
-				if (k === "stack" || k === "tags") {
-					fields.push(`${k} = ?`);
-					values.push(Array.isArray(val) ? JSON.stringify(val) : val);
-				} else if (k === "metadata") {
-					fields.push(`${k} = ?`);
-					values.push(typeof val === "object" ? JSON.stringify(val) : val);
-				} else if (k === "is_global") {
-					fields.push(`${k} = ?`);
-					values.push(val ? 1 : 0);
-				} else if (k !== "id" && k !== "created_at") {
-					fields.push(`${k} = ?`);
-					values.push(val);
-				}
-			}
+		const { fields, values } = buildUpdateClause(this.buildUpdateMap(updates), {
+			intKeys: STANDARD_INT_KEYS,
+			excludeKeys: STANDARD_EXCLUDE_KEYS
 		});
 
 		if (fields.length === 0) return;
@@ -380,6 +369,27 @@ export class StandardEntity extends BaseEntity {
 		values.push(id);
 
 		this.run(`UPDATE coding_standards SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+	}
+
+	/**
+	 * Pre-serialize stack/tags/metadata for the shared update-clause builder
+	 * (TASK-109), preserving the exact pre-refactor guards: arrays and objects
+	 * are JSON-serialized, anything else passes through raw. is_global
+	 * coercion and the id/created_at exclusion are handled by builder options.
+	 */
+	private buildUpdateMap(updates: Partial<CodingStandardEntry>): Record<string, unknown> {
+		const result: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(updates)) {
+			if (value === undefined) continue;
+			if ((key === "stack" || key === "tags") && Array.isArray(value)) {
+				result[key] = JSON.stringify(value);
+			} else if (key === "metadata" && typeof value === "object" && value !== null) {
+				result[key] = JSON.stringify(value);
+			} else {
+				result[key] = value;
+			}
+		}
+		return result;
 	}
 
 	delete(id: string): void {

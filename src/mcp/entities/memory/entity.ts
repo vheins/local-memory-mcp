@@ -1,9 +1,15 @@
 import { BaseEntity } from "../../storage/base";
-import { MemoryEntry, MemoryRow, MemoryType } from "../../types/index";
+import { MemoryEntry, MemoryRow, MemoryScope, MemoryType } from "../../types/index";
 import { CountResult, TypeCountResult } from "../../types/common";
 import { VALID_COLUMNS, mergeStructuredData } from "./validation";
 import { BULK_UPDATE_CHUNK_SIZE } from "../../utils/constants";
 import { buildFtsMatchQuery } from "../../utils/fts";
+import { buildUpdateClause } from "../../utils/sql-builder";
+
+// JSON-serialized / int-coerced columns for the shared update-clause builder
+// (TASK-109). Tags and metadata are stored as JSON text; is_global as 0/1.
+const MEMORY_JSON_KEYS = new Set(["tags", "metadata"]);
+const MEMORY_INT_KEYS = new Set(["is_global"]);
 
 export class MemoryEntity extends BaseEntity {
 	/**
@@ -53,52 +59,9 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	update(id: string, updates: Partial<MemoryEntry>): void {
-		const fields: string[] = [];
-		const values: unknown[] = [];
-
-		Object.keys(updates).forEach((key) => {
-			const k = key as keyof MemoryEntry;
-			const val = updates[k];
-			if (val !== undefined) {
-				if (k === "scope") {
-					const scope = updates.scope;
-					if (scope?.owner !== undefined) {
-						fields.push("owner = ?");
-						values.push(scope.owner);
-					}
-					if (scope?.repo) {
-						fields.push("repo = ?");
-						values.push(scope.repo);
-					}
-					if (scope?.folder !== undefined) {
-						fields.push("folder = ?");
-						values.push(scope.folder);
-					}
-					if (scope?.language !== undefined) {
-						fields.push("language = ?");
-						values.push(scope.language);
-					}
-					if (scope?.branch !== undefined) {
-						fields.push("branch = ?");
-						values.push(scope.branch);
-					}
-				} else if (k === "structuredData") {
-					const existingRow = this.get<{ metadata: string }>("SELECT metadata FROM memories WHERE id = ?", [id]);
-					const existingMeta = existingRow ? this.safeJSONParse<Record<string, unknown>>(existingRow.metadata, {}) : {};
-					const merged = { ...existingMeta, structuredData: val };
-					fields.push("metadata = ?");
-					values.push(JSON.stringify(merged));
-				} else if (k === "tags" || k === "metadata") {
-					fields.push(`${k} = ?`);
-					values.push(JSON.stringify(val));
-				} else if (k === "is_global") {
-					fields.push(`${k} = ?`);
-					values.push(val ? 1 : 0);
-				} else if (VALID_COLUMNS.has(k)) {
-					fields.push(`${k} = ?`);
-					values.push(val);
-				}
-			}
+		const { fields, values } = buildUpdateClause(this.buildUpdateMap(updates, true, id), {
+			jsonKeys: MEMORY_JSON_KEYS,
+			intKeys: MEMORY_INT_KEYS
 		});
 
 		if (fields.length === 0) return;
@@ -108,6 +71,47 @@ export class MemoryEntity extends BaseEntity {
 		values.push(id);
 
 		this.run(`UPDATE memories SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+	}
+
+	/**
+	 * Normalize a Partial<MemoryEntry> into a flat column→value map for the
+	 * shared update-clause builder (TASK-109), preserving the exact
+	 * pre-refactor whitelist and serialization semantics:
+	 *
+	 * - `scope` expands into its scalar columns (owner/repo/folder/language/branch)
+	 *   with the same per-key guards (owner/folder/language/branch when
+	 *   `!== undefined`, repo when truthy).
+	 * - `structuredData` is merged into the existing metadata JSON blob — only
+	 *   in the single-id update path (it needs a DB read); bulkUpdateMemories
+	 *   drops it (no per-row id to merge against), matching prior behavior.
+	 * - Every other key is kept only when it is tags/metadata/is_global or a
+	 *   whitelisted VALID_COLUMNS member; unknown keys are dropped.
+	 */
+	private buildUpdateMap(
+		updates: Partial<MemoryEntry>,
+		mergeStructuredData: boolean,
+		id?: string
+	): Record<string, unknown> {
+		const result: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(updates)) {
+			if (value === undefined) continue;
+			if (key === "scope") {
+				const scope = value as MemoryScope;
+				if (scope.owner !== undefined) result.owner = scope.owner;
+				if (scope.repo) result.repo = scope.repo;
+				if (scope.folder !== undefined) result.folder = scope.folder;
+				if (scope.language !== undefined) result.language = scope.language;
+				if (scope.branch !== undefined) result.branch = scope.branch;
+			} else if (key === "structuredData") {
+				if (!mergeStructuredData || id === undefined) continue;
+				const existingRow = this.get<{ metadata: string }>("SELECT metadata FROM memories WHERE id = ?", [id]);
+				const existingMeta = existingRow ? this.safeJSONParse<Record<string, unknown>>(existingRow.metadata, {}) : {};
+				result.metadata = { ...existingMeta, structuredData: value };
+			} else if (key === "tags" || key === "metadata" || key === "is_global" || VALID_COLUMNS.has(key)) {
+				result[key] = value;
+			}
+		}
+		return result;
 	}
 
 	delete(id: string): void {
@@ -463,45 +467,9 @@ export class MemoryEntity extends BaseEntity {
 	bulkUpdateMemories(ids: string[], updates: Partial<MemoryEntry>): number {
 		if (ids.length === 0) return 0;
 
-		const fields: string[] = [];
-		const values: unknown[] = [];
-
-		(Object.keys(updates) as (keyof MemoryEntry)[]).forEach((key) => {
-			const value = updates[key];
-			if (value !== undefined) {
-				if (key === "scope") {
-					const scope = updates.scope;
-					if (scope?.owner !== undefined) {
-						fields.push("owner = ?");
-						values.push(scope.owner);
-					}
-					if (scope?.repo) {
-						fields.push("repo = ?");
-						values.push(scope.repo);
-					}
-					if (scope?.folder !== undefined) {
-						fields.push("folder = ?");
-						values.push(scope.folder);
-					}
-					if (scope?.language !== undefined) {
-						fields.push("language = ?");
-						values.push(scope.language);
-					}
-					if (scope?.branch !== undefined) {
-						fields.push("branch = ?");
-						values.push(scope.branch);
-					}
-				} else if (key === "tags" || key === "metadata") {
-					fields.push(`${key} = ?`);
-					values.push(JSON.stringify(value));
-				} else if (key === "is_global") {
-					fields.push(`${key} = ?`);
-					values.push(value ? 1 : 0);
-				} else if (VALID_COLUMNS.has(key)) {
-					fields.push(`${key} = ?`);
-					values.push(value);
-				}
-			}
+		const { fields, values } = buildUpdateClause(this.buildUpdateMap(updates, false), {
+			jsonKeys: MEMORY_JSON_KEYS,
+			intKeys: MEMORY_INT_KEYS
 		});
 
 		if (fields.length === 0) return 0;
