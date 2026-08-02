@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 interface Migration {
 	version: number;
@@ -924,6 +924,25 @@ const MIGRATIONS: Migration[] = [
 			// repos' relations.
 			db.exec("CREATE INDEX IF NOT EXISTS idx_relations_repo_from_to ON relations(repo, from_entity, to_entity)");
 			logger.info("[Migration] Added idx_relations_repo_from_to (repo, from_entity, to_entity)");
+		}
+	},
+	{
+		version: 13,
+		name: "memories-branch-column",
+		up: (db) => {
+			// Complete the MemoryScope.branch round-trip (TASK-121 / review
+			// finding): memory-write accepts scope.branch and memory.read boosts
+			// same-branch matches, but the column never existed, so branch was
+			// silently dropped at write and rowToMemoryEntry's mapping could
+			// never produce a value. Mirrors the code-column migration (v2)
+			// idempotency pattern: PRAGMA table_info guard before ALTER so the
+			// migration is safe to re-run and on fresh DBs (v1 creates the
+			// table without branch, v13 adds it).
+			const memoriesCols = db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+			if (!memoriesCols.some((col) => col.name === "branch")) {
+				db.prepare("ALTER TABLE memories ADD COLUMN branch TEXT").run();
+				db.prepare("CREATE INDEX IF NOT EXISTS idx_memories_branch ON memories(branch)").run();
+			}
 		}
 	}
 ];

@@ -66,7 +66,7 @@ export abstract class BaseEntity {
 
 		return {
 			id: row.id,
-			code: row.code ?? undefined,
+			code: row.code || undefined,
 			type: row.type,
 			title: row.title || "Untitled",
 			content: row.content,
@@ -105,7 +105,7 @@ export abstract class BaseEntity {
 			task_code: row.task_code,
 			phase: row.phase || "",
 			title: row.title,
-			description: row.description ?? null,
+			description: row.description || null,
 			status: row.status || "backlog",
 			priority: row.priority || 3,
 			agent: row.agent || "unknown",

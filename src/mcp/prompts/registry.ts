@@ -102,7 +102,11 @@ export async function getPrompt(
 
 		// Standard arguments
 		for (const [key, value] of Object.entries(args)) {
-			text = text.replace(new RegExp(`\\{{${key}\\}}`, "g"), value);
+			// Escape regex metacharacters in the arg key so a client-supplied
+			// key like "(" or "a.b" can never throw SyntaxError in RegExp
+			// (parity with sdk-index.ts prompt substitution).
+			const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			text = text.replace(new RegExp(`\\{{${escapedKey}\\}}`, "g"), value);
 		}
 
 		// Auto-injected context

@@ -10,10 +10,10 @@ export class MemoryEntity extends BaseEntity {
 		const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
 		this.run(
 			`INSERT INTO memories (
-				id, code, repo, owner, type, title, content, importance, folder, language,
+				id, code, repo, owner, type, title, content, importance, folder, language, branch,
 				created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 				supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				entry.id,
 				entry.code || null,
@@ -25,6 +25,7 @@ export class MemoryEntity extends BaseEntity {
 				entry.importance,
 				entry.scope.folder || null,
 				entry.scope.language || null,
+				entry.scope.branch || null,
 				entry.created_at,
 				entry.updated_at,
 				entry.expires_at ?? null,
@@ -66,6 +67,10 @@ export class MemoryEntity extends BaseEntity {
 					if (scope?.language !== undefined) {
 						fields.push("language = ?");
 						values.push(scope.language);
+					}
+					if (scope?.branch !== undefined) {
+						fields.push("branch = ?");
+						values.push(scope.branch);
 					}
 				} else if (k === "structuredData") {
 					const existingRow = this.get<{ metadata: string }>("SELECT metadata FROM memories WHERE id = ?", [id]);
@@ -440,10 +445,10 @@ export class MemoryEntity extends BaseEntity {
 				const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
 				this.run(
 					`INSERT INTO memories (
-						id, code, repo, owner, type, title, content, importance, folder, language,
+						id, code, repo, owner, type, title, content, importance, folder, language, branch,
 						created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 						supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					[
 						entry.id,
 						entry.code || null,
@@ -455,6 +460,7 @@ export class MemoryEntity extends BaseEntity {
 						entry.importance,
 						entry.scope.folder || null,
 						entry.scope.language || null,
+						entry.scope.branch || null,
 						entry.created_at,
 						entry.updated_at,
 						entry.expires_at ?? null,
@@ -501,6 +507,10 @@ export class MemoryEntity extends BaseEntity {
 					if (scope?.language !== undefined) {
 						fields.push("language = ?");
 						values.push(scope.language);
+					}
+					if (scope?.branch !== undefined) {
+						fields.push("branch = ?");
+						values.push(scope.branch);
 					}
 				} else if (key === "tags" || key === "metadata") {
 					fields.push(`${key} = ?`);

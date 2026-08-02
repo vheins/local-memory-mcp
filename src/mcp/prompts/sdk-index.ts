@@ -85,7 +85,10 @@ export function registerAllPrompts(
 
 				// Standard arguments (mirrors registry.ts getPrompt)
 				for (const [key, value] of Object.entries(args)) {
-					text = text.replace(new RegExp(`\\{{${key}\\}}`, "g"), String(value));
+					// Escape regex metacharacters in the arg key so a client-supplied
+					// key like "(" or "a.b" can never throw SyntaxError in RegExp.
+					const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+					text = text.replace(new RegExp(`\\{{${escapedKey}\\}}`, "g"), String(value));
 				}
 
 				// Auto-injected context (always present regardless of args)
