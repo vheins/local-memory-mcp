@@ -10,8 +10,8 @@
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "../language-visitor.js";
-import { SymbolKind } from "../language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
+import { SymbolKind } from "../language-visitor";
 
 const FUNCTION_DECLARATION = "function_declaration";
 const CLASS_DECLARATION = "class_declaration";
@@ -72,7 +72,13 @@ export class KotlinVisitor implements LanguageVisitor {
 		if (type === CLASS_DECLARATION) {
 			const nameNode = node.namedChildren.find((c) => c.type === "simple_identifier" || c.type === "type_identifier");
 			if (nameNode) {
-				const isInterface = node.text.startsWith("interface");
+				// TASK-131: tree-sitter-kotlin emits `interface` as a raw (unnamed)
+				// token direct child of class_declaration. Scan node.children so
+				// preceding modifiers/annotations (e.g. `internal interface Foo`,
+				// `@Ann interface Foo`) do not break detection — the old
+				// `node.text.startsWith("interface")` check only matched when the
+				// `interface` keyword was the very first character of the node.
+				const isInterface = node.children.some((c) => c.type === "interface");
 				const kind = isInterface ? SymbolKind.Interface : SymbolKind.Class;
 				symbols.push(this.makeSymbol(node, nameNode.text, kind, parentName));
 				const body = node.namedChildren.find((c) => c.type === CLASS_BODY);

@@ -9,8 +9,8 @@
  * (the pool skips tree-sitter for configs with empty grammarWasms).
  */
 import type { Tree } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "./language-visitor.js";
-import { SymbolKind } from "./language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "./language-visitor";
+import { SymbolKind } from "./language-visitor";
 
 export class GenericTextVisitor implements LanguageVisitor {
 	extractSymbols(_tree: Tree | null, sourceCode: string): ParsedSymbol[] {
@@ -127,11 +127,18 @@ export class GenericTextVisitor implements LanguageVisitor {
 			return { name: arrowMatch[1], kind: SymbolKind.Function };
 		}
 
-		// ── Class/Interface/Trait/Protocol/Struct/Enum/Module/Namespace ──
+		// ── Class-like types (class/struct/object/enum/module/etc.) ─────
 		const typeMatch = trimmed.match(
-			/^(?:class|interface|trait|protocol|struct|enum|module|namespace|object|record|component|entity)\s+([a-zA-Z_][\w.]*)/
+			/^(?:class|struct|enum|module|namespace|object|record|component|entity)\s+([a-zA-Z_][\w.]*)/
 		);
 		if (typeMatch) return { name: typeMatch[1], kind: SymbolKind.Class };
+
+		// ── Interface-like types (interface/protocol/trait) ─────────────
+		// TASK-131: these were previously misclassified as Class by the shared
+		// typeMatch regex. Reported separately so Kotlin `interface`, Swift
+		// `protocol`, and PHP/Rust-style `trait` surfaces an `interface` kind.
+		const ifaceMatch = trimmed.match(/^(?:interface|protocol|trait)\s+([a-zA-Z_][\w.]*)/);
+		if (ifaceMatch) return { name: ifaceMatch[1], kind: SymbolKind.Interface };
 
 		// ── Type aliases: type Name =  or typedef Name ───────────
 		const typeAliasMatch = trimmed.match(/^type(?:def)?\s+([a-zA-Z_][\w]*)/);
