@@ -16,7 +16,7 @@ import { MemoryReadSchema } from "./schemas";
 import type { MemoryEntry, VectorStore, VectorResult } from "../types";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { McpResponse } from "../utils/mcp-response";
-import { createMcpResponse } from "../utils/mcp-response";
+import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
 import { inferReadMode } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
 import { expandQuery } from "../utils/query-expander";
@@ -306,14 +306,12 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		contentSummary = `No memories found for "${params.query}" in repo "${params.repo}".`;
 	}
 
-	const structuredData: Record<string, unknown> = {
-		columns: [...SEARCH_COLUMNS],
-		rows,
+	const structuredData = buildTableResult(SEARCH_COLUMNS, rows, {
 		count: paginatedResults.length,
 		total,
 		offset: params.offset,
 		limit: params.limit
-	};
+	});
 
 	// Best-effort KG context (REFACTOR-KG-003)
 	if (paginatedResults.length > 0) {

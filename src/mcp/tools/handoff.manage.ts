@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
-import { createMcpResponse } from "../utils/mcp-response";
+import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
 import {
 	ClaimListSchema,
 	ClaimReleaseSchema,
@@ -170,15 +170,12 @@ export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
 		handoff.context
 	]);
 
-	const structuredData = {
-		schema: "handoff-read" as const,
-		handoffs: {
-			columns: [...COLUMNS],
-			rows
-		},
+	const structuredData = buildTableResult(COLUMNS, rows, {
+		schema: "handoff-read",
+		key: "handoffs",
 		count: rows.length,
 		offset
-	};
+	});
 
 	const contentSummary = buildHandoffListSummary(repo, rows.length, status, from_agent, to_agent);
 
@@ -367,15 +364,12 @@ export async function handleClaimList(args: unknown, storage: SQLiteStore) {
 		claim.metadata
 	]);
 
-	const structuredData = {
-		schema: "claim-list" as const,
-		claims: {
-			columns: [...COLUMNS],
-			rows
-		},
+	const structuredData = buildTableResult(COLUMNS, rows, {
+		schema: "claim-list",
+		key: "claims",
 		count: rows.length,
 		offset
-	};
+	});
 
 	const contentSummary = buildClaimListSummary(repo, rows.length, agent, active_only);
 

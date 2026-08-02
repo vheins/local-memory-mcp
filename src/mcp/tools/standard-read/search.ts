@@ -8,7 +8,7 @@
 import { CodingStandardEntry, VectorStore } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { buildTableResult, createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { expandQuery } from "../../utils/query-expander";
 import { fetchAggregatedKgContext } from "../kg-archivist/query";
 import { StandardReadInput } from "../schemas";
@@ -279,19 +279,15 @@ export async function handleSearchMode(
 		contentSummary = "No matching coding standards found.";
 	}
 
-	const responseData: Record<string, unknown> = {
+	const responseData = buildTableResult(SEARCH_COLUMNS, rows, {
 		schema: "standard-read",
-		mode: "search",
-		query: validated.query || "",
+		key: "results",
 		count: paginatedResults.length,
 		total,
 		offset: validated.offset,
 		limit: validated.limit,
-		results: {
-			columns: [...SEARCH_COLUMNS],
-			rows
-		}
-	};
+		extra: { mode: "search", query: validated.query || "" }
+	});
 
 	// Best-effort KG context (REFACTOR-KG-005)
 	if (paginatedResults.length > 0) {

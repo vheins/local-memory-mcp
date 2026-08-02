@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { buildTableResult, createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { inferReadMode } from "../utils/auto-infer";
 import { HandoffReadSchema } from "./schemas";
 
@@ -133,15 +133,12 @@ function coreListClaims(
 		claim.metadata
 	]);
 
-	const structuredData = {
-		schema: "claim-list" as const,
-		claims: {
-			columns: [...COLUMNS],
-			rows
-		},
+	const structuredData = buildTableResult(COLUMNS, rows, {
+		schema: "claim-list",
+		key: "claims",
 		count: rows.length,
 		offset
-	};
+	});
 
 	const contentSummary = buildClaimListSummary(repo, rows.length, agent, activeOnly, claims);
 
@@ -202,15 +199,12 @@ function coreListHandoffs(
 		handoff.context
 	]);
 
-	const structuredData = {
-		schema: "handoff-read" as const,
-		handoffs: {
-			columns: [...COLUMNS],
-			rows
-		},
+	const structuredData = buildTableResult(COLUMNS, rows, {
+		schema: "handoff-read",
+		key: "handoffs",
 		count: rows.length,
 		offset
-	};
+	});
 
 	const contentSummary = buildHandoffListSummary(repo, rows.length, status, fromAgent, toAgent, handoffs);
 

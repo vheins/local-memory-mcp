@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
-import { createMcpResponse } from "../utils/mcp-response";
+import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
 import { ClaimManageSchema } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
 import { TASK_STATUS_IN_PROGRESS } from "../types";
@@ -203,15 +203,12 @@ async function handleListOp(
 		claim.metadata
 	]);
 
-	const structuredData = {
-		schema: "claim-manage" as const,
-		claims: {
-			columns: [...COLUMNS],
-			rows
-		},
+	const structuredData = buildTableResult(COLUMNS, rows, {
+		schema: "claim-manage",
+		key: "claims",
 		count: rows.length,
 		offset
-	};
+	});
 
 	const contentSummary = buildClaimListSummary(repo, rows.length, agent, activeOnly, claims);
 

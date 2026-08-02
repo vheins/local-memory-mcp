@@ -167,6 +167,76 @@ export function createTextOnlyResponse(text: string): McpResponse {
 	} as McpResponse;
 }
 
+/**
+ * Options for {@link buildTableResult}.
+ */
+export type TableResultOptions = {
+	/** Optional top-level `schema` discriminator (e.g. "task-read/search"). */
+	schema?: string;
+	/**
+	 * Optional key under which the `{ columns, rows }` table is nested
+	 * (e.g. "results", "tasks", "handoffs", "claims"). When omitted, the
+	 * columns/rows are placed at the top level of the envelope.
+	 */
+	key?: string;
+	/** Optional count override. Defaults to `rows.length`. */
+	count?: number;
+	/** Optional total count (when the request is paginated). */
+	total?: number;
+	/** Optional pagination offset. */
+	offset?: number;
+	/** Optional pagination limit. */
+	limit?: number;
+	/** Optional additional top-level fields merged into the envelope (e.g. `query`, `mode`). */
+	extra?: Record<string, unknown>;
+};
+
+/**
+ * Builds the shared table envelope scaffold:
+ *
+ *   `{ schema?, <key>?: { columns, rows }, count, total?, offset?, limit? }`
+ *
+ * This encapsulates the `COLUMNS = [...] as const` + `rows.map` +
+ * `structuredData = { schema, <kind>: { columns, rows }, count, total, offset, limit }`
+ * shape that was previously duplicated verbatim across memory.read,
+ * task-read (search/list), standard-read, handoff.read, claim.manage and the
+ * legacy handoff.manage list handlers.
+ *
+ * Column names/order and row mapping are preserved as passed in; `count`
+ * defaults to `rows.length`, matching the count semantics of every call site.
+ * Returns the same shape as the inline object literals it replaces, so the
+ * wire output is behavior-identical.
+ */
+export function buildTableResult(
+	columns: readonly string[],
+	rows: readonly unknown[][],
+	options: TableResultOptions = {}
+): Record<string, unknown> {
+	const { schema, key, count = rows.length, total, offset, limit, extra } = options;
+
+	const table = { columns: [...columns], rows };
+	const result: Record<string, unknown> = {};
+
+	if (schema !== undefined) {
+		result.schema = schema;
+	}
+	if (extra) {
+		Object.assign(result, extra);
+	}
+	if (key) {
+		result[key] = table;
+	} else {
+		result.columns = table.columns;
+		result.rows = table.rows;
+	}
+	result.count = count;
+	if (total !== undefined) result.total = total;
+	if (offset !== undefined) result.offset = offset;
+	if (limit !== undefined) result.limit = limit;
+
+	return result;
+}
+
 export function getPrimaryTextContent(response: McpResponse): string {
 	if (!Array.isArray(response.content)) return "";
 	const textItem = response.content.find((item) => item.type === "text");

@@ -1,6 +1,6 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TASK_STATUSES } from "../../types";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { buildTableResult, createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
 import { capitalize, describeStatusFilter } from "./shared";
@@ -44,15 +44,12 @@ export async function handleListMode(
 		t.comments_count || 0
 	]);
 
-	const structuredData: Record<string, unknown> = {
+	const structuredData = buildTableResult(COLUMNS, rows, {
 		schema: "task-read/list",
-		tasks: {
-			columns: [...COLUMNS],
-			rows
-		},
+		key: "tasks",
 		count: rows.length,
 		offset
-	};
+	});
 
 	// Best-effort KG context (REFACTOR-KG-004)
 	if (filteredTasks.length > 0) {

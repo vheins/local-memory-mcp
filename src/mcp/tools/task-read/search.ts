@@ -1,6 +1,6 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, VectorStore, TASK_STATUSES } from "../../types";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { buildTableResult, createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { TaskStatusValues } from "../schemas";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
@@ -193,18 +193,15 @@ export async function handleSearchMode(
 		st.task.phase
 	]);
 
-	const structuredData: Record<string, unknown> = {
+	const structuredData = buildTableResult(COLUMNS, rows, {
 		schema: "task-read/search",
-		query,
+		key: "results",
 		count: paginated.length,
 		total,
 		offset,
 		limit,
-		results: {
-			columns: [...COLUMNS],
-			rows
-		}
-	};
+		extra: { query }
+	});
 
 	// Best-effort KG context (REFACTOR-KG-004)
 	if (paginated.length > 0) {
