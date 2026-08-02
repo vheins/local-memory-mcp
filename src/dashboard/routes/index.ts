@@ -6,7 +6,7 @@ import standardRoutes from "./standard.routes";
 import coordinationRoutes from "./coordination.routes";
 import kgRoutes from "./kg.routes";
 import codebaseRoutes from "./codebase.routes";
-import unifiedGraphRoutes from "./unifiedGraph.routes";
+import unifiedGraphRoutes from "./unified-graph.routes";
 import queueRoutes from "./queue.routes";
 
 const router = Router();
