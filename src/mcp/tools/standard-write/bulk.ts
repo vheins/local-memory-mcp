@@ -11,7 +11,11 @@ import { StandardWriteParams, BulkResult, resolveStandardParentId, toContextSlug
 
 // ── Bulk handler ─────────────────────────────────────────────────────────
 
-export async function handleBulk(params: StandardWriteParams, db: SQLiteStore, _vectors: VectorStore): Promise<McpResponse> {
+export async function handleBulk(
+	params: StandardWriteParams,
+	db: SQLiteStore,
+	_vectors: VectorStore
+): Promise<McpResponse> {
 	const items = params.standards ?? [];
 	const results: BulkResult[] = [];
 	const batchCodes = new Set<string>();

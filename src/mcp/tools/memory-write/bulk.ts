@@ -106,7 +106,12 @@ export async function handleBulk(
 								updates[field] = MemoryTypeSchema.parse(raw[field]);
 							} else {
 								updates[field] = raw[field] as
-									string | number | boolean | Record<string, unknown> | string[] | undefined;
+									| string
+									| number
+									| boolean
+									| Record<string, unknown>
+									| string[]
+									| undefined;
 							}
 						}
 					}
