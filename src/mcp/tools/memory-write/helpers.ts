@@ -5,6 +5,7 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { resolveMemorySupersedes } from "../../utils/memory-utils";
 import { MEMORY_CONFLICT_THRESHOLD, TTL_MS_PER_DAY } from "../../utils/constants";
+import type { MemoryWriteItemInput } from "../schemas";
 
 // ── Mode inference ───────────────────────────────────────────────────────
 
@@ -120,47 +121,70 @@ export function applySessionFields(params: Record<string, unknown>): void {
 
 // ── Memory entry builder ─────────────────────────────────────────────────
 
+/**
+ * Builds a `MemoryEntry` from a schema-validated write item (OPT-CODE-03).
+ *
+ * The param is typed as {@link MemoryWriteItemInput} (z.infer of
+ * `MemoryWriteItemSchema`) instead of `Record<string, unknown>`, so field
+ * reads are statically typed — no `as` casts per field.
+ *
+ * Four fields keep a narrow compile-time cast because the schema marks them
+ * optional (the schema is shared with the update/acknowledge modes) while the
+ * entity type and the memories table expect non-null:
+ * - `type`     → `type TEXT NOT NULL`.
+ * - `content`  → `content TEXT NOT NULL`.
+ * - `importance` → `importance INTEGER NOT NULL CHECK (importance BETWEEN 1 AND 5)`.
+ *   All three: an absent value flows through the entry unchanged and the
+ *   insert fails with SQLITE_CONSTRAINT — the exact pre-refactor outcome for a
+ *   create missing a required column.
+ * - `title`    → `title TEXT` (nullable): an absent value flows through and is
+ *   stored as NULL (insert binds `entry.title || null`).
+ *
+ * The casts are type-level only; the runtime values pass through verbatim, so
+ * behavior is byte-identical to the pre-refactor `Record<string, unknown>` code.
+ */
 export function buildMemoryEntry(
-	params: Record<string, unknown>,
+	params: MemoryWriteItemInput,
 	db: SQLiteStore,
 	vectors: VectorStore,
 	now: string,
 	batchCodes?: Set<string>
 ): MemoryEntry {
-	const scope = (params.scope as Record<string, unknown>) ?? {};
-	const owner = (params.owner as string) ?? (scope.owner as string) ?? "unknown";
-	const repo = (params.repo as string) ?? (scope.repo as string) ?? "unknown";
+	const scope = params.scope;
+	const owner = params.owner ?? scope?.owner ?? "unknown";
+	const repo = params.repo ?? scope?.repo ?? "unknown";
 	const fullScope = {
 		owner,
 		repo,
-		branch: (scope.branch as string) ?? undefined,
-		folder: (scope.folder as string) ?? undefined,
-		language: (scope.language as string) ?? undefined
+		branch: scope?.branch,
+		folder: scope?.folder,
+		language: scope?.language
 	};
 
 	const createdAtTime = new Date(now).getTime();
 	const expires_at =
-		params.ttlDays != null ? new Date(createdAtTime + (params.ttlDays as number) * TTL_MS_PER_DAY).toISOString() : null;
+		params.ttlDays != null ? new Date(createdAtTime + params.ttlDays * TTL_MS_PER_DAY).toISOString() : null;
 
-	const resolvedSupersedes = resolveMemorySupersedes(params.supersedes as string | null | undefined, db, owner, repo);
+	const resolvedSupersedes = resolveMemorySupersedes(params.supersedes, db, owner, repo);
 
-	const tags = [...((params.tags as string[]) ?? [])];
+	const tags = [...(params.tags ?? [])];
 	if (fullScope.language && !tags.includes(fullScope.language.toLowerCase())) {
 		tags.push(fullScope.language.toLowerCase());
 	}
 
-	const code = resolveEntityCode((params.code as string) || null, owner, repo, "memory", db, { batchCodes });
+	const code = resolveEntityCode(params.code || null, owner, repo, "memory", db, { batchCodes });
 
 	return {
 		id: randomUUID(),
 		code,
+		// Narrow field casts — see the JSDoc above for the schema-vs-table contract.
 		type: params.type as MemoryEntry["type"],
 		title: params.title as string,
 		content: params.content as string,
 		importance: params.importance as number,
-		agent: (params.agent as string) ?? "unknown",
-		role: (params.role as string) ?? "unknown",
-		model: (params.model as string) ?? "unknown",
+		agent: params.agent ?? "unknown",
+		role: params.role ?? "unknown",
+		model: params.model ?? "unknown",
 		scope: fullScope,
 		created_at: now,
 		updated_at: now,
@@ -172,15 +196,15 @@ export function buildMemoryEntry(
 		supersedes: resolvedSupersedes,
 		status: MEMORY_STATUS_ACTIVE,
 		tags,
-		metadata: (params.metadata as Record<string, unknown>) ?? {},
-		is_global: (params.is_global as boolean) ?? false
+		metadata: params.metadata ?? {},
+		is_global: params.is_global ?? false
 	};
 }
 
 // ── Conflict check for create items ──────────────────────────────────────
 
 export async function checkCreateConflict(
-	params: Record<string, unknown>,
+	params: MemoryWriteItemInput,
 	db: SQLiteStore,
 	vectors: VectorStore,
 	isTaskArchive: boolean,
@@ -191,15 +215,19 @@ export async function checkCreateConflict(
 		return { conflict: false };
 	}
 
-	const scope = (params.scope as Record<string, unknown>) ?? {};
-	const owner = (params.owner as string) ?? (scope.owner as string) ?? "unknown";
-	const repo = (params.repo as string) ?? (scope.repo as string) ?? "unknown";
+	const owner = params.owner ?? params.scope?.owner ?? "unknown";
+	const repo = params.repo ?? params.scope?.repo ?? "unknown";
 
+	// `content` is schema-optional but checkConflicts requires a string. The cast
+	// is type-level only — it passes `params.content` (possibly undefined) through
+	// unchanged, exactly as the pre-refactor code did. An empty/absent content
+	// yields no similarity match (no false conflict), and a create without content
+	// still fails later at the `content TEXT NOT NULL` insert.
 	const conflict = await db.memoryVectors.checkConflicts(
 		params.content as string,
 		owner,
 		repo,
-		params.type as string,
+		params.type ?? "unknown",
 		vectors,
 		MEMORY_CONFLICT_THRESHOLD
 	);

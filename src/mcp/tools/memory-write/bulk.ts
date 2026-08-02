@@ -1,4 +1,4 @@
-import { MemoryTypeSchema } from "../schemas";
+import { MemoryTypeSchema, MemoryWriteItemSchema } from "../schemas";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore, MemoryEntry, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { logger } from "../../utils/logger";
@@ -154,26 +154,39 @@ export async function handleBulk(
 					const itemOwner = (raw.owner as string) ?? (itemScope.owner as string) ?? defaultOwner;
 					const itemRepo = (raw.repo as string) ?? (itemScope.repo as string) ?? defaultRepo;
 
-					// Propagate owner/repo to the item so buildMemoryEntry picks them up
+					// Propagate owner/repo to the item so buildMemoryEntry picks them up.
+					// Scope is only synthesized when BOTH defaults exist — MemoryScopeSchema
+					// requires owner+repo min(1), so an asymmetric pair (exactly one
+					// non-empty) would emit a PARTIAL scope that fails the item parse below
+					// and flips the whole valid bulk create into per-item errors (TASK-147).
+					// When a half is missing, leave scope undefined; buildMemoryEntry falls
+					// back to "unknown" for that half, keeping stored owner/repo byte-identical
+					// to the pre-refactor behavior.
 					if (!raw.owner && defaultOwner) raw.owner = defaultOwner;
 					if (!raw.repo && defaultRepo) raw.repo = defaultRepo;
 					if (!raw.scope) {
-						raw.scope = { owner: defaultOwner || undefined, repo: defaultRepo || undefined };
+						raw.scope = defaultOwner && defaultRepo ? { owner: defaultOwner, repo: defaultRepo } : undefined;
 					} else {
 						const scope = raw.scope as Record<string, unknown>;
-						if (!scope.owner) scope.owner = defaultOwner || undefined;
-						if (!scope.repo) scope.repo = defaultRepo || undefined;
+						if (!scope.owner && defaultOwner) scope.owner = defaultOwner;
+						if (!scope.repo && defaultRepo) scope.repo = defaultRepo;
 					}
 
-					// Conflict check
-					const resolvedS = resolveMemorySupersedes(
-						raw.supersedes as string | null | undefined,
-						db,
-						itemOwner,
-						itemRepo
-					);
+					// Parse the item through the item schema (OPT-CODE-03). Bulk items
+					// were previously NOT validated (only the single-create path ran
+					// MemoryWriteSchema.parse), letting junk values (invalid type
+					// enums, out-of-range importance, over-long titles) reach the DB.
+					// Validating here aligns bulk with the single path and hands the
+					// helpers a z.infer'd typed input instead of Record<string, unknown>.
+					// Failures surface per-item in the errors[] list (bulk partial
+					// execution contract) — the same fail-loud direction as single create.
+					const item = MemoryWriteItemSchema.parse(raw);
+
+					// Conflict check — resolve supersedes from the validated item, not
+					// the untyped raw object (NIT fix, OPT-CODE-03 review).
+					const resolvedS = resolveMemorySupersedes(item.supersedes, db, itemOwner, itemRepo);
 					const { conflict, response: conflictResponse } = await checkCreateConflict(
-						raw,
+						item,
 						db,
 						vectors,
 						isTaskArchive,
@@ -192,7 +205,7 @@ export async function handleBulk(
 						}
 					}
 
-					const entry = buildMemoryEntry(raw, db, vectors, now, batchCodes);
+					const entry = buildMemoryEntry(item, db, vectors, now, batchCodes);
 					createdEntries.push(entry);
 
 					results.push({

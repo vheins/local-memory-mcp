@@ -12,7 +12,7 @@
  * No hit_count increments on read.
  */
 
-import { MemoryReadSchema } from "./schemas";
+import { MemoryReadSchema, type MemoryReadInput } from "./schemas";
 import type { MemoryEntry, VectorStore, VectorResult } from "../types";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { McpResponse } from "../utils/mcp-response";
@@ -30,22 +30,12 @@ import { FTS_CANDIDATE_CAP } from "../utils/fts";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
-type MemoryReadParams = {
-	query?: string;
-	id?: string;
-	code?: string;
-	ids?: string[];
-	codes?: string[];
-	owner?: string;
-	repo: string;
-	current_tags?: string[];
-	current_file_path?: string;
-	scope?: { owner?: string; repo?: string; branch?: string; folder?: string; language?: string };
-	include_archived: boolean;
-	limit: number;
-	offset: number;
-	json: boolean;
-};
+// Derived from the Zod schema (OPT-CODE-03) — the hand-written interface was a
+// drift-prone duplicate (owner was optional here but required in the schema)
+// that forced `Schema.parse(...) as MemoryReadParams`. `owner` is required by
+// the schema (normalizeToolArguments injects it), so the old `params.owner!`
+// assertions below are now plain property accesses.
+type MemoryReadParams = MemoryReadInput;
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -71,7 +61,7 @@ function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): Mem
 // =====================================================================
 
 export async function handleMemoryRead(params: unknown, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
-	const validated = MemoryReadSchema.parse(params) as MemoryReadParams;
+	const validated = MemoryReadSchema.parse(params);
 
 	// Auto-infer mode from field presence via the shared helper (OPT-DRY-06):
 	//   query → SEARCH · id/code/ids/codes → DETAIL · none → RECAP
@@ -109,7 +99,7 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	const fetchLimit = (params.offset + params.limit) * 3;
 	const similarityResults = db.memoryVectors.searchBySimilarity(
 		searchQuery,
-		params.owner!,
+		params.owner,
 		params.repo,
 		fetchLimit,
 		params.include_archived,
@@ -138,7 +128,7 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	// vector/similarity pipeline below is unaffected.
 	const ftsScoreMap = new Map<string, number>();
 	try {
-		const ftsScored = db.memories.searchByFtsScored(effectiveQuery, params.owner!, params.repo, {
+		const ftsScored = db.memories.searchByFtsScored(effectiveQuery, params.owner, params.repo, {
 			limit: FTS_CANDIDATE_CAP,
 			includeArchived: params.include_archived
 		});
@@ -436,13 +426,13 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 	logger.info("[Tool] memory.read (recap)", { repo: params.repo, limit: recapLimit, offset: params.offset });
 
 	// Aggregate stats (counts by type)
-	const stats = db.memories.getStats(params.owner!, params.repo);
+	const stats = db.memories.getStats(params.owner, params.repo);
 
 	// Total active memories (excluding task_archive)
-	const total = db.memories.getTotalCount(params.owner!, params.repo, false, ["task_archive"]);
+	const total = db.memories.getTotalCount(params.owner, params.repo, false, ["task_archive"]);
 
 	// Top memories ordered by importance DESC, created_at DESC
-	const rows = db.memories.getRecentMemories(params.owner!, params.repo, recapLimit, params.offset, false, [
+	const rows = db.memories.getRecentMemories(params.owner, params.repo, recapLimit, params.offset, false, [
 		"task_archive"
 	]);
 

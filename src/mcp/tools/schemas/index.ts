@@ -17,6 +17,7 @@ export {
 	MemoryWriteItemSchema,
 	MemoryReadSchema
 } from "./memory";
+export type { MemoryReadInput, MemoryWriteInput, MemoryWriteItemInput } from "./memory";
 
 export { TaskDeleteSchema, TaskReadSchema, TaskWriteSchema, TaskWriteItemSchema } from "./task";
 

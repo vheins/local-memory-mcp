@@ -290,7 +290,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	const claim = storage.handoffs.claimTask({
 		owner: owner,
 		repo,
-		task_id: taskId!,
+		task_id: taskId,
 		agent,
 		role,
 		metadata
@@ -391,7 +391,9 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 		}
 		resolvedTaskId = task.id;
 	}
-	let resolvedTaskCode: string | null = task_code ?? null;
+	// Declared without initializer — both surviving branches assign it, and the
+	// added else-throw makes `task_code ?? null` a dead assignment (no-useless-assignment).
+	let resolvedTaskCode: string | null;
 
 	if (resolvedTaskId) {
 		const task = storage.tasks.getTaskById(resolvedTaskId);
@@ -406,9 +408,14 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 		}
 		resolvedTaskId = task.id;
 		resolvedTaskCode = task.task_code;
+	} else {
+		// Unreachable at runtime (ClaimReleaseSchema.refine requires task_id or
+		// task_code) — explicit fail-loud guard so `resolvedTaskId` narrows to
+		// `string` and no `!` is needed at the call sites below (OPT-CODE-03).
+		throw new Error("Either task_id or task_code must be provided");
 	}
 
-	const success = storage.handoffs.releaseClaim(resolvedTaskId!, agent);
+	const success = storage.handoffs.releaseClaim(resolvedTaskId, agent);
 	if (!success) {
 		throw new Error(`No active claim found for task ${resolvedTaskCode || resolvedTaskId}`);
 	}
@@ -416,11 +423,11 @@ export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 	const result = {
 		success,
 		repo,
-		task_id: resolvedTaskId!,
+		task_id: resolvedTaskId,
 		task_code: resolvedTaskCode,
 		agent: agent ?? null
 	};
-	const contentSummary = `Released claim for [${resolvedTaskCode || resolvedTaskId?.slice(0, 8)}] in repo "${repo}": agent=${agent || "any"}.`;
+	const contentSummary = `Released claim for [${resolvedTaskCode || resolvedTaskId.slice(0, 8)}] in repo "${repo}": agent=${agent || "any"}.`;
 
 	return createMcpResponse(result, contentSummary, {
 		contentSummary,

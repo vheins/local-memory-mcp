@@ -134,3 +134,12 @@ export const MemorySynthesizeSchema = z.object({
 	max_tokens: z.coerce.number().int().min(128).max(4000).default(1200),
 	json: z.boolean().default(false)
 });
+
+// ── Derived input types (OPT-CODE-03) ─────────────────────────────────────
+// z.infer keeps handler input interfaces in lockstep with the schemas — no
+// more `Schema.parse(params) as X` re-casts that silently drift from the
+// validated shape (e.g. memory.read.ts used to re-cast to a hand-written
+// MemoryReadParams with a different owner nullability).
+export type MemoryReadInput = z.infer<typeof MemoryReadSchema>;
+export type MemoryWriteInput = z.infer<typeof MemoryWriteSchema>;
+export type MemoryWriteItemInput = z.infer<typeof MemoryWriteItemSchema>;

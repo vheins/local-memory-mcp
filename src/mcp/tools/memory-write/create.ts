@@ -18,28 +18,29 @@ export async function handleCreate(
 	applyDecisionFields(params);
 	applySessionFields(params);
 
-	const parsed = MemoryWriteSchema.parse(params) as Record<string, unknown>;
+	// Parse once — `parsed` carries the z.infer'd MemoryWriteInput type
+	// (OPT-CODE-03), so no `as Record<string, unknown>` re-cast is needed
+	// and downstream reads (owner/scope/type/supersedes) are statically typed.
+	const parsed = MemoryWriteSchema.parse(params);
 
 	// Title metadata check
-	const title = (parsed.title ?? "") as string;
+	const title = parsed.title ?? "";
 	if (hasMetadataLikeTitle(title)) {
 		throw new Error(
 			"Title appears to contain metadata. Keep title concise and move agent/role/date details into metadata or dedicated fields."
 		);
 	}
 
-	const type = parsed.type as string;
-	const isTaskArchive = type === "task_archive";
-	const scope = (parsed.scope as Record<string, unknown>) ?? {};
-	const owner = (parsed.owner as string) ?? (scope.owner as string) ?? "unknown";
-	const repo = (parsed.repo as string) ?? (scope.repo as string) ?? "unknown";
+	const isTaskArchive = parsed.type === "task_archive";
+	const owner = parsed.owner ?? parsed.scope?.owner ?? "unknown";
+	const repo = parsed.repo ?? parsed.scope?.repo ?? "unknown";
 
 	// Check for resolved supersedes to decide
-	const resolvedSupersedes = resolveMemorySupersedes(parsed.supersedes as string | null | undefined, db, owner, repo);
+	const resolvedSupersedes = resolveMemorySupersedes(parsed.supersedes, db, owner, repo);
 
 	// Conflict check
 	const { conflict, response: conflictResponse } = await checkCreateConflict(
-		parsed as unknown as Record<string, unknown>,
+		parsed,
 		db,
 		vectors,
 		isTaskArchive,
@@ -59,7 +60,7 @@ export async function handleCreate(
 	}
 
 	const now = new Date().toISOString();
-	const entry = buildMemoryEntry(parsed as unknown as Record<string, unknown>, db, vectors, now);
+	const entry = buildMemoryEntry(parsed, db, vectors, now);
 
 	// Row + outbox job commit atomically inside the write transaction: ONNX
 	// embedding + KG extraction run later via the outbox worker (TASK-013).
