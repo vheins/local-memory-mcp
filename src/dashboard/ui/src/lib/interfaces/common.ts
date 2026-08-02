@@ -5,6 +5,10 @@ export interface Pagination {
 	totalPages: number;
 }
 
+// Moved from lib/types (TASK-088): live barrel is lib/interfaces
+export type Theme = "light" | "dark";
+export type ThemePreference = Theme | "auto";
+
 export interface KGNode {
 	id: string;
 	name: string;

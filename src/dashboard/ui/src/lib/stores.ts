@@ -1,6 +1,15 @@
 import { writable, derived } from "svelte/store";
-import type { RepoMeta, Memory, Task, DashboardStats, RecentAction, TaskTimeStats, HealthData } from "./interfaces";
-import type { Theme, ThemePreference } from "./types";
+import type {
+	RepoMeta,
+	Memory,
+	Task,
+	DashboardStats,
+	RecentAction,
+	TaskTimeStats,
+	HealthData,
+	Theme,
+	ThemePreference
+} from "./interfaces";
 
 // ─── Stores ─────────────────────────────────────────────────────────────────
 
@@ -176,4 +185,3 @@ export function initPersistedState() {
 
 // Re-export types for backward compatibility if needed, but better to update imports
 export * from "./interfaces";
-export * from "./types";
