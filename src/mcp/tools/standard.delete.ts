@@ -2,14 +2,14 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { collectEntityIds } from "../utils/auto-infer";
+import { purgeEntityAndCleanup } from "../utils/purge-entity-cleanup";
 import { logger } from "../utils/logger";
-import { observationText } from "./kg-archivist";
 import { StandardDeleteSchema } from "./schemas";
 
 export async function handleStandardDelete(
 	params: Record<string, unknown>,
 	db: SQLiteStore,
-	vectors: VectorStore
+	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = StandardDeleteSchema.parse(params);
 	const { id, ids, codes, owner, repo, json } = validated;
@@ -47,52 +47,17 @@ export async function handleStandardDelete(
 	let deletedCount = 0;
 
 	if (validIdsToDelete.length > 0) {
-		// Hard-delete standards + purge pending embedding-queue jobs in ONE
-		// transaction — a stale queue_jobs row could otherwise re-embed the
-		// vector and re-run KG extraction for a deleted standard
-		// (TASK-042 / MEM-427).
-		db.db
-			.transaction(() => {
-				for (const validId of validIdsToDelete) {
-					db.standards.delete(validId);
-				}
-				const placeholders = validIdsToDelete.map(() => "?").join(",");
-				db.db
-					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
-					.run("standard", ...validIdsToDelete);
+		// Shared purge + cleanup contract (OPT-DRY-03): hard delete + queue_jobs
+		// purge + vector removal + repo-scoped KG cleanup, identical to the
+		// memory/task delete tools.
+		await purgeEntityAndCleanup(
+			db,
+			"standard",
+			validIdsToDelete.map((id) => {
+				const standard = standardMap.get(id);
+				return standard ? { id, title: standard.title, repo: standard.repo ?? "" } : { id };
 			})
-			.immediate();
-
-		// Collect observation texts for batch KG cleanup (once per batch, not per
-		// item) — each (text, repo) pair is scoped to the standard's own repo so
-		// identical titles across repos never cross-delete (TASK-045/043).
-		const observationTexts: { text: string; repo: string }[] = [];
-
-		for (const validId of validIdsToDelete) {
-			// Remove vector embedding
-			await vectors.remove(validId, "standard");
-
-			const standardEntry = standardMap.get(validId);
-			if (standardEntry) {
-				observationTexts.push({
-					text: observationText("standard", standardEntry.title),
-					repo: standardEntry.repo ?? ""
-				});
-			}
-		}
-
-		// KG cleanup: best-effort, atomic (single transaction), once per batch —
-		// orphans checked via observations UNION relations so relation-referenced
-		// entities are KEPT (REFACTOR-KG-006 / TASK-004); observation deletes +
-		// orphan sweep scoped to the touched repo(s) (TASK-043).
-		try {
-			db.knowledgeGraph.deleteObservationsAndOrphans(observationTexts);
-		} catch (kgError) {
-			logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted standards", {
-				error: String(kgError)
-			});
-		}
-
+		);
 		deletedCount = validIdsToDelete.length;
 	}
 

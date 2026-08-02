@@ -1,15 +1,15 @@
 import { SQLiteStore } from "../storage/sqlite";
-import { VectorStore, MEMORY_STATUS_ARCHIVED } from "../types";
+import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { collectEntityIds } from "../utils/auto-infer";
+import { purgeEntityAndCleanup } from "../utils/purge-entity-cleanup";
 import { logger } from "../utils/logger";
-import { observationText } from "./kg-archivist";
 import { MemoryDeleteSchema } from "./schemas";
 
 export async function handleMemoryDelete(
 	params: Record<string, unknown>,
 	db: SQLiteStore,
-	vectors: VectorStore,
+	_vectors: VectorStore,
 	onProgress?: (progress: number, total?: number) => void
 ): Promise<McpResponse> {
 	const validated = MemoryDeleteSchema.parse(params);
@@ -48,61 +48,21 @@ export async function handleMemoryDelete(
 	}
 
 	let deletedCount = 0;
-	const total = validIdsToDelete.length;
-	let progress = 0;
 
 	if (validIdsToDelete.length > 0) {
-		// Archive + purge pending embedding-queue jobs in ONE transaction — a
-		// stale queue_jobs row could otherwise re-embed the vector and re-run
-		// KG extraction for an archived memory (TASK-042 / MEM-427).
-		db.db
-			.transaction(() => {
-				db.memories.bulkUpdateMemories(validIdsToDelete, { status: MEMORY_STATUS_ARCHIVED });
-				const placeholders = validIdsToDelete.map(() => "?").join(",");
-				db.db
-					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)
-					.run("memory", ...validIdsToDelete);
-			})
-			.immediate();
-
-		// Collect observation texts for batch KG cleanup (once per batch, not per
-		// item) — each (text, repo) pair is scoped to the memory's own repo so
-		// identical titles across repos never cross-delete (TASK-045/043).
-		const observationTexts: { text: string; repo: string }[] = [];
-
-		for (const validId of validIdsToDelete) {
-			if (onProgress) {
-				onProgress(progress, total);
-			}
-			await vectors.remove(validId, "memory");
-
-			const memoryEntry = memoryMap.get(validId);
-			if (memoryEntry) {
-				observationTexts.push({
-					text: observationText("memory", memoryEntry.title),
-					repo: memoryEntry.scope.repo
-				});
-			}
-			progress++;
-		}
-
-		// KG cleanup: best-effort, atomic (single transaction), orphans checked
-		// via observations UNION relations so relation-referenced entities are
-		// KEPT; observation deletes + orphan sweep scoped to the touched
-		// repo(s) (TASK-043).
-		try {
-			db.knowledgeGraph.deleteObservationsAndOrphans(observationTexts);
-		} catch (kgError) {
-			logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted memories", {
-				error: String(kgError)
-			});
-		}
-
+		// Shared purge + cleanup contract (OPT-DRY-03): archive + queue_jobs
+		// purge + vector removal + repo-scoped KG cleanup, identical to the
+		// standard/task delete tools. Progress is reported per item.
+		await purgeEntityAndCleanup(
+			db,
+			"memory",
+			validIdsToDelete.map((id) => {
+				const memory = memoryMap.get(id);
+				return memory ? { id, title: memory.title, repo: memory.scope.repo } : { id };
+			}),
+			{ onProgress }
+		);
 		deletedCount = validIdsToDelete.length;
-	}
-
-	if (onProgress) {
-		onProgress(progress, total);
 	}
 
 	logger.info("[Tool] memory.delete", { repo: lastRepo, count: deletedCount });

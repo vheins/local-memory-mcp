@@ -110,28 +110,6 @@ export class StandardEntity extends BaseEntity {
 		});
 	}
 
-	/**
-	 * Bulk deletes standards by IDs within a single transaction.
-	 *
-	 * @param ids - Array of standard IDs to delete
-	 * @returns Number of standards actually deleted
-	 */
-	bulkDeleteStandards(ids: string[]): number {
-		if (ids.length === 0) return 0;
-
-		return this.transaction(() => {
-			let count = 0;
-			const chunkSize = 500;
-			for (let i = 0; i < ids.length; i += chunkSize) {
-				const chunk = ids.slice(i, i + chunkSize);
-				const placeholders = chunk.map(() => "?").join(",");
-				const result = this.run(`DELETE FROM coding_standards WHERE id IN (${placeholders})`, chunk);
-				count += result.changes;
-			}
-			return count;
-		});
-	}
-
 	getById(id: string): CodingStandardEntry | null {
 		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE id = ?", [id]);
 		return row ? this.rowToEntry(row) : null;

@@ -21,6 +21,28 @@ export class HttpError extends Error {
 	}
 }
 
+/**
+ * Service-layer error with HTTP status. Thrown by services to signal
+ * business-rule violations (404 not-found, 400 validation, 422 all-failed,
+ * etc.) without depending on HTTP types. `handleController` honors the
+ * `status` property, preserving the original HTTP status code.
+ *
+ * Backward-compatible: `handleController` also checks for `HttpError`
+ * (which carries `code` and `extra`) so controllers keep using `HttpError`
+ * for request-shape validation.
+ */
+export class ServiceError extends Error {
+	readonly status: number;
+	readonly code?: string;
+
+	constructor(status: number, message: string, code?: string) {
+		super(message);
+		this.name = "ServiceError";
+		this.status = status;
+		this.code = code;
+	}
+}
+
 export interface PageParams {
 	page: number;
 	pageSize: number;
@@ -87,8 +109,16 @@ export async function handleController(
 			res.status(status).json(body);
 		}
 	} catch (err: unknown) {
-		const httpErr =
-			err instanceof HttpError ? err : new HttpError(500, err instanceof Error ? err.message : "Internal server error");
+		let httpErr: HttpError;
+		if (err instanceof HttpError) {
+			httpErr = err;
+		} else if (err instanceof ServiceError) {
+			// ServiceError carries the original HTTP status from business logic.
+			// Wrap in HttpError so onError callbacks get the full shape.
+			httpErr = new HttpError(err.status, err.message, err.code);
+		} else {
+			httpErr = new HttpError(500, err instanceof Error ? err.message : "Internal server error");
+		}
 		if (opts.onError) {
 			opts.onError(res, httpErr);
 			return;

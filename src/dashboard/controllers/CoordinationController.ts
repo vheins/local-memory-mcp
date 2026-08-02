@@ -1,7 +1,11 @@
 import express from "express";
-import { db, mcpClient } from "../lib/context";
 import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
+import { CoordinationService } from "../services/coordination.service";
 
+/**
+ * Thin request/response adapter for coordination endpoints.
+ * Business logic delegated to CoordinationService.
+ */
 export class CoordinationController {
 	static async listClaims(req: express.Request, res: express.Response) {
 		await handleController(req, res, () => {
@@ -10,30 +14,20 @@ export class CoordinationController {
 
 			if (!repo) throw new HttpError(400, "repo is required");
 
-			const claims = db.handoffs.listClaims({
-				owner: "",
+			const result = CoordinationService.listClaims({
 				repo: repo as string,
 				agent: typeof agent === "string" ? agent : undefined,
-				active_only: active_only === undefined ? true : String(active_only) === "true",
+				active_only: active_only === undefined ? undefined : String(active_only) === "true",
 				limit: pageSize,
 				offset
 			});
 
-			const total = db.handoffs.listClaims({
-				owner: "",
-				repo: repo as string,
-				agent: typeof agent === "string" ? agent : undefined,
-				active_only: active_only === undefined ? true : String(active_only) === "true",
-				limit: 100000,
-				offset: 0
-			}).length;
-
-			return jsonApiRes(claims, "claim", {
+			return jsonApiRes(result.claims, "claim", {
 				meta: {
 					page,
 					pageSize,
-					totalItems: total,
-					totalPages: Math.ceil(total / pageSize)
+					totalItems: result.total,
+					totalPages: Math.ceil(result.total / pageSize)
 				}
 			});
 		});
@@ -45,12 +39,8 @@ export class CoordinationController {
 			res,
 			async () => {
 				const attributes = getAttributes(req);
-				if (!mcpClient.isConnected()) await mcpClient.start();
-				const result = (await mcpClient.callTool("claim-release", {
-					...attributes,
-					structured: true
-				})) as { structuredContent?: Record<string, unknown> };
-				return jsonApiRes((result.structuredContent || result) as Record<string, unknown>, "claim-release");
+				const result = await CoordinationService.releaseClaim(attributes);
+				return jsonApiRes(result as Record<string, unknown>, "claim-release");
 			},
 			// No DB read before the MCP call — preserve the original handler's
 			// behavior of skipping db.refresh().

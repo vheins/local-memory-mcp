@@ -1,10 +1,13 @@
 import express from "express";
-import { randomUUID } from "crypto";
-import { db } from "../lib/context";
 import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
-import type { MemoryType, MemoryEntry } from "../../mcp/types";
+import { MemoryService } from "../services/memory.service";
+import type { MemoryType } from "../../mcp/types";
 import type { IdParams, MemoryListQuery } from "../../mcp/interfaces";
 
+/**
+ * Thin request/response adapter for memory endpoints.
+ * Business logic delegated to MemoryService.
+ */
 export class MemoriesController {
 	static async list(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
@@ -14,14 +17,14 @@ export class MemoriesController {
 
 			if (!repo) throw new HttpError(400, "repo is required");
 
-			const result = db.memories.listMemoriesForDashboard({
+			const result = MemoryService.list({
 				repo: repo as string,
 				type: type as MemoryType,
-				search: search as string,
-				minImportance: minImportance ? parseInt(minImportance as string) : undefined,
-				maxImportance: maxImportance ? parseInt(maxImportance as string) : undefined,
-				sortBy: sortBy as string,
-				sortOrder: (sortOrder as string)?.toUpperCase() === "ASC" ? "ASC" : "DESC",
+				search,
+				minImportance,
+				maxImportance,
+				sortBy,
+				sortOrder,
 				limit: pageSize,
 				offset
 			});
@@ -39,9 +42,8 @@ export class MemoriesController {
 
 	static async get(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
-			const memory = db.memories.getByIdWithStats(req.params.id as string);
+			const memory = MemoryService.getById(req.params.id as string);
 			if (!memory) throw new HttpError(404, "Memory not found");
-			db.actions.logAction("read", memory.scope.owner, memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
 			return jsonApiRes(memory, "memory");
 		});
 	}
@@ -51,17 +53,8 @@ export class MemoriesController {
 			const attributes = getAttributes(req);
 			const { repo, type, content } = attributes;
 			if (!repo || !type || !content) throw new HttpError(400, "Required fields missing");
-			const id = randomUUID();
-			await db.withWrite(() => {
-				db.memories.insert({
-					...attributes,
-					id,
-					created_at: new Date().toISOString(),
-					updated_at: new Date().toISOString(),
-					scope: { repo, owner: attributes.owner || "" }
-				});
-				db.actions.logAction("write", "", repo, { memoryId: id });
-			});
+
+			const id = await MemoryService.create(attributes);
 			return jsonApiRes({ id }, "memory");
 		});
 	}
@@ -69,32 +62,10 @@ export class MemoriesController {
 	static async update(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
-			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
-			if (!existing) throw new HttpError(404, "Memory not found");
+			if (!MemoryService.exists(id)) throw new HttpError(404, "Memory not found");
+
 			const attributes = getAttributes(req);
-			const { title, content, type, importance, tags, agent, model, repo } = attributes;
-			const updates = {
-				title,
-				content,
-				type,
-				importance,
-				tags,
-				agent,
-				model,
-				repo,
-				updated_at: new Date().toISOString()
-			};
-			await db.withWrite(() => {
-				db.memories.update(id, updates as Partial<MemoryEntry>);
-				db.actions.logAction(
-					"update",
-					(existing as MemoryEntry).scope?.owner || "",
-					(existing as MemoryEntry).scope?.repo || attributes.repo || "",
-					{
-						memoryId: id
-					}
-				);
-			});
+			await MemoryService.update(id, attributes);
 			return jsonApiRes({ message: "Updated" }, "status");
 		});
 	}
@@ -102,17 +73,9 @@ export class MemoriesController {
 	static async delete(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
-			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
-			if (!existing) throw new HttpError(404, "Memory not found");
-			await db.withWrite(() => {
-				db.memories.delete(id);
-				db.actions.logAction(
-					"delete",
-					(existing as MemoryEntry).scope?.owner || "",
-					(existing as MemoryEntry).scope?.repo || "",
-					{ memoryId: id }
-				);
-			});
+			if (!MemoryService.exists(id)) throw new HttpError(404, "Memory not found");
+
+			await MemoryService.delete(id);
 			return jsonApiRes({ message: "Deleted" }, "status");
 		});
 	}
@@ -123,23 +86,7 @@ export class MemoriesController {
 			if (!Array.isArray(items) || !repo)
 				throw new HttpError(400, "Invalid payload: requires 'items' array and 'repo'");
 
-			const entries = items.map((item: Record<string, unknown>) => ({
-				...item,
-				id: (item.id as string) || randomUUID(),
-				scope: {
-					...(item.scope as Record<string, unknown>),
-					repo,
-					owner: ((item.scope as Record<string, unknown> | undefined)?.owner as string) || ""
-				},
-				created_at: (item.created_at as string) || new Date().toISOString(),
-				updated_at: (item.updated_at as string) || new Date().toISOString()
-			}));
-
-			const count = await db.withWrite(() => {
-				const insertedCount = db.memories.bulkInsertMemories(entries as MemoryEntry[]);
-				db.actions.logAction("write", "", repo, { query: `Bulk imported ${insertedCount} memories` });
-				return insertedCount;
-			});
+			const count = await MemoryService.bulkCreate(items, repo);
 			return jsonApiRes({ count }, "status");
 		});
 	}
@@ -150,25 +97,7 @@ export class MemoriesController {
 			if (!Array.isArray(ids) || !action)
 				throw new HttpError(400, "Invalid payload: requires 'ids' array and 'action'");
 
-			const count = await db.withWrite(() => {
-				let n: number;
-				if (action === "delete") {
-					n = db.memoryArchives.bulkDeleteMemories(ids);
-				} else if (action === "update" || action === "archive") {
-					n = db.memories.bulkUpdateMemories(ids, updates || { status: action === "archive" ? "archived" : "active" });
-				} else {
-					throw new Error("Invalid action");
-				}
-
-				if (ids.length > 0) {
-					const mem = db.memories.getById(ids[0]);
-					db.actions.logAction(action, mem?.scope?.owner || "", mem?.scope?.repo || "unknown", {
-						query: `Bulk ${action} applied to ${n} memories`
-					});
-				}
-				return n;
-			});
-
+			const count = await MemoryService.bulkAction(action, ids, updates);
 			return jsonApiRes({ count }, "status");
 		});
 	}
