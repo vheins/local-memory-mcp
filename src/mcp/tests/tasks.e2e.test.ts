@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { ZodError } from "zod";
 import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
@@ -628,5 +629,52 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 		const data = res.structuredContent as { tasks: { rows: unknown[][] } };
 		const codes = data.tasks.rows.map((r: unknown[]) => r[1]);
 		expect(codes).toContain("PHASE-001");
+	});
+
+	it("task-delete with empty-string ids fails instead of reporting phantom success", async () => {
+		// Seed a real task so a phantom cancel would be observable
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "DELETE-GUARD",
+				phase: "cleanup",
+				title: "Phantom delete guard",
+				description: "Empty-string ids must never cancel this task",
+				status: "pending",
+				priority: 3
+			}
+		});
+		const before = db.tasks.getTasksByRepo("test", REPO);
+
+		// Empty-string item in ids must be rejected by the schema (TASK-123) —
+		// previously `{ ids: [""] }` collapsed to "" and reported
+		// canceledCount:1 without deleting anything (phantom success).
+		await expect(
+			router("tools/call", {
+				name: "task-delete",
+				arguments: { owner: "test", repo: REPO, ids: [""] }
+			})
+		).rejects.toBeInstanceOf(ZodError);
+
+		// Nothing may have been canceled by the failed delete
+		const after = db.tasks.getTasksByRepo("test", REPO);
+		expect(after).toHaveLength(before.length);
+		expect(after.every((task) => task.status !== "canceled")).toBe(true);
+
+		// Non-empty but unresolvable identifiers must also fail loudly
+		// (resolveIdentifier restore of pre-TASK-111 behavior) instead of
+		// collapsing to "" and reporting a phantom cancel.
+		await expect(
+			router("tools/call", {
+				name: "task-delete",
+				arguments: { owner: "test", repo: REPO, ids: ["MISSING-TASK-CODE"] }
+			})
+		).rejects.toThrow("Task not found: MISSING-TASK-CODE");
+
+		const afterMissing = db.tasks.getTasksByRepo("test", REPO);
+		expect(afterMissing).toHaveLength(before.length);
+		expect(afterMissing.every((task) => task.status !== "canceled")).toBe(true);
 	});
 });

@@ -24,7 +24,7 @@ export const TaskDeleteSchema = z
 		id: z.string().optional(),
 		code: z.string().optional(),
 		task_code: z.string().optional(),
-		ids: z.array(z.string()).optional(),
+		ids: z.array(z.string().min(1)).optional(),
 		codes: z.array(z.string().min(1)).optional(),
 		task_codes: z.array(z.string().min(1)).optional(),
 		json: z.boolean().default(false)

@@ -14,7 +14,15 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 
 	// Helper: resolve a single identifier (UUID or task_code) to UUID
 	function resolveIdentifier(identifier: string): string {
-		return resolveEntityRef(storage, "task", identifier, owner, repo) ?? "";
+		const resolved = resolveEntityRef(storage, "task", identifier, owner, repo);
+		if (!resolved) {
+			// TASK-123: restore pre-TASK-111 behavior — a falsy/unresolvable
+			// identifier must fail loudly instead of collapsing to "" and
+			// reporting a phantom success (updateTask("") affects 0 rows but
+			// the response still claims canceledCount > 0).
+			throw new Error(`Task not found: ${identifier}`);
+		}
+		return resolved;
 	}
 
 	// Single identifier: id (UUID or task_code)
