@@ -2,7 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { db } from "../lib/context";
-import { handleController, HttpError } from "../lib/jsonApi.js";
+import { handleController, HttpError } from "../lib/jsonApi";
 import { handleCodebaseIndexStatus, handleCodebaseIndexRepository } from "../../mcp/tools/codebase-index";
 import { handleCodebaseRead } from "../../mcp/tools/codebase.read";
 import { autoIndexIfStale } from "../../mcp/codebase-index/services/indexing-service";

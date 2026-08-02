@@ -1,5 +1,5 @@
 import express from "express";
-import { db } from "./context.js";
+import { db } from "./context";
 
 /**
  * HTTP error carrying an explicit status (and optional machine-readable code /

@@ -1,6 +1,6 @@
 import express from "express";
-import { embeddingWorker } from "../lib/context.js";
-import { jsonApiRes, handleController } from "../lib/jsonApi.js";
+import { embeddingWorker } from "../lib/context";
+import { jsonApiRes, handleController } from "../lib/jsonApi";
 
 /**
  * Embedding/KG outbox queue observability (TASK-013). Exposes worker + queue

@@ -8,8 +8,8 @@
  * (the pool skips tree-sitter for configs with empty grammarWasms).
  */
 import type { Tree } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "./language-visitor.js";
-import { SymbolKind } from "./language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "./language-visitor";
+import { SymbolKind } from "./language-visitor";
 
 export class MarkdownVisitor implements LanguageVisitor {
 	extractSymbols(_tree: Tree | null, sourceCode: string): ParsedSymbol[] {

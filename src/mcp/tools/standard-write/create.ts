@@ -3,11 +3,11 @@
  */
 
 import { randomUUID } from "crypto";
-import { CodingStandardEntry, VectorStore } from "../../types/index.js";
-import { SQLiteStore } from "../../storage/sqlite.js";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
-import { enqueueStandard } from "../../embedding-queue/index.js";
-import { StandardWriteParams, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
+import { CodingStandardEntry, VectorStore } from "../../types";
+import { SQLiteStore } from "../../storage/sqlite";
+import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { enqueueStandard } from "../../embedding-queue";
+import { StandardWriteParams, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared";
 
 // ── Core create logic — returns plain data, does NOT wrap in McpResponse ──
 

@@ -1,6 +1,6 @@
 import express from "express";
-import { db } from "../lib/context.js";
-import { jsonApiRes, handleController, HttpError } from "../lib/jsonApi.js";
+import { db } from "../lib/context";
+import { jsonApiRes, handleController, HttpError } from "../lib/jsonApi";
 import { parseRepoInput } from "../../mcp/utils/normalize";
 
 export class UnifiedGraphController {

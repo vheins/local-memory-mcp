@@ -11,8 +11,8 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import fg from "fast-glob";
 import ignoreLib from "ignore";
-import { logger } from "../../utils/logger.js";
-import type { DiscoveredFile, DiscoverFilesResult, DiscoveryError, FileDiscoveryOptions } from "../types/index.js";
+import { logger } from "../../utils/logger";
+import type { DiscoveredFile, DiscoverFilesResult, DiscoveryError, FileDiscoveryOptions } from "../types";
 
 // ── Language detection ────────────────────────────────────────────────
 

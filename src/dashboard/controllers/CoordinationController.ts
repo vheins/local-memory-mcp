@@ -1,6 +1,6 @@
 import express from "express";
-import { db, mcpClient } from "../lib/context.js";
-import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
+import { db, mcpClient } from "../lib/context";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
 
 export class CoordinationController {
 	static async listClaims(req: express.Request, res: express.Response) {

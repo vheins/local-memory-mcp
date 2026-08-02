@@ -2,7 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { SessionContext, inferOwnerFromSession, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
 import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
-import type { LoadedPrompt } from "../interfaces/index";
+import type { LoadedPrompt } from "../interfaces";
 import { logger } from "../utils/logger";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
 

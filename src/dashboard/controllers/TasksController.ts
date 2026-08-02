@@ -1,9 +1,9 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db, mcpClient } from "../lib/context.js";
-import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
-import type { Task } from "../../mcp/types/index.js";
-import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
+import { db, mcpClient } from "../lib/context";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
+import type { Task } from "../../mcp/types";
+import type { IdParams, TaskListQuery } from "../../mcp/interfaces";
 
 /**
  * Resolves the owner for dashboard task writes.

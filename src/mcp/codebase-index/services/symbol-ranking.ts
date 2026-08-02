@@ -10,7 +10,7 @@
  *   3. alphabetical by name
  */
 
-import type { CodebaseSymbol } from "../../types/codebase-symbol";
+import type { CodebaseSymbol } from "../../types";
 
 // ── Public types ────────────────────────────────────────────────────────
 

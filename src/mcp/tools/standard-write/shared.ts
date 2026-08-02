@@ -2,11 +2,11 @@
  * standard-write/shared — shared types and helpers.
  */
 
-import { SQLiteStore } from "../../storage/sqlite.js";
-import { resolveEntityRef } from "../../utils/entity-ref.js";
-import { toContextSlug, buildStandardVectorText } from "../standard.shared.js";
-import { generateNextCode } from "../../utils/code-generator.js";
-import { saveExtractions, saveStandardRelations } from "../kg-archivist/index.js";
+import { SQLiteStore } from "../../storage/sqlite";
+import { resolveEntityRef } from "../../utils/entity-ref";
+import { toContextSlug, buildStandardVectorText } from "../standard.shared";
+import { generateNextCode } from "../../utils/code-generator";
+import { saveExtractions, saveStandardRelations } from "../kg-archivist";
 
 // ── Shared types ─────────────────────────────────────────────────────────
 

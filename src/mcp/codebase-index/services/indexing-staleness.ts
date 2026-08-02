@@ -12,10 +12,10 @@
  * Does NOT import from indexing-service.ts (no circular dependency).
  */
 
-import type { IndexProgress } from "./indexing-writer.js";
+import type { IndexProgress } from "./indexing-writer";
 
 // Re-export for consumers (also re-exported by indexing-service)
-export type { StalenessResult } from "./indexing-cache.js";
+export type { StalenessResult } from "./indexing-cache";
 
 // ── IndexStatus interface ──────────────────────────────────────────────
 

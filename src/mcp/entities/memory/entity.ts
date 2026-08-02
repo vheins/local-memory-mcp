@@ -1,12 +1,17 @@
 import { BaseEntity } from "../../storage/base";
-import { MemoryEntry, MemoryRow, MemoryScope, MemoryType } from "../../types/index";
-import { CountResult, TypeCountResult } from "../../types/common";
+import {
+	MemoryEntry,
+	MemoryRow,
+	MemoryScope,
+	MemoryType,
+	CountResult,
+	TypeCountResult,
+	MEMORY_STATUS_ACTIVE
+} from "../../types";
 import { VALID_COLUMNS, mergeStructuredData } from "./validation";
-import { BULK_UPDATE_CHUNK_SIZE } from "../../utils/constants";
+import { BULK_UPDATE_CHUNK_SIZE, TABLE_MEMORIES } from "../../utils/constants";
 import { buildFtsMatchQuery } from "../../utils/fts";
 import { buildUpdateClause } from "../../utils/sql-builder";
-import { TABLE_MEMORIES } from "../../utils/constants";
-import { MEMORY_STATUS_ACTIVE } from "../../types";
 
 // JSON-serialized / int-coerced columns for the shared update-clause builder
 // (TASK-109). Tags and metadata are stored as JSON text; is_global as 0/1.
@@ -18,6 +23,17 @@ export class MemoryEntity extends BaseEntity {
 	 * Single source of truth for the memories INSERT statement (TASK-108) —
 	 * shared by insert() and bulkInsertMemories() so a column change is made
 	 * in exactly one place. Includes the TASK-121 branch column.
+	 *
+	 * `last_used_at` is deliberately hardcoded to NULL on INSERT (MEM-586 /
+	 * TASK-129 — INTENTIONAL, not a bug): creation does NOT count as "used".
+	 * A memory is timestamped only by the explicit usage paths —
+	 * acknowledge("used")/recall via incrementRecallCount(), incrementHitCount(s)(),
+	 * or a direct update() — and reads/searches deliberately never touch it
+	 * (memory.read.ts: "No hit_count increments on read"), keeping reads
+	 * side-effect-free and write-lock-free. Consumers must treat NULL as
+	 * "never explicitly used": soul-maintenance decay (`last_used_at IS NULL
+	 * OR last_used_at < cutoff`) and archive expiry
+	 * (COALESCE(last_used_at, created_at)) already handle NULL correctly.
 	 */
 	private buildInsert(entry: MemoryEntry): { sql: string; params: unknown[] } {
 		const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);

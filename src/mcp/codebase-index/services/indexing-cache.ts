@@ -12,10 +12,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { SQLiteStore } from "../../storage/sqlite.js";
-import type { CodebaseFile } from "../../types/codebase-file.js";
-import { logger } from "../../utils/logger.js";
-import { INDEX_STALENESS_TTL_MS } from "../../utils/constants.js";
+import type { SQLiteStore } from "../../storage/sqlite";
+import type { CodebaseFile } from "../../types";
+import { logger } from "../../utils/logger";
+import { INDEX_STALENESS_TTL_MS } from "../../utils/constants";
 
 // ── Module-level indexing guard ───────────────────────────────────────
 

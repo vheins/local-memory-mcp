@@ -1,6 +1,6 @@
-import type { RecentAction } from "./interfaces.js";
+import type { RecentAction } from "./interfaces";
 
-export type { RecentAction } from "./interfaces.js";
+export type { RecentAction } from "./interfaces";
 
 export type CondensedRecentAction = RecentAction & {
 	burstCount: number;

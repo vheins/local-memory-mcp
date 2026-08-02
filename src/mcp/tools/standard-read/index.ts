@@ -7,17 +7,17 @@
  * - none                    → LIST   (paginated list of all standards)
  */
 
-import { StandardReadSchema, StandardReadInput } from "../schemas/standard-read.js";
-import { SQLiteStore } from "../../storage/sqlite.js";
-import { VectorStore } from "../../types/index.js";
-import { McpResponse, createMcpResponse } from "../../utils/mcp-response.js";
-import { fetchAggregatedKgContext } from "../kg-archivist/query.js";
-import { handleSearchMode } from "./search.js";
-import { handleDetailMode } from "./detail.js";
+import { StandardReadSchema, StandardReadInput } from "../schemas";
+import { SQLiteStore } from "../../storage/sqlite";
+import { VectorStore } from "../../types";
+import { McpResponse, createMcpResponse } from "../../utils/mcp-response";
+import { fetchAggregatedKgContext } from "../kg-archivist/query";
+import { handleSearchMode } from "./search";
+import { handleDetailMode } from "./detail";
 
 // Re-export sub-modules for direct access
-export { handleDetailMode } from "./detail.js";
-export { handleSearchMode } from "./search.js";
+export { handleDetailMode } from "./detail";
+export { handleSearchMode } from "./search";
 
 // ── List columns ────────────────────────────────────────────────────────
 

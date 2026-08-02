@@ -20,7 +20,7 @@
 // resources/index.ts (listResources/listResourceTemplates/readResource); the
 // SDK transport adapts those same functions in resources/sdk-index.ts.
 
-import { listResources, listResourceTemplates, readResource } from "./resources/index";
+import { listResources, listResourceTemplates, readResource } from "./resources";
 import { SessionContext } from "./session";
 import { logger } from "./utils/logger";
 import { logAction } from "./utils/action-log";
@@ -28,7 +28,7 @@ import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
 import { normalizeToolArguments } from "./utils/normalize-args";
-import { buildExecutors } from "./tools/index";
+import { buildExecutors } from "./tools";
 import { collectAffectedResourceUris, normalizePageLimit, WRITE_TOOLS } from "./utils/tool-plumbing";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";

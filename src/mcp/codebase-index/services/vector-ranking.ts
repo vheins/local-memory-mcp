@@ -9,7 +9,7 @@
  */
 
 import { RankTier, type RankedSymbol } from "./symbol-ranking";
-import type { VectorStore } from "../../types/vector";
+import type { VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 
 /**

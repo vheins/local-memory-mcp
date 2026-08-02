@@ -5,4 +5,4 @@
  * This file exists for backward compatibility.
  */
 
-export { handleStandardRead } from "./standard-read/index.js";
+export { handleStandardRead } from "./standard-read";

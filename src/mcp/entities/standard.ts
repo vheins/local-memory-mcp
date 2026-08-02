@@ -1,5 +1,5 @@
 import { BaseEntity } from "../storage/base";
-import { CodingStandardEntry, CodingStandardRow } from "../types/memory";
+import { CodingStandardEntry, CodingStandardRow } from "../types";
 import { sanitizeFtsTerm } from "../utils/fts";
 import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
 import { buildUpdateClause } from "../utils/sql-builder";

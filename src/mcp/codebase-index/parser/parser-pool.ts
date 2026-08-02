@@ -20,7 +20,7 @@
 import { performance } from "node:perf_hooks";
 import path from "node:path";
 import { Parser, Language, type Tree } from "web-tree-sitter";
-import type { ParseResult, ParserPool } from "./language-visitor.js";
+import type { ParseResult, ParserPool } from "./language-visitor";
 import {
 	type LanguageConfig,
 	getWasmPath,
@@ -28,10 +28,10 @@ import {
 	buildGenericCatchAll,
 	buildRegistryMaps,
 	removeConfigsForWasm
-} from "./language-routing.js";
-import { Semaphore, resolveParseTimeoutMs, resolveConcurrency } from "./worker-pool.js";
-import { logger } from "../../utils/logger.js";
-import { FatalError } from "../types/errors.js";
+} from "./language-routing";
+import { Semaphore, resolveParseTimeoutMs, resolveConcurrency } from "./worker-pool";
+import { logger } from "../../utils/logger";
+import { FatalError } from "../types/errors";
 
 // ── Pool options ─────────────────────────────────────────────────────
 

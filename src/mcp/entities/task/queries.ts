@@ -1,6 +1,13 @@
 import { TABLE_TASKS, TABLE_CLAIMS, TABLE_HANDOFFS } from "../../utils/constants";
-import { TASK_STATUS_BACKLOG, TASK_STATUS_PENDING, TASK_STATUS_IN_PROGRESS, TASK_STATUS_COMPLETED, TASK_STATUS_CANCELED, TASK_STATUS_BLOCKED } from "../../types/task";
-import { HANDOFF_STATUS_PENDING } from "../../types/handoff";
+import {
+	TASK_STATUS_BACKLOG,
+	TASK_STATUS_PENDING,
+	TASK_STATUS_IN_PROGRESS,
+	TASK_STATUS_COMPLETED,
+	TASK_STATUS_CANCELED,
+	TASK_STATUS_BLOCKED,
+	HANDOFF_STATUS_PENDING
+} from "../../types";
 /**
  * Builds the coordination select subquery fragment used in task queries.
  * Returns a SQL fragment with active claim and pending handoff subqueries.

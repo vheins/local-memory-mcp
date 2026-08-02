@@ -10,7 +10,7 @@
  *     └── helpers.ts  — shared utilities
  *
  * This file re-exports the public API for backward compatibility.
- * All new imports should target "memory-write/index" directly.
+ * All new imports should target "memory-write" directly.
  */
 export {
 	handleMemoryWrite,
@@ -23,4 +23,4 @@ export {
 	applySessionFields,
 	buildMemoryEntry,
 	checkCreateConflict
-} from "./memory-write/index";
+} from "./memory-write";

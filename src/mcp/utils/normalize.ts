@@ -1,6 +1,6 @@
 // Normalization layer for text processing
 // Requirements: 4.1, 5.1, 17.4
-import { STOPWORDS } from "./stopwords.js";
+import { STOPWORDS } from "./stopwords";
 
 export { STOPWORDS };
 

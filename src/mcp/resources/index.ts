@@ -4,7 +4,7 @@ import { logger } from "../utils/logger";
 import { rankCompletionValues } from "../utils/completion";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
 import { parseRepoInput } from "../utils/normalize";
-import type { MemoryEntry, Task, MemoryType } from "../types/index";
+import type { MemoryEntry, Task, MemoryType } from "../types";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;

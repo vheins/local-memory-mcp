@@ -1,7 +1,7 @@
 import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
-import { STOPWORDS } from "../utils/stopwords.js";
+import { STOPWORDS } from "../utils/stopwords";
 import { cosineSimilarity } from "../utils/vector";
 
 // Simple vector store using SQLite - lightweight embeddings without ollama

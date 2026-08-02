@@ -2,13 +2,13 @@
  * standard-write/update — single standard update with conflict detection.
  */
 
-import { CodingStandardEntry, VectorStore } from "../../types/index.js";
-import { SQLiteStore } from "../../storage/sqlite.js";
-import { logger } from "../../utils/logger.js";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
-import { resolveEntityRef } from "../../utils/entity-ref.js";
-import { enqueueStandard } from "../../embedding-queue/index.js";
-import { StandardWriteParams, resolveStandardParentId } from "./shared.js";
+import { CodingStandardEntry, VectorStore } from "../../types";
+import { SQLiteStore } from "../../storage/sqlite";
+import { logger } from "../../utils/logger";
+import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { resolveEntityRef } from "../../utils/entity-ref";
+import { enqueueStandard } from "../../embedding-queue";
+import { StandardWriteParams, resolveStandardParentId } from "./shared";
 
 // ── Core update logic — returns plain data, does NOT wrap in McpResponse ──
 

@@ -3,7 +3,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { SessionContext, inferRepoFromSession, inferOwnerFromSession } from "../session";
 import { listPromptFiles, loadPromptFromMarkdown } from "./loader";
-import type { LoadedPrompt } from "../interfaces/index";
+import type { LoadedPrompt } from "../interfaces";
 import { logger } from "../utils/logger";
 
 /**

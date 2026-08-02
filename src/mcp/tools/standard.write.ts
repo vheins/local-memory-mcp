@@ -5,4 +5,4 @@
  * This file exists for backward compatibility.
  */
 
-export { handleStandardWrite } from "./standard-write/index.js";
+export { handleStandardWrite } from "./standard-write";

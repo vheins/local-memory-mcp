@@ -5,11 +5,10 @@
  * Handles batch upsert of files/symbols, rename transfers, and stale cleanup.
  */
 
-import type { SQLiteStore } from "../../storage/sqlite.js";
-import type { CodebaseFileInsert } from "../../types/codebase-file.js";
-import type { CodebaseSymbolInsert } from "../../types/codebase-symbol.js";
-import { logger } from "../../utils/logger.js";
-import { retryDbWrite } from "./indexing-cache.js";
+import type { SQLiteStore } from "../../storage/sqlite";
+import type { CodebaseFileInsert, CodebaseSymbolInsert } from "../../types";
+import { logger } from "../../utils/logger";
+import { retryDbWrite } from "./indexing-cache";
 
 // ── Local type aliases (avoid circular dep with indexing-repository) ────
 

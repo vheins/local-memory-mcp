@@ -6,7 +6,7 @@ import {
 	CodebaseSymbolVector,
 	SymbolSearchQuery,
 	SymbolSearchResult
-} from "../types/codebase-symbol";
+} from "../types";
 import { randomUUID } from "crypto";
 import { sanitizeFtsTerm } from "../utils/fts";
 import { VECTOR_CANDIDATE_CAP } from "../utils/constants";

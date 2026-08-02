@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
-import { MEMORY_TYPES, MEMORY_STATUSES } from "../../types/memory";
-import { TASK_STATUSES, TASK_PRIORITIES } from "../../types/task";
-import { HANDOFF_STATUSES } from "../../types/handoff";
+import { MEMORY_TYPES, MEMORY_STATUSES, TASK_STATUSES, TASK_PRIORITIES, HANDOFF_STATUSES } from "../../types";
 
 export const MemoryScopeSchema = z.object({
 	owner: z.string().min(1),

@@ -1,5 +1,5 @@
 import { BaseEntity } from "../storage/base";
-import { CodebaseFile, CodebaseFileInsert } from "../types/codebase-file";
+import { CodebaseFile, CodebaseFileInsert } from "../types";
 import { randomUUID } from "crypto";
 
 export class CodebaseFileEntity extends BaseEntity {

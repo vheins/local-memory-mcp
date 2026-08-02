@@ -7,19 +7,19 @@
  * - `content` + `name` → CREATE
  */
 
-import { StandardWriteSchema } from "../schemas/index.js";
-import { SQLiteStore } from "../../storage/sqlite.js";
-import { VectorStore } from "../../types/index.js";
-import { McpResponse } from "../../utils/mcp-response.js";
-import { handleCreateSingle } from "./create.js";
-import { handleUpdateSingle } from "./update.js";
-import { handleBulk } from "./bulk.js";
+import { StandardWriteSchema } from "../schemas";
+import { SQLiteStore } from "../../storage/sqlite";
+import { VectorStore } from "../../types";
+import { McpResponse } from "../../utils/mcp-response";
+import { handleCreateSingle } from "./create";
+import { handleUpdateSingle } from "./update";
+import { handleBulk } from "./bulk";
 
 // Re-export types and sub-modules
-export type { StandardWriteParams, BulkResult } from "./shared.js";
-export { handleCreateSingle } from "./create.js";
-export { handleUpdateSingle } from "./update.js";
-export { handleBulk } from "./bulk.js";
+export type { StandardWriteParams, BulkResult } from "./shared";
+export { handleCreateSingle } from "./create";
+export { handleUpdateSingle } from "./update";
+export { handleBulk } from "./bulk";
 
 // ── Main entry point ─────────────────────────────────────────────────────
 

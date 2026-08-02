@@ -16,8 +16,8 @@
  *   raw_text         → the inner content of a script/style block
  */
 import type { Tree } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "../language-visitor.js";
-import { SymbolKind } from "../language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
+import { SymbolKind } from "../language-visitor";
 
 // ── Regex patterns for JS/TS symbol extraction ────────────────────────
 

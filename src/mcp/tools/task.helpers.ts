@@ -2,7 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { type TaskStatus, type VectorStore } from "../types";
 import { logger } from "../utils/logger";
 import { resolveEntityRef } from "../utils/entity-ref";
-import { handleMemoryWrite } from "./memory-write/index";
+import { handleMemoryWrite } from "./memory-write";
 
 /**
  * Resolves a parent_id value that is either a UUID or a task_code string.

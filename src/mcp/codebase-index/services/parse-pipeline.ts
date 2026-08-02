@@ -13,13 +13,12 @@
  */
 
 import fs from "node:fs";
-import type { ParserPool } from "../parser/index.js";
-import { resolveConcurrency } from "../parser/worker-pool.js";
-import type { ParseResult } from "../parser/language-visitor.js";
-import type { SQLiteStore } from "../../storage/sqlite.js";
-import type { CodebaseFileInsert } from "../../types/codebase-file.js";
-import type { CodebaseSymbolInsert } from "../../types/codebase-symbol.js";
-import { logger } from "../../utils/logger.js";
+import type { ParserPool } from "../parser";
+import { resolveConcurrency } from "../parser/worker-pool";
+import type { ParseResult } from "../parser/language-visitor";
+import type { SQLiteStore } from "../../storage/sqlite";
+import type { CodebaseFileInsert, CodebaseSymbolInsert } from "../../types";
+import { logger } from "../../utils/logger";
 import {
 	isPermissionError,
 	isTimeoutError,
@@ -27,8 +26,8 @@ import {
 	countLines,
 	DEFAULT_BATCH_SIZE,
 	type FilePlan
-} from "./indexing-cache.js";
-import { writeParseBatch, type IndexFileError, type IndexProgress } from "./indexing-writer.js";
+} from "./indexing-cache";
+import { writeParseBatch, type IndexFileError, type IndexProgress } from "./indexing-writer";
 
 // ── Pipeline options (narrowed — avoids a circular dep with the orchestrator) ─
 

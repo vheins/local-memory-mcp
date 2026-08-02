@@ -167,7 +167,7 @@ function coreListHandoffs(
 	const handoffs = storage.handoffs.listHandoffs({
 		owner,
 		repo,
-		status: status as import("../types/handoff").Handoff["status"] | undefined,
+		status: status as import("../types").Handoff["status"] | undefined,
 		from_agent: fromAgent,
 		to_agent: toAgent,
 		limit,

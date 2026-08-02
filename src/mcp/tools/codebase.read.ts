@@ -13,13 +13,12 @@
 
 import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } from "./schemas/codebase-read";
 import { SQLiteStore } from "../storage/sqlite";
-import { VectorStore } from "../types";
+import { VectorStore, type CodebaseSymbol } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { buildArchitecture, renderDirTree } from "../codebase-index/services/architecture-service";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError } from "../codebase-index/services/trace-service";
 import { blendVectorRanking } from "../codebase-index/services/vector-ranking";
-import type { CodebaseSymbol } from "../types/codebase-symbol";
 import { logger } from "../utils/logger";
 
 // ═══════════════════════════════════════════════════════════════════════════

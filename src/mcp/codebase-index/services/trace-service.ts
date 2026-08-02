@@ -6,7 +6,7 @@
  * and optionally references from other symbols' doc_comments.
  */
 
-import type { CodebaseSymbol } from "../../types/codebase-symbol";
+import type { CodebaseSymbol } from "../../types";
 
 // ── Public types ────────────────────────────────────────────────────────
 

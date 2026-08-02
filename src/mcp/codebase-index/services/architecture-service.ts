@@ -11,8 +11,7 @@
  *   file and symbol arrays.
  */
 
-import type { CodebaseFile } from "../../types/codebase-file";
-import type { CodebaseSymbol } from "../../types/codebase-symbol";
+import type { CodebaseFile, CodebaseSymbol } from "../../types";
 
 // ── Public types ─────────────────────────────────────────────────────────
 

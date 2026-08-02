@@ -15,9 +15,9 @@
  * the mtime filter and are later confirmed unchanged by checksum.
  */
 
-import type { CodebaseFile } from "../../types/codebase-file.js";
-import type { DiscoveredFile } from "../types/index.js";
-import { FilePlan } from "./indexing-cache.js";
+import type { CodebaseFile } from "../../types";
+import type { DiscoveredFile } from "../types";
+import { FilePlan } from "./indexing-cache";
 
 // Filesystem mtime granularity is coarser than the ms-precision
 // last_indexed_at on many platforms (ext3 = 1s, FAT = 2s, tmpfs ≈ ms,

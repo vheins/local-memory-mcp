@@ -4,8 +4,8 @@
  */
 
 import type { Node as TSNode, Tree as TSTree } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "./language-visitor.js";
-import { SymbolKind } from "./language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "./language-visitor";
+import { SymbolKind } from "./language-visitor";
 
 // ── Node type constants ──────────────────────────────────────────────
 

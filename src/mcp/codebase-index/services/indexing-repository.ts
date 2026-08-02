@@ -12,11 +12,11 @@
 
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { discoverFiles } from "./file-discovery.js";
-import type { ParserPool } from "../parser/index.js";
-import type { SQLiteStore } from "../../storage/sqlite.js";
-import type { ErrorSummary } from "../types/errors.js";
-import { logger } from "../../utils/logger.js";
+import { discoverFiles } from "./file-discovery";
+import type { ParserPool } from "../parser";
+import type { SQLiteStore } from "../../storage/sqlite";
+import type { ErrorSummary } from "../types/errors";
+import { logger } from "../../utils/logger";
 
 // Import cache-level utilities
 import {
@@ -26,17 +26,17 @@ import {
 	DEFAULT_BATCH_SIZE,
 	type FilePlan,
 	type StalenessResult
-} from "./indexing-cache.js";
+} from "./indexing-cache";
 
 // Import extracted sub-modules
-import { createIndexPlan } from "./indexing-planner.js";
-import { applyRenames, cleanStaleFiles, type IndexProgress, type IndexFileError } from "./indexing-writer.js";
-import type { IndexStatus } from "./indexing-staleness.js";
-import { emitProgress, runParsePipeline } from "./parse-pipeline.js";
+import { createIndexPlan } from "./indexing-planner";
+import { applyRenames, cleanStaleFiles, type IndexProgress, type IndexFileError } from "./indexing-writer";
+import type { IndexStatus } from "./indexing-staleness";
+import { emitProgress, runParsePipeline } from "./parse-pipeline";
 
 // ── Module-level indexing guard (shared instance) ──────────────────────
 
-import { indexingRepos as _indexingRepos } from "./indexing-cache.js";
+import { indexingRepos as _indexingRepos } from "./indexing-cache";
 const indexingRepos = _indexingRepos;
 
 // ── Error types ────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ export interface IndexOptions {
 }
 
 // Re-export for consumers
-export type { IndexProgress, IndexFileError } from "./indexing-writer.js";
+export type { IndexProgress, IndexFileError } from "./indexing-writer";
 
 export interface IndexResult {
 	success: boolean;
@@ -97,8 +97,8 @@ export interface IndexResult {
 }
 
 // Re-export types from canonical locations (TASK-114 dedup)
-export type { IndexStatus } from "./indexing-staleness.js";
-export type { StalenessResult } from "./indexing-cache.js";
+export type { IndexStatus } from "./indexing-staleness";
+export type { StalenessResult } from "./indexing-cache";
 
 // ── Core indexRepository function ──────────────────────────────────────
 

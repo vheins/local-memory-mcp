@@ -1,9 +1,9 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db } from "../lib/context.js";
-import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
-import type { MemoryType, MemoryEntry } from "../../mcp/types/index.js";
-import type { IdParams, MemoryListQuery } from "../../mcp/interfaces/index.js";
+import { db } from "../lib/context";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
+import type { MemoryType, MemoryEntry } from "../../mcp/types";
+import type { IdParams, MemoryListQuery } from "../../mcp/interfaces";
 
 export class MemoriesController {
 	static async list(req: express.Request, res: express.Response) {

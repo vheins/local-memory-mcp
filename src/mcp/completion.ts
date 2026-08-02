@@ -3,7 +3,7 @@ import path from "path";
 import { SQLiteStore } from "./storage/sqlite";
 import { SessionContext, getFilesystemRoots, inferRepoFromSession } from "./session";
 import { completePromptArgument } from "./prompts/registry";
-import { completeResourceArgument } from "./resources/index";
+import { completeResourceArgument } from "./resources";
 import type { Task } from "./types";
 
 export type CompletionRequest = {

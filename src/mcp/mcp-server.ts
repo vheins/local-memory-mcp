@@ -4,7 +4,7 @@ import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
 import { SessionContext, createSessionContext } from "./session";
 import { CAPABILITIES } from "./capabilities";
-import { registerAllTools } from "./tools/index";
+import { registerAllTools } from "./tools";
 import { registerAllResources } from "./resources/sdk-index";
 import { registerAllPrompts } from "./prompts/sdk-index";
 import { addLogSink } from "./utils/logger";

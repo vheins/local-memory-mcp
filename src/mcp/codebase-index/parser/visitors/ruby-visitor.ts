@@ -10,8 +10,8 @@
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "../language-visitor.js";
-import { SymbolKind } from "../language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
+import { SymbolKind } from "../language-visitor";
 
 const METHOD = "method";
 const SINGLETON_METHOD = "singleton_method";

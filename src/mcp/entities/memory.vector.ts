@@ -1,8 +1,13 @@
 import { BaseEntity } from "../storage/base";
-import { MemoryEntry, MemoryRow, VectorStore } from "../types/index";
-import { MemoryIdVector } from "../types/common";
+import {
+	MemoryEntry,
+	MemoryRow,
+	VectorStore,
+	MemoryIdVector,
+	MEMORY_STATUS_ACTIVE,
+	MEMORY_STATUS_ARCHIVED
+} from "../types";
 import { TABLE_MEMORIES } from "../utils/constants";
-import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
 import {
 	VECTOR_CANDIDATE_CAP,

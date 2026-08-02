@@ -1,8 +1,8 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db, vectors } from "../lib/context.js";
-import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
-import type { CodingStandardEntry } from "../../mcp/types/index.js";
+import { db, vectors } from "../lib/context";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
+import type { CodingStandardEntry } from "../../mcp/types";
 import { enqueueStandard } from "../../mcp/embedding-queue";
 
 const STANDARDS_EXPORT_SCHEMA = "local-memory-mcp.standards.v1";

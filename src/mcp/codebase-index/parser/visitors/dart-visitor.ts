@@ -13,8 +13,8 @@
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "../language-visitor.js";
-import { SymbolKind } from "../language-visitor.js";
+import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
+import { SymbolKind } from "../language-visitor";
 
 const CLASS_DEFINITION = "class_definition";
 const ENUM_DECLARATION = "enum_declaration";

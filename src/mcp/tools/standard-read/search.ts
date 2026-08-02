@@ -5,16 +5,16 @@
  *   0.40 similarity + 0.30 keyword + 0.15 recency + 0.15 domain
  */
 
-import { CodingStandardEntry, VectorStore } from "../../types/index.js";
-import { SQLiteStore } from "../../storage/sqlite.js";
-import { logger } from "../../utils/logger.js";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
-import { expandQuery } from "../../utils/query-expander.js";
-import { fetchAggregatedKgContext } from "../kg-archivist/query.js";
-import { StandardReadInput } from "../schemas/standard-read.js";
-import { scoreHybrid, applyThreshold, HYBRID_WEIGHTS } from "../../utils/scoring.js";
-import { SEARCH_THRESHOLDS } from "../../utils/constants.js";
-import { renderGroupedSummary } from "../../utils/summary.js";
+import { CodingStandardEntry, VectorStore } from "../../types";
+import { SQLiteStore } from "../../storage/sqlite";
+import { logger } from "../../utils/logger";
+import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { expandQuery } from "../../utils/query-expander";
+import { fetchAggregatedKgContext } from "../kg-archivist/query";
+import { StandardReadInput } from "../schemas";
+import { scoreHybrid, applyThreshold, HYBRID_WEIGHTS } from "../../utils/scoring";
+import { SEARCH_THRESHOLDS } from "../../utils/constants";
+import { renderGroupedSummary } from "../../utils/summary";
 
 // ── SPEC-001 Hybrid weights ──────────────────────────────────────────────
 // All 3 scoring paths (similarity main, vector-only fallback, error fallback)

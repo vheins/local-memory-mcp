@@ -5,7 +5,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { db, mcpClient, logger, embeddingWorker } from "./lib/context";
 import { addLogSink, createFileSink } from "../mcp/utils/logger";
-import routes from "./routes/index";
+import routes from "./routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

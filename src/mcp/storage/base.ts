@@ -14,7 +14,7 @@ import {
 	CodebaseSymbolRow,
 	MEMORY_STATUS_ACTIVE,
 	TASK_STATUS_BACKLOG
-} from "../types/index";
+} from "../types";
 
 export abstract class BaseEntity {
 	constructor(protected db: Database.Database) {}

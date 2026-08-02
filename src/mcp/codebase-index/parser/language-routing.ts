@@ -13,23 +13,23 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LanguageVisitor } from "./language-visitor.js";
-import { TypeScriptVisitor } from "./typescript-visitor.js";
-import { GoVisitor } from "./visitors/go-visitor.js";
-import { PythonVisitor } from "./visitors/python-visitor.js";
-import { PhpVisitor } from "./visitors/php-visitor.js";
-import { DartVisitor } from "./visitors/dart-visitor.js";
-import { RustVisitor } from "./visitors/rust-visitor.js";
-import { JavaVisitor } from "./visitors/java-visitor.js";
-import { RubyVisitor } from "./visitors/ruby-visitor.js";
-import { KotlinVisitor } from "./visitors/kotlin-visitor.js";
-import { SwiftVisitor } from "./visitors/swift-visitor.js";
-import { CVisitor } from "./visitors/c-visitor.js";
-import { CppVisitor } from "./visitors/cpp-visitor.js";
-import { VueVisitor } from "./visitors/vue-visitor.js";
-import { MarkdownVisitor } from "./markdown-visitor.js";
-import { GenericTextVisitor } from "./generic-visitor.js";
-import { logger } from "../../utils/logger.js";
+import type { LanguageVisitor } from "./language-visitor";
+import { TypeScriptVisitor } from "./typescript-visitor";
+import { GoVisitor } from "./visitors/go-visitor";
+import { PythonVisitor } from "./visitors/python-visitor";
+import { PhpVisitor } from "./visitors/php-visitor";
+import { DartVisitor } from "./visitors/dart-visitor";
+import { RustVisitor } from "./visitors/rust-visitor";
+import { JavaVisitor } from "./visitors/java-visitor";
+import { RubyVisitor } from "./visitors/ruby-visitor";
+import { KotlinVisitor } from "./visitors/kotlin-visitor";
+import { SwiftVisitor } from "./visitors/swift-visitor";
+import { CVisitor } from "./visitors/c-visitor";
+import { CppVisitor } from "./visitors/cpp-visitor";
+import { VueVisitor } from "./visitors/vue-visitor";
+import { MarkdownVisitor } from "./markdown-visitor";
+import { GenericTextVisitor } from "./generic-visitor";
+import { logger } from "../../utils/logger";
 
 // ── Interfaces ────────────────────────────────────────────────────────
 

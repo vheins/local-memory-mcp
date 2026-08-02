@@ -14,10 +14,10 @@
 
 import process from "node:process";
 import { performance } from "node:perf_hooks";
-import { SQLiteStore } from "../storage/sqlite.js";
-import { TreeSitterParserPool } from "./parser/parser-pool.js";
-import { createCodebaseIndexService } from "./services/indexing-service.js";
-import type { IndexResult } from "./services/indexing-service.js";
+import { SQLiteStore } from "../storage/sqlite";
+import { TreeSitterParserPool } from "./parser/parser-pool";
+import { createCodebaseIndexService } from "./services/indexing-service";
+import type { IndexResult } from "./services/indexing-service";
 
 // ── Argument types ────────────────────────────────────────────────────
 

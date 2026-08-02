@@ -10,31 +10,31 @@
  * prevents concurrent indexing of the same repo.
  */
 
-import type { SQLiteStore } from "../../storage/sqlite.js";
-import type { ParserPool } from "../parser/index.js";
-import { logger } from "../../utils/logger.js";
+import type { SQLiteStore } from "../../storage/sqlite";
+import type { ParserPool } from "../parser";
+import { logger } from "../../utils/logger";
 
 // Import from sub-modules
-import { CodebaseIndexServiceImpl, type CodebaseIndexService } from "./indexing-repository.js";
+import { CodebaseIndexServiceImpl, type CodebaseIndexService } from "./indexing-repository";
 
-import { indexingRepos, getIndexFreshness } from "./indexing-cache.js";
+import { indexingRepos, getIndexFreshness } from "./indexing-cache";
 import { TTL_MS_PER_DAY } from "../../utils/constants";
 
 // ── Re-exports (preserving existing public API) ────────────────────────
 
-export { IndexInProgressError } from "./indexing-repository.js";
+export { IndexInProgressError } from "./indexing-repository";
 export type {
 	CodebaseIndexService,
 	IndexOptions,
 	IndexProgress,
 	IndexResult,
 	IndexFileError
-} from "./indexing-repository.js";
+} from "./indexing-repository";
 
-export type { StalenessResult } from "./indexing-cache.js";
-export type { IndexStatus } from "./indexing-staleness.js";
+export type { StalenessResult } from "./indexing-cache";
+export type { IndexStatus } from "./indexing-staleness";
 
-export { clearIndexingRepos } from "./indexing-cache.js";
+export { clearIndexingRepos } from "./indexing-cache";
 
 // ── AutoIndex types (defined here to avoid circular dep) ───────────────
 

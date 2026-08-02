@@ -8,7 +8,7 @@
  * outside the proper-lockfile write lock.
  */
 
-import type { VectorEntityKind } from "../types/vector";
+import type { VectorEntityKind } from "../types";
 
 /**
  * Entity kinds the queue can enrich.

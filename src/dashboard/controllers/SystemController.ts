@@ -8,7 +8,7 @@ import { condenseRecentActions } from "../lib/helpers";
 import type { RecentAction } from "../lib/interfaces";
 import { parseRepoInput } from "../../mcp/utils/normalize";
 import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
-import { listResources } from "../../mcp/resources/index";
+import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
 import {
 	handleHandoffList,
