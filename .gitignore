@@ -55,3 +55,11 @@ audit-screenshots/
 dashboard-codebase-screenshot.png
 dashboard-memories-screenshot.png
 tasks-view-check.png
+
+# Agent workspace binaries (markdown docs under .agents/documents/ stay tracked)
+.agents/**/*.png
+.agents/**/*.jpg
+.agents/**/*.jpeg
+.agents/**/*.gif
+.agents/**/*.wasm
+.agents/**/*.bin
