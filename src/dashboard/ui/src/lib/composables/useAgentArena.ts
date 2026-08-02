@@ -6,6 +6,7 @@ import { buildArenaScene } from "../arena/arenaTransform";
 import type { ArenaScene, ArenaLayoutConfig } from "../arena/arenaTypes";
 import { eventCoordinator } from "../arena/arenaEventCoordinator";
 import { arenaStateManager } from "../arena/arenaStateManager";
+import { createVisibilityPoller } from "../arena/createVisibilityPoller";
 
 export interface ArenaData {
 	scene: ArenaScene | null;
@@ -38,6 +39,9 @@ function rowToHandoff(columns: string[], row: unknown[], repo: string): Handoff 
 	};
 }
 
+/** Polling interval when the tab is visible (ms). */
+const POLL_INTERVAL_VISIBLE = 8_000;
+
 export function createArenaHandler() {
 	const store = writable<ArenaData>({
 		scene: null,
@@ -47,10 +51,10 @@ export function createArenaHandler() {
 		repoCount: 0
 	});
 
-	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let fetchInProgress = false;
 	let layoutConfig: ArenaLayoutConfig | null = null;
 	let unsubscribeRepos: (() => void) | null = null;
+	const poller = createVisibilityPoller(fetchData, POLL_INTERVAL_VISIBLE);
 
 	async function fetchData(): Promise<void> {
 		if (fetchInProgress) return;
@@ -162,18 +166,13 @@ export function createArenaHandler() {
 		// Trigger initial data load
 		void fetchData();
 
-		// Periodic polling via the existing mechanism.
-		// The EventCoordinator is now primed and ready for SSE-driven events
-		// when the backend event stream becomes available.
-		if (intervalId !== null) clearInterval(intervalId);
-		intervalId = setInterval(() => void fetchData(), 2500);
+		// Start visibility-gated periodic polling.
+		// The poller is a no-op in SSR (no document).
+		poller.start();
 	}
 
 	function stop(): void {
-		if (intervalId !== null) {
-			clearInterval(intervalId);
-			intervalId = null;
-		}
+		poller.stop();
 		unsubscribeRepos?.();
 		unsubscribeRepos = null;
 		eventCoordinator.destroy();

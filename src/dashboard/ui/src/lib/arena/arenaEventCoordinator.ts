@@ -1,11 +1,12 @@
 import type { DomainEvent } from "./arenaEvents";
 import { arenaStateManager } from "./arenaStateManager";
 import { writable, type Writable } from "svelte/store";
+import { createVisibilityPoller } from "./createVisibilityPoller";
 
 export type EventStreamStatus = "connected" | "disconnected" | "connecting" | "error";
 
 interface EventCoordinatorOptions {
-	fallbackPollInterval?: number; // ms, default 2500
+	fallbackPollInterval?: number; // ms, default 8000
 	maxBufferSize?: number; // max events in buffer, default 100
 	batchInterval?: number; // ms, default 100 (coalesce rapid events)
 }
@@ -13,15 +14,15 @@ interface EventCoordinatorOptions {
 export class EventCoordinator {
 	private status: Writable<EventStreamStatus>;
 	private eventSource: EventSource | null = null;
-	private pollInterval: ReturnType<typeof setInterval> | null = null;
 	private eventBuffer: DomainEvent[] = [];
 	private batchTimer: ReturnType<typeof setTimeout> | null = null;
 	private options: Required<EventCoordinatorOptions>;
 	private fallbackFetch: (() => Promise<void>) | null = null;
+	private poller: { start(): void; stop(): void } | null = null;
 
 	constructor(options: EventCoordinatorOptions = {}) {
 		this.options = {
-			fallbackPollInterval: options.fallbackPollInterval ?? 2500,
+			fallbackPollInterval: options.fallbackPollInterval ?? 8000,
 			maxBufferSize: options.maxBufferSize ?? 100,
 			batchInterval: options.batchInterval ?? 100
 		};
@@ -147,9 +148,10 @@ export class EventCoordinator {
 	}
 
 	private startFallbackPolling(): void {
-		if (this.pollInterval || !this.fallbackFetch) return;
+		if (this.poller || !this.fallbackFetch) return;
 
-		this.pollInterval = setInterval(async () => {
+		// Wrap fetch with error handling + status update
+		const wrappedFetch = async () => {
 			try {
 				await this.fallbackFetch!();
 				this.status.set("connected");
@@ -157,16 +159,16 @@ export class EventCoordinator {
 				console.warn("[EventCoordinator] Fallback poll failed:", e);
 				this.status.set("error");
 			}
-		}, this.options.fallbackPollInterval);
+		};
 
-		// Do initial fetch immediately
-		this.fallbackFetch().catch(() => {});
+		this.poller = createVisibilityPoller(wrappedFetch, this.options.fallbackPollInterval);
+		this.poller.start();
 	}
 
 	private stopFallbackPolling(): void {
-		if (this.pollInterval) {
-			clearInterval(this.pollInterval);
-			this.pollInterval = null;
+		if (this.poller) {
+			this.poller.stop();
+			this.poller = null;
 		}
 	}
 
