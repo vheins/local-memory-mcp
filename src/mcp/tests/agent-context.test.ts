@@ -7,7 +7,7 @@ import { AgentContextSchema } from "../tools/schemas";
 // DecisionLogSchema and SessionSummarizeSchema removed per ADR-007.
 // Use memory-write with flat fields: context/rationale/alternatives, key_decisions/next_steps
 import { MemoryWriteSchema } from "../tools/schemas/memory";
-import { AGENT_TOOL_DEFINITIONS } from "../tools/definitions/agent";
+import { AGENT_TOOL_DEFINITIONS } from "../types/tool-definitions/agent";
 
 describe("Agent Context - handleAgentContext", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;

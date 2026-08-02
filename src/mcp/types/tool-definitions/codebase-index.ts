@@ -4,7 +4,7 @@
 // are registered as backward-compat aliases in the router/executor only.
 //
 // The `inputSchema` (JSON Schema) is DERIVED from the Zod schemas in
-// `../schemas` via `inputSchemaFromSchema` (see `../schemas/json-schema.ts`
+// `../../tools/schemas` via `inputSchemaFromSchema` (see `../../tools/schemas/json-schema.ts`
 // for the generation + normalization rules). The Zod schemas are the single
 // source of truth for tool input contracts — edit the Zod schema, never the
 // derived `inputSchema` here.
@@ -13,9 +13,9 @@
 // because these tools are repo-absolute: the contract intentionally requires
 // `repo` even though it is session-injectable.
 
-import { inputSchemaFromSchema } from "../schemas/json-schema";
-import { CodebaseIndexSchema } from "../schemas/codebase-index";
-import { CodebaseReadSchema } from "../schemas/codebase-read";
+import { inputSchemaFromSchema } from "../../tools/schemas/json-schema";
+import { CodebaseIndexSchema } from "../../tools/schemas/codebase-index";
+import { CodebaseReadSchema } from "../../tools/schemas/codebase-read";
 
 export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 	{

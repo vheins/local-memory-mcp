@@ -1,15 +1,15 @@
 // Tool definitions for coding standard domain.
 //
 // The `inputSchema` (JSON Schema) is DERIVED from the Zod schemas in
-// `../schemas` via `inputSchemaFromSchema` (see `../schemas/json-schema.ts`
+// `../../tools/schemas` via `inputSchemaFromSchema` (see `../../tools/schemas/json-schema.ts`
 // for the generation + normalization rules). The Zod schemas are the single
 // source of truth for tool input contracts — edit the Zod schema, never the
 // derived `inputSchema` here.
 
-import { inputSchemaFromSchema } from "../schemas/json-schema";
-import { StandardReadSchema } from "../schemas/standard-read";
-import { StandardDeleteSchema } from "../schemas/standard";
-import { StandardWriteSchema } from "../schemas/standard-write";
+import { inputSchemaFromSchema } from "../../tools/schemas/json-schema";
+import { StandardReadSchema } from "../../tools/schemas/standard-read";
+import { StandardDeleteSchema } from "../../tools/schemas/standard";
+import { StandardWriteSchema } from "../../tools/schemas/standard-write";
 
 export const STANDARD_TOOL_DEFINITIONS = [
 	{

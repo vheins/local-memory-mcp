@@ -1,13 +1,13 @@
 // Tool definitions for memory domain.
 //
 // The `inputSchema` (JSON Schema) is DERIVED from the Zod schemas in
-// `../schemas` via `inputSchemaFromSchema` (see `../schemas/json-schema.ts`
-// for the generation + normalization rules). The Zod schemas are the single
-// source of truth for tool input contracts — edit the Zod schema, never the
-// derived `inputSchema` here.
+// `../../tools/schemas` via `inputSchemaFromSchema` (see
+// `../../tools/schemas/json-schema.ts` for the generation + normalization
+// rules). The Zod schemas are the single source of truth for tool input
+// contracts — edit the Zod schema, never the derived `inputSchema` here.
 
-import { MemoryDeleteSchema, MemoryReadSchema, MemoryWriteSchema } from "../schemas/memory";
-import { inputSchemaFromSchema } from "../schemas/json-schema";
+import { MemoryDeleteSchema, MemoryReadSchema, MemoryWriteSchema } from "../../tools/schemas/memory";
+import { inputSchemaFromSchema } from "../../tools/schemas/json-schema";
 
 export const MEMORY_TOOL_DEFINITIONS = [
 	// ── Canonical tools ──────────────────────────────────────────────────

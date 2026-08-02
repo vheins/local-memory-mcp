@@ -1,13 +1,13 @@
 // Tool definitions for handoff and claim domain.
 //
 // The `inputSchema` (JSON Schema) is DERIVED from the Zod schemas in
-// `../schemas` via `inputSchemaFromSchema` (see `../schemas/json-schema.ts`
+// `../../tools/schemas` via `inputSchemaFromSchema` (see `../../tools/schemas/json-schema.ts`
 // for the generation + normalization rules). The Zod schemas are the single
 // source of truth for tool input contracts — edit the Zod schema, never the
 // derived `inputSchema` here.
 
-import { ClaimManageSchema, HandoffReadSchema, HandoffWriteSchema } from "../schemas/handoff";
-import { inputSchemaFromSchema } from "../schemas/json-schema";
+import { ClaimManageSchema, HandoffReadSchema, HandoffWriteSchema } from "../../tools/schemas/handoff";
+import { inputSchemaFromSchema } from "../../tools/schemas/json-schema";
 
 export const HANDOFF_TOOL_DEFINITIONS = [
 	{
