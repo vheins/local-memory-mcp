@@ -73,6 +73,44 @@ describe("MCP Local Memory - memory-write (Create, Update, Acknowledge, Bulk)", 
 		expect(stored!.scope.language).toBe("typescript");
 	});
 
+	it("should CREATE with last_used_at = NULL and only stamp it via the acknowledge usage path", async () => {
+		// Preserved behavior (MEM-586 / TASK-129 — INTENTIONAL): MemoryEntity.buildInsert
+		// hardcodes last_used_at = NULL, so a newly created memory counts as "never
+		// explicitly used" until an explicit usage path (acknowledge used / recall)
+		// stamps it. Reads/searches never touch it (memory.read.ts).
+		const res = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				type: "code_fact",
+				title: "Usage Timestamp Semantics",
+				content: "A memory is not marked used at creation; only acknowledge/recall stamp last_used_at.",
+				importance: 3,
+				scope: { owner: "test", repo: REPO },
+				agent: "test-agent",
+				model: "test-model"
+			}
+		});
+
+		const stored = db.memories.getById(res.structuredContent.id);
+		expect(stored).not.toBeNull();
+		expect(stored!.last_used_at).toBeNull();
+
+		// acknowledge("used") → incrementRecallCount stamps last_used_at = now
+		await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				id: stored!.id,
+				acknowledge: "used",
+				owner: "test",
+				repo: REPO
+			}
+		});
+
+		const afterAck = db.memories.getById(stored!.id);
+		expect(afterAck!.last_used_at).not.toBeNull();
+		expect(afterAck!.recall_count).toBe(1);
+	});
+
 	// ─── UPDATE single ───────────────────────────────────────────────────
 
 	it("should UPDATE a single memory via memory-write with id + fields", async () => {
