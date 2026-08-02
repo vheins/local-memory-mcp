@@ -13,13 +13,17 @@
  *   - KGController       (entities, graph, relations)
  *   - CoordinationController (claims)
  *   - UnifiedGraphController (graph)
+ *   - QueueController    (embedding/KG outbox status)
  *
  * CodebaseController is already covered by codebase-api.integration.test.ts.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import type { AddressInfo } from "node:net";
+// Resolves to the mocked context module (vi.mock is hoisted above imports),
+// giving access to the same SQLiteStore instance the controllers use.
+import { db } from "../../dashboard/lib/context";
 
 // ── Mock context.ts (must be BEFORE any imports that transitively load it) ──
 
@@ -40,6 +44,29 @@ vi.mock("../../dashboard/lib/context", async () => {
 			isConnected: vi.fn(() => false),
 			getPendingCount: vi.fn(() => 0),
 			callTool: vi.fn().mockResolvedValue({ structuredContent: { success: true } })
+		},
+		// Embedding/KG outbox worker (TASK-013): QueueController.status reads
+		// embeddingWorker.getStats() — stubbed so the endpoint is exercised
+		// without starting a real worker.
+		embeddingWorker: {
+			getStats: vi.fn().mockReturnValue({
+				pending: 0,
+				claimed: 0,
+				done: 0,
+				poison: 0,
+				total: 0,
+				processed: 0,
+				failed: 0,
+				poisoned: 0,
+				lastBatchSize: 0,
+				lastRunAt: null,
+				running: false,
+				started: false,
+				modelReady: false,
+				pollIntervalMs: 5000,
+				batchSize: 8,
+				leaseMs: 60_000
+			})
 		},
 		logger: {
 			info: vi.fn(),
@@ -322,6 +349,69 @@ describe("Dashboard Controllers", () => {
 			expect(Array.isArray(body.data.attributes.edges)).toBe(true);
 		});
 	});
+
+	// ── Queue Controller (TASK-104) ────────────────────────────────────────
+	// Embedding/KG outbox observability (TASK-013): exposes worker + queue
+	// depth stats so the dashboard can surface backpressure.
+
+	describe("Queue API", () => {
+		it("GET /api/queue/status returns 200 with queue-status payload", async () => {
+			const res = await fetch(`${baseUrl}/api/queue/status`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.type).toBe("queue-status");
+			expect(body.data.attributes).toHaveProperty("pending");
+			expect(body.data.attributes).toHaveProperty("poison");
+			expect(body.data.attributes).toHaveProperty("total");
+			expect(body.data.attributes).toHaveProperty("running");
+			expect(body.data.attributes).toHaveProperty("started");
+			expect(body.data.attributes).toHaveProperty("modelReady");
+			expect(body.data.attributes).toHaveProperty("batchSize");
+			expect(body.data.attributes).toHaveProperty("leaseMs");
+		});
+
+		it("GET /api/queue/status reflects worker depth + config from getStats", async () => {
+			const { embeddingWorker } = await import("../../dashboard/lib/context");
+			(embeddingWorker.getStats as ReturnType<typeof vi.fn>).mockReturnValue({
+				pending: 7,
+				claimed: 2,
+				done: 10,
+				poison: 1,
+				total: 20,
+				processed: 42,
+				failed: 3,
+				poisoned: 1,
+				lastBatchSize: 5,
+				lastRunAt: "2026-08-02T00:00:00.000Z",
+				running: true,
+				started: true,
+				modelReady: true,
+				pollIntervalMs: 5000,
+				batchSize: 8,
+				leaseMs: 60_000
+			});
+
+			const res = await fetch(`${baseUrl}/api/queue/status`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.attributes.pending).toBe(7);
+			expect(body.data.attributes.poison).toBe(1);
+			expect(body.data.attributes.running).toBe(true);
+			expect(body.data.attributes.started).toBe(true);
+			expect(body.data.attributes.modelReady).toBe(true);
+			expect(body.data.attributes.batchSize).toBe(8);
+			expect(body.data.attributes.leaseMs).toBe(60_000);
+		});
+
+		it("GET /api/queue/status is a read endpoint — does NOT acquire the write lock", async () => {
+			const withWriteSpy = vi.spyOn(db, "withWrite").mockImplementation(async (fn) => fn());
+			const res = await fetch(`${baseUrl}/api/queue/status`);
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).not.toHaveBeenCalled();
+			withWriteSpy.mockRestore();
+		});
+	});
+
 	// ── Write-lock scope (TASK-102) ─────────────────────────────────────────
 	// Regression guard: every dashboard mutation endpoint must mutate through
 	// db.withWrite — the same file-lock boundary used by MCP write tools
