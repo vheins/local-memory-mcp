@@ -1,7 +1,15 @@
 import { BaseEntity } from "../../storage/base";
 import { Task, TaskRow, TaskChild, TaskComment } from "../../types";
 import { handleDuplicateTaskCode } from "./validation";
-import { buildCoordinationSelect, taskStatusOrderBy } from "./queries";
+import {
+	buildCoordinationSelect,
+	taskRepoFilter,
+	taskSearchFilter,
+	taskSelectSkeleton,
+	taskStatusFilter,
+	taskStatusesFilter,
+	taskStatusOrderBy
+} from "./queries";
 import { VECTOR_CANDIDATE_CAP } from "../../utils/constants";
 import { buildUpdateClause } from "../../utils/sql-builder";
 
@@ -107,15 +115,7 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	getTaskById(id: string): Task | null {
-		const row = this.get<TaskRow>(
-			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-				${buildCoordinationSelect("t")}
-			 FROM tasks t 
-			 LEFT JOIN tasks d ON t.depends_on = d.id 
-			 LEFT JOIN tasks p ON t.parent_id = p.id 
-			 WHERE t.id = ?`,
-			[id]
-		);
+		const row = this.get<TaskRow>(`${taskSelectSkeleton("t", false)} WHERE t.id = ?`, [id]);
 		return row
 			? {
 					...this.rowToTask(row),
@@ -161,11 +161,7 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	getTaskByCode(owner: string, repo: string, taskCode: string): Task | null {
-		const baseQuery = `SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-			${buildCoordinationSelect("t")}
-		 FROM tasks t 
-		 LEFT JOIN tasks d ON t.depends_on = d.id 
-		 LEFT JOIN tasks p ON t.parent_id = p.id `;
+		const baseQuery = taskSelectSkeleton("t", false);
 
 		// Single query — owner filter only when provided. Owner-less rows are
 		// normalized at write time (TASK-038), so no owner-fallback re-query.
@@ -192,24 +188,19 @@ export class TaskEntity extends BaseEntity {
 		offset?: number,
 		search?: string
 	): Task[] {
-		let query = `
-			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-				${buildCoordinationSelect("t")},
-				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
-			FROM tasks t 
-			LEFT JOIN tasks d ON t.depends_on = d.id 
-			LEFT JOIN tasks p ON t.parent_id = p.id 
-			WHERE ${owner ? "t.owner = ? AND " : ""}t.repo = ?
-		`;
-		const params: (string | number)[] = owner ? [owner, repo] : [repo];
+		const repoFilter = taskRepoFilter("t", owner, repo);
+		const params: (string | number)[] = repoFilter.params;
+		let query = `${taskSelectSkeleton("t")} WHERE ${repoFilter.clause}`;
 
-		if (status) {
-			query += " AND t.status = ?";
-			params.push(status);
+		const statusClause = taskStatusFilter("t", status);
+		if (statusClause) {
+			query += statusClause;
+			params.push(status as string);
 		}
 
-		if (search) {
-			query += " AND (t.title LIKE ? OR t.description LIKE ? OR t.task_code LIKE ?)";
+		const searchClause = taskSearchFilter("t", search);
+		if (searchClause) {
+			query += searchClause;
 			const searchPattern = `%${search}%`;
 			params.push(searchPattern, searchPattern, searchPattern);
 		}
@@ -233,17 +224,18 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	countTasks(owner: string, repo: string, status?: string, search?: string): number {
-		const ownerClause = owner ? "owner = ? AND " : "";
-		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${ownerClause}repo = ?`;
-		const params: (string | number)[] = owner ? [owner, repo] : [repo];
+		const { clause: repoClause, params } = taskRepoFilter(undefined, owner, repo);
+		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${repoClause}`;
 
-		if (status) {
-			query += " AND status = ?";
-			params.push(status);
+		const statusClause = taskStatusFilter(undefined, status);
+		if (statusClause) {
+			query += statusClause;
+			params.push(status as string);
 		}
 
-		if (search) {
-			query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+		const searchClause = taskSearchFilter(undefined, search);
+		if (searchClause) {
+			query += searchClause;
 			const searchPattern = `%${search}%`;
 			params.push(searchPattern, searchPattern, searchPattern);
 		}
@@ -253,14 +245,7 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	listRecentTasks(limit = 50, offset = 0): Task[] {
-		const query = `
-		SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-			${buildCoordinationSelect("t")},
-			(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
-		FROM tasks t 
-		LEFT JOIN tasks d ON t.depends_on = d.id 
-		LEFT JOIN tasks p ON t.parent_id = p.id 
-		ORDER BY ${taskStatusOrderBy()}
+		const query = `${taskSelectSkeleton("t")} ORDER BY ${taskStatusOrderBy()}
 		LIMIT ? OFFSET ?
 		`;
 		const rows = this.all<TaskRow>(query, [limit, offset]);
@@ -277,20 +262,19 @@ export class TaskEntity extends BaseEntity {
 	): Task[] {
 		if (!statuses.length) return this.getTasksByRepo(owner, repo, undefined, limit, offset, search);
 
-		const ownerClause = owner ? "t.owner = ? AND " : "";
-		let query = `
-			SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-				${buildCoordinationSelect("t")},
-				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
-			FROM tasks t 
-			LEFT JOIN tasks d ON t.depends_on = d.id 
-			LEFT JOIN tasks p ON t.parent_id = p.id 
-			WHERE ${ownerClause}t.repo = ? AND t.status IN (${statuses.map(() => "?").join(",")})
-		`;
-		const params: (string | number)[] = owner ? [owner, repo, ...statuses] : [repo, ...statuses];
+		const repoFilter = taskRepoFilter("t", owner, repo);
+		const params: (string | number)[] = repoFilter.params;
+		let query = `${taskSelectSkeleton("t")} WHERE ${repoFilter.clause}`;
 
-		if (search) {
-			query += " AND (t.title LIKE ? OR t.description LIKE ? OR t.task_code LIKE ?)";
+		const statusesClause = taskStatusesFilter("t", statuses);
+		if (statusesClause) {
+			query += statusesClause;
+			params.push(...statuses);
+		}
+
+		const searchClause = taskSearchFilter("t", search);
+		if (searchClause) {
+			query += searchClause;
 			const searchPattern = `%${search}%`;
 			params.push(searchPattern, searchPattern, searchPattern);
 		}
@@ -316,12 +300,19 @@ export class TaskEntity extends BaseEntity {
 	countTasksByMultipleStatuses(owner: string, repo: string, statuses: string[], search?: string): number {
 		if (!statuses.length) return this.countTasks(owner, repo, undefined, search);
 
-		const ownerClause = owner ? "owner = ? AND " : "";
-		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${ownerClause}repo = ? AND status IN (${statuses.map(() => "?").join(",")})`;
-		const params: (string | number)[] = owner ? [owner, repo, ...statuses] : [repo, ...statuses];
+		const repoFilter = taskRepoFilter(undefined, owner, repo);
+		const params: (string | number)[] = repoFilter.params;
+		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${repoFilter.clause}`;
 
-		if (search) {
-			query += " AND (title LIKE ? OR description LIKE ? OR task_code LIKE ?)";
+		const statusesClause = taskStatusesFilter(undefined, statuses);
+		if (statusesClause) {
+			query += statusesClause;
+			params.push(...statuses);
+		}
+
+		const searchClause = taskSearchFilter(undefined, search);
+		if (searchClause) {
+			query += searchClause;
 			const searchPattern = `%${search}%`;
 			params.push(searchPattern, searchPattern, searchPattern);
 		}
@@ -430,18 +421,11 @@ export class TaskEntity extends BaseEntity {
 	getTasksByCodes(owner: string, repo: string, taskCodes: string[]): Task[] {
 		if (taskCodes.length === 0) return [];
 		const placeholders = taskCodes.map(() => "?").join(",");
-		const ownerClause = owner ? "t.owner = ? AND " : "";
-		const params: (string | number)[] = owner ? [owner, repo, ...taskCodes] : [repo, ...taskCodes];
+		const repoFilter = taskRepoFilter("t", owner, repo);
 
 		const rows = this.all<TaskRow>(
-			`SELECT t.*, d.task_code as depends_on_code, p.task_code as parent_code,
-				${buildCoordinationSelect("t")},
-				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
-			 FROM tasks t 
-			 LEFT JOIN tasks d ON t.depends_on = d.id 
-			 LEFT JOIN tasks p ON t.parent_id = p.id 
-			 WHERE ${ownerClause}t.repo = ? AND t.task_code IN (${placeholders})`,
-			params
+			`${taskSelectSkeleton("t")} WHERE ${repoFilter.clause} AND t.task_code IN (${placeholders})`,
+			[...repoFilter.params, ...taskCodes]
 		);
 
 		const tasks = rows.map((r) => this.rowToTask(r));
