@@ -7,6 +7,32 @@ import type { LoadedPrompt } from "../interfaces/index";
 import { logger } from "../utils/logger";
 
 /**
+ * Builds the description advertised by the SDK's prompts/list handler.
+ *
+ * argsSchema is omitted (SDK bundles zod/v4 internally, incompatible with
+ * the project's zod v3), so the SDK can only surface `description` in
+ * prompts/list. Append the frontmatter argument definitions here so clients
+ * can discover each prompt's arguments.
+ */
+function buildPromptDescription(loaded: LoadedPrompt): string {
+	let description = loaded.description;
+
+	if (loaded.arguments.length > 0) {
+		const argLines = loaded.arguments
+			.map((arg) => {
+				const name = String(arg.name ?? "");
+				const argDescription = arg.description ? String(arg.description) : "";
+				const required = arg.required === true ? " (required)" : "";
+				return `- ${name}: ${argDescription}${required}`;
+			})
+			.join("\n");
+		description += `\n\nArguments:\n${argLines}`;
+	}
+
+	return description;
+}
+
+/**
  * Registers all prompts via SDK registerPrompt().
  *
  * Each prompt is defined as a Markdown file in ./definitions/ with
@@ -48,14 +74,19 @@ export function registerAllPrompts(
 			loaded.name,
 			{
 				title: loaded.name,
-				description: loaded.description
+				description: buildPromptDescription(loaded)
 			},
-			async (_args: Record<string, unknown>, _extra) => {
+			async (args: Record<string, unknown>, _extra) => {
 				const inferredRepo = inferRepoFromSession(session);
 				const inferredOwner = inferOwnerFromSession(session);
 
 				// Substitute arguments in the prompt content
 				let text = loaded.content;
+
+				// Standard arguments (mirrors registry.ts getPrompt)
+				for (const [key, value] of Object.entries(args)) {
+					text = text.replace(new RegExp(`\\{{${key}\\}}`, "g"), String(value));
+				}
 
 				// Auto-injected context (always present regardless of args)
 				text = text.replace(/\{\{current_repo\}\}/g, inferredRepo || "unknown-repo");
