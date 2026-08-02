@@ -70,9 +70,16 @@ export class MemoryVectorEntity extends BaseEntity {
 		const predicates: string[] = [];
 
 		if (currentTags.length > 0) {
-			const tagConditions = currentTags.map(() => "tags LIKE ?").join(" OR ");
+			// Indexed child-table equality (OPT-PERF-07): the normalized
+			// memory_tags table (tag COLLATE NOCASE, idx_memory_tags_tag) turns
+			// the old `tags LIKE '%tag%'` per-row text scan into a per-candidate
+			// index lookup. LIKE remains the permanent fallback for queries
+			// that cannot go through the child table.
+			const tagConditions = currentTags
+				.map(() => "EXISTS (SELECT 1 FROM memory_tags t WHERE t.memory_id = memories.id AND t.tag = ?)")
+				.join(" OR ");
 			predicates.push(`(${scopePredicate} OR (${tagConditions}))`);
-			currentTags.forEach((tag) => params.push(`%${tag}%`));
+			currentTags.forEach((tag) => params.push(tag));
 		} else {
 			predicates.push(scopePredicate);
 		}

@@ -344,10 +344,11 @@ export class MemoryEntity extends BaseEntity {
 
 	/**
 	 * Dashboard FTS fast path (MEM-367 §5.3): search clause replaced by the
-	 * FTS5 join while every other filter stays as an `m.*` predicate; the tag
-	 * filter deliberately remains `m.tags LIKE` (exact-ish substring, unchanged
-	 * semantics). Returns null when FTS produced no matches or errored so the
-	 * caller falls back to the LIKE path (permanent fallback pattern).
+	 * FTS5 join while every other filter stays as an `m.*` predicate. The tag
+	 * filter uses the indexed memory_tags child table (OPT-PERF-07) instead of
+	 * an unindexable `m.tags LIKE` scan. Returns null when FTS produced no
+	 * matches or errored so the caller falls back to the LIKE path (permanent
+	 * fallback pattern).
 	 */
 	private tryDashboardFtsSearch(options: {
 		ftsMatch: string;
@@ -399,8 +400,10 @@ export class MemoryEntity extends BaseEntity {
 				params.push(type);
 			}
 			if (tag) {
-				conditions.push("m.tags LIKE ?");
-				params.push(`%${tag}%`);
+				// Indexed tag filter via the normalized memory_tags table
+				// (OPT-PERF-07) instead of an unindexable LIKE on tags JSON.
+				conditions.push("EXISTS (SELECT 1 FROM memory_tags t WHERE t.memory_id = m.id AND t.tag = ?)");
+				params.push(tag);
 			}
 			if (isGlobal !== undefined) {
 				conditions.push("m.is_global = ?");
@@ -722,8 +725,10 @@ export class MemoryEntity extends BaseEntity {
 			params.push(type);
 		}
 		if (tag) {
-			where.push("tags LIKE ?");
-			params.push(`%${tag}%`);
+			// Indexed child-table equality (OPT-PERF-07) — replaces the
+			// `tags LIKE '%tag%'` scan on the tags JSON text column.
+			where.push("EXISTS (SELECT 1 FROM memory_tags t WHERE t.memory_id = memories.id AND t.tag = ?)");
+			params.push(tag);
 		}
 		if (isGlobal !== undefined) {
 			where.push("is_global = ?");
