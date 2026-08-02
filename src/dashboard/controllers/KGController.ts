@@ -1,6 +1,6 @@
 import express from "express";
-import { db } from "../lib/context.js";
-import { jsonApiRes, handleController, HttpError, getAttributes } from "../lib/jsonApi.js";
+import { db } from "../lib/context";
+import { jsonApiRes, handleController, HttpError, getAttributes } from "../lib/jsonApi";
 import { KG_MAX_GRAPH_EDGES } from "../../mcp/utils/constants";
 
 export class KGController {
@@ -53,7 +53,9 @@ export class KGController {
 			// Server-side edge cap (TASK-070): the response shape stays
 			// `{ nodes, edges }`; `truncated` flags when the edge list was
 			// clipped to KG_MAX_GRAPH_EDGES (client can show "showing top N").
-			const truncated = edges.length >= KG_MAX_GRAPH_EDGES;
+			// Strict `>` (not `>=`) keeps exact-cap accuracy: a graph with
+			// exactly KG_MAX_GRAPH_EDGES edges was NOT clipped.
+			const truncated = edges.length > KG_MAX_GRAPH_EDGES;
 
 			return jsonApiRes({ id: `graph-${repo}`, nodes, edges, truncated }, "graph");
 		});

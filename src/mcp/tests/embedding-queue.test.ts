@@ -322,6 +322,58 @@ describe("EmbeddingWorker — canceled task jobs complete as no-ops (TASK-042)",
 	});
 });
 
+describe("EmbeddingWorker — non-empty drain cadence (TASK-069/TASK-074)", () => {
+	let db: SQLiteStore;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("backs off to pollIntervalMs after nonEmptyBackoffStreak consecutive non-empty batches", () => {
+		const worker = new EmbeddingWorker(db, makeStubVectors(), {
+			batchSize: 32,
+			leaseMs: 60_000,
+			poisonThreshold: 3,
+			backoffBaseMs: 1_000,
+			backoffMaxMs: 60_000,
+			pollIntervalMs: 1_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0,
+			nonEmptyBackoffStreak: 3
+		});
+
+		// First two non-empty cycles poll at the fast half interval.
+		expect(worker.nextDelay(1)).toBe(500);
+		expect(worker.nextDelay(1)).toBe(500);
+
+		// Third consecutive non-empty cycle reaches the streak → full interval.
+		expect(worker.nextDelay(1)).toBe(1000);
+
+		// An empty batch resets the streak — fast drain resumes.
+		expect(worker.nextDelay(0)).toBeGreaterThanOrEqual(500);
+		expect(worker.nextDelay(1)).toBe(500);
+	});
+
+	it("defaults nonEmptyBackoffStreak to the env constant (5) when the option is omitted", () => {
+		const worker = new EmbeddingWorker(db, makeStubVectors(), {
+			pollIntervalMs: 1_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0
+		});
+
+		// Four consecutive non-empty cycles stay on the fast half interval...
+		for (let i = 0; i < 4; i++) {
+			expect(worker.nextDelay(1)).toBe(500);
+		}
+		// ...and the fifth (streak >= default 5) backs off to the full interval.
+		expect(worker.nextDelay(1)).toBe(1000);
+	});
+});
+
 describe("KnowledgeGraphEntity — repo-scoped orphan sweep (TASK-043)", () => {
 	let db: SQLiteStore;
 

@@ -14,7 +14,7 @@
  * SQLITE_BUSY_SNAPSHOT (no stale read snapshot) and wait at most
  * busy_timeout=5000 for a transient writer; backfillMissingVectors is a
  * read-then-write transaction and therefore runs with BEGIN IMMEDIATE
- * (outbox.ts). The idle poll loop uses exponential backoff + jitter so two
+ * (enqueue.ts). The idle poll loop uses exponential backoff + jitter so two
  * workers never busy-spin or thundering-herd the same poll times.
  *
  * Crash-safety: a lease expires after 60s; the next claim cycle (or startup
@@ -58,6 +58,12 @@ export interface EmbeddingWorkerOptions {
 	doneTtlMs?: number;
 	poisonTtlMs?: number;
 	purgeIntervalMs?: number;
+	/**
+	 * Consecutive non-empty batches before the worker backs off from the fast
+	 * half-interval drain to `pollIntervalMs`. Defaults to the
+	 * EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK env constant (5).
+	 */
+	nonEmptyBackoffStreak?: number;
 }
 
 export class EmbeddingWorker {
@@ -99,7 +105,8 @@ export class EmbeddingWorker {
 			backfillMinQueue: options.backfillMinQueue ?? EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE,
 			doneTtlMs: options.doneTtlMs ?? EMBEDDING_QUEUE_DONE_TTL_MS,
 			poisonTtlMs: options.poisonTtlMs ?? EMBEDDING_QUEUE_POISON_TTL_MS,
-			purgeIntervalMs: options.purgeIntervalMs ?? EMBEDDING_QUEUE_PURGE_INTERVAL_MS
+			purgeIntervalMs: options.purgeIntervalMs ?? EMBEDDING_QUEUE_PURGE_INTERVAL_MS,
+			nonEmptyBackoffStreak: options.nonEmptyBackoffStreak ?? EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK
 		};
 	}
 
@@ -191,21 +198,24 @@ export class EmbeddingWorker {
 	/**
 	 * Compute the next poll delay.
 	 *
-	 * Non-empty batches: the first `EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK`
-	 * (default 5) consecutive non-empty cycles poll at half the configured
-	 * interval (floored at 50ms — fast drain). Once the streak passes the
-	 * threshold the queue is provably deep, so the worker backs off to
-	 * `pollIntervalMs` — it keeps draining at a bounded rate without polling
-	 * between every batch (TASK-068 S1 / TASK-069). An empty batch resets the
-	 * streak and grows the delay exponentially from `pollIntervalMs` up to
-	 * `maxPollIntervalMs`, with 0.5–1.0× random jitter to decorrelate the
-	 * MCP-server and dashboard workers in the same DB.
+	 * Non-empty batches: the first `nonEmptyBackoffStreak` (default 5 — the
+	 * EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK env constant) consecutive
+	 * non-empty cycles poll at half the configured interval (floored at 50ms —
+	 * fast drain). Once the streak passes the threshold the queue is provably
+	 * deep, so the worker backs off to `pollIntervalMs` — it keeps draining at
+	 * a bounded rate without polling between every batch (TASK-068 S1 /
+	 * TASK-069). An empty batch resets the streak and grows the delay
+	 * exponentially from `pollIntervalMs` up to `maxPollIntervalMs`, with
+	 * 0.5–1.0× random jitter to decorrelate the MCP-server and dashboard
+	 * workers in the same DB.
+	 *
+	 * Public for tests/observability.
 	 */
-	private nextDelay(processed: number): number {
+	nextDelay(processed: number): number {
 		if (processed > 0) {
 			this.idleStreak = 0;
 			this.nonEmptyStreak = Math.min(this.nonEmptyStreak + 1, 32);
-			if (this.nonEmptyStreak >= EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK) {
+			if (this.nonEmptyStreak >= this.opts.nonEmptyBackoffStreak) {
 				return this.opts.pollIntervalMs;
 			}
 			return Math.max(50, this.opts.pollIntervalMs / 2);
