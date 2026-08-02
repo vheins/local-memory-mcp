@@ -12,6 +12,10 @@ out/
 package/
 *.tgz
 
+# Root-level tree-sitter build artifacts (grammars are built into dist/grammars from node_modules/.cache)
+/tree-sitter
+/*.wasm
+
 # Environment variables
 .env
 .env.local
