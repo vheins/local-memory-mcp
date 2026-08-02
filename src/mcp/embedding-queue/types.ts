@@ -8,8 +8,36 @@
  * outside the proper-lockfile write lock.
  */
 
-/** Entity kinds the queue can enrich. Mirrors VectorEntityKind minus codebase_symbol. */
-export type QueueJobKind = "memory" | "standard" | "task";
+import type { VectorEntityKind } from "../types/vector";
+
+/**
+ * Entity kinds the queue can enrich.
+ *
+ * Derived from the single shared `VectorEntityKind` (src/mcp/types/vector.ts)
+ * minus `codebase_symbol` (TASK-097): adding a new entity kind to
+ * `VectorEntityKind` automatically extends the queue instead of silently
+ * drifting from a duplicated literal union. Runtime values are unchanged —
+ * `"memory" | "standard" | "task"`.
+ */
+export type QueueJobKind = Exclude<VectorEntityKind, "codebase_symbol">;
+
+/**
+ * Compile-time lock (enforced by `tsc --noEmit`): QueueJobKind must equal
+ * VectorEntityKind minus exactly `codebase_symbol`. If the derivation above
+ * is replaced with a literal union that drifts, or a new kind is excluded
+ * beyond `codebase_symbol`, this assignment fails type-checking.
+ */
+type _QueueJobKindInvariant =
+	// Every queue kind must be a valid vector kind...
+	[QueueJobKind] extends [VectorEntityKind]
+		? // ...and codebase_symbol must be the ONLY kind excluded from the queue.
+			Exclude<VectorEntityKind, QueueJobKind> extends "codebase_symbol"
+			? true
+			: false
+		: false;
+
+// `satisfies`-style assertion — never read at runtime.
+export const _queueJobKindInvariant: _QueueJobKindInvariant = true;
 
 export type QueueJobStatus = "pending" | "claimed" | "done" | "poison";
 
