@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../lib/context";
-import { jsonApiRes, handleController, HttpError, getAttributes } from "../lib/jsonApi";
+import { jsonApiRes, handleController, HttpError, getAttributes, parsePageParams } from "../lib/jsonApi";
 import { KG_MAX_GRAPH_EDGES } from "../../mcp/utils/constants";
 
 export class KGController {
@@ -11,9 +11,19 @@ export class KGController {
 
 			const type = req.query.type as string | undefined;
 			const search = req.query.search as string | undefined;
+			const { page, pageSize, offset } = parsePageParams(req.query);
 
-			const items = db.knowledgeGraph.listEntities(repo, { type, search });
-			return jsonApiRes(items, "entity");
+			const total = db.knowledgeGraph.countEntities(repo, { type, search });
+			const items = db.knowledgeGraph.listEntities(repo, { type, search, limit: pageSize, offset });
+
+			return jsonApiRes(items, "entity", {
+				meta: {
+					page,
+					pageSize,
+					totalItems: total,
+					totalPages: Math.ceil(total / pageSize)
+				}
+			});
 		});
 	}
 
@@ -36,9 +46,19 @@ export class KGController {
 			const repo = req.query.repo as string;
 			if (!repo) throw new HttpError(400, "repo is required");
 
-			const items = db.knowledgeGraph.listRelations(repo);
+			const { page, pageSize, offset } = parsePageParams(req.query);
 
-			return jsonApiRes(items, "relation");
+			const total = db.knowledgeGraph.countRelations(repo);
+			const items = db.knowledgeGraph.listRelations(repo, { limit: pageSize, offset });
+
+			return jsonApiRes(items, "relation", {
+				meta: {
+					page,
+					pageSize,
+					totalItems: total,
+					totalPages: Math.ceil(total / pageSize)
+				}
+			});
 		});
 	}
 
@@ -47,7 +67,10 @@ export class KGController {
 			const repo = req.query.repo as string;
 			if (!repo) throw new HttpError(400, "repo is required");
 
-			const nodes = db.knowledgeGraph.listGraphNodes(repo);
+			const { page, pageSize, offset } = parsePageParams(req.query);
+
+			const nodesTotal = db.knowledgeGraph.countGraphNodes(repo);
+			const nodes = db.knowledgeGraph.listGraphNodes(repo, { limit: pageSize, offset });
 			const edges = db.knowledgeGraph.listGraphEdges(repo);
 
 			// Server-side edge cap (TASK-070): the response shape stays
@@ -57,7 +80,14 @@ export class KGController {
 			// exactly KG_MAX_GRAPH_EDGES edges was NOT clipped.
 			const truncated = edges.length > KG_MAX_GRAPH_EDGES;
 
-			return jsonApiRes({ id: `graph-${repo}`, nodes, edges, truncated }, "graph");
+			return jsonApiRes({ id: `graph-${repo}`, nodes, edges, truncated }, "graph", {
+				meta: {
+					page,
+					pageSize,
+					totalItems: nodesTotal,
+					totalPages: Math.ceil(nodesTotal / pageSize)
+				}
+			});
 		});
 	}
 

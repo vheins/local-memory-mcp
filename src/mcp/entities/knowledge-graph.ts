@@ -364,8 +364,12 @@ export class KnowledgeGraphEntity extends BaseEntity {
 
 	/**
 	 * Entities scoped to a repo with optional type/search filters (dashboard).
+	 * Supports limit/offset pagination; when omitted returns all matching rows.
 	 */
-	listEntities(repo: string, options?: { type?: string; search?: string }): KgEntityRow[] {
+	listEntities(
+		repo: string,
+		options?: { type?: string; search?: string; limit?: number; offset?: number }
+	): KgEntityRow[] {
 		let sql = "SELECT * FROM entities WHERE repo = ?";
 		const params: unknown[] = [repo];
 		if (options?.type) {
@@ -377,27 +381,101 @@ export class KnowledgeGraphEntity extends BaseEntity {
 			params.push(`%${options.search}%`);
 		}
 		sql += " ORDER BY name";
+		if (options?.limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(options.limit);
+		}
+		if (options?.offset !== undefined) {
+			sql += " OFFSET ?";
+			params.push(options.offset);
+		}
 		return this.all<KgEntityRow>(sql, params);
 	}
 
 	/**
-	 * All relations scoped to a repo (dashboard).
+	 * Count entities matching the given filters (for pagination total).
 	 */
-	listRelations(repo: string): KgRelationRow[] {
-		return this.all<KgRelationRow>("SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity", [repo]);
+	countEntities(repo: string, options?: { type?: string; search?: string }): number {
+		let sql = "SELECT COUNT(*) AS cnt FROM entities WHERE repo = ?";
+		const params: unknown[] = [repo];
+		if (options?.type) {
+			sql += " AND type = ?";
+			params.push(options.type);
+		}
+		if (options?.search) {
+			sql += " AND name LIKE ?";
+			params.push(`%${options.search}%`);
+		}
+		return this.get<{ cnt: number }>(sql, params)?.cnt ?? 0;
+	}
+
+	/**
+	 * All relations scoped to a repo (dashboard).
+	 * Supports limit/offset pagination; when omitted returns all matching rows.
+	 */
+	listRelations(repo: string, options?: { limit?: number; offset?: number }): KgRelationRow[] {
+		let sql = "SELECT * FROM relations WHERE repo = ? ORDER BY from_entity, to_entity";
+		const params: unknown[] = [repo];
+		if (options?.limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(options.limit);
+		}
+		if (options?.offset !== undefined) {
+			sql += " OFFSET ?";
+			params.push(options.offset);
+		}
+		return this.all<KgRelationRow>(sql, params);
+	}
+
+	/**
+	 * Count relations scoped to a repo (for pagination total).
+	 */
+	countRelations(repo: string): number {
+		return this.get<{ cnt: number }>("SELECT COUNT(*) AS cnt FROM relations WHERE repo = ?", [repo])?.cnt ?? 0;
 	}
 
 	/**
 	 * Graph nodes for a repo (dashboard): entity name + type.
+	 *
+	 * Ordered by edge degree (highest first) so that each paginated page is a
+	 * coherent window of the highest-connectivity nodes that the top-K edges
+	 * actually connect — alphabetical ordering scattered degree-high nodes
+	 * across pages, causing near-zero edge coverage per page (TASK-145).
+	 * Falls back to name ordering for nodes with identical degree.
+	 * Supports limit/offset pagination; when omitted returns all matching rows.
 	 */
-	listGraphNodes(repo: string): Array<{ name: string; type: string }> {
-		return this.all<{ name: string; type: string }>(
-			`SELECT e.name, e.type
+	listGraphNodes(repo: string, options?: { limit?: number; offset?: number }): Array<{ name: string; type: string }> {
+		let sql = `WITH degrees AS (
+			   SELECT node, COUNT(*) AS degree
+			   FROM (
+			     SELECT from_entity AS node FROM relations WHERE repo = ?
+			     UNION ALL
+			     SELECT to_entity AS node FROM relations WHERE repo = ?
+			   )
+			   GROUP BY node
+			 )
+			 SELECT e.name, e.type
 			 FROM entities e
+			 LEFT JOIN degrees d ON d.node = e.name
 			 WHERE e.repo = ?
-			 ORDER BY e.name`,
-			[repo]
-		);
+			 ORDER BY COALESCE(d.degree, 0) DESC, e.name`;
+		const params: unknown[] = [repo, repo, repo];
+		if (options?.limit !== undefined) {
+			sql += " LIMIT ?";
+			params.push(options.limit);
+		}
+		if (options?.offset !== undefined) {
+			sql += " OFFSET ?";
+			params.push(options.offset);
+		}
+		return this.all<{ name: string; type: string }>(sql, params);
+	}
+
+	/**
+	 * Count graph nodes for a repo (for pagination total).
+	 */
+	countGraphNodes(repo: string): number {
+		return this.get<{ cnt: number }>("SELECT COUNT(*) AS cnt FROM entities e WHERE e.repo = ?", [repo])?.cnt ?? 0;
 	}
 
 	/**

@@ -80,6 +80,14 @@ export const memoriesTotalPages = derived([memoriesTotal, memoriesPageSize], ([$
 	Math.max(1, Math.ceil($total / $size))
 );
 
+// ─── Knowledge Graph pagination ─────────────────────────────────────────────
+export const kgPage = writable<number>(1);
+export const kgPageSize = writable<number>(50);
+export const kgTotalItems = writable<number>(0);
+export const kgTotalPages = derived([kgTotalItems, kgPageSize], ([$total, $size]) =>
+	Math.max(1, Math.ceil($total / $size))
+);
+
 // ─── Persistence helpers ─────────────────────────────────────────────────────
 
 function isNightTime(date = new Date()) {

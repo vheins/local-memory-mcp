@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { get } from "svelte/store";
 	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import { onMount, onDestroy } from "svelte";
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
+	import { kgPage, kgPageSize, kgTotalItems, kgTotalPages } from "$lib/stores";
 	import { initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import { handleGraphKeyDown } from "$lib/kg/kgKeyboardShortcuts";
@@ -122,10 +124,15 @@
 		errorMsg = "";
 		clearGraph();
 		try {
-			const data = await api.kgGraph(requestedRepo);
+			const page = get(kgPage);
+			const pageSize = get(kgPageSize);
+			const data = await api.kgGraph(requestedRepo, { page, pageSize });
 			if (repo !== requestedRepo) return;
 			nodes = data.nodes || [];
 			edges = data.edges || [];
+			if (data.pagination) {
+				kgTotalItems.set(data.pagination.totalItems);
+			}
 			// eslint-disable-next-line svelte/infinite-reactive-loop -- load result is guarded by requestedRepo snapshot.
 			loadedRepo = requestedRepo;
 			initLayout();
@@ -255,6 +262,15 @@
 		nodeLookup = buildNodeLookup(layoutNodes);
 	}
 
+	// ─── Pagination navigation ──────────────────────────────────────────────────
+
+	function goToPage(p: number) {
+		const totalPages = get(kgTotalPages);
+		if (p < 1 || p > totalPages) return;
+		kgPage.set(p);
+		loadGraph(true);
+	}
+
 	// ─── Modal event handlers ──────────────────────────────────────────────────
 
 	async function handleAddEntity(event: CustomEvent<{ name: string; type: string; description?: string }>) {
@@ -338,6 +354,11 @@
 
 	// Re-load when repo changes (guarded inside loadGraph against noop)
 	$: if (repo && canvasReady && loadedRepo !== repo) {
+		// Reset pagination state before loading a new repo so we don't carry
+		// over a stale page number that exceeds the new repo's total pages
+		// (e.g. page 8 of repo-A → repo-B with 3 pages → page 8 of 3 = empty).
+		kgPage.set(1);
+		kgTotalItems.set(0);
 		// eslint-disable-next-line svelte/infinite-reactive-loop -- loadGraph updates loadedRepo to satisfy this repo-change guard.
 		untrack(() => loadGraph());
 	}
@@ -413,6 +434,60 @@
 		/>
 	</div>
 
+	<!-- Pagination -->
+	{#if $kgTotalPages > 1}
+		<div class="kg-pagination">
+			<span class="kg-pagination-info">
+				Page {$kgPage} of {$kgTotalPages} ({$kgTotalItems} nodes)
+			</span>
+			<div class="kg-pagination-controls">
+				<button
+					class="btn btn-ghost btn-sm"
+					on:click={() => goToPage(1)}
+					disabled={$kgPage <= 1}
+					aria-label="First page"
+				>
+					&laquo;
+				</button>
+				<button
+					class="btn btn-ghost btn-sm"
+					on:click={() => goToPage($kgPage - 1)}
+					disabled={$kgPage <= 1}
+					aria-label="Previous page"
+				>
+					&lsaquo;
+				</button>
+				{#each Array.from({ length: Math.min(5, $kgTotalPages) }, (_, i) => {
+					const start = Math.max(1, Math.min($kgPage - 2, $kgTotalPages - 4));
+					return start + i;
+				}) as p (p)}
+					<button
+						class="btn btn-sm"
+						class:btn-primary={p === $kgPage}
+						class:btn-ghost={p !== $kgPage}
+						on:click={() => goToPage(p)}>{p}</button
+					>
+				{/each}
+				<button
+					class="btn btn-ghost btn-sm"
+					on:click={() => goToPage($kgPage + 1)}
+					disabled={$kgPage >= $kgTotalPages}
+					aria-label="Next page"
+				>
+					&rsaquo;
+				</button>
+				<button
+					class="btn btn-ghost btn-sm"
+					on:click={() => goToPage($kgTotalPages)}
+					disabled={$kgPage >= $kgTotalPages}
+					aria-label="Last page"
+				>
+					&raquo;
+				</button>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Modals -->
 	<KGModal
 		mode="addEntity"
@@ -437,3 +512,29 @@
 		on:close={cancelDelete}
 	/>
 </KGGraphShell>
+
+<style>
+	.kg-pagination {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 8px 12px;
+		border-top: 1px solid var(--color-border);
+		background: rgba(255, 255, 255, 0.03);
+	}
+
+	:global(html.dark) .kg-pagination {
+		background: rgba(0, 0, 0, 0.15);
+	}
+
+	.kg-pagination-info {
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+	}
+
+	.kg-pagination-controls {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+</style>

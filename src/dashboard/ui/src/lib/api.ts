@@ -88,7 +88,8 @@ function deserialize(body: JsonApiBody | unknown): unknown {
 		};
 	}
 
-	return processItem(data as JsonApiItem);
+	const processed = processItem(data as JsonApiItem);
+	return meta ? { ...processed, pagination: meta } : processed;
 }
 
 // ─── Codebase Search ─────────────────────────────────────────────────────────
@@ -332,19 +333,25 @@ export const api = {
 
 	// ─── Knowledge Graph ──────────────────────────────────────────────────────
 
-	kgGraph: (repo: string) =>
-		apiFetch<{ nodes: KGNode[]; edges: KGEdge[] }>(`/api/kg/graph?repo=${encodeURIComponent(repo)}`),
+	kgGraph: (repo: string, params?: { page?: number; pageSize?: number }) => {
+		const q = new URLSearchParams({ repo });
+		if (params?.page) q.set("page", String(params.page));
+		if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<{ nodes: KGNode[]; edges: KGEdge[]; pagination: Pagination }>(`/api/kg/graph?${q}`);
+	},
 
 	kgEntityDetail: (name: string) =>
 		apiFetch<{ entity: Record<string, unknown>; relations: unknown[]; observations: unknown[] }>(
 			`/api/kg/entities/${encodeURIComponent(name)}`
 		),
 
-	kgEntities: (repo: string, params?: { type?: string; search?: string }) => {
+	kgEntities: (repo: string, params?: { type?: string; search?: string; page?: number; pageSize?: number }) => {
 		const q = new URLSearchParams({ repo });
 		if (params?.type) q.set("type", params.type);
 		if (params?.search) q.set("search", params.search);
-		return apiFetch<{ entities: KGEntity[] }>(`/api/kg/entities?${q}`);
+		if (params?.page) q.set("page", String(params.page));
+		if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<{ entities: KGEntity[]; pagination: Pagination }>(`/api/kg/entities?${q}`);
 	},
 
 	kgCreateEntity: (body: { name: string; type?: string; description?: string; repo: string }) =>
