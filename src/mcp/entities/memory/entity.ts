@@ -99,11 +99,14 @@ export class MemoryEntity extends BaseEntity {
 	 * - `scope` expands into its scalar columns (owner/repo/folder/language/branch)
 	 *   with the same per-key guards (owner/folder/language/branch when
 	 *   `!== undefined`, repo when truthy).
-	 * - `structuredData` is merged into the existing metadata JSON blob — only
-	 *   in the single-id update path (it needs a DB read); bulkUpdateMemories
-	 *   drops it (no per-row id to merge against), matching prior behavior.
+	 * - `structuredData` is merged into the existing metadata JSON blob — in
+	 *   the single-id update path (`mergeStructuredData=true, id` set) and, per
+	 *   row within {@link bulkUpdateMemories}, where each row's stored metadata
+	 *   is read and merged the same way so bulk matches single-update
+	 *   semantics. Passed `false` with no id when the caller handled merging
+	 *   (or omits structuredData entirely).
 	 * - Every other key is kept only when it is tags/metadata/is_global or a
-	 *   whitelisted VALID_COLUMNS member; unknown keys are dropped.
+	 *   whitelisted VALID_COLUMNS member; unknown keys are ignored.
 	 */
 	private buildUpdateMap(
 		updates: Partial<MemoryEntry>,
@@ -484,6 +487,37 @@ export class MemoryEntity extends BaseEntity {
 
 	bulkUpdateMemories(ids: string[], updates: Partial<MemoryEntry>): number {
 		if (ids.length === 0) return 0;
+
+		// structuredData is row-specific: the merge target is each row's own
+		// stored metadata blob, so it cannot ride the shared batched SET clause
+		// below. When present we fall through to the per-row path (mirrors
+		// update()); otherwise keep the single-clause batched UPDATE exactly as
+		// before (TASK-122 alignment, TASK-129 semantics untouched).
+		if (updates.structuredData !== undefined) {
+			const now = new Date().toISOString();
+			return this.transaction(() => {
+				let count = 0;
+				for (const id of ids) {
+					// Same merge as update(): read the row's stored metadata
+					// and set the `structuredData` key inside it, preserving
+					// every other metadata entry.
+					const { fields, values } = buildUpdateClause(this.buildUpdateMap(updates, true, id), {
+						jsonKeys: MEMORY_JSON_KEYS,
+						intKeys: MEMORY_INT_KEYS
+					});
+					if (fields.length === 0) continue;
+					fields.push("updated_at = ?");
+					values.push(now);
+					values.push(id);
+					const result = this.run(
+						`UPDATE ${TABLE_MEMORIES} SET ${fields.join(", ")} WHERE id = ?`,
+						values as (string | number)[]
+					);
+					count += result.changes;
+				}
+				return count;
+			});
+		}
 
 		const { fields, values } = buildUpdateClause(this.buildUpdateMap(updates, false), {
 			jsonKeys: MEMORY_JSON_KEYS,
