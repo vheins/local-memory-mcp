@@ -384,18 +384,17 @@ export async function saveExtractions(
 
 	for (const entity of entities) {
 		try {
-			db.knowledgeGraph.upsertEntity({
+			// ensureObservation upserts the entity AND inserts the observation
+			// in one BEGIN IMMEDIATE transaction, so a concurrent
+			// orphan-sweep (deleteOrphanEntities) cannot delete the fresh
+			// entity between the upsert and the observation insert — the
+			// observations.entity_name → entities(name) FK can never fail
+			// (TASK-073 / MEM-482).
+			db.knowledgeGraph.ensureObservation({
+				id: randomUUID(),
 				name: entity.name,
 				type: entity.type,
 				description: null,
-				repo,
-				owner: owner ?? "",
-				created_at: now,
-				updated_at: now
-			});
-			db.knowledgeGraph.insertObservation({
-				id: randomUUID(),
-				entity_name: entity.name,
 				observation: observationTextValue,
 				repo,
 				owner: owner ?? "",
@@ -414,9 +413,16 @@ export async function saveExtractions(
 		for (let i = 0; i < entities.length; i++) {
 			for (let j = i + 1; j < entities.length; j++) {
 				try {
-					db.knowledgeGraph.upsertRelation({
+					// ensureRelation upserts BOTH endpoints (types known here —
+					// they come from this same document's extraction) and
+					// inserts the edge atomically. Idempotent (all INSERT OR
+					// IGNORE), so re-processing never duplicates edges
+					// (TASK-073 / MEM-482).
+					db.knowledgeGraph.ensureRelation({
 						from_entity: entities[i].name,
+						from_type: entities[i].type,
 						to_entity: entities[j].name,
+						to_type: entities[j].type,
 						relation_type: "co_mentioned",
 						repo,
 						owner: owner ?? "",

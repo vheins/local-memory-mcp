@@ -114,23 +114,25 @@ export async function saveTaskRelations(
 			const decisionName = ref.trim();
 			if (!decisionName) continue;
 
-			// Ensure the decision entity exists
-			db.knowledgeGraph.upsertEntity({
-				name: decisionName,
-				type: "decision",
-				description: `Decision/ADR reference: ${decisionName}`,
-				repo,
-				owner: owner ?? "",
-				created_at: now,
-				updated_at: now
-			});
-
 			// Create inspired_by relations from task entities to this decision
 			for (const taskEntityName of entityNames) {
 				try {
-					db.knowledgeGraph.upsertRelation({
+					// ensureRelation upserts BOTH endpoints — the task entity
+					// AND the decision entity (type "decision") — then inserts
+					// the edge, all in one BEGIN IMMEDIATE transaction. The
+					// decision entity lives in the same repo and is referenced
+					// by the edge once committed, so a concurrent
+					// orphan-sweep can neither delete it between the upsert
+					// and the insert nor sweep it afterwards (TASK-073 /
+					// MEM-482). Previously a separate upsertEntity +
+					// upsertRelation pair autocommitted each statement, so the
+					// sweep could delete the decision endpoint mid-pair and
+					// fail the relations FK.
+					db.knowledgeGraph.ensureRelation({
 						from_entity: taskEntityName,
+						from_type: entityTypeByName.get(taskEntityName) ?? "concept",
 						to_entity: decisionName,
+						to_type: "decision",
 						relation_type: "inspired_by",
 						repo,
 						owner: owner ?? "",
@@ -215,18 +217,17 @@ export async function saveStandardRelations(
 	const observationTextValue = observationText("standard", standard.title);
 	for (const entity of entities) {
 		try {
-			db.knowledgeGraph.upsertEntity({
+			// ensureObservation upserts the entity AND inserts the observation
+			// in one BEGIN IMMEDIATE transaction, so a concurrent
+			// orphan-sweep (deleteOrphanEntities) cannot delete the fresh
+			// entity between the upsert and the observation insert — the
+			// observations.entity_name → entities(name) FK can never fail
+			// (TASK-073 / MEM-482).
+			db.knowledgeGraph.ensureObservation({
+				id: randomUUID(),
 				name: entity.name,
 				type: entity.type,
 				description: null,
-				repo,
-				owner,
-				created_at: now,
-				updated_at: now
-			});
-			db.knowledgeGraph.insertObservation({
-				id: randomUUID(),
-				entity_name: entity.name,
 				observation: observationTextValue,
 				repo,
 				owner,

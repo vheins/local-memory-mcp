@@ -157,12 +157,58 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	}
 
 	/**
+	 * Resolve-or-upsert the entity then insert the observation referencing it —
+	 * atomically (single BEGIN IMMEDIATE transaction).
+	 *
+	 * Analogue of `ensureRelation` for the observations.entity_name →
+	 * entities(name) FK (migration v8, PRAGMA foreign_keys = ON). Written as
+	 * one unit because `insertObservation` alone would be a plain autocommit
+	 * that could hit `FOREIGN KEY constraint failed` if a concurrent
+	 * orphan-sweep (`deleteOrphanEntities`) deleted the just-upserted entity
+	 * between the upsert and the insert (TASK-073 / MEM-482). The IMMEDIATE
+	 * write lock is held for the whole pair, so the sweep cannot interleave.
+	 */
+	ensureObservation(params: {
+		id: string;
+		name: string;
+		type: string;
+		description: string | null;
+		observation: string;
+		repo: string;
+		owner: string;
+		created_at: string;
+	}): void {
+		this.transaction(() => {
+			this.upsertEntity({
+				name: params.name,
+				type: params.type,
+				description: params.description,
+				repo: params.repo,
+				owner: params.owner,
+				created_at: params.created_at,
+				updated_at: params.created_at
+			});
+			this.insertObservation({
+				id: params.id,
+				entity_name: params.name,
+				observation: params.observation,
+				repo: params.repo,
+				owner: params.owner,
+				created_at: params.created_at
+			});
+		});
+	}
+
+	/**
 	 * Insert an observation record.
 	 *
 	 * Uses INSERT OR IGNORE against the unique (entity_name, observation)
 	 * index (migration v9) so the embedding/KG worker's lease-recovery
 	 * reprocessing is idempotent — a crash window never duplicates an
 	 * observation (TASK-013 acceptance: zero duplicate observations).
+	 *
+	 * NOTE: callers that also upsert the referenced entity must use
+	 * `ensureObservation` so the pair is atomic (TASK-073).
 	 */
 	insertObservation(params: {
 		id: string;
