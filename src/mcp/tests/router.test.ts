@@ -118,7 +118,12 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 			close: vi.fn(),
 			getDbPath: vi.fn().mockReturnValue(":memory:"),
 			refresh: vi.fn().mockResolvedValue(undefined),
-			withWrite: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn())
+			withWrite: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn()),
+			// OPT-PERF-09: memory/standard/task write handlers and the maintenance
+			// sweep route their compound bodies through the exclusive write lock.
+			// Passthrough mirrors withWrite so the body still executes against the
+			// injected mock store.
+			withExclusiveWrite: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn())
 		} as unknown as SQLiteStore;
 	}
 
@@ -227,6 +232,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 					expect(mockDb.memories.insert).toHaveBeenCalled();
 					expect(mockDb.withWrite).toHaveBeenCalled();
+					// OPT-PERF-09: the create body runs under the exclusive write lock.
+					expect(mockDb.withExclusiveWrite).toHaveBeenCalled();
 				}
 			),
 			{ numRuns: 100 }
@@ -652,6 +659,8 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 
 		expect(elicit).toHaveBeenCalledTimes(1);
 		expect(mockDb.tasks.insertTask).toHaveBeenCalledTimes(1);
+		// OPT-PERF-09: task creation runs under the exclusive write lock.
+		expect(mockDb.withExclusiveWrite).toHaveBeenCalled();
 		// repo is inferred from session context, not from elicit response
 		expect(result.structuredContent.repo).toBeDefined();
 		expect(result.structuredContent.task_code).toBeDefined();

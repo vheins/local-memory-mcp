@@ -8,7 +8,7 @@
  * contract (expired + low-score + decay-archived).
  *
  * Strategy: real in-memory SQLiteStore (createTestStore) for SQL-bound logic;
- * vi.spyOn passthrough for the file-lock boundary (db.withWrite) and for
+ * vi.spyOn passthrough for the file-lock boundary (db.withExclusiveWrite) and for
  * entity sweeps whose internals are covered by their own suites. No real
  * proper-lockfile acquisition.
  */
@@ -250,12 +250,14 @@ describe("pruneObservations", () => {
 
 describe("runStartupMaintenance (TASK-124 contract)", () => {
 	let db: SQLiteStore;
-	let withWriteSpy: ReturnType<typeof vi.spyOn>;
+	let withExclusiveWriteSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(async () => {
 		db = await createTestStore();
 		// Passthrough spy: crosses the lock boundary without real proper-lockfile.
-		withWriteSpy = vi.spyOn(db, "withWrite").mockImplementation(async (fn) => fn());
+		// OPT-PERF-09: runStartupMaintenance routes the whole sweep through the
+		// exclusive write lock (withExclusiveWrite), not the fast-path withWrite.
+		withExclusiveWriteSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
 		vi.spyOn(db.memoryArchives, "archiveExpiredMemories").mockReturnValue(2);
 		vi.spyOn(db.memoryArchives, "archiveLowScoreMemories").mockReturnValue(1);
 		vi.spyOn(db.knowledgeGraph, "deleteObservationsOlderThan").mockReturnValue(5);
@@ -281,7 +283,7 @@ describe("runStartupMaintenance (TASK-124 contract)", () => {
 		expect(result.totalArchived).toBe(2 + 1 + 0);
 
 		// TASK-102: the whole sweep crosses the write-lock boundary exactly once.
-		expect(withWriteSpy).toHaveBeenCalledTimes(1);
+		expect(withExclusiveWriteSpy).toHaveBeenCalledTimes(1);
 		expect(db.memoryArchives.archiveExpiredMemories).toHaveBeenCalledWith(true);
 		expect(db.memoryArchives.archiveLowScoreMemories).toHaveBeenCalledWith(true);
 	});
@@ -299,7 +301,7 @@ describe("runStartupMaintenance (TASK-124 contract)", () => {
 
 	it("records the run in memory_summary so a second run within 24h is skipped", async () => {
 		await runStartupMaintenance(db);
-		withWriteSpy.mockClear();
+		withExclusiveWriteSpy.mockClear();
 
 		const second = await runStartupMaintenance(db);
 
@@ -310,6 +312,6 @@ describe("runStartupMaintenance (TASK-124 contract)", () => {
 		expect(second.prunedActionLogRows).toBe(0);
 		expect(second.prunedObservationsRows).toBe(0);
 		expect(second.totalArchived).toBe(0);
-		expect(withWriteSpy).not.toHaveBeenCalled();
+		expect(withExclusiveWriteSpy).not.toHaveBeenCalled();
 	});
 });
