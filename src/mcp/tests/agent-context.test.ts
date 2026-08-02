@@ -8,6 +8,38 @@ import { AgentContextSchema } from "../tools/schemas";
 // Use memory-write with flat fields: context/rationale/alternatives, key_decisions/next_steps
 import { MemoryWriteSchema } from "../tools/schemas/memory";
 import { AGENT_TOOL_DEFINITIONS } from "../types/tool-definitions/agent";
+import type { McpResponse } from "../utils/mcp-response";
+
+/** Shape of handleAgentContext's structuredContent (see tools/agent-context.ts). */
+interface AgentContextResult {
+	schema: string;
+	repo: string;
+	query: string | null;
+	memories: Array<{
+		id: string;
+		code: string | null;
+		title: string;
+		type: string;
+		importance: number;
+	}>;
+	decisions: Array<{
+		id: string;
+		code: string | null;
+		title: string;
+		importance: number;
+	}>;
+	tasks: Array<{
+		task_code: string;
+		title: string;
+		status: string;
+		priority: number;
+	}>;
+}
+
+/** Narrow McpResponse.structuredContent (unknown) to the agent-context result shape. */
+function getStructured(res: McpResponse): AgentContextResult {
+	return res.structuredContent as AgentContextResult;
+}
 
 describe("Agent Context - handleAgentContext", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
@@ -63,10 +95,10 @@ describe("Agent Context - handleAgentContext", () => {
 		);
 
 		expect(res.structuredContent).toBeDefined();
-		expect(res.structuredContent.schema).toBe("agent-context");
-		expect(res.structuredContent.query).toBe("auth");
-		expect(res.structuredContent.memories.length).toBeGreaterThan(0);
-		const titles = res.structuredContent.memories.map((m: { title: string }) => m.title);
+		expect(getStructured(res).schema).toBe("agent-context");
+		expect(getStructured(res).query).toBe("auth");
+		expect(getStructured(res).memories.length).toBeGreaterThan(0);
+		const titles = getStructured(res).memories.map((m: { title: string }) => m.title);
 		expect(titles).toContain("Auth Setup");
 	});
 
@@ -76,7 +108,7 @@ describe("Agent Context - handleAgentContext", () => {
 
 		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 10, json: true }, db, vectors);
 
-		expect(res.structuredContent.memories.length).toBeGreaterThanOrEqual(2);
+		expect(getStructured(res).memories.length).toBeGreaterThanOrEqual(2);
 	});
 
 	// ─── backward compat: objective still works ──────────────────────────
@@ -90,8 +122,8 @@ describe("Agent Context - handleAgentContext", () => {
 			vectors
 		);
 
-		expect(res.structuredContent.query).toBe("database");
-		expect(res.structuredContent.memories.length).toBeGreaterThan(0);
+		expect(getStructured(res).query).toBe("database");
+		expect(getStructured(res).memories.length).toBeGreaterThan(0);
 	});
 
 	it("query param takes precedence over other params", async () => {
@@ -104,8 +136,8 @@ describe("Agent Context - handleAgentContext", () => {
 			vectors
 		);
 
-		expect(res.structuredContent.query).toBe("cache");
-		const titles = res.structuredContent.memories.map((m: { title: string }) => m.title);
+		expect(getStructured(res).query).toBe("cache");
+		const titles = getStructured(res).memories.map((m: { title: string }) => m.title);
 		expect(titles).toContain("Cache Strategy");
 	});
 
@@ -130,7 +162,7 @@ describe("Agent Context - handleAgentContext", () => {
 			vectors
 		);
 
-		expect(res.structuredContent.memories.length).toBeGreaterThan(0);
+		expect(getStructured(res).memories.length).toBeGreaterThan(0);
 	});
 
 	it("vector search returns empty gracefully when repo has no memories", async () => {
@@ -140,7 +172,7 @@ describe("Agent Context - handleAgentContext", () => {
 			vectors
 		);
 
-		expect(res.structuredContent.memories).toEqual([]);
+		expect(getStructured(res).memories).toEqual([]);
 	});
 
 	// ─── type_filter ─────────────────────────────────────────────────────
@@ -155,7 +187,7 @@ describe("Agent Context - handleAgentContext", () => {
 			vectors
 		);
 
-		const types = res.structuredContent.memories.map((m: { type: string }) => m.type);
+		const types = getStructured(res).memories.map((m: { type: string }) => m.type);
 		expect(types.every((t: string) => t === "pattern")).toBe(true);
 	});
 
@@ -166,10 +198,11 @@ describe("Agent Context - handleAgentContext", () => {
 
 		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 5, json: true }, db, vectors);
 
-		expect(res.structuredContent.decisions.length).toBeGreaterThan(0);
+		expect(getStructured(res).decisions.length).toBeGreaterThan(0);
 	});
 
 	it("should include active tasks in the response", async () => {
+		const now = new Date().toISOString();
 		db.tasks.insertTask({
 			id: crypto.randomUUID(),
 			task_code: "AC-001",
@@ -182,14 +215,26 @@ describe("Agent Context - handleAgentContext", () => {
 			priority: 3,
 			agent: "test-agent",
 			role: "tester",
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString()
+			doc_path: null,
+			created_at: now,
+			updated_at: now,
+			in_progress_at: now,
+			finished_at: null,
+			canceled_at: null,
+			est_tokens: 0,
+			commit_id: null,
+			changed_files: [],
+			tags: [],
+			suggested_skills: [],
+			metadata: {},
+			parent_id: null,
+			depends_on: null
 		});
 
 		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 5, json: true }, db, vectors);
 
-		expect(res.structuredContent.tasks.length).toBeGreaterThan(0);
-		const taskCodes = res.structuredContent.tasks.map((t: { task_code: string }) => t.task_code);
+		expect(getStructured(res).tasks.length).toBeGreaterThan(0);
+		const taskCodes = getStructured(res).tasks.map((t: { task_code: string }) => t.task_code);
 		expect(taskCodes).toContain("AC-001");
 	});
 
@@ -201,11 +246,11 @@ describe("Agent Context - handleAgentContext", () => {
 		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 5, json: true }, db, vectors);
 
 		expect(res.structuredContent).toBeDefined();
-		expect(res.structuredContent.schema).toBe("agent-context");
-		expect(res.structuredContent.repo).toBe(REPO);
-		expect(Array.isArray(res.structuredContent.memories)).toBe(true);
-		expect(Array.isArray(res.structuredContent.tasks)).toBe(true);
-		expect(Array.isArray(res.structuredContent.decisions)).toBe(true);
+		expect(getStructured(res).schema).toBe("agent-context");
+		expect(getStructured(res).repo).toBe(REPO);
+		expect(Array.isArray(getStructured(res).memories)).toBe(true);
+		expect(Array.isArray(getStructured(res).tasks)).toBe(true);
+		expect(Array.isArray(getStructured(res).decisions)).toBe(true);
 	});
 
 	// ─── limit param ─────────────────────────────────────────────────────
@@ -217,7 +262,7 @@ describe("Agent Context - handleAgentContext", () => {
 
 		const res = await handleAgentContext({ owner: OWNER, repo: REPO, limit: 3, json: true }, db, vectors);
 
-		expect(res.structuredContent.memories.length).toBeLessThanOrEqual(3);
+		expect(getStructured(res).memories.length).toBeLessThanOrEqual(3);
 	});
 });
 
