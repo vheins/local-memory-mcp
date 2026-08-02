@@ -58,7 +58,7 @@ export class MemoriesController {
 					id,
 					created_at: new Date().toISOString(),
 					updated_at: new Date().toISOString(),
-					scope: { repo }
+					scope: { repo, owner: attributes.owner || "" }
 				});
 				db.actions.logAction("write", "", repo, { memoryId: id });
 			});
@@ -126,7 +126,11 @@ export class MemoriesController {
 			const entries = items.map((item: Record<string, unknown>) => ({
 				...item,
 				id: (item.id as string) || randomUUID(),
-				scope: { ...(item.scope as Record<string, unknown>), repo },
+				scope: {
+					...(item.scope as Record<string, unknown>),
+					repo,
+					owner: ((item.scope as Record<string, unknown> | undefined)?.owner as string) || ""
+				},
 				created_at: (item.created_at as string) || new Date().toISOString(),
 				updated_at: (item.updated_at as string) || new Date().toISOString()
 			}));

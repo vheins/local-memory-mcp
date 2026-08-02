@@ -322,4 +322,208 @@ describe("Dashboard Controllers", () => {
 			expect(Array.isArray(body.data.attributes.edges)).toBe(true);
 		});
 	});
+	// ── Write-lock scope (TASK-102) ─────────────────────────────────────────
+	// Regression guard: every dashboard mutation endpoint must mutate through
+	// db.withWrite — the same file-lock boundary used by MCP write tools
+	// (router.ts / tools/index.ts) — so HTTP writes serialize with tool writes
+	// instead of racing them. Read endpoints must NOT take the lock.
+	//
+	// The spy passes through to the original handler body (so the mutation
+	// still executes and the JSON:API response shape is preserved) while
+	// recording that the withWrite boundary was crossed. This mirrors the
+	// router.test.ts pattern (`expect(mockDb.withWrite).toHaveBeenCalled()`).
+	// A passthrough spy (rather than the real proper-lockfile acquisition) is
+	// used deliberately: other test files exercise the real lock against the
+	// shared `:memory:` target, and parallel forks must not contend on it.
+
+	describe("Write-lock scope (TASK-102)", () => {
+		let withWriteSpy: ReturnType<typeof vi.spyOn>;
+
+		beforeEach(() => {
+			withWriteSpy = vi.spyOn(db, "withWrite").mockImplementation(async (fn) => fn());
+		});
+
+		afterEach(() => {
+			withWriteSpy.mockRestore();
+		});
+
+		it("POST /api/memories (create) acquires the write lock", async () => {
+			const res = await fetch(`${baseUrl}/api/memories`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "memory",
+						attributes: {
+							repo: "lock-test-repo",
+							type: "code_fact",
+							title: "lock-scope regression",
+							content: "created through the dashboard — must run under withWrite",
+							importance: 3
+						}
+					}
+				})
+			});
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("PUT + DELETE /api/memories/:id acquire the write lock", async () => {
+			// Seed through the locked create path so the row exists for update/delete.
+			const created = await fetch(`${baseUrl}/api/memories`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "memory",
+						attributes: {
+							repo: "lock-test-repo",
+							type: "pattern",
+							title: "to be updated",
+							content: "seed content",
+							importance: 2
+						}
+					}
+				})
+			});
+			expect(created.status).toBe(200);
+			const id = ((await created.json()) as Record<string, any>).data.id as string;
+			withWriteSpy.mockClear();
+
+			const updated = await fetch(`${baseUrl}/api/memories/${id}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ data: { type: "memory", attributes: { title: "renamed" } } })
+			});
+			expect(updated.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+
+			const deleted = await fetch(`${baseUrl}/api/memories/${id}`, { method: "DELETE" });
+			expect(deleted.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(2);
+		});
+
+		it("POST /api/memories/import (bulk insert) acquires the write lock", async () => {
+			const res = await fetch(`${baseUrl}/api/memories/import`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "memory",
+						attributes: {
+							repo: "lock-test-repo",
+							items: [{ title: "bulk one", content: "bulk body", type: "code_fact", importance: 3 }]
+						}
+					}
+				})
+			});
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("POST /api/memories/action (bulk delete) acquires the write lock", async () => {
+			const created = await fetch(`${baseUrl}/api/memories`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "memory",
+						attributes: {
+							repo: "lock-test-repo",
+							type: "decision",
+							title: "bulk-action target",
+							content: "to be bulk-deleted",
+							importance: 2
+						}
+					}
+				})
+			});
+			expect(created.status).toBe(200);
+			const id = ((await created.json()) as Record<string, any>).data.id as string;
+			withWriteSpy.mockClear();
+
+			const res = await fetch(`${baseUrl}/api/memories/action`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: { type: "memory", attributes: { action: "delete", ids: [id] } }
+				})
+			});
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("POST /api/standards (create) acquires the write lock", async () => {
+			const res = await fetch(`${baseUrl}/api/standards`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "standard",
+						attributes: {
+							title: "Lock scope standard",
+							content: "must be inserted under withWrite",
+							tags: ["lock-scope"],
+							metadata: { source: "regression-test" }
+						}
+					}
+				})
+			});
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("POST /api/standards/import acquires the write lock", async () => {
+			const res = await fetch(`${baseUrl}/api/standards/import`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					standards: [{ title: "Imported standard", content: "imported body" }]
+				})
+			});
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("PUT + DELETE /api/standards/:id acquire the write lock", async () => {
+			const created = await fetch(`${baseUrl}/api/standards`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "standard",
+						attributes: {
+							title: "Update me",
+							content: "seed standard",
+							tags: ["lock-scope"],
+							metadata: { source: "regression-test" }
+						}
+					}
+				})
+			});
+			expect(created.status).toBe(200);
+			const id = ((await created.json()) as Record<string, any>).data.id as string;
+			withWriteSpy.mockClear();
+
+			const updated = await fetch(`${baseUrl}/api/standards/${id}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ data: { type: "standard", attributes: { title: "Updated" } } })
+			});
+			expect(updated.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+
+			const deleted = await fetch(`${baseUrl}/api/standards/${id}`, { method: "DELETE" });
+			expect(deleted.status).toBe(200);
+			expect(withWriteSpy).toHaveBeenCalledTimes(2);
+		});
+
+		it("read endpoints do NOT acquire the write lock", async () => {
+			withWriteSpy.mockClear();
+			const res = await fetch(`${baseUrl}/api/memories?repo=lock-test-repo`);
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).not.toHaveBeenCalled();
+		});
+
+	});
 });

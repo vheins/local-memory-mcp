@@ -16,6 +16,7 @@ export interface MaintenanceResult {
 	skipped: boolean;
 	prunedActionLogRows: number;
 	prunedObservationsRows: number;
+	totalArchived: number;
 }
 
 const MAINTENANCE_OWNER = "__soul__";
@@ -83,49 +84,60 @@ export async function runStartupMaintenance(
 			lowScoreArchived: 0,
 			skipped: true,
 			prunedActionLogRows: 0,
-			prunedObservationsRows: 0
+			prunedObservationsRows: 0,
+			totalArchived: 0
 		};
 	}
 
 	logger.info("[MaintenanceJob] Starting startup maintenance sweep");
 
-	// 1. Apply biological decay
-	const decay = applyDecay(db.db, decayOptions);
+	// Write-lock invariant (TASK-102): the whole sweep (decay, archiving,
+	// pruning, run-record) mutates the DB and must serialize with MCP tool
+	// writes via the file lock. All sweep steps are synchronous SQL work, so
+	// lock hold time stays in the ms range; the "ran recently" check above is
+	// a pure read and stays outside the lock.
+	const result = await db.withWrite((): MaintenanceResult => {
+		// 1. Apply biological decay
+		const decay = applyDecay(db.db, decayOptions);
 
-	// 2. Archive expired memories (force=true since this is explicitly triggered)
-	const expiredArchived = db.memoryArchives.archiveExpiredMemories(true);
+		// 2. Archive expired memories (force=true since this is explicitly triggered)
+		const expiredArchived = db.memoryArchives.archiveExpiredMemories(true);
 
-	// 3. Archive low-score memories (force=true)
-	const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories(true);
+		// 3. Archive low-score memories (force=true)
+		const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories(true);
 
-	// 4. Prune stale action log entries (30-day retention)
-	const prunedActionLogResult = pruneActionLog(db.db, 30);
+		// 4. Prune stale action log entries (30-day retention)
+		const prunedActionLogResult = pruneActionLog(db.db, 30);
 
-	// 5. Prune stale observations (7-day retention)
-	const prunedObservationsResult = pruneObservations(db.knowledgeGraph, 7);
+		// 5. Prune stale observations (7-day retention)
+		const prunedObservationsResult = pruneObservations(db.knowledgeGraph, 7);
 
-	// Record the maintenance run
-	recordMaintenanceRun(db);
+		// Record the maintenance run
+		recordMaintenanceRun(db);
 
-	const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0) + (decay.archived || 0);
+		const totalArchived = (expiredArchived || 0) + (lowScoreArchived || 0) + (decay.archived || 0);
 
-	logger.info("[MaintenanceJob] Startup maintenance complete", {
-		decayed: decay.decayed,
-		immunizedSkipped: decay.immunizedSkipped,
-		expiredArchived,
-		lowScoreArchived,
-		decayArchived: decay.archived,
-		totalArchived,
-		prunedActionLogRows: prunedActionLogResult.deleted,
-		prunedObservationsRows: prunedObservationsResult.deleted
+		return {
+			decay,
+			expiredArchived: expiredArchived || 0,
+			lowScoreArchived: lowScoreArchived || 0,
+			skipped: false,
+			prunedActionLogRows: prunedActionLogResult.deleted,
+			prunedObservationsRows: prunedObservationsResult.deleted,
+			totalArchived
+		};
 	});
 
-	return {
-		decay,
-		expiredArchived: expiredArchived || 0,
-		lowScoreArchived: lowScoreArchived || 0,
-		skipped: false,
-		prunedActionLogRows: prunedActionLogResult.deleted,
-		prunedObservationsRows: prunedObservationsResult.deleted
-	};
+	logger.info("[MaintenanceJob] Startup maintenance complete", {
+		decayed: result.decay.decayed,
+		immunizedSkipped: result.decay.immunizedSkipped,
+		expiredArchived: result.expiredArchived,
+		lowScoreArchived: result.lowScoreArchived,
+		decayArchived: result.decay.archived,
+		totalArchived: result.totalArchived,
+		prunedActionLogRows: result.prunedActionLogRows,
+		prunedObservationsRows: result.prunedObservationsRows
+	});
+
+	return result;
 }

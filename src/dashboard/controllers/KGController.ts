@@ -60,21 +60,26 @@ export class KGController {
 	}
 
 	static async createEntity(req: express.Request, res: express.Response) {
-		await handleController(req, res, () => {
+		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
 			const { name, type, description, repo, owner } = attributes;
 
 			if (!name) throw new HttpError(400, "name is required");
 
 			const now = new Date().toISOString();
-			db.knowledgeGraph.createEntity({
-				name,
-				type: type || "unknown",
-				description: description || null,
-				repo: repo || "",
-				owner: owner || "",
-				created_at: now,
-				updated_at: now
+			// Write-lock invariant (TASK-102): all DB mutations acquire the file
+			// lock so dashboard writes serialize with MCP tool writes (LWW/conflict
+			// semantics). Only the mutation is locked; the read-back stays outside.
+			await db.withWrite(() => {
+				db.knowledgeGraph.createEntity({
+					name,
+					type: type || "unknown",
+					description: description || null,
+					repo: repo || "",
+					owner: owner || "",
+					created_at: now,
+					updated_at: now
+				});
 			});
 
 			const entity = db.knowledgeGraph.getEntityByName(name);
@@ -83,20 +88,20 @@ export class KGController {
 	}
 
 	static async deleteEntity(req: express.Request, res: express.Response) {
-		await handleController(req, res, () => {
+		await handleController(req, res, async () => {
 			const name = req.params.name as string;
 
 			if (!db.knowledgeGraph.entityExists(name)) {
 				throw new HttpError(404, "Entity not found");
 			}
 
-			db.knowledgeGraph.deleteEntity(name);
+			await db.withWrite(() => db.knowledgeGraph.deleteEntity(name));
 			return jsonApiRes({ message: "Deleted", name }, "status");
 		});
 	}
 
 	static async createRelation(req: express.Request, res: express.Response) {
-		await handleController(req, res, () => {
+		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
 			const { from_entity, to_entity, relation_type, repo, owner } = attributes;
 
@@ -114,13 +119,15 @@ export class KGController {
 
 			const now = new Date().toISOString();
 			try {
-				db.knowledgeGraph.createRelation({
-					from_entity,
-					to_entity,
-					relation_type,
-					repo: repo || "",
-					owner: owner || "",
-					created_at: now
+				await db.withWrite(() => {
+					db.knowledgeGraph.createRelation({
+						from_entity,
+						to_entity,
+						relation_type,
+						repo: repo || "",
+						owner: owner || "",
+						created_at: now
+					});
 				});
 			} catch (err: unknown) {
 				const sqlerr = err as Error & { code?: string };
@@ -135,7 +142,7 @@ export class KGController {
 	}
 
 	static async deleteRelation(req: express.Request, res: express.Response) {
-		await handleController(req, res, () => {
+		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
 			const { from_entity, to_entity, relation_type } = attributes;
 
@@ -143,7 +150,7 @@ export class KGController {
 				throw new HttpError(400, "from_entity, to_entity, and relation_type are required");
 			}
 
-			const result = db.knowledgeGraph.deleteRelation(from_entity, to_entity, relation_type);
+			const result = await db.withWrite(() => db.knowledgeGraph.deleteRelation(from_entity, to_entity, relation_type));
 
 			if (result.changes === 0) {
 				throw new HttpError(404, "Relation not found");
@@ -154,10 +161,10 @@ export class KGController {
 	}
 
 	static async deleteObservation(req: express.Request, res: express.Response) {
-		await handleController(req, res, () => {
+		await handleController(req, res, async () => {
 			const id = req.params.id as string;
 
-			const result = db.knowledgeGraph.deleteObservation(id);
+			const result = await db.withWrite(() => db.knowledgeGraph.deleteObservation(id));
 
 			if (result.changes === 0) {
 				throw new HttpError(404, "Observation not found");
