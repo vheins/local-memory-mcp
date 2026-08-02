@@ -13,7 +13,7 @@
  */
 
 import { MemoryReadSchema } from "./schemas";
-import type { MemoryEntry, VectorStore } from "../types";
+import type { MemoryEntry, VectorStore, VectorResult } from "../types";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { McpResponse } from "../utils/mcp-response";
 import { createMcpResponse } from "../utils/mcp-response";
@@ -21,7 +21,8 @@ import { logger } from "../utils/logger";
 import { expandQuery } from "../utils/query-expander";
 import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
 import { fetchKgContext, fetchAggregatedKgContext } from "./kg-archivist/query";
-import { scoreHybrid, computeRecencyScore, computeDomainScore, applyThreshold, HYBRID_WEIGHTS } from "../utils/scoring";
+import { computeRecencyScore, computeDomainScore } from "../utils/scoring";
+import { HybridSearchEngine } from "../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../utils/constants";
 import { renderGroupedSummary, enumOrderComparator } from "../utils/summary";
 import { FTS_CANDIDATE_CAP } from "../utils/fts";
@@ -175,117 +176,81 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		});
 	}
 
-	// 3. Vector re-ranking (keyword)
-	interface ScoredMemory {
-		memory: MemoryEntry;
-		similarityScore: number;
-		keywordScore: number;
-		recencyScore: number;
-		domainScore: number;
-		finalScore: number;
-	}
-
+	// 3. Hybrid scoring through the shared engine (OPT-DRY-01). The engine
+	// owns vector+keyword merge, sort by composite score, threshold,
+	// guarantee-at-least-1, the time-tunnel post-filter, and pagination.
+	// This file keeps ONLY the candidate fetch + domain/recency signal
+	// computation (EntityScorer below).
 	const queryTerms = searchQuery.split(/\s+/).filter(Boolean);
-	let scoredMemories: ScoredMemory[] = [];
 
-	try {
-		const vectorResults = await vectors.search(searchQuery, candidates.length || 10, params.repo);
-
-		if (candidates.length > 0) {
-			scoredMemories = candidates.map((c: Candidate) => {
-				// bm25 (min-max normalized) replaces the ONNX vector score in
-				// the 0.30 keyword weight (MEM-367 §6.2): lexical relevance,
-				// not vector rerank, powers the keyword signal.
-				const keywordScore = ftsScoreMap.get(c.memory.id) ?? 0;
-				const recencyScore = computeRecencyScore(c.memory.created_at);
-				const domainScore = computeDomainScore(queryTerms, c.memory.tags);
-				const finalScore = scoreHybrid({
-					similarity: c.similarityScore,
-					keyword: keywordScore,
-					recency: recencyScore,
-					domain: domainScore
-				});
-				return {
-					memory: c.memory,
-					similarityScore: c.similarityScore,
-					keywordScore,
-					recencyScore,
-					domainScore,
-					finalScore
-				};
-			});
-		} else if (vectorResults.length > 0) {
-			// Vector-only fallback: reachable only when BOTH similarity and
-			// FTS returned no candidates, so ftsScoreMap is necessarily empty
-			// here — vr.score carries the combined similarity+keyword weight
-			// (bit-exact SPEC-001 expression preserved as-is).
-			const memoryMap = new Map(
-				db.memories.getByIds(vectorResults.map((vr) => vr.id)).map((m: MemoryEntry) => [m.id, m])
-			);
-			for (const vr of vectorResults) {
-				const mem = memoryMap.get(vr.id);
-				if (mem) {
-					const recencyScore = computeRecencyScore(mem.created_at);
-					const domainScore = computeDomainScore(queryTerms, mem.tags);
-					scoredMemories.push({
-						memory: mem,
-						similarityScore: 0,
-						keywordScore: vr.score,
-						recencyScore,
-						domainScore,
-						finalScore:
-							vr.score * (HYBRID_WEIGHTS.keyword + HYBRID_WEIGHTS.similarity) +
-							recencyScore * HYBRID_WEIGHTS.recency +
-							domainScore * HYBRID_WEIGHTS.domain
-					});
-				}
+	// Vector re-rank only matters when the candidate pool is empty (vector-only
+	// fallback). Skip the inference when similarity/FTS produced candidates —
+	// its result would be discarded anyway, so this saves one full inference
+	// per search (mirrors standard-read's needsVectorFallback).
+	let vectorResults: VectorResult[] | null;
+	let vectorEntities: ReadonlyMap<string, MemoryEntry> = new Map();
+	if (candidates.length === 0) {
+		try {
+			vectorResults = await vectors.search(searchQuery, 10, params.repo);
+			if (vectorResults.length > 0) {
+				const fetched = db.memories.getByIds(vectorResults.map((vr) => vr.id));
+				vectorEntities = new Map(fetched.map((m: MemoryEntry) => [m.id, m]));
 			}
+		} catch (error) {
+			logger.warn("Vector search failed, using similarity only", { error: String(error) });
+			vectorResults = null;
 		}
-	} catch (error) {
-		logger.warn("Vector search failed, using similarity only", { error: String(error) });
-		scoredMemories = candidates.map((c: Candidate) => {
-			// Error fallback: similarity-driven, but the bm25 keyword feed
-			// still applies when available (FTS runs independently of the
-			// vector store). When bm25 is absent, the SPEC-001 fold keeps the
-			// similarity+keyword weight on similarity (bit-exact parity).
-			const keywordScore = ftsScoreMap.get(c.memory.id) ?? 0;
-			const recencyScore = computeRecencyScore(c.memory.created_at);
-			const domainScore = computeDomainScore(queryTerms, c.memory.tags);
-			return {
-				memory: c.memory,
-				similarityScore: c.similarityScore,
-				keywordScore,
-				recencyScore,
-				domainScore,
-				finalScore:
-					keywordScore > 0
-						? scoreHybrid({
-								similarity: c.similarityScore,
-								keyword: keywordScore,
-								recency: recencyScore,
-								domain: domainScore
-							})
-						: c.similarityScore * (HYBRID_WEIGHTS.similarity + HYBRID_WEIGHTS.keyword) +
-							recencyScore * HYBRID_WEIGHTS.recency +
-							domainScore * HYBRID_WEIGHTS.domain
-			};
-		});
+	} else {
+		vectorResults = [];
 	}
 
-	// 4. Threshold & Final Selection
-	scoredMemories.sort((a: ScoredMemory, b: ScoredMemory) => b.finalScore - a.finalScore);
-	let allMatches = scoredMemories
-		.filter((sm: ScoredMemory) => applyThreshold(sm.finalScore, scoredMemories.length, SEARCH_THRESHOLDS.memory))
-		.map((sm: ScoredMemory) => sm.memory);
-	if (allMatches.length === 0 && scoredMemories.length > 0) allMatches = [scoredMemories[0].memory];
+	const { items: scoredResult, total } = HybridSearchEngine.run<MemoryEntry>({
+		candidates: candidates.map((c: Candidate) => ({ entity: c.memory, similarity: c.similarityScore })),
+		queryTerms,
+		vectorResults,
+		vectorEntities,
+		scorer: {
+			idOf: (memory) => memory.id,
+			scoreCandidate: (memory, similarity, terms) => ({
+				// bm25 (min-max normalized) feeds the 0.30 keyword weight
+				// (MEM-367 §6.2): lexical relevance, not vector rerank, powers
+				// the keyword signal.
+				similarity,
+				keyword: ftsScoreMap.get(memory.id) ?? 0,
+				recency: computeRecencyScore(memory.created_at),
+				domain: computeDomainScore(terms, memory.tags)
+			}),
+			scoreVectorOnly: (memory, hit, terms) => ({
+				similarity: hit.score,
+				keyword: 0,
+				recency: computeRecencyScore(memory.created_at),
+				domain: computeDomainScore(terms, memory.tags)
+			}),
+			scoreFallback: (memory, similarity, terms) => ({
+				similarity,
+				keyword: ftsScoreMap.get(memory.id) ?? 0,
+				recency: computeRecencyScore(memory.created_at),
+				domain: computeDomainScore(terms, memory.tags)
+			})
+		},
+		thresholds: SEARCH_THRESHOLDS.memory,
+		merge: "fallback",
+		offset: params.offset,
+		limit: params.limit,
+		// 4a. Time Tunnel post-filter (window check on created_at), applied
+		// after threshold/guarantee and before pagination.
+		postFilter: (eligible) => {
+			if (!timeTunnel) return eligible;
+			const kept = applyTimeFilter(
+				eligible.map((s) => s.entity),
+				timeTunnel
+			);
+			const keptIds = new Set(kept.map((m: MemoryEntry) => m.id));
+			return eligible.filter((s) => keptIds.has(s.entity.id));
+		}
+	});
 
-	// 4a. Time Tunnel post-filter
-	if (timeTunnel) {
-		allMatches = applyTimeFilter(allMatches, timeTunnel);
-	}
-
-	const total = allMatches.length;
-	const paginatedResults = allMatches.slice(params.offset, params.offset + params.limit);
+	const paginatedResults = scoredResult.map((s) => s.entity);
 
 	// CRITICAL: No hit_count increment on search
 

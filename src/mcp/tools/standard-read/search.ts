@@ -12,14 +12,15 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { expandQuery } from "../../utils/query-expander";
 import { fetchAggregatedKgContext } from "../kg-archivist/query";
 import { StandardReadInput } from "../schemas";
-import { scoreHybrid, applyThreshold, HYBRID_WEIGHTS } from "../../utils/scoring";
+import type { HybridScores } from "../../utils/scoring";
+import { HybridSearchEngine } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
 import { renderGroupedSummary } from "../../utils/summary";
 
 // ── SPEC-001 Hybrid weights ──────────────────────────────────────────────
-// All 3 scoring paths (similarity main, vector-only fallback, error fallback)
-// now consistently use the shared scorer: 0.40 similarity + 0.30 keyword +
-// 0.15 recency + 0.15 domain (HYBRID_WEIGHTS from utils/scoring).
+// All scoring paths now blend through the shared HybridSearchEngine
+// (utils/hybrid-search): 0.40 similarity + 0.30 keyword + 0.15 recency +
+// 0.15 domain (HYBRID_WEIGHTS from utils/scoring).
 
 type StandardConfidence = "high" | "medium" | "low";
 
@@ -199,17 +200,6 @@ export async function handleSearchMode(
 				})
 				.map((standard) => ({ ...standard, similarity: 0.5 }));
 
-	let scoredStandards: Array<{
-		standard: CodingStandardEntry;
-		similarityScore: number;
-		keywordScore: number;
-		recencyScore: number;
-		domainScore: number;
-		matchedTerms: string[];
-		finalScore: number;
-		confidence: StandardConfidence;
-	}> = [];
-
 	const domainFilters = {
 		stack: validated.stack,
 		tags: validated.tags,
@@ -217,107 +207,73 @@ export async function handleSearchMode(
 		context: validated.context
 	};
 
-	try {
-		// ONNX vector search only powers the vector-only fallback (when TF
-		// similarity produced no candidates). Skip it on the main path where
-		// its result would be discarded — saves one full inference per search.
-		const needsVectorFallback = Boolean(searchQuery) && similarityResults.length === 0;
-		const vectorResults = needsVectorFallback
-			? await vectors.search(searchQuery, validated.limit, validated.repo, "standard")
-			: [];
+	// Per-entity signal computation (OPT-DRY-01): the engine owns vector+keyword
+	// merge, sort, threshold, guarantee-at-least-1, and pagination; this file
+	// keeps ONLY the candidate fetch + keyword/recency/domain signal scoring.
+	// All three paths (main, vector-only, error fallback) share the canonical
+	// SPEC-001 blend — the engine's scoreHybrid — with each signal in its own
+	// slot (the old bit-exact remainingWeight expression was exactly this).
+	const standardSignals = (standard: CodingStandardEntry, similarity: number): HybridScores => ({
+		similarity,
+		keyword: scoreKeywordRelevance(validated.query || "", standard),
+		recency: scoreRecency(standard),
+		domain: scoreDomain(standard, domainFilters)
+	});
 
-		if (similarityResults.length > 0) {
-			scoredStandards = similarityResults.map((candidate) => {
-				const keywordScore = scoreKeywordRelevance(validated.query || "", candidate);
-				const matchedTerms = collectMatchedTerms(validated.query || "", candidate);
-				const recencyScore = scoreRecency(candidate);
-				const domainScoreVal = scoreDomain(candidate, domainFilters);
-				// Vector similarity is already reflected in candidate.similarity
-				// (simFromVector is intentionally not part of the blend)
-				const finalScore = scoreHybrid({
-					similarity: candidate.similarity,
-					keyword: keywordScore,
-					recency: recencyScore,
-					domain: domainScoreVal
-				});
-				return {
-					standard: candidate,
-					similarityScore: candidate.similarity,
-					keywordScore,
-					recencyScore,
-					domainScore: domainScoreVal,
-					matchedTerms,
-					finalScore,
-					confidence: toConfidence(finalScore, keywordScore)
-				};
-			});
-		} else if (vectorResults.length > 0) {
+	// ONNX vector search only powers the vector-only fallback (when TF
+	// similarity produced no candidates). Skip it on the main path where
+	// its result would be discarded — saves one full inference per search.
+	const needsVectorFallback = Boolean(searchQuery) && similarityResults.length === 0;
+	const vectorResults = needsVectorFallback
+		? await vectors.search(searchQuery, validated.limit, validated.repo, "standard").catch((error) => {
+				logger.warn("Standard vector search failed, using similarity only", { error: String(error) });
+				return null;
+			})
+		: [];
+
+	let vectorEntities: ReadonlyMap<string, CodingStandardEntry> = new Map();
+	if (vectorResults && vectorResults.length > 0) {
+		// A DB failure fetching the entities (SQLITE_BUSY/corruption) must NOT
+		// reject the whole search — degrade to an empty map, dropping only the
+		// vector-only fallback (mirrors memory.read / task-read guards).
+		try {
 			const fetched = db.standards.getByIds(vectorResults.map((row) => row.id));
-			const standardMap = new Map(fetched.map((standard) => [standard.id, standard]));
-			scoredStandards = vectorResults.flatMap((row) => {
-				const standard = standardMap.get(row.id);
-				if (!standard) return [];
-				const keywordScore = scoreKeywordRelevance(validated.query || "", standard);
-				const matchedTerms = collectMatchedTerms(validated.query || "", standard);
-				const recencyScore = scoreRecency(standard);
-				const domainScoreVal = scoreDomain(standard, domainFilters);
-				// Bit-exact SPEC-001 vector-only fallback: the vector score carries
-				// the remaining weight (expression preserved as-is)
-				const remainingWeight = 1 - HYBRID_WEIGHTS.keyword - HYBRID_WEIGHTS.recency - HYBRID_WEIGHTS.domain;
-				const finalScore =
-					row.score * remainingWeight +
-					keywordScore * HYBRID_WEIGHTS.keyword +
-					recencyScore * HYBRID_WEIGHTS.recency +
-					domainScoreVal * HYBRID_WEIGHTS.domain;
-				return [
-					{
-						standard,
-						similarityScore: 0,
-						keywordScore,
-						recencyScore,
-						domainScore: domainScoreVal,
-						matchedTerms,
-						finalScore,
-						confidence: toConfidence(finalScore, keywordScore)
-					}
-				];
-			});
+			vectorEntities = new Map(fetched.map((standard) => [standard.id, standard]));
+		} catch (error) {
+			logger.warn("Standard vector-entity fetch failed, dropping vector-only fallback", { error: String(error) });
 		}
-	} catch (error) {
-		logger.warn("Standard vector search failed, using similarity only", { error: String(error) });
-		scoredStandards = similarityResults.map((candidate) => {
-			const keywordScore = scoreKeywordRelevance(validated.query || "", candidate);
-			const matchedTerms = collectMatchedTerms(validated.query || "", candidate);
-			const recencyScore = scoreRecency(candidate);
-			const domainScoreVal = scoreDomain(candidate, domainFilters);
-			const finalScore = scoreHybrid({
-				similarity: candidate.similarity,
-				keyword: keywordScore,
-				recency: recencyScore,
-				domain: domainScoreVal
-			});
-			return {
-				standard: candidate,
-				similarityScore: candidate.similarity,
-				keywordScore,
-				recencyScore,
-				domainScore: domainScoreVal,
-				matchedTerms,
-				finalScore,
-				confidence: toConfidence(finalScore, keywordScore)
-			};
-		});
 	}
 
-	scoredStandards.sort((a, b) => b.finalScore - a.finalScore);
-	let results = scoredStandards.filter((candidate) =>
-		applyThreshold(candidate.finalScore, scoredStandards.length, SEARCH_THRESHOLDS.standard)
-	);
-	if (results.length === 0 && scoredStandards.length > 0) {
-		results = [scoredStandards[0]];
-	}
+	const { items, total } = HybridSearchEngine.run<CodingStandardEntry>({
+		candidates: similarityResults.map((candidate) => ({ entity: candidate, similarity: candidate.similarity })),
+		queryTerms: (validated.query || "").split(/\s+/).filter(Boolean),
+		vectorResults,
+		vectorEntities,
+		scorer: {
+			idOf: (standard) => standard.id,
+			scoreCandidate: (standard, similarity) => standardSignals(standard, similarity),
+			scoreVectorOnly: (standard, hit) => standardSignals(standard, hit.score),
+			scoreFallback: (standard, similarity) => standardSignals(standard, similarity)
+		},
+		thresholds: SEARCH_THRESHOLDS.standard,
+		merge: "fallback",
+		offset: validated.offset,
+		limit: validated.limit
+	});
 
-	const paginatedResults = results.slice(validated.offset, validated.offset + validated.limit);
+	// Rebuild the scored shape expected downstream — matchedTerms + confidence
+	// are per-entity domain/confidence scoring computed after the engine blend
+	// (confidence depends on the final score).
+	const paginatedResults = items.map((scored) => ({
+		standard: scored.entity,
+		similarityScore: scored.similarityScore,
+		keywordScore: scored.keywordScore,
+		recencyScore: scored.recencyScore,
+		domainScore: scored.domainScore,
+		matchedTerms: collectMatchedTerms(validated.query || "", scored.entity),
+		finalScore: scored.finalScore,
+		confidence: toConfidence(scored.finalScore, scored.keywordScore)
+	}));
 	// NOTE: hit_count intentionally NOT incremented on read/search
 
 	logger.info("[Tool] standard-read - searched coding standards", {
@@ -345,7 +301,6 @@ export async function handleSearchMode(
 
 	let contentSummary: string;
 	if (paginatedResults.length > 0) {
-		const total = results.length;
 		const displayCount = paginatedResults.length;
 		const parts = [`### Results: ${total} standards for "${validated.query || ""}" (showing ${displayCount})`, ""];
 
@@ -379,7 +334,7 @@ export async function handleSearchMode(
 		mode: "search",
 		query: validated.query || "",
 		count: paginatedResults.length,
-		total: results.length,
+		total,
 		offset: validated.offset,
 		limit: validated.limit,
 		results: {
@@ -399,7 +354,7 @@ export async function handleSearchMode(
 		if (kgData) responseData.kg = kgData;
 	}
 
-	return createMcpResponse(responseData, `Found ${results.length} coding standards matching your query`, {
+	return createMcpResponse(responseData, `Found ${total} coding standards matching your query`, {
 		contentSummary,
 		structuredContentPathHint: "results",
 		includeJson: true

@@ -5,13 +5,8 @@ import { TaskStatusValues } from "../schemas";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
 import { capitalize } from "./shared";
-import {
-	scoreHybrid,
-	computeRecencyScore,
-	countTermOverlap,
-	applyThreshold,
-	HYBRID_WEIGHTS
-} from "../../utils/scoring";
+import { computeRecencyScore, countTermOverlap } from "../../utils/scoring";
+import { HybridSearchEngine } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
 import { renderGroupedSummary, enumOrderComparator } from "../../utils/summary";
 
@@ -89,110 +84,106 @@ export async function handleSearchMode(
 		);
 	}
 
-	// 2. Hybrid vector scoring
+	// 2. Hybrid vector scoring through the shared engine (OPT-DRY-01).
+	// The engine owns vector+keyword merge, sort, threshold, guarantee,
+	// the FTS5 supplement + phase/priority filters (postFilter), and
+	// pagination. This file keeps ONLY the candidate fetch + domain/recency
+	// signal computation (EntityScorer below).
 	const queryTerms = query.split(/\s+/).filter(Boolean);
 	const fetchLimit = (offset + limit) * 3;
-	let scoredTasks: ScoredTask[] = [];
 
-	try {
-		const vectorResults = await vectors.search(query, fetchLimit, repo, "task");
-		const vectorScoreMap = new Map(vectorResults.map((vr) => [vr.id, vr.score]));
+	// A failed vector search falls back to keyword-only scoring (engine
+	// fallback path via vectorResults = null).
+	const vectorResults = await vectors.search(query, fetchLimit, repo, "task").catch((error) => {
+		logger.warn("[Tool] task-read/search vector search failed, using keyword-only fallback", { error: String(error) });
+		return null;
+	});
+	const vectorScoreMap = new Map((vectorResults ?? []).map((vr) => [vr.id, vr.score]));
 
-		// Score keyword-matched tasks
-		scoredTasks = keywordTasks.map((t: Task) => {
-			const similarity = vectorScoreMap.get(t.id) ?? 0;
-			const keywordScore = 1.0; // Task matched the SQL LIKE query
-			const recencyScore = computeRecencyScore(t.created_at);
-			const domainScore = computeDomainScore(t, queryTerms);
-			const finalScore = scoreHybrid({ similarity, keyword: keywordScore, recency: recencyScore, domain: domainScore });
-			return { task: t, similarityScore: similarity, keywordScore, recencyScore, domainScore, finalScore };
-		});
-
-		// Add vector-only results (semantic matches not caught by SQL LIKE)
-		if (vectorResults.length > 0) {
-			const keywordIdSet = new Set(keywordTasks.map((t: Task) => t.id));
-			const vectorOnlyIds = vectorResults.filter((vr) => !keywordIdSet.has(vr.id)).map((vr) => vr.id);
-			if (vectorOnlyIds.length > 0) {
+	// Vector-only results (semantic matches not caught by SQL LIKE) are
+	// fetched here and merged in by the engine (merge: "supplement"). A DB
+	// failure fetching them (SQLITE_BUSY/corruption) must NOT reject the whole
+	// search — degrade to an empty map: vector scores still apply to keyword
+	// candidates, only the vector-only supplement is dropped.
+	let vectorEntities: ReadonlyMap<string, Task> = new Map();
+	if (vectorResults) {
+		const keywordIdSet = new Set(keywordTasks.map((t: Task) => t.id));
+		const vectorOnlyIds = vectorResults.filter((vr) => !keywordIdSet.has(vr.id)).map((vr) => vr.id);
+		if (vectorOnlyIds.length > 0) {
+			try {
 				const vectorOnlyTasks = storage.tasks.getTasksByIds(vectorOnlyIds);
-				for (const t of vectorOnlyTasks) {
-					const similarity = vectorScoreMap.get(t.id) ?? 0;
-					const keywordScore = 0;
-					const recencyScore = computeRecencyScore(t.created_at);
-					const domainScore = computeDomainScore(t, queryTerms);
-					const finalScore = scoreHybrid({
-						similarity,
-						keyword: keywordScore,
-						recency: recencyScore,
-						domain: domainScore
-					});
-					scoredTasks.push({
-						task: t,
-						similarityScore: similarity,
-						keywordScore,
-						recencyScore,
-						domainScore,
-						finalScore
-					});
-				}
+				vectorEntities = new Map(vectorOnlyTasks.map((t: Task) => [t.id, t]));
+			} catch (error) {
+				logger.warn("[Tool] task-read/search vector-entity fetch failed, dropping vector-only supplement", {
+					error: String(error)
+				});
 			}
 		}
-	} catch (error) {
-		// Graceful fallback: keyword-only with recency scoring.
-		// Preserves the original formula (recency carries the combined
-		// recency+domain weight; domain is deliberately not included here).
-		logger.warn("[Tool] task-read/search vector search failed, using keyword-only fallback", { error: String(error) });
-		scoredTasks = keywordTasks.map((t: Task) => {
-			const recencyScore = computeRecencyScore(t.created_at);
-			const domainScore = computeDomainScore(t, queryTerms);
-			const fallbackScore =
-				recencyScore * (HYBRID_WEIGHTS.recency + HYBRID_WEIGHTS.domain) +
-				(HYBRID_WEIGHTS.similarity + HYBRID_WEIGHTS.keyword);
-			return {
-				task: t,
-				similarityScore: 0,
-				keywordScore: 1.0,
-				recencyScore,
-				domainScore,
-				finalScore: fallbackScore
-			};
-		});
 	}
 
-	// 3. Sort by hybrid score
-	scoredTasks.sort((a: ScoredTask, b: ScoredTask) => b.finalScore - a.finalScore);
+	const { items, total } = HybridSearchEngine.run<Task>({
+		candidates: keywordTasks.map((t: Task) => ({ entity: t, similarity: vectorScoreMap.get(t.id) ?? 0 })),
+		queryTerms,
+		vectorResults,
+		vectorEntities,
+		scorer: {
+			idOf: (task) => task.id,
+			scoreCandidate: (task, similarity) => ({
+				similarity,
+				keyword: 1.0, // Task matched the SQL LIKE query
+				recency: computeRecencyScore(task.created_at),
+				domain: computeDomainScore(task, queryTerms)
+			}),
+			scoreVectorOnly: (task, hit) => ({
+				similarity: hit.score,
+				keyword: 0,
+				recency: computeRecencyScore(task.created_at),
+				domain: computeDomainScore(task, queryTerms)
+			}),
+			scoreFallback: (task, _similarity) => ({
+				similarity: 0,
+				keyword: 1.0,
+				recency: computeRecencyScore(task.created_at),
+				domain: computeDomainScore(task, queryTerms)
+			})
+		},
+		thresholds: SEARCH_THRESHOLDS.task,
+		merge: "supplement",
+		offset,
+		limit,
+		postFilter: (eligible, context) => {
+			let list = eligible;
+			// 5. FTS5 fallback — if eligible results are fewer than requested
+			// limit, supplement with keyword-only scored results (tasks that
+			// matched SQL LIKE)
+			if (list.length < offset + limit) {
+				const eligibleIdSet = new Set(list.map((st) => st.entity.id));
+				const fallbackTasks = context.allScored
+					.filter((st) => !eligibleIdSet.has(st.entity.id) && st.keywordScore > 0)
+					.slice(0, offset + limit - list.length);
+				list = [...list, ...fallbackTasks];
+			}
+			// 6. In-memory phase filter
+			if (phase) {
+				const phaseLower = phase.toLowerCase();
+				list = list.filter((st) => st.entity.phase && st.entity.phase.toLowerCase() === phaseLower);
+			}
+			// 7. In-memory priority filter
+			if (priority !== undefined) {
+				list = list.filter((st) => st.entity.priority === priority);
+			}
+			return list;
+		}
+	});
 
-	// 4. Adaptive threshold (SPEC-001)
-	let eligible = scoredTasks.filter((st: ScoredTask) =>
-		applyThreshold(st.finalScore, scoredTasks.length, SEARCH_THRESHOLDS.task)
-	);
-	// Guarantee at least 1 result
-	if (eligible.length === 0 && scoredTasks.length > 0) {
-		eligible = [scoredTasks[0]];
-	}
-
-	// 5. FTS5 fallback — if eligible results are fewer than requested limit,
-	// supplement with keyword-only scored results (tasks that matched SQL LIKE)
-	if (eligible.length < offset + limit) {
-		const eligibleIdSet = new Set(eligible.map((st: ScoredTask) => st.task.id));
-		const fallbackTasks = scoredTasks
-			.filter((st: ScoredTask) => !eligibleIdSet.has(st.task.id) && st.keywordScore > 0)
-			.slice(0, offset + limit - eligible.length);
-		eligible = [...eligible, ...fallbackTasks];
-	}
-
-	// 6. In-memory phase filter
-	if (phase) {
-		const phaseLower = phase.toLowerCase();
-		eligible = eligible.filter((st: ScoredTask) => st.task.phase && st.task.phase.toLowerCase() === phaseLower);
-	}
-
-	// 7. In-memory priority filter
-	if (priority !== undefined) {
-		eligible = eligible.filter((st: ScoredTask) => st.task.priority === priority);
-	}
-
-	const total = eligible.length;
-	const paginated = eligible.slice(offset, offset + limit);
+	const paginated: ScoredTask[] = items.map((st) => ({
+		task: st.entity,
+		similarityScore: st.similarityScore,
+		keywordScore: st.keywordScore,
+		recencyScore: st.recencyScore,
+		domainScore: st.domainScore,
+		finalScore: st.finalScore
+	}));
 
 	const COLUMNS = [
 		"id",
