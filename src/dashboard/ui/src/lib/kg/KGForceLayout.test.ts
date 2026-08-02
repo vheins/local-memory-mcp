@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_ZERO_EDGE_VISIBLE_NODE_LIMIT,
 	initializeZeroEdgeOverviewLayout,
+	runForceLayout,
 	type LayoutNode
 } from "./KGForceLayout";
 
@@ -43,5 +44,20 @@ describe("initializeZeroEdgeOverviewLayout", () => {
 		expect(layoutNodes).toHaveLength(3);
 		expect(layoutNodes.every((node) => Number.isFinite(node.x) && Number.isFinite(node.y))).toBe(true);
 		expect(layoutNodes.every((node) => node.x >= 18 && node.y >= 18)).toBe(true);
+	});
+
+	it("still supports connected force layouts", () => {
+		const nodes = buildNodes(2);
+		nodes[0].x = 100;
+		nodes[0].y = 100;
+		nodes[1].x = 300;
+		nodes[1].y = 300;
+
+		const result = runForceLayout(nodes, [{ source: "node-0", target: "node-1", relation_type: "related" }], 500, 400, {
+			iterations: 1
+		});
+
+		expect(result).toHaveLength(2);
+		expect(result.every((node) => Number.isFinite(node.x) && Number.isFinite(node.y))).toBe(true);
 	});
 });
