@@ -19,6 +19,7 @@ import { buildArchitecture, renderDirTree } from "../codebase-index/services/arc
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError } from "../codebase-index/services/trace-service";
 import { blendVectorRanking } from "../codebase-index/services/vector-ranking";
+import { inferReadMode } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -35,10 +36,18 @@ import { logger } from "../utils/logger";
  * 4. (nothing)  → ARCHITECTURE (tree overview)
  */
 function inferMode(params: CodebaseReadInput): CodebaseReadMode {
-	if (params.name) return "trace";
-	if (params.filePath) return "file";
-	if (params.query !== undefined) return "search";
-	return "architecture";
+	// Shared auto-infer engine (OPT-DRY-06). `name`/`filePath` keep truthy
+	// presence — an empty symbol/file name is meaningless — while `query` uses
+	// "defined" presence so `query: ""` still routes to SEARCH (empty query
+	// returns all symbols, per rankSymbols).
+	return inferReadMode(params, {
+		rules: [
+			{ mode: "trace", fields: ["name"], presence: "truthy" },
+			{ mode: "file", fields: ["filePath"], presence: "truthy" },
+			{ mode: "search", fields: ["query"] }
+		],
+		fallback: "architecture"
+	});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

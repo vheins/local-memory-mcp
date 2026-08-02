@@ -17,6 +17,7 @@ import type { MemoryEntry, VectorStore, VectorResult } from "../types";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { McpResponse } from "../utils/mcp-response";
 import { createMcpResponse } from "../utils/mcp-response";
+import { inferReadMode } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
 import { expandQuery } from "../utils/query-expander";
 import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
@@ -71,15 +72,25 @@ function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): Mem
 
 export async function handleMemoryRead(params: unknown, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
 	const validated = MemoryReadSchema.parse(params) as MemoryReadParams;
-	const { query, id, code, ids, codes } = validated;
 
-	if (query !== undefined) {
-		return handleSearch(validated, db, vectors);
+	// Auto-infer mode from field presence via the shared helper (OPT-DRY-06):
+	//   query → SEARCH · id/code/ids/codes → DETAIL · none → RECAP
+	const mode = inferReadMode(validated, {
+		rules: [
+			{ mode: "search", fields: ["query"] },
+			{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+		],
+		fallback: "recap"
+	});
+
+	switch (mode) {
+		case "search":
+			return handleSearch(validated, db, vectors);
+		case "detail":
+			return handleDetail(validated, db);
+		default:
+			return handleRecap(validated, db);
 	}
-	if (id !== undefined || code !== undefined || ids !== undefined || codes !== undefined) {
-		return handleDetail(validated, db);
-	}
-	return handleRecap(validated, db);
 }
 
 // =====================================================================

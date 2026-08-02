@@ -1,8 +1,8 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, MEMORY_STATUS_ARCHIVED } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { collectEntityIds } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
-import { resolveEntityRef } from "../utils/entity-ref";
 import { observationText } from "./kg-archivist";
 import { MemoryDeleteSchema } from "./schemas";
 
@@ -13,39 +13,12 @@ export async function handleMemoryDelete(
 	onProgress?: (progress: number, total?: number) => void
 ): Promise<McpResponse> {
 	const validated = MemoryDeleteSchema.parse(params);
-	const { id, ids, code, codes, owner, repo, json } = validated;
+	const { id, ids, owner, repo, json } = validated;
 
-	// Resolve all identifiers to UUIDs
-	const resolvedIds: string[] = [];
-
-	// Helper: resolve a single identifier (UUID or code) to UUID
-	function resolveIdentifier(identifier: string): string {
-		return resolveEntityRef(db, "memory", identifier, owner, repo) ?? "";
-	}
-
-	// Single identifier: id (UUID or code — auto-inferred)
-	if (id) {
-		resolvedIds.push(resolveIdentifier(id));
-	}
-
-	// Single code
-	if (code) {
-		resolvedIds.push(resolveIdentifier(code));
-	}
-
-	// Bulk identifiers: ids (array of UUIDs or codes — auto-inferred per item)
-	if (ids) {
-		for (const item of ids) {
-			resolvedIds.push(resolveIdentifier(item));
-		}
-	}
-
-	// Bulk codes
-	if (codes) {
-		for (const c of codes) {
-			resolvedIds.push(resolveIdentifier(c));
-		}
-	}
+	// Resolve all identifiers (id/code/ids/codes — UUID or code, auto-inferred
+	// per item) to UUIDs via the shared helper (OPT-DRY-06). Replaces the
+	// hand-rolled resolveIdentifier closure and its `?? ""` sentinel.
+	const resolvedIds = collectEntityIds(validated, "memory", db, { owner, repo });
 
 	if (resolvedIds.length === 0) {
 		throw new Error("At least one of 'id', 'code', 'ids', or 'codes' must be provided for deletion");

@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
+import { collectEntityIds } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
-import { resolveEntityRef } from "../utils/entity-ref";
 import { observationText } from "./kg-archivist";
 import { TaskDeleteSchema } from "./schemas";
 
@@ -9,57 +9,11 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	const validated = TaskDeleteSchema.parse(args);
 	const { owner, repo, id, code, task_code, ids, codes, task_codes } = validated;
 
-	// Resolve all identifiers to UUIDs
-	const resolvedIds: string[] = [];
-
-	// Helper: resolve a single identifier (UUID or task_code) to UUID
-	function resolveIdentifier(identifier: string): string {
-		const resolved = resolveEntityRef(storage, "task", identifier, owner, repo);
-		if (!resolved) {
-			// TASK-123: restore pre-TASK-111 behavior — a falsy/unresolvable
-			// identifier must fail loudly instead of collapsing to "" and
-			// reporting a phantom success (updateTask("") affects 0 rows but
-			// the response still claims canceledCount > 0).
-			throw new Error(`Task not found: ${identifier}`);
-		}
-		return resolved;
-	}
-
-	// Single identifier: id (UUID or task_code)
-	if (id) {
-		resolvedIds.push(resolveIdentifier(id));
-	}
-
-	// Single code: code (alias for task_code)
-	if (code) {
-		resolvedIds.push(resolveIdentifier(code));
-	}
-
-	// Single task_code
-	if (task_code) {
-		resolvedIds.push(resolveIdentifier(task_code));
-	}
-
-	// Bulk identifiers: ids (array of UUIDs or task_codes)
-	if (ids) {
-		for (const item of ids) {
-			resolvedIds.push(resolveIdentifier(item));
-		}
-	}
-
-	// Bulk codes: codes (canonical array of string codes)
-	if (codes) {
-		for (const c of codes) {
-			resolvedIds.push(resolveIdentifier(c));
-		}
-	}
-
-	// Bulk codes: task_codes (backward compat alias for codes)
-	if (task_codes) {
-		for (const tc of task_codes) {
-			resolvedIds.push(resolveIdentifier(tc));
-		}
-	}
+	// Resolve all identifiers (id/code/task_code/ids/codes/task_codes — UUID or
+	// code, auto-inferred per item) to UUIDs via the shared helper (OPT-DRY-06).
+	// Unresolvable non-empty identifiers still throw from resolveEntityRef —
+	// the TASK-123 fail-loud behavior (no `?? ""` sentinel, no phantom success).
+	const resolvedIds = collectEntityIds(validated, "task", storage, { owner, repo });
 
 	if (resolvedIds.length === 0) {
 		throw new Error(

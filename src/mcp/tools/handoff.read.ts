@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { inferReadMode } from "../utils/auto-infer";
 import { HandoffReadSchema } from "./schemas";
 
 // ---------------------------------------------------------------------------
@@ -252,22 +253,34 @@ function requireOwnerRepo(owner: string, repo: string): void {
  */
 export async function handleHandoffRead(args: unknown, storage: SQLiteStore): Promise<McpResponse> {
 	const validated = HandoffReadSchema.parse(args);
-	const { id, claim, query, status, from_agent, to_agent, agent, active_only, limit, offset, owner, repo, json } =
-		validated;
+	const { id, status, from_agent, to_agent, agent, active_only, limit, offset, owner, repo, json } = validated;
+
+	// ── Auto-infer mode via the shared helper (OPT-DRY-06) ──
+	// `claim`/`agent` use truthy presence — `claim` defaults to `false` after
+	// schema parse, so "defined" would match on every call. `id` uses "defined"
+	// presence to match the identifier semantics of the other read tools.
+	const mode = inferReadMode(validated, {
+		rules: [
+			{ mode: "detail", fields: ["id"] },
+			{ mode: "claims", fields: ["claim", "agent"], presence: "truthy" },
+			{ mode: "search", fields: ["query"] }
+		],
+		fallback: "list"
+	});
 
 	// ── 1. id present → DETAIL ─────────────────────────────────────
-	if (id) {
-		return coreDetail(id, json, storage);
+	if (mode === "detail") {
+		return coreDetail(id!, json, storage);
 	}
 
 	// ── 2. claim:true or agent present → LIST CLAIMS ──────────────
-	if (claim || agent) {
+	if (mode === "claims") {
 		requireOwnerRepo(owner, repo);
 		return coreListClaims(owner, repo, agent ?? undefined, active_only, limit, offset, json, storage);
 	}
 
 	// ── 3. query present → SEARCH handoffs ───────────────────────
-	if (query !== undefined) {
+	if (mode === "search") {
 		requireOwnerRepo(owner, repo);
 		return coreListHandoffs(owner, repo, status, from_agent, to_agent, limit, offset, json, storage);
 	}

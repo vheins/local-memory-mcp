@@ -8,6 +8,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { McpResponse } from "../../utils/mcp-response";
+import { inferReadMode } from "../../utils/auto-infer";
 import { TaskReadSchema } from "../schemas";
 import { handleDetailMode } from "./detail";
 import { handleSearchMode } from "./search";
@@ -57,14 +58,26 @@ export async function handleTaskRead(args: unknown, storage: SQLiteStore, vector
 	const effectiveCode = code ?? task_code;
 	const effectiveCodes = codes ?? task_codes;
 
-	// ── Auto-infer mode ──
-	if (query !== undefined) {
+	// ── Auto-infer mode from field presence via the shared helper (OPT-DRY-06):
+	//    query → SEARCH · id/code/ids/codes → DETAIL · none → LIST
+	const mode = inferReadMode(
+		{ ...validated, code: effectiveCode, codes: effectiveCodes },
+		{
+			rules: [
+				{ mode: "search", fields: ["query"] },
+				{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+			],
+			fallback: "list"
+		}
+	);
+
+	if (mode === "search") {
 		// SEARCH mode: query present — default limit 10
 		limit = limit ?? 10;
 		return handleSearchMode(
 			owner,
 			repo,
-			query,
+			query!,
 			status,
 			phase,
 			priority,
@@ -76,13 +89,7 @@ export async function handleTaskRead(args: unknown, storage: SQLiteStore, vector
 		);
 	}
 
-	if (
-		effectiveCode !== undefined ||
-		id !== undefined ||
-		effectiveCodes !== undefined ||
-		ids !== undefined ||
-		task_codes !== undefined
-	) {
+	if (mode === "detail") {
 		// DETAIL mode: identifier present
 		return handleDetailMode(owner, repo, id, effectiveCode, ids, effectiveCodes, isJsonRequest, storage);
 	}

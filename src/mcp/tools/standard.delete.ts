@@ -1,8 +1,8 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { collectEntityIds } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
-import { resolveEntityRef } from "../utils/entity-ref";
 import { observationText } from "./kg-archivist";
 import { StandardDeleteSchema } from "./schemas";
 
@@ -12,39 +12,12 @@ export async function handleStandardDelete(
 	vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = StandardDeleteSchema.parse(params);
-	const { id, ids, code, codes, owner, repo, json } = validated;
+	const { id, ids, codes, owner, repo, json } = validated;
 
-	// Resolve all identifiers to UUIDs
-	const resolvedIds: string[] = [];
-
-	// Helper: resolve a single identifier (UUID or code) to UUID
-	function resolveIdentifier(identifier: string): string {
-		return resolveEntityRef(db, "standard", identifier, owner, repo) ?? "";
-	}
-
-	// Single identifier: id (UUID or code — auto-inferred)
-	if (id) {
-		resolvedIds.push(resolveIdentifier(id));
-	}
-
-	// Single code
-	if (code) {
-		resolvedIds.push(resolveIdentifier(code));
-	}
-
-	// Bulk identifiers: ids (array of UUIDs or codes — auto-inferred per item)
-	if (ids) {
-		for (const item of ids) {
-			resolvedIds.push(resolveIdentifier(item));
-		}
-	}
-
-	// Bulk codes
-	if (codes) {
-		for (const c of codes) {
-			resolvedIds.push(resolveIdentifier(c));
-		}
-	}
+	// Resolve all identifiers (id/code/ids/codes — UUID or code, auto-inferred
+	// per item) to UUIDs via the shared helper (OPT-DRY-06). Replaces the
+	// hand-rolled resolveIdentifier closure and its `?? ""` sentinel.
+	const resolvedIds = collectEntityIds(validated, "standard", db, { owner, repo });
 
 	// Fetch standards to verify existence and collect metadata for response
 	const existingStandards = db.standards.getByIds(resolvedIds);

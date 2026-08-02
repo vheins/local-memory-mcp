@@ -11,6 +11,7 @@ import { StandardReadSchema, StandardReadInput } from "../schemas";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { McpResponse, createMcpResponse } from "../../utils/mcp-response";
+import { inferReadMode } from "../../utils/auto-infer";
 import { fetchAggregatedKgContext } from "../kg-archivist/query";
 import { handleSearchMode } from "./search";
 import { handleDetailMode } from "./detail";
@@ -140,17 +141,25 @@ export async function handleStandardRead(
 ): Promise<McpResponse> {
 	const validated = StandardReadSchema.parse(params);
 
-	// Auto-infer mode
-	if (validated.query) {
-		return handleSearchMode(validated, db, vectors);
+	// Auto-infer mode via the shared helper (OPT-DRY-06):
+	//   query → SEARCH · id/code/ids/codes → DETAIL · none → LIST
+	// `query` uses "defined" presence — an explicit empty-string query routes
+	// to SEARCH like the other read tools (previously truthy here, so
+	// `query: ""` fell through to LIST).
+	const mode = inferReadMode(validated, {
+		rules: [
+			{ mode: "search", fields: ["query"] },
+			{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+		],
+		fallback: "list"
+	});
+
+	switch (mode) {
+		case "search":
+			return handleSearchMode(validated, db, vectors);
+		case "detail":
+			return handleDetailMode(validated, db);
+		default:
+			return handleListMode(validated, db);
 	}
-	if (
-		validated.id !== undefined ||
-		validated.code !== undefined ||
-		validated.ids !== undefined ||
-		validated.codes !== undefined
-	) {
-		return handleDetailMode(validated, db);
-	}
-	return handleListMode(validated, db);
 }
