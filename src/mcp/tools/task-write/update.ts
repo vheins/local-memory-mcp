@@ -5,7 +5,7 @@ import { UUID_REGEX } from "../../utils/uuid";
 import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveParentId, resolveDependsOn } from "../task.helpers";
 import { validateStatusTransition } from "./state-machine";
-import { WriteParams } from "./types";
+import { TaskWriteParams } from "./types";
 import {
 	buildUpdatesFromParams,
 	applyPhaseTagSync,
@@ -24,7 +24,7 @@ import {
 // ---------------------------------------------------------------------------
 
 async function coreUpdate(
-	params: WriteParams,
+	params: TaskWriteParams,
 	storage: SQLiteStore,
 	vectors: VectorStore
 ): Promise<{
@@ -198,7 +198,7 @@ async function coreUpdate(
 }
 
 export async function handleUpdate(
-	params: WriteParams,
+	params: TaskWriteParams,
 	storage: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {
@@ -266,7 +266,7 @@ export async function handleUpdate(
  * field updates, comments, coordination cleanup, and KG enrichment.
  */
 export async function handleBulkUpdateByIds(
-	params: WriteParams,
+	params: TaskWriteParams,
 	storage: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {

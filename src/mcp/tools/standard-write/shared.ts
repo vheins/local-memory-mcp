@@ -10,7 +10,7 @@ import { saveExtractions, saveStandardRelations } from "../kg-archivist/index.js
 
 // ── Shared types ─────────────────────────────────────────────────────────
 
-export type WriteParams = {
+export type StandardWriteParams = {
 	// Common
 	owner?: string;
 	repo?: string;

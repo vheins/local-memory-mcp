@@ -11,7 +11,7 @@ export type TaskWriteOptions = {
 	elicit?: ElicitationRequestHandler;
 };
 
-export type WriteParams = {
+export type TaskWriteParams = {
 	owner: string;
 	repo: string;
 	json: boolean;

@@ -6,13 +6,13 @@ import { resolveEntityCode } from "../../utils/code-generator";
 import { enqueueTask } from "../../embedding-queue";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from "../task.helpers";
 import { applyDecisionRefs } from "./effects";
-import { WriteParams } from "./types";
+import { TaskWriteParams } from "./types";
 
 // ---------------------------------------------------------------------------
 // Single CREATE
 // ---------------------------------------------------------------------------
 
-function coreCreate(params: WriteParams, storage: SQLiteStore): { task: Task; code: string } {
+function coreCreate(params: TaskWriteParams, storage: SQLiteStore): { task: Task; code: string } {
 	const { owner, repo } = params;
 
 	if (!params.phase || !params.title || !params.description) {
@@ -83,7 +83,7 @@ function coreCreate(params: WriteParams, storage: SQLiteStore): { task: Task; co
 }
 
 export async function handleCreateSingle(
-	params: WriteParams,
+	params: TaskWriteParams,
 	storage: SQLiteStore,
 	_vectors: VectorStore
 ): Promise<McpResponse> {

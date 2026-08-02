@@ -8,12 +8,12 @@ import { logger } from "../../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { resolveEntityRef } from "../../utils/entity-ref.js";
 import { enqueueStandard } from "../../embedding-queue/index.js";
-import { WriteParams, resolveStandardParentId } from "./shared.js";
+import { StandardWriteParams, resolveStandardParentId } from "./shared.js";
 
 // ── Core update logic — returns plain data, does NOT wrap in McpResponse ──
 
 export async function coreUpdate(
-	params: WriteParams,
+	params: StandardWriteParams,
 	db: SQLiteStore,
 	_vectors: VectorStore
 ): Promise<{ id: string; code: string; title: string; repo: string; updatedFields: string[] }> {
@@ -134,7 +134,7 @@ export async function coreUpdate(
 // ── Single update handler (returns McpResponse) ─────────────────────────
 
 export async function handleUpdateSingle(
-	params: WriteParams,
+	params: StandardWriteParams,
 	db: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {

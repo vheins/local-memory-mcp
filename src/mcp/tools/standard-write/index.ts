@@ -16,7 +16,7 @@ import { handleUpdateSingle } from "./update.js";
 import { handleBulk } from "./bulk.js";
 
 // Re-export types and sub-modules
-export type { WriteParams, BulkResult } from "./shared.js";
+export type { StandardWriteParams, BulkResult } from "./shared.js";
 export { handleCreateSingle } from "./create.js";
 export { handleUpdateSingle } from "./update.js";
 export { handleBulk } from "./bulk.js";

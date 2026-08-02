@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, VectorStore } from "../../types";
 import { enqueueTask } from "../../embedding-queue";
-import { WriteParams } from "./types";
+import { TaskWriteParams } from "./types";
 
 // ---------------------------------------------------------------------------
 // Field-level update logic, validation
@@ -10,7 +10,7 @@ import { WriteParams } from "./types";
 /**
  * Builds the set of updatable fields from params, excluding control fields.
  */
-export function buildUpdatesFromParams(params: WriteParams): Record<string, unknown> {
+export function buildUpdatesFromParams(params: TaskWriteParams): Record<string, unknown> {
 	const { status, phase, tags, agent, role, model, est_tokens, commit_id, changed_files, ...restUpdates } = params;
 	const updates: Record<string, unknown> = { ...restUpdates };
 	if (status !== undefined) updates.status = status;
@@ -53,7 +53,7 @@ export function applyPhaseTagSync(
  * Modifies finalUpdates.metadata in place.
  */
 export function applyDecisionRefsToUpdates(
-	params: WriteParams,
+	params: TaskWriteParams,
 	existingTask: Task,
 	finalUpdates: Record<string, unknown>
 ): void {

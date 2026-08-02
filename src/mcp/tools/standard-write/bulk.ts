@@ -7,11 +7,11 @@ import { CodingStandardEntry, VectorStore } from "../../types/index.js";
 import { SQLiteStore } from "../../storage/sqlite.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { enqueueStandard } from "../../embedding-queue/index.js";
-import { WriteParams, BulkResult, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
+import { StandardWriteParams, BulkResult, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
 
 // ── Bulk handler ─────────────────────────────────────────────────────────
 
-export async function handleBulk(params: WriteParams, db: SQLiteStore, _vectors: VectorStore): Promise<McpResponse> {
+export async function handleBulk(params: StandardWriteParams, db: SQLiteStore, _vectors: VectorStore): Promise<McpResponse> {
 	const items = params.standards ?? [];
 	const results: BulkResult[] = [];
 	const batchCodes = new Set<string>();
@@ -25,7 +25,7 @@ export async function handleBulk(params: WriteParams, db: SQLiteStore, _vectors:
 			owner: (raw.owner as string) ?? params.owner,
 			repo: (raw.repo as string) ?? params.repo,
 			json: params.json
-		} as unknown as WriteParams;
+		} as unknown as StandardWriteParams;
 
 		try {
 			const incomingVersion = (std.version as string) || "1.0.0";

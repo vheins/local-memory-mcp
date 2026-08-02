@@ -4,7 +4,7 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { extractAcceptedElicitationContent } from "../../elicitation";
 import { handleCreateSingle } from "./create";
 import { executeBulkOperation } from "./bulk-executor";
-import { TaskWriteOptions, WriteParams } from "./types";
+import { TaskWriteOptions, TaskWriteParams } from "./types";
 
 // ---------------------------------------------------------------------------
 // Re-exports for public API
@@ -89,7 +89,7 @@ function buildMissingTaskSchema(task: Record<string, unknown>) {
 }
 
 export async function handleInteractive(
-	params: WriteParams,
+	params: TaskWriteParams,
 	storage: SQLiteStore,
 	vectors: VectorStore,
 	options: TaskWriteOptions
@@ -124,7 +124,7 @@ export async function handleInteractive(
 	}
 
 	// Now proceed with create using completed data
-	const createParams: WriteParams = {
+	const createParams: TaskWriteParams = {
 		...params,
 		owner: params.owner || (completedDraft.owner as string) || "",
 		repo: params.repo || (completedDraft.repo as string) || "",
@@ -144,7 +144,7 @@ export async function handleInteractive(
 // ---------------------------------------------------------------------------
 
 export async function handleBulk(
-	params: WriteParams,
+	params: TaskWriteParams,
 	storage: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {

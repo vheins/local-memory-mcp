@@ -7,12 +7,12 @@ import { CodingStandardEntry, VectorStore } from "../../types/index.js";
 import { SQLiteStore } from "../../storage/sqlite.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
 import { enqueueStandard } from "../../embedding-queue/index.js";
-import { WriteParams, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
+import { StandardWriteParams, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared.js";
 
 // ── Core create logic — returns plain data, does NOT wrap in McpResponse ──
 
 export async function coreCreate(
-	params: WriteParams,
+	params: StandardWriteParams,
 	db: SQLiteStore,
 	_vectors: VectorStore
 ): Promise<{ id: string; code: string; title: string; repo: string }> {
@@ -106,7 +106,7 @@ export async function coreCreate(
 // ── Single create handler (returns McpResponse) ──────────────────────────
 
 export async function handleCreateSingle(
-	params: WriteParams,
+	params: StandardWriteParams,
 	db: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {

@@ -6,10 +6,11 @@ import { handleCreateSingle } from "./create";
 import { handleUpdate, handleBulkUpdateByIds } from "./update";
 import { handleBulk } from "./bulk";
 import { handleInteractive } from "./bulk"; // handleInteractive lives in bulk.ts
-import { TaskWriteOptions, WriteParams } from "./types";
+import { TaskWriteOptions, TaskWriteParams } from "./types";
 
-// Re-export types for backward compatibility
-export type { TaskWriteOptions, WriteParams } from "./types";
+// Re-export write-parameter types (renamed WriteParams → TaskWriteParams for
+// cross-tool naming consistency; TaskWriteOptions is unchanged)
+export type { TaskWriteOptions, TaskWriteParams } from "./types";
 export type { ItemInfer } from "./types";
 
 // Re-export individual handler functions for direct consumption
@@ -50,7 +51,7 @@ export async function handleTaskWrite(
 	vectors: VectorStore,
 	options: TaskWriteOptions = {}
 ): Promise<McpResponse> {
-	const parsed = TaskWriteSchema.parse(args) as unknown as WriteParams;
+	const parsed = TaskWriteSchema.parse(args) as unknown as TaskWriteParams;
 
 	// ── 1. BULK mode ──
 	if (parsed.tasks && parsed.tasks.length > 0) {

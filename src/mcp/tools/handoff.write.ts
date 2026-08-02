@@ -11,7 +11,7 @@ import { logger } from "../utils/logger";
 // Types
 // ---------------------------------------------------------------------------
 
-type WriteParams = {
+type HandoffWriteParams = {
 	// CREATE fields
 	owner?: string;
 	repo?: string;
@@ -42,7 +42,7 @@ type WriteParams = {
 // ---------------------------------------------------------------------------
 
 async function coreCreate(
-	params: WriteParams,
+	params: HandoffWriteParams,
 	storage: SQLiteStore
 ): Promise<{ handoff: Record<string, unknown>; contentSummary: string }> {
 	if (!params.owner) {
@@ -153,7 +153,7 @@ async function coreCreate(
 // ---------------------------------------------------------------------------
 
 async function coreUpdate(
-	params: WriteParams,
+	params: HandoffWriteParams,
 	storage: SQLiteStore
 ): Promise<{ result: Record<string, unknown>; contentSummary: string }> {
 	if (!params.id) {
@@ -239,7 +239,7 @@ async function coreUpdate(
 // ---------------------------------------------------------------------------
 
 export async function handleHandoffWrite(params: Record<string, unknown>, storage: SQLiteStore): Promise<McpResponse> {
-	const validated = HandoffWriteSchema.parse(params) as unknown as WriteParams;
+	const validated = HandoffWriteSchema.parse(params) as unknown as HandoffWriteParams;
 
 	// ── UPDATE mode: id present ──
 	if (validated.id) {
