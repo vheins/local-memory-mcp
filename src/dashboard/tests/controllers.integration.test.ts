@@ -532,15 +532,24 @@ describe("Dashboard Controllers", () => {
 			const id = ((await created.json()) as Record<string, any>).data.id as string;
 			withWriteSpy.mockClear();
 
-			const res = await fetch(`${baseUrl}/api/memories/action`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					data: { type: "memory", attributes: { action: "delete", ids: [id] } }
-				})
-			});
-			expect(res.status).toBe(200);
-			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+			// TASK-160 / FIX-164: the compound bulkAction body routes through the
+			// EXCLUSIVE path (withExclusiveWrite) so the getByIds→purge sequence
+			// serializes cross-process; it no longer crosses the fast-path withWrite.
+			const exclusiveSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
+			try {
+				const res = await fetch(`${baseUrl}/api/memories/action`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						data: { type: "memory", attributes: { action: "delete", ids: [id] } }
+					})
+				});
+				expect(res.status).toBe(200);
+				expect(exclusiveSpy).toHaveBeenCalledTimes(1);
+				expect(withWriteSpy).not.toHaveBeenCalled();
+			} finally {
+				exclusiveSpy.mockRestore();
+			}
 		});
 
 		it("POST /api/standards (create) acquires the write lock", async () => {
@@ -564,15 +573,25 @@ describe("Dashboard Controllers", () => {
 		});
 
 		it("POST /api/standards/import acquires the write lock", async () => {
-			const res = await fetch(`${baseUrl}/api/standards/import`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					standards: [{ title: "Imported standard", content: "imported body" }]
-				})
-			});
-			expect(res.status).toBe(200);
-			expect(withWriteSpy).toHaveBeenCalledTimes(1);
+			// TASK-160 / FIX-164: the compound import loop routes through the
+			// EXCLUSIVE path (withExclusiveWrite) so the getById/getByCode →
+			// update/insert per-iteration sequence serializes cross-process; it
+			// no longer crosses the fast-path withWrite.
+			const exclusiveSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
+			try {
+				const res = await fetch(`${baseUrl}/api/standards/import`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						standards: [{ title: "Imported standard", content: "imported body" }]
+					})
+				});
+				expect(res.status).toBe(200);
+				expect(exclusiveSpy).toHaveBeenCalledTimes(1);
+				expect(withWriteSpy).not.toHaveBeenCalled();
+			} finally {
+				exclusiveSpy.mockRestore();
+			}
 		});
 
 		it("PUT + DELETE /api/standards/:id acquire the write lock", async () => {

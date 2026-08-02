@@ -92,11 +92,12 @@ export async function runStartupMaintenance(
 	logger.info("[MaintenanceJob] Starting startup maintenance sweep");
 
 	// Write-lock invariant (TASK-102): the whole sweep (decay, archiving,
-	// pruning, run-record) mutates the DB and must serialize with MCP tool
-	// writes via the file lock. All sweep steps are synchronous SQL work, so
-	// lock hold time stays in the ms range; the "ran recently" check above is
-	// a pure read and stays outside the lock.
-	const result = await db.withWrite((): MaintenanceResult => {
+	// pruning, run-record) is a compound, multi-transaction mutation and must
+	// serialize with cross-process writers via the exclusive file lock
+	// (OPT-PERF-09: routed through withExclusiveWrite). All sweep steps are
+	// synchronous SQL work, so lock hold time stays in the ms range; the "ran
+	// recently" check above is a pure read and stays outside the lock.
+	const result = await db.withExclusiveWrite((): MaintenanceResult => {
 		// 1. Apply biological decay
 		const decay = applyDecay(db.db, decayOptions);
 

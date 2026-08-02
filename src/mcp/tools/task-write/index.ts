@@ -53,39 +53,49 @@ export async function handleTaskWrite(
 ): Promise<McpResponse> {
 	const parsed = TaskWriteSchema.parse(args) as unknown as TaskWriteParams;
 
-	// ── 1. BULK mode ──
-	if (parsed.tasks && parsed.tasks.length > 0) {
-		return handleBulk(parsed, storage, vectors);
-	}
+	// Read-modify-write atomicity (TASK-159 / OPT-PERF-09 review): task-write
+	// is a guarded compound handler — read-gate (existing status / children
+	// gate / duplicate-code check), code allocation (generateNextCode), the
+	// mutation transaction, and the completion archive are separate steps. The
+	// fast-path withWrite no longer serializes the whole body, so concurrent
+	// processes could double-complete a task (double archive), collide on
+	// task_code (UNIQUE constraint), or race the status gate. Route the whole
+	// body through the exclusive lock.
+	return storage.withExclusiveWrite(async () => {
+		// ── 1. BULK mode ──
+		if (parsed.tasks && parsed.tasks.length > 0) {
+			return handleBulk(parsed, storage, vectors);
+		}
 
-	// ── 2. INTERACTIVE mode ──
-	if (parsed.interactive) {
-		return handleInteractive(parsed, storage, vectors, options);
-	}
+		// ── 2. INTERACTIVE mode ──
+		if (parsed.interactive) {
+			return handleInteractive(parsed, storage, vectors, options);
+		}
 
-	// ── 2b. BULK UPDATE by ids (array of UUIDs) ──
-	if (parsed.ids && parsed.ids.length > 0) {
-		return handleBulkUpdateByIds(parsed, storage, vectors);
-	}
+		// ── 2b. BULK UPDATE by ids (array of UUIDs) ──
+		if (parsed.ids && parsed.ids.length > 0) {
+			return handleBulkUpdateByIds(parsed, storage, vectors);
+		}
 
-	// ── 3. CREATE mode: phase + title + description (optionally with code/task_code) ──
-	// Check CREATE before code-only UPDATE since task_code is now aliased to code
-	if (parsed.phase && parsed.title && parsed.description) {
-		return handleCreateSingle(parsed, storage, vectors);
-	}
+		// ── 3. CREATE mode: phase + title + description (optionally with code/task_code) ──
+		// Check CREATE before code-only UPDATE since task_code is now aliased to code
+		if (parsed.phase && parsed.title && parsed.description) {
+			return handleCreateSingle(parsed, storage, vectors);
+		}
 
-	// ── 4. UPDATE mode: id or code present ──
-	if (parsed.id || parsed.code) {
-		return handleUpdate(parsed, storage, vectors);
-	}
+		// ── 4. UPDATE mode: id or code present ──
+		if (parsed.id || parsed.code) {
+			return handleUpdate(parsed, storage, vectors);
+		}
 
-	// ── Nothing matched ──
-	throw new Error(
-		"Could not infer operation. Provide:\n" +
-			"  - `phase` + `title` + `description` for CREATE\n" +
-			"  - `id` (UUID) or `code` + fields for UPDATE\n" +
-			"  - `id` or `code` + `status` for STATUS UPDATE\n" +
-			"  - `interactive: true` for guided creation\n" +
-			"  - `tasks[]` for BULK create/update"
-	);
+		// ── Nothing matched ──
+		throw new Error(
+			"Could not infer operation. Provide:\n" +
+				"  - `phase` + `title` + `description` for CREATE\n" +
+				"  - `id` (UUID) or `code` + fields for UPDATE\n" +
+				"  - `id` or `code` + `status` for STATUS UPDATE\n" +
+				"  - `interactive: true` for guided creation\n" +
+				"  - `tasks[]` for BULK create/update"
+		);
+	});
 }

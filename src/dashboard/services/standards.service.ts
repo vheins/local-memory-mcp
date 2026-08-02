@@ -123,7 +123,7 @@ export const StandardsService = {
 		const updated: string[] = [];
 		let vectorFailures = 0;
 
-		await db.withWrite(() => {
+		await db.withExclusiveWrite(() => {
 			for (const standard of standards) {
 				const existing =
 					db.standards.getById(standard.id) || (standard.code ? db.standards.getByCode(standard.code) : null);
@@ -269,7 +269,7 @@ export const StandardsService = {
 	},
 
 	async bulkAction(action: string, ids: string[], updates?: Record<string, unknown>): Promise<number> {
-		return db.withWrite(async () => {
+		return db.withExclusiveWrite(async () => {
 			let n: number;
 			if (action === "delete") {
 				// Route through the shared purge + cleanup contract (OPT-DRY-03):

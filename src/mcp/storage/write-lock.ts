@@ -1,8 +1,26 @@
 /**
- * File-based write lock for SQLite concurrent access protection.
+ * Write mutual exclusion for the SQLite store.
  *
- * Uses proper-lockfile to ensure only one process writes to the DB at a time.
- * Reads are never locked — only writes acquire the lock.
+ * OPT-PERF-09: SQLite already provides single-writer mutual exclusion via
+ * BEGIN IMMEDIATE transactions (base.ts) + busy_timeout (sqlite.ts). A
+ * full proper-lockfile acquire/release (fs ops) per write call — serialized
+ * through an intra-process promise chain — was redundant overhead on every
+ * write path.
+ *
+ * Mutual exclusion is now split in two:
+ *
+ *   - `withLock()`  → FAST path. Runs the body inline with NO proper-lockfile
+ *     and NO promise chain. Every individual mutation is an atomic BEGIN
+ *     IMMEDIATE transaction; better-sqlite3 is synchronous, so a transaction
+ *     can never span an await and concurrent calls cannot interleave
+ *     mid-transaction. SQLite's own single-writer protocol + busy_timeout
+ *     excludes concurrent writers (same process or cross-process).
+ *
+ *   - `withExclusiveLock()` → PROPER-LOCKFILE path. Kept for genuinely
+ *     cross-process COMPOUND mutations: multi-transaction sequences (a body
+ *     of several `db.transaction(...).immediate()` calls) that must not
+ *     interleave with another process's sequence. Examples: the maintenance
+ *     sweep, codebase indexing writer, and task→memory archival.
  */
 import lockfile from "proper-lockfile";
 import path from "path";
@@ -16,9 +34,12 @@ export class WriteLock {
 	private lockTarget: string;
 	private locked = false;
 	/**
-	 * Intra-process acquisition queue: resolves when the previous withLock
-	 * section (acquire → fn → release) fully completes. Serializes concurrent
-	 * non-reentrant acquisitions so only one holder proceeds (TASK-064).
+	 * Intra-process acquisition queue for the EXCLUSIVE path: resolves when
+	 * the previous withExclusiveLock section (acquire → fn → release) fully
+	 * completes. Serializes concurrent non-reentrant acquisitions so only one
+	 * holder proceeds (TASK-064). proper-lockfile is not reentrant and two
+	 * racing acquisitions would otherwise burn the full 50s retry window and
+	 * throw ELOCKED.
 	 */
 	private tail: Promise<unknown> = Promise.resolve();
 
@@ -33,56 +54,40 @@ export class WriteLock {
 	}
 
 	/**
-	 * Acquire the write lock. Waits up to 15s for other processes to release.
-	 */
-	async acquire(): Promise<void> {
-		await lockfile.lock(this.lockTarget, {
-			stale: LOCK_STALE_MS,
-			retries: {
-				retries: LOCK_RETRY_COUNT,
-				minTimeout: LOCK_RETRY_DELAY_MS,
-				maxTimeout: LOCK_RETRY_DELAY_MS
-			},
-			realpath: false
-		});
-		this.locked = true;
-	}
-
-	/**
-	 * Release the write lock.
-	 */
-	async release(): Promise<void> {
-		if (!this.locked) return;
-		try {
-			await lockfile.unlock(this.lockTarget, { realpath: false });
-		} catch {
-			// Ignore unlock errors (lock may have already expired)
-		}
-		this.locked = false;
-	}
-
-	/**
-	 * Run a synchronous write function under the lock.
-	 * Guarantees lock is always released, even on error.
+	 * Run a write synchronously WITHOUT acquiring a proper-lockfile.
 	 *
-	 * Reentrant: if this process already holds the lock (e.g., the router wraps
-	 * the whole tool call in withWrite and a handler also wraps its archival in
-	 * withWrite), the inner call runs directly — the outer withLock keeps the
-	 * lock held until it resolves, so there is exactly one acquire/release pair
-	 * per outermost call. proper-lockfile is NOT reentrant, so without this
-	 * guard a nested withWrite would self-deadlock until the stale timeout.
+	 * This is the default write path (SQLiteStore.withWrite / tool router /
+	 * dashboard services). Mutual exclusion is provided by SQLite's BEGIN
+	 * IMMEDIATE + busy_timeout (base.ts / sqlite.ts) — every mutation is an
+	 * atomic synchronous transaction, so there is nothing for a file lock to
+	 * add on a single-transaction write.
 	 *
-	 * Concurrent-safe (TASK-064 / MEM-475): two withLock calls racing before the
-	 * first acquire resolves both used to see `locked === false` and each start
-	 * their own proper-lockfile acquisition — one would win and the other would
-	 * burn the full 50s retry window and throw ELOCKED. All non-inline
-	 * acquisitions are therefore serialized through a promise chain (`tail`):
-	 * each caller waits for the previous acquire→fn→release section to fully
-	 * finish before it starts its own, so exactly one holder proceeds.
+	 * Reentrant by construction: there is no lock state to re-enter; nested
+	 * withWrite calls just run their bodies inline.
 	 */
 	async withLock<T>(fn: () => Promise<T> | T): Promise<T> {
+		return await fn();
+	}
+
+	/**
+	 * Run a COMPOUND write sequence under the proper-lockfile.
+	 *
+	 * Reserves this for genuinely cross-process compound mutations — a body
+	 * that performs MULTIPLE BEGIN IMMEDIATE transactions which must not
+	 * interleave with another process's same-class sequence (maintenance
+	 * sweep, indexing writer batches, task→memory archival). Each such
+	 * section pays one acquire/release pair.
+	 *
+	 * Reentrant: if this process already holds the exclusive lock, the inner
+	 * call runs directly — the outer withExclusiveLock keeps it held until it
+	 * resolves (proper-lockfile is NOT reentrant).
+	 *
+	 * Concurrent-safe (TASK-064 / MEM-475): racing acquisitions are serialized
+	 * through the `tail` promise chain so exactly one proceeds.
+	 */
+	async withExclusiveLock<T>(fn: () => Promise<T> | T): Promise<T> {
 		if (this.locked) {
-			// We already hold the lock — run inline under the outer acquisition.
+			// We already hold the exclusive lock — run inline.
 			return await fn();
 		}
 
@@ -104,6 +109,36 @@ export class WriteLock {
 			() => undefined
 		);
 		return result;
+	}
+
+	/**
+	 * Acquire the exclusive proper-lockfile. Waits up to 50s for other
+	 * processes to release.
+	 */
+	async acquire(): Promise<void> {
+		await lockfile.lock(this.lockTarget, {
+			stale: LOCK_STALE_MS,
+			retries: {
+				retries: LOCK_RETRY_COUNT,
+				minTimeout: LOCK_RETRY_DELAY_MS,
+				maxTimeout: LOCK_RETRY_DELAY_MS
+			},
+			realpath: false
+		});
+		this.locked = true;
+	}
+
+	/**
+	 * Release the exclusive proper-lockfile.
+	 */
+	async release(): Promise<void> {
+		if (!this.locked) return;
+		try {
+			await lockfile.unlock(this.lockTarget, { realpath: false });
+		} catch {
+			// Ignore unlock errors (lock may have already expired)
+		}
+		this.locked = false;
 	}
 
 	/**

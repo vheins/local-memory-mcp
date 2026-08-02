@@ -91,7 +91,7 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 	if (renameMap.size === 0) return 0;
 
 	await retryDbWrite(async () => {
-		await db.withWrite(async () => {
+		await db.withExclusiveWrite(async () => {
 			for (const [newPath, oldPath] of renameMap) {
 				db.codebaseFiles.transferFile(repo, oldPath, newPath);
 				db.codebaseSymbols.transferSymbolsFilePath(repo, oldPath, newPath);
@@ -129,7 +129,7 @@ export async function writeParseBatch(
 			const batch = fileInserts.slice(storeOffset, storeOffset + batchSize);
 			try {
 				await retryDbWrite(async () => {
-					await db.withWrite(async () => {
+					await db.withExclusiveWrite(async () => {
 						for (const fi of batch) {
 							db.codebaseFiles.upsertFile(fi);
 						}
@@ -168,7 +168,7 @@ export async function writeParseBatch(
 
 		try {
 			await retryDbWrite(async () => {
-				await db.withWrite(async () => {
+				await db.withExclusiveWrite(async () => {
 					for (const fp of reindexedPaths) {
 						db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
 					}
@@ -188,7 +188,7 @@ export async function writeParseBatch(
 				const symBatch = symbolInserts.slice(symOffset, symOffset + batchSize);
 				try {
 					await retryDbWrite(async () => {
-						await db.withWrite(async () => {
+						await db.withExclusiveWrite(async () => {
 							db.codebaseSymbols.bulkUpsertSymbols(symBatch);
 						});
 					}, `symbol-insert-batch-${symOffset}`);
@@ -234,7 +234,7 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 
 	try {
 		await retryDbWrite(async () => {
-			await db.withWrite(async () => {
+			await db.withExclusiveWrite(async () => {
 				let cleanedCount = 0;
 				for (const fp of stalePaths) {
 					db.codebaseSymbols.deleteSymbolsByFile(repo, fp);

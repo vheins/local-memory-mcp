@@ -106,13 +106,43 @@ describe("WriteLock", () => {
 		});
 	});
 
-	describe("withLock", () => {
+	describe("withLock (fast path — no proper-lockfile)", () => {
+		it("should run the function inline without acquiring or releasing the file lock", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			const lock = new WriteLock(dbPath);
+			const fn = vi.fn().mockResolvedValue("result");
+
+			// Fast path keeps the withWrite call sites unpriced by any fs ops
+			// (OPT-PERF-09): BEGIN IMMEDIATE + busy_timeout is the mutex.
+			const result = await lock.withLock(fn);
+
+			expect(result).toBe("result");
+			expect(fn).toHaveBeenCalled();
+			expect(lockfile.lock).not.toHaveBeenCalled();
+			expect(lockfile.unlock).not.toHaveBeenCalled();
+		});
+
+		it("is reentrant by construction — no lock state to re-enter", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			const lock = new WriteLock(dbPath);
+
+			const result = await lock.withLock(function inner() {
+				// Removing file-lock re-entrance entirely; a nested write just runs.
+				return lock.withLock(() => "nested-result");
+			});
+
+			expect(result).toBe("nested-result");
+			expect(lockfile.lock).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("withExclusiveLock", () => {
 		it("should acquire, run function, and release", async () => {
 			vi.mocked(fs.existsSync).mockReturnValue(true);
 			const lock = new WriteLock(dbPath);
 			const fn = vi.fn().mockResolvedValue("result");
 
-			const result = await lock.withLock(fn);
+			const result = await lock.withExclusiveLock(fn);
 
 			expect(result).toBe("result");
 			expect(lockfile.lock).toHaveBeenCalled();
@@ -126,11 +156,55 @@ describe("WriteLock", () => {
 			const error = new Error("Function failed");
 			const fn = vi.fn().mockRejectedValue(error);
 
-			await expect(lock.withLock(fn)).rejects.toThrow("Function failed");
+			await expect(lock.withExclusiveLock(fn)).rejects.toThrow("Function failed");
 
 			expect(lockfile.lock).toHaveBeenCalled();
 			expect(fn).toHaveBeenCalled();
 			expect(lockfile.unlock).toHaveBeenCalled();
+		});
+
+		it("serializes concurrent exclusive bodies (reader-gate atomicity, TASK-159)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			const lock = new WriteLock(dbPath);
+
+			// Guarded handlers (conflict-check → insert; status gate → archive)
+			// rely on withExclusiveLock to run their whole body atomically. The
+			// `tail` chain must let exactly ONE body be in flight at a time even
+			// when several writers race: otherwise two processes could both pass
+			// a read-gate before either writes (duplicate / double-archive).
+			let inFlight = 0;
+			let maxInFlight = 0;
+			const completed: string[] = [];
+			const run = (name: string) =>
+				lock.withExclusiveLock(async () => {
+					inFlight++;
+					maxInFlight = Math.max(maxInFlight, inFlight);
+					await new Promise((r) => setTimeout(r, 5));
+					inFlight--;
+					completed.push(name);
+				});
+
+			await Promise.all([run("a"), run("b"), run("c")]);
+
+			expect(maxInFlight).toBe(1);
+			expect(completed).toHaveLength(3);
+		});
+
+		it("reenters inline when already holding the exclusive lock (nested archive)", async () => {
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+			vi.mocked(lockfile.lock).mockClear();
+			const lock = new WriteLock(dbPath);
+
+			const result = await lock.withExclusiveLock(function outer() {
+				// A sibling archive/guard nested inside the outer exclusive section
+				// must run inline without a second proper-lockfile acquisition.
+				return lock.withExclusiveLock(() => "inner-result");
+			});
+
+			expect(result).toBe("inner-result");
+			// Exactly one acquire/release for the whole nested section (no ELOCKED).
+			expect(lockfile.lock).toHaveBeenCalledTimes(1);
+			expect(lockfile.unlock).toHaveBeenCalledTimes(1);
 		});
 	});
 

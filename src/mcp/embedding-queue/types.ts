@@ -104,6 +104,20 @@ export interface QueueCounts {
 	total: number;
 }
 
+/** Embedding batch latency distribution (worker.ts, OPT-OBS-01). */
+export interface EmbeddingLatencyStats {
+	/** Number of embedded batches sampled. */
+	count: number;
+	/** Average batch latency (ms). */
+	avgMs: number;
+	/** Median batch latency (ms). */
+	p50Ms: number;
+	/** 95th-percentile batch latency (ms). */
+	p95Ms: number;
+	/** Slowest batch (ms) — the worker-backlog / hot-DB-query signal. */
+	maxMs: number;
+}
+
 /** Worker + queue observability snapshot. */
 export interface EmbeddingWorkerStats extends QueueCounts {
 	processed: number;
@@ -111,6 +125,8 @@ export interface EmbeddingWorkerStats extends QueueCounts {
 	poisoned: number;
 	lastBatchSize: number;
 	lastRunAt: string | null;
+	/** Embedding batch latency (OPT-OBS-01). */
+	embedLatency: EmbeddingLatencyStats;
 	running: boolean;
 	started: boolean;
 	modelReady: boolean;

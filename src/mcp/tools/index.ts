@@ -30,11 +30,13 @@
  * what memory.write → memory-write/ already does.
  */
 
+import { performance } from "node:perf_hooks";
 import { McpServer, CallToolResult, fromJsonSchema } from "@modelcontextprotocol/server";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { SessionContext } from "../session";
 import { logger } from "../utils/logger";
+import { metrics } from "../utils/metrics";
 import { normalizeToolArguments } from "../utils/normalize-args";
 import { SamplingRequestHandler } from "../sampling";
 import { ElicitationRequestHandler } from "../elicitation";
@@ -203,6 +205,10 @@ export function registerAllTools(
 			async (args, extra) => {
 				const rawArgs = (args ?? {}) as Record<string, unknown>;
 				const normalizedArgs = normalizeToolArguments(rawArgs, session) as Record<string, unknown>;
+				// Dispatch instrumentation (OPT-OBS-01): measure the full tool
+				// call with performance.now() so slow tools are visible in logs
+				// AND the in-process metrics registry (p50/p95 per tool).
+				const toolStartMs = performance.now();
 
 				logger.info(`[Tool] ${toolName}`, {
 					repo: (normalizedArgs?.repo as string) || "unknown",
@@ -236,24 +242,47 @@ export function registerAllTools(
 				// memory-write conflict check is a synchronous TF-vector search
 				// (memory.vector.checkConflicts), not ONNX. Do not reintroduce
 				// awaited model inference inside write handlers.
+				//
+				// Write-handler duration timing (OPT-OBS-01 / TASK-161): wrapped
+				// in its own try/finally so the duration is measured even if the
+				// handler throws — a slow write handler is a queue-latency red
+				// flag for every write tool.
 				const executeFn = () => executor(normalizedArgs, store, vectors, executorExtra);
 
 				let result: McpResponse;
 				try {
 					if (isWrite) {
-						result = await store.withWrite(executeFn);
+						const writeStartMs = performance.now();
+						try {
+							result = await store.withWrite(executeFn);
+						} finally {
+							// Write-handler duration (TASK-161 / OPT-PERF-09): the
+							// fast-path withWrite holds no file lock, so this
+							// measures handler dispatch latency, not lock hold.
+							metrics.recordWriteHandler(toolName, performance.now() - writeStartMs);
+						}
 					} else {
 						result = await executeFn();
 					}
 				} catch (err) {
-					logger.error(`[Tool] ${toolName} failed`, { error: String(err) });
 					// Canonical error envelope — shared with router.ts so both
 					// transports surface identical shapes (OPT-CODE-01).
+					// Instrumented on the error path too: a fast-failing tool
+					// must still show up in per-tool latency stats.
+					const errDurationMs = performance.now() - toolStartMs;
+					metrics.recordTool(toolName, errDurationMs);
+					logger.error(`[Tool] ${toolName} failed`, {
+						error: String(err),
+						durationMs: Math.round(errDurationMs * 100) / 100
+					});
 					return toCallToolResult(toErrorResponse(err));
 				}
 
+				const durationMs = performance.now() - toolStartMs;
+				metrics.recordTool(toolName, durationMs);
 				logger.info(`[Tool] ${toolName} result`, {
-					repo: (normalizedArgs?.repo as string) || "unknown"
+					repo: (normalizedArgs?.repo as string) || "unknown",
+					durationMs: Math.round(durationMs * 100) / 100
 				});
 
 				// Action logging — exactly one row per tool call, read AND write

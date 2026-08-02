@@ -194,16 +194,15 @@ export async function executeBulkOperation(
 				// Archive for completed — awaited BEFORE the tool response resolves
 				// so the task_archive memory rows exist the moment the caller
 				// observes the write (deterministic for the bulk path, no
-				// setImmediate race). Each archive runs under withWrite: the
-				// archival performs memory INSERT + outbox enqueue via
-				// handleMemoryWrite, so it must never run unlocked. The write
-				// lock is reentrant (WriteLock.withLock), so when the router
-				// already holds the outer withWrite the inner acquisition is a
-				// no-op — no nested locking. Best-effort: a per-task archival
-				// failure is logged and does not fail the item or the batch.
+				// setImmediate race). Each archive is a compound mutation (task
+				// update + memory INSERT + outbox enqueue via handleMemoryWrite)
+				// and runs under the exclusive file lock (withExclusiveWrite,
+				// OPT-PERF-09) so it never interleaves with another process's
+				// same-class sequence. Best-effort: a per-task archival failure is
+				// logged and does not fail the item or the batch.
 				if (itemUpdates.status === "completed" && existing.status !== "completed") {
 					try {
-						await storage.withWrite(() => archiveTaskToMemory(resolvedId, repo, storage, vectors));
+						await storage.withExclusiveWrite(() => archiveTaskToMemory(resolvedId, repo, storage, vectors));
 					} catch (err) {
 						logger.error("Failed to archive task to memory", { taskId: resolvedId, error: String(err) });
 					}

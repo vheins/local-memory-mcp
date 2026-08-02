@@ -45,15 +45,25 @@ export async function handleMemoryWrite(
 
 	const json = (params.json as boolean) ?? false;
 
-	switch (mode) {
-		case "bulk":
-			return handleBulk(params.memories as Record<string, unknown>[], db, vectors, json, params);
-		case "acknowledge":
-			return handleAcknowledge(params, db, json);
-		case "update":
-			return handleUpdate(params, db, vectors, json);
-		case "create":
-		default:
-			return handleCreate(params, db, vectors, json);
-	}
+	// Read-modify-write atomicity (TASK-159 / OPT-PERF-09 review): memory-write
+	// is a guarded compound handler — conflict check (DB read via
+	// searchBySimilarity), supersede archive, code allocation (generateNextCode)
+	// and INSERT are separate transactions. The fast-path withWrite no longer
+	// serializes the whole body, so concurrent processes could bypass the
+	// conflict gate / collide on codes. Route the whole body through the
+	// exclusive lock so the read-gate and its dependent writes cannot interleave
+	// with another process's same-class sequence.
+	return db.withExclusiveWrite(async () => {
+		switch (mode) {
+			case "bulk":
+				return handleBulk(params.memories as Record<string, unknown>[], db, vectors, json, params);
+			case "acknowledge":
+				return handleAcknowledge(params, db, json);
+			case "update":
+				return handleUpdate(params, db, vectors, json);
+			case "create":
+			default:
+				return handleCreate(params, db, vectors, json);
+		}
+	});
 }

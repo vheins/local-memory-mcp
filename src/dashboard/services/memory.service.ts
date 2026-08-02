@@ -151,7 +151,7 @@ export const MemoryService = {
 	},
 
 	async bulkAction(action: string, ids: string[], updates?: Record<string, unknown>): Promise<number> {
-		return db.withWrite(async () => {
+		return db.withExclusiveWrite(async () => {
 			let n: number;
 			if (action === "delete") {
 				// Route through the shared purge + cleanup contract (OPT-DRY-03):

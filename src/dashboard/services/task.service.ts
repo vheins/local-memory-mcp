@@ -198,7 +198,7 @@ export const TaskService = {
 		let count = 0;
 
 		if (action === "delete") {
-			count = await db.withWrite(async () => {
+			count = await db.withExclusiveWrite(async () => {
 				// Route through the shared purge + cleanup contract (OPT-DRY-03):
 				// soft-cancel + claim release + handoff expiry + vector removal +
 				// queue_jobs purge + child detach + KG cleanup — identical to

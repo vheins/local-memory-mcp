@@ -23,10 +23,12 @@
  * Startup also backfills rows with missing/stale vectors and sweeps finished
  * rows (purge).
  */
+import { performance } from "node:perf_hooks";
 import { RealVectorStore } from "../storage/vectors";
 import { SQLiteStore } from "../storage/sqlite";
 import { saveExtractions, saveStandardRelations, saveTaskRelations } from "../tools/kg-archivist";
 import { logger } from "../utils/logger";
+import { DurationSeries, metrics } from "../utils/metrics";
 import {
 	EMBEDDING_QUEUE_BACKFILL_CAP,
 	EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE,
@@ -79,6 +81,8 @@ export class EmbeddingWorker {
 	private idleStreak = 0;
 	/** Consecutive non-empty claim cycles — drives the deep-queue backoff (TASK-069). */
 	private nonEmptyStreak = 0;
+	/** Embedding batch latency samples (OPT-OBS-01) — surfaced as p50/p95. */
+	private readonly embedLatency = new DurationSeries();
 	private readonly stats = {
 		processed: 0,
 		failed: 0,
@@ -252,7 +256,14 @@ export class EmbeddingWorker {
 		}
 
 		if (resolved.length > 0) {
+			// Batch embedding latency (OPT-OBS-01): measure the ONNX batch and
+			// record it into BOTH the worker's own series (exposed via
+			// getStats().embedLatency) and the process metrics registry.
+			const embedStartMs = performance.now();
 			const embedded = await this.vectors.embed(resolved.map((r) => r.payload.text));
+			const embedMs = performance.now() - embedStartMs;
+			this.embedLatency.add(embedMs);
+			metrics.recordEmbedLatency(embedMs);
 			for (let i = 0; i < resolved.length; i++) {
 				const { job, payload } = resolved[i];
 				try {
@@ -400,9 +411,17 @@ export class EmbeddingWorker {
 
 	getStats(): EmbeddingWorkerStats {
 		const counts = this.outbox.countByStatus();
+		const latency = this.embedLatency.snapshot();
 		return {
 			...counts,
 			...this.stats,
+			embedLatency: {
+				count: latency.count,
+				avgMs: latency.avgMs,
+				p50Ms: latency.p50Ms,
+				p95Ms: latency.p95Ms,
+				maxMs: latency.maxMs
+			},
 			running: this.running,
 			started: this.started,
 			modelReady: this.modelReady,

@@ -2,11 +2,12 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { db, mcpClient, startTime } from "../lib/context";
+import { db, mcpClient, startTime, embeddingWorker } from "../lib/context";
 import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
 import { condenseRecentActions } from "../lib/helpers";
 import type { RecentAction } from "../lib/interfaces";
 import { parseRepoInput } from "../../mcp/utils/normalize";
+import { metrics } from "../../mcp/utils/metrics";
 import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
 import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
@@ -82,6 +83,41 @@ export class SystemController {
 			const stats = repo ? db.system.getDashboardStats(owner || "", repo) : db.system.getGlobalDashboardStats();
 			return jsonApiRes(stats, "system-stats");
 		});
+	}
+
+	/**
+	 * Runtime metrics (OPT-OBS-01): in-memory dispatch + worker latency
+	 * distributions merged with the embedding worker snapshot. Purely
+	 * observational — no DB access, so the standard `db.refresh()` lifecycle
+	 * is skipped to keep high-frequency polling cheap.
+	 */
+	static async getMetrics(req: express.Request, res: express.Response) {
+		await handleController(
+			req,
+			res,
+			() => {
+				const snapshot = metrics.snapshot();
+				const worker = embeddingWorker.getStats();
+				return jsonApiRes(
+					{
+						// NIT (OPT-OBS-01): explicit process marker so consumers
+						// can distinguish empty-by-design (tools/writeHandler are
+						// always empty in the dashboard process — dispatch
+						// timings live in the MCP child process) from
+						// empty-by-no-traffic.
+						process: "dashboard",
+						uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
+						pid: process.pid,
+						tools: snapshot.tools,
+						writeHandler: snapshot.writeHandler,
+						embedLatency: snapshot.embedLatency,
+						worker
+					},
+					"system-metrics"
+				);
+			},
+			{ refresh: false }
+		);
 	}
 
 	static async getRecentActions(req: express.Request, res: express.Response) {

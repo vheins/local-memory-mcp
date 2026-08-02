@@ -13,6 +13,30 @@ vi.mock("../../dashboard/lib/context", async () => {
 		db,
 		vectors,
 		mcpClient: { start: vi.fn(), stop: vi.fn(), isConnected: vi.fn(() => false), getPendingCount: vi.fn(() => 0) },
+		// OPT-OBS-01: SystemController.getMetrics imports embeddingWorker and
+		// calls getStats() — required stub, else any /metrics test fails on
+		// undefined.getStats. Shape mirrors EmbeddingWorkerStats.
+		embeddingWorker: {
+			getStats: vi.fn(() => ({
+				pending: 0,
+				claimed: 0,
+				done: 0,
+				poison: 0,
+				total: 0,
+				processed: 0,
+				failed: 0,
+				poisoned: 0,
+				lastBatchSize: 0,
+				lastRunAt: null,
+				embedLatency: { count: 1, avgMs: 42, p50Ms: 40, p95Ms: 60, maxMs: 70 },
+				running: false,
+				started: false,
+				modelReady: true,
+				pollIntervalMs: 5000,
+				batchSize: 8,
+				leaseMs: 60_000
+			}))
+		},
 		logger: {
 			info: vi.fn(),
 			warn: vi.fn(),
@@ -139,5 +163,36 @@ describe("Dashboard System API", () => {
 		expect(timeBody.data.attributes.daily.added).toBeGreaterThanOrEqual(2);
 		expect(timeBody.data.attributes.overall.completed).toBeGreaterThanOrEqual(1);
 		expect(timeBody.data.attributes.overall.tokens).toBeGreaterThanOrEqual(120);
+	});
+
+	it("returns system metrics with worker embed latency and skips DB refresh (OPT-OBS-01)", async () => {
+		const { db } = await import("../../dashboard/lib/context");
+		// refresh:false must mean SystemController.getMetrics never touches the DB.
+		const refreshSpy = vi.spyOn(db, "refresh");
+
+		// System routes mount under `/api` (routes/index.ts + server.ts), so the
+		// endpoint serves at /api/metrics — same prefix as /api/stats below.
+		const res = await fetch(`${baseUrl}/api/metrics`);
+		expect(res.ok).toBe(true);
+		const body = (await res.json()) as any;
+		expect(body.data.type).toBe("system-metrics");
+		const attrs = body.data.attributes;
+
+		expect(attrs.process).toBe("dashboard");
+		expect(typeof attrs.uptimeSeconds).toBe("number");
+		expect(typeof attrs.pid).toBe("number");
+		// Dispatch-side series are empty-by-design in the dashboard process;
+		// they are populated by the MCP child process (process-local registry).
+		expect(attrs.tools).toEqual({});
+		expect(attrs.writeHandler.total.count).toBe(0);
+		expect(Array.isArray(attrs.writeHandler.byTool) ? true : typeof attrs.writeHandler.byTool).toBe("object");
+		// embedLatency mirrors the (stubbed) worker stats.
+		expect(attrs.embedLatency.count).toBeGreaterThanOrEqual(0);
+
+		const worker = attrs.worker;
+		expect(worker.embedLatency).toEqual({ count: 1, avgMs: 42, p50Ms: 40, p95Ms: 60, maxMs: 70 });
+
+		expect(refreshSpy).not.toHaveBeenCalled();
+		refreshSpy.mockRestore();
 	});
 });

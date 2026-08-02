@@ -30,26 +30,34 @@ export async function handleStandardWrite(
 ): Promise<McpResponse> {
 	const validated = StandardWriteSchema.parse(params) as unknown as Parameters<typeof handleCreateSingle>[0];
 
-	// ── Bulk mode ──
-	if (validated.standards && validated.standards.length > 0) {
-		return handleBulk(validated, db, vectors);
-	}
+	// Read-modify-write atomicity (TASK-159 / OPT-PERF-09 review): standard-write
+	// create/update run a conflict check (DB read), code allocation
+	// (generateNextCode) and INSERT in separate transactions. The fast-path
+	// withWrite no longer serializes the whole body, so concurrent processes
+	// could bypass the STANDARD_CONFLICT gate or collide on codes. Route the
+	// whole body through the exclusive lock.
+	return db.withExclusiveWrite(async () => {
+		// ── Bulk mode ──
+		if (validated.standards && validated.standards.length > 0) {
+			return handleBulk(validated, db, vectors);
+		}
 
-	// ── Update mode: id or code + any fields ──
-	if (validated.id || validated.code) {
-		return handleUpdateSingle(validated, db, vectors);
-	}
+		// ── Update mode: id or code + any fields ──
+		if (validated.id || validated.code) {
+			return handleUpdateSingle(validated, db, vectors);
+		}
 
-	// ── Create mode: content present (no id/code) ──
-	if (validated.content && validated.name) {
-		return handleCreateSingle(validated, db, vectors);
-	}
+		// ── Create mode: content present (no id/code) ──
+		if (validated.content && validated.name) {
+			return handleCreateSingle(validated, db, vectors);
+		}
 
-	// ── Nothing matched ──
-	throw new Error(
-		"Could not infer operation. Provide:\n" +
-			"  - `standards[]` for BULK CREATE\n" +
-			"  - `name` + `content` + `tags` + `metadata` for single CREATE\n" +
-			"  - `id`/`code` + fields for UPDATE"
-	);
+		// ── Nothing matched ──
+		throw new Error(
+			"Could not infer operation. Provide:\n" +
+				"  - `standards[]` for BULK CREATE\n" +
+				"  - `name` + `content` + `tags` + `metadata` for single CREATE\n" +
+				"  - `id`/`code` + fields for UPDATE"
+		);
+	});
 }

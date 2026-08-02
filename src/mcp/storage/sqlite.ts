@@ -129,14 +129,33 @@ export class SQLiteStore {
 	}
 
 	/**
-	 * Execute a write operation under the file lock.
-	 * This is the ONLY way writes should be performed.
+	 * Execute a (single-transaction) write operation, relying on SQLite's
+	 * BEGIN IMMEDIATE + busy_timeout for mutual exclusion.
+	 *
+	 * FAST PATH (OPT-PERF-09): no proper-lockfile acquire/release and no
+	 * intra-process promise chain — each mutation is an atomic synchronous
+	 * BEGIN IMMEDIATE transaction, so SQLite's own single-writer protocol
+	 * already excludes concurrent writers.
 	 *
 	 * @example
 	 * await db.withWrite(() => db.tasks.insertTask(task));
 	 */
 	async withWrite<T>(fn: () => Promise<T> | T): Promise<T> {
 		return this.lock.withLock(fn);
+	}
+
+	/**
+	 * Execute a COMPOUND write sequence under the proper-lockfile — reserved
+	 * for genuinely cross-process compound mutations (a body of several
+	 * BEGIN IMMEDIATE transactions that must not interleave with another
+	 * process's same-class sequence), e.g. the maintenance sweep, codebase
+	 * indexing writer, and task→memory archival.
+	 *
+	 * @example
+	 * await db.withExclusiveWrite(() => { db.tasks.deleteTask(id); db.actions.prune(); });
+	 */
+	async withExclusiveWrite<T>(fn: () => Promise<T> | T): Promise<T> {
+		return this.lock.withExclusiveLock(fn);
 	}
 
 	/**

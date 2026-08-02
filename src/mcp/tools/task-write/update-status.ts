@@ -83,11 +83,10 @@ export function handleCoordinationCleanup(
  * Callers await this BEFORE returning the tool response so the task_archive
  * memory rows exist the moment the caller observes the write (deterministic
  * for tests and agents alike — no race window, no deferred work leaking into
- * later requests). Each archive runs under withWrite: the archival performs
- * memory INSERT + outbox enqueue via handleMemoryWrite (task.helpers.ts), so
- * it must never run unlocked. The write lock is reentrant (WriteLock.withLock),
- * so when the router already holds the outer withWrite the inner acquisition is
- * a no-op — no nested locking, no deadlock.
+ * later requests). Each archive is a compound mutation (task update + memory
+ * INSERT + outbox enqueue via handleMemoryWrite), so it runs under the
+ * exclusive file lock (withExclusiveWrite, OPT-PERF-09) to never interleave
+ * with another process's same-class sequence.
  *
  * The archival is intentionally cheap: task_archive skips the conflict check
  * (memory-write/helpers.ts) and ONNX embedding + KG extraction run later via
@@ -102,7 +101,7 @@ export async function archiveCompletedTasks(
 ): Promise<void> {
 	for (const taskId of completedTaskIds) {
 		try {
-			await storage.withWrite(() => archiveTaskToMemory(taskId, repo, storage, vectors));
+			await storage.withExclusiveWrite(() => archiveTaskToMemory(taskId, repo, storage, vectors));
 		} catch (err) {
 			logger.error("Failed to archive task to memory", { taskId, error: String(err) });
 		}
