@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { ZodError } from "zod";
 import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
-import { McpResponse } from "../utils/mcp-response";
+import { McpResponse, getPrimaryTextContent } from "../utils/mcp-response";
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -176,20 +175,20 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 		const taskId = db.tasks.getTaskByCode("test", REPO, "TASK-003")?.id;
 		expect(taskId).toBeDefined();
 
-		await expect(
-			router("tools/call", {
-				name: "task-write",
-				arguments: {
-					owner: "test",
-					repo: REPO,
-					id: taskId,
-					status: "in_progress",
-					agent: "TestAgent",
-					role: "testing",
-					est_tokens: 50
-				}
-			})
-		).rejects.toThrow("comment is required when changing task status");
+		const res = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				id: taskId,
+				status: "in_progress",
+				agent: "TestAgent",
+				role: "testing",
+				est_tokens: 50
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("comment is required when changing task status");
 	});
 
 	it("allows task-write without est_tokens", async () => {
@@ -650,13 +649,15 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 
 		// Empty-string item in ids must be rejected by the schema (TASK-123) —
 		// previously `{ ids: [""] }` collapsed to "" and reported
-		// canceledCount:1 without deleting anything (phantom success).
-		await expect(
-			router("tools/call", {
-				name: "task-delete",
-				arguments: { owner: "test", repo: REPO, ids: [""] }
-			})
-		).rejects.toBeInstanceOf(ZodError);
+		// canceledCount:1 without deleting anything (phantom success). The
+		// transport converts the thrown ZodError into the canonical isError
+		// envelope (OPT-CODE-01), preserving the `Error:` message text.
+		const emptyIdsRes = await router("tools/call", {
+			name: "task-delete",
+			arguments: { owner: "test", repo: REPO, ids: [""] }
+		});
+		expect(emptyIdsRes.isError).toBe(true);
+		expect(getPrimaryTextContent(emptyIdsRes)).toContain("Error:");
 
 		// Nothing may have been canceled by the failed delete
 		const after = db.tasks.getTasksByRepo("test", REPO);
@@ -665,13 +666,14 @@ describe("MCP Local Memory - Consolidated Task Tools E2E", () => {
 
 		// Non-empty but unresolvable identifiers must also fail loudly
 		// (resolveIdentifier restore of pre-TASK-111 behavior) instead of
-		// collapsing to "" and reporting a phantom cancel.
-		await expect(
-			router("tools/call", {
-				name: "task-delete",
-				arguments: { owner: "test", repo: REPO, ids: ["MISSING-TASK-CODE"] }
-			})
-		).rejects.toThrow("Task not found: MISSING-TASK-CODE");
+		// collapsing to "" and reporting a phantom cancel. The transport turns
+		// the throw into the canonical isError envelope (OPT-CODE-01).
+		const res = await router("tools/call", {
+			name: "task-delete",
+			arguments: { owner: "test", repo: REPO, ids: ["MISSING-TASK-CODE"] }
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("Task not found: MISSING-TASK-CODE");
 
 		const afterMissing = db.tasks.getTasksByRepo("test", REPO);
 		expect(afterMissing).toHaveLength(before.length);

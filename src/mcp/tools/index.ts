@@ -58,6 +58,7 @@ import { handleAgentContext } from "./agent-context";
 import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
 import { McpResponse } from "../utils/mcp-response";
+import { toErrorResponse } from "../utils/mcp-error";
 import { extractActionLog, logAction } from "../utils/action-log";
 import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
 
@@ -246,10 +247,9 @@ export function registerAllTools(
 					}
 				} catch (err) {
 					logger.error(`[Tool] ${toolName} failed`, { error: String(err) });
-					return {
-						content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }],
-						isError: true
-					};
+					// Canonical error envelope — shared with router.ts so both
+					// transports surface identical shapes (OPT-CODE-01).
+					return toCallToolResult(toErrorResponse(err));
 				}
 
 				logger.info(`[Tool] ${toolName} result`, {

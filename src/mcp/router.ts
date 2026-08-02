@@ -30,6 +30,7 @@ import { complete, type CompletionRequest } from "./completion";
 import { normalizeToolArguments } from "./utils/normalize-args";
 import { buildExecutors } from "./tools";
 import { collectAffectedResourceUris, normalizePageLimit, WRITE_TOOLS } from "./utils/tool-plumbing";
+import { toErrorResponse } from "./utils/mcp-error";
 import { SQLiteStore } from "./storage/sqlite";
 import { VectorStore } from "./types";
 import { SamplingRequestHandler } from "./sampling";
@@ -176,16 +177,25 @@ export function createRouter(
 		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
 
 		let result: unknown;
-		// Lock-scope invariant (TASK-064 / MEM-475): write handlers must not
-		// await ONNX/async work under the lock — embeddings + KG enrichment run
-		// via the outbox worker (TASK-013); the memory conflict check is a sync
-		// TF-vector search. Lock hold time = DB work only.
-		const executeToolLogic = () => executor(args, db, vectors, { onProgress, signal });
+		try {
+			// Lock-scope invariant (TASK-064 / MEM-475): write handlers must not
+			// await ONNX/async work under the lock — embeddings + KG enrichment run
+			// via the outbox worker (TASK-013); the memory conflict check is a sync
+			// TF-vector search. Lock hold time = DB work only.
+			const executeToolLogic = () => executor(args, db, vectors, { onProgress, signal });
 
-		if (isWrite) {
-			result = await db.withWrite(executeToolLogic);
-		} else {
-			result = await executeToolLogic();
+			if (isWrite) {
+				result = await db.withWrite(executeToolLogic);
+			} else {
+				result = await executeToolLogic();
+			}
+		} catch (err) {
+			// Convert a thrown handler error into the SAME canonical envelope the
+			// native SDK transport produces (tools/index.ts) — OPT-CODE-01. This
+			// eliminates the legacy "log + rethrow raw exception" divergence so
+			// both transports surface identical shapes for the same failure class.
+			logger.error(`[Tool] ${toolName} failed`, { repo, error: String(err) });
+			return toErrorResponse(err);
 		}
 
 		// Log only { repo } — never the full result payload, so memory/task

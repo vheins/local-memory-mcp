@@ -3,6 +3,7 @@ import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
+import { getPrimaryTextContent } from "../utils/mcp-response";
 
 describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-read)", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
@@ -137,41 +138,41 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-read
 		expect(detailRes.structuredContent.title).toBe("Test Task 102");
 	});
 
-	it("should throw error if memory not found", async () => {
+	it("should return isError envelope if memory not found", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "memory-read",
-				arguments: { id: fakeId, owner: "test", repo: REPO }
-			})
-		).rejects.toThrow(`Memory not found: ${fakeId}`);
+		const res = await router("tools/call", {
+			name: "memory-read",
+			arguments: { id: fakeId, owner: "test", repo: REPO }
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain(`Memory not found: ${fakeId}`);
 	});
 
-	it("should throw error if task not found", async () => {
+	it("should return isError envelope if task not found", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "task-read",
-				arguments: { repo: REPO, owner: "test", id: fakeId }
-			})
-		).rejects.toThrow(`Task not found: ${fakeId}`);
+		const res = await router("tools/call", {
+			name: "task-read",
+			arguments: { repo: REPO, owner: "test", id: fakeId }
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain(`Task not found: ${fakeId}`);
 
-		await expect(
-			router("tools/call", {
-				name: "task-read",
-				arguments: { repo: REPO, owner: "test", task_code: "NON-EXISTENT" }
-			})
-		).rejects.toThrow(`Task not found: NON-EXISTENT in repo ${REPO}`);
+		const res2 = await router("tools/call", {
+			name: "task-read",
+			arguments: { repo: REPO, owner: "test", task_code: "NON-EXISTENT" }
+		});
+		expect(res2.isError).toBe(true);
+		expect(getPrimaryTextContent(res2)).toContain(`Task not found: NON-EXISTENT in repo ${REPO}`);
 	});
 
-	it("should throw error if coding standard not found", async () => {
+	it("should return isError envelope if coding standard not found", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "standard-read",
-				arguments: { id: fakeId, owner: "test", repo: REPO }
-			})
-		).rejects.toThrow(`Coding standard not found: ${fakeId}`);
+		const res = await router("tools/call", {
+			name: "standard-read",
+			arguments: { id: fakeId, owner: "test", repo: REPO }
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain(`Coding standard not found: ${fakeId}`);
 	});
 
 	it("should fetch memory details by code passed as id", async () => {

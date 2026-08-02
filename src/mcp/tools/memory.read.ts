@@ -17,6 +17,7 @@ import type { MemoryEntry, VectorStore, VectorResult } from "../types";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { McpResponse } from "../utils/mcp-response";
 import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
+import { parseArgs } from "../utils/mcp-error";
 import { inferReadMode } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
 import { expandQuery } from "../utils/query-expander";
@@ -61,7 +62,9 @@ function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): Mem
 // =====================================================================
 
 export async function handleMemoryRead(params: unknown, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
-	const validated = MemoryReadSchema.parse(params);
+	// Centralized validation (OPT-CODE-01): throws the friendly owner/repo-aware
+	// message instead of a raw ZodError; transport catch → toErrorResponse.
+	const validated = parseArgs(MemoryReadSchema, params);
 
 	// Auto-infer mode from field presence via the shared helper (OPT-DRY-06):
 	//   query → SEARCH · id/code/ids/codes → DETAIL · none → RECAP

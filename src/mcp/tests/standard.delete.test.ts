@@ -125,18 +125,18 @@ describe("MCP Local Memory - Standard Delete", () => {
 
 	// Unified not-found policy (OPT-CODE-04): single target → throw (fail
 	// loud); bulk → skip + report partial execution.
-	it("should throw when deleting a non-existent single standard", async () => {
+	it("should surface isError envelope when deleting a non-existent single standard", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "standard-delete",
-				arguments: {
-					owner: "test",
-					repo: REPO,
-					id: fakeId
-				}
-			})
-		).rejects.toThrow("Coding standard not found");
+		const res = await router("tools/call", {
+			name: "standard-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				id: fakeId
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("Coding standard not found");
 	});
 
 	it("should skip + report a missing standard in a bulk delete (partial execution)", async () => {

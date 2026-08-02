@@ -3,6 +3,7 @@ import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore } from "../types";
+import { getPrimaryTextContent } from "../utils/mcp-response";
 
 describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 	let db: Awaited<ReturnType<typeof createTestStore>>;
@@ -73,17 +74,17 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 	});
 
 	it("rejects completion-summary handoffs without transfer context", async () => {
-		await expect(
-			router("tools/call", {
-				name: "handoff-write",
-				arguments: {
-					repo: REPO,
-					owner: "test",
-					from_agent: "agent-a",
-					summary: "Completed implementation and tests"
-				}
-			})
-		).rejects.toThrow(/completed-work summaries/);
+		const res = await router("tools/call", {
+			name: "handoff-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				from_agent: "agent-a",
+				summary: "Completed implementation and tests"
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("completed-work summaries");
 	});
 
 	it("updates handoff status so stale queue items can be closed", async () => {

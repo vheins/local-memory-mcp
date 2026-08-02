@@ -292,17 +292,17 @@ describe("MCP Local Memory - memory-write (Create, Update, Acknowledge, Bulk)", 
 		});
 		const memoryId = createRes.structuredContent.id;
 
-		await expect(
-			router("tools/call", {
-				name: "memory-write",
-				arguments: {
-					id: memoryId,
-					acknowledge: "invalid_status",
-					owner: "test",
-					repo: REPO
-				}
-			})
-		).rejects.toThrow();
+		const res = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				id: memoryId,
+				acknowledge: "invalid_status",
+				owner: "test",
+				repo: REPO
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("acknowledge");
 	});
 
 	// ─── BULK mixed operations ───────────────────────────────────────────
@@ -434,35 +434,35 @@ describe("MCP Local Memory - memory-write (Create, Update, Acknowledge, Bulk)", 
 	// ─── Error cases ─────────────────────────────────────────────────────
 
 	it("should reject CREATE with metadata-like title", async () => {
-		await expect(
-			router("tools/call", {
-				name: "memory-write",
-				arguments: {
-					type: "code_fact",
-					title: "[agent: test | 2026-01-01] Metadata in Title",
-					content: "Title contains metadata patterns which should be rejected.",
-					importance: 3,
-					scope: { owner: "test", repo: REPO },
-					agent: "test-agent",
-					model: "test-model"
-				}
-			})
-		).rejects.toThrow("Title appears to contain metadata");
+		const res = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				type: "code_fact",
+				title: "[agent: test | 2026-01-01] Metadata in Title",
+				content: "Title contains metadata patterns which should be rejected.",
+				importance: 3,
+				scope: { owner: "test", repo: REPO },
+				agent: "test-agent",
+				model: "test-model"
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("Title appears to contain metadata");
 	});
 
 	it("should reject UPDATE for non-existent memory", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "memory-write",
-				arguments: {
-					id: fakeId,
-					title: "No Op",
-					owner: "test",
-					repo: REPO
-				}
-			})
-		).rejects.toThrow("Memory not found");
+		const res = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				id: fakeId,
+				title: "No Op",
+				owner: "test",
+				repo: REPO
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("Memory not found");
 	});
 
 	it("should infer operation correctly: content→CREATE, id+fields→UPDATE, id+acknowledge→ACKNOWLEDGE", async () => {
@@ -560,18 +560,18 @@ describe("decision flat fields in memory-write", () => {
 	});
 
 	it("should throw error if context/rationale provided without type=decision", async () => {
-		await expect(
-			router("tools/call", {
-				name: "memory-write",
-				arguments: {
-					type: "code_fact",
-					title: "Wrong Type",
-					context: "This should not work.",
-					rationale: "Because type is code_fact, not decision.",
-					scope: { owner: "test", repo: REPO }
-				}
-			})
-		).rejects.toThrow(/type.*decision/i);
+		const res = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				type: "code_fact",
+				title: "Wrong Type",
+				context: "This should not work.",
+				rationale: "Because type is code_fact, not decision.",
+				scope: { owner: "test", repo: REPO }
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toMatch(/type.*decision/i);
 	});
 
 	it("should include alternatives in auto-generated content", async () => {
@@ -648,16 +648,16 @@ describe("session flat fields in memory-write", () => {
 	});
 
 	it("should throw error if key_decisions/next_steps provided without type=task_archive", async () => {
-		await expect(
-			router("tools/call", {
-				name: "memory-write",
-				arguments: {
-					type: "code_fact",
-					title: "Wrong Type",
-					key_decisions: ["This should not work."],
-					scope: { owner: "test", repo: REPO }
-				}
-			})
-		).rejects.toThrow(/type.*task_archive/i);
+		const res = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				type: "code_fact",
+				title: "Wrong Type",
+				key_decisions: ["This should not work."],
+				scope: { owner: "test", repo: REPO }
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toMatch(/type.*task_archive/i);
 	});
 });

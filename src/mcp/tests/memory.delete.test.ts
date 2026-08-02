@@ -183,19 +183,20 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 	// ─── Error cases ─────────────────────────────────────────────────────
 
 	// Unified not-found policy (OPT-CODE-04): single target → throw (fail
-	// loud); bulk → skip + report partial execution.
-	it("should throw when deleting a non-existent single memory", async () => {
+	// loud); bulk → skip + report partial execution. The transport converts the
+	// thrown error into the canonical isError envelope (OPT-CODE-01).
+	it("should surface isError envelope when deleting a non-existent single memory", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "memory-delete",
-				arguments: {
-					id: fakeId,
-					owner: "test",
-					repo: REPO
-				}
-			})
-		).rejects.toThrow("Memory not found");
+		const res = await router("tools/call", {
+			name: "memory-delete",
+			arguments: {
+				id: fakeId,
+				owner: "test",
+				repo: REPO
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("Memory not found");
 	});
 
 	it("should skip + report a missing memory in a bulk delete (partial execution)", async () => {
@@ -234,15 +235,15 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 		expect(stored!.status).toBe("archived");
 	});
 
-	it("should throw error when no identifier provided", async () => {
-		await expect(
-			router("tools/call", {
-				name: "memory-delete",
-				arguments: {
-					owner: "test",
-					repo: REPO
-				}
-			})
-		).rejects.toThrow();
+	it("should surface isError envelope when no identifier provided", async () => {
+		const res = await router("tools/call", {
+			name: "memory-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("must be provided for deletion");
 	});
 });

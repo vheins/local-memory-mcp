@@ -283,18 +283,18 @@ describe("MCP Local Memory - memory-read (Search, Detail, Recap)", () => {
 		expect(getPrimaryTextContent(detailRes)).toContain("Bulk detail — 2");
 	});
 
-	it("should throw error for DETAIL of non-existent memory", async () => {
+	it("should return isError envelope for DETAIL of non-existent memory", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
-		await expect(
-			router("tools/call", {
-				name: "memory-read",
-				arguments: {
-					id: fakeId,
-					owner: "test",
-					repo: REPO
-				}
-			})
-		).rejects.toThrow("Memory not found");
+		const res = await router("tools/call", {
+			name: "memory-read",
+			arguments: {
+				id: fakeId,
+				owner: "test",
+				repo: REPO
+			}
+		});
+		expect(res.isError).toBe(true);
+		expect(getPrimaryTextContent(res)).toContain("Memory not found");
 	});
 
 	// ─── RECAP mode ──────────────────────────────────────────────────────

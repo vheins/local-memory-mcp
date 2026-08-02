@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
+import { parseArgs } from "../utils/mcp-error";
 import {
 	ClaimListSchema,
 	ClaimReleaseSchema,
@@ -118,19 +119,9 @@ export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 }
 
 export async function handleHandoffList(args: unknown, storage: SQLiteStore) {
-	const parsed = HandoffListSchema.safeParse(args);
-	if (!parsed.success) {
-		const missing = parsed.error.issues
-			.filter((i) => i.path.some((p) => p === "owner" || p === "repo"))
-			.map((i) => i.message)
-			.filter(Boolean);
-		const msg =
-			missing.length > 0
-				? `Missing required fields: ${missing.join("; ")}. Pass owner/repo explicitly or configure MCP workspace roots so they can be auto-inferred.`
-				: `Validation error: ${parsed.error.message}`;
-		return { content: [{ type: "text" as const, text: msg }], isError: true };
-	}
-	const validated = parsed.data;
+	// Centralized validation (OPT-CODE-01): throws on failure — the transport
+	// catch converts it to the canonical toErrorResponse envelope.
+	const validated = parseArgs(HandoffListSchema, args);
 	const { owner, repo, status, from_agent, to_agent, limit, offset, json } = validated;
 
 	const handoffs = storage.handoffs.listHandoffs({

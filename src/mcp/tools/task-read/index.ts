@@ -8,6 +8,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { McpResponse } from "../../utils/mcp-response";
+import { parseArgs } from "../../utils/mcp-error";
 import { inferReadMode } from "../../utils/auto-infer";
 import { TaskReadSchema } from "../schemas";
 import { handleDetailMode } from "./detail";
@@ -22,20 +23,10 @@ export { handleListMode } from "./list";
 // ── Main handler ──────────────────────────────────────────────────────────
 
 export async function handleTaskRead(args: unknown, storage: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
-	const parsed = TaskReadSchema.safeParse(args);
-	if (!parsed.success) {
-		const missing = parsed.error.issues
-			.filter((i) => i.path.some((p) => p === "owner" || p === "repo"))
-			.map((i) => i.message)
-			.filter(Boolean);
-		const msg =
-			missing.length > 0
-				? `Missing required fields: ${missing.join("; ")}. Pass owner/repo explicitly or configure MCP workspace roots so they can be auto-inferred.`
-				: `Validation error: ${parsed.error.message}`;
-		return { content: [{ type: "text" as const, text: msg }], isError: true };
-	}
-
-	const validated = parsed.data;
+	// Centralized validation (OPT-CODE-01): throws on failure — the transport
+	// catch converts it to the canonical toErrorResponse envelope. The
+	// per-tool safeParse + manual isError special-casing is gone.
+	const validated = parseArgs(TaskReadSchema, args);
 	const {
 		owner,
 		repo,
