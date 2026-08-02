@@ -1,3 +1,35 @@
+/**
+ * ── File naming convention in this directory (TASK-094) ───────────────────
+ *
+ * `src/mcp/tools/` intentionally mixes two naming styles:
+ *
+ *   1. Kebab-case subdirectories — the CANONICAL home for handler logic:
+ *      memory-write/, standard-read/, standard-write/, task-read/,
+ *      task-write/, kg-archivist/, schemas/. All NEW code and new imports
+ *      must target these paths.
+ *
+ *   2. Dotted legacy files (memory.read.ts, task.read.ts, claim.manage.ts,
+ *      standard.delete.ts, handoff.read.ts, codebase.read.ts, ...) — kept
+ *      as-is, no mass rename. They are either thin backward-compat
+ *      re-exporters for domains that were split into a kebab-case dir
+ *      (memory.write → memory-write/, task.read → task-read/,
+ *      standard.read → standard-read/, standard.write → standard-write/,
+ *      task.write → task-write/) or the original single-file implementation
+ *      for domains not yet split (memory.read, claim.manage, handoff.*,
+ *      *.delete, memory.synthesize, ...).
+ *
+ * WHY the dotted files stay (DECISION: accept-and-document, no codemod):
+ * their dotted names mirror the legacy dotted tool names (memory.read ↔
+ * memory-read). The router normalizes tool names dots→hyphens
+ * (router.ts: `String(name).replace(/\./g, "-")`) and existing tests and
+ * imports reference these file paths directly, so a mass rename would break
+ * the legacy tool-name→file mapping for zero functional gain.
+ *
+ * Migration path for future domain splits: move logic into a kebab-case
+ * subdirectory and leave a thin re-exporter at the old dotted path — exactly
+ * what memory.write → memory-write/ already does.
+ */
+
 import { McpServer, CallToolResult, fromJsonSchema } from "@modelcontextprotocol/server";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
