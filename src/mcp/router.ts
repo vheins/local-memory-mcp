@@ -23,7 +23,7 @@
 import { listResources, listResourceTemplates, readResource } from "./resources";
 import { SessionContext } from "./session";
 import { logger } from "./utils/logger";
-import { extractActionLog, logAction } from "./utils/action-log";
+import { logToolAction } from "./utils/action-log";
 import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
@@ -203,11 +203,11 @@ export function createRouter(
 		logger.info(`[Tool] ${toolName} result`, { repo });
 
 		try {
-			// Shared with the SDK path: extractActionLog reads result.structuredContent
-			// (the field McpResponse actually exposes), so memoryId/taskId/resultCount
-			// are populated here. logAction enforces the no-file-lock policy.
-			const { action, repo: logRepo, options } = extractActionLog(toolName, args, result);
-			logAction(db, action, "", logRepo, options);
+			// Shared with the SDK path: logToolAction gates on ACTION_LOG_TOOLS
+			// (OPT-PERF-05) — read tools emit no action_log write — then derives
+			// metadata from result.structuredContent and logs under the
+			// no-file-lock policy.
+			logToolAction(db, toolName, args, result);
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });
 		}

@@ -1,10 +1,14 @@
 import { logger } from "../utils/logger";
 import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
-import { TABLE_MEMORIES, TABLE_ACTION_LOG, TTL_MS_PER_DAY } from "../utils/constants";
+import { TABLE_MEMORIES, TABLE_ACTION_LOG, TTL_MS_PER_DAY, ACTION_LOG_MAX_ROWS } from "../utils/constants";
 import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 
 export interface PruneActionLogResult {
-	/** Number of action_log rows deleted */
+	/** Rows deleted by the age-based retention (older than retentionDays). */
+	deletedByAge: number;
+	/** Rows deleted by the row-count cap (oldest rows beyond maxRows). */
+	deletedByCap: number;
+	/** Total rows deleted (deletedByAge + deletedByCap). */
 	deleted: number;
 }
 
@@ -135,31 +139,59 @@ export function applyDecay(
 }
 
 /**
- * Delete action_log entries older than a specified number of days.
+ * Prune action_log rows beyond the retention policy (OPT-PERF-05).
  *
- * Action logs accumulate rapidly (one row per MCP call) and serve no purpose
- * beyond recent diagnostics. Stale entries waste disk space and slow down queries.
+ * Action logs accumulate rapidly (one row per mutating MCP call) and serve no
+ * purpose beyond recent diagnostics. Stale entries waste disk space and slow
+ * down queries. Two bounded-retention passes run:
+ *
+ *   1. Age-based: delete entries older than `retentionDays` (default 30).
+ *   2. Row-count cap: keep only the NEWEST `maxRows` entries, deleting the
+ *      oldest tail beyond the cap — bounds the table even when the remaining
+ *      rows are all recent (no unbounded growth).
+ *
+ * Both run inside the existing periodic soul-maintenance sweep; this function
+ * creates no job of its own.
  *
  * @param db - The SQLite store's raw database handle (db.db from SQLiteStore)
  * @param retentionDays - Entries older than this many days are deleted (default: 30)
- * @returns Number of rows deleted
+ * @param maxRows - Max action_log rows retained (default: ACTION_LOG_MAX_ROWS)
+ * @returns Per-pass and total rows deleted
  */
 export function pruneActionLog(
 	db: { prepare: (sql: string) => import("better-sqlite3").Statement },
-	retentionDays = 30
+	retentionDays = 30,
+	maxRows = ACTION_LOG_MAX_ROWS
 ): PruneActionLogResult {
 	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
-	const result = db.prepare(`DELETE FROM ${TABLE_ACTION_LOG} WHERE created_at < ?`).run(cutoff);
+	// 1. Age-based retention (existing behavior)
+	const ageResult = db.prepare(`DELETE FROM ${TABLE_ACTION_LOG} WHERE created_at < ?`).run(cutoff);
+	const deletedByAge = ageResult.changes;
 
-	if (result.changes > 0) {
-		logger.info("[SoulMaintenance] Pruned stale action_log entries", {
-			deleted: result.changes,
+	// 2. Row-count cap: delete everything older than the maxRows-th newest row
+	//    in one PK-indexed statement. When the table is under the cap the
+	//    subquery yields NULL and `id <= NULL` matches nothing.
+	let deletedByCap = 0;
+	if (maxRows > 0) {
+		const capResult = db
+			.prepare(
+				`DELETE FROM ${TABLE_ACTION_LOG}
+				 WHERE id <= (SELECT id FROM ${TABLE_ACTION_LOG} ORDER BY id DESC LIMIT 1 OFFSET ?)`
+			)
+			.run(maxRows);
+		deletedByCap = capResult.changes;
+	}
+
+	if (deletedByAge + deletedByCap > 0) {
+		logger.info("[SoulMaintenance] Pruned action_log entries", {
+			deletedByAge,
+			deletedByCap,
 			cutoff
 		});
 	}
 
-	return { deleted: result.changes };
+	return { deletedByAge, deletedByCap, deleted: deletedByAge + deletedByCap };
 }
 
 /**

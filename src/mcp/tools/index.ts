@@ -61,7 +61,7 @@ import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
 import { McpResponse } from "../utils/mcp-response";
 import { toErrorResponse } from "../utils/mcp-error";
-import { extractActionLog, logAction } from "../utils/action-log";
+import { logToolAction } from "../utils/action-log";
 import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -83,11 +83,13 @@ export type RegisterAllOptions = {
 // (shared with the router.ts adapter) — single source of truth.
 
 // ── Action logging ───────────────────────────────────────────────────────
-// Metadata derivation for the action log lives in ONE place:
-// extractActionLog (utils/action-log.ts) reads `result.structuredContent` —
-// the field McpResponse actually exposes (mcp-response.ts) — so memoryId /
-// taskId / resultCount are populated on the SDK path. logAction enforces the
-// no-file-lock policy and never throws (see utils/action-log.ts header).
+// The action-log gate + metadata derivation live in ONE place:
+// logToolAction (utils/action-log.ts) reads `result.structuredContent` — the
+// field McpResponse actually exposes (mcp-response.ts) — so memoryId /
+// taskId / resultCount are populated on the SDK path. Only MUTATING tools
+// emit a row (ACTION_LOG_TOOLS in utils/tool-plumbing.ts, OPT-PERF-05); reads
+// perform no action_log write. logAction enforces the no-file-lock policy and
+// never throws (see utils/action-log.ts header).
 
 // ── Response conversion (McpResponse → CallToolResult) ──────────────────
 
@@ -285,10 +287,11 @@ export function registerAllTools(
 					durationMs: Math.round(durationMs * 100) / 100
 				});
 
-				// Action logging — exactly one row per tool call, read AND write
-				// tools alike (extractActionLog + logAction, shared with router.ts).
-				const { action, repo, options: actionLogOptions } = extractActionLog(toolName, normalizedArgs, result);
-				logAction(store, action, "", repo, actionLogOptions);
+				// Action logging — one row per MUTATING tool call only
+				// (OPT-PERF-05). Read tools skip the DB write entirely; the gate
+				// lives in logToolAction (utils/action-log.ts) over
+				// ACTION_LOG_TOOLS (utils/tool-plumbing.ts), shared with router.ts.
+				logToolAction(store, toolName, normalizedArgs, result);
 
 				// Resource mutation notifications
 				const affectedUris = collectAffectedResourceUris(toolName, normalizedArgs, result);

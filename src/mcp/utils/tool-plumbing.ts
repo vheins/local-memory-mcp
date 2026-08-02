@@ -35,6 +35,26 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Tools whose calls emit an action_log row (OPT-PERF-05).
+ *
+ * Derived from WRITE_TOOLS (the canonical mutation-tool set above) plus
+ * "codebase-index" — an explicit mutation that is deliberately excluded from
+ * WRITE_TOOLS for lock reasons (TASK-007) but still warrants an audit row.
+ *
+ * Read-only tools (memory-read, task-read, standard-read, handoff-read,
+ * codebase-read, agent-context, synthesize, ...) are NOT included: persisting
+ * a row per read is the hot-path write-amplification this set exists to
+ * prevent. "claim-manage" is included because it is mutation-capable
+ * (CLAIM/RELEASE); its read-only LIST modes are further skipped inside
+ * logToolAction (TASK-162 mode gate — args without task_id/task_code and
+ * without release:true are pure reads).
+ *
+ * Both dispatch transports (tools/index.ts, router.ts) gate through
+ * logToolAction (utils/action-log.ts), which consults this set.
+ */
+export const ACTION_LOG_TOOLS: ReadonlySet<string> = new Set([...WRITE_TOOLS, "codebase-index"]);
+
+/**
  * Derives the set of resource URIs affected by a tool call, used to notify
  * clients via `notifications/resources/updated` after mutations.
  *

@@ -7,7 +7,7 @@ import {
 	type SoulMaintenanceOptions,
 	type DecayResult
 } from "./soul-maintenance";
-import { TABLE_MEMORY_SUMMARY, TTL_MS_PER_DAY } from "../utils/constants";
+import { TABLE_MEMORY_SUMMARY, TTL_MS_PER_DAY, ACTION_LOG_MAX_ROWS } from "../utils/constants";
 
 export interface MaintenanceResult {
 	decay: DecayResult;
@@ -107,8 +107,9 @@ export async function runStartupMaintenance(
 		// 3. Archive low-score memories (force=true)
 		const lowScoreArchived = db.memoryArchives.archiveLowScoreMemories(true);
 
-		// 4. Prune stale action log entries (30-day retention)
-		const prunedActionLogResult = pruneActionLog(db.db, 30);
+		// 4. Prune stale action log entries (30-day retention + row-count cap
+		//    keeping the newest ACTION_LOG_MAX_ROWS — OPT-PERF-05)
+		const prunedActionLogResult = pruneActionLog(db.db, 30, ACTION_LOG_MAX_ROWS);
 
 		// 5. Prune stale observations (7-day retention)
 		const prunedObservationsResult = pruneObservations(db.knowledgeGraph, 7);

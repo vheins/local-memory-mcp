@@ -191,6 +191,7 @@ describe("pruneActionLog", () => {
 		const result = pruneActionLog(db.db, 30);
 
 		expect(result.deleted).toBe(2);
+		expect(result.deletedByCap).toBe(0);
 		const remaining = db.db.prepare("SELECT COUNT(*) AS c FROM action_log WHERE repo = ?").get("r") as {
 			c: number;
 		};
@@ -205,8 +206,26 @@ describe("pruneActionLog", () => {
 
 		const result = pruneActionLog(fakeDb, 30);
 
-		expect(result).toEqual({ deleted: 5 });
+		expect(result).toEqual({ deletedByAge: 5, deletedByCap: 5, deleted: 10 });
 		expect(fakeDb.prepare).toHaveBeenCalledWith(expect.stringContaining("DELETE FROM action_log"));
+	});
+
+	it("keeps only the newest maxRows entries when the table exceeds the cap (OPT-PERF-05)", async () => {
+		const db = await createTestStore();
+		const insert = db.db.prepare("INSERT INTO action_log (action, repo, owner, created_at) VALUES (?, ?, ?, ?)");
+		const now = new Date().toISOString();
+		for (let i = 0; i < 25; i++) {
+			insert.run("memory-read", "r", "o", now);
+		}
+
+		const result = pruneActionLog(db.db, 30, 10);
+
+		expect(result.deletedByAge).toBe(0);
+		expect(result.deletedByCap).toBe(15);
+		expect(result.deleted).toBe(15);
+		const remaining = db.db.prepare("SELECT COUNT(*) AS c FROM action_log").get() as { c: number };
+		expect(remaining.c).toBe(10);
+		db.close();
 	});
 });
 

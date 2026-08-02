@@ -1,18 +1,21 @@
 /**
  * Unit tests for src/mcp/utils/action-log.ts — the unified action-log policy
- * (logAction / logActions) used by EVERY tool call across both transports and
- * the dashboard controllers.
+ * (logAction / logActions / logToolAction) used by tool dispatch across both
+ * transports and the dashboard controllers.
  *
  * POLICY under test (TASK-104): action_log INSERTs never acquire the file
  * lock; logging never throws — a logging failure must never break the request
  * it audits.
+ *
+ * POLICY under test (OPT-PERF-05): logToolAction emits a row ONLY for
+ * mutating tools (ACTION_LOG_TOOLS) — read-only tools perform no DB write.
  *
  * Mock strategy: a minimal `db` shaped like SQLiteStore is injected, exactly
  * mirroring the router.test.ts mock convention. No real DB / proper-lockfile.
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { extractActionLog, logAction, logActions, type ActionLogEntry } from "../utils/action-log";
+import { extractActionLog, logAction, logActions, logToolAction, type ActionLogEntry } from "../utils/action-log";
 import { logger } from "../utils/logger";
 import type { SQLiteStore } from "../storage/sqlite";
 
@@ -246,6 +249,83 @@ describe("logAction", () => {
 			repo: "r",
 			error: "Error: db locked"
 		});
+	});
+});
+
+describe("logToolAction (OPT-PERF-05 read-tool gate)", () => {
+	it("writes no action_log row for read-only tools", () => {
+		const { db, logActionSpy } = makeMockDb();
+
+		logToolAction(db, "memory-read", { repo: "acme/app", query: "hello" }, { structuredContent: {} });
+		logToolAction(db, "task-read", { repo: "acme/app" }, { structuredContent: {} });
+		logToolAction(db, "standard-read", { repo: "acme/app" }, { structuredContent: {} });
+		logToolAction(db, "handoff-read", { repo: "acme/app" }, { structuredContent: {} });
+		logToolAction(db, "codebase-read", { repo: "acme/app" }, { structuredContent: {} });
+
+		expect(logActionSpy).not.toHaveBeenCalled();
+	});
+
+	it("logs mutating tools with derived metadata", () => {
+		const { db, logActionSpy } = makeMockDb();
+
+		logToolAction(db, "task-write", { repo: "acme/app" }, { structuredContent: { id: "task-1" } });
+
+		expect(logActionSpy).toHaveBeenCalledTimes(1);
+		expect(logActionSpy).toHaveBeenCalledWith("write", "", "acme/app", expect.objectContaining({ taskId: "task-1" }));
+	});
+
+	it("keeps logging codebase-index (mutation excluded from WRITE_TOOLS for lock reasons)", () => {
+		const { db, logActionSpy } = makeMockDb();
+
+		logToolAction(db, "codebase-index", { repo: "acme/app" }, { structuredContent: {} });
+
+		expect(logActionSpy).toHaveBeenCalledTimes(1);
+		expect(logActionSpy).toHaveBeenCalledWith("index", "", "acme/app", expect.any(Object));
+	});
+
+	it("skips claim-manage LIST modes (agent-only or no-arg calls) — no action_log write (TASK-162)", () => {
+		const { db, logActionSpy } = makeMockDb();
+
+		// LIST claims by agent (agent, no task ref)
+		logToolAction(db, "claim-manage", { repo: "acme/app", agent: "backend" }, { structuredContent: {} });
+		// LIST all active claims (no args)
+		logToolAction(db, "claim-manage", { repo: "acme/app" }, { structuredContent: {} });
+
+		expect(logActionSpy).not.toHaveBeenCalled();
+	});
+
+	it("audits claim-manage CLAIM and RELEASE mutations (TASK-162)", () => {
+		const { db, logActionSpy } = makeMockDb();
+
+		// CLAIM: task_id + agent
+		logToolAction(
+			db,
+			"claim-manage",
+			{ repo: "acme/app", task_id: "task-1", agent: "backend" },
+			{ structuredContent: {} }
+		);
+		// RELEASE: task_code + release:true
+		logToolAction(db, "claim-manage", { repo: "acme/app", task_code: "T01", release: true }, { structuredContent: {} });
+
+		expect(logActionSpy).toHaveBeenCalledTimes(2);
+		expect(logActionSpy).toHaveBeenNthCalledWith(
+			1,
+			"manage",
+			"",
+			"acme/app",
+			expect.objectContaining({ taskId: "task-1" })
+		);
+		expect(logActionSpy).toHaveBeenNthCalledWith(2, "manage", "", "acme/app", expect.any(Object));
+	});
+
+	it("never throws when the entity insert fails — same policy as logAction", () => {
+		const { db } = makeMockDb(() => {
+			throw new Error("db locked");
+		});
+		const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+
+		expect(() => logToolAction(db, "task-write", { repo: "acme/app" }, { structuredContent: {} })).not.toThrow();
+		expect(errorSpy).toHaveBeenCalled();
 	});
 });
 

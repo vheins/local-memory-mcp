@@ -1,7 +1,7 @@
 /**
  * ActionLogService — unified action-log policy for the whole server.
  *
- * POLICY: action_log INSERTs NEVER acquire the file lock (WriteLock).
+ * POLICY 1: action_log INSERTs NEVER acquire the file lock (WriteLock).
  *
  * Rationale:
  * - SQLite is opened with journal_mode=WAL + busy_timeout=5000 (see
@@ -13,12 +13,22 @@
  *   would make every READ tool acquire the write lock, violating the
  *   "reads are never locked" contract documented in storage/write-lock.ts.
  *
+ * POLICY 2 (OPT-PERF-05): only MUTATING tool calls emit an action_log row.
+ * Read-only tools (memory-read, task-read, standard-read, handoff-read,
+ * codebase-read, agent-context, synthesize, ...) skip the DB write entirely —
+ * persisting a row per read is the hot-path write-amplification the gate in
+ * `logToolAction` prevents. The mutation set is ACTION_LOG_TOOLS
+ * (utils/tool-plumbing.ts), derived from the canonical WRITE_TOOLS set.
+ * claim-manage is additionally mode-gated (TASK-162): its read-only LIST
+ * modes (agent-only or no-arg calls) do not write; CLAIM/RELEASE stay audited.
+ *
  * All call sites (native SDK tools/index.ts, upstream router.ts, dashboard
  * controllers) must log through this module so the policy lives in ONE place.
  */
 
 import type { SQLiteStore } from "../storage/sqlite";
 import { logger } from "./logger";
+import { ACTION_LOG_TOOLS } from "./tool-plumbing";
 
 export interface ActionLogOptions {
 	query?: string;
@@ -186,4 +196,45 @@ export function logActions(db: SQLiteStore, entries: ActionLogEntry[]): void {
 	} catch (err) {
 		logger.error("Failed to log actions (batch)", { count: entries.length, error: String(err) });
 	}
+}
+
+/**
+ * Log one action_log row for a tool call IF the tool call is a mutation
+ * (OPT-PERF-05).
+ *
+ * Reads never write: only tools in ACTION_LOG_TOOLS (WRITE_TOOLS +
+ * "codebase-index", defined in utils/tool-plumbing.ts) emit an audit row, so
+ * read-only tools (memory-read, task-read, standard-read, handoff-read,
+ * codebase-read, ...) carry no DB write on their hot path. BOTH dispatch
+ * transports (tools/index.ts and router.ts) call this one entry point, so the
+ * gate + metadata derivation cannot drift between them.
+ *
+ * claim-manage is mode-gated on top of the tool-level set (TASK-162): the
+ * unified tool is mutation-capable (CLAIM/RELEASE keep their audit row) but
+ * its read-only LIST modes must not write. Mode inference mirrors
+ * claim.manage.ts (ADR-004): a call is a pure LIST when it carries neither a
+ * task reference (`task_id`/`task_code`) nor `release: true`.
+ *
+ * Never throws: logging must never break the request it audits.
+ */
+export function logToolAction(
+	db: SQLiteStore,
+	toolName: string,
+	args: Record<string, unknown>,
+	result: unknown,
+	owner = ""
+): void {
+	if (!ACTION_LOG_TOOLS.has(toolName)) return;
+
+	// claim-manage LIST gate (TASK-162): agent-only or no-arg calls are pure
+	// reads and must not write. CLAIM (task ref + agent) and RELEASE
+	// (task ref + release:true) keep logging, as does the task-only error path.
+	if (toolName === "claim-manage") {
+		const hasTask = !!(args?.task_id || args?.task_code);
+		const isRelease = Boolean(args?.release);
+		if (!hasTask && !isRelease) return;
+	}
+
+	const { action, repo, options } = extractActionLog(toolName, args, result);
+	logAction(db, action, owner, repo, options);
 }

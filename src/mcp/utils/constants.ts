@@ -183,3 +183,11 @@ export const EMBEDDING_QUEUE_PURGE_INTERVAL_MS = 15 * 60 * 1000;
 // JSON per request). listRelationsForGraph filters to the capped node subset
 // and is bounded by the same limit, so payloads scale with the node cap.
 export const KG_MAX_GRAPH_EDGES = envInt("KG_MAX_GRAPH_EDGES", 4_000);
+
+// ── Action log retention (OPT-PERF-05) ───────────────────────────────────
+// Row-count cap for action_log: the periodic soul-maintenance prune keeps at
+// most this many NEWEST rows, deleting the oldest tail beyond the cap (the
+// existing age-based 30-day prune also runs). Bounds the table even when the
+// remaining rows are all recent. Env-overridable so operators can raise or
+// lower the audit window without code changes.
+export const ACTION_LOG_MAX_ROWS = envInt("ACTION_LOG_MAX_ROWS", 10_000);
