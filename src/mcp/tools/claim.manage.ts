@@ -3,6 +3,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
 import { ClaimManageSchema } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
+import { TASK_STATUS_IN_PROGRESS } from "../types";
 
 /**
  * Summary builder for claim list results.
@@ -107,7 +108,7 @@ async function handleClaimOp(
 
 	if (task.status !== "completed") {
 		const now = new Date().toISOString();
-		storage.tasks.updateTask(task.id, { status: "in_progress", in_progress_at: now });
+		storage.tasks.updateTask(task.id, { status: TASK_STATUS_IN_PROGRESS, in_progress_at: now });
 		storage.taskComments.insertTaskComment({
 			id: randomUUID(),
 			task_id: task.id,
@@ -118,7 +119,7 @@ async function handleClaimOp(
 			role: role || "unknown",
 			model: "system",
 			previous_status: task.status as import("../types").TaskStatus,
-			next_status: "in_progress" as import("../types").TaskStatus,
+			next_status: TASK_STATUS_IN_PROGRESS,
 			created_at: now
 		});
 	}

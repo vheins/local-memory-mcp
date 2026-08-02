@@ -1,6 +1,8 @@
 import { BaseEntity } from "../storage/base";
 import { MemoryEntry, MemoryRow, VectorStore } from "../types/index";
 import { MemoryIdVector } from "../types/common";
+import { TABLE_MEMORIES } from "../utils/constants";
+import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
 import {
 	VECTOR_CANDIDATE_CAP,
@@ -23,7 +25,7 @@ export class MemoryVectorEntity extends BaseEntity {
 		memory_id: string;
 		vector: string;
 	}[] {
-		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN memories m ON mv.memory_id = m.id`;
+		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN ${TABLE_MEMORIES} m ON mv.memory_id = m.id`;
 		const params: (string | number)[] = [];
 		if (repo) {
 			sql += " WHERE m.owner = ? AND m.repo = ?";
@@ -110,13 +112,13 @@ export class MemoryVectorEntity extends BaseEntity {
 		const { predicates, params } = this.buildSearchPredicates(owner, repo, currentTags);
 		predicates.push("(expires_at IS NULL OR expires_at > ?)");
 		params.push(now.toISOString());
-		if (!includeArchived) predicates.push("status = 'active'");
+		if (!includeArchived) predicates.push(`status = '${MEMORY_STATUS_ACTIVE}'`);
 
 		// Honor the caller's fetch limit (was a hardcoded LIMIT 100) while
 		// keeping a floor so small fetches/conflict checks stay responsive.
 		const candidateLimit = Math.max(limit, MIN_CANDIDATES);
 
-		const sql = `SELECT * FROM memories WHERE ${predicates.join(" AND ")}
+		const sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE ${predicates.join(" AND ")}
 			ORDER BY CASE WHEN owner = ? AND repo = ? THEN 0 ELSE 1 END, importance DESC, created_at DESC LIMIT ?`;
 		const candidates = this.all<MemoryRow>(sql, [...params, owner, repo, candidateLimit]);
 
@@ -131,8 +133,8 @@ export class MemoryVectorEntity extends BaseEntity {
 				repo,
 				currentTags
 			);
-			recentPredicates.push("status = 'active'", "(expires_at IS NULL OR expires_at > ?)");
-			const recentSql = `SELECT * FROM memories WHERE ${recentPredicates.join(" AND ")} ORDER BY created_at DESC LIMIT ${COLD_START_RECENT_LIMIT}`;
+			recentPredicates.push(`status = '${MEMORY_STATUS_ACTIVE}'`, "(expires_at IS NULL OR expires_at > ?)");
+			const recentSql = `SELECT * FROM ${TABLE_MEMORIES} WHERE ${recentPredicates.join(" AND ")} ORDER BY created_at DESC LIMIT ${COLD_START_RECENT_LIMIT}`;
 			const recent = this.all<MemoryRow>(recentSql, [...recentParams, now.toISOString()]);
 			const candidateIds = new Set(candidates.map((c) => c.id));
 			for (const r of recent) {
@@ -148,7 +150,7 @@ export class MemoryVectorEntity extends BaseEntity {
 				const memory = this.rowToMemoryEntry(row);
 
 				const isExpired = row.expires_at && new Date(row.expires_at) <= now;
-				const isArchived = row.status === "archived" && !includeArchived;
+				const isArchived = row.status === MEMORY_STATUS_ARCHIVED && !includeArchived;
 
 				if (isExpired || isArchived) {
 					return { ...memory, similarity: 0 };

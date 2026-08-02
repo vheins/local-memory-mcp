@@ -1,6 +1,6 @@
 import { MemoryWriteSchema } from "../schemas";
 import { SQLiteStore } from "../../storage/sqlite";
-import { VectorStore } from "../../types";
+import { VectorStore, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { enqueueMemory } from "../../embedding-queue";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
@@ -54,7 +54,7 @@ export async function handleCreate(
 	if (resolvedSupersedes) {
 		const oldMemory = db.memories.getById(resolvedSupersedes);
 		if (oldMemory) {
-			db.memories.update(oldMemory.id, { status: "archived" });
+			db.memories.update(oldMemory.id, { status: MEMORY_STATUS_ARCHIVED });
 		}
 	}
 

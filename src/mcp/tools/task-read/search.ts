@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../../storage/sqlite";
-import { Task, VectorStore } from "../../types";
+import { Task, VectorStore, TASK_STATUSES } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { TaskStatusValues } from "../schemas";
 import { logger } from "../../utils/logger";
@@ -248,7 +248,7 @@ export async function handleSearchMode(
 			lines.push("");
 
 			// Fused grouped by status (enum order), with global rank #N
-			const STATUS_ORDER = ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"];
+			const STATUS_ORDER = [...TASK_STATUSES];
 			lines.push(
 				renderGroupedSummary<ScoredTask>({
 					items: paginated,

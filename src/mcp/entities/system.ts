@@ -1,5 +1,15 @@
 import { BaseEntity } from "../storage/base";
 import { MemoryEntry, MemoryRow } from "../types";
+import { TABLE_MEMORIES, TABLE_TASKS, TABLE_CLAIMS, TABLE_HANDOFFS } from "../utils/constants";
+import {
+	TASK_STATUS_BACKLOG,
+	TASK_STATUS_PENDING,
+	TASK_STATUS_IN_PROGRESS,
+	TASK_STATUS_COMPLETED,
+	TASK_STATUS_CANCELED,
+	TASK_STATUS_BLOCKED
+} from "../types";
+import { HANDOFF_STATUS_PENDING } from "../types";
 
 export class SystemEntity extends BaseEntity {
 	private buildTaskStats(rows: Array<{ status: string; count: number }>) {
@@ -15,12 +25,12 @@ export class SystemEntity extends BaseEntity {
 
 		rows.forEach((r) => {
 			taskStats.total += r.count;
-			if (r.status === "backlog") taskStats.backlog = r.count;
-			else if (r.status === "pending") taskStats.pending = r.count;
-			else if (r.status === "in_progress") taskStats.in_progress = r.count;
-			else if (r.status === "completed") taskStats.completed = r.count;
-			else if (r.status === "blocked") taskStats.blocked = r.count;
-			else if (r.status === "canceled") taskStats.canceled = r.count;
+			if (r.status === TASK_STATUS_BACKLOG) taskStats.backlog = r.count;
+			else if (r.status === TASK_STATUS_PENDING) taskStats.pending = r.count;
+			else if (r.status === TASK_STATUS_IN_PROGRESS) taskStats.in_progress = r.count;
+			else if (r.status === TASK_STATUS_COMPLETED) taskStats.completed = r.count;
+			else if (r.status === TASK_STATUS_BLOCKED) taskStats.blocked = r.count;
+			else if (r.status === TASK_STATUS_CANCELED) taskStats.canceled = r.count;
 		});
 
 		return taskStats;
@@ -29,9 +39,9 @@ export class SystemEntity extends BaseEntity {
 	listRepos(owner?: string): string[] {
 		let sql: string;
 		if (owner) {
-			sql = "SELECT DISTINCT repo FROM memories WHERE owner = ? UNION SELECT DISTINCT repo FROM tasks WHERE owner = ?";
+			sql = `SELECT DISTINCT repo FROM ${TABLE_MEMORIES} WHERE owner = ? UNION SELECT DISTINCT repo FROM ${TABLE_TASKS} WHERE owner = ?`;
 		} else {
-			sql = "SELECT DISTINCT repo FROM memories UNION SELECT DISTINCT repo FROM tasks";
+			sql = `SELECT DISTINCT repo FROM ${TABLE_MEMORIES} UNION SELECT DISTINCT repo FROM ${TABLE_TASKS}`;
 		}
 		const params = owner ? [owner, owner] : [];
 		const rows = this.all<{ repo: string }>(sql, params);
@@ -57,19 +67,19 @@ export class SystemEntity extends BaseEntity {
 		const ownerParams = owner ? [owner] : [];
 
 		const activeClaimRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM claims WHERE released_at IS NULL${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 		const pendingHandoffRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM handoffs WHERE status = 'pending'${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}'${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 		const unassignedHandoffRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM handoffs WHERE status = 'pending' AND to_agent IS NULL${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND to_agent IS NULL${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 		const staleClaimRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM claims WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')${ownerFilter} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')${ownerFilter} GROUP BY repo`,
 			ownerParams
 		);
 
@@ -82,14 +92,14 @@ export class SystemEntity extends BaseEntity {
 
 		// Aggregate memory counts per repo (single query instead of N)
 		const memoryCountRows = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) as count FROM memories${ownerWhere} GROUP BY repo`,
+			`SELECT repo, COUNT(*) as count FROM ${TABLE_MEMORIES}${ownerWhere} GROUP BY repo`,
 			ownerParams
 		);
 		const memoryCountByRepo = Object.fromEntries(memoryCountRows.map((r) => [r.repo, r.count]));
 
 		// Aggregate task status counts per repo (single query instead of N)
 		const taskAggRows = this.all<{ repo: string; status: string; count: number }>(
-			`SELECT repo, status, COUNT(*) as count FROM tasks${ownerWhere} GROUP BY repo, status`,
+			`SELECT repo, status, COUNT(*) as count FROM ${TABLE_TASKS}${ownerWhere} GROUP BY repo, status`,
 			ownerParams
 		);
 		const taskCountsByRepo: Record<string, { total: number; byStatus: Record<string, number> }> = {};
@@ -104,9 +114,9 @@ export class SystemEntity extends BaseEntity {
 		// Aggregate last activity per repo (single query instead of N)
 		const lastActivityRows = this.all<{ repo: string; last: string | null }>(
 			`SELECT repo, MAX(updated_at) as last FROM (
-				SELECT repo, updated_at FROM memories${ownerWhere}
+				SELECT repo, updated_at FROM ${TABLE_MEMORIES}${ownerWhere}
 				UNION ALL
-				SELECT repo, updated_at FROM tasks${ownerWhere}
+				SELECT repo, updated_at FROM ${TABLE_TASKS}${ownerWhere}
 			) GROUP BY repo`,
 			owner ? [owner, owner] : []
 		);
@@ -120,10 +130,10 @@ export class SystemEntity extends BaseEntity {
 				repo,
 				memoryCount: memCount,
 				taskCount: taskInfo.total,
-				inProgressCount: taskInfo.byStatus["in_progress"] ?? 0,
-				pendingCount: taskInfo.byStatus["pending"] ?? 0,
-				blockedCount: taskInfo.byStatus["blocked"] ?? 0,
-				backlogCount: taskInfo.byStatus["backlog"] ?? 0,
+				inProgressCount: taskInfo.byStatus[TASK_STATUS_IN_PROGRESS] ?? 0,
+				pendingCount: taskInfo.byStatus[TASK_STATUS_PENDING] ?? 0,
+				blockedCount: taskInfo.byStatus[TASK_STATUS_BLOCKED] ?? 0,
+				backlogCount: taskInfo.byStatus[TASK_STATUS_BACKLOG] ?? 0,
 				lastActivity: lastActivityByRepo[repo] ?? null,
 				activeClaims: activeClaimsByRepo[repo] ?? 0,
 				pendingHandoffs: pendingHandoffsByRepo[repo] ?? 0,
@@ -155,24 +165,24 @@ export class SystemEntity extends BaseEntity {
 		topMemories: MemoryEntry[];
 	} {
 		const totalCountRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ?",
+			`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ?`,
 			[owner, repo]
 		);
 		const avgImportanceRow = this.get<{ avg: number }>(
-			"SELECT AVG(importance) as avg FROM memories WHERE owner = ? AND repo = ?",
+			`SELECT AVG(importance) as avg FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ?`,
 			[owner, repo]
 		);
 		const totalHitCountRow = this.get<{ count: number }>(
-			"SELECT SUM(hit_count) as count FROM memories WHERE owner = ? AND repo = ?",
+			`SELECT SUM(hit_count) as count FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ?`,
 			[owner, repo]
 		);
 		const expiringSoonRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ? AND expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?",
+			`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ? AND expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?`,
 			[owner, repo, new Date().toISOString(), new Date(Date.now() + 7 * 86400 * 1000).toISOString()]
 		);
 
 		const typeStats = this.all<{ type: string; count: number }>(
-			"SELECT type, COUNT(*) as count FROM memories WHERE owner = ? AND repo = ? GROUP BY type",
+			`SELECT type, COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ? GROUP BY type`,
 			[owner, repo]
 		);
 		const byType: Record<string, number> = {};
@@ -181,14 +191,14 @@ export class SystemEntity extends BaseEntity {
 		});
 
 		const taskRows = this.all<{ status: string; count: number }>(
-			"SELECT status, COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ? GROUP BY status",
+			`SELECT status, COUNT(*) as count FROM ${TABLE_TASKS} WHERE owner = ? AND repo = ? GROUP BY status`,
 			[owner, repo]
 		);
 
 		const taskStats = this.buildTaskStats(taskRows);
 
 		const topMemoriesRows = this.all<MemoryRow>(
-			"SELECT * FROM memories WHERE owner = ? AND repo = ? ORDER BY importance DESC, created_at DESC LIMIT 5",
+			`SELECT * FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ? ORDER BY importance DESC, created_at DESC LIMIT 5`,
 			[owner, repo]
 		);
 		const topMemories = topMemoriesRows.map((r) => this.rowToMemoryEntry(r));
@@ -246,18 +256,18 @@ export class SystemEntity extends BaseEntity {
 			staleClaims: number;
 		}>;
 	} {
-		const totalCountRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM memories");
-		const avgImportanceRow = this.get<{ avg: number }>("SELECT AVG(importance) as avg FROM memories");
-		const totalHitCountRow = this.get<{ count: number }>("SELECT SUM(hit_count) as count FROM memories");
+		const totalCountRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES}`);
+		const avgImportanceRow = this.get<{ avg: number }>(`SELECT AVG(importance) as avg FROM ${TABLE_MEMORIES}`);
+		const totalHitCountRow = this.get<{ count: number }>(`SELECT SUM(hit_count) as count FROM ${TABLE_MEMORIES}`);
 		const expiringSoonRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM memories WHERE expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?",
+			`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE expires_at IS NOT NULL AND expires_at > ? AND expires_at <= ?`,
 			[new Date().toISOString(), new Date(Date.now() + 7 * 86400 * 1000).toISOString()]
 		);
 		const typeStats = this.all<{ type: string; count: number }>(
-			"SELECT type, COUNT(*) as count FROM memories GROUP BY type"
+			`SELECT type, COUNT(*) as count FROM ${TABLE_MEMORIES} GROUP BY type`
 		);
 		const taskRows = this.all<{ status: string; count: number }>(
-			"SELECT status, COUNT(*) as count FROM tasks GROUP BY status"
+			`SELECT status, COUNT(*) as count FROM ${TABLE_TASKS} GROUP BY status`
 		);
 		const repos = this.listRepoNavigation().sort((a, b) => {
 			const pressureA =
@@ -273,22 +283,22 @@ export class SystemEntity extends BaseEntity {
 		});
 
 		const activeClaimsRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM claims WHERE released_at IS NULL"
+			`SELECT COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL`
 		);
 		const agentsClaimingRow = this.get<{ count: number }>(
-			"SELECT COUNT(DISTINCT agent) as count FROM claims WHERE released_at IS NULL"
+			`SELECT COUNT(DISTINCT agent) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL`
 		);
 		const pendingHandoffsRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM handoffs WHERE status = 'pending'"
+			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}'`
 		);
 		const unassignedHandoffsRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM handoffs WHERE status = 'pending' AND to_agent IS NULL"
+			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND to_agent IS NULL`
 		);
 		const staleClaimsRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM claims WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')"
+			`SELECT COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE released_at IS NULL AND claimed_at <= datetime('now', '-1 day')`
 		);
 		const staleHandoffsRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM handoffs WHERE status = 'pending' AND created_at <= datetime('now', '-1 day')"
+			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE status = '${HANDOFF_STATUS_PENDING}' AND created_at <= datetime('now', '-1 day')`
 		);
 
 		return {
@@ -316,8 +326,8 @@ export class SystemEntity extends BaseEntity {
 	}
 
 	getGlobalStats(): { totalMemories: number; totalTasks: number; totalRepos: number } {
-		const totalMemoriesRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM memories");
-		const totalTasksRow = this.get<{ count: number }>("SELECT COUNT(*) as count FROM tasks");
+		const totalMemoriesRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES}`);
+		const totalTasksRow = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM ${TABLE_TASKS}`);
 		const totalRepos = this.listRepos().length;
 
 		return {
@@ -332,15 +342,15 @@ export class SystemEntity extends BaseEntity {
 		repo: string
 	): { repo: string; memoryCount: number; taskCount: number; languages: string[] } {
 		const memoryCountRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM memories WHERE owner = ? AND repo = ?",
+			`SELECT COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ?`,
 			[owner, repo]
 		);
 		const taskCountRow = this.get<{ count: number }>(
-			"SELECT COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ?",
+			`SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE owner = ? AND repo = ?`,
 			[owner, repo]
 		);
 		const languagesRows = this.all<{ language: string }>(
-			"SELECT DISTINCT language FROM memories WHERE owner = ? AND repo = ? AND language IS NOT NULL",
+			`SELECT DISTINCT language FROM ${TABLE_MEMORIES} WHERE owner = ? AND repo = ? AND language IS NOT NULL`,
 			[owner, repo]
 		);
 		const languages = languagesRows.map((r) => r.language);

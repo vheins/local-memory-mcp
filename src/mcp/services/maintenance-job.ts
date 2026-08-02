@@ -7,6 +7,7 @@ import {
 	type SoulMaintenanceOptions,
 	type DecayResult
 } from "./soul-maintenance";
+import { TABLE_MEMORY_SUMMARY, TTL_MS_PER_DAY } from "../utils/constants";
 
 export interface MaintenanceResult {
 	decay: DecayResult;
@@ -19,7 +20,7 @@ export interface MaintenanceResult {
 
 const MAINTENANCE_OWNER = "__soul__";
 const MAINTENANCE_REPO = "__maintenance__";
-const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAINTENANCE_INTERVAL_MS = TTL_MS_PER_DAY; // 24 hours
 
 /**
  * Check whether maintenance has already run within the configured interval.
@@ -28,7 +29,7 @@ const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 function wasMaintenanceRunRecent(db: SQLiteStore): boolean {
 	try {
 		const row = db.db
-			.prepare("SELECT updated_at FROM memory_summary WHERE owner = ? AND repo = ?")
+			.prepare(`SELECT updated_at FROM ${TABLE_MEMORY_SUMMARY} WHERE owner = ? AND repo = ?`)
 			.get(MAINTENANCE_OWNER, MAINTENANCE_REPO) as { updated_at: string } | undefined;
 
 		if (!row?.updated_at) return false;
@@ -49,7 +50,7 @@ function recordMaintenanceRun(db: SQLiteStore): void {
 	try {
 		db.db
 			.prepare(
-				`INSERT INTO memory_summary (owner, repo, summary, updated_at)
+				`INSERT INTO ${TABLE_MEMORY_SUMMARY} (owner, repo, summary, updated_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(owner, repo) DO UPDATE SET summary = excluded.summary, updated_at = excluded.updated_at`
 			)

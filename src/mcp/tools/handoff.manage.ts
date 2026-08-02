@@ -10,6 +10,7 @@ import {
 	TaskClaimSchema
 } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
+import { TASK_STATUS_IN_PROGRESS } from "../types";
 import { extractNextSteps } from "../utils/next-steps";
 import { logger } from "../utils/logger";
 
@@ -300,7 +301,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 
 	if (task && task.status !== "completed") {
 		const now = new Date().toISOString();
-		storage.tasks.updateTask(task.id, { status: "in_progress", in_progress_at: now });
+		storage.tasks.updateTask(task.id, { status: TASK_STATUS_IN_PROGRESS, in_progress_at: now });
 		try {
 			storage.taskComments.insertTaskComment({
 				id: randomUUID(),
@@ -312,7 +313,7 @@ export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 				role: role || "unknown",
 				model: "system",
 				previous_status: task.status as import("../types").TaskStatus,
-				next_status: "in_progress" as import("../types").TaskStatus,
+				next_status: TASK_STATUS_IN_PROGRESS,
 				created_at: now
 			});
 		} catch (e) {

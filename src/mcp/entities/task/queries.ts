@@ -1,18 +1,21 @@
+import { TABLE_TASKS, TABLE_CLAIMS, TABLE_HANDOFFS } from "../../utils/constants";
+import { TASK_STATUS_BACKLOG, TASK_STATUS_PENDING, TASK_STATUS_IN_PROGRESS, TASK_STATUS_COMPLETED, TASK_STATUS_CANCELED, TASK_STATUS_BLOCKED } from "../../types/task";
+import { HANDOFF_STATUS_PENDING } from "../../types/handoff";
 /**
  * Builds the coordination select subquery fragment used in task queries.
  * Returns a SQL fragment with active claim and pending handoff subqueries.
  */
 export function buildCoordinationSelect(alias = "t"): string {
 	return `
-			(SELECT COUNT(*) FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL) as active_claim_count,
-			(SELECT c.agent FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_agent,
-			(SELECT c.role FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_role,
-			(SELECT c.claimed_at FROM claims c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_claimed_at,
-			(SELECT COUNT(*) FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending') as pending_handoff_count,
-			(SELECT h.id FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_id,
-			(SELECT h.summary FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_summary,
-			(SELECT h.to_agent FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_to_agent,
-			(SELECT h.created_at FROM handoffs h WHERE h.task_id = ${alias}.id AND h.status = 'pending' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_created_at
+			(SELECT COUNT(*) FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL) as active_claim_count,
+			(SELECT c.agent FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_agent,
+			(SELECT c.role FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_role,
+			(SELECT c.claimed_at FROM ${TABLE_CLAIMS} c WHERE c.task_id = ${alias}.id AND c.released_at IS NULL ORDER BY c.claimed_at DESC LIMIT 1) as active_claim_claimed_at,
+			(SELECT COUNT(*) FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}') as pending_handoff_count,
+			(SELECT h.id FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_id,
+			(SELECT h.summary FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_summary,
+			(SELECT h.to_agent FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_to_agent,
+			(SELECT h.created_at FROM ${TABLE_HANDOFFS} h WHERE h.task_id = ${alias}.id AND h.status = '${HANDOFF_STATUS_PENDING}' ORDER BY h.created_at DESC LIMIT 1) as pending_handoff_created_at
 		`;
 }
 
@@ -22,13 +25,13 @@ export function buildCoordinationSelect(alias = "t"): string {
  */
 export function taskStatusOrderBy(): string {
 	return `
-		CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END ASC,
-		CASE WHEN t.status = 'completed' THEN t.updated_at ELSE NULL END DESC,
-		CASE WHEN t.status = 'in_progress' THEN 0
-			WHEN t.status = 'pending' THEN 1
-			WHEN t.status = 'backlog' THEN 2
-			WHEN t.status = 'blocked' THEN 3
-			WHEN t.status = 'canceled' THEN 4
+		CASE WHEN t.status = '${TASK_STATUS_COMPLETED}' THEN 1 ELSE 0 END ASC,
+		CASE WHEN t.status = '${TASK_STATUS_COMPLETED}' THEN t.updated_at ELSE NULL END DESC,
+		CASE WHEN t.status = '${TASK_STATUS_IN_PROGRESS}' THEN 0
+			WHEN t.status = '${TASK_STATUS_PENDING}' THEN 1
+			WHEN t.status = '${TASK_STATUS_BACKLOG}' THEN 2
+			WHEN t.status = '${TASK_STATUS_BLOCKED}' THEN 3
+			WHEN t.status = '${TASK_STATUS_CANCELED}' THEN 4
 			ELSE 5 END ASC,
 		t.priority DESC,
 		t.created_at ASC
@@ -53,9 +56,9 @@ export function taskSelectSkeleton(alias = "t", includeComments = true): string 
 		: "";
 	return `SELECT ${alias}.*, d.task_code as depends_on_code, p.task_code as parent_code,
 		${buildCoordinationSelect(alias)}${commentsCount}
-		FROM tasks ${alias}
-		LEFT JOIN tasks d ON ${alias}.depends_on = d.id
-		LEFT JOIN tasks p ON ${alias}.parent_id = p.id
+		FROM ${TABLE_TASKS} ${alias}
+		LEFT JOIN ${TABLE_TASKS} d ON ${alias}.depends_on = d.id
+		LEFT JOIN ${TABLE_TASKS} p ON ${alias}.parent_id = p.id
 	`;
 }
 

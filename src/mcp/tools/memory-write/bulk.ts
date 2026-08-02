@@ -1,6 +1,6 @@
 import { MemoryTypeSchema } from "../schemas";
 import { SQLiteStore } from "../../storage/sqlite";
-import { VectorStore, MemoryEntry } from "../../types";
+import { VectorStore, MemoryEntry, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { enqueueMemory } from "../../embedding-queue";
@@ -183,7 +183,7 @@ export async function handleBulk(
 					if (resolvedS) {
 						const oldMemory = db.memories.getById(resolvedS);
 						if (oldMemory) {
-							db.memories.update(oldMemory.id, { status: "archived" });
+							db.memories.update(oldMemory.id, { status: MEMORY_STATUS_ARCHIVED });
 						}
 					}
 

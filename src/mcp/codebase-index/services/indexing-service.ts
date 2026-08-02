@@ -18,6 +18,7 @@ import { logger } from "../../utils/logger.js";
 import { CodebaseIndexServiceImpl, type CodebaseIndexService } from "./indexing-repository.js";
 
 import { indexingRepos, getIndexFreshness } from "./indexing-cache.js";
+import { TTL_MS_PER_DAY } from "../../utils/constants";
 
 // ── Re-exports (preserving existing public API) ────────────────────────
 
@@ -90,7 +91,7 @@ export async function autoIndexIfStale(
 	}
 
 	// ── Compute TTL ──────────────────────────────────────────────────
-	const defaultTtlMs = 24 * 60 * 60 * 1000; // 24 hours
+	const defaultTtlMs = TTL_MS_PER_DAY; // 24 hours
 	const envTtl = process.env.CODEBASE_AUTO_INDEX_TTL ? parseInt(process.env.CODEBASE_AUTO_INDEX_TTL, 10) : undefined;
 	const ttlMs = options?.ttlMs ?? (envTtl && !isNaN(envTtl) ? envTtl : defaultTtlMs);
 

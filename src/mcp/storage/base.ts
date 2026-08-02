@@ -2,11 +2,8 @@ import Database from "better-sqlite3";
 import {
 	MemoryEntry,
 	MemoryRow,
-	MemoryType,
 	Task,
 	TaskRow,
-	TaskStatus,
-	TaskPriority,
 	CodingStandardEntry,
 	CodingStandardRow,
 	Handoff,
@@ -14,7 +11,9 @@ import {
 	Claim,
 	ClaimRow,
 	CodebaseSymbol,
-	CodebaseSymbolRow
+	CodebaseSymbolRow,
+	MEMORY_STATUS_ACTIVE,
+	TASK_STATUS_BACKLOG
 } from "../types/index";
 
 export abstract class BaseEntity {
@@ -89,7 +88,7 @@ export abstract class BaseEntity {
 			last_used_at: row.last_used_at ?? null,
 			expires_at: row.expires_at ?? null,
 			supersedes: row.supersedes ?? null,
-			status: row.status || "active",
+			status: row.status || MEMORY_STATUS_ACTIVE,
 			is_global: row.is_global === 1,
 			tags: this.safeJSONParse<string[]>(row.tags, []),
 			metadata,
@@ -106,7 +105,7 @@ export abstract class BaseEntity {
 			phase: row.phase || "",
 			title: row.title,
 			description: row.description || null,
-			status: row.status || "backlog",
+			status: row.status || TASK_STATUS_BACKLOG,
 			priority: row.priority || 3,
 			agent: row.agent || "unknown",
 			role: row.role || "unknown",

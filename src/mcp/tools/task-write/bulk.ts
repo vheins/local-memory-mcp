@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../../storage/sqlite";
-import { TaskStatus, VectorStore } from "../../types";
+import { TaskStatus, VectorStore, TASK_STATUS_BACKLOG } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { extractAcceptedElicitationContent } from "../../elicitation";
 import { handleCreateSingle } from "./create";
@@ -131,7 +131,7 @@ export async function handleInteractive(
 		phase: completedDraft.phase as string,
 		title: completedDraft.title as string,
 		description: completedDraft.description as string,
-		status: (completedDraft.status as TaskStatus) || "backlog",
+		status: (completedDraft.status as TaskStatus) || TASK_STATUS_BACKLOG,
 		priority: (completedDraft.priority as number) || 3,
 		json: true
 	};

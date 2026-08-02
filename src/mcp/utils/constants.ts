@@ -1,12 +1,27 @@
 /**
- * Centralized numeric constants for scoring, candidate caps, thresholds,
- * TTLs, and batch sizes — single source of truth across the codebase.
+ * Centralized constants — single source of truth across the codebase.
  * Do not inline these values in call sites.
  *
  * Batch sizes and candidate caps are env-overridable where sensible
  * (e.g. `VECTOR_CANDIDATE_CAP=250`). Scoring weights and similarity
  * thresholds are deliberately NOT env-overridable: silently changing them
  * between environments would alter search/conflict semantics.
+ *
+ * ────────────────────────────────────────────────────────────────────────
+ * NAMING CONVENTIONS (TASK-119) — documented rule for this codebase:
+ *
+ *   1. Scalar constants            → UPPER_SNAKE (default; e.g. TTL_MS_PER_DAY)
+ *   2. Zod schemas / types         → PascalCase (e.g. MemoryScopeSchema)
+ *   3. Process singletons          → camelCase — THE documented exception:
+ *      module-level live instances (logger, indexingRepos, db, mcpClient,
+ *      vectors, embeddingWorker, startTime). These are NOT exported consts
+ *      of a value category; they are DI. Do NOT rename them (breaking).
+ *
+ * ENUM VALUE CASING (TASK-119) — chosen convention for NEW code:
+ *   UPPER_SNAKE (e.g. ErrorSeverity). Existing enums are NOT migrated
+ *   (behavior/API risk): SymbolKind uses slug values, RankTier uses
+ *   numeric values — both remain as-is, documented here as legacy.
+ * ────────────────────────────────────────────────────────────────────────
  */
 
 function envInt(name: string, fallback: number): number {
@@ -15,6 +30,24 @@ function envInt(name: string, fallback: number): number {
 	const parsed = Number.parseInt(raw, 10);
 	return Number.isFinite(parsed) ? parsed : fallback;
 }
+
+// ── Table names (single source of truth for SQL) ────────────────────────
+// Canonical SQLite table names. Use these in ALL SQL strings (entities,
+// migrations, services, tools) — never inline the literal. Virtual/aux
+// tables (memories_fts, task_vectors, …) and migration-internal temp tables
+// (memories__migrated, memory_summary_v3, …) are intentionally NOT included.
+export const TABLE_MEMORIES = "memories";
+export const TABLE_TASKS = "tasks";
+export const TABLE_HANDOFFS = "handoffs";
+export const TABLE_CLAIMS = "claims";
+export const TABLE_ACTION_LOG = "action_log";
+export const TABLE_MEMORY_SUMMARY = "memory_summary";
+
+// ── Time (ms) — TTL building blocks (single source) ─────────────────────
+// Declared before RECENCY_HALF_LIFE_MS so derived constants can reference
+// them. Replace inline `60*60*1000` / `24*60*60*1000` math with these.
+export const TTL_MS_PER_HOUR = 60 * 60 * 1000;
+export const TTL_MS_PER_DAY = 24 * TTL_MS_PER_HOUR;
 
 // ── Hybrid scoring weights (SPEC-001) ────────────────────────────────────
 // 0.40 similarity + 0.30 keyword + 0.15 recency + 0.15 domain.
@@ -28,7 +61,7 @@ export const HYBRID_WEIGHTS = {
 
 // ── Recency decay ────────────────────────────────────────────────────────
 // Exponential half-life used by computeRecencyScore (default, 30 days).
-export const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
+export const RECENCY_HALF_LIFE_MS = 30 * TTL_MS_PER_DAY;
 
 // ── Adaptive search thresholds ───────────────────────────────────────────
 // Small result sets (<= 5 candidates) use the lenient threshold so sparse
@@ -75,7 +108,8 @@ export const DEFAULT_BATCH_SIZE = envInt("DEFAULT_BATCH_SIZE", 100);
 export const BULK_UPDATE_CHUNK_SIZE = 500;
 
 // ── Time (ms) ────────────────────────────────────────────────────────────
-export const TTL_MS_PER_DAY = 24 * 60 * 60 * 1000;
+// TTL building blocks (TTL_MS_PER_HOUR / TTL_MS_PER_DAY) are declared at the
+// top of this file so derived constants can reference them.
 
 // Minimum interval between WAL checkpoints triggered by dashboard reads
 // (TASK-017). Checkpoint cost scales with WAL size, so per-request
@@ -125,8 +159,8 @@ export const EMBEDDING_QUEUE_NON_EMPTY_BACKOFF_STREAK = envInt("EMBEDDING_QUEUE_
 // Purge TTLs: completed jobs are swept after 6h (TASK-071 — done rows are
 // pure history; 24h retention let queue_jobs scans grow needlessly), poisoned
 // after 7d (kept longer for diagnostics).
-export const EMBEDDING_QUEUE_DONE_TTL_MS = 6 * 60 * 60 * 1000;
-export const EMBEDDING_QUEUE_POISON_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const EMBEDDING_QUEUE_DONE_TTL_MS = 6 * TTL_MS_PER_HOUR;
+export const EMBEDDING_QUEUE_POISON_TTL_MS = 7 * TTL_MS_PER_DAY;
 // Frequency of the purge sweep.
 export const EMBEDDING_QUEUE_PURGE_INTERVAL_MS = 15 * 60 * 1000;
 

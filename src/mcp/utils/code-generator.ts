@@ -1,11 +1,12 @@
 import { randomBytes } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
+import { TABLE_TASKS, TABLE_MEMORIES } from "./constants";
 
 export type EntityType = "task" | "memory" | "standard";
 
 const ENTITY_CONFIG: Record<EntityType, { prefix: string; table: string; column: string }> = {
-	task: { prefix: "TASK", table: "tasks", column: "task_code" },
-	memory: { prefix: "MEM", table: "memories", column: "code" },
+	task: { prefix: "TASK", table: TABLE_TASKS, column: "task_code" },
+	memory: { prefix: "MEM", table: TABLE_MEMORIES, column: "code" },
 	standard: { prefix: "STD", table: "coding_standards", column: "code" }
 };
 

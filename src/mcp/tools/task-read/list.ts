@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../../storage/sqlite";
-import { Task } from "../../types";
+import { Task, TASK_STATUSES } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
@@ -86,7 +86,7 @@ export async function handleListMode(
 			parts.push("");
 
 			// Sort groups by status enum order, unknowns last
-			const STATUS_ORDER = ["backlog", "pending", "in_progress", "completed", "canceled", "blocked"];
+			const STATUS_ORDER = [...TASK_STATUSES];
 			const sortedEntries = Object.entries(tasksByStatus).sort(([, itemsA], [, itemsB]) => {
 				const ai = STATUS_ORDER.indexOf(itemsA[0]?.status ?? "");
 				const bi = STATUS_ORDER.indexOf(itemsB[0]?.status ?? "");

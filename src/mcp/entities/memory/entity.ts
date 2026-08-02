@@ -5,6 +5,8 @@ import { VALID_COLUMNS, mergeStructuredData } from "./validation";
 import { BULK_UPDATE_CHUNK_SIZE } from "../../utils/constants";
 import { buildFtsMatchQuery } from "../../utils/fts";
 import { buildUpdateClause } from "../../utils/sql-builder";
+import { TABLE_MEMORIES } from "../../utils/constants";
+import { MEMORY_STATUS_ACTIVE } from "../../types";
 
 // JSON-serialized / int-coerced columns for the shared update-clause builder
 // (TASK-109). Tags and metadata are stored as JSON text; is_global as 0/1.
@@ -20,7 +22,7 @@ export class MemoryEntity extends BaseEntity {
 	private buildInsert(entry: MemoryEntry): { sql: string; params: unknown[] } {
 		const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
 		return {
-			sql: `INSERT INTO memories (
+			sql: `INSERT INTO ${TABLE_MEMORIES} (
 				id, code, repo, owner, type, title, content, importance, folder, language, branch,
 				created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 				supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
@@ -41,7 +43,7 @@ export class MemoryEntity extends BaseEntity {
 				entry.updated_at,
 				entry.expires_at ?? null,
 				entry.supersedes ?? null,
-				entry.status || "active",
+				entry.status || MEMORY_STATUS_ACTIVE,
 				entry.is_global ? 1 : 0,
 				entry.tags ? JSON.stringify(entry.tags) : null,
 				mergedMeta ? JSON.stringify(mergedMeta) : null,
@@ -70,7 +72,7 @@ export class MemoryEntity extends BaseEntity {
 		values.push(new Date().toISOString());
 		values.push(id);
 
-		this.run(`UPDATE memories SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+		this.run(`UPDATE ${TABLE_MEMORIES} SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
 	}
 
 	/**
@@ -104,7 +106,7 @@ export class MemoryEntity extends BaseEntity {
 				if (scope.branch !== undefined) result.branch = scope.branch;
 			} else if (key === "structuredData") {
 				if (!mergeStructuredData || id === undefined) continue;
-				const existingRow = this.get<{ metadata: string }>("SELECT metadata FROM memories WHERE id = ?", [id]);
+				const existingRow = this.get<{ metadata: string }>(`SELECT metadata FROM ${TABLE_MEMORIES} WHERE id = ?`, [id]);
 				const existingMeta = existingRow ? this.safeJSONParse<Record<string, unknown>>(existingRow.metadata, {}) : {};
 				result.metadata = { ...existingMeta, structuredData: value };
 			} else if (key === "tags" || key === "metadata" || key === "is_global" || VALID_COLUMNS.has(key)) {
@@ -115,16 +117,16 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	delete(id: string): void {
-		this.run("DELETE FROM memories WHERE id = ?", [id]);
+		this.run(`DELETE FROM ${TABLE_MEMORIES} WHERE id = ?`, [id]);
 	}
 
 	getById(id: string): MemoryEntry | null {
-		const row = this.get<MemoryRow>("SELECT * FROM memories WHERE id = ?", [id]);
+		const row = this.get<MemoryRow>(`SELECT * FROM ${TABLE_MEMORIES} WHERE id = ?`, [id]);
 		return row ? this.rowToMemoryEntry(row) : null;
 	}
 
 	getByCode(code: string, owner?: string, repo?: string): MemoryEntry | null {
-		let sql = "SELECT * FROM memories WHERE code = ?";
+		let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE code = ?`;
 		const params: (string | null)[] = [code];
 		if (owner && repo) {
 			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
@@ -136,7 +138,7 @@ export class MemoryEntity extends BaseEntity {
 
 	getByIdWithStats(id: string): (MemoryEntry & { recall_rate: number }) | null {
 		const row = this.get<MemoryRow & { recall_rate: number }>(
-			`SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE id = ?`,
+			`SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM ${TABLE_MEMORIES} WHERE id = ?`,
 			[id]
 		);
 		if (!row) return null;
@@ -148,7 +150,7 @@ export class MemoryEntity extends BaseEntity {
 
 	getByIds(ids: string[], options: { type?: string; status?: string } = {}): MemoryEntry[] {
 		if (ids.length === 0) return [];
-		let sql = `SELECT * FROM memories WHERE id IN (${ids.map(() => "?").join(",")})`;
+		let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE id IN (${ids.map(() => "?").join(",")})`;
 		const params: (string | number)[] = [...ids];
 
 		if (options.type) {
@@ -172,7 +174,7 @@ export class MemoryEntity extends BaseEntity {
 	getMemoriesByCodes(codes: string[], owner?: string, repo?: string): MemoryEntry[] {
 		if (codes.length === 0) return [];
 		const placeholders = codes.map(() => "?").join(",");
-		let sql = `SELECT * FROM memories WHERE code IN (${placeholders})`;
+		let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE code IN (${placeholders})`;
 		const params: (string | null)[] = [...codes];
 		if (owner && repo) {
 			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
@@ -199,7 +201,7 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	getStats(owner?: string, repo?: string): { total: number; byType: Record<string, number> } {
-		let sql = "SELECT type, COUNT(*) as count FROM memories";
+		let sql = `SELECT type, COUNT(*) as count FROM ${TABLE_MEMORIES}`;
 		const params: unknown[] = [];
 		if (owner) {
 			sql += " WHERE owner = ?";
@@ -247,7 +249,7 @@ export class MemoryEntity extends BaseEntity {
 				conditions.push("m.repo = ?");
 				params.push(repo);
 			}
-			conditions.push("m.status = 'active'", "(m.expires_at IS NULL OR m.expires_at > ?)");
+			conditions.push(`m.status = '${MEMORY_STATUS_ACTIVE}'`, "(m.expires_at IS NULL OR m.expires_at > ?)");
 			params.push(new Date().toISOString());
 			if (type) {
 				conditions.push("m.type = ?");
@@ -258,7 +260,7 @@ export class MemoryEntity extends BaseEntity {
 			const rows = this.all<MemoryRow>(
 				`SELECT m.*
 				 FROM memories_fts fts
-				 JOIN memories m ON m.rowid = fts.rowid
+				 JOIN ${TABLE_MEMORIES} m ON m.rowid = fts.rowid
 				 WHERE ${conditions.join(" AND ")}
 				 ORDER BY bm25(memories_fts), m.importance DESC, m.created_at DESC
 				 LIMIT ?`,
@@ -297,7 +299,7 @@ export class MemoryEntity extends BaseEntity {
 				conditions.push("m.repo = ?");
 				params.push(repo);
 			}
-			if (!includeArchived) conditions.push("m.status = 'active'");
+			if (!includeArchived) conditions.push(`m.status = '${MEMORY_STATUS_ACTIVE}'`);
 			conditions.push("(m.expires_at IS NULL OR m.expires_at > ?)");
 			params.push(new Date().toISOString());
 			if (type) {
@@ -309,7 +311,7 @@ export class MemoryEntity extends BaseEntity {
 			const rows = this.all<MemoryRow & { bm25_score: number }>(
 				`SELECT m.*, bm25(memories_fts) AS bm25_score
 				 FROM memories_fts fts
-				 JOIN memories m ON m.rowid = fts.rowid
+				 JOIN ${TABLE_MEMORIES} m ON m.rowid = fts.rowid
 				 WHERE ${conditions.join(" AND ")}
 				 ORDER BY bm25_score
 				 LIMIT ?`,
@@ -396,7 +398,7 @@ export class MemoryEntity extends BaseEntity {
 
 			const whereClause = conditions.join(" AND ");
 			const totalRow = this.get<CountResult>(
-				`SELECT COUNT(*) as count FROM memories_fts fts JOIN memories m ON m.rowid = fts.rowid WHERE ${whereClause}`,
+				`SELECT COUNT(*) as count FROM memories_fts fts JOIN ${TABLE_MEMORIES} m ON m.rowid = fts.rowid WHERE ${whereClause}`,
 				params
 			);
 			const total = totalRow?.count ?? 0;
@@ -404,7 +406,7 @@ export class MemoryEntity extends BaseEntity {
 
 			const rows = this.all<MemoryRow & { recall_rate: number }>(
 				`SELECT m.*, CASE WHEN m.hit_count > 0 THEN CAST(m.recall_count AS REAL) / m.hit_count ELSE 0 END AS recall_rate
-				 FROM memories_fts fts JOIN memories m ON m.rowid = fts.rowid
+				 FROM memories_fts fts JOIN ${TABLE_MEMORIES} m ON m.rowid = fts.rowid
 				 WHERE ${whereClause}
 				 ORDER BY m.${sortBy} ${sortOrder} LIMIT ? OFFSET ?`,
 				[...params, limit, offset]
@@ -435,7 +437,7 @@ export class MemoryEntity extends BaseEntity {
 		}
 
 		const ownerClause = owner ? "owner = ? AND " : "";
-		let sql = `SELECT * FROM memories WHERE ${ownerClause}repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)`;
+		let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE ${ownerClause}repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = '${MEMORY_STATUS_ACTIVE}' AND (expires_at IS NULL OR expires_at > ?)`;
 		const params: (string | number)[] = owner
 			? [owner, repo, `%${query}%`, `%${query}%`, `%${query}%`, now]
 			: [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
@@ -482,7 +484,7 @@ export class MemoryEntity extends BaseEntity {
 			for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
 				const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
 				const result = this.run(
-					`UPDATE memories SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
+					`UPDATE ${TABLE_MEMORIES} SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
 					[...values, ...chunk] as (string | number)[]
 				);
 				count += result.changes;
@@ -501,11 +503,11 @@ export class MemoryEntity extends BaseEntity {
 		sortOrder: "ASC" | "DESC" = "DESC"
 	): MemoryEntry[] {
 		const ownerClause = owner ? "owner = ? AND " : "";
-		let query = `SELECT * FROM memories WHERE ${ownerClause}repo = ?`;
+		let query = `SELECT * FROM ${TABLE_MEMORIES} WHERE ${ownerClause}repo = ?`;
 		const params: (string | number)[] = owner ? [owner, repo] : [repo];
 
 		if (!includeArchived) {
-			query += " AND status = 'active'";
+			query += ` AND status = '${MEMORY_STATUS_ACTIVE}'`;
 		}
 
 		if (excludeTypes.length > 0) {
@@ -522,10 +524,10 @@ export class MemoryEntity extends BaseEntity {
 
 	getTotalCount(owner: string, repo: string, includeArchived = false, excludeTypes: string[] = []): number {
 		const ownerClause = owner ? "owner = ? AND " : "";
-		let sql = `SELECT COUNT(*) as count FROM memories WHERE ${ownerClause}repo = ?`;
+		let sql = `SELECT COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE ${ownerClause}repo = ?`;
 		const params: (string | number)[] = owner ? [owner, repo] : [repo];
 
-		if (!includeArchived) sql += " AND status = 'active'";
+		if (!includeArchived) sql += ` AND status = '${MEMORY_STATUS_ACTIVE}'`;
 
 		if (excludeTypes.length > 0) {
 			sql += ` AND type NOT IN (${excludeTypes.map(() => "?").join(",")})`;
@@ -537,7 +539,7 @@ export class MemoryEntity extends BaseEntity {
 	}
 
 	incrementHitCount(id: string): void {
-		this.run("UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?", [
+		this.run(`UPDATE ${TABLE_MEMORIES} SET hit_count = hit_count + 1, last_used_at = ? WHERE id = ?`, [
 			new Date().toISOString(),
 			id
 		]);
@@ -547,14 +549,14 @@ export class MemoryEntity extends BaseEntity {
 		if (!ids || ids.length === 0) return;
 		const now = new Date().toISOString();
 		const placeholders = ids.map(() => "?").join(",");
-		this.run(`UPDATE memories SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`, [
+		this.run(`UPDATE ${TABLE_MEMORIES} SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`, [
 			now,
 			...ids
 		]);
 	}
 
 	incrementRecallCount(id: string): void {
-		this.run("UPDATE memories SET recall_count = recall_count + 1, last_used_at = ? WHERE id = ?", [
+		this.run(`UPDATE ${TABLE_MEMORIES} SET recall_count = recall_count + 1, last_used_at = ? WHERE id = ?`, [
 			new Date().toISOString(),
 			id
 		]);
@@ -567,7 +569,7 @@ export class MemoryEntity extends BaseEntity {
 		offset?: number
 	): (MemoryEntry & { recall_rate: number })[] {
 		const ownerClause = owner ? "owner = ? AND " : "";
-		let sql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${ownerClause}repo = ? ORDER BY created_at DESC`;
+		let sql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM ${TABLE_MEMORIES} WHERE ${ownerClause}repo = ? ORDER BY created_at DESC`;
 		const params: unknown[] = owner ? [owner, repo] : [repo];
 		if (limit !== undefined) {
 			sql += " LIMIT ?";
@@ -690,11 +692,11 @@ export class MemoryEntity extends BaseEntity {
 			params.push(`%${search}%`, `%${search}%`);
 		}
 
-		const countSql = `SELECT COUNT(*) as count FROM memories WHERE ${where.join(" AND ")}`;
+		const countSql = `SELECT COUNT(*) as count FROM ${TABLE_MEMORIES} WHERE ${where.join(" AND ")}`;
 		const totalRow = this.get<CountResult>(countSql, params);
 		const total = totalRow?.count ?? 0;
 
-		const dataSql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM memories WHERE ${where.join(" AND ")} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
+		const dataSql = `SELECT *, CASE WHEN hit_count > 0 THEN CAST(recall_count AS REAL) / hit_count ELSE 0 END AS recall_rate FROM ${TABLE_MEMORIES} WHERE ${where.join(" AND ")} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
 		const rows = this.all<MemoryRow & { recall_rate: number }>(dataSql, [...params, limit, offset]);
 		const items = rows.map((row) => ({
 			...this.rowToMemoryEntry(row),

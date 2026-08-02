@@ -1,6 +1,7 @@
 export {
 	MemoryScopeSchema,
 	MemoryTypeSchema,
+	MemoryStatusSchema,
 	TaskStatusSchema,
 	TaskPrioritySchema,
 	HandoffStatusSchema,

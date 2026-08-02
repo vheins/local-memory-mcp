@@ -1,10 +1,18 @@
 import { AgentContextSchema } from "./schemas";
 import { SQLiteStore } from "../storage/sqlite";
-import { MemoryEntry, Task, VectorStore } from "../types";
+import {
+	MemoryEntry,
+	Task,
+	VectorStore,
+	TASK_STATUS_IN_PROGRESS,
+	TASK_STATUS_PENDING,
+	TASK_STATUS_BACKLOG,
+	TASK_STATUS_BLOCKED
+} from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 
-const ACTIVE_TASK_STATUSES = ["in_progress", "pending", "backlog", "blocked"];
+const ACTIVE_TASK_STATUSES = [TASK_STATUS_IN_PROGRESS, TASK_STATUS_PENDING, TASK_STATUS_BACKLOG, TASK_STATUS_BLOCKED];
 
 /**
  * Deliberate divergence from SPEC-001 hybrid weights (see utils/scoring.ts).

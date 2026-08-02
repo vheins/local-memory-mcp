@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
-import { Task, TaskStatus, TaskPriority, VectorStore } from "../../types";
+import { Task, TaskStatus, TaskPriority, VectorStore, TASK_STATUS_BACKLOG } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { enqueueTask } from "../../embedding-queue";
@@ -25,7 +25,7 @@ function coreCreate(params: WriteParams, storage: SQLiteStore): { task: Task; co
 		throw new Error(`Task code '${params.code}' already exists`);
 	}
 
-	let effectiveStatus: TaskStatus = (params.status || "backlog") as TaskStatus;
+	let effectiveStatus: TaskStatus = (params.status || TASK_STATUS_BACKLOG) as TaskStatus;
 
 	if (params.status !== "backlog" && params.status !== "pending" && params.status !== undefined) {
 		throw new Error("New tasks must be created with status 'backlog' or 'pending'.");
@@ -34,7 +34,7 @@ function coreCreate(params: WriteParams, storage: SQLiteStore): { task: Task; co
 	if (params.status === "pending") {
 		const stats = storage.taskStats.getTaskStats(owner, repo);
 		if (stats.todo > 10) {
-			effectiveStatus = "backlog" as TaskStatus;
+			effectiveStatus = TASK_STATUS_BACKLOG;
 		}
 	}
 

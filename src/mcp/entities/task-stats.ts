@@ -1,22 +1,31 @@
 import { BaseEntity } from "../storage/base";
 import { TaskStats } from "../types";
+import { TABLE_TASKS } from "../utils/constants";
+import {
+	TASK_STATUS_BACKLOG,
+	TASK_STATUS_PENDING,
+	TASK_STATUS_IN_PROGRESS,
+	TASK_STATUS_COMPLETED,
+	TASK_STATUS_BLOCKED,
+	TASK_STATUS_CANCELED
+} from "../types";
 
 export class TaskStatsEntity extends BaseEntity {
 	getTaskStats(owner: string, repo: string): TaskStats {
 		const rows = this.all<{ status: string; count: number }>(
-			"SELECT status, COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ? GROUP BY status",
+			`SELECT status, COUNT(*) as count FROM ${TABLE_TASKS} WHERE owner = ? AND repo = ? GROUP BY status`,
 			[owner, repo]
 		);
 		const stats: TaskStats = { total: 0, backlog: 0, todo: 0, inProgress: 0, completed: 0, blocked: 0, canceled: 0 };
 		rows.forEach((r) => {
 			const count = r.count;
 			stats.total += count;
-			if (r.status === "backlog") stats.backlog = count;
-			else if (r.status === "pending") stats.todo = count;
-			else if (r.status === "in_progress") stats.inProgress = count;
-			else if (r.status === "completed") stats.completed = count;
-			else if (r.status === "blocked") stats.blocked = count;
-			else if (r.status === "canceled") stats.canceled = count;
+			if (r.status === TASK_STATUS_BACKLOG) stats.backlog = count;
+			else if (r.status === TASK_STATUS_PENDING) stats.todo = count;
+			else if (r.status === TASK_STATUS_IN_PROGRESS) stats.inProgress = count;
+			else if (r.status === TASK_STATUS_COMPLETED) stats.completed = count;
+			else if (r.status === TASK_STATUS_BLOCKED) stats.blocked = count;
+			else if (r.status === TASK_STATUS_CANCELED) stats.canceled = count;
 		});
 		return stats;
 	}
@@ -46,9 +55,9 @@ export class TaskStatsEntity extends BaseEntity {
 						ELSE NULL 
 					END
 				) as avg_duration_seconds
-			FROM tasks 
+			FROM ${TABLE_TASKS} 
 			WHERE ${repoWhere}
-			AND status = 'completed' 
+			AND status = '${TASK_STATUS_COMPLETED}' 
 			${dateFilter}`,
 			repoParams
 		);
@@ -59,7 +68,7 @@ export class TaskStatsEntity extends BaseEntity {
 		else if (period === "monthly") addedDateFilter = "AND date(created_at) >= date('now', '-30 days')";
 
 		const added = this.get<{ count: number }>(
-			`SELECT COUNT(*) as count FROM tasks WHERE ${repoWhere} ${addedDateFilter}`,
+			`SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE ${repoWhere} ${addedDateFilter}`,
 			repoParams
 		);
 
@@ -107,12 +116,12 @@ export class TaskStatsEntity extends BaseEntity {
 			SELECT label, SUM(created) as created, SUM(completed) as completed
 			FROM (
 				SELECT strftime(?, created_at) as label, 1 as created, 0 as completed 
-				FROM tasks 
+				FROM ${TABLE_TASKS} 
 				WHERE ${createdRepoFilter}${createdDateFilter}
 				UNION ALL
 				SELECT strftime(?, COALESCE(finished_at, updated_at)) as label, 0 as created, 1 as completed 
-				FROM tasks 
-				WHERE ${completedRepoFilter}status = 'completed' AND ${completedDateFilter}
+				FROM ${TABLE_TASKS} 
+				WHERE ${completedRepoFilter}status = '${TASK_STATUS_COMPLETED}' AND ${completedDateFilter}
 			)
 			GROUP BY label
 			ORDER BY label ASC

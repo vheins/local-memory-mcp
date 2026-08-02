@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
+import { MEMORY_TYPES, MEMORY_STATUSES } from "../../types/memory";
+import { TASK_STATUSES, TASK_PRIORITIES } from "../../types/task";
+import { HANDOFF_STATUSES } from "../../types/handoff";
 
 export const MemoryScopeSchema = z.object({
 	owner: z.string().min(1),
@@ -9,13 +12,20 @@ export const MemoryScopeSchema = z.object({
 	language: z.string().optional()
 });
 
-export const MemoryTypeSchema = z.enum(["code_fact", "decision", "mistake", "pattern", "task_archive"]);
+// Enums are derived from the single-source consts in ../../types (TASK-118) —
+// never inline the value lists here.
+export const MemoryTypeSchema = z.enum(MEMORY_TYPES);
 
-export const TaskStatusSchema = z.enum(["backlog", "pending", "in_progress", "completed", "canceled", "blocked"]);
+export const MemoryStatusSchema = z.enum(MEMORY_STATUSES);
 
-export const TaskPrioritySchema = z.coerce.number().min(1).max(5);
+export const TaskStatusSchema = z.enum(TASK_STATUSES);
 
-export const HandoffStatusSchema = z.enum(["pending", "accepted", "rejected", "expired"]);
+export const TaskPrioritySchema = z.coerce
+	.number()
+	.min(Math.min(...TASK_PRIORITIES))
+	.max(Math.max(...TASK_PRIORITIES));
+
+export const HandoffStatusSchema = z.enum(HANDOFF_STATUSES);
 
 export const SingleStandardSchema = z.object({
 	name: z.string().min(3).max(255),
@@ -34,4 +44,4 @@ export const SingleStandardSchema = z.object({
 	model: z.string().optional()
 });
 
-export const TaskStatusValues = TaskStatusSchema.options as readonly string[];
+export const TaskStatusValues: readonly string[] = TASK_STATUSES;

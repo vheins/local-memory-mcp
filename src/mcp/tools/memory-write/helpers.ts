@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
-import { VectorStore, MemoryEntry } from "../../types";
+import { VectorStore, MemoryEntry, MEMORY_STATUS_ACTIVE } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { resolveMemorySupersedes } from "../../utils/memory-utils";
@@ -170,7 +170,7 @@ export function buildMemoryEntry(
 		last_used_at: null,
 		expires_at,
 		supersedes: resolvedSupersedes,
-		status: "active",
+		status: MEMORY_STATUS_ACTIVE,
 		tags,
 		metadata: (params.metadata as Record<string, unknown>) ?? {},
 		is_global: (params.is_global as boolean) ?? false

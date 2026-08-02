@@ -35,8 +35,10 @@ import { buildStandardVectorText } from "../tools/standard.shared";
 import { logger } from "../utils/logger";
 import { EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE } from "../utils/constants";
 import { MemoryEntry, Task } from "../types";
-import { CodingStandardEntry } from "../types/memory";
+import { CodingStandardEntry, MEMORY_STATUS_ACTIVE } from "../types/memory";
+import { TASK_STATUS_CANCELED } from "../types/task";
 import { EmbeddingJobInput, EmbeddingJobPayload, QueueCounts, QueueJobRow, QueueJobStatus } from "./types";
+import { TABLE_MEMORIES, TABLE_TASKS } from "../utils/constants";
 
 // ---------------------------------------------------------------------------
 // Snapshot payload builders
@@ -372,8 +374,8 @@ export class Outbox {
 				const memories = this.store.db
 					.prepare(
 						`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
-             FROM memories m LEFT JOIN memory_vectors mv ON mv.memory_id = m.id
-             WHERE m.status = 'active' AND (mv.memory_id IS NULL OR mv.updated_at < m.updated_at)
+             FROM ${TABLE_MEMORIES} m LEFT JOIN memory_vectors mv ON mv.memory_id = m.id
+             WHERE m.status = '${MEMORY_STATUS_ACTIVE}' AND (mv.memory_id IS NULL OR mv.updated_at < m.updated_at)
              LIMIT ?`
 					)
 					.all(cap) as Array<{
@@ -466,8 +468,8 @@ export class Outbox {
 					const tasks = this.store.db
 						.prepare(
 							`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
-               FROM tasks t LEFT JOIN task_vectors tv ON tv.task_id = t.id
-               WHERE t.status != 'canceled' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
+               FROM ${TABLE_TASKS} t LEFT JOIN task_vectors tv ON tv.task_id = t.id
+                WHERE t.status != '${TASK_STATUS_CANCELED}' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
                LIMIT ?`
 						)
 						.all(cap - enqueued) as Array<{

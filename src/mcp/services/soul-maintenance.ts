@@ -1,5 +1,7 @@
 import { logger } from "../utils/logger";
 import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
+import { TABLE_MEMORIES, TABLE_ACTION_LOG, TTL_MS_PER_DAY } from "../utils/constants";
+import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 
 export interface PruneActionLogResult {
 	/** Number of action_log rows deleted */
@@ -52,13 +54,13 @@ export function applyDecay(
 	const { immunizedTags = [], decayAfterDays = 7, decayRate = 0.5, archiveThreshold = 1 } = options ?? {};
 
 	const now = new Date().toISOString();
-	const cutoff = new Date(Date.now() - decayAfterDays * 24 * 60 * 60 * 1000).toISOString();
+	const cutoff = new Date(Date.now() - decayAfterDays * TTL_MS_PER_DAY).toISOString();
 
 	// Step 1: Find active memories that haven't been used recently
 	const rows = db
 		.prepare(
-			`SELECT id, importance, tags FROM memories
-       WHERE status = 'active'
+			`SELECT id, importance, tags FROM ${TABLE_MEMORIES}
+       WHERE status = '${MEMORY_STATUS_ACTIVE}'
          AND (last_used_at IS NULL OR last_used_at < ?)`
 		)
 		.all(cutoff) as Array<{ id: string; importance: number; tags: string | null }>;
@@ -103,7 +105,7 @@ export function applyDecay(
 
 	// Batch-decay by importance
 	if (toDecay.length > 0) {
-		const updateStmt = db.prepare("UPDATE memories SET importance = ?, updated_at = ? WHERE id = ?");
+		const updateStmt = db.prepare(`UPDATE ${TABLE_MEMORIES} SET importance = ?, updated_at = ? WHERE id = ?`);
 		for (const item of toDecay) {
 			updateStmt.run(item.newImportance, now, item.id);
 		}
@@ -114,7 +116,9 @@ export function applyDecay(
 	if (toArchive.length > 0) {
 		const placeholders = toArchive.map(() => "?").join(",");
 		const archiveResult = db
-			.prepare(`UPDATE memories SET status = 'archived', updated_at = ? WHERE id IN (${placeholders})`)
+			.prepare(
+				`UPDATE ${TABLE_MEMORIES} SET status = '${MEMORY_STATUS_ARCHIVED}', updated_at = ? WHERE id IN (${placeholders})`
+			)
 			.run(now, ...toArchive);
 		archivedCount = archiveResult.changes;
 	}
@@ -144,9 +148,9 @@ export function pruneActionLog(
 	db: { prepare: (sql: string) => import("better-sqlite3").Statement },
 	retentionDays = 30
 ): PruneActionLogResult {
-	const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
-	const result = db.prepare("DELETE FROM action_log WHERE created_at < ?").run(cutoff);
+	const result = db.prepare(`DELETE FROM ${TABLE_ACTION_LOG} WHERE created_at < ?`).run(cutoff);
 
 	if (result.changes > 0) {
 		logger.info("[SoulMaintenance] Pruned stale action_log entries", {
@@ -170,7 +174,7 @@ export function pruneActionLog(
  * @returns Number of rows deleted
  */
 export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentionDays = 7): PruneObservationsResult {
-	const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
 	const deleted = knowledgeGraph.deleteObservationsOlderThan(cutoff);
 

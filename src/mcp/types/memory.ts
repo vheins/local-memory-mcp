@@ -1,4 +1,12 @@
-export type MemoryType = "code_fact" | "decision" | "mistake" | "pattern" | "task_archive";
+// Single source of truth for memory enumerations. The zod schemas
+// (tools/schemas/shared.ts) derive their enums from these consts.
+export const MEMORY_TYPES = ["code_fact", "decision", "mistake", "pattern", "task_archive"] as const;
+export type MemoryType = (typeof MEMORY_TYPES)[number];
+
+export const MEMORY_STATUS_ACTIVE = "active" as const;
+export const MEMORY_STATUS_ARCHIVED = "archived" as const;
+export const MEMORY_STATUSES = [MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED] as const;
+export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
 
 export type MemoryScope = {
 	owner: string;
@@ -27,7 +35,7 @@ export type MemoryEntry = {
 	last_used_at: string | null;
 	expires_at: string | null;
 	supersedes: string | null;
-	status: "active" | "archived";
+	status: MemoryStatus;
 	tags: string[];
 	metadata: Record<string, unknown>;
 	structuredData?: Record<string, unknown>;
@@ -57,7 +65,7 @@ export type MemoryRow = {
 	last_used_at: string | null;
 	expires_at: string | null;
 	supersedes: string | null;
-	status: "active" | "archived";
+	status: MemoryStatus;
 	is_global: number;
 	tags: string;
 	metadata: string;

@@ -1,3 +1,4 @@
+import { TTL_MS_PER_DAY, TTL_MS_PER_HOUR } from "../utils/constants";
 /**
  * Time Tunnel — Relative Date Parsing for Memory Search
  *
@@ -69,7 +70,7 @@ const PATTERNS: PatternHandler[] = [
 		regex: /\blast week\b/i,
 		handler: (_match: RegExpMatchArray, now: Date) => {
 			const thisMonday = currentWeekMonday(now);
-			const startOfLastWeek = new Date(thisMonday.getTime() - 7 * 24 * 60 * 60 * 1000);
+			const startOfLastWeek = new Date(thisMonday.getTime() - 7 * TTL_MS_PER_DAY);
 			const _endOfLastWeek = new Date(thisMonday.getTime() - 1);
 			// endOfLastWeek should be end of Sunday (the day before this Monday)
 			const endOfSunday = new Date(
@@ -150,7 +151,7 @@ const PATTERNS: PatternHandler[] = [
 	{
 		regex: /\b(?:last|past)_hour\b/i,
 		handler: (_match: RegExpMatchArray, now: Date) => {
-			const since = new Date(now.getTime() - 60 * 60 * 1000);
+			const since = new Date(now.getTime() - TTL_MS_PER_HOUR);
 			return {
 				since: since.toISOString()
 			};

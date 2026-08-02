@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite";
-import { VectorStore } from "../types";
+import { VectorStore, MEMORY_STATUS_ARCHIVED } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 import { resolveEntityRef } from "../utils/entity-ref";
@@ -84,7 +84,7 @@ export async function handleMemoryDelete(
 		// KG extraction for an archived memory (TASK-042 / MEM-427).
 		db.db
 			.transaction(() => {
-				db.memories.bulkUpdateMemories(validIdsToDelete, { status: "archived" });
+				db.memories.bulkUpdateMemories(validIdsToDelete, { status: MEMORY_STATUS_ARCHIVED });
 				const placeholders = validIdsToDelete.map(() => "?").join(",");
 				db.db
 					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)

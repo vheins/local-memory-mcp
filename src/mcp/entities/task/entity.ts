@@ -12,6 +12,8 @@ import {
 } from "./queries";
 import { VECTOR_CANDIDATE_CAP } from "../../utils/constants";
 import { buildUpdateClause } from "../../utils/sql-builder";
+import { TABLE_TASKS } from "../../utils/constants";
+import { TASK_STATUS_BACKLOG } from "../../types";
 
 // Writable task columns / JSON-serialized keys for the shared update-clause
 // builder (TASK-109). comment/model are accepted on the API surface but are
@@ -50,7 +52,7 @@ export class TaskEntity extends BaseEntity {
 	 */
 	private buildInsert(task: Task): { sql: string; params: unknown[] } {
 		return {
-			sql: `INSERT INTO tasks (
+			sql: `INSERT INTO ${TABLE_TASKS} (
 				id, repo, owner, task_code, phase, title, description, status, priority,
 				agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, suggested_skills, metadata, parent_id, depends_on, est_tokens, in_progress_at,
 				commit_id, changed_files
@@ -63,7 +65,7 @@ export class TaskEntity extends BaseEntity {
 				task.phase || null,
 				task.title,
 				task.description || null,
-				task.status || "backlog",
+				task.status || TASK_STATUS_BACKLOG,
 				task.priority || 3,
 				task.agent || "unknown",
 				task.role || "unknown",
@@ -106,12 +108,12 @@ export class TaskEntity extends BaseEntity {
 		values.push(new Date().toISOString());
 		values.push(id);
 
-		this.run(`UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
+		this.run(`UPDATE ${TABLE_TASKS} SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
 	}
 
 	deleteTask(id: string): void {
 		this.run("DELETE FROM task_comments WHERE task_id = ?", [id]);
-		this.run("DELETE FROM tasks WHERE id = ?", [id]);
+		this.run(`DELETE FROM ${TABLE_TASKS} WHERE id = ?`, [id]);
 	}
 
 	getTaskById(id: string): Task | null {
@@ -134,8 +136,8 @@ export class TaskEntity extends BaseEntity {
 			`SELECT t.*, d.task_code as depends_on_code,
 				${buildCoordinationSelect("t")},
 				(SELECT COUNT(*) FROM task_comments WHERE task_id = t.id) as comments_count
-			FROM tasks t
-			LEFT JOIN tasks d ON t.depends_on = d.id
+			FROM ${TABLE_TASKS} t
+			LEFT JOIN ${TABLE_TASKS} d ON t.depends_on = d.id
 			WHERE t.id IN (${placeholders})`,
 			ids
 		);
@@ -225,7 +227,7 @@ export class TaskEntity extends BaseEntity {
 
 	countTasks(owner: string, repo: string, status?: string, search?: string): number {
 		const { clause: repoClause, params } = taskRepoFilter(undefined, owner, repo);
-		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${repoClause}`;
+		let query = `SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE ${repoClause}`;
 
 		const statusClause = taskStatusFilter(undefined, status);
 		if (statusClause) {
@@ -302,7 +304,7 @@ export class TaskEntity extends BaseEntity {
 
 		const repoFilter = taskRepoFilter(undefined, owner, repo);
 		const params: (string | number)[] = repoFilter.params;
-		let query = `SELECT COUNT(*) as count FROM tasks WHERE ${repoFilter.clause}`;
+		let query = `SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE ${repoFilter.clause}`;
 
 		const statusesClause = taskStatusesFilter(undefined, statuses);
 		if (statusesClause) {
@@ -322,11 +324,11 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	isTaskCodeDuplicate(owner: string, repo: string, task_code: string, excludeId?: string): boolean {
-		let query = "SELECT COUNT(*) as count FROM tasks WHERE repo = ? AND task_code = ?";
+		let query = `SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE repo = ? AND task_code = ?`;
 		const params: (string | number)[] = [repo, task_code];
 
 		if (owner) {
-			query = "SELECT COUNT(*) as count FROM tasks WHERE owner = ? AND repo = ? AND task_code = ?";
+			query = `SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE owner = ? AND repo = ? AND task_code = ?`;
 			params.unshift(owner);
 		}
 
@@ -341,14 +343,14 @@ export class TaskEntity extends BaseEntity {
 
 	getChildrenByParentId(id: string): TaskChild[] {
 		return this.all<TaskChild>(
-			"SELECT task_code, title, status FROM tasks WHERE parent_id = ? ORDER BY created_at ASC",
+			`SELECT task_code, title, status FROM ${TABLE_TASKS} WHERE parent_id = ? ORDER BY created_at ASC`,
 			[id]
 		);
 	}
 
 	getDependedByTaskId(id: string): TaskChild[] {
 		return this.all<TaskChild>(
-			"SELECT task_code, title, status FROM tasks WHERE depends_on = ? ORDER BY created_at ASC",
+			`SELECT task_code, title, status FROM ${TABLE_TASKS} WHERE depends_on = ? ORDER BY created_at ASC`,
 			[id]
 		);
 	}
@@ -361,7 +363,7 @@ export class TaskEntity extends BaseEntity {
 		if (ids.length === 0) return new Map();
 		const placeholders = ids.map(() => "?").join(",");
 		const rows = this.all<TaskChild & { parent_id: string }>(
-			`SELECT task_code, title, status, parent_id FROM tasks WHERE parent_id IN (${placeholders}) ORDER BY created_at ASC`,
+			`SELECT task_code, title, status, parent_id FROM ${TABLE_TASKS} WHERE parent_id IN (${placeholders}) ORDER BY created_at ASC`,
 			ids
 		);
 		const grouped = new Map<string, TaskChild[]>();
@@ -380,7 +382,7 @@ export class TaskEntity extends BaseEntity {
 		if (ids.length === 0) return new Map();
 		const placeholders = ids.map(() => "?").join(",");
 		const rows = this.all<TaskChild & { depends_on: string }>(
-			`SELECT task_code, title, status, depends_on FROM tasks WHERE depends_on IN (${placeholders}) ORDER BY created_at ASC`,
+			`SELECT task_code, title, status, depends_on FROM ${TABLE_TASKS} WHERE depends_on IN (${placeholders}) ORDER BY created_at ASC`,
 			ids
 		);
 		const grouped = new Map<string, TaskChild[]>();
@@ -404,7 +406,7 @@ export class TaskEntity extends BaseEntity {
 	 * Returns the number of children detached.
 	 */
 	clearChildrenParent(parentId: string): number {
-		return this.run("UPDATE tasks SET parent_id = NULL, updated_at = ? WHERE parent_id = ?", [
+		return this.run(`UPDATE ${TABLE_TASKS} SET parent_id = NULL, updated_at = ? WHERE parent_id = ?`, [
 			new Date().toISOString(),
 			parentId
 		]).changes;
@@ -474,7 +476,7 @@ export class TaskEntity extends BaseEntity {
 	getTaskVectorCandidates(repo?: string, limit = VECTOR_CANDIDATE_CAP): { task_id: string; vector: string }[] {
 		let sql = `SELECT tv.task_id, tv.vector
 			FROM task_vectors tv
-			JOIN tasks t ON t.id = tv.task_id`;
+			JOIN ${TABLE_TASKS} t ON t.id = tv.task_id`;
 		const params: (string | number)[] = [];
 
 		if (repo) {
@@ -500,7 +502,7 @@ export class TaskEntity extends BaseEntity {
 			params.unshift(owner);
 		}
 		const rows = this.all<{ task_code: string }>(
-			`SELECT task_code FROM tasks WHERE ${ownerClause}repo = ? AND task_code IN (${placeholders})`,
+			`SELECT task_code FROM ${TABLE_TASKS} WHERE ${ownerClause}repo = ? AND task_code IN (${placeholders})`,
 			params
 		);
 		return new Set(rows.map((r) => r.task_code));

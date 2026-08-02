@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
-import { Task, TaskStatus, TaskPriority, VectorStore } from "../../types";
+import { Task, TaskStatus, TaskPriority, VectorStore, TASK_STATUS_BACKLOG } from "../../types";
 import { logger } from "../../utils/logger";
 import { UUID_REGEX } from "../../utils/uuid";
 import { resolveEntityRef } from "../../utils/entity-ref";
@@ -249,7 +249,7 @@ export async function executeBulkOperation(
 
 				if (normalizedStatus === "pending") {
 					if (initialStats.todo + pendingInRequestCount > 10) {
-						normalizedStatus = "backlog" as TaskStatus;
+						normalizedStatus = TASK_STATUS_BACKLOG;
 					}
 				}
 

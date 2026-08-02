@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
-import { MemoryScopeSchema, MemoryTypeSchema } from "./shared";
+import { MemoryScopeSchema, MemoryTypeSchema, MemoryStatusSchema } from "./shared";
 
 export const MemoryDeleteSchema = z
 	.object({
@@ -72,7 +72,7 @@ const MemoryWriteFields = {
 	agent: z.string().optional(),
 	role: z.string().optional(),
 	model: z.string().optional(),
-	status: z.enum(["active", "archived"]).optional(),
+	status: MemoryStatusSchema.optional(),
 	completed_at: z.string().optional(),
 
 	// Acknowledge discriminator (separate from entity status)

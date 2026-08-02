@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { BaseEntity } from "../storage/base";
 import { Handoff, HandoffRow, Claim, ClaimRow } from "../types";
+import { TABLE_HANDOFFS, TABLE_TASKS, TABLE_CLAIMS } from "../utils/constants";
+import { HANDOFF_STATUS_PENDING } from "../types";
 
 export class HandoffEntity extends BaseEntity {
 	createHandoff(params: {
@@ -16,7 +18,7 @@ export class HandoffEntity extends BaseEntity {
 		const now = new Date().toISOString();
 		const id = randomUUID();
 		this.run(
-			`INSERT INTO handoffs (id, owner, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
+			`INSERT INTO ${TABLE_HANDOFFS} (id, owner, repo, from_agent, to_agent, task_id, summary, context, status, created_at, updated_at, expires_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			[
 				id,
@@ -27,7 +29,7 @@ export class HandoffEntity extends BaseEntity {
 				params.task_id ?? null,
 				params.summary,
 				JSON.stringify(params.context ?? {}),
-				"pending",
+				HANDOFF_STATUS_PENDING,
 				now,
 				now,
 				params.expires_at ?? null
@@ -67,8 +69,8 @@ export class HandoffEntity extends BaseEntity {
 
 		const rows = this.all<HandoffRow & { task_code?: string | null }>(
 			`SELECT h.*, t.task_code
-			 FROM handoffs h
-			 LEFT JOIN tasks t ON h.task_id = t.id
+			 FROM ${TABLE_HANDOFFS} h
+			 LEFT JOIN ${TABLE_TASKS} t ON h.task_id = t.id
 			 WHERE ${conditions
 					.map((condition) =>
 						condition
@@ -88,8 +90,8 @@ export class HandoffEntity extends BaseEntity {
 	getHandoffById(id: string): Handoff | null {
 		const row = this.get<HandoffRow & { task_code?: string | null }>(
 			`SELECT h.*, t.task_code
-			 FROM handoffs h
-			 LEFT JOIN tasks t ON h.task_id = t.id
+			 FROM ${TABLE_HANDOFFS} h
+			 LEFT JOIN ${TABLE_TASKS} t ON h.task_id = t.id
 			 WHERE h.id = ?`,
 			[id]
 		);
@@ -97,7 +99,7 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	updateHandoffStatus(id: string, status: Handoff["status"]): boolean {
-		const result = this.run("UPDATE handoffs SET status = ?, updated_at = ? WHERE id = ?", [
+		const result = this.run(`UPDATE ${TABLE_HANDOFFS} SET status = ?, updated_at = ? WHERE id = ?`, [
 			status,
 			new Date().toISOString(),
 			id
@@ -106,11 +108,10 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	updatePendingHandoffsForTask(task_id: string, status: Handoff["status"]): number {
-		const result = this.run("UPDATE handoffs SET status = ?, updated_at = ? WHERE task_id = ? AND status = 'pending'", [
-			status,
-			new Date().toISOString(),
-			task_id
-		]);
+		const result = this.run(
+			`UPDATE ${TABLE_HANDOFFS} SET status = ?, updated_at = ? WHERE task_id = ? AND status = '${HANDOFF_STATUS_PENDING}'`,
+			[status, new Date().toISOString(), task_id]
+		);
 		return result.changes;
 	}
 
@@ -128,10 +129,13 @@ export class HandoffEntity extends BaseEntity {
 		// Release any existing active claim for this task, then insert the new
 		// claim — atomic so a failure cannot leave a stale active claim behind.
 		this.transaction(() => {
-			this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [now, params.task_id]);
+			this.run(`UPDATE ${TABLE_CLAIMS} SET released_at = ? WHERE task_id = ? AND released_at IS NULL`, [
+				now,
+				params.task_id
+			]);
 
 			this.run(
-				`INSERT INTO claims (id, owner, repo, task_id, agent, role, claimed_at, released_at, metadata)
+				`INSERT INTO ${TABLE_CLAIMS} (id, owner, repo, task_id, agent, role, claimed_at, released_at, metadata)
 				VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
 				[
 					id,
@@ -148,8 +152,8 @@ export class HandoffEntity extends BaseEntity {
 		return this.rowToClaim(
 			this.get<ClaimRow & { task_code?: string | null }>(
 				`SELECT c.*, t.task_code
-				 FROM claims c
-				 LEFT JOIN tasks t ON c.task_id = t.id
+				 FROM ${TABLE_CLAIMS} c
+				 LEFT JOIN ${TABLE_TASKS} t ON c.task_id = t.id
 				 WHERE c.id = ?`,
 				[id]
 			)!
@@ -159,8 +163,8 @@ export class HandoffEntity extends BaseEntity {
 	getClaim(task_id: string): Claim | null {
 		const row = this.get<ClaimRow & { task_code?: string | null }>(
 			`SELECT c.*, t.task_code
-			 FROM claims c
-			 LEFT JOIN tasks t ON c.task_id = t.id
+			 FROM ${TABLE_CLAIMS} c
+			 LEFT JOIN ${TABLE_TASKS} t ON c.task_id = t.id
 			 WHERE c.task_id = ? AND c.released_at IS NULL
 			 ORDER BY c.claimed_at DESC LIMIT 1`,
 			[task_id]
@@ -170,7 +174,7 @@ export class HandoffEntity extends BaseEntity {
 
 	releaseClaim(task_id: string, agent?: string): boolean {
 		const now = new Date().toISOString();
-		let sql = "UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL";
+		let sql = `UPDATE ${TABLE_CLAIMS} SET released_at = ? WHERE task_id = ? AND released_at IS NULL`;
 		const params: unknown[] = [now, task_id];
 
 		if (agent) {
@@ -183,7 +187,7 @@ export class HandoffEntity extends BaseEntity {
 	}
 
 	releaseClaimsForTask(task_id: string): number {
-		const result = this.run("UPDATE claims SET released_at = ? WHERE task_id = ? AND released_at IS NULL", [
+		const result = this.run(`UPDATE ${TABLE_CLAIMS} SET released_at = ? WHERE task_id = ? AND released_at IS NULL`, [
 			new Date().toISOString(),
 			task_id
 		]);
@@ -215,8 +219,8 @@ export class HandoffEntity extends BaseEntity {
 
 		const rows = this.all<ClaimRow & { task_code?: string | null }>(
 			`SELECT c.*, t.task_code
-			 FROM claims c
-			 LEFT JOIN tasks t ON c.task_id = t.id
+			 FROM ${TABLE_CLAIMS} c
+			 LEFT JOIN ${TABLE_TASKS} t ON c.task_id = t.id
 			 WHERE ${conditions
 					.map((condition) =>
 						condition

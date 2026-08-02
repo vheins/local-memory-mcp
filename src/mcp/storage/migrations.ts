@@ -1,5 +1,13 @@
 import Database from "better-sqlite3";
 import { logger } from "../utils/logger";
+import {
+	TABLE_MEMORIES,
+	TABLE_TASKS,
+	TABLE_HANDOFFS,
+	TABLE_CLAIMS,
+	TABLE_ACTION_LOG,
+	TABLE_MEMORY_SUMMARY
+} from "../utils/constants";
 
 export const SCHEMA_VERSION = 13;
 
@@ -18,7 +26,7 @@ const MIGRATIONS: Migration[] = [
 			// All base tables + indexes
 			// ──────────────────────────────────────────────
 			db.exec(`
-        CREATE TABLE IF NOT EXISTS memories (
+        CREATE TABLE IF NOT EXISTS ${TABLE_MEMORIES} (
           id TEXT PRIMARY KEY,
           repo TEXT NOT NULL,
           owner TEXT NOT NULL DEFAULT '',
@@ -39,17 +47,17 @@ const MIGRATIONS: Migration[] = [
           completed_at TEXT
         );
 
-        CREATE INDEX IF NOT EXISTS idx_memories_repo ON memories(repo);
-        CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
-        CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance);
-        CREATE INDEX IF NOT EXISTS idx_memories_hit_count ON memories(hit_count);
-        CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
-        CREATE INDEX IF NOT EXISTS idx_memories_updated_at ON memories(updated_at);
-        CREATE INDEX IF NOT EXISTS idx_memories_repo_created_at ON memories(repo, created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_memories_repo_hit_count ON memories(repo, hit_count DESC);
-        CREATE INDEX IF NOT EXISTS idx_memories_title ON memories(title);
+        CREATE INDEX IF NOT EXISTS idx_memories_repo ON ${TABLE_MEMORIES}(repo);
+        CREATE INDEX IF NOT EXISTS idx_memories_type ON ${TABLE_MEMORIES}(type);
+        CREATE INDEX IF NOT EXISTS idx_memories_importance ON ${TABLE_MEMORIES}(importance);
+        CREATE INDEX IF NOT EXISTS idx_memories_hit_count ON ${TABLE_MEMORIES}(hit_count);
+        CREATE INDEX IF NOT EXISTS idx_memories_created_at ON ${TABLE_MEMORIES}(created_at);
+        CREATE INDEX IF NOT EXISTS idx_memories_updated_at ON ${TABLE_MEMORIES}(updated_at);
+        CREATE INDEX IF NOT EXISTS idx_memories_repo_created_at ON ${TABLE_MEMORIES}(repo, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_memories_repo_hit_count ON ${TABLE_MEMORIES}(repo, hit_count DESC);
+        CREATE INDEX IF NOT EXISTS idx_memories_title ON ${TABLE_MEMORIES}(title);
 
-        CREATE TABLE IF NOT EXISTS memory_summary (
+        CREATE TABLE IF NOT EXISTS ${TABLE_MEMORY_SUMMARY} (
           repo TEXT NOT NULL,
           owner TEXT NOT NULL DEFAULT '',
           summary TEXT NOT NULL,
@@ -61,10 +69,10 @@ const MIGRATIONS: Migration[] = [
           memory_id TEXT PRIMARY KEY,
           vector TEXT NOT NULL,
           updated_at TEXT NOT NULL,
-          FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+          FOREIGN KEY (memory_id) REFERENCES ${TABLE_MEMORIES}(id) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS tasks (
+        CREATE TABLE IF NOT EXISTS ${TABLE_TASKS} (
           id TEXT PRIMARY KEY,
           repo TEXT NOT NULL,
           owner TEXT NOT NULL DEFAULT '',
@@ -89,15 +97,15 @@ const MIGRATIONS: Migration[] = [
           in_progress_at TEXT,
           commit_id TEXT,
           changed_files TEXT,
-          FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
-          FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
+          FOREIGN KEY (parent_id) REFERENCES ${TABLE_TASKS}(id) ON DELETE SET NULL,
+          FOREIGN KEY (depends_on) REFERENCES ${TABLE_TASKS}(id) ON DELETE SET NULL
         );
 
-        CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo);
-        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-        CREATE INDEX IF NOT EXISTS idx_tasks_phase ON tasks(phase);
-        CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
-        CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+        CREATE INDEX IF NOT EXISTS idx_tasks_repo ON ${TABLE_TASKS}(repo);
+        CREATE INDEX IF NOT EXISTS idx_tasks_status ON ${TABLE_TASKS}(status);
+        CREATE INDEX IF NOT EXISTS idx_tasks_phase ON ${TABLE_TASKS}(phase);
+        CREATE INDEX IF NOT EXISTS idx_tasks_priority ON ${TABLE_TASKS}(priority);
+        CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON ${TABLE_TASKS}(created_at);
 
         CREATE TABLE IF NOT EXISTS task_comments (
           id TEXT PRIMARY KEY,
@@ -111,7 +119,7 @@ const MIGRATIONS: Migration[] = [
           previous_status TEXT,
           next_status TEXT,
           created_at TEXT NOT NULL,
-          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+          FOREIGN KEY (task_id) REFERENCES ${TABLE_TASKS}(id) ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_task_comments_task_id ON task_comments(task_id);
@@ -175,7 +183,7 @@ const MIGRATIONS: Migration[] = [
           completed_at TEXT
         );
 
-        CREATE TABLE IF NOT EXISTS action_log (
+        CREATE TABLE IF NOT EXISTS ${TABLE_ACTION_LOG} (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           action TEXT NOT NULL,
           query TEXT,
@@ -188,10 +196,10 @@ const MIGRATIONS: Migration[] = [
           created_at TEXT NOT NULL
         );
 
-        CREATE INDEX IF NOT EXISTS idx_action_log_repo ON action_log(repo);
-        CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON action_log(created_at);
+        CREATE INDEX IF NOT EXISTS idx_action_log_repo ON ${TABLE_ACTION_LOG}(repo);
+        CREATE INDEX IF NOT EXISTS idx_action_log_created_at ON ${TABLE_ACTION_LOG}(created_at);
 
-        CREATE TABLE IF NOT EXISTS handoffs (
+        CREATE TABLE IF NOT EXISTS ${TABLE_HANDOFFS} (
           id TEXT PRIMARY KEY,
           repo TEXT NOT NULL,
           owner TEXT NOT NULL DEFAULT '',
@@ -204,17 +212,17 @@ const MIGRATIONS: Migration[] = [
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           expires_at TEXT,
-          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+          FOREIGN KEY (task_id) REFERENCES ${TABLE_TASKS}(id) ON DELETE SET NULL
         );
 
-        CREATE INDEX IF NOT EXISTS idx_handoffs_repo ON handoffs(repo);
-        CREATE INDEX IF NOT EXISTS idx_handoffs_status ON handoffs(status);
-        CREATE INDEX IF NOT EXISTS idx_handoffs_from_agent ON handoffs(from_agent);
-        CREATE INDEX IF NOT EXISTS idx_handoffs_to_agent ON handoffs(to_agent);
-        CREATE INDEX IF NOT EXISTS idx_handoffs_task_id ON handoffs(task_id);
-        CREATE INDEX IF NOT EXISTS idx_handoffs_created_at ON handoffs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_handoffs_repo ON ${TABLE_HANDOFFS}(repo);
+        CREATE INDEX IF NOT EXISTS idx_handoffs_status ON ${TABLE_HANDOFFS}(status);
+        CREATE INDEX IF NOT EXISTS idx_handoffs_from_agent ON ${TABLE_HANDOFFS}(from_agent);
+        CREATE INDEX IF NOT EXISTS idx_handoffs_to_agent ON ${TABLE_HANDOFFS}(to_agent);
+        CREATE INDEX IF NOT EXISTS idx_handoffs_task_id ON ${TABLE_HANDOFFS}(task_id);
+        CREATE INDEX IF NOT EXISTS idx_handoffs_created_at ON ${TABLE_HANDOFFS}(created_at);
 
-        CREATE TABLE IF NOT EXISTS claims (
+        CREATE TABLE IF NOT EXISTS ${TABLE_CLAIMS} (
           id TEXT PRIMARY KEY,
           repo TEXT NOT NULL,
           owner TEXT NOT NULL DEFAULT '',
@@ -224,13 +232,13 @@ const MIGRATIONS: Migration[] = [
           claimed_at TEXT NOT NULL,
           released_at TEXT,
           metadata TEXT NOT NULL DEFAULT '{}',
-          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+          FOREIGN KEY (task_id) REFERENCES ${TABLE_TASKS}(id) ON DELETE CASCADE
         );
 
-        CREATE INDEX IF NOT EXISTS idx_claims_repo ON claims(repo);
-        CREATE INDEX IF NOT EXISTS idx_claims_task_id ON claims(task_id);
-        CREATE INDEX IF NOT EXISTS idx_claims_agent ON claims(agent);
-        CREATE INDEX IF NOT EXISTS idx_claims_claimed_at ON claims(claimed_at);
+        CREATE INDEX IF NOT EXISTS idx_claims_repo ON ${TABLE_CLAIMS}(repo);
+        CREATE INDEX IF NOT EXISTS idx_claims_task_id ON ${TABLE_CLAIMS}(task_id);
+        CREATE INDEX IF NOT EXISTS idx_claims_agent ON ${TABLE_CLAIMS}(agent);
+        CREATE INDEX IF NOT EXISTS idx_claims_claimed_at ON ${TABLE_CLAIMS}(claimed_at);
 
         CREATE TABLE IF NOT EXISTS entities (
           name TEXT PRIMARY KEY,
@@ -354,36 +362,48 @@ const MIGRATIONS: Migration[] = [
 			// Legacy column additions (idempotent)
 			// ──────────────────────────────────────────────
 			const columnsToAdd: Array<{ name: string; table: string; definition: string }> = [
-				{ name: "title", table: "memories", definition: "ALTER TABLE memories ADD COLUMN title TEXT" },
+				{ name: "title", table: TABLE_MEMORIES, definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN title TEXT` },
 				{
 					name: "hit_count",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0`
 				},
 				{
 					name: "recall_count",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0`
 				},
 				{
 					name: "last_used_at",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN last_used_at TEXT"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN last_used_at TEXT`
 				},
-				{ name: "expires_at", table: "memories", definition: "ALTER TABLE memories ADD COLUMN expires_at TEXT" },
-				{ name: "supersedes", table: "memories", definition: "ALTER TABLE memories ADD COLUMN supersedes TEXT" },
+				{
+					name: "expires_at",
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN expires_at TEXT`
+				},
+				{
+					name: "supersedes",
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN supersedes TEXT`
+				},
 				{
 					name: "status",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`
 				},
 				{
 					name: "is_global",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0`
 				},
-				{ name: "tags", table: "memories", definition: "ALTER TABLE memories ADD COLUMN tags TEXT" },
-				{ name: "metadata", table: "memories", definition: "ALTER TABLE memories ADD COLUMN metadata TEXT" },
+				{ name: "tags", table: TABLE_MEMORIES, definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN tags TEXT` },
+				{
+					name: "metadata",
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN metadata TEXT`
+				},
 				{
 					name: "vector_version",
 					table: "memory_vectors",
@@ -406,77 +426,85 @@ const MIGRATIONS: Migration[] = [
 				},
 				{
 					name: "depends_on",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN depends_on TEXT"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN depends_on TEXT`
 				},
 				{
 					name: "est_tokens",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN est_tokens INTEGER NOT NULL DEFAULT 0"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN est_tokens INTEGER NOT NULL DEFAULT 0`
 				},
 				{
 					name: "in_progress_at",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN in_progress_at TEXT"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN in_progress_at TEXT`
 				},
-				{ name: "task_code", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN task_code TEXT" },
-				{ name: "task_id", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN task_id TEXT" },
+				{ name: "task_code", table: TABLE_TASKS, definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN task_code TEXT` },
+				{
+					name: "task_id",
+					table: TABLE_ACTION_LOG,
+					definition: `ALTER TABLE ${TABLE_ACTION_LOG} ADD COLUMN task_id TEXT`
+				},
 				{
 					name: "agent",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'`
 				},
 				{
 					name: "role",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'`
 				},
 				{
 					name: "model",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN model TEXT NOT NULL DEFAULT 'unknown'`
 				},
 				{
 					name: "completed_at",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN completed_at TEXT"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN completed_at TEXT`
 				},
 				{
 					name: "agent",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN agent TEXT NOT NULL DEFAULT 'unknown'`
 				},
 				{
 					name: "role",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN role TEXT NOT NULL DEFAULT 'unknown'`
 				},
-				{ name: "doc_path", table: "tasks", definition: "ALTER TABLE tasks ADD COLUMN doc_path TEXT" },
-				{ name: "response", table: "action_log", definition: "ALTER TABLE action_log ADD COLUMN response TEXT" },
+				{ name: "doc_path", table: TABLE_TASKS, definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN doc_path TEXT` },
+				{
+					name: "response",
+					table: TABLE_ACTION_LOG,
+					definition: `ALTER TABLE ${TABLE_ACTION_LOG} ADD COLUMN response TEXT`
+				},
 				{
 					name: "commit_id",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN commit_id TEXT"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN commit_id TEXT`
 				},
 				{
 					name: "changed_files",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN changed_files TEXT"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN changed_files TEXT`
 				},
 				{
 					name: "suggested_skills",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN suggested_skills TEXT"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN suggested_skills TEXT`
 				},
 				{
 					name: "owner",
-					table: "memories",
-					definition: "ALTER TABLE memories ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+					table: TABLE_MEMORIES,
+					definition: `ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN owner TEXT NOT NULL DEFAULT ''`
 				},
 				{
 					name: "owner",
-					table: "tasks",
-					definition: "ALTER TABLE tasks ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+					table: TABLE_TASKS,
+					definition: `ALTER TABLE ${TABLE_TASKS} ADD COLUMN owner TEXT NOT NULL DEFAULT ''`
 				},
 				{
 					name: "owner",
@@ -495,23 +523,23 @@ const MIGRATIONS: Migration[] = [
 				},
 				{
 					name: "owner",
-					table: "action_log",
-					definition: "ALTER TABLE action_log ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+					table: TABLE_ACTION_LOG,
+					definition: `ALTER TABLE ${TABLE_ACTION_LOG} ADD COLUMN owner TEXT NOT NULL DEFAULT ''`
 				},
 				{
 					name: "owner",
-					table: "handoffs",
-					definition: "ALTER TABLE handoffs ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+					table: TABLE_HANDOFFS,
+					definition: `ALTER TABLE ${TABLE_HANDOFFS} ADD COLUMN owner TEXT NOT NULL DEFAULT ''`
 				},
 				{
 					name: "owner",
-					table: "claims",
-					definition: "ALTER TABLE claims ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+					table: TABLE_CLAIMS,
+					definition: `ALTER TABLE ${TABLE_CLAIMS} ADD COLUMN owner TEXT NOT NULL DEFAULT ''`
 				},
 				{
 					name: "owner",
-					table: "memory_summary",
-					definition: "ALTER TABLE memory_summary ADD COLUMN owner TEXT NOT NULL DEFAULT ''"
+					table: TABLE_MEMORY_SUMMARY,
+					definition: `ALTER TABLE ${TABLE_MEMORY_SUMMARY} ADD COLUMN owner TEXT NOT NULL DEFAULT ''`
 				}
 			];
 
@@ -539,9 +567,9 @@ const MIGRATIONS: Migration[] = [
 			// Additional indexes
 			// ──────────────────────────────────────────────
 			db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
-        CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes);
-        CREATE INDEX IF NOT EXISTS idx_memories_is_global ON memories(is_global);
+        CREATE INDEX IF NOT EXISTS idx_memories_status ON ${TABLE_MEMORIES}(status);
+        CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON ${TABLE_MEMORIES}(supersedes);
+        CREATE INDEX IF NOT EXISTS idx_memories_is_global ON ${TABLE_MEMORIES}(is_global);
         CREATE INDEX IF NOT EXISTS idx_coding_standards_hit_count ON coding_standards(hit_count);
       `);
 
@@ -551,7 +579,7 @@ const MIGRATIONS: Migration[] = [
 			const dupRows = db
 				.prepare(
 					`SELECT owner, repo, task_code, COUNT(*) as cnt
-           FROM tasks
+           FROM ${TABLE_TASKS}
            GROUP BY owner, repo, task_code
            HAVING cnt > 1`
 				)
@@ -562,7 +590,7 @@ const MIGRATIONS: Migration[] = [
 				for (const dup of dupRows) {
 					const rows = db
 						.prepare(
-							`SELECT id, task_code, created_at FROM tasks
+							`SELECT id, task_code, created_at FROM ${TABLE_TASKS}
                WHERE owner = ? AND repo = ? AND task_code = ?
                ORDER BY created_at ASC, id ASC`
 						)
@@ -574,17 +602,17 @@ const MIGRATIONS: Migration[] = [
 
 					for (let i = 1; i < rows.length; i++) {
 						const newCode = `${dup.task_code}-${i + 1}`;
-						db.prepare("UPDATE tasks SET task_code = ? WHERE id = ?").run(newCode, rows[i].id);
+						db.prepare(`UPDATE ${TABLE_TASKS} SET task_code = ? WHERE id = ?`).run(newCode, rows[i].id);
 					}
 					logger.info(`  Deduplicated ${dup.task_code}: kept 1 (${rows[0].id}), renamed ${rows.length - 1} rows`);
 				}
 			}
 
-			db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_code_owner_repo ON tasks(owner, repo, task_code);");
+			db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_code_owner_repo ON ${TABLE_TASKS}(owner, repo, task_code);`);
 			db.exec("DROP INDEX IF EXISTS idx_tasks_code;");
 
 			try {
-				db.prepare("UPDATE tasks SET task_code = substr(id, 1, 8) WHERE task_code IS NULL").run();
+				db.prepare(`UPDATE ${TABLE_TASKS} SET task_code = substr(id, 1, 8) WHERE task_code IS NULL`).run();
 			} catch {
 				// Ignore if column doesn't exist
 			}
@@ -600,11 +628,11 @@ const MIGRATIONS: Migration[] = [
 		name: "memory-and-standard-codes",
 		up: (db) => {
 			// code column on memories
-			const memoriesCols = db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+			const memoriesCols = db.prepare(`PRAGMA table_info(${TABLE_MEMORIES})`).all() as Array<{ name: string }>;
 			if (!memoriesCols.some((col) => col.name === "code")) {
-				db.prepare("ALTER TABLE memories ADD COLUMN code TEXT").run();
-				db.prepare("CREATE INDEX IF NOT EXISTS idx_memories_code ON memories(code)").run();
-				db.prepare("CREATE INDEX IF NOT EXISTS idx_memories_repo_code ON memories(repo, code)").run();
+				db.prepare(`ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN code TEXT`).run();
+				db.prepare(`CREATE INDEX IF NOT EXISTS idx_memories_code ON ${TABLE_MEMORIES}(code)`).run();
+				db.prepare(`CREATE INDEX IF NOT EXISTS idx_memories_repo_code ON ${TABLE_MEMORIES}(repo, code)`).run();
 			}
 
 			// code column on coding_standards
@@ -621,7 +649,10 @@ const MIGRATIONS: Migration[] = [
 		name: "fix-memory-summary-pk",
 		up: (db) => {
 			// Check if memory_summary already has composite PK (owner, repo)
-			const cols = db.prepare("PRAGMA table_info(memory_summary)").all() as Array<{ name: string; pk: number }>;
+			const cols = db.prepare(`PRAGMA table_info(${TABLE_MEMORY_SUMMARY})`).all() as Array<{
+				name: string;
+				pk: number;
+			}>;
 			const ownerPk = cols.find((c) => c.name === "owner" && c.pk > 0);
 
 			// Only rebuild if both owner and repo are not part of PK
@@ -641,13 +672,13 @@ const MIGRATIONS: Migration[] = [
 				db.prepare(
 					`
 					INSERT INTO memory_summary_v3 (repo, owner, summary, updated_at)
-					SELECT repo, owner, summary, updated_at FROM memory_summary
+					SELECT repo, owner, summary, updated_at FROM ${TABLE_MEMORY_SUMMARY}
 				`
 				).run();
 
 				// Swap tables
-				db.exec("DROP TABLE memory_summary");
-				db.exec("ALTER TABLE memory_summary_v3 RENAME TO memory_summary");
+				db.exec(`DROP TABLE ${TABLE_MEMORY_SUMMARY}`);
+				db.exec(`ALTER TABLE memory_summary_v3 RENAME TO ${TABLE_MEMORY_SUMMARY}`);
 
 				logger.info("[Migration] Rebuilt memory_summary with composite PRIMARY KEY (owner, repo)");
 			} else {
@@ -710,12 +741,12 @@ const MIGRATIONS: Migration[] = [
 		name: "composite-owner-repo-indexes",
 		up: (db) => {
 			db.exec(`
-				CREATE INDEX IF NOT EXISTS idx_memories_owner_repo ON memories(owner, repo);
-				CREATE INDEX IF NOT EXISTS idx_memories_owner_repo_type ON memories(owner, repo, type);
-				CREATE INDEX IF NOT EXISTS idx_memories_owner_repo_importance ON memories(owner, repo, importance);
-				CREATE INDEX IF NOT EXISTS idx_tasks_owner_repo ON tasks(owner, repo);
-				CREATE INDEX IF NOT EXISTS idx_tasks_owner_repo_status ON tasks(owner, repo, status);
-				CREATE INDEX IF NOT EXISTS idx_action_log_owner_repo ON action_log(owner, repo);
+				CREATE INDEX IF NOT EXISTS idx_memories_owner_repo ON ${TABLE_MEMORIES}(owner, repo);
+				CREATE INDEX IF NOT EXISTS idx_memories_owner_repo_type ON ${TABLE_MEMORIES}(owner, repo, type);
+				CREATE INDEX IF NOT EXISTS idx_memories_owner_repo_importance ON ${TABLE_MEMORIES}(owner, repo, importance);
+				CREATE INDEX IF NOT EXISTS idx_tasks_owner_repo ON ${TABLE_TASKS}(owner, repo);
+				CREATE INDEX IF NOT EXISTS idx_tasks_owner_repo_status ON ${TABLE_TASKS}(owner, repo, status);
+				CREATE INDEX IF NOT EXISTS idx_action_log_owner_repo ON ${TABLE_ACTION_LOG}(owner, repo);
 			`);
 			logger.info("[Migration] Added composite (owner, repo) indexes for memories, tasks, action_log");
 		}
@@ -744,7 +775,7 @@ const MIGRATIONS: Migration[] = [
 					task_id TEXT PRIMARY KEY,
 					vector TEXT NOT NULL,
 					updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-					FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+					FOREIGN KEY (task_id) REFERENCES ${TABLE_TASKS}(id) ON DELETE CASCADE
 				);
 			`);
 			logger.info("[Migration] Added task_vectors table");
@@ -843,7 +874,7 @@ const MIGRATIONS: Migration[] = [
 			db.exec(`
 				CREATE VIRTUAL TABLE memories_fts USING fts5(
 					title, content, tags,
-					content='memories',
+					content=${TABLE_MEMORIES},
 					content_rowid='rowid',
 					tokenize='unicode61'
 				);
@@ -873,7 +904,7 @@ const MIGRATIONS: Migration[] = [
 			try {
 				const count = db
 					.prepare(
-						"INSERT INTO memories_fts(rowid, title, content, tags) SELECT rowid, title, content, tags FROM memories"
+						`INSERT INTO memories_fts(rowid, title, content, tags) SELECT rowid, title, content, tags FROM ${TABLE_MEMORIES}`
 					)
 					.run();
 				logger.info(`[Migration] Backfilled ${count.changes} memories into FTS5 index`);
@@ -938,10 +969,10 @@ const MIGRATIONS: Migration[] = [
 			// idempotency pattern: PRAGMA table_info guard before ALTER so the
 			// migration is safe to re-run and on fresh DBs (v1 creates the
 			// table without branch, v13 adds it).
-			const memoriesCols = db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+			const memoriesCols = db.prepare(`PRAGMA table_info(${TABLE_MEMORIES})`).all() as Array<{ name: string }>;
 			if (!memoriesCols.some((col) => col.name === "branch")) {
-				db.prepare("ALTER TABLE memories ADD COLUMN branch TEXT").run();
-				db.prepare("CREATE INDEX IF NOT EXISTS idx_memories_branch ON memories(branch)").run();
+				db.prepare(`ALTER TABLE ${TABLE_MEMORIES} ADD COLUMN branch TEXT`).run();
+				db.prepare(`CREATE INDEX IF NOT EXISTS idx_memories_branch ON ${TABLE_MEMORIES}(branch)`).run();
 			}
 		}
 	}
@@ -970,8 +1001,9 @@ function dropObsoleteMemoriesFts(db: Database.Database): void {
 }
 
 function ensureMemoryTypeConstraint(db: Database.Database): void {
-	const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'").get() as
-		{ sql: string } | undefined;
+	const tableInfo = db
+		.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '${TABLE_MEMORIES}'`)
+		.get() as { sql: string } | undefined;
 	if (!tableInfo?.sql || !String(tableInfo.sql).includes("CHECK (type IN")) {
 		return;
 	}
@@ -1013,16 +1045,17 @@ function ensureMemoryTypeConstraint(db: Database.Database): void {
       id, repo, owner, type, title, content, importance, folder, language,
       created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
       supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-    FROM memories;
+    FROM ${TABLE_MEMORIES};
 
-    DROP TABLE memories;
-    ALTER TABLE memories__migrated RENAME TO memories;
+    DROP TABLE ${TABLE_MEMORIES};
+    ALTER TABLE memories__migrated RENAME TO ${TABLE_MEMORIES};
   `);
 }
 
 function ensureTaskStatusConstraintRemoved(db: Database.Database): void {
-	const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'").get() as
-		{ sql: string } | undefined;
+	const tableInfo = db
+		.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '${TABLE_TASKS}'`)
+		.get() as { sql: string } | undefined;
 
 	if (
 		!tableInfo?.sql ||
@@ -1057,8 +1090,8 @@ function ensureTaskStatusConstraintRemoved(db: Database.Database): void {
       in_progress_at TEXT,
       commit_id TEXT,
       changed_files TEXT,
-      FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE SET NULL,
-      FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE SET NULL
+      FOREIGN KEY (parent_id) REFERENCES ${TABLE_TASKS}(id) ON DELETE SET NULL,
+      FOREIGN KEY (depends_on) REFERENCES ${TABLE_TASKS}(id) ON DELETE SET NULL
     );
 
     INSERT INTO tasks__migrated (
@@ -1070,16 +1103,17 @@ function ensureTaskStatusConstraintRemoved(db: Database.Database): void {
       id, repo, owner, task_code, phase, title, description, status, priority,
       agent, role, doc_path, created_at, updated_at, finished_at, canceled_at, tags, metadata, parent_id, depends_on, est_tokens, in_progress_at,
       commit_id, changed_files
-    FROM tasks;
+    FROM ${TABLE_TASKS};
 
-    DROP TABLE tasks;
-    ALTER TABLE tasks__migrated RENAME TO tasks;
+    DROP TABLE ${TABLE_TASKS};
+    ALTER TABLE tasks__migrated RENAME TO ${TABLE_TASKS};
   `);
 }
 
 function ensureMemoryStatusConstraintRemoved(db: Database.Database): void {
-	const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memories'").get() as
-		{ sql: string } | undefined;
+	const tableInfo = db
+		.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '${TABLE_MEMORIES}'`)
+		.get() as { sql: string } | undefined;
 	if (!tableInfo?.sql || !String(tableInfo.sql).includes("CHECK (status IN")) {
 		return;
 	}
@@ -1121,10 +1155,10 @@ function ensureMemoryStatusConstraintRemoved(db: Database.Database): void {
       id, repo, owner, type, title, content, importance, folder, language,
       created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
       supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-    FROM memories;
+    FROM ${TABLE_MEMORIES};
 
-    DROP TABLE memories;
-    ALTER TABLE memories__migrated RENAME TO memories;
+    DROP TABLE ${TABLE_MEMORIES};
+    ALTER TABLE memories__migrated RENAME TO ${TABLE_MEMORIES};
   `);
 }
 
