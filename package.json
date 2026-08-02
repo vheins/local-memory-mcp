@@ -24,7 +24,7 @@
 		"dist",
 		"bin",
 		"storage/.gitkeep",
-		"dist/prompts/definitions",
+		"dist/prompts",
 		"dist/prompts/server"
 	],
 	"repository": {
