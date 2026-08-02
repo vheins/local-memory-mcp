@@ -16,6 +16,7 @@ export interface KanbanState {
 	draggedTask: Task | null;
 	sourceCol: string | null;
 	dragOverCol: string | null;
+	selectedTaskIds: Set<string>;
 }
 
 export const COLUMNS: { status: string; label: string; bg: string; border: string; icon: string; color: string }[] = [
@@ -87,7 +88,8 @@ export function createKanbanHandler() {
 		columnTasks: initialColumnTasks,
 		draggedTask: null,
 		sourceCol: null,
-		dragOverCol: null
+		dragOverCol: null,
+		selectedTaskIds: new Set()
 	};
 
 	const { subscribe, update } = writable<KanbanState>(initialState);
@@ -282,6 +284,65 @@ export function createKanbanHandler() {
 		};
 	});
 
+	function toggleSelectTask(id: string) {
+		update((s) => {
+			const next = new Set(s.selectedTaskIds);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return { ...s, selectedTaskIds: next };
+		});
+	}
+
+	function clearSelection() {
+		update((s) => ({ ...s, selectedTaskIds: new Set() }));
+	}
+
+	async function handleBulkDelete() {
+		const state = get({ subscribe });
+		const ids = Array.from(state.selectedTaskIds);
+		if (ids.length === 0) return;
+
+		try {
+			await api.bulkTaskAction("delete", ids);
+			update((s) => {
+				const nextCols = { ...s.columnTasks };
+				for (const col of Object.keys(nextCols)) {
+					nextCols[col] = nextCols[col].filter((t) => !s.selectedTaskIds.has(t.id));
+				}
+				return { ...s, columnTasks: nextCols, selectedTaskIds: new Set() };
+			});
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			alertError("Failed to delete: " + message);
+		}
+	}
+
+	async function handleBulkStatusMove(targetStatus: string) {
+		const state = get({ subscribe });
+		const ids = Array.from(state.selectedTaskIds);
+		if (ids.length === 0) return;
+
+		try {
+			await api.bulkTaskAction("status", ids, { status: targetStatus });
+			update((s) => {
+				const nextCols = { ...s.columnTasks };
+				for (const col of Object.keys(nextCols)) {
+					const movedTasks = nextCols[col].filter((t) => s.selectedTaskIds.has(t.id));
+					const remainingTasks = nextCols[col].filter((t) => !s.selectedTaskIds.has(t.id));
+					nextCols[col] = remainingTasks;
+					if (col === targetStatus) {
+						const movedWithStatus = movedTasks.map((t) => ({ ...t, status: targetStatus }));
+						nextCols[col] = [...movedWithStatus, ...nextCols[col]];
+					}
+				}
+				return { ...s, columnTasks: nextCols, selectedTaskIds: new Set() };
+			});
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			alertError("Failed to move tasks: " + message);
+		}
+	}
+
 	return {
 		subscribe,
 		loadTasks,
@@ -290,6 +351,10 @@ export function createKanbanHandler() {
 		handleDragOver,
 		handleDragLeave,
 		handleDrop,
-		handleExport
+		handleExport,
+		toggleSelectTask,
+		clearSelection,
+		handleBulkDelete,
+		handleBulkStatusMove
 	};
 }

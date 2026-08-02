@@ -73,6 +73,65 @@ export class StandardEntity extends BaseEntity {
 		});
 	}
 
+	/**
+	 * Bulk updates standards by IDs within a single transaction.
+	 *
+	 * @param ids - Array of standard IDs to update
+	 * @param updates - Partial standard fields to update
+	 * @returns Number of standards actually updated
+	 */
+	bulkUpdateStandards(ids: string[], updates: Partial<CodingStandardEntry>): number {
+		if (ids.length === 0) return 0;
+
+		const { fields, values } = buildUpdateClause(updates as Record<string, unknown>, {
+			jsonKeys: new Set(["tags", "metadata", "stack"]),
+			intKeys: STANDARD_INT_KEYS,
+			excludeKeys: STANDARD_EXCLUDE_KEYS
+		});
+
+		if (fields.length === 0) return 0;
+
+		fields.push("updated_at = ?");
+		values.push(new Date().toISOString());
+
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const placeholders = chunk.map(() => "?").join(",");
+				const result = this.run(`UPDATE coding_standards SET ${fields.join(", ")} WHERE id IN (${placeholders})`, [
+					...values,
+					...chunk
+				] as (string | number)[]);
+				count += result.changes;
+			}
+			return count;
+		});
+	}
+
+	/**
+	 * Bulk deletes standards by IDs within a single transaction.
+	 *
+	 * @param ids - Array of standard IDs to delete
+	 * @returns Number of standards actually deleted
+	 */
+	bulkDeleteStandards(ids: string[]): number {
+		if (ids.length === 0) return 0;
+
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const placeholders = chunk.map(() => "?").join(",");
+				const result = this.run(`DELETE FROM coding_standards WHERE id IN (${placeholders})`, chunk);
+				count += result.changes;
+			}
+			return count;
+		});
+	}
+
 	getById(id: string): CodingStandardEntry | null {
 		const row = this.get<CodingStandardRow>("SELECT * FROM coding_standards WHERE id = ?", [id]);
 		return row ? this.rowToEntry(row) : null;

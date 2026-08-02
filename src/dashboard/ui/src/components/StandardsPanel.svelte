@@ -93,6 +93,17 @@
 		void loadStandards();
 	}
 
+	async function handleBulkDelete(ids: string[]) {
+		if (ids.length === 0) return;
+		if (!(await confirmDelete(`Are you sure you want to delete ${ids.length} standards?`))) return;
+		try {
+			await api.bulkStandardAction("delete", ids);
+			void loadStandards();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
 	async function handleDeleteRow(std: CodingStandard) {
 		if (!(await confirmDelete(`Delete coding standard "${std.title}"?`))) return;
 		try {
@@ -208,6 +219,7 @@
 		onOpenEditDrawer={openEditDrawer}
 		onDeleteRow={handleDeleteRow}
 		onGoToPage={goToPage}
+		onBulkDelete={handleBulkDelete}
 	/>
 </div>
 

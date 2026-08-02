@@ -189,6 +189,104 @@ export class TasksController {
 		});
 	}
 
+	static async bulkAction(req: express.Request, res: express.Response) {
+		await handleController(req, res, async () => {
+			const { action, ids, updates } = getAttributes(req);
+			if (!Array.isArray(ids) || !action)
+				throw new HttpError(400, "Invalid payload: requires 'ids' array and 'action'");
+
+			let count = 0;
+
+			if (action === "delete") {
+				count = await db.withWrite(() => {
+					const n = db.tasks.bulkDeleteTasks(ids);
+					if (ids.length > 0) {
+						const task = db.tasks.getTaskById(ids[0]);
+						db.actions.logAction(action, task?.owner || "", task?.repo || "unknown", {
+							query: `Bulk ${action} applied to ${n} tasks`
+						});
+					}
+					return n;
+				});
+			} else if (action === "update" || action === "status") {
+				// Require explicit updates — never inject a default (TASK-137)
+				if (!updates || Object.keys(updates).length === 0) {
+					throw new HttpError(400, "Invalid payload: 'updates' required for update/status action");
+				}
+
+				if (!mcpClient.isConnected()) await mcpClient.start();
+
+				// Route through canonical task-update per id (TASK-136) so state machine,
+				// timestamps, comments, coordination cleanup, and archive all apply.
+				const errors: string[] = [];
+				for (const id of ids) {
+					const existingTask = db.tasks.getTaskById(id);
+					if (!existingTask) {
+						errors.push(`Task ${id} not found`);
+						continue;
+					}
+
+					const toolArgs: Record<string, unknown> = {
+						repo: existingTask.repo,
+						id,
+						agent: "dashboard",
+						role: "user",
+						model: "web-ui",
+						structured: true
+					};
+
+					for (const [key, value] of Object.entries(updates as Record<string, unknown>)) {
+						if (value !== undefined) {
+							toolArgs[key] = value;
+						}
+					}
+
+					if (updates.status && updates.status !== existingTask.status && !toolArgs.comment) {
+						toolArgs.comment = `Status updated via dashboard to ${updates.status}`;
+					}
+
+					if (updates.status === "completed") {
+						if (toolArgs.est_tokens === undefined) {
+							toolArgs.est_tokens = existingTask.est_tokens || 0;
+						}
+						if (toolArgs.commit_id === undefined) {
+							if (existingTask.commit_id) {
+								toolArgs.commit_id = existingTask.commit_id;
+							}
+						}
+						if (toolArgs.changed_files === undefined) {
+							toolArgs.changed_files = existingTask.changed_files || [];
+						}
+					}
+
+					try {
+						await mcpClient.callTool("task-update", toolArgs);
+						count++;
+					} catch (e) {
+						errors.push(`Task ${id}: ${e instanceof Error ? e.message : String(e)}`);
+					}
+				}
+
+				await db.refresh();
+
+				if (ids.length > 0) {
+					const task = db.tasks.getTaskById(ids[0]);
+					db.actions.logAction(action, task?.owner || "", task?.repo || "unknown", {
+						query: `Bulk ${action} applied to ${count} tasks${errors.length > 0 ? ` (${errors.length} errors)` : ""}`
+					});
+				}
+
+				if (errors.length > 0 && count === 0) {
+					throw new HttpError(422, `All tasks failed: ${errors.join("; ")}`);
+				}
+			} else {
+				throw new HttpError(400, "Invalid action: must be 'delete', 'update', or 'status'");
+			}
+
+			return jsonApiRes({ count }, "status");
+		});
+	}
+
 	static async getTimeStats(req: express.Request, res: express.Response) {
 		await handleController(req, res, () => {
 			const { repo } = req.query;

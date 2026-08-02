@@ -6,6 +6,7 @@ const router = Router();
 router.get("/", TasksController.list);
 router.post("/", TasksController.create);
 router.post("/import", TasksController.bulkCreate);
+router.post("/action", TasksController.bulkAction);
 router.get("/stats/time", TasksController.getTimeStats);
 router.get("/by-code", TasksController.getByCode);
 router.get("/:id", TasksController.get);

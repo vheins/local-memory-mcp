@@ -214,6 +214,13 @@ export const api = {
 			body: JSON.stringify({ repo, items })
 		}),
 
+	bulkTaskAction: (action: string, ids: string[], updates?: Partial<Task>) =>
+		apiFetch<{ count: number }>("/api/tasks/action", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action, ids, updates })
+		}),
+
 	updateTaskComment: (id: string, comment: string) =>
 		apiFetch<{ success: boolean }>(`/api/tasks/comments/${id}`, {
 			method: "PUT",
@@ -300,6 +307,13 @@ export const api = {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body)
+		}),
+
+	bulkStandardAction: (action: string, ids: string[], updates?: Partial<CodingStandard>) =>
+		apiFetch<{ count: number }>("/api/standards/action", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action, ids, updates })
 		}),
 
 	export: (repo: string) =>

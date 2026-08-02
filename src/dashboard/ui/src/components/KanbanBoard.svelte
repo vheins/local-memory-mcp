@@ -5,6 +5,7 @@
 	import ExportToolbar from "./ExportToolbar.svelte";
 	import type { Task } from "../lib/stores";
 	import { createKanbanHandler, COLUMNS } from "../lib/composables/useKanban";
+	import { confirmDelete } from "../lib/confirm";
 
 	export let onTaskClick: (task: Task) => void = () => {};
 	export let onAddTask: () => void = () => {};
@@ -15,6 +16,14 @@
 
 	export function loadTasks(repo: string) {
 		kanban.loadTasks(repo, $taskSearch);
+	}
+
+	$: selectedCount = $kanbanState.selectedTaskIds.size;
+
+	async function confirmBulkDelete() {
+		if (await confirmDelete(`Are you sure you want to delete ${selectedCount} tasks?`)) {
+			await kanban.handleBulkDelete();
+		}
 	}
 </script>
 
@@ -82,13 +91,23 @@
 						{/if}
 					{:else}
 						{#each $kanbanState.columnTasks[col.status] as task, i (`${task.id}-${i}`)}
-							<!-- svelte-ignore a11y-no-static-element-interactions -->
-							<div
-								draggable="true"
-								on:dragstart={(e) => kanban.handleDragStart(e, task, col.status)}
-								style="cursor: grab;"
-							>
-								<TaskCard {task} on:click={() => onTaskClick(task)} />
+							<div class="task-card-wrapper" class:selected={$kanbanState.selectedTaskIds.has(task.id)}>
+								<div class="task-select">
+									<input
+										type="checkbox"
+										checked={$kanbanState.selectedTaskIds.has(task.id)}
+										on:change={() => kanban.toggleSelectTask(task.id)}
+										aria-label="Select task {task.title}"
+									/>
+								</div>
+								<!-- svelte-ignore a11y-no-static-element-interactions -->
+								<div
+									draggable="true"
+									on:dragstart={(e) => kanban.handleDragStart(e, task, col.status)}
+									style="cursor: grab;flex:1;"
+								>
+									<TaskCard {task} on:click={() => onTaskClick(task)} />
+								</div>
 							</div>
 						{/each}
 
@@ -113,6 +132,38 @@
 			</div>
 		{/each}
 	</div>
+
+	<!-- Bulk Action Toolbar -->
+	{#if selectedCount > 0}
+		<div class="bulk-actions-bar">
+			<span><b>{selectedCount}</b> selected</span>
+			<div style="width:12px;"></div>
+			<button
+				class="btn btn-sm"
+				style="background:rgba(120,120,120,0.2);color:inherit;"
+				on:click={() => kanban.clearSelection()}>Cancel</button
+			>
+			<select
+				class="form-select"
+				style="width:140px;font-size:0.8rem;"
+				on:change={(e) => {
+					const target = e.currentTarget.value;
+					if (target) kanban.handleBulkStatusMove(target);
+					e.currentTarget.value = "";
+				}}
+			>
+				<option value="">Move to...</option>
+				{#each COLUMNS as col (col.status)}
+					<option value={col.status}>{col.label}</option>
+				{/each}
+			</select>
+			<button
+				class="btn btn-sm btn-accent"
+				style="background:#ef4444;color:white;border:none;"
+				on:click={confirmBulkDelete}>Delete</button
+			>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -148,5 +199,52 @@
 	.drag-over {
 		border-color: var(--color-accent) !important;
 		background: rgba(99, 102, 241, 0.1) !important;
+	}
+
+	.task-card-wrapper {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 4px;
+		border-radius: 12px;
+		transition: background-color 0.15s;
+	}
+
+	.task-card-wrapper:hover {
+		background-color: rgba(99, 102, 241, 0.05);
+	}
+
+	.task-card-wrapper.selected {
+		background-color: rgba(99, 102, 241, 0.1);
+		border: 1px solid rgba(99, 102, 241, 0.3);
+	}
+
+	.task-select {
+		padding-top: 12px;
+	}
+
+	.task-select input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
+		cursor: pointer;
+		accent-color: var(--color-accent);
+	}
+
+	.bulk-actions-bar {
+		position: fixed;
+		bottom: 24px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 20px;
+		background: var(--color-surface, #1e1e2e);
+		border: 1px solid var(--color-border);
+		border-radius: 16px;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+		z-index: 100;
+		font-size: 0.85rem;
+		color: var(--color-text);
 	}
 </style>

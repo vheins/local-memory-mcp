@@ -3,6 +3,7 @@
 	import { formatDate } from "../lib/utils";
 	import type { CodingStandard } from "../lib/stores";
 	import { buildPaginationPages, formatScopeLabel } from "../lib/standardsPanelUtils";
+	import { writable } from "svelte/store";
 
 	export let standards: CodingStandard[] = [];
 	export let loading = false;
@@ -11,14 +12,46 @@
 	export let onOpenEditDrawer: (std: CodingStandard) => void = () => {};
 	export let onDeleteRow: (std: CodingStandard) => void = () => {};
 	export let onGoToPage: (p: number) => void = () => {};
+	export let onBulkDelete: (ids: string[]) => void = () => {};
+
+	const selectedStandardIds = writable<Set<string>>(new Set());
 
 	$: paginationPages = buildPaginationPages(page, totalPages);
+	$: allSelected = standards.length > 0 && $selectedStandardIds.size === standards.length;
+
+	function toggleSelect(id: string) {
+		selectedStandardIds.update((ids) => {
+			const next = new Set(ids);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}
+
+	function toggleSelectAll() {
+		selectedStandardIds.update((ids) => {
+			if (ids.size === standards.length) return new Set();
+			return new Set(standards.map((s) => s.id));
+		});
+	}
+
+	function clearSelection() {
+		selectedStandardIds.set(new Set());
+	}
+
+	function handleBulkDelete() {
+		onBulkDelete(Array.from($selectedStandardIds));
+		clearSelection();
+	}
 </script>
 
 <div class="mem-table-wrap">
 	<table class="mem-table">
 		<thead>
 			<tr class="mem-thead-row">
+				<th class="mem-th" style="width:36px;">
+					<input type="checkbox" checked={allSelected} on:change={() => toggleSelectAll()} aria-label="Select all" />
+				</th>
 				<th class="mem-th" style="min-width:200px;">Title</th>
 				<th class="mem-th">Context</th>
 				<th class="mem-th">Version</th>
@@ -49,11 +82,20 @@
 				{#each standards as std, i (`${std.id}-${i}`)}
 					<tr
 						class="mem-row"
+						class:selected={$selectedStandardIds.has(std.id)}
 						on:click={() => onOpenEditDrawer(std)}
 						role="button"
 						tabindex="0"
 						on:keydown={(e) => e.key === "Enter" && onOpenEditDrawer(std)}
 					>
+						<td class="mem-td" on:click|stopPropagation>
+							<input
+								type="checkbox"
+								checked={$selectedStandardIds.has(std.id)}
+								on:change={() => toggleSelect(std.id)}
+								aria-label="Select standard {std.title}"
+							/>
+						</td>
 						<td class="mem-td" style="max-width:300px;">
 							<div class="truncate font-semibold" style="font-size:0.82rem;color:var(--color-text);">{std.title}</div>
 							{#if std.tags?.length}
@@ -126,6 +168,22 @@
 				>»</button
 			>
 		</div>
+	</div>
+{/if}
+
+<!-- Bulk Action Toolbar -->
+{#if $selectedStandardIds.size > 0}
+	<div class="bulk-actions-bar">
+		<span><b>{$selectedStandardIds.size}</b> selected</span>
+		<div style="width:12px;"></div>
+		<button class="btn btn-sm" style="background:rgba(120,120,120,0.2);color:inherit;" on:click={() => clearSelection()}
+			>Cancel</button
+		>
+		<button
+			class="btn btn-sm btn-accent"
+			style="background:#ef4444;color:white;border:none;"
+			on:click={handleBulkDelete}>Delete</button
+		>
 	</div>
 {/if}
 
@@ -203,6 +261,14 @@
 		opacity: 1;
 	}
 
+	.mem-row.selected {
+		background: rgba(99, 102, 241, 0.1);
+	}
+
+	:global(html.dark) .mem-row.selected {
+		background: rgba(99, 102, 241, 0.15);
+	}
+
 	.row-action-btn {
 		display: inline-flex;
 		align-items: center;
@@ -258,5 +324,23 @@
 		background: rgba(14, 165, 233, 0.1);
 		color: #0ea5e9;
 		border: 1px solid rgba(14, 165, 233, 0.2);
+	}
+
+	.bulk-actions-bar {
+		position: fixed;
+		bottom: 24px;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 20px;
+		background: var(--color-surface, #1e1e2e);
+		border: 1px solid var(--color-border);
+		border-radius: 16px;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+		z-index: 100;
+		font-size: 0.85rem;
+		color: var(--color-text);
 	}
 </style>

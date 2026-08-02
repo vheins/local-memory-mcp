@@ -541,4 +541,66 @@ export class TaskEntity extends BaseEntity {
 			return count;
 		});
 	}
+
+	/**
+	 * Bulk updates tasks by IDs within a single transaction.
+	 *
+	 * @param ids - Array of task IDs to update
+	 * @param updates - Partial task fields to update
+	 * @returns Number of tasks actually updated
+	 */
+	bulkUpdateTasks(ids: string[], updates: Partial<Task>): number {
+		if (ids.length === 0) return 0;
+
+		const { fields, values } = buildUpdateClause(updates as Record<string, unknown>, {
+			jsonKeys: TASK_JSON_KEYS,
+			validColumns: TASK_UPDATE_COLUMNS
+		});
+
+		if (fields.length === 0) return 0;
+
+		fields.push("updated_at = ?");
+		values.push(new Date().toISOString());
+
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const placeholders = chunk.map(() => "?").join(",");
+				const result = this.run(`UPDATE ${TABLE_TASKS} SET ${fields.join(", ")} WHERE id IN (${placeholders})`, [
+					...values,
+					...chunk
+				] as (string | number)[]);
+				count += result.changes;
+			}
+			return count;
+		});
+	}
+
+	/**
+	 * Bulk deletes tasks by IDs within a single transaction.
+	 * Also deletes associated task comments.
+	 *
+	 * @param ids - Array of task IDs to delete
+	 * @returns Number of tasks actually deleted
+	 */
+	bulkDeleteTasks(ids: string[]): number {
+		if (ids.length === 0) return 0;
+
+		return this.transaction(() => {
+			let count = 0;
+			const chunkSize = 500;
+			for (let i = 0; i < ids.length; i += chunkSize) {
+				const chunk = ids.slice(i, i + chunkSize);
+				const placeholders = chunk.map(() => "?").join(",");
+				// Delete associated comments first
+				this.run(`DELETE FROM task_comments WHERE task_id IN (${placeholders})`, chunk);
+				// Delete tasks
+				const result = this.run(`DELETE FROM ${TABLE_TASKS} WHERE id IN (${placeholders})`, chunk);
+				count += result.changes;
+			}
+			return count;
+		});
+	}
 }

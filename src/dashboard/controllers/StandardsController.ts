@@ -320,6 +320,43 @@ export class StandardsController {
 		});
 	}
 
+	static async bulkAction(req: express.Request, res: express.Response) {
+		await handleController(req, res, async () => {
+			const { action, ids, updates } = getAttributes(req);
+			if (!Array.isArray(ids) || !action)
+				throw new HttpError(400, "Invalid payload: requires 'ids' array and 'action'");
+
+			const count = await db.withWrite(async () => {
+				let n: number;
+				if (action === "delete") {
+					n = db.standards.bulkDeleteStandards(ids);
+					// Remove vectors for deleted standards
+					for (const id of ids) {
+						try {
+							await vectors.remove(id, "standard");
+						} catch {
+							// Vector removal is best-effort
+						}
+					}
+				} else if (action === "update") {
+					n = db.standards.bulkUpdateStandards(ids, updates || {});
+				} else {
+					throw new Error("Invalid action");
+				}
+
+				if (ids.length > 0) {
+					const standard = db.standards.getById(ids[0]);
+					db.actions.logAction(action, standard?.owner || "", standard?.repo || "global", {
+						query: `Bulk ${action} applied to ${n} standards`
+					});
+				}
+				return n;
+			});
+
+			return jsonApiRes({ count }, "status");
+		});
+	}
+
 	static async delete(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const existing = db.standards.getById(req.params.id as string);
