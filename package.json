@@ -4,6 +4,9 @@
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
+	"workspaces": [
+		"src/dashboard/ui"
+	],
 	"main": "dist/mcp/server.js",
 	"exports": {
 		".": {
