@@ -11,4 +11,3 @@ export {
 	KgEntityResult,
 	KgRelationResult
 } from "./query";
-export { deleteRepoEntities, deleteOrphanEntities, deleteEntityWithObservations } from "./cascade";

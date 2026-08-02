@@ -8,7 +8,6 @@
  *   relations.ts — saveTaskRelations + saveStandardRelations
  *   query.ts     — kgQuery, fetchKgContext, fetchAggregatedKgContext,
  *                  fetchTaskKgContext, fetchAggregatedTaskKgContext
- *   cascade.ts   — cascade delete helpers
  */
 
 export {
@@ -30,9 +29,5 @@ export {
 	fetchAggregatedTaskKgContext,
 	KgResult,
 	KgEntityResult,
-	KgRelationResult,
-	// cascade
-	deleteRepoEntities,
-	deleteOrphanEntities,
-	deleteEntityWithObservations
+	KgRelationResult
 } from "./kg-archivist/index";
