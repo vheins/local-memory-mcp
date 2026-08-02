@@ -13,13 +13,18 @@ export class StandardEntity extends BaseEntity {
 	// In-memory TF vector cache keyed by standard id and validated against
 	// coding_standards.updated_at — self-invalidates on writes.
 	private readonly tfCache = createTfVectorCache();
-	insert(entry: CodingStandardEntry): void {
-		this.run(
-			`INSERT INTO coding_standards (
+	/**
+	 * Single source of truth for the coding_standards INSERT statement
+	 * (TASK-108) — shared by insert() and bulkInsertStandards() so a column
+	 * change is made in exactly one place.
+	 */
+	private buildInsert(entry: CodingStandardEntry): { sql: string; params: unknown[] } {
+		return {
+			sql: `INSERT INTO coding_standards (
 				id, code, title, content, parent_id, context, version, language, stack,
 				is_global, owner, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			[
+			params: [
 				entry.id,
 				entry.code ?? null,
 				entry.title,
@@ -41,41 +46,20 @@ export class StandardEntity extends BaseEntity {
 				entry.agent,
 				entry.model
 			]
-		);
+		};
+	}
+
+	insert(entry: CodingStandardEntry): void {
+		const { sql, params } = this.buildInsert(entry);
+		this.run(sql, params);
 	}
 
 	bulkInsertStandards(entries: CodingStandardEntry[]): number {
 		return this.transaction(() => {
 			let count = 0;
 			for (const entry of entries) {
-				this.run(
-					`INSERT INTO coding_standards (
-						id, code, title, content, parent_id, context, version, language, stack,
-						is_global, owner, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-					[
-						entry.id,
-						entry.code ?? null,
-						entry.title,
-						entry.content,
-						entry.parent_id,
-						entry.context,
-						entry.version,
-						entry.language ?? null,
-						entry.stack.length > 0 ? JSON.stringify(entry.stack) : null,
-						entry.is_global ? 1 : 0,
-						entry.owner ?? "",
-						entry.repo ?? null,
-						entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
-						Object.keys(entry.metadata).length > 0 ? JSON.stringify(entry.metadata) : null,
-						entry.created_at,
-						entry.updated_at,
-						entry.hit_count,
-						entry.last_used_at,
-						entry.agent,
-						entry.model
-					]
-				);
+				const { sql, params } = this.buildInsert(entry);
+				this.run(sql, params);
 				count++;
 			}
 			return count;

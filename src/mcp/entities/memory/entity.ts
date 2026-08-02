@@ -6,15 +6,20 @@ import { BULK_UPDATE_CHUNK_SIZE } from "../../utils/constants";
 import { buildFtsMatchQuery } from "../../utils/fts";
 
 export class MemoryEntity extends BaseEntity {
-	insert(entry: MemoryEntry): void {
+	/**
+	 * Single source of truth for the memories INSERT statement (TASK-108) —
+	 * shared by insert() and bulkInsertMemories() so a column change is made
+	 * in exactly one place. Includes the TASK-121 branch column.
+	 */
+	private buildInsert(entry: MemoryEntry): { sql: string; params: unknown[] } {
 		const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
-		this.run(
-			`INSERT INTO memories (
+		return {
+			sql: `INSERT INTO memories (
 				id, code, repo, owner, type, title, content, importance, folder, language, branch,
 				created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
 				supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			[
+			params: [
 				entry.id,
 				entry.code || null,
 				entry.scope.repo,
@@ -39,7 +44,12 @@ export class MemoryEntity extends BaseEntity {
 				entry.model || "unknown",
 				entry.completed_at || null
 			]
-		);
+		};
+	}
+
+	insert(entry: MemoryEntry): void {
+		const { sql, params } = this.buildInsert(entry);
+		this.run(sql, params);
 	}
 
 	update(id: string, updates: Partial<MemoryEntry>): void {
@@ -442,39 +452,8 @@ export class MemoryEntity extends BaseEntity {
 		return this.transaction(() => {
 			let count = 0;
 			for (const entry of entries) {
-				const mergedMeta = mergeStructuredData(entry.metadata, entry.structuredData);
-				this.run(
-					`INSERT INTO memories (
-						id, code, repo, owner, type, title, content, importance, folder, language, branch,
-						created_at, updated_at, hit_count, recall_count, last_used_at, expires_at,
-						supersedes, status, is_global, tags, metadata, agent, role, model, completed_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-					[
-						entry.id,
-						entry.code || null,
-						entry.scope.repo,
-						entry.scope.owner,
-						entry.type,
-						entry.title || null,
-						entry.content,
-						entry.importance,
-						entry.scope.folder || null,
-						entry.scope.language || null,
-						entry.scope.branch || null,
-						entry.created_at,
-						entry.updated_at,
-						entry.expires_at ?? null,
-						entry.supersedes ?? null,
-						entry.status || "active",
-						entry.is_global ? 1 : 0,
-						entry.tags ? JSON.stringify(entry.tags) : null,
-						mergedMeta ? JSON.stringify(mergedMeta) : null,
-						entry.agent || "unknown",
-						entry.role || "unknown",
-						entry.model || "unknown",
-						entry.completed_at || null
-					]
-				);
+				const { sql, params } = this.buildInsert(entry);
+				this.run(sql, params);
 				count++;
 			}
 			return count;
