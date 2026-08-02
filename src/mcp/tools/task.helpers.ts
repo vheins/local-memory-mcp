@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { type TaskStatus, type VectorStore } from "../types";
 import { logger } from "../utils/logger";
-import { UUID_REGEX } from "../utils/uuid";
+import { resolveEntityRef } from "../utils/entity-ref";
 import { handleMemoryWrite } from "./memory-write/index";
 
 /**
@@ -16,14 +16,7 @@ export function resolveParentId(
 	storage: SQLiteStore,
 	localCodeMap?: Map<string, string>
 ): string | null {
-	if (!value) return null;
-	if (UUID_REGEX.test(value)) return value;
-	// Check in-memory batch map first (cross-reference within same create batch)
-	if (localCodeMap?.has(value)) return localCodeMap.get(value)!;
-	// Treat as task_code, fall back to DB
-	const parent = storage.tasks.getTaskByCode(owner, repo, value);
-	if (!parent) throw new Error(`parent_id: task with code '${value}' not found in repo '${repo}'`);
-	return parent.id;
+	return resolveEntityRef(storage, "task", value, owner, repo, { localMap: localCodeMap });
 }
 
 export function resolveDependsOn(
@@ -33,13 +26,7 @@ export function resolveDependsOn(
 	storage: SQLiteStore,
 	localCodeMap?: Map<string, string>
 ): string | null {
-	if (!value) return null;
-	if (UUID_REGEX.test(value)) return value;
-	// Check in-memory batch map first (cross-reference within same create batch)
-	if (localCodeMap?.has(value)) return localCodeMap.get(value)!;
-	const task = storage.tasks.getTaskByCode(owner, repo, value);
-	if (!task) throw new Error(`depends_on: task with code '${value}' not found in repo '${repo}'`);
-	return task.id;
+	return resolveEntityRef(storage, "task", value, owner, repo, { localMap: localCodeMap });
 }
 
 export function deriveTaskStatusTimestamps(status: TaskStatus, now: string, existingTask?: { status: TaskStatus }) {

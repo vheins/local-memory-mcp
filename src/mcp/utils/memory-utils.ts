@@ -1,5 +1,5 @@
-import { UUID_REGEX } from "./uuid";
 import { SQLiteStore } from "../storage/sqlite";
+import { resolveEntityRef } from "./entity-ref";
 
 /**
  * Checks if a title appears to contain metadata (agent/role/model/date/source metadata patterns).
@@ -25,9 +25,5 @@ export function resolveMemorySupersedes(
 	owner?: string,
 	repo?: string
 ): string | null {
-	if (!value) return null;
-	if (UUID_REGEX.test(value)) return value;
-	const memory = db.memories.getByCode(value, owner, repo);
-	if (!memory) throw new Error(`supersedes: memory with code '${value}' not found`);
-	return memory.id;
+	return resolveEntityRef(db, "memory", value, owner, repo);
 }

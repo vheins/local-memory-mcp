@@ -2,7 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
-import { UUID_REGEX } from "../utils/uuid";
+import { resolveEntityRef } from "../utils/entity-ref";
 import { observationText } from "./kg-archivist";
 import { StandardDeleteSchema } from "./schemas";
 
@@ -19,10 +19,7 @@ export async function handleStandardDelete(
 
 	// Helper: resolve a single identifier (UUID or code) to UUID
 	function resolveIdentifier(identifier: string): string {
-		if (UUID_REGEX.test(identifier)) return identifier;
-		const entry = db.standards.getByCode(identifier, owner, repo);
-		if (!entry) throw new Error(`Coding standard not found: ${identifier}`);
-		return entry.id;
+		return resolveEntityRef(db, "standard", identifier, owner, repo) ?? "";
 	}
 
 	// Single identifier: id (UUID or code — auto-inferred)

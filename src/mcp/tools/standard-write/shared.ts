@@ -3,7 +3,7 @@
  */
 
 import { SQLiteStore } from "../../storage/sqlite.js";
-import { UUID_REGEX } from "../../utils/uuid.js";
+import { resolveEntityRef } from "../../utils/entity-ref.js";
 import { toContextSlug, buildStandardVectorText } from "../standard.shared.js";
 import { generateNextCode } from "../../utils/code-generator.js";
 import { saveExtractions, saveStandardRelations } from "../kg-archivist/index.js";
@@ -56,11 +56,7 @@ export function resolveStandardParentId(
 	owner?: string,
 	repo?: string
 ): string | null {
-	if (!value) return null;
-	if (UUID_REGEX.test(value)) return value;
-	const standard = db.standards.getByCode(value, owner, repo);
-	if (!standard) throw new Error(`parent_id: standard with code '${value}' not found`);
-	return standard.id;
+	return resolveEntityRef(db, "standard", value, owner, repo);
 }
 
 export { toContextSlug, buildStandardVectorText, generateNextCode, saveExtractions, saveStandardRelations };

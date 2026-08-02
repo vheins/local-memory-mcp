@@ -6,7 +6,7 @@ import { CodingStandardEntry, VectorStore } from "../../types/index.js";
 import { SQLiteStore } from "../../storage/sqlite.js";
 import { logger } from "../../utils/logger.js";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response.js";
-import { UUID_REGEX } from "../../utils/uuid.js";
+import { resolveEntityRef } from "../../utils/entity-ref.js";
 import { enqueueStandard } from "../../embedding-queue/index.js";
 import { WriteParams, resolveStandardParentId } from "./shared.js";
 
@@ -18,16 +18,11 @@ export async function coreUpdate(
 	_vectors: VectorStore
 ): Promise<{ id: string; code: string; title: string; repo: string; updatedFields: string[] }> {
 	// Resolve code to id if needed
-	let resolvedId = params.id;
-	if (resolvedId && !UUID_REGEX.test(resolvedId)) {
-		const byCode = db.standards.getByCode(resolvedId, params.owner, params.repo);
-		if (!byCode) throw new Error(`Coding standard not found: ${resolvedId}`);
-		resolvedId = byCode.id;
-	}
+	let resolvedId = params.id
+		? (resolveEntityRef(db, "standard", params.id, params.owner, params.repo) ?? "")
+		: undefined;
 	if (!resolvedId && params.code) {
-		const byCode = db.standards.getByCode(params.code, params.owner, params.repo);
-		if (!byCode) throw new Error(`Coding standard not found: ${params.code}`);
-		resolvedId = byCode.id;
+		resolvedId = resolveEntityRef(db, "standard", params.code, params.owner, params.repo) ?? "";
 	} else if (!resolvedId) {
 		throw new Error("Either id or code must be provided");
 	}

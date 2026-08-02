@@ -3,8 +3,8 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
-import { UUID_REGEX } from "../../utils/uuid";
 import { enqueueMemory } from "../../embedding-queue";
+import { resolveEntityRef } from "../../utils/entity-ref";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
 
 // ── Single UPDATE ────────────────────────────────────────────────────────
@@ -20,16 +20,11 @@ export async function handleUpdate(
 		throw new Error("Either id or code must be provided for update");
 	}
 
-	// Resolve code/id
-	let resolvedId = idOrCode as string;
-	if (!UUID_REGEX.test(resolvedId)) {
-		const scope = (params.scope as Record<string, unknown>) ?? {};
-		const owner = (params.owner as string) ?? (scope.owner as string);
-		const repo = (params.repo as string) ?? (scope.repo as string);
-		const byCode = db.memories.getByCode(resolvedId, owner, repo);
-		if (!byCode) throw new Error(`Memory not found: ${resolvedId}`);
-		resolvedId = byCode.id;
-	}
+	// Resolve code/id to a memory UUID
+	const scope = (params.scope as Record<string, unknown>) ?? {};
+	const owner = (params.owner as string) ?? (scope.owner as string);
+	const repo = (params.repo as string) ?? (scope.repo as string);
+	const resolvedId = resolveEntityRef(db, "memory", idOrCode, owner, repo) ?? "";
 
 	// Check memory exists
 	const existing = db.memories.getById(resolvedId);
@@ -137,16 +132,11 @@ export async function handleAcknowledge(
 		throw new Error("Either id or code must be provided for acknowledge");
 	}
 
-	// Resolve code/id
-	let memoryId = idOrCode as string;
-	if (!UUID_REGEX.test(memoryId)) {
-		const scope = (params.scope as Record<string, unknown>) ?? {};
-		const owner = (params.owner as string) ?? (scope.owner as string);
-		const repo = (params.repo as string) ?? (scope.repo as string);
-		const byCode = db.memories.getByCode(memoryId, owner, repo);
-		if (!byCode) throw new Error(`Memory not found: ${memoryId}`);
-		memoryId = byCode.id;
-	}
+	// Resolve code/id to a memory UUID
+	const scope = (params.scope as Record<string, unknown>) ?? {};
+	const owner = (params.owner as string) ?? (scope.owner as string);
+	const repo = (params.repo as string) ?? (scope.repo as string);
+	const memoryId = resolveEntityRef(db, "memory", idOrCode, owner, repo) ?? "";
 
 	// Check memory exists
 	const memory = db.memories.getById(memoryId);

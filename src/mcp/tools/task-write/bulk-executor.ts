@@ -3,6 +3,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskStatus, TaskPriority, VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
 import { UUID_REGEX } from "../../utils/uuid";
+import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { enqueueTask } from "../../embedding-queue";
 import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps, archiveTaskToMemory } from "../task.helpers";
@@ -58,13 +59,9 @@ export async function executeBulkOperation(
 				if (itemId && UUID_REGEX.test(itemId)) {
 					resolvedId = itemId;
 				} else if (itemCode) {
-					const found = storage.tasks.getTaskByCode(owner, repo, itemCode);
-					if (!found) throw new Error(`Task not found by code: ${itemCode}`);
-					resolvedId = found.id;
+					resolvedId = resolveEntityRef(storage, "task", itemCode, owner, repo) ?? "";
 				} else if (itemId) {
-					const found = storage.tasks.getTaskByCode(owner, repo, itemId);
-					if (!found) throw new Error(`Task not found by code: ${itemId}`);
-					resolvedId = found.id;
+					resolvedId = resolveEntityRef(storage, "task", itemId, owner, repo) ?? "";
 				}
 
 				if (!resolvedId) throw new Error("Cannot update: neither 'id' nor 'code' resolved to an existing task");

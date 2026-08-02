@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
-import { UUID_REGEX } from "../utils/uuid";
+import { resolveEntityRef } from "../utils/entity-ref";
 import { observationText } from "./kg-archivist";
 import { TaskDeleteSchema } from "./schemas";
 
@@ -14,10 +14,7 @@ export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 
 	// Helper: resolve a single identifier (UUID or task_code) to UUID
 	function resolveIdentifier(identifier: string): string {
-		if (UUID_REGEX.test(identifier)) return identifier;
-		const task = storage.tasks.getTaskByCode(owner, repo, identifier);
-		if (!task) throw new Error(`Task not found: ${identifier}`);
-		return task.id;
+		return resolveEntityRef(storage, "task", identifier, owner, repo) ?? "";
 	}
 
 	// Single identifier: id (UUID or task_code)

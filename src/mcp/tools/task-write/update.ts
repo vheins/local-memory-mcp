@@ -2,6 +2,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { TaskStatus, VectorStore } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
+import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveParentId, resolveDependsOn } from "../task.helpers";
 import { validateStatusTransition } from "./state-machine";
 import { WriteParams } from "./types";
@@ -52,9 +53,7 @@ async function coreUpdate(
 		}
 	}
 	if (!resolvedId && params.code) {
-		const found = storage.tasks.getTaskByCode(owner, repo, params.code);
-		if (!found) throw new Error(`Task not found by code: ${params.code}`);
-		resolvedId = found.id;
+		resolvedId = resolveEntityRef(storage, "task", params.code, owner, repo) ?? "";
 	}
 
 	if (!resolvedId) {
