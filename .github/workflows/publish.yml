@@ -1,23 +1,16 @@
-name: Publish to npm
+# DEPRECATED (TASK-086): npm publishing is handled by release.yml (tag push `v*`).
+#
+# This workflow previously published on `release: created`, which could race
+# release.yml (tag push) and double-publish the same version. Publishing is
+# consolidated on the tag-push trigger in release.yml — this file is kept as a
+# no-op so the workflow file remains referenced but never publishes.
+name: Publish to npm (deprecated — see release.yml)
 on:
   release:
     types: [created]
 jobs:
-  publish:
+  noop:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm install --legacy-peer-deps
-      - run: npm run build
-      - name: Publish to npm
-        run: |
-          npm config set //registry.npmjs.org/:_authToken ${NPM_TOKEN}
-          npm publish --access public --provenance
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Skip (publishing moved to release.yml)
+        run: echo "Publishing is handled by release.yml on tag push (v*). This workflow is intentionally a no-op."
