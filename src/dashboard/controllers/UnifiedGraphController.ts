@@ -1,12 +1,11 @@
 import express from "express";
-import { db } from "../lib/context";
-import { jsonApiRes, jsonApiError } from "../lib/jsonApi";
+import { db } from "../lib/context.js";
+import { jsonApiRes, handleController, HttpError } from "../lib/jsonApi.js";
 import { parseRepoInput } from "../../mcp/utils/normalize";
 
 export class UnifiedGraphController {
 	static async getGraph(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const rawRepo = req.query.repo as string | undefined;
 			const owner = req.query.owner as string | undefined;
 			const domains = ((req.query.domains as string) || "memory,codebase,task,entity").split(",");
@@ -19,8 +18,7 @@ export class UnifiedGraphController {
 				resolvedOwner = parsed.owner;
 			}
 			if (!resolvedOwner) {
-				res.status(400).json(jsonApiError("owner query parameter is required"));
-				return;
+				throw new HttpError(400, "owner query parameter is required");
 			}
 
 			const repo = rawRepo?.includes("/") ? rawRepo.split("/")[1] : rawRepo;
@@ -143,10 +141,7 @@ export class UnifiedGraphController {
 				}
 			};
 
-			res.json(jsonApiRes({ id: `unified-graph-${rawRepo || "all"}`, nodes, edges, stats }, "unified-graph"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ id: `unified-graph-${rawRepo || "all"}`, nodes, edges, stats }, "unified-graph");
+		});
 	}
 }

@@ -1,4 +1,105 @@
 import express from "express";
+import { db } from "./context.js";
+
+/**
+ * HTTP error carrying an explicit status (and optional machine-readable code /
+ * extra payload) so controllers can signal 4xx/5xx by throwing instead of
+ * hand-rolling catch blocks. `handleController` translates it into a
+ * JSON:API error response (or a custom responder via `onError`).
+ */
+export class HttpError extends Error {
+	readonly status: number;
+	readonly code?: string;
+	readonly extra?: Record<string, unknown>;
+
+	constructor(status: number, message: string, code?: string, extra?: Record<string, unknown>) {
+		super(message);
+		this.name = "HttpError";
+		this.status = status;
+		this.code = code;
+		this.extra = extra;
+	}
+}
+
+export interface PageParams {
+	page: number;
+	pageSize: number;
+	offset: number;
+}
+
+export interface ParsePageParamsOptions {
+	/** Page size when `pageSize` is missing/invalid. Default 20. */
+	defaultPageSize?: number;
+	/** Upper clamp for `pageSize`. Default 100. */
+	maxPageSize?: number;
+}
+
+/**
+ * Normalizes dashboard list pagination. Unifies the previously scattered
+ * inline parses (MemoriesController used `limit`, others `pageSize`, with
+ * per-controller caps 50/100) onto a single `pageSize` query param with a
+ * consistent clamp. Invalid/garbage input falls back to `defaultPageSize`.
+ */
+export function parsePageParams(query: Record<string, unknown>, opts: ParsePageParamsOptions = {}): PageParams {
+	const defaultPageSize = opts.defaultPageSize ?? 20;
+	const maxPageSize = opts.maxPageSize ?? 100;
+	const page = Math.max(1, parseInt(String(query.page ?? ""), 10) || 1);
+	const rawSize = parseInt(String(query.pageSize ?? ""), 10);
+	const pageSize = Math.min(maxPageSize, Math.max(1, Number.isFinite(rawSize) ? rawSize : defaultPageSize));
+	return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
+export interface HandleControllerOptions {
+	/** Final HTTP status for the returned body (default 200). */
+	status?: number;
+	/** Run `db.refresh()` before the handler (default true). */
+	refresh?: boolean;
+	/**
+	 * Custom error responder. The default emits a JSON:API error body
+	 * (`jsonApiError`) with the thrown status. CodebaseController uses this
+	 * to preserve its `{ error, code }` wire contract.
+	 */
+	onError?: (res: express.Response, err: HttpError) => void;
+}
+
+/**
+ * Wraps a dashboard controller handler with the standard request lifecycle:
+ * `db.refresh()` (unless `refresh: false`) → run handler → send its return
+ * value as the response body. The handler signals failures by throwing
+ * `HttpError` (404/400/etc.); anything else becomes a 500.
+ *
+ * Handlers either `return` a body (sent as JSON) or write the response
+ * themselves (streaming endpoints) — in the latter case the wrapper respects
+ * `res.headersSent`.
+ */
+export async function handleController(
+	req: express.Request,
+	res: express.Response,
+	fn: (req: express.Request, res: express.Response) => unknown | Promise<unknown>,
+	opts: HandleControllerOptions = {}
+): Promise<void> {
+	const status = opts.status ?? 200;
+	const shouldRefresh = opts.refresh ?? true;
+	try {
+		if (shouldRefresh) await db.refresh();
+		const body = await fn(req, res);
+		if (!res.headersSent) {
+			res.status(status).json(body);
+		}
+	} catch (err: unknown) {
+		const httpErr =
+			err instanceof HttpError ? err : new HttpError(500, err instanceof Error ? err.message : "Internal server error");
+		if (opts.onError) {
+			opts.onError(res, httpErr);
+			return;
+		}
+		if (!res.headersSent) {
+			res.status(httpErr.status).json(jsonApiError(httpErr.message, httpErr.status));
+		} else {
+			res.end();
+		}
+	}
+}
 
 export function jsonApiRes(data: unknown, type: string, extra: { meta?: unknown; links?: unknown } = {}) {
 	const isArray = Array.isArray(data);

@@ -1,20 +1,18 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db } from "../lib/context";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
-import type { MemoryType, MemoryEntry } from "../../mcp/types/index";
-import type { IdParams, MemoryListQuery } from "../../mcp/interfaces/index";
+import { db } from "../lib/context.js";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
+import type { MemoryType, MemoryEntry } from "../../mcp/types/index.js";
+import type { IdParams, MemoryListQuery } from "../../mcp/interfaces/index.js";
 
 export class MemoriesController {
 	static async list(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const query = req.query as unknown as MemoryListQuery;
 			const { repo, type, search, minImportance, maxImportance, sortBy, sortOrder } = query;
-			const page = Math.max(1, parseInt(query.page || "1", 10));
-			const pageSize = Math.min(100, Math.max(1, parseInt((query.limit as string) || "25", 10)));
+			const { page, pageSize, offset } = parsePageParams(req.query, { defaultPageSize: 25 });
 
-			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
+			if (!repo) throw new HttpError(400, "repo is required");
 
 			const result = db.memories.listMemoriesForDashboard({
 				repo: repo as string,
@@ -25,44 +23,34 @@ export class MemoriesController {
 				sortBy: sortBy as string,
 				sortOrder: (sortOrder as string)?.toUpperCase() === "ASC" ? "ASC" : "DESC",
 				limit: pageSize,
-				offset: (page - 1) * pageSize
+				offset
 			});
 
-			res.json(
-				jsonApiRes(result.items, "memory", {
-					meta: {
-						page,
-						pageSize,
-						totalItems: result.total,
-						totalPages: Math.ceil(result.total / pageSize)
-					}
-				})
-			);
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(result.items, "memory", {
+				meta: {
+					page,
+					pageSize,
+					totalItems: result.total,
+					totalPages: Math.ceil(result.total / pageSize)
+				}
+			});
+		});
 	}
 
 	static async get(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const memory = db.memories.getByIdWithStats(req.params.id as string);
-			if (!memory) throw new Error("Memory not found");
+			if (!memory) throw new HttpError(404, "Memory not found");
 			db.actions.logAction("read", memory.scope.owner, memory.scope.repo, { memoryId: memory.id, resultCount: 1 });
-			res.json(jsonApiRes(memory, "memory"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Memory not found";
-			res.status(404).json(jsonApiError(message, 404));
-		}
+			return jsonApiRes(memory, "memory");
+		});
 	}
 
 	static async create(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
 			const { repo, type, content } = attributes;
-			if (!repo || !type || !content) return res.status(400).json(jsonApiError("Required fields missing", 400));
+			if (!repo || !type || !content) throw new HttpError(400, "Required fields missing");
 			const id = randomUUID();
 			await db.withWrite(() => {
 				db.memories.insert({
@@ -74,19 +62,15 @@ export class MemoriesController {
 				});
 				db.actions.logAction("write", "", repo, { memoryId: id });
 			});
-			res.json(jsonApiRes({ id }, "memory"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ id }, "memory");
+		});
 	}
 
 	static async update(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
-			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
+			if (!existing) throw new HttpError(404, "Memory not found");
 			const attributes = getAttributes(req);
 			const { title, content, type, importance, tags, agent, model, repo } = attributes;
 			const updates = {
@@ -111,19 +95,15 @@ export class MemoriesController {
 					}
 				);
 			});
-			res.json(jsonApiRes({ message: "Updated" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Updated" }, "status");
+		});
 	}
 
 	static async delete(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
 			const existing = db.memories.getByIdWithStats ? db.memories.getByIdWithStats(id) : db.memories.getById(id);
-			if (!existing) return res.status(404).json(jsonApiError("Memory not found", 404));
+			if (!existing) throw new HttpError(404, "Memory not found");
 			await db.withWrite(() => {
 				db.memories.delete(id);
 				db.actions.logAction(
@@ -133,19 +113,15 @@ export class MemoriesController {
 					{ memoryId: id }
 				);
 			});
-			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Deleted" }, "status");
+		});
 	}
 
 	static async bulkCreate(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { items, repo } = getAttributes(req);
 			if (!Array.isArray(items) || !repo)
-				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
+				throw new HttpError(400, "Invalid payload: requires 'items' array and 'repo'");
 
 			const entries = items.map((item: Record<string, unknown>) => ({
 				...item,
@@ -160,19 +136,15 @@ export class MemoriesController {
 				db.actions.logAction("write", "", repo, { query: `Bulk imported ${insertedCount} memories` });
 				return insertedCount;
 			});
-			res.json(jsonApiRes({ count }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ count }, "status");
+		});
 	}
 
 	static async bulkAction(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { action, ids, updates } = getAttributes(req);
 			if (!Array.isArray(ids) || !action)
-				return res.status(400).json(jsonApiError("Invalid payload: requires 'ids' array and 'action'", 400));
+				throw new HttpError(400, "Invalid payload: requires 'ids' array and 'action'");
 
 			const count = await db.withWrite(() => {
 				let n: number;
@@ -193,10 +165,7 @@ export class MemoriesController {
 				return n;
 			});
 
-			res.json(jsonApiRes({ count }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ count }, "status");
+		});
 	}
 }

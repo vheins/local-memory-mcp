@@ -1,8 +1,8 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import { db, vectors } from "../lib/context";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
-import type { CodingStandardEntry } from "../../mcp/types";
+import { db, vectors } from "../lib/context.js";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
+import type { CodingStandardEntry } from "../../mcp/types/index.js";
 import { enqueueStandard } from "../../mcp/embedding-queue";
 
 const STANDARDS_EXPORT_SCHEMA = "local-memory-mcp.standards.v1";
@@ -65,11 +65,9 @@ function shouldRefreshVectors(body: unknown, count: number): boolean {
 
 export class StandardsController {
 	static async list(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const { repo, query, language, stack, tags, is_global } = req.query;
-			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
-			const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) || "100", 10)));
+			const { page, pageSize, offset } = parsePageParams(req.query, { defaultPageSize: 100 });
 			const stackList =
 				typeof stack === "string"
 					? stack
@@ -93,7 +91,7 @@ export class StandardsController {
 				repo: repo as string | undefined,
 				is_global: is_global === undefined ? undefined : String(is_global) === "true",
 				limit: pageSize,
-				offset: (page - 1) * pageSize
+				offset
 			});
 
 			const total = db.standards.search({
@@ -107,42 +105,32 @@ export class StandardsController {
 				offset: 0
 			}).length;
 
-			res.json(
-				jsonApiRes(items, "standard", {
-					meta: {
-						page,
-						pageSize,
-						totalItems: total,
-						totalPages: Math.ceil(total / pageSize)
-					}
-				})
-			);
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(items, "standard", {
+				meta: {
+					page,
+					pageSize,
+					totalItems: total,
+					totalPages: Math.ceil(total / pageSize)
+				}
+			});
+		});
 	}
 
 	static async get(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const standard = db.standards.getById(req.params.id as string);
-			if (!standard) throw new Error("Coding standard not found");
+			if (!standard) throw new HttpError(404, "Coding standard not found");
 			db.standards.incrementHitCounts([standard.id]);
 			db.actions.logAction("read", standard.owner, standard.repo || "global", {
 				query: standard.title,
 				resultCount: 1
 			});
-			res.json(jsonApiRes(standard, "standard"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Coding standard not found";
-			res.status(404).json(jsonApiError(message, 404));
-		}
+			return jsonApiRes(standard, "standard");
+		});
 	}
 
 	static async export(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const { repo, scope = "repo" } = req.query;
 			const scopeValue = scope === "global" || scope === "all" ? scope : "repo";
 			const items = db.standards.search({
@@ -160,26 +148,22 @@ export class StandardsController {
 				standards: items
 			};
 
-			res.json(jsonApiRes(payload, "standard-export"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(payload, "standard-export");
+		});
 	}
 
 	static async import(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const rawStandards = standardsFromImportPayload(req.body);
 			if (rawStandards.length === 0) {
-				return res.status(400).json(jsonApiError("No standards found in import payload", 400));
+				throw new HttpError(400, "No standards found in import payload");
 			}
 
 			const standards = rawStandards
 				.map(normalizeStandardForImport)
 				.filter((item): item is CodingStandardEntry => !!item);
 			if (standards.length === 0) {
-				return res.status(400).json(jsonApiError("Import payload does not contain valid standards", 400));
+				throw new HttpError(400, "Import payload does not contain valid standards");
 			}
 			const refreshVectors = shouldRefreshVectors(req.body, standards.length);
 
@@ -237,32 +221,26 @@ export class StandardsController {
 				});
 			});
 
-			res.json(
-				jsonApiRes(
-					{
-						imported: imported.length,
-						updated: updated.length,
-						total: imported.length + updated.length,
-						vectors_refreshed: refreshVectors,
-						vector_failures: vectorFailures,
-						ids: [...imported, ...updated]
-					},
-					"standard-import"
-				)
+			return jsonApiRes(
+				{
+					imported: imported.length,
+					updated: updated.length,
+					total: imported.length + updated.length,
+					vectors_refreshed: refreshVectors,
+					vector_failures: vectorFailures,
+					ids: [...imported, ...updated]
+				},
+				"standard-import"
 			);
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+		});
 	}
 
 	static async create(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
 			const { title, content, tags, metadata } = attributes;
 			if (!title || !content || !Array.isArray(tags) || tags.length === 0 || !metadata) {
-				return res.status(400).json(jsonApiError("Required fields missing", 400));
+				throw new HttpError(400, "Required fields missing");
 			}
 
 			const now = new Date().toISOString();
@@ -297,18 +275,14 @@ export class StandardsController {
 				db.actions.logAction("write", entry.owner, entry.repo || "global", { query: entry.title, resultCount: 1 });
 			});
 
-			res.json(jsonApiRes(entry, "standard"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(entry, "standard");
+		});
 	}
 
 	static async update(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const existing = db.standards.getById(req.params.id as string);
-			if (!existing) return res.status(404).json(jsonApiError("Coding standard not found", 404));
+			if (!existing) throw new HttpError(404, "Coding standard not found");
 
 			const attributes = getAttributes(req);
 			const updates: Partial<CodingStandardEntry> = {};
@@ -342,18 +316,14 @@ export class StandardsController {
 				});
 			});
 
-			res.json(jsonApiRes({ message: "Updated" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Updated" }, "status");
+		});
 	}
 
 	static async delete(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const existing = db.standards.getById(req.params.id as string);
-			if (!existing) return res.status(404).json(jsonApiError("Coding standard not found", 404));
+			if (!existing) throw new HttpError(404, "Coding standard not found");
 
 			await db.withWrite(async () => {
 				db.standards.delete(existing.id);
@@ -364,10 +334,7 @@ export class StandardsController {
 				});
 			});
 
-			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Deleted" }, "status");
+		});
 	}
 }

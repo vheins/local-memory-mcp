@@ -3,13 +3,13 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { db, mcpClient, startTime } from "../lib/context";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi";
 import { condenseRecentActions } from "../lib/helpers";
+import type { RecentAction } from "../lib/interfaces";
 import { parseRepoInput } from "../../mcp/utils/normalize";
 import { TOOL_DEFINITIONS } from "../../mcp/tools/tool-definitions";
 import { listResources } from "../../mcp/resources/index";
 import { PROMPTS } from "../../mcp/prompts/registry";
-import type { RecentAction } from "../ui/src/lib/interfaces/common";
 import {
 	handleHandoffList,
 	handleHandoffCreate,
@@ -46,39 +46,33 @@ try {
 
 export class SystemController {
 	static async getHealth(req: express.Request, res: express.Response) {
-		await db.refresh();
-		const stats = db.system.getGlobalStats();
-		const health = {
-			connected: mcpClient.isConnected(),
-			uptime: Math.floor((Date.now() - startTime) / 1000),
-			version: pkg.version,
-			memoryCount: stats.totalMemories,
-			repoCount: stats.totalRepos,
-			pendingRequests: mcpClient.getPendingCount(),
-			dbPath: db.getDbPath()
-		};
-		res.json(jsonApiRes(health, "health"));
+		await handleController(req, res, () => {
+			const stats = db.system.getGlobalStats();
+			const health = {
+				connected: mcpClient.isConnected(),
+				uptime: Math.floor((Date.now() - startTime) / 1000),
+				version: pkg.version,
+				memoryCount: stats.totalMemories,
+				repoCount: stats.totalRepos,
+				pendingRequests: mcpClient.getPendingCount(),
+				dbPath: db.getDbPath()
+			};
+			return jsonApiRes(health, "health");
+		});
 	}
 
 	static async getRepos(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const repos = db.system.listRepoNavigation();
-			res.json(
-				jsonApiRes(
-					repos.map((r) => ({ id: r.repo, name: r.repo, ...r })),
-					"repository"
-				)
+			return jsonApiRes(
+				repos.map((r) => ({ id: r.repo, name: r.repo, ...r })),
+				"repository"
 			);
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+		});
 	}
 
 	static async getStats(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const repo = req.query.repo as string | undefined;
 			let owner = req.query.owner as string | undefined;
 			if (!owner && repo && repo.includes("/")) {
@@ -86,19 +80,14 @@ export class SystemController {
 				owner = parsed.owner;
 			}
 			const stats = repo ? db.system.getDashboardStats(owner || "", repo) : db.system.getGlobalDashboardStats();
-			res.json(jsonApiRes(stats, "system-stats"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(stats, "system-stats");
+		});
 	}
 
 	static async getRecentActions(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const repo = req.query.repo as string | undefined;
-			const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 10));
-			const page = Math.max(1, parseInt(req.query.page as string) || 1);
+			const { page, pageSize, offset } = parsePageParams(req.query, { defaultPageSize: 10 });
 			const rawActions = db.actions.getRecentActions("", repo, 100);
 			// Map ActionLogRow to RecentAction (fixing query null vs undefined)
 			const actions: RecentAction[] = rawActions.map((a) => ({
@@ -111,17 +100,11 @@ export class SystemController {
 				memory_type: a.memory_type || undefined
 			}));
 			const allCondensed = condenseRecentActions(actions, 100);
-			const offset = (page - 1) * pageSize;
 			const items = allCondensed.slice(offset, offset + pageSize);
-			res.json(
-				jsonApiRes(items, "recent-action", {
-					meta: { page, pageSize, totalItems: allCondensed.length }
-				})
-			);
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(items, "recent-action", {
+				meta: { page, pageSize, totalItems: allCondensed.length }
+			});
+		});
 	}
 
 	static getCapabilities(req: express.Request, res: express.Response) {
@@ -148,18 +131,16 @@ export class SystemController {
 	}
 
 	static async getExport(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const repo = req.query.repo as string;
-			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
+			if (!repo) throw new HttpError(400, "repo is required");
 
 			let owner = req.query.owner as string | undefined;
 			if (!owner && repo.includes("/")) {
 				const parsed = parseRepoInput(repo, undefined);
 				owner = parsed.owner;
 			}
-			if (!owner)
-				return res.status(400).json(jsonApiError("owner is required when repo is not in owner/repo format", 400));
+			if (!owner) throw new HttpError(400, "owner is required when repo is not in owner/repo format");
 
 			const PAGE_SIZE = 500;
 
@@ -217,17 +198,11 @@ export class SystemController {
 
 			res.write(`\n      ]\n    }\n  }\n}\n`);
 			res.end();
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			if (!res.headersSent) {
-				res.status(500).json(jsonApiError(message));
-			}
-			res.end();
-		}
+		});
 	}
 
 	static async callTool(req: express.Request, res: express.Response) {
-		try {
+		await handleController(req, res, async () => {
 			const { name } = req.params as { name: string };
 			const args = getAttributes(req) as Record<string, unknown>;
 
@@ -242,16 +217,12 @@ export class SystemController {
 
 			if (name in COORDINATION_TOOLS) {
 				const result = await COORDINATION_TOOLS[name](args, db);
-				res.json(jsonApiRes(result, "tool-result"));
-				return;
+				return jsonApiRes(result, "tool-result");
 			}
 
 			if (!mcpClient.isConnected()) await mcpClient.start();
 			const result = await mcpClient.callTool(name, args);
-			res.json(jsonApiRes(result, "tool-result"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(result, "tool-result");
+		});
 	}
 }

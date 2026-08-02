@@ -1,7 +1,7 @@
 import express from "express";
 import { randomUUID } from "crypto";
 import { db, mcpClient } from "../lib/context.js";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
 import type { Task } from "../../mcp/types/index.js";
 import type { IdParams, TaskListQuery } from "../../mcp/interfaces/index.js";
 
@@ -22,89 +22,60 @@ function resolveWriteOwner(owner: unknown): string {
 
 export class TasksController {
 	static async list(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const query = req.query as unknown as TaskListQuery;
 			const { repo, status, search } = query;
-			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
-			const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) || "20", 10)));
+			const { page, pageSize, offset } = parsePageParams(req.query, { defaultPageSize: 20 });
 
-			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
+			if (!repo) throw new HttpError(400, "repo is required");
 
 			let tasks;
 			let totalItems;
 
 			if (status && (status as string).includes(",")) {
 				const statuses = (status as string).split(",");
-				tasks = db.tasks.getTasksByMultipleStatuses(
-					"",
-					repo as string,
-					statuses,
-					pageSize,
-					(page - 1) * pageSize,
-					search as string
-				);
+				tasks = db.tasks.getTasksByMultipleStatuses("", repo as string, statuses, pageSize, offset, search as string);
 				totalItems = db.tasks.countTasksByMultipleStatuses("", repo as string, statuses, search as string);
 			} else {
-				tasks = db.tasks.getTasksByRepo(
-					"",
-					repo as string,
-					status as string,
-					pageSize,
-					(page - 1) * pageSize,
-					search as string
-				);
+				tasks = db.tasks.getTasksByRepo("", repo as string, status as string, pageSize, offset, search as string);
 				totalItems = db.tasks.countTasks("", repo as string, status as string, search as string);
 			}
 
 			const totalPages = Math.ceil(totalItems / pageSize);
 
-			res.json(jsonApiRes(tasks, "task", { meta: { page, pageSize, totalItems, totalPages } }));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(tasks, "task", { meta: { page, pageSize, totalItems, totalPages } });
+		});
 	}
 
 	static async get(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const task = db.tasks.getTaskById(req.params.id as string);
-			if (!task) throw new Error("Task not found");
+			if (!task) throw new HttpError(404, "Task not found");
 			db.actions.logAction("read", task.owner || "", task.repo, { taskId: task.id });
-			res.json(jsonApiRes(task, "task"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Task not found";
-			res.status(404).json(jsonApiError(message, 404));
-		}
+			return jsonApiRes(task, "task");
+		});
 	}
 
 	static async getByCode(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const { repo, task_code } = req.query;
-			if (!repo || !task_code) return res.status(400).json(jsonApiError("repo and task_code are required", 400));
+			if (!repo || !task_code) throw new HttpError(400, "repo and task_code are required");
 			const task = db.tasks.getTaskByCode("", repo as string, task_code as string);
-			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
-			res.json(jsonApiRes(task, "task"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Task not found";
-			res.status(404).json(jsonApiError(message, 404));
-		}
+			if (!task) throw new HttpError(404, "Task not found");
+			return jsonApiRes(task, "task");
+		});
 	}
 
 	static async create(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
 			const { repo, task_code, title } = attributes;
-			if (!repo || !task_code || !title) return res.status(400).json(jsonApiError("Required fields missing", 400));
+			if (!repo || !task_code || !title) throw new HttpError(400, "Required fields missing");
 			// Normalize owner at write time — reject empty instead of persisting ""
 			// (owner-less rows force fallback double-queries on every lookup).
 			const owner = resolveWriteOwner(attributes.owner);
-			if (!owner) return res.status(400).json(jsonApiError("owner is required (or set DASHBOARD_OWNER)", 400));
-			if (db.tasks.isTaskCodeDuplicate(owner, repo, task_code))
-				return res.status(400).json(jsonApiError("Duplicate task_code", 400));
+			if (!owner) throw new HttpError(400, "owner is required (or set DASHBOARD_OWNER)");
+			if (db.tasks.isTaskCodeDuplicate(owner, repo, task_code)) throw new HttpError(400, "Duplicate task_code");
 			const id = randomUUID();
 			await db.withWrite(() => {
 				db.tasks.insertTask({
@@ -116,20 +87,16 @@ export class TasksController {
 				} as Task);
 				db.actions.logAction("write", owner, repo, { taskId: id });
 			});
-			res.json(jsonApiRes({ id }, "task"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ id }, "task");
+		});
 	}
 
 	static async update(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
 			const attributes = getAttributes(req);
 			const existingTask = db.tasks.getTaskById(id);
-			if (!existingTask) return res.status(404).json(jsonApiError("Task not found", 404));
+			if (!existingTask) throw new HttpError(404, "Task not found");
 
 			if (!mcpClient.isConnected()) await mcpClient.start();
 
@@ -171,40 +138,32 @@ export class TasksController {
 
 			const updatedTask = db.tasks.getTaskById(id);
 			if (!updatedTask) {
-				return res.status(500).json(jsonApiError("Task updated but could not be reloaded", 500));
+				throw new HttpError(500, "Task updated but could not be reloaded");
 			}
 
-			res.json(jsonApiRes(updatedTask, "task"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(updatedTask, "task");
+		});
 	}
 
 	static async delete(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
 			const task = db.tasks.getTaskById(id);
-			if (!task) return res.status(404).json(jsonApiError("Task not found", 404));
+			if (!task) throw new HttpError(404, "Task not found");
 
 			await db.withWrite(() => {
 				db.tasks.deleteTask(id);
 				db.actions.logAction("delete", task.owner || "", task.repo, { taskId: id });
 			});
-			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Deleted" }, "status");
+		});
 	}
 
 	static async bulkCreate(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { items, repo } = getAttributes(req);
 			if (!Array.isArray(items) || !repo)
-				return res.status(400).json(jsonApiError("Invalid payload: requires 'items' array and 'repo'", 400));
+				throw new HttpError(400, "Invalid payload: requires 'items' array and 'repo'");
 
 			const tasks = items.map((item: Record<string, unknown>) => ({
 				...item,
@@ -218,7 +177,7 @@ export class TasksController {
 			}));
 
 			if (tasks.some((t) => !t.owner)) {
-				return res.status(400).json(jsonApiError("owner is required on every item (or set DASHBOARD_OWNER)", 400));
+				throw new HttpError(400, "owner is required on every item (or set DASHBOARD_OWNER)");
 			}
 
 			const count = await db.withWrite(() => {
@@ -226,16 +185,12 @@ export class TasksController {
 				db.actions.logAction("write", tasks[0]?.owner ?? "", repo, { query: `Bulk imported ${n} tasks` });
 				return n;
 			});
-			res.json(jsonApiRes({ count }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ count }, "status");
+		});
 	}
 
 	static async getTimeStats(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const { repo } = req.query;
 			const targetRepo = typeof repo === "string" && repo.length > 0 ? repo : null;
 
@@ -258,38 +213,27 @@ export class TasksController {
 				}
 			};
 
-			res.json(jsonApiRes(stats, "performance-stats"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(stats, "performance-stats");
+		});
 	}
 
 	static async updateComment(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
 			const { comment } = getAttributes(req);
 			const existingComment = db.taskComments.getTaskCommentById(id);
-			if (!existingComment) return res.status(404).json(jsonApiError("Comment not found", 404));
+			if (!existingComment) throw new HttpError(404, "Comment not found");
 
 			await db.withWrite(() => db.taskComments.updateTaskComment(id, { comment }));
-			res.json(jsonApiRes({ message: "Updated" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Updated" }, "status");
+		});
 	}
 
 	static async deleteComment(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, async () => {
 			const { id } = req.params as unknown as IdParams;
 			await db.withWrite(() => db.taskComments.deleteTaskComment(id));
-			res.json(jsonApiRes({ message: "Deleted" }, "status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes({ message: "Deleted" }, "status");
+		});
 	}
 }

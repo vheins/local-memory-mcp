@@ -1,6 +1,6 @@
 import express from "express";
-import { db, embeddingWorker } from "../lib/context";
-import { jsonApiRes, jsonApiError } from "../lib/jsonApi";
+import { embeddingWorker } from "../lib/context.js";
+import { jsonApiRes, handleController } from "../lib/jsonApi.js";
 
 /**
  * Embedding/KG outbox queue observability (TASK-013). Exposes worker + queue
@@ -8,13 +8,7 @@ import { jsonApiRes, jsonApiError } from "../lib/jsonApi";
  * counts, batch size, lease, model readiness).
  */
 export class QueueController {
-	static async status(_req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
-			res.json(jsonApiRes(embeddingWorker.getStats(), "queue-status"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+	static async status(req: express.Request, res: express.Response) {
+		await handleController(req, res, () => jsonApiRes(embeddingWorker.getStats(), "queue-status"));
 	}
 }

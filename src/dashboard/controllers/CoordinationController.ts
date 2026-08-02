@@ -1,16 +1,14 @@
 import express from "express";
 import { db, mcpClient } from "../lib/context.js";
-import { jsonApiRes, jsonApiError, getAttributes } from "../lib/jsonApi.js";
+import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes } from "../lib/jsonApi.js";
 
 export class CoordinationController {
 	static async listClaims(req: express.Request, res: express.Response) {
-		try {
-			await db.refresh();
+		await handleController(req, res, () => {
 			const { repo, agent, active_only } = req.query;
-			const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
-			const pageSize = Math.min(100, Math.max(1, parseInt((req.query.pageSize as string) || "20", 10)));
+			const { page, pageSize, offset } = parsePageParams(req.query, { defaultPageSize: 20 });
 
-			if (!repo) return res.status(400).json(jsonApiError("repo is required", 400));
+			if (!repo) throw new HttpError(400, "repo is required");
 
 			const claims = db.handoffs.listClaims({
 				owner: "",
@@ -18,7 +16,7 @@ export class CoordinationController {
 				agent: typeof agent === "string" ? agent : undefined,
 				active_only: active_only === undefined ? true : String(active_only) === "true",
 				limit: pageSize,
-				offset: (page - 1) * pageSize
+				offset
 			});
 
 			const total = db.handoffs.listClaims({
@@ -30,34 +28,33 @@ export class CoordinationController {
 				offset: 0
 			}).length;
 
-			res.json(
-				jsonApiRes(claims, "claim", {
-					meta: {
-						page,
-						pageSize,
-						totalItems: total,
-						totalPages: Math.ceil(total / pageSize)
-					}
-				})
-			);
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+			return jsonApiRes(claims, "claim", {
+				meta: {
+					page,
+					pageSize,
+					totalItems: total,
+					totalPages: Math.ceil(total / pageSize)
+				}
+			});
+		});
 	}
 
 	static async releaseClaim(req: express.Request, res: express.Response) {
-		try {
-			const attributes = getAttributes(req);
-			if (!mcpClient.isConnected()) await mcpClient.start();
-			const result = (await mcpClient.callTool("claim-release", {
-				...attributes,
-				structured: true
-			})) as { structuredContent?: Record<string, unknown> };
-			res.json(jsonApiRes((result.structuredContent || result) as Record<string, unknown>, "claim-release"));
-		} catch (err: unknown) {
-			const message = err instanceof Error ? err.message : "Internal server error";
-			res.status(500).json(jsonApiError(message));
-		}
+		await handleController(
+			req,
+			res,
+			async () => {
+				const attributes = getAttributes(req);
+				if (!mcpClient.isConnected()) await mcpClient.start();
+				const result = (await mcpClient.callTool("claim-release", {
+					...attributes,
+					structured: true
+				})) as { structuredContent?: Record<string, unknown> };
+				return jsonApiRes((result.structuredContent || result) as Record<string, unknown>, "claim-release");
+			},
+			// No DB read before the MCP call — preserve the original handler's
+			// behavior of skipping db.refresh().
+			{ refresh: false }
+		);
 	}
 }
