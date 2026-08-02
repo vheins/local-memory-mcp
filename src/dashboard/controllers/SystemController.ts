@@ -215,8 +215,18 @@ export class SystemController {
 				"claim-release": handleClaimRelease
 			};
 
+			// Write-lock invariant (TASK-102 / TASK-125): the four mutation
+			// handlers mutate storage.handoffs directly and MUST serialize with
+			// MCP write tools through db.withWrite — the same file-lock boundary
+			// router.ts applies to handoff-write / claim-manage (WRITE_TOOLS).
+			// The read handlers (handoff-list, claim-list) stay outside the lock.
+			const COORDINATION_WRITE_TOOLS = new Set(["handoff-create", "handoff-update", "task-claim", "claim-release"]);
+
 			if (name in COORDINATION_TOOLS) {
-				const result = await COORDINATION_TOOLS[name](args, db);
+				const handler = COORDINATION_TOOLS[name];
+				const result = COORDINATION_WRITE_TOOLS.has(name)
+					? await db.withWrite(() => handler(args, db))
+					: await handler(args, db);
 				return jsonApiRes(result, "tool-result");
 			}
 
