@@ -1,11 +1,24 @@
 // MCP protocol router — thin adapter over the SDK tool dispatch core.
 //
+// ⚠️ TEST-ADAPTER-ONLY (legacy transport) — TASK-098.
+// Production uses the native SDK path only: server.ts → mcp-server.ts
+// (serveStdio → createMcpServer), which registers tools/resources/prompts via
+// tools/index.ts, resources/sdk-index.ts, prompts/sdk-index.ts. This router is
+// a hand-rolled JSON-RPC transport kept ONLY as the test harness (router.test.ts
+// + ~14 other test files call createRouter directly); it is not wired into any
+// production entry point. Do not add new protocol surface here — extend the SDK
+// registration paths instead.
+//
 // Production tool dispatch lives in tools/index.ts (registerAllTools →
 // buildExecutors). This router keeps the MCP protocol envelope (tools/list,
 // resources/*, prompts/*, completion/*, logging/*) for the upstream transport
 // and delegates every tools/call to the SAME executor map, so there is exactly
 // one dispatch core and one WRITE_TOOLS / collectAffectedResourceUris
 // definition (utils/tool-plumbing.ts).
+//
+// Resources are served through the single shared implementation in
+// resources/index.ts (listResources/listResourceTemplates/readResource); the
+// SDK transport adapts those same functions in resources/sdk-index.ts.
 
 import { listResources, listResourceTemplates, readResource } from "./resources/index";
 import { SessionContext } from "./session";

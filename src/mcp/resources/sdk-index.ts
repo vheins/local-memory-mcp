@@ -2,15 +2,21 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { SessionContext } from "../session";
-import { rankCompletionValues } from "../utils/completion";
-import { parseRepoInput } from "../utils/normalize";
-import type { Task, MemoryType } from "../types/index";
+import { readResource } from "./index";
 
 /**
  * Registers all resources and resource templates via SDK registerResource().
  *
- * Mirrors the old resources/index.ts logic but uses the SDK's built-in
- * resource/template/completion lifecycle instead of manual handlers.
+ * Single-source adapter (TASK-098): every read handler delegates to the shared
+ * implementation in `./index` (readResource), so the SDK transport and the
+ * legacy test-adapter router (router.ts) serve resources through the SAME
+ * code path — no overlapping logic to drift.
+ *
+ * This is the PRODUCTION registration path (server.ts → mcp-server.ts).
+ * `./index` also remains the completion source (completion.ts →
+ * completeResourceArgument); the SDK's per-template `complete` callbacks are
+ * intentionally not configured here because mcp-server.ts installs a custom
+ * `completion/complete` handler that overrides the SDK's built-in one.
  *
  * Static resources:
  *   - repository://index
@@ -33,39 +39,9 @@ export function registerAllResources(
 ): void {
 	const db = store;
 
-	// ── Data source helpers (shared by completions and reads) ──────────
-
-	function getRepos(): string[] {
-		const values = new Set<string>();
-		for (const repo of db.system.listRepos()) {
-			values.add(repo);
-		}
-		if (session.roots.length > 0) {
-			for (const root of session.roots) {
-				const name = root.name || root.uri.split("/").filter(Boolean).pop() || "";
-				if (name) values.add(name);
-			}
-		}
-		return [...values].sort((a, b) => a.localeCompare(b));
-	}
-
-	function getTags(): string[] {
-		const values = new Set<string>();
-		const memories = db.memories.getRecentMemories("", "", 1000);
-		for (const memory of memories) {
-			for (const tag of memory.tags || []) {
-				if (typeof tag === "string" && tag.trim()) {
-					values.add(tag.trim());
-				}
-			}
-		}
-		return [...values].sort((a, b) => a.localeCompare(b));
-	}
-
-	function _deriveLastModified(values: Array<string | undefined | null>): string {
-		const normalized = values.filter((v): v is string => typeof v === "string" && v.length > 0);
-		return normalized.sort().at(-1) ?? new Date().toISOString();
-	}
+	// Shared read dispatcher: the SDK invokes this with the concrete URI, and
+	// readResource (./index) owns the URI → payload mapping for both transports.
+	const read = (uri: URL): ReturnType<typeof readResource> => readResource(uri.toString(), db, session);
 
 	// ── Static: Repository Index ──────────────────────────────────────
 
@@ -77,19 +53,7 @@ export function registerAllResources(
 			description: "All known repos with memory/task counts",
 			mimeType: "application/json"
 		},
-		async (uri, _extra) => {
-			const repos = db.system.listRepoNavigation();
-			const payload = JSON.stringify(repos, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Static: Session Roots ────────────────────────────────────────
@@ -104,82 +68,22 @@ export function registerAllResources(
 				: "No active workspace roots were provided by the MCP client",
 			mimeType: "application/json"
 		},
-		async (uri, _extra) => {
-			const payload = JSON.stringify({ roots: session?.roots ?? [] }, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
-
-	// ── Helper: lazy completable repos/tags (deferred until first completion request) ──
-
-	function reposLazy(): () => string[] {
-		let cached: string[] | null = null;
-		return () => {
-			if (cached === null) cached = getRepos();
-			return cached;
-		};
-	}
-
-	function tagsLazy(): () => string[] {
-		let cached: string[] | null = null;
-		return () => {
-			if (cached === null) cached = getTags();
-			return cached;
-		};
-	}
-
-	const reposFn = reposLazy();
-	const tagsFn = tagsLazy();
 
 	// ── Template: Repository Memories ─────────────────────────────────
 
 	server.registerResource(
 		"repository-memories",
 		new ResourceTemplate("repository://{name}/memories{?search,type,tag,limit,offset}", {
-			list: undefined,
-			complete: {
-				name: async (value) => rankCompletionValues(reposFn(), value as string),
-				tag: async (value) => rankCompletionValues(tagsFn(), value as string)
-			}
+			list: undefined
 		}),
 		{
 			title: "Repository Memories",
 			description: "Active memory entries for a repo, filtered by search/type/tag",
 			mimeType: "application/json"
 		},
-		async (uri, variables, _extra) => {
-			const name = variables.name as string;
-			const search = (variables.search as string) || "";
-			const type = variables.type as string | undefined;
-			const tag = variables.tag as string | undefined;
-
-			const result = db.memories.listMemoriesForDashboard({
-				repo: name,
-				type: (type as MemoryType) || undefined,
-				tag: tag || undefined,
-				search: search || undefined,
-				limit: 50
-			});
-			const entries = result.items;
-			const payload = JSON.stringify(entries, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Template: Memory Detail ───────────────────────────────────────
@@ -192,23 +96,7 @@ export function registerAllResources(
 			description: "Full content and stats for a memory UUID",
 			mimeType: "application/json"
 		},
-		async (uri, variables, _extra) => {
-			const id = variables.id as string;
-			const entry = db.memories.getByIdWithStats(id);
-			if (!entry) {
-				throw new Error(`Memory with ID ${id} not found.`);
-			}
-			const payload = JSON.stringify(entry, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Template: Repository Tasks ────────────────────────────────────
@@ -216,48 +104,14 @@ export function registerAllResources(
 	server.registerResource(
 		"repository-tasks",
 		new ResourceTemplate("repository://{name}/tasks{?status,priority,limit,offset}", {
-			list: undefined,
-			complete: {
-				name: async (value) => rankCompletionValues(reposFn(), value as string)
-			}
+			list: undefined
 		}),
 		{
 			title: "Repository Tasks",
 			description: "Active tasks for a repo, filtered by status/priority",
 			mimeType: "application/json"
 		},
-		async (uri, variables, _extra) => {
-			const name = variables.name as string;
-			const status = variables.status as string | undefined;
-			const priority = variables.priority as string | undefined;
-			const owner = parseRepoInput(name).owner;
-
-			let tasks: Task[];
-			if (status && status !== "all") {
-				const statuses = status.split(",").map((s) => s.trim());
-				tasks = db.tasks.getTasksByMultipleStatuses(owner, name, statuses);
-			} else {
-				tasks = db.tasks.getTasksByMultipleStatuses(owner, name, ["backlog", "pending", "in_progress", "blocked"]);
-			}
-
-			if (priority) {
-				const p = Number(priority);
-				if (!isNaN(p)) {
-					tasks = tasks.filter((t: Task) => t.priority === p);
-				}
-			}
-
-			const payload = JSON.stringify(tasks, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Template: Task Detail ─────────────────────────────────────────
@@ -270,23 +124,7 @@ export function registerAllResources(
 			description: "Full content and comments for a task UUID",
 			mimeType: "application/json"
 		},
-		async (uri, variables, _extra) => {
-			const id = variables.id as string;
-			const task = db.tasks.getTaskById(id);
-			if (!task) {
-				throw new Error(`Task with ID ${id} not found.`);
-			}
-			const payload = JSON.stringify(task, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Template: Repository Summary ──────────────────────────────────
@@ -294,30 +132,14 @@ export function registerAllResources(
 	server.registerResource(
 		"repository-summary",
 		new ResourceTemplate("repository://{name}/summary", {
-			list: undefined,
-			complete: {
-				name: async (value) => rankCompletionValues(reposFn(), value as string)
-			}
+			list: undefined
 		}),
 		{
 			title: "Repository Summary",
 			description: "Architectural summary for a repo",
 			mimeType: "text/plain"
 		},
-		async (uri, variables, _extra) => {
-			const name = variables.name as string;
-			const summary = db.summaries.getSummary("", name);
-			const text = summary?.summary || `No summary available for repository: ${name}`;
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "text/plain",
-						text
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Template: Repository Actions ─────────────────────────────────
@@ -325,30 +147,14 @@ export function registerAllResources(
 	server.registerResource(
 		"repository-actions",
 		new ResourceTemplate("repository://{name}/actions{?limit,offset}", {
-			list: undefined,
-			complete: {
-				name: async (value) => rankCompletionValues(reposFn(), value as string)
-			}
+			list: undefined
 		}),
 		{
 			title: "Repository Actions",
 			description: "Audit log of tool actions for a repo",
 			mimeType: "application/json"
 		},
-		async (uri, variables, _extra) => {
-			const name = variables.name as string;
-			const actions = db.actions.getRecentActions("", name, 100);
-			const payload = JSON.stringify(actions, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 
 	// ── Template: Action Detail ───────────────────────────────────────
@@ -361,23 +167,6 @@ export function registerAllResources(
 			description: "Full details of an audit log entry",
 			mimeType: "application/json"
 		},
-		async (uri, variables, _extra) => {
-			const idStr = variables.id as string;
-			const id = Number(idStr);
-			const action = db.actions.getActionById(id);
-			if (!action) {
-				throw new Error(`Action with ID ${id} not found.`);
-			}
-			const payload = JSON.stringify(action, null, 2);
-			return {
-				contents: [
-					{
-						uri: uri.toString(),
-						mimeType: "application/json",
-						text: payload
-					}
-				]
-			};
-		}
+		(uri) => read(uri)
 	);
 }
