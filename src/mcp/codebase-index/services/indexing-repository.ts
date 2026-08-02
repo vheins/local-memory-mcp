@@ -31,6 +31,7 @@ import {
 // Import extracted sub-modules
 import { createIndexPlan } from "./indexing-planner.js";
 import { applyRenames, cleanStaleFiles, type IndexProgress, type IndexFileError } from "./indexing-writer.js";
+import type { IndexStatus } from "./indexing-staleness.js";
 import { emitProgress, runParsePipeline } from "./parse-pipeline.js";
 
 // ── Module-level indexing guard (shared instance) ──────────────────────
@@ -95,21 +96,8 @@ export interface IndexResult {
 	errorSummary: ErrorSummary;
 }
 
-export interface IndexStatus {
-	repo: string;
-	isIndexed: boolean;
-	isIndexing: boolean;
-	lastIndexedAt: string | null;
-	totalFiles: number;
-	totalSymbols: number;
-	progress: IndexProgress | null;
-	/** Whether the index has become stale (>= 5% of files changed since last index). Only set when repoPath is provided. */
-	stale?: boolean;
-	/** Ratio of stale files to total indexed files (0-1). Only set when repoPath is provided. */
-	staleRatio?: number;
-}
-
-// Re-export StalenessResult from cache layer
+// Re-export types from canonical locations (TASK-114 dedup)
+export type { IndexStatus } from "./indexing-staleness.js";
 export type { StalenessResult } from "./indexing-cache.js";
 
 // ── Core indexRepository function ──────────────────────────────────────

@@ -3,7 +3,7 @@
  *
  * Delegates to focused sub-modules:
  *   - indexing-repository.ts — core indexRepository pipeline
- *   - indexing-staleness.ts  — staleness check, index status
+ *   - indexing-staleness.ts  — IndexStatus type (canonical)
  *   - indexing-cache.ts      — cache-level utilities (re-exported)
  *
  * Thread safety: the module-level `indexingRepos` set (from indexing-cache)
