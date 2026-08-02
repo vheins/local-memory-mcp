@@ -58,7 +58,7 @@ import { handleAgentContext } from "./agent-context";
 import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
 import { McpResponse } from "../utils/mcp-response";
-import { logAction } from "../utils/action-log";
+import { extractActionLog, logAction } from "../utils/action-log";
 import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
 
 // ── Tool definitions ────────────────────────────────────────────────────
@@ -80,24 +80,11 @@ export type RegisterAllOptions = {
 // (shared with the router.ts adapter) — single source of truth.
 
 // ── Action logging ───────────────────────────────────────────────────────
-
-function logToolAction(toolName: string, args: Record<string, unknown>, result: unknown, db: SQLiteStore): void {
-	const actionType = toolName.split("-")[1] || toolName;
-	const res = result as Record<string, unknown> | undefined;
-	const sc = (res as Record<string, unknown>)?.structuredData as Record<string, unknown> | undefined;
-	const repo = (args?.repo as string) || ((args?.scope as Record<string, unknown>)?.repo as string) || "unknown";
-
-	// Unified policy (ActionLogService): action_log INSERTs never take the file
-	// lock — WAL + busy_timeout serialize single-row inserts. Exactly one row
-	// per tool call, read AND write tools alike.
-	logAction(db, actionType, "", repo, {
-		query: (args?.query as string) || (args?.title as string) || (args?.task_code as string) || undefined,
-		response: res,
-		memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
-		taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
-		resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
-	});
-}
+// Metadata derivation for the action log lives in ONE place:
+// extractActionLog (utils/action-log.ts) reads `result.structuredContent` —
+// the field McpResponse actually exposes (mcp-response.ts) — so memoryId /
+// taskId / resultCount are populated on the SDK path. logAction enforces the
+// no-file-lock policy and never throws (see utils/action-log.ts header).
 
 // ── Response conversion (McpResponse → CallToolResult) ──────────────────
 
@@ -269,8 +256,10 @@ export function registerAllTools(
 					repo: (normalizedArgs?.repo as string) || "unknown"
 				});
 
-				// Action logging
-				logToolAction(toolName, normalizedArgs, result, store);
+				// Action logging — exactly one row per tool call, read AND write
+				// tools alike (extractActionLog + logAction, shared with router.ts).
+				const { action, repo, options: actionLogOptions } = extractActionLog(toolName, normalizedArgs, result);
+				logAction(store, action, "", repo, actionLogOptions);
 
 				// Resource mutation notifications
 				const affectedUris = collectAffectedResourceUris(toolName, normalizedArgs, result);

@@ -23,7 +23,7 @@
 import { listResources, listResourceTemplates, readResource } from "./resources";
 import { SessionContext } from "./session";
 import { logger } from "./utils/logger";
-import { logAction } from "./utils/action-log";
+import { extractActionLog, logAction } from "./utils/action-log";
 import { getPrompt, listPrompts } from "./prompts/registry";
 import { TOOL_DEFINITIONS } from "./tools/tool-definitions";
 import { complete, type CompletionRequest } from "./completion";
@@ -193,21 +193,11 @@ export function createRouter(
 		logger.info(`[Tool] ${toolName} result`, { repo });
 
 		try {
-			const actionType = toolName.split("-")[1] || toolName;
-			const res = result as Record<string, unknown> | undefined;
-			const sc = res?.structuredData as Record<string, unknown> | undefined;
-			const logOptions = {
-				query: (args?.query as string) || (args?.title as string) || (args?.task_code as string) || undefined,
-				response: result as Record<string, unknown>,
-				memoryId: (args?.id as string) || (args?.memory_id as string) || (sc?.id as string),
-				taskId: (args?.id as string) || (args?.task_id as string) || (sc?.id as string),
-				resultCount: Array.isArray(sc?.results) ? sc.results.length : (sc?.count as number) || 0
-			};
-
-			// Unified policy (ActionLogService): action_log INSERTs never take
-			// the file lock — WAL + busy_timeout serialize single-row inserts.
-			// Exactly one row per tool call, read AND write tools alike.
-			logAction(db, actionType, "", repo, logOptions);
+			// Shared with the SDK path: extractActionLog reads result.structuredContent
+			// (the field McpResponse actually exposes), so memoryId/taskId/resultCount
+			// are populated here. logAction enforces the no-file-lock policy.
+			const { action, repo: logRepo, options } = extractActionLog(toolName, args, result);
+			logAction(db, action, "", logRepo, options);
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });
 		}

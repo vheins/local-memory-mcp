@@ -96,8 +96,8 @@ export async function handleUpdate(
 		.immediate();
 
 	// Action logging happens once per tool call at the executor level
-	// (logToolAction in tools/index.ts / router.ts) — do NOT log here to
-	// guarantee exactly one action_log row per tool call.
+	// (extractActionLog + logAction in tools/index.ts / router.ts) — do NOT
+	// log here to guarantee exactly one action_log row per tool call.
 	logger.info("[Tool] memory.write — update", {
 		repo: existing.scope.repo,
 		id: resolvedId,

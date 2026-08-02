@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { logAction, logActions, type ActionLogEntry } from "../utils/action-log";
+import { extractActionLog, logAction, logActions, type ActionLogEntry } from "../utils/action-log";
 import { logger } from "../utils/logger";
 import type { SQLiteStore } from "../storage/sqlite";
 
@@ -23,6 +23,180 @@ function makeMockDb(actionsImpl?: () => void) {
 	} as unknown as SQLiteStore;
 	return { db, logActionSpy };
 }
+
+describe("extractActionLog", () => {
+	// OPT-DRY-05: metadata derivation is shared by both transports and MUST
+	// read result.structuredContent — the field McpResponse exposes — not the
+	// non-existent structuredData the old copy-pasted readers used.
+
+	it("derives action type, repo and query from toolName/args", () => {
+		const extracted = extractActionLog("memory-read", { repo: "acme/app", query: "hello" }, {});
+
+		expect(extracted.action).toBe("read");
+		expect(extracted.repo).toBe("acme/app");
+		expect(extracted.options.query).toBe("hello");
+	});
+
+	it("reads repo from args.scope.repo when args.repo is absent", () => {
+		const extracted = extractActionLog("task-write", { scope: { owner: "acme", repo: "app" } }, {});
+
+		expect(extracted.repo).toBe("app");
+	});
+
+	it("populates memoryId/resultCount from memory-domain structuredContent; taskId stays empty (TASK-155)", () => {
+		const result = {
+			content: [],
+			isError: false,
+			structuredContent: { id: "mem-123", results: [{ id: "a" }, { id: "b" }, { id: "c" }] }
+		};
+
+		const extracted = extractActionLog("memory-read", { query: "x" }, result);
+
+		expect(extracted.options.memoryId).toBe("mem-123");
+		// A generic top-level id on a memory-domain tool must never leak into
+		// the task_id column (wrong-entity corruption, the original bug).
+		expect(extracted.options.taskId).toBeUndefined();
+		expect(extracted.options.resultCount).toBe(3);
+		// The McpResponse itself is preserved as the audit `response` payload.
+		expect(extracted.options.response).toBe(result);
+	});
+
+	it("populates taskId for task-domain tools; memoryId stays empty (TASK-155)", () => {
+		const extracted = extractActionLog("task-write", {}, { structuredContent: { id: "task-789", title: "Ship" } });
+
+		expect(extracted.options.taskId).toBe("task-789");
+		expect(extracted.options.memoryId).toBeUndefined();
+		// task-read detail spreads task fields onto the top level.
+		const detail = extractActionLog("task-read", {}, { structuredContent: { id: "task-uuid", phase: "x" } });
+		expect(detail.options.taskId).toBe("task-uuid");
+		expect(detail.options.memoryId).toBeUndefined();
+	});
+
+	it("prefers the domain-nested id key over the generic top-level id (memory detail)", () => {
+		const extracted = extractActionLog(
+			"memory-read",
+			{},
+			{ structuredContent: { memory: { id: "mem-nested", title: "t" }, id: "mem-generic" } }
+		);
+
+		expect(extracted.options.memoryId).toBe("mem-nested");
+		expect(extracted.options.taskId).toBeUndefined();
+	});
+
+	it("maps handoff/claim domain tools to taskId via their nested keys (TASK-155)", () => {
+		const handoff = extractActionLog("handoff-write", {}, { structuredContent: { handoff: { id: "ho-1" } } });
+		expect(handoff.options.taskId).toBe("ho-1");
+		expect(handoff.options.memoryId).toBeUndefined();
+
+		// claim-manage spreads the claim row onto the top level (top-level id).
+		const claimSpread = extractActionLog("claim-manage", {}, { structuredContent: { id: "claim-row-1" } });
+		expect(claimSpread.options.taskId).toBe("claim-row-1");
+		expect(claimSpread.options.memoryId).toBeUndefined();
+	});
+
+	it("does not map standard-domain ids to either entity column (TASK-155)", () => {
+		const extracted = extractActionLog("standard-write", {}, { structuredContent: { id: "std-1" } });
+
+		expect(extracted.options.memoryId).toBeUndefined();
+		expect(extracted.options.taskId).toBeUndefined();
+	});
+
+	it("maps args.id only to the domain-matching column — never cross-leaks (TASK-157)", () => {
+		// memory-domain: args.id → memoryId, taskId stays empty.
+		const memory = extractActionLog(
+			"memory-write",
+			{ id: "args-id", memory_id: "args-memory-id" },
+			{ structuredContent: { id: "sc-id" } }
+		);
+
+		expect(memory.options.memoryId).toBe("args-id");
+		// The memory UUID in args.id must never leak into task_id.
+		expect(memory.options.taskId).toBeUndefined();
+
+		// task-domain mirror: args.id → taskId, memoryId stays empty.
+		const task = extractActionLog("task-write", { id: "args-id", task_id: "args-task-id" }, {});
+
+		expect(task.options.taskId).toBe("args-id");
+		expect(task.options.memoryId).toBeUndefined();
+	});
+
+	it("falls back to resultCount via structuredContent.count", () => {
+		const extracted = extractActionLog("task-read", {}, { structuredContent: { count: 7 } });
+
+		expect(extracted.options.resultCount).toBe(7);
+		expect(extracted.options.memoryId).toBeUndefined();
+		expect(extracted.options.taskId).toBeUndefined();
+	});
+
+	it("reads resultCount from delete-tool count fields (TASK-156)", () => {
+		const memDelete = extractActionLog(
+			"memory-delete",
+			{},
+			{ structuredContent: { success: true, deletedCount: 2, skippedCount: 1, totalAttempted: 3 } }
+		);
+		expect(memDelete.options.resultCount).toBe(2);
+
+		const taskDelete = extractActionLog("task-delete", {}, { structuredContent: { success: true, canceledCount: 1 } });
+		expect(taskDelete.options.resultCount).toBe(1);
+	});
+
+	it("prefers createdCount over the results array length for bulk creates (TASK-156)", () => {
+		const extracted = extractActionLog(
+			"task-write",
+			{},
+			{
+				structuredContent: {
+					success: true,
+					createdCount: 5,
+					results: [{}, {}, {}, {}, {}, {}] // 6 processed, 5 created
+				}
+			}
+		);
+
+		expect(extracted.options.resultCount).toBe(5);
+	});
+
+	it("reads resultCount from a real buildTableResult envelope ({ schema, results: { columns, rows }, count })", () => {
+		const extracted = extractActionLog(
+			"task-read",
+			{},
+			{
+				structuredContent: {
+					schema: "task-read/search",
+					results: {
+						columns: ["id", "title"],
+						rows: [
+							["a", "A"],
+							["b", "B"],
+							["c", "C"]
+						]
+					},
+					count: 3
+				}
+			}
+		);
+
+		expect(extracted.options.resultCount).toBe(3);
+	});
+
+	it("does NOT read the legacy structuredData key (silent-no-op regression guard)", () => {
+		const extracted = extractActionLog("memory-read", {}, { structuredData: { id: "ghost", count: 9 } });
+
+		expect(extracted.options.memoryId).toBeUndefined();
+		expect(extracted.options.resultCount).toBe(0);
+	});
+
+	it("degrades gracefully: unknown repo, zero resultCount, no query when inputs are empty", () => {
+		const extracted = extractActionLog("agent-context", {}, undefined);
+
+		expect(extracted.action).toBe("context");
+		expect(extracted.repo).toBe("unknown");
+		expect(extracted.options.query).toBeUndefined();
+		expect(extracted.options.memoryId).toBeUndefined();
+		expect(extracted.options.taskId).toBeUndefined();
+		expect(extracted.options.resultCount).toBe(0);
+	});
+});
 
 describe("logAction", () => {
 	afterEach(() => {
