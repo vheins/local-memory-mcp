@@ -11,9 +11,9 @@ import {
 	TaskClaimSchema
 } from "./schemas";
 import { UUID_REGEX } from "../utils/uuid";
-import { TASK_STATUS_IN_PROGRESS } from "../types";
 import { extractNextSteps } from "../utils/next-steps";
 import { logger } from "../utils/logger";
+import { claimCoordinated, listClaimsTable, releaseClaim } from "../utils/coordination";
 
 function buildHandoffListSummary(repo: string, count: number, status?: string, fromAgent?: string, toAgent?: string) {
 	const parts = [`Found ${count} handoff${count === 1 ? "" : "s"} in repo "${repo}".`];
@@ -34,20 +34,13 @@ function buildHandoffListSummary(repo: string, count: number, status?: string, f
 }
 
 // extractNextSteps imported from ../utils/next-steps
-
-function buildClaimListSummary(repo: string, count: number, agent?: string, activeOnly?: boolean) {
-	const parts = [`Found ${count} claim${count === 1 ? "" : "s"} in repo "${repo}".`];
-
-	if (agent) {
-		parts.push(`Agent filter: ${agent}.`);
-	}
-
-	if (activeOnly) {
-		parts.push("Showing active claims only.");
-	}
-
-	return parts.join("\n");
-}
+//
+// NOTE (OPT-DRY-02): the claim lifecycle ops below (handleTaskClaim /
+// handleClaimList / handleClaimRelease) delegate to the shared coordination
+// helpers in ../utils/coordination — the single source of truth shared with
+// claim.manage.ts. handleHandoffCreate keeps its own lightweight task-link
+// resolution because it is OPTIONAL (a handoff may be created without a task
+// ref) whereas resolveTaskByRef requires a resolvable task.
 
 export async function handleHandoffCreate(args: unknown, storage: SQLiteStore) {
 	const validated = HandoffCreateSchema.parse(args);
@@ -246,182 +239,36 @@ export async function handleHandoffUpdate(args: unknown, storage: SQLiteStore) {
 	});
 }
 
+/**
+ * Legacy CLAIM handler — delegates to the shared coordination lifecycle
+ * (utils/coordination.ts, OPT-DRY-02), which also serves claim-manage.
+ * Kept alive until OPT-CODE-02 / OPT-FEAT-01 remove the dashboard shim.
+ */
 export async function handleTaskClaim(args: unknown, storage: SQLiteStore) {
 	const validated = TaskClaimSchema.parse(args);
 	const { owner, repo, task_id, task_code, agent, role, metadata, json } = validated;
 
-	let taskId = task_id;
-	if (taskId && !UUID_REGEX.test(taskId)) {
-		const task = storage.tasks.getTaskByCode(owner, repo, taskId);
-		if (!task) {
-			throw new Error(`Task not found: ${taskId} in repo ${repo}`);
-		}
-		taskId = task.id;
-	}
-	let resolvedTaskCode: string;
-	let task: import("../types").Task | null;
-
-	if (taskId) {
-		task = storage.tasks.getTaskById(taskId);
-		if (!task || task.repo !== repo) {
-			throw new Error(`Task not found: ${taskId} in repo ${repo}`);
-		}
-		resolvedTaskCode = task.task_code;
-	} else if (task_code) {
-		task = storage.tasks.getTaskByCode(owner, repo, task_code);
-		if (!task) {
-			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
-		}
-		taskId = task.id;
-		resolvedTaskCode = task.task_code;
-	} else {
-		throw new Error("Either task_id or task_code must be provided");
-	}
-
-	const claim = storage.handoffs.claimTask({
-		owner: owner,
-		repo,
-		task_id: taskId,
-		agent,
-		role,
-		metadata
-	});
-
-	if (task && task.status !== "completed") {
-		const now = new Date().toISOString();
-		storage.tasks.updateTask(task.id, { status: TASK_STATUS_IN_PROGRESS, in_progress_at: now });
-		try {
-			storage.taskComments.insertTaskComment({
-				id: randomUUID(),
-				task_id: task.id,
-				owner: owner,
-				repo,
-				comment: `Claimed by ${agent} — auto-promoted to in_progress`,
-				agent,
-				role: role || "unknown",
-				model: "system",
-				previous_status: task.status as import("../types").TaskStatus,
-				next_status: TASK_STATUS_IN_PROGRESS,
-				created_at: now
-			});
-		} catch (e) {
-			logger.error("[Tool] handoff.manage — task comment failed (claim succeeded)", {
-				repo,
-				taskId: task.id,
-				agent,
-				error: String(e)
-			});
-			storage.actions.logAction("handoff-comment-fail", owner, repo, {
-				query: `task ${task.task_code} — claim comment failed`
-			});
-		}
-	}
-
-	const responseData = {
-		...claim,
-		task_code: resolvedTaskCode
-	};
-
-	const contentSummary = `Claimed [${resolvedTaskCode || claim.task_id.slice(0, 8)}] in repo "${claim.repo}": agent=${claim.agent}, role=${claim.role}.`;
-
-	return createMcpResponse(responseData, contentSummary, {
-		contentSummary,
-		includeJson: json
-	});
+	return claimCoordinated(owner, repo, task_id, task_code, agent, role, metadata, json, storage);
 }
 
+/**
+ * Legacy CLAIM-LIST handler — delegates to the shared coordination table
+ * builder with the legacy "claim-list" schema discriminator.
+ */
 export async function handleClaimList(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimListSchema.parse(args);
 	const { owner, repo, agent, active_only, limit, offset, json } = validated;
 
-	const claims = storage.handoffs.listClaims({
-		owner: owner,
-		repo,
-		agent,
-		active_only,
-		limit,
-		offset
-	});
-
-	const COLUMNS = ["id", "task_id", "task_code", "agent", "role", "claimed_at", "released_at", "metadata"] as const;
-	const rows = claims.map((claim) => [
-		claim.id,
-		claim.task_id,
-		claim.task_code ?? null,
-		claim.agent,
-		claim.role,
-		claim.claimed_at,
-		claim.released_at,
-		claim.metadata
-	]);
-
-	const structuredData = buildTableResult(COLUMNS, rows, {
-		schema: "claim-list",
-		key: "claims",
-		count: rows.length,
-		offset
-	});
-
-	const contentSummary = buildClaimListSummary(repo, rows.length, agent, active_only);
-
-	return createMcpResponse(structuredData, contentSummary, {
-		contentSummary,
-		includeJson: json
-	});
+	return listClaimsTable(owner, repo, agent, active_only, limit, offset, "claim-list", json, storage);
 }
 
+/**
+ * Legacy CLAIM-RELEASE handler — delegates to the shared coordination
+ * lifecycle (utils/coordination.ts, OPT-DRY-02).
+ */
 export async function handleClaimRelease(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimReleaseSchema.parse(args);
 	const { owner, repo, task_id, task_code, agent, json } = validated;
 
-	let resolvedTaskId = task_id;
-	if (resolvedTaskId && !UUID_REGEX.test(resolvedTaskId)) {
-		const task = storage.tasks.getTaskByCode(owner, repo, resolvedTaskId);
-		if (!task) {
-			throw new Error(`Task not found: ${resolvedTaskId} in repo ${repo}`);
-		}
-		resolvedTaskId = task.id;
-	}
-	// Declared without initializer — both surviving branches assign it, and the
-	// added else-throw makes `task_code ?? null` a dead assignment (no-useless-assignment).
-	let resolvedTaskCode: string | null;
-
-	if (resolvedTaskId) {
-		const task = storage.tasks.getTaskById(resolvedTaskId);
-		if (!task || task.repo !== repo) {
-			throw new Error(`Task not found: ${resolvedTaskId} in repo ${repo}`);
-		}
-		resolvedTaskCode = task.task_code;
-	} else if (task_code) {
-		const task = storage.tasks.getTaskByCode(owner, repo, task_code);
-		if (!task) {
-			throw new Error(`Task not found: ${task_code} in repo ${repo}`);
-		}
-		resolvedTaskId = task.id;
-		resolvedTaskCode = task.task_code;
-	} else {
-		// Unreachable at runtime (ClaimReleaseSchema.refine requires task_id or
-		// task_code) — explicit fail-loud guard so `resolvedTaskId` narrows to
-		// `string` and no `!` is needed at the call sites below (OPT-CODE-03).
-		throw new Error("Either task_id or task_code must be provided");
-	}
-
-	const success = storage.handoffs.releaseClaim(resolvedTaskId, agent);
-	if (!success) {
-		throw new Error(`No active claim found for task ${resolvedTaskCode || resolvedTaskId}`);
-	}
-
-	const result = {
-		success,
-		repo,
-		task_id: resolvedTaskId,
-		task_code: resolvedTaskCode,
-		agent: agent ?? null
-	};
-	const contentSummary = `Released claim for [${resolvedTaskCode || resolvedTaskId.slice(0, 8)}] in repo "${repo}": agent=${agent || "any"}.`;
-
-	return createMcpResponse(result, contentSummary, {
-		contentSummary,
-		includeJson: json
-	});
+	return releaseClaim(owner, repo, task_id, task_code, agent, json, storage);
 }
