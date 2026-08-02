@@ -71,14 +71,13 @@ export class KGController {
 
 			const nodesTotal = db.knowledgeGraph.countGraphNodes(repo);
 			const nodes = db.knowledgeGraph.listGraphNodes(repo, { limit: pageSize, offset });
-			const edges = db.knowledgeGraph.listGraphEdges(repo);
 
-			// Server-side edge cap (TASK-070): the response shape stays
-			// `{ nodes, edges }`; `truncated` flags when the edge list was
-			// clipped to KG_MAX_GRAPH_EDGES (client can show "showing top N").
-			// Strict `>` (not `>=`) keeps exact-cap accuracy: a graph with
-			// exactly KG_MAX_GRAPH_EDGES edges was NOT clipped.
-			const truncated = edges.length > KG_MAX_GRAPH_EDGES;
+			// Probe: request KG_MAX_GRAPH_EDGES + 1 rows to detect truncation.
+			// If the extra row is present, the graph exceeds the cap and we
+			// return only the first KG_MAX_GRAPH_EDGES edges with truncated=true.
+			const rawEdges = db.knowledgeGraph.listGraphEdges(repo, KG_MAX_GRAPH_EDGES, true);
+			const truncated = rawEdges.length > KG_MAX_GRAPH_EDGES;
+			const edges = truncated ? rawEdges.slice(0, KG_MAX_GRAPH_EDGES) : rawEdges;
 
 			return jsonApiRes({ id: `graph-${repo}`, nodes, edges, truncated }, "graph", {
 				meta: {

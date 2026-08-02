@@ -488,11 +488,21 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 * client culls to 2,000 edges anyway (TASK-063), so shipping only the
 	 * highest-degree edges keeps the payload at a few hundred KB and avoids the
 	 * per-request 3-way join + sort over ALL relations.
+	 *
+	 * @param repo - Repository scope
+	 * @param limit - Maximum edges to return (default: KG_MAX_GRAPH_EDGES)
+	 * @param probe - When true, queries `limit + 1` rows to detect truncation.
+	 *   Callers can check `result.length > limit` to determine if the graph
+	 *   was truncated (TASK-148). The extra probe row is never consumed by
+	 *   the caller — they slice to `limit` before returning to the client.
+	 * @returns Array of edges (may be `limit + 1` when probe=true)
 	 */
 	listGraphEdges(
 		repo: string,
-		limit = KG_MAX_GRAPH_EDGES
+		limit = KG_MAX_GRAPH_EDGES,
+		probe = false
 	): Array<{ source: string; target: string; relation_type: string }> {
+		const effectiveLimit = probe ? limit + 1 : limit;
 		return this.all<{ source: string; target: string; relation_type: string }>(
 			`WITH degrees AS (
 			   SELECT node, COUNT(*) AS degree
@@ -512,7 +522,7 @@ export class KnowledgeGraphEntity extends BaseEntity {
 			 WHERE r.repo = ?
 			 ORDER BY (COALESCE(d1.degree, 0) + COALESCE(d2.degree, 0)) DESC, r.from_entity, r.to_entity
 			 LIMIT ?`,
-			[repo, repo, repo, limit]
+			[repo, repo, repo, effectiveLimit]
 		);
 	}
 

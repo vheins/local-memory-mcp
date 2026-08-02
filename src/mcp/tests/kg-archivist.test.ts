@@ -334,7 +334,8 @@ describe("KG Archivist — saveExtractions", () => {
 		// Every observation should reference an entity that exists
 		for (const obs of observations) {
 			const entity = db.db.prepare("SELECT name FROM entities WHERE name = ?").get(obs.entity_name) as
-				{ name: string } | undefined;
+				| { name: string }
+				| undefined;
 			expect(entity).toBeDefined();
 		}
 	});
@@ -417,6 +418,91 @@ describe("KnowledgeGraphEntity — server-side graph edge cap (TASK-070)", () =>
 	it("listRelationsForGraph keeps legacy behavior when no subset is given", () => {
 		const rels = db.knowledgeGraph.listRelationsForGraph(REPO);
 		expect(rels.length).toBe(5);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Probe/truncated flag (TASK-148)
+//
+// listGraphEdges with probe=true requests limit+1 rows so callers can detect
+// truncation without a separate COUNT query. The extra probe row is never
+// returned to the client — the caller slices to limit before shipping.
+// ---------------------------------------------------------------------------
+
+describe("KnowledgeGraphEntity — probe/truncated detection (TASK-148)", () => {
+	let db: SQLiteStore;
+
+	const REPO = "kg-probe-test";
+	const CAP = 4; // small cap for testing
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		const now = new Date().toISOString();
+		// Seed 6 entities (A–F) and 6 edges so we exceed CAP.
+		for (const name of ["A", "B", "C", "D", "E", "F"]) {
+			db.db
+				.prepare(
+					"INSERT INTO entities (name, type, description, repo, owner, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+				)
+				.run(name, "concept", null, REPO, "test", now, now);
+		}
+		const edges: Array<[string, string]> = [
+			["A", "B"],
+			["A", "C"],
+			["B", "C"],
+			["D", "E"],
+			["E", "F"],
+			["F", "A"]
+		];
+		for (const [from, to] of edges) {
+			db.knowledgeGraph.upsertRelation({
+				from_entity: from,
+				to_entity: to,
+				relation_type: "related_to",
+				repo: REPO,
+				owner: "test",
+				created_at: now
+			});
+		}
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("probe=true returns cap+1 rows when graph exceeds cap", () => {
+		const edges = db.knowledgeGraph.listGraphEdges(REPO, CAP, true);
+		// 6 edges > CAP (4), so probe returns CAP+1 = 5 rows
+		expect(edges).toHaveLength(CAP + 1);
+	});
+
+	it("probe=false (default) returns exactly cap rows when graph exceeds cap", () => {
+		const edges = db.knowledgeGraph.listGraphEdges(REPO, CAP, false);
+		expect(edges).toHaveLength(CAP);
+	});
+
+	it("probe=true returns all rows when graph is at or below cap", () => {
+		// Use a high cap so all 6 edges fit
+		const edges = db.knowledgeGraph.listGraphEdges(REPO, 10, true);
+		expect(edges).toHaveLength(6);
+	});
+
+	it("probe detection: truncated = rawEdges.length > cap", () => {
+		const rawEdges = db.knowledgeGraph.listGraphEdges(REPO, CAP, true);
+		const truncated = rawEdges.length > CAP;
+		expect(truncated).toBe(true);
+
+		// Caller slices to cap
+		const edges = truncated ? rawEdges.slice(0, CAP) : rawEdges;
+		expect(edges).toHaveLength(CAP);
+	});
+
+	it("no-truncation detection: truncated = false when at cap", () => {
+		// Use CAP equal to total edges
+		const rawEdges = db.knowledgeGraph.listGraphEdges(REPO, 6, true);
+		const truncated = rawEdges.length > 6;
+		expect(truncated).toBe(false);
+		expect(rawEdges).toHaveLength(6);
 	});
 });
 

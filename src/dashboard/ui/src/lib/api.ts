@@ -337,7 +337,9 @@ export const api = {
 		const q = new URLSearchParams({ repo });
 		if (params?.page) q.set("page", String(params.page));
 		if (params?.pageSize) q.set("pageSize", String(params.pageSize));
-		return apiFetch<{ nodes: KGNode[]; edges: KGEdge[]; pagination: Pagination }>(`/api/kg/graph?${q}`);
+		return apiFetch<{ nodes: KGNode[]; edges: KGEdge[]; truncated: boolean; pagination: Pagination }>(
+			`/api/kg/graph?${q}`
+		);
 	},
 
 	kgEntityDetail: (name: string) =>

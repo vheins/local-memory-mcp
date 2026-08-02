@@ -26,6 +26,7 @@
 	let loadedRepo = "";
 	let isZeroEdgeOverview = false;
 	let hiddenZeroEdgeNodeCount = 0;
+	let truncated = false;
 
 	// Limit nodes for force layout to prevent browser freeze
 	const MAX_FORCE_NODES = 300;
@@ -130,6 +131,7 @@
 			if (repo !== requestedRepo) return;
 			nodes = data.nodes || [];
 			edges = data.edges || [];
+			truncated = data.truncated ?? false;
 			if (data.pagination) {
 				kgTotalItems.set(data.pagination.totalItems);
 			}
@@ -156,6 +158,7 @@
 		nodeLookup = EMPTY_NODE_LOOKUP;
 		isZeroEdgeOverview = false;
 		hiddenZeroEdgeNodeCount = 0;
+		truncated = false;
 		graphState.selectedNode = null;
 		graphState.selectedEdge = null;
 		graphState.hoveredNode = null;
@@ -434,11 +437,27 @@
 		/>
 	</div>
 
+	<!-- Truncated edge indicator (shown even on single-page graphs) -->
+	{#if truncated && $kgTotalPages <= 1}
+		<div class="kg-pagination">
+			<span class="kg-pagination-info">
+				<span class="kg-truncated-badge" title="Edge list was truncated to the highest-degree edges">
+					Edges truncated
+				</span>
+			</span>
+		</div>
+	{/if}
+
 	<!-- Pagination -->
 	{#if $kgTotalPages > 1}
 		<div class="kg-pagination">
 			<span class="kg-pagination-info">
 				Page {$kgPage} of {$kgTotalPages} ({$kgTotalItems} nodes)
+				{#if truncated}
+					<span class="kg-truncated-badge" title="Edge list was truncated to the highest-degree edges">
+						Edges truncated
+					</span>
+				{/if}
 			</span>
 			<div class="kg-pagination-controls">
 				<button
@@ -536,5 +555,19 @@
 		display: flex;
 		align-items: center;
 		gap: 2px;
+	}
+
+	.kg-truncated-badge {
+		display: inline-flex;
+		align-items: center;
+		margin-left: 8px;
+		padding: 2px 6px;
+		font-size: 0.65rem;
+		font-weight: 500;
+		color: var(--color-warning, #d97706);
+		background: rgba(217, 119, 6, 0.1);
+		border: 1px solid rgba(217, 119, 6, 0.2);
+		border-radius: 4px;
+		white-space: nowrap;
 	}
 </style>
