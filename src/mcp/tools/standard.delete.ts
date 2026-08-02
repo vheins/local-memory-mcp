@@ -12,7 +12,7 @@ export async function handleStandardDelete(
 	_vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = StandardDeleteSchema.parse(params);
-	const { id, ids, codes, owner, repo, json } = validated;
+	const { id, ids, owner, repo, json } = validated;
 
 	// Resolve all identifiers (id/code/ids/codes — UUID or code, auto-inferred
 	// per item) to UUIDs via the shared helper (OPT-DRY-06). Replaces the
@@ -26,9 +26,14 @@ export async function handleStandardDelete(
 	const deletedCodes: string[] = [];
 	const validIdsToDelete: string[] = [];
 
+	// Code-resolution failures already throw from collectEntityIds (TASK-123);
+	// this existence check covers raw-UUID targets that resolve but no longer
+	// exist. Unified not-found policy (OPT-CODE-04): single → throw, bulk →
+	// skip + report (documented bulk-partial-execution convention).
+	const isBulk = resolvedIds.length > 1;
+
 	let lastRepo = repo || "unknown";
-	const deleteErrors: { identifier: string; error: string }[] = [];
-	const isBulk = (ids && ids.length > 1) || (codes && codes.length > 1);
+	const skippedErrors: { identifier: string; error: string }[] = [];
 
 	for (const targetId of resolvedIds) {
 		const existing = standardMap.get(targetId);
@@ -38,8 +43,11 @@ export async function handleStandardDelete(
 			if (existing.code) deletedCodes.push(existing.code);
 			validIdsToDelete.push(targetId);
 		} else if (isBulk) {
-			deleteErrors.push({ identifier: targetId, error: "Coding standard not found" });
+			// Bulk partial execution — skip and report instead of throw
+			logger.warn("[Tool] standard.delete — skipping not found", { targetId });
+			skippedErrors.push({ identifier: targetId, error: `Coding standard not found: ${targetId}` });
 		} else {
+			// Single target not found — fail loud (OPT-CODE-04)
 			throw new Error(`Coding standard not found: ${targetId}`);
 		}
 	}
@@ -61,12 +69,14 @@ export async function handleStandardDelete(
 		deletedCount = validIdsToDelete.length;
 	}
 
-	const allOk = deleteErrors.length === 0;
+	const skippedCount = skippedErrors.length;
+	// success is false only when nothing was deleted and there were errors
+	const overallSuccess = deletedCount > 0 || skippedCount === 0;
 
 	logger.info("[Tool] standard.delete", {
 		repo: lastRepo,
 		count: deletedCount,
-		...(deleteErrors.length > 0 ? { errors: deleteErrors.length } : {})
+		...(skippedCount > 0 ? { errors: skippedCount } : {})
 	});
 
 	const codeSample =
@@ -75,7 +85,7 @@ export async function handleStandardDelete(
 			: `${deletedCodes.slice(0, 3).join(", ")}, ... (${deletedCodes.length} total)`;
 
 	const responseData: Record<string, unknown> = {
-		success: allOk,
+		success: overallSuccess,
 		id: id || undefined,
 		ids: ids || undefined,
 		repo: lastRepo,
@@ -84,14 +94,15 @@ export async function handleStandardDelete(
 		deletedTitles: deletedTitles.length > 10 ? [...deletedTitles.slice(0, 10), "..."] : deletedTitles
 	};
 
-	if (deleteErrors.length > 0) {
-		responseData.errors = deleteErrors;
+	if (skippedErrors.length > 0) {
+		responseData.errors = skippedErrors;
+		responseData.skippedCount = skippedErrors.length;
 		responseData.totalAttempted = resolvedIds.length;
 	}
 
 	return createMcpResponse(
 		responseData,
-		`Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from "${lastRepo}"${deletedCodes.length > 0 ? `: ${codeSample}` : ""}${deleteErrors.length > 0 ? ` (${deleteErrors.length} failed)` : ""}.`,
+		`Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from "${lastRepo}"${deletedCodes.length > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`,
 		{
 			includeJson: json
 		}

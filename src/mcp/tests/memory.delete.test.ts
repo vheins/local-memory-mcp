@@ -182,21 +182,56 @@ describe("MCP Local Memory - memory-delete (Single & Bulk)", () => {
 
 	// ─── Error cases ─────────────────────────────────────────────────────
 
-	it("should return error when deleting non-existent memory", async () => {
+	// Unified not-found policy (OPT-CODE-04): single target → throw (fail
+	// loud); bulk → skip + report partial execution.
+	it("should throw when deleting a non-existent single memory", async () => {
 		const fakeId = "00000000-0000-0000-0000-000000000000";
+		await expect(
+			router("tools/call", {
+				name: "memory-delete",
+				arguments: {
+					id: fakeId,
+					owner: "test",
+					repo: REPO
+				}
+			})
+		).rejects.toThrow("Memory not found");
+	});
+
+	it("should skip + report a missing memory in a bulk delete (partial execution)", async () => {
+		const createRes = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				type: "code_fact",
+				title: "Bulk Partial Surviving",
+				content: "This memory survives the partial bulk delete.",
+				importance: 3,
+				scope: { owner: "test", repo: REPO },
+				agent: "test-agent",
+				model: "test-model"
+			}
+		});
+		const realId = createRes.structuredContent.id;
+		const fakeId = "00000000-0000-0000-0000-000000000000";
+
 		const delRes = await router("tools/call", {
 			name: "memory-delete",
 			arguments: {
-				id: fakeId,
+				ids: [realId, fakeId],
 				owner: "test",
 				repo: REPO
 			}
 		});
 
-		expect(delRes.structuredContent.success).toBe(false);
-		expect(delRes.structuredContent.deletedCount).toBe(0);
-		expect(delRes.structuredContent.errors).toBeDefined();
+		expect(delRes.structuredContent.success).toBe(true);
+		expect(delRes.structuredContent.deletedCount).toBe(1);
+		expect(delRes.structuredContent.skippedCount).toBe(1);
+		expect(delRes.structuredContent.totalAttempted).toBe(2);
 		expect(delRes.structuredContent.errors[0].error).toContain("Memory not found");
+
+		// The existing memory was archived; the phantom id changed nothing.
+		const stored = db.memories.getById(realId);
+		expect(stored!.status).toBe("archived");
 	});
 
 	it("should throw error when no identifier provided", async () => {

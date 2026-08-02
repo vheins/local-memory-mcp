@@ -673,4 +673,115 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations", () => {
 		expect(task3).toBeDefined();
 		expect(task3!.status).toBe("canceled");
 	});
+
+	// Unified not-found policy (OPT-CODE-04): single target → throw (fail
+	// loud); bulk → skip + report partial execution.
+	it("should fail loudly when deleting a non-existent single task (raw UUID)", async () => {
+		const fakeId = "00000000-0000-0000-0000-000000000000";
+		// The bulk-test router converts a thrown handler error into an isError
+		// result — the fail-loud contract surfaces as isError:true here.
+		const res = (await router("tools/call", {
+			name: "task-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				id: fakeId
+			}
+		})) as McpResponse;
+
+		expect(res.isError).toBe(true);
+		expect(getTextContent(res)).toContain("Task not found");
+	});
+
+	it("should skip + report a missing task in a bulk delete (partial execution)", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "PARTIAL-DEL-001",
+				phase: "p",
+				title: "Partial Delete Surviving",
+				description: "This task survives the partial bulk delete.",
+				status: "pending",
+				priority: 2,
+				est_tokens: 10
+			}
+		});
+
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
+		const realId = tasks.find((t) => t.task_code === "PARTIAL-DEL-001")!.id;
+		const fakeId = "00000000-0000-0000-0000-000000000000";
+
+		const delRes = (await router("tools/call", {
+			name: "task-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				ids: [realId, fakeId],
+				json: true
+			}
+		})) as McpResponse;
+
+		const data = delRes.structuredContent as any;
+		expect(data.success).toBe(true);
+		expect(data.canceledCount).toBe(1);
+		expect(data.skippedCount).toBe(1);
+		expect(data.totalAttempted).toBe(2);
+		expect(data.errors[0].error).toContain("Task not found");
+
+		// The real task was canceled; the phantom id changed nothing.
+		const stored = db.tasks.getTaskById(realId);
+		expect(stored!.status).toBe("canceled");
+	});
+
+	it("should report success:false when every target of a bulk delete is missing (all-negative)", async () => {
+		// Seed a real task so a phantom "canceled" would be observable.
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "ALL-NEG-DEL-001",
+				phase: "p",
+				title: "All-Negative Guard",
+				description: "This task must survive an all-phantom bulk delete.",
+				status: "pending",
+				priority: 2,
+				est_tokens: 10
+			}
+		});
+
+		const before = db.tasks.getTasksByRepo("test", REPO);
+		expect(before.length).toBe(1);
+
+		const fakeId1 = "00000000-0000-0000-0000-000000000001";
+		const fakeId2 = "00000000-0000-0000-0000-000000000002";
+
+		const delRes = (await router("tools/call", {
+			name: "task-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				ids: [fakeId1, fakeId2],
+				json: true
+			}
+		})) as McpResponse;
+
+		// The shared success formula `deletedCount > 0 || skippedCount === 0`
+		// flips to false here — nothing was deleted and everything was skipped.
+		const data = delRes.structuredContent as any;
+		expect(data.success).toBe(false);
+		expect(data.canceledCount).toBe(0);
+		expect(data.skippedCount).toBe(2);
+		expect(data.totalAttempted).toBe(2);
+		expect(data.errors.length).toBe(2);
+		expect(data.errors[0].error).toContain("Task not found");
+		expect(data.errors[1].error).toContain("Task not found");
+
+		// Task count/status unchanged — no phantom cancellation.
+		const after = db.tasks.getTasksByRepo("test", REPO);
+		expect(after).toHaveLength(before.length);
+		expect(after.every((task) => task.status !== "canceled")).toBe(true);
+	});
 });

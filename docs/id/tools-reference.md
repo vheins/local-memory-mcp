@@ -107,6 +107,8 @@ Tunggal atau massal:
 { "codes": ["MEM-001", "MEM-002"] }
 ```
 
+**Perilaku saat tidak ditemukan** (OPT-CODE-04): penghapusan satu target (`id`/`code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`) melewati target yang tidak ada, menghapus sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial). Berlaku seragam untuk `memory-delete`, `standard-delete`, dan `task-delete`.
+
 ### `memory-recap` — Ikhtisar Dasbor
 
 Mengembalikan statistik (jumlah berdasarkan jenis) dan tabel pointer dari memori teratas.
@@ -268,6 +270,8 @@ Pembaruan massal:
 { "repo": "my-project", "task_code": "AUTH-001" }
 ```
 
+**Perilaku saat tidak ditemukan** (OPT-CODE-04): penghapusan satu target (`id`/`code`/`task_code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`/`task_codes`) melewati target yang tidak ada, membatalkan sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial).
+
 ---
 
 ## Alat Standar (Pustaka Standar Koding)
@@ -319,6 +323,8 @@ Kode dibuat otomatis sebagai `STD-001`, `STD-002`, dst. (berurutan per repo atau
 ```json
 { "code": "STD-001" }
 ```
+
+**Perilaku saat tidak ditemukan** (OPT-CODE-04): penghapusan satu target (`id`/`code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`) melewati target yang tidak ada, menghapus sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial).
 
 ---
 

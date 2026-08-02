@@ -122,4 +122,58 @@ describe("MCP Local Memory - Standard Delete", () => {
 		expect(getPrimaryTextContent(delRes)).toContain("Deleted 2 standards from");
 		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
 	});
+
+	// Unified not-found policy (OPT-CODE-04): single target → throw (fail
+	// loud); bulk → skip + report partial execution.
+	it("should throw when deleting a non-existent single standard", async () => {
+		const fakeId = "00000000-0000-0000-0000-000000000000";
+		await expect(
+			router("tools/call", {
+				name: "standard-delete",
+				arguments: {
+					owner: "test",
+					repo: REPO,
+					id: fakeId
+				}
+			})
+		).rejects.toThrow("Coding standard not found");
+	});
+
+	it("should skip + report a missing standard in a bulk delete (partial execution)", async () => {
+		await router("tools/call", {
+			name: "standard-write",
+			arguments: {
+				owner: "test",
+				name: "Bulk Partial Surviving",
+				content: "This standard survives the partial bulk delete.",
+				repo: REPO,
+				is_global: false,
+				tags: ["delete"],
+				metadata: { source: "test" }
+			}
+		});
+
+		const existing = db.standards.search({ repo: REPO, limit: 10, offset: 0 });
+		expect(existing.length).toBe(1);
+		const fakeId = "00000000-0000-0000-0000-000000000000";
+
+		const delRes = await router("tools/call", {
+			name: "standard-delete",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				ids: [existing[0].id, fakeId],
+				json: true
+			}
+		});
+
+		expect(delRes.structuredContent.success).toBe(true);
+		expect(delRes.structuredContent.deletedCount).toBe(1);
+		expect(delRes.structuredContent.skippedCount).toBe(1);
+		expect(delRes.structuredContent.totalAttempted).toBe(2);
+		expect(delRes.structuredContent.errors[0].error).toContain("Coding standard not found");
+
+		// The existing standard was deleted; the phantom id changed nothing.
+		expect(db.standards.search({ repo: REPO, limit: 10, offset: 0 })).toHaveLength(0);
+	});
 });

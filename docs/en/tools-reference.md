@@ -107,6 +107,8 @@ Single or bulk:
 { "codes": ["MEM-001", "MEM-002"] }
 ```
 
+**Not-found semantics** (OPT-CODE-04): a single-target delete (`id`/`code`) throws when the target is missing; a bulk delete (`ids`/`codes`) skips missing targets, deletes the rest, and reports them in `errors`/`skippedCount` (partial execution). Applies uniformly to `memory-delete`, `standard-delete`, and `task-delete`.
+
 ### `memory-recap` — Dashboard Overview
 
 Returns stats (counts by type) and a pointer table of top memories.
@@ -268,6 +270,8 @@ Bulk update:
 { "repo": "my-project", "task_code": "AUTH-001" }
 ```
 
+**Not-found semantics** (OPT-CODE-04): a single-target delete (`id`/`code`/`task_code`) throws when the target is missing; a bulk delete (`ids`/`codes`/`task_codes`) skips missing targets, cancels the rest, and reports them in `errors`/`skippedCount` (partial execution).
+
 ---
 
 ## Standard Tools (Coding Standards Library)
@@ -319,6 +323,8 @@ Codes are auto-generated as `STD-001`, `STD-002`, etc. (sequential per repo or g
 ```json
 { "code": "STD-001" }
 ```
+
+**Not-found semantics** (OPT-CODE-04): a single-target delete (`id`/`code`) throws when the target is missing; a bulk delete (`ids`/`codes`) skips missing targets, deletes the rest, and reports them in `errors`/`skippedCount` (partial execution).
 
 ---
 

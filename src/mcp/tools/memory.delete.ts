@@ -31,6 +31,12 @@ export async function handleMemoryDelete(
 	const validIdsToDelete: string[] = [];
 	const skippedErrors: { identifier: string; error: string }[] = [];
 
+	// Code-resolution failures already throw from collectEntityIds (TASK-123);
+	// this existence check covers raw-UUID targets that resolve but no longer
+	// exist. Unified not-found policy (OPT-CODE-04): single → throw, bulk →
+	// skip + report (documented bulk-partial-execution convention).
+	const isBulk = resolvedIds.length > 1;
+
 	let lastRepo = repo || "unknown";
 
 	for (const targetId of resolvedIds) {
@@ -39,11 +45,14 @@ export async function handleMemoryDelete(
 			lastRepo = existing.scope.repo;
 			deletedCodes.push(existing.code || existing.id);
 			validIdsToDelete.push(targetId);
-		} else {
+		} else if (isBulk) {
 			const msg = `Memory not found: ${targetId}`;
-			// Partial execution for bulk — warn and skip instead of throw
+			// Bulk partial execution — warn and skip instead of throw
 			logger.warn("[Tool] memory.delete — skipping not found", { targetId });
 			skippedErrors.push({ identifier: targetId, error: msg });
+		} else {
+			// Single target not found — fail loud (OPT-CODE-04)
+			throw new Error(`Memory not found: ${targetId}`);
 		}
 	}
 
@@ -84,7 +93,7 @@ export async function handleMemoryDelete(
 			repo: lastRepo,
 			deletedCount,
 			deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes,
-			...(skippedCount > 0 ? { skippedCount, errors: skippedErrors } : {})
+			...(skippedCount > 0 ? { skippedCount, errors: skippedErrors, totalAttempted: resolvedIds.length } : {})
 		},
 		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from "${lastRepo}"${deletedCount > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`,
 		{

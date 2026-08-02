@@ -17,7 +17,11 @@
  * route here so a change to purge/KG semantics lands once. (The dashboard
  * single-delete paths still bypass it — owned by a parallel service-layer fix
  * round.) Entity-not-found handling is deliberately NOT part of this contract
- * — each caller preserves its own (OPT-CODE-04 owns policy unification).
+ * — each caller implements the OPT-CODE-04 unified policy in its own existence
+ * loop (single target → throw; bulk → skip + report via `errors`), because
+ * labels and response shapes differ per domain. Code-resolution failures
+ * (unresolvable codes) already throw at collectEntityIds (TASK-123) before any
+ * caller loop runs.
  *
  * Signature note: the `items` array carries `{ id, title, repo }` instead of
  * separate `ids/titles/repo` args because KG observation cleanup is scoped per
