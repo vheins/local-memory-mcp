@@ -241,6 +241,148 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		);
 	}
 
+	// -----------------------------------------------------------------------
+	// Batch extraction writes (OPT-PERF-01)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Persist a document's extracted entity observations + co-occurrence
+	 * relations in a **single BEGIN IMMEDIATE transaction** (OPT-PERF-01).
+	 *
+	 * Cuts transaction count from O(N²) to 1 per document by reusing the
+	 * outer `this.transaction()` instead of calling `ensureObservation` /
+	 * `ensureRelation` per pair (each of which opened its own `BEGIN
+	 * IMMEDIATE`). Uses the inner statements (`upsertEntity`,
+	 * `insertObservation`, `upsertRelation`) directly — no nested
+	 * savepoints, single transaction level.
+	 *
+	 * The IMMEDIATE write lock is held for the full batch, so a concurrent
+	 * orphan-sweep (deleteOrphanEntities) on a second connection cannot
+	 * interleave between entity upsert and observation insert — pair
+	 * atomicity (TASK-073 / MEM-482) is preserved for every pair.
+	 *
+	 * Per-pair try/catch preserves the "never throw, log warn on failure"
+	 * contract (TASK-013). Relation failures are silent (idempotent INSERT
+	 * OR IGNORE — relation may already exist). If a per-pair failure is
+	 * caught, the entity row survives inside the transaction (best-effort);
+	 * the orphan sweep will eventually clean up any orphaned entity.
+	 *
+	 * Transaction-boundary guard (TASK-175): the single `BEGIN IMMEDIATE`
+	 * can itself throw `SQLITE_BUSY` after the busy_timeout when another
+	 * connection holds the write lock (cross-process orphan sweep / repo
+	 * delete). The per-pair catches sit INSIDE the transaction, so they never
+	 * see that boundary failure — the transaction call itself is wrapped in
+	 * try/catch here (matching the `ensureObservation` / `ensureRelation`
+	 * never-throw precedent) so callers like `saveExtractions` still never
+	 * throw on write contention. Per-pair catches are left untouched; only
+	 * the boundary is guarded. Whole-document atomicity is preserved: on
+	 * rollback none of the batch's writes land.
+	 *
+	 * @param observations - Entity+observation pairs (name, type, id, text).
+	 * @param relations    - Co-occurrence edges (from/to endpoints with types).
+	 * @param repo         - Repository scope for all writes.
+	 * @param owner        - Owner scope for all writes.
+	 * @param created_at   - Timestamp for all writes (same instant).
+	 */
+	saveExtractionBatch(params: {
+		observations: Array<{
+			id: string;
+			name: string;
+			type: string;
+			description: string | null;
+			observation: string;
+		}>;
+		relations: Array<{
+			from_entity: string;
+			from_type: string;
+			to_entity: string;
+			to_type: string;
+			relation_type: string;
+		}>;
+		repo: string;
+		owner: string;
+		created_at: string;
+	}): void {
+		try {
+			this.transaction(() => {
+				const { observations, relations, repo, owner, created_at } = params;
+
+				// ── Entity observation pairs ──
+				for (const obs of observations) {
+					try {
+						this.upsertEntity({
+							name: obs.name,
+							type: obs.type,
+							description: obs.description,
+							repo,
+							owner,
+							created_at,
+							updated_at: created_at
+						});
+						this.insertObservation({
+							id: obs.id,
+							entity_name: obs.name,
+							observation: obs.observation,
+							repo,
+							owner,
+							created_at
+						});
+					} catch (err) {
+						logger.warn("[KG-Archivist] Failed to save extraction for entity", {
+							error: String(err),
+							entity: obs.name
+						});
+					}
+				}
+
+				// ── Co-occurrence relation edges ──
+				for (const rel of relations) {
+					try {
+						this.upsertEntity({
+							name: rel.from_entity,
+							type: rel.from_type,
+							description: null,
+							repo,
+							owner,
+							created_at,
+							updated_at: created_at
+						});
+						this.upsertEntity({
+							name: rel.to_entity,
+							type: rel.to_type,
+							description: null,
+							repo,
+							owner,
+							created_at,
+							updated_at: created_at
+						});
+						this.upsertRelation({
+							from_entity: rel.from_entity,
+							to_entity: rel.to_entity,
+							relation_type: rel.relation_type,
+							repo,
+							owner,
+							created_at
+						});
+					} catch {
+						// Silent: relation may already exist
+					}
+				}
+			});
+		} catch (err) {
+			// Boundary guard (TASK-175): the single BEGIN IMMEDIATE, or an
+			// abort mid-batch, throws here — outside the per-pair catches.
+			// Hang onto the "never throw" contract so a cross-process write
+			// lock holder (orphan sweep / repo delete) can't bubble SQLITE_BUSY
+			// into saveExtractions and poison the worker's embedding cycle.
+			logger.warn("[KG-Archivist] Failed to save extraction batch", {
+				error: String(err),
+				repo: params.repo,
+				count: params.observations.length + params.relations.length
+			});
+		}
+	}
+
 	/**
 	 * Dashboard/admin create: plain INSERT (throws on duplicate name so the
 	 * caller can surface a PK conflict).

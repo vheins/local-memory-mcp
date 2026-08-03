@@ -866,6 +866,60 @@ describe("KG Archivist — entity+observation pair atomicity (TASK-073)", () => 
 		}
 	});
 
+	it("saveExtractions does not throw when another connection holds the write lock (TASK-175 boundary guard)", async () => {
+		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "kg-batch-busy-"));
+		const dbPath = path.join(tempDir, "test.db");
+		const fileDb = await SQLiteStore.create(dbPath);
+
+		// Fail fast: lower the store connection's busy_timeout so the blocked
+		// BEGIN IMMEDIATE throws SQLITE_BUSY after ~100ms, not the default 5s
+		// (sqlite.ts sets busy_timeout = 5000).
+		fileDb.db.pragma("busy_timeout = 100");
+
+		// Second raw connection holds the write lock (BEGIN IMMEDIATE) for the
+		// whole test — simulating a cross-process dashboard-worker orphan sweep
+		// or repo delete (TASK-175 regression: the whole-batch refactor moved
+		// the per-pair catches INSIDE the transaction, so the single BEGIN
+		// IMMEDIATE boundary itself must be guarded).
+		const lockHolder = new Database(dbPath);
+		lockHolder.pragma("busy_timeout = 100");
+		lockHolder.pragma("foreign_keys = ON");
+		lockHolder.exec("BEGIN IMMEDIATE");
+
+		try {
+			const warnSpy = vi.spyOn(logger, "warn");
+
+			// The batch's BEGIN IMMEDIATE hits SQLITE_BUSY after 100ms; the
+			// boundary guard catches it, so saveExtractions resolves without
+			// throwing (extract.ts contract: "Failures are logged at warn
+			// level but never thrown"). Without the guard this rejects and
+			// poisons the embedding worker cycle (outbox fail → backoff).
+			await expect(
+				saveExtractions("Alice and Bob worked on the project", "Test Memory", "owner", REPO, fileDb)
+			).resolves.toBeUndefined();
+
+			// Exactly one batch-level warn with repo + count diagnostics.
+			const batchWarns = warnSpy.mock.calls.filter((call) =>
+				String(call[0]).includes("Failed to save extraction batch")
+			);
+			expect(batchWarns).toHaveLength(1);
+
+			// Whole-document atomicity: nothing landed after the boundary
+			// rollback (IMMEDIATE lock held by the other connection).
+			const entities = fileDb.db.prepare("SELECT COUNT(*) as cnt FROM entities").get() as { cnt: number };
+			expect(entities.cnt).toBe(0);
+			const observations = fileDb.db.prepare("SELECT COUNT(*) as cnt FROM observations").get() as {
+				cnt: number;
+			};
+			expect(observations.cnt).toBe(0);
+		} finally {
+			lockHolder.exec("ROLLBACK");
+			lockHolder.close();
+			fileDb.close();
+			fs.rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	// -----------------------------------------------------------------------
 	// inspired_by / co_mentioned now flow through ensureRelation (TASK-073)
 	// -----------------------------------------------------------------------

@@ -345,7 +345,9 @@ export async function extractEntities(content: string): Promise<ExtractedEntity[
 
 /**
  * Extract entities from `content` and persist them into the knowledge-graph
- * tables (`entities`, `observations`).
+ * tables (`entities`, `observations`) **plus** co-occurrence relations
+ * (`relations`) in a single `BEGIN IMMEDIATE` transaction per document
+ * (OPT-PERF-01).
  *
  * - Entities are inserted with `INSERT OR IGNORE` so duplicate names do not
  *   cause errors.
@@ -356,6 +358,16 @@ export async function extractEntities(content: string): Promise<ExtractedEntity[
  *   domain (`memory`/`standard`/`task`), never the legacy hardcoded default.
  * - Failures are logged at `warn` level but never thrown — the caller's
  *   memory-store operation is never blocked.
+ *
+ * **OPT-PERF-01**: The old per-entity `ensureObservation` / per-pair
+ * `ensureRelation` pattern opened a separate `BEGIN IMMEDIATE` transaction
+ * per call → O(N²) transactions for N entities. Now all writes for one
+ * document go through `KnowledgeGraphEntity.saveExtractionBatch`, which
+ * wraps everything in a single outer transaction using the inner statements
+ * directly (no nested savepoints — single transaction level). The IMMEDIATE
+ * write lock is held for the full batch, so a concurrent orphan-sweep cannot
+ * interleave between entity upsert and observation insert (pair atomicity
+ * preserved, TASK-073 / MEM-482).
  */
 export async function saveExtractions(
 	content: string,
@@ -382,56 +394,43 @@ export async function saveExtractions(
 	const now = new Date().toISOString();
 	const observationTextValue = observationText(domain, title);
 
-	for (const entity of entities) {
-		try {
-			// ensureObservation upserts the entity AND inserts the observation
-			// in one BEGIN IMMEDIATE transaction, so a concurrent
-			// orphan-sweep (deleteOrphanEntities) cannot delete the fresh
-			// entity between the upsert and the observation insert — the
-			// observations.entity_name → entities(name) FK can never fail
-			// (TASK-073 / MEM-482).
-			db.knowledgeGraph.ensureObservation({
-				id: randomUUID(),
-				name: entity.name,
-				type: entity.type,
-				description: null,
-				observation: observationTextValue,
-				repo,
-				owner: owner ?? "",
-				created_at: now
-			});
-		} catch (err) {
-			logger.warn("[KG-Archivist] Failed to save extraction for entity", {
-				error: String(err),
-				entity: entity.name
-			});
-		}
-	}
+	// Build entity-observation pairs (entity upsert + observation insert)
+	const observations = entities.map((entity) => ({
+		id: randomUUID(),
+		name: entity.name,
+		type: entity.type,
+		description: null as string | null,
+		observation: observationTextValue
+	}));
 
-	// Create co-occurrence relations between entities extracted from the same content
+	// Build co-occurrence relation edges
+	const relations: Array<{
+		from_entity: string;
+		from_type: string;
+		to_entity: string;
+		to_type: string;
+		relation_type: string;
+	}> = [];
 	if (entities.length > 1) {
 		for (let i = 0; i < entities.length; i++) {
 			for (let j = i + 1; j < entities.length; j++) {
-				try {
-					// ensureRelation upserts BOTH endpoints (types known here —
-					// they come from this same document's extraction) and
-					// inserts the edge atomically. Idempotent (all INSERT OR
-					// IGNORE), so re-processing never duplicates edges
-					// (TASK-073 / MEM-482).
-					db.knowledgeGraph.ensureRelation({
-						from_entity: entities[i].name,
-						from_type: entities[i].type,
-						to_entity: entities[j].name,
-						to_type: entities[j].type,
-						relation_type: "co_mentioned",
-						repo,
-						owner: owner ?? "",
-						created_at: now
-					});
-				} catch {
-					// Silent: relation might already exist
-				}
+				relations.push({
+					from_entity: entities[i].name,
+					from_type: entities[i].type,
+					to_entity: entities[j].name,
+					to_type: entities[j].type,
+					relation_type: "co_mentioned"
+				});
 			}
 		}
 	}
+
+	// Single BEGIN IMMEDIATE for the whole document (OPT-PERF-01)
+	db.knowledgeGraph.saveExtractionBatch({
+		observations,
+		relations,
+		repo,
+		owner: owner ?? "",
+		created_at: now
+	});
 }
