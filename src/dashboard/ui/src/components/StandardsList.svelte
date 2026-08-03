@@ -2,6 +2,7 @@
 	import Icon from "../lib/Icon.svelte";
 	import { formatDate } from "../lib/utils";
 	import type { CodingStandard } from "../lib/stores";
+	import { SvelteSet } from "svelte/reactivity";
 	import { buildPaginationPages, formatScopeLabel } from "../lib/standardsPanelUtils";
 	import { writable } from "svelte/store";
 
@@ -14,14 +15,14 @@
 	export let onGoToPage: (p: number) => void = () => {};
 	export let onBulkDelete: (ids: string[]) => void = () => {};
 
-	const selectedStandardIds = writable<Set<string>>(new Set());
+	const selectedStandardIds = writable<SvelteSet<string>>(new SvelteSet());
 
 	$: paginationPages = buildPaginationPages(page, totalPages);
 	$: allSelected = standards.length > 0 && $selectedStandardIds.size === standards.length;
 
 	function toggleSelect(id: string) {
 		selectedStandardIds.update((ids) => {
-			const next = new Set(ids);
+			const next = new SvelteSet(ids);
 			if (next.has(id)) next.delete(id);
 			else next.add(id);
 			return next;
@@ -30,13 +31,13 @@
 
 	function toggleSelectAll() {
 		selectedStandardIds.update((ids) => {
-			if (ids.size === standards.length) return new Set();
-			return new Set(standards.map((s) => s.id));
+			if (ids.size === standards.length) return new SvelteSet();
+			return new SvelteSet(standards.map((s) => s.id));
 		});
 	}
 
 	function clearSelection() {
-		selectedStandardIds.set(new Set());
+		selectedStandardIds.set(new SvelteSet());
 	}
 
 	function handleBulkDelete() {
