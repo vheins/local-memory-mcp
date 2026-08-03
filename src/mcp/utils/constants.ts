@@ -184,6 +184,21 @@ export const EMBEDDING_QUEUE_PURGE_INTERVAL_MS = 15 * 60 * 1000;
 // and is bounded by the same limit, so payloads scale with the node cap.
 export const KG_MAX_GRAPH_EDGES = envInt("KG_MAX_GRAPH_EDGES", 4_000);
 
+// ── KG-context enrichment bounds (OPT-PERF-04) ───────────────────────────
+// Maximum entity names fed into kgQuery's IN() scans on entities/relations
+// from ANY context fetcher (memory/task/standard read paths). The fetchers
+// resolve entity names first (observation text match or the v15 FTS token
+// index over entities.name), then kgQuery slices the deduped set to this cap
+// before issuing the entity + relation IN() lookups, so KG-context enrichment
+// cost is bounded even when the resolved name set is large. Env-overridable
+// so operators can widen the enrichment window without code changes.
+export const KG_MAX_CONTEXT_ENTITIES = envInt("KG_MAX_CONTEXT_ENTITIES", 50);
+// Maximum distinct tokens from the search text used to build the
+// entity_names_fts MATCH query (v15). Bounds the OR-term count per read —
+// entity names are short identifiers, so the first N tokens are a
+// representative sample; the FTS query itself is LIMIT-capped downstream.
+export const KG_CONTEXT_TEXT_TOKENS = envInt("KG_CONTEXT_TEXT_TOKENS", 40);
+
 // ── Action log retention (OPT-PERF-05) ───────────────────────────────────
 // Row-count cap for action_log: the periodic soul-maintenance prune keeps at
 // most this many NEWEST rows, deleting the oldest tail beyond the cap (the

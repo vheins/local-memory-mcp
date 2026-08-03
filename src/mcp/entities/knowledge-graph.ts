@@ -1,5 +1,21 @@
 import { BaseEntity } from "../storage/base";
-import { KG_MAX_GRAPH_EDGES } from "../utils/constants";
+import { logger } from "../utils/logger";
+import { KG_MAX_CONTEXT_ENTITIES, KG_CONTEXT_TEXT_TOKENS, KG_MAX_GRAPH_EDGES } from "../utils/constants";
+
+// ---------------------------------------------------------------------------
+// Tokenizer for entity-name resolution (OPT-PERF-04)
+// ---------------------------------------------------------------------------
+
+/**
+ * Split arbitrary text into lowercase alphanumeric tokens, mirroring FTS5's
+ * unicode61 tokenizer for ASCII input (case-fold, split on any
+ * non-alphanumeric). Used to turn task title/description text into the
+ * `entity_names_fts` MATCH query terms. Entity names are code identifiers
+ * (ASCII), so the approximation is exact for realistic corpora.
+ */
+function tokenizeKgText(text: string): string[] {
+	return (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((t) => t.length > 0);
+}
 
 // ---------------------------------------------------------------------------
 // Row shapes for the KG tables (entities / relations / observations)
@@ -318,15 +334,52 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	}
 
 	/**
-	 * Entity names whose name is a substring of the given search text
-	 * (used to match task title/description text against known entities).
+	 * Entity names related to the given search text.
+	 *
+	 * OPT-PERF-04: the old `INSTR(?, name) > 0` scan walked EVERY entity row
+	 * with no LIMIT on every task-read (the hottest read path). This now
+	 * resolves names through the `entity_names_fts` token index (migration
+	 * v15): the search text is split into unicode61-style tokens, OR'd into a
+	 * single MATCH query, and looked up index-scoped with a LIMIT.
+	 *
+	 * Matching semantics: FTS5 token-boundary, case-insensitive matching (any
+	 * name token present in the search text) replaces the old case-sensitive
+	 * contiguous-substring (INSTR) rule. A single-token entity name matches
+	 * when the name appears as a standalone token in the search text; mid-word
+	 * (~substring) and case-variant behavior differs from the old INSTR rule.
+	 * Multi-token names are matched by ANY token overlap (more permissive).
+	 * Rows are ORDER BY rank (FTS5 bm25 + repo filter), so the LIMIT keeps the
+	 * highest-relevance names; both are bounded by `limit`
+	 * (KG_MAX_CONTEXT_ENTITIES), so enrichment cost is capped regardless of
+	 * match breadth.
+	 *
+	 * Degraded fallback (index absent, e.g. pre-v15 DB or rollback): the
+	 * INSTR scan still runs, but LIMIT-bounded — bounded output, scan cost
+	 * bounded by the entities table only in that fallback path.
 	 */
-	getEntityNamesByText(repo: string, text: string, distinct = false): string[] {
-		const rows = this.all<{ name: string }>(
-			`SELECT ${distinct ? "DISTINCT " : ""}name FROM entities WHERE repo = ? AND INSTR(?, name) > 0`,
-			[repo, text]
-		);
-		return rows.map((r) => r.name);
+	getEntityNamesByText(repo: string, text: string, limit = KG_MAX_CONTEXT_ENTITIES): string[] {
+		const tokens = [...new Set(tokenizeKgText(text))];
+		if (tokens.length === 0) return [];
+
+		const queryTokens = tokens.slice(0, KG_CONTEXT_TEXT_TOKENS);
+		const matchQuery = queryTokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+
+		try {
+			const rows = this.all<{ name: string }>(
+				"SELECT name, rank FROM entity_names_fts WHERE repo = ? AND entity_names_fts MATCH ? ORDER BY rank LIMIT ?",
+				[repo, matchQuery, limit]
+			);
+			return rows.map((r) => r.name);
+		} catch (error) {
+			logger.warn("[KG] FTS entity-name lookup failed, falling back to bounded INSTR", {
+				error: String(error)
+			});
+			const rows = this.all<{ name: string }>(
+				"SELECT name FROM entities WHERE repo = ? AND INSTR(?, name) > 0 LIMIT ?",
+				[repo, text, limit]
+			);
+			return rows.map((r) => r.name);
+		}
 	}
 
 	/**

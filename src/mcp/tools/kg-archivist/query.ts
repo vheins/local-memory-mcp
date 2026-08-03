@@ -1,5 +1,6 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { KG_MAX_CONTEXT_ENTITIES } from "../../utils/constants";
 import { observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
@@ -30,18 +31,27 @@ export interface KgResult {
 /**
  * Query entities + relations for a given set of entity names.
  * Best-effort — never throws.
+ *
+ * OPT-PERF-04: the resolved name set is sliced to KG_MAX_CONTEXT_ENTITIES
+ * before the IN() scans on entities/relations, so KG-context enrichment cost
+ * stays bounded even when the caller resolved a large name set (e.g. an
+ * aggregated memory/task read). Truncation semantics: the highest-relevance
+ * names (FTS bm25 ORDER BY rank for the task path, observation-insertion
+ * order for the memory/standard path) are kept; the tail beyond the cap is
+ * dropped.
  */
 export function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], sourceDomain: string): KgResult | null {
 	try {
 		if (entityNames.length === 0) return { entities: [], relations: [] };
 
 		const uniqueNames = [...new Set(entityNames)];
+		const capped = uniqueNames.slice(0, KG_MAX_CONTEXT_ENTITIES);
 
 		const entities = db.knowledgeGraph
-			.getEntitiesFor(uniqueNames, repo)
+			.getEntitiesFor(capped, repo)
 			.map((e) => ({ name: e.name, type: e.type, source_domain: sourceDomain }));
 
-		const relations = db.knowledgeGraph.getRelationsFor(uniqueNames, repo);
+		const relations = db.knowledgeGraph.getRelationsFor(capped, repo);
 
 		return { entities, relations };
 	} catch (error) {
@@ -105,7 +115,8 @@ export function fetchAggregatedKgContext(
 
 /**
  * Fetch KG entities + relations related to a task by matching title/description
- * text against entity names using INSTR. Best-effort — never throws.
+ * text against entity names (FTS5 token index, OPT-PERF-04 — bounded, never
+ * an unbounded scan). Best-effort — never throws.
  */
 export function fetchTaskKgContext(
 	db: SQLiteStore,
@@ -148,7 +159,7 @@ export function fetchAggregatedTaskKgContext(
 			.join(" ");
 		if (!searchText.trim()) return { entities: [], relations: [] };
 
-		const entityNames = db.knowledgeGraph.getEntityNamesByText(repo, searchText, true);
+		const entityNames = db.knowledgeGraph.getEntityNamesByText(repo, searchText);
 
 		if (entityNames.length === 0) return { entities: [], relations: [] };
 
