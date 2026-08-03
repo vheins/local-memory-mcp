@@ -206,3 +206,11 @@ export const KG_CONTEXT_TEXT_TOKENS = envInt("KG_CONTEXT_TEXT_TOKENS", 40);
 // remaining rows are all recent. Env-overridable so operators can raise or
 // lower the audit window without code changes.
 export const ACTION_LOG_MAX_ROWS = envInt("ACTION_LOG_MAX_ROWS", 10_000);
+
+// ── Codebase ARCHITECTURE bounds (OPT-PERF-08) ───────────────────────────
+// Max number of top-level exports (exported symbols with no parent) returned
+// by an ARCHITECTURE read. The handler fetches them with a SQL LIMIT instead
+// of filtering the full symbol set, so the payload never scales with the
+// repo's total symbol count. Single source for the tool LIMIT and the
+// buildArchitecture() default — keep them in sync.
+export const ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT = 50;

@@ -9,9 +9,15 @@
  *   summary nodes with aggregated symbol counts and a `hasMoreFiles` flag.
  * - Language breakdown and top-level exports are computed from the raw
  *   file and symbol arrays.
+ * - OPT-PERF-08: ARCHITECTURE reads can pass pre-aggregated symbol data
+ *   (`ArchitectureSymbolData` from `buildArchitectureFromData`) so symbol
+ *   counts and exports come from SQL GROUP BY / LIMIT instead of hydrating
+ *   every symbol row. `buildArchitecture()` keeps the legacy array-based
+ *   signature and derives the same data internally.
  */
 
 import type { CodebaseFile, CodebaseSymbol } from "../../types";
+import { ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT } from "../../utils/constants";
 
 // ── Public types ─────────────────────────────────────────────────────────
 
@@ -36,6 +42,24 @@ export interface ArchitectureResult {
 	summary: ArchitectureSummary;
 }
 
+/**
+ * Pre-aggregated symbol data for ARCHITECTURE reads (OPT-PERF-08).
+ *
+ * Produced by the tool from SQL-level aggregates:
+ * - `totalSymbols`        → `COUNT(*)` for the repo (cheap, always available).
+ * - `symbolCountsByFile`  → `GROUP BY file_path, kind` — file_path → {kind → count}.
+ * - `topLevelExports`     → exported symbols with no parent, LIMIT-capped.
+ *
+ * Callers own the bounds: `topLevelExports` must already be capped and
+ * `symbolCountsByFile` must be complete for every file in `files` (collapsed
+ * directory nodes aggregate counts from the full subtree).
+ */
+export interface ArchitectureSymbolData {
+	totalSymbols: number;
+	symbolCountsByFile: Map<string, Record<string, number>>;
+	topLevelExports: CodebaseSymbol[];
+}
+
 // ── Internal helpers ─────────────────────────────────────────────────────
 
 interface DirTree {
@@ -55,19 +79,31 @@ function normalizeFilePath(fp: string): string {
 }
 
 /**
- * Build a flat Map of file_path → CodebaseSymbol[] for quick lookup.
+ * Build a flat Map of file_path → {kind → count} for quick lookup.
+ *
+ * Equivalent to `ArchitectureSymbolData.symbolCountsByFile` but derived from
+ * a raw symbol array — used by the legacy `buildArchitecture()` path so the
+ * tree logic is identical whether counts come from an array or from SQL.
  */
-function buildSymbolMap(symbols: CodebaseSymbol[]): Map<string, CodebaseSymbol[]> {
-	const map = new Map<string, CodebaseSymbol[]>();
+function buildSymbolCountIndex(symbols: CodebaseSymbol[]): Map<string, Record<string, number>> {
+	const index = new Map<string, Record<string, number>>();
 	for (const sym of symbols) {
-		const list = map.get(sym.file_path);
-		if (list) {
-			list.push(sym);
-		} else {
-			map.set(sym.file_path, [sym]);
+		let kinds = index.get(sym.file_path);
+		if (!kinds) {
+			kinds = {};
+			index.set(sym.file_path, kinds);
 		}
+		kinds[sym.kind] = (kinds[sym.kind] ?? 0) + 1;
 	}
-	return map;
+	return index;
+}
+
+/**
+ * Top-level exports from a raw symbol array (exported, no parent), bounded
+ * by `limit` — used by the legacy `buildArchitecture()` path.
+ */
+function topLevelExportsFromSymbols(symbols: CodebaseSymbol[], limit: number): CodebaseSymbol[] {
+	return symbols.filter((s) => s.exported && s.parent_symbol_id === null).slice(0, limit);
 }
 
 /**
@@ -80,18 +116,14 @@ function dirTreeToNode(
 	tree: DirTree,
 	currentDepth: number,
 	maxDepth: number,
-	symbolMap: Map<string, CodebaseSymbol[]>
+	symbolCountIndex: Map<string, Record<string, number>>
 ): DirectoryNode {
 	const children: DirectoryNode[] = [];
 
 	if (currentDepth < maxDepth) {
 		// Add file nodes
 		for (const file of tree.files) {
-			const fileSyms = symbolMap.get(file.file_path) ?? [];
-			const symbolCounts: Record<string, number> = {};
-			for (const sym of fileSyms) {
-				symbolCounts[sym.kind] = (symbolCounts[sym.kind] ?? 0) + 1;
-			}
+			const symbolCounts = symbolCountIndex.get(file.file_path) ?? {};
 			children.push({
 				path: file.file_path,
 				name: file.file_path.split("/").pop() ?? file.file_path,
@@ -102,17 +134,13 @@ function dirTreeToNode(
 
 		// Recursively process subdirectories
 		for (const [, subdir] of tree.subdirs) {
-			children.push(dirTreeToNode(subdir, currentDepth + 1, maxDepth, symbolMap));
+			children.push(dirTreeToNode(subdir, currentDepth + 1, maxDepth, symbolCountIndex));
 		}
 	} else {
 		// At max depth: collapse everything below
 		// First, add direct file children
 		for (const file of tree.files) {
-			const fileSyms = symbolMap.get(file.file_path) ?? [];
-			const symbolCounts: Record<string, number> = {};
-			for (const sym of fileSyms) {
-				symbolCounts[sym.kind] = (symbolCounts[sym.kind] ?? 0) + 1;
-			}
+			const symbolCounts = symbolCountIndex.get(file.file_path) ?? {};
 			children.push({
 				path: file.file_path,
 				name: file.file_path.split("/").pop() ?? file.file_path,
@@ -123,7 +151,7 @@ function dirTreeToNode(
 
 		// Collapse subdirectories into summary nodes
 		for (const [, subdir] of tree.subdirs) {
-			const { symbolCounts } = countFilesAndSymbols(subdir, symbolMap);
+			const { symbolCounts } = countFilesAndSymbols(subdir, symbolCountIndex);
 			children.push({
 				path: subdir.path,
 				name: subdir.name,
@@ -147,20 +175,20 @@ function dirTreeToNode(
  */
 function countFilesAndSymbols(
 	tree: DirTree,
-	symbolMap: Map<string, CodebaseSymbol[]>
+	symbolCountIndex: Map<string, Record<string, number>>
 ): { fileCount: number; symbolCounts: Record<string, number> } {
 	const symbolCounts: Record<string, number> = {};
 	let fileCount = tree.files.length;
 
 	for (const file of tree.files) {
-		const syms = symbolMap.get(file.file_path) ?? [];
-		for (const sym of syms) {
-			symbolCounts[sym.kind] = (symbolCounts[sym.kind] ?? 0) + 1;
+		const counts = symbolCountIndex.get(file.file_path) ?? {};
+		for (const [kind, count] of Object.entries(counts)) {
+			symbolCounts[kind] = (symbolCounts[kind] ?? 0) + count;
 		}
 	}
 
 	for (const [, subdir] of tree.subdirs) {
-		const sub = countFilesAndSymbols(subdir, symbolMap);
+		const sub = countFilesAndSymbols(subdir, symbolCountIndex);
 		fileCount += sub.fileCount;
 		for (const [kind, count] of Object.entries(sub.symbolCounts)) {
 			symbolCounts[kind] = (symbolCounts[kind] ?? 0) + count;
@@ -241,6 +269,10 @@ export function renderDirTree(root: DirectoryNode, maxDepth: number = 2): string
 /**
  * Build an architecture overview from indexed codebase data.
  *
+ * Legacy array-based entry point (unchanged signature): derives per-file
+ * symbol counts, the total symbol count, and top-level exports from the raw
+ * `symbols` array, then delegates to `buildArchitectureFromData`.
+ *
  * @param files  - All CodebaseFile records for the repo.
  * @param symbols - All CodebaseSymbol records for the repo.
  * @param depth   - Maximum directory depth to expand before collapsing.
@@ -250,9 +282,38 @@ export function buildArchitecture(
 	files: CodebaseFile[],
 	symbols: CodebaseSymbol[],
 	depth: number,
-	topLevelExportsLimit: number = 50
+	topLevelExportsLimit: number = ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT
 ): ArchitectureResult {
-	const symbolMap = buildSymbolMap(symbols);
+	return buildArchitectureFromData(
+		files,
+		{
+			totalSymbols: symbols.length,
+			symbolCountsByFile: buildSymbolCountIndex(symbols),
+			topLevelExports: topLevelExportsFromSymbols(symbols, topLevelExportsLimit)
+		},
+		depth
+	);
+}
+
+/**
+ * Build an architecture overview from pre-aggregated symbol data.
+ *
+ * OPT-PERF-08: ARCHITECTURE reads call this with SQL-level aggregates
+ * (`ArchitectureSymbolData`) so cost is bounded by distinct file×kind pairs
+ * plus the capped export list instead of the repo's full symbol count.
+ * The caller owns the bounds — `symbolCountsByFile` must cover every file
+ * in `files` and `topLevelExports` must already be capped.
+ *
+ * @param files      - All CodebaseFile records for the repo.
+ * @param symbolData - Pre-aggregated symbol counts and bounded exports.
+ * @param depth      - Maximum directory depth to expand before collapsing.
+ */
+export function buildArchitectureFromData(
+	files: CodebaseFile[],
+	symbolData: ArchitectureSymbolData,
+	depth: number
+): ArchitectureResult {
+	const { symbolCountsByFile } = symbolData;
 
 	// ── Build directory tree ──────────────────────────────────────────
 	const root: DirTree = createDirTree(".", ".");
@@ -277,7 +338,7 @@ export function buildArchitecture(
 	}
 
 	// ── Convert tree to DirectoryNode ─────────────────────────────────
-	const rootNode = dirTreeToNode(root, 0, depth, symbolMap);
+	const rootNode = dirTreeToNode(root, 0, depth, symbolCountsByFile);
 
 	// ── Language breakdown ────────────────────────────────────────────
 	const languageBreakdown: Record<string, number> = {};
@@ -286,17 +347,12 @@ export function buildArchitecture(
 		languageBreakdown[lang] = (languageBreakdown[lang] ?? 0) + 1;
 	}
 
-	// ── Top-level exports ─────────────────────────────────────────────
-	const topLevelExports = symbols
-		.filter((s) => s.exported && s.parent_symbol_id === null)
-		.slice(0, topLevelExportsLimit);
-
 	// ── Summary ───────────────────────────────────────────────────────
 	const summary: ArchitectureSummary = {
 		totalFiles: files.length,
-		totalSymbols: symbols.length,
+		totalSymbols: symbolData.totalSymbols,
 		languageBreakdown,
-		topLevelExports
+		topLevelExports: symbolData.topLevelExports
 	};
 
 	return { root: rootNode, summary };

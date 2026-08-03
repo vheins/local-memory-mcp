@@ -4,6 +4,7 @@ import {
 	CodebaseSymbolRow,
 	CodebaseSymbolInsert,
 	CodebaseSymbolVector,
+	SymbolCountGroupRow,
 	SymbolSearchQuery,
 	SymbolSearchResult
 } from "../types";
@@ -108,6 +109,39 @@ export class CodebaseSymbolEntity extends BaseEntity {
 	getSymbolCountByRepo(repo: string): number {
 		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM codebase_symbols WHERE repo = ?", [repo]);
 		return row?.count ?? 0;
+	}
+
+	/**
+	 * Symbol-kind counts per file for a repo, aggregated in SQL via
+	 * `GROUP BY file_path, kind` (OPT-PERF-08). Used by ARCHITECTURE reads so
+	 * per-file/per-directory symbol counts are derived from O(distinct
+	 * file×kind pairs) rows instead of hydrating every symbol row.
+	 */
+	getSymbolCountsByRepoGrouped(repo: string): SymbolCountGroupRow[] {
+		return this.all<SymbolCountGroupRow>(
+			`SELECT file_path, kind, COUNT(*) as count
+			 FROM codebase_symbols
+			 WHERE repo = ?
+			 GROUP BY file_path, kind
+			 ORDER BY file_path ASC, kind ASC`,
+			[repo]
+		);
+	}
+
+	/**
+	 * Top-level exports for a repo (exported symbols with no parent), bounded
+	 * by `limit` (OPT-PERF-08). Used by ARCHITECTURE reads instead of
+	 * filtering the full symbol set in memory; the row count never exceeds
+	 * `limit`, so the payload is constant regardless of repo symbol count.
+	 */
+	getTopLevelExportsByRepo(repo: string, limit: number): CodebaseSymbol[] {
+		return this.all<CodebaseSymbolRow>(
+			`SELECT * FROM codebase_symbols
+			 WHERE repo = ? AND exported = 1 AND parent_symbol_id IS NULL
+			 ORDER BY file_path ASC, start_line ASC
+			 LIMIT ?`,
+			[repo, limit]
+		).map((r) => this.rowToSymbol(r));
 	}
 
 	getAllSymbols(limit?: number): CodebaseSymbol[] {

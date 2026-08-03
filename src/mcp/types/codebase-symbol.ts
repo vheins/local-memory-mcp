@@ -68,6 +68,17 @@ export interface SymbolSearchQuery {
 	offset?: number;
 }
 
+/**
+ * Row shape for the SQL-level aggregation used by ARCHITECTURE reads
+ * (OPT-PERF-08): symbol counts grouped by `(file_path, kind)` via GROUP BY.
+ * Hydrating these rows is O(distinct file×kind pairs) instead of O(symbols).
+ */
+export interface SymbolCountGroupRow {
+	file_path: string;
+	kind: string;
+	count: number;
+}
+
 export interface SymbolSearchResult {
 	symbols: CodebaseSymbol[];
 	total: number;

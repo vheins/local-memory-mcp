@@ -15,11 +15,16 @@ import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } fro
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore, type CodebaseSymbol } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { buildArchitecture, renderDirTree } from "../codebase-index/services/architecture-service";
+import {
+	buildArchitectureFromData,
+	renderDirTree,
+	type ArchitectureSymbolData
+} from "../codebase-index/services/architecture-service";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError } from "../codebase-index/services/trace-service";
 import { blendVectorRanking } from "../codebase-index/services/vector-ranking";
 import { inferReadMode } from "../utils/auto-infer";
+import { ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT } from "../utils/constants";
 import { logger } from "../utils/logger";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -235,9 +240,33 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 	const depth = validated.depth ?? 2;
 
 	const files = db.codebaseFiles.getFilesByRepo(repo);
-	const symbols = validated.includeSymbolCounts ? db.codebaseSymbols.getSymbolsByRepo(repo) : [];
 
-	const result = buildArchitecture(files, symbols, depth);
+	// ── Aggregated symbol data (OPT-PERF-08) ─────────────────────────────
+	// Symbol data is fully aggregated in SQL — no full-repo symbol hydration.
+	// totalSymbols is a cheap COUNT; per-file kind counts come from a GROUP BY
+	// (bounded by distinct file×kind pairs); top-level exports are LIMIT-capped.
+	const symbolData: ArchitectureSymbolData = {
+		totalSymbols: db.codebaseSymbols.getSymbolCountByRepo(repo),
+		symbolCountsByFile: new Map<string, Record<string, number>>(),
+		topLevelExports: []
+	};
+
+	if (validated.includeSymbolCounts) {
+		for (const row of db.codebaseSymbols.getSymbolCountsByRepoGrouped(repo)) {
+			let kinds = symbolData.symbolCountsByFile.get(row.file_path);
+			if (!kinds) {
+				kinds = {};
+				symbolData.symbolCountsByFile.set(row.file_path, kinds);
+			}
+			kinds[row.kind] = row.count;
+		}
+		symbolData.topLevelExports = db.codebaseSymbols.getTopLevelExportsByRepo(
+			repo,
+			ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT
+		);
+	}
+
+	const result = buildArchitectureFromData(files, symbolData, depth);
 
 	const langEntries = Object.entries(result.summary.languageBreakdown);
 	let archSummary = `Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${langEntries.length} languages`;
