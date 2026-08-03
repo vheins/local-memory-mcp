@@ -25,7 +25,8 @@ import { buildStandardVectorText } from "../tools/standard.shared";
 import { logger } from "../utils/logger";
 import { EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE, TABLE_MEMORIES, TABLE_TASKS } from "../utils/constants";
 import { MemoryEntry, Task, CodingStandardEntry, MEMORY_STATUS_ACTIVE, TASK_STATUS_CANCELED } from "../types";
-import { EmbeddingJobInput, EmbeddingJobPayload, QueueCounts, QueueJobStatus } from "./types";
+import { embedPayloadContentHash } from "./content-hash";
+import { EmbeddingJobInput, EmbeddingJobPayload, QueueCounts, QueueJobStatus, QueueJobRow } from "./types";
 
 // ---------------------------------------------------------------------------
 // Snapshot payload builders
@@ -88,10 +89,11 @@ export function taskJobPayload(task: Task): EmbeddingJobPayload {
 // ---------------------------------------------------------------------------
 
 const ENQUEUE_SQL = `
-  INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, status, attempts, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+  INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, content_hash, status, attempts, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
   ON CONFLICT(entity_kind, entity_id) DO UPDATE SET
     payload = excluded.payload,
+    content_hash = excluded.content_hash,
     status = 'pending',
     attempts = 0,
     lease_until = NULL,
@@ -101,12 +103,56 @@ const ENQUEUE_SQL = `
     updated_at = excluded.updated_at
 `;
 
-/** Synchronous LWW enqueue. Cheap (~µs) — safe inside the write lock. */
-export function enqueueEmbeddingJob(store: SQLiteStore, input: EmbeddingJobInput): void {
+/**
+ * Synchronous LWW enqueue. Cheap (~µs) — safe inside the write lock.
+ *
+ * Content-hash dedup (OPT-FLOW-03): when a `queue_jobs` row already exists for
+ * (entity_kind, entity_id) AND its stored `content_hash` matches the incoming
+ * payload's embed/KG-relevant hash, the row is left untouched and the enqueue
+ * returns `false` — no ONNX inference, no KG extraction, no attempt/backoff
+ * reset. This turns tag-only / metadata-only / touch updates (which the worker
+ * would otherwise re-embed on byte-identical content) into no-ops. LWW
+ * semantics for genuinely-changed content are preserved: any change to a field
+ * the worker consumes (text/content/title/parentId/decisionRefs/context/stack)
+ * produces a different hash and falls through to the normal LWW upsert.
+ *
+ * Pre-migration rows (`content_hash` NULL) are never deduped — the first
+ * enqueue after v16 computes and stores the hash.
+ *
+ * Poisoned rows are NEVER deduped: `Outbox.claim()` skips `poison` rows (they
+ * are swept by purge TTL, not retried), so a re-enqueue after any update is
+ * the only recovery path for a job that failed on this exact content — a touch
+ * update must reset it to `pending` even when the hash matches, otherwise the
+ * entity stays without a vector until purge + restart.
+ *
+ * @returns `true` when the job was enqueued/upserted, `false` when deduped.
+ */
+export function enqueueEmbeddingJob(store: SQLiteStore, input: EmbeddingJobInput): boolean {
+	const contentHash = embedPayloadContentHash(input.payload);
+
+	const existing = store.db
+		.prepare("SELECT content_hash, status FROM queue_jobs WHERE entity_kind = ? AND entity_id = ?")
+		.get(input.kind, input.id) as Pick<QueueJobRow, "content_hash" | "status"> | undefined;
+
+	if (
+		existing &&
+		existing.content_hash !== null &&
+		existing.content_hash === contentHash &&
+		existing.status !== "poison"
+	) {
+		logger.debug("[EmbeddingQueue] dedup: embed/KG content unchanged — skip re-enqueue (OPT-FLOW-03)", {
+			kind: input.kind,
+			id: input.id,
+			status: existing.status
+		});
+		return false;
+	}
+
 	const now = new Date().toISOString();
 	store.db
 		.prepare(ENQUEUE_SQL)
-		.run(randomUUID(), input.kind, input.id, input.repo ?? "", JSON.stringify(input.payload), now, now);
+		.run(randomUUID(), input.kind, input.id, input.repo ?? "", JSON.stringify(input.payload), contentHash, now, now);
+	return true;
 }
 
 /**
@@ -120,11 +166,20 @@ export function enqueueIfAbsent(store: SQLiteStore, input: EmbeddingJobInput): b
 	const now = new Date().toISOString();
 	const result = store.db
 		.prepare(
-			`INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, status, attempts, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+			`INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, content_hash, status, attempts, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
 			ON CONFLICT(entity_kind, entity_id) DO NOTHING`
 		)
-		.run(randomUUID(), input.kind, input.id, input.repo ?? "", JSON.stringify(input.payload), now, now);
+		.run(
+			randomUUID(),
+			input.kind,
+			input.id,
+			input.repo ?? "",
+			JSON.stringify(input.payload),
+			embedPayloadContentHash(input.payload),
+			now,
+			now
+		);
 	return result.changes > 0;
 }
 

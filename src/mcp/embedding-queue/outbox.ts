@@ -56,8 +56,14 @@ export class Outbox {
 		return this.store.db;
 	}
 
-	enqueue(input: EmbeddingJobInput): void {
-		enqueueEmbeddingJob(this.store, input);
+	/**
+	 * Synchronous LWW enqueue (single upsert). Returns `false` when the job was
+	 * deduped (OPT-FLOW-03): an existing `queue_jobs` row for the same entity
+	 * already carries an identical embed/KG `content_hash`, so the row is left
+	 * untouched — no redundant ONNX inference or KG extraction is queued.
+	 */
+	enqueue(input: EmbeddingJobInput): boolean {
+		return enqueueEmbeddingJob(this.store, input);
 	}
 
 	/**

@@ -48,6 +48,14 @@ export interface QueueJobRow {
 	entity_id: string;
 	entity_repo: string;
 	payload: string;
+	/**
+	 * sha256 of the embed/KG-relevant payload fields (OPT-FLOW-03). NULL for
+	 * rows enqueued before migration v16; the next enqueue computes and stores
+	 * it. `enqueueEmbeddingJob` skips the LWW reset when the incoming hash
+	 * matches an existing row's hash (identical content → no redundant ONNX +
+	 * KG work).
+	 */
+	content_hash: string | null;
 	status: QueueJobStatus;
 	attempts: number;
 	lease_until: string | null;
