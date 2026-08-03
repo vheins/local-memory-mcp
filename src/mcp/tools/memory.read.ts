@@ -20,6 +20,7 @@ import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
 import { parseArgs } from "../utils/mcp-error";
 import { inferReadMode } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
+import { UUID_REGEX } from "../utils/uuid";
 import { expandQuery } from "../utils/query-expander";
 import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
 import { fetchKgContext, fetchAggregatedKgContext } from "./kg-archivist/query";
@@ -394,10 +395,14 @@ async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<
 		});
 	}
 
-	// Single detail by id or code
+	// Single detail by id or code. Branch on UUID shape so a code-addressed
+	// lookup runs EXACTLY one query (getById for ids, getByCode for codes) —
+	// the old `getById(id) ?? getByCode(id, ...)` burned two queries whenever
+	// a code was passed through `id` (OPT-FLOW-01). Mirrors the convention in
+	// task-read/detail.ts and standard-read/detail.ts.
 	let memory: MemoryEntry | null = null;
 	if (id) {
-		memory = db.memories.getById(id) ?? db.memories.getByCode(id, owner, repo);
+		memory = UUID_REGEX.test(id) ? db.memories.getById(id) : db.memories.getByCode(id, owner, repo);
 	} else if (code) {
 		memory = db.memories.getByCode(code, owner, repo);
 	}
