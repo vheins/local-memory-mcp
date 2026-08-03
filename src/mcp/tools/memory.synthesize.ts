@@ -4,6 +4,7 @@ import {
 	SamplingCreateMessageResult,
 	SamplingRequestHandler,
 	SamplingMessage,
+	SamplingToolDefinition,
 	extractTextFromContent,
 	extractToolUses
 } from "../sampling";
@@ -11,8 +12,11 @@ import { SessionContext, inferRepoFromSession } from "../session";
 import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation";
 import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
-import { MemorySynthesizeSchema } from "./schemas/index";
+import { MemorySynthesizeSchema, MemoryReadSchema, TaskReadSchema } from "./schemas/index";
+import { inputSchemaFromSchema } from "./schemas/json-schema";
 import { normalizeRepo } from "../utils/normalize";
+import { normalizeToolArguments } from "../utils/normalize-args";
+import { inferReadMode } from "../utils/auto-infer";
 import { handleMemoryRead } from "./memory.read";
 import { handleTaskRead } from "./task-read";
 
@@ -20,6 +24,28 @@ type SynthesizeOptions = {
 	session?: SessionContext;
 	sampleMessage?: SamplingRequestHandler;
 	elicit?: ElicitationRequestHandler;
+};
+
+// ── First-iteration snapshot reuse (OPT-FLOW-02) ─────────────────────────
+// The recap + task snapshot are already fetched for the grounding context
+// below. A model tool call on the FIRST iteration only reuses that cached
+// text when it reproduces the snapshot query EXACTLY (same scope, offset 0,
+// and limit EXACTLY equal to the seeded size — TASK-178; for tasks also the
+// exact seeded status set). Undefined or non-matching limits fall through to
+// a real query, because the handlers' per-mode defaults (recap/list = 5)
+// would return FEWER rows than the seed, so serving the cache would not be
+// byte-identical to the handler output. Serving the cache is byte-identical
+// to the handler output for matching args (recap/list output depends only on
+// owner/repo/limit/offset/status/phase).
+const SEEDED_RECAP_LIMIT = 8;
+const SEEDED_TASK_LIMIT = 15;
+const SEEDED_TASK_STATUSES = ["backlog", "pending", "in_progress", "blocked"] as const;
+
+type SeededSnapshot = {
+	owner: string;
+	repo: string;
+	recapText: string;
+	taskText: string;
 };
 
 export async function handleMemorySynthesize(
@@ -53,6 +79,10 @@ export async function handleMemorySynthesize(
 			)
 		: null;
 	const taskText = taskSnapshot ? getPrimaryTextContent(taskSnapshot) : "";
+
+	// Reuse the already-fetched recap/task snapshot as the first-iteration seed
+	// (OPT-FLOW-02): the model can re-read it without re-querying the DB.
+	const seededSnapshot: SeededSnapshot = { owner: repoOwner, repo, recapText, taskText };
 
 	const systemPrompt = [
 		"You are a repository memory synthesizer.",
@@ -115,16 +145,29 @@ export async function handleMemorySynthesize(
 
 		totalToolCalls += toolUses.length;
 		const toolResults = await Promise.all(
-			toolUses.map(async (toolUse) => ({
-				type: "tool_result" as const,
-				toolUseId: toolUse.id,
-				content: [
-					{
-						type: "text" as const,
-						text: await executeSamplingTool(toolUse.name, toolUse.input, db, vectors, repoOwner)
-					}
-				]
-			}))
+			toolUses.map(async (toolUse) => {
+				// Normalize exactly like the transport does (tools/index.ts,
+				// router.ts): session owner/repo/scope injection happens here so
+				// sampling tool calls share the SAME auto-infer/scope behavior as
+				// regular MCP tool calls (OPT-FLOW-02).
+				const normalizedArgs = normalizeToolArguments(toolUse.input, session) as Record<string, unknown>;
+
+				// First iteration: serve the already-fetched recap/task snapshot
+				// instead of re-querying the DB when the model re-requests it.
+				const seededText =
+					iterations === 1 ? matchSeededSnapshot(toolUse.name, normalizedArgs, seededSnapshot) : undefined;
+
+				return {
+					type: "tool_result" as const,
+					toolUseId: toolUse.id,
+					content: [
+						{
+							type: "text" as const,
+							text: seededText ?? (await executeSamplingTool(toolUse.name, normalizedArgs, db, vectors))
+						}
+					]
+				};
+			})
 		);
 
 		messages.push({
@@ -199,107 +242,126 @@ async function resolveRepository(
 	return typeof elicited.repo === "string" && elicited.repo.trim() ? normalizeRepo(elicited.repo.trim()) : undefined;
 }
 
-function buildSamplingTools(session: SessionContext | undefined, useTools: boolean) {
+function buildSamplingTools(session: SessionContext | undefined, useTools: boolean): SamplingToolDefinition[] {
 	if (!useTools || !session?.supportsSamplingTools) {
 		return [];
 	}
 
+	// Reuse the REGISTERED tool names + schemas (types/tool-definitions, wired
+	// in tools/index.ts) so the model samples against the same contract the
+	// transport advertises — no legacy aliases (memory_search, memory_recap,
+	// task_list) that the transport would reject (OPT-FLOW-02). The inputSchema
+	// is the same derived JSON Schema the MCP server registers, and read-mode
+	// resolution flows through the handlers' own inferReadMode rules.
 	return [
 		{
-			name: "memory_search",
-			description: "Search local repository memories for relevant context.",
-			inputSchema: {
-				type: "object",
-				properties: {
-					repo: { type: "string" },
-					query: { type: "string" },
-					limit: { type: "number", minimum: 1, maximum: 10 }
-				},
-				required: ["repo", "query"]
-			}
+			name: "memory-read",
+			description:
+				"Search local repository memories (query), fetch full memories (id/code/ids/codes), or recap the most recent memories (no query). Auto-infers mode: query→search, id/code/ids/codes→detail, none→recap.",
+			inputSchema: inputSchemaFromSchema(MemoryReadSchema)
 		},
 		{
-			name: "memory_recap",
-			description: "Fetch a recap of the most recent memories and active tasks.",
-			inputSchema: {
-				type: "object",
-				properties: {
-					repo: { type: "string" },
-					limit: { type: "number", minimum: 1, maximum: 20 }
-				},
-				required: ["repo"]
-			}
-		},
-		{
-			name: "task_list",
-			description: "List tasks by status or search term for the repository.",
-			inputSchema: {
-				type: "object",
-				properties: {
-					repo: { type: "string" },
-					status: { type: "string" },
-					search: { type: "string" },
-					limit: { type: "number", minimum: 1, maximum: 20 }
-				},
-				required: ["repo"]
-			}
+			name: "task-read",
+			description:
+				"Search tasks (query), fetch task details (id/code/task_code), or list tasks filtered by status/phase (no query). Auto-infers mode: query→search, id/code→detail, none→list.",
+			inputSchema: inputSchemaFromSchema(TaskReadSchema)
 		}
 	];
 }
 
+/**
+ * Executes a sampling tool call through the SAME normalized-args path as the
+ * transport: args were already run through `normalizeToolArguments` (session
+ * owner/repo/scope injection) by the caller, then dispatched to the canonical
+ * read handlers. Any error throws and aborts the synthesize — identical error
+ * semantics to the previous internal dispatch.
+ */
 async function executeSamplingTool(
 	toolName: string,
-	rawInput: Record<string, unknown>,
+	normalizedArgs: Record<string, unknown>,
 	db: SQLiteStore,
-	vectors: VectorStore,
-	owner: string
-) {
+	vectors: VectorStore
+): Promise<string> {
 	switch (toolName) {
-		case "memory_search": {
-			const response = await handleMemoryRead(
-				{
-					owner,
-					repo: rawInput.repo,
-					query: rawInput.query,
-					limit: rawInput.limit ?? 5
-				},
-				db,
-				vectors
-			);
+		case "memory-read": {
+			const response = await handleMemoryRead(normalizedArgs, db, vectors);
 			return getPrimaryTextContent(response);
 		}
 
-		case "memory_recap": {
-			const response = await handleMemoryRead(
-				{
-					owner,
-					repo: rawInput.repo,
-					limit: rawInput.limit ?? 8,
-					offset: 0
-				},
-				db,
-				vectors
-			);
-			return getPrimaryTextContent(response);
-		}
-
-		case "task_list": {
-			const response = await handleTaskRead(
-				{
-					owner,
-					repo: rawInput.repo,
-					status: rawInput.status,
-					query: rawInput.search,
-					limit: rawInput.limit ?? 10,
-					offset: 0
-				},
-				db,
-				vectors
-			);
+		case "task-read": {
+			const response = await handleTaskRead(normalizedArgs, db, vectors);
 			return getPrimaryTextContent(response);
 		}
 
 		default:
 			throw new Error(`Unsupported sampling tool: ${toolName}`);
 	}
+}
+
+/**
+ * Returns the cached recap/task snapshot text when the first-iteration tool
+ * call is an exact match for the already-fetched seed data, or `undefined` to
+ * fall through to a real query. Read-mode inference mirrors the handlers
+ * (memory.read.ts / task-read/index.ts) so classification never diverges from
+ * what `handleMemoryRead`/`handleTaskRead` would do.
+ */
+function matchSeededSnapshot(
+	toolName: string,
+	normalized: Record<string, unknown>,
+	seed: SeededSnapshot
+): string | undefined {
+	// Only serve the cached snapshot for the same repo/owner scope.
+	if (normalized.repo !== seed.repo || normalized.owner !== seed.owner) {
+		return undefined;
+	}
+
+	if (toolName === "memory-read") {
+		// Recap mode — same rule as memory.read.ts: no query / identifier.
+		const mode = inferReadMode(normalized, {
+			rules: [
+				{ mode: "search", fields: ["query"] },
+				{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+			],
+			fallback: "recap"
+		});
+		if (mode !== "recap" || !seed.recapText) return undefined;
+		if ((normalized.offset ?? 0) !== 0) return undefined;
+		// EXACT limit equality required (TASK-178): the handler's schema default
+		// (5) would return fewer rows than the seeded 8, so a smaller or absent
+		// limit must fall through to a real query (safe cache-miss direction).
+		if (normalized.limit === undefined || Number(normalized.limit) !== SEEDED_RECAP_LIMIT) return undefined;
+		return seed.recapText;
+	}
+
+	if (toolName === "task-read") {
+		// List mode — mirrors task-read/index.ts, including the
+		// code ← task_code / codes ← task_codes detail resolution.
+		const mode = inferReadMode(normalized, {
+			rules: [
+				{ mode: "search", fields: ["query"] },
+				{ mode: "detail", fields: ["id", "code", "ids", "codes", "task_code", "task_codes"] }
+			],
+			fallback: "list"
+		});
+		if (mode !== "list" || !seed.taskText) return undefined;
+		if ((normalized.offset ?? 0) !== 0) return undefined;
+		// EXACT limit equality required (TASK-178): the handler's list-mode
+		// default (5) would return fewer rows than the seeded 15, so a smaller
+		// or absent limit must fall through to a real query (safe cache-miss).
+		if (normalized.limit === undefined || Number(normalized.limit) !== SEEDED_TASK_LIMIT) return undefined;
+		if (normalized.phase !== undefined) return undefined;
+		if (typeof normalized.status !== "string" || !sameStatusSet(normalized.status)) return undefined;
+		return seed.taskText;
+	}
+
+	return undefined;
+}
+
+function sameStatusSet(status: string): boolean {
+	const allowed: readonly string[] = SEEDED_TASK_STATUSES;
+	const parts = status
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	return parts.length === allowed.length && parts.every((p) => allowed.includes(p));
 }

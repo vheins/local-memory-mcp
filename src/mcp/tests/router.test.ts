@@ -561,8 +561,14 @@ describe("createRouter() — Property 11: uses provided storage", () => {
 					{
 						type: "tool_use",
 						id: "call_1",
-						name: "memory_recap",
-						input: { repo: "test-repo", limit: 3 }
+						// Registered tool name (OPT-FLOW-02): legacy alias memory_recap
+						// was removed from the sampling surface (buildSamplingTools now
+						// hands the model only memory-read/task-read). Recap-mode args
+						// with limit 8 === SEEDED_RECAP_LIMIT and the synthesize scope
+						// (owner/repo) additionally exercise the first-iteration
+						// seed-serve path (cached recap instead of a re-query).
+						name: "memory-read",
+						input: { owner: "test", repo: "test-repo", limit: 8 }
 					}
 				],
 				stopReason: "toolUse"
