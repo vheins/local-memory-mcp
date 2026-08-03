@@ -19,6 +19,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "crypto";
 import express from "express";
 import type { AddressInfo } from "node:net";
 // Resolves to the mocked context module (vi.mock is hoisted above imports),
@@ -634,27 +635,34 @@ describe("Dashboard Controllers", () => {
 			expect(withWriteSpy).not.toHaveBeenCalled();
 		});
 
-		// TASK-125: the generic tool-call endpoint special-cases the
-		// coordination handlers. The four mutation handlers (handoff-create,
-		// handoff-update, task-claim, claim-release) mutate storage.handoffs
-		// directly and MUST cross db.withWrite like the MCP equivalents
-		// (handoff-write / claim-manage). The read handlers must NOT.
+		// TASK-125 / OPT-FEAT-01: coordination mutation endpoints must acquire
+		// db.withWrite; read endpoints must NOT.
 
-		it("POST /api/tools/handoff-create/call acquires the write lock", async () => {
+		it("GET /api/coordination/handoffs does NOT acquire the write lock", async () => {
 			withWriteSpy.mockClear();
-			const res = await fetch(`${baseUrl}/api/tools/handoff-create/call`, {
+			const res = await fetch(`${baseUrl}/api/coordination/handoffs?repo=lock-test-repo`);
+			expect(res.status).toBe(200);
+			expect(withWriteSpy).not.toHaveBeenCalled();
+		});
+
+		it("POST /api/coordination/handoffs/status acquires the write lock", async () => {
+			// Seed a handoff directly via the real store (mocked mcpClient
+			// doesn't persist, so HTTP seeding would yield no DB row).
+			const handoff = db.handoffs.createHandoff({
+				owner: "test-owner",
+				repo: "lock-test-repo",
+				from_agent: "backend",
+				summary: "handoff-status write lock target"
+			});
+			withWriteSpy.mockClear();
+
+			const res = await fetch(`${baseUrl}/api/coordination/handoffs/status`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					data: {
 						type: "tool-result",
-						attributes: {
-							owner: "test-owner",
-							repo: "lock-test-repo",
-							from_agent: "backend",
-							to_agent: "tester",
-							summary: "coordination write must run under withWrite"
-						}
+						attributes: { id: handoff.id, status: "expired" }
 					}
 				})
 			});
@@ -662,48 +670,47 @@ describe("Dashboard Controllers", () => {
 			expect(withWriteSpy).toHaveBeenCalledTimes(1);
 		});
 
-		it("POST /api/tools/claim-release/call acquires the write lock", async () => {
-			// Seed a task through the locked create path, then claim it through
-			// the (also locked) task-claim tool so the release has a real target.
-			const created = await fetch(`${baseUrl}/api/tasks`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					data: {
-						type: "task",
-						attributes: {
-							owner: "test-owner",
-							repo: "lock-test-repo",
-							task_code: "T-LOCK-RELEASE",
-							title: "claim-release lock target"
-						}
-					}
-				})
+		it("POST /api/coordination/claims/release acquires the write lock", async () => {
+			// Seed a task directly, then claim it via the real store so the
+			// release has a real target in the DB.
+			const now = new Date().toISOString();
+			const taskId = randomUUID();
+			db.tasks.insertTask({
+				id: taskId,
+				owner: "test-owner",
+				repo: "lock-test-repo",
+				task_code: "T-LOCK-RELEASE",
+				phase: "test",
+				title: "claim-release lock target",
+				description: null,
+				status: "pending",
+				priority: 3,
+				agent: "",
+				role: "",
+				doc_path: null,
+				created_at: now,
+				updated_at: now,
+				in_progress_at: null,
+				finished_at: null,
+				canceled_at: null,
+				est_tokens: 0,
+				commit_id: null,
+				changed_files: [],
+				tags: [],
+				suggested_skills: [],
+				metadata: {},
+				parent_id: null,
+				depends_on: null
 			});
-			expect(created.status).toBe(200);
-			const taskId = ((await created.json()) as Record<string, any>).data.id as string;
+			db.handoffs.claimTask({
+				owner: "test-owner",
+				repo: "lock-test-repo",
+				task_id: taskId,
+				agent: "backend"
+			});
 			withWriteSpy.mockClear();
 
-			const claimed = await fetch(`${baseUrl}/api/tools/task-claim/call`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					data: {
-						type: "tool-result",
-						attributes: {
-							owner: "test-owner",
-							repo: "lock-test-repo",
-							task_id: taskId,
-							agent: "backend"
-						}
-					}
-				})
-			});
-			expect(claimed.status).toBe(200);
-			expect(withWriteSpy).toHaveBeenCalledTimes(1);
-			withWriteSpy.mockClear();
-
-			const released = await fetch(`${baseUrl}/api/tools/claim-release/call`, {
+			const released = await fetch(`${baseUrl}/api/coordination/claims/release`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -719,22 +726,6 @@ describe("Dashboard Controllers", () => {
 			});
 			expect(released.status).toBe(200);
 			expect(withWriteSpy).toHaveBeenCalledTimes(1);
-		});
-
-		it("POST /api/tools/handoff-list/call does NOT acquire the write lock", async () => {
-			withWriteSpy.mockClear();
-			const res = await fetch(`${baseUrl}/api/tools/handoff-list/call`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					data: {
-						type: "tool-result",
-						attributes: { owner: "test-owner", repo: "lock-test-repo" }
-					}
-				})
-			});
-			expect(res.status).toBe(200);
-			expect(withWriteSpy).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -68,14 +68,13 @@ export function createDetailHandoff(subscribe: (run: (s: DetailState) => void) =
 
 		update((s) => ({ ...s, handoffCreating: true, handoffError: "" }));
 		try {
-			await api.callTool("handoff-create", {
+			await api.createHandoff({
 				repo,
 				from_agent: form.from_agent.trim(),
 				to_agent: form.to_agent.trim() || undefined,
 				task_code: form.task_code.trim() || undefined,
 				summary: form.summary.trim(),
-				context: parseHandoffContext(form.context),
-				structured: true
+				context: parseHandoffContext(form.context)
 			});
 			onCreated();
 		} catch (e) {
@@ -94,10 +93,9 @@ export function createDetailHandoff(subscribe: (run: (s: DetailState) => void) =
 
 		update((s) => ({ ...s, handoffUpdating: true, handoffError: "" }));
 		try {
-			await api.callTool("handoff-update", {
+			await api.updateHandoffStatus({
 				id: state.handoff.id,
-				status,
-				structured: true
+				status
 			});
 			onUpdated();
 		} catch (e) {

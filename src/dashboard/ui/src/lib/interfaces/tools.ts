@@ -71,16 +71,6 @@ export interface Handoff {
 	expires_at: string | null;
 }
 
-export interface HandoffListResult {
-	schema: "handoff-list";
-	handoffs: {
-		columns: string[];
-		rows: unknown[][];
-	};
-	count: number;
-	offset: number;
-}
-
 export interface TaskClaim {
 	id: string;
 	repo: string;
@@ -91,14 +81,4 @@ export interface TaskClaim {
 	claimed_at: string;
 	released_at: string | null;
 	metadata: Record<string, unknown>;
-}
-
-export interface ClaimListResult {
-	schema: "claim-list";
-	claims: {
-		columns: string[];
-		rows: unknown[][];
-	};
-	count: number;
-	offset: number;
 }

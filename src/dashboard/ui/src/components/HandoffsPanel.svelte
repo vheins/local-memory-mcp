@@ -5,8 +5,7 @@
 	import HandoffFilterBar from "./HandoffFilterBar.svelte";
 	import HandoffList from "./HandoffList.svelte";
 	import { confirmDelete } from "../lib/confirm";
-	import type { Handoff, HandoffListResult, TaskClaim } from "../lib/interfaces";
-	import { rowToHandoff, structured } from "../lib/handoffPanelUtils";
+	import type { Handoff, TaskClaim } from "../lib/interfaces";
 
 	export let repo = "";
 
@@ -45,12 +44,11 @@
 		loading = true;
 		error = "";
 		try {
-			const args: Record<string, unknown> = { repo, limit: 50, structured: true };
-			if (status) args.status = status;
-			if (agentFilter.trim()) args.to_agent = agentFilter.trim();
-			const result = structured<HandoffListResult>(await api.callTool("handoff-list", args));
-			const columns = result?.handoffs?.columns || [];
-			handoffs = (result?.handoffs?.rows || []).map((row) => rowToHandoff(columns, row, repo));
+			const params: Record<string, unknown> = { repo, pageSize: 50 };
+			if (status) params.status = status;
+			if (agentFilter.trim()) params.to_agent = agentFilter.trim();
+			const result = await api.coordinationHandoffs(params);
+			handoffs = result.handoffs || [];
 			if (selectedHandoff && !handoffs.some((h) => h.id === selectedHandoff?.id)) {
 				selectedHandoff = null;
 			}
@@ -106,7 +104,7 @@
 	async function handleDeleteRow(handoff: Handoff) {
 		if (!(await confirmDelete(`Expire handoff "${handoff.summary}"?`))) return;
 		try {
-			await api.callTool("handoff-update", { id: handoff.id, status: "expired", structured: true });
+			await api.updateHandoffStatus({ id: handoff.id, status: "expired" });
 			void refreshCoordination();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);

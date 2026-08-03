@@ -47,8 +47,8 @@ export class HandoffEntity extends BaseEntity {
 		limit?: number;
 		offset?: number;
 	}): Handoff[] {
-		const conditions: string[] = ["owner = ?", "repo = ?"];
-		const values: unknown[] = [params.owner, params.repo];
+		const conditions: string[] = params.owner ? ["owner = ?", "repo = ?"] : ["repo = ?"];
+		const values: unknown[] = params.owner ? [params.owner, params.repo] : [params.repo];
 
 		if (params.status) {
 			conditions.push("status = ?");
@@ -85,6 +85,36 @@ export class HandoffEntity extends BaseEntity {
 			values
 		);
 		return rows.map((r) => this.rowToHandoff(r));
+	}
+
+	countHandoffs(params: {
+		owner: string;
+		repo: string;
+		status?: Handoff["status"];
+		to_agent?: string;
+		from_agent?: string;
+	}): number {
+		const conditions: string[] = params.owner ? ["owner = ?", "repo = ?"] : ["repo = ?"];
+		const values: unknown[] = params.owner ? [params.owner, params.repo] : [params.repo];
+
+		if (params.status) {
+			conditions.push("status = ?");
+			values.push(params.status);
+		}
+		if (params.to_agent) {
+			conditions.push("to_agent = ?");
+			values.push(params.to_agent);
+		}
+		if (params.from_agent) {
+			conditions.push("from_agent = ?");
+			values.push(params.from_agent);
+		}
+
+		const row = this.get<{ count: number }>(
+			`SELECT COUNT(*) as count FROM ${TABLE_HANDOFFS} WHERE ${conditions.join(" AND ")}`,
+			values
+		);
+		return row?.count ?? 0;
 	}
 
 	getHandoffById(id: string): Handoff | null {
@@ -234,5 +264,24 @@ export class HandoffEntity extends BaseEntity {
 			values
 		);
 		return rows.map((r) => this.rowToClaim(r));
+	}
+
+	countClaims(params: { owner: string; repo: string; agent?: string; active_only?: boolean }): number {
+		const conditions: string[] = params.owner ? ["owner = ?", "repo = ?"] : ["repo = ?"];
+		const values: unknown[] = params.owner ? [params.owner, params.repo] : [params.repo];
+
+		if (params.agent) {
+			conditions.push("agent = ?");
+			values.push(params.agent);
+		}
+		if (params.active_only) {
+			conditions.push("released_at IS NULL");
+		}
+
+		const row = this.get<{ count: number }>(
+			`SELECT COUNT(*) as count FROM ${TABLE_CLAIMS} WHERE ${conditions.join(" AND ")}`,
+			values
+		);
+		return row?.count ?? 0;
 	}
 }
