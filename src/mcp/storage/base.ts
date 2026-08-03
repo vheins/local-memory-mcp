@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import type { Statement } from "better-sqlite3";
 import {
 	MemoryEntry,
 	MemoryRow,
@@ -19,6 +20,35 @@ import {
 export abstract class BaseEntity {
 	constructor(protected db: Database.Database) {}
 
+	/**
+	 * Bounded prepared-statement cache (OPT-PERF-11). Keyed by SQL string so
+	 * every call to {@link run}, {@link all}, or {@link get} reuses the native
+	 * better-sqlite3 Statement instead of calling `db.prepare(sql)` per
+	 * invocation. FIFO eviction at `STMT_CACHE_MAX` entries bounds memory even
+	 * when dynamic `IN (...)` queries produce many distinct SQL strings.
+	 *
+	 * Safe because `this.db` is stable for the entity's lifetime (SQLiteStore
+	 * never replaces the Database instance after construction).
+	 */
+	private _stmtCache = new Map<string, Statement>();
+	private static readonly STMT_CACHE_MAX = 256;
+
+	/**
+	 * Return a cached prepared statement for `sql`, preparing and caching it on
+	 * first access. Evicts the oldest entry when the cache is at capacity.
+	 */
+	protected prepare(sql: string): Statement {
+		let stmt = this._stmtCache.get(sql);
+		if (stmt) return stmt;
+		stmt = this.db.prepare(sql);
+		if (this._stmtCache.size >= BaseEntity.STMT_CACHE_MAX) {
+			const firstKey = this._stmtCache.keys().next().value;
+			if (firstKey !== undefined) this._stmtCache.delete(firstKey);
+		}
+		this._stmtCache.set(sql, stmt);
+		return stmt;
+	}
+
 	protected transaction<T>(fn: () => T): T {
 		// BEGIN IMMEDIATE grabs the SQLite write lock at transaction start, so a
 		// read-then-write body can never hit SQLITE_BUSY_SNAPSHOT (immediate,
@@ -28,7 +58,7 @@ export abstract class BaseEntity {
 	}
 
 	protected run(sql: string, params: unknown[] = []): { changes: number } {
-		const stmt = this.db.prepare(sql);
+		const stmt = this.prepare(sql);
 		const result = stmt.run(...(params as (string | number | null | Buffer)[]));
 		return { changes: result.changes };
 	}
@@ -38,12 +68,12 @@ export abstract class BaseEntity {
 	}
 
 	protected all<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
-		const stmt = this.db.prepare(sql);
+		const stmt = this.prepare(sql);
 		return stmt.all(...(params as (string | number | null | Buffer)[])) as T[];
 	}
 
 	protected get<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T | undefined {
-		const stmt = this.db.prepare(sql);
+		const stmt = this.prepare(sql);
 		return stmt.get(...(params as (string | number | null | Buffer)[])) as T | undefined;
 	}
 

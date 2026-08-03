@@ -7,7 +7,8 @@ import {
 	STANDARD_CONFLICT_THRESHOLD,
 	STANDARD_CONFLICT_CANDIDATES,
 	STANDARD_CANDIDATE_CAP,
-	VECTOR_CANDIDATE_CAP
+	VECTOR_CANDIDATE_CAP,
+	BULK_UPDATE_CHUNK_SIZE
 } from "../utils/constants";
 
 // Int-coerced / immutable columns for the shared update-clause builder
@@ -392,9 +393,16 @@ export class StandardEntity extends BaseEntity {
 
 	getByIds(ids: string[]): CodingStandardEntry[] {
 		if (ids.length === 0) return [];
-		const placeholders = ids.map(() => "?").join(",");
-		const rows = this.all<CodingStandardRow>(`SELECT * FROM coding_standards WHERE id IN (${placeholders})`, ids);
-		return rows.map((row) => this.rowToEntry(row));
+		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) to bound the IN()-list width —
+		// same rationale as memory.entity.ts.getByIds.
+		const results: CodingStandardEntry[] = [];
+		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
+			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+			const placeholders = chunk.map(() => "?").join(",");
+			const rows = this.all<CodingStandardRow>(`SELECT * FROM coding_standards WHERE id IN (${placeholders})`, chunk);
+			results.push(...rows.map((row) => this.rowToEntry(row)));
+		}
+		return results;
 	}
 
 	update(id: string, updates: Partial<CodingStandardEntry>): void {
@@ -439,15 +447,19 @@ export class StandardEntity extends BaseEntity {
 
 	incrementHitCounts(ids: string[]): void {
 		if (ids.length === 0) return;
-		const placeholders = ids.map(() => "?").join(",");
 		const now = new Date().toISOString();
-		this.run(
-			`UPDATE coding_standards
-			 SET hit_count = hit_count + 1,
-			     last_used_at = ?
-			 WHERE id IN (${placeholders})`,
-			[now, ...ids]
-		);
+		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) — same rationale as getByIds.
+		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
+			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+			const placeholders = chunk.map(() => "?").join(",");
+			this.run(
+				`UPDATE coding_standards
+				 SET hit_count = hit_count + 1,
+				     last_used_at = ?
+				 WHERE id IN (${placeholders})`,
+				[now, ...chunk]
+			);
+		}
 	}
 
 	getVectorCandidates(repo?: string, limit = VECTOR_CANDIDATE_CAP): { standard_id: string; vector: string }[] {

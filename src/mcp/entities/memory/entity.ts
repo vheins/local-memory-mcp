@@ -169,20 +169,27 @@ export class MemoryEntity extends BaseEntity {
 
 	getByIds(ids: string[], options: { type?: string; status?: string } = {}): MemoryEntry[] {
 		if (ids.length === 0) return [];
-		let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE id IN (${ids.map(() => "?").join(",")})`;
-		const params: (string | number)[] = [...ids];
-
-		if (options.type) {
-			sql += " AND type = ?";
-			params.push(options.type);
+		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) to bound the IN()-list width —
+		// very large id sets produce long SQL strings that miss better-sqlite3's
+		// prepare cache and can stall the parser. Results are fused per-chunk;
+		// callers consume by-id (Set/Map lookup), so concatenation is safe.
+		const results: MemoryEntry[] = [];
+		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
+			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+			let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE id IN (${chunk.map(() => "?").join(",")})`;
+			const params: (string | number)[] = [...chunk];
+			if (options.type) {
+				sql += " AND type = ?";
+				params.push(options.type);
+			}
+			if (options.status) {
+				sql += " AND status = ?";
+				params.push(options.status);
+			}
+			const rows = this.all<MemoryRow>(sql, params);
+			results.push(...rows.map((row) => this.rowToMemoryEntry(row)));
 		}
-		if (options.status) {
-			sql += " AND status = ?";
-			params.push(options.status);
-		}
-
-		const rows = this.all<MemoryRow>(sql, params);
-		return rows.map((row) => this.rowToMemoryEntry(row));
+		return results;
 	}
 
 	/**
@@ -192,19 +199,22 @@ export class MemoryEntity extends BaseEntity {
 	 */
 	getMemoriesByCodes(codes: string[], owner?: string, repo?: string): MemoryEntry[] {
 		if (codes.length === 0) return [];
-		const placeholders = codes.map(() => "?").join(",");
-		let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE code IN (${placeholders})`;
-		const params: (string | null)[] = [...codes];
-		if (owner && repo) {
-			sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
-			params.push(owner, repo);
-		}
-		const rows = this.all<MemoryRow>(sql, params);
-
 		const byCode = new Map<string, MemoryEntry>();
-		for (const row of rows) {
-			const entry = this.rowToMemoryEntry(row);
-			if (entry.code && !byCode.has(entry.code)) byCode.set(entry.code, entry);
+		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) — same rationale as getByIds.
+		for (let i = 0; i < codes.length; i += BULK_UPDATE_CHUNK_SIZE) {
+			const chunk = codes.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+			const placeholders = chunk.map(() => "?").join(",");
+			let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE code IN (${placeholders})`;
+			const params: (string | null)[] = [...chunk];
+			if (owner && repo) {
+				sql += " AND ((owner = ? AND repo = ?) OR is_global = 1)";
+				params.push(owner, repo);
+			}
+			const rows = this.all<MemoryRow>(sql, params);
+			for (const row of rows) {
+				const entry = this.rowToMemoryEntry(row);
+				if (entry.code && !byCode.has(entry.code)) byCode.set(entry.code, entry);
+			}
 		}
 
 		const seen = new Set<string>();
@@ -601,11 +611,15 @@ export class MemoryEntity extends BaseEntity {
 	incrementHitCounts(ids: string[]): void {
 		if (!ids || ids.length === 0) return;
 		const now = new Date().toISOString();
-		const placeholders = ids.map(() => "?").join(",");
-		this.run(`UPDATE ${TABLE_MEMORIES} SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`, [
-			now,
-			...ids
-		]);
+		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) — same rationale as getByIds.
+		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
+			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+			const placeholders = chunk.map(() => "?").join(",");
+			this.run(
+				`UPDATE ${TABLE_MEMORIES} SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`,
+				[now, ...chunk]
+			);
+		}
 	}
 
 	incrementRecallCount(id: string): void {
