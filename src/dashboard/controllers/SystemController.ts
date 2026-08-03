@@ -11,14 +11,6 @@ import { metrics } from "../../mcp/utils/metrics";
 import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
 import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
-import {
-	handleHandoffList,
-	handleHandoffCreate,
-	handleHandoffUpdate,
-	handleTaskClaim,
-	handleClaimList,
-	handleClaimRelease
-} from "../../mcp/tools/handoff.manage";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -241,30 +233,6 @@ export class SystemController {
 		await handleController(req, res, async () => {
 			const { name } = req.params as { name: string };
 			const args = getAttributes(req) as Record<string, unknown>;
-
-			const COORDINATION_TOOLS: Record<string, (args: unknown, storage: typeof db) => Promise<unknown>> = {
-				"handoff-list": handleHandoffList,
-				"handoff-create": handleHandoffCreate,
-				"handoff-update": handleHandoffUpdate,
-				"task-claim": handleTaskClaim,
-				"claim-list": handleClaimList,
-				"claim-release": handleClaimRelease
-			};
-
-			// Write-lock invariant (TASK-102 / TASK-125): the four mutation
-			// handlers mutate storage.handoffs directly and MUST serialize with
-			// MCP write tools through db.withWrite — the same file-lock boundary
-			// router.ts applies to handoff-write / claim-manage (WRITE_TOOLS).
-			// The read handlers (handoff-list, claim-list) stay outside the lock.
-			const COORDINATION_WRITE_TOOLS = new Set(["handoff-create", "handoff-update", "task-claim", "claim-release"]);
-
-			if (name in COORDINATION_TOOLS) {
-				const handler = COORDINATION_TOOLS[name];
-				const result = COORDINATION_WRITE_TOOLS.has(name)
-					? await db.withWrite(() => handler(args, db))
-					: await handler(args, db);
-				return jsonApiRes(result, "tool-result");
-			}
 
 			if (!mcpClient.isConnected()) await mcpClient.start();
 			const result = await mcpClient.callTool(name, args);
