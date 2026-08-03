@@ -39,7 +39,10 @@ type SynthesizeOptions = {
 // owner/repo/limit/offset/status/phase).
 const SEEDED_RECAP_LIMIT = 8;
 const SEEDED_TASK_LIMIT = 15;
-const SEEDED_TASK_STATUSES = ["backlog", "pending", "in_progress", "blocked"] as const;
+// The EXACT status string the task snapshot was seeded with (line 76). The
+// handler's describeStatusFilter (task-read/shared.ts) preserves input order,
+// so only a byte-identical status string may be served from cache (TASK-181).
+const SEEDED_TASK_STATUS_STRING = "backlog,pending,in_progress,blocked";
 
 type SeededSnapshot = {
 	owner: string;
@@ -350,18 +353,17 @@ function matchSeededSnapshot(
 		// or absent limit must fall through to a real query (safe cache-miss).
 		if (normalized.limit === undefined || Number(normalized.limit) !== SEEDED_TASK_LIMIT) return undefined;
 		if (normalized.phase !== undefined) return undefined;
-		if (typeof normalized.status !== "string" || !sameStatusSet(normalized.status)) return undefined;
+		// json:true makes the handler skip contentSummary (task-read/list.ts:60-61),
+		// returning content=[] → getPrimaryTextContent "" — serving the seeded text
+		// would NOT be byte-identical, so truthy json must fall through (TASK-181).
+		// json undefined/false (schema default false) serves byte-identically.
+		if (normalized.json !== undefined && normalized.json !== false) return undefined;
+		// EXACT status string equality (TASK-181): describeStatusFilter preserves
+		// input order, so a reordered status set would embed a different label
+		// than the seed's canonical-order one — only the exact seed string serves.
+		if (normalized.status !== SEEDED_TASK_STATUS_STRING) return undefined;
 		return seed.taskText;
 	}
 
 	return undefined;
-}
-
-function sameStatusSet(status: string): boolean {
-	const allowed: readonly string[] = SEEDED_TASK_STATUSES;
-	const parts = status
-		.split(",")
-		.map((s) => s.trim())
-		.filter(Boolean);
-	return parts.length === allowed.length && parts.every((p) => allowed.includes(p));
 }
