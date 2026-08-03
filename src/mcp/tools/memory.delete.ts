@@ -4,7 +4,7 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { collectEntityIds } from "../utils/auto-infer";
 import { purgeEntityAndCleanup } from "../utils/purge-entity-cleanup";
 import { logger } from "../utils/logger";
-import { MemoryDeleteSchema } from "./schemas";
+import { MemoryDeleteSchema } from "./schemas/index";
 
 export async function handleMemoryDelete(
 	params: Record<string, unknown>,

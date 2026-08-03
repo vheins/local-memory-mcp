@@ -10,7 +10,7 @@ import { VectorStore } from "../../types";
 import { McpResponse } from "../../utils/mcp-response";
 import { parseArgs } from "../../utils/mcp-error";
 import { inferReadMode } from "../../utils/auto-infer";
-import { TaskReadSchema } from "../schemas";
+import { TaskReadSchema } from "../schemas/index";
 import { handleDetailMode } from "./detail";
 import { handleSearchMode } from "./search";
 import { handleListMode } from "./list";

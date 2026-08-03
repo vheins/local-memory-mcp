@@ -12,7 +12,7 @@
  * No hit_count increments on read.
  */
 
-import { MemoryReadSchema, type MemoryReadInput } from "./schemas";
+import { MemoryReadSchema, type MemoryReadInput } from "./schemas/index";
 import type { MemoryEntry, VectorStore, VectorResult } from "../types";
 import type { SQLiteStore } from "../storage/sqlite";
 import type { McpResponse } from "../utils/mcp-response";

@@ -11,7 +11,7 @@ import { logger } from "../../utils/logger";
 import { buildTableResult, createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { expandQuery } from "../../utils/query-expander";
 import { fetchAggregatedKgContext } from "../kg-archivist/query";
-import { StandardReadInput } from "../schemas";
+import { StandardReadInput } from "../schemas/index";
 import type { HybridScores } from "../../utils/scoring";
 import { STANDARD_SCORING } from "../../utils/scoring";
 import { HybridSearchEngine } from "../../utils/hybrid-search";

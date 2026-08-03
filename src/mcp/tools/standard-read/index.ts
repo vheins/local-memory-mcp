@@ -7,7 +7,7 @@
  * - none                    → LIST   (paginated list of all standards)
  */
 
-import { StandardReadSchema, StandardReadInput } from "../schemas";
+import { StandardReadSchema, StandardReadInput } from "../schemas/index";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { McpResponse, createMcpResponse } from "../../utils/mcp-response";

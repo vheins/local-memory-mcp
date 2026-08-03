@@ -11,7 +11,7 @@ import { SessionContext, inferRepoFromSession } from "../session";
 import { ElicitationRequestHandler, extractAcceptedElicitationContent } from "../elicitation";
 import { createMcpResponse, getPrimaryTextContent, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
-import { MemorySynthesizeSchema } from "./schemas";
+import { MemorySynthesizeSchema } from "./schemas/index";
 import { normalizeRepo } from "../utils/normalize";
 import { handleMemoryRead } from "./memory.read";
 import { handleTaskRead } from "./task-read";

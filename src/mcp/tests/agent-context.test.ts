@@ -3,7 +3,7 @@ import { handleAgentContext } from "../tools/agent-context";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { VectorStore, MemoryEntry } from "../types";
-import { AgentContextSchema } from "../tools/schemas";
+import { AgentContextSchema } from "../tools/schemas/index";
 // DecisionLogSchema and SessionSummarizeSchema removed per ADR-007.
 // Use memory-write with flat fields: context/rationale/alternatives, key_decisions/next_steps
 import { MemoryWriteSchema } from "../tools/schemas/memory";

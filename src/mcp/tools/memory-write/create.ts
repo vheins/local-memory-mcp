@@ -1,4 +1,4 @@
-import { MemoryWriteSchema } from "../schemas";
+import { MemoryWriteSchema } from "../schemas/index";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";

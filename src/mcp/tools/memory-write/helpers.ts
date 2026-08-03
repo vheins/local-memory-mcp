@@ -5,7 +5,7 @@ import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { resolveMemorySupersedes } from "../../utils/memory-utils";
 import { MEMORY_CONFLICT_THRESHOLD, TTL_MS_PER_DAY } from "../../utils/constants";
-import type { MemoryWriteItemInput } from "../schemas";
+import type { MemoryWriteItemInput } from "../schemas/index";
 
 // ── Mode inference ───────────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@ import { createMcpResponse } from "../utils/mcp-response";
 import { collectEntityIds } from "../utils/auto-infer";
 import { purgeEntityAndCleanup } from "../utils/purge-entity-cleanup";
 import { logger } from "../utils/logger";
-import { TaskDeleteSchema } from "./schemas";
+import { TaskDeleteSchema } from "./schemas/index";
 
 export async function handleTaskDelete(args: unknown, storage: SQLiteStore) {
 	const validated = TaskDeleteSchema.parse(args);

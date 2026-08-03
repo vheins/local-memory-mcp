@@ -1,4 +1,4 @@
-import { AgentContextSchema } from "./schemas";
+import { AgentContextSchema } from "./schemas/index";
 import { SQLiteStore } from "../storage/sqlite";
 import {
 	MemoryEntry,

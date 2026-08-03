@@ -1,4 +1,4 @@
-import { MemorySummarizeSchema } from "./schemas";
+import { MemorySummarizeSchema } from "./schemas/index";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { IndexRepoSchema, IndexStatusSchema } from "./schemas";
+import { IndexRepoSchema, IndexStatusSchema } from "./schemas/index";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";

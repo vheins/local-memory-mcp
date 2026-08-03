@@ -1,4 +1,4 @@
-import { MemoryTypeSchema, MemoryWriteItemSchema } from "../schemas";
+import { MemoryTypeSchema, MemoryWriteItemSchema } from "../schemas/index";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore, MemoryEntry, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { logger } from "../../utils/logger";

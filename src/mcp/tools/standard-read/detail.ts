@@ -11,7 +11,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query";
-import { StandardReadInput } from "../schemas";
+import { StandardReadInput } from "../schemas/index";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 

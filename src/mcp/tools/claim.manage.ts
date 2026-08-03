@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite";
-import { ClaimManageSchema } from "./schemas";
+import { ClaimManageSchema } from "./schemas/index";
 import { claimCoordinated, listClaimsTable, releaseClaim } from "../utils/coordination";
 
 // ── PUBLIC ENTRY POINT ──────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, VectorStore, TASK_STATUSES } from "../../types";
 import { buildTableResult, createMcpResponse, McpResponse } from "../../utils/mcp-response";
-import { TaskStatusValues } from "../schemas";
+import { TaskStatusValues } from "../schemas/index";
 import { logger } from "../../utils/logger";
 import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
 import { capitalize } from "./shared";

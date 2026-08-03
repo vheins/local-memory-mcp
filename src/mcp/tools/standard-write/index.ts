@@ -7,7 +7,7 @@
  * - `content` + `name` → CREATE
  */
 
-import { StandardWriteSchema } from "../schemas";
+import { StandardWriteSchema } from "../schemas/index";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { McpResponse } from "../../utils/mcp-response";

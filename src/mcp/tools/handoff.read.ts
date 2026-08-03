@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { buildTableResult, createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { inferReadMode } from "../utils/auto-infer";
-import { HandoffReadSchema } from "./schemas";
+import { HandoffReadSchema } from "./schemas/index";
 
 // ---------------------------------------------------------------------------
 // Summary builders

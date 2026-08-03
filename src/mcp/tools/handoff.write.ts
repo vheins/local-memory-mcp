@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
-import { HandoffWriteSchema, HandoffStatusSchema } from "./schemas";
+import { HandoffWriteSchema, HandoffStatusSchema } from "./schemas/index";
 import { UUID_REGEX } from "../utils/uuid";
 import { extractNextSteps } from "../utils/next-steps";
 import { logger } from "../utils/logger";

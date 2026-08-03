@@ -1,7 +1,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
 import { McpResponse } from "../../utils/mcp-response";
-import { TaskWriteSchema } from "../schemas";
+import { TaskWriteSchema } from "../schemas/index";
 import { handleCreateSingle } from "./create";
 import { handleUpdate, handleBulkUpdateByIds } from "./update";
 import { handleBulk } from "./bulk";
