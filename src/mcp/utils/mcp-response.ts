@@ -199,8 +199,7 @@ export type TableResultOptions = {
  * This encapsulates the `COLUMNS = [...] as const` + `rows.map` +
  * `structuredData = { schema, <kind>: { columns, rows }, count, total, offset, limit }`
  * shape that was previously duplicated verbatim across memory.read,
- * task-read (search/list), standard-read, handoff.read, claim.manage and the
- * legacy handoff.manage list handlers.
+ * task-read (search/list), standard-read, handoff.read and claim.manage.
  *
  * Column names/order and row mapping are preserved as passed in; `count`
  * defaults to `rows.length`, matching the count semantics of every call site.

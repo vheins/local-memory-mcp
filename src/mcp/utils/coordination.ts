@@ -13,7 +13,7 @@ import { logger } from "./logger";
  * duplicated across `tools/claim.manage.ts` (the registered `claim-manage`
  * tool) and the legacy `tools/handoff.manage.ts`. OPT-FEAT-01 removed the
  * dashboard COORDINATION_TOOLS shim that depended on the legacy handlers;
- * OPT-CODE-02 will delete `handoff.manage.ts` entirely.
+ * OPT-CODE-02 deleted `handoff.manage.ts` entirely.
  *
  * Behavior contract:
  * - CLAIM auto-promotes a non-completed task to `in_progress` and writes an

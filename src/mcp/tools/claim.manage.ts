@@ -16,8 +16,8 @@ import { claimCoordinated, listClaimsTable, releaseClaim } from "../utils/coordi
  * All LIST modes support pagination (`limit`, `offset`) and `active_only` filter.
  *
  * The actual operations delegate to the shared coordination lifecycle
- * (utils/coordination.ts, OPT-DRY-02) — the single source of truth shared
- * with the legacy handoff.manage dashboard shim.
+ * (utils/coordination.ts, OPT-DRY-02) — the single source of truth for the
+ * claim domain (legacy handoff.manage.ts removed in OPT-CODE-02).
  */
 export async function handleClaimManage(args: unknown, storage: SQLiteStore) {
 	const validated = ClaimManageSchema.parse(args);

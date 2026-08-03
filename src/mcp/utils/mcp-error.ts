@@ -50,7 +50,7 @@ function toErrorMessage(err: unknown): string {
 /**
  * Centralized validation wrapper — replaces the per-tool
  * `schema.safeParse(args) -> custom message + manual isError` duplication
- * (task-read/index.ts, handoff.manage.ts) AND the raw `Schema.parse` throw
+ * (task-read/index.ts) AND the raw `Schema.parse` throw
  * (memory.read.ts).
  *
  * On failure it throws an `Error` whose message is the SAME friendly text the

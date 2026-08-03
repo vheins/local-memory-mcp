@@ -1,7 +1,6 @@
 /**
  * Shared helper: extract human-readable next-steps string from handoff context.
- * Used by handoff.write.ts and handoff.manage.ts — byte-identical to the
- * local copies they replace.
+ * Used by handoff.write.ts — byte-identical to the local copy it replaced.
  */
 export function extractNextSteps(context: Record<string, unknown> | undefined): string {
 	const steps = context?.next_steps;
