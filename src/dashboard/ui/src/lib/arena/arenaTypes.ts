@@ -66,7 +66,15 @@ export interface VisualAgent {
 	// ── Health & Status ───────────────────────────────────────────────────────
 	health: "healthy" | "degraded" | "critical" | "offline";
 	currentAction:
-		"thinking" | "coding" | "testing" | "reviewing" | "searching" | "memory-syncing" | "waiting" | "retrying" | "idle";
+		| "thinking"
+		| "coding"
+		| "testing"
+		| "reviewing"
+		| "searching"
+		| "memory-syncing"
+		| "waiting"
+		| "retrying"
+		| "idle";
 	currentTool: string;
 	confidence: number; // 0.0 - 1.0
 	progress: number; // 0.0 - 1.0 on current task

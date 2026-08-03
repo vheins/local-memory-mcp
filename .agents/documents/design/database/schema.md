@@ -1,6 +1,6 @@
 # Database Schema
 
-This document specifies the database schema used in the MCP Local Memory system. The implementation logic for these tables is modularly distributed across specialized entities in `src/mcp/entities/` (inheriting from `src/mcp/storage/base.ts`). Schema versioning is managed by `src/mcp/storage/migrations.ts` (current version: v2).
+This document specifies the database schema used in the MCP Local Memory system. The implementation logic for these tables is modularly distributed across specialized entities in `src/mcp/entities/` (inheriting from `src/mcp/storage/base.ts`). Schema versioning is managed by `src/mcp/storage/migrations/` (versioned index — `index.ts` + `vNN-*.ts`; current version: v16).
 
 ## Tables
 

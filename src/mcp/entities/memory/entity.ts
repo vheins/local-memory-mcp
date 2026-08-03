@@ -12,6 +12,7 @@ import { VALID_COLUMNS, mergeStructuredData } from "./validation";
 import { BULK_UPDATE_CHUNK_SIZE, TABLE_MEMORIES } from "../../utils/constants";
 import { buildFtsMatchQuery } from "../../utils/fts";
 import { buildUpdateClause } from "../../utils/sql-builder";
+import { chunksOf } from "../../utils/chunk";
 
 // JSON-serialized / int-coerced columns for the shared update-clause builder
 // (TASK-109). Tags and metadata are stored as JSON text; is_global as 0/1.
@@ -174,8 +175,7 @@ export class MemoryEntity extends BaseEntity {
 		// prepare cache and can stall the parser. Results are fused per-chunk;
 		// callers consume by-id (Set/Map lookup), so concatenation is safe.
 		const results: MemoryEntry[] = [];
-		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
-			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+		for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 			let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE id IN (${chunk.map(() => "?").join(",")})`;
 			const params: (string | number)[] = [...chunk];
 			if (options.type) {
@@ -201,8 +201,7 @@ export class MemoryEntity extends BaseEntity {
 		if (codes.length === 0) return [];
 		const byCode = new Map<string, MemoryEntry>();
 		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) — same rationale as getByIds.
-		for (let i = 0; i < codes.length; i += BULK_UPDATE_CHUNK_SIZE) {
-			const chunk = codes.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+		for (const chunk of chunksOf(codes, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
 			let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE code IN (${placeholders})`;
 			const params: (string | null)[] = [...chunk];
@@ -544,8 +543,7 @@ export class MemoryEntity extends BaseEntity {
 
 		return this.transaction(() => {
 			let count = 0;
-			for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
-				const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+			for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 				const result = this.run(
 					`UPDATE ${TABLE_MEMORIES} SET ${fields.join(", ")} WHERE id IN (${chunk.map(() => "?").join(",")})`,
 					[...values, ...chunk] as (string | number)[]
@@ -612,8 +610,7 @@ export class MemoryEntity extends BaseEntity {
 		if (!ids || ids.length === 0) return;
 		const now = new Date().toISOString();
 		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) — same rationale as getByIds.
-		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
-			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+		for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
 			this.run(
 				`UPDATE ${TABLE_MEMORIES} SET hit_count = hit_count + 1, last_used_at = ? WHERE id IN (${placeholders})`,

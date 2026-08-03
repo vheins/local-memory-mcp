@@ -20,15 +20,15 @@ import { buildTableResult, createMcpResponse } from "../utils/mcp-response";
 import { parseArgs } from "../utils/mcp-error";
 import { inferReadMode } from "../utils/auto-infer";
 import { logger } from "../utils/logger";
-import { UUID_REGEX } from "../utils/uuid";
 import { expandQuery } from "../utils/query-expander";
 import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
-import { fetchKgContext, fetchAggregatedKgContext } from "./kg-archivist/query";
+import { fetchAggregatedKgContext } from "./kg-archivist/query";
 import { MEMORY_SCORING } from "../utils/scoring";
 import { HybridSearchEngine } from "../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../utils/constants";
 import { renderGroupedSummary, enumOrderComparator } from "../utils/summary";
 import { FTS_CANDIDATE_CAP } from "../utils/fts";
+import { handleDetailMode } from "./memory-read/detail";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ export async function handleMemoryRead(params: unknown, db: SQLiteStore, vectors
 		case "search":
 			return handleSearch(validated, db, vectors);
 		case "detail":
-			return handleDetail(validated, db);
+			return handleDetailMode(validated, db);
 		default:
 			return handleRecap(validated, db);
 	}
@@ -321,104 +321,6 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	return createMcpResponse(structuredData, contentSummary, {
 		contentSummary,
 		structuredContentPathHint: "rows",
-		includeJson: params.json
-	});
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-function formatMemoryDetail(memory: MemoryEntry, showId?: boolean): string {
-	const lines: string[] = [`Code: ${memory.code || "-"}`];
-	if (showId) lines.push(`ID: ${memory.id}`);
-	lines.push(
-		`Title: ${memory.title}`,
-		`Type: ${memory.type}`,
-		`Importance: ${memory.importance}`,
-		`Status: ${memory.status}`,
-		`Tags: ${memory.tags.length > 0 ? memory.tags.join(", ") : "-"}`,
-		`Created: ${memory.created_at}`,
-		`Updated: ${memory.updated_at}`
-	);
-	if (memory.scope?.repo) lines.push(`Repo: ${memory.scope.repo}`);
-	if (memory.scope?.folder) lines.push(`Folder: ${memory.scope.folder}`);
-	if (memory.scope?.language) lines.push(`Language: ${memory.scope.language}`);
-	if (memory.content) lines.push("", "--- Content ---", memory.content);
-	return lines.join("\n");
-}
-
-function formatBulkDetail(memories: MemoryEntry[]): string {
-	const SEPARATOR = "━".repeat(44);
-	const parts = memories.map((m) => SEPARATOR + "\n" + formatMemoryDetail(m, true));
-	return `Bulk detail — ${memories.length} memories\n\n${parts.join("\n")}\n\nUse memory-read with id (or code) for full content.`;
-}
-
-// =====================================================================
-//  GET DETAIL MODE — single or bulk by id/code
-// =====================================================================
-
-async function handleDetail(params: MemoryReadParams, db: SQLiteStore): Promise<McpResponse> {
-	const { id, code, ids, codes, owner, repo } = params;
-
-	// Bulk detail via ids array
-	if (ids !== undefined && ids.length > 0) {
-		const memories = db.memories.getByIds(ids);
-		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given ids.";
-		const kgContext = fetchAggregatedKgContext(
-			db,
-			repo,
-			memories.map((m: MemoryEntry) => m.title),
-			"memory"
-		);
-		const data: Record<string, unknown> = { memories };
-		if (kgContext) data.kg = kgContext;
-		return createMcpResponse(data, contentSummary, {
-			contentSummary,
-			includeJson: params.json
-		});
-	}
-
-	// Bulk detail via codes array
-	if (codes !== undefined && codes.length > 0) {
-		const memories = db.memories.getMemoriesByCodes(codes, owner, repo);
-		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given codes.";
-		const kgContext = fetchAggregatedKgContext(
-			db,
-			repo,
-			memories.map((m: MemoryEntry) => m.title),
-			"memory"
-		);
-		const data: Record<string, unknown> = { memories };
-		if (kgContext) data.kg = kgContext;
-		return createMcpResponse(data, contentSummary, {
-			contentSummary,
-			includeJson: params.json
-		});
-	}
-
-	// Single detail by id or code. Branch on UUID shape so a code-addressed
-	// lookup runs EXACTLY one query (getById for ids, getByCode for codes) —
-	// the old `getById(id) ?? getByCode(id, ...)` burned two queries whenever
-	// a code was passed through `id` (OPT-FLOW-01). Mirrors the convention in
-	// task-read/detail.ts and standard-read/detail.ts.
-	let memory: MemoryEntry | null = null;
-	if (id) {
-		memory = UUID_REGEX.test(id) ? db.memories.getById(id) : db.memories.getByCode(id, owner, repo);
-	} else if (code) {
-		memory = db.memories.getByCode(code, owner, repo);
-	}
-
-	if (!memory) {
-		throw new Error(`Memory not found: ${id || code}`);
-	}
-
-	const content = formatMemoryDetail(memory);
-
-	const kgContext = fetchKgContext(db, repo, memory.title, "memory");
-	const data: Record<string, unknown> = { memory };
-	if (kgContext) data.kg = kgContext;
-
-	return createMcpResponse(data, content, {
-		contentSummary: content,
 		includeJson: params.json
 	});
 }

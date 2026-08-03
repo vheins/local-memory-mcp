@@ -26,4 +26,4 @@ We will use `better-sqlite3` as our core datastore, taking advantage of its sync
 - Database schema versioning via `_schema_version` table (current: v2).
 - Cross-process write locking via `proper-lockfile` (`WriteLock.withLock()`).
 - Default path: `./storage/memory.db` (configurable via `MEMORY_DB_PATH` env var).
-- Migrations managed by `src/mcp/storage/migrations.ts`.
+- Migrations managed by `src/mcp/storage/migrations/` (versioned index — `index.ts` + `vNN-*.ts`).

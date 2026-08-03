@@ -3,16 +3,17 @@
  *
  * Split out of `outbox.ts` so the outbox stays under the 500-line rule and
  * each file owns one concern:
- *   - `enqueue.ts` — snapshot payload builders, synchronous LWW enqueue
- *     (single upsert used by tool handlers inside `withWrite`), and the
- *     read-then-write startup backfill.
+ *   - `enqueue.ts` — snapshot payload builders, synchronous SELECT-dedup +
+ *     conditional-LWW-upsert enqueue (returns boolean: `false` = deduped
+ *     no-op, `true` = inserted/upserted) used by tool handlers inside
+ *     `withWrite`, and the read-then-write startup backfill.
  *   - `outbox.ts` — the `Outbox` worker-facing lifecycle (claim/complete/fail/
  *     reconcile/purge/count), delegating enqueue + backfill back here.
  *
- * All methods are synchronous (better-sqlite3) and cheap — enqueue is a single
- * upsert statement that runs inside the caller's write transaction, keeping
- * write-lock hold time at ~µs instead of the 150-500ms ONNX + compromise work
- * it replaces.
+ * All methods are synchronous (better-sqlite3) and cheap — enqueue performs a
+ * SELECT dedup check (content_hash comparison) then a conditional LWW upsert,
+ * both inside the caller's write transaction, keeping write-lock hold time at
+ * ~µs instead of the 150-500ms ONNX + compromise work it replaces.
  *
  * Write-lock policy (TASK-064 / MEM-475): worker/backfill writes stay OUTSIDE
  * the proper-lockfile write lock by design. The read-then-write backfill runs
@@ -85,7 +86,8 @@ export function taskJobPayload(task: Task): EmbeddingJobPayload {
 }
 
 // ---------------------------------------------------------------------------
-// Enqueue (single sync upsert — used by tool handlers inside withWrite)
+// Enqueue (SELECT-dedup + conditional LWW upsert — used by tool handlers
+// inside withWrite; returns false when deduped, true when inserted/upserted)
 // ---------------------------------------------------------------------------
 
 const ENQUEUE_SQL = `

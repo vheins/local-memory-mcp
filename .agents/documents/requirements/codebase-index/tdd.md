@@ -543,7 +543,7 @@ Full schema (DDL, indexes, migration code) is in `../../design/codebase-index/sc
 
 ### Migration Version
 
-Bump `SCHEMA_VERSION` from **2** to **3** in `src/mcp/storage/migrations.ts`.
+Bump `SCHEMA_VERSION` from **2** to **3** in `src/mcp/storage/migrations/index.ts`.
 
 ### Data Volume Estimates
 

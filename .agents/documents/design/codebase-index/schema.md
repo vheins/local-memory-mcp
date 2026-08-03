@@ -1,6 +1,6 @@
 # Codebase Index — Database Schema
 
-This document specifies the SQLite schema for the Codebase Index feature. These tables are added to the existing `memory.db` via migration version 3, managed by `MigrationManager` in `src/mcp/storage/migrations.ts`.
+This document specifies the SQLite schema for the Codebase Index feature. These tables are added to the existing `memory.db` via migration version 3, managed by `MigrationManager` in `src/mcp/storage/migrations/` (versioned index — `index.ts` + `vNN-*.ts`).
 
 ## 1. Entity-Relationship Diagram
 
@@ -275,7 +275,7 @@ CREATE INDEX IF NOT EXISTS idx_codebase_index_queue_project
 
 ### 4.1 Migration Version
 
-Version **3** in `MigrationManager`. Bump `SCHEMA_VERSION` from 2 to 3 in `src/mcp/storage/migrations.ts`.
+Version **3** in `MigrationManager`. Bump `SCHEMA_VERSION` from 2 to 3 in `src/mcp/storage/migrations/index.ts`.
 
 ### 4.2 Migration Implementation
 

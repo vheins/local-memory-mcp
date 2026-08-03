@@ -3,6 +3,7 @@ import { CodingStandardEntry, CodingStandardRow } from "../../types";
 import { sanitizeFtsTerm } from "../../utils/fts";
 import { computeVector, cosineSimilarity, createTfVectorCache } from "../../utils/vector";
 import { buildUpdateClause } from "../../utils/sql-builder";
+import { chunksOf } from "../../utils/chunk";
 import {
 	STANDARD_CONFLICT_THRESHOLD,
 	STANDARD_CONFLICT_CANDIDATES,
@@ -396,8 +397,7 @@ export class StandardEntity extends BaseEntity {
 		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) to bound the IN()-list width —
 		// same rationale as memory.entity.ts.getByIds.
 		const results: CodingStandardEntry[] = [];
-		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
-			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+		for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
 			const rows = this.all<CodingStandardRow>(`SELECT * FROM coding_standards WHERE id IN (${placeholders})`, chunk);
 			results.push(...rows.map((row) => this.rowToEntry(row)));
@@ -449,8 +449,7 @@ export class StandardEntity extends BaseEntity {
 		if (ids.length === 0) return;
 		const now = new Date().toISOString();
 		// Chunk at BULK_UPDATE_CHUNK_SIZE (500) — same rationale as getByIds.
-		for (let i = 0; i < ids.length; i += BULK_UPDATE_CHUNK_SIZE) {
-			const chunk = ids.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+		for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 			const placeholders = chunk.map(() => "?").join(",");
 			this.run(
 				`UPDATE coding_standards

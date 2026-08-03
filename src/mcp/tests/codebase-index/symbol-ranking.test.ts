@@ -7,11 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-	rankSymbols,
-	filterSymbols,
-	RankTier
-} from "../../codebase-index/services/symbol-ranking";
+import { rankSymbols, filterSymbols, RankTier } from "../../codebase-index/services/symbol-ranking";
 import type { CodebaseSymbol } from "../../types/codebase-symbol";
 
 // ── Minimal helpers ─────────────────────────────────────────────────────

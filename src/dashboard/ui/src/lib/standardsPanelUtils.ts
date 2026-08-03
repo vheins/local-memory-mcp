@@ -1,4 +1,3 @@
-
 /** Build pagination page numbers */
 export function buildPaginationPages(page: number, totalPages: number): number[] {
 	const start = Math.max(1, Math.min(page - 2, totalPages - 4));

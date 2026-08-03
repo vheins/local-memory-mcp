@@ -129,6 +129,12 @@ export class TaskEntity extends BaseEntity {
 			: null;
 	}
 
+	/**
+	 * Bulk fetch by ids. Loads full comment bodies for every task — the worker
+	 * existence check (embedding-queue/worker.ts loadExistingEntityIds) only
+	 * needs ids + status and discards them. A lean variant that skips the
+	 * comments join is possible if the API-surface cost ever justifies it.
+	 */
 	getTasksByIds(ids: string[]): Task[] {
 		if (ids.length === 0) return [];
 		const placeholders = ids.map(() => "?").join(",");
@@ -400,9 +406,9 @@ export class TaskEntity extends BaseEntity {
 	 * entities are orphan-swept, so keeping children linked would let any
 	 * future writer re-derive `depends_on` relations from a document whose
 	 * entity rows no longer exist (TASK-065 / MEM-473). The embedding
-	 * worker's `entityExists` guard (worker.ts) already skips canceled tasks,
-	 * but stale enqueued snapshots still carry the parentId — detaching here
-	 * makes the skip unconditional.
+	 * worker's `loadExistingEntityIds` guard (worker.ts) already skips canceled
+	 * tasks via the batched IN(...) existence check; detaching children here
+	 * makes the skip unconditional even for stale enqueued snapshots.
 	 * Returns the number of children detached.
 	 */
 	clearChildrenParent(parentId: string): number {

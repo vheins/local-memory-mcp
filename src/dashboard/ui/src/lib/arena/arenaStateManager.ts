@@ -1,13 +1,6 @@
 import { writable, type Writable } from "svelte/store";
 import type { VisualAgent, VisualTask, VisualRepository, ArenaScene } from "./arenaTypes";
-import type {
-	DomainEvent,
-	ArenaState,
-	ArenaPatch,
-	ZoneAggregate,
-	FilterState,
-	EventLogEntry
-} from "./arenaEvents";
+import type { DomainEvent, ArenaState, ArenaPatch, ZoneAggregate, FilterState, EventLogEntry } from "./arenaEvents";
 import {
 	buildAgentConnectedPatch,
 	buildAgentDisconnectedPatch,

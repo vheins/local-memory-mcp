@@ -728,4 +728,238 @@ describe("Dashboard Controllers", () => {
 			expect(withWriteSpy).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	// ── Bulk actions API (OPT-FEAT-04 / STR-01 coverage) ────────────────────
+	// Zero-test-coverage bulk paths: POST /api/tasks/action and
+	// POST /api/standards/action. The compound delete/update bodies route
+	// through the EXCLUSIVE write path (withExclusiveWrite) — passthrough-spied
+	// exactly like the Write-lock scope describe above so parallel forks don't
+	// contend on the real proper-lockfile target.
+
+	describe("Bulk actions API (OPT-FEAT-04 / STR-01)", () => {
+		let exclusiveSpy: ReturnType<typeof vi.spyOn>;
+
+		const seedTask = (overrides: Record<string, unknown> = {}) => {
+			const now = new Date().toISOString();
+			const id = randomUUID();
+			db.tasks.insertTask({
+				id,
+				owner: "test-owner",
+				repo: "bulk-test-repo",
+				task_code: `T-BULK-${id.slice(0, 8)}`,
+				phase: "test",
+				title: "bulk action target",
+				description: null,
+				status: "pending",
+				priority: 3,
+				agent: "",
+				role: "",
+				doc_path: null,
+				created_at: now,
+				updated_at: now,
+				in_progress_at: null,
+				finished_at: null,
+				canceled_at: null,
+				est_tokens: 0,
+				commit_id: null,
+				changed_files: [],
+				tags: [],
+				suggested_skills: [],
+				metadata: {},
+				parent_id: null,
+				depends_on: null,
+				...overrides
+			} as never);
+			return id;
+		};
+
+		const seedStandard = (overrides: Record<string, unknown> = {}) => {
+			const now = new Date().toISOString();
+			const id = randomUUID();
+			db.standards.insert({
+				id,
+				title: "Bulk standard",
+				content: "bulk standard body",
+				parent_id: null,
+				context: "general",
+				version: "1.0.0",
+				language: null,
+				stack: [],
+				is_global: false,
+				owner: "test-owner",
+				repo: "bulk-test-repo",
+				tags: ["bulk"],
+				metadata: {},
+				created_at: now,
+				updated_at: now,
+				hit_count: 0,
+				last_used_at: null,
+				agent: "test",
+				model: "test",
+				...overrides
+			} as never);
+			return id;
+		};
+
+		const postAction = (path: string, attributes: Record<string, unknown>) =>
+			fetch(`${baseUrl}${path}`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ data: { type: "action", attributes } })
+			});
+
+		beforeEach(async () => {
+			exclusiveSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
+			const { mcpClient } = await import("../../dashboard/lib/context");
+			(mcpClient.callTool as ReturnType<typeof vi.fn>).mockClear();
+		});
+
+		afterEach(() => {
+			exclusiveSpy.mockRestore();
+		});
+
+		describe("POST /api/tasks/action", () => {
+			it("delete soft-cancels existing tasks (status → canceled) and returns count", async () => {
+				const id = seedTask();
+
+				const res = await postAction("/api/tasks/action", { action: "delete", ids: [id] });
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.data.attributes.count).toBe(1);
+
+				// Soft-cancel contract (OPT-DRY-03): the row survives with
+				// status canceled — not a hard delete.
+				const task = db.tasks.getTaskById(id);
+				expect(task).not.toBeNull();
+				expect(task?.status).toBe("canceled");
+			});
+
+			it("delete with phantom ids returns count 0 and cancels nothing", async () => {
+				const res = await postAction("/api/tasks/action", {
+					action: "delete",
+					ids: [randomUUID()]
+				});
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.data.attributes.count).toBe(0);
+			});
+
+			it("status/update routes each id through mcpClient.callTool('task-update', …)", async () => {
+				const id1 = seedTask();
+				const id2 = seedTask();
+				const { mcpClient } = await import("../../dashboard/lib/context");
+
+				const res = await postAction("/api/tasks/action", {
+					action: "status",
+					ids: [id1, id2],
+					updates: { status: "completed" }
+				});
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.data.attributes.count).toBe(2);
+
+				// The dashboard delegates task mutations to the MCP client —
+				// assert the mocked callTool got the right tool + per-id args.
+				expect(mcpClient.callTool).toHaveBeenCalledTimes(2);
+				expect(mcpClient.callTool).toHaveBeenCalledWith(
+					"task-update",
+					expect.objectContaining({ id: id1, status: "completed", agent: "dashboard", structured: true })
+				);
+				expect(mcpClient.callTool).toHaveBeenCalledWith(
+					"task-update",
+					expect.objectContaining({ id: id2, status: "completed", agent: "dashboard", structured: true })
+				);
+			});
+
+			it("update with no updates payload → 400", async () => {
+				const id = seedTask();
+
+				const res = await postAction("/api/tasks/action", { action: "update", ids: [id] });
+				expect(res.status).toBe(400);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/updates/i);
+			});
+
+			it("invalid action → 400", async () => {
+				const res = await postAction("/api/tasks/action", {
+					action: "explode",
+					ids: [randomUUID()]
+				});
+				expect(res.status).toBe(400);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/invalid action/i);
+			});
+
+			it("non-array ids → 400", async () => {
+				const res = await postAction("/api/tasks/action", {
+					action: "delete",
+					ids: "not-an-array"
+				});
+				expect(res.status).toBe(400);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/ids/i);
+			});
+
+			it("status with all-unknown ids → 422", async () => {
+				const res = await postAction("/api/tasks/action", {
+					action: "status",
+					ids: [randomUUID(), randomUUID()],
+					updates: { status: "completed" }
+				});
+				expect(res.status).toBe(422);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/all tasks failed/i);
+			});
+		});
+
+		describe("POST /api/standards/action", () => {
+			it("delete hard-deletes standards (getById → null)", async () => {
+				const id = seedStandard();
+
+				const res = await postAction("/api/standards/action", { action: "delete", ids: [id] });
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.data.attributes.count).toBe(1);
+
+				// Hard-delete contract: the row is gone, not soft-marked.
+				expect(db.standards.getById(id)).toBeNull();
+			});
+
+			it("update applies bulkUpdateStandards — field actually changed", async () => {
+				const id = seedStandard();
+
+				const res = await postAction("/api/standards/action", {
+					action: "update",
+					ids: [id],
+					updates: { title: "Renamed bulk standard" }
+				});
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.data.attributes.count).toBe(1);
+
+				const updated = db.standards.getById(id);
+				expect(updated?.title).toBe("Renamed bulk standard");
+			});
+
+			it("invalid action → 400", async () => {
+				const res = await postAction("/api/standards/action", {
+					action: "explode",
+					ids: [randomUUID()]
+				});
+				expect(res.status).toBe(400);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/invalid action/i);
+			});
+
+			it("non-array ids → 400", async () => {
+				const res = await postAction("/api/standards/action", {
+					action: "delete",
+					ids: "not-an-array"
+				});
+				expect(res.status).toBe(400);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/ids/i);
+			});
+		});
+	});
 });

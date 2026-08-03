@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
@@ -191,14 +191,25 @@ describe("MCP Local Memory - Detail Tools (memory-read, standard-read, task-read
 		const memoryId = storeRes.structuredContent.id;
 		const memoryCode = storeRes.structuredContent.code;
 
+		// A code routed through `id` must resolve via getByCode with EXACTLY one
+		// query — the UUID-shape branch (OPT-FLOW-01) must not also hit getById.
+		const getByCodeSpy = vi.spyOn(db.memories, "getByCode");
+		const getByIdSpy = vi.spyOn(db.memories, "getById");
+
 		const detailRes = await router("tools/call", {
 			name: "memory-read",
-			arguments: { code: memoryCode, owner: "test", repo: REPO }
+			arguments: { id: memoryCode, owner: "test", repo: REPO }
 		});
 
 		expect(detailRes.structuredContent.memory.id).toBe(memoryId);
 		expect(detailRes.structuredContent.memory.code).toBe(memoryCode);
 		expect(detailRes.structuredContent.memory.title).toBe("Test Memory By Code");
+		expect(getByCodeSpy).toHaveBeenCalledTimes(1);
+		expect(getByCodeSpy).toHaveBeenCalledWith(memoryCode, "test", REPO);
+		expect(getByIdSpy).not.toHaveBeenCalled();
+
+		getByCodeSpy.mockRestore();
+		getByIdSpy.mockRestore();
 	});
 
 	it("should fetch standard details by code passed as id", async () => {

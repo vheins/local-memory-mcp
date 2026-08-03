@@ -15,13 +15,7 @@ import {
 	drawFilingCabinet,
 	drawFlowerVase
 } from "./furniture";
-import {
-	drawReceptionDesk,
-	drawWhiteboard,
-	drawCeilingLamp,
-	drawPowerStrip,
-	drawWaterDispenser
-} from "./office";
+import { drawReceptionDesk, drawWhiteboard, drawCeilingLamp, drawPowerStrip, drawWaterDispenser } from "./office";
 import { drawHazardSign, drawMedicalCross } from "./props";
 
 // ── Cooldown ring ─────────────────────────────────────────────────────────

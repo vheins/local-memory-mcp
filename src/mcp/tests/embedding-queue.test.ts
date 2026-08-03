@@ -928,4 +928,63 @@ describe("OPT-FLOW-03 — content-hash dedup", () => {
 			expect(getJob(db, "memory", memory.id)!.content_hash).toBe(embedPayloadContentHash(changed));
 		});
 	});
+
+	describe("7. array-hash order-sensitivity (TASK-177 review NIT)", () => {
+		it("positive: re-enqueue with reordered decisionRefs returns true + new content_hash", () => {
+			const original = makeTask({
+				metadata: { decision_refs: ["A", "B"] as string[] }
+			});
+			db.tasks.insertTask(original);
+			const firstPayload = taskJobPayload(original);
+
+			// First enqueue inserts the row.
+			expect(
+				outbox.enqueue({
+					kind: "task",
+					id: original.id,
+					repo: original.repo,
+					owner: original.owner,
+					payload: firstPayload
+				})
+			).toBe(true);
+			const firstHash = getJob(db, "task", original.id)!.content_hash;
+			expect(firstHash).toBe(embedPayloadContentHash(firstPayload));
+
+			// Same entity, reordered decisionRefs → different hash → LWW reset.
+			const reordered = { ...original, metadata: { decision_refs: ["B", "A"] as string[] } };
+			const secondPayload = taskJobPayload(reordered);
+			expect(embedPayloadContentHash(secondPayload)).not.toBe(embedPayloadContentHash(firstPayload));
+
+			expect(
+				outbox.enqueue({
+					kind: "task",
+					id: original.id,
+					repo: original.repo,
+					owner: original.owner,
+					payload: secondPayload
+				})
+			).toBe(true);
+			const secondHash = getJob(db, "task", original.id)!.content_hash;
+			expect(secondHash).toBe(embedPayloadContentHash(secondPayload));
+			expect(secondHash).not.toBe(firstHash);
+		});
+
+		it("negative: identical order preserves dedup (false, row untouched)", () => {
+			const task = makeTask({
+				metadata: { decision_refs: ["X", "Y", "Z"] as string[] }
+			});
+			db.tasks.insertTask(task);
+			const payload = taskJobPayload(task);
+
+			expect(outbox.enqueue({ kind: "task", id: task.id, repo: task.repo, owner: task.owner, payload })).toBe(true);
+			const firstHash = getJob(db, "task", task.id)!.content_hash;
+
+			// Re-enqueue with IDENTICAL decisionRefs order → deduped.
+			expect(outbox.enqueue({ kind: "task", id: task.id, repo: task.repo, owner: task.owner, payload })).toBe(false);
+			const row = getJob(db, "task", task.id)!;
+			expect(row.content_hash).toBe(firstHash);
+			expect(row.status).toBe("pending");
+			expect(row.attempts).toBe(0);
+		});
+	});
 });

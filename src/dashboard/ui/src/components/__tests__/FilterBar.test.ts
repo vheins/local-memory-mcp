@@ -15,30 +15,30 @@ vi.mock("../../lib/arena/arenaStateManager", () => ({
 							roles: [],
 							priorities: [],
 							statuses: [],
-							search: "",
-						},
-					},
+							search: ""
+						}
+					}
 				});
 				return () => {};
-			},
+			}
 		}),
-		setFilter: vi.fn(),
-	},
+		setFilter: vi.fn()
+	}
 }));
 
 // Mock sub-component — must be a callable function for Svelte 5
 vi.mock("../FilterMenu.svelte", () => ({
-	default: () => ({}),
+	default: () => ({})
 }));
 
 // Mock Icon — must be a callable function for Svelte 5
 vi.mock("../../lib/Icon.svelte", () => ({
-	default: () => ({}),
+	default: () => ({})
 }));
 
 // Mock filterBarUtils
 vi.mock("../../lib/filterBarUtils", () => ({
-	computeActiveCount: () => 0,
+	computeActiveCount: () => 0
 }));
 
 describe("FilterBar", () => {

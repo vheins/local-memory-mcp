@@ -8,28 +8,28 @@ vi.mock("../../lib/stores", () => ({
 		subscribe: (fn: any) => {
 			fn("test/repo");
 			return () => {};
-		},
+		}
 	},
 	recentActions: {
 		set: vi.fn(),
 		subscribe: (fn: any) => {
 			fn([]);
 			return () => {};
-		},
+		}
 	},
 	recentActionsPage: {
 		set: vi.fn(),
 		subscribe: (fn: any) => {
 			fn(1);
 			return () => {};
-		},
+		}
 	},
 	recentActionsTotalItems: {
 		subscribe: (fn: any) => {
 			fn(0);
 			return () => {};
-		},
-	},
+		}
+	}
 }));
 
 vi.mock("../../lib/api", () => ({ api: {} }));
@@ -44,19 +44,19 @@ vi.mock("../../lib/composables/useRecentActions", () => ({
 			subscribe: (fn: any) => {
 				fn([]);
 				return () => {};
-			},
+			}
 		},
 		recentActions: {
 			subscribe: (fn: any) => {
 				fn([]);
 				return () => {};
-			},
+			}
 		},
 		recentActionsPage: {
 			subscribe: (fn: any) => {
 				fn(1);
 				return () => {};
-			},
+			}
 		},
 		isLoadingMore: false,
 		scrollToBottom: () => {},
@@ -64,14 +64,14 @@ vi.mock("../../lib/composables/useRecentActions", () => ({
 		getConfig: () => ({ icon: "", label: "", color: "", bgAlpha: 0 }),
 		parseResponse: () => ({ text: "", isLong: false }),
 		toggleExpand: () => {},
-		expandedResponses: { has: () => false },
-	}),
+		expandedResponses: { has: () => false }
+	})
 }));
 
 vi.mock("../../lib/utils", () => ({ createChatTask: vi.fn() }));
 vi.mock("../../lib/chatUtils", () => ({
 	loadPage: vi.fn(),
-	sendChatMessage: vi.fn(),
+	sendChatMessage: vi.fn()
 }));
 vi.mock("../../lib/Icon.svelte", () => ({ default: () => ({}) }));
 

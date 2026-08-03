@@ -34,6 +34,8 @@ import { SQLiteStore } from "../storage/sqlite";
 import { MEMORY_STATUS_ARCHIVED } from "../types";
 import { observationText, type KgObservationDomain } from "../tools/kg-archivist/observation-text";
 import { logger } from "./logger";
+import { chunksOf } from "./chunk";
+import { BULK_UPDATE_CHUNK_SIZE } from "./constants";
 
 export type PurgeEntityKind = KgObservationDomain;
 
@@ -65,14 +67,13 @@ const KIND_PLURALS: Record<PurgeEntityKind, string> = {
 };
 
 /**
- * Bound on the number of ids bound into a single `IN (...)` statement. SQLite
- * caps bound variables (~999 default, 32766 with SQLITE_MAX_VARIABLE_NUMBER);
- * a select-all bulk delete can exceed that and abort the whole transaction
- * with "too many SQL variables" (TASK-139). The pre-helper bulkDelete* methods
- * chunked at 500 — kept here so the queue purge stays single-statement-safe
- * for any batch size.
+ * The queue purge shares the 500-chunk invariant with the entity bulk paths
+ * (OPT-PERF-11): a single un-chunked `IN (...)` over the whole batch would
+ * exceed SQLite's bound-variable limit (~999 default, 32766 with
+ * SQLITE_MAX_VARIABLE_NUMBER) and abort the transaction with "too many SQL
+ * variables" (TASK-139). The chunking now goes through the shared `chunksOf`
+ * helper with BULK_UPDATE_CHUNK_SIZE as the single home of that bound.
  */
-const QUEUE_PURGE_CHUNK_SIZE = 500;
 
 /**
  * Runs the full delete contract for a batch of entities of one kind:
@@ -140,11 +141,11 @@ export function purgeEntityAndCleanup(
 
 			// Purge pending embedding-queue jobs so a stale job can never
 			// re-embed the vector / re-run KG extraction for a deleted entity.
-			// Chunked at QUEUE_PURGE_CHUNK_SIZE — a single un-chunked IN(...)
+			// Chunked at BULK_UPDATE_CHUNK_SIZE via the shared chunksOf helper —
+			// a single un-chunked IN(...)
 			// over the whole batch would exceed SQLite's bound-variable limit on
 			// select-all bulk deletes and abort the transaction (TASK-139).
-			for (let i = 0; i < items.length; i += QUEUE_PURGE_CHUNK_SIZE) {
-				const chunk = items.slice(i, i + QUEUE_PURGE_CHUNK_SIZE);
+			for (const chunk of chunksOf(items, BULK_UPDATE_CHUNK_SIZE)) {
 				const placeholders = chunk.map(() => "?").join(",");
 				db.db
 					.prepare(`DELETE FROM queue_jobs WHERE entity_kind = ? AND entity_id IN (${placeholders})`)

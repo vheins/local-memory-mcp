@@ -6,8 +6,8 @@ import CodebaseSearchBar from "../CodebaseSearchBar.svelte";
 // Mock the API module to prevent actual network calls
 vi.mock("../../lib/api", () => ({
 	api: {
-		codebaseSearch: vi.fn().mockResolvedValue({ results: [] }),
-	},
+		codebaseSearch: vi.fn().mockResolvedValue({ results: [] })
+	}
 }));
 
 describe("CodebaseSearchBar", () => {
@@ -20,7 +20,7 @@ describe("CodebaseSearchBar", () => {
 		const target = document.createElement("div");
 		const component = mount(CodebaseSearchBar, {
 			target,
-			props: { repo: "", onSymbolSelect: () => {} },
+			props: { repo: "", onSymbolSelect: () => {} }
 		});
 		expect(target.querySelector(".search-bar-container")).not.toBeNull();
 		expect(target.querySelector(".search-input")).not.toBeNull();

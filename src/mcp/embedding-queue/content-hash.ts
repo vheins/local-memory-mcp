@@ -21,6 +21,15 @@
  * observability metadata, not embed/KG-relevant content, so a touch update
  * that bumps `updated_at` without touching content still dedups.
  *
+ * Known trade-off of excluding `repo`: `repo` is a KG-scoping input, and
+ * standard-write permits a repo mutation with an otherwise-unchanged content
+ * field set. In that narrow window (repo change + no content/relation-field
+ * change), dedup skips re-KG-extraction under the new repo. This is accepted
+ * and NOT a regression: the pre-hash path never enqueued a repo-only change
+ * either, so the entity was never re-scoped on repo-only mutation. Only a
+ * content-related field change triggers re-scoping, which is the intended
+ * behavior.
+ *
  * Stability: optional fields are normalized to `null` (JSON.stringify omits
  * `undefined` keys, which would otherwise make `undefined` vs `null` hash
  * differently across enqueue sites); arrays are hashed as-is (not sorted) so
