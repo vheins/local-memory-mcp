@@ -240,19 +240,40 @@ export class EmbeddingWorker {
 		this.stats.lastBatchSize = jobs.length;
 		if (jobs.length === 0) return 0;
 
-		const resolved: { job: QueueJobRow; payload: EmbeddingJobPayload }[] = [];
+		// Phase 1 — parse payloads in memory (no DB reads). Unparseable jobs
+		// are completed as no-ops, matching the pre-batch behavior.
+		const parsed: { job: QueueJobRow; payload: EmbeddingJobPayload }[] = [];
 		for (const job of jobs) {
 			const payload = this.parsePayload(job);
-			if (!payload || !this.entityExists(job.entity_kind, job.entity_id)) {
-				// Unparseable payload or entity deleted — nothing to enrich.
-				// Complete bound to OUR batch token: if the lease expired and
-				// another worker re-claimed the row, this no-ops and that
-				// worker keeps processing it.
+			if (!payload) {
+				// Unparseable payload — nothing to enrich. Complete bound to
+				// OUR batch token: if the lease expired and another worker
+				// re-claimed the row, this no-ops and that worker keeps
+				// processing it.
 				this.outbox.complete(job.id, job.locked_by ?? "");
 				this.stats.failed++;
 				continue;
 			}
-			resolved.push({ job, payload });
+			parsed.push({ job, payload });
+		}
+
+		// Phase 2 — batch entity-existence check (OPT-PERF-03): one IN(...)
+		// read per entity kind for the whole claimed batch instead of one
+		// getById/getTaskById per job (~32 reads → ~3 reads). A job whose
+		// entity no longer exists is skipped exactly as before: completed as
+		// a no-op (complete() is token-bound, so a re-claimed row no-ops) and
+		// counted as failed.
+		const resolved: { job: QueueJobRow; payload: EmbeddingJobPayload }[] = [];
+		if (parsed.length > 0) {
+			const existingById = this.loadExistingEntityIds(parsed);
+			for (const item of parsed) {
+				if (!existingById.get(item.job.entity_kind)?.has(item.job.entity_id)) {
+					this.outbox.complete(item.job.id, item.job.locked_by ?? "");
+					this.stats.failed++;
+					continue;
+				}
+				resolved.push(item);
+			}
 		}
 
 		if (resolved.length > 0) {
@@ -301,15 +322,47 @@ export class EmbeddingWorker {
 		}
 	}
 
-	private entityExists(kind: QueueJobKind, id: string): boolean {
-		if (kind === "memory") return this.store.memories.getById(id) !== null;
-		if (kind === "standard") return this.store.standards.getById(id) !== null;
-		// Soft-deleted tasks (status = 'canceled') are treated as non-existent:
-		// the job is completed as a no-op so a stale pending job can never
-		// re-embed the vector or re-run KG extraction for a deleted task
-		// (TASK-042 / MEM-427).
-		const task = this.store.tasks.getTaskById(id);
-		return task !== null && task.status !== "canceled";
+	/**
+	 * Batch entity-existence check (OPT-PERF-03). One IN(...) DB read per
+	 * entity kind present in the claimed batch replaces the per-job
+	 * getById/getTaskById round-trips (K=32 reads → ≤3 reads). Returns a
+	 * per-kind Set of entity ids that still exist; soft-deleted (canceled)
+	 * tasks are excluded exactly as the per-job check did — a stale pending
+	 * job can never re-embed the vector or re-run KG extraction for a deleted
+	 * task (TASK-042 / MEM-427).
+	 */
+	private loadExistingEntityIds(items: ReadonlyArray<{ job: QueueJobRow }>): Map<QueueJobKind, Set<string>> {
+		const idsByKind = new Map<QueueJobKind, string[]>();
+		for (const { job } of items) {
+			const ids = idsByKind.get(job.entity_kind);
+			if (ids) {
+				ids.push(job.entity_id);
+			} else {
+				idsByKind.set(job.entity_kind, [job.entity_id]);
+			}
+		}
+
+		const existing = new Map<QueueJobKind, Set<string>>();
+		for (const [kind, ids] of idsByKind) {
+			if (kind === "memory") {
+				existing.set(kind, new Set(this.store.memories.getByIds(ids).map((m) => m.id)));
+			} else if (kind === "standard") {
+				existing.set(kind, new Set(this.store.standards.getByIds(ids).map((s) => s.id)));
+			} else {
+				// Soft-deleted tasks (status = 'canceled') are treated as
+				// non-existent: the job is completed as a no-op (TASK-042).
+				existing.set(
+					kind,
+					new Set(
+						this.store.tasks
+							.getTasksByIds(ids)
+							.filter((t) => t.status !== "canceled")
+							.map((t) => t.id)
+					)
+				);
+			}
+		}
+		return existing;
 	}
 
 	/**
