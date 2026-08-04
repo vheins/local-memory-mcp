@@ -44,7 +44,7 @@
 		loading = true;
 		error = "";
 		try {
-			const params: Record<string, unknown> = { repo, pageSize: 50 };
+			const params: { repo: string; pageSize: number; status?: string; to_agent?: string } = { repo, pageSize: 50 };
 			if (status) params.status = status;
 			if (agentFilter.trim()) params.to_agent = agentFilter.trim();
 			const result = await api.coordinationHandoffs(params);
