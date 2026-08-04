@@ -1076,6 +1076,23 @@ describe("Dashboard Controllers", () => {
 				expect(task?.status).toBe("canceled");
 			});
 
+			it("canceled tasks are excluded from the default list unless ?status=canceled (TASK-209)", async () => {
+				const repo = "task-read-repo";
+				const id = seedTask({ repo, owner: "test-owner", status: "canceled" });
+
+				// Default list hides canceled (soft-deleted) tasks…
+				const list = await fetch(`${baseUrl}/api/tasks?repo=${repo}`);
+				expect(list.status).toBe(200);
+				const listBody = (await list.json()) as Record<string, any>;
+				expect((listBody.data as Array<{ id: string }>).map((d) => d.id)).not.toContain(id);
+
+				// …but an explicit ?status=canceled filter still returns them.
+				const listCanceled = await fetch(`${baseUrl}/api/tasks?repo=${repo}&status=canceled`);
+				expect(listCanceled.status).toBe(200);
+				const canceledBody = (await listCanceled.json()) as Record<string, any>;
+				expect((canceledBody.data as Array<{ id: string }>).map((d) => d.id)).toContain(id);
+			});
+
 			it("delete with phantom ids returns count 0 and cancels nothing", async () => {
 				const res = await postAction("/api/tasks/action", {
 					action: "delete",
@@ -1201,6 +1218,83 @@ describe("Dashboard Controllers", () => {
 				expect(res.status).toBe(400);
 				const body = (await res.json()) as Record<string, any>;
 				expect(body.errors[0].detail).toMatch(/ids/i);
+			});
+		});
+
+		describe("POST /api/memories/action + single delete — soft-archive reads (TASK-207/209)", () => {
+			const seedMemory = async (repo: string, overrides: Record<string, unknown> = {}) => {
+				const created = await fetch(`${baseUrl}/api/memories`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						data: {
+							type: "memory",
+							attributes: {
+								repo,
+								type: "code_fact",
+								title: "soft-archive read target",
+								content: "must disappear from default dashboard reads after delete",
+								importance: 3,
+								...overrides
+							}
+						}
+					})
+				});
+				expect(created.status).toBe(200);
+				const body = (await created.json()) as Record<string, any>;
+				return body.data.id as string;
+			};
+
+			const listIds = async (url: string): Promise<string[]> => {
+				const res = await fetch(url);
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				return (body.data as Array<{ id: string }>).map((d) => d.id);
+			};
+
+			it("DELETE /api/memories/:id archives, then GET returns 404 unless includeArchived=true", async () => {
+				const repo = "soft-delete-read-repo";
+				const id = await seedMemory(repo);
+
+				const del = await fetch(`${baseUrl}/api/memories/${id}`, { method: "DELETE" });
+				expect(del.status).toBe(200);
+
+				// Soft-archive contract (TASK-207): the row survives with
+				// status archived — not a hard delete.
+				const stored = db.memories.getById(id);
+				expect(stored).not.toBeNull();
+				expect(stored?.status).toBe("archived");
+
+				// TASK-209 regression: the previously-returned 200 is now 404
+				// by default (matches the pre-soft-delete hard-delete behavior).
+				const get = await fetch(`${baseUrl}/api/memories/${id}`);
+				expect(get.status).toBe(404);
+
+				// Still restorable: explicit includeArchived=true serves it.
+				const getArchived = await fetch(`${baseUrl}/api/memories/${id}?includeArchived=true`);
+				expect(getArchived.status).toBe(200);
+				const archivedBody = (await getArchived.json()) as Record<string, any>;
+				expect(archivedBody.data.id).toBe(id);
+
+				// List excludes archived by default…
+				expect(await listIds(`${baseUrl}/api/memories?repo=${repo}`)).not.toContain(id);
+				// …and includeArchived=true brings it back.
+				expect(await listIds(`${baseUrl}/api/memories?repo=${repo}&includeArchived=true`)).toContain(id);
+			});
+
+			it("bulk delete soft-archives and hides from reads; includeArchived=true restores", async () => {
+				const repo = "soft-delete-bulk-repo";
+				const id = await seedMemory(repo);
+
+				const res = await postAction("/api/memories/action", { action: "delete", ids: [id] });
+				expect(res.status).toBe(200);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.data.attributes.count).toBe(1);
+
+				expect(db.memories.getById(id)?.status).toBe("archived");
+				expect((await fetch(`${baseUrl}/api/memories/${id}`)).status).toBe(404);
+				expect(await listIds(`${baseUrl}/api/memories?repo=${repo}`)).not.toContain(id);
+				expect(await listIds(`${baseUrl}/api/memories?repo=${repo}&includeArchived=true`)).toContain(id);
 			});
 		});
 	});
