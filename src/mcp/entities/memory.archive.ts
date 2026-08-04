@@ -1,5 +1,6 @@
 import { BaseEntity } from "../storage/base";
-import { TABLE_MEMORIES } from "../utils/constants";
+import { BULK_UPDATE_CHUNK_SIZE, TABLE_MEMORIES } from "../utils/constants";
+import { chunksOf } from "../utils/chunk";
 import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 
 export class MemoryArchiveEntity extends BaseEntity {
@@ -8,9 +9,7 @@ export class MemoryArchiveEntity extends BaseEntity {
 
 		return this.transaction(() => {
 			let count = 0;
-			const chunkSize = 500;
-			for (let i = 0; i < ids.length; i += chunkSize) {
-				const chunk = ids.slice(i, i + chunkSize);
+			for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 				const result = this.run(`DELETE FROM ${TABLE_MEMORIES} WHERE id IN (${chunk.map(() => "?").join(",")})`, chunk);
 				count += result.changes;
 			}

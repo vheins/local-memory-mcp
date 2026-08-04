@@ -98,9 +98,7 @@ export class StandardEntity extends BaseEntity {
 
 		return this.transaction(() => {
 			let count = 0;
-			const chunkSize = 500;
-			for (let i = 0; i < ids.length; i += chunkSize) {
-				const chunk = ids.slice(i, i + chunkSize);
+			for (const chunk of chunksOf(ids, BULK_UPDATE_CHUNK_SIZE)) {
 				const placeholders = chunk.map(() => "?").join(",");
 				const result = this.run(`UPDATE coding_standards SET ${fields.join(", ")} WHERE id IN (${placeholders})`, [
 					...values,
