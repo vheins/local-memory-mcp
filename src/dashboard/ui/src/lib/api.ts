@@ -373,12 +373,13 @@ export const api = {
 
 	// ─── Knowledge Graph ──────────────────────────────────────────────────────
 
-	kgGraph: (repo: string, params?: { page?: number; pageSize?: number }) => {
+	kgGraph: (repo: string, params?: { page?: number; pageSize?: number; signal?: AbortSignal }) => {
 		const q = new URLSearchParams({ repo });
 		if (params?.page) q.set("page", String(params.page));
 		if (params?.pageSize) q.set("pageSize", String(params.pageSize));
 		return apiFetch<{ nodes: KGNode[]; edges: KGEdge[]; truncated: boolean; pagination: Pagination }>(
-			`/api/kg/graph?${q}`
+			`/api/kg/graph?${q}`,
+			params?.signal ? { signal: params.signal } : undefined
 		);
 	},
 

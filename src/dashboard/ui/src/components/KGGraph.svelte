@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { untrack } from "svelte";
-	import { get } from "svelte/store";
 	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import { onMount, onDestroy } from "svelte";
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
 	import { kgPage, kgPageSize, kgTotalItems, kgTotalPages } from "$lib/stores";
+	import { createGraphLoader } from "$lib/kg/graphLoader";
+	import { stopNeuralAnimation } from "$lib/kg/KGNeuralRenderer";
 	import { initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import { handleGraphKeyDown } from "$lib/kg/kgKeyboardShortcuts";
@@ -116,55 +117,38 @@
 		return lookup;
 	}
 
-	// ─── Load graph data ────────────────────────────────────────────────────────
-	async function loadGraph(forceReload = false) {
-		if (!repo) return;
-		const requestedRepo = repo;
-		if (!forceReload && loadedRepo === requestedRepo && layoutNodes.length > 0) return;
-		isLoading = true;
-		errorMsg = "";
-		clearGraph();
-		try {
-			const page = get(kgPage);
-			const pageSize = get(kgPageSize);
-			const data = await api.kgGraph(requestedRepo, { page, pageSize });
-			if (repo !== requestedRepo) return;
-			nodes = data.nodes || [];
-			edges = data.edges || [];
-			truncated = data.truncated ?? false;
-			if (data.pagination) {
-				kgTotalItems.set(data.pagination.totalItems);
-			}
-			// eslint-disable-next-line svelte/infinite-reactive-loop -- load result is guarded by requestedRepo snapshot.
-			loadedRepo = requestedRepo;
-			initLayout();
-		} catch (e: unknown) {
-			if (repo !== requestedRepo) return;
-			// eslint-disable-next-line svelte/infinite-reactive-loop -- failed load clears guard to allow retry for the same repo.
-			loadedRepo = "";
-			errorMsg = e instanceof Error ? e.message : "Failed to load graph";
-		} finally {
-			if (repo === requestedRepo) {
-				isLoading = false;
-			}
-		}
-	}
-
-	function clearGraph() {
-		nodes = [];
-		edges = [];
-		layoutNodes = [];
-		layoutEdges = [];
-		nodeLookup = EMPTY_NODE_LOOKUP;
-		isZeroEdgeOverview = false;
-		hiddenZeroEdgeNodeCount = 0;
-		truncated = false;
-		graphState.selectedNode = null;
-		graphState.selectedEdge = null;
-		graphState.hoveredNode = null;
-		graphState.showTooltip = false;
-		detailEntityName = "";
-	}
+	// ─── Graph fetch orchestration (delegated to graphLoader, TASK-196) ───────
+	// The edge cache, AbortController lifecycle, page-nav debounce, and the
+	// loadGraph/clearGraph/goToPage flow live in $lib/kg/graphLoader.ts. This
+	// component wires its view/layout state in via stores + callbacks.
+	const graphLoader = createGraphLoader({
+		repo: () => repo,
+		getLoadedRepo: () => loadedRepo,
+		setLoadedRepo: (r) => (loadedRepo = r),
+		hasLayout: () => layoutNodes.length > 0,
+		setNodes: (n) => (nodes = n),
+		setEdges: (e) => (edges = e),
+		setTruncated: (t) => (truncated = t),
+		setLoading: (v) => (isLoading = v),
+		setError: (m) => (errorMsg = m),
+		onClear: () => {
+			layoutNodes = [];
+			layoutEdges = [];
+			nodeLookup = EMPTY_NODE_LOOKUP;
+			isZeroEdgeOverview = false;
+			hiddenZeroEdgeNodeCount = 0;
+			graphState.selectedNode = null;
+			graphState.selectedEdge = null;
+			graphState.hoveredNode = null;
+			graphState.showTooltip = false;
+			detailEntityName = "";
+		},
+		onDataReady: initLayout,
+		page: kgPage,
+		pageSize: kgPageSize,
+		totalItems: kgTotalItems,
+		totalPages: kgTotalPages
+	});
 
 	function initLayout() {
 		isZeroEdgeOverview = edges.length === 0 && nodes.length > 0;
@@ -265,15 +249,6 @@
 		nodeLookup = buildNodeLookup(layoutNodes);
 	}
 
-	// ─── Pagination navigation ──────────────────────────────────────────────────
-
-	function goToPage(p: number) {
-		const totalPages = get(kgTotalPages);
-		if (p < 1 || p > totalPages) return;
-		kgPage.set(p);
-		loadGraph(true);
-	}
-
 	// ─── Modal event handlers ──────────────────────────────────────────────────
 
 	async function handleAddEntity(event: CustomEvent<{ name: string; type: string; description?: string }>) {
@@ -281,7 +256,7 @@
 		try {
 			await api.kgCreateEntity({ name, type, description, repo });
 			showAddEntityModal = false;
-			await loadGraph(true);
+			await graphLoader.loadGraph(true);
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Failed to create entity";
 		}
@@ -294,7 +269,7 @@
 		try {
 			await api.kgCreateRelation({ from_entity, to_entity, relation_type, repo });
 			showAddRelationModal = false;
-			await loadGraph(true);
+			await graphLoader.loadGraph(true);
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Failed to create relation";
 		}
@@ -318,7 +293,7 @@
 			graphState.selectedEdge = null;
 			graphState.selectedNode = null;
 			graphState.showTooltip = false;
-			await loadGraph(true);
+			await graphLoader.loadGraph(true);
 		} catch (e: unknown) {
 			errorMsg = e instanceof Error ? e.message : "Failed to delete";
 		}
@@ -352,18 +327,23 @@
 	});
 
 	onDestroy(() => {
-		// Animation cleanup is handled by KGGraphCanvas
+		// Stop the neural renderer RAF loop when the KG tab unmounts
+		// (TASK-189) — KGGraphCanvas also stops it, this is defense-in-depth.
+		stopNeuralAnimation();
+		// Cancel any in-flight kgGraph request and pending page navigation.
+		graphLoader.dispose();
 	});
 
 	// Re-load when repo changes (guarded inside loadGraph against noop)
 	$: if (repo && canvasReady && loadedRepo !== repo) {
+		// Drop any pending debounced page navigation — it belongs to the old repo.
+		graphLoader.cancelPendingNavigation();
 		// Reset pagination state before loading a new repo so we don't carry
 		// over a stale page number that exceeds the new repo's total pages
 		// (e.g. page 8 of repo-A → repo-B with 3 pages → page 8 of 3 = empty).
 		kgPage.set(1);
 		kgTotalItems.set(0);
-		// eslint-disable-next-line svelte/infinite-reactive-loop -- loadGraph updates loadedRepo to satisfy this repo-change guard.
-		untrack(() => loadGraph());
+		untrack(() => graphLoader.loadGraph());
 	}
 
 	function handleNavigateToEntity(name: string) {
@@ -389,7 +369,7 @@
 		{zoomPercent}
 		onAddEntity={() => (showAddEntityModal = true)}
 		onAddRelation={() => (showAddRelationModal = true)}
-		onRefresh={() => loadGraph(true)}
+		onRefresh={() => graphLoader.loadGraph(true)}
 		onZoomIn={() => kgCanvasRef?.handleZoomIn()}
 		onZoomOut={() => kgCanvasRef?.handleZoomOut()}
 		onResetCamera={() => kgCanvasRef?.handleResetCamera()}
@@ -462,7 +442,7 @@
 			<div class="kg-pagination-controls">
 				<button
 					class="btn btn-ghost btn-sm"
-					on:click={() => goToPage(1)}
+					on:click={() => graphLoader.goToPage(1)}
 					disabled={$kgPage <= 1}
 					aria-label="First page"
 				>
@@ -470,7 +450,7 @@
 				</button>
 				<button
 					class="btn btn-ghost btn-sm"
-					on:click={() => goToPage($kgPage - 1)}
+					on:click={() => graphLoader.goToPage($kgPage - 1)}
 					disabled={$kgPage <= 1}
 					aria-label="Previous page"
 				>
@@ -484,12 +464,12 @@
 						class="btn btn-sm"
 						class:btn-primary={p === $kgPage}
 						class:btn-ghost={p !== $kgPage}
-						on:click={() => goToPage(p)}>{p}</button
+						on:click={() => graphLoader.goToPage(p)}>{p}</button
 					>
 				{/each}
 				<button
 					class="btn btn-ghost btn-sm"
-					on:click={() => goToPage($kgPage + 1)}
+					on:click={() => graphLoader.goToPage($kgPage + 1)}
 					disabled={$kgPage >= $kgTotalPages}
 					aria-label="Next page"
 				>
@@ -497,7 +477,7 @@
 				</button>
 				<button
 					class="btn btn-ghost btn-sm"
-					on:click={() => goToPage($kgTotalPages)}
+					on:click={() => graphLoader.goToPage($kgTotalPages)}
 					disabled={$kgPage >= $kgTotalPages}
 					aria-label="Last page"
 				>

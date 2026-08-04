@@ -6,6 +6,9 @@
 export {
 	startNeuralAnimation,
 	stopNeuralAnimation,
+	pauseNeuralAnimation,
+	resumeNeuralAnimation,
+	isNeuralAnimationRunning,
 	updateNeuralDimensions,
 	updateAnimationData,
 	zoomCamera,
@@ -14,6 +17,8 @@ export {
 	endDragCamera,
 	resetCamera,
 	getZoomPercent,
-	isCameraDragging
+	isCameraDragging,
+	queryNodeCandidates,
+	isSpatialGridReady
 } from "./kg-neural-renderer/index";
 export type { NeuralRenderState } from "./kg-neural-renderer/index";

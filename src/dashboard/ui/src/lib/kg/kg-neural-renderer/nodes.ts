@@ -18,6 +18,59 @@ export interface NeuralRenderState {
 
 // ─── Particle Drawing — Tiny Star with Soft Bloom ────────────────────────────
 
+// ─── Radial Gradient Cache ───────────────────────────────────────────────────
+// The per-particle glow gradient is identical for every particle of the same
+// color and theme (the color stops are fixed *fractions* of the outer radius).
+// The gradient is built once, centered at the origin with a reference outer
+// radius, then drawn inside a per-particle translate/scale (see below). Because
+// the stops are relative to GLOW_REF_RADIUS, scaling reproduces the exact same
+// gradient shape at any position/radius — no allocation per frame per particle.
+// Alpha is applied via ctx.globalAlpha so the cached gradient object can be
+// shared regardless of each particle's blend/twinkle alpha.
+const GLOW_REF_RADIUS = 100;
+const glowGradientCache = new Map<string, CanvasGradient>();
+let glowGradientCacheDark: boolean | null = null;
+
+function darkenColor(color: { r: number; g: number; b: number }): { r: number; g: number; b: number } {
+	return {
+		r: Math.round(color.r * 0.65),
+		g: Math.round(color.g * 0.65),
+		b: Math.round(color.b * 0.65)
+	};
+}
+
+function getGlowGradient(
+	ctx: CanvasRenderingContext2D,
+	dark: boolean,
+	color: { r: number; g: number; b: number }
+): CanvasGradient {
+	// Invalidate cache on theme change (gradient stops differ per theme)
+	if (glowGradientCacheDark !== dark) {
+		glowGradientCache.clear();
+		glowGradientCacheDark = dark;
+	}
+
+	const key = `${color.r},${color.g},${color.b}`;
+	let grad = glowGradientCache.get(key);
+	if (grad) return grad;
+
+	grad = ctx.createRadialGradient(0, 0, 0, 0, 0, GLOW_REF_RADIUS);
+	if (dark) {
+		// Dark mode: additive glow (original cinematic look)
+		grad.addColorStop(0, `rgba(${color.r},${color.g},${color.b},0.2)`);
+		grad.addColorStop(0.5, `rgba(${color.r},${color.g},${color.b},0.05)`);
+		grad.addColorStop(1, `rgba(${color.r},${color.g},${color.b},0)`);
+	} else {
+		// Light mode: darken colors for contrast against light background
+		const c = darkenColor(color);
+		grad.addColorStop(0, `rgba(${c.r},${c.g},${c.b},0.18)`);
+		grad.addColorStop(0.4, `rgba(${c.r},${c.g},${c.b},0.07)`);
+		grad.addColorStop(1, `rgba(${c.r},${c.g},${c.b},0)`);
+	}
+	glowGradientCache.set(key, grad);
+	return grad;
+}
+
 export function drawParticle(
 	ctx: CanvasRenderingContext2D,
 	sx: number,
@@ -37,18 +90,25 @@ export function drawParticle(
 
 	ctx.save();
 
+	// Apply per-particle alpha once for the whole particle (glow + cores).
+	// The cached gradient + core fill colors bake fixed multipliers and rely
+	// on globalAlpha to scale their opacity — visually identical to the original
+	// alpha-in-string approach while letting the gradient be reused.
+	ctx.globalAlpha = finalAlpha;
+
 	if (dark) {
-		// Dark mode: additive glow (original cinematic look)
 		ctx.globalCompositeOperation = "lighter";
-		const glowR = radius * 5;
-		const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
-		grad.addColorStop(0, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.2})`);
-		grad.addColorStop(0.5, `rgba(${color.r},${color.g},${color.b},${finalAlpha * 0.05})`);
-		grad.addColorStop(1, `rgba(${color.r},${color.g},${color.b},0)`);
-		ctx.fillStyle = grad;
+
+		// Glow — drawn in a transformed space so the shared origin-centered
+		// gradient can be reused for any particle position/radius.
+		ctx.save();
+		ctx.translate(sx, sy);
+		ctx.scale((radius * 5) / GLOW_REF_RADIUS, (radius * 5) / GLOW_REF_RADIUS);
+		ctx.fillStyle = getGlowGradient(ctx, dark, color);
 		ctx.beginPath();
-		ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+		ctx.arc(0, 0, GLOW_REF_RADIUS, 0, Math.PI * 2);
 		ctx.fill();
+		ctx.restore();
 
 		// Core particle
 		const br = Math.min(255, color.r + 60);
@@ -56,40 +116,35 @@ export function drawParticle(
 		const bb = Math.min(255, color.b + 60);
 		ctx.beginPath();
 		ctx.arc(sx, sy, Math.max(0.5, radius), 0, Math.PI * 2);
-		ctx.fillStyle = `rgba(${br},${bg},${bb},${finalAlpha * 0.9})`;
+		ctx.fillStyle = `rgba(${br},${bg},${bb},0.9)`;
 		ctx.fill();
 	} else {
-		// Light mode: darken colors for contrast against light background
-		const darken = (v: number) => Math.round(v * 0.65);
-		const cr = darken(color.r);
-		const cg = darken(color.g);
-		const cb = darken(color.b);
+		const c = darkenColor(color);
 
-		// Light mode: normal blending with soft shadow + solid core
-		const glowR = radius * 4;
-		const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
-		grad.addColorStop(0, `rgba(${cr},${cg},${cb},${finalAlpha * 0.18})`);
-		grad.addColorStop(0.4, `rgba(${cr},${cg},${cb},${finalAlpha * 0.07})`);
-		grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
-		ctx.fillStyle = grad;
+		// Glow — see dark mode comment above
+		ctx.save();
+		ctx.translate(sx, sy);
+		ctx.scale((radius * 4) / GLOW_REF_RADIUS, (radius * 4) / GLOW_REF_RADIUS);
+		ctx.fillStyle = getGlowGradient(ctx, dark, color);
 		ctx.beginPath();
-		ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+		ctx.arc(0, 0, GLOW_REF_RADIUS, 0, Math.PI * 2);
 		ctx.fill();
+		ctx.restore();
 
 		// Core particle — full color, solid
 		ctx.beginPath();
 		ctx.arc(sx, sy, Math.max(1.0, radius), 0, Math.PI * 2);
-		ctx.fillStyle = `rgba(${cr},${cg},${cb},${finalAlpha})`;
+		ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},1)`;
 		ctx.fill();
 
 		// Inner bright core
 		const ir = Math.max(0.5, radius * 0.45);
-		const br = Math.min(255, cr + 80);
-		const bg = Math.min(255, cg + 80);
-		const bb = Math.min(255, cb + 80);
+		const br = Math.min(255, c.r + 80);
+		const bg = Math.min(255, c.g + 80);
+		const bb = Math.min(255, c.b + 80);
 		ctx.beginPath();
 		ctx.arc(sx, sy, ir, 0, Math.PI * 2);
-		ctx.fillStyle = `rgba(${br},${bg},${bb},${finalAlpha})`;
+		ctx.fillStyle = `rgba(${br},${bg},${bb},1)`;
 		ctx.fill();
 	}
 

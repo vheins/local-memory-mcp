@@ -5,6 +5,7 @@
  */
 
 import type { LayoutNode, LayoutEdge } from "../KGForceLayout";
+import { NODE_RADIUS } from "../KGForceLayout";
 import {
 	project3D,
 	drawBackground,
@@ -47,6 +48,20 @@ export { zoomCamera, startDragCamera, dragCamera, endDragCamera, resetCamera, ge
 let animationId: number | null = null;
 let currentCleanup: (() => void) | null = null;
 
+// Pause/resume control (TASK-189). `running` is the manual control used by
+// consumers (e.g. KGGraph stops the loop when the KG tab unmounts);
+// `isTabHidden` snapshots document.visibilitychange so the RAF loop also
+// pauses when the browser tab is hidden. Both must be true for the loop to
+// schedule frames — no rendering work happens while either is false.
+let running = false;
+let isTabHidden = false;
+
+// Hook into the active animation instance so the module-level resume()
+// control can re-anchor the frame clock (avoids a large dt jump after a
+// pause/hidden period) and restart scheduling. Only the single active
+// animation sets this; cleared on cleanup.
+let currentResumeHook: (() => void) | null = null;
+
 let animNodes: LayoutNode[] = [];
 let animEdges: LayoutEdge[] = [];
 let animDataDirty = false;
@@ -62,6 +77,63 @@ let cachedBackgroundGradient: CanvasGradient | null = null;
 let cachedBackgroundWidth = 0;
 let cachedBackgroundHeight = 0;
 let cachedBackgroundDark = false;
+
+// ─── Spatial Grid for Hit Testing ────────────────────────────────────────────
+// Coarse uniform grid over projected node positions, rebuilt every frame right
+// after projection (node screen positions mutate each frame via camera
+// auto-rotation/breathing, so the grid must match the last rendered frame).
+// The UI hit-test handlers query candidates from the grid instead of linearly
+// scanning every node on each mousemove/click.
+const HIT_GRID_CELL_SIZE = Math.ceil((NODE_RADIUS + 4) * 2); // ~2x max hit radius
+const HIT_GRID_KEY_OFFSET = 32768;
+const HIT_GRID_KEY_MULT = 65536;
+let spatialGrid = new Map<number, LayoutNode[]>();
+let spatialGridBuilt = false;
+
+function rebuildSpatialGrid(): void {
+	const grid = new Map<number, LayoutNode[]>();
+	for (const n of animNodes) {
+		const cx = Math.floor(n.x / HIT_GRID_CELL_SIZE);
+		const cy = Math.floor(n.y / HIT_GRID_CELL_SIZE);
+		const key = (cx + HIT_GRID_KEY_OFFSET) * HIT_GRID_KEY_MULT + (cy + HIT_GRID_KEY_OFFSET);
+		let bucket = grid.get(key);
+		if (!bucket) {
+			bucket = [];
+			grid.set(key, bucket);
+		}
+		bucket.push(n);
+	}
+	spatialGrid = grid;
+	spatialGridBuilt = true;
+}
+
+/**
+ * Returns every node whose grid cell could contain it within `radius` of (x, y).
+ * Callers must still perform the exact distance check (this is a candidate
+ * pre-selection, not a hit test).
+ */
+export function queryNodeCandidates(x: number, y: number, radius: number): LayoutNode[] {
+	const minCX = Math.floor((x - radius) / HIT_GRID_CELL_SIZE);
+	const maxCX = Math.floor((x + radius) / HIT_GRID_CELL_SIZE);
+	const minCY = Math.floor((y - radius) / HIT_GRID_CELL_SIZE);
+	const maxCY = Math.floor((y + radius) / HIT_GRID_CELL_SIZE);
+	const out: LayoutNode[] = [];
+	for (let cy = minCY; cy <= maxCY; cy++) {
+		for (let cx = minCX; cx <= maxCX; cx++) {
+			const key = (cx + HIT_GRID_KEY_OFFSET) * HIT_GRID_KEY_MULT + (cy + HIT_GRID_KEY_OFFSET);
+			const bucket = spatialGrid.get(key);
+			if (bucket) {
+				for (const n of bucket) out.push(n);
+			}
+		}
+	}
+	return out;
+}
+
+/** True once the spatial grid has been built at least once (animation running). */
+export function isSpatialGridReady(): boolean {
+	return spatialGridBuilt;
+}
 
 // ─── Main Animation Entry Point ──────────────────────────────────────────────
 
@@ -86,6 +158,10 @@ export function startNeuralAnimation(
 
 	const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 	if (!ctx) return () => {};
+
+	// Resume loop control state for this animation instance
+	running = true;
+	isTabHidden = typeof document !== "undefined" && document.hidden;
 
 	// Device detection for frame skipping
 	const isLowEnd = navigator.hardwareConcurrency !== undefined && navigator.hardwareConcurrency < 4;
@@ -205,6 +281,9 @@ export function startNeuralAnimation(
 			p.node3d.node.x = p.sx;
 			p.node3d.node.y = p.sy;
 		}
+
+		// Rebuild spatial grid for hit-testing (positions/camera changed this frame)
+		rebuildSpatialGrid();
 
 		// Depth sort (far to near)
 		projected.sort((a, b) => b.depth - a.depth);
@@ -488,7 +567,13 @@ export function startNeuralAnimation(
 	}
 
 	// ── Animation loop ──
+	// Frames are only scheduled while `running && !isTabHidden`. When paused
+	// (hidden tab or manual pause), no further frame is scheduled, so the loop
+	// performs zero work until resumed.
 	function animate(timestamp: number) {
+		animationId = null;
+		if (!running || isTabHidden) return; // paused — do not reschedule
+
 		if (isLowEnd && frameCount++ % 2 !== 0) {
 			animationId = requestAnimationFrame(animate);
 			return;
@@ -498,11 +583,35 @@ export function startNeuralAnimation(
 		animationId = requestAnimationFrame(animate);
 	}
 
+	// Re-anchor the frame clock and restart scheduling. Called on visibility
+	// resume and by the exported resumeNeuralAnimation() control.
+	currentResumeHook = () => {
+		// Reset `lastTimestamp` so the first frame after a pause/hidden period
+		// does not produce a huge dt that teleports camera auto-rotation.
+		lastTimestamp = performance.now();
+		if (animationId === null && running && !isTabHidden) {
+			animationId = requestAnimationFrame(animate);
+		}
+	};
+
+	// Pause the RAF loop while the browser tab is hidden; resume when visible.
+	// (Browsers already throttle rAF for hidden tabs, but this makes the
+	// pause explicit and re-anchors the clock so auto-rotation doesn't jump.)
+	const handleVisibilityChange = () => {
+		isTabHidden = document.hidden;
+		if (!isTabHidden) {
+			currentResumeHook?.();
+		}
+	};
+	document.addEventListener("visibilitychange", handleVisibilityChange);
+
 	// ── Kick off ──
 	startTime = performance.now();
 	lastTimestamp = startTime;
 	totalElapsed = 0;
-	animationId = requestAnimationFrame(animate);
+	if (!isTabHidden) {
+		animationId = requestAnimationFrame(animate);
+	}
 
 	// ── Cleanup function ──
 	const cleanup = () => {
@@ -510,6 +619,8 @@ export function startNeuralAnimation(
 			cancelAnimationFrame(animationId);
 			animationId = null;
 		}
+		document.removeEventListener("visibilitychange", handleVisibilityChange);
+		currentResumeHook = null;
 	};
 
 	currentCleanup = cleanup;
@@ -527,6 +638,44 @@ export function stopNeuralAnimation(): void {
 		currentCleanup();
 		currentCleanup = null;
 	}
+}
+
+// ─── Pause / Resume Control (TASK-189) ───────────────────────────────────────
+
+/**
+ * Pauses the active animation loop. No frames are scheduled while paused.
+ * The current frame is cancelled immediately; rendering resumes from the
+ * same state via `resumeNeuralAnimation()`. Safe to call when no animation
+ * is running.
+ */
+export function pauseNeuralAnimation(): void {
+	running = false;
+	if (animationId !== null) {
+		cancelAnimationFrame(animationId);
+		animationId = null;
+	}
+}
+
+/**
+ * Resumes the animation loop after `pauseNeuralAnimation()` (or after the
+ * browser tab becomes visible again). Does nothing if the loop is already
+ * running, or while the tab is still hidden (visibilitychange resumes it).
+ */
+export function resumeNeuralAnimation(): void {
+	if (running) return;
+	running = true;
+	isTabHidden = typeof document !== "undefined" && document.hidden;
+	if (isTabHidden) return; // resumes via visibilitychange when visible
+	currentResumeHook?.();
+}
+
+/**
+ * Reports whether the animation loop is currently active (running and the
+ * tab is visible). Useful for consumers to decide whether to call
+ * `pauseNeuralAnimation()` / `resumeNeuralAnimation()`.
+ */
+export function isNeuralAnimationRunning(): boolean {
+	return running && !isTabHidden;
 }
 
 // ─── External Dimension Update ──────────────────────────────────────────────

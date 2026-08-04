@@ -13,7 +13,9 @@
 		endDragCamera,
 		resetCamera,
 		getZoomPercent,
-		isCameraDragging
+		isCameraDragging,
+		queryNodeCandidates,
+		isSpatialGridReady
 	} from "$lib/kg/KGNeuralRenderer";
 	import type { NeuralRenderState } from "$lib/kg/KGNeuralRenderer";
 
@@ -109,34 +111,32 @@
 		const my = e.clientY - rect.top;
 
 		const hitRadius = NODE_RADIUS + 4;
-		for (const n of layoutNodes) {
-			// Quick AABB rejection before distance check
+		const node = findNodeAt(mx, my, hitRadius);
+		if (node) {
+			graphState.selectedNode = node;
+			graphState.selectedEdge = null;
+			graphState.showTooltip = false;
+			onDetailEntityChange(node.name);
+			return;
+		}
+
+		// Edge hit test with AABB pre-rejection before the segment distance check
+		const edgeHitRadius = 10;
+		for (const edge of layoutEdges) {
+			const a = getNodeByKey(edge.source);
+			const b = getNodeByKey(edge.target);
+			if (!a || !b) continue;
 			if (
-				n.x < mx - hitRadius * 2 ||
-				n.x > mx + hitRadius * 2 ||
-				n.y < my - hitRadius * 2 ||
-				n.y > my + hitRadius * 2
+				(a.x < mx - edgeHitRadius && b.x < mx - edgeHitRadius) ||
+				(a.x > mx + edgeHitRadius && b.x > mx + edgeHitRadius) ||
+				(a.y < my - edgeHitRadius && b.y < my - edgeHitRadius) ||
+				(a.y > my + edgeHitRadius && b.y > my + edgeHitRadius)
 			) {
 				continue;
 			}
-			const dx = mx - n.x;
-			const dy = my - n.y;
-			if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-				graphState.selectedNode = n;
-				graphState.selectedEdge = null;
-				graphState.showTooltip = false;
-				onDetailEntityChange(n.name);
-				return;
-			}
-		}
-
-		for (const e of layoutEdges) {
-			const a = getNodeByKey(e.source);
-			const b = getNodeByKey(e.target);
-			if (!a || !b) continue;
 			const dist = distToSegment(mx, my, a.x, a.y, b.x, b.y);
-			if (dist < 10) {
-				graphState.selectedEdge = e;
+			if (dist < edgeHitRadius) {
+				graphState.selectedEdge = edge;
 				graphState.selectedNode = null;
 				graphState.showTooltip = false;
 				onDetailEntityChange("");
@@ -155,16 +155,11 @@
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 
-		for (const n of layoutNodes) {
-			const r = NODE_RADIUS + 4;
-			const dx = mx - n.x;
-			const dy = my - n.y;
-			if (dx * dx + dy * dy <= r * r) {
-				graphState.selectedNode = n;
-				onDetailEntityChange("");
-				onDeleteNodeRequest(n.name);
-				return;
-			}
+		const node = findNodeAt(mx, my, NODE_RADIUS + 4);
+		if (node) {
+			graphState.selectedNode = node;
+			onDetailEntityChange("");
+			onDeleteNodeRequest(node.name);
 		}
 	}
 
@@ -174,15 +169,25 @@
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 
-		for (const e of layoutEdges) {
-			const a = getNodeByKey(e.source);
-			const b = getNodeByKey(e.target);
+		// Edge hit test with AABB pre-rejection before the segment distance check
+		const edgeHitRadius = 10;
+		for (const edge of layoutEdges) {
+			const a = getNodeByKey(edge.source);
+			const b = getNodeByKey(edge.target);
 			if (!a || !b) continue;
+			if (
+				(a.x < mx - edgeHitRadius && b.x < mx - edgeHitRadius) ||
+				(a.x > mx + edgeHitRadius && b.x > mx + edgeHitRadius) ||
+				(a.y < my - edgeHitRadius && b.y < my - edgeHitRadius) ||
+				(a.y > my + edgeHitRadius && b.y > my + edgeHitRadius)
+			) {
+				continue;
+			}
 			const dist = distToSegment(mx, my, a.x, a.y, b.x, b.y);
-			if (dist < 10) {
-				graphState.selectedEdge = e;
+			if (dist < edgeHitRadius) {
+				graphState.selectedEdge = edge;
 				graphState.selectedNode = null;
-				onDeleteEdgeRequest(e.source, e.target, e.relation_type);
+				onDeleteEdgeRequest(edge.source, edge.target, edge.relation_type);
 				return;
 			}
 		}
@@ -195,26 +200,7 @@
 
 		if (isCameraDragging()) return;
 
-		// Viewport culling for hit testing — only test nodes near the mouse
-		const hitRadius = NODE_RADIUS + 4;
-		let found: LayoutNode | null = null;
-		for (const n of layoutNodes) {
-			// Quick AABB rejection before distance check
-			if (
-				n.x < mx - hitRadius * 2 ||
-				n.x > mx + hitRadius * 2 ||
-				n.y < my - hitRadius * 2 ||
-				n.y > my + hitRadius * 2
-			) {
-				continue;
-			}
-			const dx = mx - n.x;
-			const dy = my - n.y;
-			if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-				found = n;
-				break;
-			}
-		}
+		const found = findNodeAt(mx, my, NODE_RADIUS + 4);
 
 		if (found !== graphState.hoveredNode) {
 			graphState.hoveredNode = found;
@@ -352,6 +338,31 @@
 		let t = ((px - x1) * dx + (py - y1) * dy) / len2;
 		t = Math.max(0, Math.min(1, t));
 		return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+	}
+
+	// ─── Spatial-grid hit testing ───────────────────────────────────────────
+	// Pre-select a small candidate set from the renderer's spatial grid (rebuilt
+	// each frame with the latest projected positions), then run the exact
+	// distance check on candidates only — avoids an O(N) scan per mousemove.
+	// Falls back to a linear scan when the grid isn't built yet (animation not
+	// started), preserving identical behavior.
+	function findNodeAt(mx: number, my: number, hitRadius: number): LayoutNode | null {
+		if (isSpatialGridReady()) {
+			const candidates = queryNodeCandidates(mx, my, hitRadius);
+			for (const n of candidates) {
+				const dx = mx - n.x;
+				const dy = my - n.y;
+				if (dx * dx + dy * dy <= hitRadius * hitRadius) return n;
+			}
+			return null;
+		}
+
+		for (const n of layoutNodes) {
+			const dx = mx - n.x;
+			const dy = my - n.y;
+			if (dx * dx + dy * dy <= hitRadius * hitRadius) return n;
+		}
+		return null;
 	}
 </script>
 
