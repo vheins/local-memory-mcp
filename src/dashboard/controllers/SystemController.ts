@@ -7,6 +7,7 @@ import { jsonApiRes, handleController, HttpError, parsePageParams, getAttributes
 import { condenseRecentActions } from "../lib/helpers";
 import type { RecentAction } from "../lib/interfaces";
 import { parseRepoInput } from "../../mcp/utils/normalize";
+import { getCachedRepoStats, setCachedRepoStats } from "../services/statsCache";
 import { metrics } from "../../mcp/utils/metrics";
 import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
 import { listResources } from "../../mcp/resources";
@@ -72,8 +73,16 @@ export class SystemController {
 				const parsed = parseRepoInput(repo, undefined);
 				owner = parsed.owner;
 			}
-			const stats = repo ? db.system.getDashboardStats(owner || "", repo) : db.system.getGlobalDashboardStats();
-			return jsonApiRes(stats, "system-stats");
+			// Repo-scoped stats run 16+ aggregate queries (OPT-PERF-06 / TASK-202).
+			// Serve from the TTL cache when warm; the global path is already
+			// cached inside the entity. Shape is identical either way.
+			if (repo) {
+				const cached = getCachedRepoStats<ReturnType<typeof db.system.getDashboardStats>>(owner || "", repo);
+				if (cached) return jsonApiRes(cached, "system-stats");
+				const stats = db.system.getDashboardStats(owner || "", repo);
+				return jsonApiRes(setCachedRepoStats(owner || "", repo, stats), "system-stats");
+			}
+			return jsonApiRes(db.system.getGlobalDashboardStats(), "system-stats");
 		});
 	}
 
