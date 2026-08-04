@@ -25,10 +25,24 @@ import type { AddressInfo } from "node:net";
 // Resolves to the mocked context module (vi.mock is hoisted above imports),
 // giving access to the same SQLiteStore instance the controllers use.
 import { db } from "../../dashboard/lib/context";
+// Must stay AFTER the context import: constants.ts is first evaluated through
+// the mock factory above (with KG_MAX_GRAPH_EDGES overridden), so this
+// binding reflects the test cap used by the truncated graph assertion.
+import { KG_MAX_GRAPH_EDGES } from "../../mcp/utils/constants";
+// TTL stats cache (OPT-PERF-06 / TASK-202) — cleared between /api/stats cache
+// tests so each case starts from a cold cache regardless of run order.
+import { clearRepoStatsCache } from "../services/statsCache";
 
 // ── Mock context.ts (must be BEFORE any imports that transitively load it) ──
 
 vi.mock("../../dashboard/lib/context", async () => {
+	// OPT-FEAT-03 test hook: KG_MAX_GRAPH_EDGES is captured at constants.ts
+	// module load, so the cap MUST be set BEFORE sqlite.ts → constants.ts is
+	// imported. A small cap lets the truncated graph test seed a handful of
+	// relations instead of 4000+. No other test in this file depends on the
+	// default 4000 cap (the existing graph tests only assert shape/empty), so
+	// the override is safe for the whole file run (vitest workers are isolated).
+	process.env.KG_MAX_GRAPH_EDGES = "10";
 	const { SQLiteStore } = await import("../../mcp/storage/sqlite");
 	const db = new SQLiteStore(":memory:");
 
@@ -141,6 +155,112 @@ describe("Dashboard Controllers", () => {
 			expect(body.data.attributes).toHaveProperty("resources");
 			expect(body.data.attributes).toHaveProperty("prompts");
 			expect(Array.isArray(body.data.attributes.tools)).toBe(true);
+		});
+	});
+
+	// ── Stats caching (OPT-PERF-06 / TASK-202) ─────────────────────────────
+	// Repo-scoped /api/stats runs 16+ aggregate queries per call; the TTL cache
+	// (statsCache.ts, DASHBOARD_STATS_TTL_MS, default 30 s) serves repeated
+	// selects within the window from memory. Contract: identical JSON:API shape
+	// on hit and miss; stats may be up to TTL stale — acceptable for an overview.
+	// The TTL is read lazily from the env, so each test sets its own window.
+
+	describe("System API — /api/stats caching (OPT-PERF-06)", () => {
+		afterEach(() => {
+			delete process.env.DASHBOARD_STATS_TTL_MS;
+			clearRepoStatsCache();
+		});
+
+		it("GET /api/stats?repo=... returns 200 with the repo-scoped shape", async () => {
+			const repo = "stats-shape-repo";
+			const res = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.type).toBe("system-stats");
+			const attrs = body.data.attributes as Record<string, any>;
+			expect(attrs.scope).toBe("repo");
+			expect(typeof attrs.total).toBe("number");
+			expect(typeof attrs.avgImportance).toBe("string");
+			expect(typeof attrs.totalHitCount).toBe("number");
+			expect(typeof attrs.expiringSoon).toBe("number");
+			expect(attrs.byType).toBeDefined();
+			expect(attrs.taskStats).toHaveProperty("total");
+			expect(Array.isArray(attrs.topMemories)).toBe(true);
+		});
+
+		it("GET /api/stats?repo=... serves repeated calls from cache (single compute within TTL)", async () => {
+			const repo = "stats-cache-repo";
+			// Long window: both calls are guaranteed to land inside the TTL.
+			process.env.DASHBOARD_STATS_TTL_MS = "60000";
+			clearRepoStatsCache();
+			const spy = vi.spyOn(db.system, "getDashboardStats");
+
+			const res1 = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
+			expect(res1.status).toBe(200);
+			expect(spy).toHaveBeenCalledTimes(1);
+			const body1 = await res1.json();
+
+			const res2 = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
+			expect(res2.status).toBe(200);
+			// Cache hit: the aggregates are NOT recomputed, payload is identical.
+			expect(spy).toHaveBeenCalledTimes(1);
+			expect(await res2.json()).toEqual(body1);
+
+			spy.mockRestore();
+		});
+
+		it("GET /api/stats?repo=... recomputes after the TTL expires", async () => {
+			const repo = "stats-expiry-repo";
+			process.env.DASHBOARD_STATS_TTL_MS = "100";
+			clearRepoStatsCache();
+			const spy = vi.spyOn(db.system, "getDashboardStats");
+
+			// Warm the cache (cold compute #1).
+			const warm = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
+			expect(warm.status).toBe(200);
+			expect(spy).toHaveBeenCalledTimes(1);
+			const warmBody = (await warm.json()) as Record<string, any>;
+			const warmTotal = warmBody.data.attributes.total as number;
+
+			// Mutate the data source directly (bypasses the cache entirely).
+			db.memories.insert({
+				id: randomUUID(),
+				type: "code_fact",
+				title: "ttl-expiry seed",
+				content: "should surface once the stats cache expires",
+				importance: 1,
+				agent: "test",
+				role: "backend",
+				model: "test",
+				scope: { owner: "", repo },
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+				completed_at: null,
+				hit_count: 0,
+				recall_count: 0,
+				last_used_at: null,
+				expires_at: null,
+				supersedes: null,
+				status: "active",
+				tags: [],
+				metadata: {},
+				is_global: false
+			});
+
+			// Within the TTL: cached payload served (no recompute, stale total).
+			const within = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
+			expect(within.status).toBe(200);
+			expect(spy).toHaveBeenCalledTimes(1);
+			expect(((await within.json()) as Record<string, any>).data.attributes.total).toBe(warmTotal);
+
+			// Past the TTL: the next call recomputes and sees the new row.
+			await new Promise((r) => setTimeout(r, 400));
+			const after = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
+			expect(after.status).toBe(200);
+			expect(spy).toHaveBeenCalledTimes(2);
+			expect(((await after.json()) as Record<string, any>).data.attributes.total).toBe(warmTotal + 1);
+
+			spy.mockRestore();
 		});
 	});
 
@@ -273,6 +393,12 @@ describe("Dashboard Controllers", () => {
 			expect(res.status).toBe(200);
 			const body = (await res.json()) as Record<string, any>;
 			expect(Array.isArray(body.data)).toBe(true);
+			// Pagination meta (OPT-FEAT-02): same {page, pageSize, totalItems,
+			// totalPages} shape as listGraph — the data array shape is unchanged.
+			expect(body.meta).toHaveProperty("page");
+			expect(body.meta).toHaveProperty("pageSize");
+			expect(body.meta).toHaveProperty("totalItems");
+			expect(body.meta).toHaveProperty("totalPages");
 		});
 
 		it("GET /api/kg/entities/nonexist returns 404", async () => {
@@ -315,6 +441,112 @@ describe("Dashboard Controllers", () => {
 			expect(Array.isArray(body.data.attributes.nodes)).toBe(true);
 			expect(body.data.attributes.edges).toEqual([]);
 			expect(body.data.attributes.truncated).toBe(false);
+		});
+	});
+
+	// ── KG pagination + truncated (OPT-FEAT-02 / OPT-FEAT-03) ───────────────
+	// List endpoints carry JSON:API pagination meta; the graph `truncated`
+	// flag is driven by a LIMIT+1 probe so it is only true when the edge set
+	// exceeds KG_MAX_GRAPH_EDGES (TASK-148 pattern).
+
+	describe("KG API — pagination + truncated (OPT-FEAT-02/03)", () => {
+		const now = new Date().toISOString();
+
+		const seedEntities = (repo: string, count: number) => {
+			for (let i = 0; i < count; i++) {
+				db.knowledgeGraph.upsertEntity({
+					name: `${repo}-entity-${i}`,
+					type: "concept",
+					description: null,
+					repo,
+					owner: "test",
+					created_at: now,
+					updated_at: now
+				});
+			}
+		};
+
+		const seedRelation = (repo: string, from: string, to: string, relationType: string) => {
+			db.knowledgeGraph.upsertRelation({
+				from_entity: from,
+				to_entity: to,
+				relation_type: relationType,
+				repo,
+				owner: "test",
+				created_at: now
+			});
+		};
+
+		it("GET /api/kg/entities paginates with meta (default pageSize 20)", async () => {
+			const repo = "kg-pag-entities";
+			seedEntities(repo, 25);
+
+			const res = await fetch(`${baseUrl}/api/kg/entities?repo=${repo}`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data).toHaveLength(20);
+			expect(body.meta).toEqual({ page: 1, pageSize: 20, totalItems: 25, totalPages: 2 });
+		});
+
+		it("GET /api/kg/entities honors page/pageSize, offsets correctly, clamps pageSize to 100", async () => {
+			const repo = "kg-pag-entities-page";
+			seedEntities(repo, 25);
+
+			const page1Res = await fetch(`${baseUrl}/api/kg/entities?repo=${repo}&pageSize=10`);
+			expect(page1Res.status).toBe(200);
+			const page1 = (await page1Res.json()) as Record<string, any>;
+			const page2Res = await fetch(`${baseUrl}/api/kg/entities?repo=${repo}&page=2&pageSize=10`);
+			expect(page2Res.status).toBe(200);
+			const page2 = (await page2Res.json()) as Record<string, any>;
+			expect(page2.data).toHaveLength(10);
+			expect(page2.meta).toEqual({ page: 2, pageSize: 10, totalItems: 25, totalPages: 3 });
+
+			// Offset slicing: page 1 and page 2 are disjoint windows of the same set.
+			const names = (arr: Array<Record<string, any>>) => arr.map((item) => item.attributes.name);
+			const union = new Set([...names(page1.data), ...names(page2.data)]);
+			expect(union.size).toBe(20);
+
+			// Clamp: pageSize above 100 falls back to the 100 max (parsePageParams).
+			const clampedRes = await fetch(`${baseUrl}/api/kg/entities?repo=${repo}&pageSize=500`);
+			expect(clampedRes.status).toBe(200);
+			const clamped = (await clampedRes.json()) as Record<string, any>;
+			expect(clamped.meta.pageSize).toBe(100);
+			expect(clamped.data).toHaveLength(25);
+		});
+
+		it("GET /api/kg/relations returns 200 with array + pagination meta", async () => {
+			const repo = "kg-pag-relations";
+			seedEntities(repo, 41);
+			for (let i = 1; i <= 40; i++) {
+				seedRelation(repo, `${repo}-entity-0`, `${repo}-entity-${i}`, `rel-${i}`);
+			}
+
+			const res = await fetch(`${baseUrl}/api/kg/relations?repo=${repo}&pageSize=10`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(Array.isArray(body.data)).toBe(true);
+			expect(body.data).toHaveLength(10);
+			expect(body.meta).toEqual({ page: 1, pageSize: 10, totalItems: 40, totalPages: 4 });
+		});
+
+		it("GET /api/kg/graph sets truncated=true when edges exceed the cap (LIMIT+1 probe)", async () => {
+			const repo = "kg-truncated";
+			// Hub-spoke: KG_MAX_GRAPH_EDGES (10 under the test override) + 1
+			// relations → the probe returns 11 rows and the controller slices
+			// to the cap with truncated=true (OPT-FEAT-03 / TASK-148 pattern).
+			seedEntities(repo, 12);
+			for (let i = 1; i <= 11; i++) {
+				seedRelation(repo, `${repo}-entity-0`, `${repo}-entity-${i}`, "rel");
+			}
+
+			const res = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.attributes.truncated).toBe(true);
+			expect(body.data.attributes.edges).toHaveLength(KG_MAX_GRAPH_EDGES);
+			// Nodes are paginated independently of the edge cap (still meta'd).
+			expect(body.meta).toHaveProperty("totalItems");
+			expect(body.meta.totalItems).toBe(12);
 		});
 	});
 
