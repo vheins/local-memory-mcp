@@ -6,7 +6,7 @@ import { createVisibilityPoller } from "./createVisibilityPoller";
 export type EventStreamStatus = "connected" | "disconnected" | "connecting" | "error";
 
 interface EventCoordinatorOptions {
-	fallbackPollInterval?: number; // ms, default 8000
+	fallbackPollInterval?: number; // ms, default 2500
 	maxBufferSize?: number; // max events in buffer, default 100
 	batchInterval?: number; // ms, default 100 (coalesce rapid events)
 }
@@ -22,7 +22,7 @@ export class EventCoordinator {
 
 	constructor(options: EventCoordinatorOptions = {}) {
 		this.options = {
-			fallbackPollInterval: options.fallbackPollInterval ?? 8000,
+			fallbackPollInterval: options.fallbackPollInterval ?? 2500,
 			maxBufferSize: options.maxBufferSize ?? 100,
 			batchInterval: options.batchInterval ?? 100
 		};

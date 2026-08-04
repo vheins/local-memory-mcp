@@ -17,7 +17,7 @@ export interface ArenaData {
 }
 
 /** Polling interval when the tab is visible (ms). */
-const POLL_INTERVAL_VISIBLE = 8_000;
+const POLL_INTERVAL_VISIBLE = 2_500;
 
 export function createArenaHandler() {
 	const store = writable<ArenaData>({
