@@ -70,6 +70,14 @@ export const COLUMNS: { status: string; label: string; bg: string; border: strin
 	}
 ];
 
+// Prioritized/staggered loading: the 4 ACTIVE columns fire in parallel first (in
+// taskStatusOrderBy priority order), then the 2 TERMINAL columns in a second batch.
+// This keeps request concurrency at 4 instead of 6 while all columns still fill —
+// per-column pagination/hasMore depends on per-status totalItems, so a single
+// multi-status request would break it (TaskService.list returns one flat page).
+const ACTIVE_COLUMN_STATUSES = ["in_progress", "pending", "backlog", "blocked"];
+const TERMINAL_COLUMN_STATUSES = ["completed", "canceled"];
+
 export function createKanbanHandler() {
 	const initialPagination: Record<
 		string,
@@ -158,7 +166,9 @@ export function createKanbanHandler() {
 			return { ...s, pagination: nextPagination, columnTasks: nextColumnTasks };
 		});
 
-		await Promise.all(COLUMNS.map((c) => loadColumn(repo, c.status, search)));
+		// ACTIVE columns first (concurrency peaks at 4), then TERMINAL columns.
+		await Promise.all(ACTIVE_COLUMN_STATUSES.map((status) => loadColumn(repo, status, search)));
+		await Promise.all(TERMINAL_COLUMN_STATUSES.map((status) => loadColumn(repo, status, search)));
 	}
 
 	async function loadMore(status: string) {
