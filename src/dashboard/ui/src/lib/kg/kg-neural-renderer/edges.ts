@@ -2,7 +2,7 @@
  * Edge and signal rendering for the Knowledge Graph Neural Renderer.
  */
 
-import { isDarkMode, fogFactor } from "./layout";
+import { fogFactor } from "./layout";
 
 // ─── Internal Types ──────────────────────────────────────────────────────────
 
@@ -22,9 +22,9 @@ export function drawEdge3D(
 	to: { sx: number; sy: number; depth: number },
 	edgeAlpha: number,
 	isActive: boolean,
-	time: number
+	time: number,
+	dark: boolean
 ) {
-	const dark = isDarkMode();
 	const avgDepth = (from.depth + to.depth) / 2;
 	const fog = fogFactor(avgDepth);
 	const alpha = dark ? Math.min(0.8, edgeAlpha * fog) : Math.min(0.9, Math.max(0.08, edgeAlpha * fog));

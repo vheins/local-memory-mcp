@@ -14,6 +14,7 @@ import {
 	isDarkMode,
 	getNodeColor,
 	roundRect,
+	computeRotationTrig,
 	FOG_FAR,
 	BREATHE_SPEED,
 	BREATHE_AMOUNT,
@@ -22,7 +23,14 @@ import {
 	PARTICLE_IMPORTANT_RADIUS,
 	PARTICLE_SUBTLE_MIN
 } from "./layout";
-import { drawParticle, drawTooltip, drawOverflowNotice, type NeuralRenderState } from "./nodes";
+import {
+	drawParticle,
+	drawTooltip,
+	drawOverflowNotice,
+	getSignalHaloGradient,
+	SIGNAL_HALO_REF_RADIUS,
+	type NeuralRenderState
+} from "./nodes";
 import { drawEdge3D } from "./edges";
 import type { Node3D, ProjectedNode } from "./layout";
 import {
@@ -225,6 +233,11 @@ export function startNeuralAnimation(
 		const isZeroEdge = animEdges.length === 0;
 		const cam = updateCamera(now, isZeroEdge, totalElapsed);
 
+		// rotY/rotX are frame constants — compute the 4 trig values ONCE per
+		// frame and share them with every node/signal projection (~1200
+		// trig calls/frame → 4).
+		const frameTrig = computeRotationTrig(cam.rotY, cam.rotX);
+
 		// Breathing
 		const breathe = isZeroEdge ? 1 : 1 + Math.sin(totalElapsed * BREATHE_SPEED) * BREATHE_AMOUNT;
 
@@ -269,7 +282,17 @@ export function startNeuralAnimation(
 			const bx = (n3d.x - cx) * breathe + cx;
 			const by = (n3d.y - cy) * breathe + cy;
 			const bz = n3d.z * breathe;
-			const proj = project3D(bx - cx, by - cy, bz, width, height, cam.rotY, cam.rotX, cam.effectiveFocalLength);
+			const proj = project3D(
+				bx - cx,
+				by - cy,
+				bz,
+				width,
+				height,
+				cam.rotY,
+				cam.rotX,
+				cam.effectiveFocalLength,
+				frameTrig
+			);
 			return {
 				...proj,
 				node3d: n3d
@@ -402,7 +425,7 @@ export function startNeuralAnimation(
 
 		// Draw active (hovered/selected) edges individually for effects
 		for (const re of activeEdges) {
-			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, re.isRelated, totalElapsed);
+			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, re.isRelated, totalElapsed, dark);
 		}
 
 		// ── Draw signals ──
@@ -421,7 +444,17 @@ export function startNeuralAnimation(
 			const iy = (fromN.y + (toN.y - fromN.y) * sig.progress - cy) * breathe + cy;
 			const iz = (fromN3d.z + (toN3d.z - fromN3d.z) * sig.progress) * breathe;
 
-			const proj = project3D(ix - cx, iy - cy, iz, width, height, cam.rotY, cam.rotX, cam.effectiveFocalLength);
+			const proj = project3D(
+				ix - cx,
+				iy - cy,
+				iz,
+				width,
+				height,
+				cam.rotY,
+				cam.rotX,
+				cam.effectiveFocalLength,
+				frameTrig
+			);
 
 			const brightness = Math.sin(sig.progress * Math.PI);
 			if (brightness <= 0 || proj.scale < 0.05) continue;
@@ -457,15 +490,21 @@ export function startNeuralAnimation(
 				const sg = darken(sig.color.g);
 				const sb = darken(sig.color.b);
 
-				// Normal blending with soft halo
+				// Normal blending with soft halo. The halo gradient is built
+				// once per color (cached, origin-centered) and drawn in a
+				// per-signal translate/scale — the inner stop bakes a fixed
+				// 0.25 multiplier and ctx.globalAlpha applies the per-signal
+				// alpha (alpha-in-string was `sigAlpha * 0.25`, identical).
 				const outerR = size * 2.5;
-				const grad = ctx.createRadialGradient(proj.sx, proj.sy, 0, proj.sx, proj.sy, outerR);
-				grad.addColorStop(0, `rgba(${sr},${sg},${sb},${sigAlpha * 0.25})`);
-				grad.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
-				ctx.fillStyle = grad;
+				ctx.save();
+				ctx.translate(proj.sx, proj.sy);
+				ctx.scale(outerR / SIGNAL_HALO_REF_RADIUS, outerR / SIGNAL_HALO_REF_RADIUS);
+				ctx.globalAlpha = sigAlpha;
+				ctx.fillStyle = getSignalHaloGradient(ctx, { r: sr, g: sg, b: sb });
 				ctx.beginPath();
-				ctx.arc(proj.sx, proj.sy, outerR, 0, Math.PI * 2);
+				ctx.arc(0, 0, SIGNAL_HALO_REF_RADIUS, 0, Math.PI * 2);
 				ctx.fill();
+				ctx.restore();
 
 				// Core
 				ctx.beginPath();
@@ -511,13 +550,13 @@ export function startNeuralAnimation(
 			// Subtle minimum for deep particles
 			const drawRadius = Math.max(PARTICLE_SUBTLE_MIN, finalRadius);
 
-			drawParticle(ctx, p.sx, p.sy, p.depth, n3d.color, drawRadius, depthAlpha, twinkle);
+			drawParticle(ctx, p.sx, p.sy, p.depth, n3d.color, drawRadius, depthAlpha, twinkle, dark);
 
 			// Hover/select label
 			if ((isHovered || isSelected) && normalizedScale > 0.15) {
 				const labelAlpha = Math.max(0, (normalizedScale - 0.15) / 0.85) * depthAlpha;
 				if (labelAlpha > 0.05) {
-					const darkLabel = isDarkMode();
+					const darkLabel = dark;
 					ctx.save();
 					ctx.globalAlpha = labelAlpha;
 

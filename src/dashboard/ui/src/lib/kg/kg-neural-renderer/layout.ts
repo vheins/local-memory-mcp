@@ -114,6 +114,28 @@ export function fogFactor(z: number): number {
 
 // ─── 3D Projection — Dual-Axis Rotation ──────────────────────────────────────
 
+/**
+ * The 4 rotation trig values used by `project3D`. `rotY`/`rotX` are frame
+ * constants (camera rotation only changes once per frame), so these are
+ * computed ONCE per frame and shared by every node/signal projection instead
+ * of recomputing 4 trig calls per node (~1200/frame at 300 nodes → 4/frame).
+ */
+export interface RotationTrig {
+	cosY: number;
+	sinY: number;
+	cosX: number;
+	sinX: number;
+}
+
+export function computeRotationTrig(rotY: number, rotX: number): RotationTrig {
+	return {
+		cosY: Math.cos(rotY),
+		sinY: Math.sin(rotY),
+		cosX: Math.cos(rotX),
+		sinX: Math.sin(rotX)
+	};
+}
+
 export function project3D(
 	x: number,
 	y: number,
@@ -122,17 +144,18 @@ export function project3D(
 	height: number,
 	rotY: number,
 	rotX: number,
-	focalLength: number
+	focalLength: number,
+	trig?: RotationTrig
 ): { sx: number; sy: number; z: number; scale: number; depth: number } {
+	// Use the precomputed per-frame trig when supplied (hot path); fall back to
+	// computing inline for standalone callers without a cached frame trig.
+	const { cosY, sinY, cosX, sinX } = trig ?? computeRotationTrig(rotY, rotX);
+
 	// Rotate around Y axis
-	const cosY = Math.cos(rotY);
-	const sinY = Math.sin(rotY);
 	const rx = x * cosY + z * sinY;
 	const rz = -x * sinY + z * cosY;
 
 	// Rotate around X axis
-	const cosX = Math.cos(rotX);
-	const sinX = Math.sin(rotX);
 	const ry = y * cosX - rz * sinX;
 	const finalZ = y * sinX + rz * cosX;
 
