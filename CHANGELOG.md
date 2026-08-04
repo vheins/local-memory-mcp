@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] — 2026-08-04
+
+### Added
+
+- Dashboard: bulk actions for Tasks & Standards — multi-select, bulk status move, bulk delete with confirmation — mirroring the Memories bulk action (OPT-FEAT-04)
+- Dashboard: pagination for KG entity/relation/graph lists with `totalItems`/`totalPages` meta; graph node pages ordered by edge degree (OPT-FEAT-02)
+- Dashboard: accurate `truncated` flag on the KG graph via a LIMIT+1 probe, with an "edges truncated" indicator (OPT-FEAT-03)
+- Dashboard: `GET /api/metrics` — per-tool dispatch durations, write-handler latency, and embedding latency (p50/p95) via a bounded-reservoir metrics registry (OPT-OBS-01)
+- Dashboard: Agent Arena polling gated on tab visibility with an 8s interval via a shared `createVisibilityPoller` (OPT-PERF-02)
+- Dashboard: coordination REST endpoints — `GET /api/coordination/handoffs`, `POST /api/coordination/handoffs/status`, `POST /api/coordination/handoffs`, `POST /api/coordination/claims/release` — replacing the legacy tool-name shim (OPT-FEAT-01)
+- MCP: content-hash dedup in the embedding queue — no-op/touch updates no longer re-embed or re-extract KG (migration v16, OPT-FLOW-03)
+- MCP: FTS5 `entity_names` index bounds KG-context enrichment on read paths (migration v15, OPT-PERF-04)
+- MCP: child tables with triggers index tag/stack filters, removing unindexed `LIKE '%…%'` scans (migration v14, OPT-PERF-07)
+- MCP: `memory-synthesize` now samples through registered tool names (`memory-read`/`task-read`) and the normalized-args path, seeding its first iteration (OPT-FLOW-02)
+- Tests: scoring strategy contracts, visibility poller (jsdom), KG entity-name ranking/cap/fallback, dashboard bulk API, content-hash dedup, `onResourcesMutated` emission, recent-actions feed, metrics registry (TASK-182, TASK-184, TASK-187)
+
+### Changed
+
+- MCP: unified error envelope `toErrorResponse` + `parseArgs` across both transports; handlers keep fail-loud throws, transports convert (OPT-CODE-01)
+- MCP: reads never write to `action_log` (POLICY 2) — read tools and dashboard GET endpoints no longer emit audit rows; `claim-manage` LIST also skipped (OPT-PERF-05, TASK-186)
+- MCP: delete not-found semantics unified — single-target throws, bulk skips and reports partial success (OPT-CODE-04)
+- MCP: id-or-code detail reads resolve in a single lookup by UUID shape (OPT-FLOW-01)
+- Dashboard: recent-actions feed is now mutation-only; detail reads vanish from it by design
+- Dashboard: services layer extracted under `src/dashboard/services/`; controllers are thin adapters with status-aware `ServiceError` handling (OPT-STR-01)
+
+### Refactored
+
+- DRY: `HybridSearchEngine` unifying 3 search pipelines (OPT-DRY-01); per-kind scoring strategy objects (OPT-DRY-04); shared auto-infer dispatch + `collectEntityIds` (OPT-DRY-06); `buildTableResult` envelope (OPT-DRY-07); `purgeEntityAndCleanup` delete contract (OPT-DRY-03); coordination claim-lifecycle helpers (OPT-DRY-02); `extractActionLog` with entity-aware id routing (OPT-DRY-05); `z.infer` typed tool inputs, no sentinel ids or post-parse casts (OPT-CODE-03)
+- Structure: entity dir splits for standard/knowledge-graph/system + extracted KG queries module (OPT-STR-03); migrations registry split into per-version modules v01–v16 (OPT-STR-04); schema barrel consolidation (OPT-STR-05); route filename normalization (OPT-STR-02); dead `handoff.manage.ts` deleted (OPT-CODE-02)
+- Performance: KG extractions batched into one transaction per document (OPT-PERF-01); worker existence checks batched per entity kind (OPT-PERF-03); codebase ARCHITECTURE aggregated in SQL with capped exports (OPT-PERF-08); write-lock fast path with `withExclusiveWrite` for compound/read-modify-write bodies (OPT-PERF-09); cold-start fallback folded into a single vector query (OPT-PERF-10); prepared-statement cache + `chunksOf` single 500-chunk bound (OPT-PERF-11, TASK-185); TTL-cached global dashboard stats (OPT-PERF-06); resource-URI derivation reads `structuredContent` (OPT-DRY-08)
+
 ## [0.31.3] — 2026-08-01
 
 ### Fixed
