@@ -373,10 +373,16 @@ export const api = {
 
 	// ─── Knowledge Graph ──────────────────────────────────────────────────────
 
-	kgGraph: (repo: string, params?: { page?: number; pageSize?: number; signal?: AbortSignal }) => {
+	kgGraph: (
+		repo: string,
+		params?: { page?: number; pageSize?: number; signal?: AbortSignal; includeEdges?: boolean }
+	) => {
 		const q = new URLSearchParams({ repo });
 		if (params?.page) q.set("page", String(params.page));
 		if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+		// TASK-198: only an explicit `false` opts out of the edge payload (up to
+		// 4000 edges). Absent/true leave the query unchanged (server default).
+		if (params?.includeEdges === false) q.set("includeEdges", "false");
 		return apiFetch<{ nodes: KGNode[]; edges: KGEdge[]; truncated: boolean; pagination: Pagination }>(
 			`/api/kg/graph?${q}`,
 			params?.signal ? { signal: params.signal } : undefined

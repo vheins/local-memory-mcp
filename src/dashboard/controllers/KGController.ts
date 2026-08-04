@@ -69,15 +69,28 @@ export class KGController {
 
 			const { page, pageSize, offset } = parsePageParams(req.query);
 
+			// Optional `includeEdges` query param (TASK-197): consumers that only
+			// need the node set can skip the edge fetch + truncation probe entirely,
+			// avoiding a payload of up to KG_MAX_GRAPH_EDGES (4000) edges per request.
+			// Any value other than the exact string "false" → true (default true), so
+			// absent/`true`/garbage all keep the current behavior. Nodes are unaffected:
+			// degree is computed server-side via SQL CTE independent of this edge set.
+			const includeEdges = (req.query.includeEdges as string | undefined) !== "false";
+
 			const nodesTotal = db.knowledgeGraph.countGraphNodes(repo);
 			const nodes = db.knowledgeGraph.listGraphNodes(repo, { limit: pageSize, offset });
 
-			// Probe: request KG_MAX_GRAPH_EDGES + 1 rows to detect truncation.
-			// If the extra row is present, the graph exceeds the cap and we
-			// return only the first KG_MAX_GRAPH_EDGES edges with truncated=true.
-			const rawEdges = db.knowledgeGraph.listGraphEdges(repo, KG_MAX_GRAPH_EDGES, true);
-			const truncated = rawEdges.length > KG_MAX_GRAPH_EDGES;
-			const edges = truncated ? rawEdges.slice(0, KG_MAX_GRAPH_EDGES) : rawEdges;
+			let edges: Array<{ source: string; target: string; relation_type: string }> = [];
+			let truncated = false;
+
+			if (includeEdges) {
+				// Probe: request KG_MAX_GRAPH_EDGES + 1 rows to detect truncation.
+				// If the extra row is present, the graph exceeds the cap and we
+				// return only the first KG_MAX_GRAPH_EDGES edges with truncated=true.
+				const rawEdges = db.knowledgeGraph.listGraphEdges(repo, KG_MAX_GRAPH_EDGES, true);
+				truncated = rawEdges.length > KG_MAX_GRAPH_EDGES;
+				edges = truncated ? rawEdges.slice(0, KG_MAX_GRAPH_EDGES) : rawEdges;
+			}
 
 			return jsonApiRes({ id: `graph-${repo}`, nodes, edges, truncated }, "graph", {
 				meta: {

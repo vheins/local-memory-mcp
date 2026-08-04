@@ -306,6 +306,16 @@ describe("Dashboard Controllers", () => {
 			expect(Array.isArray(body.data.attributes.nodes)).toBe(true);
 			expect(Array.isArray(body.data.attributes.edges)).toBe(true);
 		});
+
+		it("GET /api/kg/graph?repo=test-repo&includeEdges=false returns 200 with empty edges", async () => {
+			const res = await fetch(`${baseUrl}/api/kg/graph?repo=test-repo&includeEdges=false`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.type).toBe("graph");
+			expect(Array.isArray(body.data.attributes.nodes)).toBe(true);
+			expect(body.data.attributes.edges).toEqual([]);
+			expect(body.data.attributes.truncated).toBe(false);
+		});
 	});
 
 	// ── Coordination Controller ────────────────────────────────────────────

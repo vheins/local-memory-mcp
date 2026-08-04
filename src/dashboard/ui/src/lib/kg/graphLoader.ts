@@ -110,10 +110,19 @@ export function createGraphLoader(deps: GraphLoaderDeps): GraphLoader {
 		try {
 			const page = get(deps.page);
 			const pageSize = get(deps.pageSize);
-			const data = await api.kgGraph(requestedRepo, { page, pageSize, signal: controller.signal });
+			// TASK-198: when reusing edges and this repo's entry is cached, skip the
+			// edge payload entirely (includeEdges=false — server returns edges:[]).
+			// The response's empty edge array must never overwrite the cache entry.
+			// Cache miss OR forceReload → full fetch, cache (re)populated below.
+			const cached = !forceReload && reuseEdges ? edgeCache.get(requestedRepo) : undefined;
+			const data = await api.kgGraph(requestedRepo, {
+				page,
+				pageSize,
+				signal: controller.signal,
+				includeEdges: cached ? false : undefined
+			});
 			if (controller.signal.aborted) return; // superseded by a newer request
 			if (deps.repo() !== requestedRepo) return; // stale-guard: repo switched mid-flight
-			const cached = reuseEdges ? edgeCache.get(requestedRepo) : undefined;
 			deps.setNodes(data.nodes || []);
 			if (cached) {
 				// Reuse the repo-wide cached edge set; only nodes differ per page.
