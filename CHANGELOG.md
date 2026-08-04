@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] — 2026-08-04
+
+### Added
+
+- Dashboard: `includeEdges` query param on `GET /api/kg/graph` — consumers that only need the node set can skip the edge fetch and truncation probe entirely (avoiding a payload of up to `KG_MAX_GRAPH_EDGES`, 4000 edges, per request). Any value other than the exact string `"false"` keeps the current behavior (default `true`) (TASK-197)
+- Dashboard: soft-delete read scoping — archived memories are hidden from list and detail reads (`404`) unless `?includeArchived=true`, and canceled tasks are hidden from list reads when no explicit `?status` filter is passed (an explicit `?status=canceled` still returns them) (TASK-209)
+
+### Changed
+
+- Dashboard: single-item deletes for memories/standards/tasks now route through the shared purge + cleanup contract — soft archive/cancel with `queue_jobs` purge, vector removal, and repo-scoped KG cleanup — instead of hard-deleting in place, closing the single-vs-bulk divergence where single deletes removed rows outright while bulk/tool paths soft-deleted (TASK-207)
+
+### Fixed
+
+- Dashboard: HandoffsPanel — explicit parameter type for the handoffs query (TASK-193)
+
+### Refactored
+
+- MCP: memory entity split into a `src/mcp/entities/memory/` directory — `queries.ts` and `search.ts` extracted out of `entity.ts`, which drops from ~770 to ~343 lines (TASK-206, TASK-210)
+- Dashboard: System/KG/UnifiedGraph controllers reduced to thin adapters with their business logic extracted into a services layer (`services/system.service.ts`, `services/kg.service.ts`, `services/unified-graph.service.ts`) (OPT-STR-01, TASK-205)
+
+### Performance
+
+- KG graph: extracted a dedicated `graphLoader` (aborts stale fetches on page navigation) and off-screen neural animation now pauses via RAF gating (TASK-189, TASK-190, TASK-191, TASK-192, TASK-194, TASK-195, TASK-196)
+- KG graph: on cache-hit page navigation the edge payload is skipped via `includeEdges=false` — the cached edge set is reused and the response's empty edge array never overwrites it (TASK-197, TASK-198)
+- KG renderer: five cheap canvas wins — rotation trig precomputed once per frame and shared across projections, per-color fill strings precomputed at module load (zero per-frame allocation), cached signal-halo radial gradients drawn via translate/scale, overlapping particle circles batched into a single path fill, and the dark-mode check hoisted out of the per-edge draw path (TASK-208)
+- Kanban: column loads staggered, with the active column fetched before terminal columns (TASK-199)
+- Agent Arena: polling interval tightened to 2500ms and paused when the tab is hidden (TASK-201)
+- Stats: TTL cache for repo-scoped `GET /api/stats` (OPT-PERF-06, TASK-202)
+
+### Tests
+
+- KG `graphLoader` unit tests (TASK-200)
+- Stats TTL cache + KG pagination/truncated integration tests (TASK-202, TASK-203)
+- `useKanban` unit tests (TASK-204)
+- KG renderer performance/regression tests (TASK-208)
+- Single-delete 404 + `includeArchived` regression tests (TASK-209)
+
+### Documentation
+
+- Optimization roadmap findings marked "verified complete" in `docs/en/optimization-roadmap.md` and `docs/id/optimization-roadmap.md`
+
 ## [0.32.0] — 2026-08-04
 
 ### Added
