@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
-import { derived, get, writable } from "svelte/store";
-import { createGraphLoader, type GraphLoaderDeps } from "./graphLoader";
+import { get, writable } from "svelte/store";
+import { createGraphLoader, SHOW_MORE_STEP, MAX_GRAPH_LIMIT, type GraphLoaderDeps } from "./graphLoader";
 import type { KGNode, KGEdge } from "$lib/interfaces";
 
 // Mock the api module ($lib alias resolves via vitest.config.ts). The mock is
@@ -25,12 +25,14 @@ const edgeCD: KGEdge = { source: "n-c", target: "n-d", relation_type: "related" 
 function graphResponse(
 	overrides: { nodes?: KGNode[]; edges?: KGEdge[]; truncated?: boolean; totalItems?: number } = {}
 ) {
-	const totalItems = overrides.totalItems ?? 100;
+	// Default totalItems is 1000 so 'Show more' can grow (300→600→900→1000)
+	// without being prematurely capped; tests that exercise the cap override it.
+	const totalItems = overrides.totalItems ?? 1000;
 	return {
 		nodes: overrides.nodes ?? [nodeA],
 		edges: overrides.edges ?? [edgeAB],
 		truncated: overrides.truncated ?? false,
-		pagination: { page: 1, pageSize: 25, totalItems, totalPages: Math.ceil(totalItems / 25) }
+		pagination: { page: 1, pageSize: 300, graphLimit: 300, totalItems, totalPages: Math.ceil(totalItems / 300) }
 	};
 }
 
@@ -54,10 +56,8 @@ interface TestHarness {
 function createTestDeps(initialRepo = "repo-a"): TestHarness {
 	let repo = initialRepo;
 	let loadedRepo = "";
-	const page = writable(1);
-	const pageSize = writable(25);
+	const graphLimit = writable(300);
 	const totalItems = writable(0);
-	const totalPages = derived([totalItems, pageSize], ([ti, ps]) => Math.ceil(ti / ps));
 	const deps: GraphLoaderDeps = {
 		repo: vi.fn(() => repo),
 		getLoadedRepo: vi.fn(() => loadedRepo),
@@ -72,10 +72,8 @@ function createTestDeps(initialRepo = "repo-a"): TestHarness {
 		setError: vi.fn(),
 		onClear: vi.fn(),
 		onDataReady: vi.fn(),
-		page,
-		pageSize,
-		totalItems,
-		totalPages
+		graphLimit,
+		totalItems
 	};
 	return {
 		deps,
@@ -83,6 +81,13 @@ function createTestDeps(initialRepo = "repo-a"): TestHarness {
 			repo = r;
 		}
 	};
+}
+
+/** Warm the loader for a repo with the given totalItems (default 1000 so Show-more can grow). */
+async function warmCache(loader: ReturnType<typeof createGraphLoader>, totalItems = 1000) {
+	kgGraphMock.mockResolvedValueOnce(graphResponse({ totalItems }));
+	await loader.loadGraph();
+	kgGraphMock.mockClear();
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -96,7 +101,7 @@ describe("graphLoader", () => {
 		vi.useRealTimers();
 	});
 
-	it("first load (cache miss) fetches full edges and populates the cache", async () => {
+	it("first load (cache miss) fetches the top-N nodes with graphLimit and populates the edge cache", async () => {
 		const { deps } = createTestDeps();
 		const loader = createGraphLoader(deps);
 		kgGraphMock.mockResolvedValueOnce(graphResponse());
@@ -106,6 +111,9 @@ describe("graphLoader", () => {
 		expect(kgGraphMock).toHaveBeenCalledTimes(1);
 		const [repoArg, params] = kgGraphMock.mock.calls[0];
 		expect(repoArg).toBe("repo-a");
+		expect(params.graphLimit).toBe(300); // top-N window, not page/pageSize
+		expect(params.page).toBeUndefined();
+		expect(params.pageSize).toBeUndefined();
 		expect(params.includeEdges).toBeUndefined(); // full fetch — no opt-out
 		expect(params.signal).toBeInstanceOf(AbortSignal);
 		expect(deps.setNodes).toHaveBeenCalledWith([nodeA]);
@@ -116,34 +124,37 @@ describe("graphLoader", () => {
 		expect(deps.setLoading).toHaveBeenLastCalledWith(false);
 	});
 
-	it("page nav after cache warm sends includeEdges:false, reuses cached edges, and never overwrites the cache with the server's empty edges", async () => {
+	it("showMore grows graphLimit, sends includeEdges:false, reuses cached edges, and never overwrites the cache with the server's empty edges", async () => {
+		vi.useFakeTimers();
 		const { deps } = createTestDeps();
 		const loader = createGraphLoader(deps);
-		kgGraphMock.mockResolvedValueOnce(graphResponse());
-		await loader.loadGraph(); // warm the repo-a cache
+		await warmCache(loader);
 
-		// Page nav — the server honors includeEdges=false: nodes only, edges: [].
-		kgGraphMock.mockClear();
-		deps.page.set(2);
+		// Show more — the server honors includeEdges=false: nodes only, edges: [].
 		kgGraphMock.mockResolvedValueOnce(graphResponse({ nodes: [nodeB], edges: [] }));
-		await loader.loadGraph(false, true);
+		loader.showMore();
+		expect(get(deps.graphLimit)).toBe(300 + SHOW_MORE_STEP); // store grows immediately
+		expect(kgGraphMock).not.toHaveBeenCalled(); // debounced
+		await vi.advanceTimersByTimeAsync(150);
 
 		expect(kgGraphMock).toHaveBeenCalledTimes(1);
 		const [repoArg, params] = kgGraphMock.mock.calls[0];
 		expect(repoArg).toBe("repo-a");
-		expect(params.page).toBe(2);
+		expect(params.graphLimit).toBe(300 + SHOW_MORE_STEP);
+		expect(params.page).toBeUndefined();
 		expect(params.includeEdges).toBe(false);
 		// Cached edges served — NOT the response's empty array.
 		expect(deps.setEdges).toHaveBeenLastCalledWith([edgeAB]);
 		expect(deps.setTruncated).toHaveBeenLastCalledWith(false);
 		expect(deps.setNodes).toHaveBeenLastCalledWith([nodeB]);
 
-		// A third page nav still gets the cached edges — the [] from the
+		// A second show-more still gets the cached edges — the [] from the
 		// includeEdges=false response never replaced the cache entry.
 		kgGraphMock.mockClear();
-		deps.page.set(3);
 		kgGraphMock.mockResolvedValueOnce(graphResponse({ nodes: [nodeA], edges: [] }));
-		await loader.loadGraph(false, true);
+		loader.showMore();
+		await vi.advanceTimersByTimeAsync(150);
+		expect(kgGraphMock.mock.calls[0][1].graphLimit).toBe(300 + 2 * SHOW_MORE_STEP);
 		expect(kgGraphMock.mock.calls[0][1].includeEdges).toBe(false);
 		expect(deps.setEdges).toHaveBeenLastCalledWith([edgeAB]);
 	});
@@ -163,11 +174,12 @@ describe("graphLoader", () => {
 		expect(deps.setEdges).toHaveBeenLastCalledWith([edgeCD]);
 		expect(deps.setTruncated).toHaveBeenLastCalledWith(true);
 
-		// The refreshed entry is what subsequent reuse page-navs serve.
+		// The refreshed entry is what subsequent show-mores serve.
+		vi.useFakeTimers();
 		kgGraphMock.mockClear();
-		deps.page.set(2);
 		kgGraphMock.mockResolvedValueOnce(graphResponse({ nodes: [nodeB], edges: [] }));
-		await loader.loadGraph(false, true);
+		loader.showMore();
+		await vi.advanceTimersByTimeAsync(150);
 		expect(deps.setEdges).toHaveBeenLastCalledWith([edgeCD]);
 		expect(deps.setTruncated).toHaveBeenLastCalledWith(true);
 	});
@@ -224,28 +236,50 @@ describe("graphLoader", () => {
 		expect(deps.setLoading).toHaveBeenLastCalledWith(false);
 	});
 
-	it("goToPage debounces rapid clicks into a single fetch after 150ms", async () => {
+	it("showMore debounces rapid clicks into a single fetch after 150ms", async () => {
 		vi.useFakeTimers();
 		const { deps } = createTestDeps();
 		const loader = createGraphLoader(deps);
-		kgGraphMock.mockResolvedValueOnce(graphResponse());
-		await loader.loadGraph(); // warm cache; pagination → 4 total pages
+		await warmCache(loader);
 
-		kgGraphMock.mockClear();
 		kgGraphMock.mockResolvedValue(graphResponse({ nodes: [nodeB], edges: [] }));
 
-		loader.goToPage(2);
-		loader.goToPage(3);
-		loader.goToPage(4);
+		loader.showMore();
+		loader.showMore();
+		loader.showMore();
 		expect(kgGraphMock).not.toHaveBeenCalled();
 
 		await vi.advanceTimersByTimeAsync(150);
 
 		expect(kgGraphMock).toHaveBeenCalledTimes(1);
-		expect(get(deps.page)).toBe(4);
-		expect(kgGraphMock.mock.calls[0][1].page).toBe(4);
+		// 300 → 600 → 900 → capped at 1000 by the final click.
+		expect(get(deps.graphLimit)).toBe(MAX_GRAPH_LIMIT);
+		expect(kgGraphMock.mock.calls[0][1].graphLimit).toBe(MAX_GRAPH_LIMIT);
 		expect(kgGraphMock.mock.calls[0][1].includeEdges).toBe(false); // cache hit
 		expect(deps.setEdges).toHaveBeenLastCalledWith([edgeAB]); // cached, not []
+	});
+
+	it("showMore caps at totalItems when the repo has fewer than 1000 nodes, and is a no-op at the cap", async () => {
+		vi.useFakeTimers();
+		const { deps } = createTestDeps();
+		const loader = createGraphLoader(deps);
+		kgGraphMock.mockResolvedValueOnce(graphResponse({ totalItems: 500 }));
+		await loader.loadGraph(); // totalItems=500, graphLimit=300
+
+		kgGraphMock.mockClear();
+		kgGraphMock.mockResolvedValue(graphResponse({ nodes: [nodeB], edges: [], totalItems: 500 }));
+		loader.showMore(); // 300 → min(500, 600) = 500
+		await vi.advanceTimersByTimeAsync(150);
+		expect(get(deps.graphLimit)).toBe(500);
+		expect(kgGraphMock).toHaveBeenCalledTimes(1);
+		expect(kgGraphMock.mock.calls[0][1].graphLimit).toBe(500);
+
+		// Already at the cap — no further growth, no fetch.
+		kgGraphMock.mockClear();
+		loader.showMore();
+		await vi.advanceTimersByTimeAsync(150);
+		expect(get(deps.graphLimit)).toBe(500);
+		expect(kgGraphMock).not.toHaveBeenCalled();
 	});
 
 	it("repo switch mid-flight discards the stale response", async () => {

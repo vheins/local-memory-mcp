@@ -80,13 +80,12 @@ export const memoriesTotalPages = derived([memoriesTotal, memoriesPageSize], ([$
 	Math.max(1, Math.ceil($total / $size))
 );
 
-// ─── Knowledge Graph pagination ─────────────────────────────────────────────
-export const kgPage = writable<number>(1);
-export const kgPageSize = writable<number>(50);
+// ─── Knowledge Graph top-N view (TASK-213) ──────────────────────────────────
+// The KG graph no longer paginates; it renders the top-N highest-degree nodes
+// (graphLimit) with a progressive 'Show more' button. `kgGraphLimit` starts at
+// 300 and grows by +300 per Show-more, capped at min(1000, totalItems).
+export const kgGraphLimit = writable<number>(300);
 export const kgTotalItems = writable<number>(0);
-export const kgTotalPages = derived([kgTotalItems, kgPageSize], ([$total, $size]) =>
-	Math.max(1, Math.ceil($total / $size))
-);
 
 // ─── Persistence helpers ─────────────────────────────────────────────────────
 

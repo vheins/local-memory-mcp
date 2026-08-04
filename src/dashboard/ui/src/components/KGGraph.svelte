@@ -2,11 +2,12 @@
 	import { untrack } from "svelte";
 	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import { onMount, onDestroy } from "svelte";
+	import { get } from "svelte/store";
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
-	import { kgPage, kgPageSize, kgTotalItems, kgTotalPages } from "$lib/stores";
-	import { createGraphLoader } from "$lib/kg/graphLoader";
+	import { kgGraphLimit, kgTotalItems } from "$lib/stores";
+	import { createGraphLoader, MAX_GRAPH_LIMIT } from "$lib/kg/graphLoader";
 	import { stopNeuralAnimation } from "$lib/kg/KGNeuralRenderer";
 	import { initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
@@ -29,8 +30,10 @@
 	let hiddenZeroEdgeNodeCount = 0;
 	let truncated = false;
 
-	// Limit nodes for force layout to prevent browser freeze
-	const MAX_FORCE_NODES = 300;
+	// Default top-N-by-degree window before 'Show more' grows it (TASK-213).
+	// Not a layout cap — initLayout renders the full fetched window up to
+	// MAX_GRAPH_LIMIT (see TASK-214), so 'Show more' is a true superset.
+	const INITIAL_GRAPH_LIMIT = 300;
 
 	// Layout state
 	let layoutNodes: LayoutNode[] = [];
@@ -118,8 +121,8 @@
 	}
 
 	// ─── Graph fetch orchestration (delegated to graphLoader, TASK-196) ───────
-	// The edge cache, AbortController lifecycle, page-nav debounce, and the
-	// loadGraph/clearGraph/goToPage flow live in $lib/kg/graphLoader.ts. This
+	// The edge cache, AbortController lifecycle, show-more debounce, and the
+	// loadGraph/clearGraph/showMore flow live in $lib/kg/graphLoader.ts. This
 	// component wires its view/layout state in via stores + callbacks.
 	const graphLoader = createGraphLoader({
 		repo: () => repo,
@@ -144,10 +147,8 @@
 			detailEntityName = "";
 		},
 		onDataReady: initLayout,
-		page: kgPage,
-		pageSize: kgPageSize,
-		totalItems: kgTotalItems,
-		totalPages: kgTotalPages
+		graphLimit: kgGraphLimit,
+		totalItems: kgTotalItems
 	});
 
 	function initLayout() {
@@ -198,17 +199,23 @@
 			edgeNodeNames.add(e.target);
 		}
 
+		// Cap the selection at the fetched top-N window (graphLimit) so 'Show
+		// more' renders a true superset 300 → 600 → 900 → 1000 (TASK-214).
+		// MAX_GRAPH_LIMIT is the server-side hard cap — defense in depth in
+		// case the store ever holds a value above it.
+		const layoutNodeCap = Math.min(get(kgGraphLimit), MAX_GRAPH_LIMIT);
+
 		const selectedNames = new SvelteSet<string>();
 		const selectedNodes: typeof nodes = [];
 		for (const n of sortedNodes) {
-			if (selectedNodes.length >= MAX_FORCE_NODES) break;
+			if (selectedNodes.length >= layoutNodeCap) break;
 			if (!selectedNames.has(n.name)) {
 				selectedNames.add(n.name);
 				selectedNodes.push(n);
 			}
 		}
 		for (const n of nodes) {
-			if (selectedNodes.length >= MAX_FORCE_NODES) break;
+			if (selectedNodes.length >= layoutNodeCap) break;
 			if (edgeNodeNames.has(n.name) && !selectedNames.has(n.name)) {
 				selectedNames.add(n.name);
 				selectedNodes.push(n);
@@ -336,12 +343,12 @@
 
 	// Re-load when repo changes (guarded inside loadGraph against noop)
 	$: if (repo && canvasReady && loadedRepo !== repo) {
-		// Drop any pending debounced page navigation — it belongs to the old repo.
+		// Drop any pending debounced show-more — it belongs to the old repo.
 		graphLoader.cancelPendingNavigation();
-		// Reset pagination state before loading a new repo so we don't carry
-		// over a stale page number that exceeds the new repo's total pages
-		// (e.g. page 8 of repo-A → repo-B with 3 pages → page 8 of 3 = empty).
-		kgPage.set(1);
+		// Reset the top-N window before loading a new repo so we don't carry
+		// over a stale graphLimit (e.g. limit 900 of repo-A → repo-B starts
+		// fresh at the default top-N window).
+		kgGraphLimit.set(INITIAL_GRAPH_LIMIT);
 		kgTotalItems.set(0);
 		untrack(() => graphLoader.loadGraph());
 	}
@@ -417,73 +424,31 @@
 		/>
 	</div>
 
-	<!-- Truncated edge indicator (shown even on single-page graphs) -->
-	{#if truncated && $kgTotalPages <= 1}
+	<!-- Top-N window (TASK-213): top highest-degree nodes + progressive 'Show more' -->
+	{#if $kgTotalItems > 0}
+		{@const showMoreDisabled = $kgGraphLimit >= $kgTotalItems || $kgGraphLimit >= MAX_GRAPH_LIMIT}
 		<div class="kg-pagination">
 			<span class="kg-pagination-info">
-				<span class="kg-truncated-badge" title="Edge list was truncated to the highest-degree edges">
-					Edges truncated
-				</span>
-			</span>
-		</div>
-	{/if}
-
-	<!-- Pagination -->
-	{#if $kgTotalPages > 1}
-		<div class="kg-pagination">
-			<span class="kg-pagination-info">
-				Page {$kgPage} of {$kgTotalPages} ({$kgTotalItems} nodes)
+				Top {$kgGraphLimit} of {$kgTotalItems} nodes
 				{#if truncated}
 					<span class="kg-truncated-badge" title="Edge list was truncated to the highest-degree edges">
 						Edges truncated
 					</span>
 				{/if}
+				{#if $kgGraphLimit > 600}
+					<span class="kg-layout-note" title="The larger top-N window takes longer to lay out">
+						Laying out {$kgGraphLimit} nodes…
+					</span>
+				{/if}
 			</span>
-			<div class="kg-pagination-controls">
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => graphLoader.goToPage(1)}
-					disabled={$kgPage <= 1}
-					aria-label="First page"
-				>
-					&laquo;
-				</button>
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => graphLoader.goToPage($kgPage - 1)}
-					disabled={$kgPage <= 1}
-					aria-label="Previous page"
-				>
-					&lsaquo;
-				</button>
-				{#each Array.from({ length: Math.min(5, $kgTotalPages) }, (_, i) => {
-					const start = Math.max(1, Math.min($kgPage - 2, $kgTotalPages - 4));
-					return start + i;
-				}) as p (p)}
-					<button
-						class="btn btn-sm"
-						class:btn-primary={p === $kgPage}
-						class:btn-ghost={p !== $kgPage}
-						on:click={() => graphLoader.goToPage(p)}>{p}</button
-					>
-				{/each}
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => graphLoader.goToPage($kgPage + 1)}
-					disabled={$kgPage >= $kgTotalPages}
-					aria-label="Next page"
-				>
-					&rsaquo;
-				</button>
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => graphLoader.goToPage($kgTotalPages)}
-					disabled={$kgPage >= $kgTotalPages}
-					aria-label="Last page"
-				>
-					&raquo;
-				</button>
-			</div>
+			<button
+				class="btn btn-ghost btn-sm"
+				on:click={() => graphLoader.showMore()}
+				disabled={showMoreDisabled}
+				title="Load the next 300 highest-degree nodes (capped at 1000)"
+			>
+				Show more
+			</button>
 		</div>
 	{/if}
 
@@ -531,12 +496,6 @@
 		color: var(--color-text-muted);
 	}
 
-	.kg-pagination-controls {
-		display: flex;
-		align-items: center;
-		gap: 2px;
-	}
-
 	.kg-truncated-badge {
 		display: inline-flex;
 		align-items: center;
@@ -547,6 +506,20 @@
 		color: var(--color-warning, #d97706);
 		background: rgba(217, 119, 6, 0.1);
 		border: 1px solid rgba(217, 119, 6, 0.2);
+		border-radius: 4px;
+		white-space: nowrap;
+	}
+
+	.kg-layout-note {
+		display: inline-flex;
+		align-items: center;
+		margin-left: 8px;
+		padding: 2px 6px;
+		font-size: 0.65rem;
+		font-weight: 500;
+		color: var(--color-text-muted);
+		background: rgba(128, 128, 128, 0.08);
+		border: 1px solid rgba(128, 128, 128, 0.15);
 		border-radius: 4px;
 		white-space: nowrap;
 	}

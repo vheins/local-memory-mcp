@@ -375,11 +375,19 @@ export const api = {
 
 	kgGraph: (
 		repo: string,
-		params?: { page?: number; pageSize?: number; signal?: AbortSignal; includeEdges?: boolean }
+		params?: { page?: number; pageSize?: number; graphLimit?: number; signal?: AbortSignal; includeEdges?: boolean }
 	) => {
 		const q = new URLSearchParams({ repo });
-		if (params?.page) q.set("page", String(params.page));
-		if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+		// TASK-213: top-N-by-degree mode sends `graphLimit` INSTEAD of page/pageSize.
+		// The server treats graphLimit as authoritative — it bypasses the pageSize
+		// clamp ([100,1000]) and forces offset=0, so sending page alongside would
+		// be ambiguous. graphLimit mode ignores page/pageSize entirely.
+		if (params?.graphLimit) {
+			q.set("graphLimit", String(params.graphLimit));
+		} else {
+			if (params?.page) q.set("page", String(params.page));
+			if (params?.pageSize) q.set("pageSize", String(params.pageSize));
+		}
 		// TASK-198: only an explicit `false` opts out of the edge payload (up to
 		// 4000 edges). Absent/true leave the query unchanged (server default).
 		if (params?.includeEdges === false) q.set("includeEdges", "false");
