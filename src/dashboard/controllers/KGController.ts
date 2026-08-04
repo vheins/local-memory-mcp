@@ -65,6 +65,19 @@ export class KGController {
 
 			const { page, pageSize, offset } = parsePageParams(req.query);
 
+			// `graphLimit` (TASK-212): optional top-N-by-degree view that
+			// bypasses the pageSize clamp (max 100). Positive integer, clamped
+			// to [100, 1000]. When absent the legacy page/pageSize paginated
+			// behavior is unchanged (backward compat).
+			let graphLimit: number | undefined;
+			if (req.query.graphLimit !== undefined) {
+				const raw = Number(req.query.graphLimit);
+				if (!Number.isInteger(raw) || raw <= 0) {
+					throw new HttpError(400, "graphLimit must be a positive integer");
+				}
+				graphLimit = Math.min(1000, Math.max(100, raw));
+			}
+
 			// Optional `includeEdges` query param (TASK-197): consumers that only
 			// need the node set can skip the edge fetch + truncation probe entirely,
 			// avoiding a payload of up to KG_MAX_GRAPH_EDGES (4000) edges per request.
@@ -73,14 +86,19 @@ export class KGController {
 			// degree is computed server-side via SQL CTE independent of this edge set.
 			const includeEdges = (req.query.includeEdges as string | undefined) !== "false";
 
-			const result = KgService.listGraph(repo, pageSize, offset, includeEdges);
+			const result = KgService.listGraph(repo, pageSize, offset, includeEdges, graphLimit);
 
+			const effectiveTotal = graphLimit ?? pageSize;
 			return jsonApiRes(result.data, "graph", {
 				meta: {
-					page,
-					pageSize,
+					// graphLimit mode (TASK-216): an offset-0 top-N window, not a
+					// paginated view — emitting page/pageSize (default 20) would
+					// contradict graphLimit (e.g. 300). Omit them here; the legacy
+					// paginated path (graphLimit absent) keeps page/pageSize.
+					...(graphLimit === undefined ? { page, pageSize } : {}),
+					...(graphLimit !== undefined ? { graphLimit } : {}),
 					totalItems: result.totalItems,
-					totalPages: Math.ceil(result.totalItems / pageSize)
+					totalPages: Math.ceil(result.totalItems / effectiveTotal)
 				}
 			});
 		});

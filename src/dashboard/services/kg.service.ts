@@ -68,10 +68,18 @@ export const KgService = {
 	 * that only need the node set can skip the edge fetch + truncation probe
 	 * entirely. When included, a LIMIT+1 probe detects whether the edge set
 	 * exceeds KG_MAX_GRAPH_EDGES (TASK-148 pattern) and slices to the cap.
+	 *
+	 * Optional `graphLimit` (TASK-212): the top-N-by-degree view. When set,
+	 * ignores page/pageSize and returns the N highest-degree nodes in one
+	 * shot (`listGraphNodes` is degree-ordered); when absent, the legacy
+	 * paginated window (`limit`/`offset`) is unchanged for backward compat.
 	 */
-	listGraph(repo: string, limit: number, offset: number, includeEdges: boolean): KgGraphResult {
+	listGraph(repo: string, limit: number, offset: number, includeEdges: boolean, graphLimit?: number): KgGraphResult {
 		const nodesTotal = db.knowledgeGraph.countGraphNodes(repo);
-		const nodes = db.knowledgeGraph.listGraphNodes(repo, { limit, offset });
+		const nodes = db.knowledgeGraph.listGraphNodes(repo, {
+			limit: graphLimit ?? limit,
+			offset: graphLimit !== undefined ? 0 : offset
+		});
 
 		let edges: Array<{ source: string; target: string; relation_type: string }> = [];
 		let truncated = false;

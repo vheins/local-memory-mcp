@@ -550,6 +550,83 @@ describe("Dashboard Controllers", () => {
 		});
 	});
 
+	// ── KG graphLimit top-N view (TASK-212) ────────────────────────────────
+	// `graphLimit` overrides page/pageSize for the top-N-by-degree graph view:
+	// bypasses the pageSize clamp (max 100) so a renderer can fetch its full
+	// top-N window (up to 1000, client-side MAX_GRAPH_LIMIT) in one request.
+	// When absent, the legacy paginated behavior is unchanged (covered by the
+	// tests above).
+
+	describe("KG API — graphLimit top-N view (TASK-212)", () => {
+		const now = new Date().toISOString();
+
+		const seedEntities = (repo: string, count: number) => {
+			for (let i = 0; i < count; i++) {
+				db.knowledgeGraph.upsertEntity({
+					name: `${repo}-entity-${i}`,
+					type: "concept",
+					description: null,
+					repo,
+					owner: "test",
+					created_at: now,
+					updated_at: now
+				});
+			}
+		};
+
+		it("GET /api/kg/graph?repo=X&graphLimit=250 returns top-250 nodes of 260 with graphLimit meta", async () => {
+			const repo = "kg-graphlimit";
+			seedEntities(repo, 260);
+
+			const res = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}&graphLimit=250`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.type).toBe("graph");
+			// Top-N window: never more than graphLimit nodes, and for a fresh
+			// repo with 260 seeded entities exactly 250 (degree ties broken by
+			// name — the ordering is stable, only the count matters here).
+			expect(Array.isArray(body.data.attributes.nodes)).toBe(true);
+			expect(body.data.attributes.nodes.length).toBeLessThanOrEqual(250);
+			expect(body.data.attributes.nodes.length).toBe(250);
+			// includeEdges default (TASK-197): edges still fetched + probed.
+			expect(body.data.attributes).toHaveProperty("edges");
+			expect(body.data.attributes).toHaveProperty("truncated");
+			// Meta drives the renderer's "Top N of M" readout.
+			expect(body.meta.totalItems).toBe(260);
+			expect(body.meta.totalPages).toBe(2); // ceil(260 / 250)
+			expect(body.meta.graphLimit).toBe(250);
+		});
+
+		it("GET /api/kg/graph clamps graphLimit into [100, 1000]", async () => {
+			const repo = "kg-graphlimit-clamp";
+			seedEntities(repo, 1200);
+
+			const clampedRes = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}&graphLimit=5000`);
+			expect(clampedRes.status).toBe(200);
+			const clamped = (await clampedRes.json()) as Record<string, any>;
+			expect(clamped.meta.graphLimit).toBe(1000);
+			expect(clamped.data.attributes.nodes.length).toBeLessThanOrEqual(1000);
+
+			const flooredRes = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}&graphLimit=50`);
+			expect(flooredRes.status).toBe(200);
+			const floored = (await flooredRes.json()) as Record<string, any>;
+			expect(floored.meta.graphLimit).toBe(100);
+			expect(floored.data.attributes.nodes.length).toBeLessThanOrEqual(100);
+		});
+
+		it("GET /api/kg/graph rejects non-positive-integer graphLimit with 400", async () => {
+			const repo = "kg-graphlimit-invalid";
+			seedEntities(repo, 5);
+
+			for (const bad of ["abc", "-1", "0", "1.5"]) {
+				const res = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}&graphLimit=${bad}`);
+				expect(res.status).toBe(400);
+				const body = (await res.json()) as Record<string, any>;
+				expect(body.errors[0].detail).toMatch(/graphLimit/i);
+			}
+		});
+	});
+
 	// ── Coordination Controller ────────────────────────────────────────────
 
 	describe("Coordination API", () => {
