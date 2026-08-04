@@ -1,5 +1,7 @@
 # Optimization Roadmap
 
+> **Status (verified 2026-08-04)**: ALL `OPT-*` findings are **FIXED** and verified in code — DRY (01-07), Code Quality (01-04), Performance (01-11), Structure (01-05), Feature/Flow (01-04, FLOW-01..03), Observability (01). Shared modules: `utils/hybrid-search.ts`, `utils/purge-entity-cleanup.ts`, `utils/mcp-error.ts`, `utils/coordination.ts`, `utils/auto-infer.ts`, `utils/mcp-response.ts`, `utils/action-log.ts` (POLICY 2), `utils/scoring.ts`, `utils/chunk.ts`; migrations split into versioned `vNN-*.ts`; dashboard `services/` layer complete (incl. `statsCache.ts`); KG list endpoints paginated + truncated probe; Arena polling visibility-gated. Only residual decisions: OPT-PERF-03 serial worker loop deferred (not a bottleneck — see memory), dashboard single-delete paths still bypass `purgeEntityAndCleanup` (documented in code).
+>
 > **Scope**: `vheins/local-memory-mcp` — TypeScript MCP memory server (`src/mcp/`, 385 TS files) + Svelte dashboard (`src/dashboard/`, 88 svelte files). 559 files, 6064 symbols (codebase index).
 > **Method**: Evidence-based code analysis (codebase index + source reads). All findings are structural — visible in code. Runtime claims flagged `[benchmark]` where unverified.
 > **Created**: 2026-08-02 · **Tasks**: 35 implementation tasks registered in MCP under phase `optimize-*` (codes `OPT-*`).
