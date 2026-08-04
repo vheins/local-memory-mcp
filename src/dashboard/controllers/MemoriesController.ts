@@ -17,6 +17,10 @@ export class MemoriesController {
 
 			if (!repo) throw new HttpError(400, "repo is required");
 
+			// Soft-delete status scoping (TASK-209): archived memories are hidden
+			// by default; `?includeArchived=true` opts into showing them.
+			const includeArchived = req.query.includeArchived === "true";
+
 			const result = MemoryService.list({
 				repo: repo as string,
 				type: type as MemoryType,
@@ -25,6 +29,7 @@ export class MemoriesController {
 				maxImportance,
 				sortBy,
 				sortOrder,
+				includeArchived,
 				limit: pageSize,
 				offset
 			});
@@ -42,7 +47,10 @@ export class MemoriesController {
 
 	static async get(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
-			const memory = MemoryService.getById(req.params.id as string);
+			// TASK-209: archived memories 404 by default; `?includeArchived=true`
+			// restores read access (restore path after soft-archive delete).
+			const includeArchived = req.query.includeArchived === "true";
+			const memory = MemoryService.getById(req.params.id as string, includeArchived);
 			if (!memory) throw new HttpError(404, "Memory not found");
 			return jsonApiRes(memory, "memory");
 		});

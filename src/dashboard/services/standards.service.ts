@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { db, vectors } from "../lib/context";
+import { db } from "../lib/context";
 import { ServiceError } from "../lib/jsonApi";
 import { purgeEntityAndCleanup } from "../../mcp/utils/purge-entity-cleanup";
 import type { CodingStandardEntry } from "../../mcp/types";
@@ -258,9 +258,14 @@ export const StandardsService = {
 		const existing = db.standards.getById(id);
 		if (!existing) throw new ServiceError(404, "Coding standard not found");
 
+		// Route through the shared purge + cleanup contract (OPT-DRY-03): hard
+		// delete + queue_jobs purge + vector removal + repo-scoped KG cleanup —
+		// identical to the MCP standard-delete tool and the dashboard bulk path.
+		// The explicit vectors.remove is dropped: standard_vectors cascades on
+		// coding_standards hard delete (matching the memory/standard tools,
+		// which rely on the contract's CASCADE coverage; TASK-207).
 		await db.withWrite(() => {
-			db.standards.delete(existing.id);
-			vectors.remove(existing.id, "standard");
+			purgeEntityAndCleanup(db, "standard", [{ id, title: existing.title, repo: existing.repo ?? "" }]);
 			db.actions.logAction("delete", existing.owner, existing.repo || "global", {
 				query: existing.title,
 				resultCount: 1

@@ -110,6 +110,23 @@ export function taskStatusesFilter(alias: string | undefined, statuses: string[]
 }
 
 /**
+ * Optional exclude-canceled filter fragment (` AND t.status != 'canceled'`)
+ * for dashboard task lists WITHOUT an explicit ?status filter (TASK-209).
+ * Mirrors the memories list hiding archived by default. Returns null when the
+ * caller passed an explicit status (which already narrows the set) or when the
+ * opt-in is off — keeping every existing MCP caller's behavior unchanged.
+ */
+export function taskExcludeCanceledFilter(
+	alias: string | undefined,
+	excludeCanceled: boolean,
+	status: string | undefined
+): string | null {
+	if (!excludeCanceled || status) return null;
+	const a = alias ? `${alias}.` : "";
+	return ` AND ${a}status != '${TASK_STATUS_CANCELED}'`;
+}
+
+/**
  * Optional search filter fragment (` AND (t.title LIKE ? OR ...)`) shared by
  * task list and count queries (TASK-112). Returns null when no search term is
  * present. Callers must push `%term%` three times (title/description/task_code).

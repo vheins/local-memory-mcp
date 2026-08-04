@@ -3,6 +3,7 @@ import { Task, TaskRow, TaskChild, TaskComment } from "../../types";
 import { handleDuplicateTaskCode } from "./validation";
 import {
 	buildCoordinationSelect,
+	taskExcludeCanceledFilter,
 	taskRepoFilter,
 	taskSearchFilter,
 	taskSelectSkeleton,
@@ -194,7 +195,8 @@ export class TaskEntity extends BaseEntity {
 		status?: string,
 		limit?: number,
 		offset?: number,
-		search?: string
+		search?: string,
+		excludeCanceled: boolean = false
 	): Task[] {
 		const repoFilter = taskRepoFilter("t", owner, repo);
 		const params: (string | number)[] = repoFilter.params;
@@ -204,6 +206,11 @@ export class TaskEntity extends BaseEntity {
 		if (statusClause) {
 			query += statusClause;
 			params.push(status as string);
+		}
+
+		const excludeCanceledClause = taskExcludeCanceledFilter("t", excludeCanceled, status);
+		if (excludeCanceledClause) {
+			query += excludeCanceledClause;
 		}
 
 		const searchClause = taskSearchFilter("t", search);
@@ -231,7 +238,7 @@ export class TaskEntity extends BaseEntity {
 		return rows.map((r) => this.rowToTask(r));
 	}
 
-	countTasks(owner: string, repo: string, status?: string, search?: string): number {
+	countTasks(owner: string, repo: string, status?: string, search?: string, excludeCanceled: boolean = false): number {
 		const { clause: repoClause, params } = taskRepoFilter(undefined, owner, repo);
 		let query = `SELECT COUNT(*) as count FROM ${TABLE_TASKS} WHERE ${repoClause}`;
 
@@ -239,6 +246,11 @@ export class TaskEntity extends BaseEntity {
 		if (statusClause) {
 			query += statusClause;
 			params.push(status as string);
+		}
+
+		const excludeCanceledClause = taskExcludeCanceledFilter(undefined, excludeCanceled, status);
+		if (excludeCanceledClause) {
+			query += excludeCanceledClause;
 		}
 
 		const searchClause = taskSearchFilter(undefined, search);

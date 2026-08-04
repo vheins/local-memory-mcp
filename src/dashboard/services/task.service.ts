@@ -91,8 +91,12 @@ export const TaskService = {
 			tasks = db.tasks.getTasksByMultipleStatuses("", repo, statuses, limit, offset, search);
 			totalItems = db.tasks.countTasksByMultipleStatuses("", repo, statuses, search);
 		} else {
-			tasks = db.tasks.getTasksByRepo("", repo, status, limit, offset, search);
-			totalItems = db.tasks.countTasks("", repo, status, search);
+			// Soft-delete status scoping (TASK-209): with no explicit ?status
+			// filter, canceled (soft-deleted) tasks are hidden — mirrors the
+			// memories list hiding archived by default. An explicit
+			// `?status=canceled` still returns them.
+			tasks = db.tasks.getTasksByRepo("", repo, status, limit, offset, search, !status);
+			totalItems = db.tasks.countTasks("", repo, status, search, !status);
 		}
 
 		return { tasks, totalItems };
@@ -164,8 +168,14 @@ export const TaskService = {
 	async delete(id: string): Promise<void> {
 		const task = db.tasks.getTaskById(id);
 		if (!task) throw new ServiceError(404, "Task not found");
+		// Route through the shared purge + cleanup contract (OPT-DRY-03): soft
+		// cancel + child detach + vector removal + claim release + handoff
+		// expiry + queue_jobs purge + repo-scoped KG cleanup — identical to the
+		// MCP task-delete tool and the dashboard bulk path. This closes the
+		// single-vs-bulk divergence (single used to hard-delete while
+		// bulk/tool soft-cancel; TASK-207).
 		await db.withWrite(() => {
-			db.tasks.deleteTask(id);
+			purgeEntityAndCleanup(db, "task", [{ id, title: task.title, repo: task.repo }]);
 			db.actions.logAction("delete", task.owner || "", task.repo, { taskId: id });
 		});
 	},

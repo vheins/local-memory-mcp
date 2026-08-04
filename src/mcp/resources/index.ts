@@ -208,7 +208,10 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 	const memoryIdMatch = uri.match(/^memory:\/\/([0-9a-f-]{36})$/i);
 	if (memoryIdMatch) {
 		const id = memoryIdMatch[1];
-		const entry = db.memories.getByIdWithStats(id);
+		// TASK-209: the dashboard GET hides archived by default, but this
+		// by-id MCP resource must keep serving soft-archived memories (restore
+		// path) — opt in explicitly.
+		const entry = db.memories.getByIdWithStats(id, true);
 		if (!entry) throw resourceNotFound(`Memory with ID ${id} not found.`, uri);
 
 		const payload = JSON.stringify(entry, null, 2);

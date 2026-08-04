@@ -12,6 +12,7 @@ export interface MemoryListParams {
 	maxImportance?: string;
 	sortBy?: string;
 	sortOrder?: string;
+	includeArchived?: boolean;
 	limit: number;
 	offset: number;
 }
@@ -29,7 +30,8 @@ export interface MemoryListResult {
  */
 export const MemoryService = {
 	list(params: MemoryListParams): MemoryListResult {
-		const { repo, type, search, minImportance, maxImportance, sortBy, sortOrder, limit, offset } = params;
+		const { repo, type, search, minImportance, maxImportance, sortBy, sortOrder, includeArchived, limit, offset } =
+			params;
 
 		return db.memories.listMemoriesForDashboard({
 			repo,
@@ -39,22 +41,30 @@ export const MemoryService = {
 			maxImportance: maxImportance ? parseInt(maxImportance) : undefined,
 			sortBy,
 			sortOrder: sortOrder?.toUpperCase() === "ASC" ? "ASC" : "DESC",
+			includeArchived,
 			limit,
 			offset
 		});
 	},
 
-	/** Side-effect-free existence check (no action log, no hit_count). */
+	/**
+	 * Side-effect-free existence check (no action log, no hit_count).
+	 * Mutations (update/delete) must still find soft-archived rows so the
+	 * restore path keeps working — archived is an existence, not an absence
+	 * (TASK-209). The GET read path hides archived via `getById`.
+	 */
 	exists(id: string): boolean {
-		return db.memories.getByIdWithStats(id) !== null;
+		return db.memories.getByIdWithStats(id, true) !== null;
 	},
 
 	/**
 	 * GET endpoint: returns memory. Read-only — no action_log write
 	 * (POLICY 2 / TASK-186: reads never write; mutations below still log).
+	 * Archived memories are hidden by default (404) and only returned when
+	 * `includeArchived` is explicitly true (TASK-209).
 	 */
-	getById(id: string): MemoryEntry | null {
-		return db.memories.getByIdWithStats(id);
+	getById(id: string, includeArchived: boolean = false): MemoryEntry | null {
+		return db.memories.getByIdWithStats(id, includeArchived);
 	},
 
 	async create(attributes: {
@@ -93,7 +103,7 @@ export const MemoryService = {
 			[key: string]: unknown;
 		}
 	): Promise<void> {
-		const existing = db.memories.getByIdWithStats(id);
+		const existing = db.memories.getByIdWithStats(id, true);
 		if (!existing) throw new ServiceError(404, "Memory not found");
 
 		const updates = {
@@ -117,10 +127,15 @@ export const MemoryService = {
 	},
 
 	async delete(id: string): Promise<void> {
-		const existing = db.memories.getByIdWithStats(id);
+		const existing = db.memories.getByIdWithStats(id, true);
 		if (!existing) throw new ServiceError(404, "Memory not found");
+		// Route through the shared purge + cleanup contract (OPT-DRY-03): soft
+		// archive + queue_jobs purge + vector removal + repo-scoped KG cleanup —
+		// identical to the MCP memory-delete tool and the dashboard bulk path.
+		// This closes the single-vs-bulk divergence (single used to hard-delete
+		// while bulk/tool soft-archive; TASK-207).
 		await db.withWrite(() => {
-			db.memories.delete(id);
+			purgeEntityAndCleanup(db, "memory", [{ id, title: existing.title, repo: existing.scope.repo }]);
 			db.actions.logAction("delete", existing.scope?.owner || "", existing.scope?.repo || "", { memoryId: id });
 		});
 	},
