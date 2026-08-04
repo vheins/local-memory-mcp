@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0] — 2026-08-04
+
+### Added
+
+- KG dashboard: `graphLimit` query param on `GET /api/kg/graph` — a top-N-by-degree window (positive integer, clamped to `[100, 1000]`, `400` on non-positive/non-integer values) that returns the N highest-degree nodes in a single request, bypassing the pageSize clamp; response meta includes `graphLimit` and omits `page`/`pageSize` in graphLimit mode; when `graphLimit` is absent the legacy `page`/`pageSize` paginated behavior is unchanged (backward compat) (TASK-212, TASK-216)
+- KG dashboard: 'Show more' control replaces page navigation — grows the top-N window by `+300` (cap `min(1000, totalItems)`), debounced 150ms, re-fetching only the (bigger) node subset with `includeEdges=false` so the cached repo-wide edge set is reused (TASK-213)
+
+### Changed
+
+- KG dashboard: the graph no longer renders 50-node paginated pages — the default top-N window is the 300 highest-degree nodes rendered as a dense single graph, with a "Top N of M nodes" readout and progressive 'Show more' button; switching repos resets the window to the default (TASK-213)
+- KG renderer: the layout render cap now follows the fetched top-N window (`min(graphLimit, 1000)`) instead of the hard 300-node `MAX_FORCE_NODES` cap, so each 'Show more' growth (300 → 600 → 900 → 1000) lays out the full superset; a "Laying out N nodes…" note appears above the default window (TASK-214)
+
+### Fixed
+
+- KG renderer: 'Show more' would have re-rendered the same first 300 nodes regardless of the grown fetch window — the layout cap now follows `graphLimit`, so a grown window (600/900/1000) renders the full superset of nodes (TASK-214)
+
+### Refactored
+
+- KG dashboard: dead `kgPage`/`kgPageSize`/`kgTotalPages` pagination wiring removed from the graph store, loader, and `KGGraph` component (replaced by the `kgGraphLimit` top-N store) (TASK-213)
+
+### Tests
+
+- Integration: `graphLimit` top-N window (top-250 of 260 nodes with `graphLimit` meta), clamping into `[100, 1000]`, and `400` on non-positive-integer values (TASK-212)
+- `graphLoader` unit tests migrated to the show-more flow — `graphLimit` sent instead of `page`/`pageSize`, 150ms debounce of rapid clicks, cap at `min(1000, totalItems)`, and no-op once at the cap (TASK-213)
+
 ## [0.33.0] — 2026-08-04
 
 ### Added
