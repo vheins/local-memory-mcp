@@ -7,16 +7,20 @@
 // createRouter with a spy onResourcesMutated hook and assert:
 //   1. write tools notify the affected entity URIs (memory://{id}, task://{id})
 //      derived from result.structuredContent (the OPT-DRY-08 fix);
-//   2. read tools never emit ENTITY-level mutation notifications — entity URIs
-//      can only come from a write handler's structuredContent (or args id).
+//   2. read tools emit no ENTITY-level mutation notifications when they return
+//      no result rows — entity URIs can only come from a tool whose
+//      structuredContent carries rows (or args id).
 //
 // NOTE (read-path behavior): collectAffectedResourceUris derives
 // repository:// collection URIs from the args repo for any memory/task-domain
 // tool, so a memory-read WITH a repo still triggers the hook with
-// repository-scope invalidation. Reads emit no memory://{id}/task://{id}
-// entity URIs, and a read with no affected scope (standard-read list) does not
-// invoke the hook at all. Gating reads fully silent would require a
-// WRITE_TOOLS check in router.ts/tools/index.ts — out of this test's scope.
+// repository-scope invalidation. addTableIds (utils/tool-plumbing.ts) runs for
+// any memory-domain tool returning structuredContent, so a memory-read WITH
+// result rows DOES emit memory://{id} entity URIs (per MEM-887); they are
+// absent in these tests only because the store is empty, so the reads are
+// row-less. A read with no affected scope (standard-read list) does not invoke
+// the hook at all. Gating reads fully silent would require a WRITE_TOOLS check
+// in router.ts/tools/index.ts — out of this test's scope.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createRouter } from "../router";
 import { createTestStore } from "../storage/sqlite";
@@ -91,7 +95,9 @@ describe("onResourcesMutated — resource mutation notification emission (OPT-DR
 		const uris = onResourcesMutated.mock.calls[0][0] as string[];
 		expect(uris).toContain(`task://${taskId}`);
 		expect(uris).toContain(`repository://${REPO}/tasks`);
-		// task-write may touch memory rows (task completion archives to memory).
+		// task-write is hardcoded as touchesMemory in tool-plumbing.ts:104, so
+		// its repository://{REPO}/memories collection URI is emitted regardless
+		// of whether any memory row was actually written.
 		expect(uris).toContain(`repository://${REPO}/memories`);
 		expect(uris).toContain("repository://index");
 	});
