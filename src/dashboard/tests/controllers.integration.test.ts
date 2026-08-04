@@ -962,4 +962,131 @@ describe("Dashboard Controllers", () => {
 			});
 		});
 	});
+
+	// ── Action-log policy (TASK-186 / OPT-PERF-05) ──────────────────────────
+	// POLICY 2: reads never write. Dashboard GET detail endpoints must NOT emit
+	// action_log rows — only mutations do. Covers the three read sites that
+	// previously logged directly via db.actions.logAction (memory/standard/task
+	// getById). The in-memory SQLiteStore is shared across the file, so every
+	// test counts rows scoped to its OWN repo.
+
+	describe("Action-log policy (TASK-186 / OPT-PERF-05)", () => {
+		const actionCountForRepo = (repo: string): number => db.actions.getRecentActions("", repo, 10_000).length;
+
+		it("POST /api/memories (create) still writes an action-log row", async () => {
+			const repo = "policy-write-test-repo";
+			const before = actionCountForRepo(repo);
+
+			const res = await fetch(`${baseUrl}/api/memories`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "memory",
+						attributes: {
+							repo,
+							type: "code_fact",
+							title: "policy write target",
+							content: "create must keep logging an action",
+							importance: 3
+						}
+					}
+				})
+			});
+			expect(res.status).toBe(200);
+			expect(actionCountForRepo(repo)).toBe(before + 1);
+		});
+
+		it("GET /api/memories/:id (read) does NOT write an action-log row", async () => {
+			const repo = "policy-read-memory-repo";
+			const created = await fetch(`${baseUrl}/api/memories`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "memory",
+						attributes: {
+							repo,
+							type: "code_fact",
+							title: "read target",
+							content: "reads must not log",
+							importance: 2
+						}
+					}
+				})
+			});
+			expect(created.status).toBe(200);
+			const id = ((await created.json()) as Record<string, any>).data.id as string;
+
+			const before = actionCountForRepo(repo);
+			const res = await fetch(`${baseUrl}/api/memories/${id}`);
+			expect(res.status).toBe(200);
+			expect(actionCountForRepo(repo)).toBe(before);
+		});
+
+		it("GET /api/standards/:id (read) does NOT write an action-log row", async () => {
+			const repo = "policy-read-standard-repo";
+			const created = await fetch(`${baseUrl}/api/standards`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "standard",
+						attributes: {
+							repo,
+							title: "Read-only standard",
+							content: "reads must not log",
+							tags: ["policy"],
+							metadata: { source: "policy-test" }
+						}
+					}
+				})
+			});
+			expect(created.status).toBe(200);
+			const id = ((await created.json()) as Record<string, any>).data.id as string;
+
+			const before = actionCountForRepo(repo);
+			const res = await fetch(`${baseUrl}/api/standards/${id}`);
+			expect(res.status).toBe(200);
+			expect(actionCountForRepo(repo)).toBe(before);
+		});
+
+		it("GET /api/tasks/:id (read) does NOT write an action-log row", async () => {
+			const repo = "policy-read-task-repo";
+			const now = new Date().toISOString();
+			const id = randomUUID();
+			db.tasks.insertTask({
+				id,
+				owner: "test-owner",
+				repo,
+				task_code: "T-POLICY-READ",
+				phase: "test",
+				title: "read-only task",
+				description: null,
+				status: "pending",
+				priority: 3,
+				agent: "",
+				role: "",
+				doc_path: null,
+				created_at: now,
+				updated_at: now,
+				in_progress_at: null,
+				finished_at: null,
+				canceled_at: null,
+				est_tokens: 0,
+				commit_id: null,
+				changed_files: [],
+				tags: [],
+				suggested_skills: [],
+				metadata: {},
+				parent_id: null,
+				depends_on: null
+			} as never);
+
+			const before = actionCountForRepo(repo);
+			const res = await fetch(`${baseUrl}/api/tasks/${id}`);
+			expect(res.status).toBe(200);
+			expect(actionCountForRepo(repo)).toBe(before);
+		});
+	});
 });

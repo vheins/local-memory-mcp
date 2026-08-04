@@ -103,12 +103,12 @@ export const TaskService = {
 		return db.tasks.getTaskById(id) !== null;
 	},
 
-	/** GET endpoint: returns task + logs a "read" action. */
+	/**
+	 * GET endpoint: returns task. Read-only — no action_log write
+	 * (POLICY 2 / TASK-186: reads never write; mutations below still log).
+	 */
 	getById(id: string): Task | null {
-		const task = db.tasks.getTaskById(id);
-		if (!task) return null;
-		db.actions.logAction("read", task.owner || "", task.repo, { taskId: task.id });
-		return task;
+		return db.tasks.getTaskById(id);
 	},
 
 	getByCode(repo: string, task_code: string): Task | null {

@@ -70,15 +70,15 @@ export const StandardsService = {
 		return db.standards.getById(id) !== null;
 	},
 
-	/** GET endpoint: returns standard + increments hit_count + logs "read" action. */
+	/**
+	 * GET endpoint: returns standard + increments hit_count (read-tracking
+	 * metric, intentionally kept). No action_log write — reads never write
+	 * (POLICY 2 / TASK-186; mutations below still log).
+	 */
 	getById(id: string): CodingStandardEntry | null {
 		const standard = db.standards.getById(id);
 		if (!standard) return null;
 		db.standards.incrementHitCounts([standard.id]);
-		db.actions.logAction("read", standard.owner, standard.repo || "global", {
-			query: standard.title,
-			resultCount: 1
-		});
 		return standard;
 	},
 

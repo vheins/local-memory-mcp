@@ -49,15 +49,12 @@ export const MemoryService = {
 		return db.memories.getByIdWithStats(id) !== null;
 	},
 
-	/** GET endpoint: returns memory + logs a "read" action. */
+	/**
+	 * GET endpoint: returns memory. Read-only — no action_log write
+	 * (POLICY 2 / TASK-186: reads never write; mutations below still log).
+	 */
 	getById(id: string): MemoryEntry | null {
-		const memory = db.memories.getByIdWithStats(id);
-		if (!memory) return null;
-		db.actions.logAction("read", memory.scope.owner, memory.scope.repo, {
-			memoryId: memory.id,
-			resultCount: 1
-		});
-		return memory;
+		return db.memories.getByIdWithStats(id);
 	},
 
 	async create(attributes: {
