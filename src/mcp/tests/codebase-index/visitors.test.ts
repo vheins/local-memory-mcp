@@ -703,6 +703,82 @@ class User {
 		expect(prop).toBeDefined();
 		expect(prop!.docComment).toBe("The display name.\n@var string");
 	});
+
+	it("includes visibility and static/abstract/final/readonly keywords in method signatures", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+abstract class Repository {
+	public static function find(int $id): string { return ""; }
+	abstract public function all(): array;
+	protected final function finalize(): void {}
+	public readonly int $id;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const repo = result.symbols.find((s) => s.name === "Repository");
+		expect(repo).toBeDefined();
+		expect(repo!.kind).toBe("class");
+		// The `abstract` keyword is present in the class signature.
+		expect(repo!.signature).toContain("abstract");
+
+		const find = result.symbols.find((s) => s.name === "find" && s.parentName === "Repository");
+		expect(find).toBeDefined();
+		expect(find!.kind).toBe("method");
+		expect(find!.signature).toContain("public static");
+		expect(find!.signature).toContain("find(int $id): string");
+
+		const all = result.symbols.find((s) => s.name === "all" && s.parentName === "Repository");
+		expect(all).toBeDefined();
+		expect(all!.kind).toBe("method");
+		expect(all!.signature).toContain("abstract public");
+		expect(all!.signature).toContain("all(): array");
+
+		const finalize = result.symbols.find((s) => s.name === "finalize" && s.parentName === "Repository");
+		expect(finalize).toBeDefined();
+		expect(finalize!.kind).toBe("method");
+		expect(finalize!.signature).toContain("protected final");
+		expect(finalize!.signature).toContain("finalize(): void");
+
+		const id = result.symbols.find((s) => s.name === "id" && s.parentName === "Repository");
+		expect(id).toBeDefined();
+		expect(id!.kind).toBe("variable");
+		// readonly property modifier is preserved in the property signature.
+		expect(id!.signature).toContain("readonly");
+		expect(id!.signature).toContain("public readonly");
+	});
+
+	it("prefixes PHP 8 attributes onto method/function/class signatures without leaking them as symbols", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+#[Route('/api')]
+final class User {
+	#[Route('/user', methods: ['GET'])]
+	public static function show(int $id): string { return ""; }
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const user = result.symbols.find((s) => s.name === "User");
+		expect(user).toBeDefined();
+		expect(user!.kind).toBe("class");
+		expect(user!.signature).toContain("#[Route('/api')]");
+
+		const show = result.symbols.find((s) => s.name === "show" && s.parentName === "User");
+		expect(show).toBeDefined();
+		expect(show!.kind).toBe("method");
+		expect(show!.signature).toContain("#[Route('/user', methods: ['GET'])]");
+		expect(show!.signature).toContain("public");
+
+		// Attributes are modifiers of their declaration, not standalone symbols.
+		expect(result.symbols.some((s) => s.name === "Route")).toBe(false);
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════

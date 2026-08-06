@@ -20,13 +20,14 @@
  *                          and are intentionally not extracted.
  *
  * Function/method `signature` is constructed structurally (not raw first-line
- * text): `visibility? static? name(typedParams): returnType`. Parameters are
- * rendered from `formal_parameters` children (simple_parameter,
- * variadic_parameter, property_promotion_parameter) preserving each param's
- * type, by-ref/variadic marker and default value; the return type is read from
- * the `return_type` field (named_type, primitive_type, optional_type,
- * union_type, intersection_type, bottom_type, ...). Functions/methods without
- * an explicit return type omit the `: type` suffix.
+ * text): a leading PHP 8 attribute prefix (`#[Route('/api')] ...`) where
+ * present, then `visibility? static?/abstract?/final?/readonly? name(params):
+ * returnType`. Parameters are rendered from `formal_parameters` children
+ * (simple_parameter, variadic_parameter, property_promotion_parameter)
+ * preserving each param's type, by-ref/variadic marker and default value; the
+ * return type is read from the `return_type` field (named_type, primitive_type,
+ * optional_type, union_type, intersection_type, bottom_type, ...).
+ * Functions/methods without an explicit return type omit the `: type` suffix.
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
@@ -52,7 +53,11 @@ const VARIADIC_PARAMETER = "variadic_parameter";
 const PROPERTY_PROMOTION_PARAMETER = "property_promotion_parameter";
 const VISIBILITY_MODIFIER = "visibility_modifier";
 const STATIC_MODIFIER = "static_modifier";
+const ABSTRACT_MODIFIER = "abstract_modifier";
+const FINAL_MODIFIER = "final_modifier";
 const READONLY_MODIFIER = "readonly_modifier";
+const ATTRIBUTE_LIST = "attribute_list";
+const ATTRIBUTE_GROUP = "attribute_group";
 const COMMENT = "comment";
 const DECLARATION_LIST = "declaration_list";
 const NAMESPACE_USE_DECLARATION = "namespace_use_declaration";
@@ -374,10 +379,11 @@ export class PhpVisitor implements LanguageVisitor {
 	 * space so the result is a clean one-liner.
 	 */
 	private buildFunctionSignature(funcNode: TSNode, name: string): string {
+		const attributes = this.extractAttributesPrefix(funcNode);
 		const prefix = this.extractMethodModifiers(funcNode);
 		const params = this.extractParameters(funcNode.childForFieldName("parameters"));
 		const returnType = this.extractReturnType(funcNode);
-		let signature = `${prefix}${name}(${params})`;
+		let signature = `${attributes}${prefix}${name}(${params})`;
 		if (returnType) {
 			signature += `: ${returnType}`;
 		}
@@ -385,15 +391,41 @@ export class PhpVisitor implements LanguageVisitor {
 	}
 
 	/**
-	 * Collect visibility (public/protected/private) and static modifiers from a
-	 * method_declaration node as a space-separated prefix (e.g. `protected
-	 * static `). Functions have no modifiers, so the prefix is empty. Modifier
-	 * nodes are named children, not fields.
+	 * Collect PHP 8 attributes (`#[Route('/api')]`, `#[Attribute]`) that precede
+	 * a declaration as a space-separated prefix (e.g. `#[Route('/api')] `).
+	 *
+	 * The `attributes` field of a method/function/class/property declaration
+	 * holds a single attribute_list node whose named children are the
+	 * attribute_group nodes — each rendered verbatim as `#[Attr(arg)]`. Multiple
+	 * groups (`#[A] #[B]`) are joined with a single space. Declarations without
+	 * attributes return an empty string, so no prefix is prepended.
+	 */
+	private extractAttributesPrefix(node: TSNode): string {
+		const attrList = node.childForFieldName("attributes");
+		if (!attrList) return "";
+		const groups = attrList.namedChildren.filter((c) => c.type === ATTRIBUTE_GROUP);
+		if (groups.length === 0) return "";
+		const rendered = groups.map((g) => g.text.replace(/\s+/g, " ").trim()).join(" ");
+		return `${rendered} `;
+	}
+
+	/**
+	 * Collect visibility (public/protected/private) and static/abstract/final/
+	 * readonly modifiers from a method_declaration property_declaration node as
+	 * a space-separated prefix (e.g. `protected static `). Modifier nodes are
+	 * named children, not fields; their source order is preserved. Functions have
+	 * no modifiers, so the prefix is empty.
 	 */
 	private extractMethodModifiers(node: TSNode): string {
 		const parts: string[] = [];
 		for (const child of node.namedChildren) {
-			if (child.type === VISIBILITY_MODIFIER || child.type === STATIC_MODIFIER) {
+			if (
+				child.type === VISIBILITY_MODIFIER ||
+				child.type === STATIC_MODIFIER ||
+				child.type === ABSTRACT_MODIFIER ||
+				child.type === FINAL_MODIFIER ||
+				child.type === READONLY_MODIFIER
+			) {
 				parts.push(child.text);
 			}
 		}
