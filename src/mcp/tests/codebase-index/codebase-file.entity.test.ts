@@ -83,6 +83,33 @@ describe("CodebaseFile Entity", () => {
 		expect(files[1].file_path).toBe("z.ts");
 	});
 
+	it("getFilesByRepo slim mode selects only staleness/planning columns", () => {
+		entity.upsertFile({
+			repo: "repo-slim",
+			file_path: "src/index.ts",
+			language: "typescript",
+			checksum: "abc123",
+			lines: 42,
+			size_bytes: 1500
+		});
+
+		const slim = entity.getFilesByRepo("repo-slim", { slim: true });
+		expect(slim.length).toBe(1);
+
+		// Only the three projected columns are returned — no full-row columns.
+		expect(Object.keys(slim[0]).sort()).toEqual(["checksum", "file_path", "last_indexed_at"]);
+		expect(slim[0].file_path).toBe("src/index.ts");
+		expect(slim[0].checksum).toBe("abc123");
+		expect(slim[0].last_indexed_at).toBeDefined();
+
+		// Default (full) mode is unaffected and still hydrates every column.
+		const full = entity.getFilesByRepo("repo-slim");
+		expect(full[0].id).toBeDefined();
+		expect(full[0].language).toBe("typescript");
+		expect(full[0].lines).toBe(42);
+		expect(full[0].size_bytes).toBe(1500);
+	});
+
 	it("getFileCountByRepo returns the count of files", () => {
 		expect(entity.getFileCountByRepo("empty-repo")).toBe(0);
 

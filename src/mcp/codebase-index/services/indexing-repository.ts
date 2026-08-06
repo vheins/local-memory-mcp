@@ -152,7 +152,7 @@ export async function performIndexRepository(
 		});
 
 		// ═══ 2. COMPARE (delegate to planner) ═══
-		const existingFiles = db.codebaseFiles.getFilesByRepo(repo);
+		const existingFiles = db.codebaseFiles.getFilesByRepo(repo, { slim: true });
 		const planResult = createIndexPlan(discoveredFiles, existingFiles, options);
 
 		totalFiles = planResult.totalFiles;

@@ -316,7 +316,7 @@ export async function checkRepoStaleness(
 		return cached.result;
 	}
 
-	const existingFiles = db.codebaseFiles.getFilesByRepo(repo);
+	const existingFiles = db.codebaseFiles.getFilesByRepo(repo, { slim: true });
 	const totalFiles = existingFiles.length;
 
 	// Nothing indexed yet — no basis for staleness comparison

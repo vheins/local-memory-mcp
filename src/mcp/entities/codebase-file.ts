@@ -43,7 +43,22 @@ export class CodebaseFileEntity extends BaseEntity {
 		return this.get<CodebaseFile>("SELECT * FROM codebase_files WHERE repo = ? AND file_path = ?", [repo, filePath]);
 	}
 
-	getFilesByRepo(repo: string): CodebaseFile[] {
+	/**
+	 * List files for a repo ordered by path.
+	 *
+	 * Default (full) mode returns complete `CodebaseFile` rows. Pass
+	 * `{ slim: true }` to project only the columns staleness/planning need
+	 * (`file_path`, `checksum`, `last_indexed_at` — see `CodebaseFileSlim`);
+	 * the non-selected `CodebaseFile` fields are `undefined` on those rows, so
+	 * slim results must only be used by callers that read that subset.
+	 */
+	getFilesByRepo(repo: string, opts?: { slim?: boolean }): CodebaseFile[] {
+		if (opts?.slim) {
+			return this.all<CodebaseFile>(
+				"SELECT file_path, checksum, last_indexed_at FROM codebase_files WHERE repo = ? ORDER BY file_path ASC",
+				[repo]
+			);
+		}
 		return this.all<CodebaseFile>("SELECT * FROM codebase_files WHERE repo = ? ORDER BY file_path ASC", [repo]);
 	}
 
