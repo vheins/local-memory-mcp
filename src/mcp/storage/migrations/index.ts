@@ -18,8 +18,9 @@ import { migration as v14 } from "./v14-normalized-tag-indexes";
 import { migration as v15 } from "./v15-entity-names-fts";
 import { migration as v16 } from "./v16-queue-jobs-content-hash";
 import { migration as v17 } from "./v17-symbols-repo-exported-parent-index";
+import { migration as v18 } from "./v18-symbols-fts-signature";
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -35,7 +36,26 @@ export interface Migration {
 // Ordered migration registry — version order MUST be strictly ascending and
 // immutable once a version ships (applied-DB determinism). New migrations are
 // appended as a new v{N} module; never renumber or edit historical modules.
-const MIGRATIONS: Migration[] = [v01, v02, v03, v04, v05, v06, v07, v08, v09, v10, v11, v12, v13, v14, v15, v16, v17];
+const MIGRATIONS: Migration[] = [
+	v01,
+	v02,
+	v03,
+	v04,
+	v05,
+	v06,
+	v07,
+	v08,
+	v09,
+	v10,
+	v11,
+	v12,
+	v13,
+	v14,
+	v15,
+	v16,
+	v17,
+	v18
+];
 
 // ──────────────────────────────────────────────
 // Utils for _schema_version table

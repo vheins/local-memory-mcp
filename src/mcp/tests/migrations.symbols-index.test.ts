@@ -15,22 +15,22 @@ import { MigrationManager, SCHEMA_VERSION } from "../storage/migrations";
  *   ORDER BY file_path, start_line LIMIT ?
  * The index is pure DDL (CREATE INDEX IF NOT EXISTS), so these tests pin the
  * two contracts that matter for applied-DB determinism: a fresh migrate lands
- * on SCHEMA_VERSION 17 with the index present, and re-applying v17 (idempotent
- * retry) is a no-op that does not throw.
+ * on the latest SCHEMA_VERSION with the v17 index present, and re-applying v17
+ * (idempotent retry) is a no-op that does not throw.
  */
 describe("migration v17 symbols repo-exported-parent index", () => {
-	it("fresh DB migrates to SCHEMA_VERSION 17 and creates idx_cs_repo_exported_parent", () => {
+	it("fresh DB migrates to latest SCHEMA_VERSION and creates idx_cs_repo_exported_parent", () => {
 		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "lmcp-symbols-idx-"));
 		const dbPath = path.join(tempDir, "symbols.db");
 		const db = new Database(dbPath);
 		db.pragma("foreign_keys = ON");
 
-		// Full v1..v17 apply on a fresh DB.
+		// Full v1..latest migration set applies on a fresh DB.
 		new MigrationManager(db).migrate();
 
 		// Migration record tracked per-version (new-style _schema_version).
 		const applied = db.prepare("SELECT version FROM _schema_version ORDER BY version").all() as { version: number }[];
-		expect(applied.at(-1)?.version).toBe(17);
+		expect(applied.at(-1)?.version).toBe(SCHEMA_VERSION);
 		expect(applied.map((r) => r.version)).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1));
 
 		// Index exists and is registered against codebase_symbols.

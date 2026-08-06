@@ -190,6 +190,11 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 	private tryFtsSearch(query: SymbolSearchQuery, limit: number, offset: number): SymbolSearchResult | null {
 		try {
+			// The full query is sanitized here (FTS5 metacharacters stripped, no
+			// wildcards). The v18 FTS5 index covers name, doc_comment AND
+			// signature, so a MATCH on the whole table row is enough — no
+			// per-column MATCH needed. Signature tokens are therefore sanitized
+			// through the same sanitizeFtsTerm() path as name/doc_comment.
 			const safeTerm = sanitizeFtsTerm(query.query);
 			if (!safeTerm) return null;
 
@@ -252,8 +257,13 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 	private likeSearch(query: SymbolSearchQuery, limit: number, offset: number): SymbolSearchResult {
 		const likeTerm = `%${query.query}%`;
-		const conditions: string[] = ["(cs.name LIKE ? OR cs.doc_comment LIKE ? OR cs.file_path LIKE ?)"];
-		const params: unknown[] = [likeTerm, likeTerm, likeTerm];
+		// signature is included for parity with the FTS5 tier (v18): a symbol
+		// findable by its signature token via FTS stays findable via the LIKE
+		// fallback (e.g. when sanitizeFtsTerm produces an empty MATCH term).
+		const conditions: string[] = [
+			"(cs.name LIKE ? OR cs.doc_comment LIKE ? OR cs.file_path LIKE ? OR cs.signature LIKE ?)"
+		];
+		const params: unknown[] = [likeTerm, likeTerm, likeTerm, likeTerm];
 
 		if (query.repo) {
 			conditions.push("cs.repo = ?");

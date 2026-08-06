@@ -147,6 +147,38 @@ describe("CodebaseSymbol Entity", () => {
 		expect(result.symbols.map((s) => s.name).sort()).toEqual(["createOrder", "login"]);
 	});
 
+	it("searchSymbols finds symbols via distinctive signature tokens (v18 FTS)", () => {
+		// Migration v18 (TASK-227 / #79) added the signature column to the
+		// codebase_symbols_fts index; a MATCH covers the whole FTS row, so a
+		// bare signature token must surface the symbol.
+		entity.bulkUpsertSymbols([
+			{
+				repo: "test-repo",
+				file_path: "src/math.ts",
+				name: "foo",
+				kind: "function",
+				signature: "fn foo(x: u32) -> bool"
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/io.ts",
+				name: "unrelated",
+				kind: "function",
+				signature: "fn unrelated(s: string) -> void"
+			}
+		]);
+
+		const result = entity.searchSymbols({
+			query: "u32",
+			repo: "test-repo",
+			limit: 10
+		});
+
+		expect(result.symbols.map((s) => s.name)).toContain("foo");
+		expect(result.symbols.some((s) => s.name === "unrelated")).toBe(false);
+		expect(result.total).toBe(1);
+	});
+
 	it("searchSymbols filters by kind", () => {
 		entity.bulkUpsertSymbols([
 			{
