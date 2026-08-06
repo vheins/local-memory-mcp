@@ -198,7 +198,6 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			const safeTerm = sanitizeFtsTerm(query.query);
 			if (!safeTerm) return null;
 
-			const parts: string[] = [];
 			const conditions: string[] = ["codebase_symbols_fts MATCH ?"];
 			const params: unknown[] = [safeTerm];
 
@@ -218,33 +217,31 @@ export class CodebaseSymbolEntity extends BaseEntity {
 				conditions.push("cs.exported = 1");
 			}
 
-			parts.push(`
-				SELECT cs.*, rank
+			// Single-pass results + unpaged total (issue #75 / OPT-PERF). A
+			// window function `COUNT(*) OVER ()` runs without any PARTITION so it
+			// counts across the FULL matched row set BEFORE LIMIT/OFFSET, and
+			// every returned row carries that count. The hot path therefore needs
+			// only ONE query instead of a separate results query + standalone
+			// COUNT query.
+			const sql = `
+				SELECT cs.*, rank, COUNT(*) OVER () AS total_count
 				FROM codebase_symbols_fts fts
 				JOIN codebase_symbols cs ON cs.rowid = fts.rowid
 				WHERE ${conditions.join(" AND ")}
 				ORDER BY rank
 				LIMIT ? OFFSET ?
-			`);
+			`;
 			params.push(limit, offset);
 
-			const countParts: string[] = [];
-			const countPartsConditions = [...conditions];
-			countParts.push(`
-				SELECT COUNT(*) as total
-				FROM codebase_symbols_fts fts
-				JOIN codebase_symbols cs ON cs.rowid = fts.rowid
-				WHERE ${countPartsConditions.join(" AND ")}
-			`);
+			const rows = this.all<CodebaseSymbolRow & { rank: number; total_count: number }>(sql, params);
+			const symbols = rows.map((r) => this.rowToSymbol(r));
 
-			const symbols = this.all<CodebaseSymbolRow>(parts[0], params).map((r) => this.rowToSymbol(r));
-
-			const countRow = this.get<{ total: number }>(
-				countParts[0],
-				params.slice(0, -2) // Remove limit/offset
-			);
-
-			const total = countRow?.total ?? symbols.length;
+			// Empty FTS pages are never returned: searchSymbols falls back to
+			// likeSearch (which computes the authoritative total) whenever this
+			// page has zero rows, so the total here is only ever read from a
+			// non-empty page where the window function materializes it. A
+			// standalone COUNT fallback would be discarded work.
+			const total = rows[0]?.total_count ?? 0;
 			return {
 				symbols,
 				total,
