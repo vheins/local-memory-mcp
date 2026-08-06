@@ -147,6 +147,39 @@ describe("CodebaseSymbol Entity", () => {
 		expect(result.symbols.map((s) => s.name).sort()).toEqual(["createOrder", "login"]);
 	});
 
+	it("searchSymbols matches a docblock summary term inside the structured doc_comment", () => {
+		// The visitor recomposes a structured doc_comment (summary + tags +
+		// @deprecated). Every word of that string is FTS5-indexed via the
+		// doc_comment column, so a bare summary term must surface the symbol.
+		entity.bulkUpsertSymbols([
+			{
+				repo: "test-repo",
+				file_path: "src/quixotic.ts",
+				name: "quixoticLattice",
+				kind: "function",
+				doc_comment:
+					"[DEPRECATED] Navigates the quixotic lattice.\n@param node - the node\n@return Promise<Node>\n@deprecated use nav() instead"
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/other.ts",
+				name: "unrelated",
+				kind: "function",
+				doc_comment: "Handles routing for the dashboard"
+			}
+		]);
+
+		const result = entity.searchSymbols({
+			query: "quixotic",
+			repo: "test-repo",
+			limit: 10
+		});
+
+		expect(result.symbols.map((s) => s.name)).toContain("quixoticLattice");
+		expect(result.symbols.some((s) => s.name === "unrelated")).toBe(false);
+		expect(result.total).toBe(1);
+	});
+
 	it("searchSymbols finds symbols via distinctive signature tokens (v18 FTS)", () => {
 		// Migration v18 (TASK-227 / #79) added the signature column to the
 		// codebase_symbols_fts index; a MATCH covers the whole FTS row, so a

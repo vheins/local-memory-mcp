@@ -650,6 +650,59 @@ enum Simple {
 		expect(one.parentName).toBe("Simple");
 		expect(one.signature).toBe("One");
 	});
+
+	it("extracts structured doc-comment (summary + tags + deprecated) from preceding PHPDoc", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+/**
+ * Fetches a user by ID.
+ * @param int $id - The user ID
+ * @return string
+ * @throws \\RuntimeException when the user is missing
+ * @deprecated use findUser() instead
+ */
+function fetchUser(int $id): string { return ""; }
+
+class User {
+	/**
+	 * Greets the person.
+	 * @param string $greeting - a greeting
+	 * @return void
+	 */
+	public function greet(string $greeting): void {}
+
+	/**
+	 * The display name.
+	 * @var string
+	 */
+	public string $name;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		const fn = result.symbols.find((s) => s.name === "fetchUser");
+		expect(fn).toBeDefined();
+		expect(fn!.docComment).toContain("Fetches a user by ID.");
+		expect(fn!.docComment).toContain("@param int $id - The user ID");
+		expect(fn!.docComment).toContain("@return string");
+		expect(fn!.docComment).toContain("@throws \\RuntimeException when the user is missing");
+		expect(fn!.docComment).toContain("@deprecated use findUser() instead");
+		expect(fn!.docComment).toContain("[DEPRECATED]");
+
+		const method = result.symbols.find((s) => s.name === "greet" && s.parentName === "User");
+		expect(method).toBeDefined();
+		expect(method!.docComment).toContain("Greets the person.");
+		expect(method!.docComment).toContain("@param string $greeting - a greeting");
+		expect(method!.docComment).toContain("@return void");
+
+		const prop = result.symbols.find((s) => s.name === "name" && s.parentName === "User");
+		expect(prop).toBeDefined();
+		expect(prop!.docComment).toBe("The display name.\n@var string");
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1539,5 +1592,74 @@ module.exports = { add, Car };
 		const drive = result.symbols.find((s) => s.name === "drive" && s.parentName === "Car");
 		expect(drive).toBeDefined();
 		expect(drive!.kind).toBe("method");
+	});
+
+	it("extracts structured doc-comment (summary + tags + deprecated) from preceding JSDoc", async () => {
+		const result = await parseOrSkip(
+			"docs.ts",
+			`
+/**
+ * Computes a total cost.
+ * @param items - the line items
+ * @returns the computed total
+ * @throws if items is empty
+ * @deprecated use \`calculateTotal()\` instead
+ */
+export function computeTotal(items: Item[]): number { return 0; }
+
+/** Fetches a local value.
+ * @param key - the key
+ */
+function fetchLocal(key: string) {}
+
+class Cart {
+  /** The current item count. */
+  private count = 0;
+
+  /**
+   * Adds an item to the cart.
+   * @param item - the item
+   */
+  @Tracked()
+  add(item: Item): number {
+    return 1;
+  }
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		// Exported function: doc comment precedes the export_statement wrapper.
+		const total = result.symbols.find((s) => s.name === "computeTotal");
+		expect(total).toBeDefined();
+		expect(total!.docComment).toContain("Computes a total cost.");
+		expect(total!.docComment).toContain("@param items - the line items");
+		expect(total!.docComment).toContain("@returns the computed total");
+		expect(total!.docComment).toContain("@throws if items is empty");
+		expect(total!.docComment).toContain("@deprecated");
+		expect(total!.docComment).toContain("[DEPRECATED]");
+
+		// Non-exported function still captures its own JSDoc.
+		const local = result.symbols.find((s) => s.name === "fetchLocal");
+		expect(local).toBeDefined();
+		expect(local!.docComment).toContain("Fetches a local value.");
+		expect(local!.docComment).toContain("@param key - the key");
+
+		// Class property: single-line JSDoc becomes the summary.
+		const count = result.symbols.find((s) => s.name === "count" && s.parentName === "Cart");
+		expect(count).toBeDefined();
+		expect(count!.docComment).toBe("The current item count.");
+
+		// Decorated method: the JSDoc is found past the decorator sibling.
+		const add = result.symbols.find((s) => s.name === "add" && s.parentName === "Cart");
+		expect(add).toBeDefined();
+		expect(add!.docComment).toContain("Adds an item to the cart.");
+		expect(add!.docComment).toContain("@param item - the item");
+
+		// A declaration without its own JSDoc must NOT inherit a neighbour's.
+		const cart = result.symbols.find((s) => s.name === "Cart");
+		expect(cart).toBeDefined();
+		expect(cart!.docComment).toBeNull();
 	});
 });

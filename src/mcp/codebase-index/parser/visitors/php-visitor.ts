@@ -32,6 +32,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 
 const FUNCTION_DEFINITION = "function_definition";
 const METHOD_DECLARATION = "method_declaration";
@@ -282,7 +283,9 @@ export class PhpVisitor implements LanguageVisitor {
 			// Anchor the symbol range on the name token so line/col point at the
 			// property itself; the signature still reflects the full declaration.
 			const symbolNode = element.startPosition.row === node.startPosition.row ? node : element;
-			symbols.push(this.makeSymbol(symbolNode, rawName, SymbolKind.Variable, parentName));
+			// Doc lookup is anchored on the whole property_declaration node: the
+			// preceding PHPDoc comment siblings the declaration, not the element.
+			symbols.push(this.makeSymbol(symbolNode, rawName, SymbolKind.Variable, parentName, node));
 		}
 	}
 
@@ -311,7 +314,11 @@ export class PhpVisitor implements LanguageVisitor {
 			// Anchor the symbol range on the name token so line/col point at the
 			// constant itself.
 			const symbolNode = element.startPosition.row === node.startPosition.row ? node : element;
-			symbols.push(this.makeSymbolWithSignature(symbolNode, nameNode.text, SymbolKind.Constant, parentName, signature));
+			// Doc lookup is anchored on the whole const_declaration node so a
+			// preceding PHPDoc is captured even for multi-element declarations.
+			symbols.push(
+				this.makeSymbolWithSignature(symbolNode, nameNode.text, SymbolKind.Constant, parentName, signature, node)
+			);
 		}
 	}
 
@@ -461,8 +468,14 @@ export class PhpVisitor implements LanguageVisitor {
 		return type.length > 0 ? type : null;
 	}
 
-	private makeSymbol(node: TSNode, name: string, kind: SymbolKind, parentName: string | null): ParsedSymbol {
-		return this.makeSymbolWithSignature(node, name, kind, parentName, this.buildSignature(node));
+	private makeSymbol(
+		node: TSNode,
+		name: string,
+		kind: SymbolKind,
+		parentName: string | null,
+		docNode?: TSNode
+	): ParsedSymbol {
+		return this.makeSymbolWithSignature(node, name, kind, parentName, this.buildSignature(node), docNode);
 	}
 
 	/** Like makeSymbol, but with an explicit signature (used for focused
@@ -472,7 +485,8 @@ export class PhpVisitor implements LanguageVisitor {
 		name: string,
 		kind: SymbolKind,
 		parentName: string | null,
-		signature: string
+		signature: string,
+		docNode?: TSNode
 	): ParsedSymbol {
 		return {
 			name,
@@ -482,7 +496,7 @@ export class PhpVisitor implements LanguageVisitor {
 			endLine: node.endPosition.row + 1,
 			endCol: node.endPosition.column + 1,
 			signature,
-			docComment: this.extractDocComment(node),
+			docComment: this.extractDocComment(docNode ?? node),
 			exported: false,
 			defaultExport: false,
 			parentName
@@ -494,14 +508,20 @@ export class PhpVisitor implements LanguageVisitor {
 		return firstLine.replace(/\s+/g, " ").trim();
 	}
 
+	/**
+	 * Extract the doc comment preceding a declaration node and serialize it as
+	 * a structured, searchable summary + tags string (see doc-comment.ts).
+	 *
+	 * The comment is the declaration's previous named sibling in the php_only
+	 * grammar (verified against the live WASM AST for functions, methods,
+	 * classes, properties and constants). The raw block is cleaned and
+	 * recomposed so `doc_comment` contains the summary, every doc-tag
+	 * (@param/@return/@throws/@deprecated) and a visible `[DEPRECATED]` marker.
+	 */
 	private extractDocComment(node: TSNode): string | null {
 		const prev = node.previousNamedSibling;
 		if (prev && prev.type === COMMENT) {
-			return prev.text
-				.replace(/^\/\/\s?/, "")
-				.replace(/^\/\*\*?\s?/, "")
-				.replace(/\s?\*\/$/, "")
-				.trim();
+			return serializeDocBlock(prev.text);
 		}
 		return null;
 	}
