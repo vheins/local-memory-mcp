@@ -40,10 +40,20 @@ export function computeChecksum(content: string): string {
 	return crypto.createHash("sha256").update(content, "utf-8").digest("hex");
 }
 
-/** Count lines in a string (LF-normalized, non-empty final line counts). */
+/**
+ * Count lines in a string (LF-normalized, non-empty final line counts).
+ *
+ * Uses a single character scan counting `\n` occurrences instead of
+ * `String.split("\n")`, which allocated a full array just to measure length.
+ * Empty content → 0; non-empty content → 1 + number of `\n` characters.
+ */
 export function countLines(content: string): number {
 	if (!content) return 0;
-	return content.split("\n").length;
+	let count = 1;
+	for (let i = 0; i < content.length; i++) {
+		if (content.charCodeAt(i) === 10 /* \n */) count++;
+	}
+	return count;
 }
 
 // ── Error classification helpers ───────────────────────────────────────
