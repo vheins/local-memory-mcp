@@ -2,7 +2,7 @@
  * Indexing cache — progress tracking, staleness checking, and utility helpers.
  *
  * Manages the module-level indexing guard Set, provides standalone staleness
- * and freshness checking functions, and holds shared helper utilities
+ * checking and cache utilities, and holds shared helper utilities
  * (SHA-256 checksums, error classification, retry logic).
  *
  * This module has no dependency on the indexing orchestrator, making it
@@ -375,57 +375,4 @@ export async function checkRepoStaleness(
 		stalenessCache.set(repo, { repoPath: resolvedPath, result, cachedAt: Date.now() });
 	}
 	return result;
-}
-
-// ── Freshness check (extracted from autoIndexIfStale) ──────────────────
-
-export interface FreshnessResult {
-	stale: boolean;
-	maxIndexedAt: Date | null;
-	elapsedMs: number;
-	ttlMs: number;
-}
-
-/**
- * Determine whether an existing index is still "fresh" based on the most
- * recent last_indexed_at timestamp and the configured TTL.
- *
- * @returns FreshnessResult with stale=true if the index TTL has expired
- *   or there is no index (existingFiles is empty).
- */
-export function getIndexFreshness(existingFiles: CodebaseFile[], ttlMs: number): FreshnessResult {
-	if (existingFiles.length === 0) {
-		return {
-			stale: true,
-			maxIndexedAt: null,
-			elapsedMs: 0,
-			ttlMs
-		};
-	}
-
-	// Find the most recent last_indexed_at across all files
-	let maxIndexedAt: Date | null = null;
-	for (const f of existingFiles) {
-		const t = f.last_indexed_at ? new Date(f.last_indexed_at) : null;
-		if (t && (!maxIndexedAt || t > maxIndexedAt)) {
-			maxIndexedAt = t;
-		}
-	}
-
-	if (!maxIndexedAt) {
-		return {
-			stale: true,
-			maxIndexedAt: null,
-			elapsedMs: 0,
-			ttlMs
-		};
-	}
-
-	const elapsedMs = Date.now() - maxIndexedAt.getTime();
-	return {
-		stale: elapsedMs >= ttlMs,
-		maxIndexedAt,
-		elapsedMs,
-		ttlMs
-	};
 }

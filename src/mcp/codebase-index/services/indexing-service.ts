@@ -17,7 +17,7 @@ import { logger } from "../../utils/logger";
 // Import from sub-modules
 import { CodebaseIndexServiceImpl, type CodebaseIndexService } from "./indexing-repository";
 
-import { indexingRepos, getIndexFreshness } from "./indexing-cache";
+import { indexingRepos, getLastIndexedAt } from "./indexing-cache";
 import { TTL_MS_PER_DAY } from "../../utils/constants";
 
 // ── Re-exports (preserving existing public API) ────────────────────────
@@ -95,16 +95,19 @@ export async function autoIndexIfStale(
 	const envTtl = process.env.CODEBASE_AUTO_INDEX_TTL ? parseInt(process.env.CODEBASE_AUTO_INDEX_TTL, 10) : undefined;
 	const ttlMs = options?.ttlMs ?? (envTtl && !isNaN(envTtl) ? envTtl : defaultTtlMs);
 
-	// ── Check freshness via getIndexFreshness ────────────────────────
-	const existingFiles = db.codebaseFiles.getFilesByRepo(repo);
-	const freshness = getIndexFreshness(existingFiles, ttlMs);
-
-	if (!freshness.stale) {
-		const remainingHrs = Math.round((ttlMs - freshness.elapsedMs) / 3600000);
-		return {
-			status: "skipped",
-			reason: `Index is fresh (last indexed ${remainingHrs}h ago, TTL: ${Math.round(ttlMs / 3600000)}h)`
-		};
+	// ── Check freshness via a single scalar MAX query ────────────────
+	// Avoids loading every file row just to find the newest last_indexed_at —
+	// memory O(1). Identical staleness decision to the former per-file scan.
+	const lastIndexedAt = getLastIndexedAt(db, repo);
+	if (lastIndexedAt !== null) {
+		const elapsedMs = Date.now() - new Date(lastIndexedAt).getTime();
+		if (elapsedMs < ttlMs) {
+			const remainingHrs = Math.round((ttlMs - elapsedMs) / 3600000);
+			return {
+				status: "skipped",
+				reason: `Index is fresh (last indexed ${remainingHrs}h ago, TTL: ${Math.round(ttlMs / 3600000)}h)`
+			};
+		}
 	}
 
 	// ── Trigger background indexing ──────────────────────────────────
@@ -120,6 +123,6 @@ export async function autoIndexIfStale(
 
 	return {
 		status: "started",
-		reason: freshness.maxIndexedAt ? "Index TTL expired — re-indexing" : "No existing index — building fresh"
+		reason: lastIndexedAt ? "Index TTL expired — re-indexing" : "No existing index — building fresh"
 	};
 }
