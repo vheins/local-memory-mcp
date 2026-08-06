@@ -169,38 +169,35 @@ export async function writeParseBatch(
 		try {
 			await retryDbWrite(async () => {
 				await db.withExclusiveWrite(async () => {
-					for (const fp of reindexedPaths) {
-						db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
-					}
+					// ONE SQLite transaction (BEGIN IMMEDIATE) covers the whole
+					// batch (issue #69): delete symbols for every re-parsed path,
+					// then bulk-insert the new symbols across chunk boundaries —
+					// a single commit, so delete+insert is atomic. A failure
+					// mid-batch rolls back the entire batch (no symbol leakage,
+					// no duplicate rows). `bulkUpsertSymbols` opens a transaction
+					// internally; better-sqlite3 turns the nested call into a
+					// SAVEPOINT inside this outer transaction, so the rollback
+					// still reverts the whole batch.
+					db.db
+						.transaction(() => {
+							for (const fp of reindexedPaths) {
+								db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
+							}
+
+							let symOffset = 0;
+							while (symOffset < symbolInserts.length) {
+								db.codebaseSymbols.bulkUpsertSymbols(symbolInserts.slice(symOffset, symOffset + batchSize));
+								symOffset += batchSize;
+							}
+						})
+						.immediate();
 				});
-			}, "symbol-delete");
+			}, "symbol-replace-batch");
 		} catch (err) {
 			dbWriteErrors++;
-			logger.error("[IndexingWriter] Symbol delete batch failed", {
+			logger.error("[IndexingWriter] Symbol replace batch failed", {
 				error: String(err)
 			});
-		}
-
-		// Bulk insert symbols in batches
-		if (symbolInserts.length > 0) {
-			let symOffset = 0;
-			while (symOffset < symbolInserts.length) {
-				const symBatch = symbolInserts.slice(symOffset, symOffset + batchSize);
-				try {
-					await retryDbWrite(async () => {
-						await db.withExclusiveWrite(async () => {
-							db.codebaseSymbols.bulkUpsertSymbols(symBatch);
-						});
-					}, `symbol-insert-batch-${symOffset}`);
-				} catch (err) {
-					dbWriteErrors++;
-					logger.error("[IndexingWriter] Symbol insert batch failed", {
-						batchOffset: symOffset,
-						error: String(err)
-					});
-				}
-				symOffset += batchSize;
-			}
 		}
 	}
 
@@ -235,18 +232,25 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 	try {
 		await retryDbWrite(async () => {
 			await db.withExclusiveWrite(async () => {
-				let cleanedCount = 0;
-				for (const fp of stalePaths) {
-					db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
-					db.codebaseFiles.deleteFile(repo, fp);
-					cleanedCount++;
-					emitProgress(options, {
-						stage: "cleaning",
-						current: cleanedCount,
-						total: stalePaths.size,
-						message: `Cleaned ${cleanedCount}/${stalePaths.size}: ${fp}`
-					});
-				}
+				// ONE SQLite transaction for the whole cleanup (issue #69): all
+				// stale symbol + file deletions commit atomically — a failure
+				// mid-cleanup rolls back instead of leaving half-deleted records.
+				db.db
+					.transaction(() => {
+						let cleanedCount = 0;
+						for (const fp of stalePaths) {
+							db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
+							db.codebaseFiles.deleteFile(repo, fp);
+							cleanedCount++;
+							emitProgress(options, {
+								stage: "cleaning",
+								current: cleanedCount,
+								total: stalePaths.size,
+								message: `Cleaned ${cleanedCount}/${stalePaths.size}: ${fp}`
+							});
+						}
+					})
+					.immediate();
 			});
 		}, "stale-cleanup");
 	} catch (err) {
