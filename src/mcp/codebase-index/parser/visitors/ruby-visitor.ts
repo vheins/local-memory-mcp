@@ -7,6 +7,8 @@
  * - class            → Class
  * - singleton_class  → Class
  * - module           → Class (treat module as class)
+ * - attr_accessor/attr_reader/attr_writer → Method (one per symbol argument)
+ * - extend/include (module mixing)        → Module
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
@@ -18,8 +20,16 @@ const SINGLETON_METHOD = "singleton_method";
 const CLASS = "class";
 const SINGLETON_CLASS = "singleton_class";
 const MODULE = "module";
+const CALL = "call";
 const BODY_STATEMENT = "body_statement";
 const COMMENT = "comment";
+const SIMPLE_SYMBOL = "simple_symbol";
+const CONSTANT = "constant";
+
+/** attr_accessor / attr_reader / attr_writer — synthetic reader/writer methods. */
+const ATTR_METHOD_RE = /^attr_(accessor|reader|writer)$/;
+/** Module-mixing calls whose constant argument is a module reference. */
+const MIXIN_METHOD = new Set(["extend", "include"]);
 
 export class RubyVisitor implements LanguageVisitor {
 	extractSymbols(tree: Tree, _sourceCode: string): ParsedSymbol[] {
@@ -40,6 +50,9 @@ export class RubyVisitor implements LanguageVisitor {
 					symbols.push(this.makeSymbol(node, nameNode.text, SymbolKind.Method, parentName));
 				}
 				return;
+			}
+			if (type === CALL) {
+				this.extractCallSymbols(node, symbols, parentName);
 			}
 			for (const child of node.namedChildren) {
 				this.walkNode(child, symbols, parentName, true);
@@ -86,7 +99,42 @@ export class RubyVisitor implements LanguageVisitor {
 
 	// ── Helpers ─────────────────────────────────────────────────────
 
-	private makeSymbol(node: TSNode, name: string, kind: SymbolKind, parentName: string | null): ParsedSymbol {
+	/**
+	 * Extract synthetic symbols from class-body `call` nodes:
+	 * - attr_accessor/attr_reader/attr_writer :foo, :bar → one Method per symbol arg
+	 * - extend/include SomeModule                       → one Module per constant arg
+	 */
+	private extractCallSymbols(node: TSNode, symbols: ParsedSymbol[], parentName: string | null): void {
+		const methodNode = node.childForFieldName("method");
+		if (!methodNode || methodNode.type !== "identifier") return;
+		const methodName = methodNode.text;
+
+		const isAttrMethod = ATTR_METHOD_RE.test(methodName);
+		const isMixinMethod = MIXIN_METHOD.has(methodName);
+		if (!isAttrMethod && !isMixinMethod) return;
+
+		const argsNode = node.childForFieldName("arguments");
+		if (!argsNode) return;
+
+		const argType = isAttrMethod ? SIMPLE_SYMBOL : CONSTANT;
+		const kind = isAttrMethod ? SymbolKind.Method : SymbolKind.Module;
+		for (const arg of argsNode.namedChildren) {
+			if (arg.type !== argType) continue;
+			// `attr_accessor :name` → Method named "name" (strip the leading `:`);
+			// `extend SomeModule` → Module named "SomeModule".
+			const name = isAttrMethod ? arg.text.replace(/^:/, "") : arg.text;
+			if (!name) continue;
+			symbols.push(this.makeSymbol(node, name, kind, parentName, `${methodName} ${arg.text}`));
+		}
+	}
+
+	private makeSymbol(
+		node: TSNode,
+		name: string,
+		kind: SymbolKind,
+		parentName: string | null,
+		signatureOverride?: string
+	): ParsedSymbol {
 		return {
 			name,
 			kind,
@@ -94,7 +142,7 @@ export class RubyVisitor implements LanguageVisitor {
 			startCol: node.startPosition.column + 1,
 			endLine: node.endPosition.row + 1,
 			endCol: node.endPosition.column + 1,
-			signature: this.buildSignature(node),
+			signature: signatureOverride ?? this.buildSignature(node),
 			docComment: this.extractDocComment(node),
 			exported: false,
 			defaultExport: false,

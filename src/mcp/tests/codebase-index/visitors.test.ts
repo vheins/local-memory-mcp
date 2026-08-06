@@ -644,6 +644,62 @@ end
 		if (!m) return;
 		expect(m.kind).toBe("method");
 	});
+
+	it("extracts attr_accessor/attr_reader/attr_writer as methods parented to class", async () => {
+		const result = await parseOrSkip(
+			"test.rb",
+			`
+class Person
+  # member attributes
+  attr_accessor :name, :age
+  attr_reader :email
+  attr_writer :nickname
+end
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const name = result.symbols.find((s) => s.name === "name");
+		if (!name) return;
+		expect(name.kind).toBe("method");
+		expect(name.parentName).toBe("Person");
+		expect(name.signature).toBe("attr_accessor :name");
+		const age = result.symbols.find((s) => s.name === "age");
+		if (!age) return;
+		expect(age.kind).toBe("method");
+		expect(age.parentName).toBe("Person");
+		expect(age.signature).toBe("attr_accessor :age");
+		const email = result.symbols.find((s) => s.name === "email");
+		if (!email) return;
+		expect(email.kind).toBe("method");
+		expect(email.parentName).toBe("Person");
+		expect(email.signature).toBe("attr_reader :email");
+		const nickname = result.symbols.find((s) => s.name === "nickname");
+		if (!nickname) return;
+		expect(nickname.signature).toBe("attr_writer :nickname");
+	});
+
+	it("extracts extend/include module mixins parented to class", async () => {
+		const result = await parseOrSkip(
+			"test.rb",
+			`
+class Service
+  extend SomeModule
+  include OtherModule
+end
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const ext = result.symbols.find((s) => s.kind === "module" && s.name === "SomeModule");
+		if (!ext) return;
+		expect(ext.parentName).toBe("Service");
+		expect(ext.signature).toBe("extend SomeModule");
+		const inc = result.symbols.find((s) => s.kind === "module" && s.name === "OtherModule");
+		if (!inc) return;
+		expect(inc.parentName).toBe("Service");
+		expect(inc.signature).toBe("include OtherModule");
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
