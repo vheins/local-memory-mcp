@@ -1,6 +1,16 @@
 /**
  * TypeScriptVisitor — extracts symbols from TypeScript/JavaScript source using
  * tree-sitter's AST. Implements the LanguageVisitor interface.
+ *
+ * Symbol extraction:
+ * - Top-level declarations: functions, classes, interfaces, type aliases, enums,
+ *   variable/lexical declarations, arrow functions.
+ * - Class body: methods + fields (with accessibility modifiers / readonly),
+ *   decorated members (@Injectable, @Component, etc.).
+ * - Interface body: property signatures → Property, method signatures → Method,
+ *   parented to the interface.
+ * - Enum members → Constant, parented to the enum.
+ * - Generic `type_parameters` are retained in signatures (TASK-059).
  */
 
 import type { Node as TSNode, Tree as TSTree } from "web-tree-sitter";
@@ -13,9 +23,13 @@ const FUNCTION_DECLARATION = "function_declaration";
 const GENERATOR_FUNCTION_DECLARATION = "generator_function_declaration";
 const METHOD_DEFINITION = "method_definition";
 const CLASS_DECLARATION = "class_declaration";
+const ABSTRACT_CLASS_DECLARATION = "abstract_class_declaration";
+const CLASS_BODY = "class_body";
 const INTERFACE_DECLARATION = "interface_declaration";
+const INTERFACE_BODY = "interface_body";
 const TYPE_ALIAS_DECLARATION = "type_alias_declaration";
 const ENUM_DECLARATION = "enum_declaration";
+const ENUM_BODY = "enum_body";
 const VARIABLE_DECLARATION = "variable_declaration";
 const LEXICAL_DECLARATION = "lexical_declaration";
 const ARROW_FUNCTION = "arrow_function";
@@ -23,6 +37,19 @@ const EXPORT_STATEMENT = "export_statement";
 const NAMED_EXPORTS = "export_clause";
 const EXPORT_SPECIFIER = "export_specifier";
 const COMMENT = "comment";
+
+// TS-specific member / type nodes.
+const PROPERTY_SIGNATURE = "property_signature";
+const METHOD_SIGNATURE = "method_signature";
+const ABSTRACT_METHOD_SIGNATURE = "abstract_method_signature";
+const INDEX_SIGNATURE = "index_signature";
+const GET_SIGNATURE = "get_signature";
+const SET_SIGNATURE = "set_signature";
+const ENUM_ASSIGNMENT = "enum_assignment";
+const PUBLIC_FIELD_DEFINITION = "public_field_definition";
+const FIELD_DEFINITION = "field_definition";
+const PROPERTY_IDENTIFIER = "property_identifier";
+const DECORATOR = "decorator";
 
 // ── Export scanner ───────────────────────────────────────────────────
 
@@ -49,6 +76,7 @@ function scanExports(root: TSNode): {
 								FUNCTION_DECLARATION,
 								GENERATOR_FUNCTION_DECLARATION,
 								CLASS_DECLARATION,
+								ABSTRACT_CLASS_DECLARATION,
 								INTERFACE_DECLARATION,
 								TYPE_ALIAS_DECLARATION,
 								ENUM_DECLARATION,
@@ -96,6 +124,7 @@ function scanExports(root: TSNode): {
 							FUNCTION_DECLARATION,
 							GENERATOR_FUNCTION_DECLARATION,
 							CLASS_DECLARATION,
+							ABSTRACT_CLASS_DECLARATION,
 							INTERFACE_DECLARATION,
 							TYPE_ALIAS_DECLARATION,
 							ENUM_DECLARATION,
@@ -127,7 +156,13 @@ function getNameFromDeclaration(node: TSNode): string | null {
 			return declarator.namedChildren[0]?.text ?? null;
 		}
 	}
-	return node.namedChildren[0]?.text ?? null;
+	// Skip leading `decorator` children (e.g. `@Injectable() class Foo {}` has the
+	// decorator as its first named child) so the declaration's real name is used.
+	for (const child of node.namedChildren) {
+		if (child.type === DECORATOR) continue;
+		if (isNameNode(child)) return child.text;
+	}
+	return null;
 }
 
 /** Get all declared names from a declaration. */
@@ -174,11 +209,86 @@ function cleanDocComment(raw: string): string {
 
 // ── Signature extraction ────────────────────────────────────────────
 
-/** Build a human-readable signature from the first line of the node text. */
+/** Collapse whitespace/newlines in a source snippet to a single line. */
+function normalizeText(text: string): string {
+	return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Collect decorator texts applied directly to a node.
+ *
+ * tree-sitter-typescript models decorators in two ways:
+ * - A `decorator` node that is a NAMED CHILD of the declaration
+ *   (e.g. `class_declaration` for `@Injectable() class Foo {}`).
+ * - A `decorator` node that is the PRECEDING SIBLING of the declaration
+ *   (e.g. a decorated method inside `class_body`, or `@Injectable() class`
+ *   nested inside an `export_statement`).
+ *
+ * Returns the decorator texts in source order (e.g. `["@Injectable()"]`).
+ */
+function collectDecorators(node: TSNode): string[] {
+	const decorators: string[] = [];
+
+	// Direct named children (bare decorated classes).
+	for (const child of node.namedChildren) {
+		if (child.type === DECORATOR) {
+			decorators.push(normalizeText(child.text));
+		}
+	}
+
+	// Preceding sibling decorators (decorated methods, exported decorated classes).
+	let sibling: TSNode | null = node.previousNamedSibling;
+	while (sibling && sibling.type === DECORATOR) {
+		decorators.unshift(normalizeText(sibling.text));
+		sibling = sibling.previousNamedSibling;
+	}
+
+	return decorators;
+}
+
+/**
+ * Build a human-readable signature from the declaration.
+ *
+ * Returns the first meaningful source line of the declaration normalized to a
+ * single line, which naturally preserves accessibility modifiers
+ * (`private readonly`), the `readonly` keyword, type annotations, and generic
+ * `type_parameters` (e.g. `function foo<T>(x: T): T`).
+ *
+ * When the node carries decorator children (decorated fields/methods/classes),
+ * their exact span is stripped from the output so the base signature is the
+ * declaration itself — the decorators are then re-prefixed by the caller.
+ */
 function buildSignature(node: TSNode): string {
-	const fullText = node.text;
-	const firstLine = fullText.split("\n")[0] ?? fullText;
-	return firstLine.replace(/\s+/g, " ").trim();
+	let text = node.text;
+
+	// Strip decorator child spans. Decorators are re-added as a prefix by
+	// `withDecorators()`, so without this they would leak into (duplicate) the
+	// base signature and truncate the real declaration line.
+	for (const child of node.namedChildren) {
+		if (child.type === DECORATOR) {
+			text = text.replace(child.text, "");
+		}
+	}
+
+	const lines = text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+
+	return normalizeText(lines[0] ?? "");
+}
+
+/** Whether a node represents a declarable identifier (class/type/function name or property). */
+function isNameNode(node: TSNode): boolean {
+	switch (node.type) {
+		case "identifier":
+		case "type_identifier":
+		case PROPERTY_IDENTIFIER:
+		case "shorthand_property_identifier_pattern":
+			return true;
+		default:
+			return false;
+	}
 }
 
 // ── Visitor implementation ───────────────────────────────────────────
@@ -188,11 +298,20 @@ const TOP_LEVEL_TYPES = new Set([
 	FUNCTION_DECLARATION,
 	GENERATOR_FUNCTION_DECLARATION,
 	CLASS_DECLARATION,
+	ABSTRACT_CLASS_DECLARATION,
 	INTERFACE_DECLARATION,
 	TYPE_ALIAS_DECLARATION,
 	ENUM_DECLARATION,
 	LEXICAL_DECLARATION,
 	VARIABLE_DECLARATION
+]);
+
+/** The kinds of class members extracted inside a class body. */
+const CLASS_MEMBER_KINDS = new Set([
+	METHOD_DEFINITION,
+	ABSTRACT_METHOD_SIGNATURE,
+	PUBLIC_FIELD_DEFINITION,
+	FIELD_DEFINITION
 ]);
 
 export class TypeScriptVisitor implements LanguageVisitor {
@@ -218,14 +337,16 @@ export class TypeScriptVisitor implements LanguageVisitor {
 		defaultExportNames: Set<string>,
 		insideClass: boolean
 	): void {
-		// If we're inside a class, only look for methods/properties, skip nested declarations
+		// If we're inside a class/interface, only look for members, skip nested declarations
 		if (insideClass) {
-			if (node.type === METHOD_DEFINITION) {
-				symbols.push(this.nodeToSymbol(node, SymbolKind.Method, parentName, exportedNames, defaultExportNames));
-			} else if (node.type === "public_field_definition" || node.type === "field_definition") {
-				symbols.push(this.nodeToSymbol(node, SymbolKind.Property, parentName, exportedNames, defaultExportNames));
+			if (CLASS_MEMBER_KINDS.has(node.type)) {
+				const kind =
+					node.type === METHOD_DEFINITION || node.type === ABSTRACT_METHOD_SIGNATURE
+						? SymbolKind.Method
+						: SymbolKind.Property;
+				symbols.push(this.nodeToSymbol(node, kind, parentName, exportedNames, defaultExportNames));
 			}
-			// Recurse into children of the class body
+			// Recurse into children of the class body (decorators, nested getters, etc.)
 			for (const child of node.namedChildren) {
 				this.walkNode(child, symbols, parentName, exportedNames, defaultExportNames, true);
 			}
@@ -281,11 +402,74 @@ export class TypeScriptVisitor implements LanguageVisitor {
 
 		symbols.push(this.nodeToSymbol(node, kind, parentName, exportedNames, defaultExportNames));
 
-		// Recurse into class body for methods/properties
-		if (node.type === CLASS_DECLARATION) {
-			const body = node.descendantsOfType("class_body")[0];
+		// Recurse into class body for methods/properties. All class members share
+		// the class's parent context — decorators on individual members are
+		// resolved via their own preceding-sibling decorator nodes.
+		if (node.type === CLASS_DECLARATION || node.type === ABSTRACT_CLASS_DECLARATION) {
+			const body = node.descendantsOfType(CLASS_BODY)[0];
 			if (body) {
 				this.walkNode(body, symbols, name, exportedNames, defaultExportNames, true);
+			}
+		}
+
+		// Emit interface members (properties, methods) parented to the interface.
+		if (node.type === INTERFACE_DECLARATION) {
+			this.handleInterfaceMembers(name, node, symbols);
+		}
+
+		// Emit enum members (constants) parented to the enum.
+		if (node.type === ENUM_DECLARATION) {
+			this.handleEnumMembers(name, node, symbols);
+		}
+	}
+
+	/** Emit `property_signature`/`method_signature` members as Property/Method symbols. */
+	private handleInterfaceMembers(interfaceName: string, node: TSNode, symbols: ParsedSymbol[]): void {
+		const body = node.namedChildren.find((c) => c.type === INTERFACE_BODY);
+		if (!body) return;
+
+		for (const member of body.namedChildren) {
+			switch (member.type) {
+				case PROPERTY_SIGNATURE:
+					symbols.push(
+						this.memberSymbol(member, symbolIdentifier(member) ?? "unknown", SymbolKind.Property, interfaceName)
+					);
+					break;
+				case METHOD_SIGNATURE:
+					symbols.push(
+						this.memberSymbol(member, symbolIdentifier(member) ?? "unknown", SymbolKind.Method, interfaceName)
+					);
+					break;
+				// Getters/setters map to a Property whose name is the accessor's identifier.
+				case GET_SIGNATURE:
+				case SET_SIGNATURE: {
+					const accessorName = symbolIdentifier(member);
+					if (accessorName) {
+						symbols.push(this.memberSymbol(member, accessorName, SymbolKind.Property, interfaceName));
+					}
+					break;
+				}
+				// `[key: string]: unknown` index signatures have no single identifier —
+				// skip them rather than fabricate a misleading name.
+				case INDEX_SIGNATURE:
+				default:
+					break;
+			}
+		}
+	}
+
+	/** Emit enum members (with or without explicit values) as Constant symbols. */
+	private handleEnumMembers(enumName: string, node: TSNode, symbols: ParsedSymbol[]): void {
+		const body = node.namedChildren.find((c) => c.type === ENUM_BODY);
+		if (!body) return;
+
+		for (const member of body.namedChildren) {
+			if (member.type === ENUM_ASSIGNMENT) {
+				const memberName = member.namedChildren[0]?.text ?? "unknown";
+				symbols.push(this.memberSymbol(member, memberName, SymbolKind.Constant, enumName));
+			} else if (member.type === PROPERTY_IDENTIFIER) {
+				// Bare member without an explicit value: `enum { Red, Green }`.
+				symbols.push(this.memberSymbol(member, member.text, SymbolKind.Constant, enumName));
 			}
 		}
 	}
@@ -317,6 +501,7 @@ export class TypeScriptVisitor implements LanguageVisitor {
 			case GENERATOR_FUNCTION_DECLARATION:
 				return SymbolKind.Function;
 			case CLASS_DECLARATION:
+			case ABSTRACT_CLASS_DECLARATION:
 				return SymbolKind.Class;
 			case INTERFACE_DECLARATION:
 				return SymbolKind.Interface;
@@ -331,6 +516,30 @@ export class TypeScriptVisitor implements LanguageVisitor {
 		}
 	}
 
+	/** Build a ParsedSymbol for a class/interface/enum member (never top-level). */
+	private memberSymbol(node: TSNode, name: string, kind: SymbolKind, parentName: string | null): ParsedSymbol {
+		const decorators = collectDecorators(node);
+		return {
+			name,
+			kind,
+			startLine: node.startPosition.row + 1,
+			startCol: node.startPosition.column + 1,
+			endLine: node.endPosition.row + 1,
+			endCol: node.endPosition.column + 1,
+			signature: this.withDecorators(buildSignature(node), decorators),
+			docComment: extractDocComment(node),
+			exported: false,
+			defaultExport: false,
+			parentName
+		};
+	}
+
+	/** Prefix decorator texts to a signature, e.g. `@Injectable() class Foo {`. */
+	private withDecorators(signature: string, decorators: string[]): string {
+		if (decorators.length === 0) return signature;
+		return decorators.concat([signature]).join(" ");
+	}
+
 	private nodeToSymbol(
 		node: TSNode,
 		kind: SymbolKind,
@@ -343,14 +552,19 @@ export class TypeScriptVisitor implements LanguageVisitor {
 		if (node.type === "variable_declarator") {
 			name = node.firstNamedChild?.text ?? "unknown";
 		} else if (kind === SymbolKind.Property || kind === SymbolKind.Method) {
-			const nameNode = node.firstNamedChild ?? node.descendantsOfType("property_identifier")[0];
-			name = nameNode?.text ?? "unknown";
+			// Class members are named by their `property_identifier`. Prefer it over
+			// the first named child, which may be an `accessibility_modifier`
+			// (`private readonly apiKey` would otherwise be named "private").
+			name = symbolIdentifier(node) ?? node.descendantsOfType(PROPERTY_IDENTIFIER)[0]?.text ?? "unknown";
 		} else {
-			name = node.namedChildren[0]?.text ?? "unknown";
+			// Top-level declarations; skip decorators (bare `@Injectable() class Foo {}`).
+			name = getNameFromDeclaration(node) ?? node.namedChildren[0]?.text ?? "unknown";
 		}
 
 		const exported = exportedNames.has(name);
 		const defaultExport = defaultExportNames.has(name);
+
+		const decorators = collectDecorators(node);
 
 		return {
 			name,
@@ -359,11 +573,19 @@ export class TypeScriptVisitor implements LanguageVisitor {
 			startCol: node.startPosition.column + 1,
 			endLine: node.endPosition.row + 1,
 			endCol: node.endPosition.column + 1,
-			signature: buildSignature(node),
+			signature: this.withDecorators(buildSignature(node), decorators),
 			docComment: extractDocComment(node),
 			exported,
 			defaultExport,
 			parentName
 		};
 	}
+}
+
+/** Return the first yielded child that carries a declarable identifier name. */
+function symbolIdentifier(node: TSNode): string | null {
+	for (const child of node.namedChildren) {
+		if (isNameNode(child)) return child.text;
+	}
+	return null;
 }

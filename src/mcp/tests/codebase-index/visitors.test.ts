@@ -1158,3 +1158,386 @@ public:
 		expect(cls.kind).toBe("class");
 	});
 });
+
+// ══════════════════════════════════════════════════════════════════════
+
+describe("TypeScriptVisitor", () => {
+	// ── Interfaces ────────────────────────────────────────────────
+
+	it("extracts interface properties and methods parented to the interface", async () => {
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+interface User {
+  id: string;
+  name?: string;
+  readonly email: string;
+  greet(): void;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const user = result.symbols.find((s) => s.name === "User");
+		expect(user).toBeDefined();
+		expect(user!.kind).toBe("interface");
+
+		const propertyNames = result.symbols
+			.filter((s) => s.parentName === "User" && s.kind === "property")
+			.map((s) => s.name);
+		expect(propertyNames).toEqual(["id", "name", "email"]);
+
+		const id = result.symbols.find((s) => s.name === "id" && s.parentName === "User");
+		expect(id).toBeDefined();
+		expect(id!.kind).toBe("property");
+		expect(id!.signature).toBe("id: string");
+
+		const email = result.symbols.find((s) => s.name === "email" && s.parentName === "User");
+		expect(email).toBeDefined();
+		// readonly is preserved verbatim in the signature.
+		expect(email!.signature).toBe("readonly email: string");
+
+		const greet = result.symbols.find((s) => s.name === "greet" && s.parentName === "User");
+		expect(greet).toBeDefined();
+		expect(greet!.kind).toBe("method");
+		expect(greet!.parentName).toBe("User");
+		expect(greet!.signature).toBe("greet(): void");
+	});
+
+	it("does not mark a non-exported interface (or its members) as exported", async () => {
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+interface PrivateShape {
+  width: number;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const iface = result.symbols.find((s) => s.name === "PrivateShape");
+		expect(iface).toBeDefined();
+		expect(iface!.exported).toBe(false);
+		const width = result.symbols.find((s) => s.name === "width" && s.parentName === "PrivateShape");
+		expect(width).toBeDefined();
+		expect(width!.exported).toBe(false);
+	});
+
+	// ── Type aliases ──────────────────────────────────────────────
+
+	it("extracts a type alias with its RHS preview in the signature", async () => {
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+type Status = "active" | "inactive";
+type Callback<T> = (value: T) => void;
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const status = result.symbols.find((s) => s.name === "Status");
+		expect(status).toBeDefined();
+		expect(status!.kind).toBe("type");
+		// The RHS of the type alias appears in the signature as a preview.
+		expect(status!.signature).toContain('type Status = "active" | "inactive"');
+
+		const callback = result.symbols.find((s) => s.name === "Callback");
+		expect(callback).toBeDefined();
+		expect(callback!.kind).toBe("type");
+		// Generic parameters are retained in type-alias signatures.
+		expect(callback!.signature).toContain("<T>");
+	});
+
+	it("does not mark an unexported type alias as exported", async () => {
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+type InternalKey = string;
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const key = result.symbols.find((s) => s.name === "InternalKey");
+		expect(key).toBeDefined();
+		expect(key!.kind).toBe("type");
+		expect(key!.exported).toBe(false);
+	});
+
+	// ── Enums ─────────────────────────────────────────────────────
+
+	it("extracts enum members as constants parented to the enum", async () => {
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+enum UserRole {
+  Admin = "admin",
+  Editor,
+  Viewer = "viewer",
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const role = result.symbols.find((s) => s.name === "UserRole");
+		expect(role).toBeDefined();
+		expect(role!.kind).toBe("enum");
+
+		const admin = result.symbols.find((s) => s.name === "Admin" && s.parentName === "UserRole");
+		expect(admin).toBeDefined();
+		expect(admin!.kind).toBe("constant");
+		expect(admin!.signature).toBe(`Admin = "admin"`);
+
+		// Bare members (no explicit value) still get a Constant symbol.
+		const editor = result.symbols.find((s) => s.name === "Editor" && s.parentName === "UserRole");
+		expect(editor).toBeDefined();
+		expect(editor!.kind).toBe("constant");
+		expect(editor!.signature).toBe("Editor");
+
+		const viewer = result.symbols.find((s) => s.name === "Viewer" && s.parentName === "UserRole");
+		expect(viewer).toBeDefined();
+		expect(viewer!.kind).toBe("constant");
+	});
+
+	it("does not mark enum members as exported", async () => {
+		const source = `
+export enum Status {
+  Active = 1,
+}
+`;
+		const result = await parseOrSkip("types.ts", source);
+		assertNoError(result);
+		guardEmpty(result);
+		const active = result.symbols.find((s) => s.name === "Active" && s.parentName === "Status");
+		expect(active).toBeDefined();
+		expect(active!.kind).toBe("constant");
+		expect(active!.exported).toBe(false);
+	});
+
+	// ── Generic type parameters ───────────────────────────────────
+
+	it("retains generic type parameters in function, class, and interface signatures", async () => {
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+function identity<T>(x: T): T { return x; }
+
+class Box<T, U> {
+  value: T;
+  other: U;
+}
+
+interface Pair<A, B> {
+  first: A;
+  second: B;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const fn = result.symbols.find((s) => s.name === "identity");
+		expect(fn).toBeDefined();
+		expect(fn!.signature).toContain("<T>");
+
+		const box = result.symbols.find((s) => s.name === "Box");
+		expect(box).toBeDefined();
+		expect(box!.kind).toBe("class");
+		expect(box!.signature).toContain("<T, U>");
+
+		const pair = result.symbols.find((s) => s.name === "Pair");
+		expect(pair).toBeDefined();
+		expect(pair!.kind).toBe("interface");
+		expect(pair!.signature).toContain("<A, B>");
+	});
+
+	// ── Class properties with visibility ─────────────────────────
+
+	it("extracts class properties with accessibility and type in the signature", async () => {
+		const result = await parseOrSkip(
+			"service.ts",
+			`
+class UserService {
+  public name: string;
+  private readonly apiKey: string;
+  protected age: number;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const apiKey = result.symbols.find((s) => s.name === "apiKey" && s.parentName === "UserService");
+		expect(apiKey).toBeDefined();
+		expect(apiKey!.kind).toBe("property");
+		// Name must be the real identifier, NOT the accessibility modifier ("private").
+		expect(apiKey!.name).toBe("apiKey");
+		expect(apiKey!.signature).toBe("private readonly apiKey: string");
+
+		const name = result.symbols.find((s) => s.name === "name" && s.parentName === "UserService");
+		expect(name).toBeDefined();
+		expect(name!.signature).toBe("public name: string");
+
+		const age = result.symbols.find((s) => s.name === "age" && s.parentName === "UserService");
+		expect(age).toBeDefined();
+		expect(age!.signature).toBe("protected age: number");
+	});
+
+	it("marks public class members as names rather than their modifier", async () => {
+		const result = await parseOrSkip(
+			"service.ts",
+			`
+class UserService {
+	public secret: string;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		// The named symbol must be "secret", never "public".
+		const secret = result.symbols.find((s) => s.kind === "property" && s.parentName === "UserService");
+		expect(secret).toBeDefined();
+		expect(secret!.name).toBe("secret");
+	});
+
+	// ── Abstract classes & members ─────────────────────────────
+
+	it("extracts abstract classes and their abstract methods parented to the class", async () => {
+		const result = await parseOrSkip(
+			"abstract.ts",
+			`
+abstract class Repository {
+  abstract find(id: string): unknown;
+  abstract save(item: unknown): Promise<void>;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const repo = result.symbols.find((s) => s.name === "Repository");
+		expect(repo).toBeDefined();
+		expect(repo!.kind).toBe("class");
+
+		const find = result.symbols.find((s) => s.name === "find" && s.parentName === "Repository");
+		expect(find).toBeDefined();
+		expect(find!.kind).toBe("method");
+		expect(find!.parentName).toBe("Repository");
+
+		const save = result.symbols.find((s) => s.name === "save" && s.parentName === "Repository");
+		expect(save).toBeDefined();
+		expect(save!.kind).toBe("method");
+		expect(save!.parentName).toBe("Repository");
+	});
+
+	it("does not drop an exported abstract class or leak into the class declaration body", async () => {
+		const result = await parseOrSkip(
+			"abstract.ts",
+			`
+export abstract class Cache {
+	abstract get(key: string): string | undefined;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const cache = result.symbols.find((s) => s.name === "Cache");
+		expect(cache).toBeDefined();
+		expect(cache!.kind).toBe("class");
+		expect(cache!.exported).toBe(true);
+
+		const get = result.symbols.find((s) => s.name === "get" && s.parentName === "Cache");
+		expect(get).toBeDefined();
+		expect(get!.kind).toBe("method");
+		expect(get!.parentName).toBe("Cache");
+	});
+
+	// ── Decorators ───────────────────────────────────────────────
+
+	it("captures decorators on classes and members in the signature", async () => {
+		const result = await parseOrSkip(
+			"decorated.ts",
+			`
+@Injectable()
+export class UserService {
+  private readonly client: Client;
+
+  @RuntimeLogger()
+  fetch(): string {
+    return "";
+  }
+}
+
+@Component({ selector: "app" })
+class AppRoot {}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const svc = result.symbols.find((s) => s.name === "UserService");
+		expect(svc).toBeDefined();
+		expect(svc!.signature).toContain("@Injectable()");
+
+		const fetch = result.symbols.find((s) => s.name === "fetch" && s.parentName === "UserService");
+		expect(fetch).toBeDefined();
+		expect(fetch!.signature).toContain("@RuntimeLogger()");
+
+		// A decorator on a bare (non-exported) class still indexes it with its
+		// real name and decorator prefix.
+		const app = result.symbols.find((s) => s.name === "AppRoot");
+		expect(app).toBeDefined();
+		expect(app!.kind).toBe("class");
+		expect(app!.signature).toContain('@Component({ selector: "app" })');
+	});
+
+	it("leaves undecorated members' signatures untouched", async () => {
+		const result = await parseOrSkip(
+			"decorator.ts",
+			`
+@Injectable()
+class Service {
+	someField: string;
+	run(): void {}
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const field = result.symbols.find((s) => s.name === "someField" && s.parentName === "Service");
+		expect(field).toBeDefined();
+		// Undecorated member does not inherit the class decorator.
+		expect(field!.signature).not.toContain("@Injectable()");
+		expect(field!.signature).toBe("someField: string");
+
+		const run = result.symbols.find((s) => s.name === "run" && s.parentName === "Service");
+		expect(run).toBeDefined();
+		expect(run!.signature).not.toContain("@Injectable()");
+		expect(run!.signature).toBe("run(): void {}");
+	});
+
+	// ── .js path regression ──────────────────────────────────────
+
+	it("parses plain JS files without regressing symbol extraction", async () => {
+		const result = await parseOrSkip(
+			"plain.js",
+			`
+function add(a, b) { return a + b; }
+
+class Car {
+  constructor() { this.name = "x"; }
+  drive() { return "vroom"; }
+}
+
+module.exports = { add, Car };
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const add = result.symbols.find((s) => s.name === "add");
+		expect(add).toBeDefined();
+		expect(add!.kind).toBe("function");
+		const car = result.symbols.find((s) => s.name === "Car");
+		expect(car).toBeDefined();
+		expect(car!.kind).toBe("class");
+		// Class methods still resolve to their identifier, not a modifier keyword.
+		const drive = result.symbols.find((s) => s.name === "drive" && s.parentName === "Car");
+		expect(drive).toBeDefined();
+		expect(drive!.kind).toBe("method");
+	});
+});
