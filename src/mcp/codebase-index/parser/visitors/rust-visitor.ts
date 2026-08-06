@@ -2,13 +2,19 @@
  * RustVisitor — extracts symbols from Rust source code using tree-sitter's AST.
  *
  * Node type mappings:
- * - function_item → Function
- * - struct_item   → Class
- * - enum_item     → Enum
- * - trait_item    → Interface
- * - type_item     → Type
+ * - function_item   → Function
+ * - struct_item     → Class
+ * - enum_item       → Enum
+ * - trait_item      → Interface
+ * - type_item       → Type
+ * - impl_item       → (container; methods → Method)
+ * - const_item      → Constant
+ * - static_item     → Constant
+ * - use_declaration → Module (pub re-exports only; private `use` is not indexed)
  *
  * Export detection: checks for `visibility_modifier` child containing `pub`.
+ * `pub(crate)` / `pub(super)` restricted visibilities are NOT treated as
+ * exported (consistent with isExported).
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
@@ -21,6 +27,15 @@ const ENUM_ITEM = "enum_item";
 const TRAIT_ITEM = "trait_item";
 const TYPE_ITEM = "type_item";
 const IMPL_ITEM = "impl_item";
+const CONST_ITEM = "const_item";
+const STATIC_ITEM = "static_item";
+const USE_DECLARATION = "use_declaration";
+const USE_AS_CLAUSE = "use_as_clause";
+const SCOPED_IDENTIFIER = "scoped_identifier";
+const IDENTIFIER = "identifier";
+const SELF = "self";
+const SUPER = "super";
+const CRATE = "crate";
 const COMMENT = "comment";
 const LINE_COMMENT = "line_comment";
 const BLOCK_COMMENT = "block_comment";
@@ -97,6 +112,33 @@ export class RustVisitor implements LanguageVisitor {
 			return;
 		}
 
+		// ── Const item ──────────────────────────────────────────
+		// Only top-level / module-scope items reach here: function bodies are
+		// never walked (the function_item branch returns early) and associated
+		// consts inside impl blocks are consumed by the insideImpl branch.
+		if (type === CONST_ITEM) {
+			const nameNode = node.childForFieldName("name");
+			if (nameNode) {
+				symbols.push(this.makeSymbol(node, nameNode.text, SymbolKind.Constant, parentName));
+			}
+			return;
+		}
+
+		// ── Static item ─────────────────────────────────────────
+		if (type === STATIC_ITEM) {
+			const nameNode = node.childForFieldName("name");
+			if (nameNode) {
+				symbols.push(this.makeSymbol(node, nameNode.text, SymbolKind.Constant, parentName));
+			}
+			return;
+		}
+
+		// ── Use declaration (pub re-exports only) ───────────────
+		if (type === USE_DECLARATION) {
+			this.extractPubUse(node, symbols, parentName);
+			return;
+		}
+
 		// ── Impl item: recurse for methods ──────────────────────
 		if (type === IMPL_ITEM) {
 			let implParent: string | null;
@@ -131,6 +173,38 @@ export class RustVisitor implements LanguageVisitor {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Extract a `pub use` re-export as a Module symbol.
+	 *
+	 * Only declarations with plain `pub` visibility are indexed (matching
+	 * isExported). Private `use` statements and restricted visibilities such as
+	 * `pub(crate)` / `pub(super)` are skipped.
+	 *
+	 * Name resolution: `pub use path::to::Name as Alias` uses the `Alias`;
+	 * otherwise the name is the final path segment. tree-sitter's
+	 * `scoped_identifier` `name` field already yields the last segment, so any
+	 * `self::`, `crate::` or leading `::` prefix is inherently stripped.
+	 * Grouped (`use a::{b, c}`) and glob (`use a::*`) forms carry no single
+	 * name and are not indexed.
+	 */
+	private extractPubUse(node: TSNode, symbols: ParsedSymbol[], parentName: string | null): void {
+		if (!this.isExported(node)) return;
+		const arg = node.childForFieldName("argument");
+		if (!arg) return;
+
+		let name: string | null = null;
+		if (arg.type === USE_AS_CLAUSE) {
+			name = arg.childForFieldName("alias")?.text ?? null;
+		} else if (arg.type === SCOPED_IDENTIFIER) {
+			name = arg.childForFieldName("name")?.text ?? null;
+		} else if (arg.type === IDENTIFIER || arg.type === SELF || arg.type === SUPER || arg.type === CRATE) {
+			name = arg.text;
+		}
+		if (!name || name.length === 0) return;
+
+		symbols.push(this.makeSymbol(node, name, SymbolKind.Module, parentName));
 	}
 
 	private makeSymbol(node: TSNode, name: string, kind: SymbolKind, parentName: string | null): ParsedSymbol {
