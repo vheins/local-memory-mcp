@@ -21,7 +21,6 @@ import { logger } from "../../utils/logger";
 // Import cache-level utilities
 import {
 	checkRepoStaleness,
-	getLastIndexedAt,
 	clearStalenessCache,
 	DEFAULT_BATCH_SIZE,
 	type FilePlan,
@@ -281,11 +280,7 @@ export class CodebaseIndexServiceImpl implements CodebaseIndexService {
 	}
 
 	async getIndexStatus(repo: string, repoPath?: string): Promise<IndexStatus> {
-		const totalFiles = this.db.codebaseFiles.getFileCountByRepo(repo);
-
-		const totalSymbols = this.db.codebaseSymbols.getSymbolCountByRepo(repo);
-
-		const lastIndexedAt = getLastIndexedAt(this.db, repo);
+		const { files: totalFiles, symbols: totalSymbols, lastIndexedAt } = getIndexStats(this.db, repo);
 
 		const base: IndexStatus = {
 			repo,
@@ -308,4 +303,30 @@ export class CodebaseIndexServiceImpl implements CodebaseIndexService {
 
 		return base;
 	}
+}
+
+/**
+ * Aggregate a repo's index stats (file count, symbol count, and last indexed
+ * timestamp) with a SINGLE statement using scalar subqueries — collapses the
+ * three separate COUNT/COUNT/MAX queries getIndexStatus used to issue into one
+ * round-trip (issue #70), while keeping the exact IndexStatus shape.
+ */
+function getIndexStats(
+	db: SQLiteStore,
+	repo: string
+): { files: number; symbols: number; lastIndexedAt: string | null } {
+	const row = db.db
+		.prepare(
+			`SELECT
+				(SELECT COUNT(*) FROM codebase_files WHERE repo = ?) AS files,
+				(SELECT COUNT(*) FROM codebase_symbols WHERE repo = ?) AS symbols,
+				(SELECT MAX(last_indexed_at) FROM codebase_files WHERE repo = ?) AS last_indexed_at`
+		)
+		.get(repo, repo, repo) as { files: number; symbols: number; last_indexed_at: string | null } | undefined;
+
+	return {
+		files: row?.files ?? 0,
+		symbols: row?.symbols ?? 0,
+		lastIndexedAt: row?.last_indexed_at ?? null
+	};
 }
