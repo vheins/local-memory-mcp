@@ -91,6 +91,46 @@ local-memory-mcp --index --repo owner/repo --path /absolute/path/to/repo
 
 See the [Feature Guide](../features/codebase-index.md#cli---index-flag) for complete CLI documentation.
 
+### Performance Optimization Options
+
+The two environment variables below are set through your MCP client's server configuration (not the [env var table](#environment-variables) above — both mechanisms feed the same `indexing-service.ts` logic). The examples use the array-form `command` syntax supported by modern MCP clients (opencode, Claude Desktop, etc.).
+
+#### Option 1: Increase TTL (Reduce Re-index Frequency)
+
+By default, the codebase index is refreshed every 24 hours. For large projects, you can reduce CPU usage by increasing the TTL to 7 days:
+
+```json
+"local-memory-mcp": {
+  "command": ["npx", "-y", "@vheins/local-memory-mcp@latest"],
+  "enabled": true,
+  "type": "local",
+  "timeout": 120000,
+  "environment": {
+    "CODEBASE_AUTO_INDEX_TTL": "604800000"
+  }
+}
+```
+
+Value `604800000` = 7 days in milliseconds (7 × 24 × 60 × 60 × 1000).
+
+#### Option 2: Disable Auto-Index on Startup
+
+To eliminate CPU spikes entirely, disable automatic indexing at server startup. You can still trigger indexing manually via `codebase-index(repoPath)` when needed:
+
+```json
+"local-memory-mcp": {
+  "command": ["npx", "-y", "@vheins/local-memory-mcp@latest"],
+  "enabled": true,
+  "type": "local",
+  "timeout": 120000,
+  "environment": {
+    "CODEBASE_AUTO_INDEX": "false"
+  }
+}
+```
+
+**Note:** After editing the config, restart the MCP client (opencode/Claude Desktop) for the environment variables to take effect.
+
 ---
 
 ## 3. Database Schema
