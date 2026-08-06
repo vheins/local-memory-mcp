@@ -6,7 +6,8 @@ import {
 	CodebaseSymbolVector,
 	SymbolCountGroupRow,
 	SymbolSearchQuery,
-	SymbolSearchResult
+	SymbolSearchResult,
+	SymbolPrefixSearchQuery
 } from "../types";
 import { randomUUID } from "crypto";
 import { sanitizeFtsTerm } from "../utils/fts";
@@ -79,6 +80,58 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 		// Fallback to LIKE search
 		return this.likeSearch(query, limit, offset);
+	}
+
+	/**
+	 * Case-insensitive prefix search on symbol names (autocomplete), served by
+	 * the idx_symbols_name_lower expression index (migration v20, issue #63).
+	 *
+	 * Consumption contract: the prefix is expressed as an EXCLUSIVE RANGE on
+	 * the lowercased name — `LOWER(name) >= lower(prefix) AND LOWER(name) <
+	 * lower(prefix) || X'...'` (upper bound = prefix + U+FFFF). The literal
+	 * `LOWER(name) LIKE 'prefix%'` form is NOT used because SQLite's LIKE
+	 * optimization requires a plain column (not an expression) on the
+	 * left-hand side, so it falls back to a full table scan (verified on
+	 * SQLite 3.53). The range form reports `USING INDEX
+	 * idx_symbols_name_lower` in EXPLAIN QUERY PLAN. The trailing repo/kind
+	 * predicates are covered by the composite index's trailing columns.
+	 */
+	searchByPrefix(query: SymbolPrefixSearchQuery): SymbolSearchResult {
+		const limit = Math.min(query.limit ?? 50, 200);
+		const offset = query.offset ?? 0;
+		const prefix = (query.prefix ?? "").toLowerCase();
+		// U+FFFF upper bound: the smallest string greater than every string
+		// that starts with `prefix` for identifier-name characters (< U+FFFF).
+		const prefixUpper = `${prefix}\uffff`;
+
+		const conditions: string[] = ["LOWER(cs.name) >= ? AND LOWER(cs.name) < ?"];
+		const params: unknown[] = [prefix, prefixUpper];
+
+		if (query.kind) {
+			conditions.push("cs.kind = ?");
+			params.push(query.kind);
+		}
+
+		const whereClause = conditions.join(" AND ");
+
+		const symbols = this.all<CodebaseSymbolRow>(
+			`SELECT cs.* FROM codebase_symbols cs
+			 WHERE cs.repo = ? AND ${whereClause}
+			 ORDER BY LOWER(cs.name) ASC LIMIT ? OFFSET ?`,
+			[query.repo, ...params, limit, offset]
+		).map((r) => this.rowToSymbol(r));
+
+		const countRow = this.get<{ total: number }>(
+			`SELECT COUNT(*) as total FROM codebase_symbols cs WHERE cs.repo = ? AND ${whereClause}`,
+			[query.repo, ...params]
+		);
+
+		const total = countRow?.total ?? symbols.length;
+		return {
+			symbols,
+			total,
+			hasMore: offset + limit < total
+		};
 	}
 
 	deleteSymbolsByFile(repo: string, filePath: string): number {

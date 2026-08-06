@@ -688,4 +688,129 @@ describe("CodebaseSymbol Entity", () => {
 		expect(fileAfterReindex).toBeDefined();
 		expect(fileAfterReindex!.checksum).toBe("abc123");
 	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// searchByPrefix — case-insensitive name prefix (idx_symbols_name_lower,
+	// migration v20 / issue #63)
+	// ══════════════════════════════════════════════════════════════════
+
+	it("searchByPrefix returns case-insensitive prefix matches only", () => {
+		entity.bulkUpsertSymbols([
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "getUserProfile",
+				kind: "function",
+				start_line: 1
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "getUser",
+				kind: "function",
+				start_line: 2
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "GetUserPermissions",
+				kind: "function",
+				start_line: 3
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "getOrders",
+				kind: "class",
+				start_line: 4
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "fetchUser",
+				kind: "function",
+				start_line: 5
+			}
+		]);
+
+		const result = entity.searchByPrefix({ repo: "test-repo", prefix: "getu" });
+
+		// Prefix only — mid-word/substring matches ("fetchUser") and non-matches
+		// ("getOrders") are excluded; matching is case-insensitive ("GetUser…").
+		expect(result.symbols.map((s) => s.name)).toEqual(["getUser", "GetUserPermissions", "getUserProfile"]);
+		expect(result.total).toBe(3);
+		expect(result.hasMore).toBe(false);
+	});
+
+	it("searchByPrefix filters by kind and paginates", () => {
+		entity.bulkUpsertSymbols([
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "loadUserData",
+				kind: "function",
+				start_line: 1
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "loadUserConfig",
+				kind: "function",
+				start_line: 2
+			},
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "loadUserService",
+				kind: "class",
+				start_line: 3
+			},
+			{
+				repo: "other-repo",
+				file_path: "src/a.ts",
+				name: "loadUserExternal",
+				kind: "function",
+				start_line: 4
+			}
+		]);
+
+		// kind filter narrows to function symbols in the prefix range.
+		const kindFiltered = entity.searchByPrefix({
+			repo: "test-repo",
+			prefix: "loadUser",
+			kind: "function"
+		});
+		expect(kindFiltered.symbols.map((s) => s.name)).toEqual(["loadUserConfig", "loadUserData"]);
+
+		// repo scope: symbols from other repos are never returned.
+		const scoped = entity.searchByPrefix({ repo: "test-repo", prefix: "loadUser" });
+		expect(scoped.symbols.map((s) => s.name)).toEqual(["loadUserConfig", "loadUserData", "loadUserService"]);
+
+		// Pagination: page size 2 → hasMore until the last page.
+		const page1 = entity.searchByPrefix({ repo: "test-repo", prefix: "loadUser", limit: 2, offset: 0 });
+		expect(page1.symbols.map((s) => s.name)).toEqual(["loadUserConfig", "loadUserData"]);
+		expect(page1.hasMore).toBe(true);
+		expect(page1.total).toBe(3);
+
+		const page2 = entity.searchByPrefix({ repo: "test-repo", prefix: "loadUser", limit: 2, offset: 2 });
+		expect(page2.symbols.map((s) => s.name)).toEqual(["loadUserService"]);
+		expect(page2.hasMore).toBe(false);
+	});
+
+	it("searchByPrefix returns empty for no prefix matches", () => {
+		entity.bulkUpsertSymbols([
+			{
+				repo: "test-repo",
+				file_path: "src/a.ts",
+				name: "calculateTotal",
+				kind: "function",
+				start_line: 1
+			}
+		]);
+
+		const result = entity.searchByPrefix({ repo: "test-repo", prefix: "zzz" });
+		expect(result.symbols).toEqual([]);
+		expect(result.total).toBe(0);
+		expect(result.hasMore).toBe(false);
+	});
 });

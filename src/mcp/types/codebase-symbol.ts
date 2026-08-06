@@ -69,6 +69,20 @@ export interface SymbolSearchQuery {
 }
 
 /**
+ * Case-insensitive prefix search on symbol names (autocomplete), served by the
+ * idx_symbols_name_lower expression index (migration v20, issue #63). `repo`
+ * is required to scope the scan; `kind` optionally narrows it (both are
+ * trailing columns of the composite index).
+ */
+export interface SymbolPrefixSearchQuery {
+	repo: string;
+	prefix: string;
+	kind?: string;
+	limit?: number;
+	offset?: number;
+}
+
+/**
  * Row shape for the SQL-level aggregation used by ARCHITECTURE reads
  * (OPT-PERF-08): symbol counts grouped by `(file_path, kind)` via GROUP BY.
  * Hydrating these rows is O(distinct file×kind pairs) instead of O(symbols).

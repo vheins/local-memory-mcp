@@ -20,8 +20,9 @@ import { migration as v16 } from "./v16-queue-jobs-content-hash";
 import { migration as v17 } from "./v17-symbols-repo-exported-parent-index";
 import { migration as v18 } from "./v18-symbols-fts-signature";
 import { migration as v19 } from "./v19-symbols-file-path-index";
+import { migration as v20 } from "./v20-symbols-name-lower-index";
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -56,7 +57,8 @@ const MIGRATIONS: Migration[] = [
 	v16,
 	v17,
 	v18,
-	v19
+	v19,
+	v20
 ];
 
 // ──────────────────────────────────────────────
