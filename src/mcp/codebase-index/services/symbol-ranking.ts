@@ -32,6 +32,8 @@ export interface RankedSymbol {
 export interface SymbolFilter {
 	kind?: string[];
 	repo?: string;
+	/** When non-empty, keeps only symbols whose `repo` is in this set (cross-repo search). */
+	repos?: string[];
 	filePath?: string;
 	exportedOnly?: boolean;
 }
@@ -87,6 +89,7 @@ export function filterSymbols(symbols: CodebaseSymbol[], filter: SymbolFilter): 
 			if (!filter.kind.includes(s.kind)) return false;
 		}
 		if (filter.repo && s.repo !== filter.repo) return false;
+		if (filter.repos && filter.repos.length > 0 && !filter.repos.includes(s.repo)) return false;
 		if (filter.filePath && s.file_path !== filter.filePath) return false;
 		if (filter.exportedOnly && !s.exported) return false;
 		return true;

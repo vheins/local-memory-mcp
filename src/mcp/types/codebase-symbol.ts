@@ -61,6 +61,12 @@ export interface CodebaseSymbolInsert {
 export interface SymbolSearchQuery {
 	query: string;
 	repo?: string;
+	/**
+	 * Cross-repo scope — when non-empty, filters `cs.repo IN (...)` and takes
+	 * precedence over `repo`. When both are absent the search is unscoped
+	 * (callers must guard against this: codebase_symbols has no owner column).
+	 */
+	repos?: string[];
 	kind?: string;
 	filePath?: string;
 	exportedOnly?: boolean;

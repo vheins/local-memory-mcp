@@ -35,7 +35,23 @@ export const CodebaseReadSchema = z.object({
 
 	// ── Common ─────────────────────────────────────────────────────────────
 	owner: z.string().optional().default(""),
-	repo: z.string().min(1).transform(normalizeRepo),
+	/**
+	 * Single-repo scope. Backward compatible — a single value is validated and
+	 * normalized exactly as before. Now optional so SEARCH can be scoped with
+	 * `repos` alone; the handler enforces "repo or repos required".
+	 */
+	repo: z.string().min(1).transform(normalizeRepo).optional(),
+	/**
+	 * Cross-repo scope for SEARCH — each value is normalized like `repo`.
+	 * When provided (with or without `repo`), results are restricted to these
+	 * repos. Documented limitation: `codebase_symbols` has no owner column, so
+	 * scanning is tenant-unscoped at the DB level. When BOTH `repo` and `repos`
+	 * are absent, SEARCH mode rejects to prevent cross-tenant leaks.
+	 *
+	 * Capped at 50 entries — an unbounded IN clause would exceed SQLite variable
+	 * limits and allow a single oversized request to blow up the query (DoS).
+	 */
+	repos: z.array(z.string().min(1).transform(normalizeRepo)).max(50).nonempty().optional(),
 
 	// ── Pagination ─────────────────────────────────────────────────────────
 	/** Max results (default 50, max 200). */

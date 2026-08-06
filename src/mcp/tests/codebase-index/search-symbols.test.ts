@@ -253,4 +253,61 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 			expect(sym.exported).toBe(true);
 		}
 	});
+
+	it("searches across repos when `repos` is provided without `repo`", async () => {
+		const response = await handleCodebaseRead(
+			{ query: "createUser", repos: ["test-repo", "other-repo"], owner: "vheins" },
+			store,
+			vectors
+		);
+		const data = response.structuredContent as Record<string, unknown>;
+		const symbols = data.symbols as Array<Record<string, unknown>>;
+
+		// createUser exists in both fixture repos — both must be surfaced with
+		// their `repo` field intact (issue #67 cross-repo search).
+		expect(data.total as number).toBeGreaterThanOrEqual(2);
+		const repos = new Set(symbols.map((s) => s.repo));
+		expect(repos.has("test-repo")).toBe(true);
+		expect(repos.has("other-repo")).toBe(true);
+		for (const sym of symbols) {
+			expect(["test-repo", "other-repo"]).toContain(sym.repo);
+		}
+	});
+
+	it("rejects SEARCH when both `repo` and `repos` are absent (cross-tenant guard)", async () => {
+		const response = await handleCodebaseRead({ query: "createUser", owner: "vheins" }, store, vectors);
+		const data = response.structuredContent as Record<string, unknown>;
+
+		expect(data.code).toBe("REPO_REQUIRED");
+		expect(String(data.error)).toMatch(/repo.*repos/i);
+	});
+
+	it("keeps single-repo search working (backward compat) and lets `repos` win over `repo`", async () => {
+		// `repo` alone still scopes to one repo (backward compatible).
+		const single = await handleCodebaseRead(
+			{ query: "createUser", repo: "test-repo", owner: "vheins" },
+			store,
+			vectors
+		);
+		const singleData = single.structuredContent as Record<string, unknown>;
+		const singleSymbols = singleData.symbols as Array<Record<string, unknown>>;
+		expect(singleSymbols.length).toBeGreaterThanOrEqual(1);
+		for (const sym of singleSymbols) {
+			expect(sym.repo).toBe("test-repo");
+		}
+
+		// When both are provided, `repos` governs — a session-injected `repo`
+		// must not narrow an explicit cross-repo scope.
+		const both = await handleCodebaseRead(
+			{ query: "createUser", repo: "test-repo", repos: ["other-repo"], owner: "vheins" },
+			store,
+			vectors
+		);
+		const bothData = both.structuredContent as Record<string, unknown>;
+		const bothSymbols = bothData.symbols as Array<Record<string, unknown>>;
+		expect(bothSymbols.length).toBeGreaterThanOrEqual(1);
+		for (const sym of bothSymbols) {
+			expect(sym.repo).toBe("other-repo");
+		}
+	});
 });

@@ -254,7 +254,11 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			const conditions: string[] = ["codebase_symbols_fts MATCH ?"];
 			const params: unknown[] = [safeTerm];
 
-			if (query.repo) {
+			if (query.repos && query.repos.length > 0) {
+				const placeholders = query.repos.map(() => "?").join(", ");
+				conditions.push(`cs.repo IN (${placeholders})`);
+				params.push(...query.repos);
+			} else if (query.repo) {
 				conditions.push("cs.repo = ?");
 				params.push(query.repo);
 			}
@@ -315,7 +319,11 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		];
 		const params: unknown[] = [likeTerm, likeTerm, likeTerm, likeTerm];
 
-		if (query.repo) {
+		if (query.repos && query.repos.length > 0) {
+			const placeholders = query.repos.map(() => "?").join(", ");
+			conditions.push(`cs.repo IN (${placeholders})`);
+			params.push(...query.repos);
+		} else if (query.repo) {
 			conditions.push("cs.repo = ?");
 			params.push(query.repo);
 		}

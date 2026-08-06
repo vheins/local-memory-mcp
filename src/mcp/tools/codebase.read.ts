@@ -59,6 +59,45 @@ function inferMode(params: CodebaseReadInput): CodebaseReadMode {
 // MODE HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── SCOPE GUARD ─────────────────────────────────────────────────────────
+
+/**
+ * Ensures every mode has an explicit repo scope.
+ *
+ * SEARCH accepts `repo` OR the cross-repo `repos` set; all other modes
+ * (TRACE / FILE / ARCHITECTURE) require a concrete single `repo`.
+ *
+ * Cross-tenant guard: `codebase_symbols` has no owner column, so an unscoped
+ * read would span every indexed repo across tenants. When both `repo` and
+ * `repos` are absent, SEARCH mode rejects (per TASK-235 / issue #67).
+ */
+function requireRepoScope(validated: CodebaseReadInput, mode: CodebaseReadMode): McpResponse | null {
+	const hasRepos = validated.repos !== undefined && validated.repos.length > 0;
+
+	if (mode === "search") {
+		if (!validated.repo && !hasRepos) {
+			return createMcpResponse(
+				{
+					error: "Search requires `repo` or `repos`",
+					code: "REPO_REQUIRED"
+				},
+				"Search requires `repo` or `repos` to scope the query (cross-tenant guard — codebase_symbols has no owner column).",
+				{ includeJson: true }
+			);
+		}
+		return null;
+	}
+
+	if (!validated.repo) {
+		return createMcpResponse(
+			{ error: `Mode '${mode}' requires a concrete 'repo'`, code: "REPO_REQUIRED" },
+			`Mode '${mode}' requires a concrete 'repo'.`,
+			{ includeJson: true }
+		);
+	}
+	return null;
+}
+
 // ── TRACE ────────────────────────────────────────────────────────────────
 
 async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
@@ -177,7 +216,14 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 // ── FILE SYMBOLS ─────────────────────────────────────────────────────────
 
 async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
-	const repo = validated.repo.trim();
+	const repo = validated.repo;
+	if (!repo) {
+		return createMcpResponse(
+			{ error: "Mode 'file' requires a concrete 'repo'", code: "REPO_REQUIRED" },
+			"Mode 'file' requires a concrete 'repo'.",
+			{ includeJson: true }
+		);
+	}
 	const filePath = validated.filePath!.trim();
 
 	const file = db.codebaseFiles.getFile(repo, filePath);
@@ -236,7 +282,14 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 // ── ARCHITECTURE ─────────────────────────────────────────────────────────
 
 async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
-	const repo = validated.repo.trim();
+	const repo = validated.repo;
+	if (!repo) {
+		return createMcpResponse(
+			{ error: "Mode 'architecture' requires a concrete 'repo'", code: "REPO_REQUIRED" },
+			"Mode 'architecture' requires a concrete 'repo'.",
+			{ includeJson: true }
+		);
+	}
 	const depth = validated.depth ?? 2;
 
 	const files = db.codebaseFiles.getFilesByRepo(repo);
@@ -362,10 +415,17 @@ async function handleSearchMode(
 	// Normalize kind: accept string or string[], use first if array
 	const kindFilter: string | undefined = Array.isArray(validated.kind) ? validated.kind[0] : validated.kind;
 
+	// Cross-repo scope wins over single-repo scope. When `repos` is provided
+	// (even alongside a session-injected `repo`), results are restricted to the
+	// requested set and the single `repo` value is ignored.
+	const repos = validated.repos && validated.repos.length > 0 ? validated.repos : undefined;
+	const repo = repos && repos.length > 0 ? undefined : validated.repo;
+
 	// Phase 1: DB-level name search (LIKE on symbol name + kind/filePath filtering)
 	const dbResult = db.codebaseSymbols.searchSymbols({
 		query,
-		repo: validated.repo,
+		repo,
+		repos,
 		kind: kindFilter,
 		filePath: validated.filePath,
 		exportedOnly: validated.exportedOnly,
@@ -384,7 +444,8 @@ async function handleSearchMode(
 
 	symbols = filterSymbols(symbols, {
 		kind: inMemoryKind,
-		repo: validated.repo,
+		repo,
+		repos,
 		filePath: validated.filePath,
 		exportedOnly: validated.exportedOnly
 	});
@@ -395,7 +456,8 @@ async function handleSearchMode(
 		for (const word of words) {
 			const wordResult = db.codebaseSymbols.searchSymbols({
 				query: word,
-				repo: validated.repo,
+				repo,
+				repos,
 				kind: kindFilter,
 				filePath: validated.filePath,
 				exportedOnly: validated.exportedOnly,
@@ -405,7 +467,8 @@ async function handleSearchMode(
 			if (wordResult.symbols.length > 0) {
 				symbols = filterSymbols(wordResult.symbols, {
 					kind: inMemoryKind,
-					repo: validated.repo,
+					repo,
+					repos,
 					filePath: validated.filePath,
 					exportedOnly: validated.exportedOnly
 				});
@@ -417,8 +480,11 @@ async function handleSearchMode(
 	// Phase 3: Text ranking via SymbolRankingService (5 tiers)
 	let ranked: RankedSymbol[] = rankSymbols(symbols, query);
 
-	// Phase 4: Vector similarity tiebreaker within each rank tier
-	ranked = await blendVectorRanking(ranked, query, validated.repo, vectors);
+	// Phase 4: Vector similarity tiebreaker within each rank tier. For a
+	// cross-repo search the vector stage is unscoped (`repo` empty) so vector
+	// candidates aren't wrongly limited to the single repo; blendVectorRanking
+	// degrades to text-only ranking when vector search is unavailable.
+	ranked = await blendVectorRanking(ranked, query, repo ?? "", vectors);
 
 	// Apply pagination
 	const paginated = ranked.slice(validated.offset, validated.offset + validated.limit);
@@ -471,8 +537,14 @@ export async function handleCodebaseRead(
 	const validated = CodebaseReadSchema.parse(params);
 	const mode = inferMode(validated);
 
+	// Cross-tenant guard: SEARCH requires `repo` or `repos`; other modes
+	// require a concrete `repo` (TASK-235 / issue #67).
+	const scopeError = requireRepoScope(validated, mode);
+	if (scopeError) return scopeError;
+
 	logger.info("[Tool] codebase-read", {
 		repo: validated.repo,
+		repos: validated.repos,
 		mode
 	});
 

@@ -10,8 +10,10 @@
 // derived `inputSchema` here.
 //
 // `required: ["repo"]` is declared explicitly (instead of being derived away)
-// because these tools are repo-absolute: the contract intentionally requires
-// `repo` even though it is session-injectable.
+// because the index tool is repo-absolute: the contract intentionally requires
+// `repo` even though it is session-injectable. `codebase-read` does NOT force
+// `repo` required — SEARCH accepts either `repo` or the cross-repo `repos`
+// set (issue #67); the handler rejects when both are absent.
 
 import { inputSchemaFromSchema } from "../../tools/schemas/json-schema";
 import { CodebaseIndexSchema } from "../../tools/schemas/codebase-index";
@@ -52,6 +54,6 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			destructiveHint: false,
 			openWorldHint: false
 		},
-		inputSchema: inputSchemaFromSchema(CodebaseReadSchema, { required: ["repo"] })
+		inputSchema: inputSchemaFromSchema(CodebaseReadSchema)
 	}
 ];
