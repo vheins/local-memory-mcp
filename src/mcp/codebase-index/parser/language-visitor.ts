@@ -17,6 +17,10 @@ export enum SymbolKind {
 	Variable = "variable",
 	Method = "method",
 	Property = "property",
+	/** Class constant or top-level constant (PHP `const`, `define`, etc.). */
+	Constant = "constant",
+	/** Namespace import / module reference (PHP `use Foo\Bar;`, Python `import`, etc.). */
+	Module = "module",
 	/** Markdown H1 heading. */
 	Heading1 = "heading1",
 	/** Markdown H2 heading. */

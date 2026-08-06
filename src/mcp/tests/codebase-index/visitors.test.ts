@@ -242,6 +242,134 @@ interface JsonSerializable {
 		if (!iface) return;
 		expect(iface.kind).toBe("interface");
 	});
+
+	it("extracts use statements as module imports", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+use App\\Models\\User;
+use Illuminate\\Support\\Facades\\DB as Database;
+use function array_map as am;
+use const PHP_VERSION;
+use Carbon\\Carbon, Ramsey\\Uuid\\Uuid;
+
+class A { use SomeTrait; }
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const modules = result.symbols.filter((s) => s.kind === "module");
+		const names = modules.map((s) => s.name);
+		expect(names).toContain("App\\Models\\User");
+		expect(names).toContain("Illuminate\\Support\\Facades\\DB");
+		expect(names).toContain("array_map");
+		expect(names).toContain("PHP_VERSION");
+		expect(names).toContain("Carbon\\Carbon");
+		expect(names).toContain("Ramsey\\Uuid\\Uuid");
+		// Trait `use` statements inside classes are NOT imports.
+		expect(names).not.toContain("SomeTrait");
+	});
+
+	it("captures aliases of use statements in signature", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+use Illuminate\\Support\\Facades\\DB as Database;
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const db = result.symbols.find((s) => s.name === "Illuminate\\Support\\Facades\\DB");
+		if (!db) return;
+		expect(db.kind).toBe("module");
+		expect(db.signature).toBe("Database");
+	});
+
+	it("extracts group use statements with namespace prefix", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+use Foo\\Bar\\{Baz, Qux as Q};
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const names = result.symbols.filter((s) => s.kind === "module").map((s) => s.name);
+		expect(names).toContain("Foo\\Bar\\Baz");
+		expect(names).toContain("Foo\\Bar\\Qux");
+		const qux = result.symbols.find((s) => s.name === "Foo\\Bar\\Qux");
+		if (!qux) return;
+		expect(qux.signature).toBe("Q");
+	});
+
+	it("extracts enum methods with parent enum name", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+enum UserRole: string {
+	case Admin = 'admin';
+	case Editor = 'editor';
+
+	public function label(): string {
+		return ucfirst($this->value);
+	}
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const role = result.symbols.find((s) => s.name === "UserRole");
+		if (!role) return;
+		expect(role.kind).toBe("enum");
+		const method = result.symbols.find((s) => s.name === "label");
+		if (!method) return;
+		expect(method.kind).toBe("method");
+		expect(method.parentName).toBe("UserRole");
+	});
+
+	it("extracts enum cases as constants", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+enum UserRole: string {
+	case Admin = 'admin';
+	case Editor = 'editor';
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const cases = result.symbols.filter((s) => s.kind === "constant" && s.parentName === "UserRole");
+		const admin = cases.find((s) => s.name === "Admin");
+		if (!admin) return;
+		expect(admin.signature).toBe("Admin = 'admin'");
+		expect(cases.some((s) => s.name === "Editor")).toBe(true);
+	});
+
+	it("extracts unbacked enum cases without value in signature", async () => {
+		const result = await parseOrSkip(
+			"test.php",
+			`
+<?php
+enum Simple {
+	case One;
+	case Two;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+		const one = result.symbols.find((s) => s.name === "One");
+		if (!one) return;
+		expect(one.kind).toBe("constant");
+		expect(one.parentName).toBe("Simple");
+		expect(one.signature).toBe("One");
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
