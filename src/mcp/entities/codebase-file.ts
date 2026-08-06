@@ -7,34 +7,21 @@ export class CodebaseFileEntity extends BaseEntity {
 		const now = new Date().toISOString();
 		const id = randomUUID();
 
-		const existing = this.get<CodebaseFile>(
-			"SELECT id, created_at FROM codebase_files WHERE repo = ? AND file_path = ?",
-			[file.repo, file.file_path]
-		);
-
-		if (existing) {
-			this.run(
-				`UPDATE codebase_files SET
-					language = ?, checksum = ?, lines = ?, size_bytes = ?,
-					last_indexed_at = ?, updated_at = ?
-				WHERE repo = ? AND file_path = ?`,
-				[
-					file.language ?? null,
-					file.checksum ?? null,
-					file.lines ?? 0,
-					file.size_bytes ?? 0,
-					now,
-					now,
-					file.repo,
-					file.file_path
-				]
-			);
-			return this.getFile(file.repo, file.file_path)!;
-		}
-
-		this.run(
+		// Single-statement upsert keyed by the unique (repo, file_path) index.
+		// created_at is intentionally NOT in the DO UPDATE SET list, so it is
+		// preserved on conflict. RETURNING * returns the exact stored row on both
+		// insert (new id) and update (original id preserved).
+		const row = this.get<CodebaseFile>(
 			`INSERT INTO codebase_files (id, repo, file_path, language, checksum, lines, size_bytes, last_indexed_at, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(repo, file_path) DO UPDATE SET
+				language = excluded.language,
+				checksum = excluded.checksum,
+				lines = excluded.lines,
+				size_bytes = excluded.size_bytes,
+				last_indexed_at = excluded.last_indexed_at,
+				updated_at = excluded.updated_at
+			RETURNING *`,
 			[
 				id,
 				file.repo,
@@ -49,18 +36,7 @@ export class CodebaseFileEntity extends BaseEntity {
 			]
 		);
 
-		return {
-			id,
-			repo: file.repo,
-			file_path: file.file_path,
-			language: file.language ?? null,
-			checksum: file.checksum ?? null,
-			lines: file.lines ?? 0,
-			size_bytes: file.size_bytes ?? 0,
-			last_indexed_at: now,
-			created_at: now,
-			updated_at: now
-		};
+		return row!;
 	}
 
 	getFile(repo: string, filePath: string): CodebaseFile | undefined {
