@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0] — 2026-08-07
+
+### Added
+
+- Codebase search: cross-repo symbol search — `codebase_read` SEARCH mode accepts `repos: string[]` (each value normalized like `repo`; a single `repo` still works, backward compatible). Unscoped queries (neither `repo` nor `repos`) are rejected with a `REPO_REQUIRED` error to prevent cross-tenant leakage — `codebase_symbols` has no owner column, so an unscoped read would span every indexed repo. Results already carry `repo` (#67)
+- Codebase index: call-site indexing — new `codebase_references` table (migration v21: `repo`, `symbol_name`, `caller_file`, `caller_line`, `caller_name`, `kind`; indexes on `(repo, symbol_name)` and `(repo, caller_file)`); the TypeScript visitor emits references for `call_expression`/`new_expression`/`import_statement` and the PHP visitor for method calls (`member_call_expression`/`scoped_call_expression`), `function_call_expression`, and `object_creation_expression`; the parse pipeline persists references per file inside the batch transaction (including clean-stale deletion and rename transfer); `trace_symbol` now returns `references[]` from the table merged with the in-memory scan fallback, deduped by call-site file/line (#64)
+- Codebase search: FTS5 index now covers the symbol `signature` column (content-backed FTS rebuild migration v18) — signature-aware search for typed languages (#79)
+- Codebase search: `searchByPrefix()` symbol lookup backed by a `LOWER(name)` expression index (migration v20) for fast case-insensitive prefix queries (#63)
+- Codebase index: `CODEBASE_INDEX_WORKERS` env alias for parse concurrency (0 = auto; precedence: explicit override > `CODEBASE_INDEX_WORKERS` > `CODEBASE_INDEX_PARSE_CONCURRENCY` > default 4) (#65)
+- Parser coverage: Rust `const`/`static` items and `pub use` re-exports (alias and `crate::` paths) (#76); Ruby `attr_accessor`/`attr_reader`/`attr_writer` generated methods and `extend`/`include` module mixins (#74); Python `async def`, decorated definitions (decorators prefixed in the signature), and `__all__` exports (#73); Go struct fields (incl. embedded), interface method signatures, method receivers in signatures, and const blocks (incl. iota) (#68); TypeScript interfaces with property/method signatures, type alias RHS previews, enum members, generics in signatures, class properties with visibility + type, decorators, and abstract classes/members (#59); PHP `abstract`/`final`/`readonly` modifiers and PHP 8 attributes (`#[Route(...)]`) in signatures (#62); structured PHPDoc/JSDoc extraction — summary + `@param`/`@return`/`@throws`/`@deprecated` doc-tags, `[DEPRECATED]` marker, searchable via the `doc_comment` FTS column (#66)
+
+### Changed
+
+- Codebase file storage: `upsertFile` collapsed the SELECT + INSERT/UPDATE pair into a single `INSERT ... ON CONFLICT ... RETURNING *` — halves DB round-trips and removes the TOCTOU between check and write (#71)
+- Codebase index: `autoIndexIfStale` replaced the full file-row staleness load with a scalar `SELECT MAX(last_indexed_at)` — O(1) memory freshness check (#77)
+- Codebase index: `getIndexStatus` collapsed its per-field COUNT/MAX queries into a single scalar-subquery aggregation (#70)
+
+### Performance
+
+- Codebase index: `countLines` uses a character scan instead of `String.split` — no per-file array allocation (#80)
+- Codebase index: `getFilesByRepo` gained a slim projection (only `file_path`/`checksum`/`last_indexed_at`) for staleness/planning callers (#72)
+- Codebase index: symbol re-index batches delete + insert into a single transaction per parse batch — SAVEPOINT atomicity, no partial writes on failure (#69)
+- Codebase search: single-pass `COUNT(*) OVER ()` window for unpaged FTS5 totals, plus a `file_path` index (migration v19) (#75)
+- Codebase search: composite index `(repo, exported, parent_symbol_id)` (migration v17) for top-level-export queries (#78)
+
+### Tests
+
+- FTS5-primary regression test pinning BM25 rank ordering over the LIKE fallback (#61)
+- Re-index of an unchanged repo completes under 1s (performance regression) (#60)
+- Worker-pool `resolveConcurrency` env precedence tests (#65)
+- Migration tests for v17–v21
+- Parser fixtures for all 6 languages touched this release (Rust, Ruby, Python, Go, TypeScript, PHP)
+- Trace references: 1 definition + 2 call sites → definition and exactly the two stored call-site references (#64)
+
 ## [0.34.0] — 2026-08-04
 
 ### Added

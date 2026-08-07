@@ -1,6 +1,6 @@
 {
 	"name": "@vheins/local-memory-mcp",
-	"version": "0.34.1",
+	"version": "0.35.0",
 	"description": "MCP Local Memory Service for coding copilot agents",
 	"mcpName": "io.github.vheins/local-memory-mcp",
 	"type": "module",
