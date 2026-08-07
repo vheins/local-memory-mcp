@@ -117,6 +117,7 @@
 		isDark={$theme === "dark"}
 		{reducedMotion}
 		{reducedTransparency}
+		onlayout={(l) => arena.setLayout(l)}
 	/>
 
 	<!-- Footer legend -->

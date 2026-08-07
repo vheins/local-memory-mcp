@@ -70,6 +70,17 @@ export function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 	ctx.closePath();
 }
 
+// ─── Geometric containment ─────────────────────────────────────────────────
+/**
+ * Point-in-rect test — the single source for geometric membership used by
+ * the zone stats strip and the aggregate overlay (inclusive bounds, so a
+ * point exactly on an edge belongs to the rect, matching the historical
+ * inline copies exactly).
+ */
+export function pointInRect(x: number, y: number, rect: { x: number; y: number; w: number; h: number }): boolean {
+	return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
 // ─── Blocked reason visual helpers ──────────────────────────────────────────
 export const BLOCKED_REASON_COLORS: Record<string, string> = {
 	dependency: "#F59E0B",

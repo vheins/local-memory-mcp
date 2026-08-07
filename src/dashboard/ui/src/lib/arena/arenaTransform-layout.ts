@@ -1,116 +1,106 @@
-import type { Task } from "../interfaces";
+/**
+ * arenaTransform-layout.ts
+ *
+ * Thin layout façade over the shared ArenaLayoutManager (arena-layout/).
+ *
+ * The manager is the SINGLE SOURCE OF TRUTH for zone geometry, workstation
+ * positions and visual tokens. These functions keep the historical exported
+ * names (computeZones / placeTasksInZones / therapySlotPosition) so existing
+ * importers keep working, but all math now lives in the manager — there are
+ * no hardcoded coordinates or colors in this module anymore.
+ */
+
 import type { ZoneRect } from "./arenaTypes";
 import { STATUS_TO_ZONE } from "./arenaTransform-utils";
+import { getArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
+import { MAX_TASKS_PER_ZONE } from "./arena-layout/grid";
+import type { SectionBounds } from "./arena-layout/types";
 
-// ── Layout constants ─────────────────────────────────────────────
-const MAX_TASKS_PER_ZONE = 16;
-const TASK_INNER_PAD = 22;
-const TASK_TOP_PAD = 28; // below zone label
-const THERAPY_SLOT_PAD_X = 34;
-const THERAPY_SLOT_PAD_TOP = 54;
-const THERAPY_SLOT_PAD_BOTTOM = 28;
-const THERAPY_SLOT_MIN_GAP_X = 58;
-const THERAPY_SLOT_MIN_GAP_Y = 42;
-
-function clamp(n: number, min: number, max: number): number {
-	return Math.min(max, Math.max(min, n));
+/** Map manager sections to the legacy ZoneRect shape (full section rects). */
+export function sectionsToZones(sections: SectionBounds[]): ZoneRect[] {
+	return sections.map((s) => ({
+		id: s.id,
+		label: s.label,
+		x: s.rect.x,
+		y: s.rect.y,
+		w: s.rect.w,
+		h: s.rect.h,
+		color: s.visual.color
+	}));
 }
 
 /**
- * Computes the position of a "therapy slot" (burnout recovery bed)
- * within a given zone for a given index.
+ * Aggregate per-zone task counts from a task list (zone = STATUS_TO_ZONE
+ * mapping), restricted to the given zone ids (the registered sections).
+ * Unknown ids (e.g. "completed"/"canceled") are ignored — they are not
+ * rendered as sections.
  */
-export function therapySlotPosition(zone: ZoneRect, idx: number): { x: number; y: number } {
-	const availableW = Math.max(1, zone.w - THERAPY_SLOT_PAD_X * 2);
-	const availableH = Math.max(1, zone.h - THERAPY_SLOT_PAD_TOP - THERAPY_SLOT_PAD_BOTTOM);
-	const cols = clamp(Math.floor(availableW / THERAPY_SLOT_MIN_GAP_X) + 1, 1, 3);
-	const rows = Math.max(1, Math.floor(availableH / THERAPY_SLOT_MIN_GAP_Y) + 1);
-	const slot = idx % (cols * rows);
-	const col = slot % cols;
-	const row = Math.floor(slot / cols);
-	const colGap = cols > 1 ? availableW / (cols - 1) : 0;
-	const rowGap = rows > 1 ? availableH / (rows - 1) : 0;
-
-	return {
-		x: zone.x + THERAPY_SLOT_PAD_X + col * colGap,
-		y: zone.y + THERAPY_SLOT_PAD_TOP + row * rowGap
-	};
+export function aggregateZoneCounts(
+	tasks: Array<{ status: string }>,
+	zoneIds: Iterable<string>
+): Record<string, number> {
+	const ids = new Set(zoneIds);
+	const counts: Record<string, number> = {};
+	for (const t of tasks) {
+		const zid = STATUS_TO_ZONE[t.status];
+		if (zid && ids.has(zid)) counts[zid] = (counts[zid] ?? 0) + 1;
+	}
+	return counts;
 }
 
 /**
- * Computes zone rectangles for the given canvas dimensions.
+ * Computes zone rectangles for the given canvas dimensions — a thin consumer
+ * of the shared ArenaLayoutManager (module singleton). The optional `counts`
+ * feed the manager's occupancy so zone sizes respond to the task load.
  * Zones: pending, in_progress, backlog, blocked, recovery.
  */
-export function computeZones(cw: number, ch: number): ZoneRect[] {
-	const M = 16;
-	const G = 16;
-	const iw = cw - M * 2;
-	const ih = ch - M * 2;
-
-	const topH = Math.floor((ih - G) / 2);
-	const bottomH = ih - topH - G;
-
-	const colW2 = Math.floor((iw - G) / 2);
-	const colW3 = Math.floor((iw - G * 2) / 3);
-
-	return [
-		{ id: "pending", label: "Pending", x: M, y: M, w: colW2, h: topH, color: "#f59e0b" },
-		{ id: "in_progress", label: "In Progress", x: M + colW2 + G, y: M, w: iw - colW2 - G, h: topH, color: "#3b82f6" },
-		{ id: "backlog", label: "Backlog", x: M, y: M + topH + G, w: colW3, h: bottomH, color: "#8b5cf6" },
-		{ id: "blocked", label: "Blocked", x: M + colW3 + G, y: M + topH + G, w: colW3, h: bottomH, color: "#ef4444" },
-		{
-			id: "recovery",
-			label: "Recovery Center",
-			x: M + colW3 * 2 + G * 2,
-			y: M + topH + G,
-			w: iw - colW3 * 2 - G * 2,
-			h: bottomH,
-			color: "#14b8a6"
-		}
-	];
+export function computeZones(cw: number, ch: number, counts?: Record<string, number>): ZoneRect[] {
+	const manager = getArenaLayoutManager();
+	manager.setDimensions(cw, ch);
+	if (counts) manager.setOccupancy(counts);
+	return sectionsToZones(manager.getSections());
 }
 
-/** Spreads tasks as workstations within their zone. */
-export function placeTasksInZones(tasks: Task[], zones: ZoneRect[]): Map<string, { x: number; y: number }> {
-	const zoneById = new Map(zones.map((z) => [z.id, z]));
-	const byZone = new Map<string, Task[]>();
-	zones.forEach((z) => byZone.set(z.id, []));
+/**
+ * Spreads tasks as workstations within their zone. Positions come from the
+ * manager's per-section workstation grid (row-major cell centers, capped at
+ * MAX_TASKS_PER_ZONE) so they always match the rendered rooms.
+ */
+export function placeTasksInZones(
+	tasks: Array<{ id: string; status: string }>,
+	zones: ZoneRect[]
+): Map<string, { x: number; y: number }> {
+	const manager = getArenaLayoutManager();
+	const byZone = new Map<string, Array<{ id: string; status: string }>>();
+	for (const z of zones) byZone.set(z.id, []);
 
 	for (const task of tasks) {
 		const zid = STATUS_TO_ZONE[task.status] ?? "pending";
-		if (!byZone.has(zid)) continue;
-		const bucket = byZone.get(zid)!;
-		if (bucket.length < MAX_TASKS_PER_ZONE) bucket.push(task);
+		const bucket = byZone.get(zid);
+		if (!bucket || bucket.length >= MAX_TASKS_PER_ZONE) continue;
+		bucket.push(task);
 	}
 
 	const positions = new Map<string, { x: number; y: number }>();
-
 	for (const [zid, zoneTasks] of byZone) {
-		const zone = zoneById.get(zid);
-		if (!zone || zoneTasks.length === 0) continue;
-
-		const innerW = zone.w - TASK_INNER_PAD * 2;
-		const innerH = zone.h - TASK_INNER_PAD - TASK_TOP_PAD;
-		let cols = Math.max(1, Math.floor(innerW / 65));
-		let rows = Math.ceil(zoneTasks.length / cols);
-
-		while (innerH / rows < 55 && cols < zoneTasks.length) {
-			cols++;
-			rows = Math.ceil(zoneTasks.length / cols);
-		}
-
-		const cellW = innerW / cols;
-		const cellH = Math.max(55, Math.min(75, innerH / rows));
-
+		if (zoneTasks.length === 0) continue;
+		const pts = manager.getWorkstationPositions(zid, zoneTasks.length);
 		zoneTasks.forEach((t, i) => {
-			const col = i % cols;
-			const row = Math.floor(i / cols);
-			positions.set(t.id, {
-				x: zone.x + TASK_INNER_PAD + col * cellW + cellW / 2,
-				y: zone.y + TASK_TOP_PAD + row * cellH + cellH / 2
-			});
+			const p = pts[i];
+			if (p) positions.set(t.id, p);
 		});
 	}
-
 	return positions;
+}
+
+/**
+ * Computes the position of a "therapy slot" (burnout recovery bed) for a
+ * given index — delegated to the manager's recovery workstation grid so beds
+ * align with rendered recovery workstations. The index wraps modulo capacity
+ * (mirrors the legacy `idx % (cols * rows)` behavior).
+ */
+export function therapySlotPosition(_zone: ZoneRect, idx: number): { x: number; y: number } {
+	const manager = getArenaLayoutManager();
+	const positions = manager.getWorkstationPositions("recovery", Math.max(1, idx + 1));
+	return positions[idx % positions.length];
 }

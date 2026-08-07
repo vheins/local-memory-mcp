@@ -1,6 +1,5 @@
 import type { RenderCtx } from "./utils";
 import { rr, rgba, lighten } from "./utils";
-import { STATUS_COLORS } from "../arenaTransform";
 import type { VisualTask } from "../arenaTypes";
 import { drawMonitorActivity } from "./effects";
 export { drawZoneAggregate } from "./workstation-overlay";
@@ -11,12 +10,15 @@ export function drawWorkstation(
 	task: VisualTask,
 	reducedMotion: boolean,
 	reducedTransparency: boolean,
-	sceneAgents?: Map<string, { currentTool: string }> | null
+	sceneAgents?: Map<string, { currentTool: string }> | null,
+	zoneColor?: string
 ) {
 	const { ctx, isDark, ts } = rc;
 	const x = task.x,
 		y = task.y;
-	const color = STATUS_COLORS[task.status] ?? "#64748b";
+	// Zone accent comes from the shared layout manager (passed by the
+	// renderer) — the workstation monitor matches its room's tint.
+	const color = zoneColor ?? "#64748b";
 	const active = !!task.claimedByAgentId;
 	const blocked = !!task.blockedReason;
 	const DW = 50,

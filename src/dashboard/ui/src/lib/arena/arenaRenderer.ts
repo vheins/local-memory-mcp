@@ -1,5 +1,9 @@
 import type { ArenaScene, ArenaLayoutConfig, ZoneRect, VisualAgent, VisualTask } from "./arenaTypes";
-import { computeZones } from "./arenaTransform";
+import { sectionsToZones } from "./arenaTransform-layout";
+import { STATUS_TO_ZONE } from "./arenaTransform-utils";
+import { getArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
+import type { ArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
+import type { SectionBounds, WorkflowEdge } from "./arena-layout/types";
 import type { FilterState } from "./arenaEvents";
 
 // ─── Re-export LOD constants & type ──────────────────────────────────────
@@ -13,6 +17,7 @@ import {
 	type LODLevel,
 	type RenderCtx,
 	type WanderState,
+	pointInRect,
 	matchesAgentFilter as utilMatchesAgentFilter,
 	matchesTaskFilter as utilMatchesTaskFilter,
 	isFilterActive as utilIsFilterActive,
@@ -23,7 +28,8 @@ import {
 
 import { drawGlobalFloor, drawRoom } from "./arena-renderer/scene";
 import { drawCharacter, drawCharacterSimplified, drawCharacterAggregate } from "./arena-renderer/agents";
-import { drawClaimLinks, drawHandoffBeams } from "./arena-renderer/connections";
+import { drawClaimLinks, drawHandoffBeams, drawWorkflowArrows } from "./arena-renderer/connections";
+import type { ZoneStats } from "./arena-renderer/zones";
 import { drawHandoffTrail, drawHandoffGroup } from "./arena-renderer/effects";
 import { drawWorkstation, drawWorkstationSimplified, drawZoneAggregate } from "./arena-renderer/workstations";
 import { updateAgents, updateHandoffAnim } from "./arena-renderer/physics";
@@ -37,6 +43,22 @@ export class ArenaRenderer {
 	private ctx: CanvasRenderingContext2D;
 	private scene: ArenaScene | null = null;
 	private layout: ArenaLayoutConfig | null = null;
+	/** Shared layout manager — single source of truth for zone geometry. */
+	private layoutManager: ArenaLayoutManager = getArenaLayoutManager();
+	/** Cached sections (identity-compared to detect manager cache invalidation). */
+	private cachedSections: SectionBounds[] | null = null;
+	/** Manager sections mapped to the legacy ZoneRect shape (full rects). */
+	private zones: ZoneRect[] = [];
+	/** Section id → section color (for workstation monitor accents). */
+	private zoneColorById = new Map<string, string>();
+	/** Workflow pipeline edges (cached alongside zones — same invalidation). */
+	private workflowEdges: WorkflowEdge[] = [];
+	/** Cached per-section task/agent counts for the stats strip (see computeZoneStats). */
+	private zoneStats = new Map<string, ZoneStats>();
+	/** Sections identity the cached task-count portion was computed from. */
+	private statsSections: SectionBounds[] | null = null;
+	/** Scene reference the cached task-count portion was computed from. */
+	private statsScene: ArenaScene | null = null;
 	private isDark = false;
 	private hoveredId: string | null = null;
 	private selectedId: string | null = null;
@@ -62,6 +84,7 @@ export class ArenaRenderer {
 	update(scene: ArenaScene, layout: ArenaLayoutConfig, isDark: boolean) {
 		this.scene = scene;
 		this.layout = layout;
+		this.layoutManager = layout.layoutManager ?? getArenaLayoutManager();
 		this.isDark = isDark;
 	}
 	setHovered(id: string | null) {
@@ -104,7 +127,8 @@ export class ArenaRenderer {
 	}
 
 	getZones(): ZoneRect[] {
-		return this.layout ? computeZones(this.layout.canvasWidth, this.layout.canvasHeight) : [];
+		if (!this.layout) return [];
+		return sectionsToZones(this.layoutManager.getSections());
 	}
 
 	getViewportInfo() {
@@ -207,22 +231,97 @@ export class ArenaRenderer {
 		return utilIsFilterActive(this.activeFilter);
 	}
 
+	/**
+	 * Refresh cached zones/colors when the manager's layout cache was
+	 * invalidated (dims/occupancy changed). The manager returns the same
+	 * sections array until its cache key changes — identity comparison makes
+	 * this a single O(1) check per frame, with no per-frame zone math.
+	 */
+	private syncSections() {
+		const sections = this.layoutManager.getSections();
+		if (sections === this.cachedSections) return;
+		this.cachedSections = sections;
+		this.zones = sectionsToZones(sections);
+		this.zoneColorById = new Map(sections.map((s) => [s.id, s.visual.color]));
+		this.workflowEdges = this.layoutManager.getWorkflow();
+	}
+
+	/**
+	 * Per-section task/agent counts for the header stats strip — geometric
+	 * membership mirrors the aggregate overlay (both use the shared pointInRect
+	 * helper). Task positions are baked at scene build, so the task-count
+	 * portion is cached: it is recomputed only when the sections array identity
+	 * (layout cache invalidation) or the scene reference (re-baked positions)
+	 * changes. Agent counts refresh on every call because agents move per frame.
+	 * Callers only invoke this when the strip will actually be drawn.
+	 */
+	private computeZoneStats(scene: ArenaScene): Map<string, ZoneStats> {
+		const sections = this.layoutManager.getSections();
+		if (sections !== this.statsSections || scene !== this.statsScene) {
+			this.statsSections = sections;
+			this.statsScene = scene;
+			this.zoneStats.clear();
+			for (const zr of this.zones) {
+				let tasks = 0;
+				for (const t of scene.tasks.values()) {
+					if (pointInRect(t.x, t.y, zr)) tasks++;
+				}
+				this.zoneStats.set(zr.id, { tasks, agents: 0 });
+			}
+		}
+		// Agents move every frame — refresh their counts whenever the strip draws.
+		for (const zr of this.zones) {
+			let agents = 0;
+			for (const a of scene.agents.values()) {
+				if (pointInRect(a.targetX, a.targetY, zr)) agents++;
+			}
+			const prev = this.zoneStats.get(zr.id) ?? { tasks: 0, agents: 0 };
+			this.zoneStats.set(zr.id, { tasks: prev.tasks, agents });
+		}
+		return this.zoneStats;
+	}
+
+	/** Section accent color for a task's workstation (matches its room tint). */
+	private zoneColorForTask(t: VisualTask): string {
+		const zoneId = STATUS_TO_ZONE[t.status] ?? "";
+		return this.zoneColorById.get(zoneId) ?? this.zones[0]?.color ?? "#64748b";
+	}
+
+	/**
+	 * Section accent color for a claim link's target task — the same manager
+	 * section tokens rooms use (status → zone → section color). Statuses with
+	 * no registered zone (completed / canceled render no room) get the neutral
+	 * fallback instead of borrowing another section's tint.
+	 */
+	private zoneColorForStatus(status: string): string {
+		const zoneId = STATUS_TO_ZONE[status] ?? "";
+		return this.zoneColorById.get(zoneId) ?? "#64748b";
+	}
+
 	// ── Loop ────────────────────────────────────────────────────────────
 	private loop = (ts: number) => {
 		const dt = Math.min((ts - this.prevTs) / 1000, 0.05);
 		this.prevTs = ts;
 		this.ts = ts;
 		if (this.scene && this.layout) {
-			const zones = computeZones(this.layout.canvasWidth, this.layout.canvasHeight);
-			updateAgents(
-				this.scene.agents,
-				this.wander,
-				zones.find((z) => z.id === "in_progress") || zones[0],
-				dt,
-				ts,
-				this.reducedMotion,
-				updateHandoffAnim
-			);
+			// Wander bounds = the in_progress content area (where the desks
+			// are), straight from the shared manager; falls back to the first
+			// registered section when "in_progress" is missing.
+			const sections = this.layoutManager.getSections();
+			const inProgress = sections.find((s) => s.id === "in_progress") ?? sections[0];
+			if (inProgress) {
+				const c = inProgress.contentRect;
+				const idleZone: ZoneRect = {
+					id: inProgress.id,
+					label: inProgress.label,
+					x: c.x,
+					y: c.y,
+					w: c.w,
+					h: c.h,
+					color: inProgress.visual.color
+				};
+				updateAgents(this.scene.agents, this.wander, idleZone, dt, ts, this.reducedMotion, updateHandoffAnim);
+			}
 		}
 		this.render();
 		this.rafId = requestAnimationFrame(this.loop);
@@ -232,7 +331,8 @@ export class ArenaRenderer {
 	private render() {
 		const { canvas, ctx, scene, layout, isDark, viewportZoom: z, viewportPanX: px, viewportPanY: py } = this;
 		if (!layout) return;
-		const zones = computeZones(layout.canvasWidth, layout.canvasHeight);
+		this.syncSections();
+		const zones = this.zones;
 		this.currentLod = this.computeLOD();
 		const lod = this.currentLod;
 		const rc = this.rc();
@@ -246,7 +346,22 @@ export class ArenaRenderer {
 		ctx.scale(z, z);
 
 		drawGlobalFloor(rc);
-		for (const zr of zones) drawRoom(rc, zr);
+		const sections = this.cachedSections ?? [];
+
+		// Per-section task/agent counts for the header stats strip — computed
+		// only when the strip will actually be drawn (FULL/NORMAL LOD; drawRoom
+		// skips it at SIMPLIFIED/AGGREGATE). Task counts are cached inside
+		// computeZoneStats (baked positions), so this is not a per-frame
+		// recompute of layout or task geometry.
+		const zoneStats = scene && lod < LOD_SIMPLIFIED ? this.computeZoneStats(scene) : null;
+
+		for (let i = 0; i < sections.length; i++) {
+			drawRoom(rc, zones[i], sections[i].visual, zoneStats?.get(zones[i].id), this.layoutManager);
+		}
+
+		// Workflow arrows: infrastructure between rooms — drawn after rooms,
+		// before workstations/agents so they read as the pipeline, not content.
+		if (lod < LOD_AGGREGATE) drawWorkflowArrows(rc, this.workflowEdges);
 
 		if (!scene) {
 			ctx.restore();
@@ -266,7 +381,9 @@ export class ArenaRenderer {
 		} else if (lod === LOD_SIMPLIFIED) {
 			for (const t of sortedTasks) drawWorkstationSimplified(rc, t);
 		} else {
-			for (const t of sortedTasks) drawWorkstation(rc, t, this.reducedMotion, this.reducedTransparency, scene.agents);
+			for (const t of sortedTasks) {
+				drawWorkstation(rc, t, this.reducedMotion, this.reducedTransparency, scene.agents, this.zoneColorForTask(t));
+			}
 		}
 
 		if (lod < LOD_SIMPLIFIED) {
@@ -276,7 +393,8 @@ export class ArenaRenderer {
 				(id) => this.mAF(scene.agents.get(id)!),
 				(id) => this.mTF(scene.tasks.get(id)!),
 				() => this.iFA(),
-				lod
+				lod,
+				(status) => this.zoneColorForStatus(status)
 			);
 			drawHandoffBeams(
 				rc,

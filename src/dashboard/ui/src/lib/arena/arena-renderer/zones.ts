@@ -1,7 +1,18 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba } from "./utils";
-import type { ZoneRect } from "../arenaTypes";
-import { drawPlazaFloor, drawDirtFloor, drawCleanTileFloor, drawGrassFloor, drawWoodPlankFloor } from "./floors";
+import { rr, rgba, darken, LOD_SIMPLIFIED, LOD_AGGREGATE } from "./utils";
+import type { SectionVisual, ZoneRect } from "../arenaTypes";
+import type { ArenaLayoutManager } from "../arena-layout/ArenaLayoutManager";
+import { SECTION_PAD, LABEL_HEIGHT, STATS_HEIGHT } from "../arena-layout/grid";
+import {
+	drawPlazaFloor,
+	drawDirtFloor,
+	drawCleanTileFloor,
+	drawGrassFloor,
+	drawWoodPlankFloor,
+	drawCarpetFloor,
+	drawConcreteFloor,
+	drawCrackedTileFloor
+} from "./floors";
 import { drawRoomDecor } from "./decorations";
 
 // ── Wall (top of room) ─────────────────────────────────────────────────────
@@ -53,34 +64,73 @@ export function drawZoneLabel(rc: RenderCtx, zone: ZoneRect) {
 	ctx.fillText(label.toUpperCase(), bx + 6, by + bh / 2);
 }
 
-// ── Room ────────────────────────────────────────────────────────────────────
-export function drawRoom(rc: RenderCtx, zone: ZoneRect) {
+// ── Zone stats strip ──────────────────────────────────────────────────────
+export interface ZoneStats {
+	tasks: number;
+	agents: number;
+}
+
+/**
+ * Stats line drawn in every section's reserved stats band (STATS_HEIGHT just
+ * below the LABEL_HEIGHT band — the same offset the manager's contentRect
+ * uses, so the strip never collides with workstations). All offsets derive
+ * from the manager's single-source layout constants.
+ */
+export function drawZoneStats(rc: RenderCtx, zone: ZoneRect, stats: ZoneStats) {
 	const { ctx, isDark } = rc;
-	const { x, y, w, h, color, id } = zone;
+	const { x, y, w } = zone;
+	const sy = y + SECTION_PAD + LABEL_HEIGHT;
+	ctx.font = "7px system-ui,sans-serif";
+	ctx.textBaseline = "top";
+	ctx.textAlign = "left";
+	ctx.fillStyle = isDark ? "rgba(148,163,184,0.75)" : "rgba(71,85,105,0.75)";
+	ctx.fillText(`${stats.tasks} tasks`, x + SECTION_PAD, sy + (STATS_HEIGHT - 7) / 2);
+	ctx.textAlign = "right";
+	ctx.fillText(`${stats.agents} agents`, x + w - SECTION_PAD, sy + (STATS_HEIGHT - 7) / 2);
+	ctx.textAlign = "left";
+}
+
+// ── Room ────────────────────────────────────────────────────────────────────
+export function drawRoom(
+	rc: RenderCtx,
+	zone: ZoneRect,
+	visual: SectionVisual,
+	stats: ZoneStats | undefined,
+	layoutManager: ArenaLayoutManager
+) {
+	const { ctx, isDark } = rc;
+	const { x, y, w, h } = zone;
 
 	ctx.save();
 	rr(ctx, x, y, w, h, 10);
 	ctx.clip();
 
-	switch (id) {
-		case "in_progress":
+	// Floor style + colors come from the manager's visual tokens — the
+	// renderer no longer owns per-zone floor choices.
+	switch (visual.floorStyle) {
+		case "plaza":
 			drawPlazaFloor(rc, x, y, w, h);
 			break;
-		case "backlog":
-			drawDirtFloor(rc, x, y, w, h, "#5b3a6e");
+		case "dirt":
+			drawDirtFloor(rc, x, y, w, h, darken(visual.color, 55));
 			break;
-		case "pending":
-			drawDirtFloor(rc, x, y, w, h, "#a68246");
+		case "grass":
+			drawGrassFloor(rc, x, y, w, h);
 			break;
-		case "blocked":
-			drawDirtFloor(rc, x, y, w, h, "#8b2a2a");
+		case "wood":
+			drawWoodPlankFloor(rc, x, y, w, h);
 			break;
-		case "burnout":
-		case "recovery":
+		case "carpet":
+			drawCarpetFloor(rc, x, y, w, h, visual.color);
+			break;
+		case "concrete":
+			drawConcreteFloor(rc, x, y, w, h);
+			break;
+		case "tile":
 			drawCleanTileFloor(rc, x, y, w, h);
 			break;
-		case "completed":
-			drawGrassFloor(rc, x, y, w, h);
+		case "cracked":
+			drawCrackedTileFloor(rc, x, y, w, h);
 			break;
 		default:
 			drawWoodPlankFloor(rc, x, y, w, h);
@@ -90,22 +140,25 @@ export function drawRoom(rc: RenderCtx, zone: ZoneRect) {
 	const lx = x + w / 2,
 		ly = y + h * 0.35;
 	const grd = ctx.createRadialGradient(lx, ly, 0, lx, ly, Math.max(w, h) * 0.85);
-	grd.addColorStop(0, rgba(color, isDark ? 0.12 : 0.08));
+	grd.addColorStop(0, rgba(visual.color, isDark ? 0.12 : 0.08));
 	grd.addColorStop(1, "rgba(0,0,0,0)");
 	ctx.fillStyle = grd;
 	ctx.fillRect(x, y, w, h);
 	ctx.restore();
 
-	drawWall(rc, x, y, w, color);
+	drawWall(rc, x, y, w, visual.color);
 
-	ctx.strokeStyle = rgba(color, isDark ? 0.45 : 0.35);
+	ctx.strokeStyle = rgba(visual.color, isDark ? 0.45 : 0.35);
 	ctx.lineWidth = 1.5;
 	rr(ctx, x, y, w, h, 10);
 	ctx.stroke();
 
-	drawRoomDecor(rc, zone);
+	drawRoomDecor(rc, zone, visual, layoutManager);
 
-	if (rc.lod !== 2 && rc.lod !== 3) {
+	if (rc.lod !== LOD_SIMPLIFIED && rc.lod !== LOD_AGGREGATE) {
 		drawZoneLabel(rc, zone);
+		// Every section draws its stats strip at the same manager-derived
+		// offset (below the label band, above the workstation content rect).
+		if (stats) drawZoneStats(rc, zone, stats);
 	}
 }

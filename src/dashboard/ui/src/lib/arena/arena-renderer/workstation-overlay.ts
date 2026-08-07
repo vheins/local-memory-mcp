@@ -1,5 +1,5 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba } from "./utils";
+import { rr, rgba, pointInRect } from "./utils";
 import type { ZoneRect, ArenaScene } from "../arenaTypes";
 
 // ── Zone aggregate overlay (LOD_AGGREGATE) ─────────────────────────────────
@@ -12,8 +12,8 @@ export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaSce
 		criticalCount = 0;
 
 	for (const a of scene.agents.values()) {
-		const inZone = a.targetX >= x && a.targetX <= x + w && a.targetY >= y && a.targetY <= y + h;
-		if (inZone) {
+		// Geometric membership shares the same helper as the zone stats strip.
+		if (pointInRect(a.targetX, a.targetY, zone)) {
 			agentCount++;
 			if (a.health === "healthy") healthyCount++;
 			else if (a.health === "degraded") degradedCount++;
@@ -23,7 +23,7 @@ export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaSce
 
 	let taskCount = 0;
 	for (const t of scene.tasks.values()) {
-		if (t.x >= x && t.x <= x + w && t.y >= y && t.y <= y + h) taskCount++;
+		if (pointInRect(t.x, t.y, zone)) taskCount++;
 	}
 
 	const totalCount = agentCount + taskCount;

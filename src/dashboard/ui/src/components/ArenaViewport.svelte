@@ -17,13 +17,16 @@
 		loading = false,
 		isDark = false,
 		reducedMotion = false,
-		reducedTransparency = false
+		reducedTransparency = false,
+		onlayout
 	}: {
 		scene?: ArenaScene | null;
 		loading?: boolean;
 		isDark?: boolean;
 		reducedMotion?: boolean;
 		reducedTransparency?: boolean;
+		/** Forward the measured canvas layout up (so the arena handler bakes at real dims). */
+		onlayout?: (l: ArenaLayoutConfig) => void;
 	} = $props();
 
 	// ── Shared state ────────────────────────────────────────────────────────
@@ -82,6 +85,7 @@
 	}
 	function onLayoutReady(l: ArenaLayoutConfig): void {
 		layout = l;
+		onlayout?.(l);
 	}
 	function onCanvasReady(c: HTMLCanvasElement): void {
 		arenaCanvas = c;

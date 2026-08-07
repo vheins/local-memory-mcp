@@ -1,3 +1,9 @@
+import type { ArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
+import type { SectionBounds } from "./arena-layout/types";
+
+/** Visual tokens per section (color/accent/decor/floor) owned by the layout manager. */
+export type SectionVisual = SectionBounds["visual"];
+
 export type AgentState =
 	| "idle"
 	| "claiming"
@@ -185,6 +191,13 @@ export interface ArenaScene {
 export interface ArenaLayoutConfig {
 	canvasWidth: number;
 	canvasHeight: number;
+	/**
+	 * Shared ArenaLayoutManager instance (module singleton). The scene
+	 * transform (buildArenaScene) and the renderer both consume this one
+	 * manager so baked task positions and drawn room geometry always match.
+	 * Optional — callers fall back to getArenaLayoutManager().
+	 */
+	layoutManager?: ArenaLayoutManager;
 }
 
 export interface ZoneRect {

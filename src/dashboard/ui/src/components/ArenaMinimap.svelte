@@ -2,6 +2,7 @@
 	import type { ArenaRenderer } from "../lib/arena/arenaRenderer";
 	import type { ArenaLayoutConfig, ArenaScene } from "../lib/arena/arenaTypes";
 	import { arenaStateManager } from "../lib/arena/arenaStateManager";
+	import { STATUS_TO_ZONE } from "../lib/arena/arenaTransform-utils";
 
 	let {
 		renderer = null,
@@ -38,45 +39,36 @@
 		ctx.fillStyle = isDark ? "rgba(15,23,42,0.9)" : "rgba(241,245,249,0.9)";
 		ctx.fillRect(0, 0, mw, mh);
 
-		// Zone rectangles
+		// Zone rectangles — geometry AND colors come from the manager via
+		// renderer.getZones() (each zone carries its manager visual token).
+		// No local color map: the minimap can no longer drift from the arena.
 		if (renderer) {
 			const zones = renderer.getZones();
-			const zoneColors: Record<string, string> = {
-				in_progress: "#a855f7",
-				pending: "#0ea5e9",
-				backlog: "#64748b",
-				blocked: "#ef4444",
-				completed: "#10b981"
-			};
+			const zoneColorById = new Map(zones.map((z) => [z.id, z.color]));
 			for (const z of zones) {
-				ctx.fillStyle = isDark ? (zoneColors[z.id] || "#334155") + "44" : (zoneColors[z.id] || "#94a3b8") + "33";
+				ctx.fillStyle = isDark ? z.color + "44" : z.color + "33";
 				ctx.fillRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
-				ctx.strokeStyle = (zoneColors[z.id] || "#64748b") + "88";
+				ctx.strokeStyle = z.color + "88";
 				ctx.lineWidth = 0.5;
 				ctx.strokeRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
 			}
-		}
 
-		// Task dots
-		if (scene) {
-			const statusDotColors: Record<string, string> = {
-				in_progress: "#a855f7",
-				pending: "#0ea5e9",
-				blocked: "#ef4444",
-				completed: "#10b981",
-				backlog: "#64748b"
-			};
-			for (const t of scene.tasks.values()) {
-				ctx.fillStyle = statusDotColors[t.status] || "#64748b";
-				ctx.fillRect(t.x * scale - 1, t.y * scale - 1, 2, 2);
-			}
+			// Task dots — tinted by the task's zone color (via STATUS_TO_ZONE);
+			// tasks without a zone (completed/canceled) fall back to neutral.
+			if (scene) {
+				for (const t of scene.tasks.values()) {
+					const zoneId = STATUS_TO_ZONE[t.status];
+					ctx.fillStyle = (zoneId && zoneColorById.get(zoneId)) || "#94a3b8";
+					ctx.fillRect(t.x * scale - 1, t.y * scale - 1, 2, 2);
+				}
 
-			// Agent dots (colored by role/color)
-			for (const a of scene.agents.values()) {
-				ctx.fillStyle = a.color || "#8b5cf6";
-				ctx.beginPath();
-				ctx.arc(a.x * scale, a.y * scale, 2, 0, Math.PI * 2);
-				ctx.fill();
+				// Agent dots (colored by role/color)
+				for (const a of scene.agents.values()) {
+					ctx.fillStyle = a.color || "#8b5cf6";
+					ctx.beginPath();
+					ctx.arc(a.x * scale, a.y * scale, 2, 0, Math.PI * 2);
+					ctx.fill();
+				}
 			}
 		}
 

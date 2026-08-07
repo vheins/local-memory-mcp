@@ -15,7 +15,8 @@ import {
 	stateToIcon,
 	computeAgentProgress
 } from "./arenaTransform-utils";
-import { computeZones, placeTasksInZones, therapySlotPosition } from "./arenaTransform-layout";
+import { computeZones, placeTasksInZones, therapySlotPosition, aggregateZoneCounts } from "./arenaTransform-layout";
+import { getArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
 
 // Re-export all public symbols from split files for backward compatibility
 export {
@@ -36,15 +37,6 @@ export {
 } from "./arenaTransform-utils";
 export { computeZones, therapySlotPosition, placeTasksInZones } from "./arenaTransform-layout";
 
-export const STATUS_COLORS: Record<string, string> = {
-	backlog: "#64748b",
-	pending: "#0ea5e9",
-	in_progress: "#a855f7",
-	blocked: "#ef4444",
-	completed: "#10b981",
-	canceled: "#94a3b8"
-};
-
 export function buildArenaScene(
 	tasks: Task[],
 	claims: TaskClaim[],
@@ -52,6 +44,18 @@ export function buildArenaScene(
 	existingScene: ArenaScene | null,
 	layout: ArenaLayoutConfig
 ): ArenaScene {
+	// ── Single source of truth for geometry: the shared ArenaLayoutManager ──
+	// The renderer consumes the SAME manager (layout.layoutManager, or the
+	// module singleton) so baked task positions always match drawn rooms.
+	const layoutManager = layout.layoutManager ?? getArenaLayoutManager();
+	layoutManager.setDimensions(layout.canvasWidth, layout.canvasHeight);
+	layoutManager.setOccupancy(
+		aggregateZoneCounts(
+			tasks,
+			layoutManager.getDefinitions().map((d) => d.id)
+		)
+	);
+
 	const zones = computeZones(layout.canvasWidth, layout.canvasHeight);
 	const taskPositions = placeTasksInZones(tasks, zones);
 	const idleZone = zones.find((z) => z.id === "in_progress") || zones[0];

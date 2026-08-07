@@ -2,6 +2,8 @@
 	import { onMount, onDestroy } from "svelte";
 	import { ArenaRenderer } from "../lib/arena/arenaRenderer";
 	import type { ArenaScene, ArenaLayoutConfig } from "../lib/arena/arenaTypes";
+	import { getArenaLayoutManager } from "../lib/arena/arena-layout/ArenaLayoutManager";
+	import { aggregateZoneCounts, placeTasksInZones, sectionsToZones } from "../lib/arena/arenaTransform-layout";
 
 	let {
 		scene = null,
@@ -33,15 +35,52 @@
 	let renderer: ArenaRenderer | null = null;
 	let layout: ArenaLayoutConfig | null = null;
 
+	/**
+	 * Re-place task workstations after a resize: the shared layout manager has
+	 * new dimensions, so positions baked at the old size are recomputed from
+	 * the current scene's task list (in place — the renderer reads the same
+	 * scene object every frame).
+	 */
+	function reBakePositions(currentScene: ArenaScene): void {
+		const manager = getArenaLayoutManager();
+		const tasks = Array.from(currentScene.tasks.values());
+		const zones = sectionsToZones(manager.getSections());
+		manager.setOccupancy(
+			aggregateZoneCounts(
+				tasks,
+				zones.map((z) => z.id)
+			)
+		);
+		const positions = placeTasksInZones(tasks, zones);
+		for (const t of currentScene.tasks.values()) {
+			const p = positions.get(t.id);
+			if (p) {
+				t.x = p.x;
+				t.y = p.y;
+			}
+		}
+	}
+
 	function initCanvas(): void {
 		if (!canvas || !wrapEl) return;
 		const w = wrapEl.clientWidth || 960;
 		const h = Math.max(520, Math.min(window.innerHeight - 220, 800));
 		canvas.width = w;
 		canvas.height = h;
-		layout = { canvasWidth: w, canvasHeight: h };
+		// The shared ArenaLayoutManager (module singleton) is the single source
+		// of truth for geometry — the scene transform (buildArenaScene) and the
+		// renderer both consume this same instance, so baked task positions and
+		// drawn rooms always match. The measured size overrides the 960px
+		// fallback default from AgentArena.
+		const manager = getArenaLayoutManager();
+		manager.setDimensions(w, h);
+		layout = { canvasWidth: w, canvasHeight: h, layoutManager: manager };
 		onlayout?.(layout);
 		oncanvas?.(canvas);
+
+		// Positions baked at an older size are re-placed at the new dims so
+		// workstations stay aligned with their rooms until the next poll.
+		if (scene) reBakePositions(scene);
 
 		if (!renderer) {
 			renderer = new ArenaRenderer(canvas);
