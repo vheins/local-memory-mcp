@@ -326,8 +326,8 @@ def hello(name):
 		assertNoError(result);
 		guardEmpty(result);
 		const fn = result.symbols.find((s) => s.name === "hello");
-		if (!fn) return;
-		expect(fn.kind).toBe("function");
+		expect(fn).toBeDefined();
+		expect(fn!.kind).toBe("function");
 	});
 
 	it("extracts classes", async () => {
@@ -342,8 +342,8 @@ class Person:
 		assertNoError(result);
 		guardEmpty(result);
 		const cls = result.symbols.find((s) => s.name === "Person");
-		if (!cls) return;
-		expect(cls.kind).toBe("class");
+		expect(cls).toBeDefined();
+		expect(cls!.kind).toBe("class");
 	});
 
 	it("extracts class methods", async () => {
@@ -358,9 +358,9 @@ class Calculator:
 		assertNoError(result);
 		guardEmpty(result);
 		const m = result.symbols.find((s) => s.name === "add");
-		if (!m) return;
-		expect(m.kind).toBe("method");
-		expect(m.parentName).toBe("Calculator");
+		expect(m).toBeDefined();
+		expect(m!.kind).toBe("method");
+		expect(m!.parentName).toBe("Calculator");
 	});
 
 	it("extracts async functions with async in the signature", async () => {
