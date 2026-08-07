@@ -26,6 +26,13 @@ npx @vheins/local-memory-mcp dashboard
 
 Then open `http://localhost:3456`.
 
+For a **local source checkout**, the dashboard bin automatically rebuilds the
+served UI bundle (`dist/dashboard/public`) when `src/dashboard/ui` is newer —
+so editing the dashboard sources and re-running the command above serves the
+fresh build automatically. If you prefer to build explicitly, run
+`npm run dashboard:build` before serving. (In an installed npm package the
+`src/` directory is not shipped, so the published bundle is served as-is.)
+
 ## How to Use
 
 ### 1. Orchestrator Mode

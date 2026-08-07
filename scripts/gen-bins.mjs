@@ -21,10 +21,14 @@ const binDir = path.resolve(__dirname, "../bin");
 
 const SHEBANG = "#!/usr/bin/env node\n";
 
-const SERVER_BIN = `${SHEBANG}process.env.MCP_SERVER = "true";
+const SERVER_BIN = `${SHEBANG}import { ensureDashboardBuild } from "./ensure-dashboard-build.mjs";
+
+process.env.MCP_SERVER = "true";
 
 const sub = process.argv[2];
 if (sub === "dashboard" || sub === "mcp-memory-dashboard") {
+	// Rebuild the served UI bundle if stale (no-op when fresh).
+	ensureDashboardBuild();
 	import("../dist/dashboard/server.js");
 } else if (sub === "--index") {
 	// Pass through --index and all subsequent args to server.ts
@@ -34,7 +38,15 @@ if (sub === "dashboard" || sub === "mcp-memory-dashboard") {
 }
 `;
 
-const DASHBOARD_BIN = `${SHEBANG}import '../dist/dashboard/server.js';
+const DASHBOARD_BIN = `${SHEBANG}import { ensureDashboardBuild } from "./ensure-dashboard-build.mjs";
+
+// Rebuild the served UI bundle if the source is newer than dist/ (no-op when
+// fresh). Prevents serving a stale dashboard after src/dashboard/ui changes.
+// Uses a dynamic import so the build is guaranteed to finish BEFORE the
+// server module is evaluated (static imports are hoisted and would race it).
+ensureDashboardBuild();
+
+await import("../dist/dashboard/server.js");
 `;
 
 function writeBin(filename, content) {
