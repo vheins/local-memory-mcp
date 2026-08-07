@@ -231,14 +231,22 @@ describe("handleCodebaseRead (file mode)", () => {
 		expect(data.symbols).toEqual([]);
 	});
 
-	it("throws on missing repo param", async () => {
-		await expect(handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+	it("returns REPO_REQUIRED structured response on missing repo param", async () => {
+		const response = await handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors);
+		const data = response.structuredContent as Record<string, unknown>;
+
+		expect(data.code).toBe("REPO_REQUIRED");
+		expect(String(data.error)).toMatch(/repo/i);
 	});
 
-	it("throws on missing filePath param", async () => {
+	it("returns REPO_REQUIRED structured response on missing filePath param", async () => {
 		// Without filePath, it falls into status mode (no error), but with filePath it's file mode.
-		// File mode without repo throws.
-		await expect(handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors)).rejects.toThrow();
+		// File mode without repo returns a structured REPO_REQUIRED response.
+		const response = await handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors);
+		const data = response.structuredContent as Record<string, unknown>;
+
+		expect(data.code).toBe("REPO_REQUIRED");
+		expect(String(data.error)).toMatch(/repo/i);
 	});
 
 	it("throws on empty repo", async () => {
