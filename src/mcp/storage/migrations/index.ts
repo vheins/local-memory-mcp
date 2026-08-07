@@ -21,8 +21,9 @@ import { migration as v17 } from "./v17-symbols-repo-exported-parent-index";
 import { migration as v18 } from "./v18-symbols-fts-signature";
 import { migration as v19 } from "./v19-symbols-file-path-index";
 import { migration as v20 } from "./v20-symbols-name-lower-index";
+import { migration as v21 } from "./v21-codebase-references";
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -58,7 +59,8 @@ const MIGRATIONS: Migration[] = [
 	v17,
 	v18,
 	v19,
-	v20
+	v20,
+	v21
 ];
 
 // ──────────────────────────────────────────────

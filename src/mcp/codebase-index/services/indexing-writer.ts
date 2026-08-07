@@ -6,7 +6,7 @@
  */
 
 import type { SQLiteStore } from "../../storage/sqlite";
-import type { CodebaseFileInsert, CodebaseSymbolInsert } from "../../types";
+import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../types";
 import { logger } from "../../utils/logger";
 import { retryDbWrite } from "./indexing-cache";
 
@@ -39,6 +39,7 @@ export interface WriteContext {
 	repo: string;
 	fileInserts: CodebaseFileInsert[];
 	symbolInserts: CodebaseSymbolInsert[];
+	referenceInserts?: CodebaseReferenceInsert[];
 	renameMap: Map<string, string>;
 	stalePaths: Set<string>;
 	batchSize: number;
@@ -95,6 +96,7 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 			for (const [newPath, oldPath] of renameMap) {
 				db.codebaseFiles.transferFile(repo, oldPath, newPath);
 				db.codebaseSymbols.transferSymbolsFilePath(repo, oldPath, newPath);
+				db.codebaseReferences.transferReferencesFilePath(repo, oldPath, newPath);
 			}
 		});
 	}, "rename-transfer");
@@ -115,7 +117,8 @@ export async function writeParseBatch(
 	base: WriteBaseContext,
 	fileInserts: CodebaseFileInsert[],
 	symbolInserts: CodebaseSymbolInsert[],
-	renameMap: Map<string, string>
+	renameMap: Map<string, string>,
+	referenceInserts: CodebaseReferenceInsert[] = []
 ): Promise<number> {
 	const { db, repo, batchSize, options } = base;
 	let dbWriteErrors = 0;
@@ -189,6 +192,21 @@ export async function writeParseBatch(
 								db.codebaseSymbols.bulkUpsertSymbols(symbolInserts.slice(symOffset, symOffset + batchSize));
 								symOffset += batchSize;
 							}
+
+							// 3b. Call-site references (TASK-236 / #64): delete the
+							// re-parsed files' refs then bulk-insert the fresh set,
+							// atomically with the symbol replace above.
+							for (const fp of reindexedPaths) {
+								db.codebaseReferences.deleteReferencesByFile(repo, fp);
+							}
+							let refOffset = 0;
+							while (refOffset < referenceInserts.length) {
+								db.codebaseReferences.bulkUpsertReferences(
+									repo,
+									referenceInserts.slice(refOffset, refOffset + batchSize)
+								);
+								refOffset += batchSize;
+							}
 						})
 						.immediate();
 				});
@@ -240,6 +258,7 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 						let cleanedCount = 0;
 						for (const fp of stalePaths) {
 							db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
+							db.codebaseReferences.deleteReferencesByFile(repo, fp);
 							db.codebaseFiles.deleteFile(repo, fp);
 							cleanedCount++;
 							emitProgress(options, {
@@ -275,12 +294,12 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
  *   4. Clean stale file records
  */
 export async function writeIndexResults(ctx: WriteContext): Promise<WriteResult> {
-	const { db, repo, fileInserts, symbolInserts, renameMap, stalePaths, batchSize, options } = ctx;
+	const { db, repo, fileInserts, symbolInserts, referenceInserts, renameMap, stalePaths, batchSize, options } = ctx;
 	const base: WriteBaseContext = { db, repo, batchSize, options };
 
 	let dbWriteErrors = 0;
 	dbWriteErrors += await applyRenames(base, renameMap);
-	dbWriteErrors += await writeParseBatch(base, fileInserts, symbolInserts, renameMap);
+	dbWriteErrors += await writeParseBatch(base, fileInserts, symbolInserts, renameMap, referenceInserts);
 	dbWriteErrors += await cleanStaleFiles(base, stalePaths);
 
 	return {

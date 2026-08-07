@@ -17,7 +17,7 @@ import type { ParserPool } from "../parser";
 import { resolveConcurrency } from "../parser/worker-pool";
 import type { ParseResult } from "../parser/language-visitor";
 import type { SQLiteStore } from "../../storage/sqlite";
-import type { CodebaseFileInsert, CodebaseSymbolInsert } from "../../types";
+import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../types";
 import { logger } from "../../utils/logger";
 import {
 	isPermissionError,
@@ -132,6 +132,7 @@ export async function runParsePipeline(
 	// memory stays bounded (Fix #3a); the whole repo is never accumulated.
 	let fileInserts: CodebaseFileInsert[] = [];
 	let symbolInserts: CodebaseSymbolInsert[] = [];
+	let referenceInserts: CodebaseReferenceInsert[] = [];
 	let processedSoFar = 0;
 
 	for (let i = 0; i < parseTasks.length; i += CONCURRENT_PARSE_BATCH) {
@@ -332,6 +333,19 @@ export async function runParsePipeline(
 					totalSymbols++;
 				}
 
+				// Call-site references (TASK-236 / issue #64). caller_file is the
+				// parsed file; the caller line/name/kind come from the visitor.
+				for (const ref of parseResult.references ?? []) {
+					referenceInserts.push({
+						repo,
+						symbol_name: ref.symbolName,
+						caller_file: ref.callerFile || plan.filePath,
+						caller_line: ref.callerLine,
+						caller_name: ref.callerName,
+						kind: ref.kind
+					});
+				}
+
 				fileInserts.push({
 					repo,
 					file_path: plan.filePath,
@@ -346,9 +360,16 @@ export async function runParsePipeline(
 
 			// ── Flush this batch's inserts (bounded memory — Fix #3a) ──
 			if (fileInserts.length > 0) {
-				dbWriteErrors += await writeParseBatch({ db, repo, batchSize, options }, fileInserts, symbolInserts, renameMap);
+				dbWriteErrors += await writeParseBatch(
+					{ db, repo, batchSize, options },
+					fileInserts,
+					symbolInserts,
+					renameMap,
+					referenceInserts
+				);
 				fileInserts = [];
 				symbolInserts = [];
+				referenceInserts = [];
 			}
 		}
 

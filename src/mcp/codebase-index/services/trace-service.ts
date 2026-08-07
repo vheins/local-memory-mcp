@@ -34,6 +34,10 @@ export interface TraceReference {
 	endLine: number;
 	endCol: number;
 	context: string;
+	/** 'call' | 'instantiation' | 'import' — present for table-backed references (TASK-236). */
+	kind?: string;
+	/** Enclosing function/method at the call site, when determinable. */
+	callerName?: string | null;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────
@@ -74,7 +78,8 @@ export function traceSymbol(
 	name: string,
 	repo: string | undefined,
 	symbols: CodebaseSymbol[],
-	includeReferences: boolean
+	includeReferences: boolean,
+	storedReferences?: TraceReference[]
 ): TraceResult {
 	// Step 1: Find exact name matches
 	const matches = symbols.filter((s) => s.name === name);
@@ -107,12 +112,46 @@ export function traceSymbol(
 		}
 	};
 
-	// Step 4: Find references if requested
+	// Step 4: Find references if requested. The table-backed references
+	// (emitted by the parse visitors, TASK-236) are the primary precise source;
+	// the in-memory doc_comment/signature scan is kept as the safety net when
+	// the table has no stored refs for the symbol (e.g. pre-v21 index data or a
+	// language without a reference-emitting visitor). When both exist they are
+	// merged and deduped by call-site line.
 	if (includeReferences) {
-		result.references = findReferences(name, symbols, symbol.id);
+		const inMemory = findReferences(name, symbols, symbol.id);
+		const stored = storedReferences ?? [];
+		if (stored.length === 0) {
+			result.references = inMemory;
+		} else {
+			result.references = mergeStoredAndInMemory(stored, inMemory);
+		}
 	}
 
 	return result;
+}
+
+/**
+ * Merge table-backed references with in-memory substring matches, deduping by
+ * call-site (filePath, startLine) so the same site is never reported twice.
+ * Stored references win on conflict (precise line > symbol-anchored context).
+ */
+function mergeStoredAndInMemory(stored: TraceReference[], inMemory: TraceReference[]): TraceReference[] {
+	const seen = new Set<string>();
+	const merged: TraceReference[] = [];
+	for (const ref of stored) {
+		const key = `${ref.filePath}:${ref.startLine}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		merged.push(ref);
+	}
+	for (const ref of inMemory) {
+		const key = `${ref.filePath}:${ref.startLine}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		merged.push(ref);
+	}
+	return merged;
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────

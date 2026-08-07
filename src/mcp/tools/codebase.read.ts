@@ -113,7 +113,25 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 
 	function tryTrace(traceName: string): McpResponse | null {
 		try {
-			const result = traceSymbol(traceName, repo, symbols, validated.includeReferences);
+			// Table-backed call sites for the exact symbol (TASK-236 / #64). TRACE
+			// mode requires a concrete repo, so this is always scoped. Reflected
+			// into TraceReference for the trace result; the service merges them
+			// with the in-memory doc_comment scan and dedupes by call-site line.
+			const storedRefs =
+				validated.includeReferences && repo
+					? db.codebaseReferences.getReferencesBySymbol(repo, traceName).map((r) => ({
+							filePath: r.caller_file,
+							startLine: r.caller_line ?? 0,
+							startCol: 0,
+							endLine: r.caller_line ?? 0,
+							endCol: 0,
+							context: `${r.kind} ${r.symbol_name}${r.caller_name ? ` (in ${r.caller_name})` : ""}`,
+							kind: r.kind,
+							callerName: r.caller_name
+						}))
+					: [];
+
+			const result = traceSymbol(traceName, repo, symbols, validated.includeReferences, storedRefs);
 
 			const refList =
 				result.references.length > 0

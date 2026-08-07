@@ -218,7 +218,11 @@ export class TreeSitterParserPool implements ParserPool {
 		if (config.grammarWasms.length === 0) {
 			const visitor = config.createVisitor();
 			const symbols = visitor.extractSymbols(null, sourceCode);
-			return { symbols, error: null, durationMs: 0 };
+			const references = (visitor.extractReferences?.(null, sourceCode) ?? []).map((r) => ({
+				...r,
+				callerFile: filePath
+			}));
+			return { symbols, references, error: null, durationMs: 0 };
 		}
 
 		// Find the grammar WASM for this config
@@ -273,9 +277,14 @@ export class TreeSitterParserPool implements ParserPool {
 
 			const visitor = config.createVisitor();
 			const symbols = visitor.extractSymbols(tree, sourceCode);
+			const references = (visitor.extractReferences?.(tree, sourceCode) ?? []).map((r) => ({
+				...r,
+				callerFile: filePath
+			}));
 
 			return {
 				symbols,
+				references,
 				error: hasErrors ? "Parse errors detected (partial results returned)" : null,
 				durationMs: 0
 			};

@@ -31,7 +31,7 @@
  */
 
 import type { Tree, Node as TSNode } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
+import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
 import { serializeDocBlock } from "../doc-comment";
 
@@ -65,12 +65,101 @@ const NAMESPACE_USE_CLAUSE = "namespace_use_clause";
 const NAMESPACE_USE_GROUP = "namespace_use_group";
 const NAMESPACE_NAME = "namespace_name";
 
+// Call-site node types (reference emission, TASK-236 / issue #64).
+const FUNCTION_CALL_EXPRESSION = "function_call_expression";
+const MEMBER_CALL_EXPRESSION = "member_call_expression";
+const SCOPED_CALL_EXPRESSION = "scoped_call_expression";
+const OBJECT_CREATION_EXPRESSION = "object_creation_expression";
+
 export class PhpVisitor implements LanguageVisitor {
 	extractSymbols(tree: Tree, _sourceCode: string): ParsedSymbol[] {
 		const root = tree.rootNode;
 		const symbols: ParsedSymbol[] = [];
 		this.walkNode(root, symbols, null, false);
 		return symbols;
+	}
+
+	/**
+	 * Emit call-site references (TASK-236 / issue #64).
+	 *
+	 * Cheap single AST pass over the obvious call targets in the php_only
+	 * grammar:
+	 * - `function_call_expression`  → kind 'call' (`helper()` → 'helper')
+	 * - `member_call_expression`    → kind 'call' (`$obj->save()` → 'save')
+	 * - `scoped_call_expression`    → kind 'call' (`self::make()` / `Svc::x()` → 'x')
+	 * - `object_creation_expression`→ kind 'instantiation' (`new User()` → 'User')
+	 *
+	 * `callerName` is the enclosing function/method name, tracked by descending
+	 * into function_definition / method_declaration bodies. Timestamps to the
+	 * tree root so no symbol is required to pre-exist the caller.
+	 */
+	extractReferences(tree: Tree, _sourceCode: string): ParsedReference[] {
+		const refs: ParsedReference[] = [];
+		this.walkReferences(tree.rootNode, null, refs);
+		return refs;
+	}
+
+	private walkReferences(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
+		let called: string | null = null;
+		switch (node.type) {
+			case FUNCTION_CALL_EXPRESSION:
+			case MEMBER_CALL_EXPRESSION:
+			case SCOPED_CALL_EXPRESSION:
+				called = this.callTargetName(node);
+				break;
+			case OBJECT_CREATION_EXPRESSION:
+				called = this.callTargetName(node);
+				break;
+			case "function_definition":
+			case "method_declaration": {
+				const nameNode =
+					node.childForFieldName("name") ??
+					node.namedChildren.find((c) => c.type === "name" || c.type === "identifier");
+				const fnName = nameNode ? nameNode.text : null;
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, fnName ?? callerName, refs);
+				}
+				return;
+			}
+			default:
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
+				return;
+		}
+
+		if (called) {
+			refs.push({
+				symbolName: called,
+				callerFile: "",
+				callerLine: node.startPosition.row + 1,
+				callerName,
+				kind: node.type === OBJECT_CREATION_EXPRESSION ? "instantiation" : "call"
+			});
+		}
+
+		// Recurse into children so nested calls are also indexed.
+		for (const child of node.namedChildren) {
+			this.walkReferences(child, callerName, refs);
+		}
+	}
+
+	/**
+	 * Read the referenced identifier from a call/creation node:
+	 * - function_call_expression / object_creation_expression expose the target
+	 *   as a `name` CHILD (not a field) — `new User()` / `helper()`.
+	 * - member_/scoped_call_expression expose the callee as a `name` FIELD.
+	 * Returns null for dynamic (variable) targets, which we can't index.
+	 */
+	private callTargetName(node: TSNode): string | null {
+		const fieldName = node.childForFieldName("name");
+		if (fieldName) return fieldName.text;
+		const child = node.namedChildren.find((c) => c.type === "name" || c.type === NAME);
+		if (!child) return null;
+		const text = child.text;
+		// Skip purely-dynamic targets like `$fn()` / `new $class()` — text is
+		// a variable_name/placeholder, not a symbolic definition.
+		return text.startsWith("$") ? null : text;
 	}
 
 	private walkNode(node: TSNode, symbols: ParsedSymbol[], parentName: string | null, insideClass: boolean): void {

@@ -345,4 +345,65 @@ describe("handleCodebaseRead (trace mode)", () => {
 		const refs = data.references as Array<unknown>;
 		expect(refs).toEqual([]);
 	});
+
+	// ══════════════════════════════════════════════════════════════════
+	// Table-backed call-site references (TASK-236 / issue #64)
+	// ══════════════════════════════════════════════════════════════════
+
+	it("returns stored call-site references alongside the definition", async () => {
+		// Definition seeded in codebase_symbols.
+		seedSymbols(store, [
+			{
+				repo,
+				file_path: "src/services/auth.ts",
+				name: "authenticate",
+				kind: "function",
+				exported: true,
+				start_line: 42,
+				start_col: 0,
+				end_line: 55,
+				end_col: 1,
+				signature: "function authenticate(token: string): User"
+			}
+		]);
+
+		// Two call sites stored in codebase_references via the parse pipeline.
+		store.codebaseReferences.bulkUpsertReferences(repo, [
+			{
+				repo,
+				symbol_name: "authenticate",
+				caller_file: "src/middleware/guard.ts",
+				caller_line: 14,
+				caller_name: "guardRequest",
+				kind: "call"
+			},
+			{
+				repo,
+				symbol_name: "authenticate",
+				caller_file: "src/services/session.ts",
+				caller_line: 88,
+				caller_name: "refreshSession",
+				kind: "call"
+			}
+		]);
+
+		const response = await handleCodebaseRead(
+			{ name: "authenticate", repo, owner: "vheins", includeReferences: true },
+			store,
+			vectors
+		);
+		const data = response.structuredContent as Record<string, unknown>;
+
+		expect(data.error).toBeUndefined();
+		expect((data.symbol as Record<string, unknown>).name).toBe("authenticate");
+		expect(data.definition).toMatchObject({ file: "src/services/auth.ts", line: 42 });
+
+		const refs = data.references as Array<Record<string, unknown>>;
+		// Exactly the two stored call sites (definition excluded from references).
+		expect(refs.map((r) => r.filePath).sort()).toEqual(["src/middleware/guard.ts", "src/services/session.ts"]);
+		const guard = refs.find((r) => r.filePath === "src/middleware/guard.ts")!;
+		expect(guard.startLine).toBe(14);
+		expect(guard.kind).toBe("call");
+		expect(guard.callerName).toBe("guardRequest");
+	});
 });

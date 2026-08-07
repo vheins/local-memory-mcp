@@ -14,7 +14,7 @@
  */
 
 import type { Node as TSNode, Tree as TSTree } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "./language-visitor";
+import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "./language-visitor";
 import { SymbolKind } from "./language-visitor";
 import { serializeDocBlock } from "./doc-comment";
 
@@ -51,6 +51,16 @@ const PUBLIC_FIELD_DEFINITION = "public_field_definition";
 const FIELD_DEFINITION = "field_definition";
 const PROPERTY_IDENTIFIER = "property_identifier";
 const DECORATOR = "decorator";
+
+// Call-site / import node types (reference emission, TASK-236 / issue #64).
+const CALL_EXPRESSION = "call_expression";
+const NEW_EXPRESSION = "new_expression";
+const MEMBER_EXPRESSION = "member_expression";
+const IMPORT_STATEMENT = "import_statement";
+const IMPORT_CLAUSE = "import_clause";
+const NAMED_IMPORTS = "named_imports";
+const IMPORT_SPECIFIER = "import_specifier";
+const NAMESPACE_IMPORT = "namespace_import";
 
 // ── Export scanner ───────────────────────────────────────────────────
 
@@ -337,6 +347,175 @@ export class TypeScriptVisitor implements LanguageVisitor {
 		this.walkNode(root, symbols, null, exportedNames, defaultExportNames, false);
 
 		return symbols;
+	}
+
+	/**
+	 * Emit call-site references (TASK-236 / issue #64).
+	 *
+	 * Cheap single AST pass emitting only obvious call targets:
+	 * - `call_expression` → kind 'call' (the called identifier / last property
+	 *   of a member expression — e.g. `foo()` → 'foo', `ns.helper()` → 'helper').
+	 * - `new_expression` → kind 'instantiation' (the constructed class).
+	 * - `import_statement` → kind 'import' (each imported binding; default and
+	 *   named imports, minus import specifiers aliased to 'default').
+	 *
+	 * `callerName` is the enclosing function/method name, tracked while
+	 * descending into function/method/arrow bodies. No attempt is made to
+	 * resolve symbols or follow aliases — we index the textual call target.
+	 */
+	extractReferences(tree: TSTree, _sourceCode: string): ParsedReference[] {
+		const refs: ParsedReference[] = [];
+		this.walkReferences(tree.rootNode, null, refs);
+		return refs;
+	}
+
+	private walkReferences(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
+		switch (node.type) {
+			case CALL_EXPRESSION: {
+				const name = this.calledExpressionName(node);
+				if (name) {
+					refs.push({
+						symbolName: name,
+						callerFile: "",
+						callerLine: node.startPosition.row + 1,
+						callerName,
+						kind: "call"
+					});
+				}
+				// Recurse into children so nested calls (`foo().bar()`) are also
+				// indexed — the enclosing name for the children is still the same.
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
+				return;
+			}
+			case NEW_EXPRESSION: {
+				const ctor = node.childForFieldName("constructor") ?? node.firstNamedChild;
+				const name = this.constructorName(ctor);
+				if (name) {
+					refs.push({
+						symbolName: name,
+						callerFile: "",
+						callerLine: node.startPosition.row + 1,
+						callerName,
+						kind: "instantiation"
+					});
+				}
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
+				return;
+			}
+			case IMPORT_STATEMENT: {
+				this.emitImports(node, callerName, refs);
+				// Do NOT recurse into import children — the import clause itself is
+				// the only meaningful reference surface here.
+				return;
+			}
+			// Descend into function-like bodies, updating the enclosing caller name
+			// so call sites inside them are attributed to the right function.
+			case "function_declaration":
+			case "generator_function_declaration":
+			case "function_expression":
+			case "arrow_function": {
+				const fnName = this.declaredName(node);
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, fnName ?? callerName, refs);
+				}
+				return;
+			}
+			case "method_definition": {
+				const methodName = this.declaredName(node) ?? symbolIdentifier(node);
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, methodName ?? callerName, refs);
+				}
+				return;
+			}
+			default:
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
+		}
+	}
+
+	/** Resolve the referenced name of a call/instantiation expression. */
+	private calledExpressionName(node: TSNode): string | null {
+		const fn = node.firstNamedChild;
+		if (!fn) return null;
+		if (fn.type === MEMBER_EXPRESSION) {
+			return this.memberPropertyName(fn);
+		}
+		if (fn.type === CALL_EXPRESSION) {
+			// `foo().bar()` — the outer call's target is `foo().bar`, so the
+			// member property is the meaningful callee.
+			const member = fn.firstNamedChild;
+			if (member?.type === MEMBER_EXPRESSION) {
+				return this.memberPropertyName(member);
+			}
+		}
+		return fn.text;
+	}
+
+	/** Name of the property accessed by a member expression (e.g. `helper` from `ns.helper`). */
+	private memberPropertyName(member: TSNode): string | null {
+		return member.childForFieldName("property")?.text ?? member.lastNamedChild?.text ?? null;
+	}
+
+	private constructorName(ctor: TSNode | null | undefined): string | null {
+		if (!ctor) return null;
+		if (ctor.type === MEMBER_EXPRESSION) {
+			return this.memberPropertyName(ctor) ?? ctor.text;
+		}
+		return ctor.text;
+	}
+
+	/** Emit one 'import' reference per imported binding in an import_statement. */
+	private emitImports(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
+		const clause = node.childForFieldName("import_clause") ?? node.namedChildren.find((c) => c.type === IMPORT_CLAUSE);
+		if (!clause) return; // `import "x";` side-effect import — no binding to reference
+
+		const line = node.startPosition.row + 1;
+
+		// Default-import binding: `import Foo from "x"` → clause's first named child is an identifier.
+		const defaultImport = clause.namedChildren.find((c) => c.type === "identifier");
+		if (defaultImport && defaultImport.text.length > 0) {
+			refs.push({
+				symbolName: defaultImport.text,
+				callerFile: "",
+				callerLine: line,
+				callerName: callerName,
+				kind: "import"
+			});
+		}
+
+		// Named imports: `import { a, b } from "x"`.
+		const named = clause.namedChildren.find((c) => c.type === NAMED_IMPORTS);
+		if (named) {
+			for (const spec of named.namedChildren) {
+				if (spec.type !== IMPORT_SPECIFIER) continue;
+				const nameNode = spec.childForFieldName("name");
+				const imported = nameNode?.text;
+				if (!imported || imported === "default") continue; // skip rebindings aliased to `default`
+				refs.push({ symbolName: imported, callerFile: "", callerLine: line, callerName: callerName, kind: "import" });
+			}
+		}
+
+		// Namespace import `import * as ns` — the imported (namespace) binding is
+		// ambiguous; index the specifier so `ns` appears as the referenced symbol.
+		const nsImport = clause.namedChildren.find((c) => c.type === NAMESPACE_IMPORT);
+		if (nsImport) {
+			const alias = (nsImport.lastNamedChild?.text ?? "").replace(/^as\s*/, "");
+			if (alias) {
+				refs.push({ symbolName: alias, callerFile: "", callerLine: line, callerName: callerName, kind: "import" });
+			}
+		}
+	}
+
+	/** Best-effort name of a declaration/function node for caller attribution. */
+	private declaredName(node: TSNode): string | null {
+		const name = getNameFromDeclaration(node);
+		if (name) return name;
+		return symbolIdentifier(node);
 	}
 
 	// ── Recursive AST walker ────────────────────────────────────

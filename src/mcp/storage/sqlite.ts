@@ -16,6 +16,7 @@ import { StandardEntity } from "../entities/standard";
 import { HandoffEntity } from "../entities/handoff";
 import { CodebaseFileEntity } from "../entities/codebase-file";
 import { CodebaseSymbolEntity } from "../entities/codebase-symbol";
+import { CodebaseReferenceEntity } from "../entities/codebase-reference";
 import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 import { WriteLock } from "./write-lock";
 import { logger } from "../utils/logger";
@@ -60,6 +61,7 @@ export class SQLiteStore {
 	public handoffs: HandoffEntity;
 	public codebaseFiles: CodebaseFileEntity;
 	public codebaseSymbols: CodebaseSymbolEntity;
+	public codebaseReferences: CodebaseReferenceEntity;
 	public knowledgeGraph: KnowledgeGraphEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
@@ -124,6 +126,7 @@ export class SQLiteStore {
 		this.handoffs = new HandoffEntity(this.db);
 		this.codebaseFiles = new CodebaseFileEntity(this.db);
 		this.codebaseSymbols = new CodebaseSymbolEntity(this.db);
+		this.codebaseReferences = new CodebaseReferenceEntity(this.db);
 		this.knowledgeGraph = new KnowledgeGraphEntity(this.db);
 		this.lock = new WriteLock(finalPath);
 	}
