@@ -202,4 +202,43 @@ describe("CodebaseIndexService — Performance", () => {
 		},
 		MAX_DURATION_MS + 5_000
 	); // Vitest timeout with buffer
+
+	it(`re-indexes ${TARGET_FILE_COUNT} unchanged .ts files in under 1s (mtime delta fast-path)`, async () => {
+		const parserPool = createFastMockParser();
+		const service = createCodebaseIndexService(store, parserPool);
+
+		// The repo is already fully indexed by the test above (1000 files).
+		// Backdate every file's mtime to well before last_indexed_at so the
+		// planner's mtime pre-filter proves content unchanged WITHOUT a read
+		// (issue #60 — incremental indexing via mtime delta, fast-path).
+		const backdate = new Date(Date.now() - 10_000); // 10s before now
+		for (let i = 0; i < TARGET_FILE_COUNT; i++) {
+			const dir = path.join(repoPath, `dir-${Math.floor(i / 100)}`);
+			fs.utimesSync(path.join(dir, `file-${i}.ts`), backdate, backdate);
+		}
+
+		const startTime = performance.now();
+		const result = await service.indexRepository("test-repo", repoPath, {
+			includeGlobs: ["**/*.ts"],
+			batchSize: 100
+		});
+		const durationMs = Math.round(performance.now() - startTime);
+
+		// ── Assertions ──
+		expect(result.success).toBe(true);
+		expect(result.totalFiles).toBe(TARGET_FILE_COUNT);
+		// Incremental skip: ZERO files re-parsed, all taken via the mtime
+		// fast-path (file mtime safely before last_indexed_at).
+		expect(result.parsedFiles).toBe(0);
+		expect(result.skippedFiles).toBe(TARGET_FILE_COUNT);
+		expect(result.skippedByMtime).toBe(TARGET_FILE_COUNT);
+
+		// AC4: a re-index of an unchanged repo must be near-instant (< 1s).
+		expect(durationMs).toBeLessThan(1000);
+
+		console.log(
+			`\n[Performance] Re-indexed ${TARGET_FILE_COUNT} unchanged files in ${durationMs}ms ` +
+				`(parsed=${result.parsedFiles}, mtime-skipped=${result.skippedByMtime})`
+		);
+	}, 10_000); // generous buffer; assert is durationMs < 1000
 });
