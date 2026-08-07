@@ -13,6 +13,7 @@ export default defineConfig({
 		// Support ESM
 		environment: "node",
 		exclude: ["dist/**", "node_modules/**", "src/dashboard/ui/node_modules/**"],
-		testTimeout: 30_000
+		testTimeout: 30_000,
+		hookTimeout: 30_000
 	}
 });
