@@ -1352,6 +1352,45 @@ interface PrivateShape {
 		expect(width!.exported).toBe(false);
 	});
 
+	it("emits interface getter/setter accessors as Method (consistent with class accessors)", async () => {
+		// In tree-sitter-typescript ^0.23 interface getters/setters parse as
+		// `method_signature` (not get_signature/set_signature), so they are
+		// emitted as Method — the same kind class accessors get via
+		// `method_definition`. They are never emitted as Property.
+		const result = await parseOrSkip(
+			"types.ts",
+			`
+interface AccessorApi {
+  get value(): string;
+  set value(v: string);
+  get count(): number;
+  method(): void;
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		const value = result.symbols.find((s) => s.name === "value" && s.parentName === "AccessorApi");
+		expect(value).toBeDefined();
+		expect(value!.kind).toBe("method");
+		// The signature keeps the `get`/`set` keyword so the accessor is still
+		// distinguishable from a plain method in the index.
+		expect(value!.signature).toContain("get value");
+
+		const count = result.symbols.find((s) => s.name === "count" && s.parentName === "AccessorApi");
+		expect(count).toBeDefined();
+		expect(count!.kind).toBe("method");
+
+		const method = result.symbols.find((s) => s.name === "method" && s.parentName === "AccessorApi");
+		expect(method).toBeDefined();
+		expect(method!.kind).toBe("method");
+
+		// No accessor may leak out as a Property symbol.
+		const properties = result.symbols.filter((s) => s.parentName === "AccessorApi" && s.kind === "property");
+		expect(properties).toEqual([]);
+	});
+
 	// ── Type aliases ──────────────────────────────────────────────
 
 	it("extracts a type alias with its RHS preview in the signature", async () => {
@@ -1575,6 +1614,49 @@ export abstract class Cache {
 		expect(get).toBeDefined();
 		expect(get!.kind).toBe("method");
 		expect(get!.parentName).toBe("Cache");
+	});
+
+	it("leaves concrete classes (and their non-abstract members) unaffected", async () => {
+		const result = await parseOrSkip(
+			"concrete.ts",
+			`
+class AccountService {
+  private readonly repository: Repository;
+
+  find(id: string): unknown {
+    return this.repository.find(id);
+  }
+
+  save(item: unknown): Promise<void> {
+    return this.repository.save(item);
+  }
+}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		// Concrete class still emits a Class symbol.
+		const svc = result.symbols.find((s) => s.name === "AccountService");
+		expect(svc).toBeDefined();
+		expect(svc!.kind).toBe("class");
+
+		// Concrete member methods are Method, parented to the class, with their
+		// bodies intact — the abstract-class branch must not change their kind.
+		const find = result.symbols.find((s) => s.name === "find" && s.parentName === "AccountService");
+		expect(find).toBeDefined();
+		expect(find!.kind).toBe("method");
+		expect(find!.parentName).toBe("AccountService");
+		expect(find!.signature).toBe("find(id: string): unknown {");
+
+		const save = result.symbols.find((s) => s.name === "save" && s.parentName === "AccountService");
+		expect(save).toBeDefined();
+		expect(save!.kind).toBe("method");
+
+		// A non-abstract field is still a Property, never a Method.
+		const repository = result.symbols.find((s) => s.name === "repository" && s.parentName === "AccountService");
+		expect(repository).toBeDefined();
+		expect(repository!.kind).toBe("property");
 	});
 
 	// ── Decorators ───────────────────────────────────────────────

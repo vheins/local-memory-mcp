@@ -44,8 +44,6 @@ const PROPERTY_SIGNATURE = "property_signature";
 const METHOD_SIGNATURE = "method_signature";
 const ABSTRACT_METHOD_SIGNATURE = "abstract_method_signature";
 const INDEX_SIGNATURE = "index_signature";
-const GET_SIGNATURE = "get_signature";
-const SET_SIGNATURE = "set_signature";
 const ENUM_ASSIGNMENT = "enum_assignment";
 const PUBLIC_FIELD_DEFINITION = "public_field_definition";
 const FIELD_DEFINITION = "field_definition";
@@ -627,19 +625,15 @@ export class TypeScriptVisitor implements LanguageVisitor {
 					);
 					break;
 				case METHOD_SIGNATURE:
+					// In this grammar version (tree-sitter-typescript ^0.23) interface
+					// getters/setters parse as `method_signature`, whose first child
+					// is the anonymous `get`/`set` keyword — the same as plain methods.
+					// They are intentionally emitted as Method (consistent with class
+					// accessors, which parse as `method_definition` → Method).
 					symbols.push(
 						this.memberSymbol(member, symbolIdentifier(member) ?? "unknown", SymbolKind.Method, interfaceName)
 					);
 					break;
-				// Getters/setters map to a Property whose name is the accessor's identifier.
-				case GET_SIGNATURE:
-				case SET_SIGNATURE: {
-					const accessorName = symbolIdentifier(member);
-					if (accessorName) {
-						symbols.push(this.memberSymbol(member, accessorName, SymbolKind.Property, interfaceName));
-					}
-					break;
-				}
 				// `[key: string]: unknown` index signatures have no single identifier —
 				// skip them rather than fabricate a misleading name.
 				case INDEX_SIGNATURE:
