@@ -55,8 +55,18 @@ export function tileNoise(x: number, y: number): number {
 }
 
 // ─── Canvas rounded-rect helper ────────────────────────────────────────────
+/**
+ * Path a rounded rectangle. Degenerate-rect safe: transiently negative or
+ * zero w/h (spawn/entrance tweens scale geometry from 0) never reach the
+ * canvas arcTo calls — a negative radius throws IndexSizeError. When either
+ * dimension is <= 0 the path is left empty (nothing to draw).
+ */
 export function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-	r = Math.min(r, w / 2, h / 2);
+	if (!(w > 0) || !(h > 0)) {
+		ctx.beginPath();
+		return;
+	}
+	r = Math.max(0, Math.min(r, Math.floor(w / 2), Math.floor(h / 2)));
 	ctx.beginPath();
 	ctx.moveTo(x + r, y);
 	ctx.lineTo(x + w - r, y);

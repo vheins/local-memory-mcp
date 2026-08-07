@@ -1,14 +1,19 @@
 <script lang="ts">
-	// Pure display component — no props or logic needed.
+	import { getArenaLayoutManager } from "../lib/arena/arena-layout/ArenaLayoutManager";
+
+	/**
+	 * The five current arena sections — sourced from the shared layout manager
+	 * so labels + colors always match the scene. Registry order (the manager's
+	 * single source of truth), rendered in the same order as the arena rooms.
+	 */
+	const sections = getArenaLayoutManager().getDefinitions();
 </script>
 
 <div class="arena-footer">
 	<div class="legend-row">
-		<div class="legend-item"><span class="lg-dot" style="background:#8b5cf6"></span>Lobby (idle)</div>
-		<div class="legend-item"><span class="lg-dot" style="background:#0ea5e9"></span>Inbox</div>
-		<div class="legend-item"><span class="lg-dot" style="background:#a855f7"></span>Workspace</div>
-		<div class="legend-item"><span class="lg-dot" style="background:#ef4444"></span>Issues</div>
-		<div class="legend-item"><span class="lg-dot" style="background:#10b981"></span>Done</div>
+		{#each sections as s (s.id)}
+			<div class="legend-item"><span class="lg-dot" style="background:{s.color}"></span>{s.label}</div>
+		{/each}
 	</div>
 	<div class="legend-row">
 		<div class="legend-item">

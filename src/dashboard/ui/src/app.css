@@ -862,6 +862,31 @@ a:hover {
 	gap: 16px;
 	overflow-x: auto;
 	padding-bottom: 8px;
+	/* Visible horizontal scroll affordance (Firefox / modern scrollbars). */
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-accent, #6366f1) rgba(99, 102, 241, 0.1);
+	overscroll-behavior-x: contain;
+}
+
+/* Clearly visible horizontal scrollbar (WebKit/Blink) so side-scrolling
+   kanban columns are never unreachable with no affordance on small screens. */
+.kanban-board::-webkit-scrollbar {
+	height: 10px;
+}
+.kanban-board::-webkit-scrollbar-track {
+	background: rgba(99, 102, 241, 0.12);
+	border-radius: 999px;
+}
+.kanban-board::-webkit-scrollbar-thumb {
+	background: var(--color-accent, #6366f1);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+	min-width: 40px;
+}
+.kanban-board::-webkit-scrollbar-thumb:hover {
+	background: var(--color-accent-hover, #818cf8);
+	background-clip: content-box;
 }
 
 @media (max-width: 900px) {
@@ -870,6 +895,13 @@ a:hover {
 		grid-auto-columns: 280px;
 		scroll-snap-type: x mandatory;
 		-webkit-overflow-scrolling: touch;
+		scroll-padding-inline: 8px;
+	}
+}
+
+@media (max-width: 560px) {
+	.kanban-board {
+		grid-auto-columns: minmax(240px, 76vw);
 	}
 }
 

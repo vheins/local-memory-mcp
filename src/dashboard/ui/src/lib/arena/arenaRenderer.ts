@@ -66,6 +66,8 @@ export class ArenaRenderer {
 	private rafId = 0;
 	private ts = 0;
 	private prevTs = 0;
+	/** Dedup key for frame errors — an error message is logged once per distinct occurrence. */
+	private lastFrameError: string | null = null;
 	private wander = new Map<string, WanderState>();
 	private activeFilter: FilterState = { repository: null, roles: [], priorities: [], statuses: [], search: "" };
 	private currentLod: LODLevel = LOD_NORMAL;
@@ -299,33 +301,55 @@ export class ArenaRenderer {
 	}
 
 	// ── Loop ────────────────────────────────────────────────────────────
+	/**
+	 * Frame scheduling is exception-safe: the next rAF is always re-requested
+	 * in a finally, so a single render() throw (e.g. a transient degenerate
+	 * geometry or a context state hiccup) can never permanently freeze the
+	 * canvas. Errors are logged once per distinct message to avoid console
+	 * spam while the loop keeps animating. On a successful frame the dedup
+	 * key resets so an intermittent error is reported again when it recurs.
+	 */
 	private loop = (ts: number) => {
 		const dt = Math.min((ts - this.prevTs) / 1000, 0.05);
 		this.prevTs = ts;
 		this.ts = ts;
-		if (this.scene && this.layout) {
-			// Wander bounds = the in_progress content area (where the desks
-			// are), straight from the shared manager; falls back to the first
-			// registered section when "in_progress" is missing.
-			const sections = this.layoutManager.getSections();
-			const inProgress = sections.find((s) => s.id === "in_progress") ?? sections[0];
-			if (inProgress) {
-				const c = inProgress.contentRect;
-				const idleZone: ZoneRect = {
-					id: inProgress.id,
-					label: inProgress.label,
-					x: c.x,
-					y: c.y,
-					w: c.w,
-					h: c.h,
-					color: inProgress.visual.color
-				};
-				updateAgents(this.scene.agents, this.wander, idleZone, dt, ts, this.reducedMotion, updateHandoffAnim);
+		try {
+			if (this.scene && this.layout) {
+				// Wander bounds = the in_progress content area (where the desks
+				// are), straight from the shared manager; falls back to the first
+				// registered section when "in_progress" is missing.
+				const sections = this.layoutManager.getSections();
+				const inProgress = sections.find((s) => s.id === "in_progress") ?? sections[0];
+				if (inProgress) {
+					const c = inProgress.contentRect;
+					const idleZone: ZoneRect = {
+						id: inProgress.id,
+						label: inProgress.label,
+						x: c.x,
+						y: c.y,
+						w: c.w,
+						h: c.h,
+						color: inProgress.visual.color
+					};
+					updateAgents(this.scene.agents, this.wander, idleZone, dt, ts, this.reducedMotion, updateHandoffAnim);
+				}
 			}
+			this.render();
+			this.lastFrameError = null;
+		} catch (err) {
+			this.logFrameError(err);
+		} finally {
+			this.rafId = requestAnimationFrame(this.loop);
 		}
-		this.render();
-		this.rafId = requestAnimationFrame(this.loop);
 	};
+
+	/** Log a frame error once per distinct message; the loop continues regardless. */
+	private logFrameError(err: unknown): void {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg && msg === this.lastFrameError) return;
+		this.lastFrameError = msg || null;
+		console.error("[ArenaRenderer] frame error (render loop continues):", err);
+	}
 
 	// ── Main render ──────────────────────────────────────────────────────
 	private render() {
@@ -345,86 +369,88 @@ export class ArenaRenderer {
 		ctx.translate(px, py);
 		ctx.scale(z, z);
 
-		drawGlobalFloor(rc);
-		const sections = this.cachedSections ?? [];
+		// try/finally guarantees the ctx.save() above is always balanced by a
+		// restore — even if a draw call throws, the transform stack stays clean
+		// and subsequent frames render at the correct scale (no accumulation).
+		try {
+			drawGlobalFloor(rc);
+			const sections = this.cachedSections ?? [];
 
-		// Per-section task/agent counts for the header stats strip — computed
-		// only when the strip will actually be drawn (FULL/NORMAL LOD; drawRoom
-		// skips it at SIMPLIFIED/AGGREGATE). Task counts are cached inside
-		// computeZoneStats (baked positions), so this is not a per-frame
-		// recompute of layout or task geometry.
-		const zoneStats = scene && lod < LOD_SIMPLIFIED ? this.computeZoneStats(scene) : null;
+			// Per-section task/agent counts for the header stats strip — computed
+			// only when the strip will actually be drawn (FULL/NORMAL LOD; drawRoom
+			// skips it at SIMPLIFIED/AGGREGATE). Task counts are cached inside
+			// computeZoneStats (baked positions), so this is not a per-frame
+			// recompute of layout or task geometry.
+			const zoneStats = scene && lod < LOD_SIMPLIFIED ? this.computeZoneStats(scene) : null;
 
-		for (let i = 0; i < sections.length; i++) {
-			drawRoom(rc, zones[i], sections[i].visual, zoneStats?.get(zones[i].id), this.layoutManager);
-		}
-
-		// Workflow arrows: infrastructure between rooms — drawn after rooms,
-		// before workstations/agents so they read as the pipeline, not content.
-		if (lod < LOD_AGGREGATE) drawWorkflowArrows(rc, this.workflowEdges);
-
-		if (!scene) {
-			ctx.restore();
-			return;
-		}
-
-		if (lod === LOD_AGGREGATE) for (const zr of zones) drawZoneAggregate(rc, zr, scene);
-
-		const hasFilter = this.iFA();
-		const cull = lod < LOD_SIMPLIFIED ? this.getViewportCullBounds() : undefined;
-		const sortedTasks = Array.from(scene.tasks.values())
-			.filter((t) => (!hasFilter || this.mTF(t)) && (lod >= LOD_SIMPLIFIED || this.isInViewport(t.x, t.y, cull!)))
-			.sort((a, b) => a.y - b.y);
-
-		if (lod === LOD_AGGREGATE) {
-			// Aggregate workstations are drawn via drawZoneAggregate above.
-		} else if (lod === LOD_SIMPLIFIED) {
-			for (const t of sortedTasks) drawWorkstationSimplified(rc, t);
-		} else {
-			for (const t of sortedTasks) {
-				drawWorkstation(rc, t, this.reducedMotion, this.reducedTransparency, scene.agents, this.zoneColorForTask(t));
+			for (let i = 0; i < sections.length; i++) {
+				drawRoom(rc, zones[i], sections[i].visual, zoneStats?.get(zones[i].id), this.layoutManager);
 			}
-		}
 
-		if (lod < LOD_SIMPLIFIED) {
-			drawClaimLinks(
-				rc,
-				scene,
-				(id) => this.mAF(scene.agents.get(id)!),
-				(id) => this.mTF(scene.tasks.get(id)!),
-				() => this.iFA(),
-				lod,
-				(status) => this.zoneColorForStatus(status)
-			);
-			drawHandoffBeams(
-				rc,
-				scene,
-				(id) => this.mAF(scene.agents.get(id)!),
-				(id) => this.mTF(scene.tasks.get(id)!),
-				() => this.iFA(),
-				lod
-			);
-			for (const a of scene.agents.values()) {
-				if (a.handoffAnim && (!hasFilter || this.mAF(a)) && this.isInViewport(a.x, a.y, cull!)) {
-					drawHandoffTrail(rc, a);
+			// Workflow arrows: infrastructure between rooms — drawn after rooms,
+			// before workstations/agents so they read as the pipeline, not content.
+			if (lod < LOD_AGGREGATE) drawWorkflowArrows(rc, this.workflowEdges);
+
+			if (!scene) return;
+
+			if (lod === LOD_AGGREGATE) for (const zr of zones) drawZoneAggregate(rc, zr, scene);
+
+			const hasFilter = this.iFA();
+			const cull = lod < LOD_SIMPLIFIED ? this.getViewportCullBounds() : undefined;
+			const sortedTasks = Array.from(scene.tasks.values())
+				.filter((t) => (!hasFilter || this.mTF(t)) && (lod >= LOD_SIMPLIFIED || this.isInViewport(t.x, t.y, cull!)))
+				.sort((a, b) => a.y - b.y);
+
+			if (lod === LOD_AGGREGATE) {
+				// Aggregate workstations are drawn via drawZoneAggregate above.
+			} else if (lod === LOD_SIMPLIFIED) {
+				for (const t of sortedTasks) drawWorkstationSimplified(rc, t);
+			} else {
+				for (const t of sortedTasks) {
+					drawWorkstation(rc, t, this.reducedMotion, this.reducedTransparency, scene.agents, this.zoneColorForTask(t));
 				}
 			}
-		}
 
-		const sortedAgents = Array.from(scene.agents.values())
-			.filter((a) => (!hasFilter || this.mAF(a)) && (lod >= LOD_SIMPLIFIED || this.isInViewport(a.x, a.y, cull!)))
-			.sort((a, b) => a.y - b.y || (a.id === this.hoveredId ? 1 : -1));
-
-		for (const a of sortedAgents) {
-			if (a.handoffAnim) {
-				drawHandoffGroup(rc, a);
-				continue;
+			if (lod < LOD_SIMPLIFIED) {
+				drawClaimLinks(
+					rc,
+					scene,
+					(id) => this.mAF(scene.agents.get(id)!),
+					(id) => this.mTF(scene.tasks.get(id)!),
+					() => this.iFA(),
+					lod,
+					(status) => this.zoneColorForStatus(status)
+				);
+				drawHandoffBeams(
+					rc,
+					scene,
+					(id) => this.mAF(scene.agents.get(id)!),
+					(id) => this.mTF(scene.tasks.get(id)!),
+					() => this.iFA(),
+					lod
+				);
+				for (const a of scene.agents.values()) {
+					if (a.handoffAnim && (!hasFilter || this.mAF(a)) && this.isInViewport(a.x, a.y, cull!)) {
+						drawHandoffTrail(rc, a);
+					}
+				}
 			}
-			if (lod === LOD_AGGREGATE) drawCharacterAggregate(rc, a);
-			else if (lod === LOD_SIMPLIFIED) drawCharacterSimplified(rc, a);
-			else drawCharacter(rc, a);
-		}
 
-		ctx.restore();
+			const sortedAgents = Array.from(scene.agents.values())
+				.filter((a) => (!hasFilter || this.mAF(a)) && (lod >= LOD_SIMPLIFIED || this.isInViewport(a.x, a.y, cull!)))
+				.sort((a, b) => a.y - b.y || (a.id === this.hoveredId ? 1 : -1));
+
+			for (const a of sortedAgents) {
+				if (a.handoffAnim) {
+					drawHandoffGroup(rc, a);
+					continue;
+				}
+				if (lod === LOD_AGGREGATE) drawCharacterAggregate(rc, a);
+				else if (lod === LOD_SIMPLIFIED) drawCharacterSimplified(rc, a);
+				else drawCharacter(rc, a);
+			}
+		} finally {
+			ctx.restore();
+		}
 	}
 }
