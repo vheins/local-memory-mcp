@@ -2,7 +2,7 @@
 	import { onMount, afterUpdate, tick } from "svelte";
 	import { get } from "svelte/store";
 	import Icon from "../lib/Icon.svelte";
-	import { currentRepo, recentActions, recentActionsPage, recentActionsTotalItems } from "../lib/stores";
+	import { currentRepo, recentActions, recentActionsPage, recentActionsTotalItems, activeTab } from "../lib/stores";
 	import { createRecentActionsHandler } from "../lib/composables/useRecentActions";
 	import { createChatTask } from "../lib/utils";
 	import ChatHeader from "./ChatHeader.svelte";
@@ -77,71 +77,80 @@
 <svelte:window on:keydown={handleKeyDown} />
 
 {#if $currentRepo}
-	{#if open}
-		<div
-			class="chat-backdrop"
-			on:click={() => (open = false)}
-			on:keydown={(e) => e.key === "Enter" && (open = false)}
-			role="button"
-			tabindex="-1"
-			aria-label="Close"
-		></div>
-		<div class="chat-popup animate-fade-in-scale">
-			<ChatHeader totalEvents={$recentActionsTotalItems} onClose={() => (open = false)} />
+	<!-- TASK-273 / audit F5: the chat FAB (position:fixed, z-index 50) sat on
+	     top of the Arena tab's zoom controls (bottom-right of the viewport), so
+	     elementFromPoint at the zoom-in button returned the chat-fab and real
+	     mouse clicks hit the FAB — the user could not zoom in with the mouse.
+	     Resolution: hide the FAB (and its popup, only reachable via the FAB)
+	     while the Arena tab is active so pointer events reach the zoom controls;
+	     the FAB stays reachable on every other tab. -->
+	{#if $activeTab !== "arena"}
+		{#if open}
+			<div
+				class="chat-backdrop"
+				on:click={() => (open = false)}
+				on:keydown={(e) => e.key === "Enter" && (open = false)}
+				role="button"
+				tabindex="-1"
+				aria-label="Close"
+			></div>
+			<div class="chat-popup animate-fade-in-scale">
+				<ChatHeader totalEvents={$recentActionsTotalItems} onClose={() => (open = false)} />
 
-			<div class="chat-popup-body" bind:this={chatContainer}>
-				{#if $handler.isLoadingMore}
-					<div class="popup-load-more">
-						<Icon name="refresh-cw" size={12} className="animate-spin" />
-						<span>Loading older...</span>
-					</div>
-				{/if}
+				<div class="chat-popup-body" bind:this={chatContainer}>
+					{#if $handler.isLoadingMore}
+						<div class="popup-load-more">
+							<Icon name="refresh-cw" size={12} className="animate-spin" />
+							<span>Loading older...</span>
+						</div>
+					{/if}
 
-				{#if $actionsStore.length === 0}
-					<div class="popup-empty">
-						<Icon name="message-circle" size={36} strokeWidth={1} />
-						<div>No activity yet</div>
-						<div>Events appear here as they happen.</div>
-					</div>
-				{:else}
-					{#each $groupedActions as group, i (`${group.date}-${i}`)}
-						<div class="popup-date-header"><span>{group.date}</span></div>
-						{#each group.items as action, i (`${action.id}-${i}`)}
-							{@const label = handler.getLabel(action)}
-							{@const cfg = handler.getConfig(action.action)}
-							<ChatMessage
-								type="action"
-								badgeIcon={cfg.icon}
-								badgeLabel={cfg.label}
-								badgeColor={cfg.color}
-								badgeBgAlpha={cfg.bgAlpha}
-								mainText={label.main}
-								subText={label.sub ?? ""}
-							/>
-							{#if action.response}
-								{@const parsed = handler.parseResponse(action.response)}
-								{@const isExpanded = $handler.expandedResponses.has(action.id)}
+					{#if $actionsStore.length === 0}
+						<div class="popup-empty">
+							<Icon name="message-circle" size={36} strokeWidth={1} />
+							<div>No activity yet</div>
+							<div>Events appear here as they happen.</div>
+						</div>
+					{:else}
+						{#each $groupedActions as group, i (`${group.date}-${i}`)}
+							<div class="popup-date-header"><span>{group.date}</span></div>
+							{#each group.items as action, i (`${action.id}-${i}`)}
+								{@const label = handler.getLabel(action)}
+								{@const cfg = handler.getConfig(action.action)}
 								<ChatMessage
-									type="mcp"
-									responseText={parsed.text}
-									isLong={parsed.isLong}
-									{isExpanded}
-									onToggleExpand={() => handler.toggleExpand(action.id)}
+									type="action"
+									badgeIcon={cfg.icon}
+									badgeLabel={cfg.label}
+									badgeColor={cfg.color}
+									badgeBgAlpha={cfg.bgAlpha}
+									mainText={label.main}
+									subText={label.sub ?? ""}
 								/>
-							{/if}
+								{#if action.response}
+									{@const parsed = handler.parseResponse(action.response)}
+									{@const isExpanded = $handler.expandedResponses.has(action.id)}
+									<ChatMessage
+										type="mcp"
+										responseText={parsed.text}
+										isLong={parsed.isLong}
+										{isExpanded}
+										onToggleExpand={() => handler.toggleExpand(action.id)}
+									/>
+								{/if}
+							{/each}
 						{/each}
-					{/each}
-				{/if}
-			</div>
+					{/if}
+				</div>
 
-			<div class="chat-popup-footer">
-				<ChatInput value={chatMessage} disabled={isSending} onInput={onChatInput} onSend={sendChat} />
+				<div class="chat-popup-footer">
+					<ChatInput value={chatMessage} disabled={isSending} onInput={onChatInput} onSend={sendChat} />
+				</div>
 			</div>
-		</div>
-	{:else}
-		<button class="chat-fab" on:click={toggle} title="Open activity chat" aria-label="Open activity chat">
-			<Icon name="message-circle" size={22} strokeWidth={2.2} />
-		</button>
+		{:else}
+			<button class="chat-fab" on:click={toggle} title="Open activity chat" aria-label="Open activity chat">
+				<Icon name="message-circle" size={22} strokeWidth={2.2} />
+			</button>
+		{/if}
 	{/if}
 {/if}
 

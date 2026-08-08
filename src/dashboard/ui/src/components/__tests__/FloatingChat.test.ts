@@ -4,6 +4,13 @@ import { mount, unmount } from "svelte";
 import FloatingChat from "../FloatingChat.svelte";
 
 vi.mock("../../lib/stores", () => ({
+	// Non-arena tab so the FAB is visible (TASK-273 hides it on the Arena tab).
+	activeTab: {
+		subscribe: (fn: any) => {
+			fn("dashboard");
+			return () => {};
+		}
+	},
 	currentRepo: {
 		subscribe: (fn: any) => {
 			fn("test/repo");
