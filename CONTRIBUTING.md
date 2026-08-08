@@ -2,27 +2,46 @@
 
 Thank you for your interest in contributing to the MCP Local Memory Service!
 
+- **Project overview:** See the [README](README.md) for features and usage.
+- **Setup & client integration:** See [docs/en/getting-started.md](docs/en/getting-started.md) (Gemini CLI, Claude Code, OpenCode, and more).
+- **API & internals:** See [docs/en/tools-reference.md](docs/en/tools-reference.md) and [docs/en/mcp-concepts.md](docs/en/mcp-concepts.md).
+
 ## Reporting Issues
+
 If you find a bug or have a feature idea:
+
 1. Check if a similar issue has already been reported on [GitHub Issues](https://github.com/vheins/local-memory-mcp/issues).
 2. If not, create a new issue with the label `bug` or `enhancement`.
 3. Include details about your OS, Node.js version, and steps to reproduce the bug.
 
 ## Code Contribution Workflow
+
 1. Fork this repository.
 2. Create a new branch (`feat/feature-name` or `fix/bug-description`).
 3. Ensure your code follows the project's TypeScript standards.
-4. **Mandatory:** Add unit tests in `src/` or update `src/e2e.test.ts` if adding new features.
+4. **Mandatory:** Add unit tests under `src/mcp/tests/` (or update `src/mcp/tests/e2e.test.ts`) if adding new features.
 5. Run tests: `npm run test`.
 6. Submit a Pull Request (PR) to the `main` branch.
 
+## Commit Conventions
+
+This repository follows [Conventional Commits](https://www.conventionalcommits.org/) with a task-code footer for traceability:
+
+- Format: `type(scope): description` — e.g. `feat(dashboard): add arena minimap`, `fix(deps): pin js-yaml (CVE)`.
+- Reference the active MCP task in the commit body or subject as `[TASK-xxx]` — e.g. `feat(dashboard): [TASK-281] arena UI component tests`.
+- Types: `feat` / `fix` (behavior), `docs` (documentation), `test` (tests), `refactor` (no behavior change), `chore` (maintenance).
+- If the change fixes a GitHub issue, append `keyword #N` as the footer (e.g. `fix #1423`).
+
 ## Quality Standards (Strict Rules)
+
 - **Local-First:** Do not add cloud dependencies or external APIs without deep discussion.
 - **SQLite Only:** All data persistence must use SQLite.
 - **Strict Anti-Hallucination:** Do not lower the semantic search thresholds below the project's security standards.
 
 ## ⚠️ No Warranty & Liability
+
 By contributing, you acknowledge that this project is provided **"AS IS"** without any warranty. You agree that the authors and maintainers are not liable for any damages arising from the use of this software.
 
 ## License
+
 By contributing, you agree that your contributions will be licensed under the project's MIT License.

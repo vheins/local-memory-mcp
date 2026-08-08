@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.35.0] — 2026-08-07
 
+> **Corrected (2026-08-09):** the `trace_symbol` name used below is the legacy alias — the canonical tool is `codebase-read` (`name` → TRACE mode, per ADR-005). Behavior described is accurate; only the tool name is legacy.
+
 ### Added
 
 - Codebase search: cross-repo symbol search — `codebase_read` SEARCH mode accepts `repos: string[]` (each value normalized like `repo`; a single `repo` still works, backward compatible). Unscoped queries (neither `repo` nor `repos`) are rejected with a `REPO_REQUIRED` error to prevent cross-tenant leakage — `codebase_symbols` has no owner column, so an unscoped read would span every indexed repo. Results already carry `repo` (#67)
@@ -38,6 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Migration tests for v17–v21
 - Parser fixtures for all 6 languages touched this release (Rust, Ruby, Python, Go, TypeScript, PHP)
 - Trace references: 1 definition + 2 call sites → definition and exactly the two stored call-site references (#64)
+
+## [0.34.1] — 2026-08-06
+
+> **Entry restored from git history (2026-08-09):** this release was tagged (`v0.34.1`) but never documented in the changelog. The two commits it contained are recorded here.
+
+### Added
+
+- Codebase index: enhanced PHP visitor — properties, constants, `use` statements, enum members, and structured function/method signatures are now indexed (previously only functions/methods/classes)
+
+### Documentation
+
+- Codebase index: index performance optimization options documented (`docs/operations/codebase-index.md` — e.g. `CODEBASE_AUTO_INDEX=false` to disable auto-index on startup)
 
 ## [0.34.0] — 2026-08-04
 
