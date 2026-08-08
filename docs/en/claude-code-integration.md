@@ -233,7 +233,7 @@ To temporarily disable, use the `/mcp` panel inside Claude Code.
 
 ## References
 
-- [Claude Code MCP Documentation](https://code.claude.com/docs/id/mcp)
+- [Claude Code MCP Documentation](https://code.claude.com/docs/en/mcp)
 - [MCP Local Memory — Getting Started](getting-started.md)
 - [Tool Reference & Usage Guide](tools-reference.md)
 - [Troubleshooting Guide](troubleshooting.md)

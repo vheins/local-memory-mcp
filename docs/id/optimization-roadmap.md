@@ -1,4 +1,4 @@
-# Optimization Roadmap (Bahasa Indonesia)
+# Optimization Roadmap
 
 > **Status (terverifikasi 2026-08-04)**: SEMUA temuan `OPT-*` telah **SELESAI** dan terverifikasi di kode — DRY (01-07), Kualitas Kode (01-04), Performance (01-11), Struktur (01-05), Fitur/Flow (01-04, FLOW-01..03), Observability (01). Modul bersama: `utils/hybrid-search.ts`, `utils/purge-entity-cleanup.ts`, `utils/mcp-error.ts`, `utils/coordination.ts`, `utils/auto-infer.ts`, `utils/mcp-response.ts`, `utils/action-log.ts` (POLICY 2), `utils/scoring.ts`, `utils/chunk.ts`; migrasi dipecah ke file versi `vNN-*.ts`; layer `services/` dashboard lengkap (termasuk `statsCache.ts`); endpoint list KG dipaginasi + probe truncated; polling Arena digate visibility. Sisa keputusan: loop serial worker OPT-PERF-03 ditunda (bukan bottleneck — lihat memory), jalur delete tunggal dashboard masih melewati `purgeEntityAndCleanup` (terdokumentasi di kode).
 >

@@ -18,7 +18,7 @@ npm install -g @vheins/local-memory-mcp
 Register the server in your preferred AI tool. Below are the standard configurations:
 
 #### 🏠 Claude Desktop
-- **File Path:** 
+- **File Path:**
   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 - **JSON:** Standard `mcpServers` format.
