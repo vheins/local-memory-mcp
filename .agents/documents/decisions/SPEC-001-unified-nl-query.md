@@ -3,6 +3,10 @@
 **Date:** 2026-07-27
 **Status:** Proposed
 
+> **IMPLEMENTED (verified 2026-08-08):** the 40/30/15/15 formula is the canonical scoring engine — `HYBRID_WEIGHTS = { similarity: 0.4, keyword: 0.3, recency: 0.15, domain: 0.15 }` (src/mcp/utils/constants.ts) and `scoreHybrid` in src/mcp/utils/hybrid-search.ts. Vector embeddings ship for memory (v06/memory_vectors), standards (standard_vectors), tasks (migration v07 task-vectors), codebase symbols (v06 codebase_symbols_vectors; symbols FTS v18). `task-write` vector embedding (TASK-007) and `task-read` hybrid search (TASK-008) are implemented. `codebase-read` vector tier (CI-005 → 0.30 vector / 0.70 tier blend) and `agent-context` query→vector (AC-005) are implemented.
+>
+> **NEXT PHASE — MEM-009 / STD-006 (backlog, priority 3):** the two "standardisasi formula" items remain open in the task list below — hybrid formulas are unified in code (`scoreHybrid`) for memory/task/standard, so these two entries are effectively superseded by the shared engine; confirm official close in a future release.
+
 ## Goal
 
 Semua read tool yang mengelola **knowledge** (memory, task, standard, codebase, agent-context) menggunakan formula hybrid scoring yang seragam. Write tools otomatis generate vector embeddings untuk data baru.
@@ -26,6 +30,8 @@ score = (vector_similarity × 0.40)
 | **domain_boost**      | 0.15  | Tags match, language match, workspace affinity (file path, branch)  |
 
 ### Adaptive Threshold
+
+> **CORRECTED (verified 2026-08-08):** shipped thresholds differ per domain (src/mcp/utils/constants.ts `SEARCH_THRESHOLDS`) — memory `{ smallSet: 0.10, largeSet: 0.40 }`, task `{ smallSet: 0.08, largeSet: 0.20 }`, standard `{ smallSet: 0.08, largeSet: 0.20 }`. The 0.08/0.20 values in the table below match task/standard only, not memory. The "least 1 result" guarantee is implemented (guarantee-at-least-1 in hybrid-search.ts).
 
 | Kondisi        | Threshold       |
 | -------------- | --------------- |

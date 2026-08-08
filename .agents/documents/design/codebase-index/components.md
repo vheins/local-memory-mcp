@@ -1,5 +1,7 @@
 # Codebase Index — Component Inventory
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning component inventory. The Codebase dashboard tab **is implemented** but with different component names than listed below: `CodebasePage.svelte` (orchestrator, not `CodebaseTab.svelte`), `CodebaseSearchBar.svelte`, `CodebaseIndexStatus.svelte`, `CodebaseFileTree.svelte` + `FileTreeNode.svelte`/`FileTreeHeader.svelte`, `CodebaseSymbolList.svelte`, `CodebaseSymbolDetail.svelte`, `CodebaseLanguageBreakdown.svelte`, `CodebaseEmptyState.svelte`, `IndexProgress.svelte`/`IndexStatusBadge.svelte` (src/dashboard/ui/src/components/). There is **no** `CallGraph.svelte` (Mermaid DAG) and **no** standalone `FileViewer.svelte` or `IndexStats.svelte` — symbol callers/callees render inside `CodebaseSymbolDetail`; a full call-graph view is **NEXT PHASE**. Composables are `useApp.ts` etc. (src/dashboard/ui/src/lib/composables/), matching the "createCodebaseHandler()" pattern concept.
+
 This document details the new Svelte components needed for the Codebase Index tab, following the existing composable pattern from the dashboard.
 
 ---

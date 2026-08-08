@@ -1,5 +1,7 @@
 # Product Requirements Document (PRD)
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** "Must/Should/Could All Implemented" claims hold with these notes — (1) "Knowledge Graph with CRUD tools": **no MCP KG CRUD tools**; KG is dashboard/API-only + embedded `kg` context in read tools (ADR-006); (2) "Agent Tools: `agent-context`, `decision-log`, `session-summarize`": `decision-log` and `session-summarize` no longer exist as tools — absorbed into `memory-write` (type=decision / type=task_archive); `agent-context` remains canonical. Time-tunnel temporal parsing ("yesterday"/"last week") is implemented inside `memory-read` (src/mcp/tools/time-tunnel.ts). Upstream alias item below already marked LEGACY by TASK-283 ✓.
+
 ## Target Audience
 
 Senior software engineers managing complex repositories who require persistent, semantic context across their development sessions.

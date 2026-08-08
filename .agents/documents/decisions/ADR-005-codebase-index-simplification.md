@@ -4,6 +4,8 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfín
 
+> **IMPLEMENTED (verified 2026-08-08):** shipped as `codebase-index` (index via `repoPath`+`repo`; status via `repo` only) and `codebase-read` (name→trace, filePath→file symbols, query→search, none→architecture). Search unifies symbol + NL semantic ranking (5-tier `rankSymbols` + vector blend 0.30/0.70). The 6 legacy read tools (`index_repository`, `index_status`, `search_symbols`, `codebase_search`, `trace_symbol`, `get_file_symbols`, `get_architecture`) no longer exist in the 17 canonical tool set.
+
 ## Context
 
 Domain Codebase Index saat ini memiliki **7 tools**:

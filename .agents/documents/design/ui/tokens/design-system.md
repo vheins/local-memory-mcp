@@ -1,5 +1,7 @@
 # Agentic Glass Design System v2.0
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** token values match src/dashboard/ui/src/app.css — `--glass-bg: rgba(255,255,255,0.52)`, `--glass-blur: blur(28px) saturate(1.2)`, `--panel-dark: rgba(6,12,28,0.7)`, `--radius-2xl: 24px`, `--glass-border: rgba(255,255,255,0.18)`, primary #0ea5e9/#38bdf8, accent #6366f1. Glass card pattern (`.glass`, ::before etched border), interactive glows, and the spring cubic-bezier are implemented. Verified as the shipped design system.
+
 This document defines the visual language and tokens used in the Local Memory Dashboard (Svelte 5).
 
 ## 1. Visual Philosophy

@@ -2,6 +2,8 @@
 
 > **Scope**: MVP (Phase 1.0) — File discovery, tree-sitter parsing, SQLite storage, `search_symbols` and `get_file_symbols` MCP tools.
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** tool names in US-03..US-10 are legacy → the shipped pair is `codebase-index`/`codebase-read` (ADR-005). US-01, US-02, US-03, US-04, US-05, US-06, US-07 (trace via `codebase-read({ name })`), US-09 (architecture via `codebase-read()`), US-10 (auto-index) are **implemented**. US-08 (file-watch incremental) is partially implemented — re-index is mtime/checksum-driven, but there is **no real-time file watcher** (NEXT PHASE). US-11 (`search_code` with symbol context) is **NEXT PHASE**. US-12 (Dashboard browse) is **implemented** (Codebase tab).
+
 ## Persona Reference
 
 | Persona                | Description                                                               |

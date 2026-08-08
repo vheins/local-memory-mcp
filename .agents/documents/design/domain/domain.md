@@ -1,5 +1,7 @@
 # Domain Model
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** entity model is accurate (memory/task/standard/handoff/claim/KG entities; 6-state task lifecycle with gradual promotion; memory lifecycle with supersedes/decay/immunization). Two corrections: (1) "Conflict Detection ... similarity > 0.55" → the shipped create-conflict threshold is **0.85** (`MEMORY_CONFLICT_THRESHOLD`, src/mcp/utils/constants.ts; 0.55 exists as the legacy `MEMORY_CHECK_CONFLICTS_THRESHOLD`); (2) tool names in §1–§2 are legacy — the canonical write path is `memory-write` (which performs the conflict check), not `memory-store`. KG cascade + composite-PK rules verified (plus `kg_degrees` v22 cache).
+
 This document specifies the core entities and business logic of the MCP Local Memory system.
 
 ## Core Entities

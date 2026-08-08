@@ -2,6 +2,8 @@
 
 **Feature:** Stateful Task Lifecycle Management via MCP
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** all 8 stories implemented via canonical tools — `task-create` → `task-write` (incl. `interactive: true` elicitation in story 4), `task-create-interactive` → `task-write({ interactive: true })`, claims (story 6) → `claim-manage`, handoffs → `handoff-write`/`handoff-read`. Mandatory transition comments, `est_tokens` on completion, parent-child hierarchy (`parent_id`), and auto-archive to task_archive memory all enforced in `task-write`.
+
 ## 1. Goal Tracking
 
 - **As an** AI agent, **I want** to use `task-create` to register a new development objective, **so that** my work is explicitly tracked on the global Kanban board.

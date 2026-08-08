@@ -3,6 +3,8 @@
 > **Format**: Gherkin (Given/When/Then)
 > **Scope**: MVP features (P0) plus critical Should-have features (P1)
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** tool names are legacy — `index_project` → `codebase-index({ repo, repoPath })`; `search_symbols` → `codebase-read({ query })`; `get_file_symbols` → `codebase-read({ filePath })`. Scenario behavior (discovery excludes node_modules/dist, exact-match ranking first, empty-directory handling, incremental re-index of only changed files) matches the shipped engine.
+
 ---
 
 ## Scenario 1: Successful Full Index of a TypeScript Project

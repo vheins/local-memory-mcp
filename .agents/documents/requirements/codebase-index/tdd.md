@@ -5,6 +5,8 @@
 - **Status:** Draft
 - **Date:** 2026-07-22
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning TDD — the proposed directory `src/codebase-index/` shipped as `src/mcp/codebase-index/` (services/, parser/, types/); the proposed `src/codebase-index/__tests__/` shipped as `src/mcp/tests/codebase-index/` (21 test files per testing-gap-analysis). "Migration v3 / 4 tables" is superseded: `codebase_files`+`codebase_symbols` are v01, symbols vectors v06, symbols FTS v18, and relations ship as `codebase_references` v21 (no `codebase_relations`/`codebase_index_queue`). The tool handlers in the API Contracts Summary are legacy names → `codebase-index`/`codebase-read` (ADR-005). The resource URIs (`codebase://...`) in "Resource URIs (Phase 1.2)" were **not shipped** as MCP resources (repo resources are `repository://...`, src/mcp/resources/sdk-index.ts) — **NEXT PHASE**.
+
 ---
 
 ## System Architecture Overview

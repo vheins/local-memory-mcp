@@ -3,6 +3,8 @@
 > **Scope**: MVP (P0) plus Should-have (P1) features.
 > Each edge case includes the feature it affects, risk level, and recommended handling strategy.
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** the handling strategies in this file match the shipped engine (binary detection, symlink cycle detection, size/line guards, concurrent-index rejection via in-flight guard, ENOENT skip). Tool names referenced (`search_symbols`, `get_file_symbols`) are legacy → `codebase-read` modes; file-count guard for auto-index (EC-04) is implemented via `CODEBASE_AUTO_INDEX` + indexing service.
+
 ---
 
 ## EC-01: Binary Files

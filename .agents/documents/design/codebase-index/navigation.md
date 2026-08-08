@@ -1,5 +1,7 @@
 # Codebase Index — Navigation Integration
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning navigation. The shipped dashboard does **not** insert `codebase` into the `TABS` constant in `useApp.ts`; instead the Codebase button is hardcoded in App.svelte's tab bar between **Tasks** and **Handoffs** (id `tab-codebase`), and `knowledge-graph` sits after `handoffs`. Actual tab list (App.svelte + useApp.ts TABS): arena, dashboard, activity, memories, tasks, **codebase**, handoffs, knowledge-graph, standards, reference. The dashboard is a tab-switch SPA without URL routes, so the route table (§2) is a logical state model, not real URL routing — consistent with the doc's own note. Call-graph right-pane and keyboard shortcuts (§6) are **NEXT PHASE** (not shipped).
+
 This document specifies how the Codebase tab integrates into the existing dashboard navigation structure.
 
 ---

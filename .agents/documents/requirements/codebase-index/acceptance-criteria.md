@@ -3,6 +3,8 @@
 > **Format**: EARS (Easy Approach to Requirements Syntax) — Ubiquitous, Event-driven, State-driven, Unwanted.
 > **Scope**: MVP features (M1–M5) plus Should-have features (S1–S5).
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** tool names in this file are legacy. `search_symbols` → `codebase-read({ query })`; `get_file_symbols` → `codebase-read({ filePath })`; `trace_path`/`trace_symbol` → `codebase-read({ name })`; `get_architecture` → `codebase-read()` (no params); `index_project`/`index_repository` → `codebase-index({ repo, repoPath })`. AC-08/AC-13 describe mtime-based incremental re-index — implemented via mtime/checksum comparisons (`indexing-planner.ts`, `skippedByMtime`). AC-15 auto-index on session start is **implemented** (`autoIndexIfStale` + `CODEBASE_AUTO_INDEX` env). Behavior assertions (AC-01..AC-14) themselves match the shipped engine (file discovery defaults, 5-tier symbol ranking, doc comments, cascade deletes).
+
 ---
 
 ## AC-01: File Discovery Respects `.gitignore` [Ubiquitous]

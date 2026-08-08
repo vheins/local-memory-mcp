@@ -1,5 +1,7 @@
 # Value Proposition — Codebase Index
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** "TypeScript/JavaScript only (MVP)" is superseded — the shipped index supports 15 languages (typescript, tsx, vue, go, python, php, dart, rust, java, ruby, kotlin, swift, c, cpp, markdown) plus a generic regex fallback. The dashboard tab ("Graph UI" row) is **implemented** (CodebasePage + Codebase tab in dashboard). Shared-SQLite, local-first, zero-native-deps, and tree-sitter WASM claims all verified. The unified-KG row (code-specific `CALLS`/`IMPLEMENTS` edges) is partially realized — references ship as `codebase_references` (v21) with `call`/`instantiation`/`import` kinds; **dead-code detection and full code-graph visualization are NEXT PHASE**.
+
 ## One-Sentence Pitch
 
 A persistent, local-only code knowledge graph embedded directly into local-memory-mcp that gives AI agents instant structural awareness of a TypeScript/JavaScript codebase — eliminating token-wasting file-by-file exploration and hallucinated symbols.

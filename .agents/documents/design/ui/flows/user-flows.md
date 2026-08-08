@@ -1,5 +1,7 @@
 # User Flow Descriptions
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** all 7 flows match shipped behaviors (dashboard at 127.0.0.1:3456, bulk import modal with JSON/Markdown, Reference catalog incl. prompt/resource/ecosystem filters, Kanban + gradual promotion, KG tab with drag/zoom, Standards browse/filter/detail, Handoffs + claims). Flow 3 step "User clicks on `task-list`" uses a legacy tool name — the Reference catalog lists the canonical tools (`task-read`/`task-write`, etc.); Flow 2 "Memory Drawer" is `MemoryDrawer.svelte` ✓.
+
 This document maps the primary user journeys within the Local Memory Dashboard.
 
 ## Flow 1: Contextual Information Audit

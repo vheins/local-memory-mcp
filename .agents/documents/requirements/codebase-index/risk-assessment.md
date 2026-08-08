@@ -3,6 +3,8 @@
 > **Methodology**: Risk = Likelihood × Impact. Each risk rated for probability (1-5) and severity (1-5).
 > **Response strategies**: Avoid, Mitigate, Transfer, Accept.
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** risk register is planning-forecast (no stale tool claims); the mitigations cited (single cached WASM instance, codebase_ prefix, in-memory mutex, size/line guards, per-file indexed_at) all match shipped code. R-18 cross-file call resolution ships as `codebase_references` (v21) without per-edge confidence labels — confidence labeling remains **NEXT PHASE**.
+
 ---
 
 ## Risk Register

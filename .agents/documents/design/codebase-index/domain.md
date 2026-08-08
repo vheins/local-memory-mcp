@@ -1,5 +1,7 @@
 # Codebase Index — Domain Model
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning domain model. Shipped entities are `CodebaseFile`, `CodebaseSymbol`, and `CodebaseReference` (src/mcp/entities/codebase-file.ts, codebase-symbol.ts, codebase-reference.ts) — the `CodebaseRelation` entity/table (§1.3, §2.3) was **not** shipped (superseded by `codebase_references` v21 with kinds `call`/`instantiation`/`import`; there is no `CodebaseIndex` session entity — index state lives in `codebase_files` metadata + indexing services). `CodebaseIndexEntity` (§5/§1.4 pattern) is replaced by service classes under src/mcp/codebase-index/services/. Symbol kinds match (function/method/class/interface/type/enum/variable via visitors). Checksum + cascade-delete invariants verified.
+
 This document specifies the domain entities, value objects, and business rules for the Codebase Index feature using DDD (Domain-Driven Design) principles.
 
 ## 1. Core Entities

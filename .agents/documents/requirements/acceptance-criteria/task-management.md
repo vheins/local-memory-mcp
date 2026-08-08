@@ -2,6 +2,8 @@
 
 State management for work-in-progress goals.
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** criteria verified with canonical mapping — `task-update` → `task-write` (status transitions), `task-claim` → `claim-manage` (unique claim per task, conflict rejection), `task-search` → `task-read({ query })`. Items 1–6 (gradual promotion via in_progress, `est_tokens` required on completion, per-transition `task_comments` audit entry, auto-archive to task_archive memory, parent_id hierarchy) are enforced in src/mcp/tools/task-write/. Item 4 "bulk rollback" — shipped semantics are **partial execution** (per-item errors reported, valid items committed), not whole-set rollback.
+
 ## 1. Lifecycle Integrity (`task-update`)
 
 - **Given** a task is in state `pending` or `backlog`,

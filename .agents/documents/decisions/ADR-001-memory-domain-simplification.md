@@ -4,6 +4,8 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfin
 
+> **IMPLEMENTED (verified 2026-08-08):** the 3-tool + auto-infer design shipped as the canonical domain — `memory-write` (create/update/acknowledge/bulk via `memories[]`), `memory-read` (search/detail/recap), `memory-delete` (single/bulk). `synthesize` and `repo-summarize` exist as standalone Agent Context tools. The 9 legacy tools (`memory-store`, `memory-search`, `memory-detail`, `memory-recap`, `memory-acknowledge`, `memory-update`, `memory-summarize`, `memory-synthesize`, `memory-delete`) are removed from the 17 canonical tool set (src/mcp/types/tool-definitions).
+
 ## Context
 
 Domain Memory saat ini memiliki **9 MCP tools** yang masing-masing memiliki JSON Schema inputSchema sendiri:

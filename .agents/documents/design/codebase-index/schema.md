@@ -1,5 +1,7 @@
 # Codebase Index — Database Schema
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning schema — materially differs from shipped DDL. `codebase_files` and `codebase_symbols` were created in **migration v01** (initial schema, src/mcp/storage/migrations/v01-initial-schema.ts), not "migration version 3"; symbol vectors in v06, symbols FTS (name+doc_comment+signature) rebuilt in v18, references in v21. There is **no** `codebase_relations` table (relation data ships as `codebase_references` — id, repo, symbol_name, caller_file, caller_line, caller_name, kind ∈ call|instantiation|import) and **no** `codebase_index_queue` (queueing uses `queue_jobs`, v09). SCHEMA_VERSION is 22, not 3. ERD/DDL below are LEGACY DESIGN INTENT.
+
 This document specifies the SQLite schema for the Codebase Index feature. These tables are added to the existing `memory.db` via migration version 3, managed by `MigrationManager` in `src/mcp/storage/migrations/` (versioned index — `index.ts` + `vNN-*.ts`).
 
 ## 1. Entity-Relationship Diagram

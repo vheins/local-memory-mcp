@@ -1,5 +1,7 @@
 # Target Users — Codebase Index
 
+> **VERIFIED (2026-08-08):** persona/pain-point analysis only — contains no implementation claims; the "call graph with inbound/outbound edge resolution" pain-point solver is realized via `codebase_references` (v21) + `codebase-read({ name })` trace mode.
+
 ## Primary Users
 
 ### 1. AI Coding Agents (Primary Consumers)

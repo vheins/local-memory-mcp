@@ -4,6 +4,8 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfin
 
+> **IMPLEMENTED (PARTIAL — verified 2026-08-08):** all 7 legacy KG tools were removed — no KG MCP tools exist in the 17 canonical set, matching "Zero KG tools". KG is embedded as an aggregated `kg` context field in `memory-read`, `task-read`, and `standard-read` (src/mcp/tools/kg-archivist/query.ts) and via dashboard KG routes. **Difference from the design:** entity/relation auto-population is NOT inline in write tools — it runs asynchronously through the embedding outbox worker (TASK-013), and there is a dashboard KG tab + API CRUD (not shipped as MCP tools). KG-degree caching ships via migration v22 (`kg_degrees`).
+
 ## Context
 
 Knowledge Graph saat ini memiliki **7 MCP tools** yang berdiri sendiri:

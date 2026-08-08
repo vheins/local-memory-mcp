@@ -1,5 +1,7 @@
 # Navigation Structure Design
 
+> **CORRECTED (2026-08-08):** shipped dashboard has 10 tabs, not 8: **arena** ("Agent Arena", default) and **codebase** are missing from the list below. Full shipped order (useApp.ts TABS + App.svelte tab bar): arena, dashboard, activity, memories, tasks, standards, **codebase**, handoffs, reference, **knowledge-graph**. The Knowledge Graph and Codebase tabs are reachable via the App.svelte tab bar (between Tasks/Handoffs). Global actions (Refresh Sync, Theme Toggle) verified; a command palette (`GlobalCommandCenter`) also ships.
+
 This document specifies the routing and navigational hierarchy of the dashboard.
 
 ## 1. High-Level Taxonomy

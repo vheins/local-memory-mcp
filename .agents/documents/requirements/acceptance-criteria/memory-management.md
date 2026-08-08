@@ -2,6 +2,8 @@
 
 All features must satisfy the following criteria to be considered production-ready.
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** criteria verified with canonical mapping — `memory-store` → `memory-write`, `memory-search` → `memory-read`, `memory-synthesize` → `synthesize`, `memory-acknowledge` → `memory-write({ acknowledge })`, `memory-detail` → `memory-read({ id/code })`. **Correction:** items 1/8 "similarity > 0.55" → shipped create-conflict threshold is **0.85** (`MEMORY_CONFLICT_THRESHOLD`); 0.55 remains as `MEMORY_CHECK_CONFLICTS_THRESHOLD` legacy constant. Supersedes archiving, global-scope visibility, recall-count increments, and soul-maintenance decay/archiving are implemented.
+
 ## 1. Storage (`memory-store`)
 
 - **Given** the repository state is open,

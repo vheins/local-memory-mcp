@@ -5,6 +5,8 @@
 - **Status:** Draft
 - **Date:** 2026-07-22
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** this BRD is the pre-implementation plan. The shipped feature is a unified 2-tool pair (`codebase-index` / `codebase-read`, per ADR-005) instead of the 6+1 legacy tools below (`index_repository`, `index_status`, `search_symbols`, `get_file_symbols`, `get_architecture`, `trace_symbol` — none exist in the 17 canonical tools). Schema is **not** "migration v3": `codebase_files`/`codebase_symbols` live in v01, symbol vectors in v06, FTS in v18, and relation data ships as `codebase_references` (migration v21) — there is **no** `codebase_relations` or `codebase_index_queue` table. Language support is 15 languages (not TS/JS-only); the Dashboard Codebase tab is implemented (Phase 1.2 item C1 landed).
+
 ---
 
 ## Executive Summary

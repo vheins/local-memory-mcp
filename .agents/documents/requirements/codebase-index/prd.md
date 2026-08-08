@@ -5,6 +5,8 @@
 - **Status:** Draft
 - **Date:** 2026-07-22
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning doc — the M1–M8 tool list below maps onto the shipped pair `codebase-index`/`codebase-read` (ADR-005); `search_symbols`, `get_file_symbols`, `trace_symbol`, `get_architecture`, `index_repository`, `index_status` are legacy names (removed from the 17 canonical tools). S4 incremental re-index (mtime/checksum-based, `skippedByMtime`) and S5 auto-index on session start are **implemented** (src/mcp/codebase-index/services/indexing-service.ts `autoIndexIfStale`, `CODEBASE_AUTO_INDEX` env). C1 Dashboard Codebase tab is **implemented**; C2 graph visualization and C3 `search_code` tool are **NEXT PHASE** (roadmap); C4 multi-language is **implemented** (15 languages).
+
 ---
 
 ## Product Overview

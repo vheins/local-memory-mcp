@@ -5,6 +5,8 @@
 - **Status:** Draft
 - **Date:** 2026-07-22
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning FSD — sections 4–5 spec the legacy 6-tool surface (`search_symbols`, `get_file_symbols`, `index_repository`, `index_status`, `get_architecture`, `trace_symbol`). All are **removed**; the shipped surface is `codebase-index` (index via `repoPath`+`repo`, optional `force`/`includeGlobs`/`excludeGlobs`) and `codebase-read` (name→trace, filePath→file symbols, query→search, none→architecture). Language discovery covers 15 languages via extension map (parser/language-routing.ts), not just TS/JS. Errors are classified `RecoverableError`/`FatalError` (src/mcp/codebase-index/types/errors.ts); `index_status` progress is always `null` in the shipped implementation. Auto-index (section 6) is implemented (`autoIndexIfStale` on server start, `CODEBASE_AUTO_INDEX` env). The "binary detection via null-byte in first 8KB" and "1MB default size limit" are implemented in file-discovery defaults.
+
 ---
 
 ## Overview

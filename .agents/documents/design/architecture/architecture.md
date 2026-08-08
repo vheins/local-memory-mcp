@@ -1,5 +1,7 @@
 # Architecture Overview
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** architecture is accurate with these corrections — (1) "Semantic Search & Hybrid Search (SQLite TF-IDF + ONNX Embeddings)": keyword scoring is FTS5-based (memory FTS v10, standards FTS v04, symbols FTS v18) blended with ONNX vectors via `scoreHybrid` (40/30/15/15); (2) "Knowledge Graph CRUD with NLP-based auto-extraction": there are **no KG MCP tools** — KG CRUD is dashboard/API-only, and extraction runs asynchronously via the embedding outbox worker (ADR-006); (3) "Decision logging and session summarization": `decision-log`/`session-summarize` are absorbed into `memory-write` convenience modes (ADR-007); (4) DB default path is OS-specific (Linux `~/.config/...`, macOS `~/Library/Application Support`, Windows `~/.local-memory-mcp`), not `./storage/memory.db`; (5) task lifecycle is 6 states (backlog/pending/in_progress/completed/canceled/blocked) with `in_progress`→`completed` required ✓. Dashboard responsibilities (Kanban 4 swimlanes, Activity, Reference, KG force-directed viz, Import/Export, Standards) all verified. There are 17 canonical MCP tools, not the 27 implied elsewhere.
+
 This document specifies the technical architecture and component interactions of the MCP Local Memory system.
 
 ## 1. Physical & Process Architecture

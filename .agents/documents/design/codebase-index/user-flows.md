@@ -1,5 +1,7 @@
 # Codebase Index — User Flow Descriptions
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning UI flows. The Codebase tab ships with file-tree browsing, symbol search (CodebaseSearchBar + CodebaseSymbolList), symbol detail (CodebaseSymbolDetail), index status (CodebaseIndexStatus), and language breakdown (CodebaseLanguageBreakdown) — Flows 1, 2, 4, 5 match. Flow 3's Mermaid call-graph tab (Callers/Callees/References) is **NEXT PHASE** — callers/callees are shown as lists in the symbol detail, not as a rendered Mermaid graph. Re-index trigger (Flow 4) is available in the UI; auto-index on server start is implemented at the MCP layer.
+
 This document maps the primary user journeys within the Codebase Index tab of the Local Memory Dashboard.
 
 ---

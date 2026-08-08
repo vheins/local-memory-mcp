@@ -1,5 +1,7 @@
 # Codebase Index — Architecture Design
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning architecture. The MCP tool layer shipped as `codebase-index` + `codebase-read` (ADR-005) — `index_repository`, `get_file_symbols`, `search_symbols`, `get_architecture`, `trace_symbol`, `index_status` are legacy names. Storage tables differ: `codebase_files`/`codebase_symbols` (migration v01, not "v3"), symbol vectors v06, symbols FTS v18, references v21 — **no** `codebase_relations`/`codebase_index_queue`. Implementation lives in `src/mcp/codebase-index/` (services/, parser/; 15 languages), not `src/codebase-index/`. Multi-pass pipeline §6: pass-1 symbols are shipped with single-pass parse pipeline; Pass 2 relations ship as **references** (v21); Pass 3 dead-code/hotspot analysis is **NEXT PHASE**. Auto-index hook (§12) is implemented (`autoIndexIfStale`, `CODEBASE_AUTO_INDEX`).
+
 This document specifies the system architecture for the Codebase Index feature, describing how it integrates into the existing local-memory-mcp MCP server.
 
 ## 1. Integration Overview

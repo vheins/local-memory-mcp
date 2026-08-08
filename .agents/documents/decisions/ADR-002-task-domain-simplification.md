@@ -4,6 +4,8 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfin
 
+> **IMPLEMENTED (verified 2026-08-08):** the 3-tool design shipped as `task-write` (single/bulk/interactive/update), `task-read` (list/search/detail single+bulk), `task-delete`. Status state machine, claims/handoffs cleanup, and archive-to-memory are enforced in `src/mcp/tools/task-write/`. The 7 legacy tools (`task-create`, `task-create-interactive`, `task-update`, `task-delete`, `task-detail`, `task-list`, `task-search`) no longer exist in the 17 canonical tool set; `task_code` is the canonical identifier.
+
 ## Context
 
 Mengikuti pola yang sama seperti ADR-001 (Memory Domain), domain Task perlu disederhanakan dari **7 tools** menjadi **3 tools** dengan auto-infer intent dan zero `oneOf`/`mode` parameter.

@@ -1,5 +1,7 @@
 # Business Requirements Document (BRD)
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** BRD goals/features align with the shipped system. Tool names referenced below are legacy → canonical 17-tool set (`memory-store` → `memory-write`, `memory-search` → `memory-read`, `task-create` → `task-write`, `task-claim`/`claim-list`/`claim-release` → `claim-manage`, `handoff-create`/`handoff-list`/`handoff-update` → `handoff-write`/`handoff-read`, `standard-store` → `standard-write`, `decision-log`/`session-summarize` → `memory-write` modes). KG tools (`create-entity` etc.) are **dashboard/API-only** — no MCP KG CRUD (ADR-006). Soul maintenance, 6-state task lifecycle, `est_tokens` on completion, and 0.85 conflict threshold are implemented.
+
 ## Project Overview
 
 `@vheins/local-memory-mcp` solves the problem of "context amnesia" in AI coding assistants by providing a local, high-performance semantic memory and task orchestration server with multi-agent coordination, coding standards, knowledge graphs, and a visualization dashboard.

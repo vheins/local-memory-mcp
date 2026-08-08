@@ -1,5 +1,7 @@
 # Codebase Index — Wireframe Layout
 
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning wireframe. The shipped Codebase tab implements the top bar (search + status + re-index), file tree sidebar, main content (File/Results/Stats→ shipped as symbol list + language breakdown), and right-panel symbol detail. The **Call Graph** sub-tab and **Mermaid DAG** (§2.4/§3) are **NEXT PHASE** (not shipped). The responsive collapse behavior (right panel → drawer on tablet/mobile) matches the dashboard's existing responsive patterns.
+
 This document provides the wireframe layout for the Codebase Index tab, following the established glass-interface design system from the dashboard.
 
 ---
