@@ -8,7 +8,7 @@
 
 ## Context
 
-Domain Codebase Index saat ini memiliki **7 tools**:
+The Codebase Index domain currently has **7 tools**:
 
 - `index_repository` (495 chars), `index_status` (242 chars)
 - `get_architecture` (331 chars), `get_file_symbols` (234 chars)
@@ -16,57 +16,57 @@ Domain Codebase Index saat ini memiliki **7 tools**:
 - `trace_symbol` (385 chars)
 - **Total: ~2,789 chars / 7 tools**
 
-Domain ini didominasi read operations (6 dari 7 tools). Hanya `index_repository` yang write. `search_symbols` dan `codebase_search` tumpang tindih — bedanya hanya di jumlah filter.
+This domain is dominated by read operations (6 of 7 tools). Only `index_repository` is a write. `search_symbols` and `codebase_search` overlap — they differ only in the number of filters.
 
 ## Decision Drivers
 
-- **Sederhana untuk weak agent**: cukup 3 parameter mutual-exclusive: `name` / `query` / `filePath`
-- **Pola konsisten**: `codebase-index` untuk management, `codebase-read` untuk exploration
-- **Zero oneOf**: auto-infer dari parameter mana yang diisi
+- **Simple for weak agents**: just 3 mutually-exclusive parameters: `name` / `query` / `filePath`
+- **Consistent pattern**: `codebase-index` for management, `codebase-read` for exploration
+- **Zero oneOf**: auto-infer from which parameter is provided
 
 ## Decision Outcome
 
 **Chosen option:** 2 tools — codebase-index, codebase-read
 
-### Tools Baru
+### New Tools
 
-| Tool             | Mencakup                                                                              | Estimasi Schema         |
+| Tool             | Covers                                                                                | Estimated Schema        |
 | ---------------- | ------------------------------------------------------------------------------------- | ----------------------- |
 | `codebase-index` | index_repository + index_status                                                       | ~450 chars              |
 | `codebase-read`  | search_symbols + codebase_search + trace_symbol + get_file_symbols + get_architecture | ~1,100 chars            |
-| **Total**        | **dari 7 tools / 2,789 chars**                                                        | **~1,550 chars (-44%)** |
+| **Total**        | **from 7 tools / 2,789 chars**                                                        | **~1,550 chars (-44%)** |
 
 ### Auto-infer Rules
 
 #### `codebase-index`
 
-| Input                        | Detect         | Aksi                                 |
-| ---------------------------- | -------------- | ------------------------------------ |
-| `repoPath` + `repo`          | Path diberikan | **Index** — trigger tree-sitter scan |
-| `repo` saja (tanpa repoPath) | Hanya repo     | **Status** — cek freshness + count   |
+| Input                          | Detect        | Action                               |
+| ------------------------------ | ------------- | ------------------------------------ |
+| `repoPath` + `repo`            | Path provided | **Index** — trigger tree-sitter scan |
+| `repo` only (without repoPath) | Repo only     | **Status** — check freshness + count |
 
 #### `codebase-read`
 
-| Input                        | Mental Model Agent                 | Aksi                                                  |
-| ---------------------------- | ---------------------------------- | ----------------------------------------------------- |
-| `name: "UserService"`        | "Saya tahu nama symbol-nya"        | **Trace** — definisi + references + export chain      |
-| `query: "cari fungsi login"` | "Saya mau cari sesuatu"            | **Search** — unified ranking + NL search              |
-| `filePath: "src/auth.ts"`    | "Saya mau lihat isi file"          | **File symbols** — semua symbol dalam file            |
-| (nothing)                    | "Project ini struktur-nya gimana?" | **Architecture** — tree overview + language breakdown |
+| Input                          | Mental Model Agent                              | Action                                                |
+| ------------------------------ | ----------------------------------------------- | ----------------------------------------------------- |
+| `name: "UserService"`          | "I know the symbol name"                        | **Trace** — definition + references + export chain    |
+| `query: "find login function"` | "I want to search for something"                | **Search** — unified ranking + NL search              |
+| `filePath: "src/auth.ts"`      | "I want to see the file contents"               | **File symbols** — all symbols in the file            |
+| (nothing)                      | "What does this project's structure look like?" | **Architecture** — tree overview + language breakdown |
 
-### Schema `codebase-read`
+### `codebase-read` Schema
 
 ```jsonc
 {
-	// 3 param mutual-exclusive — agent isi 1 aja
+	// 3 mutually-exclusive params — agent fills in one
 	"name": "string", // → trace
 	"query": "string", // → search
 	"filePath": "string", // → file symbols
 
-	// Filter opsional
+	// Optional filters
 	"kind": "string", // function | class | variable | ...
 	"exportedOnly": "boolean",
-	"depth": "number (2)", // untuk architecture mode
+	"depth": "number (2)", // for architecture mode
 	"limit": "number (50)",
 
 	"repo": "string",
@@ -79,24 +79,24 @@ Domain ini didominasi read operations (6 dari 7 tools). Hanya `index_repository`
 
 **Positive:**
 
-- Tool count turun 7 → 2
-- Schema size turun ~44% (2,789 → ~1,550 chars)
-- 3 parameter mutual-exclusive: agent cukup isi 1 dari 3
-- Tidak ada mode/oneOf — auto-infer dari field yang ada
-- `search_symbols` dan `codebase_search` digabung — tidak perlu bedain
+- Tool count drops 7 → 2
+- Schema size drops ~44% (2,789 → ~1,550 chars)
+- 3 mutually-exclusive parameters: the agent only fills in 1 of 3
+- No mode/oneOf — auto-infer from the provided fields
+- `search_symbols` and `codebase_search` are merged — no need to distinguish them
 
 **Negative:**
 
-- Search internal perlu unified: jika query mengandung code-like terms → symbol ranking, jika NL → semantic
-- Backward compat — client lama perlu migrasi
+- Internal search must be unified: if the query contains code-like terms → symbol ranking; if natural language → semantic
+- Backward compatibility — legacy clients need to migrate
 
 ## Related ADRs
 
-- ADR-001 sampai ADR-004
+- ADR-001 up to ADR-004
 
 ## Implementation Plan
 
-1. **REFACTOR-CI-001:** Implement `codebase-index` handler — index + status, infer dari ada/tidaknya repoPath
-2. **REFACTOR-CI-002:** Implement `codebase-read` handler — trace/search/fileSymbols/architecture, infer dari name/query/filePath
+1. **REFACTOR-CI-001:** Implement `codebase-index` handler — index + status, infer from presence/absence of repoPath
+2. **REFACTOR-CI-002:** Implement `codebase-read` handler — trace/search/fileSymbols/architecture, infer from name/query/filePath
 3. **REFACTOR-CI-003:** Register 2 tools + remove old 7 definitions + update router + cleanup
 4. **REFACTOR-CI-004:** Update integration tests

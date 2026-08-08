@@ -8,19 +8,19 @@
 
 ## Context
 
-Knowledge Graph saat ini memiliki **7 MCP tools** yang berdiri sendiri:
+The Knowledge Graph currently has **7 standalone MCP tools**:
 
 - `create_entity`, `delete_entity`, `create_relation`, `delete_relation`, `delete_observation`
 - `query_graph`, `kg-backfill`
 
-Setelah analisis, KG sebenarnya adalah **infrastructure neural layer** yang harusnya embedded di memory-read, task-read, dan standard-read — bukan domain tool terpisah.
+After analysis, the KG is actually an **infrastructure neural layer** that should be embedded in memory-read, task-read, and standard-read — not a separate domain tool.
 
-Konsep:
+Concept:
 
 ```
 memory-read({ query: "neural network" })
-  ├── result: memories        ← search seperti biasa
-  └── kg: { entities, relations }  ← auto dari KG layer
+  ├── result: memories        ← search as usual
+  └── kg: { entities, relations }  ← automatically from the KG layer
 
 task-read({ query: "auth" })
   ├── result: tasks
@@ -33,31 +33,31 @@ standard-read({ query: "laravel controller" })
 
 ## Decision Drivers
 
-- **Zero KG tools**: KG adalah infrastructure, bukan user-facing domain
-- **Embedded di read tools**: memory-read/task-read/standard-read otomatis return KG context
-- **Auto-populate**: entity/relations dibuat oleh write tools
-- **Cascade delete**: entity KG ikut terhapus saat sumber dihapus
+- **Zero KG tools**: the KG is infrastructure, not a user-facing domain
+- **Embedded in read tools**: memory-read/task-read/standard-read automatically return KG context
+- **Auto-populate**: entities/relations are created by the write tools
+- **Cascade delete**: KG entities are deleted along with their source
 
 ## Decision Outcome
 
 **Chosen option:** 0 KG tools — fully embedded.
 
-Semua 7 tools dihapus. KG entities/relations:
+All 7 tools are removed. KG entities/relations:
 
-- **Auto-populated** oleh memory-write (✅ existing), task-write (➕), standard-write (➕)
-- **Auto-returned** oleh memory-read, task-read, standard-read sebagai `kg` field tambahan
-- **Auto-deleted** oleh cascade saat memory/task/standard dihapus
+- **Auto-populated** by memory-write (✅ existing), task-write (➕), standard-write (➕)
+- **Auto-returned** by memory-read, task-read, standard-read as an additional `kg` field
+- **Auto-deleted** by cascade when memory/task/standard are deleted
 
-### Perubahan di Read Tools
+### Changes in Read Tools
 
-Setiap read tool menambahkan field `kg` di response:
+Each read tool adds a `kg` field to the response:
 
 ```jsonc
 {
-  // hasil search biasa
+  // regular search results
   "results": [...],
 
-  // tambahan KG neural context
+  // additional KG neural context
   "kg": {
     "entities": [
       { "name": "JWT", "type": "concept", "source_domain": "memory" },
@@ -75,19 +75,19 @@ Setiap read tool menambahkan field `kg` di response:
 
 **Positive:**
 
-- Tool count turun: 7 → 0
-- Konsep bersih: KG adalah infrastructure, bukan tool
-- Agent cukup panggil read tools biasa — dapat neural context otomatis
-- Tidak ada tool tambahan yang perlu dipelajari weak agent
+- Tool count drops: 7 → 0
+- Clean concept: KG is infrastructure, not a tool
+- Agents simply call the regular read tools — they get neural context automatically
+- No additional tools for weak agents to learn
 
 **Negative:**
 
-- Read tools response jadi lebih besar (ada field kg tambahan)
-- Query performance: perlu join dengan KG tables di setiap read
+- Read tool responses become larger (there is an additional `kg` field)
+- Query performance: needs joins with KG tables on every read
 
 ## Related ADRs
 
-- ADR-001 sampai ADR-005
+- ADR-001 through ADR-005
 
 ## Implementation Plan
 

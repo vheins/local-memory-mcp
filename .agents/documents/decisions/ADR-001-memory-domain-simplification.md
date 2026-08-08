@@ -8,32 +8,32 @@
 
 ## Context
 
-Domain Memory saat ini memiliki **9 MCP tools** yang masing-masing memiliki JSON Schema inputSchema sendiri:
+The Memory domain currently has **9 MCP tools**, each with its own JSON Schema inputSchema:
 `memory-store`, `memory-update`, `memory-search`, `memory-delete`, `memory-detail`, `memory-recap`, `memory-summarize`, `memory-synthesize`, `memory-acknowledge`.
 
-Total schema size mencapai **~8,658 chars** yang dikirim ke agent (LLM) setiap kali `tools/list` dipanggil. Ini memberatkan konteks, terutama untuk agent dengan intelegensi lebih rendah yang kesulitan memilih tool dari banyak opsi.
+The total schema size reaches **~8,658 chars** sent to the agent (LLM) every time `tools/list` is called. This weighs down the context, especially for lower-intelligence agents that struggle to pick a tool from many options.
 
-Analisis menunjukkan:
+Analysis shows:
 
-- `memory-summarize` bukan operasi memory — menulis ke tabel `summaries` (entity terpisah)
-- `memory-synthesize` adalah composite orchestration yang memanggil LLM sampling — bukan operasi memory murni
-- `memory-detail` dan `memory-recap` adalah varian read dari `memory-search`
-- `memory-acknowledge` adalah specialized update
-- Beberapa tool memiliki `oneOf`, `enum`, dan parameter `required` yang menyulitkan weak agent
+- `memory-summarize` is not a memory operation — it writes to the `summaries` table (a separate entity)
+- `memory-synthesize` is a composite orchestration that calls LLM sampling — not a pure memory operation
+- `memory-detail` and `memory-recap` are read variants of `memory-search`
+- `memory-acknowledge` is a specialized update
+- Several tools have `oneOf`, `enum`, and `required` parameters that make things harder for weak agents
 
 ## Decision Drivers
 
-- **Agent lemah harus bisa pakai**: nama tool obvious, semua parameter optional, tool infer intent otomatis
-- **Hemat token**: total schema size harus turun drastis
-- **Zero oneOf/mode**: tidak boleh ada parameter `mode` atau discriminated union — agent cukup kasih field yang relevan
-- **Bulk support**: write dan delete harus support bulk operation (create + update + acknowledge dalam satu array `memories[]`)
-- **Partial execution**: bulk error handling bersifat partial — item gagal di-skip, error di-return sebagai list
+- **Weak agents must be able to use it**: obvious tool names, all parameters optional, tool infers intent automatically
+- **Save tokens**: total schema size must drop drastically
+- **Zero oneOf/mode**: no `mode` parameter or discriminated union — the agent just provides the relevant fields
+- **Bulk support**: write and delete must support bulk operations (create + update + acknowledge in a single `memories[]` array)
+- **Partial execution**: bulk error handling is partial — failed items are skipped, errors are returned as a list
 
 ## Considered Options
 
-1. **9 tools terpisah** (status quo) — masing-masing punya schema kecil, tapi banyak tool overhead
-2. **5 tools** — konsolidasi parsial (merge detail+search, ack+update, rename summarize)
-3. **3 tools + auto-infer** — `memory-write`, `memory-read`, `memory-delete` dengan intent inference dari field yang ada
+1. **9 separate tools** (status quo) — each has a small schema, but many tools add overhead
+2. **5 tools** — partial consolidation (merge detail+search, ack+update, rename summarize)
+3. **3 tools + auto-infer** — `memory-write`, `memory-read`, `memory-delete` with intent inference from the provided fields
 
 ## Decision Outcome
 
@@ -41,68 +41,68 @@ Analisis menunjukkan:
 
 **Rationale:**
 
-- Paling hemat token: ~2,850 chars vs 8,658 (hemat **67%**)
-- Zero `oneOf`/`mode` — tool infer intent dari kombinasi field yang diberikan
-- Weak agent cukup tahu 3 tool name: write, read, delete
-- `memories[]` unified array handle bulk create, bulk update, bulk acknowledge dalam satu struktur
-- Partial execution membuat bulk lebih resilient
+- Most token-efficient: ~2,850 chars vs 8,658 (saving **67%**)
+- Zero `oneOf`/`mode` — the tool infers intent from the combination of provided fields
+- Weak agents only need to know 3 tool names: write, read, delete
+- The unified `memories[]` array handles bulk create, bulk update, and bulk acknowledge in a single structure
+- Partial execution makes bulk operations more resilient
 
 ### Mapping Detail
 
-| Tool Baru       | Mencakup                                              | Cara Infer                                                                                     |
+| New Tool        | Covers                                                | How to Infer                                                                                   |
 | --------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `memory-write`  | `memory-store`, `memory-update`, `memory-acknowledge` | `content` → create; `id`+`acknowledge` → acknowledge; `id`+field → update; `memories[]` → bulk |
-| `memory-read`   | `memory-search`, `memory-detail`, `memory-recap`      | `query` → search; `id`/`code` → get detail single; `ids`/`codes` → detail bulk; kosong → recap |
+| `memory-read`   | `memory-search`, `memory-detail`, `memory-recap`      | `query` → search; `id`/`code` → get detail single; `ids`/`codes` → detail bulk; empty → recap  |
 | `memory-delete` | `memory-delete` (existing)                            | `id`/`code` → single; `ids`/`codes` → bulk                                                     |
 
-### Tools yang Dipindahkan
+### Tools Moved
 
-| Tool                                  | Domain Baru   | Alasan                                        |
+| Tool                                  | New Domain    | Reason                                        |
 | ------------------------------------- | ------------- | --------------------------------------------- |
 | `memory-synthesize` → `synthesize`    | Agent Context | Composite orchestration, require LLM sampling |
-| `memory-summarize` → `repo-summarize` | Agent Context | Operasi di tabel summaries, bukan memory      |
+| `memory-summarize` → `repo-summarize` | Agent Context | Operation on the summaries table, not memory  |
 
 ## Consequences
 
 **Positive:**
 
-- Tool overhead turun dari 9 → 3 (hemat 6 nama + deskripsi dari context)
-- Schema size turun ~67% (8,658 → ~2,850 chars)
-- Weak agent cukup hafal 3 tool name
-- Tidak ada parameter `required` — semua opsional, tool infer sendiri
-- Bulk unified (`memories[]`) mengurangi cognitive load: 1 struktur untuk create + update + ack
+- Tool overhead drops from 9 → 3 (saving 6 names + descriptions from context)
+- Schema size drops ~67% (8,658 → ~2,850 chars)
+- Weak agents only need to memorize 3 tool names
+- No `required` parameters — all optional, the tool infers on its own
+- Unified bulk (`memories[]`) reduces cognitive load: 1 structure for create + update + ack
 
 **Negative:**
 
-- Schema `memory-write` lebih besar dari schema `memory-store` sebelumnya (~1,400 vs ~2,406 chars, tapi ini karena dia mencakup 3 tool)
-- Auto-infer menambah kompleksitas internal handler (logic untuk bedakan create vs update)
-- Breaking change: client yang panggil `memory-store`, `memory-update`, dll harus migrasi ke `memory-write`
-- Legacy router perlu maintain backward compat aliases
+- The `memory-write` schema is larger than the previous `memory-store` schema (~1,400 vs ~2,406 chars, but that is because it covers 3 tools)
+- Auto-infer adds internal handler complexity (logic to distinguish create vs update)
+- Breaking change: clients calling `memory-store`, `memory-update`, etc. must migrate to `memory-write`
+- The legacy router needs to maintain backward-compat aliases
 
 **Neutral:**
 
-- `synthesize` dan `repo-summarize` tetap ada sebagai tool terpisah di domain Agent Context — tidak dihapus
+- `synthesize` and `repo-summarize` remain as separate tools in the Agent Context domain — not removed
 
 ## Alternatives Considered
 
 ### 5 tools (option 2)
 
-Mempertahankan `memory-search` standalone, `memory-store` standalone, dan merge sisanya.
+Keeps `memory-search` standalone, `memory-store` standalone, and merges the rest.
 
-- **Pros:** Transisi lebih gradual, schema per tool lebih kecil
-- **Cons:** Masih 5 tool name yang harus dipelajari weak agent; tidak sehemat 3 tools
+- **Pros:** More gradual transition, smaller per-tool schemas
+- **Cons:** Still 5 tool names weak agents must learn; not as efficient as 3 tools
 
 ### Status quo — 9 tools (option 1)
 
-- **Pros:** Familiar, backward compat penuh
-- **Cons:** 8,658 chars di context; 9 nama tool; weak agent sering salah pilih tool; banyak parameter `required`
+- **Pros:** Familiar, full backward compatibility
+- **Cons:** 8,658 chars in context; 9 tool names; weak agents often pick the wrong tool; many `required` parameters
 
 ## Implementation Plan
 
-1. **memory-write:** Handler baru yang menggabungkan store + update + acknowledge. Support single via field inference, support bulk via `memories[]`. Partial execution untuk bulk errors.
-2. **memory-read:** Handler baru yang menggabungkan search + detail + recap. Infer dari ada/tidaknya `query` atau `id`.
-3. **memory-delete:** Refactor minimal — tambahin support `code` params dan bulk codes.
-4. **Register & router:** Update `registerAllTools` dan legacy router. Maintain backward compat aliases.
-5. **Remove old definitions:** Hapus 6 tool definitions yang sudah di-merge dari `MEMORY_TOOL_DEFINITIONS`.
-6. **Move synthesize & summarize:** Pindahkan ke domain Agent Context.
-7. **Test:** Update integration tests sesuai tool baru.
+1. **memory-write:** New handler that combines store + update + acknowledge. Supports single via field inference, supports bulk via `memories[]`. Partial execution for bulk errors.
+2. **memory-read:** New handler that combines search + detail + recap. Infers from the presence/absence of `query` or `id`.
+3. **memory-delete:** Minimal refactor — add support for `code` params and bulk codes.
+4. **Register & router:** Update `registerAllTools` and the legacy router. Maintain backward-compat aliases.
+5. **Remove old definitions:** Remove the 6 tool definitions that were merged from `MEMORY_TOOL_DEFINITIONS`.
+6. **Move synthesize & summarize:** Move them to the Agent Context domain.
+7. **Test:** Update integration tests to match the new tools.

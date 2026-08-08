@@ -9,9 +9,9 @@
 
 ## Goal
 
-Semua read tool yang mengelola **knowledge** (memory, task, standard, codebase, agent-context) menggunakan formula hybrid scoring yang seragam. Write tools otomatis generate vector embeddings untuk data baru.
+All read tools that manage **knowledge** (memory, task, standard, codebase, agent-context) use a uniform hybrid scoring formula. Write tools automatically generate vector embeddings for new data.
 
-## Formula Hybrid (SERAGAM)
+## Hybrid Formula (UNIFORM)
 
 ```
 score = (vector_similarity × 0.40)
@@ -20,26 +20,26 @@ score = (vector_similarity × 0.40)
       + (domain_boost       × 0.15)
 ```
 
-### Komponen
+### Components
 
-| Komponen              | Bobot | Cara Hitung                                                         |
-| --------------------- | ----- | ------------------------------------------------------------------- |
-| **vector_similarity** | 0.40  | Cosine similarity dari vector embedding (all-MiniLM-L6-v2, 384-dim) |
-| **keyword_score**     | 0.30  | FTS5 match score / LIKE relevance / code ranking tier               |
-| **recency_boost**     | 0.15  | `min(1, days_since_update / 30)` — makin baru makin tinggi          |
-| **domain_boost**      | 0.15  | Tags match, language match, workspace affinity (file path, branch)  |
+| Component             | Weight | How It Is Calculated                                                  |
+| --------------------- | ------ | --------------------------------------------------------------------- |
+| **vector_similarity** | 0.40   | Cosine similarity of the vector embedding (all-MiniLM-L6-v2, 384-dim) |
+| **keyword_score**     | 0.30   | FTS5 match score / LIKE relevance / code ranking tier                 |
+| **recency_boost**     | 0.15   | `min(1, days_since_update / 30)` — the newer, the higher              |
+| **domain_boost**      | 0.15   | Tags match, language match, workspace affinity (file path, branch)    |
 
 ### Adaptive Threshold
 
 > **CORRECTED (verified 2026-08-08):** shipped thresholds differ per domain (src/mcp/utils/constants.ts `SEARCH_THRESHOLDS`) — memory `{ smallSet: 0.10, largeSet: 0.40 }`, task `{ smallSet: 0.08, largeSet: 0.20 }`, standard `{ smallSet: 0.08, largeSet: 0.20 }`. The 0.08/0.20 values in the table below match task/standard only, not memory. The "least 1 result" guarantee is implemented (guarantee-at-least-1 in hybrid-search.ts).
 
-| Kondisi        | Threshold       |
-| -------------- | --------------- |
-| Hasil ≤ 5      | 0.08 (longgar)  |
-| Hasil > 5      | 0.20 (ketat)    |
-| Minimal return | 1 hasil teratas |
+| Condition      | Threshold      |
+| -------------- | -------------- |
+| Results ≤ 5    | 0.08 (lenient) |
+| Results > 5    | 0.20 (strict)  |
+| Minimum return | 1 top result   |
 
-### Parameter Seragam
+### Uniform Parameters
 
 ```jsonc
 {
@@ -58,20 +58,20 @@ score = (vector_similarity × 0.40)
 
 | Write Tool       | Embed Content                         | Trigger         | Status          |
 | ---------------- | ------------------------------------- | --------------- | --------------- |
-| `memory-write`   | content (full)                        | Create & update | ✅ Ada          |
-| `standard-write` | name + content + context + stack      | Create & update | ✅ Ada          |
-| `task-write`     | title + description                   | Create & update | ❌ Belum        |
-| `codebase-index` | symbol name + signature + doc_comment | Index/re-index  | ✅ Ada          |
+| `memory-write`   | content (full)                        | Create & update | ✅ Yes          |
+| `standard-write` | name + content + context + stack      | Create & update | ✅ Yes          |
+| `task-write`     | title + description                   | Create & update | ❌ Not yet      |
+| `codebase-index` | symbol name + signature + doc_comment | Index/re-index  | ✅ Yes          |
 | `agent-context`  | —                                     | —               | N/A (read-only) |
 
-## Perubahan Per Domain
+## Changes Per Domain
 
 ### 1. task-write → generate vector embedding
 
-**Di handler `task.write.ts`:**
+**In the `task.write.ts` handler:**
 
 ```typescript
-// Setelah insert/update sukses
+// After a successful insert/update
 if (content || title) {
 	await vectors
 		.upsert(taskId, `${title}\n${description}`, "task")
@@ -81,48 +81,48 @@ if (content || title) {
 
 ### 2. task-read → hybrid search upgrade
 
-**Di handler `task.read.ts`:**
+**In the `task.read.ts` handler:**
 
 ```
 Current:        FTS5 → LIKE → pagination
 Upgrade:        Vector search → hybrid score → FTS5 fallback → same output
 ```
 
-Pattern sama dengan yang sudah ada di `memory-read`:
+Pattern identical to the one already in `memory-read`:
 
 1. `searchBySimilarity(query, filters)` → vector candidates
-2. Jika hasil < threshold → FTS5 fallback
-3. Hybrid scoring 4 komponen
+2. If results < threshold → FTS5 fallback
+3. Hybrid scoring 4 components
 4. Adaptive threshold
 
 ### 3. codebase-read → vector tier
 
-**Di handler `codebase.read.ts`:**
+**In the `codebase.read.ts` handler:**
 
 ```
 Current:        FTS5 → 5-tier ranking (exact/camelCase/prefix/substring/FTS5)
 Upgrade:        Vector → [existing 5-tier] → hybrid score
 ```
 
-Vector jadi tier tambahan di `rankSymbols()`:
+The vector becomes an additional tier in `rankSymbols()`:
 
 - Vector score = cosine similarity (0-1)
 - Final score = (vector × 0.30) + (existing_tier_score × 0.70)
 
 ### 4. agent-context → query + vector
 
-**Di handler `agent-context.ts`:**
+**In the `agent-context.ts` handler:**
 
 - Rename parameter `objective` → `query`
-- Jika `query` ada → vector search (ganti dari keyword `searchByRepo`)
-- Jika `query` tidak ada → `getRecentMemories` (sama seperti sekarang)
-- Hybrid scoring sama
+- If `query` is present → vector search (replacing the keyword `searchByRepo`)
+- If `query` is absent → `getRecentMemories` (same as before)
+- Same hybrid scoring
 
-### 5. Standardisasi formula di memory-read & standard-read
+### 5. Standardize the formula in memory-read & standard-read
 
-Kedua domain sudah punya hybrid scoring, tapi formulanya perlu diseragamkan:
+Both domains already have hybrid scoring, but the formulas need to be unified:
 
-| Komponen          | Existing memory-read | Existing standard-read | Unified  |
+| Component         | Existing memory-read | Existing standard-read | Unified  |
 | ----------------- | -------------------: | ---------------------: | :------: |
 | vector_similarity |                 0.40 |                   0.40 | **0.40** |
 | keyword_score     |                    — |                   0.30 | **0.30** |
@@ -131,7 +131,7 @@ Kedua domain sudah punya hybrid scoring, tapi formulanya perlu diseragamkan:
 | domain_boost      |                    — |         0.25 (keyword) | **0.15** |
 | importance        |                 0.20 |                      — |    —     |
 
-## Output Seragam
+## Unified Output
 
 ```jsonc
 {
@@ -145,7 +145,7 @@ Kedua domain sudah punya hybrid scoring, tapi formulanya perlu diseragamkan:
 		"columns": ["id", "code", "title", "type", "score", "confidence"],
 		"rows": [["...", "...", "...", "...", 0.85, "high"]]
 	},
-	// Tambahan: KG context
+	// Additional: KG context
 	"kg": {
 		"entities": [{ "name": "...", "type": "...", "source_domain": "..." }],
 		"relations": [{ "from": "...", "to": "...", "type": "..." }]
@@ -159,8 +159,8 @@ Kedua domain sudah punya hybrid scoring, tapi formulanya perlu diseragamkan:
 
 ### Task Domain (REFACTOR-TASK)
 
-- ~~**TASK-007:** Generate vector embedding di task-write (title + description → vectors.upsert)~~ ✅
-- ~~**TASK-008:** Upgrade task-read ke hybrid search (vector + FTS5 + formula unified)~~ ✅
+- ~~**TASK-007:** Generate vector embedding in task-write (title + description → vectors.upsert)~~ ✅
+- ~~**TASK-008:** Upgrade task-read to hybrid search (vector + FTS5 + unified formula)~~ ✅
 
 ### Codebase Index Domain (REFACTOR-CI)
 
@@ -168,13 +168,13 @@ Kedua domain sudah punya hybrid scoring, tapi formulanya perlu diseragamkan:
 
 ### Agent Context Domain (REFACTOR-AC)
 
-- ~~**AC-005:** Rename objective→query, upgrade ke vector search hybrid~~ ✅
+- ~~**AC-005:** Rename objective→query, upgrade to hybrid vector search~~ ✅
 
 ### Memory & Standard (REFACTOR-MEM, REFACTOR-STD)
 
-- **MEM-009:** Standarisasi formula hybrid memory-read ke unified formula (backlog — priority 3)
-- **STD-006:** Standarisasi formula hybrid standard-read ke unified formula (backlog — priority 3)
+- **MEM-009:** Standardize the hybrid formula in memory-read to the unified formula (backlog — priority 3)
+- **STD-006:** Standardize the hybrid formula in standard-read to the unified formula (backlog — priority 3)
 
 ### Testing
 
-- **INTEGRATION-001:** Test hybrid search di semua domain — konsistensi formula ✅ (5 tests added)
+- **INTEGRATION-001:** Test hybrid search in all domains — formula consistency ✅ (5 tests added)

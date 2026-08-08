@@ -8,54 +8,54 @@
 
 ## Context
 
-Domain Agent Context saat ini memiliki **3 tools**:
+The Agent Context domain currently has **3 tools**:
 
-- `agent-context` (515 chars) — aggregasi memories + tasks + decisions
-- `decision-log` (743 chars) — convenience wrapper untuk memory-write type=decision
-- `session-summarize` (676 chars) — convenience wrapper untuk memory-write type=task_archive
+- `agent-context` (515 chars) — aggregation of memories + tasks + decisions
+- `decision-log` (743 chars) — convenience wrapper for memory-write type=decision
+- `session-summarize` (676 chars) — convenience wrapper for memory-write type=task_archive
 - **Total: ~1,934 chars / 3 tools**
 
-`decision-log` dan `session-summarize` sebenarnya adalah convenience wrapper yang cuma format data lalu panggil `handleMemoryStore` (sekarang `memory-write`). Keduanya bisa dieliminasi dengan menambahkan structured fields ke memory-write.
+`decision-log` and `session-summarize` are actually convenience wrappers that merely format the data and then call `handleMemoryStore` (now `memory-write`). Both can be eliminated by adding structured fields to memory-write.
 
 ## Decision Drivers
 
-- **Konsisten dengan pola domain lain**: write/read/delete pattern
-- **Minimal tool count**: cukup 1 tool
-- **Memory-write sebagai satu-satunya write path**: semua write via memory-write
+- **Consistent with other domain patterns**: write/read/delete pattern
+- **Minimal tool count**: just 1 tool
+- **Memory-write as the single write path**: all writes go through memory-write
 
 ## Decision Outcome
 
-**Chosen option:** 1 tool — `agent-context` saja. `decision-log` dan `session-summarize` di-absorb ke memory-write.
+**Chosen option:** 1 tool — `agent-context` only. `decision-log` and `session-summarize` are absorbed into memory-write.
 
-### Perubahan
+### Changes
 
-| Old Tool            | Nasib    | Cara Baru                                                              |
-| ------------------- | -------- | ---------------------------------------------------------------------- |
-| `agent-context`     | ✅ Tetap | Standalone read aggregation                                            |
-| `decision-log`      | ❌ Hapus | `memory-write({ type: "decision", context, rationale, alternatives })` |
-| `session-summarize` | ❌ Hapus | `memory-write({ type: "task_archive", key_decisions, next_steps })`    |
+| Old Tool            | Fate       | New Way                                                                |
+| ------------------- | ---------- | ---------------------------------------------------------------------- |
+| `agent-context`     | ✅ Kept    | Standalone read aggregation                                            |
+| `decision-log`      | ❌ Removed | `memory-write({ type: "decision", context, rationale, alternatives })` |
+| `session-summarize` | ❌ Removed | `memory-write({ type: "task_archive", key_decisions, next_steps })`    |
 
-### Field Tambahan di memory-write
+### Additional Fields in memory-write
 
-Untuk akomodasi structured formatting yang sebelumnya ada di decision-log dan session-summarize:
+To accommodate the structured formatting previously handled by decision-log and session-summarize:
 
 ```jsonc
-// Di memory-write schema — new optional fields
+// In the memory-write schema — new optional fields
 {
-	// ── Decision fields (untuk type: "decision") ──
-	"context": "string", // "Kenapa keputusan ini diambil"
-	"rationale": "string", // "Alasan memilih opsi ini"
-	"alternatives": "string[]", // "Opsi lain yang dipertimbangkan"
+	// ── Decision fields (for type: "decision") ──
+	"context": "string", // "Why this decision was made"
+	"rationale": "string", // "Reason for choosing this option"
+	"alternatives": "string[]", // "Other options considered"
 
-	// ── Session fields (untuk type: "task_archive") ──
-	"key_decisions": "string[]", // "Keputusan penting di sesi ini"
-	"next_steps": "string[]" // "Langkah selanjutnya"
+	// ── Session fields (for type: "task_archive") ──
+	"key_decisions": "string[]", // "Important decisions in this session"
+	"next_steps": "string[]" // "Next steps"
 }
 ```
 
-**Cara kerja di handler:**
+**How it works in the handler:**
 
-- Jika `type === "decision"` dan `context`/`rationale` ada → auto-format ke content dengan struktur:
+- If `type === "decision"` and `context`/`rationale` are present → auto-format into content with the structure:
   ```
   ## Context
   {context}
@@ -64,20 +64,20 @@ Untuk akomodasi structured formatting yang sebelumnya ada di decision-log dan se
   ## Alternatives
   - {alternatives}
   ```
-- Jika `type === "task_archive"` dan `key_decisions`/`next_steps` ada → auto-format ke content dengan struktur:
+- If `type === "task_archive"` and `key_decisions`/`next_steps` are present → auto-format into content with the structure:
   ```
   ## Key Decisions
   - {key_decisions}
   ## Next Steps
   - {next_steps}
   ```
-- Jika tidak ada structured fields → content seperti biasa
+- If no structured fields are present → content as usual
 
-### `agent-context` — Tidak Berubah
+### `agent-context` — Unchanged
 
 ```jsonc
 {
-	"objective": "string", // NL query untuk context
+	"objective": "string", // NL query for context
 	"type_filter": "enum", // Filter memory type
 	"limit": "number (5)",
 
@@ -91,20 +91,20 @@ Untuk akomodasi structured formatting yang sebelumnya ada di decision-log dan se
 
 **Positive:**
 
-- Tool count turun: 3 → 1
-- Schema size turun: 1,934 → ~515 chars (-73%)
-- Satu-satunya write path: memory-write (tidak ada shortcut terpisah)
-- Agent cukup tahu 1 tool untuk context
+- Tool count drops: 3 → 1
+- Schema size drops: 1,934 → ~515 chars (-73%)
+- Single write path: memory-write (no separate shortcuts)
+- Agents only need to know 1 tool for context
 
 **Negative:**
 
-- Schema memory-write bertambah 5 field (tapi semua optional)
-- Agent harus ingat type="decision" untuk decision-log, type="task_archive" untuk session summary
+- The memory-write schema grows by 5 fields (but all optional)
+- Agents must remember type="decision" for decision-log, type="task_archive" for session summary
 
 ## Related ADRs
 
-- ADR-001 (Memory) — memory-write adalah write path utama
-- ADR-002 sampai ADR-006
+- ADR-001 (Memory) — memory-write is the primary write path
+- ADR-002 through ADR-006
 
 ## Implementation Plan
 
