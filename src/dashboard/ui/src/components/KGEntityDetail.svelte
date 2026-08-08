@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
 	import Icon from "$lib/Icon.svelte";
+	import { createFocusTrap } from "$lib/focusTrap";
 	import type { KgEntityDetail } from "$lib/kg/kgEntityUtils";
 	import KGEntityInfo from "./KGEntityInfo.svelte";
 	import KGEntityRelations from "./KGEntityRelations.svelte";
@@ -43,6 +44,23 @@
 			dispatch("close");
 		}
 	}
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	let detailPanel: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if (show && detailPanel) {
+		requestAnimationFrame(() => {
+			if (show && detailPanel) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(detailPanel, { onEscape: handleClose });
+				trapFocus.activate();
+			}
+		});
+	} else if (!show) {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	}
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -51,7 +69,7 @@
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<div class="detail-overlay" on:click={handleOverlayClick} role="button" tabindex="-1" aria-label="Close panel"></div>
 
-	<div class="detail-panel" role="complementary" aria-label="Entity details">
+	<div class="detail-panel" bind:this={detailPanel} role="complementary" aria-label="Entity details" tabindex="-1">
 		<!-- Close button -->
 		<button class="close-btn" on:click={handleClose} aria-label="Close detail panel">
 			<Icon name="x" size={16} strokeWidth={2} />

@@ -5,6 +5,7 @@
 	import MemoryDrawerHeader from "./MemoryDrawerHeader.svelte";
 	import MemoryViewMode from "./MemoryViewMode.svelte";
 	import { createMemoryHandler } from "../lib/composables/useMemory";
+	import { createFocusTrap } from "../lib/focusTrap";
 	import { TYPES, TYPE_LABELS, importanceColor, importanceBg } from "../lib/memoryConfig";
 	import { buildMetaFields, hasMetadata } from "../lib/memoryDrawerUtils";
 
@@ -31,6 +32,23 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === "Escape") onClose();
 	}
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	let modalPanel: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if (open && modalPanel) {
+		requestAnimationFrame(() => {
+			if (open && modalPanel) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(modalPanel, { onEscape: onClose });
+				trapFocus.activate();
+			}
+		});
+	} else if (!open) {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	}
 </script>
 
 <svelte:window on:keydown={handleKeyDown} />
@@ -47,7 +65,7 @@
 	></div>
 
 	<!-- Modal panel -->
-	<div class="modal-panel animate-fade-in" role="dialog" aria-modal="true" tabindex="-1">
+	<div class="modal-panel animate-fade-in" bind:this={modalPanel} role="dialog" aria-modal="true" tabindex="-1">
 		<MemoryDrawerHeader
 			{memory}
 			{isCreate}

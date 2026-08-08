@@ -4,6 +4,7 @@
 	import Icon from "../lib/Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 	import { createReferenceHandler } from "../lib/composables/useReference";
+	import { createFocusTrap } from "../lib/focusTrap";
 
 	export let item: ReferenceItem | null = null;
 	export let open = false;
@@ -21,6 +22,23 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === "Escape") onClose();
 	}
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	let drawerPanel: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if (open && drawerPanel) {
+		requestAnimationFrame(() => {
+			if (open && drawerPanel) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(drawerPanel, { onEscape: onClose });
+				trapFocus.activate();
+			}
+		});
+	} else if (!open) {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	}
 </script>
 
 {#if open && $handler.item}
@@ -36,6 +54,7 @@
 
 	<div
 		class="drawer-panel animate-fade-in"
+		bind:this={drawerPanel}
 		on:click={handler.handlePanelClick}
 		on:keydown={handleKeyDown}
 		role="dialog"

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getStatusLabel, getPriorityLabel } from "../lib/utils";
 	import Icon from "../lib/Icon.svelte";
+	import { createFocusTrap } from "../lib/focusTrap";
 	import type { Task } from "../lib/stores";
 
 	export let open = false;
@@ -10,6 +11,23 @@
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === "Escape") onClose();
+	}
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	let modalPanel: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if (open && modalPanel) {
+		requestAnimationFrame(() => {
+			if (open && modalPanel) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(modalPanel, { onEscape: onClose });
+				trapFocus.activate();
+			}
+		});
+	} else if (!open) {
+		trapFocus?.deactivate();
+		trapFocus = null;
 	}
 </script>
 
@@ -27,7 +45,14 @@
 	></div>
 
 	<!-- Modal panel -->
-	<div class="modal-panel animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+	<div
+		class="modal-panel animate-fade-in"
+		bind:this={modalPanel}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="modal-title"
+		tabindex="-1"
+	>
 		<!-- Header -->
 		<div class="modal-header">
 			<div class="modal-header-icon">

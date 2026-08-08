@@ -2,6 +2,7 @@
 	import type { Memory, Task, CodingStandard, Handoff } from "../lib/stores";
 	import { getStatusColor, getStatusLabel } from "../lib/utils";
 	import { createDetailHandler } from "../lib/composables/useDetail";
+	import { createFocusTrap } from "../lib/focusTrap";
 	import MemoryDetailPanel from "./MemoryDetailPanel.svelte";
 	import TaskDetailPanel from "./TaskDetailPanel.svelte";
 	import HandoffDetailPanel from "./HandoffDetailPanel.svelte";
@@ -46,6 +47,28 @@
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.key === "Escape") onClose();
 	}
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	// Move focus into the drawer on open, wrap Tab inside it while open, and
+	// restore focus to the trigger on close. This also fixes Escape closing
+	// the Handoff drawer: focus now actually lands inside it, so its own
+	// Escape handler (the trusted task-drawer pattern) fires. Deferred with
+	// requestAnimationFrame so the {#if open} DOM exists before activating.
+	let drawerPanel: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if (open && drawerPanel) {
+		requestAnimationFrame(() => {
+			if (open && drawerPanel) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(drawerPanel, { onEscape: onClose });
+				trapFocus.activate();
+			}
+		});
+	} else if (!open) {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	}
 </script>
 
 {#if open && $handlerMode}
@@ -60,6 +83,7 @@
 
 	<div
 		class="drawer-panel animate-fade-in"
+		bind:this={drawerPanel}
 		on:click|stopPropagation
 		on:keydown={handleKeyDown}
 		role="dialog"

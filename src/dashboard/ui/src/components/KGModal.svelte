@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from "svelte";
 	import Icon from "$lib/Icon.svelte";
+	import { createFocusTrap } from "$lib/focusTrap";
 	import type { LayoutNode } from "$lib/kg/KGForceLayout";
 
 	const dispatch = createEventDispatcher<{
@@ -60,12 +61,31 @@
 	function handleDelete() {
 		dispatch("delete");
 	}
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	// KGModal previously had NO Escape handling at all — the trap routes
+	// Escape to close and moves/keeps focus inside while open.
+	let modalPanel: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if (show && modalPanel) {
+		requestAnimationFrame(() => {
+			if (show && modalPanel) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(modalPanel, { onEscape: () => dispatch("close") });
+				trapFocus.activate();
+			}
+		});
+	} else if (!show) {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	}
 </script>
 
 {#if show}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<div class="modal-overlay" on:click={handleOverlayClick} role="button" tabindex="0" aria-label="Close"></div>
-	<div class="modal-panel animate-fade-in-scale" role="dialog">
+	<div class="modal-panel animate-fade-in-scale" bind:this={modalPanel} role="dialog" aria-modal="true" tabindex="-1">
 		{#if mode === "deleteConfirm"}
 			<div class="modal-header">
 				<Icon name="trash" size={14} strokeWidth={1.75} />

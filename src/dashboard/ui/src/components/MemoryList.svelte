@@ -167,7 +167,15 @@
 					</tr>
 				{:else}
 					{#each $memories as mem, i (`${mem.id}-${i}`)}
-						<tr class="mem-row" class:selected={$selectedMemoryIds.has(mem.id)} on:click={() => onMemoryClick(mem)}>
+						<!-- tabindex="-1": programmatically focusable (not in tab
+							order) so the row becomes the focus-restore target when
+							the Memory drawer closes (TASK-278 / audit F4). -->
+						<tr
+							class="mem-row"
+							class:selected={$selectedMemoryIds.has(mem.id)}
+							tabindex="-1"
+							on:click={() => onMemoryClick(mem)}
+						>
 							<td class="mem-td" on:click|stopPropagation>
 								<input
 									type="checkbox"

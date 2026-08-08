@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from "svelte";
 	import { fade, scale } from "svelte/transition";
 	import Icon from "../lib/Icon.svelte";
+	import { createFocusTrap } from "../lib/focusTrap";
 	import { createBulkImport, type ImportTarget } from "../lib/composables/useBulkImport";
 
 	export let repo: string;
@@ -53,13 +54,39 @@
 	$: currentFileName = $fileName;
 	$: currentErrorMsg = $errorMsg;
 	$: currentIsSubmitting = $isSubmitting;
+
+	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
+	let modalContent: HTMLDivElement | undefined;
+	let trapFocus: ReturnType<typeof createFocusTrap> | null = null;
+
+	$: if ($composableIsOpen && modalContent) {
+		requestAnimationFrame(() => {
+			if ($composableIsOpen && modalContent) {
+				trapFocus?.deactivate();
+				trapFocus = createFocusTrap(modalContent, { onEscape: close });
+				trapFocus.activate();
+			}
+		});
+	} else if (!$composableIsOpen) {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	}
 </script>
 
 {#if $composableIsOpen}
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div class="modal-backdrop" transition:fade={{ duration: 200 }} on:click={close}>
-		<div class="modal-content" transition:scale={{ duration: 200, start: 0.95 }} on:click|stopPropagation>
+		<div
+			class="modal-content"
+			bind:this={modalContent}
+			transition:scale={{ duration: 200, start: 0.95 }}
+			on:click|stopPropagation
+			role="dialog"
+			aria-modal="true"
+			aria-label={`Bulk Import ${importTarget === "memories" ? "Memories" : "Tasks"}`}
+			tabindex="-1"
+		>
 			<div class="modal-header">
 				<div class="flex items-center gap-2">
 					<div class="header-icon" style="color: #0ea5e9">
