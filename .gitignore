@@ -51,6 +51,9 @@ storage/*.db-*
 # Audit screenshots
 audit-screenshots/
 
+# Agent tool-output artifacts (browser verification screenshots/results)
+tool-output/
+
 # Sibling screenshots
 dashboard-codebase-screenshot.png
 dashboard-memories-screenshot.png
