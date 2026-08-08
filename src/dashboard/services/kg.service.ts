@@ -1,6 +1,7 @@
 import { db } from "../lib/context";
 import { ServiceError } from "../lib/jsonApi";
 import { KG_MAX_GRAPH_EDGES } from "../../mcp/utils/constants";
+import { getKgGraphCache, setKgGraphCache, clearKgGraphCache } from "./statsCache";
 import type { KgEntityRow, KgRelationRow, KgObservationRow } from "../../mcp/entities/knowledge-graph";
 
 /**
@@ -73,9 +74,26 @@ export const KgService = {
 	 * ignores page/pageSize and returns the N highest-degree nodes in one
 	 * shot (`listGraphNodes` is degree-ordered); when absent, the legacy
 	 * paginated window (`limit`/`offset`) is unchanged for backward compat.
+	 *
+	 * PERF (TASK-268 / audit F2): the payload is served from the KG graph
+	 * TTL cache (statsCache) whenever the same repo+window was assembled
+	 * within the TTL, and edges are fetched with the subset-bounded
+	 * `listGraphEdgesForSubset` (both endpoints within the returned node
+	 * window) backed by the materialized kg_degrees cache (migration v22).
+	 * The former per-request degree CTE + full-repo sort over ALL of a
+	 * repo's relations blocked the Node event loop for ~23s warm / ~190s
+	 * cold, taking /api/health down with it (408s); the current path is
+	 * index-driven and bounds the sort to the window's edges.
 	 */
 	listGraph(repo: string, limit: number, offset: number, includeEdges: boolean, graphLimit?: number): KgGraphResult {
-		const nodesTotal = db.knowledgeGraph.countGraphNodes(repo);
+		// Cache key encodes the exact window + edge flag so 'Show more'
+		// (larger graphLimit) and legacy pagination each cache their own
+		// payload. Nodes are degree-ordered, so top-N windows are cumulative.
+		const window = graphLimit !== undefined ? `limit:${graphLimit}` : `page:${offset}:${limit}`;
+		const cacheKey = `${repo}|${window}|edges:${includeEdges ? 1 : 0}`;
+		const cached = getKgGraphCache<KgGraphResult>(cacheKey);
+		if (cached) return cached;
+
 		const nodes = db.knowledgeGraph.listGraphNodes(repo, {
 			limit: graphLimit ?? limit,
 			offset: graphLimit !== undefined ? 0 : offset
@@ -84,19 +102,26 @@ export const KgService = {
 		let edges: Array<{ source: string; target: string; relation_type: string }> = [];
 		let truncated = false;
 
-		if (includeEdges) {
+		if (includeEdges && nodes.length > 0) {
 			// Probe: request KG_MAX_GRAPH_EDGES + 1 rows to detect truncation.
-			// If the extra row is present, the graph exceeds the cap and we
-			// return only the first KG_MAX_GRAPH_EDGES edges with truncated=true.
-			const rawEdges = db.knowledgeGraph.listGraphEdges(repo, KG_MAX_GRAPH_EDGES, true);
+			// Bounded to edges whose BOTH endpoints are in the fetched node
+			// window — every shipped edge is drawable and the query never scans
+			// the repo's full relation set (TASK-268).
+			const rawEdges = db.knowledgeGraph.listGraphEdgesForSubset(
+				repo,
+				nodes.map((n) => n.name),
+				KG_MAX_GRAPH_EDGES,
+				true
+			);
 			truncated = rawEdges.length > KG_MAX_GRAPH_EDGES;
 			edges = truncated ? rawEdges.slice(0, KG_MAX_GRAPH_EDGES) : rawEdges;
 		}
 
-		return {
+		const result: KgGraphResult = {
 			data: { id: `graph-${repo}`, nodes, edges, truncated },
-			totalItems: nodesTotal
+			totalItems: db.knowledgeGraph.countGraphNodes(repo)
 		};
+		return setKgGraphCache(cacheKey, result);
 	},
 
 	async createEntity(attributes: {
@@ -109,6 +134,9 @@ export const KgService = {
 		const { name, type, description, repo, owner } = attributes;
 
 		const now = new Date().toISOString();
+		// Invalidate cached graph payloads — dashboard-initiated mutations are
+		// reflected immediately (MCP-side writes stay within the TTL window).
+		clearKgGraphCache();
 		// Write-lock invariant (TASK-102): all DB mutations acquire the file
 		// lock so dashboard writes serialize with MCP tool writes (LWW/conflict
 		// semantics). Only the mutation is locked; the read-back stays outside.
@@ -129,6 +157,7 @@ export const KgService = {
 	},
 
 	async deleteEntity(name: string): Promise<{ message: string; name: string }> {
+		clearKgGraphCache();
 		if (!db.knowledgeGraph.entityExists(name)) {
 			throw new ServiceError(404, "Entity not found");
 		}
@@ -154,6 +183,7 @@ export const KgService = {
 			throw new ServiceError(400, `Target entity '${to_entity}' not found`);
 		}
 
+		clearKgGraphCache();
 		const now = new Date().toISOString();
 		try {
 			await db.withWrite(() => {
@@ -178,6 +208,7 @@ export const KgService = {
 	},
 
 	async deleteRelation(from_entity: string, to_entity: string, relation_type: string): Promise<{ message: string }> {
+		clearKgGraphCache();
 		const result = await db.withWrite(() => db.knowledgeGraph.deleteRelation(from_entity, to_entity, relation_type));
 
 		if (result.changes === 0) {
@@ -188,6 +219,7 @@ export const KgService = {
 	},
 
 	async deleteObservation(id: string): Promise<{ message: string; id: string }> {
+		clearKgGraphCache();
 		const result = await db.withWrite(() => db.knowledgeGraph.deleteObservation(id));
 
 		if (result.changes === 0) {

@@ -22,8 +22,9 @@ import { migration as v18 } from "./v18-symbols-fts-signature";
 import { migration as v19 } from "./v19-symbols-file-path-index";
 import { migration as v20 } from "./v20-symbols-name-lower-index";
 import { migration as v21 } from "./v21-codebase-references";
+import { migration as v22 } from "./v22-kg-degree-cache";
 
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -60,7 +61,8 @@ const MIGRATIONS: Migration[] = [
 	v18,
 	v19,
 	v20,
-	v21
+	v21,
+	v22
 ];
 
 // ──────────────────────────────────────────────

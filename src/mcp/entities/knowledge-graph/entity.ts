@@ -386,6 +386,16 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		return queries.listGraphEdges(this.runner, repo, limit, probe);
 	}
 
+	/** Graph edges restricted to a node subset (both endpoints in `nodeNames`), degree-ranked via the kg_degrees cache (TASK-268); probe detects truncation (TASK-148). */
+	listGraphEdgesForSubset(
+		repo: string,
+		nodeNames: string[],
+		limit = KG_MAX_GRAPH_EDGES,
+		probe = false
+	): Array<{ source: string; target: string; relation_type: string }> {
+		return queries.listGraphEdgesForSubset(this.runner, repo, nodeNames, limit, probe);
+	}
+
 	/** Entities for the unified graph — optionally scoped to a repo. */
 	listEntitiesForGraph(repo: string | undefined, limit: number): KgEntityRow[] {
 		return queries.listEntitiesForGraph(this.runner, repo, limit);

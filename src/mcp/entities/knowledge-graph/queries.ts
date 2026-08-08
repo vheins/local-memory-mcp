@@ -300,27 +300,25 @@ export function countRelations(runner: KgQueryRunner, repo: string): number {
  * across pages, causing near-zero edge coverage per page (TASK-145).
  * Falls back to name ordering for nodes with identical degree.
  * Supports limit/offset pagination; when omitted returns all matching rows.
+ *
+ * OPT-PERF (TASK-268 / audit F2): degrees come from the materialized
+ * `kg_degrees` table (migration v22, maintained by relations triggers)
+ * instead of a per-request CTE aggregate over ALL of the repo's relations.
+ * The old CTE walked every relation of the repo (852k+ rows for edge-heavy
+ * repos) on the Node event loop — ~23s warm / ~190s cold, blocking
+ * /api/health. The v22 backfill seeds the table once at migration time.
  */
 export function listGraphNodes(
 	runner: KgQueryRunner,
 	repo: string,
 	options?: { limit?: number; offset?: number }
 ): Array<{ name: string; type: string }> {
-	let sql = `WITH degrees AS (
-		   SELECT node, COUNT(*) AS degree
-		   FROM (
-		     SELECT from_entity AS node FROM relations WHERE repo = ?
-		     UNION ALL
-		     SELECT to_entity AS node FROM relations WHERE repo = ?
-		   )
-		   GROUP BY node
-		 )
-		 SELECT e.name, e.type
+	let sql = `SELECT e.name, e.type
 		 FROM entities e
-		 LEFT JOIN degrees d ON d.node = e.name
+		 LEFT JOIN kg_degrees d ON d.repo = e.repo AND d.node = e.name
 		 WHERE e.repo = ?
 		 ORDER BY COALESCE(d.degree, 0) DESC, e.name`;
-	const params: unknown[] = [repo, repo, repo];
+	const params: unknown[] = [repo];
 	if (options?.limit !== undefined) {
 		sql += " LIMIT ?";
 		params.push(options.limit);
@@ -386,6 +384,50 @@ export function listGraphEdges(
 		 ORDER BY (COALESCE(d1.degree, 0) + COALESCE(d2.degree, 0)) DESC, r.from_entity, r.to_entity
 		 LIMIT ?`,
 		[repo, repo, repo, effectiveLimit]
+	);
+}
+
+/**
+ * Graph edges for a repo restricted to a node subset (TASK-268 / audit F2).
+ *
+ * Only edges whose BOTH endpoints are in `nodeNames` are returned — the
+ * dashboard graph renders exactly the fetched top-N window, so every shipped
+ * edge is drawable and the query never walks the repo's full relation set.
+ * Endpoint degrees come from the materialized `kg_degrees` cache (migration
+ * v22) instead of a per-request CTE over ALL relations, and the sort is
+ * bounded to the subset's edge count. For an 852k-relation repo with a
+ * 300-node window this replaced a ~23s full-repo sort with a sub-second
+ * index-served subset scan (OPT-PERF / TASK-268).
+ *
+ * @param runner - Query accessor
+ * @param repo - Repository scope
+ * @param nodeNames - Node window returned by `listGraphNodes`; edges must
+ *   connect two nodes in this set. Empty → no edges.
+ * @param limit - Maximum edges to return (default: KG_MAX_GRAPH_EDGES)
+ * @param probe - When true, queries `limit + 1` rows so callers can detect
+ *   truncation (TASK-148 pattern: `result.length > limit`). The probe row is
+ *   never consumed by callers.
+ * @returns Edges among the subset, ranked by endpoint degree
+ */
+export function listGraphEdgesForSubset(
+	runner: KgQueryRunner,
+	repo: string,
+	nodeNames: string[],
+	limit = KG_MAX_GRAPH_EDGES,
+	probe = false
+): Array<{ source: string; target: string; relation_type: string }> {
+	if (nodeNames.length === 0) return [];
+	const placeholders = nodeNames.map(() => "?").join(",");
+	const effectiveLimit = probe ? limit + 1 : limit;
+	return runner.all<{ source: string; target: string; relation_type: string }>(
+		`SELECT r.from_entity as source, r.to_entity as target, r.relation_type
+		 FROM relations r
+		 JOIN kg_degrees d1 ON d1.repo = r.repo AND d1.node = r.from_entity
+		 JOIN kg_degrees d2 ON d2.repo = r.repo AND d2.node = r.to_entity
+		 WHERE r.repo = ? AND r.from_entity IN (${placeholders}) AND r.to_entity IN (${placeholders})
+		 ORDER BY (d1.degree + d2.degree) DESC, r.from_entity, r.to_entity
+		 LIMIT ?`,
+		[repo, ...nodeNames, ...nodeNames, effectiveLimit]
 	);
 }
 

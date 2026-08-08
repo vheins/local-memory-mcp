@@ -334,8 +334,7 @@ describe("KG Archivist — saveExtractions", () => {
 		// Every observation should reference an entity that exists
 		for (const obs of observations) {
 			const entity = db.db.prepare("SELECT name FROM entities WHERE name = ?").get(obs.entity_name) as
-				| { name: string }
-				| undefined;
+				{ name: string } | undefined;
 			expect(entity).toBeDefined();
 		}
 	});
@@ -503,6 +502,137 @@ describe("KnowledgeGraphEntity — probe/truncated detection (TASK-148)", () => 
 		const truncated = rawEdges.length > 6;
 		expect(truncated).toBe(false);
 		expect(rawEdges).toHaveLength(6);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Subset-bounded graph edges (TASK-268 / audit F2)
+//
+// The dashboard graph payload is assembled from the fetched top-N node
+// window: listGraphEdgesForSubset returns ONLY edges whose BOTH endpoints
+// are in that window (every shipped edge is drawable) and ranks them by
+// endpoint degree via the materialized kg_degrees cache (migration v22).
+// This bounds the edge query to the window instead of sorting ALL of the
+// repo's relations per request (the former ~23s warm / ~190s cold path).
+// ---------------------------------------------------------------------------
+
+describe("KnowledgeGraphEntity — subset-bounded graph edges (TASK-268)", () => {
+	let db: SQLiteStore;
+
+	const REPO = "kg-subset-test";
+
+	function seedGraph() {
+		const now = new Date().toISOString();
+		// Entities A–D; edges: AB, AC, BC, DA, BD.
+		// Degrees: A=3 (AB,AC,DA), B=3 (AB,BC,BD), C=2 (AC,BC), D=2 (DA,BD).
+		for (const name of ["A", "B", "C", "D"]) {
+			db.knowledgeGraph.upsertEntity({
+				name,
+				type: "concept",
+				description: null,
+				repo: REPO,
+				owner: "test",
+				created_at: now,
+				updated_at: now
+			});
+		}
+		const edges: Array<[string, string]> = [
+			["A", "B"],
+			["A", "C"],
+			["B", "C"],
+			["D", "A"],
+			["B", "D"]
+		];
+		for (const [from, to] of edges) {
+			db.knowledgeGraph.upsertRelation({
+				from_entity: from,
+				to_entity: to,
+				relation_type: "related_to",
+				repo: REPO,
+				owner: "test",
+				created_at: now
+			});
+		}
+	}
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		seedGraph();
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("returns only edges with BOTH endpoints in the subset", () => {
+		const edges = db.knowledgeGraph.listGraphEdgesForSubset(REPO, ["A", "B"]);
+		expect(edges).toHaveLength(1); // only A→B is fully inside {A, B}
+		expect(edges[0]).toEqual({ source: "A", target: "B", relation_type: "related_to" });
+	});
+
+	it("ranks subset edges by endpoint degree like the full graph", () => {
+		// Combined degrees: AB=6, AC=5, BC=5, BD=5, DA=5 (ties by from,to).
+		const edges = db.knowledgeGraph.listGraphEdgesForSubset(REPO, ["A", "B", "C", "D"], 2);
+		expect(edges).toHaveLength(2);
+		expect(edges[0]).toEqual({ source: "A", target: "B", relation_type: "related_to" });
+		expect(edges[1]).toEqual({ source: "A", target: "C", relation_type: "related_to" });
+	});
+
+	it("probe=true returns cap+1 rows so callers detect truncation", () => {
+		// 5 subset edges > cap 4 → probe returns 5 rows; caller slices to 4.
+		const raw = db.knowledgeGraph.listGraphEdgesForSubset(REPO, ["A", "B", "C", "D"], 4, true);
+		expect(raw).toHaveLength(5);
+		const truncated = raw.length > 4;
+		expect(truncated).toBe(true);
+		expect(truncated ? raw.slice(0, 4) : raw).toHaveLength(4);
+	});
+
+	it("returns everything below the cap and empty for an empty subset", () => {
+		expect(db.knowledgeGraph.listGraphEdgesForSubset(REPO, ["A", "B", "C", "D"])).toHaveLength(5);
+		expect(db.knowledgeGraph.listGraphEdgesForSubset(REPO, [])).toHaveLength(0);
+	});
+
+	it("degree cache stays consistent across writes and deletes", () => {
+		// Insert a new relation B→A (self-loop-free, both endpoints existing):
+		// degree of A and B should bump to 4.
+		const now = new Date().toISOString();
+		db.knowledgeGraph.upsertRelation({
+			from_entity: "B",
+			to_entity: "A",
+			relation_type: "backlink",
+			repo: REPO,
+			owner: "test",
+			created_at: now
+		});
+		const degreeRow = db.db.prepare("SELECT degree FROM kg_degrees WHERE repo = ? AND node = ?").get(REPO, "A") as {
+			degree: number;
+		};
+		expect(degreeRow.degree).toBe(4);
+
+		// Deleting the relation decrements back to 3.
+		db.knowledgeGraph.deleteRelation("B", "A", "backlink");
+		const after = db.db.prepare("SELECT degree FROM kg_degrees WHERE repo = ? AND node = ?").get(REPO, "A") as {
+			degree: number;
+		};
+		expect(after.degree).toBe(3);
+
+		// Edge set reflects the mutation (backlink now absent).
+		const edges = db.knowledgeGraph.listGraphEdgesForSubset(REPO, ["A", "B", "C", "D"]);
+		expect(edges).toHaveLength(5);
+		expect(edges.some((e) => e.relation_type === "backlink")).toBe(false);
+	});
+
+	it("listGraphNodes is degree-ordered via the kg_degrees cache", () => {
+		const nodes = db.knowledgeGraph.listGraphNodes(REPO, { limit: 10 });
+		// A and B tie at degree 3; name ordering breaks the tie.
+		expect(nodes[0].name).toBe("A");
+		expect(nodes[1].name).toBe("B");
+		expect(
+			nodes
+				.map((n) => n.name)
+				.slice(0, 4)
+				.sort()
+		).toEqual(["A", "B", "C", "D"]);
 	});
 });
 

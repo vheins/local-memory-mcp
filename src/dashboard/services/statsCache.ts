@@ -72,3 +72,59 @@ export function setCachedRepoStats<T>(owner: string, repo: string, data: T): T {
 export function clearRepoStatsCache(): void {
 	cache.clear();
 }
+
+// ---------------------------------------------------------------------------
+// KG graph payload cache (TASK-268 / audit F2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Server-side cache for assembled KG graph payloads, reusing the same TTL
+ * map as repo stats. The graph assembly (degree-ranked node window + edges)
+ * is the dashboard's most expensive read path when computed from scratch —
+ * for edge-heavy repos it previously re-aggregated EVERY relation of the
+ * repo per request. Caching the assembled payload (keyed on repo + the
+ * requested window) makes repeated/tab-switch loads ~0ms and bounds the
+ * compute cost to one pass per window per TTL.
+ *
+ * TTL is read from `DASHBOARD_KG_TTL_MS` (default 30 s, same value as the
+ * stats TTL) so tests can shrink it per case.
+ *
+ * STALENESS: same trade-off as repo stats — KG mutations performed through
+ * the dashboard clear the cache immediately (`clearKgGraphCache`), while
+ * MCP-side writes may be up to `ttlMs` stale. Accepted for a dashboard view.
+ *
+ * Keys use the `kg/graph/` prefix so they never collide with `owner/repo`
+ * stats keys, and share the MAX_ENTRIES eviction guard.
+ */
+const KG_CACHE_PREFIX = "kg/graph/";
+
+function kgTtlMs(): number {
+	const raw = Number(process.env.DASHBOARD_KG_TTL_MS);
+	return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_TTL_MS;
+}
+
+/** Returns the cached KG payload for `key`, or `undefined` on miss/expiry. */
+export function getKgGraphCache<T>(key: string): T | undefined {
+	const entry = cache.get(KG_CACHE_PREFIX + key);
+	if (!entry) return undefined;
+	if (Date.now() >= entry.expiresAt) {
+		cache.delete(KG_CACHE_PREFIX + key);
+		return undefined;
+	}
+	return entry.data as T;
+}
+
+/** Stores `data` under the KG cache `key` with a fresh TTL and returns it. */
+export function setKgGraphCache<T>(key: string, data: T): T {
+	cache.set(KG_CACHE_PREFIX + key, { data, expiresAt: Date.now() + kgTtlMs() });
+	return data;
+}
+
+/** Drop cached KG payloads (`repo` optional; absent clears the whole KG cache). */
+export function clearKgGraphCache(repo?: string): void {
+	for (const key of cache.keys()) {
+		if (!key.startsWith(KG_CACHE_PREFIX)) continue;
+		if (repo !== undefined && !key.endsWith(repo)) continue;
+		cache.delete(key);
+	}
+}
