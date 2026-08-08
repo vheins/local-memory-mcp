@@ -1,41 +1,44 @@
-# Core Features & V2 Enhancements
+# Core Features
 
 This project is more than just text storage; it is a "brain" system for AI agents designed for long-term stability and project consistency.
 
 ## 🧠 Hybrid Semantic Search
 
-The system uses a hybrid approach to find the most relevant memories:
+The system blends four signals to find the most relevant memories:
 
-1.  **Keyword Matching (TF-IDF):** Finds exact keyword matches in SQLite.
-2.  **Semantic Vector Search:** Uses the `Transformers.js` AI model locally to understand the meaning behind the query.
-3.  **Workspace Boost:** Provides additional ranking scores to memories located in the same folder as the file you are currently working on.
+1. **Semantic similarity (40%)** — `all-MiniLM-L6-v2` embeddings computed locally via Transformers.js.
+2. **Keyword match (30%)** — exact token matches via SQLite FTS.
+3. **Recency (15%)** — newer entries rank higher (exponential decay, ~30-day half-life).
+4. **Domain / workspace affinity (15%)** — a boost when the memory's repository or folder matches your current working context.
+
+The threshold is **adaptive**: small result sets use a lenient cutoff (0.10 for memories) so a fresh project still returns results; larger sets use a stricter one (0.40). If every candidate falls below the threshold, the single best match is still returned (guarantee-at-least-1). Full detail: [Hybrid Search Logic](hybrid-search.md).
 
 ## 🔄 Tech-Stack Affinity
 
-**Case:** You have knowledge about **Filament** in Project A. When you start Project B (also using Filament), your Agent can automatically pull those best practices if you tag that memory with `filament`.
+**Case:** You have knowledge about **Filament** in Project A. When you start Project B (also using Filament), your Agent can automatically pull those best practices by passing `current_tags: ["filament"]` when searching — or because the memory is tagged `filament`.
 
-- Memories can be **Local** (per repo), **Affinity-based** (per technology), or **Global** (universal rules).
+- Memories can be scoped **per-repo**, shared across **tags** (affinity), or **Global** (`is_global: true`).
 
 ## 🛡️ Anti-Hallucination Guard
 
 One of the main issues with AI Agents is "matching" irrelevant information.
 
-- **Strict Threshold (0.50):** If semantic similarity is below the threshold, the system strictly returns empty results, preventing the Agent from hallucinating based on wrong data.
-- **Conflict Rejection:** If an Agent tries to store a decision that contradicts an existing one, the system rejects it and forces the Agent to use `update` or `supersede`.
+- **Conflict Rejection:** storing a memory that semantically overlaps an existing one by more than **0.85** cosine similarity is rejected with a `MEMORY_CONFLICT` error. The response tells the Agent to pass `id`/`code` to update, `acknowledge` it, or `supersedes` if the new entry replaces the old one.
+- **Adaptive Relevance Threshold:** search filters weak matches (small-set threshold 0.10, large-set 0.40) instead of returning noise.
 
 ## 📈 Memory Recall Tracking
 
-Every time an Agent uses a memory, it is required to provide feedback via the `acknowledge` tool.
+Every time an Agent uses a memory, it reports feedback via `memory-write` with `acknowledge` (e.g. `"acknowledge": "used"`).
 
 - We track the **Utility Rate** (how often a memory was actually helpful).
-- Memories with low utility will gradually be "forgotten" through the decay system.
+- Memories with zero recalls despite many hits (`hit_count > 10` and `recall_count = 0`) are archived as low-value.
 
 ## 📉 Automatic Archiving (Natural Forgetting)
 
 Just like humans, not everything needs to be remembered forever.
 
-- **Expired Memories:** Memories with a TTL (Time-To-Live) are automatically archived.
-- **Decay System:** Memories unused for 90 days with low importance are moved to the archive to keep the Agent's context clean.
+- **Expired Memories:** Memories with a TTL (`ttlDays`) are automatically archived once `expires_at` passes.
+- **Low-Score Memories:** Memories unused for **90 days** with `importance < 3` are moved to the archive to keep the Agent's context clean.
 
 ## 🧩 Knowledge Graph
 
@@ -44,32 +47,39 @@ Structured entity-relationship storage that maps complex domain knowledge:
 - **Entities** with types (person, place, organization, concept) and descriptions
 - **Relations** with typed connections between entities
 - **Observations** linking context to entities
-- **Auto-extraction**: NLP Archivist automatically extracts entities when memories are stored
-- **Dashboard**: Interactive force-directed graph visualization
+- **Auto-extraction**: offline NLP (compromise.js) extracts named entities when memories and tasks are stored
+- **Dashboard**: interactive force-directed graph visualization with add/edit/delete (see [Dashboard Guide](dashboard-guide.md))
+
+> Dedicated MCP tools for direct graph CRUD are **roadmap — not yet implemented**. Graph management happens in the dashboard's Knowledge Graph tab.
 
 ## 🕰️ Time Tunnel (Temporal Search)
 
-Filter memory searches by natural language time references:
+Filter memory searches by natural-language time phrases — just add one to your query:
 
-- "today", "yesterday", "this week"
-- "last week", "last month"
-- "last N days", "past N hours"
-- Seamlessly integrates with existing search — just add the phrase
+- `today`, `yesterday`
+- `this week`, `last week`
+- `last month`
+- `last N days` / `past N days`, `last N weeks` / `past N weeks`
+- `last_hour` / `past_hour`
+
+Seamlessly integrates with existing search — the temporal phrase is stripped from the query and applied as a date window.
 
 ## 🧬 Soul Maintenance (Decay Engine)
 
 Biological-style memory lifecycle management:
 
-- **Decay**: Unused memories lose importance over time
-- **Immunization**: Tag-protected memories never decay
-- **Archiving**: Below-threshold memories automatically archived
-- **Startup sweep**: Runs maintenance on server start (24h dedup)
+- **Decay:** memories unused for 7+ days (default `decayAfterDays`) lose importance at a fixed rate per cycle (floored, minimum 1).
+- **Immunization:** memories tagged with immune tags never decay.
+- **Archiving:** memories whose decayed importance drops below the threshold are archived.
+- **Startup sweep:** runs on server start with a 24-hour dedup guard (expired + low-score + decayed).
 
 ## 🤖 Agentic Productivity Tools
 
-- **agent-context**: One-call session context (relevant memories + active tasks + recent decisions)
-- **decision-log**: Structured decision persistence with context/rationale/alternatives
-- **session-summarize**: Archive session summaries as searchable task_archive memories
+- `agent-context` — one-call session context (relevant memories + active tasks + recent decisions)
+- `memory-write` (`type: "decision"`) — structured decision persistence with context/rationale/alternatives
+- `memory-write` (`type: "task_archive"`) — searchable session summaries via `key_decisions`/`next_steps`
+- `synthesize` — ask questions grounded in local memories using your own LLM
+- `repo-summarize` — keep a short per-repo project summary
 
 ## ⚠️ Disclaimer
 

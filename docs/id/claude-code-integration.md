@@ -6,7 +6,7 @@ Panduan lengkap menghubungkan **MCP Local Memory Service** ke [Claude Code](http
 
 ## Prasyarat
 
-- **Node.js 18+** terinstal
+- **Node.js 20+** terinstal
 - **Claude Code** terinstal (`npm install -g @anthropic-ai/claude-code`)
 - Akses internet untuk instalasi pertama (model embedding di-download sekali)
 
@@ -46,13 +46,14 @@ claude mcp add --transport stdio --scope project local-memory -- npx @vheins/loc
 
 Gunakan `--scope` sesuai kebutuhan:
 
-| Scope | File | Dibagikan? | Cocok untuk |
-|-------|------|------------|-------------|
+| Scope     | File                        | Dibagikan?   | Cocok untuk                              |
+| --------- | --------------------------- | ------------ | ---------------------------------------- |
 | `project` | `.mcp.json` di root project | Ya (via git) | Semua anggota tim pakai memory yang sama |
-| `local` | `~/.claude.json` | Tidak | Hanya untuk kamu |
-| `user` | `~/.claude.json` (global) | Tidak | Kamu di semua project |
+| `local`   | `~/.claude.json`            | Tidak        | Hanya untuk kamu                         |
+| `user`    | `~/.claude.json` (global)   | Tidak        | Kamu di semua project                    |
 
 Contoh:
+
 ```bash
 # Hanya untuk kamu, di project ini
 claude mcp add --transport stdio --scope local local-memory -- npx -y @vheins/local-memory-mcp
@@ -66,24 +67,31 @@ claude mcp add --transport stdio --scope project local-memory -- npx -y @vheins/
 ## Verifikasi
 
 ### Cek daftar server MCP
+
 ```bash
 claude mcp list
 ```
+
 Output:
+
 ```
 local-memory (project) — running
-  Tools: memory-store, memory-search, memory-detail, memory-update, ...
+  Tools: memory-read, memory-write, task-read, ...
 ```
 
 ### Cek status di dalam Claude Code
+
 ```
 /mcp
 ```
+
 Panel `/mcp` akan menunjukkan server `local-memory` dengan daftar tool yang tersedia.
 
 ### Test koneksi
+
 Di dalam Claude Code, tanyakan:
-> *"Cek memori lokal untuk project ini"*
+
+> _"Cek memori lokal untuk project ini"_
 
 Jika Claude merespon dengan "Tidak ada memori yang ditemukan" (bukan error), koneksi berhasil.
 
@@ -95,25 +103,26 @@ Jika kamu lebih suka mengedit file `.mcp.json` langsung (misalnya untuk version 
 
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "npx",
-      "args": ["-y", "@vheins/local-memory-mcp"],
-      "type": "stdio"
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "npx",
+			"args": ["-y", "@vheins/local-memory-mcp"],
+			"type": "stdio"
+		}
+	}
 }
 ```
 
 Atau untuk global install:
+
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "local-memory-mcp",
-      "type": "stdio"
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "local-memory-mcp",
+			"type": "stdio"
+		}
+	}
 }
 ```
 
@@ -121,9 +130,8 @@ Atau untuk global install:
 
 ## Environment Variables
 
-Claude Code secara otomatis menetapkan `CLAUDE_PROJECT_DIR` ke root project. Server MCP Local Memory membaca environment ini untuk mendeteksi repository aktif.
+Server mendeteksi repository aktif secara otomatis dari direktori kerja saat ini dan workspace roots MCP apa pun (ia juga membaca git remote untuk menyimpulkan owner). Kamu bisa menimpa penyimpanan atau port saat registrasi:
 
-Kamu bisa menambahkan env vars saat registrasi:
 ```bash
 claude mcp add --transport stdio --scope project \
   --env STORAGE_PATH=/custom/path \
@@ -131,17 +139,18 @@ claude mcp add --transport stdio --scope project \
 ```
 
 Atau di `.mcp.json`:
+
 ```json
 {
-  "mcpServers": {
-    "local-memory": {
-      "command": "local-memory-mcp",
-      "args": [],
-      "env": {
-        "PORT": "3456"
-      }
-    }
-  }
+	"mcpServers": {
+		"local-memory": {
+			"command": "local-memory-mcp",
+			"args": [],
+			"env": {
+				"PORT": "3456"
+			}
+		}
+	}
 }
 ```
 
@@ -150,28 +159,36 @@ Atau di `.mcp.json`:
 ## Workflow Harian dengan Claude Code
 
 ### Saat memulai sesi baru
+
 ```
 Claude, cek task yang pending untuk project ini.
 ```
-Claude akan memanggil `task-list` dan menampilkan task yang harus dikerjakan.
+
+Claude akan memanggil `task-read` dan menampilkan task yang harus dikerjakan.
 
 ### Menyimpan knowledge
+
 ```
 Catat bahwa kita memutuskan pakai Prisma ORM karena lebih mature.
 ```
-Claude akan memanggil `memory-store` dengan type `decision`.
+
+Claude akan memanggil `memory-write` dengan type `decision`.
 
 ### Search memori lama
+
 ```
 Apa yang kita tahu tentang autentikasi di project ini?
 ```
-Claude akan memanggil `memory-search` dan `memory-synthesize` untuk memberikan jawaban.
+
+Claude akan memanggil `memory-read` (dan `synthesize` jika perlu jawaban berbasis LLM).
 
 ### Menyelesaikan task
+
 ```
 Task LOGIN-001 sudah selesai, commit ada di abc123.
 ```
-Claude akan memanggil `task-update` dengan status `completed`.
+
+Claude akan memanggil `task-write` dengan status `completed`.
 
 ---
 
@@ -186,13 +203,15 @@ npx @vheins/local-memory-mcp dashboard
 ```
 
 Atau minta Claude untuk menjalankannya:
-> *"Jalankan dashboard memory"* — tapi perlu diingat, Claude Code harus tetap berjalan di terminal terpisah.
+
+> _"Jalankan dashboard memory"_ — tapi perlu diingat, Claude Code harus tetap berjalan di terminal terpisah.
 
 ---
 
 ## Troubleshooting untuk Claude Code
 
 ### "local-memory" not found di `/mcp`
+
 ```bash
 claude mcp list   # cek apakah terdaftar
 claude mcp remove local-memory
@@ -201,6 +220,7 @@ claude mcp add --transport stdio --scope project local-memory -- npx -y @vheins/
 ```
 
 ### Server crashes / disconnected
+
 ```bash
 # Cek log error
 claude mcp get local-memory
@@ -210,13 +230,17 @@ npx -y @vheins/local-memory-mcp
 ```
 
 ### Tool tidak muncul walau server running
+
 Claude Code mendukung notifikasi `list_changed`, jadi tool baru seharusnya muncul otomatis. Kalau tidak:
+
 ```
 /mcp   # refresh panel
 ```
+
 Atau restart Claude Code.
 
 ### Slow startup
+
 Jika pakai `npx`, setiap startup bisa lambat karena download/check cache. Solusi: **global install** (Opsi 2).
 
 ---

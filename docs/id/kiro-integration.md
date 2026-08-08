@@ -6,7 +6,7 @@ Panduan lengkap menghubungkan **MCP Local Memory Service** ke [Kiro](https://kir
 
 ## Prasyarat
 
-- **Node.js 18+** terinstal
+- **Node.js 20+** terinstal
 - **Kiro** terinstal ([download](https://kiro.dev/downloads))
 - Akses internet untuk instalasi pertama
 
@@ -122,21 +122,13 @@ Agar Kiro tidak meminta konfirmasi setiap kali agent memanggil tool memory, kamu
 		"local-memory": {
 			"command": "npx",
 			"args": ["-y", "@vheins/local-memory-mcp"],
-			"autoApprove": [
-				"memory-search",
-				"memory-detail",
-				"memory-recap",
-				"task-list",
-				"task-detail",
-				"standard-search",
-				"standard-detail"
-			]
+			"autoApprove": ["memory-read", "task-read", "standard-read"]
 		}
 	}
 }
 ```
 
-Tool read-only aman untuk auto-approve. Tool write (`memory-store`, `task-update`, dll.) sebaiknya tetap minta konfirmasi.
+Tool read-only aman untuk auto-approve. Tool write (`memory-write`, `task-write`, dll.) sebaiknya tetap minta konfirmasi.
 
 Untuk auto-approve semua tool (tidak direkomendasikan):
 

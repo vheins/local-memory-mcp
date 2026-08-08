@@ -13,10 +13,10 @@ Klien AI Anda menampilkan error seperti `MCP server disconnected` atau `Failed t
 ### Pemeriksaan 1: Versi Node.js
 
 ```bash
-node --version   # membutuhkan >= 18
+node --version   # membutuhkan >= 20
 ```
 
-Server ini menggunakan `fetch`, `AbortController`, dan API modern lainnya. Node 18+ diperlukan.
+Server ini bergantung pada `better-sqlite3` (Node 20+) dan perangkat dasbor memerlukan Node 20.19+ (atau 22.12+).
 
 ### Pemeriksaan 2: Instalasi Rusak
 
@@ -63,10 +63,10 @@ export PATH="$(npm bin -g):$PATH"
 npx @vheins/local-memory-mcp dashboard
 ```
 
-Anda akan melihat:
+Anda akan melihat baris seperti:
 
 ```
-MCP Memory Dashboard running on http://localhost:3456
+DASHBOARD_STARTING v0.35.0 on http://localhost:3456
 ```
 
 ### Pemeriksaan 2: Konflik Port
@@ -84,7 +84,7 @@ PORT=3457 npx @vheins/local-memory-mcp dashboard
 
 ### Pemeriksaan 3: Dasbor Terbuka tetapi Tidak Menampilkan Data
 
-Dasbor memuat data dari basis data SQLite yang sama yang digunakan server MCP. Jika server MCP tidak pernah dijalankan, belum ada data. Buat beberapa aktivitas terlebih dahulu dengan menggunakan alat MCP (mis. memory-store).
+Dasbor memuat data dari basis data SQLite yang sama yang digunakan server MCP. Jika server MCP tidak pernah dijalankan, belum ada data. Buat beberapa aktivitas terlebih dahulu dengan menggunakan alat MCP (mis. `memory-write`).
 
 ---
 
@@ -96,7 +96,7 @@ Error yang menyebutkan `Transformers.js`, `ONNX`, atau `all-MiniLM-L6-v2` saat p
 
 ### Penyebab
 
-Saat pertama kali Anda mencari, server mengunduh model embedding (~23MB) ke direktori cache Hugging Face (`~/.cache/huggingface/`). Ini memerlukan koneksi internet dan bisa memakan waktu 30-60 detik.
+Saat pertama kali Anda mencari, server mengunduh model embedding (`Xenova/all-MiniLM-L6-v2`) ke direktori cache Hugging Face (`~/.cache/huggingface/`). Ini memerlukan koneksi internet dan bisa memakan waktu 30-60 detik.
 
 ### Perbaikan
 
@@ -138,10 +138,16 @@ SQLITE_ERROR: no such table: memories
    ```bash
    pkill -f local-memory-mcp   # macOS/Linux
    ```
-2. Hapus basis data untuk memulai dari awal (data Anda akan hilang):
+2. Hapus basis data untuk memulai dari awal (data Anda akan hilang). Lokasi bawaan tergantung OS Anda:
    ```bash
-   rm -f storage/memory.db
+   # Linux
+   rm -f ~/.config/local-memory-mcp/memory.db
+   # macOS
+   rm -f ~/Library/Application\ Support/local-memory-mcp/memory.db
+   # Windows (PowerShell)
+   Remove-Item ~/.local-memory-mcp/memory.db
    ```
+   > Catatan: `./storage/memory.db` lama di direktori kerja lebih diutamakan jika ada.
 3. Mulai ulang server — tabel dibuat otomatis saat startup.
 
 ---
@@ -162,7 +168,7 @@ Memori dibatasi pada repositori. Jika proyek Anda saat ini adalah `my-app`, cari
 
 ### Pemeriksaan 2: Ambang Batas Kemiripan Rendah
 
-Sistem menyaring hasil di bawah kemiripan 0,50. Jika memori Anda sangat berbeda dari kueri Anda, coba ubah kata-katanya. Pencocokan kata kunci masih berfungsi untuk istilah yang tepat.
+Pencarian menggunakan **ambang batas adaptif**: kumpulan hasil kecil memakai batas longgar (0,10), kumpulan lebih besar memakai batas lebih ketat (0,40), dan hasil terbaik tunggal selalu dikembalikan bahkan saat cold start. Jika kueri Anda tidak menghasilkan apa pun, coba ubah kata-katanya atau tambahkan istilah — pencocokan kata kunci masih berfungsi untuk istilah yang tepat.
 
 ### Pemeriksaan 3: Agen Belum Menyimpan Apa pun
 
@@ -198,7 +204,7 @@ Atau gunakan manajer versi Node seperti `nvm` atau `fnm` yang sepenuhnya menghin
 
 ### Gejala
 
-Agen AI merespons dengan _"Saya tidak memiliki alat yang disebut memory-store"_ atau serupa.
+Agen AI merespons dengan _"Saya tidak memiliki alat yang disebut memory-write"_ atau serupa.
 
 ### Penyebab
 

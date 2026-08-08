@@ -6,7 +6,7 @@ Panduan lengkap menghubungkan **MCP Local Memory Service** ke [Codex](https://de
 
 ## Prasyarat
 
-- **Node.js 18+** terinstal
+- **Node.js 20+** terinstal
 - **Codex CLI** terinstal ([download](https://developers.openai.com/codex))
 - Akses internet untuk instalasi pertama
 
@@ -164,10 +164,10 @@ command = "npx"
 args = ["-y", "@vheins/local-memory-mcp"]
 default_tools_approval_mode = "prompt"
 
-[mcp_servers.local-memory.tools.memory-search]
+[mcp_servers.local-memory.tools.memory-read]
 approval_mode = "auto"
 
-[mcp_servers.local-memory.tools.memory-store]
+[mcp_servers.local-memory.tools.memory-write]
 approval_mode = "prompt"
 
 [mcp_servers.local-memory.tools.task-delete]
@@ -182,7 +182,7 @@ Batasi tool mana yang tersedia:
 
 ```toml
 # Hanya tool ini yang boleh dipakai
-enabled_tools = ["memory-search", "memory-detail", "memory-recap", "task-list", "task-detail"]
+enabled_tools = ["memory-read", "task-read", "standard-read"]
 
 # Tool yang dilarang (diterapkan setelah enabled_tools)
 disabled_tools = ["memory-delete", "task-delete"]
@@ -224,7 +224,7 @@ Output:
 
 ```
 local-memory — running
-  Tools: memory-store, memory-search, memory-detail, ...
+  Tools: memory-read, memory-write, task-read, ...
 ```
 
 Di dalam TUI Codex, buka `/mcp` untuk melihat status server.
@@ -259,30 +259,23 @@ startup_timeout_sec = 20
 tool_timeout_sec = 45
 default_tools_approval_mode = "prompt"
 enabled_tools = [
-  "memory-store", "memory-search", "memory-detail",
-  "memory-update", "memory-acknowledge", "memory-recap",
-  "task-list", "task-detail", "task-update",
-  "standard-search", "standard-detail"
+  "memory-read", "memory-write",
+  "task-read", "task-write",
+  "standard-read", "standard-write"
 ]
 disabled_tools = ["memory-delete", "task-delete"]
 
 # Tool-specific approval overrides
-[mcp_servers.local-memory.tools.memory-search]
+[mcp_servers.local-memory.tools.memory-read]
 approval_mode = "auto"
 
-[mcp_servers.local-memory.tools.memory-detail]
+[mcp_servers.local-memory.tools.task-read]
 approval_mode = "auto"
 
-[mcp_servers.local-memory.tools.task-list]
-approval_mode = "auto"
-
-[mcp_servers.local-memory.tools.task-detail]
-approval_mode = "auto"
-
-[mcp_servers.local-memory.tools.memory-store]
+[mcp_servers.local-memory.tools.memory-write]
 approval_mode = "prompt"
 
-[mcp_servers.local-memory.tools.task-update]
+[mcp_servers.local-memory.tools.task-write]
 approval_mode = "prompt"
 ```
 
@@ -292,9 +285,9 @@ approval_mode = "prompt"
 
 ### MCP Prompts Tidak Didukung
 
-Codex CLI **tidak** mendukung MCP **prompts** (kemampuan `prompts/list` dan `prompts/get`). Ini berarti templat prompt seperti `memory-agent-core`, `project-briefing`, atau `task-orchestrator` tidak bisa dipanggil sebagai perintah slash di Codex.
+Codex CLI **tidak** mendukung MCP **prompts** (kemampuan `prompts/list` dan `prompts/get`). Ini berarti templat prompt seperti `memory-agent-core`, `project-briefing`, atau `task-management-guidelines` tidak bisa dipanggil sebagai perintah slash di Codex.
 
-Namun, **Tools** dan **Resources** berfungsi penuh. Anda tetap bisa menggunakan tool server secara langsung (misalnya `memory-store`, `memory-search`, `task-list`) — hanya templat prompt bawaan yang tidak tersedia.
+Namun, **Tools** dan **Resources** berfungsi penuh. Anda tetap bisa menggunakan tool server secara langsung (misalnya `memory-read`, `memory-write`, `task-read`) — hanya templat prompt bawaan yang tidak tersedia.
 
 Untuk agent dengan dukungan prompt penuh, lihat [MCP Protocol Reference](mcp-concepts.md).
 

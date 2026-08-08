@@ -17,10 +17,10 @@ Built with a **Local-First** philosophy, this service stores architectural decis
 - 🧩 **Knowledge Graph:** Structured entities, relations, and observations with auto-extraction via offline NLP.
 - 🕰️ **Time Tunnel:** Query memories with natural language dates ("yesterday", "last week").
 - 📉 **Soul Maintenance:** Biological-style memory decay with tag immunization — automatically archives obsolete memories.
-- 🤖 **Agentic Tools:** Agent-context recall, structured decision logging, session summarization.
+- 🤖 **Agentic Tools:** One-call session context (`agent-context`), structured decision logging via `memory-write` (`type: "decision"`), LLM-driven knowledge synthesis (`synthesize`), and per-repo project summaries (`repo-summarize`).
 - 📊 **Glassy Dashboard:** Visualize memories, tasks, handoffs, knowledge graph, and interaction logs through a modern Svelte 5 interface.
 - 🔍 **Codebase Index:** Index and query source code structure — search for functions, classes, interfaces, types, and enums across your projects. Uses tree-sitter WASM for fast parsing with incremental updates.
-- 🧭 **Codebase Search & Trace:** Search indexed symbols with ranked results (`search_symbols`), inspect file-level declarations (`get_file_symbols`), explore architecture overviews (`get_architecture`), and trace symbol definitions across your codebase (`trace_symbol`).
+- 🧭 **Codebase Search & Trace:** A single unified tool (`codebase-read`) with auto-detected modes — search ranked symbols (`query`), trace a symbol's definition and call sites (`name`), list the symbols declared in a file (`filePath`), or explore the architecture overview (`depth`). `codebase-index` builds and refreshes the tree-sitter index.
 
 ## 🔌 MCP Usage & Configuration
 
@@ -96,6 +96,7 @@ The dashboard UI is built with **Svelte 5 + Vite**. Source files live in `src/da
 
 ```bash
 # Start the API server (port 3456)
+# Note: `npm run dashboard` serves the compiled bundle — run `npm run build` once first (`dist/dashboard/public/`)
 npm run dashboard
 
 # In a separate terminal, start the Svelte dev server (port 5173)

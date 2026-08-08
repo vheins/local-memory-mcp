@@ -17,10 +17,10 @@ Dibangun dengan filosofi **Local-First**, layanan ini menyimpan keputusan arsite
 - 🧩 **Knowledge Graph:** Entitas, relasi, dan observasi terstruktur dengan ekstraksi otomatis via NLP offline.
 - 🕰️ **Time Tunnel:** Kueri memori dengan tanggal berbahasa alami ("kemarin", "minggu lalu").
 - 📉 **Soul Maintenance:** Decay memori bergaya biologis dengan imunitas tag — otomatis mengarsipkan memori usang.
-- 🤖 **Alat Agentic:** Konteks sesi agent-context, pencatatan keputusan terstruktur, peringkasan sesi.
+- 🤖 **Alat Agentic:** Konteks sesi sekali-panggil (`agent-context`), pencatatan keputusan terstruktur via `memory-write` (`type: "decision"`), sintesis pengetahuan berbasis LLM (`synthesize`), dan ringkasan proyek per-repo (`repo-summarize`).
 - 📊 **Dasbor Kaca (Glassy Dashboard):** Visualisasikan memori, tugas, handoff, knowledge graph, dan log interaksi melalui antarmuka Svelte 5 modern.
 - 🔍 **Codebase Index:** Indeks dan kueri struktur kode sumber — cari fungsi, kelas, antarmuka, tipe, dan enum di seluruh proyek Anda. Menggunakan tree-sitter WASM untuk parsing cepat dengan pembaruan inkremental.
-- 🧭 **Codebase Search & Trace:** Cari simbol terindeks dengan hasil berperingkat (`search_symbols`), periksa deklarasi level-berkas (`get_file_symbols`), jelajahi ikhtisar arsitektur (`get_architecture`), dan telusuri definisi simbol di seluruh codebase Anda (`trace_symbol`).
+- 🧭 **Codebase Search & Trace:** Satu alat terpadu (`codebase-read`) dengan mode yang terdeteksi otomatis — cari simbol berperingkat (`query`), telusuri definisi dan situs pemanggilan simbol (`name`), daftar simbol yang dideklarasikan dalam berkas (`filePath`), atau jelajahi ikhtisar arsitektur (`depth`). `codebase-index` membangun dan memperbarui indeks tree-sitter.
 
 ## 🔌 Penggunaan & Konfigurasi MCP
 

@@ -26,6 +26,8 @@ npx @vheins/local-memory-mcp dashboard
 
 Kemudian buka `http://localhost:3456`.
 
+Untuk **checkout source lokal**, bin dasbor otomatis membangun ulang bundle UI yang disajikan (`dist/dashboard/public`) saat `src/dashboard/ui` lebih baru — jadi mengedit sumber dasbor dan menjalankan ulang perintah di atas menyajikan build terbaru secara otomatis. Jika Anda lebih suka membangun secara eksplisit, jalankan `npm run dashboard:build` sebelum menyajikan. (Dalam paket npm terinstal, direktori `src/` tidak disertakan, sehingga bundle terbitan disajikan apa adanya.)
+
 ## Cara Menggunakan
 
 ### 1. Mode Orkestrator
@@ -50,19 +52,19 @@ Gunakan tab `Handoffs` sebagai konsol koordinasi.
 
 - **Klaim:** Periksa kepemilikan aktif di seluruh repo yang dipilih dan lepaskan klaim basi ketika penugasan ulang diperlukan.
 - **Handoff:** Buat konteks transfer untuk pekerjaan yang belum selesai, periksa konteks terstruktur, dan tutup handoff yang sudah dikonsumsi atau basi.
-- **Pembersihan:** Menyelesaikan atau membatalkan tugas melalui dasbor kini mengikuti `task-update` MCP, sehingga klaim aktif dilepaskan dan handoff tertunda yang terkait kedaluwarsa secara otomatis.
+- **Pembersihan:** Menyelesaikan atau membatalkan tugas melalui dasbor mengikuti aturan status MCP `task-write`, sehingga klaim aktif dilepaskan dan handoff tertunda yang terkait kedaluwarsa secara otomatis.
 
 ## Model Koordinasi
 
 Dasbor mencerminkan alur alat MCP:
 
-- `task-claim` membuat kepemilikan
-- `claim-list` memeriksa kepemilikan
-- `claim-release` membersihkan kepemilikan basi
-- `handoff-create` mentransfer pekerjaan yang belum selesai
-- `handoff-list` memeriksa status antrean
-- `handoff-update` menutup transfer yang basi atau telah dikonsumsi
-- `task-update` adalah jalur transisi status yang otoritatif
+- `claim-manage` membuat kepemilikan (mode klaim)
+- `claim-manage` memeriksa kepemilikan (mode list)
+- `claim-manage` membersihkan kepemilikan basi (mode rilis)
+- `handoff-write` mentransfer pekerjaan yang belum selesai
+- `handoff-read` memeriksa status antrean
+- `handoff-write` menutup transfer yang basi atau telah dikonsumsi (mode update)
+- `task-write` adalah jalur transisi status yang otoritatif
 
 Ini berarti dasbor bukan lagi jalur mutasi terpisah untuk tugas. Pembersihan koordinasi dan aturan siklus hidup tugas tetap konsisten antara UI dan pemanggil MCP.
 
@@ -73,7 +75,7 @@ Tab Knowledge Graph menyediakan visualisasi graf gaya-tarik (force-directed) int
 - **Node berkode warna** berdasarkan tipe entitas: hijau (orang), biru (tempat), oranye (organisasi), ungu (konsep)
 - **Label tepi** yang menampilkan tipe relasi antar entitas yang terhubung
 - **Klik** node untuk memeriksa detail dan observasinya di tooltip
-- **Klik dua kali** node untuk menghapusnya (berkaskade ke relasi dan observasi)
+- **Klik dua kali** node untuk menghapusnya (meminta konfirmasi; berkaskade ke relasi dan observasi)
 - **Klik kanan** tepi untuk menghapus relasi
 - **Modal Tambah Entitas**: nama, dropdown tipe (orang/tempat/organisasi/konsep), deskripsi
 - **Modal Tambah Relasi**: pilih entitas asal, pilih entitas tujuan, input tipe relasi

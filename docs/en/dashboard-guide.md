@@ -57,19 +57,19 @@ Use the `Handoffs` tab as the coordination console.
 
 - **Claims:** Inspect active ownership across the selected repo and release stale claims when reassignment is needed.
 - **Handoffs:** Create transfer context for unfinished work, inspect structured context, and close consumed or stale handoffs.
-- **Cleanup:** Completing or canceling a task through the dashboard now follows MCP `task-update`, so active claims are released and linked pending handoffs are expired automatically.
+- **Cleanup:** Completing or canceling a task through the dashboard follows the MCP `task-write` status rules, so active claims are released and linked pending handoffs are expired automatically.
 
 ## Coordination Model
 
 The dashboard mirrors the MCP tool flow:
 
-- `task-claim` creates ownership
-- `claim-list` inspects ownership
-- `claim-release` clears stale ownership
-- `handoff-create` transfers unfinished work
-- `handoff-list` inspects queue state
-- `handoff-update` closes stale or consumed transfers
-- `task-update` is the authoritative status transition path
+- `claim-manage` creates ownership (claim mode)
+- `claim-manage` inspects ownership (list mode)
+- `claim-manage` clears stale ownership (release mode)
+- `handoff-write` transfers unfinished work
+- `handoff-read` inspects queue state
+- `handoff-write` closes stale or consumed transfers (update mode)
+- `task-write` is the authoritative status transition path
 
 This means the dashboard is no longer a separate mutation path for tasks. Coordination cleanup and task lifecycle rules stay consistent between UI and MCP callers.
 
@@ -80,7 +80,7 @@ The Knowledge Graph tab provides an interactive force-directed graph visualizati
 - **Color-coded nodes** by entity type: green (person), blue (place), orange (organization), purple (concept)
 - **Edge labels** showing relation types between connected entities
 - **Click** a node to inspect its details and observations in a tooltip
-- **Double-click** a node to delete it (cascades to relations and observations)
+- **Double-click** a node to delete it (asks for confirmation; cascades to relations and observations)
 - **Right-click** an edge to delete the relation
 - **Add Entity modal**: name, type dropdown (person/place/organization/concept), description
 - **Add Relation modal**: from-entity select, to-entity select, relation type input

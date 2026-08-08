@@ -2,7 +2,9 @@
 
 Panduan praktis untuk alat-alat yang diekspos server MCP ini kepada agen AI. Setiap alat dikelompokkan berdasarkan domain dengan pola penggunaan dan contoh.
 
-> **`owner` & `repo` — persyaratan penting:** Sebagian besar alat memerlukan `owner` (organisasi/username GitHub) dan `repo` (nama proyek). Jika tidak disertakan, server akan mencoba menentukannya dari workspace roots — tetapi ini tidak dapat diandalkan. **Selalu berikan keduanya secara eksplisit** untuk menghindari kegagalan. Sebagai jalan pintas, Anda dapat menggunakan format `"owner/nama-repo"` untuk `repo` dan server akan mengekstrak `owner` secara otomatis.
+> **`owner` & `repo` — persyaratan penting:** Sebagian besar alat menerima `owner` (organisasi/username GitHub) dan `repo` (nama proyek). Jika tidak disertakan, server akan mencoba menentukannya dari workspace roots / direktori kerja — tetapi ini tidak dapat diandalkan. **Selalu berikan keduanya secara eksplisit** untuk menghindari kegagalan. Sebagai jalan pintas, Anda dapat menggunakan format `"owner/nama-repo"` untuk `repo` dan server akan mengekstrak `owner` secara otomatis. Anda juga dapat mengirim `scope: { owner, repo }`.
+
+> **Satu alat, banyak mode:** Server mengekspos **17 alat terpadu**. Setiap alat mendeteksi otomatis apa yang Anda inginkan dari parameter yang Anda kirim (lihat catatan "Auto-infer" per alat). Nama lama bertitik seperti `memory-store`, `memory-search`, atau `task-create` **bukan** alat terpisah — di sini dijelaskan sebagai _mode_ dari alat terpadu.
 
 ---
 
@@ -10,9 +12,18 @@ Panduan praktis untuk alat-alat yang diekspos server MCP ini kepada agen AI. Set
 
 Alat-alat ini mengelola memori jangka panjang proyek Anda: keputusan arsitektur, fakta kode, pola, dan kesalahan.
 
-### `memory-store` — Menyimpan Memori Baru
+### `memory-write` — Menyimpan / Memperbarui / Mengakui Memori
 
-Simpan apa yang Anda pelajari agar tetap ada di seluruh sesi.
+Empat mode, terdeteksi otomatis:
+
+| Mode            | Pemicunya                     | Gunakan untuk                                           |
+| --------------- | ----------------------------- | ------------------------------------------------------- |
+| **Create**      | `content` ada                 | Menyimpan memori baru (dulu `memory-store`)             |
+| **Update**      | `id` / `code` + bidang        | Mengedit memori yang ada (dulu `memory-update`)         |
+| **Acknowledge** | `id` / `code` + `acknowledge` | Melaporkan memori berguna (dulu `memory-acknowledge`)   |
+| **Bulk**        | `memories: [...]`             | Campuran create/update/acknowledge dalam satu panggilan |
+
+**Contoh Create:**
 
 ```json
 {
@@ -20,34 +31,86 @@ Simpan apa yang Anda pelajari agar tetap ada di seluruh sesi.
 	"title": "Use SQLite for local persistence",
 	"content": "We chose SQLite over JSON files because...",
 	"importance": 4,
-	"agent": "assistant",
-	"model": "gpt-4",
 	"scope": { "owner": "my-org", "repo": "my-project" },
 	"tags": ["database", "architecture"]
 }
 ```
 
-**Bidang (semua wajib kecuali disebutkan opsional):**
+**Bidang Create:**
 
 - `type` — `code_fact`, `decision`, `mistake`, `pattern`, atau `task_archive`
 - `title` — judul pendek yang dapat dibaca manusia (3-255 karakter)
 - `content` — isi memori (min 10 karakter)
 - `importance` — angka 1-5; seberapa kritis ini (semakin tinggi = semakin lambat meluruh)
-- `agent` — nama agen yang membuat memori ini
-- `model` — model AI yang digunakan oleh agen
-- `scope` — **objek** dengan `owner` (organisasi/username GitHub) dan `repo` (nama proyek) — keduanya wajib
+- `scope` — **objek** dengan `owner` dan `repo` (atau kirim `owner`/`repo` di level atas)
 - `tags` (opsional) — label teknologi untuk kemudahan ditemukan lintas proyek
 - `code` (opsional) — dibuat otomatis sebagai `MEM-001`, `MEM-002`, dst. jika tidak diisi (berurutan per repo)
+- `agent` / `model` (opsional) — otomatis ditangkap dari sesi jika tidak diisi
 - `role` (opsional, default `"unknown"`) — peran agen yang membuat memori ini
 - `metadata` (opsional) — konteks tambahan terstruktur
 - `ttlDays` (opsional) — time-to-live dalam hari; setelah itu memori kedaluwarsa
 - `supersedes` (opsional) — kode memori atau UUID yang digantikan oleh entri ini
 - `is_global` (opsional, default `false`) — jika true, dibagikan ke semua repositori
-- `structured` (opsional, default `false`) — jika true, mengembalikan JSON terstruktur dari memori yang disimpan
+- `status` (opsional) — `active` (default) atau `archived`
 
-### `memory-search` — Menemukan Memori yang Relevan
+**Kemudahan keputusan (dulu `decision-log`):** tambahkan `type: "decision"` dengan `context` + `rationale` + `alternatives`, konten diformat otomatis (importance default 4):
 
-Lapisan navigasi. Mengembalikan tabel kompak dari ID memori yang cocok (bukan konten lengkap).
+```json
+{
+	"type": "decision",
+	"title": "Use SQLite over PostgreSQL",
+	"context": "We need local-first storage without server setup",
+	"rationale": "SQLite is embedded, zero-config, and sufficient for single-user agent workflows",
+	"alternatives": ["PostgreSQL", "JSON files"],
+	"scope": { "owner": "my-org", "repo": "my-project" }
+}
+```
+
+**Arsip sesi (dulu `session-summarize`):** tambahkan `type: "task_archive"` dengan `key_decisions` + `next_steps`, konten diformat otomatis (importance default 3):
+
+```json
+{
+	"type": "task_archive",
+	"title": "Session: authentication flow",
+	"key_decisions": ["Use JWT with 24h expiry"],
+	"next_steps": ["Add refresh token rotation"],
+	"scope": { "owner": "my-org", "repo": "my-project" }
+}
+```
+
+**Contoh Update:**
+
+```json
+{
+	"code": "MEM-001",
+	"importance": 5,
+	"status": "archived"
+}
+```
+
+**Contoh Acknowledge** — wajib setelah menggunakan memori untuk menghasilkan kode. Membantu sistem peluruhan mengetahui apa yang berguna:
+
+```json
+{
+	"code": "MEM-001",
+	"acknowledge": "used",
+	"application_context": "Used this pattern when implementing the auth middleware"
+}
+```
+
+**Penolakan konflik (Pengaman Anti-Hallusinasi):** membuat memori yang isinya tumpang tindih dengan memori yang ada di atas ambang konflik ditolak dengan error `MEMORY_CONFLICT`. Petunjuknya menyuruh Anda mengirim `id`/`code` untuk update, `acknowledge`, atau `supersedes` jika entri baru menggantikan yang lama.
+
+### `memory-read` — Cari / Detail / Recap
+
+Tiga mode, terdeteksi otomatis:
+
+| Mode       | Pemicunya                            | Gunakan untuk                                             |
+| ---------- | ------------------------------------ | --------------------------------------------------------- |
+| **Search** | `query`                              | Menemukan memori yang relevan (dulu `memory-search`)      |
+| **Detail** | `id` / `code` (atau `ids` / `codes`) | Konten lengkap satu/lebih memori (dulu `memory-detail`)   |
+| **Recap**  | tidak ada parameter lain             | Statistik ikhtisar + memori teratas (dulu `memory-recap`) |
+
+**Contoh Search:**
 
 ```json
 {
@@ -59,40 +122,20 @@ Lapisan navigasi. Mengembalikan tabel kompak dari ID memori yang cocok (bukan ko
 
 **Tips pro:**
 
-- Gunakan `current_tags: ["react", "typescript"]` untuk menemukan memori yang relevan dengan tech-stack dari proyek lain.
-- Gunakan `types: ["decision", "pattern"]` untuk menyaring berdasarkan jenis pengetahuan.
-- Gunakan `include_archived: true` untuk mencari juga memori yang diarsipkan/meluruh.
+- Gunakan `current_tags: ["react", "typescript"]` untuk menarik memori yang relevan dengan tech-stack dari proyek lain (Tech-Stack Affinity).
+- Gunakan filter `type` (mis. `"decision"`, `"pattern"`), rentang importance (`min`/`max`), dan `include_archived: true` untuk menyertakan memori yang diarsipkan/meluruh.
+- Tanggal bahasa alami bekerja di query: `"yesterday"`, `"last week"`, `"last 3 days"` (Time Tunnel).
 
-### `memory-detail` — Membaca Konten Memori Lengkap
-
-Setelah pencarian mengembalikan baris pointer, ambil konten lengkap:
+**Contoh Detail** — pencarian berdasarkan `id` (UUID) atau `code` (mis. `MEM-001`):
 
 ```json
 { "code": "MEM-001" }
 ```
 
-Mendukung pencarian berdasarkan `id` (UUID) atau `code` (mis. `MEM-001`). Kode bersifat berurutan per repo.
-
-### `memory-update` — Mengedit Memori yang Ada
+**Contoh Recap:**
 
 ```json
-{
-	"code": "MEM-001",
-	"importance": 5,
-	"status": "archived"
-}
-```
-
-### `memory-acknowledge` — Melaporkan Kegunaan Memori
-
-Wajib setelah menggunakan memori untuk menghasilkan kode. Membantu sistem peluruhan mengetahui apa yang berguna.
-
-```json
-{
-	"code": "MEM-001",
-	"status": "used",
-	"application_context": "Used this pattern when implementing the auth middleware"
-}
+{ "repo": "my-project" }
 ```
 
 ### `memory-delete` — Menghapus Memori
@@ -107,17 +150,9 @@ Tunggal atau massal:
 { "codes": ["MEM-001", "MEM-002"] }
 ```
 
-**Perilaku saat tidak ditemukan** (OPT-CODE-04): penghapusan satu target (`id`/`code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`) melewati target yang tidak ada, menghapus sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial). Berlaku seragam untuk `memory-delete`, `standard-delete`, dan `task-delete`.
+**Perilaku saat tidak ditemukan:** penghapusan satu target (`id`/`code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`) melewati target yang tidak ada, menghapus sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial). Berlaku seragam untuk `memory-delete`, `standard-delete`, dan `task-delete`.
 
-### `memory-recap` — Ikhtisar Dasbor
-
-Mengembalikan statistik (jumlah berdasarkan jenis) dan tabel pointer dari memori teratas.
-
-```json
-{ "repo": "my-project" }
-```
-
-### `memory-summarize` — Memperbarui Ringkasan Repo
+### `repo-summarize` — Memperbarui Ringkasan Repo (dulu `memory-summarize`)
 
 Menjaga ringkasan proyek tingkat tinggi yang dapat dengan cepat dirujuk oleh agen:
 
@@ -128,9 +163,9 @@ Menjaga ringkasan proyek tingkat tinggi yang dapat dengan cepat dirujuk oleh age
 }
 ```
 
-### `memory-synthesize` — Mengajukan Pertanyaan Tentang Pengetahuan Anda
+### `synthesize` — Mengajukan Pertanyaan Tentang Pengetahuan Anda (dulu `memory-synthesize`)
 
-Menggunakan LLM klien AI Anda sendiri untuk menjawab pertanyaan yang didasarkan pada memori lokal:
+Menggunakan LLM klien AI Anda sendiri (sampling) untuk menjawab pertanyaan yang didasarkan pada memori lokal:
 
 ```json
 {
@@ -139,15 +174,22 @@ Menggunakan LLM klien AI Anda sendiri untuk menjawab pertanyaan yang didasarkan 
 }
 ```
 
+> Catatan: `synthesize` hanya terdaftar jika klien mengiklankan dukungan sampling.
+
 ---
 
 ## Alat Tugas (Manajemen Pekerjaan)
 
-Melacak item pekerjaan melalui siklus hidupnya: Backlog → Pending → In Progress → Completed.
+### `task-write` — Membuat / Memperbarui Tugas (dulu `task-create` & `task-update`)
 
-### `task-create` — Mendaftarkan Tugas
+Mode, terdeteksi otomatis dalam urutan ini:
 
-`task_code` bersifat opsional. Jika tidak diisi, akan dibuat otomatis sebagai `TASK-001`, `TASK-002`, dst. (berurutan per repo).
+1. `tasks: [...]` → **Bulk** — setiap item menebak create vs update secara independen
+2. `interactive: true` → **Interaktif** — menggali bidang yang kurang dari pengguna
+3. `phase` + `title` + `description` → **Create**
+4. `id` atau `code`/`task_code` ada → **Update**
+
+**Contoh Create** (`task_code` opsional — dibuat otomatis sebagai `TASK-001`, `TASK-002`, dst. berurutan per repo):
 
 ```json
 {
@@ -161,34 +203,7 @@ Melacak item pekerjaan melalui siklus hidupnya: Backlog → Pending → In Progr
 }
 ```
 
-Dengan `task_code` eksplisit dan `suggested_skills`:
-
-```json
-{
-	"repo": "my-project",
-	"task_code": "AUTH-001",
-	"phase": "implementation",
-	"title": "Implement JWT middleware",
-	"description": "1. Create middleware class\n2. Add token validation\n3. Write tests",
-	"priority": 4,
-	"status": "pending",
-	"suggested_skills": ["implement-feature"]
-}
-```
-
-Mode massal (`task_code` opsional di setiap item):
-
-```json
-{
-	"repo": "my-project",
-	"tasks": [
-		{ "task_code": "AUTH-001", "phase": "impl", "title": "...", "description": "..." },
-		{ "phase": "impl", "title": "...", "description": "..." }
-	]
-}
-```
-
-Mode massal:
+**Contoh Bulk Create:**
 
 ```json
 {
@@ -200,27 +215,7 @@ Mode massal:
 }
 ```
 
-### `task-list` — Menemukan Tugas
-
-```json
-{ "repo": "my-project" }
-```
-
-Secara default menyaring ke `in_progress` dan `pending`. Gunakan `status` untuk filter kustom:
-
-```json
-{ "repo": "my-project", "status": "backlog", "limit": 20 }
-```
-
-### `task-detail` — Membaca Tugas Lengkap
-
-```json
-{ "repo": "my-project", "task_code": "AUTH-001" }
-```
-
-Mengembalikan deskripsi lengkap, komentar, status koordinasi (klaim, handoff), dan riwayat status.
-
-### `task-update` — Memajukan Tugas
+**Contoh Update / progres:**
 
 ```json
 {
@@ -231,7 +226,7 @@ Mengembalikan deskripsi lengkap, komentar, status koordinasi (klaim, handoff), d
 }
 ```
 
-Saat menyelesaikan:
+**Saat menyelesaikan:**
 
 ```json
 {
@@ -245,23 +240,39 @@ Saat menyelesaikan:
 }
 ```
 
-**Transisi status yang diizinkan:**
+**Aturan status:**
 
-- backlog → pending, in_progress
-- pending → in_progress, blocked
-- in_progress → completed, blocked, canceled
-- blocked → in_progress
-- completed/canceled → terminal (tidak ada keluar)
+- Tugas baru harus dimulai sebagai `backlog` atau `pending`.
+- Setiap perubahan status **wajib menyertakan `comment`** kecuali `force: true` diberikan.
+- Anda tidak bisa langsung melompat ke `completed` dari `backlog`/`pending`/`blocked` — tugas harus melewati `in_progress` dulu.
+- `completed` / `canceled` bersifat terminal: klaim dilepas otomatis, handoff tertunda yang terhubung kedaluwarsa, dan tugas yang selesai diarsipkan ke memori.
 
-Pembaruan massal:
+### `task-read` — Cari / Detail / List (dulu `task-list` & `task-detail`)
+
+Mode, terdeteksi otomatis:
+
+| Mode       | Pemicunya                       | Contoh                                                            |
+| ---------- | ------------------------------- | ----------------------------------------------------------------- |
+| **Search** | `query` ada                     | pencarian kata kunci + semantik di seluruh tugas                  |
+| **Detail** | `task_code` / `id` (atau array) | tugas lengkap incl. komentar + status koordinasi (klaim, handoff) |
+| **List**   | tidak ada parameter lain        | daftar halaman, difilter oleh `status`                            |
+
+**Contoh List:**
 
 ```json
-{
-	"repo": "my-project",
-	"ids": ["uuid-1", "uuid-2"],
-	"status": "blocked",
-	"comment": "Blocked by missing API key"
-}
+{ "repo": "my-project" }
+```
+
+Secara default menyaring ke `in_progress` dan `pending`. Gunakan `status` untuk filter kustom:
+
+```json
+{ "repo": "my-project", "status": "backlog", "limit": 20 }
+```
+
+**Contoh Detail** — mengembalikan deskripsi lengkap, komentar, status koordinasi (klaim, handoff), dan riwayat status:
+
+```json
+{ "repo": "my-project", "task_code": "AUTH-001" }
 ```
 
 ### `task-delete` — Menghapus Tugas
@@ -270,31 +281,15 @@ Pembaruan massal:
 { "repo": "my-project", "task_code": "AUTH-001" }
 ```
 
-**Perilaku saat tidak ditemukan** (OPT-CODE-04): penghapusan satu target (`id`/`code`/`task_code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`/`task_codes`) melewati target yang tidak ada, membatalkan sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial).
+**Perilaku saat tidak ditemukan:** kontrak eksekusi parsial yang sama seperti dijelaskan di `memory-delete` (referensi tunggal melempar error, massal melewati + melaporkan).
 
 ---
 
 ## Alat Standar (Pustaka Standar Koding)
 
-Mengelola aturan koding yang dapat digunakan kembali yang diterapkan di seluruh proyek.
+### `standard-write` — Menyimpan / Memperbarui Standar (dulu `standard-store` & `standard-update`)
 
-### `standard-search` — Menemukan Standar yang Berlaku
-
-Panggilan WAJIB sebelum mengimplementasikan apa pun. Mengembalikan standar koding yang cocok:
-
-```json
-{ "stack": ["react", "typescript"] }
-```
-
-### `standard-detail` — Membaca Standar Lengkap
-
-```json
-{ "code": "STD-001" }
-```
-
-Kode dibuat otomatis sebagai `STD-001`, `STD-002`, dst. (berurutan per repo atau lingkup global).
-
-### `standard-store` — Menyimpan Standar Baru
+**Create** (wajib `name` + `content` + `tags` + `metadata`):
 
 ```json
 {
@@ -308,7 +303,7 @@ Kode dibuat otomatis sebagai `STD-001`, `STD-002`, dst. (berurutan per repo atau
 }
 ```
 
-### `standard-update` — Memperbarui Standar
+**Update** (`code` + bidang):
 
 ```json
 {
@@ -318,21 +313,45 @@ Kode dibuat otomatis sebagai `STD-001`, `STD-002`, dst. (berurutan per repo atau
 }
 ```
 
+Kode dibuat otomatis sebagai `STD-001`, `STD-002`, dst. (berurutan per repo atau lingkup global).
+
+### `standard-read` — Cari / Detail / List (dulu `standard-search` & `standard-detail`)
+
+Mode, terdeteksi otomatis:
+
+| Mode       | Pemicunya                  | Contoh                                                    |
+| ---------- | -------------------------- | --------------------------------------------------------- |
+| **Search** | `query` / `stack` ada      | WAJIB sebelum implementasi — temukan standar yang berlaku |
+| **Detail** | `id` / `code` (atau array) | konten standar lengkap                                    |
+| **List**   | tidak ada parameter lain   | daftar halaman                                            |
+
+**Contoh Search:**
+
+```json
+{ "stack": ["react", "typescript"] }
+```
+
+**Contoh Detail:**
+
+```json
+{ "code": "STD-001" }
+```
+
 ### `standard-delete` — Menghapus Standar
 
 ```json
 { "code": "STD-001" }
 ```
 
-**Perilaku saat tidak ditemukan** (OPT-CODE-04): penghapusan satu target (`id`/`code`) melempar error jika target tidak ada; penghapusan massal (`ids`/`codes`) melewati target yang tidak ada, menghapus sisanya, dan melaporkannya di `errors`/`skippedCount` (eksekusi parsial).
+**Perilaku saat tidak ditemukan:** kontrak penghapusan parsial yang sama dengan `memory-delete`.
 
 ---
 
-## Alat Koordinasi (Serah Terima Agen)
+## Alat Koordinasi (Serah Terima Multi-Agen)
 
-Digunakan ketika banyak agen perlu mentransfer konteks.
+### `handoff-write` — Membuat atau Memperbarui Handoff (dulu `handoff-create` & `handoff-update`)
 
-### `handoff-create` — Mentransfer Pekerjaan yang Belum Selesai
+**Create** (wajib `summary` + `from_agent`, di-scope oleh owner/repo):
 
 ```json
 {
@@ -348,19 +367,39 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 }
 ```
 
-### `handoff-list` — Memeriksa Antrean Handoff
-
-```json
-{ "repo": "my-project", "status": "pending" }
-```
-
-### `handoff-update` — Menutup Handoff
+**Update** (`id` + `status`):
 
 ```json
 { "id": "handoff-uuid", "status": "accepted" }
 ```
 
-### `task-claim` — Mengambil Kepemilikan
+### `handoff-read` — Memeriksa Antrean Handoff (dulu `handoff-list`)
+
+Mode, terdeteksi otomatis:
+
+| Mode           | Pemicunya                  | Contoh                                                        |
+| -------------- | -------------------------- | ------------------------------------------------------------- |
+| **Detail**     | `id` ada                   | satu handoff                                                  |
+| **List klaim** | `claim: true` atau `agent` | klaim aktif                                                   |
+| **Search**     | `query` ada                | pencarian handoff dengan filter                               |
+| **List**       | tidak ada parameter lain   | semua handoff, filter dengan `status`/`to_agent`/`from_agent` |
+
+```json
+{ "repo": "my-project", "status": "pending" }
+```
+
+### `claim-manage` — Mengambil / Melepas / Memeriksa Kepemilikan (dulu `task-claim`, `claim-list`, `claim-release`)
+
+Mode, terdeteksi otomatis:
+
+| Mode              | Pemicunya                       | Contoh                        |
+| ----------------- | ------------------------------- | ----------------------------- |
+| **Claim**         | `task_id`/`task_code` + `agent` | mengambil kepemilikan tugas   |
+| **Release**       | `release: true` + referensi     | melepas kepemilikan yang basi |
+| **List per agen** | hanya `agent`                   | klaim untuk satu agen         |
+| **List semua**    | tidak ada parameter lain        | semua klaim aktif             |
+
+**Contoh Claim:**
 
 ```json
 {
@@ -371,16 +410,16 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 }
 ```
 
-### `claim-list` — Melihat Siapa Memiliki Apa
+**Contoh Release:**
+
+```json
+{ "repo": "my-project", "task_code": "AUTH-001", "release": true }
+```
+
+**Contoh List:**
 
 ```json
 { "repo": "my-project" }
-```
-
-### `claim-release` — Melepaskan Kepemilikan
-
-```json
-{ "repo": "my-project", "task_code": "AUTH-001", "agent": "agent-b" }
 ```
 
 ---
@@ -390,41 +429,41 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 ### Memulai Sesi Baru
 
 ```
-1. task-list (repo: my-project)
+1. task-read (repo: my-project, status: pending)
 2. Pilih SATU tugas dari daftar
-3. task-claim (task_code: ..., agent: ..., role: ...)
-4. task-detail (task_code: ...)
-5. standard-search (stack: [teknologi relevan])
-6. Kerjakan tugas
-7. task-update (status: completed, est_tokens: N)
+3. claim-manage (task_code: ..., agent: ..., role: ...)
+4. task-read (task_code: ...) — detail lengkap
+5. standard-read (stack: [teknologi relevan])
+6. Kerjakan tugas teknis
+7. task-write (task_code: ..., status: completed, est_tokens: N, comment: ...)
 ```
 
 ### Men-debug Bug
 
 ```
-1. memory-search (query: deskripsi error, repo: ...)
-2. memory-detail pada hasil yang relevan
+1. memory-read (query: deskripsi error, repo: ...)
+2. memory-read (code: <kode hasil>) — konten lengkap
 3. Perbaiki masalah
-4. memory-store (type: mistake, tentang apa yang salah)
-5. task-update (jika ada tugas yang melacak perbaikan)
+4. memory-write (type: mistake, tentang apa yang salah)
+5. task-write (jika ada tugas yang melacak perbaikan)
 ```
 
 ### Transfer Pengetahuan Antar Agen
 
 ```
-1. task-detail / memory-search untuk mengumpulkan konteks
-2. handoff-create dengan next_steps dan blockers
-3. Agen penerima melihat handoff-list dan mengambilnya
-4. Agen penerima memanggil handoff-update (status: accepted)
+1. task-read / memory-read untuk mengumpulkan konteks
+2. handoff-write dengan next_steps dan blockers
+3. Agen penerima melihat handoff-read (status: pending) dan mengambilnya
+4. Agen penerima memanggil handoff-write (id: ..., status: accepted)
 ```
 
 ### Orientasi ke Proyek Baru
 
 ```
-1. memory-synthesize (objective: "Tentang apa proyek ini?")
-2. memory-recap untuk melihat memori teratas
-3. task-list untuk melihat apa yang tertunda
-4. standard-search untuk aturan koding
+1. synthesize (objective: "Tentang apa proyek ini?")
+2. memory-read (repo: ...) — recap memori teratas
+3. task-read (repo: ...) — apa yang tertunda
+4. standard-read (stack: [...]) — aturan koding
 5. Mulai bekerja
 ```
 
@@ -432,65 +471,32 @@ Digunakan ketika banyak agen perlu mentransfer konteks.
 
 ## Ringkasan Grup Alat
 
-| Grup         | Alat                                                                                | Tujuan                                     |
-| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------ |
-| Memory       | store, search, detail, update, acknowledge, delete, recap, summarize, synthesize    | Pengetahuan tahan lama jangka panjang      |
-| Task         | create, list, detail, update, delete                                                | Siklus hidup item pekerjaan                |
-| Standard     | store, search, detail, update, delete                                               | Aturan koding yang dapat digunakan kembali |
-| Coordination | handoff-create, handoff-list, handoff-update, task-claim, claim-list, claim-release | Orkestrasi multi-agen                      |
-| Knowledge    | create_entity, delete_entity, create_relation, delete_relation, delete_observation  | Graf entitas & relasi                      |
+| Grup         | Alat                                                                           | Tujuan                                     |
+| ------------ | ------------------------------------------------------------------------------ | ------------------------------------------ |
+| Memory       | `memory-read`, `memory-write`, `memory-delete`, `repo-summarize`, `synthesize` | Pengetahuan tahan lama jangka panjang      |
+| Task         | `task-read`, `task-write`, `task-delete`                                       | Siklus hidup item pekerjaan                |
+| Standard     | `standard-read`, `standard-write`, `standard-delete`                           | Aturan koding yang dapat digunakan kembali |
+| Coordination | `handoff-read`, `handoff-write`, `claim-manage`                                | Orkestrasi multi-agen                      |
 
----
-
-## Alat Knowledge Graph (Graf Pengetahuan)
-
-Alat-alat ini mengelola data relasi entitas terstruktur untuk memetakan konsep domain.
-
-### `create_entity` — Membuat Entitas Knowledge Graph
-
-```json
-{
-	"name": "PaymentService",
-	"type": "concept",
-	"description": "Handles payment processing and invoicing",
-	"repo": "my-project"
-}
-```
-
-### `delete_entity` — Menghapus Entitas (Berkaskade)
-
-Berkaskade untuk menghapus semua relasi dan observasi terkait.
-
-```json
-{ "name": "PaymentService" }
-```
-
-### `create_relation` — Menghubungkan Dua Entitas
-
-```json
-{
-	"from_entity": "PaymentService",
-	"to_entity": "User",
-	"relation_type": "processes_payments_for",
-	"repo": "my-project"
-}
-```
-
-### `delete_relation` — Menghapus Relasi
-
-```json
-{
-	"from_entity": "PaymentService",
-	"to_entity": "User",
-	"relation_type": "processes_payments_for"
-}
-```
-
-### `delete_observation` — Menghapus Observasi
-
-```json
-{ "id": "<observation-uuid>" }
-```
+| Alat              | Tujuan                                       |
+| ----------------- | -------------------------------------------- |
+| `memory-read`     | Cari / detail / recap memori                 |
+| `memory-write`    | Buat / perbarui / akui memori                |
+| `memory-delete`   | Hapus memori (tunggal atau massal)           |
+| `repo-summarize`  | Perbarui ringkasan proyek singkat repo       |
+| `synthesize`      | Tanya-jawab berbasis LLM atas memori lokal   |
+| `task-read`       | Cari / detail / list tugas                   |
+| `task-write`      | Buat / perbarui / operasi massal tugas       |
+| `task-delete`     | Hapus tugas (tunggal atau massal)            |
+| `standard-read`   | Cari / detail / list standar koding          |
+| `standard-write`  | Buat / perbarui standar                      |
+| `standard-delete` | Hapus standar (tunggal atau massal)          |
+| `handoff-read`    | Periksa handoff atau klaim aktif             |
+| `handoff-write`   | Buat / perbarui handoff                      |
+| `claim-manage`    | Klaim, lepas, atau list kepemilikan tugas    |
+| `agent-context`   | Konteks sesi dalam satu panggilan            |
+| `codebase-index`  | Bangun / segarkan / status indeks codebase   |
+| `codebase-read`   | Cari / telusuri / simbol berkas / arsitektur |
 
 ---
 
@@ -498,40 +504,28 @@ Berkaskade untuk menghapus semua relasi dan observasi terkait.
 
 ### `agent-context` — Konteks Sesi dalam Satu Panggilan
 
-Mengembalikan memori yang relevan, tugas aktif, dan keputusan terbaru untuk sesi saat ini.
+Mengembalikan memori yang relevan, tugas aktif, dan keputusan terbaru untuk sesi saat ini:
 
 ```json
-{
-	"owner": "my-org",
-	"repo": "my-project",
-	"objective": "implement auth",
-	"limit": 5
-}
+{ "owner": "my-org", "repo": "my-project", "objective": "implement auth", "limit": 5 }
 ```
 
-### `decision-log` — Pencatatan Keputusan Terstruktur
+### Pencatatan Keputusan Terstruktur
 
-Menyimpan keputusan dengan konteks, alasan, dan alternatif.
+Bukan alat terpisah — gunakan `memory-write` dengan `type: "decision"` plus `context`, `rationale`, dan `alternatives` (lihat [Alat Memori](#memory-write--menyimpan--memperbarui--mengakui-memori)).
 
-```json
-{
-	"summary": "Use SQLite over PostgreSQL",
-	"context": "We need local-first storage without server setup",
-	"rationale": "SQLite is embedded, zero-config, and sufficient for single-user agent workflows",
-	"alternatives": ["PostgreSQL", "JSON files"]
-}
-```
+### Ringkasan Sesi
 
-### `session-summarize` — Mengarsipkan Ringkasan Sesi
+Gunakan `memory-write` dengan `type: "task_archive"` plus `key_decisions` dan `next_steps`, atau `repo-summarize` untuk ringkasan proyek per-repo yang persisten.
 
-```json
-{
-	"summary": "Implemented authentication flow with JWT tokens. Updated user model.",
-	"key_decisions": ["Use JWT with 24h expiry"],
-	"next_steps": ["Add refresh token rotation"],
-	"repo": "my-project"
-}
-```
+---
+
+## Knowledge Graph (Dikelola via Dasbor)
+
+Knowledge Graph menyimpan entitas, relasi ber-tipe, dan observasi, dengan ekstraksi entitas otomatis saat memori disimpan (NLP offline).
+
+- **Buat / edit / hapus** entitas, relasi, dan observasi dilakukan di **Web Dashboard → tab Knowledge Graph** (dan via API dasbor).
+- **Alat MCP** khusus untuk CRUD graf (`create_entity`, `delete_entity`, `create_relation`, `delete_relation`, `delete_observation`) adalah **roadmap — belum diimplementasikan**.
 
 ---
 
@@ -539,4 +533,4 @@ Menyimpan keputusan dengan konteks, alasan, dan alternatif.
 
 Fitur **Knowledge Graph** **terinspirasi dari** [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — konsep grafik entitas/relasi terstruktur diimplementasikan ulang dengan skema sendiri dan ekstraksi NLP offline.
 
-Proyek ini **bukan** kompatibel drop-in: nama hulu `remember_fact`, `remember_facts`, `recall`, dan `forget` tidak disediakan sebagai alat maupun alias. Gunakan nama alat kanonik yang didokumentasikan di atas (`memory-store`, `memory-search`, `memory-delete`, dst.).
+Proyek ini **bukan** kompatibel drop-in: nama hulu `remember_fact`, `remember_facts`, `recall`, dan `forget` tidak disediakan sebagai alat maupun alias. Gunakan nama alat kanonik yang didokumentasikan di atas (`memory-write`, `memory-read`, `memory-delete`, dst.).

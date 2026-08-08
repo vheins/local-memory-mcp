@@ -13,10 +13,10 @@ Your AI client shows an error like `MCP server disconnected` or `Failed to initi
 ### Check 1: Node.js Version
 
 ```bash
-node --version   # requires >= 18
+node --version   # requires >= 20
 ```
 
-This server uses `fetch`, `AbortController`, and other modern APIs. Node 18+ is required.
+This server depends on `better-sqlite3` (Node 20+) and the dashboard tooling requires Node 20.19+ (or 22.12+).
 
 ### Check 2: Installation is Corrupt
 
@@ -63,10 +63,10 @@ export PATH="$(npm bin -g):$PATH"
 npx @vheins/local-memory-mcp dashboard
 ```
 
-You should see:
+You should see a line like:
 
 ```
-MCP Memory Dashboard running on http://localhost:3456
+DASHBOARD_STARTING v0.35.0 on http://localhost:3456
 ```
 
 ### Check 2: Port Conflict
@@ -84,7 +84,7 @@ PORT=3457 npx @vheins/local-memory-mcp dashboard
 
 ### Check 3: Dashboard Opens But Shows No Data
 
-The dashboard loads data from the same SQLite database the MCP server uses. If the MCP server never ran, there's no data yet. Create some activity first by using the MCP tools (e.g. memory-store).
+The dashboard loads data from the same SQLite database the MCP server uses. If the MCP server never ran, there's no data yet. Create some activity first by using the MCP tools (e.g. `memory-write`).
 
 ---
 
@@ -96,7 +96,7 @@ Errors mentioning `Transformers.js`, `ONNX`, or `all-MiniLM-L6-v2` during search
 
 ### Cause
 
-The first time you search, the server downloads the embedding model (~23MB) to Hugging Face's cache directory (`~/.cache/huggingface/`). This requires an internet connection and can take 30-60 seconds.
+The first time you search, the server downloads the embedding model (`Xenova/all-MiniLM-L6-v2`) to Hugging Face's cache directory (`~/.cache/huggingface/`). This requires an internet connection and can take 30-60 seconds.
 
 ### Fix
 
@@ -138,10 +138,16 @@ SQLITE_ERROR: no such table: memories
    ```bash
    pkill -f local-memory-mcp   # macOS/Linux
    ```
-2. Delete the database to start fresh (your data will be lost):
+2. Delete the database to start fresh (your data will be lost). The default location depends on your OS:
    ```bash
-   rm -f storage/memory.db
+   # Linux
+   rm -f ~/.config/local-memory-mcp/memory.db
+   # macOS
+   rm -f ~/Library/Application\ Support/local-memory-mcp/memory.db
+   # Windows (PowerShell)
+   Remove-Item ~/.local-memory-mcp/memory.db
    ```
+   > Note: a legacy `./storage/memory.db` in the working directory takes priority if it exists.
 3. Restart the server — tables are auto-created on startup.
 
 ---
@@ -162,7 +168,7 @@ Memories are scoped to a repository. If your current project is `my-app`, search
 
 ### Check 2: Low Similarity Threshold
 
-The system filters results below 0.50 similarity. If your memories are very different from your query, try rephrasing. Keyword matching still works for exact terms.
+Search uses an **adaptive threshold**: small result sets use a lenient cutoff (0.10), larger sets a stricter one (0.40), and the single best match is always returned even on a cold start. If your query returns nothing, try rephrasing or adding more terms — keyword matching still works for exact terms.
 
 ### Check 3: Agent Didn't Store Anything Yet
 
@@ -198,7 +204,7 @@ Or use a Node version manager like `nvm` or `fnm` which avoids permission issues
 
 ### Symptom
 
-The AI agent responds with _"I don't have a tool called memory-store"_ or similar.
+The AI agent responds with _"I don't have a tool called memory-write"_ or similar.
 
 ### Cause
 

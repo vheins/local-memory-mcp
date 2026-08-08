@@ -6,7 +6,7 @@ Complete guide for connecting **MCP Local Memory Service** to [Codex](https://de
 
 ## Prerequisites
 
-- **Node.js 18+** installed
+- **Node.js 20+** installed
 - **Codex CLI** installed ([download](https://developers.openai.com/codex))
 - Internet access for first-time setup
 
@@ -148,11 +148,11 @@ args = ["-y", "@vheins/local-memory-mcp"]
 default_tools_approval_mode = "prompt"
 ```
 
-| Mode | Behavior |
-|------|----------|
-| `auto` | Auto-approve all tools |
-| `prompt` | Ask the user each time (default) |
-| `approve` | Always approve without prompt |
+| Mode      | Behavior                         |
+| --------- | -------------------------------- |
+| `auto`    | Auto-approve all tools           |
+| `prompt`  | Ask the user each time (default) |
+| `approve` | Always approve without prompt    |
 
 ### Per-tool approval
 
@@ -164,10 +164,10 @@ command = "npx"
 args = ["-y", "@vheins/local-memory-mcp"]
 default_tools_approval_mode = "prompt"
 
-[mcp_servers.local-memory.tools.memory-search]
+[mcp_servers.local-memory.tools.memory-read]
 approval_mode = "auto"
 
-[mcp_servers.local-memory.tools.memory-store]
+[mcp_servers.local-memory.tools.memory-write]
 approval_mode = "prompt"
 
 [mcp_servers.local-memory.tools.task-delete]
@@ -182,7 +182,7 @@ Restrict which tools are available:
 
 ```toml
 # Only these tools may be used
-enabled_tools = ["memory-search", "memory-detail", "memory-recap", "task-list", "task-detail"]
+enabled_tools = ["memory-read", "task-read", "standard-read"]
 
 # Disallowed tools (applied after enabled_tools)
 disabled_tools = ["memory-delete", "task-delete"]
@@ -221,16 +221,17 @@ codex mcp list
 ```
 
 Output:
+
 ```
 local-memory — running
-  Tools: memory-store, memory-search, memory-detail, ...
+  Tools: memory-read, memory-write, task-read, ...
 ```
 
 Inside the Codex TUI, open `/mcp` to check server status.
 
 Test the connection by asking Codex:
 
-> *"Check local memory for this project"*
+> _"Check local memory for this project"_
 
 If Codex responds with "No memory" (not an error), the connection is successful.
 
@@ -258,30 +259,23 @@ startup_timeout_sec = 20
 tool_timeout_sec = 45
 default_tools_approval_mode = "prompt"
 enabled_tools = [
-  "memory-store", "memory-search", "memory-detail",
-  "memory-update", "memory-acknowledge", "memory-recap",
-  "task-list", "task-detail", "task-update",
-  "standard-search", "standard-detail"
+  "memory-read", "memory-write",
+  "task-read", "task-write",
+  "standard-read", "standard-write"
 ]
 disabled_tools = ["memory-delete", "task-delete"]
 
 # Tool-specific approval overrides
-[mcp_servers.local-memory.tools.memory-search]
+[mcp_servers.local-memory.tools.memory-read]
 approval_mode = "auto"
 
-[mcp_servers.local-memory.tools.memory-detail]
+[mcp_servers.local-memory.tools.task-read]
 approval_mode = "auto"
 
-[mcp_servers.local-memory.tools.task-list]
-approval_mode = "auto"
-
-[mcp_servers.local-memory.tools.task-detail]
-approval_mode = "auto"
-
-[mcp_servers.local-memory.tools.memory-store]
+[mcp_servers.local-memory.tools.memory-write]
 approval_mode = "prompt"
 
-[mcp_servers.local-memory.tools.task-update]
+[mcp_servers.local-memory.tools.task-write]
 approval_mode = "prompt"
 ```
 
@@ -291,9 +285,9 @@ approval_mode = "prompt"
 
 ### MCP Prompts Not Supported
 
-Codex CLI does **not** support MCP **prompts** (the `prompts/list` and `prompts/get` capabilities). This means prompt templates like `memory-agent-core`, `project-briefing`, or `task-orchestrator` cannot be invoked as slash commands in Codex.
+Codex CLI does **not** support MCP **prompts** (the `prompts/list` and `prompts/get` capabilities). This means prompt templates like `memory-agent-core`, `project-briefing`, or `task-management-guidelines` cannot be invoked as slash commands in Codex.
 
-However, **Tools** and **Resources** work fully. You can still use the server's tools directly (e.g., `memory-store`, `memory-search`, `task-list`) — only the predefined prompt templates are unavailable.
+However, **Tools** and **Resources** work fully. You can still use the server's tools directly (e.g. `memory-read`, `memory-write`, `task-read`) — only the predefined prompt templates are unavailable.
 
 For agents with full prompt support, see [MCP Protocol Reference](mcp-concepts.md).
 
@@ -318,6 +312,7 @@ codex mcp add local-memory -- npx -y @vheins/local-memory-mcp
 ### Server error / disconnect
 
 Run directly to see errors:
+
 ```bash
 npx -y @vheins/local-memory-mcp
 ```
