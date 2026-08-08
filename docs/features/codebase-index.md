@@ -75,26 +75,27 @@ Database records for files that no longer exist on disk are removed, keeping the
 
 ## Supported Languages
 
-| Language   | File Extensions                              | Status   |
-| :--------- | :------------------------------------------- | :------- |
-| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts`                | ✅ Full  |
-| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs`                | ✅ Full  |
-| Vue        | `.vue`                                       | ✅ Full  |
-| Go         | `.go`                                        | ✅ Full  |
-| Python     | `.py`                                        | ✅ Full  |
-| PHP        | `.php`                                       | ✅ Full  |
-| Rust       | `.rs`                                        | ✅ Full  |
-| Java       | `.java`                                      | ✅ Full  |
-| Dart       | `.dart`                                      | ✅ Full* |
-| Kotlin     | `.kt`, `.kts`                                | ✅ Full  |
-| Ruby       | `.rb`                                        | ✅ Full  |
-| Swift      | `.swift`                                     | ✅ Full  |
-| C          | `.c`, `.h`                                   | ✅ Full  |
-| C++        | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx` | ✅ Full  |
+| Language   | File Extensions                                    | Status   |
+| :--------- | :------------------------------------------------- | :------- |
+| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts`, `.svelte`, `.astro` | ✅ Full  |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs`                      | ✅ Full  |
+| Vue        | `.vue`                                             | ✅ Full  |
+| Go         | `.go`                                              | ✅ Full  |
+| Python     | `.py`                                              | ✅ Full  |
+| PHP        | `.php`                                             | ✅ Full  |
+| Rust       | `.rs`                                              | ✅ Full  |
+| Java       | `.java`                                            | ✅ Full  |
+| Dart       | `.dart`                                            | ✅ Full* |
+| Kotlin     | `.kt`, `.kts`                                      | ✅ Full  |
+| Ruby       | `.rb`                                              | ✅ Full  |
+| Swift      | `.swift`                                           | ✅ Full  |
+| C          | `.c`, `.h`                                         | ✅ Full  |
+| C++        | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`       | ✅ Full  |
+| Markdown   | `.md`, `.mdx`                                      | ✅ Full  |
 
 > _\* Dart requires a compatible tree-sitter grammar WASM — see ABI compatibility notes in operational guide._
 
-14 languages are parsed through tree-sitter grammars, implemented by **13 visitor classes** (the TypeScript visitor handles both TypeScript and TSX). Markdown uses a dedicated visitor (no grammar WASM), and a generic text visitor covers every other extension (JSON, YAML, CSS, shell scripts, etc.).
+15 languages are registered in `createRegistry()` (`parser/language-routing.ts`): 14 are parsed through tree-sitter grammars and Markdown uses a dedicated visitor without WASM. They are implemented by **14 visitor classes** — the TypeScript visitor handles TypeScript/TSX/JSX (`.svelte` and `.astro` route to TS too), and a generic text visitor covers every other extension (JSON, YAML, CSS, shell scripts, etc.).
 
 The parser architecture uses a registry pattern. Each language is defined by a `LanguageConfig` entry in `createRegistry()` (`parser/language-routing.ts`), which maps file extensions to a tree-sitter grammar WASM and a `LanguageVisitor` implementation. Adding a new language requires:
 
@@ -180,7 +181,7 @@ The Glassy Dashboard provides a visual overview of indexed repositories. Navigat
 
 ## Database Schema
 
-The Codebase Index uses two tables in the existing `memory.db`:
+The Codebase Index uses three tables in the existing `memory.db` (plus the FTS5 virtual table):
 
 ### `codebase_files`
 
@@ -220,7 +221,24 @@ The Codebase Index uses two tables in the existing `memory.db`:
 
 ### FTS5 Virtual Table: `codebase_symbols_fts`
 
-Full-text search index on `name` and `doc_comment` columns, auto-synchronized via database triggers (INSERT/UPDATE/DELETE).
+Full-text search index on `name`, `doc_comment`, and `signature` (the `signature` column was added by migration **v18**, which rebuilt the table), auto-synchronized via database triggers (INSERT/UPDATE/DELETE).
+
+### `codebase_references` (migration v21)
+
+One row per call-site edge discovered during parsing:
+
+| Column        | Type      | Description                                    |
+| :------------ | :-------- | :--------------------------------------------- |
+| `id`          | `TEXT`    | UUID primary key.                              |
+| `repo`        | `TEXT`    | Repository identifier.                         |
+| `symbol_name` | `TEXT`    | Symbol being referenced (the callee).          |
+| `caller_file` | `TEXT`    | File holding the call site.                    |
+| `caller_line` | `INTEGER` | Line of the call site.                         |
+| `caller_name` | `TEXT`    | Name of the enclosing symbol at the call site. |
+| `kind`        | `TEXT`    | Reference kind.                                |
+| `created_at`  | `TEXT`    | Row creation timestamp.                        |
+
+**Indexes:** `idx_refs_repo_symbol` — on `(repo, symbol_name)`; `idx_refs_repo_file` — on `(repo, caller_file)`.
 
 ---
 
@@ -232,9 +250,11 @@ Symbol tracing and reference detection work by exact name string matching across
 
 See [ADR-002 §Consequences](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for the full discussion of name-based vs type-based resolution.
 
-### No Relation Storage
+### Reference Storage (call-site edges, since migration v21)
 
-Call graphs, import graphs, and inheritance chains are not stored. The `codebase_relations` table is documented in ADR-002 but not created. Relation resolution is deferred to Phase 1.1.
+Call-site edges ARE persisted since migration **v21** (`codebase_references`): each reference records `symbol_name`, `caller_file`, `caller_line`, `caller_name`, and `kind`, with indexes on `(repo, symbol_name)` and `(repo, caller_file)`. TRACE mode reads these edges to list where a symbol is used.
+
+What is still **not** built is a type-graph: import graphs and inheritance chains are not resolved (only name-matched call-site edges are stored). That remains Phase 1.1 — see [ADR-002 §Consequences](../../.agents/documents/design/decisions/adr-002-codebase-index.md).
 
 ### Incremental Refresh, No File Watching
 

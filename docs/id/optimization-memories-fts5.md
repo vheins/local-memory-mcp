@@ -1,8 +1,9 @@
 # Desain: Pencarian Teks Lengkap FTS5 untuk Memori
 
-- **Status**: Desain selesai (2026-07-31) — belum diimplementasikan
-- **Task**: TASK-003 (optimization) · **Memori keputusan**: MEM-367
-- **Repo**: vheins/local-memory-mcp · **Scope**: desain saja
+> **Status: ✅ DIIMPLEMENTASIKAN (terverifikasi 2026-08-08).** Desain ini dirilis melalui migrasi **`v10-memories-fts`** (TASK-014) — indeks skema kini di **`SCHEMA_VERSION 22`** (`src/mcp/storage/migrations/index.ts`). Header "belum diimplementasikan" asli di bawah dipertahankan sebagai catatan historis; catatan inline menandai di mana rilis menyimpang dari desain (terutama: migrasi mendarat sebagai **v10**, bukan v8 yang diusulkan).
+
+- **Task**: TASK-003 (optimization) · **Memori keputusan**: MEM-367 · **Implementasi**: TASK-014
+- **Repo**: vheins/local-memory-mcp · **Scope**: desain + catatan implementasi yang dirilis
 
 ## 1. Ikhtisar
 
@@ -16,6 +17,8 @@ Pencarian memori saat ini melakukan pemindaian penuh `LIKE '%q%'` pada `content`
 Codebase sudah memiliki pola FTS5 yang mapan untuk diikuti: `codebase_symbols_fts` (tabel konten-eksternal + trigger, `migrations.ts:330-350`) dan `coding_standards_fts` (pola lengkap termasuk backfill, `migrations.ts:672-706`). Tabel `memories_fts` **pernah ada dan dihapus** di migrasi v1 (`dropObsoleteMemoriesFts`, `migrations.ts:760-776`) — jadi ekstensi FTS5 terkonfirmasi terkompilasi ke dalam SQLite ter-bundle (better-sqlite3), dan nama tabel/trigger lama bebas digunakan ulang pada basis data baru maupun yang sudah di-upgrade.
 
 Desain ini membuat ulang `memories_fts` sebagai migrasi aditif, menghubungkan dua jalur baca ke tabel tersebut dengan fallback LIKE permanen (mencerminkan `codebase-symbol.ts:69-256`), dan memasukkan skor `bm25()` yang dinormalisasi ke dalam campuran hibrida SPEC-001 yang ada di `src/mcp/tools/memory.read.ts` (bobot 0.40/0.30/0.15/0.15, `memory.read.ts:49-54`) dengan cara yang sama seperti `standard-read/search.ts:229-251` memasukkan skor kata kunci teksnya.
+
+> **Diimplementasikan (terverifikasi terhadap `src/`):** `memories_fts` berada di migrasi **v10** (`src/mcp/storage/migrations/v10-memories-fts.ts`); `buildFtsMatchQuery` ada di `src/mcp/utils/fts.ts`; `searchByFts` / `searchByFtsScored` / jalur cepat FTS dashboard ada di `src/mcp/entities/memory/search.ts`; skor bm25 ternormalisasi min-max memberi nilai pada bobot kata kunci 0.30 di `src/mcp/tools/memory.read.ts` (hits khusus-FTS juga digabung sebagai kandidat tambahan). Filter `tags` dashboard tetap predikat LIKE (desain §5.3).
 
 ## 2. Skema
 
@@ -85,15 +88,17 @@ END;
 
 ## 4. Migrasi & Backfill
 
-### 4.1 Migrasi aditif v8
+### 4.1 Migrasi aditif — **dirilis sebagai v10** (diusulkan sebagai v8)
 
-- `SCHEMA_VERSION` 7 → **8** (`migrations.ts:4`).
-- Tambahkan entri baru ke array `MIGRATIONS` (`migrations.ts:12-754`). **Jangan pernah mengedit** entri yang ada — rantainya append-only dan `MigrationManager` melewati versi yang sudah diterapkan (`migrations.ts:1012-1024`).
-- Guard `up()` mencerminkan v4 (`migrations.ts:663-669`):
+> `MigrationManager` kini berada di `src/mcp/storage/migrations/index.ts` dengan satu file per versi (`vNN-*.ts`); `SCHEMA_VERSION = 22`. Migrasi yang dirilis adalah **`v10-memories-fts`**, bukan v8 yang diusulkan di bawah (v8 dipakai untuk indeks `observations`, v9 untuk tabel antrean `queue_jobs` embedding).
+
+- `SCHEMA_VERSION` bergerak 7 → **10** saat rilis (`src/mcp/storage/migrations/index.ts:27` — kini 22).
+- Entri baru ditambahkan ke larik `MIGRATIONS`. **Jangan pernah mengedit** entri yang ada — rantai bersifat append-only dan `MigrationManager` melewati versi yang sudah diterapkan.
+- Guard `up()` mencerminkan v4 (`v04-coding-standards-fts.ts`):
 
 ```ts
 {
-  version: 8,
+  version: 8, // ⚠️ DIRILIS SEBAGAI VERSION 10 — lihat v10-memories-fts.ts
   name: "memories-fts",
   up: (db) => {
     const ftsExists = db.prepare(
@@ -108,14 +113,14 @@ END;
 
 ### 4.2 Backfill
 
-Yang disukai — **backfill pernyataan tunggal di dalam transaksi migrasi**, persis seperti v4 (`migrations.ts:696-706`):
+Yang disukai — **backfill pernyataan tunggal di dalam transaksi migrasi**, persis seperti v4 (`v04-coding-standards-fts.ts`):
 
 ```sql
 INSERT INTO memories_fts(rowid, title, content, tags)
 SELECT rowid, title, content, tags FROM memories;
 ```
 
-- Pelari migrasi membungkus setiap `up()` dalam `db.transaction` (`migrations.ts:1019-1022`), sehingga pembuatan-tabel + trigger + backfill + baris `_schema_version` di-commit secara atomik. Crash di tengah migrasi di-rollback; saat restart versi tidak ada dan migrasi dijalankan ulang (guard `ftsExists` membuatnya idempoten).
+- Pelari migrasi membungkus setiap `up()` dalam `db.transaction` (`src/mcp/storage/migrations/index.ts`), sehingga pembuatan-tabel + trigger + backfill + baris `_schema_version` di-commit secara atomik. Crash di tengah migrasi di-rollback; saat restart versi tidak ada dan migrasi dijalankan ulang (guard `ftsExists` membuatnya idempoten).
 - **Interaksi ukuran-batch / kunci** (`storage/write-lock.ts`): migrasi berjalan di konstruktor `SQLiteStore` (`sqlite.ts:91-92`), **di luar** kunci file lintas-proses (`withWrite`, `write-lock.ts:62-69`; kunci bersifat per-operasi-tulis, bukan per-startup). Ini adalah properti yang sudah ada yang dibagikan oleh migrasi v1–v7 — bukan risiko baru. Mitigasi, secara berurutan:
   - Backfill adalah **satu pernyataan atomik** (better-sqlite3 + WAL + `busy_timeout = 30000`, `sqlite.ts:76-79` men-serialisasi penulis bersamaan; tulis proses lain memblokir ≤30 dtk, lalu commit, lalu pernyataan ini melihatnya — trigger pada tulis proses lain menjaga FTS tetap sinkron apa pun).
   - Skala tipikal: memori berjumlah ribuan baris → pernyataan tunggal sudah cukup.
@@ -126,9 +131,9 @@ SELECT rowid, title, content, tags FROM memories;
 
 ## 5. Pengalihan Kueri
 
-### 5.1 Helper pembangun kueri baru — `buildFtsMatchQuery(raw: string): string`
+### 5.1 Helper pembangun kueri — `buildFtsMatchQuery(raw: string): string`
 
-Perluas `src/mcp/utils/fts.ts` (saat ini hanya `sanitizeFtsTerm`, 5 baris). Semantik:
+✅ **Diimplementasikan** di `src/mcp/utils/fts.ts` (dengan `sanitizeFtsTerm` dan konstanta `FTS_MAX_TERMS = 8` / `FTS_CANDIDATE_CAP = 100`). Semantik:
 
 1. Trim. Kosong → kembalikan `""` (pemanggil jatuh ke jalur non-FTS).
 2. Ekstrak frasa bertanda kutip ganda yang seimbang: `/"([^"]+)"/g` → pertahankan masing-masing sebagai token frasa apa adanya (divalidasi: isi frasa hanya boleh berisi huruf/angka/spasi/`_` setelah sanitasi, jika tidak buang).
@@ -264,7 +269,7 @@ Efek bersih: bobot kata kunci `0.30` menjadi sinyal **leksikal** nyata (bm25 ata
 Data FTS bersifat **turunan** — tidak ada yang tahan lama yang hilang karena penghapusan; tabel `memories` adalah sumber kebenaran.
 
 1. **Kode**: fallback LIKE permanen secara desain (persis seperti `codebase-symbol.ts:77-78`). Membalik = menghapus cabang jalur-cepat FTS dari `searchByRepo`/`listMemoriesForDashboard` dan skor kata kunci bm25 dari `memory.read.ts` (kembali ke `vectorScoreMap`).
-2. **Basis data** (baik sebagai migrasi v9 atau skrip manual):
+2. **Basis data** (skrip manual — tidak perlu migrasi tambahan karena tabel yang dirilis adalah v10):
 
 ```sql
 DROP TRIGGER IF EXISTS memories_ai;
@@ -278,15 +283,17 @@ DROP TABLE IF EXISTS memories_fts;
 
 ## 9. Rencana Bertahap
 
-| Fase                                            | Pekerjaan                                                                                                                                    | Kriteria penerimaan                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P1 — Migrasi**                                | Tambahkan entri v8: buat `memories_fts` + 3 trigger + backfill (guard/log `SELECT COUNT`).                                                   | (a) DB baru: migrasi ke v8 dengan bersih; jumlah `memories_fts` == jumlah `memories`. (b) DB v7 yang ada di-upgrade di tempat; migrasi dilewati pada run kedua (idempoten). (c) Round-trip: insert → baris di FTS; update title → token lama hilang, yang baru ada; delete → baris dihapus. (d) Belum ada pengalihan LIKE — nol perubahan perilaku. |
-| **P2 — Integritas backfill & utilitas rebuild** | Verifikasi paritas: untuk kueri sampel, himpunan kandidat FTS ⊇ hasil LIKE pada kecocokan awal-token; dokumentasikan penggunaan `'rebuild'`. | Paritas `SELECT COUNT(*)`; spot-check recall awal-token vs LIKE; rebuild mereproduksi indeks identik (hash dari himpunan rowid).                                                                                                                                                                                                                    |
-| **P3 — Pengalihan kueri**                       | Tambahkan `buildFtsMatchQuery`; alihkan `searchByRepo` + `listMemoriesForDashboard` dengan fallback LIKE.                                    | Test yang ada lulus: `sqlite.test.ts:225-241` (kedaluwarsa dikecualikan), `agent-context.test.ts:123`, `tasks.bulk.test.ts:488`; daftar dashboard mempertahankan filter + sort yang di-allowlist; jalur kueri-kosong tidak tersentuh; kueri karakter khusus jatuh dengan anggun.                                                                    |
-| **P4 — Integrasi hibrida**                      | Skor kata kunci FTS (bm25 min-max) menggantikan skor ONNX dalam bobot kata kunci 0.30; FTS sebagai sumber kandidat fallback.                 | Pencarian `memory.read.ts` mengembalikan hasil dengan komponen kata kunci ≠ 0 untuk hit leksikal; kegagalan FTS → fallback error yang ada; bobot SPEC-001 tidak berubah; paritas `memory.search.test.ts` / `e2e.test.ts:35`.                                                                                                                        |
-| **P5 — Pengerasan & dok rollback**              | Opsional evaluasi `trigram` (ukur recall/`EXPLAIN QUERY PLAN` pada kueri lambat), dokumentasikan SQL rollback di header file migrasi.        | Skrip rollback diverifikasi terhadap DB snapshot; perbandingan performa (LIKE vs FTS) dicatat di komentar task.                                                                                                                                                                                                                                     |
+| Fase                                               | Pekerjaan                                                                                                                                    | Kriteria penerimaan                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1 — Migrasi** ✅ dirilis (v10)                  | Tambahkan entri v10 (diusulkan v8): buat `memories_fts` + 3 trigger + backfill (guard/log `SELECT COUNT`).                                   | (a) DB baru: migrasi ke v10 dengan bersih; jumlah `memories_fts` == jumlah `memories`. (b) DB v7 yang ada di-upgrade di tempat; migrasi dilewati pada run kedua (idempoten). (c) Round-trip: insert → baris di FTS; update title → token lama hilang, yang baru ada; delete → baris dihapus. (d) Belum ada pengalihan LIKE — nol perubahan perilaku. |
+| **P2 — Integritas backfill & utilitas rebuild** ✅ | Verifikasi paritas: untuk kueri sampel, himpunan kandidat FTS ⊇ hasil LIKE pada kecocokan awal-token; dokumentasikan penggunaan `'rebuild'`. | Paritas `SELECT COUNT(*)`; spot-check recall awal-token vs LIKE; rebuild mereproduksi indeks identik (hash dari himpunan rowid).                                                                                                                                                                                                                     |
+| **P3 — Pengalihan kueri** ✅                       | Tambahkan `buildFtsMatchQuery`; alihkan `searchByRepo` + `listMemoriesForDashboard` dengan fallback LIKE.                                    | Test yang ada lulus: `sqlite.test.ts:225-241` (kedaluwarsa dikecualikan), `agent-context.test.ts:123`, `tasks.bulk.test.ts:488`; daftar dashboard mempertahankan filter + sort yang di-allowlist; jalur kueri-kosong tidak tersentuh; kueri karakter khusus jatuh dengan anggun.                                                                     |
+| **P4 — Integrasi hibrida** ✅                      | Skor kata kunci FTS (bm25 min-max) menggantikan skor vektor dalam bobot kata kunci 0.30; hit khusus-FTS digabung sebagai kandidat tambahan.  | Pencarian `memory.read.ts` mengembalikan hasil dengan komponen kata kunci ≠ 0 untuk hit leksikal; kegagalan FTS → fallback error yang ada; bobot SPEC-001 tidak berubah; paritas `memory.search.test.ts` / `e2e.test.ts:35`.                                                                                                                         |
+| **P5 — Pengerasan & dok rollback** 🔜 NEXT PHASE   | Opsional evaluasi `trigram` (ukur recall/`EXPLAIN QUERY PLAN` pada kueri lambat), dokumentasikan SQL rollback di header file migrasi.        | Skrip rollback diverifikasi terhadap DB snapshot; perbandingan performa (LIKE vs FTS) dicatat di komentar task. — **belum diimplementasikan, ditunda**.                                                                                                                                                                                              |
 
-**Jejak bukti**: `migrations.ts:330-350` (FTS+trigger simbol), `migrations.ts:672-706` (FTS+trigger+backfill standar), `migrations.ts:760-776` (drop lama — keamanan nama trigger), `migrations.ts:1019-1022` (transaksi per-migrasi), `codebase-symbol.ts:69-256` (pola FTS-first/fallback LIKE + `sanitizeFtsTerm`), `entity.ts:173-191, 404-496` (target pengalihan), `memory.read.ts:49-54, 105-247` (hibrida), `standard-read/search.ts:229-305` (cermin skor kata kunci), `sqlite.ts:75-92` (pragma + bootstrap migrasi), `write-lock.ts` (semantik kunci).
+> **Status bertahap:** P1–P4 dirilis dan terverifikasi di `src/` (migrasi v10, `utils/fts.ts`, `entities/memory/search.ts`, `tools/memory.read.ts`). P5 (evaluasi tokenizer trigram + dokumentasi rollback) adalah **NEXT PHASE** — belum diimplementasikan.
+
+**Jejak bukti** (ref baris `migrations.ts` historis — file sejak itu dipecah menjadi `storage/migrations/index.ts` + modul `vNN-*.ts`): `migrations.ts:330-350` (FTS+trigger simbol, kini `v01`), `migrations.ts:672-706` (FTS+trigger+backfill standar, kini `v04`), `migrations.ts:760-776` (drop lama — keamanan nama trigger, kini `v01-helpers`), `migrations.ts:1019-1022` (transaksi per-migrasi, kini `index.ts`), `codebase-symbol.ts:69-256` (pola FTS-first/fallback LIKE + `sanitizeFtsTerm`), `entity.ts:173-191, 404-496` (target pengalihan, kini `entities/memory/search.ts`), `memory.read.ts:49-54, 105-247` (hibrida), `standard-read/search.ts:229-305` (cermin skor kata kunci), `sqlite.ts:75-92` (pragma + bootstrap migrasi), `write-lock.ts` (semantik kunci).
 
 ## 10. Artefak terkait
 

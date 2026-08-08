@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-The codebase is healthy at the architecture level — the ADR Simplification (44→15 tools, SPEC-001 hybrid scoring, KG atomic writes) landed cleanly. The optimization opportunities cluster into five themes:
+The codebase is healthy at the architecture level — the ADR Simplification (44→15 tools at the time, now **17 canonical tools** — `codebase-index` and `codebase-read` joined the unified set later; see `buildExecutors` in `src/mcp/tools/index.ts` — SPEC-001 hybrid scoring, KG atomic writes) landed cleanly. The optimization opportunities cluster into five themes:
 
 | Theme                | Count       | Highest Impact                                                                                       |
 | :------------------- | :---------- | :--------------------------------------------------------------------------------------------------- |
@@ -81,16 +81,16 @@ The codebase is healthy at the architecture level — the ADR Simplification (44
 
 ### Feature / Flow / Observability
 
-| Code          | Severity | Effort | Issue                                                                                                  | Evidence                                                                                                |
-| :------------ | :------- | :----- | :----------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------ |
-| `OPT-FEAT-01` | high     | M      | Dashboard keeps 6 legacy coordination handlers for tool names no longer registered; UI depends on them | `dashboard/controllers/SystemController.ts:209-231` · `useAgentArena.ts:89` · `HandoffsPanel.svelte:51` |
-| `OPT-FEAT-02` | medium   | S      | KG list endpoints unpaginated + unbounded                                                              | `dashboard/controllers/KGController.ts:15,39` · `entities/knowledge-graph/entity.ts:368-388`            |
-| `OPT-FEAT-03` | low      | S      | `truncated` flag always false (computed after LIMIT clip)                                              | `KGController.ts:58` vs `entities/knowledge-graph/entity.ts:436`                                        |
-| `OPT-FEAT-04` | medium   | M      | No bulk actions for Tasks/Standards (memories only) — multi-round-trip UX gap                          | `dashboard/ui/src/lib/api.ts:170-175` · `MemoriesController.ts:147-174`                                 |
-| `OPT-FLOW-01` | medium   | S      | Code-addressed detail reads burn 2 DB queries (id-or-code ambiguity)                                   | `tools/memory.read.ts:433`                                                                              |
-| `OPT-FLOW-02` | medium   | M      | `memory-synthesize` bypasses unified tool plumbing (legacy tool names, re-fetched data)                | `tools/memory.synthesize.ts:84-88,202-248,250-304`                                                      |
-| `OPT-FLOW-03` | low      | S      | Every update fully re-embeds + re-extracts KG, no content-diff dedup                                   | `embedding-queue/types.ts` · `tools/memory-write/create.ts` · `kg-archivist/relations.ts`               |
-| `OPT-OBS-01`  | medium   | S      | Dispatch core logs no durations; worker stats no latency; no metrics endpoint                          | `tools/index.ts:219-270` · `embedding-queue/worker.ts:82-88,401-413`                                    |
+| Code          | Severity | Effort | Issue                                                                                                  | Evidence                                                                                                                                                                |
+| :------------ | :------- | :----- | :----------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPT-FEAT-01` | high     | M      | Dashboard keeps 6 legacy coordination handlers for tool names no longer registered; UI depends on them | `dashboard/controllers/SystemController.ts:209-231` · `useAgentArena.ts:89` · `HandoffsPanel.svelte:51`                                                                 |
+| `OPT-FEAT-02` | medium   | S      | KG list endpoints unpaginated + unbounded                                                              | `dashboard/controllers/KGController.ts:15,39` · `entities/knowledge-graph/entity.ts:368-388`                                                                            |
+| `OPT-FEAT-03` | low      | S      | `truncated` flag always false (computed after LIMIT clip)                                              | `KGController.ts:58` vs `entities/knowledge-graph/entity.ts:436`                                                                                                        |
+| `OPT-FEAT-04` | medium   | M      | No bulk actions for Tasks/Standards (memories only) — multi-round-trip UX gap                          | `dashboard/ui/src/lib/api.ts:170-175` · `MemoriesController.ts:147-174`                                                                                                 |
+| `OPT-FLOW-01` | medium   | S      | Code-addressed detail reads burn 2 DB queries (id-or-code ambiguity)                                   | `tools/memory.read.ts:433`                                                                                                                                              |
+| `OPT-FLOW-02` | medium   | M      | `memory-synthesize` bypasses unified tool plumbing (legacy tool names, re-fetched data)                | `tools/memory.synthesize.ts:84-88,202-248,250-304` _(historical — shipped as the canonical `synthesize` tool in `tools/index.ts` with `sampleMessage`/`elicit` wiring)_ |
+| `OPT-FLOW-03` | low      | S      | Every update fully re-embeds + re-extracts KG, no content-diff dedup                                   | `embedding-queue/types.ts` · `tools/memory-write/create.ts` · `kg-archivist/relations.ts`                                                                               |
+| `OPT-OBS-01`  | medium   | S      | Dispatch core logs no durations; worker stats no latency; no metrics endpoint                          | `tools/index.ts:219-270` · `embedding-queue/worker.ts:82-88,401-413`                                                                                                    |
 
 ---
 

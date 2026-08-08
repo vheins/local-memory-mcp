@@ -10,7 +10,7 @@
 
 ## 1. Ringkasan Eksekutif
 
-Arsitektur codebase ini sehat — ADR Simplification (44→15 tools, SPEC-001 hybrid scoring, KG atomic writes) sudah terpasang rapi. Peluang optimisasi mengelompok dalam lima tema:
+Arsitektur codebase ini sehat — ADR Simplification (44→15 tools saat digabung, kini **17 alat kanonik** — `codebase-index` dan `codebase-read` masuk ke set terpadu belakangan; lihat `buildExecutors` di `src/mcp/tools/index.ts` — SPEC-001 hybrid scoring, KG atomic writes) sudah terpasang rapi. Peluang optimisasi mengelompok dalam lima tema:
 
 | Tema                | Jumlah    | Dampak Tertinggi                                                                                              |
 | :------------------ | :-------- | :------------------------------------------------------------------------------------------------------------ |
@@ -81,16 +81,16 @@ Arsitektur codebase ini sehat — ADR Simplification (44→15 tools, SPEC-001 hy
 
 ### Fitur / Flow / Observability
 
-| Kode          | Severity | Effort | Masalah                                                                                                             | Bukti                                                                                                   |
-| :------------ | :------- | :----- | :------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------ |
-| `OPT-FEAT-01` | tinggi   | M      | Dashboard mempertahankan 6 handler koordinasi legacy untuk nama tool yang tak lagi terdaftar; UI bergantung padanya | `dashboard/controllers/SystemController.ts:209-231` · `useAgentArena.ts:89` · `HandoffsPanel.svelte:51` |
-| `OPT-FEAT-02` | sedang   | S      | Endpoint list KG tanpa pagination + tak terbatas                                                                    | `dashboard/controllers/KGController.ts:15,39` · `entities/knowledge-graph/entity.ts:368-388`            |
-| `OPT-FEAT-03` | rendah   | S      | Flag `truncated` selalu false (dihitung setelah clip LIMIT)                                                         | `KGController.ts:58` vs `entities/knowledge-graph/entity.ts:436`                                        |
-| `OPT-FEAT-04` | sedang   | M      | Tanpa bulk action untuk Tasks/Standards (hanya memories) — celah UX multi-round-trip                                | `dashboard/ui/src/lib/api.ts:170-175` · `MemoriesController.ts:147-174`                                 |
-| `OPT-FLOW-01` | sedang   | S      | Detail baca ber-alamat-kode membakar 2 query DB (ambiguitas id-or-code)                                             | `tools/memory.read.ts:433`                                                                              |
-| `OPT-FLOW-02` | sedang   | M      | `memory-synthesize` melewati plumbing tool terpadu (nama tool legacy, data di-fetch ulang)                          | `tools/memory.synthesize.ts:84-88,202-248,250-304`                                                      |
-| `OPT-FLOW-03` | rendah   | S      | Setiap update di-embed ulang + di-extract KG penuh, tanpa dedup content-diff                                        | `embedding-queue/types.ts` · `tools/memory-write/create.ts` · `kg-archivist/relations.ts`               |
-| `OPT-OBS-01`  | sedang   | S      | Core dispatch tidak mencatat durasi; statistik worker tanpa latensi; tanpa endpoint metrics                         | `tools/index.ts:219-270` · `embedding-queue/worker.ts:82-88,401-413`                                    |
+| Kode          | Severity | Effort | Masalah                                                                                                             | Bukti                                                                                                                                                               |
+| :------------ | :------- | :----- | :------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OPT-FEAT-01` | tinggi   | M      | Dashboard mempertahankan 6 handler koordinasi legacy untuk nama tool yang tak lagi terdaftar; UI bergantung padanya | `dashboard/controllers/SystemController.ts:209-231` · `useAgentArena.ts:89` · `HandoffsPanel.svelte:51`                                                             |
+| `OPT-FEAT-02` | sedang   | S      | Endpoint list KG tanpa pagination + tak terbatas                                                                    | `dashboard/controllers/KGController.ts:15,39` · `entities/knowledge-graph/entity.ts:368-388`                                                                        |
+| `OPT-FEAT-03` | rendah   | S      | Flag `truncated` selalu false (dihitung setelah clip LIMIT)                                                         | `KGController.ts:58` vs `entities/knowledge-graph/entity.ts:436`                                                                                                    |
+| `OPT-FEAT-04` | sedang   | M      | Tanpa bulk action untuk Tasks/Standards (hanya memories) — celah UX multi-round-trip                                | `dashboard/ui/src/lib/api.ts:170-175` · `MemoriesController.ts:147-174`                                                                                             |
+| `OPT-FLOW-01` | sedang   | S      | Detail baca ber-alamat-kode membakar 2 query DB (ambiguitas id-or-code)                                             | `tools/memory.read.ts:433`                                                                                                                                          |
+| `OPT-FLOW-02` | sedang   | M      | `memory-synthesize` melewati plumbing tool terpadu (nama tool legacy, data di-fetch ulang)                          | `tools/memory.synthesize.ts:84-88,202-248,250-304` _(historis: dirilis sebagai alat kanonik `synthesize` di `tools/index.ts` dengan opsi `sampleMessage`/`elicit`)_ |
+| `OPT-FLOW-03` | rendah   | S      | Setiap update di-embed ulang + di-extract KG penuh, tanpa dedup content-diff                                        | `embedding-queue/types.ts` · `tools/memory-write/create.ts` · `kg-archivist/relations.ts`                                                                           |
+| `OPT-OBS-01`  | sedang   | S      | Core dispatch tidak mencatat durasi; statistik worker tanpa latensi; tanpa endpoint metrics                         | `tools/index.ts:219-270` · `embedding-queue/worker.ts:82-88,401-413`                                                                                                |
 
 ---
 

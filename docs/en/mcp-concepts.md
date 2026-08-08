@@ -1,10 +1,12 @@
-# MCP Protocol Reference (v2025-11-25)
+# MCP Protocol Reference (v2025-03-26)
 
-This document details the technical interface exposed by the `local-memory-mcp` server for AI Agents, fully compliant with the [Model Context Protocol (MCP) Specification v2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server).
+This document details the technical interface exposed by the `local-memory-mcp` server for AI Agents, fully compliant with the [Model Context Protocol (MCP) Specification v2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/server).
+
+> **Protocol version source:** the server advertises `2025-03-26` — see `MCP_PROTOCOL_VERSION` in `src/mcp/capabilities.ts`. Spec links below point to that version.
 
 ## Server Lifecycle & Capabilities
 
-- **Protocol Version**: `2025-11-25`
+- **Protocol Version**: `2025-03-26`
 - **Transport**: JSON-RPC 2.0 over standard input/output (stdio).
 - **Supported Capabilities**:
   - `tools` (list, call)
@@ -15,7 +17,8 @@ This document details the technical interface exposed by the `local-memory-mcp` 
 
 ## Basic Protocol Requirements (JSON-RPC 2.0)
 
-In compliance with the [MCP Basic Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic), all communication with this server must adhere strictly to JSON-RPC 2.0:
+In compliance with the [MCP Basic Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic), all communication with this server must adhere strictly to JSON-RPC 2.0:
+
 - **Requests & Responses:** All requests MUST include a valid, non-null `id` (string or integer) which MUST NOT have been used previously by the requestor in the active session. All responses MUST include the matching `id`.
 - **Notifications:** Oneway messages MUST NOT include an `id` field. The receiver must not send a response.
 - **Schema Validation:** All input schemas and tools use JSON Schema draft **2020-12** by default. Clients must validate the schema dialect accordingly.
@@ -24,7 +27,8 @@ In compliance with the [MCP Basic Specification](https://modelcontextprotocol.io
 
 ## Lifecycle Management
 
-In compliance with the [MCP Lifecycle Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle), the server enforces a strict initialization handshake and lifecycle process:
+In compliance with the [MCP Lifecycle Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle), the server enforces a strict initialization handshake and lifecycle process:
+
 - **Initialization Handshake:** The connection begins with the client sending an `initialize` request. The server MUST respond with its capabilities. The client MUST then send a `notifications/initialized` notification. No other requests (except `ping`) are permitted before this handshake is complete.
 - **Liveness (Ping):** Both client and server support the `ping` method to verify connection liveness. Pings can be sent at any time, including during initialization.
 - **Disconnection:** On stdio transports, disconnection is handled via process streams. The client gracefully exits by closing the input stream to the server, and the server shuts down gracefully.
@@ -32,28 +36,32 @@ In compliance with the [MCP Lifecycle Specification](https://modelcontextprotoco
 
 ## Utilities: Ping
 
-In compliance with the [MCP Ping Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping), the server and client may verify connection liveness:
+In compliance with the [MCP Ping Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/utilities/ping), the server and client may verify connection liveness:
+
 - **Request Format:** A standard JSON-RPC request with the method `"ping"` and no parameters.
 - **Response Format:** The receiver MUST promptly return a JSON-RPC response with an empty result object (`"result": {}`).
 - **Timeout & Error Handling:** If a response is not received within a reasonable timeout period, the sender MAY consider the connection stale, log the failure, or reset the connection. Frequent but lightweight pinging is recommended to prevent hung processes without causing excessive network/processing overhead.
 
 ## Utilities: Progress
 
-In compliance with the [MCP Progress Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/progress), the server supports out-of-band progress notifications for long-running requests:
+In compliance with the [MCP Progress Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/utilities/progress), the server supports out-of-band progress notifications for long-running requests:
+
 - **Progress Token:** Requests may include a `_meta.progressToken` (string or integer) supplied by the client.
 - **Progress Notification:** While processing the request, the server MAY emit `notifications/progress` messages. These notifications MUST include the matching `progressToken`, a strictly increasing `progress` value (number), and MAY optionally include a `total` (number) or a human-readable `message`.
 - **Completion:** Progress tracking ends implicitly when the server returns the final JSON-RPC response (result or error) for the corresponding request.
 
 ## Utilities: Cancellation
 
-In compliance with the [MCP Cancellation Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/cancellation), the server supports aborting in-flight requests:
+In compliance with the [MCP Cancellation Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/utilities/cancellation), the server supports aborting in-flight requests:
+
 - **Notification Method:** Clients may send a `notifications/cancelled` notification containing a `requestId` and an optional `reason`.
 - **Behavior:** Upon receiving this notification, the server triggers an internal `AbortController` for the corresponding active request.
 - **Response:** If the request has not yet completed, the server aborts the underlying processing (e.g., SQLite query, vector embeddings, tool execution) and drops the response. The client MUST NOT expect a JSON-RPC `result` or `error` response for a successfully cancelled request.
 
 ## STDIO Transport Requirements
 
-In compliance with the [MCP STDIO Transport Specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports), the server adheres to the following strict boundaries:
+In compliance with the [MCP STDIO Transport Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports), the server adheres to the following strict boundaries:
+
 - **Encoding & Formatting:** All JSON-RPC messages MUST be encoded in **UTF-8**.
 - **Delimiters:** Messages MUST be delimited by a single newline character. Messages MUST NOT contain any embedded newlines within their payload.
 - **I/O Channels:** The server reads requests/notifications from `stdin` and writes its responses/notifications exclusively to `stdout`. The server MUST NOT write anything to `stdout` that is not a valid MCP JSON-RPC message.
@@ -61,7 +69,8 @@ In compliance with the [MCP STDIO Transport Specification](https://modelcontextp
 
 ## Client Features: Roots
 
-In compliance with the [MCP Roots Specification](https://modelcontextprotocol.io/specification/2025-11-25/client/roots), the server supports understanding client-defined filesystem boundaries:
+In compliance with the [MCP Roots Specification](https://modelcontextprotocol.io/specification/2025-03-26/client/roots), the server supports understanding client-defined filesystem boundaries:
+
 - **Capability:** The client MUST declare the `roots` capability during the initialization handshake.
 - **List Request (`roots/list`):** The server MAY issue a `roots/list` request to the client to retrieve the current active workspaces. The client returns an array of `Root` objects, each containing a mandatory `uri` (which MUST use the `file://` scheme) and an optional `name`.
 - **Notifications (`notifications/roots/list_changed`):** If the client declared `roots: { listChanged: true }`, it MUST emit a `notifications/roots/list_changed` notification whenever its workspace boundaries change, prompting the server to refresh its context.
@@ -73,22 +82,19 @@ In compliance with the [MCP Roots Specification](https://modelcontextprotocol.io
 Tools are executable functions exposed to the LLM to perform actions, interact with the local SQLite database, or retrieve dynamic data.
 
 ### Knowledge Management (Memory)
-- **`memory-store`**: Store a new human-auditable knowledge entry (e.g., `code_fact`, `decision`, `mistake`).
-- **`memory-search`**: NAVIGATION LAYER: Returns a pointer table of matching memory IDs.
-- **`memory-synthesize`**: Advanced reasoning tool that synthesizes grounded answers using the client's LLM.
-- **`memory-detail`**: Fetch full content and metadata for a specific memory by its ID.
-- **`memory-acknowledge`**: (MANDATORY) Acknowledge the use of a memory or report its irrelevance.
-- **`memory-update`**: Update an existing memory entry (e.g., status, importance, or metadata).
+
+> **Tool names:** the server registers **17 canonical tools** (see `buildExecutors` in `src/mcp/tools/index.ts`). Legacy dotted names (`memory-store`, `task-create`, …) are **not** registered; their functionality is folded into the unified tools below under auto-inferred modes. "Formerly" notes give the legacy mapping.
+
+- **`memory-write`**: Unified write tool — store a new human-auditable entry (`content` + `type` + `title`; formerly `memory-store`), update an entry (`id`/`code` + fields; formerly `memory-update`), or acknowledge usage (`acknowledge: "used" | "irrelevant" | "contradictory"`; formerly `memory-acknowledge`). Convenience modes: `type: "decision"` with `context`/`rationale`/`alternatives` auto-formats an importance-4 decision entry; `type: "task_archive"` with `key_decisions`/`next_steps` auto-formats an importance-3 archive.
+- **`memory-read`**: Unified read tool — search (`query`; formerly `memory-search`), detail by `id`/`code`/`ids`/`codes` (formerly `memory-detail`), or recap with stats + top memories (no params; formerly `memory-recap`).
 - **`memory-delete`**: Soft-delete one or more memory entries. Supports single `id` or bulk deletion via `ids`.
-- **`memory-summarize`**: Update the high-level global summary for a repository.
-- **`memory-recap`**: AGGREGATED OVERVIEW: Returns stats and top memories in a repo.
+- **`synthesize`**: Advanced reasoning tool that synthesizes grounded answers using the client's LLM (formerly `memory-synthesize`). Only registered when the client declares the `sampling` capability.
+- **`repo-summarize`**: Update the high-level summary for a repository (formerly `memory-summarize`).
 
 ### Task Management
-- **`task-list`**: PRIMARY navigation and search tool. Returns a tabular list of tasks.
-- **`task-create`**: Register one or more new tasks. Supports single task or bulk creation. Supports MCP elicitation fallbacks for missing fields.
-- **`task-create-interactive`**: Interactively creates a task by requesting user input via elicitation.
-- **`task-detail`**: Fetch full description, phase, priority, coordination state, and all comments for a specific task.
-- **`task-update`**: Progress one or more tasks through their lifecycle (Backlog → Pending → In Progress → Completed). Supports bulk updates via `ids`.
+
+- **`task-read`**: Unified read tool — list (no params; formerly `task-list`), detail by `id`/`task_code` (formerly `task-detail`), or search (`query`).
+- **`task-write`**: Unified write tool — create one or more tasks (`phase` + `title` + `description`; formerly `task-create`), interactive create via elicitation (`interactive: true`; formerly `task-create-interactive`), update (`id`/`code`; formerly `task-update`), or bulk (`tasks[]`). Progresses tasks through `backlog → pending → in_progress → completed/canceled/blocked`; a `comment` is required on status changes, and `completed` gates on children being completed first.
 - **`task-delete`**: Hard deletion of task records. Supports single `id` or bulk deletion via `ids`.
 
 ---
@@ -98,16 +104,18 @@ Tools are executable functions exposed to the LLM to perform actions, interact w
 Resources provide read-only access to specialized data views and global knowledge using a repository-scoped URI scheme. The server supports real-time updates via `resources/subscribe`.
 
 ### Global Resources
+
 - **`repository://index`**: List of all available repositories in the system.
 - **`session://roots`**: List of active workspace roots provided by the current client session.
 
 ### Repository Resources (Templates)
+
 - **`repository://{name}/memories`**: Paginated list of all active memories for a specific repository.
 - **`repository://{name}/memories?search={search}&type={type}&tag={tag}`**: Filtered list of memories scoped to a repository.
 - **`memory://{id}`**: Direct access to a specific memory entry (full details and statistics) by its UUID.
 - **`repository://{name}/summary`**: Retrieves the high-level global summary/signal for a repository.
 - **`repository://{name}/tasks`**: Paginated list of all tasks for a specific repository.
-- **`repository://{name}/tasks?status={status}&priority={priority}`**: Scoped task list for a repository with filtering. Priority uses MCP semantics: `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical`.
+- **`repository://{name}/tasks?status={status}&priority={priority}`**: Scoped task list for a repository with filtering. Priority filter (`priority` 1–5) uses local-memory-mcp task semantics: `1=Low`, `2=Normal`, `3=Medium`, `4=High`, `5=Critical` — same labels as the dashboard (`getPriorityLabel` in `src/dashboard/ui/src/lib/utils.ts`); it is not an MCP-specified field.
 - **`task://{id}`**: Direct access to a specific task (full description and comments) by its UUID.
 - **`repository://{name}/actions`**: Paginated stream of all agent tool actions logged within a repository.
 - **`action://{id}`**: Direct access to a specific action audit log entry by its integer ID.
@@ -122,29 +130,33 @@ Prompts are predefined instruction templates that guide model interactions.
 
 Not all coding agents support MCP **prompts** (the capability to list/get prompt templates). Below is the compatibility matrix:
 
-| Agent | MCP Prompts | Notes |
-|-------|------------|-------|
-| Claude Desktop | ✅ Supported | Prompts appear as slash commands |
-| Claude Code | ✅ Supported | Invoked as `/mcp__servername__promptname` |
-| Cursor | ✅ Supported | Prompts supported, Resources NOT supported |
-| Windsurf | ✅ Supported | All three: Tools, Prompts, Resources |
-| GitHub Copilot (VS Code) | ✅ Supported | Use `/<server>.<prompt>` in chat |
-| Continue.dev | ✅ Supported | Surfaces as slash commands in agent mode |
-| Zed | ✅ Supported | As slash commands |
-| Gemini CLI | ✅ Supported | |
-| **Codex CLI (OpenAI)** | ❌ **Not Supported** | Only Tools + Resources |
-| Cline | ❌ Not Supported | Only Tools + Resources |
+| Agent                    | MCP Prompts          | Notes                                      |
+| ------------------------ | -------------------- | ------------------------------------------ |
+| Claude Desktop           | ✅ Supported         | Prompts appear as slash commands           |
+| Claude Code              | ✅ Supported         | Invoked as `/mcp__servername__promptname`  |
+| Cursor                   | ✅ Supported         | Prompts supported, Resources NOT supported |
+| Windsurf                 | ✅ Supported         | All three: Tools, Prompts, Resources       |
+| GitHub Copilot (VS Code) | ✅ Supported         | Use `/<server>.<prompt>` in chat           |
+| Continue.dev             | ✅ Supported         | Surfaces as slash commands in agent mode   |
+| Zed                      | ✅ Supported         | As slash commands                          |
+| Gemini CLI               | ✅ Supported         |                                            |
+| **Codex CLI (OpenAI)**   | ❌ **Not Supported** | Only Tools + Resources                     |
+| Cline                    | ❌ Not Supported     | Only Tools + Resources                     |
 
 If your agent doesn't support prompts, you can still invoke the equivalent behavior via **Tools** (e.g., `memory-agent-core` instructions can be manually prompted), or trigger prompts through the **Dashboard** UI.
 
 ### Core Lifecycle Prompts
+
 - **`memory-agent-core`**: Essential behavioral contract for any memory-aware agent.
 - **`project-briefing`**: Onboarding template for starting a new session in a repository.
 
 ### Specialized Workflow Prompts
-- **`task-orchestrator`**: Specialized for managing complex multi-task initiatives.
+
+- **`task-management-guidelines`**: Task lifecycle and coordination contract for managing complex multi-task initiatives (replaces the legacy `task-orchestrator` prompt, which is not registered).
 - **`senior-code-review`**: High-standard review template focused on project-specific patterns.
 - **`root-cause-analysis`**: Debugging template for tracing bugs back to their origin.
+
+> The full registered prompt set is loaded from `src/mcp/prompts/definitions/` (e.g., `session-planner`, `create-task`, `memory-agent-core`, `project-briefing`) and served via `prompts/list` + `prompts/get`.
 
 ---
 
@@ -152,12 +164,13 @@ If your agent doesn't support prompts, you can still invoke the equivalent behav
 
 The following features conform to the standard MCP specification.
 
-- **Completions**: Supported via `completion/complete` to provide autocompletion for prompt arguments or tool inputs.
+- **Completions**: Supported via `completion/complete` to provide autocompletion for **prompt arguments** (`ref/prompt`) and **resource arguments** (`ref/resource`) — not tool inputs (`src/mcp/completion.ts`).
 - **Logging**: The server supports dynamic log level adjustment via `logging/setLevel` and emits structured logs through `notifications/message`.
-- **Sampling**: Utilizes the `sampling/createMessage` client capability to generate synthesized memory summaries.
-- **Elicitation**: Utilizes the `elicitation/create` client capability for interactive task creation forms.
+- **Sampling**: Utilizes the `sampling/createMessage` client capability to generate synthesized memory summaries (the `synthesize` tool).
+- **Elicitation**: Utilizes the `elicitation/create` client capability (`form` or `url` mode) for interactive task creation forms.
 
 ---
 
 ## ⚠️ No Warranty
+
 The MCP interface and responses are provided **"AS IS"** without any warranty.

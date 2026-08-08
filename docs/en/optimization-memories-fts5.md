@@ -1,8 +1,9 @@
 # Design: FTS5 Full-Text Search for Memories
 
-- **Status**: Design complete (2026-07-31) — not yet implemented
-- **Task**: TASK-003 (optimization) · **Decision memory**: MEM-367
-- **Repo**: vheins/local-memory-mcp · **Scope**: design only
+> **Status: ✅ IMPLEMENTED (verified 2026-08-08).** This design shipped via migration **`v10-memories-fts`** (TASK-014) — the schema index is now at **`SCHEMA_VERSION 22`** (`src/mcp/storage/migrations/index.ts`). The original "not yet implemented" header below is preserved as the historical record; inline notes mark where the ship deviates from the design (notably: the migration landed as **v10**, not the proposed v8).
+
+- **Task**: TASK-003 (optimization) · **Decision memory**: MEM-367 · **Implementation**: TASK-014
+- **Repo**: vheins/local-memory-mcp · **Scope**: design + shipped implementation note
 
 ## 1. Overview
 
@@ -16,6 +17,8 @@ Memory search currently performs `LIKE '%q%'` full scans on `content`/`title`/`t
 The codebase already has the established FTS5 pattern to follow: `codebase_symbols_fts` (external-content table + triggers, `migrations.ts:330-350`) and `coding_standards_fts` (full pattern incl. backfill, `migrations.ts:672-706`). A `memories_fts` table **existed and was dropped** in migration v1 (`dropObsoleteMemoriesFts`, `migrations.ts:760-776`) — so the FTS5 extension is confirmed compiled into the bundled SQLite (better-sqlite3), and the legacy table/trigger names are free for reuse on both fresh and upgraded databases.
 
 This design recreates `memories_fts` as an additive migration, wires the two read paths to it with a permanent LIKE fallback (mirroring `codebase-symbol.ts:69-256`), and feeds a normalized `bm25()` score into the existing SPEC-001 hybrid blend in `src/mcp/tools/memory.read.ts` (weights 0.40/0.30/0.15/0.15, `memory.read.ts:49-54`) the same way `standard-read/search.ts:229-251` feeds its text keyword score.
+
+> **Implemented (verified against `src/`):** `memories_fts` lives at migration **v10** (`src/mcp/storage/migrations/v10-memories-fts.ts`); `buildFtsMatchQuery` is in `src/mcp/utils/fts.ts`; `searchByFts` / `searchByFtsScored` / the dashboard FTS fast path live in `src/mcp/entities/memory/search.ts`; the min-max-normalized bm25 score feeds the 0.30 keyword weight in `src/mcp/tools/memory.read.ts` (FTS-only hits are also merged as extra candidates). The `tags` "filter" for the dashboard remains a LIKE predicate (design §5.3).
 
 ## 2. Schema
 
@@ -85,15 +88,17 @@ END;
 
 ## 4. Migration & Backfill
 
-### 4.1 Additive migration v8
+### 4.1 Additive migration — **shipped as v10** (proposed as v8)
 
-- `SCHEMA_VERSION` 7 → **8** (`migrations.ts:4`).
-- Append a new entry to the `MIGRATIONS` array (`migrations.ts:12-754`). **Never edit** existing entries — the chain is append-only and `MigrationManager` skips applied versions (`migrations.ts:1012-1024`).
-- The `up()` guard mirrors v4 (`migrations.ts:663-669`):
+> The `MigrationManager` now lives in `src/mcp/storage/migrations/index.ts` with one file per version (`vNN-*.ts`); `SCHEMA_VERSION = 22`. The shipped migration is **`v10-memories-fts`**, not the v8 proposed below (v8 was repurposed for `observations` index, v9 for the embedding `queue_jobs` table).
+
+- `SCHEMA_VERSION` moved 7 → **10** at ship time (`src/mcp/storage/migrations/index.ts:27` — now 22).
+- A new entry was appended to the `MIGRATIONS` array. **Never edit** existing entries — the chain is append-only and `MigrationManager` skips applied versions.
+- The `up()` guard mirrors v4 (`v04-coding-standards-fts.ts`):
 
 ```ts
 {
-  version: 8,
+  version: 8, // ⚠️ SHIPPED AS VERSION 10 — see v10-memories-fts.ts
   name: "memories-fts",
   up: (db) => {
     const ftsExists = db.prepare(
@@ -108,14 +113,14 @@ END;
 
 ### 4.2 Backfill
 
-Preferred — **single-statement backfill inside the migration transaction**, exactly like v4 (`migrations.ts:696-706`):
+Preferred — **single-statement backfill inside the migration transaction**, exactly like v4 (`v04-coding-standards-fts.ts`):
 
 ```sql
 INSERT INTO memories_fts(rowid, title, content, tags)
 SELECT rowid, title, content, tags FROM memories;
 ```
 
-- The migration runner wraps each `up()` in `db.transaction` (`migrations.ts:1019-1022`), so table-create + triggers + backfill + `_schema_version` row commit atomically. A crash mid-migration rolls back; on restart the version is absent and it re-runs (the `ftsExists` guard makes it idempotent).
+- The migration runner wraps each `up()` in `db.transaction` (`src/mcp/storage/migrations/index.ts`), so table-create + triggers + backfill + `_schema_version` row commit atomically. A crash mid-migration rolls back; on restart the version is absent and it re-runs (the `ftsExists` guard makes it idempotent).
 - **Batch-size / lock interaction** (`storage/write-lock.ts`): migrations run in the `SQLiteStore` constructor (`sqlite.ts:91-92`), **outside** the cross-process file lock (`withWrite`, `write-lock.ts:62-69`; lock is per-write-operation, not per-startup). This is a pre-existing property shared by migrations v1–v7 — not new risk. Mitigations, in order:
   - The backfill is **one atomic statement** (better-sqlite3 + WAL + `busy_timeout = 30000`, `sqlite.ts:76-79` serializes a concurrent writer; the other process's write blocks ≤30 s, then commits, then this statement sees it — triggers on the other process's writes keep FTS in sync regardless).
   - Typical scale: memories are thousands of rows → single statement is fine.
@@ -126,9 +131,9 @@ SELECT rowid, title, content, tags FROM memories;
 
 ## 5. Query Rewiring
 
-### 5.1 New query-builder helper — `buildFtsMatchQuery(raw: string): string`
+### 5.1 Query-builder helper — `buildFtsMatchQuery(raw: string): string`
 
-Extend `src/mcp/utils/fts.ts` (currently only `sanitizeFtsTerm`, 5 lines). Semantics:
+✅ **Implemented** in `src/mcp/utils/fts.ts` (with `sanitizeFtsTerm` and the `FTS_MAX_TERMS = 8` / `FTS_CANDIDATE_CAP = 100` constants). Semantics:
 
 1. Trim. Empty → return `""` (caller falls back to non-FTS path).
 2. Extract balanced double-quoted phrases: `/"([^"]+)"/g` → keep each as a phrase token verbatim (validated: phrase content must contain only letters/digits/spaces/`_` after sanitize, else drop).
@@ -264,7 +269,7 @@ Net effect: the `0.30` keyword weight becomes an actual **lexical** signal (bm25
 FTS data is **derived** — nothing durable is lost by removal; the `memories` table is the source of truth.
 
 1. **Code**: the LIKE fallback is permanent by design (exactly like `codebase-symbol.ts:77-78`). Reverting = removing the FTS fast-path branches from `searchByRepo`/`listMemoriesForDashboard` and the bm25 keyword score from `memory.read.ts` (revert to `vectorScoreMap`).
-2. **Database** (either as migration v9 or a manual script):
+2. **Database** (a manual script — no extra migration was needed since the shipped table is v10; there is no v9 rollback entry):
 
 ```sql
 DROP TRIGGER IF EXISTS memories_ai;
@@ -278,15 +283,17 @@ DROP TABLE IF EXISTS memories_fts;
 
 ## 9. Phased Plan
 
-| Phase                                         | Work                                                                                                                                     | Acceptance criteria                                                                                                                                                                                                                                                                                                         |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P1 — Migration**                            | Append v8 entry: create `memories_fts` + 3 triggers + backfill (`SELECT COUNT` guard/log).                                               | (a) Fresh DB: migrate to v8 cleanly; `memories_fts` count == `memories` count. (b) Existing v7 DB upgraded in place; migration skipped on second run (idempotent). (c) Round-trip: insert → row in FTS; update title → old tokens gone, new present; delete → row removed. (d) No LIKE rewiring yet — zero behavior change. |
-| **P2 — Backfill integrity & rebuild utility** | Verify parity: for sample queries, FTS candidate sets ⊇ LIKE results on token-initial matches; document `'rebuild'` usage.               | `SELECT COUNT(*)` parity; spot-check token-initial recall vs LIKE; rebuild reproduces identical index (hash of rowid sets).                                                                                                                                                                                                 |
-| **P3 — Query rewiring**                       | Add `buildFtsMatchQuery`; rewire `searchByRepo` + `listMemoriesForDashboard` with LIKE fallback.                                         | Existing tests pass: `sqlite.test.ts:225-241` (expired excluded), `agent-context.test.ts:123`, `tasks.bulk.test.ts:488`; dashboard list preserves filters + allowlisted sort; empty-query path untouched; special-char queries fall back gracefully.                                                                        |
-| **P4 — Hybrid integration**                   | FTS keyword score (bm25 min-max) replaces ONNX score in the 0.30 keyword weight; FTS as fallback candidate source.                       | `memory.read.ts` search returns results with keyword component ≠ 0 for lexical hits; FTS failure → existing error fallback; SPEC-001 weights unchanged; `memory.search.test.ts` / `e2e.test.ts:35` parity.                                                                                                                  |
-| **P5 — Hardening & rollback doc**             | Optionally evaluate `trigram` (measure recall/`EXPLAIN QUERY PLAN` on slow queries), document rollback SQL in the migration file header. | Rollback script verified against a snapshot DB; perf comparison (LIKE vs FTS) recorded in task comment.                                                                                                                                                                                                                     |
+| Phase                                            | Work                                                                                                                                     | Acceptance criteria                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1 — Migration** ✅ shipped (v10)              | Append v10 entry (proposed as v8): create `memories_fts` + 3 triggers + backfill (`SELECT COUNT` guard/log).                             | (a) Fresh DB: migrate to v10 cleanly; `memories_fts` count == `memories` count. (b) Existing v7 DB upgraded in place; migration skipped on second run (idempotent). (c) Round-trip: insert → row in FTS; update title → old tokens gone, new present; delete → row removed. (d) No LIKE rewiring yet — zero behavior change. |
+| **P2 — Backfill integrity & rebuild utility** ✅ | Verify parity: for sample queries, FTS candidate sets ⊇ LIKE results on token-initial matches; document `'rebuild'` usage.               | `SELECT COUNT(*)` parity; spot-check token-initial recall vs LIKE; rebuild reproduces identical index (hash of rowid sets).                                                                                                                                                                                                  |
+| **P3 — Query rewiring** ✅                       | Add `buildFtsMatchQuery`; rewire `searchByRepo` + `listMemoriesForDashboard` with LIKE fallback.                                         | Existing tests pass: `sqlite.test.ts:225-241` (expired excluded), `agent-context.test.ts:123`, `tasks.bulk.test.ts:488`; dashboard list preserves filters + allowlisted sort; empty-query path untouched; special-char queries fall back gracefully.                                                                         |
+| **P4 — Hybrid integration** ✅                   | FTS keyword score (bm25 min-max) replaces the vector score in the 0.30 keyword weight; FTS-only hits merged as extra candidates.         | `memory.read.ts` search returns results with keyword component ≠ 0 for lexical hits; FTS failure → existing error fallback; SPEC-001 weights unchanged; `memory.search.test.ts` / `e2e.test.ts:35` parity.                                                                                                                   |
+| **P5 — Hardening & rollback doc** 🔜 NEXT PHASE  | Optionally evaluate `trigram` (measure recall/`EXPLAIN QUERY PLAN` on slow queries), document rollback SQL in the migration file header. | Rollback script verified against a snapshot DB; perf comparison (LIKE vs FTS) recorded in task comment. — **not implemented, deferred**.                                                                                                                                                                                     |
 
-**Evidence trail**: `migrations.ts:330-350` (symbol FTS+triggers), `migrations.ts:672-706` (standard FTS+triggers+backfill), `migrations.ts:760-776` (legacy drop — trigger-name safety), `migrations.ts:1019-1022` (per-migration transaction), `codebase-symbol.ts:69-256` (FTS-first/LIKE-fallback pattern + `sanitizeFtsTerm`), `entity.ts:173-191, 404-496` (rewiring targets), `memory.read.ts:49-54, 105-247` (hybrid), `standard-read/search.ts:229-305` (keyword-score mirror), `sqlite.ts:75-92` (pragmas + migration bootstrap), `write-lock.ts` (lock semantics).
+> **Phased status:** P1–P4 shipped and verified in `src/` (migration v10, `utils/fts.ts`, `entities/memory/search.ts`, `tools/memory.read.ts`). P5 (trigram tokenizer evaluation + rollback documentation) is **NEXT PHASE** — not implemented.
+
+**Evidence trail** (historical `migrations.ts` line refs — the file has since been split into `storage/migrations/index.ts` + versioned `vNN-*.ts`): `migrations.ts:330-350` (symbol FTS+triggers, now `v01`), `migrations.ts:672-706` (standard FTS+triggers+backfill, now `v04`), `migrations.ts:760-776` (legacy drop — trigger-name safety, now `v01-helpers`), `migrations.ts:1019-1022` (per-migration transaction, now `index.ts`), `codebase-symbol.ts:69-256` (FTS-first/LIKE-fallback pattern + `sanitizeFtsTerm`), `entity.ts:173-191, 404-496` (rewiring targets, now `entities/memory/search.ts`), `memory.read.ts:49-54, 105-247` (hybrid), `standard-read/search.ts:229-305` (keyword-score mirror), `sqlite.ts:75-92` (pragmas + migration bootstrap), `write-lock.ts` (lock semantics).
 
 ## 10. Related artifacts
 

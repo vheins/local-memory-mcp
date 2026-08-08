@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Codebase Index subsystem discovers source files, parses them with tree-sitter WASM, and stores extracted symbols in SQLite. It supports 14 languages via tree-sitter grammars — TypeScript/TSX, JavaScript/JSX, Vue, Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, and C++ — plus Markdown and a generic text fallback for every other extension.
+The Codebase Index subsystem discovers source files, parses them with tree-sitter WASM, and stores extracted symbols in SQLite. It supports **15 languages** — 14 via tree-sitter grammars (TypeScript/TSX, JavaScript/JSX, Vue, Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, and C++) plus a dedicated Markdown visitor (no WASM) — and a generic text fallback for every other extension (JSON, YAML, CSS, shell scripts, etc.).
 
 All codebase data lives in the same `memory.db` database as other application data. See [Backup & Recovery](#6-backup--recovery) for details.
 
@@ -190,14 +190,35 @@ Stores one row per extracted symbol (function, class, interface, etc.).
 - `idx_cs_name` — on `(name)`
 - `idx_cs_parent` — on `(parent_symbol_id)`
 
+### `codebase_references` (migration v21)
+
+Stores one row per call-site edge discovered during parsing (used by `codebase-read` TRACE):
+
+| Column        | Type      | Description                             |
+| :------------ | :-------- | :-------------------------------------- |
+| `id`          | `TEXT`    | UUID primary key.                       |
+| `repo`        | `TEXT`    | Repository identifier.                  |
+| `symbol_name` | `TEXT`    | Symbol being referenced (the callee).   |
+| `caller_file` | `TEXT`    | File holding the call site.             |
+| `caller_line` | `INTEGER` | Line of the call site.                  |
+| `caller_name` | `TEXT`    | Enclosing symbol name at the call site. |
+| `kind`        | `TEXT`    | Reference kind.                         |
+| `created_at`  | `TEXT`    | Row creation timestamp.                 |
+
+**Indexes:**
+
+- `idx_refs_repo_symbol` — on `(repo, symbol_name)`
+- `idx_refs_repo_file` — on `(repo, caller_file)`
+
 ### FTS5 Virtual Table: `codebase_symbols_fts`
 
-Full-text search index on `name` and `doc_comment` columns:
+Full-text search index on `name`, `doc_comment`, and `signature` (the `signature` column was added when migration **v18** rebuilt the table):
 
 ```sql
 CREATE VIRTUAL TABLE codebase_symbols_fts USING fts5(
     name,
     doc_comment,
+    signature,
     content='codebase_symbols',
     content_rowid='rowid'
 );
@@ -378,7 +399,7 @@ For production deployments, ensure at least 1 GB free to accommodate growth and 
 
 ### Database Location
 
-All codebase tables (`codebase_files`, `codebase_symbols`, `codebase_symbols_fts`) are stored in the same `memory.db` database as memories, tasks, standards, and other application data. The database location follows this resolution order:
+All codebase tables (`codebase_files`, `codebase_symbols`, `codebase_references`, `codebase_symbols_fts`) are stored in the same `memory.db` database as memories, tasks, standards, and other application data. The database location follows this resolution order:
 
 1. `MEMORY_DB_PATH` environment variable (explicit override)
 2. `~/.config/local-memory-mcp/memory.db` (Linux)
@@ -386,15 +407,13 @@ All codebase tables (`codebase_files`, `codebase_symbols`, `codebase_symbols_fts
 4. `%USERPROFILE%\.local-memory-mcp\memory.db` (Windows)
 5. `./storage/memory.db` (current working directory, legacy fallback)
 
-### Automatic Backup
+### Automatic Backup — NOT IMPLEMENTED
 
-After every successful write operation, the system creates a backup by atomically copying `memory.db` to `memory.db.backup` in the same directory.
+> **Correction (verified 2026-08-08):** there is **no automatic backup** in the implementation — no code copies `memory.db` to `memory.db.backup`, and there is no nightly backup job (`grep -ri backup src/` matches tests only). The only built-in durability mechanism is **SQLite WAL journaling with automatic checkpointing**. Treat the manual procedures below as the supported backup path; consider scheduling them (e.g., a cron job) for real deployments.
 
 ### Corruption Recovery
 
-The database uses WAL journaling with automatic checkpointing, backed by nightly backup
-(see "Automatic Backup" below). If corruption is suspected, run the recovery procedure
-manually:
+The database uses WAL journaling with automatic checkpointing (no automatic backup — see above). If corruption is suspected, run the recovery procedure manually:
 
 1. Stop the server.
 2. Run `sqlite3 memory.db "PRAGMA integrity_check;"` to verify corruption.
