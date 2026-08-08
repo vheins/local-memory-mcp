@@ -1,4 +1,4 @@
-# ADR-007: Agent Context Domain Simplification
+# ADR-007 — Agent Context Simplification
 
 **Date:** 2026-07-27
 **Status:** Proposed

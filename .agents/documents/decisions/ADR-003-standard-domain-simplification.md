@@ -1,4 +1,4 @@
-# ADR-003: Standard Domain Tools Simplification
+# ADR-003 — Standard Domain Simplification
 
 **Date:** 2026-07-27
 **Status:** Proposed

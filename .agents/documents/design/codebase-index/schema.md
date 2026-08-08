@@ -204,7 +204,6 @@ CREATE INDEX IF NOT EXISTS idx_codebase_files_language
 CREATE INDEX IF NOT EXISTS idx_codebase_files_last_indexed
     ON codebase_files(last_indexed_at);
 
-
 -- ── codebase_symbols indexes ───────────────────────────────────────────
 
 -- Per-file symbol listing (get_file_symbols)
@@ -236,7 +235,6 @@ CREATE INDEX IF NOT EXISTS idx_codebase_symbols_file_kind
 CREATE INDEX IF NOT EXISTS idx_codebase_symbols_parent
     ON codebase_symbols(parent_symbol_id);
 
-
 -- ── codebase_relations indexes ──────────────────────────────────────────
 
 -- Outbound relations from a symbol (trace_symbol outbound)
@@ -258,7 +256,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_codebase_relations_unique
 -- Per-file relation listing
 CREATE INDEX IF NOT EXISTS idx_codebase_relations_file_id
     ON codebase_relations(file_id);
-
 
 -- ── codebase_index_queue indexes ────────────────────────────────────────
 

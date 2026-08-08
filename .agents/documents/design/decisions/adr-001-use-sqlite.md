@@ -1,4 +1,4 @@
-# Architecture Decision Record (ADR-001)
+# ADR-001 — Use SQLite
 
 ## Title
 

@@ -1,4 +1,4 @@
-# ADR-001: Memory Domain Tools Simplification
+# ADR-001 — Memory Domain Simplification
 
 **Date:** 2026-07-27
 **Status:** Proposed

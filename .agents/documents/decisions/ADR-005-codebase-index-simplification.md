@@ -1,4 +1,4 @@
-# ADR-005: Codebase Index Domain Simplification
+# ADR-005 — Codebase Index Simplification
 
 **Date:** 2026-07-27
 **Status:** Proposed

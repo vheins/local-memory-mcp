@@ -1,4 +1,4 @@
-# SPEC-001: Unified NL Query — Hybrid Vector + FTS5
+# SPEC-001 — Unified NL Query
 
 **Date:** 2026-07-27
 **Status:** Proposed

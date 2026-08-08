@@ -1,4 +1,4 @@
-# ADR-006: Knowledge Graph as Infrastructure (Not Tools)
+# ADR-006 — Knowledge Graph Infrastructure
 
 **Date:** 2026-07-27
 **Status:** Proposed

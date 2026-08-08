@@ -1,4 +1,4 @@
-# ADR-004: Handoff & Claim Domain Simplification
+# ADR-004 — Handoff & Claim Simplification
 
 **Date:** 2026-07-27
 **Status:** Proposed

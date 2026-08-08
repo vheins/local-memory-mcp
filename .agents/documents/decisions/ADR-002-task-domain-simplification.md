@@ -1,4 +1,4 @@
-# ADR-002: Task Domain Tools Simplification
+# ADR-002 — Task Domain Simplification
 
 **Date:** 2026-07-27
 **Status:** Proposed
