@@ -29,7 +29,7 @@ Senior software engineers managing complex repositories who require persistent, 
 - Capability Reference UI: Auto-generated documentation for all MCP tools.
 - Priority-based task sorting and filtering.
 - Agent Tools: `agent-context`, `decision-log`, `session-summarize`.
-- Upstream alias compatibility (`remember_fact`, `recall`, `forget`).
+- Upstream alias compatibility (`remember_fact`, `recall`, `forget`) — **LEGACY DESIGN INTENT, NOT IMPLEMENTED**: no alias tools were ever shipped (verified 2026-08-08), so the "All Implemented" label does not apply to this item.
 
 ### Won't Have (Rejected)
 

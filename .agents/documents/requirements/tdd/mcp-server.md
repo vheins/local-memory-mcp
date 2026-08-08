@@ -99,6 +99,8 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 
 ### Upstream Compatibility
 
+> **LEGACY DESIGN INTENT — NOT IMPLEMENTED (verified 2026-08-08):** the alias tools below were never shipped; no `remember_fact` / `remember_facts` / `recall` / `forget` tools or aliases exist in `src/mcp`. Canonical tools are `memory-store`, `memory-search`, `memory-delete`, etc. Retained for historical record only.
+
 - Alias tools registered via SDK `registerTool()`:
   - `remember_fact` → `memory-store`
   - `remember_facts` → `memory-store` (bulk)

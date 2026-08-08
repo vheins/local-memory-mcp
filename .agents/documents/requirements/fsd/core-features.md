@@ -15,7 +15,7 @@ This document specifies the functional behavior of the `@vheins/local-memory-mcp
   - `memory-delete`: Soft-delete one or more memory entries (single `id` or bulk `ids`).
   - `memory-summarize`: Update the high-level global summary for a repository.
   - `memory-recap`: AGGREGATED OVERVIEW — stats by type + top memories pointer table.
-- **Upstream Aliases**: `remember_fact` → `memory-store`, `remember_facts` → bulk store, `recall` → `memory-search`, `forget` → `memory-delete`.
+- **Upstream Aliases** _(LEGACY DESIGN INTENT — NOT IMPLEMENTED, verified 2026-08-08; no alias tools shipped — use the canonical tools above)_: `remember_fact` → `memory-store`, `remember_facts` → bulk store, `recall` → `memory-search`, `forget` → `memory-delete`.
 - **Rules**:
   - Collision detection at similarity > 0.55.
   - Supersedes versioning: old memories archived when superseded.
