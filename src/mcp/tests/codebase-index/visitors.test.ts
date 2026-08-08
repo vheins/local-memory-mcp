@@ -1378,6 +1378,14 @@ interface AccessorApi {
 		// distinguishable from a plain method in the index.
 		expect(value!.signature).toContain("get value");
 
+		// `find` on the getter above would still pass if the setter were dropped,
+		// so assert the `set value` accessor explicitly to guard the pair.
+		const set = result.symbols.find(
+			(s) => s.name === "value" && s.parentName === "AccessorApi" && s.signature.includes("set value")
+		);
+		expect(set).toBeDefined();
+		expect(set!.kind).toBe("method");
+
 		const count = result.symbols.find((s) => s.name === "count" && s.parentName === "AccessorApi");
 		expect(count).toBeDefined();
 		expect(count!.kind).toBe("method");
