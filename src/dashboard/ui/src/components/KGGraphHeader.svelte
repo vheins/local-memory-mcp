@@ -20,10 +20,10 @@
 
 <div class="kg-toolbar">
 	<div class="kg-toolbar-left">
-		<span class="section-label" style="font-size:0.68rem;">
+		<h1 class="section-label" style="font-size:0.68rem;">
 			<Icon name="share-2" size={12} strokeWidth={1.75} />
 			Knowledge Graph
-		</span>
+		</h1>
 		<span class="kg-stats">
 			{nodeCount} nodes · {edgeCount} edges
 		</span>

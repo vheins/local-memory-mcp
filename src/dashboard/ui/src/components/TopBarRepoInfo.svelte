@@ -5,11 +5,22 @@
 	export let currentRepo: string | null = null;
 	export let repoData: RepoMeta | undefined = undefined;
 	export let getRepoInitials: (repo: string) => string = () => "RP";
+	/** Opens the mobile sidebar menu (wired from the Visible← TopBar row; only shown ≤1024px). */
+	export let onToggleMobileMenu: () => void = () => {};
+	/** Whether the mobile menu is open — drives aria-expanded on the hamburger. */
+	export let mobileMenuOpen = false;
 </script>
 
 <div class="flex items-center gap-3">
-	<!-- Mobile hamburger -->
-	<button class="btn btn-ghost btn-icon" id="mobileMenuBtn" aria-label="Toggle menu" style="display:none;">
+	<!-- Mobile hamburger (hidden ≥1025px via CSS below; visible + functional ≤1024px) -->
+	<button
+		class="btn btn-ghost btn-icon"
+		id="mobileMenuBtn"
+		aria-label="Toggle menu"
+		aria-haspopup="true"
+		aria-expanded={mobileMenuOpen}
+		on:click={onToggleMobileMenu}
+	>
 		<Icon name="menu" size={18} strokeWidth={2} />
 	</button>
 
@@ -55,6 +66,12 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Hidden by default (desktop) — the inline display:none was removed so the
+	   button is a real interactive element; visibility is purely CSS-driven. */
+	#mobileMenuBtn {
+		display: none;
 	}
 
 	@media (max-width: 1024px) {

@@ -93,7 +93,12 @@
 	<!-- Main content -->
 	<div class="main-content" class:sidebar-collapsed={$sidebarCollapsed}>
 		<!-- Top bar -->
-		<TopBar onRefresh={app.onRefresh} onToggleMobileMenu={app.toggleMobileMenu} onEcosystem={app.onEcosystemClick} />
+		<TopBar
+			onRefresh={app.onRefresh}
+			onToggleMobileMenu={app.toggleMobileMenu}
+			onEcosystem={app.onEcosystemClick}
+			mobileMenuOpen={$appState.mobileMenuOpen}
+		/>
 
 		<!-- Mobile overlay -->
 		{#if $appState.mobileMenuOpen}
@@ -111,7 +116,7 @@
 		{/if}
 
 		<!-- Content Shell -->
-		<main id="dashboardShell" class="dashboard-shell" aria-live="polite">
+		<main id="dashboardShell" class="dashboard-shell">
 			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena"}
 				<div class="empty-state animate-fade-in">
 					<div class="empty-state-icon animate-float">
@@ -249,9 +254,9 @@
 									<Icon name="activity" size={18} strokeWidth={2.2} />
 								</div>
 								<div>
-									<div style="font-size:0.95rem;font-weight:800;color:var(--color-text);letter-spacing:-0.01em;">
+									<h1 style="font-size:0.95rem;font-weight:800;color:var(--color-text);letter-spacing:-0.01em;">
 										Recent Activity
-									</div>
+									</h1>
 									<div style="font-size:0.68rem;color:var(--color-text-muted);font-weight:600;">
 										{$recentActionsTotalItems} events tracked
 									</div>
@@ -282,7 +287,7 @@
 					<div class="glass card hover-glow animate-fade-in">
 						<div class="flex items-center gap-2" style="margin-bottom:16px;">
 							<Icon name="brain" size={14} strokeWidth={1.75} />
-							<h2 class="section-label">Memory Explorer</h2>
+							<h1 class="section-label">Memory Explorer</h1>
 						</div>
 						<MemoryList
 							bind:this={memoryList}
@@ -299,7 +304,7 @@
 						<div class="glass card hover-glow" style="margin-bottom:20px;">
 							<div class="flex items-center gap-2" style="margin-bottom:16px;">
 								<Icon name="columns" size={14} strokeWidth={1.75} />
-								<h2 class="stat-label">Task Overview</h2>
+								<h1 class="stat-label">Task Overview</h1>
 							</div>
 							<KanbanBoard
 								bind:this={kanbanBoard}

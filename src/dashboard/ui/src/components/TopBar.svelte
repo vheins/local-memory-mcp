@@ -12,6 +12,8 @@
 	export let onRefresh: () => void = () => {};
 	export let onToggleMobileMenu: () => void = () => {};
 	export let onEcosystem: () => void = () => {};
+	/** Whether the mobile sidebar menu is currently open (for aria-expanded). */
+	export let mobileMenuOpen = false;
 
 	const handler = createTopBarHandler(onRefresh);
 	const {
@@ -50,7 +52,13 @@
 <header class="top-bar glass-strong" style="border-bottom: 1px solid var(--color-border); z-index: 30;">
 	<div class="top-bar-inner">
 		<!-- Left: Mobile menu + current repo -->
-		<TopBarRepoInfo currentRepo={$currentRepo} repoData={currentRepoData} {getRepoInitials} />
+		<TopBarRepoInfo
+			currentRepo={$currentRepo}
+			repoData={currentRepoData}
+			{getRepoInitials}
+			{onToggleMobileMenu}
+			{mobileMenuOpen}
+		/>
 
 		<!-- Right: external links, status, countdown, theme toggle -->
 		<div class="top-actions">
@@ -74,7 +82,6 @@
 				theme={$theme}
 				themePreference={$themePreference}
 				onToggleTheme={toggleTheme}
-				{onToggleMobileMenu}
 			/>
 		</div>
 	</div>

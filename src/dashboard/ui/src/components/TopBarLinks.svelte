@@ -266,7 +266,7 @@
 	}
 
 	.ext-links-group :global(.ext-link-label) {
-		color: #556f8a;
+		color: var(--color-text-muted);
 	}
 
 	.npm-dl-badge {
@@ -361,6 +361,15 @@
 
 	@media (max-width: 420px) {
 		.countdown-label {
+			display: none;
+		}
+	}
+
+	/* TASK-275 / audit F12: at ≤400px the countdown strip pushes the TopBar
+	   actions (refresh, theme) off-screen at 320px. It's informational — the
+	   refresh button remains reachable. All actions stay visible ≤320px. */
+	@media (max-width: 400px) {
+		.countdown-bar {
 			display: none;
 		}
 	}

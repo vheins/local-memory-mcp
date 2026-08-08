@@ -12,18 +12,7 @@
 	export let theme: Theme = "light";
 	export let themePreference: string = "auto";
 	export let onToggleTheme: (e?: MouseEvent) => void = () => {};
-	export let onToggleMobileMenu: () => void = () => {};
 </script>
-
-<button
-	class="btn btn-ghost btn-icon"
-	on:click={onToggleMobileMenu}
-	aria-label="Toggle menu"
-	id="mobileMenuBtn"
-	style="display:none;"
->
-	<Icon name="menu" size={18} strokeWidth={2} />
-</button>
 
 <!-- Arena Metrics (only when arena data available) -->
 {#if arenaMetrics}

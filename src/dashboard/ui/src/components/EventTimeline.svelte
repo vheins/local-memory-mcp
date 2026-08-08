@@ -66,7 +66,11 @@
 	/>
 
 	{#if expanded}
-		<div class="timeline-body">
+		<!-- TASK-275 / audit F11: dedicated polite live region for the event
+		     log. The whole-shell aria-live (previously on #dashboardShell)
+		     announced every tab/panel change; announcements now come from the
+		     timeline itself. -->
+		<div class="timeline-body" aria-live="polite">
 			<div class="event-list" bind:this={eventContainer}>
 				{#if filteredEvents.length === 0}
 					<div class="empty-events">No matching events</div>

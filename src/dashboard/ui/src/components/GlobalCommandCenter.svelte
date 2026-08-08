@@ -9,14 +9,16 @@
 			label: "Repositories",
 			value: $stats?.repoCount ?? 0,
 			icon: "database",
-			color: "#0ea5e9",
+			// Theme-aware text colors (TASK-274) — light clears 4.5:1 on the
+			// card tint; dark keeps the original bright shade.
+			cls: "c-sky",
 			tint: "rgba(14,165,233,0.12)"
 		},
 		{
 			label: "Active Repos",
 			value: $stats?.activeRepoCount ?? 0,
 			icon: "activity",
-			color: "#8b5cf6",
+			cls: "c-violet",
 			tint: "rgba(139,92,246,0.12)"
 		},
 		{
@@ -27,37 +29,37 @@
 				($stats?.taskStats?.blocked ?? 0) +
 				($stats?.taskStats?.backlog ?? 0),
 			icon: "clipboard-list",
-			color: "#f59e0b",
+			cls: "c-amber",
 			tint: "rgba(245,158,11,0.12)"
 		},
 		{
 			label: "Active Claims",
 			value: $stats?.coordination?.activeClaims ?? 0,
 			icon: "check",
-			color: "#10b981",
+			cls: "c-emerald",
 			tint: "rgba(16,185,129,0.12)"
 		},
 		{
 			label: "Pending Handoffs",
 			value: $stats?.coordination?.pendingHandoffs ?? 0,
 			icon: "git-branch",
-			color: "#6366f1",
+			cls: "c-indigo",
 			tint: "rgba(99,102,241,0.12)"
 		},
 		{
 			label: "Blocked Tasks",
 			value: $stats?.taskStats?.blocked ?? 0,
 			icon: "triangle-alert",
-			color: "#ef4444",
+			cls: "c-red",
 			tint: "rgba(239,68,68,0.12)"
 		}
 	]);
 
 	const coordinationCards = derived(globalDashboardStats, ($stats) => [
-		{ label: "Agents Claiming", value: $stats?.coordination?.agentsClaiming ?? 0, accent: "#10b981" },
-		{ label: "Unassigned Handoffs", value: $stats?.coordination?.unassignedHandoffs ?? 0, accent: "#f97316" },
-		{ label: "Stale Claims", value: $stats?.coordination?.staleClaims ?? 0, accent: "#ef4444" },
-		{ label: "Stale Handoffs", value: $stats?.coordination?.staleHandoffs ?? 0, accent: "#e11d48" }
+		{ label: "Agents Claiming", value: $stats?.coordination?.agentsClaiming ?? 0, cls: "c-emerald" },
+		{ label: "Unassigned Handoffs", value: $stats?.coordination?.unassignedHandoffs ?? 0, cls: "c-orange" },
+		{ label: "Stale Claims", value: $stats?.coordination?.staleClaims ?? 0, cls: "c-red" },
+		{ label: "Stale Handoffs", value: $stats?.coordination?.staleHandoffs ?? 0, cls: "c-red" }
 	]);
 
 	const throughputCards = derived(globalTaskTimeStats, ($stats) => [
@@ -65,25 +67,25 @@
 			label: "Today Done",
 			value: $stats?.daily?.completed ?? 0,
 			icon: "circle-check",
-			color: "#10b981"
+			cls: "c-emerald"
 		},
 		{
 			label: "Today Added",
 			value: $stats?.daily?.added ?? 0,
 			icon: "plus",
-			color: "#0ea5e9"
+			cls: "c-sky"
 		},
 		{
 			label: "7d Done",
 			value: $stats?.weekly?.completed ?? 0,
 			icon: "bar-chart",
-			color: "#8b5cf6"
+			cls: "c-violet"
 		},
 		{
 			label: "7d Tokens",
 			value: formatTokens($stats?.weekly?.tokens),
 			icon: "cpu",
-			color: "#f59e0b"
+			cls: "c-amber"
 		}
 	]);
 
@@ -105,7 +107,7 @@
 	<div class="glass card panel-card">
 		<div class="panel-header">
 			<div>
-				<h2 class="section-label">Global Command Center</h2>
+				<h1 class="section-label">Global Command Center</h1>
 				<div class="panel-copy">Cross-repository orchestration view for workload, coordination, and pressure.</div>
 			</div>
 			{#if highlightedRepo}
@@ -119,10 +121,10 @@
 		<div class="summary-grid">
 			{#each $summaryCards as card (card.label)}
 				<div class="summary-card" style="background:{card.tint};border-color:{card.tint};">
-					<div class="summary-icon" style="color:{card.color};">
+					<div class="summary-icon {card.cls}">
 						<Icon name={card.icon} size={14} strokeWidth={1.9} />
 					</div>
-					<div class="summary-value" style="color:{card.color};">{card.value}</div>
+					<div class="summary-value {card.cls}">{card.value}</div>
 					<div class="summary-label">{card.label}</div>
 				</div>
 			{/each}
@@ -135,7 +137,7 @@
 			<div class="mini-grid">
 				{#each $coordinationCards as card (card.label)}
 					<div class="mini-card">
-						<div class="mini-value" style="color:{card.accent};">{card.value}</div>
+						<div class="mini-value {card.cls}">{card.value}</div>
 						<div class="mini-label">{card.label}</div>
 					</div>
 				{/each}
@@ -147,10 +149,10 @@
 			<div class="mini-grid">
 				{#each $throughputCards as card (card.label)}
 					<div class="mini-card">
-						<div class="mini-icon" style="color:{card.color};">
+						<div class="mini-icon {card.cls}">
 							<Icon name={card.icon} size={12} strokeWidth={2} />
 						</div>
-						<div class="mini-value" style="color:{card.color};">{card.value}</div>
+						<div class="mini-value {card.cls}">{card.value}</div>
 						<div class="mini-label">{card.label}</div>
 					</div>
 				{/each}
@@ -240,7 +242,7 @@
 		border-radius: 999px;
 		background: rgba(99, 102, 241, 0.08);
 		border: 1px solid rgba(99, 102, 241, 0.16);
-		color: #6366f1;
+		color: var(--stat-indigo, #4338ca);
 		font-size: 0.68rem;
 		font-weight: 800;
 	}
@@ -266,6 +268,30 @@
 		font-weight: 900;
 		line-height: 1;
 		letter-spacing: -0.04em;
+	}
+
+	/* Theme-aware accent text colors (TASK-274) — see app.css --stat-* tokens.
+	   Light = 700-class shades (≥4.5:1 on card tints); dark = original shades. */
+	.c-sky {
+		color: var(--stat-sky, #0369a1);
+	}
+	.c-violet {
+		color: var(--stat-violet, #6d28d9);
+	}
+	.c-amber {
+		color: var(--stat-amber, #b45309);
+	}
+	.c-emerald {
+		color: var(--stat-emerald, #047857);
+	}
+	.c-indigo {
+		color: var(--stat-indigo, #4338ca);
+	}
+	.c-red {
+		color: var(--stat-red, #b91c1c);
+	}
+	.c-orange {
+		color: var(--stat-orange, #c2410c);
 	}
 	.summary-label {
 		font-size: 0.62rem;
@@ -367,7 +393,7 @@
 		border-radius: 999px;
 		background: rgba(239, 68, 68, 0.08);
 		border: 1px solid rgba(239, 68, 68, 0.16);
-		color: #ef4444;
+		color: var(--stat-red, #b91c1c);
 		font-size: 0.78rem;
 		font-weight: 900;
 	}
@@ -386,37 +412,37 @@
 		border: 1px solid transparent;
 	}
 	.stat-chip.active {
-		color: #8b5cf6;
+		color: var(--stat-violet, #6d28d9);
 		background: rgba(139, 92, 246, 0.1);
 		border-color: rgba(139, 92, 246, 0.16);
 	}
 	.stat-chip.pending {
-		color: #0ea5e9;
+		color: var(--stat-sky, #0369a1);
 		background: rgba(14, 165, 233, 0.1);
 		border-color: rgba(14, 165, 233, 0.16);
 	}
 	.stat-chip.blocked {
-		color: #ef4444;
+		color: var(--stat-red, #b91c1c);
 		background: rgba(239, 68, 68, 0.1);
 		border-color: rgba(239, 68, 68, 0.16);
 	}
 	.stat-chip.backlog {
-		color: #64748b;
+		color: var(--stat-slate, #475569);
 		background: rgba(100, 116, 139, 0.1);
 		border-color: rgba(100, 116, 139, 0.16);
 	}
 	.stat-chip.claim {
-		color: #10b981;
+		color: var(--stat-emerald, #047857);
 		background: rgba(16, 185, 129, 0.1);
 		border-color: rgba(16, 185, 129, 0.16);
 	}
 	.stat-chip.handoff {
-		color: #6366f1;
+		color: var(--stat-indigo, #4338ca);
 		background: rgba(99, 102, 241, 0.1);
 		border-color: rgba(99, 102, 241, 0.16);
 	}
 	.stat-chip.stale {
-		color: #f97316;
+		color: var(--stat-orange, #c2410c);
 		background: rgba(249, 115, 22, 0.1);
 		border-color: rgba(249, 115, 22, 0.16);
 	}

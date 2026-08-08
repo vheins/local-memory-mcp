@@ -224,7 +224,7 @@
 
 						<div class="flex items-center gap-2" style="margin-bottom:16px;">
 							<Icon name="code" size={14} strokeWidth={1.75} />
-							<div class="section-label">Codebase Overview</div>
+							<h1 class="section-label">Codebase Overview</h1>
 							<div class="repo-badge">{$currentRepo}</div>
 						</div>
 

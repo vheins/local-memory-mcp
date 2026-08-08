@@ -17,7 +17,7 @@
 	<div class="toolbar-title">
 		<Icon name="git-branch" size={16} strokeWidth={2} />
 		<div>
-			<div class="section-label">HANDOFFS & CLAIMS</div>
+			<h1 class="section-label">HANDOFFS & CLAIMS</h1>
 			<div class="toolbar-subtitle">Handoffs transfer context between agents. Claims reserve a task for one owner.</div>
 		</div>
 	</div>
@@ -33,7 +33,13 @@
 			<option value="rejected">Rejected</option>
 			<option value="expired">Expired</option>
 		</select>
-		<input class="form-input" placeholder="To agent filter" bind:value={agentFilter} on:input={onAgentFilterChange} />
+		<input
+			class="form-input"
+			placeholder="To agent filter"
+			aria-label="Filter handoffs by recipient agent"
+			bind:value={agentFilter}
+			on:input={onAgentFilterChange}
+		/>
 		<button class="btn btn-ghost" on:click={onRefresh}>
 			<Icon name="refresh-cw" size={14} strokeWidth={2} />
 			Refresh

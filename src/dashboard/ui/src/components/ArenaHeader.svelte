@@ -21,7 +21,7 @@
 			<Icon name="cpu" size={16} strokeWidth={1.75} />
 		</div>
 		<div>
-			<div class="section-label" style="margin:0">Agent Arena</div>
+			<h1 class="section-label" style="margin:0">Agent Arena</h1>
 			<div class="arena-sub">Live 2D view · all repositories</div>
 		</div>
 	</div>

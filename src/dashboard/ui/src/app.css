@@ -44,8 +44,14 @@
 	--color-surface: #ffffff;
 	--color-border: #e1ecf7;
 	--color-text: #0a1628;
-	--color-text-muted: #556f8a;
-	--color-text-faint: #8faec4;
+	/* TASK-274 / audit F6 (WCAG AA, LIGHT THEME ONLY):
+	   17/21 sampled light-theme text pairs were < 4.5:1 because muted/faint
+	   were too light against the glass surfaces. Darkened here; the .dark
+	   block below is untouched so dark theme keeps its (passing) palette.
+	   - muted #556f8a → #51647a : 6.09:1 on white, ~5.8:1 on glass surfaces
+	   - faint #8faec4 → #64748b : 4.76:1 on white (was ~2.3:1) */
+	--color-text-muted: #51647a;
+	--color-text-faint: #64748b;
 	--color-primary: #0ea5e9;
 	--color-primary-dark: #0284c7;
 	--color-primary-light: #38bdf8;
@@ -55,6 +61,21 @@
 	--color-warning: #f59e0b;
 	--color-danger: #ef4444;
 	--color-purple: #a855f7;
+
+	/* ── Semantic status/accent TEXT colors (TASK-274) ───
+	   Components that draw colored text/icons on tinted backgrounds (summary
+	   cards, stat chips, pressure pills, repo-focus badges) use these tokens.
+	   Light values are Tailwind-700-class shades that clear 4.5:1 on their
+	   tinted backgrounds (computed per pair); dark values are the original
+	   bright shades, so dark theme visuals are unchanged. */
+	--stat-sky: #0369a1;
+	--stat-violet: #6d28d9;
+	--stat-amber: #b45309;
+	--stat-emerald: #047857;
+	--stat-indigo: #4338ca;
+	--stat-red: #b91c1c;
+	--stat-orange: #c2410c;
+	--stat-slate: #475569;
 
 	/* ── Motion ─── */
 	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -75,6 +96,17 @@
 	--color-primary: #38bdf8;
 	--color-primary-dark: #0ea5e9;
 	--color-primary-light: #7dd3fc;
+
+	/* Dark-theme stat accent text colors — original bright shades, unchanged
+	   from before TASK-274 (dark theme passed 15/20 samples; no regression). */
+	--stat-sky: #38bdf8;
+	--stat-violet: #a78bfa;
+	--stat-amber: #fbbf24;
+	--stat-emerald: #34d399;
+	--stat-indigo: #818cf8;
+	--stat-red: #f87171;
+	--stat-orange: #fb923c;
+	--stat-slate: #94a3b8;
 }
 
 /* ─── Reset & Base ────────────────────────────────────────────────────────── */
@@ -321,6 +353,29 @@ a:hover {
 
 .tabs-wrap::-webkit-scrollbar {
 	display: none;
+}
+
+/* TASK-275 / audit F13: on phones the tab strip previously hid its scrollbar
+   entirely (overflow-x:auto + scrollbar:none), so tabs beyond the fold were
+   undiscoverable. ≤480px: show a thin styled scrollbar as a scroll affordance. */
+@media (max-width: 480px) {
+	.tabs-wrap {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(99, 102, 241, 0.5) rgba(148, 163, 184, 0.15);
+		-webkit-overflow-scrolling: touch;
+	}
+	.tabs-wrap::-webkit-scrollbar {
+		display: block;
+		height: 4px;
+	}
+	.tabs-wrap::-webkit-scrollbar-track {
+		background: rgba(148, 163, 184, 0.15);
+		border-radius: 9999px;
+	}
+	.tabs-wrap::-webkit-scrollbar-thumb {
+		background: rgba(99, 102, 241, 0.5);
+		border-radius: 9999px;
+	}
 }
 
 .dark .tab-nav {
@@ -713,12 +768,14 @@ a:hover {
 }
 .status-canceled {
 	background: rgba(156, 163, 175, 0.08);
-	color: #9ca3af;
+	/* TASK-274: #9ca3af was ~1.9:1 on white — darkened to pass 4.5:1. */
+	color: #6b7280;
 	border: 1px solid rgba(156, 163, 175, 0.18);
 }
 .status-default {
 	background: rgba(203, 213, 225, 0.12);
-	color: #94a3b8;
+	/* TASK-274: #94a3b8 was ~2.4:1 on white — darkened to pass 4.5:1. */
+	color: #64748b;
 	border: 1px solid rgba(203, 213, 225, 0.28);
 }
 
@@ -745,6 +802,12 @@ a:hover {
 .dark .status-canceled {
 	background: rgba(156, 163, 175, 0.12);
 	color: #6b7280;
+}
+/* Dark override keeps the original light-on-dark gray for default status
+   (the base rule above was darkened for light-theme contrast only — TASK-274). */
+.dark .status-default {
+	background: rgba(203, 213, 225, 0.12);
+	color: #94a3b8;
 }
 
 /* ─── Repo Sidebar Items ─────────────────────────────────────────────────── */

@@ -20,7 +20,7 @@
 	<div class="toolbar-title">
 		<Icon name="check" size={16} strokeWidth={2} />
 		<div>
-			<div class="section-label">CODING STANDARDS</div>
+			<h1 class="section-label">CODING STANDARDS</h1>
 			<div class="toolbar-subtitle">
 				Rules the agents follow in this repo. Filter, inspect, import, or add one rule at a time.
 			</div>
@@ -48,11 +48,24 @@
 		/>
 	</div>
 	<div class="toolbar-controls">
-		<input class="form-input" placeholder="Search standards..." bind:value={query} on:input={onFilterChange} />
-		<input class="form-input" placeholder="Language, e.g. typescript" bind:value={language} on:input={onFilterChange} />
+		<input
+			class="form-input"
+			placeholder="Search standards..."
+			aria-label="Search coding standards"
+			bind:value={query}
+			on:input={onFilterChange}
+		/>
+		<input
+			class="form-input"
+			placeholder="Language, e.g. typescript"
+			aria-label="Filter by language"
+			bind:value={language}
+			on:input={onFilterChange}
+		/>
 		<input
 			class="form-input"
 			placeholder="Stack tags, e.g. svelte, vite"
+			aria-label="Filter by stack tags"
 			bind:value={stack}
 			on:input={onFilterChange}
 		/>

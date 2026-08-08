@@ -70,9 +70,11 @@
 		<div class="ref-header">
 			<div class="flex items-center gap-2">
 				<Icon name="book-open" size={15} strokeWidth={1.75} />
-				<span style="font-size:0.9rem;font-weight:800;color:var(--color-text);letter-spacing:-0.02em;"
-					>MCP Reference</span
-				>
+				<!-- Page heading (audit F8/F7): every other tab exposes its
+					purpose as an h1 (Memory Explorer, Coding Standards, …);
+					Reference was the only tab without a heading. Matches the
+					canonical section-label h1 used by the other tabs. -->
+				<h1 class="section-label">MCP Reference</h1>
 				{#if state.capabilities}
 					<span class="ref-total-badge"
 						>{(state.capabilities.tools?.length || 0) + (state.capabilities.prompts?.length || 0)} items</span

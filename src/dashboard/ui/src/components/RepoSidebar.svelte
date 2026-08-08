@@ -92,7 +92,13 @@
 				<span class="search-icon">
 					<Icon name="search" size={13} strokeWidth={2} />
 				</span>
-				<input class="form-input search-input" type="text" placeholder="Search repos…" bind:value={$repoSearchQuery} />
+				<input
+					class="form-input search-input"
+					type="text"
+					placeholder="Search repos…"
+					aria-label="Search repositories"
+					bind:value={$repoSearchQuery}
+				/>
 			</div>
 		</div>
 	{/if}
