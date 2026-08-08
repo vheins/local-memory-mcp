@@ -22,10 +22,6 @@ Built with a **Local-First** philosophy, this service stores architectural decis
 - 🔍 **Codebase Index:** Index and query source code structure — search for functions, classes, interfaces, types, and enums across your projects. Uses tree-sitter WASM for fast parsing with incremental updates.
 - 🧭 **Codebase Search & Trace:** Search indexed symbols with ranked results (`search_symbols`), inspect file-level declarations (`get_file_symbols`), explore architecture overviews (`get_architecture`), and trace symbol definitions across your codebase (`trace_symbol`).
 
-### Drop-In Upstream Compatibility
-
-Compatible with `Beledarian/mcp-local-memory` clients: `remember_fact`, `remember_facts`, `recall`, `forget` are built-in aliases.
-
 ## 🔌 MCP Usage & Configuration
 
 Add this service to your AI Agent (Claude Desktop, Cursor, Windsurf, etc.) using one of the methods below.
@@ -148,3 +144,7 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 ## ⚖️ License
 
 MIT © Muhammad Rheza Alfin
+
+## 🙏 Acknowledgements
+
+Inspired by [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — this project builds on the concept of local-first MCP memory, reimplemented with its own architecture, SQLite schema, and tool set. It is **not** drop-in compatible with the upstream tool names; use the canonical tools documented in this README (`memory-store`, `memory-search`, `memory-delete`, etc.).

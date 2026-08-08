@@ -22,10 +22,6 @@ Dibangun dengan filosofi **Local-First**, layanan ini menyimpan keputusan arsite
 - 🔍 **Codebase Index:** Indeks dan kueri struktur kode sumber — cari fungsi, kelas, antarmuka, tipe, dan enum di seluruh proyek Anda. Menggunakan tree-sitter WASM untuk parsing cepat dengan pembaruan inkremental.
 - 🧭 **Codebase Search & Trace:** Cari simbol terindeks dengan hasil berperingkat (`search_symbols`), periksa deklarasi level-berkas (`get_file_symbols`), jelajahi ikhtisar arsitektur (`get_architecture`), dan telusuri definisi simbol di seluruh codebase Anda (`trace_symbol`).
 
-### Kompatibilitas Drop-In dengan Hulu
-
-Kompatibel dengan klien `Beledarian/mcp-local-memory`: `remember_fact`, `remember_facts`, `recall`, `forget` adalah alias bawaan.
-
 ## 🔌 Penggunaan & Konfigurasi MCP
 
 Tambahkan layanan ini ke AI Agent Anda (Claude Desktop, Cursor, Windsurf, dll.) menggunakan salah satu metode di bawah.
@@ -148,3 +144,7 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 ## ⚖️ Lisensi
 
 MIT © Muhammad Rheza Alfin
+
+## 🙏 Ucapan Terima Kasih
+
+Terinspirasi [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — proyek ini dibangun di atas konsep memori MCP lokal-first, diimplementasikan ulang dengan arsitektur, skema SQLite, dan kumpulan alatnya sendiri. Proyek ini **bukan** kompatibel drop-in dengan nama alat hulu; gunakan alat kanonik yang didokumentasikan di sini (`memory-store`, `memory-search`, `memory-delete`, dll.).

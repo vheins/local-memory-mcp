@@ -535,13 +535,8 @@ Menyimpan keputusan dengan konteks, alasan, dan alternatif.
 
 ---
 
-## Alias Kompatibilitas Hulu
+## Inspirasi Hulu
 
-Alat-alat ini cocok dengan antarmuka `Beledarian/mcp-local-memory` untuk kompatibilitas langsung:
+Proyek ini **terinspirasi dari** [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — konsep server memori MCP lokal-first — tetapi merupakan reimplementasi mandiri dengan arsitektur, skema SQLite, dan kumpulan alatnya sendiri.
 
-| Hulu             | Dipetakan Ke            | Deskripsi               |
-| :--------------- | :---------------------- | :---------------------- |
-| `remember_fact`  | `memory-store`          | Menyimpan sebuah fakta  |
-| `remember_facts` | `memory-store` (massal) | Menyimpan banyak fakta  |
-| `recall`         | `memory-search`         | Mencari memori          |
-| `forget`         | `memory-delete`         | Menghapus sebuah memori |
+Proyek ini **bukan** kompatibel drop-in: nama hulu `remember_fact`, `remember_facts`, `recall`, dan `forget` tidak disediakan sebagai alat maupun alias. Gunakan nama alat kanonik yang didokumentasikan di atas (`memory-store`, `memory-search`, `memory-delete`, dst.).

@@ -535,13 +535,8 @@ Persists a decision with context, rationale, and alternatives.
 
 ---
 
-## Upstream Compatibility Aliases
+## Upstream Inspiration
 
-These tools match the `Beledarian/mcp-local-memory` interface for drop-in compatibility:
+This project is **inspired by [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory)** — the concept of a local-first MCP memory server — but it is an independent reimplementation with its own architecture, SQLite schema, and tool set.
 
-| Upstream         | Maps To               | Description          |
-| :--------------- | :-------------------- | :------------------- |
-| `remember_fact`  | `memory-store`        | Store a fact         |
-| `remember_facts` | `memory-store` (bulk) | Store multiple facts |
-| `recall`         | `memory-search`       | Search memories      |
-| `forget`         | `memory-delete`       | Delete a memory      |
+It is **not** drop-in compatible: the upstream names `remember_fact`, `remember_facts`, `recall`, and `forget` are not provided as tools or aliases. Use the canonical tool names documented above (`memory-store`, `memory-search`, `memory-delete`, etc.).
