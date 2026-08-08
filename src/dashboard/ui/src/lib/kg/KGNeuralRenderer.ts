@@ -9,6 +9,7 @@ export {
 	pauseNeuralAnimation,
 	resumeNeuralAnimation,
 	isNeuralAnimationRunning,
+	wakeNeuralAnimation,
 	updateNeuralDimensions,
 	updateAnimationData,
 	zoomCamera,

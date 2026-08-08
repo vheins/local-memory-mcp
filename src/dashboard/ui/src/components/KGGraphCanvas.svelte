@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount, onDestroy, createEventDispatcher } from "svelte";
 	import { NODE_RADIUS } from "$lib/kg/KGForceLayout";
+	import { MAX_DPR } from "$lib/kg/kg-neural-renderer/layout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import {
 		startNeuralAnimation,
 		stopNeuralAnimation,
 		updateAnimationData,
 		updateNeuralDimensions,
+		wakeNeuralAnimation,
 		zoomCamera,
 		startDragCamera,
 		dragCamera,
@@ -57,7 +59,10 @@
 	onMount(() => {
 		if (!canvas) return;
 		updateNeuralDimensions(canvas);
-		const dpr = window.devicePixelRatio || 1;
+		// Backing store is sized with the CAPPED dpr (TASK-271). CSS-pixel
+		// dimensions therefore must divide by the capped value, not the raw
+		// devicePixelRatio, or width/height would shrink on DPR > 1.5 displays.
+		const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
 		canvasWidth = canvas.width / dpr;
 		canvasHeight = canvas.height / dpr;
 		ctx = canvas.getContext("2d");
@@ -80,7 +85,7 @@
 	function handleResize() {
 		if (!canvas) return;
 		updateNeuralDimensions(canvas);
-		const dpr = window.devicePixelRatio || 1;
+		const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
 		canvasWidth = canvas.width / dpr;
 		canvasHeight = canvas.height / dpr;
 		ctx = canvas.getContext("2d")!;
@@ -324,6 +329,9 @@
 
 	export function handleResetCamera() {
 		resetCamera();
+		// Camera reset changes the view even at the default zoom — wake the
+		// settled renderer so the new framing is drawn immediately (TASK-277).
+		wakeNeuralAnimation();
 		zoomPercent = getZoomPercent();
 		onZoomPercentChange(zoomPercent);
 	}

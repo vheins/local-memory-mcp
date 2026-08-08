@@ -84,6 +84,26 @@ export function isCameraDragging(): boolean {
 	return isDragging;
 }
 
+/**
+ * True while the zoom lerp is still converging (`cameraDistance` has not yet
+ * reached `targetCameraDistance`). Used by the renderer's settle detector
+ * (TASK-277) as an "interaction activity" signal so the graph keeps rendering
+ * through a zoom animation and only freezes once the lerp settles.
+ */
+export function isZoomAnimating(): boolean {
+	return Math.abs(cameraDistance - targetCameraDistance) > 0.5;
+}
+
+/**
+ * Re-anchors the auto-rotation clock to `now` on the next `updateCamera`
+ * call. The renderer calls this after a freeze gap so the first resumed frame
+ * does not compute a huge `autoDt` (which would teleport the camera rotation
+ * across the time the loop was frozen) (TASK-277).
+ */
+export function resetAutoRotationClock(): void {
+	lastAutoTimestamp = 0;
+}
+
 // ─── Frame update (called once per render frame) ───────────────────────────
 
 export interface CameraFrame {

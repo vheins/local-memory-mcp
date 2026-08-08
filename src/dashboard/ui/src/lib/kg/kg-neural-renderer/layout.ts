@@ -220,6 +220,16 @@ export function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: 
 
 // ─── Canvas Sizing ───────────────────────────────────────────────────────────
 
+/**
+ * Effective DPR cap for the KG canvas (TASK-271 / audit F3).
+ * At DPR 2-3 displays, rendering at native DPR doubles/triples the backing
+ * store pixels with no visible gain for this particle graph but a large fill
+ * cost per frame (the audit measured 50-85 ms long tasks on a 300-node /
+ * 4000-edge graph). Capping at 1.5 cuts raster work by up to 4x on DPR 2
+ * displays while keeping edges/particles crisp.
+ */
+export const MAX_DPR = 1.5;
+
 export function resizeNeuralCanvas(canvas: HTMLCanvasElement): {
 	width: number;
 	height: number;
@@ -229,7 +239,7 @@ export function resizeNeuralCanvas(canvas: HTMLCanvasElement): {
 	const rect = canvas.parentElement?.getBoundingClientRect();
 	const w = rect ? rect.width : 800;
 	const h = rect ? rect.height : 600;
-	const dpr = window.devicePixelRatio || 1;
+	const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
 	canvas.width = w * dpr;
 	canvas.height = h * dpr;
 	canvas.style.width = w + "px";

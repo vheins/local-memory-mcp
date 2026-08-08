@@ -61,7 +61,9 @@ export function resizeCanvas(canvas: HTMLCanvasElement): {
 	const rect = canvas.parentElement?.getBoundingClientRect();
 	const width = rect ? rect.width : 800;
 	const height = rect ? rect.height : 600;
-	const dpr = window.devicePixelRatio || 1;
+	// TASK-271: cap effective DPR — fill cost is quadratic in DPR with no
+	// visible benefit for this graph above 1.5 (mirrors the neural renderer).
+	const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 	canvas.width = width * dpr;
 	canvas.height = height * dpr;
 	canvas.style.width = width + "px";

@@ -164,7 +164,9 @@ export function drawParticle(
 	radius: number,
 	baseAlpha: number,
 	twinkle: number,
-	dark: boolean
+	dark: boolean,
+	/** TASK-277: during camera drag, skip the decorative bloom layer. */
+	simplified = false
 ) {
 	const fog = fogFactor(depth);
 	const finalAlpha = baseAlpha * fog * twinkle;
@@ -183,15 +185,20 @@ export function drawParticle(
 		ctx.globalCompositeOperation = "lighter";
 
 		// Glow — drawn in a transformed space so the shared origin-centered
-		// gradient can be reused for any particle position/radius.
-		ctx.save();
-		ctx.translate(sx, sy);
-		ctx.scale((radius * 5) / GLOW_REF_RADIUS, (radius * 5) / GLOW_REF_RADIUS);
-		ctx.fillStyle = getGlowGradient(ctx, dark, color);
-		ctx.beginPath();
-		ctx.arc(0, 0, GLOW_REF_RADIUS, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
+		// gradient can be reused for any particle position/radius. Skipped
+		// while dragging: it is the costliest raster of the particle (~300
+		// "lighter"-composite gradient fills/frame) and the bloom is barely
+		// visible while the scene is in motion.
+		if (!simplified) {
+			ctx.save();
+			ctx.translate(sx, sy);
+			ctx.scale((radius * 5) / GLOW_REF_RADIUS, (radius * 5) / GLOW_REF_RADIUS);
+			ctx.fillStyle = getGlowGradient(ctx, dark, color);
+			ctx.beginPath();
+			ctx.arc(0, 0, GLOW_REF_RADIUS, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.restore();
+		}
 
 		// Core particle — fillStyle from the precomputed table (zero alloc)
 		ctx.beginPath();
@@ -202,14 +209,16 @@ export function drawParticle(
 		const core = getCoreColorEntry(color);
 
 		// Glow — see dark mode comment above
-		ctx.save();
-		ctx.translate(sx, sy);
-		ctx.scale((radius * 4) / GLOW_REF_RADIUS, (radius * 4) / GLOW_REF_RADIUS);
-		ctx.fillStyle = getGlowGradient(ctx, dark, color);
-		ctx.beginPath();
-		ctx.arc(0, 0, GLOW_REF_RADIUS, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.restore();
+		if (!simplified) {
+			ctx.save();
+			ctx.translate(sx, sy);
+			ctx.scale((radius * 4) / GLOW_REF_RADIUS, (radius * 4) / GLOW_REF_RADIUS);
+			ctx.fillStyle = getGlowGradient(ctx, dark, color);
+			ctx.beginPath();
+			ctx.arc(0, 0, GLOW_REF_RADIUS, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.restore();
+		}
 
 		// Core particle — full color, solid
 		ctx.beginPath();
