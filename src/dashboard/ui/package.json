@@ -4,7 +4,7 @@
 	"type": "module",
 	"dependencies": {
 		"chart.js": "^4.5.1",
-		"dompurify": "^3.3.3",
+		"dompurify": "^3.4.13",
 		"marked": "^18.0.0",
 		"svelte": "^5.55.9",
 		"sweetalert2": "^11.26.25"

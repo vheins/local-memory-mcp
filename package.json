@@ -67,7 +67,7 @@
 		"chart.js": "^4.5.1",
 		"compromise": "^14.15.1",
 		"compromise-dates": "^3.8.0",
-		"dompurify": "^3.3.3",
+		"dompurify": "^3.4.13",
 		"esbuild": "0.28.1",
 		"express": "^5.2.1",
 		"fast-glob": "^3.3.3",
