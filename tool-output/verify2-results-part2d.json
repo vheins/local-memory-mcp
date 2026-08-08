@@ -1,0 +1,12 @@
+[
+  {
+    "id": "F7 aria-live on timeline (TASK-275)",
+    "pass": false,
+    "detail": "dashboardShell aria-live=null (expect null); timeline-body aria-live=null visible=false; [aria-live] on page=[{\"cls\":\"sr-only\",\"live\":\"polite\"}]"
+  },
+  {
+    "id": "F7 h1 codebase (indexed repo)",
+    "pass": false,
+    "detail": "repo=local-memory-mcp; codebase h1=null (loading=true at 31.603s)"
+  }
+]

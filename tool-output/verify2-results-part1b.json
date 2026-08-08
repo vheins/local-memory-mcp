@@ -1,0 +1,27 @@
+[
+  {
+    "id": "F1-fanout (TASK-269)",
+    "pass": false,
+    "detail": "requests=13 (was ~320); overview=false; repoRows=0 (appeared in >90s); no-table; totalWait=95.035s; urls=[\"200 /\",\"200 https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap\",\"200 /assets/index-dqloGaES.js\",\"200 /assets/index-BzirzNyD.css\",\"200 /api/repos\",\"200 https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2\",\"200 /api/kg/graph?repo=DocuBook-docubook&graphLimit=300\",\"200 /api/health\",\"200 /api/stats\",\"200 /api/tasks/stats/time\",\"200 /api/stats?repo=DocuBook-docubook\",\"200 /api/recent-actions?page=1&pageSize=25&repo=DocuBook-docubook\",\"200 /api/tasks/stats/time?repo=DocuBook-docubook\"]"
+  },
+  {
+    "id": "F1 mobile nav (TASK-270)",
+    "pass": true,
+    "detail": "menuOpened=true; repoSelected=DocuBook-docubook; menuClosedAfterSelect=true (910ms); uniqueBtn=1"
+  },
+  {
+    "id": "F2 KG speed (TASK-268)",
+    "pass": true,
+    "detail": "coldLoad=712ms (target<30000, was ~190s, expect ~11.6s); healthSamples=1 non200=[]; kgResponses=200"
+  },
+  {
+    "id": "F2 KG warm (TASK-268)",
+    "pass": true,
+    "detail": "warmLoad=486ms (target <5000)"
+  },
+  {
+    "id": "F3 KG jank (TASK-271)",
+    "pass": false,
+    "detail": "CONTROL activityIdle: fps=0 med=nullms p95=nullms long=1\nKG idle: fps=0 (was 24.6, target>=30) med=nullms p95=nullms long=0 max=0ms longTasks=[]\nKG drag: fps=0 (was 12.5, target>=25) med=nullms p95=nullms long=0 max=0ms longTasks=[]"
+  }
+]
