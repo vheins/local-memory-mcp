@@ -537,6 +537,6 @@ Menyimpan keputusan dengan konteks, alasan, dan alternatif.
 
 ## Inspirasi Hulu
 
-Proyek ini **terinspirasi dari** [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — konsep server memori MCP lokal-first — tetapi merupakan reimplementasi mandiri dengan arsitektur, skema SQLite, dan kumpulan alatnya sendiri.
+Fitur **Knowledge Graph** **terinspirasi dari** [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — konsep grafik entitas/relasi terstruktur diimplementasikan ulang dengan skema sendiri dan ekstraksi NLP offline.
 
 Proyek ini **bukan** kompatibel drop-in: nama hulu `remember_fact`, `remember_facts`, `recall`, dan `forget` tidak disediakan sebagai alat maupun alias. Gunakan nama alat kanonik yang didokumentasikan di atas (`memory-store`, `memory-search`, `memory-delete`, dst.).

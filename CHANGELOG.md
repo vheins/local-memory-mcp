@@ -511,7 +511,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **SDK Migration**: Migrated from custom JSON-RPC to `@modelcontextprotocol/server` v2 beta. All 27+ tools registered via `registerTool()`, resources/prompts via SDK. Replaced custom `MCPClient` with SDK `Client` + `StdioClientTransport`.
 - **Agentic Tools**: 3 new agentic productivity tools — `agent-context` (session context recall), `decision-log` (structured decision persistence), `session-summarize` (session archive).
-- **Upstream Inspiration**: Reimplemented the concept of `Beledarian/mcp-local-memory` as an independent local-first MCP memory server (own architecture, SQLite schema, tool set) — **not** drop-in compatible. The alias names `remember_fact`, `remember_facts`, `recall`, `forget` were design intent only and never shipped (corrected 2026-08-08).
+- **Upstream Inspiration**: The Knowledge Graph feature reimplements the entity/relation concept of `Beledarian/mcp-local-memory`; the alias names `remember_fact`, `remember_facts`, `recall`, `forget` were design intent only and never shipped (corrected 2026-08-08).
 - **Knowledge Graph**: 3 new database tables (`entities`, `relations`, `observations`) with cascading FK constraints. 5 CRUD tools (`create-entity`, `delete-entity`, `create-relation`, `delete-relation`, `delete-observation`) with SQLite transactions and FK validation.
 - **NLP Archivist**: Automatic entity extraction via `compromise` library (people, places, organizations, concepts) on every memory-store — zero-dependency, local-only.
 - **Time Tunnel**: Relative date filtering in `memory-search` — supports "today", "yesterday", "last week", "last month", "last N days", "last hour".

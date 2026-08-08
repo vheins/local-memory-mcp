@@ -147,6 +147,6 @@ MIT © Muhammad Rheza Alfin
 
 ## 🙏 Ucapan Terima Kasih
 
-Terinspirasi [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — proyek ini dibangun di atas konsep memori MCP lokal-first, diimplementasikan ulang dengan arsitektur, skema SQLite, dan kumpulan alatnya sendiri. Proyek ini **bukan** kompatibel drop-in dengan nama alat hulu; gunakan alat kanonik yang didokumentasikan di sini (`memory-store`, `memory-search`, `memory-delete`, dll.).
+- **Knowledge Graph** terinspirasi [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — konsep grafik entitas/relasi terstruktur dibangun di atas proyek ini, diimplementasikan ulang dengan skema sendiri dan ekstraksi NLP offline.
 
 - **Codebase Index** terinspirasi [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) — kemampuan pengindeksan, pencarian, dan penelusuran kode dibangun di atas konsep ini, diimplementasikan ulang dengan tree-sitter WASM dan alat yang terpadu.

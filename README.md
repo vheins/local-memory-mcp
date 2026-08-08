@@ -147,6 +147,6 @@ MIT © Muhammad Rheza Alfin
 
 ## 🙏 Acknowledgements
 
-Inspired by [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — this project builds on the concept of local-first MCP memory, reimplemented with its own architecture, SQLite schema, and tool set. It is **not** drop-in compatible with the upstream tool names; use the canonical tools documented in this README (`memory-store`, `memory-search`, `memory-delete`, etc.).
+- **Knowledge Graph** inspired by [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory) — the structured entity/relation graph concept builds on this project, reimplemented with its own schema and offline NLP extraction.
 
 - **Codebase Index** inspired by [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) — the codebase indexing/search/trace capabilities build on this concept, reimplemented with tree-sitter WASM and unified tools.

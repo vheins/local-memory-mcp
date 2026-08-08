@@ -537,6 +537,6 @@ Persists a decision with context, rationale, and alternatives.
 
 ## Upstream Inspiration
 
-This project is **inspired by [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory)** — the concept of a local-first MCP memory server — but it is an independent reimplementation with its own architecture, SQLite schema, and tool set.
+The **Knowledge Graph** feature is **inspired by [Beledarian/mcp-local-memory](https://github.com/Beledarian/mcp-local-memory)** — the structured entity/relation graph concept is reimplemented with this project's own schema and offline NLP extraction.
 
 It is **not** drop-in compatible: the upstream names `remember_fact`, `remember_facts`, `recall`, and `forget` are not provided as tools or aliases. Use the canonical tool names documented above (`memory-store`, `memory-search`, `memory-delete`, etc.).
