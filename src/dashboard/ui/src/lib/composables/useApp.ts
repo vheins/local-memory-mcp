@@ -95,50 +95,58 @@ export function createAppHandler(refs: {
 		}
 	}
 
-	async function loadHealth() {
+	async function loadHealth(): Promise<boolean> {
 		try {
 			const data = await api.health();
 			healthData.set(data);
+			return true;
 		} catch {
 			healthData.set(null);
+			return false;
 		}
 	}
 
-	async function loadGlobalStats(forceRefresh = false) {
+	async function loadGlobalStats(forceRefresh = false): Promise<boolean> {
 		const now = Date.now();
 		if (!forceRefresh && globalStatsCache && now - globalStatsCache.ts < GLOBAL_STATS_CACHE_TTL_MS) {
-			return;
+			return true;
 		}
 		try {
 			const [stats, timeStats] = await Promise.all([api.stats(), api.taskTimeStats()]);
 			globalDashboardStats.set(stats);
 			globalTaskTimeStats.set(timeStats);
 			globalStatsCache = { ts: now };
+			return true;
 		} catch (e) {
 			console.error("Failed to load global stats:", e);
+			return false;
 		}
 	}
 
-	async function loadStats() {
+	async function loadStats(): Promise<boolean> {
 		const repo = get(currentRepo);
-		if (!repo) return;
+		if (!repo) return true;
+		let ok = true;
 		try {
 			const data = await api.stats(repo);
 			dashboardStats.set(data);
 		} catch (e) {
 			console.error("Failed to load stats:", e);
+			ok = false;
 		}
 		try {
 			const data = await api.taskTimeStats(repo);
 			taskTimeStats.set(data);
 		} catch (err) {
 			console.error("Failed to load task time stats:", err);
+			ok = false;
 		}
+		return ok;
 	}
 
-	async function loadRecentActions(page?: number, append: boolean = false) {
+	async function loadRecentActions(page?: number, append: boolean = false): Promise<boolean> {
 		const repo = get(currentRepo);
-		if (!repo) return;
+		if (!repo) return true;
 		const p = page ?? get(recentActionsPage);
 		try {
 			const data = await api.recentActions(repo, p, get(recentActionsPageSize));
@@ -149,18 +157,22 @@ export function createAppHandler(refs: {
 			}
 			recentActionsPage.set(data.pagination?.page ?? p);
 			recentActionsTotalItems.set(data.pagination?.totalItems ?? 0);
+			return true;
 		} catch (e) {
 			console.error("Failed to load recent actions:", e);
+			return false;
 		}
 	}
 
-	async function loadData(forceRefresh = false) {
+	async function loadData(forceRefresh = false): Promise<boolean> {
 		const repo = get(currentRepo);
 		if (repo) {
-			await Promise.all([loadGlobalStats(forceRefresh), loadStats(), loadRecentActions()]);
-			return;
+			const results = await Promise.allSettled([loadGlobalStats(forceRefresh), loadStats(), loadRecentActions()]);
+			// TASK-276: report failure to the polling layer so the 30s
+			// countdown can back off instead of hammering an overloaded server.
+			return results.every((r) => r.status === "fulfilled" && r.value === true);
 		}
-		await loadGlobalStats(forceRefresh);
+		return loadGlobalStats(forceRefresh);
 	}
 
 	async function onRepoSelect(repo: string) {
@@ -171,13 +183,19 @@ export function createAppHandler(refs: {
 		update((s) => ({ ...s, mobileMenuOpen: false }));
 	}
 
-	async function onRefresh() {
-		await loadHealth();
-		await loadData(true);
+	/**
+	 * Refreshes all dashboard data. Returns whether every loader succeeded so
+	 * the polling layer (TopBar countdown) can apply exponential backoff on
+	 * failure/408 (TASK-276 / audit F10).
+	 */
+	async function onRefresh(): Promise<boolean> {
+		const results = await Promise.allSettled([loadHealth(), loadData(true)]);
+		const ok = results.every((r) => r.status === "fulfilled" && r.value === true);
 		const tab = get(activeTab);
 		const repo = get(currentRepo);
 		if (tab === "memories") refs.memoryList?.refresh();
 		if (tab === "tasks" && repo) refs.kanbanBoard?.loadTasks(repo);
+		return ok;
 	}
 
 	async function onTabChange(tab: string) {

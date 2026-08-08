@@ -4,7 +4,7 @@
 	import Icon from "../lib/Icon.svelte";
 	import Markdown from "./Markdown.svelte";
 
-	export let onLoadPage: (page: number, append?: boolean) => Promise<void> = async () => {};
+	export let onLoadPage: (page: number, append?: boolean) => Promise<unknown> = async () => {};
 
 	const handler = createRecentActionsHandler(onLoadPage);
 	const { groupedActions, recentActions, recentActionsPage } = handler;

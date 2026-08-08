@@ -364,6 +364,17 @@ export const api = {
 
 	capabilities: () => apiFetch<ReferenceDataState>("/api/capabilities"),
 
+	/**
+	 * TASK-269 / audit F7: ONE aggregate endpoint replacing the ~5×N per-repo
+	 * fan-out the Agent Arena fired on load. Returns the same task/claim/
+	 * handoff rows the per-repo endpoints returned, merged across all repos.
+	 */
+	arenaOverview: (signal?: AbortSignal) =>
+		apiFetch<{ id?: string; tasks: Task[]; claims: TaskClaim[]; handoffs: Handoff[] }>(
+			"/api/dashboard/overview",
+			signal ? { signal } : undefined
+		),
+
 	callTool: (name: string, args: Record<string, unknown>) =>
 		apiFetch<unknown>(`/api/tools/${encodeURIComponent(name)}/call`, {
 			method: "POST",

@@ -32,6 +32,8 @@ import { KG_MAX_GRAPH_EDGES } from "../../mcp/utils/constants";
 // TTL stats cache (OPT-PERF-06 / TASK-202) — cleared between /api/stats cache
 // tests so each case starts from a cold cache regardless of run order.
 import { clearRepoStatsCache } from "../services/statsCache";
+// Arena overview aggregate cache (TASK-269 / audit F7) — same isolation need.
+import { clearArenaOverviewCache } from "../services/arena.service";
 
 // ── Mock context.ts (must be BEFORE any imports that transitively load it) ──
 
@@ -624,6 +626,204 @@ describe("Dashboard Controllers", () => {
 				const body = (await res.json()) as Record<string, any>;
 				expect(body.errors[0].detail).toMatch(/graphLimit/i);
 			}
+		});
+	});
+
+	// ── KG graph cache + invalidation (TASK-268 / audit F2) ─────────────────
+	// The graph payload is assembled once per repo+window and served from the
+	// KG graph TTL cache (statsCache) for the TTL; dashboard-initiated KG
+	// mutations must invalidate the cache so edits are reflected immediately.
+
+	describe("KG API — graph TTL cache + invalidation (TASK-268)", () => {
+		const now = new Date().toISOString();
+
+		const seedEntity = (repo: string, name: string) => {
+			db.knowledgeGraph.upsertEntity({
+				name,
+				type: "concept",
+				description: null,
+				repo,
+				owner: "test",
+				created_at: now,
+				updated_at: now
+			});
+		};
+
+		it("reflects a relation created via the API immediately (cache invalidation)", async () => {
+			const repo = "kg-cache-inval";
+			// entities.name is a GLOBAL PK — prefix names with the repo so
+			// tests in the same process can never collide (TASK-268).
+			seedEntity(repo, `${repo}-hub`);
+			seedEntity(repo, `${repo}-leaf-a`);
+			seedEntity(repo, `${repo}-leaf-b`);
+			db.knowledgeGraph.upsertRelation({
+				from_entity: `${repo}-hub`,
+				to_entity: `${repo}-leaf-a`,
+				relation_type: "related_to",
+				repo,
+				owner: "test",
+				created_at: now
+			});
+
+			// First fetch: assembles + caches the payload (window includes all 3 nodes).
+			const firstRes = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}`);
+			expect(firstRes.status).toBe(200);
+			const first = (await firstRes.json()) as Record<string, any>;
+			expect(first.data.attributes.edges).toHaveLength(1);
+
+			// Mutate through the API — must invalidate the cached graph payload.
+			const createRes = await fetch(`${baseUrl}/api/kg/relations`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					data: {
+						type: "relation",
+						attributes: {
+							from_entity: `${repo}-hub`,
+							to_entity: `${repo}-leaf-b`,
+							relation_type: "related",
+							repo
+						}
+					}
+				})
+			});
+			expect(createRes.status).toBe(200);
+
+			// Second fetch: same window, but the new relation must be present.
+			const secondRes = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}`);
+			expect(secondRes.status).toBe(200);
+			const second = (await secondRes.json()) as Record<string, any>;
+			const edges = second.data.attributes.edges as Array<{ source: string; target: string }>;
+			expect(edges).toHaveLength(2);
+			expect(edges.some((e) => e.source === `${repo}-hub` && e.target === `${repo}-leaf-b`)).toBe(true);
+		});
+
+		it("legacy pageSize window ships only subset-bounded edges (both endpoints in window)", async () => {
+			const repo = "kg-subset-window";
+			// 5 entities → legacy default pageSize 20 returns all of them.
+			// Names are repo-prefixed (entities.name is a GLOBAL PK).
+			seedEntity(repo, `${repo}-hub`);
+			seedEntity(repo, `${repo}-node-a`);
+			seedEntity(repo, `${repo}-node-b`);
+			seedEntity(repo, `${repo}-hub2`);
+			seedEntity(repo, `${repo}-node-c`);
+			for (const [from, to] of [
+				[`${repo}-hub`, `${repo}-node-a`],
+				[`${repo}-hub`, `${repo}-node-b`],
+				[`${repo}-hub2`, `${repo}-node-c`]
+			] as Array<[string, string]>) {
+				db.knowledgeGraph.upsertRelation({
+					from_entity: from,
+					to_entity: to,
+					relation_type: "related",
+					repo,
+					owner: "test",
+					created_at: now
+				});
+			}
+
+			const res = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}&pageSize=10`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			const edges = body.data.attributes.edges as Array<{ source: string; target: string }>;
+			// All edges connect pairs within the 5-node window.
+			expect(edges).toHaveLength(3);
+		});
+	});
+
+	// ── Arena Overview aggregate (TASK-269 / audit F7) ───────────────────
+	// ONE /api/dashboard/overview response replaces the ~5×N per-repo fan-out
+	// the Agent Arena fired on first load. It must return the same merged
+	// task/claim/handoff rows across all repos.
+
+	describe("Dashboard API — arena overview aggregate (TASK-269)", () => {
+		const now = new Date().toISOString();
+
+		const seedTask = (repo: string, status: string, code: string) => {
+			const id = randomUUID();
+			db.tasks.insertTask({
+				id,
+				owner: "",
+				repo,
+				task_code: code,
+				phase: "test",
+				title: `arena task ${code}`,
+				description: null,
+				status,
+				priority: 3,
+				agent: "probe-agent",
+				role: "backend",
+				doc_path: null,
+				created_at: now,
+				updated_at: now,
+				in_progress_at: null,
+				finished_at: null,
+				canceled_at: null,
+				est_tokens: 100,
+				commit_id: null,
+				changed_files: [],
+				tags: [],
+				suggested_skills: [],
+				metadata: {},
+				parent_id: null,
+				depends_on: null
+			} as never);
+			return id;
+		};
+
+		beforeEach(() => {
+			clearArenaOverviewCache();
+		});
+
+		it("returns merged tasks/claims/handoffs across all repos in ONE response", async () => {
+			const repoA = "arena-overview-a";
+			const repoB = "arena-overview-b";
+			const tA = seedTask(repoA, "in_progress", "AROV-A-1");
+			seedTask(repoB, "pending", "AROV-B-1");
+			db.handoffs.claimTask({ owner: "", repo: repoA, task_id: tA, agent: "probe-agent" });
+			db.handoffs.createHandoff({
+				owner: "",
+				repo: repoB,
+				from_agent: "probe-agent",
+				to_agent: "other-agent",
+				summary: "arena handoff B"
+			});
+
+			const res = await fetch(`${baseUrl}/api/dashboard/overview`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			expect(body.data.type).toBe("arena-overview");
+			const attrs = body.data.attributes as Record<string, any>;
+			expect(Array.isArray(attrs.tasks)).toBe(true);
+			expect(Array.isArray(attrs.claims)).toBe(true);
+			expect(Array.isArray(attrs.handoffs)).toBe(true);
+			const taskCodes = (attrs.tasks as Array<{ task_code: string }>).map((t) => t.task_code);
+			expect(taskCodes).toContain("AROV-A-1");
+			expect(taskCodes).toContain("AROV-B-1");
+			expect((attrs.tasks as unknown[]).length).toBeGreaterThan(0);
+			expect((attrs.claims as unknown[]).length).toBeGreaterThan(0);
+			expect((attrs.handoffs as Array<{ summary: string }>).some((h) => h.summary === "arena handoff B")).toBe(true);
+		});
+
+		it("respects the per-status/per-repo caps of the old fan-out", async () => {
+			const repo = "arena-overview-caps";
+			// 12 in_progress tasks — the old client only pulled 10 per repo.
+			for (let i = 0; i < 12; i++) {
+				seedTask(repo, "in_progress", `AROV-CAP-${i}`);
+			}
+
+			const res = await fetch(`${baseUrl}/api/dashboard/overview`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			const attrs = body.data.attributes as Record<string, any>;
+			const ipTasks = (attrs.tasks as Array<{ status: string }>).filter((t) => t.status === "in_progress");
+			// 12 seeded + any other in_progress rows from earlier tests in this
+			// process — the per-repo cap still binds at 10 for this repo.
+			const ipForRepo = (attrs.tasks as Array<{ repo: string; status: string }>).filter(
+				(t) => t.repo === repo && t.status === "in_progress"
+			);
+			expect(ipForRepo.length).toBe(10);
+			expect(ipTasks.length).toBeGreaterThanOrEqual(10);
 		});
 	});
 

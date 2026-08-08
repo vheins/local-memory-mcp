@@ -19,6 +19,13 @@ export interface ArenaData {
 /** Polling interval when the tab is visible (ms). */
 const POLL_INTERVAL_VISIBLE = 2_500;
 
+// ─── Exponential backoff on failures/408s (TASK-276 / audit F10) ─────────────
+// When the server can't keep up (408s under load), hammering it every 2.5s
+// makes the pile-up worse. Backoff ladder: 15s → 30s → 60s → 120s (cap),
+// reset to the healthy 2.5s cadence on the first successful poll.
+const BACKOFF_BASE_MS = 15_000;
+const BACKOFF_CAP_MS = 120_000;
+
 export function createArenaHandler() {
 	const store = writable<ArenaData>({
 		scene: null,
@@ -31,7 +38,25 @@ export function createArenaHandler() {
 	let fetchInProgress = false;
 	let layoutConfig: ArenaLayoutConfig | null = null;
 	let unsubscribeRepos: (() => void) | null = null;
+	// TASK-269 / audit F7: one AbortController per fetch — aborted on unmount
+	// (stop) or when a newer fetch supersedes it, so stale responses can
+	// never race a repo switch or leave orphaned work behind.
+	let fetchAbortController: AbortController | null = null;
+	let consecutiveFailures = 0;
 	const poller = createVisibilityPoller(fetchData, POLL_INTERVAL_VISIBLE);
+
+	/** Applies backoff after a failed poll; no-op while healthy. */
+	function applyBackoff(): void {
+		consecutiveFailures++;
+		const backoffMs = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** (consecutiveFailures - 1));
+		poller.setIntervalMs(backoffMs);
+	}
+
+	/** Resets backoff after a successful poll. */
+	function resetBackoff(): void {
+		consecutiveFailures = 0;
+		poller.setIntervalMs(POLL_INTERVAL_VISIBLE);
+	}
 
 	async function fetchData(): Promise<void> {
 		if (fetchInProgress) return;
@@ -58,40 +83,23 @@ export function createArenaHandler() {
 
 		fetchInProgress = true;
 
+		// Supersede any in-flight fetch — only the latest wins.
+		fetchAbortController?.abort();
+		const controller = new AbortController();
+		fetchAbortController = controller;
+
 		try {
-			// Fetch from all repos in parallel — prioritise in_progress tasks
-			const perRepo = await Promise.allSettled(
-				repos.map((repo) =>
-					Promise.allSettled([
-						api.tasks({ repo, status: "in_progress", pageSize: 10 }),
-						api.tasks({ repo, status: "pending", pageSize: 8 }),
-						api.tasks({ repo, status: "blocked", pageSize: 4 }),
-						api.coordinationClaims({ repo, active_only: true, pageSize: 50 }),
-						api.coordinationHandoffs({ repo, status: "pending", pageSize: 10 })
-					])
-				)
-			);
+			// TASK-269 / audit F7: previously this fetched 5 per-repo endpoints
+			// for EVERY repo in parallel (~300 requests on a 64-repo install,
+			// each ~2.6s, saturating the server). The server now joins the same
+			// data into ONE aggregate response — same rows, one request.
+			const data = await api.arenaOverview(controller.signal);
+			if (controller.signal.aborted) return; // superseded / unmounted
+			const allTasks: Task[] = data.tasks ?? [];
+			const allClaims: TaskClaim[] = data.claims ?? [];
+			const allHandoffs: Handoff[] = data.handoffs ?? [];
 
-			const allTasks: Task[] = [];
-			const allClaims: TaskClaim[] = [];
-			const allHandoffs: Handoff[] = [];
-
-			repos.forEach((repo, i) => {
-				const repoResult = perRepo[i];
-				if (repoResult.status === "rejected") return;
-				const [ipRes, pendRes, blockedRes, claimsRes, handoffsRes] = repoResult.value;
-
-				if (ipRes.status === "fulfilled") allTasks.push(...(ipRes.value.tasks ?? []));
-				if (pendRes.status === "fulfilled") allTasks.push(...(pendRes.value.tasks ?? []));
-				if (blockedRes.status === "fulfilled") allTasks.push(...(blockedRes.value.tasks ?? []));
-				if (claimsRes.status === "fulfilled") allClaims.push(...(claimsRes.value.claims ?? []));
-
-				if (handoffsRes.status === "fulfilled") {
-					allHandoffs.push(...(handoffsRes.value.handoffs ?? []));
-				}
-			});
-
-			// Deduplicate tasks by id
+			// Deduplicate tasks by id (a task is keyed once regardless of repo).
 			const uniqueTasks = Array.from(new Map(allTasks.map((t) => [t.id, t])).values());
 
 			const scene = buildArenaScene(uniqueTasks, allClaims, allHandoffs, get(store).scene, layoutConfig!);
@@ -109,13 +117,24 @@ export function createArenaHandler() {
 			// This primes the state manager for future event-driven updates
 			// while the rendering continues to use the existing store.
 			arenaStateManager.initFromScene(scene);
+
+			// Healthy poll — restore normal cadence (TASK-276).
+			resetBackoff();
 		} catch (e) {
+			if (controller.signal.aborted) return; // aborted — not an error
+			// Failure / 408 — back off exponentially instead of hammering the
+			// server (TASK-276 / audit F10). Superseded fetches are excluded
+			// above; every real failure escalates 15→30→60→120s.
+			applyBackoff();
 			store.update((s) => ({
 				...s,
 				loading: false,
 				error: e instanceof Error ? e.message : "Failed to load arena data"
 			}));
 		} finally {
+			if (fetchAbortController === controller) {
+				fetchAbortController = null;
+			}
 			fetchInProgress = false;
 		}
 	}
@@ -150,6 +169,10 @@ export function createArenaHandler() {
 		unsubscribeRepos?.();
 		unsubscribeRepos = null;
 		eventCoordinator.destroy();
+		// Abort any in-flight aggregate fetch so unmount never leaves work or
+		// a stale scene update behind (TASK-269 / audit F7).
+		fetchAbortController?.abort();
+		fetchAbortController = null;
 		fetchInProgress = false;
 	}
 

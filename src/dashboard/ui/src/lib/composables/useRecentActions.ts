@@ -9,7 +9,7 @@ export interface RecentActionsState {
 	hasReachedStart: boolean;
 }
 
-export function createRecentActionsHandler(onLoadPage: (page: number, append?: boolean) => Promise<void>) {
+export function createRecentActionsHandler(onLoadPage: (page: number, append?: boolean) => Promise<unknown>) {
 	const state = writable<RecentActionsState>({
 		expandedResponses: new Set(),
 		isLoadingMore: false,

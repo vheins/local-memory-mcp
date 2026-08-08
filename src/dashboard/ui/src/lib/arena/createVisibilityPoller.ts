@@ -12,9 +12,16 @@
 export function createVisibilityPoller(
 	fetchFn: () => void | Promise<void>,
 	intervalMs: number
-): { start(): void; stop(): void } {
+): { start(): void; stop(): void; setIntervalMs(ms: number): void } {
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let onVisibilityChange: (() => void) | null = null;
+	let currentIntervalMs = intervalMs;
+
+	const tick = () => {
+		if (document.visibilityState === "visible") {
+			void fetchFn();
+		}
+	};
 
 	function start(): void {
 		// Guard: no DOM → no-op (SSR / test without jsdom)
@@ -23,13 +30,7 @@ export function createVisibilityPoller(
 		// Already running — guard against double-start
 		if (intervalId !== null) return;
 
-		const tick = () => {
-			if (document.visibilityState === "visible") {
-				void fetchFn();
-			}
-		};
-
-		intervalId = setInterval(tick, intervalMs);
+		intervalId = setInterval(tick, currentIntervalMs);
 
 		onVisibilityChange = () => {
 			if (document.visibilityState === "visible") {
@@ -50,5 +51,19 @@ export function createVisibilityPoller(
 		}
 	}
 
-	return { start, stop };
+	/**
+	 * Changes the polling interval live (TASK-276 / audit F10). Used for
+	 * exponential backoff on failures/408s — the running timer is re-armed at
+	 * the new cadence; healthy cadence is restored by calling it with the
+	 * normal interval after a successful poll.
+	 */
+	function setIntervalMs(ms: number): void {
+		currentIntervalMs = ms;
+		if (intervalId !== null) {
+			clearInterval(intervalId);
+			intervalId = setInterval(tick, currentIntervalMs);
+		}
+	}
+
+	return { start, stop, setIntervalMs };
 }
