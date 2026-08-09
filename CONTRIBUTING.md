@@ -19,9 +19,26 @@ If you find a bug or have a feature idea:
 1. Fork this repository.
 2. Create a new branch (`feat/feature-name` or `fix/bug-description`).
 3. Ensure your code follows the project's TypeScript standards.
-4. **Mandatory:** Add unit tests under `src/mcp/tests/` (or update `src/mcp/tests/e2e.test.ts`) if adding new features.
+4. **Mandatory:** Add tests for your change per the [Testing Standard](docs/testing.md) — server tests under `src/**/tests/`, dashboard UI tests in colocated `__tests__/`; new code ships its tests in the same commit.
 5. Run tests: `npm run test`.
 6. Submit a Pull Request (PR) to the `main` branch.
+
+## Testing
+
+The single authoritative testing standard is **[docs/testing.md](docs/testing.md)** — location policy, naming taxonomy, scope/layer rules, fixtures, and coverage requirements. Key points:
+
+- **Location:** server/dashboard non-UI tests under `src/**/tests/`; dashboard UI tests in `__tests__/` colocated beside the component/lib.
+- **Naming:** `*.test.ts` (unit) | `*.integration.test.ts` | `*.e2e.test.ts` | `*.perf.test.ts`. No snake_case names.
+- **Coverage:** every change ships its tests in the same commit; targets configured per docs/testing.md §7.
+
+Commands:
+
+```bash
+npm run test          # full suite
+npm run test:watch    # watch mode
+npm run test -- --coverage   # with V8 coverage report
+npx vitest run src/mcp/tests/memory.write.test.ts   # scoped to one file
+```
 
 ## Commit Conventions
 
