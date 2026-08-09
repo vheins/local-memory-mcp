@@ -56,7 +56,6 @@ const STATIC_MODIFIER = "static_modifier";
 const ABSTRACT_MODIFIER = "abstract_modifier";
 const FINAL_MODIFIER = "final_modifier";
 const READONLY_MODIFIER = "readonly_modifier";
-const ATTRIBUTE_LIST = "attribute_list";
 const ATTRIBUTE_GROUP = "attribute_group";
 const COMMENT = "comment";
 const DECLARATION_LIST = "declaration_list";
@@ -71,6 +70,12 @@ const MEMBER_CALL_EXPRESSION = "member_call_expression";
 const SCOPED_CALL_EXPRESSION = "scoped_call_expression";
 const OBJECT_CREATION_EXPRESSION = "object_creation_expression";
 
+// Heritage / import-name node types (reference emission, TASK-302 / Phase 1.1).
+const BASE_CLAUSE = "base_clause";
+const CLASS_INTERFACE_CLAUSE = "class_interface_clause";
+const QUALIFIED_NAME = "qualified_name";
+const RELATIVE_NAME = "relative_name";
+
 export class PhpVisitor implements LanguageVisitor {
 	extractSymbols(tree: Tree, _sourceCode: string): ParsedSymbol[] {
 		const root = tree.rootNode;
@@ -80,18 +85,30 @@ export class PhpVisitor implements LanguageVisitor {
 	}
 
 	/**
-	 * Emit call-site references (TASK-236 / issue #64).
+	 * Emit call-site references (TASK-236 / issue #64) + import and heritage
+	 * edges (TASK-302 / Phase 1.1).
 	 *
-	 * Cheap single AST pass over the obvious call targets in the php_only
-	 * grammar:
+	 * Cheap single AST pass over the obvious reference surfaces in the
+	 * php_only grammar:
 	 * - `function_call_expression`  → kind 'call' (`helper()` → 'helper')
 	 * - `member_call_expression`    → kind 'call' (`$obj->save()` → 'save')
 	 * - `scoped_call_expression`    → kind 'call' (`self::make()` / `Svc::x()` → 'x')
 	 * - `object_creation_expression`→ kind 'instantiation' (`new User()` → 'User')
+	 * - `namespace_use_declaration` → kind 'import' (one edge per binding —
+	 *   the `as` alias when present, else the LAST segment of the qualified
+	 *   name; group form `use NS\{A, B as C};` covered).
+	 * - class/interface/enum declarations → kind 'extends'/'implements' per
+	 *   heritage target (`class Foo extends Bar implements I` emits Bar as
+	 *   'extends' and I as 'implements'; `interface A extends B, C` and
+	 *   `enum E implements I1, I2` emit per-target edges).
 	 *
 	 * `callerName` is the enclosing function/method name, tracked by descending
-	 * into function_definition / method_declaration bodies. Timestamps to the
-	 * tree root so no symbol is required to pre-exist the caller.
+	 * into function_definition / method_declaration bodies, and null for
+	 * heritage edges and top-level imports (they belong to a declaration, not
+	 * a function). Timestamps to the tree root so no symbol is required to
+	 * pre-exist the caller. Trait `use` statements (`use_declaration` inside
+	 * classes) are NOT imports and stay unindexed, matching the symbol
+	 * extraction contract.
 	 */
 	extractReferences(tree: Tree, _sourceCode: string): ParsedReference[] {
 		const refs: ParsedReference[] = [];
@@ -100,7 +117,7 @@ export class PhpVisitor implements LanguageVisitor {
 	}
 
 	private walkReferences(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
-		let called: string | null = null;
+		let called: string | null;
 		switch (node.type) {
 			case FUNCTION_CALL_EXPRESSION:
 			case MEMBER_CALL_EXPRESSION:
@@ -118,6 +135,26 @@ export class PhpVisitor implements LanguageVisitor {
 				const fnName = nameNode ? nameNode.text : null;
 				for (const child of node.namedChildren) {
 					this.walkReferences(child, fnName ?? callerName, refs);
+				}
+				return;
+			}
+			case NAMESPACE_USE_DECLARATION: {
+				// Import edges (TASK-302): one 'import' reference per binding.
+				// Do NOT recurse — use-clause children are pure names, never
+				// call sites (mirrors the TS emitImports surface).
+				this.emitImportEdges(node, callerName, refs);
+				return;
+			}
+			// Heritage edges (TASK-302): emit 'extends'/'implements' for the
+			// declaration's base/interface clauses, then recurse into the body
+			// so call-site refs inside members still emit (identical traversal
+			// to the default branch — purely additive).
+			case CLASS_DECLARATION:
+			case INTERFACE_DECLARATION:
+			case ENUM_DECLARATION: {
+				this.emitHeritage(node, refs);
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
 				}
 				return;
 			}
@@ -160,6 +197,142 @@ export class PhpVisitor implements LanguageVisitor {
 		// Skip purely-dynamic targets like `$fn()` / `new $class()` — text is
 		// a variable_name/placeholder, not a symbolic definition.
 		return text.startsWith("$") ? null : text;
+	}
+
+	/**
+	 * Emit one 'import' reference edge per binding in a `namespace_use_declaration`
+	 * (top-level `use` statements), consistent with TS emitImports semantics
+	 * (TASK-302 / Phase 1.1).
+	 *
+	 * Both grammar shapes are covered (verified empirically against the shipped
+	 * php_only WASM):
+	 * - Plain form: `use Foo\Bar;` / `use Foo\Bar as Baz;` / `use A, B;` → one
+	 *   or more `namespace_use_clause` children.
+	 * - Group form: `use NS\Util\{Factory, Repo as Store};` → a `namespace_name`
+	 *   prefix + a `namespace_use_group` whose clauses hold the relative names.
+	 *
+	 * The referenced symbol is the LOCAL BINDING per PHP semantics — the `as`
+	 * alias when present (`use Foo\Bar as Baz;` → 'Baz'), otherwise the LAST
+	 * name segment of the imported name (`use Foo\Bar;` → 'Bar'), matching
+	 * ADR-002 last-segment, name-based resolution. `callerLine` is the `use`
+	 * statement line; `callerName` is the enclosing function/method (null in
+	 * practice — PHP requires `use` at the top level).
+	 */
+	private emitImportEdges(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
+		const line = node.startPosition.row + 1;
+		const children = node.namedChildren;
+
+		// ── Group form: `use NS\Util\{Factory, Repo as Store};` ──────────────
+		const groupNode = children.find((c) => c.type === NAMESPACE_USE_GROUP);
+		if (groupNode) {
+			for (const clause of groupNode.namedChildren) {
+				if (clause.type !== NAMESPACE_USE_CLAUSE) continue;
+				this.emitImportBinding(clause, line, callerName, refs);
+			}
+			return;
+		}
+
+		// ── Plain form: one or more `namespace_use_clause` children ──
+		for (const clause of children) {
+			if (clause.type !== NAMESPACE_USE_CLAUSE) continue;
+			this.emitImportBinding(clause, line, callerName, refs);
+		}
+	}
+
+	/** Emit a single 'import' edge for one namespace_use_clause binding. */
+	private emitImportBinding(clause: TSNode, line: number, callerName: string | null, refs: ParsedReference[]): void {
+		const binding = this.importBindingName(clause);
+		if (!binding) return;
+		refs.push({
+			symbolName: binding,
+			callerFile: "",
+			callerLine: line,
+			callerName,
+			kind: "import"
+		});
+	}
+
+	/**
+	 * Resolve the local binding name of a namespace_use_clause: the `as` alias
+	 * when present (`use Foo\Bar as Baz;` → 'Baz'), otherwise the LAST name
+	 * segment of the imported name (`use Foo\Bar;` → 'Bar').
+	 */
+	private importBindingName(clause: TSNode): string | null {
+		const alias = clause.childForFieldName("alias");
+		if (alias) return alias.text;
+		const nameNode = clause.namedChildren[0];
+		if (!nameNode) return null;
+		return this.heritageTargetName(nameNode);
+	}
+
+	/**
+	 * Emit 'extends' / 'implements' heritage edges for a class, interface or
+	 * enum declaration (TASK-302, Phase 1.1).
+	 *
+	 * Grammar (tree-sitter-php_only, verified empirically against the shipped
+	 * WASM): class heritage lives in DIRECT `base_clause` ('extends', single
+	 * target) + `class_interface_clause` ('implements', list) children of the
+	 * declaration — no wrapper node. `interface_declaration` heritage is a
+	 * `base_clause` holding MULTIPLE targets (`interface A extends B, C`).
+	 * `enum_declaration` heritage is a `class_interface_clause` ('implements').
+	 * `trait_declaration` has NO heritage clause. The declaration's own
+	 * backing-type `primitive_type` on enums is not a heritage target.
+	 *
+	 * `callerName` is null per the ParsedReference heritage contract
+	 * (language-visitor.ts) — the edge belongs to the derived type's
+	 * declaration, not an enclosing function. `targetFile`/`targetSymbolId`
+	 * are left null: name-based resolution per ADR-002 happens at query time,
+	 * not parse time.
+	 */
+	private emitHeritage(node: TSNode, refs: ParsedReference[]): void {
+		const line = node.startPosition.row + 1;
+		for (const clause of node.namedChildren) {
+			if (clause.type === BASE_CLAUSE) this.emitHeritageTargets(clause, "extends", line, refs);
+			else if (clause.type === CLASS_INTERFACE_CLAUSE) this.emitHeritageTargets(clause, "implements", line, refs);
+		}
+	}
+
+	/** Emit one heritage edge per target inside a base_clause/class_interface_clause. */
+	private emitHeritageTargets(
+		clause: TSNode,
+		kind: "extends" | "implements",
+		line: number,
+		refs: ParsedReference[]
+	): void {
+		for (const target of clause.namedChildren) {
+			const name = this.heritageTargetName(target);
+			if (!name) continue;
+			refs.push({
+				symbolName: name,
+				callerFile: "",
+				callerLine: line,
+				callerName: null,
+				kind
+			});
+		}
+	}
+
+	/**
+	 * Resolve the name-based target of a heritage element or imported name.
+	 *
+	 * Per ADR-002 (name-based resolution, no LSP / type resolution), the edge
+	 * references the LAST name segment of the heritage target / import as
+	 * written:
+	 *
+	 *   - `name`           → `Foo`      (extends Foo / use Foo\Bar → 'Bar')
+	 *   - `qualified_name`  → `Base`    (extends \App\Models\Base → 'Base')
+	 *   - `relative_name`   → `Foo`     (namespace\Foo → 'Foo')
+	 *
+	 * Returns null for non-name elements (no edge emitted) — all children of
+	 * base_clause/class_interface_clause/namespace_use_clause are name-shaped
+	 * in the php_only grammar, so this is a defensive guard.
+	 */
+	private heritageTargetName(node: TSNode): string | null {
+		if (node.type === NAME) return node.text;
+		if (node.type === QUALIFIED_NAME || node.type === RELATIVE_NAME) {
+			return node.lastNamedChild?.text ?? null;
+		}
+		return null;
 	}
 
 	private walkNode(node: TSNode, symbols: ParsedSymbol[], parentName: string | null, insideClass: boolean): void {
