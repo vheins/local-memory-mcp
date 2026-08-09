@@ -48,3 +48,15 @@ export const IMPORT_CLAUSE = "import_clause";
 export const NAMED_IMPORTS = "named_imports";
 export const IMPORT_SPECIFIER = "import_specifier";
 export const NAMESPACE_IMPORT = "namespace_import";
+
+// Heritage / type-reference node types (reference emission, TASK-301).
+export const CLASS_HERITAGE = "class_heritage";
+export const EXTENDS_CLAUSE = "extends_clause";
+export const IMPLEMENTS_CLAUSE = "implements_clause";
+export const EXTENDS_TYPE_CLAUSE = "extends_type_clause";
+export const TYPE_IDENTIFIER = "type_identifier";
+export const NESTED_TYPE_IDENTIFIER = "nested_type_identifier";
+export const GENERIC_TYPE = "generic_type";
+export const TYPE_PARAMETER = "type_parameter";
+export const TYPE_PARAMETERS = "type_parameters";
+export const CONSTRAINT = "constraint";

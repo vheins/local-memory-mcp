@@ -52,7 +52,7 @@ import {
 import { scanExports, getNameFromDeclaration } from "./ts-export-scanner";
 import { extractDocComment } from "./ts-doc-comment";
 import { buildSignature, collectDecorators, symbolIdentifier, withDecorators } from "./ts-signature";
-import { calledExpressionName, constructorName, emitImports } from "./ts-reference-emission";
+import { calledExpressionName, constructorName, emitHeritage, emitImports } from "./ts-reference-emission";
 
 // ── Visitor implementation ───────────────────────────────────────────
 
@@ -91,7 +91,8 @@ export class TypeScriptVisitor implements LanguageVisitor {
 	}
 
 	/**
-	 * Emit call-site references (TASK-236 / issue #64).
+	 * Emit call-site references (TASK-236 / issue #64) + heritage edges
+	 * (TASK-301 / Phase 1.1).
 	 *
 	 * Cheap single AST pass emitting only obvious call targets:
 	 * - `call_expression` → kind 'call' (the called identifier / last property
@@ -99,9 +100,14 @@ export class TypeScriptVisitor implements LanguageVisitor {
 	 * - `new_expression` → kind 'instantiation' (the constructed class).
 	 * - `import_statement` → kind 'import' (each imported binding; default and
 	 *   named imports, minus import specifiers aliased to 'default').
+	 * - class/abstract class/interface declarations → kind 'extends'/'implements'
+	 *   per heritage target (`class Foo extends Bar implements I` emits Bar as
+	 *   'extends' and I as 'implements'; `interface A extends B` emits B as
+	 *   'extends'; `class Foo<T extends Bar>` emits Bar as 'extends').
 	 *
 	 * `callerName` is the enclosing function/method name, tracked while
-	 * descending into function/method/arrow bodies. No attempt is made to
+	 * descending into function/method/arrow bodies (null for heritage edges —
+	 * they belong to the derived type's declaration). No attempt is made to
 	 * resolve symbols or follow aliases — we index the textual call target.
 	 */
 	extractReferences(tree: TSTree, _sourceCode: string): ParsedReference[] {
@@ -151,6 +157,18 @@ export class TypeScriptVisitor implements LanguageVisitor {
 				emitImports(node, callerName, refs);
 				// Do NOT recurse into import children — the import clause itself is
 				// the only meaningful reference surface here.
+				return;
+			}
+			// Heritage edges (Phase 1.1 / TASK-301): emit 'extends'/'implements'
+			// for the declaration's class heritage + generics constraints, then
+			// recurse into the body so call-site refs inside members still emit.
+			case CLASS_DECLARATION:
+			case ABSTRACT_CLASS_DECLARATION:
+			case INTERFACE_DECLARATION: {
+				emitHeritage(node, refs);
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
 				return;
 			}
 			// Descend into function-like bodies, updating the enclosing caller name
