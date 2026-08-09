@@ -8,16 +8,33 @@
  * 3. For <template> and <style> blocks, emit structural markers.
  * 4. Falls back to GenericTextVisitor regex scanning if tree-sitter parse fails.
  *
+ * Reference edges (TASK-312 / Phase 1.1): delegated to the
+ * vue-reference-emission.ts helper module — 'import' edges per binding of
+ * every ES import statement in a <script>/<script setup> raw_text (the vue
+ * grammar never TS-parses the script body), and 'instantiation' edges per
+ * template component tag (PascalCase or kebab-case; native lowercase single
+ * words emit nothing). See that module for the full semantics + documented
+ * regex limitations.
+ *
  * tree-sitter-vue grammar nodes of interest:
  *   component        → top-level wrapper, repeats (element|template_element|script_element|style_element)
  *   script_element   → start_tag + optional(raw_text) + end_tag
  *   template_element → start_tag + repeat(_node) + end_tag
  *   style_element    → start_tag + optional(raw_text) + end_tag
  *   raw_text         → the inner content of a script/style block
+ *   element          → start_tag | self_closing_tag (+ nested element children)
+ *   tag_name         → the tag text inside start_tag / self_closing_tag
  */
 import type { Tree } from "web-tree-sitter";
-import type { LanguageVisitor, ParsedSymbol } from "../language-visitor";
+import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import {
+	collectScriptImports,
+	walkTemplate,
+	SCRIPT_ELEMENT,
+	TEMPLATE_ELEMENT,
+	ELEMENT
+} from "./vue-reference-emission";
 
 // ── Regex patterns for JS/TS symbol extraction ────────────────────────
 
@@ -424,5 +441,39 @@ export class VueVisitor implements LanguageVisitor {
 		}
 
 		return symbols;
+	}
+
+	// ── Reference emission (TASK-312 / Phase 1.1) ─────────────────────
+
+	/**
+	 * Emit reference edges for a Vue SFC (TASK-312 / Phase 1.1). Locates the
+	 * top-level <script> / <template> blocks and delegates the per-block work
+	 * to vue-reference-emission.ts (extracted in review FIX-2):
+	 * - 'import' per ES import binding in every <script> / <script setup>
+	 *   block;
+	 * - 'instantiation' per template component tag in the template body.
+	 *
+	 * callerName is null for both families (imports are file-scope; a template
+	 * usage has no enclosing function). targetFile/targetSymbolId are explicit
+	 * null per the canonical TASK-347 pushRef pattern — edges are name-based,
+	 * ADR-002 resolution happens at query time.
+	 */
+	extractReferences(tree: Tree | null, _sourceCode: string): ParsedReference[] {
+		const refs: ParsedReference[] = [];
+		if (!tree) return refs;
+
+		const root = tree.rootNode;
+		for (let i = 0; i < root.namedChildCount; i++) {
+			const child = root.namedChild(i);
+			if (!child) continue;
+			if (child.type === SCRIPT_ELEMENT) {
+				collectScriptImports(child, refs);
+			} else if (child.type === TEMPLATE_ELEMENT || child.type === ELEMENT) {
+				// Element children may sit directly under the root when the SFC
+				// has no <template> wrapper; both routes share the same walk.
+				walkTemplate(child, refs);
+			}
+		}
+		return refs;
 	}
 }
