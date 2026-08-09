@@ -9,6 +9,7 @@ import type { ParserPool } from "../../mcp/codebase-index/parser/language-visito
 import { TreeSitterParserPool } from "../../mcp/codebase-index/parser/parser-pool";
 import type { VectorStore } from "../../mcp/types";
 import { parseRepoInput } from "../../mcp/utils/normalize";
+import { buildCodeGraph, getSymbolCallers, readFileContent as readCodebaseFileContent } from "./codebase-graph.service";
 
 // ── Parser pool singleton (lazy, shared across endpoints) ─────────────
 
@@ -208,6 +209,40 @@ export const CodebaseService = {
 			throw new ServiceError(500, "Unexpected empty response");
 		}
 		return result.structuredContent;
+	},
+
+	/**
+	 * File-content endpoint (TASK-324 CG-B). Resolves the repo root via
+	 * resolveRepoPath, then delegates the (traversal-guarded) disk read to the
+	 * graph service. `repoPath` is optional — auto-resolution covers
+	 * CODEBASE_REPOS_DIR and CWD-relative layouts, exactly like `startIndex`.
+	 */
+	async readFileContent(repo: string, filePath: string, repoPath?: string): Promise<unknown> {
+		const root = resolveRepoPath(repo, repoPath);
+		if (!root) {
+			throw new ServiceError(
+				400,
+				`repoPath is required and could not be resolved automatically for "${repo}". ` +
+					"Set CODEBASE_REPOS_DIR env var or provide repoPath in the request.",
+				"MISSING_REPO_PATH"
+			);
+		}
+		// DB lookups + cache keys use the short repo name (schema-normalized);
+		// path resolution uses the raw `repo` (directory-name candidate).
+		return readCodebaseFileContent(root, parseRepoInput(repo).repo, filePath);
+	},
+
+	/**
+	 * Caller/callee pairs for a symbol (CallGraph DAG data, TASK-324).
+	 * Optional `filePath` disambiguates duplicate symbol names (TASK-373).
+	 */
+	async symbolCallers(repo: string, name: string, kind?: string, filePath?: string): Promise<unknown> {
+		return getSymbolCallers(parseRepoInput(repo).repo, name, kind, filePath);
+	},
+
+	/** Code-graph nodes/edges for KGGraphCanvas (TASK-324). */
+	async codeGraph(repo: string, limit?: string, kind?: string): Promise<unknown> {
+		return buildCodeGraph(parseRepoInput(repo).repo, limit, kind);
 	},
 
 	async getIndexStatus(repo: string): Promise<unknown> {

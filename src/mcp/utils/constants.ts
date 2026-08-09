@@ -289,3 +289,22 @@ export const CODE_SEARCH_READ_CONCURRENCY = 16;
 // (e.g. `CODE_SEARCH_MAX_REGEX_LENGTH=500`) so operators can widen the window
 // without code changes.
 export const CODE_SEARCH_MAX_REGEX_LENGTH = envInt("CODE_SEARCH_MAX_REGEX_LENGTH", 200);
+
+// ── Codebase graph + file-content bounds (TASK-324, phase codebase-graph-ui) ──
+// Dashboard graph endpoints (GET /api/codebase/graph, /symbol/callers,
+// /file/content). Edge cap for the code-graph payload: the graph is assembled
+// server-side (degree-ranked nodes, edges between the selected subset), so the
+// payload stays bounded regardless of repo size. The 400 default sits inside
+// the spec's 200-500 window; env-overridable so tests and operators can shrink
+// it without code changes (mirrors CODE_SEARCH_CACHE_MAX_BYTES).
+export const CODE_GRAPH_MAX_EDGES = envInt("CODE_GRAPH_MAX_EDGES", 400);
+// Node (symbol) limits for the graph: default when `limit` is absent, and the
+// hard clamp for a caller-supplied `limit`. Degree ranking selects the top-N
+// symbols by reference count; edges whose both endpoints are selected are
+// shipped, then trimmed to CODE_GRAPH_MAX_EDGES by combined-degree priority.
+export const CODE_GRAPH_DEFAULT_NODE_LIMIT = 120;
+export const CODE_GRAPH_MAX_NODES = 240;
+// File-content line cap: GET/POST /api/codebase/file/content returns at most
+// this many lines; `truncated` flags when the file was longer. Env-overridable
+// so the truncation test can use a tiny cap.
+export const FILE_CONTENT_MAX_LINES = envInt("FILE_CONTENT_MAX_LINES", 2000);

@@ -69,6 +69,31 @@ export class CodebaseReferenceEntity extends BaseEntity {
 	}
 
 	/**
+	 * ALL reference rows for a repo (TASK-324 code-graph edge assembly).
+	 *
+	 * Served by the (repo, caller_file) index prefix (idx_refs_repo_file) with
+	 * the same ordering — the graph service filters by kind in memory because
+	 * no (repo, kind) index exists (deliberate v23 stance; a kind-filtered
+	 * query would scan, not seek). Optional `kinds` narrows the set before
+	 * hydration (cheap row filter, still index-served by the repo prefix).
+	 */
+	getReferencesByRepo(repo: string, kinds?: string[]): CodebaseReference[] {
+		if (kinds && kinds.length > 0) {
+			const placeholders = kinds.map(() => "?").join(", ");
+			return this.all<CodebaseReferenceRow>(
+				`SELECT * FROM codebase_references
+				 WHERE repo = ? AND kind IN (${placeholders})
+				 ORDER BY caller_file ASC, caller_line ASC, symbol_name ASC`,
+				[repo, ...kinds]
+			).map((r) => this.rowToReference(r));
+		}
+		return this.all<CodebaseReferenceRow>(
+			"SELECT * FROM codebase_references WHERE repo = ? ORDER BY caller_file ASC, caller_line ASC, symbol_name ASC",
+			[repo]
+		).map((r) => this.rowToReference(r));
+	}
+
+	/**
 	 * Reference-row counts for a SET of symbol names (TASK-319 dead-code).
 	 *
 	 * Aggregates `GROUP BY symbol_name, kind` served by idx_refs_repo_symbol —

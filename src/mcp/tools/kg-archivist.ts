@@ -15,10 +15,10 @@ export {
 	// extract
 	extractEntities,
 	saveExtractions,
-	ExtractedEntity,
+	type ExtractedEntity,
 	// observation-text contract (TASK-045)
 	observationText,
-	KgObservationDomain,
+	type KgObservationDomain,
 	// relations
 	saveTaskRelations,
 	saveStandardRelations,
@@ -29,7 +29,7 @@ export {
 	fetchAggregatedKgContext,
 	fetchTaskKgContext,
 	fetchAggregatedTaskKgContext,
-	KgResult,
-	KgEntityResult,
-	KgRelationResult
+	type KgResult,
+	type KgEntityResult,
+	type KgRelationResult
 } from "./kg-archivist/index";

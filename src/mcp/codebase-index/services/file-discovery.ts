@@ -145,8 +145,12 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = Object.freeze({
 /**
  * Map a file extension to a language identifier.
  * Returns `null` for unsupported extensions (file should be skipped).
+ *
+ * Exported (TASK-324): the dashboard file-content endpoint reuses this for
+ * NON-indexed files (no codebase_files row to carry `language`); indexed
+ * files keep the row's stored language as the authoritative value.
  */
-function detectLanguage(filePath: string): string | null {
+export function detectLanguage(filePath: string): string | null {
 	const ext = path.extname(filePath).toLowerCase();
 	if (!ext) {
 		// Handle extensionless files like "Dockerfile", "Makefile"

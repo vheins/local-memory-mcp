@@ -1,5 +1,5 @@
-export { extractEntities, saveExtractions, ExtractedEntity } from "./extract";
-export { observationText, KgObservationDomain } from "./observation-text";
+export { extractEntities, saveExtractions, type ExtractedEntity } from "./extract";
+export { observationText, type KgObservationDomain } from "./observation-text";
 export { saveTaskRelations, saveStandardRelations, saveCodebaseRelations } from "./relations";
 export {
 	kgQuery,
@@ -7,7 +7,7 @@ export {
 	fetchAggregatedKgContext,
 	fetchTaskKgContext,
 	fetchAggregatedTaskKgContext,
-	KgResult,
-	KgEntityResult,
-	KgRelationResult
+	type KgResult,
+	type KgEntityResult,
+	type KgRelationResult
 } from "./query";

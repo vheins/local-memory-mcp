@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
 import { KG_MAX_CONTEXT_ENTITIES, KG_MAX_GRAPH_EDGES } from "../../utils/constants";
-import { extractEntities, ExtractedEntity } from "./extract";
+import { extractEntities, type ExtractedEntity } from "./extract";
 import { observationText } from "./observation-text";
 import type { CodebaseReference, CodebaseSymbol } from "../../types";
 
