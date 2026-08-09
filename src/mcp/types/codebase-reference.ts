@@ -65,3 +65,26 @@ export interface CodebaseReferenceInsert {
 	/** codebase_symbols(id) of the referenced symbol when resolvable. */
 	target_symbol_id?: string | null;
 }
+
+/**
+ * Per-symbol reference aggregation (TASK-319 dead-code / hotspots).
+ *
+ * Produced by `CodebaseReferenceEntity.countReferencesBySymbol` and
+ * `getTopReferencedSymbols` via SQL `GROUP BY symbol_name, kind` — the same
+ * name-based model as `getReferencesBySymbol` (ADR-002: a symbol is "used" if
+ * ANY reference kind points at its name). No denormalized counter column is
+ * stored on codebase_symbols (DB stays flat — this is a query-level compute).
+ */
+export interface SymbolReferenceCounts {
+	/** Total reference rows across ALL kinds (call + instantiation + import + extends + implements). */
+	total: number;
+	/** Per-kind row counts, keyed by CodebaseReferenceKind. */
+	countsByKind: Record<string, number>;
+}
+
+/** A row from the top-N reference aggregation (hotspots): name + total + per-kind breakdown. */
+export interface TopReferencedSymbolRow {
+	symbol_name: string;
+	total: number;
+	countsByKind: Record<string, number>;
+}

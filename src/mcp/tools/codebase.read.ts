@@ -21,6 +21,7 @@ import {
 	renderDirTree,
 	type ArchitectureSymbolData
 } from "../codebase-index/services/architecture-service";
+import { analyzeDeadCode, renderDeadCodeText } from "../codebase-index/services/dead-code";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../codebase-index/services/symbol-ranking";
 import { traceSymbol, AmbiguousSymbolError } from "../codebase-index/services/trace-service";
 import { blendVectorRanking } from "../codebase-index/services/vector-ranking";
@@ -328,6 +329,27 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 
 // ── ARCHITECTURE ─────────────────────────────────────────────────────────
 
+/**
+ * Resolve an OPTIONAL repoPath for ARCHITECTURE's entry-point exclusion.
+ *
+ * Unlike CODE mode (where repoPath is REQUIRED and a bad path is a hard
+ * error), architecture treats it as an enhancement: an absent path, or one
+ * that does not resolve to a directory, degrades to null — entry-point
+ * exclusion then falls back to the exported=1 public-API anchor and the
+ * coverage note documents the skip. Keeps existing no-repoPath ARCHITECTURE
+ * requests 100% non-breaking.
+ */
+function resolveOptionalRepoPath(raw: string | undefined): string | null {
+	const trimmed = raw?.trim();
+	if (!trimmed) return null;
+	try {
+		const resolved = path.resolve(trimmed);
+		return fs.statSync(resolved).isDirectory() ? resolved : null;
+	} catch {
+		return null;
+	}
+}
+
 async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const repo = validated.repo;
 	if (!repo) {
@@ -366,7 +388,16 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 		);
 	}
 
-	const result = buildArchitectureFromData(files, symbolData, depth);
+	// ── Dead-code candidates + hotspots (TASK-319) ───────────────────────
+	// Bounded compute layer over codebase_references (no schema change).
+	// gated on includeSymbolCounts like the other symbol-level blocks.
+	const repoPath = resolveOptionalRepoPath(validated.repoPath);
+	let deadCode = null;
+	if (validated.includeSymbolCounts) {
+		deadCode = analyzeDeadCode(db, repo, repoPath, files);
+	}
+
+	const result = buildArchitectureFromData(files, symbolData, depth, deadCode ?? undefined);
 
 	const langEntries = Object.entries(result.summary.languageBreakdown);
 	let archSummary = `Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${langEntries.length} languages`;
@@ -378,6 +409,10 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 
 	const dirTreeOutput = renderDirTree(result.root, depth);
 	archSummary += `\n\n### Project Structure\n\n\`\`\`\n${dirTreeOutput}\n\`\`\``;
+
+	if (deadCode) {
+		archSummary += renderDeadCodeText(deadCode);
+	}
 
 	return createMcpResponse(
 		{ ...result, mode: "architecture" },

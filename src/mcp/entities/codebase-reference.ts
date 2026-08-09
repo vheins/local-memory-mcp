@@ -1,5 +1,11 @@
 import { BaseEntity } from "../storage/base";
-import { CodebaseReference, CodebaseReferenceInsert, CodebaseReferenceRow } from "../types";
+import {
+	CodebaseReference,
+	CodebaseReferenceInsert,
+	CodebaseReferenceRow,
+	SymbolReferenceCounts,
+	TopReferencedSymbolRow
+} from "../types";
 import { randomUUID } from "crypto";
 
 /**
@@ -60,6 +66,101 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			"SELECT * FROM codebase_references WHERE repo = ? AND symbol_name = ? ORDER BY caller_file ASC, caller_line ASC",
 			[repo, symbolName]
 		).map((r) => this.rowToReference(r));
+	}
+
+	/**
+	 * Reference-row counts for a SET of symbol names (TASK-319 dead-code).
+	 *
+	 * Aggregates `GROUP BY symbol_name, kind` served by idx_refs_repo_symbol —
+	 * one bounded query instead of N `getReferencesBySymbol` calls. A symbol
+	 * absent from the returned map has ZERO reference rows of every kind ⇒
+	 * dead-code candidate. Names are sent in IN-clause chunks of 500 so a
+	 * large candidate pool never trips SQLite's variable limit.
+	 */
+	countReferencesBySymbol(repo: string, symbolNames: string[]): Map<string, SymbolReferenceCounts> {
+		const counts = new Map<string, SymbolReferenceCounts>();
+		const CHUNK = 500;
+		for (let i = 0; i < symbolNames.length; i += CHUNK) {
+			const chunk = symbolNames.slice(i, i + CHUNK);
+			const placeholders = chunk.map(() => "?").join(", ");
+			const rows = this.all<{ symbol_name: string; kind: string; count: number }>(
+				`SELECT symbol_name, kind, COUNT(*) as count
+				 FROM codebase_references
+				 WHERE repo = ? AND symbol_name IN (${placeholders})
+				 GROUP BY symbol_name, kind
+				 ORDER BY symbol_name ASC, kind ASC`,
+				[repo, ...chunk]
+			);
+			for (const row of rows) {
+				let entry = counts.get(row.symbol_name);
+				if (!entry) {
+					entry = { total: 0, countsByKind: {} };
+					counts.set(row.symbol_name, entry);
+				}
+				entry.total += row.count;
+				entry.countsByKind[row.kind] = row.count;
+			}
+		}
+		return counts;
+	}
+
+	/**
+	 * Top-N referenced symbol names by total reference count (TASK-319
+	 * hotspots). Aggregates `GROUP BY symbol_name, kind` for the whole repo
+	 * (bounded by distinct symbol×kind pairs — the OPT-PERF-08 discipline),
+	 * sums per kind, sorts by total DESC, slices to `limit`.
+	 */
+	getTopReferencedSymbols(repo: string, limit: number): TopReferencedSymbolRow[] {
+		const rows = this.all<{ symbol_name: string; kind: string; count: number }>(
+			`SELECT symbol_name, kind, COUNT(*) as count
+			 FROM codebase_references
+			 WHERE repo = ?
+			 GROUP BY symbol_name, kind`,
+			[repo]
+		);
+		const byName = new Map<string, SymbolReferenceCounts>();
+		for (const row of rows) {
+			let entry = byName.get(row.symbol_name);
+			if (!entry) {
+				entry = { total: 0, countsByKind: {} };
+				byName.set(row.symbol_name, entry);
+			}
+			entry.total += row.count;
+			entry.countsByKind[row.kind] = (entry.countsByKind[row.kind] ?? 0) + row.count;
+		}
+		return [...byName.entries()]
+			.map(([symbol_name, counts]) => ({ symbol_name, ...counts }))
+			.sort((a, b) => b.total - a.total || a.symbol_name.localeCompare(b.symbol_name))
+			.slice(0, limit);
+	}
+
+	/**
+	 * Total reference rows for a repo (cheap COUNT — the honesty gate for
+	 * dead-code analysis: zero rows means no language evidence exists in this
+	 * index, so candidate claims would be garbage).
+	 */
+	countReferencesByRepo(repo: string): number {
+		const row = this.get<{ count: number }>("SELECT COUNT(*) as count FROM codebase_references WHERE repo = ?", [repo]);
+		return row?.count ?? 0;
+	}
+
+	/**
+	 * Languages that OBSERVED reference emission in this repo's index
+	 * (TASK-319 language honesty). Joins reference caller files back to
+	 * codebase_files: a language appears here only when at least one of its
+	 * indexed files produced reference rows — proof the emitter ran for that
+	 * language in the CURRENT index (vs an index that predates reference
+	 * emission, where zero refs would lie).
+	 */
+	getReferenceLanguagesByRepo(repo: string): string[] {
+		return this.all<{ language: string }>(
+			`SELECT DISTINCT f.language
+			 FROM codebase_references r
+			 JOIN codebase_files f ON f.repo = r.repo AND f.file_path = r.caller_file
+			 WHERE r.repo = ? AND f.language IS NOT NULL
+			 ORDER BY f.language ASC`,
+			[repo]
+		).map((r) => r.language);
 	}
 
 	deleteReferencesByFile(repo: string, filePath: string): number {

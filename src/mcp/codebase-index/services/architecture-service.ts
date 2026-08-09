@@ -18,6 +18,7 @@
 
 import type { CodebaseFile, CodebaseSymbol } from "../../types";
 import { ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT } from "../../utils/constants";
+import type { DeadCodeBlock } from "./dead-code";
 
 // ── Public types ─────────────────────────────────────────────────────────
 
@@ -40,6 +41,13 @@ export interface ArchitectureSummary {
 export interface ArchitectureResult {
 	root: DirectoryNode;
 	summary: ArchitectureSummary;
+	/**
+	 * Dead-code candidates + hotspots (TASK-319). Purely PASS-THROUGH —
+	 * computed by the caller (analyzeDeadCode, which owns the DB + disk I/O);
+	 * the service stays pure. Absent for legacy callers ⇒ output byte-identical
+	 * to pre-TASK-319.
+	 */
+	deadCode?: DeadCodeBlock;
 }
 
 /**
@@ -282,7 +290,8 @@ export function buildArchitecture(
 	files: CodebaseFile[],
 	symbols: CodebaseSymbol[],
 	depth: number,
-	topLevelExportsLimit: number = ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT
+	topLevelExportsLimit: number = ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT,
+	deadCode?: DeadCodeBlock
 ): ArchitectureResult {
 	return buildArchitectureFromData(
 		files,
@@ -291,7 +300,8 @@ export function buildArchitecture(
 			symbolCountsByFile: buildSymbolCountIndex(symbols),
 			topLevelExports: topLevelExportsFromSymbols(symbols, topLevelExportsLimit)
 		},
-		depth
+		depth,
+		deadCode
 	);
 }
 
@@ -307,11 +317,15 @@ export function buildArchitecture(
  * @param files      - All CodebaseFile records for the repo.
  * @param symbolData - Pre-aggregated symbol counts and bounded exports.
  * @param depth      - Maximum directory depth to expand before collapsing.
+ * @param deadCode   - Optional pre-computed deadCode block (TASK-319); attached
+ *                     to the result when provided. The caller owns computation
+ *                     (DB + disk) — this service stays pure.
  */
 export function buildArchitectureFromData(
 	files: CodebaseFile[],
 	symbolData: ArchitectureSymbolData,
-	depth: number
+	depth: number,
+	deadCode?: DeadCodeBlock
 ): ArchitectureResult {
 	const { symbolCountsByFile } = symbolData;
 
@@ -355,5 +369,7 @@ export function buildArchitectureFromData(
 		topLevelExports: symbolData.topLevelExports
 	};
 
-	return { root: rootNode, summary };
+	const result: ArchitectureResult = { root: rootNode, summary };
+	if (deadCode) result.deadCode = deadCode;
+	return result;
 }

@@ -199,6 +199,28 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		).map((r) => this.rowToSymbol(r));
 	}
 
+	/**
+	 * Top-level symbols for a repo (parent_symbol_id IS NULL — exported OR
+	 * internal), bounded by `limit` (TASK-319 dead-code candidate scan).
+	 *
+	 * Dead-code candidates are deliberately restricted to top-level symbols:
+	 * members (methods/fields) share names across containers, so name-based
+	 * reference rows (ADR-002) aggregate same-name members and would both
+	 * hide truly-unused members and over-report used ones — top-level names
+	 * are trustworthy under the name-based model, and the pool is a small
+	 * fraction of the repo's total symbol count. Index-served by the
+	 * (repo, exported, parent_symbol_id) prefix of idx_cs_repo_exported_parent.
+	 */
+	getTopLevelSymbolsByRepo(repo: string, limit: number): CodebaseSymbol[] {
+		return this.all<CodebaseSymbolRow>(
+			`SELECT * FROM codebase_symbols
+			 WHERE repo = ? AND parent_symbol_id IS NULL
+			 ORDER BY file_path ASC, start_line ASC
+			 LIMIT ?`,
+			[repo, limit]
+		).map((r) => this.rowToSymbol(r));
+	}
+
 	getAllSymbols(limit?: number): CodebaseSymbol[] {
 		let sql = "SELECT * FROM codebase_symbols ORDER BY repo ASC, file_path ASC, start_line ASC";
 		const params: (string | number)[] = [];

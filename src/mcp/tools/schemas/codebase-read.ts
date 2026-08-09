@@ -48,9 +48,13 @@ export const CodebaseReadSchema = z.object({
 	/** CODE mode: only grep files with this `codebase_files.language`. */
 	language: z.string().optional(),
 	/**
-	 * CODE mode: absolute path of the repo root on disk. Required because the
-	 * index stores no repo→path registry — the caller supplies it, exactly as
-	 * index_repository does. Absent ⇒ REPO_PATH_REQUIRED error envelope.
+	 * Absolute path of the repo root on disk. Required for CODE mode (grep
+	 * file contents); OPTIONAL for ARCHITECTURE mode, where it enables the
+	 * dead-code entry-point exclusion (package.json bin/main/exports + shebang
+	 * scan — absent ⇒ public-API-anchor exclusion only, noted in coverageNote).
+	 * The index stores no repo→path registry — the caller supplies it, exactly
+	 * as index_repository does. CODE mode absent ⇒ REPO_PATH_REQUIRED error
+	 * envelope; ARCHITECTURE absent ⇒ graceful degradation.
 	 */
 	repoPath: z.string().min(1).optional(),
 

@@ -243,6 +243,23 @@ export const ACTION_LOG_MAX_ROWS = envInt("ACTION_LOG_MAX_ROWS", 10_000);
 // buildArchitecture() default — keep them in sync.
 export const ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT = 50;
 
+// ── Dead-code + hotspots bounds (TASK-319, phase dead-code) ───────────────
+// Max entries in the ARCHITECTURE `deadCode.unreferenced` array (dead-code
+// candidates — truly-dead first, entry-point-excluded after) and `deadCode.
+// hotspots` array (top in-degree symbols by reference count). Both are
+// output caps only — the text summary still reports FULL counts (dead vs
+// entry-excluded) so a capped list never misleads about scale.
+export const DEAD_CODE_UNREFERENCED_MAX = 20;
+export const DEAD_CODE_HOTSPOTS_MAX = 10;
+// Bounded candidate-universe cap for the dead-code scan: only top-level
+// symbols (parent_symbol_id IS NULL — exported OR internal) are considered,
+// fetched with a SQL LIMIT. Top-level symbols are a small fraction of the
+// repo's members, and the architecture read already hydrates the full file
+// list — this keeps the dead-code pass O(top-level symbols) instead of
+// O(all symbols), mirroring the OPT-PERF-08 aggregate discipline. When the
+// cap is hit, `totals.truncated` is set and surfaced in the coverage note.
+export const DEAD_CODE_SCAN_LIMIT = 500;
+
 // ── Codebase-read default result limits ───────────────────────────────────
 // SEARCH mode default page size (was the schema default of 50 before the
 // per-mode defaults were introduced by TASK-316; behavior preserved). CODE

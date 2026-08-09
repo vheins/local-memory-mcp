@@ -271,6 +271,85 @@ describe("handleCodebaseRead (architecture mode)", () => {
 		const summary = data.summary as Record<string, unknown>;
 		expect(summary.totalSymbols).toBe(1);
 	});
+
+	it("returns deadCode blocks (unreferenced + hotspots) with language coverage (TASK-319)", async () => {
+		store.codebaseFiles.upsertFile({
+			repo: "repo",
+			file_path: "src/app.ts",
+			language: "typescript",
+			checksum: "abc",
+			lines: 30,
+			size_bytes: 300
+		});
+		store.codebaseSymbols.bulkUpsertSymbols([
+			{
+				repo: "repo",
+				file_path: "src/app.ts",
+				name: "usedFn",
+				kind: "function",
+				exported: true,
+				default_export: false,
+				start_line: 1,
+				start_col: 0,
+				parent_symbol_id: null
+			},
+			{
+				repo: "repo",
+				file_path: "src/app.ts",
+				name: "deadFn",
+				kind: "function",
+				exported: false,
+				default_export: false,
+				start_line: 5,
+				start_col: 0,
+				parent_symbol_id: null
+			}
+		]);
+		store.codebaseReferences.bulkUpsertReferences("repo", [
+			{ repo: "repo", symbol_name: "usedFn", caller_file: "src/app.ts", caller_line: 12, kind: "call" },
+			{ repo: "repo", symbol_name: "usedFn", caller_file: "src/app.ts", caller_line: 14, kind: "import" }
+		]);
+
+		const response = await handleCodebaseRead({ owner: "vheins", repo: "repo", depth: 3 }, store, vectors);
+		const data = response.structuredContent as Record<string, unknown>;
+		const deadCode = data.deadCode as Record<string, unknown>;
+
+		expect(deadCode).toBeDefined();
+		const unreferenced = deadCode.unreferenced as Array<Record<string, unknown>>;
+		expect(unreferenced.map((u) => u.name)).toContain("deadFn");
+		expect(unreferenced.map((u) => u.name)).not.toContain("usedFn");
+
+		const hotspots = deadCode.hotspots as Array<Record<string, unknown>>;
+		expect(hotspots.find((h) => h.name === "usedFn")?.refCount).toBe(2);
+		expect(hotspots.find((h) => h.name === "usedFn")?.topKinds).toEqual({ call: 1, import: 1 });
+
+		const coverage = deadCode.languageCoverage as Record<string, unknown>;
+		expect(coverage.reliable).toContain("typescript");
+
+		// Existing architecture output untouched.
+		const summary = data.summary as Record<string, unknown>;
+		expect(summary.totalFiles).toBe(1);
+		expect(summary.totalSymbols).toBe(2);
+	});
+
+	it("omits deadCode when includeSymbolCounts is false (gate)", async () => {
+		store.codebaseFiles.upsertFile({
+			repo: "repo",
+			file_path: "src/app.ts",
+			language: "typescript",
+			checksum: "abc",
+			lines: 10,
+			size_bytes: 100
+		});
+
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", repo: "repo", depth: 3, includeSymbolCounts: false },
+			store,
+			vectors
+		);
+		const data = response.structuredContent as Record<string, unknown>;
+		expect(data.deadCode).toBeUndefined();
+	});
 });
 
 // ── handleCodebaseRead (file mode) tests ────────────────────────────────

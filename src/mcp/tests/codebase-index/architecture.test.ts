@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildArchitecture } from "../../codebase-index/services/architecture-service";
+import { buildArchitecture, buildArchitectureFromData } from "../../codebase-index/services/architecture-service";
+import type { DeadCodeBlock } from "../../codebase-index/services/dead-code";
 import type { CodebaseFile } from "../../types/codebase-file";
 import type { CodebaseSymbol } from "../../types/codebase-symbol";
 
@@ -249,5 +250,39 @@ describe("buildArchitecture", () => {
 		const srcChildren = result.root.children!;
 		expect(srcChildren.length).toBe(1);
 		expect(srcChildren[0].name).toBe("src");
+	});
+});
+
+// ── TASK-319: deadCode block passthrough ───────────────────────────────
+
+describe("buildArchitecture deadCode passthrough (TASK-319)", () => {
+	const deadCodeBlock: DeadCodeBlock = {
+		unreferenced: [],
+		hotspots: [],
+		languageCoverage: { reliable: ["typescript"], unreliable: [] },
+		totals: { scanned: 0, dead: 0, entryExcluded: 0, truncated: false },
+		coverageNote: "test block"
+	};
+
+	it("buildArchitectureFromData attaches the block when provided", () => {
+		const result = buildArchitectureFromData(
+			[makeFile("src/a.ts")],
+			{ totalSymbols: 0, symbolCountsByFile: new Map(), topLevelExports: [] },
+			3,
+			deadCodeBlock
+		);
+
+		expect(result.deadCode).toBe(deadCodeBlock);
+		expect(result.summary.totalFiles).toBe(1); // architecture output unchanged
+	});
+
+	it("buildArchitecture (legacy) passes the block through", () => {
+		const result = buildArchitecture([makeFile("a.ts")], [], 3, 50, deadCodeBlock);
+		expect(result.deadCode).toBe(deadCodeBlock);
+	});
+
+	it("omits deadCode when not provided — legacy output unchanged", () => {
+		const result = buildArchitecture([makeFile("a.ts")], [], 3);
+		expect(result.deadCode).toBeUndefined();
 	});
 });
