@@ -214,3 +214,33 @@ export const ACTION_LOG_MAX_ROWS = envInt("ACTION_LOG_MAX_ROWS", 10_000);
 // repo's total symbol count. Single source for the tool LIMIT and the
 // buildArchitecture() default — keep them in sync.
 export const ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT = 50;
+
+// ── Codebase-read default result limits ───────────────────────────────────
+// SEARCH mode default page size (was the schema default of 50 before the
+// per-mode defaults were introduced by TASK-316; behavior preserved). CODE
+// mode greps file CONTENTS, so a match line is far cheaper to consume than a
+// symbol record — 10 matches is a tight default, offset paginates for more.
+export const CODEBASE_SEARCH_DEFAULT_LIMIT = 50;
+export const CODE_SEARCH_DEFAULT_LIMIT = 10;
+
+// ── Codebase CODE mode (content grep) bounds (TASK-316) ───────────────────
+// Snippet width around a match: ~40 chars on each side of the matched
+// substring (~80 chars total), ellipsis-padded at line boundaries.
+export const CODE_SEARCH_SNIPPET_CHARS = 80;
+// Process-shared content cache (multi-agent): bounded by BOTH max entries and
+// max bytes, LRU-evicted. Keyed by repo+file_path, validity keyed to the
+// codebase_files row checksum (row changed ⇒ content reloaded on next access).
+export const CODE_SEARCH_CACHE_MAX_FILES = envInt("CODE_SEARCH_CACHE_MAX_FILES", 256);
+export const CODE_SEARCH_CACHE_MAX_BYTES = envInt("CODE_SEARCH_CACHE_MAX_BYTES", 16 * 1024 * 1024);
+// Bounded read concurrency while grepping indexed files (mirrors the
+// staleness-check STAT_CONCURRENCY pattern — never N parallel reads).
+export const CODE_SEARCH_READ_CONCURRENCY = 16;
+// ReDoS guard (TASK-344): maximum length of a caller-supplied regex needle.
+// V8 has no RegExp timeout and the compiled regex runs per line against
+// indexed files (10-100KB minified lines) on the PROCESS-SHARED server, so an
+// over-long pattern multiplies the exponential-backtracking surface. Patterns
+// longer than this are rejected with the INVALID_REGEX envelope — substring
+// mode (the default) is unaffected and remains the safe path. Env-overridable
+// (e.g. `CODE_SEARCH_MAX_REGEX_LENGTH=500`) so operators can widen the window
+// without code changes.
+export const CODE_SEARCH_MAX_REGEX_LENGTH = envInt("CODE_SEARCH_MAX_REGEX_LENGTH", 200);

@@ -2,24 +2,35 @@ import { z } from "zod";
 import { normalizeRepo } from "../../utils/normalize";
 
 /**
- * Unified schema for codebase-read (TRACE / SEARCH / FILE / ARCHITECTURE).
+ * Unified schema for codebase-read (TRACE / SEARCH / FILE / ARCHITECTURE / CODE).
  *
- * Auto-infer rules (checked in order — only ONE of the 3 mutual-exclusive params):
- * - `name` → TRACE (was trace_symbol)
+ * Auto-infer rules (checked in order — only ONE of the mutual-exclusive params):
+ * - `name`     → TRACE (was trace_symbol)
  * - `filePath` → FILE (was get_file_symbols)
- * - `query` → SEARCH (unified: was search_symbols + codebase_search)
- * - none   → ARCHITECTURE (was get_architecture — tree overview)
+ * - `content`  → CODE (TASK-316 — grep file contents, symbol-enriched)
+ * - `query`    → SEARCH (unified: was search_symbols + codebase_search)
+ * - none       → ARCHITECTURE (was get_architecture — tree overview)
  *
  * Per ADR-005: "Zero oneOf — auto-infer dari parameter mana yang diisi"
  */
 export const CodebaseReadSchema = z.object({
-	// ── 3 mutual-exclusive params — agent fills exactly 1 ─────────────────
+	// ── Mutual-exclusive params — agent fills exactly 1 ──────────────────
 	/** Symbol name to trace. Presence triggers TRACE mode. */
 	name: z.string().optional(),
 	/** Relative file path to get symbols for. Presence triggers FILE mode. */
 	filePath: z.string().optional(),
-	/** Search query — code-like term or natural language. Presence triggers SEARCH mode. */
+	/**
+	 * Search query — code-like term or natural language. Presence triggers
+	 * SEARCH mode (symbol names / signatures).
+	 */
 	query: z.string().optional(),
+	/**
+	 * Content to grep for in indexed file CONTENTS. Presence triggers CODE
+	 * mode (TASK-316): substring (case-insensitive) or regex match against
+	 * every file in the codebase_files index, enriched with the enclosing
+	 * symbol definition. Requires `repo` + `repoPath`.
+	 */
+	content: z.string().optional(),
 
 	// ── Optional filters ──────────────────────────────────────────────────
 	/** Filter by symbol kind(s) — single string or array. */
@@ -32,6 +43,16 @@ export const CodebaseReadSchema = z.object({
 	includeReferences: z.coerce.boolean().default(true),
 	/** Include symbol counts in ARCHITECTURE tree. */
 	includeSymbolCounts: z.coerce.boolean().default(true),
+	/** CODE mode: treat `content` as a regular expression (default: substring). */
+	regex: z.boolean().default(false),
+	/** CODE mode: only grep files with this `codebase_files.language`. */
+	language: z.string().optional(),
+	/**
+	 * CODE mode: absolute path of the repo root on disk. Required because the
+	 * index stores no repo→path registry — the caller supplies it, exactly as
+	 * index_repository does. Absent ⇒ REPO_PATH_REQUIRED error envelope.
+	 */
+	repoPath: z.string().min(1).optional(),
 
 	// ── Common ─────────────────────────────────────────────────────────────
 	owner: z.string().optional().default(""),
@@ -54,8 +75,12 @@ export const CodebaseReadSchema = z.object({
 	repos: z.array(z.string().min(1).transform(normalizeRepo)).max(50).nonempty().optional(),
 
 	// ── Pagination ─────────────────────────────────────────────────────────
-	/** Max results (default 50, max 200). */
-	limit: z.coerce.number().min(1).max(200).default(50),
+	/**
+	 * Max results. No schema-level default (TASK-316): each mode applies its
+	 * own — SEARCH `CODEBASE_SEARCH_DEFAULT_LIMIT` (50, the historical schema
+	 * default) and CODE `CODE_SEARCH_DEFAULT_LIMIT` (10). Max 200.
+	 */
+	limit: z.coerce.number().min(1).max(200).optional(),
 	/** Pagination offset. */
 	offset: z.coerce.number().min(0).default(0),
 
@@ -65,4 +90,4 @@ export const CodebaseReadSchema = z.object({
 });
 
 export type CodebaseReadInput = z.infer<typeof CodebaseReadSchema>;
-export type CodebaseReadMode = "trace" | "search" | "file" | "architecture";
+export type CodebaseReadMode = "trace" | "search" | "file" | "architecture" | "code";
