@@ -41,7 +41,7 @@ import { EmbeddingJobInput, QueueCounts, QueueJobRow } from "./types";
 
 // Re-export the enqueue helpers for backward compatibility (index.ts and tools
 // import them from the embedding-queue barrel; tests import them from outbox).
-export { enqueueEmbeddingJob, enqueueMemory, enqueueStandard, enqueueTask } from "./enqueue";
+export { enqueueEmbeddingJob, enqueueMemory, enqueueStandard, enqueueTask, enqueueCodebaseSymbols } from "./enqueue";
 
 // ---------------------------------------------------------------------------
 // Outbox — claim/complete/fail/reconcile/purge/count (worker-facing)

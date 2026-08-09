@@ -1,6 +1,8 @@
 import { BaseEntity } from "../storage/base";
 import { CodebaseFile, CodebaseFileInsert } from "../types";
 import { randomUUID } from "crypto";
+import { chunksOf } from "../utils/chunk";
+import { BULK_UPDATE_CHUNK_SIZE } from "../utils/constants";
 
 export class CodebaseFileEntity extends BaseEntity {
 	upsertFile(file: CodebaseFileInsert): CodebaseFile {
@@ -41,6 +43,29 @@ export class CodebaseFileEntity extends BaseEntity {
 
 	getFile(repo: string, filePath: string): CodebaseFile | undefined {
 		return this.get<CodebaseFile>("SELECT * FROM codebase_files WHERE repo = ? AND file_path = ?", [repo, filePath]);
+	}
+
+	/**
+	 * Batch existence read for a set of file paths (OPT-PERF-03 pattern —
+	 * used by the embedding worker's codebase_symbol precheck, TASK-293).
+	 * One IN(...) query replaces one getFile() per job in the claimed batch.
+	 * Chunked at BULK_UPDATE_CHUNK_SIZE via the shared chunksOf helper so the
+	 * bound-variable limit is never exceeded (TASK-139).
+	 */
+	getFilesByPaths(repo: string, filePaths: string[]): CodebaseFile[] {
+		if (filePaths.length === 0) return [];
+		const unique = [...new Set(filePaths)];
+		const rows: CodebaseFile[] = [];
+		for (const chunk of chunksOf(unique, BULK_UPDATE_CHUNK_SIZE)) {
+			const placeholders = chunk.map(() => "?").join(",");
+			rows.push(
+				...this.all<CodebaseFile>(`SELECT * FROM codebase_files WHERE repo = ? AND file_path IN (${placeholders})`, [
+					repo,
+					...chunk
+				])
+			);
+		}
+		return rows;
 	}
 
 	/**

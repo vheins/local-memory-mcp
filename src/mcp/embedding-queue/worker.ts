@@ -26,7 +26,12 @@
 import { performance } from "node:perf_hooks";
 import { RealVectorStore } from "../storage/vectors";
 import { SQLiteStore } from "../storage/sqlite";
-import { saveExtractions, saveStandardRelations, saveTaskRelations } from "../tools/kg-archivist";
+import {
+	saveCodebaseRelations,
+	saveExtractions,
+	saveStandardRelations,
+	saveTaskRelations
+} from "../tools/kg-archivist";
 import { logger } from "../utils/logger";
 import { DurationSeries, metrics } from "../utils/metrics";
 import {
@@ -45,6 +50,7 @@ import {
 	EMBEDDING_QUEUE_PURGE_INTERVAL_MS
 } from "../utils/constants";
 import { Outbox } from "./outbox";
+import { codebaseEntityId, codebaseEntityParts } from "./enqueue";
 import { EmbeddingJobPayload, EmbeddingWorkerStats, QueueJobKind, QueueJobRow } from "./types";
 
 export interface EmbeddingWorkerOptions {
@@ -277,18 +283,39 @@ export class EmbeddingWorker {
 		}
 
 		if (resolved.length > 0) {
-			// Batch embedding latency (OPT-OBS-01): measure the ONNX batch and
-			// record it into BOTH the worker's own series (exposed via
-			// getStats().embedLatency) and the process metrics registry.
-			const embedStartMs = performance.now();
-			const embedded = await this.vectors.embed(resolved.map((r) => r.payload.text));
-			const embedMs = performance.now() - embedStartMs;
-			this.embedLatency.add(embedMs);
-			metrics.recordEmbedLatency(embedMs);
-			for (let i = 0; i < resolved.length; i++) {
-				const { job, payload } = resolved[i];
+			// Split the batch: only memory/standard/task jobs consume an ONNX
+			// embedding. codebase_symbol jobs are KG-only — writeVector is a
+			// deliberate NO-OP for them (TASK-293) and codebase_symbol_vectors
+			// is never populated, so batch-embedding them previously burned
+			// 150-500ms of CPU per file for a vector that was immediately
+			// discarded (TASK-338 / code-review F1). Embed only the
+			// embed-needed subset and hand codebase jobs a placeholder vector
+			// that applyJob's writeVector branch never persists.
+			const embedNeeded = resolved.filter((r) => r.job.entity_kind !== "codebase_symbol");
+			const toApply: { job: QueueJobRow; payload: EmbeddingJobPayload; vector: number[] }[] = [];
+			if (embedNeeded.length > 0) {
+				// Batch embedding latency (OPT-OBS-01): measure the ONNX batch
+				// and record it into BOTH the worker's own series (exposed via
+				// getStats().embedLatency) and the process metrics registry.
+				const embedStartMs = performance.now();
+				const embedded = await this.vectors.embed(embedNeeded.map((r) => r.payload.text));
+				const embedMs = performance.now() - embedStartMs;
+				this.embedLatency.add(embedMs);
+				metrics.recordEmbedLatency(embedMs);
+				for (let i = 0; i < embedNeeded.length; i++) {
+					toApply.push({ ...embedNeeded[i], vector: embedded[i] });
+				}
+			}
+			for (const item of resolved) {
+				if (item.job.entity_kind === "codebase_symbol") {
+					// Placeholder — discarded by the writeVector NO-OP.
+					toApply.push({ ...item, vector: [] });
+				}
+			}
+
+			for (const { job, payload, vector } of toApply) {
 				try {
-					await this.applyJob(job, payload, embedded[i]);
+					await this.applyJob(job, payload, vector);
 					this.outbox.complete(job.id, job.locked_by ?? "");
 					this.stats.processed++;
 				} catch (err) {
@@ -348,6 +375,27 @@ export class EmbeddingWorker {
 				existing.set(kind, new Set(this.store.memories.getByIds(ids).map((m) => m.id)));
 			} else if (kind === "standard") {
 				existing.set(kind, new Set(this.store.standards.getByIds(ids).map((s) => s.id)));
+			} else if (kind === "codebase_symbol") {
+				// Codebase jobs are keyed by the stable `<repo>::<file_path>`
+				// entity id (TASK-293). Existence = the indexed file row still
+				// exists; a deleted/stale-cleaned file completes the job as a
+				// no-op exactly like a soft-deleted task. One IN(...) read per
+				// (repo) group keeps the OPT-PERF-03 batch-read pattern.
+				const pathsByRepo = new Map<string, string[]>();
+				for (const id of ids) {
+					const { repo, filePath } = codebaseEntityParts(id);
+					const paths = pathsByRepo.get(repo) ?? [];
+					paths.push(filePath);
+					pathsByRepo.set(repo, paths);
+				}
+				const existingIds = new Set<string>();
+				for (const [repo, paths] of pathsByRepo) {
+					const livePaths = new Set(this.store.codebaseFiles.getFilesByPaths(repo, paths).map((f) => f.file_path));
+					for (const p of paths) {
+						if (livePaths.has(p)) existingIds.add(codebaseEntityId(repo, p));
+					}
+				}
+				existing.set(kind, existingIds);
 			} else {
 				// Soft-deleted tasks (status = 'canceled') are treated as
 				// non-existent: the job is completed as a no-op (TASK-042).
@@ -395,6 +443,15 @@ export class EmbeddingWorker {
 				},
 				this.store
 			);
+		} else if (job.entity_kind === "codebase_symbol") {
+			// Codebase KG population (TASK-293): compromise extraction over the
+			// file's symbol lines (payload content), then the codebase relation
+			// writer mirrors saveStandardRelations — it re-reads the file's
+			// symbols + reference edges from codebase_symbols/codebase_references
+			// (the latest committed state; the payload snapshot gates dedup).
+			// owner is "" (codebase_symbols has no owner column).
+			await saveExtractions(kgContent, title, owner, repo, this.store, "codebase");
+			await saveCodebaseRelations({ filePath: title, owner, repo }, this.store);
 		} else {
 			await saveExtractions(kgContent, title, owner, repo, this.store, "task");
 			await saveTaskRelations(kgContent, title, owner, repo, this.store, {
@@ -411,8 +468,19 @@ export class EmbeddingWorker {
 			this.store.memoryVectors.upsertVectorEmbedding(id, vector);
 		} else if (kind === "standard") {
 			this.store.standards.upsertVectorEmbedding(id, vector);
-		} else {
+		} else if (kind === "task") {
 			this.store.tasks.upsertTaskVectorEmbedding(id, vector);
+		} else {
+			// codebase_symbol — intentionally NO-OP (TASK-293): symbols keep
+			// their OWN vector lifecycle. codebase_symbol_vectors is not
+			// populated by any production path today (`upsertSymbolVector` has
+			// no callers — RealVectorStore.search gates on it and falls back
+			// to text-only ranking), so writing here would be a double vector
+			// with no consumer. The pre-TASK-293 else-branch would have written
+			// task_vectors keyed by a symbol id — the exact pollution this
+			// guard prevents. runOnce skips ONNX inference for codebase jobs
+			// entirely and passes a placeholder vector that is discarded here
+			// (TASK-338).
 		}
 	}
 

@@ -5,7 +5,8 @@
  * the `kg-archivist/` directory, split into focused modules:
  *
  *   extract.ts   — NLP entity extraction + saveExtractions
- *   relations.ts — saveTaskRelations + saveStandardRelations
+ *   relations.ts — saveTaskRelations + saveStandardRelations +
+ *                  saveCodebaseRelations (TASK-293)
  *   query.ts     — kgQuery, fetchKgContext, fetchAggregatedKgContext,
  *                  fetchTaskKgContext, fetchAggregatedTaskKgContext
  */
@@ -21,6 +22,7 @@ export {
 	// relations
 	saveTaskRelations,
 	saveStandardRelations,
+	saveCodebaseRelations,
 	// query
 	kgQuery,
 	fetchKgContext,

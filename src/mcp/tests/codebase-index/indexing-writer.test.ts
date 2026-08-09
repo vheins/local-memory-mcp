@@ -9,8 +9,16 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
-import { writeParseBatch, cleanStaleFiles, WriteBaseContext } from "../../codebase-index/services/indexing-writer";
-import type { CodebaseFileInsert, CodebaseSymbolInsert } from "../../types";
+import {
+	writeParseBatch,
+	cleanStaleFiles,
+	applyRenames,
+	WriteBaseContext
+} from "../../codebase-index/services/indexing-writer";
+import { codebaseEntityId } from "../../embedding-queue/enqueue";
+import { observationText } from "../../tools/kg-archivist";
+import { randomUUID } from "crypto";
+import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../types";
 
 // Kept at module scope so tests keep their own store and close it via afterEach.
 const activeStores: SQLiteStore[] = [];
@@ -114,5 +122,192 @@ describe("indexing-writer", () => {
 		expect(errors).toBe(0);
 		expect(store.codebaseFiles.getFilesByRepo(repo).map((f) => f.file_path)).toEqual(["keep.ts"]);
 		expect(store.codebaseSymbols.getSymbolsByFile(repo, "gone.ts")).toEqual([]);
+	});
+
+	// -----------------------------------------------------------------------
+	// Codebase → KG outbox wiring (TASK-293)
+	// -----------------------------------------------------------------------
+
+	it("writeParseBatch enqueues ONE codebase_symbol job per re-parsed file (single funnel for tool + autoIndex)", async () => {
+		const store = await makeStore();
+		const repo = "test-repo";
+
+		const fileInserts: CodebaseFileInsert[] = [{ repo, file_path: "a.ts" }];
+		const symbolInserts: CodebaseSymbolInsert[] = [{ repo, file_path: "a.ts", name: "newA", kind: "function" }];
+		const referenceInserts: CodebaseReferenceInsert[] = [
+			{ repo, symbol_name: "dep", caller_file: "a.ts", caller_line: 1, caller_name: "newA", kind: "call" }
+		];
+
+		const errors = await writeParseBatch(base(store, repo), fileInserts, symbolInserts, new Map(), referenceInserts);
+		expect(errors).toBe(0);
+
+		// One queue job for the file, keyed by the stable <repo>::<file_path> id.
+		const row = store.db
+			.prepare("SELECT payload FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+			.get(codebaseEntityId(repo, "a.ts")) as { payload: string } | undefined;
+		expect(row).toBeDefined();
+
+		const payload = JSON.parse(row!.payload) as { content: string; codebaseRefDigest?: string };
+		expect(payload.content).toContain("newA (function)");
+		// The ref digest makes the content hash sensitive to call-graph changes.
+		expect(payload.codebaseRefDigest).toBeTruthy();
+	});
+
+	it("writeParseBatch: an identical re-parse LWW-dedups to a single queue row", async () => {
+		const store = await makeStore();
+		const repo = "test-repo";
+
+		const fileInserts: CodebaseFileInsert[] = [{ repo, file_path: "a.ts" }];
+		const symbolInserts: CodebaseSymbolInsert[] = [{ repo, file_path: "a.ts", name: "newA", kind: "function" }];
+
+		expect(await writeParseBatch(base(store, repo), fileInserts, symbolInserts, new Map())).toBe(0);
+		expect(await writeParseBatch(base(store, repo), fileInserts, symbolInserts, new Map())).toBe(0);
+
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(codebaseEntityId(repo, "a.ts")) as { cnt: number }
+			).cnt
+		).toBe(1);
+	});
+
+	it("cleanStaleFiles purges the codebase job + removes the file's KG observations (delete path)", async () => {
+		const store = await makeStore();
+		const repo = "test-repo";
+
+		// Seed the file + symbols and run a parse batch so the job exists.
+		const fileInserts: CodebaseFileInsert[] = [{ repo, file_path: "gone.ts" }];
+		const symbolInserts: CodebaseSymbolInsert[] = [{ repo, file_path: "gone.ts", name: "gone", kind: "function" }];
+		await writeParseBatch(base(store, repo), fileInserts, symbolInserts, new Map());
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(codebaseEntityId(repo, "gone.ts")) as { cnt: number }
+			).cnt
+		).toBe(1);
+
+		// Simulate KG rows the worker already produced for the file.
+		const now = new Date().toISOString();
+		const obsText = observationText("codebase", "gone.ts");
+		store.knowledgeGraph.ensureObservation({
+			id: randomUUID(),
+			name: "gone",
+			type: "function",
+			description: null,
+			observation: obsText,
+			repo,
+			owner: "",
+			created_at: now
+		});
+
+		const errors = await cleanStaleFiles(base(store, repo), new Set(["gone.ts"]));
+		expect(errors).toBe(0);
+
+		// Queue row purged and the file-scoped KG observation + orphan swept.
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(codebaseEntityId(repo, "gone.ts")) as { cnt: number }
+			).cnt
+		).toBe(0);
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM observations WHERE observation = ? AND repo = ?")
+					.get(obsText, repo) as { cnt: number }
+			).cnt
+		).toBe(0);
+	});
+
+	it("applyRenames: purges old-path queue job, enqueues the new path, removes old-path KG observation (rename path)", async () => {
+		const store = await makeStore();
+		const repo = "test-repo";
+
+		// Seed the file under the OLD path exactly like a prior index run:
+		// file record + symbols + reference edges, which also enqueues the
+		// old-path codebase_symbol job via the writeParseBatch funnel.
+		const fileInserts: CodebaseFileInsert[] = [{ repo, file_path: "old.ts" }];
+		const symbolInserts: CodebaseSymbolInsert[] = [
+			{ repo, file_path: "old.ts", name: "renamedSym", kind: "function", doc_comment: "renamed symbol" }
+		];
+		const referenceInserts: CodebaseReferenceInsert[] = [
+			{ repo, symbol_name: "dep", caller_file: "old.ts", caller_line: 1, caller_name: "renamedSym", kind: "call" }
+		];
+		expect(await writeParseBatch(base(store, repo), fileInserts, symbolInserts, new Map(), referenceInserts)).toBe(0);
+
+		const oldJobId = codebaseEntityId(repo, "old.ts");
+		const newJobId = codebaseEntityId(repo, "new.ts");
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(oldJobId) as { cnt: number }
+			).cnt
+		).toBe(1);
+
+		// Simulate KG rows the worker already produced for the OLD path.
+		const now = new Date().toISOString();
+		const oldObsText = observationText("codebase", "old.ts");
+		store.knowledgeGraph.ensureObservation({
+			id: randomUUID(),
+			name: "renamedSym",
+			type: "function",
+			description: null,
+			observation: oldObsText,
+			repo,
+			owner: "",
+			created_at: now
+		});
+
+		// Rename old.ts → new.ts.
+		expect(await applyRenames(base(store, repo), new Map([["new.ts", "old.ts"]]))).toBe(0);
+
+		// Old-path queue row purged.
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(oldJobId) as { cnt: number }
+			).cnt
+		).toBe(0);
+
+		// New-path job enqueued from the transferred symbols/refs.
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(newJobId) as { cnt: number }
+			).cnt
+		).toBe(1);
+		const newPayload = JSON.parse(
+			(
+				store.db
+					.prepare("SELECT payload FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.get(newJobId) as { payload: string }
+			).payload
+		) as { content: string; title: string; codebaseRefDigest?: string };
+		expect(newPayload.title).toBe("new.ts");
+		expect(newPayload.content).toContain("renamedSym (function)");
+		// Caller edges survived the transfer, so the ref digest is present.
+		expect(newPayload.codebaseRefDigest).toBeTruthy();
+
+		// Symbols + refs transferred to the new path.
+		expect(store.codebaseSymbols.getSymbolsByFile(repo, "new.ts").map((s) => s.name)).toEqual(["renamedSym"]);
+		expect(store.codebaseReferences.getReferencesByFile(repo, "new.ts").map((r) => r.symbol_name)).toEqual(["dep"]);
+
+		// Old-path KG observation removed + orphan entity swept.
+		expect(
+			(
+				store.db
+					.prepare("SELECT COUNT(*) as cnt FROM observations WHERE observation = ? AND repo = ?")
+					.get(oldObsText, repo) as { cnt: number }
+			).cnt
+		).toBe(0);
+		expect(
+			(store.db.prepare("SELECT COUNT(*) as cnt FROM entities WHERE name = 'renamedSym'").get() as { cnt: number }).cnt
+		).toBe(0);
 	});
 });

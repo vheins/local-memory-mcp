@@ -36,7 +36,14 @@ import { logger } from "./logger";
 import { chunksOf } from "./chunk";
 import { BULK_UPDATE_CHUNK_SIZE } from "./constants";
 
-export type PurgeEntityKind = KgObservationDomain;
+/**
+ * Purge-able domains — deliberately EXCLUDES "codebase": codebase rows are
+ * purged by the indexing writer's stale-file sweep (cleanStaleFiles, TASK-293),
+ * NOT through this helper. Narrowing via Exclude makes the compiler enforce
+ * that intent here, so a future caller can never pass "codebase" into the
+ * 3-branch switch below and silently no-op the entity delete (TASK-341).
+ */
+export type PurgeEntityKind = Exclude<KgObservationDomain, "codebase">;
 
 export interface PurgeEntityItem {
 	/** Entity UUID to purge. */
@@ -59,6 +66,8 @@ export interface PurgeEntityCleanupOptions {
 	onProgress?: (progress: number, total: number) => void;
 }
 
+// Exactly 3 members: the compiler rejects a "codebase" key here because
+// PurgeEntityKind excludes it (codebase purges go through cleanStaleFiles).
 const KIND_PLURALS: Record<PurgeEntityKind, string> = {
 	memory: "memories",
 	standard: "standards",

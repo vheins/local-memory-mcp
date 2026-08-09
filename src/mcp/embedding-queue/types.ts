@@ -13,25 +13,29 @@ import type { VectorEntityKind } from "../types";
 /**
  * Entity kinds the queue can enrich.
  *
- * Derived from the single shared `VectorEntityKind` (src/mcp/types/vector.ts)
- * minus `codebase_symbol` (TASK-097): adding a new entity kind to
- * `VectorEntityKind` automatically extends the queue instead of silently
- * drifting from a duplicated literal union. Runtime values are unchanged —
- * `"memory" | "standard" | "task"`.
+ * Derived from the single shared `VectorEntityKind` (src/mcp/types/vector.ts):
+ * adding a new entity kind to `VectorEntityKind` automatically extends the
+ * queue instead of silently drifting from a duplicated literal union. Runtime
+ * values are `"memory" | "standard" | "task" | "codebase_symbol"` — the
+ * codebase_symbol kind was re-admitted for KG auto-population (TASK-293): an
+ * indexed codebase file enqueues ONE job per re-parsed file whose
+ * `entity_id` is the stable `"<repo>::<file_path>"` key (codebase symbols
+ * are re-created with fresh UUIDs on every re-index, so per-symbol ids would
+ * defeat LWW dedup — see `enqueue.ts codebaseEntityId`).
  */
-export type QueueJobKind = Exclude<VectorEntityKind, "codebase_symbol">;
+export type QueueJobKind = VectorEntityKind;
 
 /**
  * Compile-time lock (enforced by `tsc --noEmit`): QueueJobKind must equal
- * VectorEntityKind minus exactly `codebase_symbol`. If the derivation above
- * is replaced with a literal union that drifts, or a new kind is excluded
- * beyond `codebase_symbol`, this assignment fails type-checking.
+ * VectorEntityKind exactly — EVERY vector kind is queue-enrichable. If the
+ * derivation above is replaced with a literal union that drifts, or a kind
+ * is excluded, this assignment fails type-checking.
  */
 type _QueueJobKindInvariant =
 	// Every queue kind must be a valid vector kind...
 	[QueueJobKind] extends [VectorEntityKind]
-		? // ...and codebase_symbol must be the ONLY kind excluded from the queue.
-			Exclude<VectorEntityKind, QueueJobKind> extends "codebase_symbol"
+		? // ...and NO vector kind may be excluded from the queue.
+			Exclude<VectorEntityKind, QueueJobKind> extends never
 			? true
 			: false
 		: false;
@@ -92,6 +96,16 @@ export interface EmbeddingJobPayload {
 	context?: string;
 	/** Standard stack (KG relations). */
 	stack?: string[];
+	/**
+	 * Codebase_symbol only: stable digest of the file's reference-edge set at
+	 * enqueue time. The extraction content (`content`) is built from the file's
+	 * SYMBOLS only, so a pure call-graph change (symbols unchanged, references
+	 * changed) would otherwise dedup on an identical content hash and the
+	 * worker would never re-run the codebase relation writer. Including this
+	 * digest in `embedPayloadContentHash` makes re-index dedup sensitive to
+	 * reference changes too (TASK-293).
+	 */
+	codebaseRefDigest?: string;
 }
 
 /** Input for a synchronous enqueue. */

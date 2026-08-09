@@ -17,7 +17,11 @@ export { Outbox, outboxFor } from "./outbox";
 export type { Outbox as OutboxInstance } from "./outbox";
 export {
 	backfillMissingVectors,
+	codebaseEntityId,
+	codebaseEntityParts,
+	codebaseSymbolJobPayload,
 	countByStatus,
+	enqueueCodebaseSymbols,
 	enqueueEmbeddingJob,
 	enqueueIfAbsent,
 	enqueueMemory,

@@ -16,6 +16,10 @@
  *   - `content` → KG extraction text (falls back to `text`).
  *   - `title`  → KG observation text.
  *   - `parentId` / `decisionRefs` / `context` / `stack` → KG relations.
+ *   - `codebaseRefDigest` → codebase reference-edge digest (TASK-293): the
+ *     extraction content carries only a file's SYMBOLS, so a pure call-graph
+ *     change must still invalidate dedup — otherwise the worker would never
+ *     re-run the codebase relation writer.
  *
  * `owner`/`repo`/`updatedAt` are deliberately EXCLUDED: they are scope +
  * observability metadata, not embed/KG-relevant content, so a touch update
@@ -58,6 +62,8 @@ export interface EmbedPayloadHashFields {
 	context?: string;
 	/** Standard stack (embed text + KG relations). */
 	stack?: string[];
+	/** Codebase reference-edge digest (TASK-293) — makes dedup sensitive to call-graph changes. */
+	codebaseRefDigest?: string;
 }
 
 /**
@@ -75,7 +81,8 @@ export function embedPayloadContentHash(fields: EmbedPayloadHashFields): string 
 		parentId: fields.parentId ?? null,
 		decisionRefs: fields.decisionRefs ?? null,
 		context: fields.context ?? null,
-		stack: fields.stack ?? null
+		stack: fields.stack ?? null,
+		codebaseRefDigest: fields.codebaseRefDigest ?? null
 	};
 	return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }

@@ -2,15 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { randomUUID } from "crypto";
 import { createTestStore, SQLiteStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
-import { Outbox, enqueueTask, enqueueMemory, enqueueStandard } from "../embedding-queue/outbox";
-import { taskJobPayload, memoryJobPayload, standardJobPayload } from "../embedding-queue/enqueue";
+import { Outbox, enqueueTask, enqueueMemory, enqueueStandard, enqueueCodebaseSymbols } from "../embedding-queue/outbox";
+import { taskJobPayload, memoryJobPayload, standardJobPayload, codebaseEntityId } from "../embedding-queue/enqueue";
 import { embedPayloadContentHash } from "../embedding-queue/content-hash";
 import { EmbeddingWorker } from "../embedding-queue/worker";
 import { RealVectorStore } from "../storage/vectors";
 import { observationText, saveExtractions } from "../tools/kg-archivist";
 import { handleTaskDelete } from "../tools/task.delete";
 import { handleMemoryDelete } from "../tools/memory.delete";
-import type { Task, MemoryEntry, CodingStandardEntry } from "../types";
+import { _queueJobKindInvariant, type QueueJobKind } from "../embedding-queue/types";
+import type { Task, MemoryEntry, CodingStandardEntry, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../types";
 
 // ---------------------------------------------------------------------------
 // Embedding-queue lifecycle regression tests (TASK-042/043/044/045, MEM-427):
@@ -131,8 +132,7 @@ function makeWorker(db: SQLiteStore): EmbeddingWorker {
 
 function getJob(db: SQLiteStore, kind: string, entityId: string): Record<string, unknown> | undefined {
 	return db.db.prepare("SELECT * FROM queue_jobs WHERE entity_kind = ? AND entity_id = ?").get(kind, entityId) as
-		| Record<string, unknown>
-		| undefined;
+		Record<string, unknown> | undefined;
 }
 
 function countRows(db: SQLiteStore, sql: string, params: unknown[] = []): number {
@@ -986,5 +986,299 @@ describe("OPT-FLOW-03 — content-hash dedup", () => {
 			expect(row.status).toBe("pending");
 			expect(row.attempts).toBe(0);
 		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Codebase → KG auto-population (TASK-293)
+// ---------------------------------------------------------------------------
+
+function makeCodebaseSymbols(filePath: string): CodebaseSymbolInsert[] {
+	return [
+		{
+			repo: REPO,
+			file_path: filePath,
+			name: "OrderService",
+			kind: "class",
+			signature: "class OrderService",
+			doc_comment: "Handles order processing for Acme Corp"
+		},
+		{
+			repo: REPO,
+			file_path: filePath,
+			name: "computeTotal",
+			kind: "function",
+			signature: "computeTotal(items)",
+			doc_comment: "Computes the order total"
+		}
+	];
+}
+
+function makeCodebaseRefs(filePath: string): CodebaseReferenceInsert[] {
+	return [
+		{
+			repo: REPO,
+			symbol_name: "computeTotal",
+			caller_file: filePath,
+			caller_line: 5,
+			caller_name: "OrderService",
+			kind: "call"
+		},
+		{
+			repo: REPO,
+			symbol_name: "ExternalDep",
+			caller_file: filePath,
+			caller_line: 9,
+			caller_name: "OrderService",
+			kind: "import"
+		}
+	];
+}
+
+describe("EmbeddingWorker — codebase_symbol → KG auto-population (TASK-293)", () => {
+	let db: SQLiteStore;
+	let worker: EmbeddingWorker;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		worker = makeWorker(db);
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("positive: a codebase job KG-extracts entities + relations and writes NO vector (no double-vector)", async () => {
+		const FILE = "src/order.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+		db.codebaseSymbols.bulkUpsertSymbols(makeCodebaseSymbols(FILE));
+		db.codebaseReferences.bulkUpsertReferences(REPO, makeCodebaseRefs(FILE));
+
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE))).toBe(true);
+		expect(getJob(db, "codebase_symbol", entityId)).toBeDefined();
+
+		const claimed = await worker.runOnce();
+		expect(claimed).toBe(1);
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("done");
+
+		// KG: the file-scoped "codebase" observation exists (shared by
+		// saveExtractions + the relation writer) …
+		const obsText = observationText("codebase", FILE);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM observations WHERE observation = ?", [obsText])).toBeGreaterThan(
+			0
+		);
+		// … symbol entities exist (name-keyed; compromise extraction may have
+		// created them first with a generic type, so the TYPE is pinned only
+		// deterministically in the direct saveCodebaseRelations tests) …
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM entities WHERE name = 'OrderService'")).toBe(1);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM entities WHERE name = 'computeTotal'")).toBe(1);
+		// … and reference edges (caller → referenced symbol, type = ref kind).
+		const callRel = db.db
+			.prepare("SELECT relation_type FROM relations WHERE from_entity = 'OrderService' AND to_entity = 'computeTotal'")
+			.get() as { relation_type: string } | undefined;
+		expect(callRel).toBeDefined();
+		expect(callRel!.relation_type).toBe("call");
+
+		// No vector writes: codebase symbols keep their own (currently
+		// unpopulated) vector tables, and the worker must NOT fall into the
+		// task-vector branch either — the double-vector guard (TASK-293).
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM codebase_symbol_vectors")).toBe(0);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM task_vectors")).toBe(0);
+	});
+
+	it("negative: a codebase-only batch never invokes the ONNX embed path — KG extraction still runs (TASK-338)", async () => {
+		const FILE = "src/embed-skip.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+		db.codebaseSymbols.bulkUpsertSymbols(makeCodebaseSymbols(FILE));
+		db.codebaseReferences.bulkUpsertReferences(REPO, makeCodebaseRefs(FILE));
+		enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE));
+
+		// The embed spy FAILS the test if ONNX inference is attempted — the
+		// pre-fix batch embed (worker.ts:290) would reject here, poisoning the
+		// job instead of completing it.
+		const embedMock = vi.fn().mockRejectedValue(new Error("embed must not run for codebase_symbol jobs"));
+		const noEmbedWorker = new EmbeddingWorker(db, { embed: embedMock } as unknown as RealVectorStore, {
+			batchSize: 32,
+			leaseMs: 60_000,
+			poisonThreshold: 3,
+			backoffBaseMs: 1_000,
+			backoffMaxMs: 60_000,
+			pollIntervalMs: 3_600_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0
+		});
+
+		const claimed = await noEmbedWorker.runOnce();
+		expect(claimed).toBe(1);
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("done");
+
+		// Embed path untouched — zero ONNX inference for the codebase job.
+		expect(embedMock).not.toHaveBeenCalled();
+
+		// The KG side still ran: file-scoped observation + symbol entities.
+		const obsText = observationText("codebase", FILE);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM observations WHERE observation = ?", [obsText])).toBeGreaterThan(
+			0
+		);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM entities WHERE name = 'OrderService'")).toBe(1);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM entities WHERE name = 'computeTotal'")).toBe(1);
+	});
+
+	it("mixed batch: only memory/standard/task texts reach ONNX; codebase jobs embed-skip with a placeholder vector (TASK-338)", async () => {
+		const FILE = "src/mixed.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+		db.codebaseSymbols.bulkUpsertSymbols(makeCodebaseSymbols(FILE));
+		enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE));
+
+		const memory = makeMemory();
+		db.memories.insert(memory);
+		enqueueMemory(db, memory);
+
+		// Single 1-D vector is enough: exactly ONE text may reach the embed
+		// call — the codebase symbol payload must be filtered out.
+		const embedMock = vi.fn().mockResolvedValue([[0.1, 0.2]]);
+		const mixedWorker = new EmbeddingWorker(db, { embed: embedMock } as unknown as RealVectorStore, {
+			batchSize: 32,
+			leaseMs: 60_000,
+			poisonThreshold: 3,
+			backoffBaseMs: 1_000,
+			backoffMaxMs: 60_000,
+			pollIntervalMs: 3_600_000,
+			purgeIntervalMs: 3_600_000,
+			backfillCap: 0
+		});
+
+		const claimed = await mixedWorker.runOnce();
+		expect(claimed).toBe(2);
+		expect(getJob(db, "memory", memory.id)!.status).toBe("done");
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("done");
+
+		// Exactly one embed call, carrying ONLY the embed-needed (memory) text.
+		expect(embedMock).toHaveBeenCalledTimes(1);
+		expect(embedMock.mock.calls[0][0]).toEqual([memory.content]);
+
+		// Memory vector persisted; codebase KG observation written with the
+		// placeholder vector (never persisted — zero symbol/task vectors).
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM memory_vectors WHERE memory_id = ?", [memory.id])).toBe(1);
+		const obsText = observationText("codebase", FILE);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM observations WHERE observation = ?", [obsText])).toBeGreaterThan(
+			0
+		);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM codebase_symbol_vectors")).toBe(0);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM task_vectors")).toBe(0);
+	});
+
+	it("LWW + content-hash dedup: identical re-enqueue dedups, changed content LWW-resets the single row", () => {
+		const FILE = "src/lww.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+
+		// Identical re-parse → dedup (OPT-FLOW-03) — still exactly one row.
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE))).toBe(true);
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE))).toBe(false);
+		expect(
+			countRows(db, "SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?", [
+				entityId
+			])
+		).toBe(1);
+
+		// Changed symbol content → LWW reset of the SAME row (no duplicate).
+		const changed = [
+			{ ...makeCodebaseSymbols(FILE)[0], doc_comment: "Handles orders v2" },
+			makeCodebaseSymbols(FILE)[1]
+		];
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, changed, makeCodebaseRefs(FILE))).toBe(true);
+		expect(
+			countRows(db, "SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?", [
+				entityId
+			])
+		).toBe(1);
+		expect(getJob(db, "codebase_symbol", entityId)!.payload).toContain("orders v2");
+	});
+
+	it("reference-only change (identical symbols) invalidates dedup via the ref digest", () => {
+		const FILE = "src/calls.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), makeCodebaseRefs(FILE))).toBe(true);
+
+		// Same symbols, changed call graph → ref digest differs → re-enqueue.
+		const changedRefs = [
+			...makeCodebaseRefs(FILE),
+			{
+				repo: REPO,
+				symbol_name: "NewDep",
+				caller_file: FILE,
+				caller_line: 90,
+				caller_name: "OrderService",
+				kind: "call"
+			}
+		];
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), changedRefs)).toBe(true);
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("pending");
+	});
+
+	it("ref digest is stable across per-parse target_symbol_id churn (TASK-342)", () => {
+		const FILE = "src/stable-target.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+
+		// Wave 1 resolution result: same edge, same resolved target FILE, but
+		// re-parse re-created the target symbol row with a fresh UUID
+		// (delete-by-file + bulkUpsertSymbols) — target_symbol_id must NOT
+		// churn the digest, or every force re-index of an unchanged file would
+		// re-enqueue and re-run ONNX/KG. target_file is the stable identity.
+		const refsWithUuidA = makeCodebaseRefs(FILE).map((r) => ({
+			...r,
+			target_file: "src/dep.ts",
+			target_symbol_id: "3f9c4c2e-0000-4000-8000-00000000000a"
+		}));
+		const refsWithUuidB = makeCodebaseRefs(FILE).map((r) => ({
+			...r,
+			target_file: "src/dep.ts",
+			target_symbol_id: "b7d1e8f4-1111-4111-8111-111111111111"
+		}));
+
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), refsWithUuidA)).toBe(true);
+		// Identical edge identity (same name/kind/caller/target_file), only the
+		// per-parse symbol UUID differs → same ref digest → same content hash →
+		// deduped, single row. Pre-fix (hashing target_symbol_id) this returned
+		// true and LWW-reset the row on every re-parse.
+		expect(enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE), refsWithUuidB)).toBe(false);
+		expect(
+			countRows(db, "SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?", [
+				entityId
+			])
+		).toBe(1);
+	});
+
+	it("negative: a job whose indexed file no longer exists completes as a no-op (no KG rows)", async () => {
+		const FILE = "src/ghost.ts";
+		const entityId = codebaseEntityId(REPO, FILE);
+		db.codebaseFiles.upsertFile({ repo: REPO, file_path: FILE, language: "typescript" });
+		db.codebaseSymbols.bulkUpsertSymbols(makeCodebaseSymbols(FILE));
+		enqueueCodebaseSymbols(db, REPO, FILE, makeCodebaseSymbols(FILE));
+
+		// The file is deleted after enqueue (stale cleanup race) — the worker
+		// precheck must skip KG extraction for the stale job.
+		db.codebaseFiles.deleteFile(REPO, FILE);
+
+		const claimed = await worker.runOnce();
+		expect(claimed).toBe(1);
+		expect(getJob(db, "codebase_symbol", entityId)!.status).toBe("done");
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM entities")).toBe(0);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM observations")).toBe(0);
+	});
+
+	it("queue-kind contract: QueueJobKind re-admits codebase_symbol (compile-time invariant)", () => {
+		// _queueJobKindInvariant is 'true' at compile time — tsc fails if the
+		// QueueJobKind derivation drifts. This runtime test pins the union.
+		expect(_queueJobKindInvariant).toBe(true);
+		const kinds: QueueJobKind[] = ["memory", "standard", "task", "codebase_symbol"];
+		expect(kinds).toHaveLength(4);
 	});
 });

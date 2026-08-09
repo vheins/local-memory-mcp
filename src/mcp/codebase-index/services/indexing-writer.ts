@@ -9,6 +9,8 @@ import type { SQLiteStore } from "../../storage/sqlite";
 import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../types";
 import { logger } from "../../utils/logger";
 import { retryDbWrite } from "./indexing-cache";
+import { codebaseEntityId, enqueueCodebaseSymbols } from "../../embedding-queue/enqueue";
+import { observationText } from "../../tools/kg-archivist/observation-text";
 
 // ── Local type aliases (avoid circular dep with indexing-repository) ────
 
@@ -84,6 +86,19 @@ function emitProgress(options: { onProgress?: (progress: IndexProgress) => void 
  * Preserves the existing contract: rename transfer failures propagate to the
  * caller (the only uncovered throw path in the writer).
  *
+ * Renamed files are never re-parsed (parse-pipeline rename skip), so they
+ * bypass the writeParseBatch codebase → KG enqueue funnel. To keep the
+ * "codebase" KG domain consistent with the rename (TASK-340), each transfer
+ * also:
+ *   1. purges the OLD-path queue_jobs row so a pending job can never re-run
+ *      KG extraction for a path that no longer exists (mirrors the
+ *      cleanStaleFiles queue purge), and
+ *   2. re-enqueues under the NEW path from the transferred symbols/refs so
+ *      the worker re-derives the observation text for the new path
+ *      (unchanged transfers LWW-dedup to a single new-path row).
+ * Both run inside the same exclusive write as the transfer, so a failure
+ * rolls the whole rename back together.
+ *
  * @returns Number of DB write errors (always 0 — failures throw).
  */
 export async function applyRenames(base: WriteBaseContext, renameMap: Map<string, string>): Promise<number> {
@@ -97,9 +112,70 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 				db.codebaseFiles.transferFile(repo, oldPath, newPath);
 				db.codebaseSymbols.transferSymbolsFilePath(repo, oldPath, newPath);
 				db.codebaseReferences.transferReferencesFilePath(repo, oldPath, newPath);
+
+				// Purge the old-path queue job — the file record no longer
+				// exists under this entity id, so any pending job would re-run
+				// KG extraction against a stale precheck miss (TASK-340).
+				db.db
+					.prepare("DELETE FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+					.run(codebaseEntityId(repo, oldPath));
+
+				// Re-enqueue the renamed file under its NEW path from the
+				// transferred rows (symbols + caller edges), mirroring the
+				// writeParseBatch enqueue gate: only files with signal
+				// (symbols OR references) enqueue — zero-signal files would
+				// only ever no-op. Row types carry `null` where the insert
+				// types want `undefined`, so the transferred rows are
+				// normalized before the payload builder consumes them.
+				const symbols: CodebaseSymbolInsert[] = db.codebaseSymbols.getSymbolsByFile(repo, newPath).map((s) => ({
+					repo: s.repo,
+					file_path: s.file_path,
+					name: s.name,
+					kind: s.kind,
+					exported: s.exported,
+					default_export: s.default_export,
+					start_line: s.start_line ?? undefined,
+					start_col: s.start_col ?? undefined,
+					end_line: s.end_line ?? undefined,
+					end_col: s.end_col ?? undefined,
+					signature: s.signature,
+					doc_comment: s.doc_comment,
+					parent_symbol_id: s.parent_symbol_id
+				}));
+				const refs: CodebaseReferenceInsert[] = db.codebaseReferences.getReferencesByFile(repo, newPath).map((r) => ({
+					repo: r.repo,
+					symbol_name: r.symbol_name,
+					caller_file: r.caller_file,
+					caller_line: r.caller_line ?? undefined,
+					caller_name: r.caller_name,
+					kind: r.kind,
+					target_file: r.target_file,
+					target_symbol_id: r.target_symbol_id
+				}));
+				if (symbols.length > 0 || refs.length > 0) {
+					enqueueCodebaseSymbols(db, repo, newPath, symbols, refs);
+				}
 			}
 		});
 	}, "rename-transfer");
+
+	// KG cleanup for renamed codebase files (TASK-340): remove the OLD-path
+	// "codebase" observation text + orphan-sweep so the renamed file is never
+	// doubly observed under both paths (mirrors cleanStaleFiles's best-effort,
+	// repo-scoped contract). Best-effort — never throws.
+	if (renameMap.size > 0) {
+		const observationItems: { text: string; repo: string }[] = [];
+		for (const [, oldPath] of renameMap) {
+			observationItems.push({ text: observationText("codebase", oldPath), repo });
+		}
+		try {
+			db.knowledgeGraph.deleteObservationsAndOrphans(observationItems);
+		} catch (kgError) {
+			logger.warn("[KG-Rename] Failed to clean up KG observations for renamed codebase files", {
+				error: String(kgError)
+			});
+		}
+	}
 
 	return 0;
 }
@@ -107,6 +183,12 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 /**
  * Steps 2 + 3 — persist ONE parse batch: upsert file records and replace the
  * symbols of the re-parsed files (delete old, bulk insert new).
+ *
+ * Also the codebase → KG outbox funnel (TASK-293): one `codebase_symbol`
+ * queue job is enqueued per re-parsed file (symbols or references present),
+ * atomically with the symbol replace — BOTH `handleCodebaseIndexRepository`
+ * and `autoIndexIfStale` route here via `performIndexRepository` →
+ * `runParsePipeline`.
  *
  * Called once per parse batch so the repository never accumulates inserts for
  * the whole repo in memory.
@@ -207,6 +289,37 @@ export async function writeParseBatch(
 								);
 								refOffset += batchSize;
 							}
+
+							// 3c. Codebase → KG outbox (TASK-293): enqueue ONE
+							// embedding/KG job per re-parsed file (stable
+							// `<repo>::<file_path>` entity id) so the worker can
+							// KG-extract the "codebase" observation domain. Atomic
+							// with the symbol replace — a commit includes the queue
+							// rows, a rollback excludes them (no orphan jobs for
+							// files whose symbols were never persisted). Content-
+							// hash dedup makes unchanged re-parses no-ops; a changed
+							// file LWW-updates its single row. Only files that
+							// produced symbols or reference edges are enqueued
+							// (zero-signal files would only ever no-op).
+							const symbolsByFile = new Map<string, CodebaseSymbolInsert[]>();
+							for (const s of symbolInserts) {
+								const arr = symbolsByFile.get(s.file_path) ?? [];
+								arr.push(s);
+								symbolsByFile.set(s.file_path, arr);
+							}
+							const refsByFile = new Map<string, CodebaseReferenceInsert[]>();
+							for (const r of referenceInserts) {
+								const arr = refsByFile.get(r.caller_file) ?? [];
+								arr.push(r);
+								refsByFile.set(r.caller_file, arr);
+							}
+							for (const fp of reindexedPaths) {
+								const symbols = symbolsByFile.get(fp);
+								const refs = refsByFile.get(fp);
+								if ((symbols && symbols.length > 0) || (refs && refs.length > 0)) {
+									enqueueCodebaseSymbols(db, repo, fp, symbols ?? [], refs ?? []);
+								}
+							}
 						})
 						.immediate();
 				});
@@ -259,6 +372,13 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 						for (const fp of stalePaths) {
 							db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
 							db.codebaseReferences.deleteReferencesByFile(repo, fp);
+							// Purge pending codebase jobs for the deleted files so a
+							// stale job can never re-run KG extraction for a file
+							// that no longer exists (TASK-293 — mirrors the
+							// memory/task/standard delete-tool purge contract).
+							db.db
+								.prepare("DELETE FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+								.run(codebaseEntityId(repo, fp));
 							db.codebaseFiles.deleteFile(repo, fp);
 							cleanedCount++;
 							emitProgress(options, {
@@ -277,6 +397,24 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 		logger.error("[IndexingWriter] Stale cleanup failed", {
 			error: String(err)
 		});
+	}
+
+	// KG cleanup for stale codebase files (TASK-293): remove the file-scoped
+	// "codebase" observations + orphan-sweep, mirroring
+	// purgeEntityAndCleanup's best-effort, repo-scoped contract
+	// (deleteObservationsAndOrphans). Best-effort — never throws.
+	if (stalePaths.size > 0) {
+		const observationItems: { text: string; repo: string }[] = [];
+		for (const fp of stalePaths) {
+			observationItems.push({ text: observationText("codebase", fp), repo });
+		}
+		try {
+			db.knowledgeGraph.deleteObservationsAndOrphans(observationItems);
+		} catch (kgError) {
+			logger.warn("[KG-Cleanup] Failed to clean up KG entities for deleted codebase files", {
+				error: String(kgError)
+			});
+		}
 	}
 
 	return dbWriteErrors;
