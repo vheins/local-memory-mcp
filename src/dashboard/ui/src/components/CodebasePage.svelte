@@ -251,7 +251,18 @@
 						{/if}
 
 						{#if selectedSymbol}
-							<CodebaseSymbolDetail symbol={selectedSymbol} references={[]} loading={false} {repo} />
+							<CodebaseSymbolDetail
+								symbol={selectedSymbol}
+								references={[]}
+								loading={false}
+								{repo}
+								onSymbolSelect={handleSymbolSelect}
+								onOpenFile={(filePath) => {
+									selectedSymbol = null;
+									selectedFile = filePath;
+									void loadFileSymbols(filePath);
+								}}
+							/>
 						{:else if selectedFile}
 							<div class="muted-text" style="margin-bottom:12px;">
 								Selected file: <code>{selectedFile}</code>

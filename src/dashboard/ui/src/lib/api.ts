@@ -547,6 +547,49 @@ export interface TraceReference {
 	endLine: number;
 	endCol: number;
 	context: string;
+	/**
+	 * Edge kind — 'call' | 'instantiation' | 'import' | 'extends' | 'implements'
+	 * (table-backed references, v23 / TASK-299-301). Absent on legacy
+	 * in-memory references (doc_comment scan).
+	 */
+	kind?: string;
+	/** Enclosing function/method at the call / heritage site, when determinable. */
+	callerName?: string | null;
+	/** File path of the referenced symbol when resolvable (table-backed, v23). */
+	targetFile?: string | null;
+	/** codebase_symbols(id) of the referenced symbol when resolvable (table-backed, v23). */
+	targetSymbolId?: string | null;
+}
+
+/**
+ * Raw `codebase_symbols` row as served by the codebase API (snake_case —
+ * mirrors src/mcp/types/codebase-symbol.ts CodebaseSymbol). TRACE surfaces
+ * these verbatim for `children`.
+ */
+export interface CodebaseSymbolRow {
+	id: string;
+	repo: string;
+	file_path: string;
+	name: string;
+	kind: string;
+	exported: boolean;
+	default_export: boolean;
+	start_line: number | null;
+	start_col: number | null;
+	end_line: number | null;
+	end_col: number | null;
+	signature: string | null;
+	doc_comment: string | null;
+	parent_symbol_id: string | null;
+}
+
+/** Enclosing container of a traced symbol, resolved from parent_symbol_id (TASK-300). */
+export interface TraceParent {
+	id: string;
+	name: string;
+	kind: string;
+	filePath: string;
+	line: number | null;
 }
 
 export interface TraceResult {
@@ -563,4 +606,21 @@ export interface TraceResult {
 		exported: boolean;
 		defaultExport: boolean;
 	};
+	/** Enclosing container (e.g. class → method). Null for top-level symbols or when absent. */
+	parent?: TraceParent | null;
+	/** Direct children (e.g. a class's methods/properties), ordered by start line (TASK-300). */
+	children?: CodebaseSymbolRow[];
+	/** Candidates when the trace was ambiguous (camelCase projection — aligned
+	 *  with codebase.read.ts TRACE structuredContent: name/kind/file/line/
+	 *  exported, NOT raw rows). */
+	disambiguation?: TraceDisambiguationCandidate[];
+}
+
+/** A disambiguation candidate for an ambiguous TRACE, as served by the API. */
+export interface TraceDisambiguationCandidate {
+	name: string;
+	kind: string;
+	file: string;
+	line: number | null;
+	exported: boolean;
 }
