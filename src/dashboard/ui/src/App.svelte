@@ -25,6 +25,7 @@
 	import StandardsPanel from "./components/StandardsPanel.svelte";
 	import CodebasePage from "./components/CodebasePage.svelte";
 	import HandoffsPanel from "./components/HandoffsPanel.svelte";
+	import QueuePage from "./components/QueuePage.svelte";
 	import KGGraph from "./components/KGGraph.svelte";
 	import AgentArena from "./components/AgentArena.svelte";
 	import GlobalCommandCenter from "./components/GlobalCommandCenter.svelte";
@@ -185,6 +186,17 @@
 						</button>
 						<button
 							class="tab-btn"
+							class:active={$activeTab === "queue"}
+							on:click={() => app.onTabChange("queue")}
+							id="tab-queue"
+							role="tab"
+							aria-selected={$activeTab === "queue"}
+						>
+							<Icon name="list" size={14} strokeWidth={1.75} />
+							<span>Queue</span>
+						</button>
+						<button
+							class="tab-btn"
 							class:active={$activeTab === "knowledge-graph"}
 							on:click={() => app.onTabChange("knowledge-graph")}
 							id="tab-knowledge-graph"
@@ -329,6 +341,11 @@
 				<!-- ════ HANDOFFS TAB ════ -->
 				{#if $activeTab === "handoffs"}
 					<HandoffsPanel repo={$currentRepo || ""} />
+				{/if}
+
+				<!-- ════ QUEUE TAB ════ -->
+				{#if $activeTab === "queue"}
+					<QueuePage repo={$currentRepo || ""} />
 				{/if}
 
 				<!-- ════ KNOWLEDGE GRAPH TAB ════ -->

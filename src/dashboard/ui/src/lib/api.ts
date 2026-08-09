@@ -69,6 +69,7 @@ function deserialize(body: JsonApiBody | unknown): unknown {
 		if (firstType === "recent-action") return { ...result, actions: items };
 		if (firstType === "memory") return { ...result, memories: items };
 		if (firstType === "task") return { ...result, tasks: items };
+		if (firstType === "queue-job") return { ...result, jobs: items };
 
 		const rootKey = firstType ? `${firstType}s` : "data";
 		result[rootKey] = items;
@@ -101,6 +102,43 @@ export interface CodeSymbol {
 	signature?: string;
 	filePath?: string;
 	line?: number;
+}
+
+/**
+ * Innermost symbol whose [start_line, end_line] span encloses a code match
+ * (TASK-316 CODE mode enrichment).
+ */
+export interface EnclosingSymbol {
+	name: string;
+	kind: string;
+	startLine: number;
+	endLine: number;
+}
+
+/** A single content grep hit as served by GET /api/codebase/code-search. */
+export interface CodeSearchMatch {
+	filePath: string;
+	language: string | null;
+	line: number;
+	snippet: string;
+	matchIndex: number;
+	enclosingSymbol: EnclosingSymbol | null;
+}
+
+/** CODE mode response shape (mirrors handleCodeSearchMode structuredContent). */
+export interface CodeSearchResult {
+	mode: "code";
+	content: string;
+	regex: boolean;
+	language: string | null;
+	matches: CodeSearchMatch[];
+	total: number;
+	hasMore: boolean;
+	filesScanned: number;
+	fileCount: number;
+	indexedFiles: number;
+	offset: number;
+	limit: number;
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
@@ -457,6 +495,23 @@ export const api = {
 		return apiFetch<{ results: CodeSymbol[] }>(`/api/codebase/search?${q}`);
 	},
 
+	// GET /api/codebase/code-search — CODE mode content grep (TASK-317).
+	// `content` mirrors the tool's CODE discriminator param (presence ⇒ CODE
+	// mode); `query` would route to SEARCH instead, so it is intentionally
+	// NOT used here.
+	codebaseCodeSearch: (
+		repo: string,
+		content: string,
+		opts?: { regex?: boolean; language?: string; limit?: number; offset?: number }
+	) => {
+		const q = new URLSearchParams({ repo, content });
+		if (opts?.regex) q.set("regex", "true");
+		if (opts?.language) q.set("language", opts.language);
+		if (opts?.limit != null) q.set("limit", String(opts.limit));
+		if (opts?.offset != null) q.set("offset", String(opts.offset));
+		return apiFetch<CodeSearchResult>(`/api/codebase/code-search?${q}`);
+	},
+
 	// ─── Codebase Index Status ──────────────────────────────────────────────────
 
 	codebaseIndexStatus: async (repo: string) => {
@@ -521,10 +576,93 @@ export const api = {
 		return apiFetch<{ file: Record<string, unknown>; symbols: CodeSymbol[]; total: number }>(
 			`/api/codebase/symbols?${q}`
 		).then((res) => res.symbols ?? []);
+	},
+
+	// ─── Queue Admin ──────────────────────────────────────────────────────────
+	// TASK-297 failed-job admin view. `status` values on the wire are the
+	// LITERAL QueueJobStatus enum names (pending|claimed|done|poison) — the UI
+	// layer translates `poison` to a "Failed" label, the enum is never renamed.
+	// `?repo=` scope mirrors the other dashboard controllers (KG/Codebase/
+	// System): present → restricted to that entity_repo; absent → global view.
+
+	queueStatus: () => apiFetch<QueueStatus>("/api/queue/status"),
+
+	queueJobs: (params: { repo: string; status?: string; page?: number; pageSize?: number }) => {
+		const q = new URLSearchParams({ repo: params.repo });
+		if (params.status) q.set("status", params.status);
+		if (params.page) q.set("page", String(params.page));
+		if (params.pageSize) q.set("pageSize", String(params.pageSize));
+		return apiFetch<{ jobs: QueueJob[]; pagination: Pagination }>(`/api/queue/jobs?${q}`);
+	},
+
+	queueRetryJob: (id: string, repo?: string) => {
+		const q = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+		return apiFetch<QueueJob>(`/api/queue/jobs/${encodeURIComponent(id)}/retry${q}`, { method: "POST" });
+	},
+
+	queueClearJob: (id: string, repo?: string) => {
+		const q = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+		return apiFetch<{ id: string; message: string }>(`/api/queue/jobs/${encodeURIComponent(id)}/clear${q}`, {
+			method: "POST"
+		});
+	},
+
+	queueRetryAll: (repo?: string) => {
+		const q = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+		return apiFetch<{ id: string; retried: number }>(`/api/queue/retry-all${q}`, { method: "POST" });
 	}
 };
 
 // ─── Codebase Index Types ──────────────────────────────────────────────────────
+
+/**
+ * A queue job as served by GET /api/queue/jobs (TASK-296/297).
+ * `status` is the LITERAL `QueueJobStatus` enum value (`pending|claimed|done|
+ * poison`) — the UI renders `poison` as "Failed", the enum is never renamed.
+ */
+export interface QueueJob {
+	id: string;
+	entity_kind: string;
+	entity_id: string;
+	entity_repo: string;
+	status: "pending" | "claimed" | "done" | "poison";
+	attempts: number;
+	max_attempts: number;
+	enqueued_at: string;
+	processed_at: string;
+	last_error: string | null;
+}
+
+/**
+ * Worker + queue observability snapshot from GET /api/queue/status
+ * (`embeddingWorker.getStats()`). `poison` rows are the failed-job count the
+ * admin view surfaces as "Failed".
+ */
+export interface QueueStatus {
+	pending: number;
+	claimed: number;
+	done: number;
+	poison: number;
+	total: number;
+	processed: number;
+	failed: number;
+	poisoned: number;
+	lastBatchSize: number;
+	lastRunAt: string | null;
+	running: boolean;
+	started: boolean;
+	modelReady: boolean;
+	pollIntervalMs: number;
+	batchSize: number;
+	leaseMs: number;
+	embedLatency: {
+		count: number;
+		avgMs: number;
+		p50Ms: number;
+		p95Ms: number;
+		maxMs: number;
+	};
+}
 
 export interface CodebaseIndexStatus {
 	indexed: boolean;
