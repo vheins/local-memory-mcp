@@ -3,16 +3,18 @@ import { CodebaseReference, CodebaseReferenceInsert, CodebaseReferenceRow } from
 import { randomUUID } from "crypto";
 
 /**
- * CodebaseReferenceEntity — persistence for call-site edge rows
- * (migration v21, issue #64 / TASK-236).
+ * CodebaseReferenceEntity — persistence for reference edge rows
+ * (migration v21 call-site edges, issue #64 / TASK-236; migrated to generalized
+ * edge table with target_file/target_symbol_id in v23, TASK-299).
  *
  * Mirrors the CodebaseSymbolEntity persistence pattern: bulk upsert (insert →
  * replace-by-file is the caller's job), delete-by-file (the indexing writer
  * deletes a re-parsed file's refs then bulk-inserts the fresh set inside the
  * same batch transaction), and read-by-symbol for traceSymbol.
  *
- * The table is keyed by `caller_file` (the file HOLDING the call site), not
- * `file_path`, so all delete/transfer helpers operate on `caller_file`.
+ * The table is keyed by `caller_file` (the file HOLDING the call / heritage
+ * site), not `file_path`, so all delete/transfer helpers operate on
+ * `caller_file`.
  */
 export class CodebaseReferenceEntity extends BaseEntity {
 	bulkUpsertReferences(repo: string, refs: CodebaseReferenceInsert[]): number {
@@ -20,8 +22,9 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			const now = new Date().toISOString();
 			const stmt = this.db.prepare(`
 				INSERT INTO codebase_references (
-					id, repo, symbol_name, caller_file, caller_line, caller_name, kind, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+					id, repo, symbol_name, caller_file, caller_line, caller_name, kind,
+					target_file, target_symbol_id, created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`);
 
 			let count = 0;
@@ -34,6 +37,8 @@ export class CodebaseReferenceEntity extends BaseEntity {
 					r.caller_line ?? null,
 					r.caller_name ?? null,
 					r.kind,
+					r.target_file ?? null,
+					r.target_symbol_id ?? null,
 					now
 				);
 				count++;
@@ -85,6 +90,8 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			caller_line: row.caller_line,
 			caller_name: row.caller_name,
 			kind: row.kind,
+			target_file: row.target_file,
+			target_symbol_id: row.target_symbol_id,
 			created_at: row.created_at
 		};
 	}

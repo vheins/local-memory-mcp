@@ -7,10 +7,11 @@ import { MigrationManager, SCHEMA_VERSION } from "../storage/migrations";
 
 /**
  * Regression net for migration v21 "codebase-references" (GitHub #64 /
- * TASK-236).
+ * TASK-236), extended by v23 "codebase-references-edge-targets" (TASK-299).
  *
  * v21 adds the denormalized codebase_references call-site table plus two
- * indexes (repo, symbol_name) and (repo, caller_file). These tests pin the
+ * indexes (repo, symbol_name) and (repo, caller_file); v23 adds the
+ * edge-target columns (target_file, target_symbol_id). These tests pin the
  * applied-DB contracts: a fresh migrate lands on the latest SCHEMA_VERSION
  * with the table + indexes present, and re-applying v21 (idempotent retry,
  * simulating a crash mid-migration) is a no-op that does not throw.
@@ -31,7 +32,8 @@ describe("migration v21 codebase references", () => {
 		expect(applied.at(-1)?.version).toBe(SCHEMA_VERSION);
 		expect(applied.map((r) => r.version)).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1));
 
-		// Table exists with the required columns.
+		// Table exists with the required columns: the v21 set plus the v23
+		// edge-target columns (target_file, target_symbol_id).
 		const cols = db.prepare("PRAGMA table_info(codebase_references)").all() as { name: string; type: string }[];
 		const colNames = cols.map((c) => c.name).sort();
 		expect(colNames).toEqual([
@@ -42,7 +44,9 @@ describe("migration v21 codebase references", () => {
 			"id",
 			"kind",
 			"repo",
-			"symbol_name"
+			"symbol_name",
+			"target_file",
+			"target_symbol_id"
 		]);
 
 		// Both indexes exist.

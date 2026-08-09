@@ -113,7 +113,8 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 
 	function tryTrace(traceName: string): McpResponse | null {
 		try {
-			// Table-backed call sites for the exact symbol (TASK-236 / #64). TRACE
+			// Table-backed reference edges for the exact symbol (TASK-236 / #64;
+			// Phase 1.1 heritage kinds + target fields v23 / TASK-299). TRACE
 			// mode requires a concrete repo, so this is always scoped. Reflected
 			// into TraceReference for the trace result; the service merges them
 			// with the in-memory doc_comment scan and dedupes by call-site line.
@@ -127,7 +128,9 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 							endCol: 0,
 							context: `${r.kind} ${r.symbol_name}${r.caller_name ? ` (in ${r.caller_name})` : ""}`,
 							kind: r.kind,
-							callerName: r.caller_name
+							callerName: r.caller_name,
+							targetFile: r.target_file,
+							targetSymbolId: r.target_symbol_id
 						}))
 					: [];
 

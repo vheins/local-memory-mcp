@@ -1,28 +1,42 @@
 /**
- * codebase_references — denormalized call-site edge rows.
+ * codebase_references — denormalized edge rows (Phase 1.1, migration v23).
  *
- * One row = one call / instantiation / import site emitted by a language
- * visitor during parsing. `symbol_name` is the name of the referenced symbol
- * (the called identifier / constructed class / imported binding); the row
- * lives in the CALLER's file (`caller_file`, `caller_line`, `caller_name`).
- * `kind` is a coarse taxonomy: 'call' | 'instantiation' | 'import'.
+ * One row = one call / instantiation / import / heritage site emitted by a
+ * language visitor during parsing. Two edge families share the table:
+ *
+ *   1. Call-site edges (v21): `symbol_name` is the referenced symbol (called
+ *      identifier / constructed class / imported binding); the row lives in
+ *      the CALLER's file (`caller_file`, `caller_line`, `caller_name`).
+ *   2. Heritage edges (Wave 1, kinds 'extends' | 'implements'): `symbol_name`
+ *      is the referenced base class / implemented interface; `caller_file`
+ *      is the file declaring the derived type and `caller_line` the class
+ *      declaration line.
+ *
+ * `target_file` / `target_symbol_id` (added v23) locate the referenced symbol
+ * when resolvable at parse time (name-based resolution per ADR-002 — no LSP);
+ * both are null for unresolved names. `kind` is the single enum-driven
+ * taxonomy: 'call' | 'instantiation' | 'import' | 'extends' | 'implements'.
  */
-export type CodebaseReferenceKind = "call" | "instantiation" | "import";
+export type CodebaseReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements";
 
 export interface CodebaseReference {
 	/** UUID. */
 	id: string;
 	repo: string;
-	/** The referenced (called / instantiated / imported) symbol name. */
+	/** The referenced (called / instantiated / imported / extended) symbol name. */
 	symbol_name: string;
-	/** File containing the call site. */
+	/** File containing the call / heritage site. */
 	caller_file: string;
-	/** 1-based start line of the call site. */
+	/** 1-based start line of the call / heritage site. */
 	caller_line: number | null;
 	/** Enclosing function/method name, when determinable. */
 	caller_name: string | null;
-	/** 'call' | 'instantiation' | 'import'. */
+	/** 'call' | 'instantiation' | 'import' | 'extends' | 'implements'. */
 	kind: string;
+	/** File path of the referenced symbol, when resolvable at parse time (else null). */
+	target_file: string | null;
+	/** codebase_symbols(id) of the referenced symbol, when resolvable (else null). */
+	target_symbol_id: string | null;
 	created_at: string;
 }
 
@@ -34,6 +48,8 @@ export interface CodebaseReferenceRow {
 	caller_line: number | null;
 	caller_name: string | null;
 	kind: string;
+	target_file: string | null;
+	target_symbol_id: string | null;
 	created_at: string;
 }
 
@@ -44,4 +60,8 @@ export interface CodebaseReferenceInsert {
 	caller_line?: number;
 	caller_name?: string | null;
 	kind: CodebaseReferenceKind | string;
+	/** File path of the referenced symbol when resolvable at parse time. */
+	target_file?: string | null;
+	/** codebase_symbols(id) of the referenced symbol when resolvable. */
+	target_symbol_id?: string | null;
 }

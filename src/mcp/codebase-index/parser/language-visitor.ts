@@ -7,27 +7,38 @@
 
 import type { Tree } from "web-tree-sitter";
 
-/** Coarse taxonomy of a call-site reference. */
-export type ReferenceKind = "call" | "instantiation" | "import";
+/** Coarse taxonomy of a reference edge (call-site or heritage). */
+export type ReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements";
 
 /**
- * A single call / instantiation / import site emitted by a language visitor.
+ * A single reference edge emitted by a language visitor — two families:
  *
- * `symbolName` is the referenced symbol (the called identifier, constructed
- * class, or imported binding); `callerLine` is the 1-based start line of the
- * call site; `callerName` is the enclosing function/method name when
- * determinable (else null). The parser pool fills `callerFile` from the file
- * being parsed (visitors emit references without it).
+ *   1. Call-site edges (existing): `symbolName` is the referenced symbol (the
+ *      called identifier, constructed class, or imported binding); `callerLine`
+ *      is the 1-based start line of the call site; `callerName` is the
+ *      enclosing function/method name when determinable (else null).
+ *   2. Heritage edges (Wave 1, kinds 'extends' | 'implements'): `symbolName`
+ *      is the referenced base class / implemented interface; `callerLine` is
+ *      the derived type's declaration line; `callerName` is null.
+ *
+ * The parser pool fills `callerFile` from the file being parsed (visitors emit
+ * references without it). `targetFile` / `targetSymbolId` locate the referenced
+ * symbol when resolvable at parse time (name-based resolution per ADR-002 — no
+ * LSP); both default to null for unresolved names.
  */
 export interface ParsedReference {
 	symbolName: string;
-	/** File containing the call site — filled by the parser pool. */
+	/** File containing the call / heritage site — filled by the parser pool. */
 	callerFile: string;
-	/** Call-site line, 1-based. */
+	/** Call-site / heritage-site line, 1-based. */
 	callerLine: number;
 	/** Enclosing function/method name, when determinable. */
 	callerName: string | null;
 	kind: ReferenceKind;
+	/** File path of the referenced symbol when resolvable at parse time. */
+	targetFile?: string | null;
+	/** codebase_symbols(id) of the referenced symbol when resolvable. */
+	targetSymbolId?: string | null;
 }
 
 /** Classification of a parsed symbol. */
@@ -93,13 +104,17 @@ export interface LanguageVisitor {
 	extractSymbols(tree: Tree | null, sourceCode: string): ParsedSymbol[];
 
 	/**
-	 * OPTIONAL — emit call-site references for the parsed tree.
+	 * OPTIONAL — emit reference edges (call-site + heritage) for the parsed tree.
 	 *
 	 * Additive passthrough added in TASK-236 (#64) so language visitors can
 	 * index calls/instantiations/imports WITHOUT breaking existing visitors
-	 * that only implement `extractSymbols`. Implementers return references
-	 * without `callerFile` (the pool fills it); absent references resolve to
-	 * `[]`. Only TS and PHP visitors implement it today.
+	 * that only implement `extractSymbols`. Phase 1.1 (TASK-299) generalized
+	 * the contract to BOTH edge families: call/instantiation/import (existing)
+	 * plus heritage edges 'extends' | 'implements', with optional
+	 * targetFile/targetSymbolId for resolvable targets. Implementers return
+	 * references without `callerFile` (the pool fills it); absent references
+	 * resolve to `[]`. Only TS and PHP visitors implement it today — other
+	 * languages continue returning `[]` until their Wave 1 tasks land.
 	 */
 	extractReferences?(tree: Tree | null, sourceCode: string): ParsedReference[];
 }

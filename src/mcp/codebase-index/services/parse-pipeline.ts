@@ -333,8 +333,11 @@ export async function runParsePipeline(
 					totalSymbols++;
 				}
 
-				// Call-site references (TASK-236 / issue #64). caller_file is the
-				// parsed file; the caller line/name/kind come from the visitor.
+				// Reference edges (TASK-236 / issue #64 + Phase 1.1 / TASK-299).
+				// caller_file is the parsed file; the caller line/name/kind come
+				// from the visitor. target_file/target_symbol_id (v23) locate the
+				// referenced symbol when the visitor could resolve it at parse
+				// time (name-based resolution per ADR-002 — else null).
 				for (const ref of parseResult.references ?? []) {
 					referenceInserts.push({
 						repo,
@@ -342,7 +345,9 @@ export async function runParsePipeline(
 						caller_file: ref.callerFile || plan.filePath,
 						caller_line: ref.callerLine,
 						caller_name: ref.callerName,
-						kind: ref.kind
+						kind: ref.kind,
+						target_file: ref.targetFile ?? null,
+						target_symbol_id: ref.targetSymbolId ?? null
 					});
 				}
 

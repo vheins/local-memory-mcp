@@ -34,10 +34,18 @@ export interface TraceReference {
 	endLine: number;
 	endCol: number;
 	context: string;
-	/** 'call' | 'instantiation' | 'import' — present for table-backed references (TASK-236). */
+	/**
+	 * 'call' | 'instantiation' | 'import' | 'extends' | 'implements' — present
+	 * for table-backed references (TASK-236 / #64; heritage kinds added by
+	 * Phase 1.1 / TASK-299).
+	 */
 	kind?: string;
-	/** Enclosing function/method at the call site, when determinable. */
+	/** Enclosing function/method at the call / heritage site, when determinable. */
 	callerName?: string | null;
+	/** File path of the referenced symbol when resolvable (table-backed, v23). */
+	targetFile?: string | null;
+	/** codebase_symbols(id) of the referenced symbol when resolvable (table-backed, v23). */
+	targetSymbolId?: string | null;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────

@@ -54,6 +54,70 @@ describe("CodebaseReference Entity", () => {
 		expect(entity.getReferencesBySymbol("nope-repo", "connect")).toEqual([]);
 	});
 
+	it("bulkUpsertReferences round-trips v23 edge-target fields (target_file / target_symbol_id)", () => {
+		// Heritage + cross-file import edges (Phase 1.1 / TASK-299): the new
+		// target columns are written and read back for every reader.
+		const count = entity.bulkUpsertReferences("test-repo", [
+			{
+				repo: "test-repo",
+				symbol_name: "Base",
+				caller_file: "src/derived.ts",
+				caller_line: 1,
+				caller_name: null,
+				kind: "extends",
+				target_file: "src/base.ts",
+				target_symbol_id: "sym-base-1"
+			},
+			{
+				repo: "test-repo",
+				symbol_name: "Serializable",
+				caller_file: "src/derived.ts",
+				caller_line: 1,
+				caller_name: null,
+				kind: "implements",
+				target_file: null,
+				target_symbol_id: null
+			},
+			// Legacy v21-style insert (no target fields) → NULL, not undefined.
+			{
+				repo: "test-repo",
+				symbol_name: "connect",
+				caller_file: "src/a.ts",
+				caller_line: 12,
+				caller_name: "init",
+				kind: "call"
+			}
+		]);
+		expect(count).toBe(3);
+
+		// getReferencesBySymbol returns the new kinds + targets typed.
+		const extendsRefs = entity.getReferencesBySymbol("test-repo", "Base");
+		expect(extendsRefs.length).toBe(1);
+		expect(extendsRefs[0].kind).toBe("extends");
+		expect(extendsRefs[0].target_file).toBe("src/base.ts");
+		expect(extendsRefs[0].target_symbol_id).toBe("sym-base-1");
+		expect(extendsRefs[0].caller_name).toBeNull();
+
+		// Explicit NULL targets round-trip as null.
+		const implementsRefs = entity.getReferencesBySymbol("test-repo", "Serializable");
+		expect(implementsRefs.length).toBe(1);
+		expect(implementsRefs[0].kind).toBe("implements");
+		expect(implementsRefs[0].target_file).toBeNull();
+		expect(implementsRefs[0].target_symbol_id).toBeNull();
+
+		// Legacy insert → NULL targets (not undefined) — typed round-trip holds.
+		const callRefs = entity.getReferencesBySymbol("test-repo", "connect");
+		expect(callRefs.length).toBe(1);
+		expect(callRefs[0].kind).toBe("call");
+		expect(callRefs[0].target_file).toBeNull();
+		expect(callRefs[0].target_symbol_id).toBeNull();
+
+		// getReferencesByFile also returns the new fields (SELECT * path).
+		const fileRefs = entity.getReferencesByFile("test-repo", "src/derived.ts");
+		expect(fileRefs.length).toBe(2);
+		expect(fileRefs[0].target_symbol_id).toBe("sym-base-1");
+	});
+
 	it("deleteReferencesByFile removes only that caller file's refs", () => {
 		entity.bulkUpsertReferences("test-repo", [
 			{ repo: "test-repo", symbol_name: "fx", caller_file: "src/remove.ts", caller_line: 1, kind: "call" },
