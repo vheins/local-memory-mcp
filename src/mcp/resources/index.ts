@@ -4,6 +4,7 @@ import { logger } from "../utils/logger";
 import { rankCompletionValues } from "../utils/completion";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
 import { parseRepoInput } from "../utils/normalize";
+import { readCodebaseResource, CODEBASE_RESOURCE_TEMPLATES, CODEBASE_TEMPLATE_URIS } from "./codebase";
 import type { MemoryEntry, Task, MemoryType } from "../types";
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -120,7 +121,11 @@ export function listResourceTemplates(params?: { cursor?: string; limit?: number
 			description: "Full details of an audit log entry",
 			mimeType: "application/json",
 			annotations: { audience: ["assistant"], priority: 0.55 }
-		}
+		},
+		// ── Codebase index (RS-1/TASK-323) ───────────────────────────────────
+		// Each entry mirrors the SDK registration in sdk-index.ts (single-param
+		// siblings + multi-segment `{+file_path}`); metadata in codebase.ts.
+		...CODEBASE_RESOURCE_TEMPLATES
 	];
 
 	return paginateEntries("resourceTemplates", templates, params);
@@ -146,6 +151,16 @@ export function completeResourceArgument(
 		resourceUri === "repository://{name}/actions"
 	) {
 		if (argumentName === "name") {
+			return rankCompletionValues(dataSources.repos, argumentValue);
+		}
+	}
+
+	// Repo autocomplete for all codebase://{repo}/... templates (RS-1/TASK-323).
+	// Match set accepts BOTH the listing form and the SDK registration form for
+	// every template (incl. single-param siblings and `{+file_path}`) so
+	// production completion/complete never throws -32602 for a listed template.
+	if (CODEBASE_TEMPLATE_URIS.includes(resourceUri)) {
+		if (argumentName === "repo") {
 			return rankCompletionValues(dataSources.repos, argumentValue);
 		}
 	}
@@ -377,6 +392,14 @@ export function readResource(uri: string, db: SQLiteStore, session?: SessionCont
 				]
 			};
 		}
+	}
+
+	// 5e. Codebase resources: codebase://{repo}/... (RS-1/TASK-323).
+	// Dispatches to the shared codebase resource reader (symbols list /
+	// symbol detail / file landmark). RecoverableError when the repo is not
+	// indexed; -32002 for unknown URIs / missing symbols / unindexed files.
+	if (uri.startsWith("codebase://")) {
+		return readCodebaseResource(uri, db);
 	}
 
 	// 6. Action Detail: action://{id}  (integer ID from audit log)

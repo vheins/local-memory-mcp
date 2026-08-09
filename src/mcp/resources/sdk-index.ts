@@ -30,6 +30,11 @@ import { readResource } from "./index";
  *   - repository://{name}/summary
  *   - repository://{name}/actions{?limit,offset}
  *   - action://{id}
+ *   - codebase://{repo}/symbols  (RS-1/TASK-323)
+ *   - codebase://{repo}/symbols{?search,kind,limit}
+ *   - codebase://{repo}/symbols{?search} / {?kind} / {?limit} / {?offset}
+ *   - codebase://{repo}/symbols/{name}
+ *   - codebase://{repo}/files/{+file_path}
  */
 export function registerAllResources(
 	server: McpServer,
@@ -165,6 +170,115 @@ export function registerAllResources(
 		{
 			title: "Action Detail",
 			description: "Full details of an audit log entry",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	// ── Template: Codebase Symbols (list, no query) ────────────────────
+	// RS-1/TASK-323 — serves reads WITHOUT query params. This SDK's
+	// UriTemplate requires ALL listed `{?...}` params to dispatch, so the
+	// plain and full-query forms are registered as separate templates.
+
+	server.registerResource(
+		"codebase-symbols",
+		new ResourceTemplate("codebase://{repo}/symbols", { list: undefined }),
+		{
+			title: "Codebase Symbols",
+			description: "Indexed symbol records for a repo",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	// ── Template: Codebase Symbols (filtered, full query) ──────────────
+
+	server.registerResource(
+		"codebase-symbols-filtered",
+		new ResourceTemplate("codebase://{repo}/symbols{?search,kind,limit}", { list: undefined }),
+		{
+			title: "Filtered Codebase Symbols",
+			description: "Search and filter indexed symbols by keyword or kind",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	// ── Template: Codebase Symbols (single-param siblings) ───────────────
+	// The `{?...}` operator above matches ALL listed params or none (anchored
+	// ^...$ with `([^&]+)`), so a URI with a SUBSET of params (e.g. ?limit=2),
+	// and the pagination params offset/limit, match NO template and fail with
+	// transport ResourceNotFound. Each param an agent may use alone gets its
+	// own template so partial-query reads reach the dispatcher.
+
+	server.registerResource(
+		"codebase-symbols-search",
+		new ResourceTemplate("codebase://{repo}/symbols{?search}", { list: undefined }),
+		{
+			title: "Codebase Symbols by Search",
+			description: "Search indexed symbols by keyword",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"codebase-symbols-kind",
+		new ResourceTemplate("codebase://{repo}/symbols{?kind}", { list: undefined }),
+		{
+			title: "Codebase Symbols by Kind",
+			description: "Filter indexed symbols by kind",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"codebase-symbols-limit",
+		new ResourceTemplate("codebase://{repo}/symbols{?limit}", { list: undefined }),
+		{
+			title: "Codebase Symbols with Page Size",
+			description: "Page the symbol list with an explicit page size",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"codebase-symbols-offset",
+		new ResourceTemplate("codebase://{repo}/symbols{?offset}", { list: undefined }),
+		{
+			title: "Codebase Symbols with Pagination Offset",
+			description: "Page the symbol list by offset (follow hasMore pagination)",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	// ── Template: Codebase Symbol Detail (trace) ───────────────────────
+
+	server.registerResource(
+		"codebase-symbol",
+		new ResourceTemplate("codebase://{repo}/symbols/{name}", { list: undefined }),
+		{
+			title: "Codebase Symbol Detail",
+			description: "Trace payload for one symbol (definition, references, hierarchy)",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	// ── Template: Codebase File (landmark) ─────────────────────────────
+	// `{+file_path}` (reserved expansion) is the ONLY form in this SDK's
+	// UriTemplate that matches multi-segment paths — verified empirically:
+	// `{file_path}` / `{file_path*}` capture a single path segment only.
+
+	server.registerResource(
+		"codebase-file",
+		new ResourceTemplate("codebase://{repo}/files/{+file_path}", { list: undefined }),
+		{
+			title: "Codebase File",
+			description: "Indexed file landmark (meta + symbol list, no content)",
 			mimeType: "application/json"
 		},
 		(uri) => read(uri)
