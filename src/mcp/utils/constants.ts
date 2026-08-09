@@ -176,6 +176,34 @@ export const EMBEDDING_QUEUE_POISON_TTL_MS = 7 * TTL_MS_PER_DAY;
 // Frequency of the purge sweep.
 export const EMBEDDING_QUEUE_PURGE_INTERVAL_MS = 15 * 60 * 1000;
 
+// ── Codebase file watcher (TASK-322 / US-08) ─────────────────────────────
+// Polling sweep over autoIndexIfStale — deliberately NO fs.watch/chokidar
+// (zero usage in src today; polling avoids per-process watcher lifecycle,
+// cross-platform leaks, and double-index races). Hosted by the MCP server
+// process ONLY (dashboard excluded — avoids cross-process double index).
+// Sweep cadence: how often the watcher checks registered repos. Every tick
+// costs one cheap MAX(last_indexed_at) query (never-indexed guard) + math per
+// repo; the TTL below gates whether a full (incremental) index run is
+// triggered.
+export const FILE_WATCH_INTERVAL_MS = envInt("FILE_WATCH_INTERVAL_MS", 30_000);
+// Floor for the sweep cadence: a zero/misconfigured interval would create a
+// busy loop (review NIT, TASK-354). Applied in the FileWatcher constructor to
+// both env- and option-provided intervals, so it is not itself env-tunable.
+export const FILE_WATCH_INTERVAL_MIN_MS = 1_000;
+// Per-repo re-entry cap (debounce): minimum period between trigger dispatches
+// for the same repo — detection latency is ≤ this TTL (tunable). Deliberately
+// > FILE_WATCH_INTERVAL_MS (default 5 min vs 30 s) so the cap meaningfully
+// throttles. Keyed on the watcher's IN-MEMORY lastTriggeredAt, NOT DB
+// last_indexed_at: a zero-parse run (untouched repo — the incremental planner
+// marks every file "skip") never advances last_indexed_at, so a DB-keyed cap
+// would re-trigger a full discovery walk every tick forever (TASK-354).
+// Passed through to autoIndexIfStale as options.ttlMs so its internal
+// DB-freshness check — the correctness backstop — agrees with the sweep's
+// (deliberately SHORT vs the 24h CODEBASE_AUTO_INDEX_TTL default). Gate flag
+// ENABLE_FILE_WATCHER (default enabled; "false" disables) lives in
+// file-watcher.ts, mirroring the CODEBASE_AUTO_INDEX convention.
+export const FILE_WATCH_TTL_MS = envInt("FILE_WATCH_TTL_MS", 300_000);
+
 // ── KG graph (dashboard) ─────────────────────────────────────────────────
 // Server-side edge cap for the KG graph endpoints (TASK-068 S2 / TASK-070):
 // listGraphEdges returns the top-N highest-value edges (ranked by endpoint

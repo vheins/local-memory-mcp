@@ -14,6 +14,7 @@ import { runStartupMaintenance } from "./services/maintenance-job";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
 import { TreeSitterParserPool } from "./codebase-index/parser/parser-pool";
+import { FileWatcher, registerRepo } from "./codebase-index/services/file-watcher";
 import fs from "fs";
 import path from "path";
 
@@ -105,6 +106,23 @@ const vectors = new RealVectorStore(db);
 const embeddingWorker = new EmbeddingWorker(db, vectors);
 embeddingWorker.start();
 
+// Parser pool for codebase indexing — shared by the startup auto-index and
+// the polling file watcher (TASK-322 / US-08). Lazy-initialized on first
+// parse (TreeSitterParserPool.parseFile auto-initializes), so no eager WASM
+// load here. NOTE: tools/codebase-index.ts keeps its own lazy singleton pool
+// (used by MCP tool + dashboard index calls); two pools coexist bounded by
+// the per-language WASM cache.
+const parserPool = new TreeSitterParserPool();
+
+// Polling file watcher (TASK-322 / US-08): sweeps registered repos over
+// autoIndexIfStale with a short TTL — no fs.watch. Hosted ONLY by this MCP
+// server process (the dashboard runs its own index path in a separate
+// process; hosting the loop there too would double-index). Gated by
+// ENABLE_FILE_WATCHER (default enabled). The startup auto-index block below
+// registers the CWD repo so the watcher keeps it fresh.
+const fileWatcher = new FileWatcher(db, parserPool);
+fileWatcher.start();
+
 // Register file log sink (same dir as DB, retain last 5 files)
 addLogSink(createFileSink(path.dirname(db.getDbPath())));
 logger.info("[Server] startup", { pid: process.pid, version: CAPABILITIES.serverInfo.version, db: db.getDbPath() });
@@ -134,14 +152,17 @@ runStartupMaintenance(db)
 		logger.error("[Server] Startup maintenance failed", { error: String(err) });
 	});
 
-// Run startup auto-index: triggers codebase indexing for the current working directory
-// if the index has never been built or is older than TTL (default 24h).
-// Respects CODEBASE_AUTO_INDEX env var. The parser pool is initialized asynchronously
-// and indexing runs in the background; the dashboard polls /api/codebase/index-status.
+// Run startup auto-index: triggers codebase indexing for the current working
+// directory if the index has never been built or is older than TTL (default
+// 24h). Respects CODEBASE_AUTO_INDEX env var. The parser pool (hoisted above,
+// shared with the file watcher) is initialized asynchronously and indexing
+// runs in the background; the dashboard polls /api/codebase/index-status.
+// The repo is registered with the file watcher so the polling sweep keeps it
+// fresh after the first build (watch set = startup repo + tool-indexed repos).
 {
 	const repoName = path.basename(process.cwd());
 	const repoPath = process.cwd();
-	const parserPool = new TreeSitterParserPool();
+	registerRepo(repoName, repoPath);
 	void parserPool
 		.initialize()
 		.then(() => {
@@ -177,6 +198,7 @@ process.stderr.on("error", (err: unknown) => {
 const shutdown = async (signal: string) => {
 	logger.info("[Server] shutdown", { signal, pid: process.pid });
 	embeddingWorker.stop();
+	fileWatcher.stop();
 	await handle?.close();
 	db.close();
 	process.exit(0);

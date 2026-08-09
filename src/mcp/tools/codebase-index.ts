@@ -7,6 +7,7 @@ import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { createCodebaseIndexService } from "../codebase-index/services/indexing-service";
 import type { ParserPool } from "../codebase-index/parser/language-visitor";
 import { TreeSitterParserPool } from "../codebase-index/parser/parser-pool";
+import { registerRepo } from "../codebase-index/services/file-watcher";
 import { logger } from "../utils/logger";
 
 // ── Parser pool singleton ───────────────────────────────────────────────
@@ -65,6 +66,12 @@ export async function handleCodebaseIndexRepository(
 			includeGlobs: validated.includeGlobs,
 			excludeGlobs: validated.excludeGlobs
 		});
+
+		// Register with the polling file watcher (TASK-322 / US-08) so the
+		// repo stays fresh after this build. Idempotent; in the dashboard
+		// process (which imports this handler too) the entry is a harmless
+		// no-op — the watcher loop only runs in the MCP server process.
+		registerRepo(repo, resolvedPath);
 
 		const errorLines =
 			result.errors.length > 0
