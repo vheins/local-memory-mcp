@@ -24,7 +24,8 @@ export interface KgGraphResult {
 	data: {
 		id: string;
 		nodes: Array<{ name: string; type: string }>;
-		edges: Array<{ source: string; target: string; relation_type: string }>;
+		/** Relation edges; `confidence` is the per-edge label (migration v24 / TASK-325, 0..1). */
+		edges: Array<{ source: string; target: string; relation_type: string; confidence: number }>;
 		truncated: boolean;
 	};
 	totalItems: number;
@@ -99,7 +100,7 @@ export const KgService = {
 			offset: graphLimit !== undefined ? 0 : offset
 		});
 
-		let edges: Array<{ source: string; target: string; relation_type: string }> = [];
+		let edges: Array<{ source: string; target: string; relation_type: string; confidence: number }> = [];
 		let truncated = false;
 
 		if (includeEdges && nodes.length > 0) {

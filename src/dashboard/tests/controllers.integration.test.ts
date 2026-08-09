@@ -489,6 +489,45 @@ describe("Dashboard Controllers", () => {
 			expect(body.data.attributes.edges).toEqual([]);
 			expect(body.data.attributes.truncated).toBe(false);
 		});
+
+		it("GET /api/kg/graph edges carry the relation confidence field (TASK-325)", async () => {
+			const repo = "kg-conf-api";
+			const now = new Date().toISOString();
+			db.knowledgeGraph.upsertEntity({
+				name: "Alpha",
+				type: "concept",
+				description: null,
+				repo,
+				owner: "test",
+				created_at: now,
+				updated_at: now
+			});
+			db.knowledgeGraph.upsertEntity({
+				name: "Beta",
+				type: "concept",
+				description: null,
+				repo,
+				owner: "test",
+				created_at: now,
+				updated_at: now
+			});
+			db.knowledgeGraph.upsertRelation({
+				from_entity: "Alpha",
+				to_entity: "Beta",
+				relation_type: "related_to",
+				repo,
+				owner: "test",
+				created_at: now,
+				confidence: 0.8
+			});
+
+			const res = await fetch(`${baseUrl}/api/kg/graph?repo=${repo}&includeEdges=true`);
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as Record<string, any>;
+			const edges = body.data.attributes.edges as Array<Record<string, unknown>>;
+			expect(edges).toHaveLength(1);
+			expect(edges[0]).toEqual({ source: "Alpha", target: "Beta", relation_type: "related_to", confidence: 0.8 });
+		});
 	});
 
 	// ── KG pagination + truncated (OPT-FEAT-02 / OPT-FEAT-03) ───────────────

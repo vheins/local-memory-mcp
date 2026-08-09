@@ -39,7 +39,23 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		);
 	}
 
-	/** Insert a relation, ignoring duplicates (composite PK on from_entity, to_entity, relation_type). */
+	/**
+	 * Insert a relation, ignoring duplicates (composite PK on from_entity, to_entity, relation_type).
+	 *
+	 * `confidence` is the per-edge KG confidence label (migration v24, [KGCONF-1]
+	 * / TASK-325): an INSERT-TIME constant chosen by the CALLER SITE (the
+	 * relations table has no source column — the writer that creates the row
+	 * is the provenance). Default 1.0 when omitted (explicit-grade, backward
+	 * compatible — pre-v24 rows and legacy callers read 1.0). The mapping is
+	 * documented in the v24 migration: NLP auto-extraction (saveExtractions)
+	 * 0.55, structured semantic writers 0.8, parser-deterministic codebase
+	 * edges 0.9, explicit/manual + default 1.0.
+	 *
+	 * INSERT OR IGNORE first-write-wins: re-inserting an existing edge is a
+	 * no-op, so the FIRST writer's confidence sticks (a later writer can never
+	 * overwrite a row already present — including one carrying a lower
+	 * auto-extraction confidence).
+	 */
 	upsertRelation(params: {
 		from_entity: string;
 		to_entity: string;
@@ -47,11 +63,20 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		repo: string;
 		owner: string;
 		created_at: string;
+		confidence?: number;
 	}): void {
 		this.run(
-			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
-			[params.from_entity, params.to_entity, params.relation_type, params.repo, params.owner, params.created_at]
+			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			[
+				params.from_entity,
+				params.to_entity,
+				params.relation_type,
+				params.repo,
+				params.owner,
+				params.created_at,
+				params.confidence ?? 1.0
+			]
 		);
 	}
 
@@ -60,6 +85,11 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 * idempotent against orphan-swept endpoints (TASK-065 / MEM-473). ATOMIC
 	 * (TASK-067 fix #2 / TASK-072): both upserts + insert run in one BEGIN
 	 * IMMEDIATE (base.ts immediate, TASK-064 / MEM-475).
+	 *
+	 * `confidence` (optional, migration v24 / TASK-325) is passed through to
+	 * the relation insert; when omitted it defaults to 1.0 (explicit-grade).
+	 * INSERT OR IGNORE keeps the FIRST writer's confidence for an already
+	 * existing edge (first-write-wins — documented in the v24 migration).
 	 */
 	ensureRelation(params: {
 		from_entity: string;
@@ -70,6 +100,7 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		repo: string;
 		owner: string;
 		created_at: string;
+		confidence?: number;
 	}): void {
 		this.transaction(() => {
 			this.upsertEntity({
@@ -96,7 +127,8 @@ export class KnowledgeGraphEntity extends BaseEntity {
 				relation_type: params.relation_type,
 				repo: params.repo,
 				owner: params.owner,
-				created_at: params.created_at
+				created_at: params.created_at,
+				confidence: params.confidence
 			});
 		});
 	}
@@ -182,6 +214,7 @@ export class KnowledgeGraphEntity extends BaseEntity {
 			to_entity: string;
 			to_type: string;
 			relation_type: string;
+			confidence?: number;
 		}>;
 		repo: string;
 		owner: string;
@@ -244,7 +277,8 @@ export class KnowledgeGraphEntity extends BaseEntity {
 							relation_type: rel.relation_type,
 							repo,
 							owner,
-							created_at
+							created_at,
+							confidence: rel.confidence
 						});
 					} catch {
 						// Silent: relation may already exist
@@ -287,11 +321,20 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		repo: string;
 		owner: string;
 		created_at: string;
+		confidence?: number;
 	}): void {
 		this.run(
-			`INSERT INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
-			[params.from_entity, params.to_entity, params.relation_type, params.repo, params.owner, params.created_at]
+			`INSERT INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			[
+				params.from_entity,
+				params.to_entity,
+				params.relation_type,
+				params.repo,
+				params.owner,
+				params.created_at,
+				params.confidence ?? 1.0
+			]
 		);
 	}
 
@@ -377,22 +420,22 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		return queries.countGraphNodes(this.runner, repo);
 	}
 
-	/** Graph edges capped to the top-N by endpoint degree (TASK-068/S2, TASK-070); probe detects truncation (TASK-148). */
+	/** Graph edges capped to the top-N by endpoint degree (TASK-068/S2, TASK-070); probe detects truncation (TASK-148). Edge payload includes the confidence label (migration v24 / TASK-325). */
 	listGraphEdges(
 		repo: string,
 		limit = KG_MAX_GRAPH_EDGES,
 		probe = false
-	): Array<{ source: string; target: string; relation_type: string }> {
+	): Array<{ source: string; target: string; relation_type: string; confidence: number }> {
 		return queries.listGraphEdges(this.runner, repo, limit, probe);
 	}
 
-	/** Graph edges restricted to a node subset (both endpoints in `nodeNames`), degree-ranked via the kg_degrees cache (TASK-268); probe detects truncation (TASK-148). */
+	/** Graph edges restricted to a node subset (both endpoints in `nodeNames`), degree-ranked via the kg_degrees cache (TASK-268); probe detects truncation (TASK-148). Edge payload includes the confidence label (migration v24 / TASK-325). */
 	listGraphEdgesForSubset(
 		repo: string,
 		nodeNames: string[],
 		limit = KG_MAX_GRAPH_EDGES,
 		probe = false
-	): Array<{ source: string; target: string; relation_type: string }> {
+	): Array<{ source: string; target: string; relation_type: string; confidence: number }> {
 		return queries.listGraphEdgesForSubset(this.runner, repo, nodeNames, limit, probe);
 	}
 

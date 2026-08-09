@@ -51,6 +51,8 @@ export interface KgRelationRow {
 	repo: string;
 	owner: string;
 	created_at: string;
+	/** Per-edge confidence label (migration v24 / TASK-325); 1.0 for pre-v24 and explicit rows. */
+	confidence: number;
 }
 
 export interface KgObservationRow {
@@ -362,9 +364,9 @@ export function listGraphEdges(
 	repo: string,
 	limit = KG_MAX_GRAPH_EDGES,
 	probe = false
-): Array<{ source: string; target: string; relation_type: string }> {
+): Array<{ source: string; target: string; relation_type: string; confidence: number }> {
 	const effectiveLimit = probe ? limit + 1 : limit;
-	return runner.all<{ source: string; target: string; relation_type: string }>(
+	return runner.all<{ source: string; target: string; relation_type: string; confidence: number }>(
 		`WITH degrees AS (
 		   SELECT node, COUNT(*) AS degree
 		   FROM (
@@ -374,7 +376,7 @@ export function listGraphEdges(
 		   )
 		   GROUP BY node
 		 )
-		 SELECT r.from_entity as source, r.to_entity as target, r.relation_type
+		 SELECT r.from_entity as source, r.to_entity as target, r.relation_type, r.confidence
 		 FROM relations r
 		 INNER JOIN entities e1 ON r.from_entity = e1.name AND r.repo = e1.repo
 		 INNER JOIN entities e2 ON r.to_entity = e2.name AND r.repo = e2.repo
@@ -415,12 +417,12 @@ export function listGraphEdgesForSubset(
 	nodeNames: string[],
 	limit = KG_MAX_GRAPH_EDGES,
 	probe = false
-): Array<{ source: string; target: string; relation_type: string }> {
+): Array<{ source: string; target: string; relation_type: string; confidence: number }> {
 	if (nodeNames.length === 0) return [];
 	const placeholders = nodeNames.map(() => "?").join(",");
 	const effectiveLimit = probe ? limit + 1 : limit;
-	return runner.all<{ source: string; target: string; relation_type: string }>(
-		`SELECT r.from_entity as source, r.to_entity as target, r.relation_type
+	return runner.all<{ source: string; target: string; relation_type: string; confidence: number }>(
+		`SELECT r.from_entity as source, r.to_entity as target, r.relation_type, r.confidence
 		 FROM relations r
 		 JOIN kg_degrees d1 ON d1.repo = r.repo AND d1.node = r.from_entity
 		 JOIN kg_degrees d2 ON d2.repo = r.repo AND d2.node = r.to_entity

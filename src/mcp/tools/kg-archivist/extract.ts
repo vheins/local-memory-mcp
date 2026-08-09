@@ -344,6 +344,14 @@ export async function extractEntities(content: string): Promise<ExtractedEntity[
 // ---------------------------------------------------------------------------
 
 /**
+ * Confidence for NLP auto-extraction co-occurrence edges ([KGCONF-1] /
+ * TASK-325, migration v24). The compromise extractor may misidentify entity
+ * names and co-occurrence pairs, so free-text edges carry the heaviest
+ * discount (spec anchor ~0.55). Full mapping documented in the v24 migration.
+ */
+export const KG_RELATION_CONFIDENCE_AUTO_EXTRACTION = 0.55;
+
+/**
  * Extract entities from `content` and persist them into the knowledge-graph
  * tables (`entities`, `observations`) **plus** co-occurrence relations
  * (`relations`) in a single `BEGIN IMMEDIATE` transaction per document
@@ -403,13 +411,16 @@ export async function saveExtractions(
 		observation: observationTextValue
 	}));
 
-	// Build co-occurrence relation edges
+	// Build co-occurrence relation edges. Every pair carries the auto-
+	// extraction confidence 0.55 ([KGCONF-1] / TASK-325, migration v24) —
+	// these are free-text NLP guesses, the most uncertain edge family.
 	const relations: Array<{
 		from_entity: string;
 		from_type: string;
 		to_entity: string;
 		to_type: string;
 		relation_type: string;
+		confidence: number;
 	}> = [];
 	if (entities.length > 1) {
 		for (let i = 0; i < entities.length; i++) {
@@ -419,7 +430,8 @@ export async function saveExtractions(
 					from_type: entities[i].type,
 					to_entity: entities[j].name,
 					to_type: entities[j].type,
-					relation_type: "co_mentioned"
+					relation_type: "co_mentioned",
+					confidence: KG_RELATION_CONFIDENCE_AUTO_EXTRACTION
 				});
 			}
 		}
