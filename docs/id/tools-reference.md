@@ -522,10 +522,16 @@ Gunakan `memory-write` dengan `type: "task_archive"` plus `key_decisions` dan `n
 
 ## Knowledge Graph (Dikelola via Dasbor)
 
-Knowledge Graph menyimpan entitas, relasi ber-tipe, dan observasi, dengan ekstraksi entitas otomatis saat memori disimpan (NLP offline).
+Knowledge Graph menyimpan entitas, relasi ber-tipe, dan observasi, dengan ekstraksi entitas otomatis saat memori, standar, dan tugas disimpan serta saat indeks codebase dijalankan (NLP offline, melalui worker outbox embedding).
 
-- **Buat / edit / hapus** entitas, relasi, dan observasi dilakukan di **Web Dashboard → tab Knowledge Graph** (dan via API dasbor).
-- **Alat MCP** khusus untuk CRUD graf (`create_entity`, `delete_entity`, `create_relation`, `delete_relation`, `delete_observation`) adalah **roadmap — belum diimplementasikan**.
+- **Buat / edit / hapus** entitas, relasi, dan observasi dilakukan di **Web Dashboard → tab Knowledge Graph** (dan via API dasbor) — satu-satunya permukaan edit manual.
+- Graf **diisi otomatis dari domain memory, standard, task, dan codebase** — entitas/relasi ditulis oleh outbox embedding dari penulisan memory/standard/task dan eksekusi indeks codebase. Entitas KG codebase berasal dari data simbol/referensi terindeks (bukan dari API simbol terpisah).
+
+> **Keputusan (2026-08-09): TIDAK ADA alat MCP KG.** KG adalah infrastruktur yang diisi otomatis (ADR-006): entitas/relasi ditulis oleh outbox embedding dari penulisan memory/standard/task dan eksekusi indeks codebase; pembacaan terjadi melalui field `kg` tertanam di memory-read/task-read/standard-read. Tab Knowledge Graph dasbor tetap menjadi satu-satunya permukaan edit manual (API CRUD).
+>
+> Nama alat `create_entity`, `delete_entity`, `create_relation`, `delete_relation`, dan `delete_observation` hanyalah **niat desain lama (legacy design intent)** — tidak pernah dirilis sebagai alat MCP kanonik (sesuai hasil ADR-006 "nol alat KG"; pemetaan gaya "formerly" tidak berlaku).
+>
+> **Catatan (terverifikasi 2026-08-09):** `source_domain` pada konteks `kg` tertanam dihias oleh pemanggil — mencerminkan domain pemanggil (`memory` / `task` / `standard`), bukan provensi tersimpan. Entitas codebase dapat dijangkau melalui pencocokan nama dan dapat muncul dengan label domain pemanggil saat nama bertumpang tindih; tidak ada API KG codebase terpisah.
 
 ---
 

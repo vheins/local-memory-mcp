@@ -1,6 +1,6 @@
 # Design: FTS5 Full-Text Search for Memories
 
-> **Status: ✅ IMPLEMENTED (verified 2026-08-08).** This design shipped via migration **`v10-memories-fts`** (TASK-014) — the schema index is now at **`SCHEMA_VERSION 22`** (`src/mcp/storage/migrations/index.ts`). The original "not yet implemented" header below is preserved as the historical record; inline notes mark where the ship deviates from the design (notably: the migration landed as **v10**, not the proposed v8).
+> **Status: ✅ IMPLEMENTED (verified 2026-08-08).** This design shipped via migration **`v10-memories-fts`** (TASK-014) — the schema index is now at **`SCHEMA_VERSION 23`** (`src/mcp/storage/migrations/index.ts`). The original "not yet implemented" header below is preserved as the historical record; inline notes mark where the ship deviates from the design (notably: the migration landed as **v10**, not the proposed v8).
 
 - **Task**: TASK-003 (optimization) · **Decision memory**: MEM-367 · **Implementation**: TASK-014
 - **Repo**: vheins/local-memory-mcp · **Scope**: design + shipped implementation note
@@ -90,9 +90,9 @@ END;
 
 ### 4.1 Additive migration — **shipped as v10** (proposed as v8)
 
-> The `MigrationManager` now lives in `src/mcp/storage/migrations/index.ts` with one file per version (`vNN-*.ts`); `SCHEMA_VERSION = 22`. The shipped migration is **`v10-memories-fts`**, not the v8 proposed below (v8 was repurposed for `observations` index, v9 for the embedding `queue_jobs` table).
+> The `MigrationManager` now lives in `src/mcp/storage/migrations/index.ts` with one file per version (`vNN-*.ts`); `SCHEMA_VERSION = 23`. The shipped migration is **`v10-memories-fts`**, not the v8 proposed below (v8 was repurposed for `observations` index, v9 for the embedding `queue_jobs` table).
 
-- `SCHEMA_VERSION` moved 7 → **10** at ship time (`src/mcp/storage/migrations/index.ts:27` — now 22).
+- `SCHEMA_VERSION` moved 7 → **10** at ship time (`src/mcp/storage/migrations/index.ts:28` — now 23).
 - A new entry was appended to the `MIGRATIONS` array. **Never edit** existing entries — the chain is append-only and `MigrationManager` skips applied versions.
 - The `up()` guard mirrors v4 (`v04-coding-standards-fts.ts`):
 

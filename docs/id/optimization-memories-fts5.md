@@ -1,6 +1,6 @@
 # Desain: Pencarian Teks Lengkap FTS5 untuk Memori
 
-> **Status: ✅ DIIMPLEMENTASIKAN (terverifikasi 2026-08-08).** Desain ini dirilis melalui migrasi **`v10-memories-fts`** (TASK-014) — indeks skema kini di **`SCHEMA_VERSION 22`** (`src/mcp/storage/migrations/index.ts`). Header "belum diimplementasikan" asli di bawah dipertahankan sebagai catatan historis; catatan inline menandai di mana rilis menyimpang dari desain (terutama: migrasi mendarat sebagai **v10**, bukan v8 yang diusulkan).
+> **Status: ✅ DIIMPLEMENTASIKAN (terverifikasi 2026-08-08).** Desain ini dirilis melalui migrasi **`v10-memories-fts`** (TASK-014) — indeks skema kini di **`SCHEMA_VERSION 23`** (`src/mcp/storage/migrations/index.ts`). Header "belum diimplementasikan" asli di bawah dipertahankan sebagai catatan historis; catatan inline menandai di mana rilis menyimpang dari desain (terutama: migrasi mendarat sebagai **v10**, bukan v8 yang diusulkan).
 
 - **Task**: TASK-003 (optimization) · **Memori keputusan**: MEM-367 · **Implementasi**: TASK-014
 - **Repo**: vheins/local-memory-mcp · **Scope**: desain + catatan implementasi yang dirilis
@@ -90,9 +90,9 @@ END;
 
 ### 4.1 Migrasi aditif — **dirilis sebagai v10** (diusulkan sebagai v8)
 
-> `MigrationManager` kini berada di `src/mcp/storage/migrations/index.ts` dengan satu file per versi (`vNN-*.ts`); `SCHEMA_VERSION = 22`. Migrasi yang dirilis adalah **`v10-memories-fts`**, bukan v8 yang diusulkan di bawah (v8 dipakai untuk indeks `observations`, v9 untuk tabel antrean `queue_jobs` embedding).
+> `MigrationManager` kini berada di `src/mcp/storage/migrations/index.ts` dengan satu file per versi (`vNN-*.ts`); `SCHEMA_VERSION = 23`. Migrasi yang dirilis adalah **`v10-memories-fts`**, bukan v8 yang diusulkan di bawah (v8 dipakai untuk indeks `observations`, v9 untuk tabel antrean `queue_jobs` embedding).
 
-- `SCHEMA_VERSION` bergerak 7 → **10** saat rilis (`src/mcp/storage/migrations/index.ts:27` — kini 22).
+- `SCHEMA_VERSION` bergerak 7 → **10** saat rilis (`src/mcp/storage/migrations/index.ts:28` — kini 23).
 - Entri baru ditambahkan ke larik `MIGRATIONS`. **Jangan pernah mengedit** entri yang ada — rantai bersifat append-only dan `MigrationManager` melewati versi yang sudah diterapkan.
 - Guard `up()` mencerminkan v4 (`v04-coding-standards-fts.ts`):
 

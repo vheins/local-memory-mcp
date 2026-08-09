@@ -47,10 +47,11 @@ Structured entity-relationship storage that maps complex domain knowledge:
 - **Entities** with types (person, place, organization, concept) and descriptions
 - **Relations** with typed connections between entities
 - **Observations** linking context to entities
-- **Auto-extraction**: offline NLP (compromise.js) extracts named entities when memories and tasks are stored
-- **Dashboard**: interactive force-directed graph visualization with add/edit/delete (see [Dashboard Guide](dashboard-guide.md))
+- **Auto-extraction**: offline NLP (compromise.js) extracts named entities when memories, standards, and tasks are stored and when the codebase index runs
+- **Auto-populated** from the **memory | standard | task | codebase** domains — codebase KG entities derive from the indexed symbol/reference data (no separate symbol API)
+- **Dashboard**: interactive force-directed graph visualization with add/edit/delete — the only manual editing surface (see [Dashboard Guide](dashboard-guide.md))
 
-> Dedicated MCP tools for direct graph CRUD are **roadmap — not yet implemented**. Graph management happens in the dashboard's Knowledge Graph tab.
+> **Decision (2026-08-09): NO KG MCP tools.** KG is auto-populated infrastructure (ADR-006): entities/relations are written by the embedding outbox from memory/standard/task writes and codebase index runs, and read via the embedded `kg` field in memory-read/task-read/standard-read. There are no MCP tools for direct graph CRUD; graph management happens in the dashboard's Knowledge Graph tab (API CRUD).
 
 ## 🕰️ Time Tunnel (Temporal Search)
 

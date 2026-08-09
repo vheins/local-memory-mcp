@@ -16,7 +16,7 @@ We will use `better-sqlite3` as our core datastore, taking advantage of its sync
 
 **Adopted** — This decision has been implemented and is the foundation of the data layer.
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** decision is in force. Corrections: `_schema_version` is **v22** (not v2); default DB path is OS-specific (Linux `~/.config/local-memory-mcp/`, macOS `~/Library/Application Support/local-memory-mcp/`, Windows `~/.local-memory-mcp/`), not `./storage/memory.db`; hybrid search keyword leg is FTS5-based (v04/v10/v18), not raw TF-IDF.
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** decision is in force. Corrections: `_schema_version` is **v23** (not v2); default DB path is OS-specific (Linux `~/.config/local-memory-mcp/`, macOS `~/Library/Application Support/local-memory-mcp/`, Windows `~/.local-memory-mcp/`), not `./storage/memory.db`; hybrid search keyword leg is FTS5-based (v04/v10/v18), not raw TF-IDF.
 
 ## Consequences
 

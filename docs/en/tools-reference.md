@@ -522,10 +522,16 @@ Use `memory-write` with `type: "task_archive"` plus `key_decisions` and `next_st
 
 ## Knowledge Graph (Dashboard-managed)
 
-The Knowledge Graph stores entities, typed relations, and observations, with automatic entity extraction when memories are stored (offline NLP).
+The Knowledge Graph stores entities, typed relations, and observations, with automatic entity extraction when memories, standards, and tasks are stored and when the codebase index runs (offline NLP, via the embedding outbox worker).
 
-- **Create / edit / delete** entities, relations, and observations happen in the **Web Dashboard → Knowledge Graph tab** (and via the dashboard API).
-- Dedicated **MCP tools** for graph CRUD (`create_entity`, `delete_entity`, `create_relation`, `delete_relation`, `delete_observation`) are **roadmap — not yet implemented**.
+- **Create / edit / delete** entities, relations, and observations happen in the **Web Dashboard → Knowledge Graph tab** (and via the dashboard API) — the only manual editing surface.
+- The graph is **auto-populated from the memory, standard, task, and codebase domains** — entities/relations are written by the embedding outbox from memory/standard/task writes and codebase index runs. Codebase KG entities derive from the indexed symbol/reference data (not from a separate symbol API).
+
+> **Decision (2026-08-09): NO KG MCP tools.** KG is auto-populated infrastructure (ADR-006): entities/relations are written by the embedding outbox from memory/standard/task writes and codebase index runs; reading happens via the embedded `kg` field in memory-read/task-read/standard-read. The dashboard KG tab remains the only manual editing surface (API CRUD).
+>
+> The tool names `create_entity`, `delete_entity`, `create_relation`, `delete_relation`, and `delete_observation` were **legacy design intent only** — never shipped as canonical MCP tools (matching ADR-006's "zero KG tools" outcome; no formerly-style mapping applies).
+>
+> **Note (verified 2026-08-09):** `source_domain` in the embedded `kg` context is caller-decorated — it reflects the querying domain (`memory` / `task` / `standard`), not stored provenance. Codebase entities are reachable by name-matching and can surface under the caller's domain label on name overlap; there is no separate codebase KG API.
 
 ---
 

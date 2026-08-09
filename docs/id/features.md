@@ -47,10 +47,11 @@ Penyimpanan relasi entitas terstruktur yang memetakan pengetahuan domain yang ko
 - **Entitas** dengan tipe (orang, tempat, organisasi, konsep) dan deskripsi
 - **Relasi** dengan koneksi ber-tipe antar entitas
 - **Observasi** yang menghubungkan konteks ke entitas
-- **Ekstraksi otomatis**: NLP offline (compromise.js) mengekstrak entitas bernama saat memori dan tugas disimpan
-- **Dashboard**: visualisasi graf gaya-tarik (force-directed) interaktif dengan tambah/edit/hapus (lihat [Panduan Dasbor](dashboard-guide.md))
+- **Ekstraksi otomatis**: NLP offline (compromise.js) mengekstrak entitas bernama saat memori, standar, dan tugas disimpan serta saat indeks codebase dijalankan
+- **Diisi otomatis (auto-populated)** dari domain **memory | standard | task | codebase** — entitas KG codebase berasal dari data simbol/referensi terindeks (tidak ada API simbol terpisah)
+- **Dashboard**: visualisasi graf gaya-tarik (force-directed) interaktif dengan tambah/edit/hapus — satu-satunya permukaan edit manual (lihat [Panduan Dasbor](dashboard-guide.md))
 
-> Alat MCP khusus untuk CRUD graf langsung adalah **roadmap — belum diimplementasikan**. Pengelolaan graf dilakukan di tab Knowledge Graph dasbor.
+> **Keputusan (2026-08-09): TIDAK ADA alat MCP KG.** KG adalah infrastruktur yang diisi otomatis (ADR-006): entitas/relasi ditulis oleh outbox embedding dari penulisan memory/standard/task dan eksekusi indeks codebase, serta dibaca melalui field `kg` tertanam di memory-read/task-read/standard-read. Tidak ada alat MCP untuk CRUD graf langsung; pengelolaan graf dilakukan di tab Knowledge Graph dasbor (API CRUD).
 
 ## 🕰️ Time Tunnel (Pencarian Temporal)
 
