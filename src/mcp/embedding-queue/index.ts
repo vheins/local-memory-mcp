@@ -39,6 +39,7 @@ export type {
 	EmbeddingWorkerStats,
 	QueueCounts,
 	QueueJobKind,
+	QueueJobListOptions,
 	QueueJobRow,
 	QueueJobStatus
 } from "./types";

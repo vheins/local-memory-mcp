@@ -37,7 +37,7 @@ import {
 	countByStatus as countQueueByStatus,
 	backfillMissingVectors as runBackfillMissingVectors
 } from "./enqueue";
-import { EmbeddingJobInput, QueueCounts, QueueJobRow } from "./types";
+import { EmbeddingJobInput, QueueCounts, QueueJobListOptions, QueueJobRow } from "./types";
 
 // Re-export the enqueue helpers for backward compatibility (index.ts and tools
 // import them from the embedding-queue barrel; tests import them from outbox).
@@ -183,6 +183,144 @@ export class Outbox {
 
 	countByStatus(): QueueCounts {
 		return countQueueByStatus(this.store);
+	}
+
+	/**
+	 * Paginated queue view (dashboard queue admin, TASK-296). Pure read — never
+	 * touches the proper-lockfile write lock (TASK-102 contract).
+	 *
+	 * `statuses` is optional: when omitted the full table is returned, newest
+	 * first (`created_at DESC`) — the caller (dashboard service) decides the
+	 * default filter (`pending` + `poison` for the failed-job view).
+	 *
+	 * `options.repo` (TASK-360) restricts the window to a single `entity_repo`
+	 * (parameterized `entity_repo = ?`); absent → global, back-compat.
+	 */
+	listJobs(options: QueueJobListOptions): { items: QueueJobRow[]; total: number } {
+		const statuses = options.statuses ?? [];
+		const clauses: string[] = [];
+		const params: string[] = [];
+		if (statuses.length > 0) {
+			clauses.push(`status IN (${statuses.map(() => "?").join(", ")})`);
+			params.push(...statuses);
+		}
+		if (options.repo) {
+			clauses.push("entity_repo = ?");
+			params.push(options.repo);
+		}
+		const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+
+		const total = (
+			this.store.db.prepare(`SELECT COUNT(*) AS c FROM queue_jobs ${where}`).get(...params) as { c: number }
+		).c;
+		const items = this.store.db
+			.prepare(`SELECT * FROM queue_jobs ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+			.all(...params, options.limit, options.offset) as QueueJobRow[];
+		return { items, total };
+	}
+
+	/**
+	 * Admin retry (TASK-296): flips a terminal `poison` (or `done`) row back to
+	 * `pending`. Mirrors the `ENQUEUE_SQL` LWW reset semantics exactly —
+	 * `attempts = 0`, `last_error`, `backoff_until`, `lease_until`, `locked_by`
+	 * all cleared, `updated_at` bumped — WITHOUT touching the stored
+	 * `payload`/`content_hash`, so the worker re-processes the SAME snapshot it
+	 * failed on.
+	 *
+	 * Worker-safe by construction: `Outbox.claim()` only ever claims `pending`
+	 * (or lease-expired `claimed`) rows, so a row flipped to `pending` here
+	 * becomes re-claimable and the worker picks it up on its next poll. The
+	 * status guard (`IN ('poison','done')`) is a single atomic UPDATE — a
+	 * concurrent worker cannot race it (poison/done rows are never claimed).
+	 *
+	 * `repo` (TASK-360): optional multi-repo scope — when present the row is
+	 * only retried if it ALSO belongs to `entity_repo = repo` (parameterized).
+	 * This is defense-in-depth on top of the service-layer repo check: even if
+	 * the caller's read raced, the guarded UPDATE can never flip a row from
+	 * another repo.
+	 *
+	 * @returns `true` when the row was flipped, `false` when no poison/done row
+	 * with that id (and repo, when supplied) exists.
+	 */
+	retryJob(id: string, repo?: string): boolean {
+		const params: string[] = [new Date().toISOString(), id];
+		let repoClause = "";
+		if (repo) {
+			repoClause = " AND entity_repo = ?";
+			params.push(repo);
+		}
+		const result = this.store.db
+			.prepare(
+				`UPDATE queue_jobs
+       SET status = 'pending',
+           attempts = 0,
+           lease_until = NULL,
+           locked_by = NULL,
+           backoff_until = NULL,
+           last_error = NULL,
+           updated_at = ?
+       WHERE id = ? AND status IN ('poison', 'done')${repoClause}`
+			)
+			.run(...params);
+		return result.changes > 0;
+	}
+
+	/**
+	 * Bulk retry (TASK-296, optional): flips EVERY `poison` row back to
+	 * `pending` with the same reset semantics as {@link retryJob}. Rows in
+	 * pending/claimed/done are untouched.
+	 *
+	 * `repo` (TASK-360): optional multi-repo scope — when present ONLY poison
+	 * rows with `entity_repo = repo` are flipped (parameterized), so a
+	 * repo-scoped retry-all can never mass-reset another repo's poison rows.
+	 */
+	retryAllPoison(repo?: string): number {
+		const params: string[] = [new Date().toISOString()];
+		let repoClause = "";
+		if (repo) {
+			repoClause = " AND entity_repo = ?";
+			params.push(repo);
+		}
+		const result = this.store.db
+			.prepare(
+				`UPDATE queue_jobs
+       SET status = 'pending',
+           attempts = 0,
+           lease_until = NULL,
+           locked_by = NULL,
+           backoff_until = NULL,
+           last_error = NULL,
+           updated_at = ?
+       WHERE status = 'poison'${repoClause}`
+			)
+			.run(...params);
+		return result.changes;
+	}
+
+	/**
+	 * Admin clear (TASK-296): deletes a specific `poison`/`done` row — the
+	 * row-level counterpart of the time-based `purge` sweep. Guarded to the
+	 * terminal states so a live (`pending`/`claimed`) job can never be
+	 * removed out from under a worker.
+	 *
+	 * `repo` (TASK-360): optional multi-repo scope — the row is only deleted
+	 * when it ALSO belongs to `entity_repo = repo` (parameterized). A
+	 * repo-scoped clear can never delete another repo's row.
+	 *
+	 * @returns `true` when the row was deleted, `false` when no poison/done
+	 * row with that id (and repo, when supplied) exists.
+	 */
+	deleteJob(id: string, repo?: string): boolean {
+		const params: string[] = [id];
+		let repoClause = "";
+		if (repo) {
+			repoClause = " AND entity_repo = ?";
+			params.push(repo);
+		}
+		const result = this.store.db
+			.prepare(`DELETE FROM queue_jobs WHERE id = ? AND status IN ('poison', 'done')${repoClause}`)
+			.run(...params);
+		return result.changes > 0;
 	}
 
 	/** Sweep finished rows: done after `doneTtlMs`, poison after `poisonTtlMs`. */

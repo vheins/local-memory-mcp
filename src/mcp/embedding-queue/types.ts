@@ -117,6 +117,26 @@ export interface EmbeddingJobInput {
 	payload: EmbeddingJobPayload;
 }
 
+/**
+ * Read options for `Outbox.listJobs` (dashboard queue admin, TASK-296).
+ *
+ * `statuses` is the optional status filter — when omitted the FULL table is
+ * returned (no status filter). The dashboard service layer supplies the admin
+ * default (`pending` + `poison`) so the neutral Outbox read stays
+ * caller-agnostic.
+ *
+ * `repo` is the optional multi-repo scope (TASK-360): when present the query
+ * is restricted to `entity_repo = repo` (parameterized). When absent the
+ * read stays global — matching the pre-existing unscoped `GET /api/queue/status`
+ * convention and preserving back-compat.
+ */
+export interface QueueJobListOptions {
+	statuses?: QueueJobStatus[];
+	repo?: string;
+	limit: number;
+	offset: number;
+}
+
 /** Queue depth by status (from the DB). */
 export interface QueueCounts {
 	pending: number;
