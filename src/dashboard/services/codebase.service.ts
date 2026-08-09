@@ -110,14 +110,20 @@ export function errorCodeToHttp(code: string): number {
 	switch (code) {
 		case "PATH_NOT_FOUND":
 		case "NOT_A_DIRECTORY":
+		case "REPO_PATH_REQUIRED":
+		case "REPO_PATH_NOT_FOUND":
+		case "REPO_FILES_MISSING":
+		case "INVALID_REGEX":
 			return 400;
 		case "SYMBOL_NOT_FOUND":
 		case "FILE_NOT_INDEXED":
+		case "REPO_NOT_INDEXED":
 			return 404;
 		case "AMBIGUOUS_SYMBOL":
 			return 409;
 		case "INDEX_FAILED":
 		case "TRACE_FAILED":
+		case "CODE_SEARCH_FAILED":
 			return 500;
 		default:
 			return 500;
@@ -158,6 +164,32 @@ export const CodebaseService = {
 
 	async searchSymbols(query: Record<string, unknown>): Promise<unknown> {
 		const result = await handleCodebaseRead(injectOwner(query), db, noopVectors);
+
+		if (!result.structuredContent) {
+			throw new ServiceError(500, "Unexpected empty response");
+		}
+		return result.structuredContent;
+	},
+
+	/**
+	 * CODE mode content search (TASK-317). The CODE mode requires an absolute
+	 * `repoPath` (the index stores no repo→path registry), which the dashboard
+	 * does not know — reuse the same `resolveRepoPath` plumbing as `startIndex`.
+	 * Repo path not resolvable ⇒ 400 with re-index guidance.
+	 */
+	async searchCode(params: Record<string, unknown>): Promise<unknown> {
+		const repo = (params.repo as string)?.trim();
+		const repoPath = resolveRepoPath(repo, params.repoPath as string | undefined);
+		if (!repoPath) {
+			throw new ServiceError(
+				400,
+				`repoPath is required and could not be resolved automatically for "${repo}". ` +
+					"Set CODEBASE_REPOS_DIR env var or provide repoPath in the request.",
+				"MISSING_REPO_PATH"
+			);
+		}
+
+		const result = await handleCodebaseRead(injectOwner({ ...params, repoPath }), db, noopVectors);
 
 		if (!result.structuredContent) {
 			throw new ServiceError(500, "Unexpected empty response");

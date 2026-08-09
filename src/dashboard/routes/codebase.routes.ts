@@ -6,6 +6,7 @@ const router = Router();
 router.get("/architecture", CodebaseController.getArchitecture);
 router.get("/symbols", CodebaseController.getFileSymbols);
 router.get("/search", CodebaseController.searchSymbols);
+router.get("/code-search", CodebaseController.searchCode);
 router.get("/trace", CodebaseController.traceSymbol);
 router.get("/index-status", CodebaseController.getIndexStatus);
 router.post("/index", CodebaseController.startIndex);

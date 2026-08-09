@@ -1,21 +1,10 @@
-<script module lang="ts">
-	function getKindIcon(kind: string): string {
-		const icons: Record<string, string> = {
-			function: "zap",
-			class: "layers",
-			interface: "terminal",
-			type: "hash",
-			enum: "list",
-			variable: "database",
-			other: "code"
-		};
-		return icons[kind] || "code";
-	}
-</script>
-
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
-	import { api, type CodeSymbol } from "../lib/api";
+	import { api, type CodeSymbol, type CodeSearchMatch } from "../lib/api";
+	import CodeSearchResults from "./CodeSearchResults.svelte";
+	import SymbolSearchResults from "./SymbolSearchResults.svelte";
+
+	type SearchMode = "symbols" | "code";
 
 	let {
 		repo = "",
@@ -26,8 +15,10 @@
 	} = $props();
 
 	// State
+	let mode = $state<SearchMode>("symbols");
 	let query = $state("");
 	let results = $state<CodeSymbol[]>([]);
+	let codeMatches = $state<CodeSearchMatch[]>([]);
 	let loading = $state(false);
 	let error = $state("");
 	let isOpen = $state(false);
@@ -36,40 +27,53 @@
 	let containerEl = $state<HTMLDivElement | null>(null);
 
 	// Derived
-	let groupedResults = $derived.by(() => {
-		const groups: Record<string, CodeSymbol[]> = {};
-		for (const symbol of results) {
-			const kind = symbol.kind || "other";
-			if (!groups[kind]) groups[kind] = [];
-			groups[kind].push(symbol);
-		}
-		return groups;
-	});
+	/** Number of visible rows for keyboard navigation in the active mode. */
+	let visibleCount = $derived(mode === "code" ? codeMatches.length : results.length);
+
+	/** CODE-mode errors about a missing/unindexed repo or unresolvable repo
+	 *  path get a re-index hint (TASK-317) — mirrors the tab's error handling. */
+	let codeIndexGuidance = $derived(mode === "code" && /index|repoPath|repository path|codebase-index/i.test(error));
 
 	// Effects
 	$effect(() => {
 		const currentQuery = query;
 		const currentRepo = repo;
+		const currentMode = mode;
 
 		if (currentQuery.length < 2 || !currentRepo) {
 			results = [];
+			codeMatches = [];
 			isOpen = false;
 			return;
 		}
 
+		// Clear both lists on any re-run (query or mode change) so stale rows
+		// from the other mode never linger while the new fetch is in flight.
+		results = [];
+		codeMatches = [];
+		isOpen = false;
 		loading = true;
 		error = "";
 
 		const timer = setTimeout(async () => {
 			try {
-				const response = await api.codebaseSearch(currentRepo, currentQuery, 10);
-				results = response.results || [];
-				isOpen = results.length > 0;
+				if (currentMode === "code") {
+					const response = await api.codebaseCodeSearch(currentRepo, currentQuery, { limit: 10 });
+					codeMatches = response.matches ?? [];
+					isOpen = true;
+				} else {
+					const response = await api.codebaseSearch(currentRepo, currentQuery, 10);
+					results = response.results || [];
+					isOpen = true;
+				}
 				selectedIndex = -1;
 			} catch (err) {
 				error = err instanceof Error ? err.message : "Search failed";
 				results = [];
-				isOpen = false;
+				codeMatches = [];
+				// Keep the dropdown open so the error state (incl. re-index
+				// guidance) is actually visible to the user.
+				isOpen = true;
 			} finally {
 				loading = false;
 			}
@@ -95,14 +99,14 @@
 	});
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (!isOpen && results.length === 0) {
+		if (!isOpen && results.length === 0 && codeMatches.length === 0) {
 			return;
 		}
 
 		switch (event.key) {
 			case "ArrowDown":
 				event.preventDefault();
-				selectedIndex = Math.min(selectedIndex + 1, results.length - 1);
+				selectedIndex = Math.min(selectedIndex + 1, visibleCount - 1);
 				break;
 			case "ArrowUp":
 				event.preventDefault();
@@ -110,8 +114,14 @@
 				break;
 			case "Enter":
 				event.preventDefault();
-				if (selectedIndex >= 0 && selectedIndex < results.length) {
-					selectSymbol(results[selectedIndex]);
+				if (selectedIndex >= 0 && selectedIndex < visibleCount) {
+					if (mode === "code") {
+						const match = codeMatches[selectedIndex];
+						if (match) selectCodeMatch(match);
+					} else {
+						const symbol = results[selectedIndex];
+						if (symbol) selectSymbol(symbol);
+					}
 				}
 				break;
 			case "Escape":
@@ -130,17 +140,50 @@
 		inputEl?.blur();
 	}
 
-	function getResultIndex(symbol: CodeSymbol): number {
-		return results.indexOf(symbol);
-	}
-
-	function truncatePath(path: string, maxLength: number = 20): string {
-		if (path.length <= maxLength) return path;
-		return "..." + path.slice(-(maxLength - 3));
+	/** Deep-link to the enclosing symbol's detail when enrichment found one. */
+	function selectCodeMatch(match: CodeSearchMatch) {
+		const enc = match.enclosingSymbol;
+		if (enc) {
+			onSymbolSelect({
+				name: enc.name,
+				kind: enc.kind as CodeSymbol["kind"],
+				filePath: match.filePath,
+				line: enc.startLine
+			});
+		}
+		isOpen = false;
+		selectedIndex = -1;
+		inputEl?.blur();
 	}
 </script>
 
 <div class="search-bar-container" bind:this={containerEl}>
+	<div class="search-mode-toggle" role="group" aria-label="Search mode">
+		<button
+			type="button"
+			class="mode-btn"
+			class:active={mode === "symbols"}
+			aria-pressed={mode === "symbols"}
+			onclick={() => {
+				mode = "symbols";
+			}}
+		>
+			<Icon name="search" size={11} strokeWidth={2} />
+			Symbols
+		</button>
+		<button
+			type="button"
+			class="mode-btn"
+			class:active={mode === "code"}
+			aria-pressed={mode === "code"}
+			onclick={() => {
+				mode = "code";
+			}}
+		>
+			<Icon name="code" size={11} strokeWidth={2} />
+			Code
+		</button>
+	</div>
 	<div class="search-input-wrapper">
 		<div class="search-icon">
 			<Icon name="search" size={16} strokeWidth={2} />
@@ -148,14 +191,14 @@
 		<input
 			type="text"
 			class="search-input"
-			placeholder="Search symbols in this repository..."
+			placeholder={mode === "code" ? "Search code in this repository..." : "Search symbols in this repository..."}
 			bind:value={query}
 			bind:this={inputEl}
 			onkeydown={handleKeydown}
 			onfocus={() => {
-				if (results.length > 0) isOpen = true;
+				if (visibleCount > 0) isOpen = true;
 			}}
-			aria-label="Search codebase symbols"
+			aria-label={mode === "code" ? "Search codebase file contents" : "Search codebase symbols"}
 			aria-autocomplete="list"
 			aria-controls="search-results-list"
 			aria-activedescendant={selectedIndex >= 0 ? `search-result-${selectedIndex}` : undefined}
@@ -167,49 +210,22 @@
 		{/if}
 	</div>
 
-	{#if isOpen && (results.length > 0 || error)}
+	{#if isOpen && (results.length > 0 || codeMatches.length > 0 || error || (mode === "code" && !loading))}
 		<div class="search-dropdown" id="search-results-list" role="listbox">
 			{#if error}
 				<div class="search-error">
 					<Icon name="alert-circle" size={14} strokeWidth={2} />
-					<span>{error}</span>
-				</div>
-			{:else if results.length === 0}
-				<div class="search-empty">No symbols found</div>
-			{:else}
-				{#each Object.entries(groupedResults) as [kind, symbols] (kind)}
-					<div class="search-group">
-						<div class="search-group-header">
-							<Icon name={getKindIcon(kind)} size={12} strokeWidth={2} />
-							<span>{kind}</span>
-						</div>
-						{#each symbols as symbol (symbol.name + symbol.filePath)}
-							<button
-								class="search-result"
-								class:selected={getResultIndex(symbol) === selectedIndex}
-								id="search-result-{getResultIndex(symbol)}"
-								role="option"
-								aria-selected={getResultIndex(symbol) === selectedIndex}
-								onclick={() => selectSymbol(symbol)}
-							>
-								<div class="result-icon">
-									<Icon name={getKindIcon(symbol.kind)} size={14} strokeWidth={1.75} />
-								</div>
-								<div class="result-info">
-									<div class="result-name">{symbol.name}</div>
-									<div class="result-meta">
-										{#if symbol.filePath}
-											<span class="result-path">{truncatePath(symbol.filePath)}</span>
-										{/if}
-										{#if symbol.line != null}
-											<span class="result-line">:{symbol.line}</span>
-										{/if}
-									</div>
-								</div>
-							</button>
-						{/each}
+					<div class="search-error-body">
+						<span>{error}</span>
+						{#if codeIndexGuidance}
+							<span class="search-error-hint">Run codebase-index to index this repository, then retry.</span>
+						{/if}
 					</div>
-				{/each}
+				</div>
+			{:else if mode === "code"}
+				<CodeSearchResults matches={codeMatches} {selectedIndex} onSelect={selectCodeMatch} />
+			{:else}
+				<SymbolSearchResults symbols={results} {selectedIndex} onSelect={selectSymbol} />
 			{/if}
 		</div>
 	{/if}
@@ -220,6 +236,41 @@
 		position: relative;
 		width: 100%;
 		margin-bottom: 16px;
+	}
+
+	.search-mode-toggle {
+		display: inline-flex;
+		gap: 2px;
+		padding: 2px;
+		margin-bottom: 8px;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+	}
+
+	.mode-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 10px;
+		font-size: 0.68rem;
+		font-weight: 600;
+		font-family: inherit;
+		color: var(--color-text-muted);
+		background: transparent;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.mode-btn:hover {
+		color: var(--color-text);
+	}
+
+	.mode-btn.active {
+		background: rgba(99, 102, 241, 0.14);
+		color: var(--color-primary);
 	}
 
 	.search-input-wrapper {
@@ -299,94 +350,15 @@
 		font-size: 0.78rem;
 	}
 
-	.search-empty {
-		padding: 12px 16px;
-		color: var(--color-text-muted);
-		font-size: 0.78rem;
-		text-align: center;
-	}
-
-	.search-group {
-		padding: 8px 0;
-	}
-
-	.search-group:first-child {
-		padding-top: 4px;
-	}
-
-	.search-group:last-child {
-		padding-bottom: 4px;
-	}
-
-	.search-group-header {
+	.search-error-body {
 		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 4px 16px;
-		font-size: 0.68rem;
-		font-weight: 700;
-		color: var(--color-text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.search-result {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		padding: 8px 16px;
-		border: none;
-		background: transparent;
-		text-align: left;
-		cursor: pointer;
-		transition: background 0.1s ease;
-		border-radius: 0;
-		font-family: inherit;
-	}
-
-	.search-result:hover,
-	.search-result.selected {
-		background: rgba(255, 255, 255, 0.06);
-	}
-
-	.result-icon {
-		color: var(--color-primary);
-		flex-shrink: 0;
-	}
-
-	.result-info {
-		flex: 1;
+		flex-direction: column;
+		gap: 2px;
 		min-width: 0;
 	}
 
-	.result-name {
-		font-size: 0.82rem;
-		font-weight: 600;
-		color: var(--color-text);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.result-meta {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		font-size: 0.68rem;
+	.search-error-hint {
 		color: var(--color-text-muted);
-	}
-
-	.result-path {
-		font-family: "SF Mono", "Fira Code", monospace;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 150px;
-	}
-
-	.result-line {
-		font-family: "SF Mono", "Fira Code", monospace;
-		opacity: 0.8;
+		font-size: 0.7rem;
 	}
 </style>

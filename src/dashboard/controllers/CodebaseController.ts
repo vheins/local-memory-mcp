@@ -107,6 +107,36 @@ export class CodebaseController {
 		);
 	}
 
+	// GET /api/codebase/code-search?repo=owner/repo&content=handler&regex=false&language=ts&limit=10&offset=0
+	// Content grep over indexed files (TASK-317, backend CODE mode from TASK-316).
+	// `regex` is a STRICT boolean in the tool schema (z.boolean, not coerced), so the
+	// query string is coerced here before proxying to CodebaseService.searchCode.
+	static async searchCode(req: express.Request, res: express.Response) {
+		await handleController(
+			req,
+			res,
+			async () => {
+				const repo = (req.query.repo as string)?.trim();
+				const content = (req.query.content as string)?.trim();
+
+				if (!repo) throw new HttpError(400, "repo query parameter is required", "MISSING_REPO");
+				if (!content) throw new HttpError(400, "content query parameter is required", "MISSING_CONTENT");
+
+				const params: Record<string, unknown> = { repo, content };
+				if (req.query.regex !== undefined) params.regex = req.query.regex === "true" || req.query.regex === "1";
+				if (req.query.language !== undefined) params.language = req.query.language;
+				if (req.query.limit !== undefined) params.limit = req.query.limit;
+				if (req.query.offset !== undefined) params.offset = req.query.offset;
+				if (req.query.repoPath !== undefined) params.repoPath = (req.query.repoPath as string).trim();
+
+				const result = await CodebaseService.searchCode(params);
+				assertNoToolError(result as Record<string, unknown>, "CODE_SEARCH_FAILED");
+				return result;
+			},
+			{ onError: onCodebaseError }
+		);
+	}
+
 	// GET /api/codebase/trace?name=handleCodebaseRead&repo=owner/repo&includeReferences=true
 	static async traceSymbol(req: express.Request, res: express.Response) {
 		await handleController(
