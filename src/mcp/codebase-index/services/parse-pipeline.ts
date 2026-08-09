@@ -28,6 +28,7 @@ import {
 	type FilePlan
 } from "./indexing-cache";
 import { writeParseBatch, type IndexFileError, type IndexProgress } from "./indexing-writer";
+import { resolveFileParents } from "../parser/parent-resolver";
 
 // ── Pipeline options (narrowed — avoids a circular dep with the orchestrator) ─
 
@@ -314,8 +315,17 @@ export async function runParsePipeline(
 					parsedFiles++;
 				}
 
-				for (const sym of parseResult.symbols) {
+				// Symbols (TASK-300 parent linking): the visitor already emitted
+				// each symbol's `parentName` (enclosing class/interface/enum/...),
+				// so resolveFileParents assigns per-symbol ids and resolves
+				// parent_symbol_id (same-file, name-based per ADR-002, span
+				// containment disambiguates same-name collisions) BEFORE insert —
+				// the entity honors the pre-assigned id. The whole parent map is
+				// recomputed per parse and replaced atomically per file by the
+				// indexing writer (delete-by-file + bulk-insert in one txn).
+				for (const sym of resolveFileParents(parseResult.symbols)) {
 					symbolInserts.push({
+						id: sym.id,
 						repo,
 						file_path: plan.filePath,
 						name: sym.name,
@@ -328,7 +338,7 @@ export async function runParsePipeline(
 						end_col: sym.endCol,
 						signature: sym.signature,
 						doc_comment: sym.docComment,
-						parent_symbol_id: null
+						parent_symbol_id: sym.resolvedParentSymbolId
 					});
 					totalSymbols++;
 				}

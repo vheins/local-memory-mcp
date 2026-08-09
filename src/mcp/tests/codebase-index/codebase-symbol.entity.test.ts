@@ -338,6 +338,59 @@ describe("CodebaseSymbol Entity", () => {
 		expect(methods[1].start_line).toBe(30);
 	});
 
+	it("honors pre-assigned ids and links parents in a single batch (TASK-300 pipeline shape)", () => {
+		// The parse pipeline (resolveFileParents) now assigns ids BEFORE insert
+		// so children can reference their parent's id in the same batch — the
+		// entity must persist the provided id verbatim (no re-generation).
+		const classId = "pipeline-class-0001";
+		entity.bulkUpsertSymbols([
+			{
+				id: classId,
+				repo: "test-repo",
+				file_path: "src/Order.ts",
+				name: "Order",
+				kind: "class",
+				start_line: 5,
+				end_line: 60
+			},
+			{
+				id: "pipeline-method-0002",
+				repo: "test-repo",
+				file_path: "src/Order.ts",
+				name: "total",
+				kind: "method",
+				start_line: 10,
+				end_line: 20,
+				parent_symbol_id: classId
+			},
+			{
+				id: "pipeline-method-0003",
+				repo: "test-repo",
+				file_path: "src/Order.ts",
+				name: "ship",
+				kind: "method",
+				start_line: 30,
+				end_line: 40,
+				parent_symbol_id: classId
+			}
+		]);
+
+		const allSymbols = entity.getSymbolsByFile("test-repo", "src/Order.ts");
+		expect(allSymbols.length).toBe(3);
+
+		const parent = allSymbols.find((s) => s.kind === "class")!;
+		expect(parent.id).toBe(classId);
+
+		const methods = allSymbols.filter((s) => s.kind === "method");
+		expect(methods).toHaveLength(2);
+		expect(methods.every((m) => m.parent_symbol_id === classId)).toBe(true);
+
+		// Children are findable by parent id (the hierarchy query shape TRACE
+		// resolves in memory from the same parent_symbol_id link).
+		const children = allSymbols.filter((s) => s.parent_symbol_id === parent.id);
+		expect(children.map((c) => c.name).sort()).toEqual(["ship", "total"]);
+	});
+
 	it("deleteSymbolsByRepo removes all symbols for the repo", () => {
 		entity.bulkUpsertSymbols([
 			{

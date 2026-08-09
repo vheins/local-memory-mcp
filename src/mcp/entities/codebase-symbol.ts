@@ -31,7 +31,9 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 			let count = 0;
 			for (const sym of symbols) {
-				const id = randomUUID();
+				// Pre-assigned ids (TASK-300 parent linking) are honored; legacy
+				// callers without `id` keep the entity-generated UUID behavior.
+				const id = sym.id ?? randomUUID();
 				stmt.run(
 					id,
 					sym.repo,

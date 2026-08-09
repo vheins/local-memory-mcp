@@ -130,6 +130,57 @@ describe("traceSymbol (pure unit)", () => {
 		const result = traceSymbol("noRefs", undefined, [target, other], false);
 		expect(result.references).toEqual([]);
 	});
+
+	it("surfaces parent + children from parent_symbol_id links (TASK-300)", () => {
+		const service = makeSym({
+			id: "svc-1",
+			name: "UserService",
+			file_path: "src/UserService.ts",
+			kind: "class",
+			start_line: 5,
+			end_line: 50
+		});
+		const create = makeSym({
+			id: "m-1",
+			name: "createUser",
+			file_path: "src/UserService.ts",
+			kind: "method",
+			start_line: 10,
+			end_line: 20,
+			parent_symbol_id: "svc-1"
+		});
+		const del = makeSym({
+			id: "m-2",
+			name: "deleteUser",
+			file_path: "src/UserService.ts",
+			kind: "method",
+			start_line: 30,
+			end_line: 40,
+			parent_symbol_id: "svc-1"
+		});
+		const unrelated = makeSym({ id: "fn-1", name: "helper", file_path: "src/util.ts", kind: "function" });
+
+		// Class trace: parent null, children = both methods (start-line ordered).
+		const classResult = traceSymbol("UserService", "test/repo", [service, create, del, unrelated], false);
+		expect(classResult.parent).toBeNull();
+		expect(classResult.children.map((c) => c.name)).toEqual(["createUser", "deleteUser"]);
+
+		// Method trace: parent = the class; children empty.
+		const methodResult = traceSymbol("createUser", "test/repo", [service, create, del, unrelated], false);
+		expect(methodResult.parent).toEqual({
+			id: "svc-1",
+			name: "UserService",
+			kind: "class",
+			filePath: "src/UserService.ts",
+			line: 5
+		});
+		expect(methodResult.children).toEqual([]);
+
+		// Unrelated top-level symbol: no parent, no children.
+		const fnResult = traceSymbol("helper", "test/repo", [service, create, del, unrelated], false);
+		expect(fnResult.parent).toBeNull();
+		expect(fnResult.children).toEqual([]);
+	});
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -137,6 +188,7 @@ describe("traceSymbol (pure unit)", () => {
 function seedSymbols(
 	store: SQLiteStore,
 	symbols: Array<{
+		id?: string;
 		repo: string;
 		file_path: string;
 		name: string;
@@ -405,5 +457,62 @@ describe("handleCodebaseRead (trace mode)", () => {
 		expect(guard.startLine).toBe(14);
 		expect(guard.kind).toBe("call");
 		expect(guard.callerName).toBe("guardRequest");
+	});
+
+	it("surfaces hierarchy (parent + children) in trace mode (TASK-300)", async () => {
+		// Pipeline-shaped seed: class + methods linked via pre-assigned ids.
+		seedSymbols(store, [
+			{
+				id: "user-service-1",
+				repo,
+				file_path: "src/services/user.service.ts",
+				name: "UserService",
+				kind: "class",
+				exported: true,
+				start_line: 5,
+				end_line: 60
+			},
+			{
+				id: "user-service-create",
+				repo,
+				file_path: "src/services/user.service.ts",
+				name: "createUser",
+				kind: "method",
+				start_line: 10,
+				end_line: 22,
+				parent_symbol_id: "user-service-1"
+			},
+			{
+				id: "user-service-delete",
+				repo,
+				file_path: "src/services/user.service.ts",
+				name: "deleteUser",
+				kind: "method",
+				start_line: 30,
+				end_line: 42,
+				parent_symbol_id: "user-service-1"
+			}
+		]);
+
+		// Class trace → children list.
+		const classResponse = await handleCodebaseRead({ name: "UserService", repo, owner: "vheins" }, store, vectors);
+		const classData = classResponse.structuredContent as Record<string, unknown>;
+		expect(classData.error).toBeUndefined();
+		expect(classData.parent).toBeNull();
+		const children = classData.children as Array<Record<string, unknown>>;
+		expect(children.map((c) => c.name).sort()).toEqual(["createUser", "deleteUser"]);
+
+		// Method trace → parent descriptor.
+		const methodResponse = await handleCodebaseRead({ name: "createUser", repo, owner: "vheins" }, store, vectors);
+		const methodData = methodResponse.structuredContent as Record<string, unknown>;
+		expect(methodData.error).toBeUndefined();
+		expect(methodData.parent).toEqual({
+			id: "user-service-1",
+			name: "UserService",
+			kind: "class",
+			filePath: "src/services/user.service.ts",
+			line: 5
+		});
+		expect(methodData.children).toEqual([]);
 	});
 });

@@ -1,6 +1,8 @@
 export { TreeSitterParserPool } from "./parser-pool";
 export { SymbolKind } from "./language-visitor";
 export type { LanguageVisitor, ParsedSymbol, ParseResult, ParserPool } from "./language-visitor";
+export { resolveParentSymbolId, resolveFileParents, PARENT_ELIGIBLE_KINDS } from "./parent-resolver";
+export type { ParentCandidate, ResolvedSymbol } from "./parent-resolver";
 export { TypeScriptVisitor } from "./typescript-visitor";
 export { GoVisitor } from "./visitors/go-visitor";
 export { PythonVisitor } from "./visitors/python-visitor";

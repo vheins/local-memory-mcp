@@ -24,6 +24,20 @@ export interface TraceResult {
 		exported: boolean;
 		defaultExport: boolean;
 	};
+	/**
+	 * Enclosing container (e.g. class → method), resolved from the same-file
+	 * parent_symbol_id link populated at index time (TASK-300). Null for
+	 * top-level symbols or when the parent row is absent.
+	 */
+	parent: {
+		id: string;
+		name: string;
+		kind: string;
+		filePath: string;
+		line: number | null;
+	} | null;
+	/** Direct children (e.g. a class's methods/properties), ordered by start line. */
+	children: CodebaseSymbol[];
 	disambiguation?: CodebaseSymbol[];
 }
 
@@ -104,6 +118,16 @@ export function traceSymbol(
 	// Step 3: Single match — build result
 	const symbol = matches[0];
 
+	// Step 3b: hierarchy (TASK-300) — the parent is the same-file container
+	// whose id equals symbol.parent_symbol_id (set at index time by the parse
+	// pipeline); children are the symbols whose parent_symbol_id points at this
+	// symbol. Both are resolved in-memory from the provided array, which TRACE
+	// mode already loads in full (getSymbolsByRepo), so no extra queries.
+	const parentSymbol = symbol.parent_symbol_id ? (symbols.find((s) => s.id === symbol.parent_symbol_id) ?? null) : null;
+	const children = symbols
+		.filter((s) => s.parent_symbol_id === symbol.id)
+		.sort((a, b) => (a.start_line ?? 0) - (b.start_line ?? 0));
+
 	const result: TraceResult = {
 		symbol,
 		definition: {
@@ -117,7 +141,17 @@ export function traceSymbol(
 		exportChain: {
 			exported: symbol.exported,
 			defaultExport: symbol.default_export
-		}
+		},
+		parent: parentSymbol
+			? {
+					id: parentSymbol.id,
+					name: parentSymbol.name,
+					kind: parentSymbol.kind,
+					filePath: parentSymbol.file_path,
+					line: parentSymbol.start_line
+				}
+			: null,
+		children
 	};
 
 	// Step 4: Find references if requested. The table-backed references

@@ -144,12 +144,23 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 							.join("\n")}${result.references.length > 20 ? `\n... and ${result.references.length - 20} more` : ""}`
 					: "";
 
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refList}`;
+			// Hierarchy surface (TASK-300): parent container + direct children of
+			// the traced symbol, populated from parent_symbol_id links at index time.
+			const hierarchy =
+				result.parent || result.children.length > 0
+					? `\n\n### Hierarchy\n\n${result.parent ? `Parent: ${result.parent.name} (${result.parent.kind}) — ${result.parent.filePath}:${result.parent.line ?? "?"}` : "Parent: none (top-level)"}\nChildren (${result.children.length}):\n${result.children
+							.slice(0, 20)
+							.map((c) => `- ${c.name} (${c.kind}) — ${c.file_path}:${c.start_line ?? "?"}`)
+							.join("\n")}${result.children.length > 20 ? `\n... and ${result.children.length - 20} more` : ""}`
+					: "";
+
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refList}${hierarchy}`;
 
 			return createMcpResponse(
 				{ ...result, mode: "trace", originalName: traceName !== name ? name : undefined },
 				`Symbol "${traceName}": defined in ${result.definition.file}:${result.definition.line}, ` +
-					`${result.references.length} references found`,
+					`${result.references.length} references, ` +
+					`${result.parent ? `parent ${result.parent.name}, ` : ""}${result.children.length} children found`,
 				{ includeJson: true, contentSummary }
 			);
 		} catch (err) {

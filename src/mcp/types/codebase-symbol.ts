@@ -43,6 +43,12 @@ export interface CodebaseSymbolRow {
 }
 
 export interface CodebaseSymbolInsert {
+	/**
+	 * Optional pre-assigned id (TASK-300). The parse pipeline assigns ids
+	 * before insert so parent_symbol_id links can reference the parent's id
+	 * within the same batch; when absent the entity generates a UUID.
+	 */
+	id?: string;
 	repo: string;
 	file_path: string;
 	name: string;
