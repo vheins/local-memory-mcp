@@ -1,6 +1,6 @@
 # Main Wireframe (Glass Interface)
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** global shell, glass sidebar/header, pill tab bar, detail drawer, Quick Create FAB, and theme toggle all match the shipped dashboard. Tab list below is outdated — shipped tabs also include **Arena** and **Codebase** (10 tabs total; see design/ui/navigation/site-map.md). The hybrid search bar ("Task codes, Memory content, Standards") is realized via the dashboard search + reference catalog; no single cross-entity search bar ships today.
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** global shell, glass sidebar/header, pill tab bar, detail drawer, Quick Create FAB, and theme toggle all match the shipped dashboard. Tab list below is outdated — shipped tabs also include **Arena**, **Codebase**, and **Queue** (11 tabs total after TASK-297; see design/ui/navigation/site-map.md). The hybrid search bar ("Task codes, Memory content, Standards") is realized via the dashboard search + reference catalog; no single cross-entity search bar ships today.
 
 This document provides a low-fidelity visual map of the primary dashboard screen.
 

@@ -14,6 +14,7 @@ It keeps the dashboard aligned with the same coordination model exposed by the M
 - **Task Coordination Visibility:** Task board cards and task detail drawers now surface active claims and pending handoffs directly.
 - **Claims Operations:** The `Handoffs` tab shows active claims and lets you release stale ownership without leaving the dashboard.
 - **Handoff Operations:** Handoff rows now expose richer transfer context including linked `task_code`, `updated_at`, `expires_at`, and structured `context`.
+- **Queue Operations:** The `Queue` tab shows the embedding/KG outbox worker — status counts (pending/claimed/done/failed) plus lifetime processed/failed/poisoned counters — and a Failed-jobs table with per-row Re-run and Clear actions (plus Re-run all).
 - **Reference Alignment:** Dashboard actions and MCP tools now follow the same flow for task status updates and coordination cleanup.
 
 ## How to Start
@@ -72,6 +73,17 @@ The dashboard mirrors the MCP tool flow:
 - `task-write` is the authoritative status transition path
 
 This means the dashboard is no longer a separate mutation path for tasks. Coordination cleanup and task lifecycle rules stay consistent between UI and MCP callers.
+
+### Queue Tab
+
+The Queue tab (the 11th tab, after Handoffs and before Knowledge Graph) surfaces the embedding/KG outbox worker and its failed jobs.
+
+- **Status summary:** counts by state (pending/claimed/done/failed) with lifetime processed/failed/poisoned counters and a worker running indicator — from `GET /api/queue/status`
+- **Failed jobs table:** terminal `poison` jobs with entity kind/id, attempts/max attempts, enqueued/processed timestamps, and the last error
+- **Re-run:** re-queue a failed job so the worker processes it again (per row, or all at once)
+- **Clear:** delete a failed job row (asks for confirmation)
+
+Failed jobs are named `poison` in the queue API and rendered as "Failed" in the UI.
 
 ### Knowledge Graph Tab
 

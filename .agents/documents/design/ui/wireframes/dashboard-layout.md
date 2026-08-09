@@ -1,6 +1,6 @@
 # Dashboard Content Layout
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** grid strategies match shipped tabs (StatsWidget full-width + TaskStats/TimeStats 2-col; Activity single-column; Memories scrollable cards; Tasks 4-column Kanban with min-width ~260px; Reference master-detail drawer; Standards list+detail; Handoffs status-filtered; KG full-viewport canvas). **Two tabs missing from this doc:** the **Arena** tab (default; AgentArena canvas) and the **Codebase** tab (CodebasePage layout). Responsive breakpoints (1024px/768px) verified in shipped CSS.
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** grid strategies match shipped tabs (StatsWidget full-width + TaskStats/TimeStats 2-col; Activity single-column; Memories scrollable cards; Tasks 4-column Kanban with min-width ~260px; Reference master-detail drawer; Standards list+detail; Handoffs status-filtered; KG full-viewport canvas). **Three tabs missing from this doc:** the **Arena** tab (default; AgentArena canvas), the **Codebase** tab (CodebasePage layout), and the **Queue** tab (QueuePage — status summary + failed-jobs table with Re-run/Clear; TASK-297 — 11 tabs total). Responsive breakpoints (1024px/768px) verified in shipped CSS.
 
 This document details the specific grid layouts for each primary tab in the dashboard.
 

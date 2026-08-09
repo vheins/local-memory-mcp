@@ -14,6 +14,7 @@ Dasbor tetap selaras dengan model koordinasi yang sama yang diekspos oleh alat M
 - **Visibilitas Koordinasi Tugas:** Kartu papan tugas dan laci detail tugas kini menampilkan klaim aktif dan handoff tertunda secara langsung.
 - **Operasi Klaim:** Tab `Handoffs` menampilkan klaim aktif dan memungkinkan Anda melepaskan kepemilikan yang basi tanpa meninggalkan dasbor.
 - **Operasi Handoff:** Baris handoff kini mengekspos konteks transfer yang lebih kaya termasuk `task_code`, `updated_at`, `expires_at`, dan `context` terstruktur.
+- **Operasi Antrean:** Tab `Queue` menampilkan worker outbox embedding/KG — hitungan status (pending/claimed/done/failed) plus penghitung seumur hidup processed/failed/poisoned — dan tabel Failed jobs dengan aksi Re-run dan Clear per baris (plus Re-run all).
 - **Keselarasan Referensi:** Tindakan dasbor dan alat MCP kini mengikuti alur yang sama untuk pembaruan status tugas dan pembersihan koordinasi.
 
 ## Cara Memulai
@@ -67,6 +68,17 @@ Dasbor mencerminkan alur alat MCP:
 - `task-write` adalah jalur transisi status yang otoritatif
 
 Ini berarti dasbor bukan lagi jalur mutasi terpisah untuk tugas. Pembersihan koordinasi dan aturan siklus hidup tugas tetap konsisten antara UI dan pemanggil MCP.
+
+### Tab Queue
+
+Tab Queue (tab ke-11, setelah Handoffs dan sebelum Knowledge Graph) menampilkan worker outbox embedding/KG dan job yang gagal.
+
+- **Ringkasan status:** hitungan per status (pending/claimed/done/failed) dengan penghitung seumur hidup processed/failed/poisoned dan indikator worker berjalan — dari `GET /api/queue/status`
+- **Tabel Failed jobs:** job terminal `poison` dengan jenis/id entitas, attempts/max attempts, stempel waktu enqueued/processed, dan error terakhir
+- **Re-run:** mengantrekan ulang job yang gagal agar worker memprosesnya lagi (per baris, atau sekaligus)
+- **Clear:** menghapus baris job yang gagal (meminta konfirmasi)
+
+Job yang gagal dinamai `poison` di API antrean dan ditampilkan sebagai "Failed" di UI.
 
 ### Tab Knowledge Graph
 
