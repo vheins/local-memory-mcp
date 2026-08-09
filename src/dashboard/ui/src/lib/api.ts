@@ -141,6 +141,68 @@ export interface CodeSearchResult {
 	limit: number;
 }
 
+// ─── Codebase Dead-Code Analysis (TASK-319/320) ─────────────────────────────
+// Mirrors the ARCHITECTURE-mode `deadCode` block served by the MCP backend
+// (src/mcp/codebase-index/services/dead-code.ts). Field names must match the
+// wire shape EXACTLY — additive only.
+
+/** Entry-point exclusion classifications for zero-ref candidates. */
+export type EntryPointType = "bin" | "manifest" | "shebang" | "public-api";
+
+/** Why a zero-ref candidate is excluded from the dead list (TASK-319). */
+export interface EntryPointTag {
+	type: EntryPointType;
+	/** Human-readable why (e.g. "listed in package.json (bin)"). */
+	reason: string;
+}
+
+/** A zero-reference top-level symbol in the unreferenced report. */
+export interface UnreferencedSymbol {
+	name: string;
+	kind: string;
+	file_path: string;
+	/** Declaration start line (symbol.start_line), when known. */
+	line: number | null;
+	/** Per-kind reference breakdown — every kind is 0 for a true candidate. */
+	kinds: Record<string, number>;
+	/** Present ONLY when the candidate was excluded as an entry point. */
+	entryPoint?: EntryPointTag;
+}
+
+/** A top in-degree symbol in the hotspots report. */
+export interface HotspotSymbol {
+	name: string;
+	kind: string;
+	file_path: string;
+	refCount: number;
+	/** Per-kind reference breakdown (call/instantiation/import/extends/implements). */
+	topKinds: Record<string, number>;
+}
+
+/** Languages with trustworthy reference data vs declaration-only/unobserved. */
+export interface LanguageCoverage {
+	reliable: string[];
+	unreliable: string[];
+}
+
+/** Totals for the dead-code analysis — full counts, NOT capped like the lists. */
+export interface DeadCodeTotals {
+	scanned: number;
+	dead: number;
+	entryExcluded: number;
+	truncated: boolean;
+}
+
+/** The `deadCode` block appended to an ARCHITECTURE response (TASK-319). */
+export interface DeadCodeBlock {
+	unreferenced: UnreferencedSymbol[];
+	hotspots: HotspotSymbol[];
+	languageCoverage: LanguageCoverage;
+	totals: DeadCodeTotals;
+	/** Honesty note: which languages are trustworthy and why, plus any skipped exclusions. */
+	coverageNote: string;
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -550,7 +612,7 @@ export const api = {
 			depth: String(depth),
 			includeSymbolCounts: String(includeSymbolCounts)
 		});
-		return apiFetch<{ root: Record<string, unknown>; summary: Record<string, unknown> }>(
+		return apiFetch<{ root: Record<string, unknown>; summary: Record<string, unknown>; deadCode?: DeadCodeBlock }>(
 			`/api/codebase/architecture?${q}`
 		);
 	},

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
-	import { api, type CodeSymbol } from "../lib/api";
+	import { api, type CodeSymbol, type DeadCodeBlock } from "../lib/api";
 	import { currentRepo } from "../lib/stores";
 	import CodebaseSymbolDetail from "./CodebaseSymbolDetail.svelte";
 	import CodebaseIndexStatus from "./CodebaseIndexStatus.svelte";
@@ -9,6 +9,7 @@
 	import CodebaseSymbolList from "./CodebaseSymbolList.svelte";
 	import CodebaseEmptyState from "./CodebaseEmptyState.svelte";
 	import CodebaseLanguageBreakdown from "./CodebaseLanguageBreakdown.svelte";
+	import CodebaseDeadCode from "./CodebaseDeadCode.svelte";
 
 	let { repo = "" }: { repo: string } = $props();
 
@@ -21,6 +22,8 @@
 			children?: Array<Record<string, unknown>>;
 		};
 		summary: Record<string, unknown>;
+		/** Dead-code candidates + hotspots (TASK-319/320) — present only when the ARCHITECTURE response carries them. */
+		deadCode?: DeadCodeBlock;
 	}
 
 	interface LanguageEntry {
@@ -77,6 +80,9 @@
 		if (!Array.isArray(exports)) return [];
 		return exports.slice(0, 10);
 	});
+
+	// --- Derived: dead-code block (TASK-320) ---
+	let deadCodeBlock = $derived<DeadCodeBlock | null>(architectureData?.deadCode ?? null);
 
 	// --- Reactive: load index when repo changes ---
 	$effect(() => {
@@ -150,6 +156,13 @@
 		selectedSymbol = symbol;
 	}
 
+	/** Open a file in the detail view (file tree, symbol detail, dead-code rows). */
+	function openCodebaseFile(filePath: string) {
+		selectedSymbol = null;
+		selectedFile = filePath;
+		void loadFileSymbols(filePath);
+	}
+
 	async function loadFileSymbols(filePath: string) {
 		if (!repo || !filePath) {
 			fileSymbols = [];
@@ -202,11 +215,7 @@
 						architecture={architectureData?.root?.children ?? null}
 						loading={architectureLoading}
 						error={architectureError || null}
-						onFileSelect={(filePath) => {
-							selectedSymbol = null;
-							selectedFile = filePath;
-							void loadFileSymbols(filePath);
-						}}
+						onFileSelect={openCodebaseFile}
 						onRetry={() => void loadArchitecture()}
 					/>
 				</div>
@@ -250,6 +259,9 @@
 							</div>
 						{/if}
 
+						<!-- ─── Dead-code candidates + Hotspots (TASK-320) ─── -->
+						<CodebaseDeadCode block={deadCodeBlock} onOpenFile={openCodebaseFile} />
+
 						{#if selectedSymbol}
 							<CodebaseSymbolDetail
 								symbol={selectedSymbol}
@@ -257,11 +269,7 @@
 								loading={false}
 								{repo}
 								onSymbolSelect={handleSymbolSelect}
-								onOpenFile={(filePath) => {
-									selectedSymbol = null;
-									selectedFile = filePath;
-									void loadFileSymbols(filePath);
-								}}
+								onOpenFile={openCodebaseFile}
 							/>
 						{:else if selectedFile}
 							<div class="muted-text" style="margin-bottom:12px;">
