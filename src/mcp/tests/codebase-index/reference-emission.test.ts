@@ -21,11 +21,65 @@
  * implements), and 'call' edges for call expressions. The Go visitor
  * (TASK-306) emits 'import' edges per import_spec binding (explicit alias
  * wins, else LAST path segment; blank `_` and dot `.` imports emit nothing),
- * 'extends' edges for interface embedding (type_elem children) and struct
- * embedding (anonymous field_declaration with no name field — pointer /
- * qualified / generic embedded types resolve to the LAST name segment), and
- * 'call' edges for call expressions.
- * WASM-dependent — skips gracefully when WASM is missing.
+ *  'extends' edges for interface embedding (type_elem children) and struct
+ *  embedding (anonymous field_declaration with no name field — pointer /
+ *  qualified / generic embedded types resolve to the LAST name segment), and
+ *  'call' edges for call expressions. The C and C++ visitors (TASK-308) emit
+ *  'import' edges per preproc_include — the symbol name is the FULL header
+ *  path with delimiters stripped (`"base.h"` → 'base.h', `<sys/stat.h>` →
+ *  'sys/stat.h'; mapping header→symbol is out of scope, the include path
+ *  string is the name) — and 'call' edges for call expressions (identifier /
+ *  field_expression / qualified_identifier LAST-segment). The C++ visitor
+ *  additionally emits heritage edges from class_specifier / struct_specifier
+ *  base_class_clause: 'extends' for the FIRST base, 'implements' for each
+ *  SUBSEQUENT base (position-based heuristic — C++ has no interface keyword;
+ *  template_type / qualified / virtual bases resolve to the LAST name
+ *  segment); C has no class heritage (verified — struct_specifier has no
+ *  base_class_clause). The Rust visitor (TASK-307) emits 'import' edges per
+ *  use_declaration binding (explicit `as` alias wins, else the LAST path
+ *  segment; grouped `use foo::{...}` emits per member, recursing into nested
+ *  groups; glob `use foo::*` and `self`/`super`/`crate` members emit nothing),
+ *  'implements' edges for `impl Trait for Type` blocks (qualified / generic
+ *  trait paths → LAST segment; inherent impls emit nothing) and for
+ *  `#[derive(...)]` attributes on struct/enum (per derived trait, LAST segment
+ *  of qualified paths, anchored at the declaration line), 'extends' edges for
+ *  trait supertraits (`trait T: Super + Other`; `'static`-style lifetime
+ *  bounds skipped), and 'call' edges (identifier / field_expression field /
+ *  scoped_identifier name → LAST segment; macro_invocations emit nothing).
+ *  The Swift visitor (TASK-309) emits 'import' edges per import_declaration
+ *  (one edge per statement; binding = LAST name segment — `import class
+ *  Foundation.URLSession` → 'URLSession'; the import-kind keyword is
+ *  anonymous in the tree-sitter AST), heritage edges from the DIRECT
+ *  `inheritance_specifier` children of class_declaration / protocol_declaration
+ *  (class/actor: FIRST specifier → 'extends', each subsequent → 'implements';
+ *  struct/extension → 'implements' each; enum → skipped — raw-value type
+ *  indistinguishable from a conformance by name; protocol → 'extends' each),
+ *  and 'call' edges for call_expressions (simple_identifier, or the LAST
+ *  simple_identifier of a navigation_expression; dynamic targets like
+ *  `(getFactory)()` emit nothing). The Ruby visitor (TASK-310) emits 'import'
+ *  edges for require/require_relative/load calls — the FULL literal string
+ *  path is the name (`require "json"` → 'json', mirroring the C/C++ include
+ *  path decision from TASK-308; interpolated and non-literal args emit
+ *  nothing) — 'extends' edges for the class superclass clause (`class Foo <
+ *  Bar` → 'Bar'; qualified `< Outer::Base` → LAST segment 'Base') and for
+ *  include/extend/prepend mixin calls (one per module argument, LAST segment
+ *  of qualified names — mixins are inheritance-like, so kind stays 'extends'),
+ *  and 'call' edges (method field identifier; chained receivers like `a.b.c`
+ *  emit only the LAST segment 'c'). The Dart visitor (TASK-311) emits one
+ *  'import' edge per library import directive — the FULL URI path with quotes
+ *  stripped is the name (import path→symbol mapping is query-time, mirroring
+ *  the C/C++ include/Ruby require decisions); exports and part directives
+ *  emit nothing — 'extends' edges for the class superclass and the `with`
+ *  mixin clause (heritage-like, mirroring the Ruby include decision), for the
+ *  mixin `on` applicability constraint, and for the class-level generic bound
+ *  (type_bound) — qualified (library-prefixed) heritage names resolve to the
+ *  LAST segment (`extends pkg.Base` → 'Base', never 'pkg'), plus 'implements'
+ *  edges per DIRECT interface target of the `implements` clause, and 'call'
+ *  edges from `selector` argument lists and cascade_section nodes (chained
+ *  receivers, nested calls and cascades emit the LAST callee segment; bare
+ *  property selectors AND bare cascade properties like `..length` emit
+ *  nothing; callerName = the enclosing method/constructor/function name).
+ *  WASM-dependent — skips gracefully when WASM is missing.
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
@@ -1322,5 +1376,1398 @@ func main() {
 
 		const fnCall = calls.find((r) => r.symbolName === "helper" && r.callerLine === 10);
 		expect(fnCall!.callerName).toBe("main");
+	});
+});
+
+describe("CppVisitor & CVisitor reference emission (TASK-308)", () => {
+	it("C++: emits 'import' edges per preproc_include with the FULL stripped header path", async () => {
+		const result = await parseOrSkip(
+			"cpp-includes.cpp",
+			`#include "base.h"
+#include <vector>
+#include "utils/math.h"
+#include <sys/stat.h>
+
+void run() {}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// The include path string IS the name (mapping header→symbol is out
+		// of scope per TASK-308): full path, delimiters stripped — quotes for
+		// string_literal, angle brackets for system_lib_string.
+		expect(names).toContain("base.h@1");
+		expect(names).toContain("vector@2");
+		expect(names).toContain("utils/math.h@3");
+		expect(names).toContain("sys/stat.h@4");
+
+		// The pool fills callerFile; includes carry no enclosing caller.
+		const first = imports[0];
+		expect(first!.callerFile).toBe("cpp-includes.cpp");
+		expect(first!.callerName).toBeNull();
+	});
+
+	it("C++: emits 'extends' for the first base and 'implements' for each subsequent base", async () => {
+		const result = await parseOrSkip(
+			"cpp-heritage.cpp",
+			`class Derived : public Base, protected ILeft, virtual IRight {
+public:
+  void run() {}
+};
+struct S : Base2 { int x; };
+class Single : virtual Lonely {};
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+
+		// FIRST base → 'extends' at the declaration line; subsequent bases →
+		// 'implements' (position-based heuristic per TASK-308; `virtual` and
+		// access_specifier nodes are not bases and don't shift the position).
+		const extBase = heritage.find((r) => r.symbolName === "Base" && r.kind === "extends");
+		expect(extBase).toBeDefined();
+		expect(extBase!.callerFile).toBe("cpp-heritage.cpp");
+		expect(extBase!.callerLine).toBe(1);
+		expect(extBase!.callerName).toBeNull();
+
+		const implILeft = heritage.find((r) => r.symbolName === "ILeft" && r.kind === "implements");
+		expect(implILeft).toBeDefined();
+		expect(implILeft!.callerLine).toBe(1);
+
+		const implIRight = heritage.find((r) => r.symbolName === "IRight" && r.kind === "implements");
+		expect(implIRight).toBeDefined();
+		expect(implIRight!.callerLine).toBe(1);
+
+		// Non-virtual single base on a struct → 'extends' (line 5).
+		const extBase2 = heritage.find((r) => r.symbolName === "Base2" && r.kind === "extends");
+		expect(extBase2).toBeDefined();
+		expect(extBase2!.callerLine).toBe(5);
+
+		// Single protected base → 'extends' (line 6).
+		const extLonely = heritage.find((r) => r.symbolName === "Lonely" && r.kind === "extends");
+		expect(extLonely).toBeDefined();
+		expect(extLonely!.callerLine).toBe(6);
+	});
+
+	it("C++: resolves template / qualified bases to the LAST name segment; access specifiers leak nothing", async () => {
+		const result = await parseOrSkip(
+			"cpp-template-bases.cpp",
+			`template <typename T>
+class Gen : public Generic<T> {};
+class Templ : public Base<int>, private Other<T>, virtual IFace {};
+struct Alt { int x; };
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+
+		// template_type `Generic<T>` → base is the first named child:
+		// 'Generic' (template_declaration-wrapped class, line 2).
+		const extGeneric = heritage.find((r) => r.symbolName === "Generic" && r.kind === "extends");
+		expect(extGeneric).toBeDefined();
+		expect(extGeneric!.callerLine).toBe(2);
+
+		// `Base<int>` → 'Base':extends; `Other<T>` (private) →
+		// 'Other':implements; `virtual IFace` → 'IFace':implements (all on
+		// the Templ declaration line 3).
+		const line3 = heritage.filter((r) => r.callerLine === 3);
+		expect(line3.map((r) => `${r.symbolName}:${r.kind}`).sort()).toEqual([
+			"Base:extends",
+			"IFace:implements",
+			"Other:implements"
+		]);
+
+		// Access specifiers (public/private/protected), template arguments
+		// (int, typename T) and the `virtual` keyword never leak as base
+		// targets — only the resolved base names are edges.
+		expect(
+			heritage.some((r) => ["public", "private", "protected", "virtual", "int", "typename", "T"].includes(r.symbolName))
+		).toBe(false);
+	});
+
+	it("C++: emits call edges with the enclosing method as caller; dynamic calls emit nothing", async () => {
+		const result = await parseOrSkip(
+			"cpp-calls.cpp",
+			`class Foo {
+public:
+  void update() {
+    helper();
+    obj.method();
+    ns::func();
+    a.b.c();
+    X::Y::z();
+    (*fp)();
+  }
+};
+void top() {
+  helper();
+}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const names = calls.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// identifier → 'helper'; field_expression → LAST segment
+		// ('obj.method' → 'method'); qualified_identifier → LAST segment
+		// ('ns::func' → 'func'); nested `a.b.c()` → 'c'; `X::Y::z()` → 'z'.
+		expect(names).toContain("helper@4");
+		expect(names).toContain("method@5");
+		expect(names).toContain("func@6");
+		expect(names).toContain("c@7");
+		expect(names).toContain("z@8");
+		// `(*fp)()` → parenthesized_expression function → no edge.
+		expect(calls.some((r) => r.symbolName === "fp")).toBe(false);
+
+		// Method-body call tracks the METHOD name as caller; function-body
+		// call tracks the FUNCTION name.
+		const methodCall = calls.find((r) => r.symbolName === "helper" && r.callerLine === 4);
+		expect(methodCall!.callerName).toBe("update");
+		expect(methodCall!.callerFile).toBe("cpp-calls.cpp");
+
+		const fnCall = calls.find((r) => r.symbolName === "helper" && r.callerLine === 13);
+		expect(fnCall!.callerName).toBe("top");
+	});
+
+	it("C: emits include edges and call edges; structs have no heritage", async () => {
+		const result = await parseOrSkip(
+			"c-sanity.c",
+			`#include <stdio.h>
+#include "local.h"
+#include <sys/types.h>
+void run() {
+  helper();
+  obj.method();
+  p->save();
+  (*fp)();
+}
+struct S { int x; };
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		expect(imports.map((r) => `${r.symbolName}@${r.callerLine}`)).toEqual(["stdio.h@1", "local.h@2", "sys/types.h@3"]);
+		const first = imports[0];
+		expect(first!.callerFile).toBe("c-sanity.c");
+		expect(first!.callerName).toBeNull();
+
+		const calls = refs.filter((r) => r.kind === "call");
+		const names = calls.map((r) => `${r.symbolName}@${r.callerLine}`);
+		expect(names).toContain("helper@5");
+		expect(names).toContain("method@6");
+		expect(names).toContain("save@7");
+		// `(*fp)()` → no edge.
+		expect(calls.some((r) => r.symbolName === "fp")).toBe(false);
+		const methodCall = calls.find((r) => r.symbolName === "helper" && r.callerLine === 5);
+		expect(methodCall!.callerName).toBe("run");
+
+		// C has NO class heritage — `struct S { int x; }` emits no
+		// extends/implements edges at all.
+		expect(refs.some((r) => r.kind === "extends" || r.kind === "implements")).toBe(false);
+	});
+
+	it("C++/C: callerName pierces declarator wrappers (out-of-line, pointer/ref-returning, destructor) — FIX-349", async () => {
+		const result = await parseOrSkip(
+			"cpp-callername-pierce.cpp",
+			`void Widget::outline() { helper2(); }
+int *getPtr() { aCall(); }
+int& getRef() { bCall(); }
+class W {
+public:
+  ~W() { dCall(); }
+};
+void f(int x) { q(); }
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const byLine = new Map(calls.map((r) => [r.callerLine, r]));
+
+		// Out-of-line definition: name is a qualified_identifier inside the
+		// function_declarator → LAST segment 'outline' (was null before).
+		expect(byLine.get(1)!.symbolName).toBe("helper2");
+		expect(byLine.get(1)!.callerName).toBe("outline");
+		// Pointer / reference-returning: function_declarator nested inside
+		// pointer_declarator / reference_declarator → 'getPtr' / 'getRef'
+		// (both were null before).
+		expect(byLine.get(2)!.symbolName).toBe("aCall");
+		expect(byLine.get(2)!.callerName).toBe("getPtr");
+		expect(byLine.get(3)!.symbolName).toBe("bCall");
+		expect(byLine.get(3)!.callerName).toBe("getRef");
+		// Destructor: name is a destructor_name inside the
+		// function_declarator → inner identifier 'W' (was null before).
+		expect(byLine.get(6)!.symbolName).toBe("dCall");
+		expect(byLine.get(6)!.callerName).toBe("W");
+		// Parameter names (identifiers inside parameter_list) never leak as
+		// the caller name — 'f' is the function, not 'x'.
+		expect(byLine.get(8)!.symbolName).toBe("q");
+		expect(byLine.get(8)!.callerName).toBe("f");
+		expect(calls.some((r) => r.callerName === "x")).toBe(false);
+	});
+
+	it("C: callerName pierces pointer_declarator for pointer-returning functions — FIX-349", async () => {
+		const result = await parseOrSkip(
+			"c-callername-pierce.c",
+			`int *getPtr() { aCall(); }
+void top() { helper(); }
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const byLine = new Map(calls.map((r) => [r.callerLine, r]));
+		expect(byLine.get(1)!.symbolName).toBe("aCall");
+		expect(byLine.get(1)!.callerName).toBe("getPtr");
+		expect(byLine.get(2)!.symbolName).toBe("helper");
+		expect(byLine.get(2)!.callerName).toBe("top");
+	});
+
+	it("C++: attribute_declaration in base_class_clause is skipped — no spurious edge, first base stays extends — FIX-350", async () => {
+		const result = await parseOrSkip(
+			"cpp-attr-base.cpp",
+			`class X : [[deprecated]] Base {};
+class Y : public Base, [[nodiscard]] I2 {};
+class Z : public B1, I3 {};
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+
+		// `[[deprecated]]` is an attribute-specifier on the base-specifier —
+		// legal C++, parses cleanly, but is NOT a base: it must not emit an
+		// edge and must not shift the first REAL base to 'implements'.
+		expect(heritage.some((r) => r.symbolName === "deprecated")).toBe(false);
+		expect(heritage.some((r) => r.symbolName === "nodiscard")).toBe(false);
+		const line1 = heritage.filter((r) => r.callerLine === 1);
+		expect(line1).toHaveLength(1);
+		expect(line1[0]).toMatchObject({ symbolName: "Base", kind: "extends", callerLine: 1, callerName: null });
+		// Attribute mid-list: Base is still the first (extends) base, I2 the
+		// second (implements).
+		const line2 = heritage.filter((r) => r.callerLine === 2);
+		expect(line2.map((r) => `${r.symbolName}:${r.kind}`).sort()).toEqual(["Base:extends", "I2:implements"]);
+		// Regression: plain multi-base still extends-then-implements.
+		const line3 = heritage.filter((r) => r.callerLine === 3);
+		expect(line3.map((r) => `${r.symbolName}:${r.kind}`).sort()).toEqual(["B1:extends", "I3:implements"]);
+	});
+});
+
+describe("RustVisitor reference emission (TASK-307)", () => {
+	it("emits 'import' edges per use binding — alias wins, last segment, glob/self emit nothing", async () => {
+		const result = await parseOrSkip(
+			"rust-imports.rs",
+			`use crate::a::b::Thing;
+use foo::{x, y as z, deep::Nested};
+use nested::{inner::{a, b as c}};
+use bar::*;
+use std::collections::HashMap as Map;
+use std::fmt;
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// Simple path `use crate::a::b::Thing` → LAST segment 'Thing';
+		// `use std::fmt` → 'fmt'.
+		expect(names).toContain("Thing@1");
+		expect(names).toContain("fmt@6");
+		// Grouped `use foo::{...}` → per-member edges; alias wins (`y as z` → 'z');
+		// `deep::Nested` → 'Nested'.
+		expect(names).toContain("x@2");
+		expect(names).toContain("z@2");
+		expect(names).toContain("Nested@2");
+		// Nested group `use nested::{inner::{...}}` recurses.
+		expect(names).toContain("a@3");
+		expect(names).toContain("c@3");
+		// `as Map` alias wins over the path's last segment ('HashMap').
+		expect(names).toContain("Map@5");
+		expect(names).not.toContain("HashMap@5");
+		// Glob `use bar::*` binds no name — nothing on its line, no '*' edge.
+		expect(imports.filter((r) => r.callerLine === 4)).toHaveLength(0);
+		expect(names.some((n) => n.includes("*"))).toBe(false);
+
+		// The pool fills callerFile; top-level imports carry no caller.
+		const first = imports[0];
+		expect(first!.callerFile).toBe("rust-imports.rs");
+		expect(first!.callerName).toBeNull();
+		expect(first!.callerLine).toBe(1);
+	});
+
+	it("emits 'implements' edges for impl Trait for Type (qualified/generic); inherent impls emit nothing", async () => {
+		const result = await parseOrSkip(
+			"rust-impl.rs",
+			`use std::fmt;
+
+impl std::fmt::Display for crate::models::User {}
+impl serde::Serialize for MyType {}
+impl Iterator<Item = u8> for MyVec {}
+impl<T> MyTrait for MyStruct<T> {}
+impl Base { fn a() {} }
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "implements");
+		const names = heritage.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// Qualified trait path → LAST segment: std::fmt::Display → 'Display',
+		// serde::Serialize → 'Serialize'.
+		expect(names).toContain("Display@3");
+		expect(names).toContain("Serialize@4");
+		// Generic trait `Iterator<Item = u8>` → 'Iterator'; generic impl
+		// `impl<T> MyTrait for ...` works.
+		expect(names).toContain("Iterator@5");
+		expect(names).toContain("MyTrait@6");
+		// Inherent impl `impl Base { ... }` has NO trait field → no edge.
+		expect(heritage.filter((r) => r.callerLine === 7)).toHaveLength(0);
+
+		// Heritage contract: callerLine = the impl block line; callerName null;
+		// target fields left null (name-based resolution per ADR-002).
+		const implDisplay = heritage.find((r) => r.symbolName === "Display");
+		expect(implDisplay!.callerFile).toBe("rust-impl.rs");
+		expect(implDisplay!.callerLine).toBe(3);
+		expect(implDisplay!.callerName).toBeNull();
+		expect(implDisplay!.targetFile).toBeNull();
+		expect(implDisplay!.targetSymbolId).toBeNull();
+
+		// The `use std::fmt;` import edge still emits alongside.
+		expect(refs.filter((r) => r.kind === "import").map((r) => r.symbolName)).toContain("fmt");
+	});
+
+	it("emits 'extends' edges for trait supertraits, skipping lifetime bounds", async () => {
+		const result = await parseOrSkip(
+			"rust-trait.rs",
+			`pub trait SuperTrait {}
+
+pub trait MyTrait: SuperTrait + OtherTrait {}
+
+pub trait Qualified: crate::base::TraitBase + core::fmt::Debug {}
+
+pub trait Bounded: Foo<u8> + std::ops::Add<f64> + 'static + Sized {}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends");
+		const names = heritage.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// Plain supertraits.
+		expect(names).toContain("SuperTrait@3");
+		expect(names).toContain("OtherTrait@3");
+		// Qualified supertraits → LAST segment: crate::base::TraitBase →
+		// 'TraitBase', core::fmt::Debug → 'Debug'.
+		expect(names).toContain("TraitBase@5");
+		expect(names).toContain("Debug@5");
+		// Generic bounds: Foo<u8> → 'Foo', std::ops::Add<f64> → 'Add'.
+		expect(names).toContain("Foo@7");
+		expect(names).toContain("Add@7");
+		// 'static lifetime bound is NOT a trait → no edge and no spurious
+		// 'static symbol; Sized is a real (auto)trait.
+		expect(names).toContain("Sized@7");
+		expect(heritage.some((r) => r.symbolName === "static")).toBe(false);
+		expect(heritage).toHaveLength(7);
+
+		const extSuper = heritage.find((r) => r.symbolName === "SuperTrait");
+		expect(extSuper!.callerFile).toBe("rust-trait.rs");
+		expect(extSuper!.callerName).toBeNull();
+	});
+
+	it("emits 'implements' edges per derived trait in #[derive(...)], skipping non-derive attributes", async () => {
+		const result = await parseOrSkip(
+			"rust-derive.rs",
+			`#[derive(Debug, Clone, serde::Serialize)]
+pub struct User {}
+
+#[derive(PartialEq)]
+enum Color { Red, Green }
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Plain {}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "implements");
+		const names = heritage.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// One edge per derived trait, anchored at the STRUCT/ENUM declaration
+		// line (the derived type), NOT the attribute line.
+		expect(names).toContain("Debug@2");
+		expect(names).toContain("Clone@2");
+		// Qualified derive path `serde::Serialize` → LAST segment 'Serialize'
+		// (the token_tree is flat — 'serde' must not leak a spurious edge).
+		expect(names).toContain("Serialize@2");
+		expect(heritage.some((r) => r.symbolName === "serde")).toBe(false);
+		// Enum derive.
+		expect(names).toContain("PartialEq@5");
+		// Stacked attributes: `#[repr(C)]` is NOT a derive → skipped, only
+		// `#[derive(Copy, Clone)]` on the Plain struct emits.
+		expect(names).toContain("Copy@9");
+		expect(names).toContain("Clone@9");
+		expect(heritage.some((r) => r.symbolName === "repr" || r.symbolName === "C")).toBe(false);
+		expect(heritage).toHaveLength(6);
+
+		const deriveDebug = heritage.find((r) => r.symbolName === "Debug");
+		expect(deriveDebug!.callerFile).toBe("rust-derive.rs");
+		expect(deriveDebug!.callerName).toBeNull();
+	});
+
+	it("emits call edges with the enclosing function/method as caller; macros emit nothing", async () => {
+		const result = await parseOrSkip(
+			"rust-calls.rs",
+			`impl Greeter {
+    fn greet(&self) { helper(); }
+}
+
+pub fn run() {
+    let s = obj.method();
+    std::io::read(&s);
+    self::helper();
+    helper();
+    println!("hi");
+}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const names = calls.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// Plain call → 'helper'; method body calls track the METHOD name;
+		// function body calls track the FUNCTION name as caller.
+		expect(names).toContain("helper@2");
+		const methodCall = calls.find((r) => r.symbolName === "helper" && r.callerLine === 2);
+		expect(methodCall!.callerName).toBe("greet");
+		expect(methodCall!.callerFile).toBe("rust-calls.rs");
+
+		// `obj.method()` → field_expression field 'method'; `std::io::read()`
+		// and `self::helper()` → scoped_identifier name (LAST segment).
+		expect(names).toContain("method@6");
+		expect(names).toContain("read@7");
+		expect(names).toContain("helper@8");
+		expect(names).toContain("helper@9");
+		const fnCall = calls.find((r) => r.symbolName === "helper" && r.callerLine === 9);
+		expect(fnCall!.callerName).toBe("run");
+
+		// `println!` is a macro_invocation, NOT a call_expression → no edge.
+		expect(calls.some((r) => r.symbolName === "println")).toBe(false);
+	});
+});
+
+describe("SwiftVisitor reference emission (TASK-309)", () => {
+	it("emits 'import' edges per import_declaration with LAST-segment binding; the import-kind keyword is anonymous", async () => {
+		const result = await parseOrSkip(
+			"swift-imports.swift",
+			`import UIKit
+import class Foundation.URLSession
+import func Darwin.pow
+
+func run() {}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// One edge per statement; plain `import UIKit` → 'UIKit'; the
+		// import-KIND keyword ('class' | 'func' | ...) is ANONYMOUS at the
+		// AST level (verified against the shipped WASM), so the binding is
+		// the LAST name segment: 'Foundation.URLSession' → 'URLSession'.
+		expect(names).toEqual(["UIKit@1", "URLSession@2", "pow@3"]);
+
+		// The pool fills callerFile; imports carry no enclosing caller.
+		const first = imports[0];
+		expect(first!.callerFile).toBe("swift-imports.swift");
+		expect(first!.callerName).toBeNull();
+	});
+
+	it("emits 'extends' for the first class base and 'implements' for each subsequent (incl. & composition); protocols extend every target", async () => {
+		const result = await parseOrSkip(
+			"swift-heritage.swift",
+			`class Foo: Base, Proto1, Proto2 {
+    func helper() { _ = self.save() }
+}
+
+class Composed: Base & Proto {
+}
+
+protocol P: Q, R {
+  func requirement()
+}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+
+		// FIRST base → 'extends' at the declaration line, subsequent →
+		// 'implements' (position-based heuristic; Swift can't name-distinguish
+		// a lone first protocol from a superclass — documented limitation).
+		const extBase = heritage.find((r) => r.symbolName === "Base" && r.kind === "extends");
+		expect(extBase).toBeDefined();
+		expect(extBase!.callerFile).toBe("swift-heritage.swift");
+		expect(extBase!.callerLine).toBe(1);
+		expect(extBase!.callerName).toBeNull();
+
+		const implProto1 = heritage.find((r) => r.symbolName === "Proto1" && r.kind === "implements");
+		expect(implProto1).toBeDefined();
+		expect(implProto1!.callerLine).toBe(1);
+		expect(implProto1!.callerName).toBeNull();
+
+		const implProto2 = heritage.find((r) => r.symbolName === "Proto2" && r.kind === "implements");
+		expect(implProto2).toBeDefined();
+		expect(implProto2!.callerLine).toBe(1);
+
+		// `Base & Proto` composition → one inheritance_specifier PER element
+		// (verified in the WASM): first 'extends', second 'implements'.
+		const compBase = heritage.find((r) => r.symbolName === "Base" && r.callerLine === 5);
+		expect(compBase!.kind).toBe("extends");
+		const compProto = heritage.find((r) => r.symbolName === "Proto" && r.kind === "implements");
+		expect(compProto).toBeDefined();
+		expect(compProto!.callerLine).toBe(5);
+
+		// protocol P: Q, R → EVERY inheritance target is 'extends'.
+		const extQ = heritage.find((r) => r.symbolName === "Q" && r.kind === "extends");
+		expect(extQ).toBeDefined();
+		expect(extQ!.callerLine).toBe(8);
+		const extR = heritage.find((r) => r.symbolName === "R" && r.kind === "extends");
+		expect(extR).toBeDefined();
+		expect(extR!.callerLine).toBe(8);
+
+		// Regression: call emission inside a method body unchanged — the
+		// method name is threaded as callerName.
+		const saveCall = refs.find((r) => r.symbolName === "save" && r.kind === "call");
+		expect(saveCall).toBeDefined();
+		expect(saveCall!.callerLine).toBe(2);
+		expect(saveCall!.callerName).toBe("helper");
+	});
+
+	it("emits 'implements' for struct/extension conformances and LAST-segment resolution; enum heritage is skipped", async () => {
+		const result = await parseOrSkip(
+			"swift-conformances.swift",
+			`struct S: ProtoA, ProtoB {
+  var x: Int = 0
+}
+
+extension Foo: ExtraProto {
+  func helper() { _ = multiply(2, 3) }
+}
+
+enum E: Int, CaseIterable {
+  case a
+}
+
+class Generic<T>: Base<T>, ns.GenericProto {
+}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+
+		// struct S: ProtoA, ProtoB — structs have no superclass → every
+		// conformance is 'implements'.
+		const implProtoA = heritage.find((r) => r.symbolName === "ProtoA" && r.kind === "implements");
+		expect(implProtoA).toBeDefined();
+		expect(implProtoA!.callerLine).toBe(1);
+		expect(implProtoA!.callerName).toBeNull();
+		expect(heritage.find((r) => r.symbolName === "ProtoB" && r.kind === "implements")).toBeDefined();
+
+		// extension Foo: ExtraProto — same: 'implements' at the declaration line.
+		const implExtra = heritage.find((r) => r.symbolName === "ExtraProto" && r.kind === "implements");
+		expect(implExtra).toBeDefined();
+		expect(implExtra!.callerLine).toBe(5);
+
+		// enum E: Int, CaseIterable — SKIPPED entirely: 'Int' is a raw-value
+		// type sharing the exact AST shape of a conformance; name-based
+		// resolution cannot distinguish them (documented limitation).
+		expect(heritage.some((r) => r.symbolName === "Int" || r.symbolName === "CaseIterable")).toBe(false);
+
+		// generic Base<T> → 'Base':extends (type_arguments excluded); dotted
+		// ns.GenericProto → LAST segment 'GenericProto':implements.
+		const extGeneric = heritage.find((r) => r.symbolName === "Base" && r.kind === "extends");
+		expect(extGeneric).toBeDefined();
+		expect(extGeneric!.callerLine).toBe(13);
+		expect(heritage.find((r) => r.symbolName === "GenericProto" && r.kind === "implements")).toBeDefined();
+
+		// Method call regression inside the extension body.
+		const multCall = refs.find((r) => r.symbolName === "multiply" && r.kind === "call");
+		expect(multCall).toBeDefined();
+		expect(multCall!.callerName).toBe("helper");
+		expect(multCall!.callerLine).toBe(6);
+	});
+
+	it("emits 'call' edges (identifier / navigation LAST segment) with the enclosing function as caller; dynamic targets emit nothing", async () => {
+		const result = await parseOrSkip(
+			"swift-calls.swift",
+			`func topCall() {
+  helper()
+  obj.save()
+  self.update()
+  a.b.c()
+  (getFactory)()
+  NSObject.init()
+  let c = C()
+}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const names = calls.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// identifier → 'helper'; navigation_expression → LAST simple identifier
+		// segment: 'obj.save' → 'save', 'self.update' → 'update', 'a.b.c' → 'c'.
+		expect(names).toContain("helper@2");
+		expect(names).toContain("save@3");
+		expect(names).toContain("update@4");
+		expect(names).toContain("c@5");
+		// `NSObject.init()` → LAST segment 'init' (name-based, documented);
+		// `C()` initializer call → 'C'.
+		expect(names).toContain("init@7");
+		expect(names).toContain("C@8");
+		// `(getFactory)()` → tuple_expression-call target (dynamic) → no edge
+		// (and no 'getFactory' from a paren-wrapped identifier).
+		expect(calls.some((r) => r.symbolName === "getFactory")).toBe(false);
+
+		// Every call tracks the enclosing FUNCTION name as caller.
+		for (const c of calls) {
+			expect(c.callerName).toBe("topCall");
+			expect(c.callerFile).toBe("swift-calls.swift");
+		}
+	});
+});
+
+describe("RubyVisitor reference emission (TASK-310)", () => {
+	it("emits 'import' edges for require/require_relative/load with the full literal path as the name; interpolated/non-literal args emit nothing", async () => {
+		const result = await parseOrSkip(
+			"ruby-imports.rb",
+			`require "json"
+require_relative "./models/user"
+load "tasks/seed.rb"
+
+class Boot
+  require "nested/req"
+  require "#{dir}/dynamic"
+  require File.join("a", "b")
+end
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// The FULL literal path is the imported name (mirrors the C/C++
+		// include-path decision — TASK-308; a require path is a single
+		// identifier, no last-segment splitting).
+		expect(names).toContain("json@1");
+		expect(names).toContain("./models/user@2");
+		expect(names).toContain("tasks/seed.rb@3");
+		// require works inside class bodies too.
+		expect(names).toContain("nested/req@6");
+		// Interpolated ("#{dir}/x") and non-literal (File.join(...)) require
+		// args have no statically resolvable path → no import edge.
+		expect(imports.filter((r) => r.callerLine === 7 || r.callerLine === 8)).toHaveLength(0);
+
+		// The pool fills callerFile; requires are file-scope statements.
+		const first = imports[0];
+		expect(first!.callerFile).toBe("ruby-imports.rb");
+		expect(first!.callerName).toBeNull();
+		expect(first!.callerLine).toBe(1);
+		expect(first!.targetFile).toBeNull();
+		expect(first!.targetSymbolId).toBeNull();
+	});
+
+	it("emits 'extends' for the class superclass (incl. qualified LAST segment) and for include/extend/prepend mixins", async () => {
+		const result = await parseOrSkip(
+			"ruby-heritage.rb",
+			`class Vehicle
+end
+
+class Car < Vehicle
+  include Drivable, Enumerable
+  extend Other::Mod, Addon
+  prepend Observable
+end
+
+module Outer
+  class Inner < Outer::Base
+  end
+end
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends");
+
+		// Class superclass → 'extends' at the declaration line; callerName null.
+		const extVehicle = heritage.find((r) => r.symbolName === "Vehicle" && r.kind === "extends");
+		expect(extVehicle).toBeDefined();
+		expect(extVehicle!.callerFile).toBe("ruby-heritage.rb");
+		expect(extVehicle!.callerLine).toBe(4);
+		expect(extVehicle!.callerName).toBeNull();
+		expect(extVehicle!.targetFile).toBeNull();
+		expect(extVehicle!.targetSymbolId).toBeNull();
+
+		// Qualified superclass `Outer::Base` → LAST segment 'Base'.
+		const extBase = heritage.find((r) => r.symbolName === "Base" && r.kind === "extends");
+		expect(extBase).toBeDefined();
+		expect(extBase!.callerLine).toBe(11);
+
+		// include/extend/prepend mixins → 'extends' per argument at the call
+		// line; multi-arg include emits one edge per module; qualified module
+		// names resolve to the LAST segment ('Other::Mod' → 'Mod').
+		expect(heritage.map((r) => `${r.symbolName}@${r.callerLine}`)).toContain("Drivable@5");
+		expect(heritage.map((r) => `${r.symbolName}@${r.callerLine}`)).toContain("Enumerable@5");
+		expect(heritage.map((r) => `${r.symbolName}@${r.callerLine}`)).toContain("Mod@6");
+		expect(heritage.map((r) => `${r.symbolName}@${r.callerLine}`)).toContain("Addon@6");
+		const mixin = heritage.find((r) => r.symbolName === "Drivable");
+		expect(mixin!.callerName).toBeNull();
+	});
+
+	it("emits 'call' edges with the enclosing method as caller; chained receivers emit only the LAST segment", async () => {
+		const result = await parseOrSkip(
+			"ruby-calls.rb",
+			`def drive
+  helper()
+  obj.save
+  a.b.c
+  self.update
+  attr_accessor :name
+end
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const names = calls.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// Plain identifier → 'helper'; member-style receiver → the method
+		// field identifier ('save', 'update'); `attr_accessor` is a plain call.
+		expect(names).toContain("helper@2");
+		expect(names).toContain("save@3");
+		expect(names).toContain("update@5");
+		expect(names).toContain("attr_accessor@6");
+		// `a.b.c` — the receiver subtree is a path component, so ONLY the LAST
+		// segment 'c' is emitted (no 'b' edge).
+		expect(names).toContain("c@4");
+		expect(calls.some((r) => r.symbolName === "b")).toBe(false);
+
+		// Every call tracks the enclosing METHOD name as caller.
+		for (const c of calls) {
+			expect(c.callerName).toBe("drive");
+			expect(c.callerFile).toBe("ruby-calls.rb");
+			expect(c.targetFile).toBeNull();
+			expect(c.targetSymbolId).toBeNull();
+		}
+	});
+});
+
+describe("DartVisitor reference emission (TASK-311)", () => {
+	it("emits one 'import' edge per library import with the full URI (quotes stripped) as the name; exports and parts emit nothing", async () => {
+		const result = await parseOrSkip(
+			"dart-imports.dart",
+			`import 'dart:math';
+import 'package:foo/bar.dart' as fb show Baz, qux hide Secret;
+import "src/local.dart";
+
+export 'src/dep.dart';
+part 'src/other.dart';
+part of 'src/library.dart';
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		// The FULL URI path is the imported name (quotes stripped); the `as`
+		// alias and show/hide combinators are selection granularity, NOT edges.
+		expect(names).toContain("dart:math@1");
+		expect(names).toContain("package:foo/bar.dart@2");
+		expect(names).toContain("src/local.dart@3");
+		// export / part / part-of are NOT imports.
+		expect(imports).toHaveLength(3);
+
+		// The pool fills callerFile; imports are file-scope statements.
+		const first = imports[0];
+		expect(first!.callerFile).toBe("dart-imports.dart");
+		expect(first!.callerName).toBeNull();
+		expect(first!.callerLine).toBe(1);
+		expect(first!.targetFile).toBeNull();
+		expect(first!.targetSymbolId).toBeNull();
+	});
+
+	it("emits 'extends' for the superclass and with-mixins, 'implements' per interface, the mixin on-constraint and the class-level generic bound", async () => {
+		const result = await parseOrSkip(
+			"dart-heritage.dart",
+			`abstract class Animal implements Comparable<Animal> {
+  int get age;
+}
+
+class Dog extends Animal with Fable, Juggable implements Barkable, Playable {
+}
+
+mixin Fetcher {
+  void fetch() {}
+}
+
+mixin Jumper on Animal {
+  void jump() {}
+}
+
+class Generic<T extends Animal> implements Listenable<T> {
+  final T value;
+}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+
+		// Class superclass → 'extends' at the declaration line; callerName null
+		// per the heritage contract.
+		const extAnimal = heritage.find((r) => r.symbolName === "Animal" && r.kind === "extends" && r.callerLine === 5);
+		expect(extAnimal).toBeDefined();
+		expect(extAnimal!.callerFile).toBe("dart-heritage.dart");
+		expect(extAnimal!.callerLine).toBe(5);
+		expect(extAnimal!.callerName).toBeNull();
+		expect(extAnimal!.targetFile).toBeNull();
+		expect(extAnimal!.targetSymbolId).toBeNull();
+
+		const hnames = heritage.map((r) => `${r.symbolName}:${r.kind}@${r.callerLine}`);
+		// with-mixins → 'extends' (inheritance-like heritage, per the task decision).
+		expect(hnames).toContain("Fable:extends@5");
+		expect(hnames).toContain("Juggable:extends@5");
+		// implements list → one 'implements' per DIRECT interface target.
+		expect(hnames).toContain("Barkable:implements@5");
+		expect(hnames).toContain("Playable:implements@5");
+		// The declaring class itself and generic type-argument targets are NOT
+		// edges ('Comparable<Animal>' → 'Comparable' only; type args nested).
+		expect(heritage.some((r) => r.symbolName === "Dog")).toBe(false);
+		expect(hnames).toContain("Comparable:implements@1");
+		expect(heritage.some((r) => r.symbolName === "Animal" && r.kind === "implements")).toBe(false);
+		// mixin `on` applicability constraint → 'extends' (no edge for a mixin
+		// without an `on` clause — 'Fetcher').
+		expect(hnames).toContain("Animal:extends@12");
+		expect(heritage.some((r) => r.symbolName === "Fetcher")).toBe(false);
+		// class-level generic bound → 'extends' (mirrors TS TASK-301).
+		expect(hnames).toContain("Listenable:implements@16");
+		expect(hnames).toContain("Animal:extends@16");
+	});
+
+	it("resolves qualified (library-prefixed) heritage names to the LAST segment — the library prefix is never an edge", async () => {
+		const result = await parseOrSkip(
+			"dart-heritage-qualified.dart",
+			`class C extends pkg.Base {}
+class D implements pkg.A, B {}
+class E with pkg.M1, M2 {}
+mixin F on pkg.T {}
+mixin H on pkg.T, U {}
+class G<T extends pkg.V> implements Listenable<T> {}
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const heritage = refs.filter((r) => r.kind === "extends" || r.kind === "implements");
+		const hnames = heritage.map((r) => `${r.symbolName}:${r.kind}@${r.callerLine}`);
+
+		// The hidden _type_name/_type_dot_identifier rules hoist BOTH 'pkg' and
+		// 'Base' as direct type_identifiers — the LAST per segment wins.
+		expect(hnames).toContain("Base:extends@1");
+		expect(hnames).toContain("A:implements@2");
+		expect(hnames).toContain("B:implements@2");
+		expect(hnames).toContain("M1:extends@3");
+		expect(hnames).toContain("M2:extends@3");
+		expect(hnames).toContain("T:extends@4");
+		expect(hnames).toContain("T:extends@5");
+		expect(hnames).toContain("U:extends@5");
+		expect(hnames).toContain("V:extends@6");
+		expect(hnames).toContain("Listenable:implements@6");
+		// The library prefix is a path component — never a heritage target, and
+		// generic type arguments stay nested (no edge).
+		expect(heritage.some((r) => r.symbolName === "pkg")).toBe(false);
+		expect(heritage.some((r) => r.symbolName === "T" && r.kind === "implements")).toBe(false);
+	});
+
+	it("emits 'call' edges with the enclosing method as caller; chained receivers, nested calls and cascades emit only the LAST callee; bare property selectors and bare cascade properties emit nothing", async () => {
+		const result = await parseOrSkip(
+			"dart-calls.dart",
+			`class Greeter {
+  String greet(String name) {
+    final msg = format(name);
+    return msg.length;
+  }
+}
+String format(String name) => 'Hi $name';
+void main() {
+  final g = Greeter();
+  g.greet('bob');
+  print('done');
+  g.greet('a').toUpperCase();
+  final nested = foo(bar());
+  list..add(1)..add(2);
+  list..length;
+  list..first;
+  list..add(1)..first;
+}
+int foo(int x) => x;
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const calls = refs.filter((r) => r.kind === "call");
+		const names = calls.map((r) => `${r.symbolName}@${r.callerLine}`);
+
+		expect(names).toContain("format@3");
+		expect(names).toContain("Greeter@9");
+		expect(names).toContain("greet@10");
+		expect(names).toContain("print@11");
+		// `g.greet('a').toUpperCase()` → 'greet' AND 'toUpperCase'; the receiver
+		// `g` is a path component, never a call site.
+		expect(names).toContain("greet@12");
+		expect(names).toContain("toUpperCase@12");
+		expect(calls.some((r) => r.symbolName === "g")).toBe(false);
+		// Nested call `foo(bar())` → BOTH callees.
+		expect(names).toContain("foo@13");
+		expect(names).toContain("bar@13");
+		// Cascade `list..add(1)..add(2)` → one 'add' edge PER cascade section.
+		expect(calls.filter((r) => r.symbolName === "add" && r.callerLine === 14)).toHaveLength(2);
+		// Bare property access (`msg.length`) without `()` is NOT a call.
+		expect(calls.some((r) => r.symbolName === "length")).toBe(false);
+		// Bare cascade property selectors (`list..length`, `list..first`) carry
+		// no argument list → NOT calls, at any position in a cascade chain.
+		expect(calls.some((r) => r.symbolName === "length" && r.callerLine === 15)).toBe(false);
+		expect(calls.some((r) => r.symbolName === "first")).toBe(false);
+		// `list..add(1)..first` → the trailing `..first` is property access but
+		// the `..add(1)` section before it still emits exactly one call.
+		expect(calls.filter((r) => r.symbolName === "add" && r.callerLine === 17)).toHaveLength(1);
+
+		// callerName = the enclosing method/function name.
+		const formatCall = calls.find((r) => r.symbolName === "format");
+		expect(formatCall!.callerName).toBe("greet");
+		const greetCall = calls.find((r) => r.symbolName === "greet" && r.callerLine === 10);
+		expect(greetCall!.callerName).toBe("main");
+		expect(greetCall!.callerFile).toBe("dart-calls.dart");
+		expect(greetCall!.targetFile).toBeNull();
+		expect(greetCall!.targetSymbolId).toBeNull();
+	});
+});
+
+describe("VueVisitor reference emission (TASK-312)", () => {
+	it("emits import edges per binding inside <script setup> and <script> blocks", async () => {
+		const result = await parseOrSkip(
+			"vue-component.vue",
+			`<template>
+  <div>
+    <MyComponent :prop="x" />
+    <base-button @click="go">Go</base-button>
+    <span>{{ msg }}</span>
+  </div>
+</template>
+
+<script lang="ts" setup>
+import { ref, computed } from 'vue'
+import MyComponent from './components/MyComponent.vue'
+import * as store from './store'
+import type { Foo, Bar as Baz } from './types'
+import './styles.css'
+import Def, { named } from './mixed'
+const msg = ref('hello')
+const dynamic = import('./lazy')
+</script>
+
+<script>
+import LegacyThing from './legacy'
+export default {
+  name: 'Plain'
+}
+</script>
+
+<style scoped>
+.red { color: red; }
+</style>
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+		// Named imports (single line) inside <script setup>.
+		expect(names).toContain("ref@10");
+		expect(names).toContain("computed@10");
+		// Default import — the binding name is the reference, not the module path.
+		expect(names).toContain("MyComponent@11");
+		// Namespace import resolves to the alias (`* as store` → 'store').
+		expect(names).toContain("store@12");
+		// Type-only import: imported name wins over the `as` alias (TS emitImports
+		// semantics — `Bar as Baz` → 'Bar').
+		expect(names).toContain("Foo@13");
+		expect(names).toContain("Bar@13");
+		// Mixed default + named in one statement.
+		expect(names).toContain("Def@15");
+		expect(names).toContain("named@15");
+		// A second plain <script> block is scanned too.
+		expect(names).toContain("LegacyThing@21");
+
+		// Side-effect imports (`import './styles.css'`) carry no binding → no edge;
+		// dynamic `import('./lazy')` is not an import statement → no edge; the
+		// `const msg = ref(...)` line never produces an import edge.
+		expect(names).not.toContain("styles");
+		expect(names).not.toContain("lazy");
+		expect(imports.filter((r) => r.callerLine === 14)).toHaveLength(0);
+
+		// Imports are file-scope: callerName null; the pool fills callerFile;
+		// targets are explicit null (canonical TASK-347 pattern).
+		const first = imports[0];
+		expect(first!.callerName).toBeNull();
+		expect(first!.callerFile).toBe("vue-component.vue");
+		expect(first!.targetFile).toBeNull();
+		expect(first!.targetSymbolId).toBeNull();
+	});
+
+	it("emits instantiation edges for template component tags, skipping native elements", async () => {
+		const result = await parseOrSkip(
+			"vue-template.vue",
+			`<template>
+  <div>
+    <MyComponent :prop="x" />
+    <base-button @click="go">Go</base-button>
+    <span>{{ msg }}</span>
+    <div>
+      <NestedComp />
+    </div>
+    <keep-alive>
+      <router-view />
+    </keep-alive>
+  </div>
+</template>
+
+<script setup lang="ts">
+const msg = ref('hello')
+</script>
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const insts = refs.filter((r) => r.kind === "instantiation");
+		const names = insts.map((r) => `${r.symbolName}@${r.callerLine}`);
+		// PascalCase component tag.
+		expect(names).toContain("MyComponent@3");
+		// kebab-case component tag.
+		expect(names).toContain("base-button@4");
+		// Nested component inside a nested native element.
+		expect(names).toContain("NestedComp@7");
+		// Vue built-in kebab-case components are usages too (harmless dangling
+		// name-based edges).
+		expect(names).toContain("keep-alive@9");
+		expect(names).toContain("router-view@10");
+
+		// Native elements (`div`, `span`) emit nothing.
+		expect(names.some((n) => n.startsWith("div") || n.startsWith("span"))).toBe(false);
+
+		// Template usage has no enclosing function: callerName null.
+		const comp = insts.find((r) => r.symbolName === "MyComponent");
+		expect(comp).toBeDefined();
+		expect(comp!.callerName).toBeNull();
+		expect(comp!.callerFile).toBe("vue-template.vue");
+		expect(comp!.targetFile).toBeNull();
+		expect(comp!.targetSymbolId).toBeNull();
+	});
+
+	it("emits nothing for native-only templates or script-less SFCs", async () => {
+		const result = await parseOrSkip(
+			"vue-native.vue",
+			`<template>
+  <div>
+    <span>plain text</span>
+    <section>
+      <p>hello</p>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.red { color: red; }
+</style>
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		// No script block → no import edges; all-lowercase native tags → no
+		// instantiation edges; no heritage/call kinds anywhere in a Vue SFC.
+		expect(refs).toHaveLength(0);
+	});
+
+	it("recurses into <template> wrappers (slot/v-if) emitting nested component instantiations", async () => {
+		const result = await parseOrSkip(
+			"vue-template-wrappers.vue",
+			`<template>
+  <div>
+    <template #header>
+      <MySlotComp />
+    </template>
+    <template v-if="ok">
+      <VIfComp />
+    </template>
+  </div>
+</template>
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		// The grammar's `_node` includes `template_element`, so `<template
+		// #header>` / `<template v-if>` wrappers are NOT `element` nodes —
+		// walkTemplate must recurse into them or these components stay silent
+		// (review FIX-1). Each nested component instantiation edge anchors at
+		// its own tag line.
+		const refs = result.references ?? [];
+		const insts = refs.filter((r) => r.kind === "instantiation");
+		const names = insts.map((r) => `${r.symbolName}@${r.callerLine}`);
+		expect(names).toContain("MySlotComp@4");
+		expect(names).toContain("VIfComp@7");
+		// The `template` wrapper itself emits nothing (lowercase built-in tag).
+		expect(names.some((n) => n.startsWith("template"))).toBe(false);
+	});
+
+	it("pins callerLine for multi-line named imports and type-default imports", async () => {
+		const result = await parseOrSkip(
+			"vue-script-imports.vue",
+			`<script lang="ts" setup>
+import {
+  namedA,
+  namedB
+} from './mod'
+import type Foo from './types'
+</script>
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		const refs = result.references ?? [];
+		const imports = refs.filter((r) => r.kind === "import");
+		const names = imports.map((r) => `${r.symbolName}@${r.callerLine}`);
+		// Multi-line named import: BOTH bindings anchor at the statement's
+		// start line (the negative-lookahead + brace-split is the most
+		// failure-prone part of SCRIPT_IMPORT_RE — review FIX-4).
+		expect(names).toContain("namedA@2");
+		expect(names).toContain("namedB@2");
+		// `import type Foo from './types'` — type modifier + default binding →
+		// one edge for the binding (type stripped by the regex).
+		expect(names).toContain("Foo@6");
+
+		// FIX-3: no garbage rows — a `{\n` fragment (comment/truncation shape)
+		// is not a valid identifier, so it must never reach symbol_name.
+		expect(imports.some((r) => r.symbolName.includes("{") || r.symbolName.includes("\n"))).toBe(false);
+		expect(imports.some((r) => r.symbolName === "default")).toBe(false);
+	});
+
+	it("emits no import edge for template-literal import lookalikes not at a line start", async () => {
+		const result = await parseOrSkip(
+			"vue-string-context.vue",
+			`<script lang="ts">
+const snippet = \`sql example: import fake from './fake.sql'\`
+</script>
+`
+		);
+		if (!wasmAvailable) return;
+		if (
+			result.error &&
+			(result.error.startsWith("Unsupported extension") || result.error.startsWith("Failed to load grammar"))
+		)
+			return;
+
+		// SCRIPT_IMPORT_RE is line-anchored: mid-line import-looking text
+		// inside a template literal does NOT match → zero edges. (A line-START
+		// `import` inside a template literal remains an accepted false
+		// positive — documented in the SCRIPT_IMPORT_RE JSDoc; a TS-grammar
+		// re-parse is out of scope per the TASK-312 constraints. Review FIX-4.)
+		const refs = result.references ?? [];
+		expect(refs).toHaveLength(0);
 	});
 });
