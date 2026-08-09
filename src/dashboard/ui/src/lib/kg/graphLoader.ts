@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import type { Writable } from "svelte/store";
-import { api } from "$lib/api";
-import type { KGNode, KGEdge } from "$lib/interfaces";
+import { api } from "../api";
+import type { KGNode, KGEdge } from "../interfaces";
 
 /**
  * Graph-fetch orchestration for the knowledge-graph dashboard (TASK-196).

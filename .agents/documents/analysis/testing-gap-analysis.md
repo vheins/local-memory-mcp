@@ -55,15 +55,15 @@ Structural consolidation (locations + naming) → Coverage gaps → CI gate → 
 
 ### 2.3 Naming & Location Conventions (current, mixed)
 
-| Convention                      | Example                                                     | Count   |
-| :------------------------------ | :---------------------------------------------------------- | :------ |
-| Plain `X.test.ts` (centralized) | `src/mcp/tests/memory.write.test.ts`                        | ~97     |
-| `*.integration.test.ts`         | `src/dashboard/tests/controllers.integration.test.ts`       | 3       |
-| `e2e.test.ts`                   | `src/mcp/tests/e2e.test.ts`                                 | 2       |
-| `*.perf.test.ts`                | `src/dashboard/ui/src/lib/kg/KGNeuralRenderer.perf.test.ts` | 1       |
-| snake_case legacy               | `src/mcp/tests/spec_compliance.test.ts`                     | 1       |
-| Colocated                       | `src/dashboard/lib/helpers.test.ts`                         | 2       |
-| `__tests__/` dirs               | `src/dashboard/ui/src/components/__tests__/`                | UI only |
+| Convention                      | Example                                                               | Count   |
+| :------------------------------ | :-------------------------------------------------------------------- | :------ |
+| Plain `X.test.ts` (centralized) | `src/mcp/tests/memory.write.test.ts`                                  | ~97     |
+| `*.integration.test.ts`         | `src/dashboard/tests/controllers.integration.test.ts`                 | 3       |
+| `e2e.test.ts`                   | `src/mcp/tests/e2e.test.ts`                                           | 2       |
+| `*.perf.test.ts`                | `src/dashboard/ui/src/lib/kg/__tests__/KGNeuralRenderer.perf.test.ts` | 1       |
+| snake_case legacy               | `src/mcp/tests/spec_compliance.test.ts`                               | 1       |
+| Colocated                       | `src/dashboard/lib/helpers.test.ts`                                   | 2       |
+| `__tests__/` dirs               | `src/dashboard/ui/src/components/__tests__/`                          | UI only |
 
 ---
 

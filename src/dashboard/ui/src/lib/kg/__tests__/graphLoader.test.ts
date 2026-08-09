@@ -1,13 +1,14 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { get, writable } from "svelte/store";
-import { createGraphLoader, SHOW_MORE_STEP, MAX_GRAPH_LIMIT, type GraphLoaderDeps } from "./graphLoader";
-import type { KGNode, KGEdge } from "$lib/interfaces";
+import { createGraphLoader, SHOW_MORE_STEP, MAX_GRAPH_LIMIT, type GraphLoaderDeps } from "../graphLoader";
+import type { KGNode, KGEdge } from "../../interfaces";
 
-// Mock the api module ($lib alias resolves via vitest.config.ts). The mock is
-// hoisted above imports, so the shared fn must come from vi.hoisted.
+// Mock the api module with a RELATIVE path so it resolves identically under
+// both configs (the root vitest.config.ts does not define the $lib alias).
+// Shared fn must come from vi.hoisted (hoisted above imports).
 const { kgGraphMock } = vi.hoisted(() => ({ kgGraphMock: vi.fn() }));
 
-vi.mock("$lib/api", () => ({
+vi.mock("../../api", () => ({
 	api: {
 		kgGraph: kgGraphMock
 	}

@@ -34,9 +34,19 @@ Fixed facts (do not change without an ADR):
 - `environment: "node"` default for the whole suite. DOM-dependent tests opt in
   per file (see 1.2).
 - `testTimeout: 30_000` / `hookTimeout: 30_000`. Heavy suites override per file
-  via `vi.setConfig({ testTimeout })` — `src/mcp/tests/e2e.test.ts` sets
+  via `vi.setConfig({ testTimeout })` — `src/mcp/tests/e2e.e2e.test.ts` sets
   `90_000` (REQUIRED for its full-toolchain flows).
 - Excludes: `dist/**`, `node_modules/**`, `src/dashboard/ui/node_modules/**`.
+- Suite groups: `test.projects` (Vitest 4) defines four named projects —
+  `unit` / `integration` / `e2e` / `perf` — each `extends: true` (inherits
+  pool/environment/excludes/timeouts) with `include` patterns that PARTITION
+  the taxonomy (no file runs twice). The root config is NOT a project itself;
+  only global options (`reporters`, `coverage`) apply at root. Run one group
+  with `--project <name>` (see §6).
+- Coverage: `provider: "v8"` with `reporter: text / text-summary / json / html`,
+  `include: ["src/**/*.{ts,tsx}"]`, global floors `lines/statements/functions
+70, branches 60`. Flag-gated (`--coverage`) until the suite reaches the floor
+  (see §7) — `coverage.enabled` stays `false` until REFACTOR-TST-013.
 - Svelte plugin + `resolve.conditions: ["browser"]` are present so UI
   components can be mounted under the root runner.
 
@@ -92,13 +102,18 @@ the directory containing its subject:
 ### 2.3 Banned locations
 
 - FORBIDDEN: a `*.test.ts` file colocated beside server/non-UI source.
-  Current violation to migrate (REFACTOR-TST-004a): `src/dashboard/lib/helpers.test.ts`
-  → `src/dashboard/tests/helpers.test.ts`.
+  ✅ Migrated by REFACTOR-TST-004a: `src/dashboard/lib/helpers.test.ts`
+  → `src/dashboard/tests/helpers.test.ts` (verified 2026-08-10).
 - FORBIDDEN: a UI test file directly beside its subject (no `__tests__/`).
-  Current violations (REFACTOR-TST-004b): `src/dashboard/ui/src/lib/kg/KGForceLayout.test.ts`,
-  `src/dashboard/ui/src/lib/kg/graphLoader.test.ts`,
-  `src/dashboard/ui/src/lib/kg/KGNeuralRenderer.perf.test.ts`,
-  `src/dashboard/ui/src/lib/composables/useKanban.test.ts`.
+  ✅ Migrated by REFACTOR-TST-004b: `src/dashboard/ui/src/lib/kg/KGForceLayout.test.ts`
+  → `src/dashboard/ui/src/lib/kg/__tests__/KGForceLayout.test.ts`;
+  `src/dashboard/ui/src/lib/kg/graphLoader.test.ts`
+  → `src/dashboard/ui/src/lib/kg/__tests__/graphLoader.test.ts`;
+  `src/dashboard/ui/src/lib/kg/KGNeuralRenderer.perf.test.ts`
+  → `src/dashboard/ui/src/lib/kg/__tests__/KGNeuralRenderer.perf.test.ts`;
+  `src/dashboard/ui/src/lib/composables/useKanban.test.ts`
+  → `src/dashboard/ui/src/lib/composables/__tests__/useKanban.test.ts`
+  (verified 2026-08-10).
 - FORBIDDEN: tests under `dist/`, `bin/`, `storage/`, `node_modules/` (lint
   ignores already enforce this).
 
@@ -114,7 +129,7 @@ reader MUST be able to infer what the file does from the name alone.
 | Unit        | `*.test.ts`             | One module, one layer, no live server, no network                                                      | `src/mcp/tests/memory.write.test.ts`, `src/dashboard/ui/src/components/__tests__/TopBar.test.ts` |
 | Integration | `*.integration.test.ts` | Crosses component boundaries (router → DB, express → store); uses in-memory SQLite (`createTestStore`) | `src/mcp/tests/codebase-index/mcp-tools.integration.test.ts`                                     |
 | E2E         | `*.e2e.test.ts`         | Full toolchain / high-complexity flows                                                                 | `src/mcp/tests/tasks.e2e.test.ts`                                                                |
-| Perf        | `*.perf.test.ts`        | Performance characteristics (frame-constant reuse, allocation, timing bounds)                          | `src/dashboard/ui/src/lib/kg/KGNeuralRenderer.perf.test.ts`                                      |
+| Perf        | `*.perf.test.ts`        | Performance characteristics (frame-constant reuse, allocation, timing bounds)                          | `src/dashboard/ui/src/lib/kg/__tests__/KGNeuralRenderer.perf.test.ts`                            |
 
 ### 3.1 Hard rules
 
@@ -122,20 +137,18 @@ Subject name: `kebab-case` words joined by `.`/`-`, mirroring the module name �
 `mcp-tools.integration.test.ts`, `tasks.e2e.test.ts`,
 `KGNeuralRenderer.perf.test.ts` (PascalCase follows the class subject name).
 
-- BANNED: `snake_case` in any test filename. Current violation to migrate
-  (REFACTOR-TST-005): `src/mcp/tests/spec_compliance.test.ts` →
-  `spec-compliance.test.ts`. `snake_case` test names fail review.
+- BANNED: `snake_case` in any test filename (last server-scope violation
+  migrated by REFACTOR-TST-005: `src/mcp/tests/spec_compliance.test.ts` →
+  `spec-compliance.test.ts`). `snake_case` test names fail review.
 - BANNED: `_test.ts` / `_spec.ts` surrogate markers.
 - BANNED: out-of-taxonomy suffixes (`*.spec.test.ts`, `*.test.integration.ts`,
   `*.e2e.ts`). If a test belongs to a marker, the marker MUST be
   `<subject>.integration.test.ts` / `<subject>.e2e.test.ts` /
   `<subject>.perf.test.ts` — never elsewhere in the name.
-- GRANDFATHERED (only existing exception; does not extend to new files):
-  `src/mcp/tests/e2e.test.ts` keeps its legacy name — it is referenced from
-  `CONTRIBUTING.md` and shipped history. New E2E suites MUST use
-  `*.e2e.test.ts`, never a bare `e2e` prefix. When `test.projects` partitioning
-  lands (REFACTOR-TST-003) the legacy file MUST be renamed to
-  `e2e.e2e.test.ts` so the `e2e` project include (`**/*.e2e.test.ts`) captures it.
+- The legacy `src/mcp/tests/e2e.test.ts` was renamed by REFACTOR-TST-005 to
+  `e2e.e2e.test.ts` — the `e2e` project include (`**/*.e2e.test.ts`) captures
+  it, and it no longer runs in the `unit` project. New E2E suites MUST use
+  `*.e2e.test.ts`, never a bare `e2e` prefix.
 - One subject → one test file, unless split by marker (unit + integration are
   separate files). Do NOT bundle unit inside an `integration` file.
 
@@ -191,7 +204,7 @@ These land in the SAME file; empty it or drop either → review fail.
 - FORBIDDEN: committing fixture files written by tests (they are temp).
 - For in-memory DB state, use `createTestStore()` — an in-memory SQLite factory
   exported from `src/mcp/storage/sqlite.ts` (production module), used by
-  `src/mcp/tests/e2e.test.ts` and
+  `src/mcp/tests/e2e.e2e.test.ts` and
   `src/mcp/tests/codebase-index/mcp-tools.integration.test.ts`. Tests NEVER
   touch the real `storage/` directory.
 
@@ -199,13 +212,17 @@ These land in the SAME file; empty it or drop either → review fail.
 
 ## 6. Running Tests
 
-| Command                        | Effect                                                                            |
-| ------------------------------ | --------------------------------------------------------------------------------- |
-| `npm run test`                 | Full suite, run once (`vitest --run`)                                             |
-| `npm run test:watch`           | Watch mode (`vitest`)                                                             |
-| `npx vitest run <file-or-dir>` | Scoped run (any path from §2)                                                     |
-| `npm run test -- --coverage`   | Full suite with V8 coverage report (reporters: text / text-summary / json / html) |
-| `npm run type-check`           | `tsc` (src + `tsconfig.test.json` incl. `src/**/*.test.ts`) + `svelte-check`      |
+| Command                        | Effect                                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| `npm run test`                 | Full suite (all projects), run once (`vitest --run`)                             |
+| `npm run test:watch`           | Watch mode (`vitest`)                                                            |
+| `npm run test:unit`            | `vitest --run --project unit` — only `*.test.ts` (non-integration/e2e/perf)      |
+| `npm run test:integration`     | `vitest --run --project integration` — only `*.integration.test.ts`              |
+| `npm run test:e2e`             | `vitest --run --project e2e` — only `*.e2e.test.ts`                              |
+| `npm run test:perf`            | `vitest --run --project perf` — only `*.perf.test.ts`                            |
+| `npx vitest run <file-or-dir>` | Scoped run (any path from §2)                                                    |
+| `npm run test -- --coverage`   | Full suite with V8 coverage report (reporter: text / text-summary / json / html) |
+| `npm run type-check`           | `tsc` (src + `tsconfig.test.json` incl. `src/**/*.test.ts`) + `svelte-check`     |
 
 ### 6.1 Scoped-run recipes (all verified to resolve)
 
@@ -222,26 +239,38 @@ npm run test -- --coverage                        # +V8 coverage
 E2E / perf are part of the full suite — run them deliberately:
 `npx vitest run src/mcp/tests/tasks.e2e.test.ts`,
 `npx vitest run src/dashboard/tests/controllers.integration.test.ts`,
-`npx vitest run src/dashboard/ui/src/lib/kg/KGNeuralRenderer.perf.test.ts`.
+`npx vitest run src/dashboard/ui/src/lib/kg/__tests__/KGNeuralRenderer.perf.test.ts`.
 
-### 6.2 Planned (REFACTOR-TST-003, not yet merged)
+### 6.2 Project-scoped runs (live since REFACTOR-TST-003)
 
-`test.projects` will add `--project unit|integration|e2e|perf` scripts —
-does NOT work until then; use the path-scoped commands above.
+`test.projects` partitions the suite into `unit` / `integration` / `e2e` /
+`perf`; the scripts in §6 run one group each. Partitioning is exhaustive and
+disjoint — 105 unit / 3 integration / 2 e2e / 1 perf files today (the legacy
+`e2e.test.ts` moved to the `e2e` project as `e2e.e2e.test.ts` by
+REFACTOR-TST-005), no file runs twice. One caveat:
+
+- Coverage is NOT included in project-scoped runs (flag-gated, see §7);
+  thresholds are evaluated only under `--coverage`, after the full suite runs.
 
 ## 7. Coverage Policy
 
 `@vitest/coverage-v8` is installed; `npm run test -- --coverage` reports today.
-The REQUIRED target config (REFACTOR-TST-003) is:
+The config (REFACTOR-TST-003, live) is:
 
-- provider `v8`, reporters `text` + `text-summary` + `json` + `html`,
+- provider `v8`, coverage `reporter`: `text` + `text-summary` + `json` + `html`,
   `include: ["src/**/*.{ts,tsx}"]`, exclude `dist`/`node_modules`/
   `src/dashboard/ui/node_modules`.
-- `thresholds.all: true` and global floors:
-  `lines: 70`, `statements: 70`, `functions: 70`, `branches: 60`.
+- Global floors: `lines: 70`, `statements: 70`, `functions: 70`, `branches: 60`.
+  NOTE: `thresholds.all` is a jest/nyc option with NO Vitest equivalent (Vitest
+  would parse `all` as a file-glob key). The all-files semantics come from
+  `coverage.include` — including the pattern pulls untested files into the
+  report, and the global floors apply to every matched file.
+- Non-blocking today: `coverage.enabled` is `false`, so thresholds are only
+  evaluated when coverage runs (`--coverage`). The v8 provider has no warn-only
+  mode — a missed threshold fails the run (exit 1).
 - Thresholds become BLOCKING in CI (REFACTOR-TST-013: `npm run test -- --coverage`
-  gate on PR + before publish); until the suite reaches the floor, coverage
-  failures are non-blocking (REFACTOR-TST-012 is the green gate).
+  gate on PR + before publish, `enabled: true`); until the suite reaches the
+  floor, coverage failures are non-blocking (REFACTOR-TST-012 is the green gate).
 
 ### 7.1 Per-module `priority` (where coverage must be before anything else)
 
@@ -272,9 +301,11 @@ REVIEW-BLOCKING defect (enforced at code review), not a follow-up.
   will require CI success before publish.
 - While CI is absent, `npm run type-check && npm run test` is the LOCAL
   pre-push gate.
-- `spec_compliance.test.ts` and the 4 colocated UI files above MUST be
-  migrated by REFACTOR-TST-004a/004b/005 — after those migrations the tree is
-  fully conformant.
+- Server-scope test names are conformant since REFACTOR-TST-005 (legacy
+  `spec_compliance.test.ts` → `spec-compliance.test.ts` and
+  `e2e.test.ts` → `e2e.e2e.test.ts`); UI colocation was completed by
+  REFACTOR-TST-004b (all UI tests now sit in `__tests__/` beside their
+  subjects) — the tree is fully conformant.
 
 ---
 

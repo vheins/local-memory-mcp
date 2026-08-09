@@ -4,7 +4,7 @@ import {
 	initializeZeroEdgeOverviewLayout,
 	runForceLayout,
 	type LayoutNode
-} from "./KGForceLayout";
+} from "../KGForceLayout";
 
 function buildNodes(count: number): LayoutNode[] {
 	return Array.from({ length: count }, (_, index) => ({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeRotationTrig, PALETTE } from "./kg-neural-renderer/layout";
-import { buildCoreColorTable } from "./kg-neural-renderer/nodes";
+import { computeRotationTrig, PALETTE } from "../kg-neural-renderer/layout";
+import { buildCoreColorTable } from "../kg-neural-renderer/nodes";
 
 describe("computeRotationTrig", () => {
 	it("precomputes the 4 rotation trig values for given rotY/rotX", () => {

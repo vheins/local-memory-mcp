@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { get } from "svelte/store";
-import { createKanbanHandler, COLUMNS } from "./useKanban";
-import { currentRepo, taskSearch } from "../stores";
-import type { Task, Pagination } from "../stores";
+import { createKanbanHandler, COLUMNS } from "../useKanban";
+import { currentRepo, taskSearch } from "../../stores";
+import type { Task, Pagination } from "../../stores";
 
 // createKanbanHandler() calls svelte's onMount() at the end of construction,
 // and Svelte 5 throws when onMount is used outside a component lifecycle.
@@ -26,7 +26,7 @@ const { apiMock } = vi.hoisted(() => ({
 	}
 }));
 
-vi.mock("../api", () => ({ api: apiMock }));
+vi.mock("../../api", () => ({ api: apiMock }));
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
