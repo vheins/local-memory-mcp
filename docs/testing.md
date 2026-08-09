@@ -54,7 +54,7 @@ Fixed facts (do not change without an ADR):
 
 - Default environment is `node`.
 - A test that touches DOM MUST declare `// @vitest-environment jsdom` as its
-  FIRST line (verified pattern: 13 of the 17 UI test files).
+  FIRST line (verified pattern: 10 of the 18 UI test files).
 - Pure-TypeScript tests (no DOM) MUST NOT declare jsdom — e.g.
   `src/dashboard/ui/src/lib/arena/__tests__/arenaTransformLayout.test.ts` runs
   under `node`.
@@ -230,9 +230,9 @@ These land in the SAME file; empty it or drop either → review fail.
 npm run test                                        # whole suite
 npm run test:watch                                # watch
 npx vitest run src/mcp/tests/memory.write.test.ts # one file
-npx vitest run src/mcp/tests/codebase-index       # one dir (21 files)
+npx vitest run src/mcp/tests/codebase-index       # one dir (25 files)
 npx vitest run src/dashboard/tests                # dashboard integration
-npx vitest run src/dashboard/ui                    # all 17 UI files
+npx vitest run src/dashboard/ui                    # all 18 UI files
 npm run test -- --coverage                        # +V8 coverage
 ```
 

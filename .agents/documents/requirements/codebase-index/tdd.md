@@ -5,7 +5,7 @@
 - **Status:** Draft
 - **Date:** 2026-07-22
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning TDD — the proposed directory `src/codebase-index/` shipped as `src/mcp/codebase-index/` (services/, parser/, types/); the proposed `src/codebase-index/__tests__/` shipped as `src/mcp/tests/codebase-index/` (21 test files per testing-gap-analysis). "Migration v3 / 4 tables" is superseded: `codebase_files`+`codebase_symbols` are v01, symbols vectors v06, symbols FTS v18, and relations ship as `codebase_references` v21 (no `codebase_relations`/`codebase_index_queue`). The tool handlers in the API Contracts Summary are legacy names → `codebase-index`/`codebase-read` (ADR-005). The resource URIs (`codebase://...`) in "Resource URIs (Phase 1.2)" were **not shipped** as MCP resources (repo resources are `repository://...`, src/mcp/resources/sdk-index.ts) — **NEXT PHASE**.
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning TDD — the proposed directory `src/codebase-index/` shipped as `src/mcp/codebase-index/` (services/, parser/, types/); the proposed `src/codebase-index/__tests__/` shipped as `src/mcp/tests/codebase-index/` (25 test files as of 2026-08-10; 21 per testing-gap-analysis). "Migration v3 / 4 tables" is superseded: `codebase_files`+`codebase_symbols` are v01, symbols vectors v06, symbols FTS v18, and relations ship as `codebase_references` v21 (no `codebase_relations`/`codebase_index_queue`). The tool handlers in the API Contracts Summary are legacy names → `codebase-index`/`codebase-read` (ADR-005). The resource URIs (`codebase://...`) in "Resource URIs (Phase 1.2)" were **not shipped** as MCP resources (repo resources are `repository://...`, src/mcp/resources/sdk-index.ts) — **NEXT PHASE**.
 
 ---
 
@@ -604,21 +604,21 @@ Bump `SCHEMA_VERSION` from **2** to **3** in `src/mcp/storage/migrations/index.t
 
 ### Test Levels
 
-| Level              | Focus                                                                   | Tools                  | Location                                         |
-| :----------------- | :---------------------------------------------------------------------- | :--------------------- | :----------------------------------------------- |
-| **Unit**           | Individual service logic (discovery, entity queries, schema validation) | Vitest                 | `src/codebase-index/__tests__/*.test.ts`         |
-| **Integration**    | End-to-end index pipeline with real SQLite backend                      | Vitest + temp SQLite   | `src/codebase-index/__tests__/entity.test.ts`    |
-| **Parser Fixture** | tree-sitter AST extraction against known source files                   | Vitest + fixture files | `src/codebase-index/__tests__/fixtures/*.ts`     |
-| **MCP Tool**       | Tool handler input/output contract verification                         | Vitest + mock DB       | `src/codebase-index/__tests__/mcp-tools.test.ts` |
+| Level                | Focus                                                                  | Tools                  | Location                                                    |
+| :------------------- | :--------------------------------------------------------------------- | :--------------------- | :---------------------------------------------------------- |
+| **Unit**             | Individual service logic (discovery, entity queries, schema validation) | Vitest                 | `src/mcp/tests/codebase-index/*.test.ts`                    |
+| **Integration**      | End-to-end index pipeline with real SQLite backend                     | Vitest + temp SQLite   | `src/mcp/tests/codebase-index/mcp-tools.integration.test.ts` |
+| **Parser Fixture**   | tree-sitter AST extraction against known source files                  | Vitest + fixture files | `src/mcp/tests/fixtures/codebase-index/`                    |
+| **MCP Tool**         | Tool handler input/output contract verification                        | Vitest + mock DB       | `src/mcp/tests/codebase-index/mcp-tools.integration.test.ts` |
 
 ### Test Files
 
-| Test File                | Tests                                                                                                              | Coverage Target |
-| :----------------------- | :----------------------------------------------------------------------------------------------------------------- | :-------------- |
-| `entity.test.ts`         | CRUD for files, symbols, relations; bulk insert; search queries; cascade deletes                                   | 90%+            |
-| `file-discovery.test.ts` | Directory walking, `.gitignore` parsing, binary detection, symlink handling, size limits                           | 95%+            |
-| `parser.test.ts`         | tree-sitter initialization, symbol extraction per kind, doc comment extraction, signature building, error recovery | 90%+            |
-| `mcp-tools.test.ts`      | Tool handler validity, input validation, error cases, response formatting                                          | 90%+            |
+| Test File                       | Tests                                                                                                            | Coverage Target   |
+| :------------------------------ | :--------------------------------------------------------------------------------------------------------------- | :---------------- |
+| `codebase-*.entity.test.ts`     | CRUD for files, symbols, relations; bulk insert; search queries; cascade deletes                                 | 90%+              |
+| `file-discovery.test.ts`        | Directory walking, `.gitignore` parsing, binary detection, symlink handling, size limits                         | 95%+              |
+| `parser.test.ts`                | tree-sitter initialization, symbol extraction per kind, doc comment extraction, signature building, error recovery | 90%+              |
+| `tools.test.ts`                 | Tool handler validity, input validation, error cases, response formatting                                        | 90%+              |
 
 ### Fixture Files
 
