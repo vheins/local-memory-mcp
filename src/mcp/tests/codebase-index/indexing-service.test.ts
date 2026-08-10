@@ -17,6 +17,7 @@ import {
 	clearIndexingRepos
 } from "../../codebase-index/services/indexing-service";
 import { autoIndexIfStale } from "../../codebase-index/services/indexing-service";
+import { indexingRepos } from "../../codebase-index/services/indexing-cache";
 import type { IndexOptions, IndexResult } from "../../codebase-index/services/indexing-service";
 import type { ParserPool, ParseResult, ParsedSymbol } from "../../codebase-index/parser/language-visitor";
 import { SymbolKind } from "../../codebase-index/parser/language-visitor";
@@ -28,6 +29,25 @@ function touch(filePath: string, content: string): void {
 	const dir = path.dirname(filePath);
 	fs.mkdirSync(dir, { recursive: true });
 	fs.writeFileSync(filePath, content, "utf-8");
+}
+
+/**
+ * Poll a condition until it holds or the timeout elapses.
+ *
+ * autoIndexIfStale dispatches the background index fire-and-forget and
+ * returns "started" immediately (indexing-service.ts:113-127), so tests
+ * must synchronize on completion EVENT-DRIVEN — a fixed sleep races the
+ * real async pipeline (fast-glob setImmediate walk → parse → DB write)
+ * and flakes under load (TASK-391). Same pattern as file-watcher.test.ts.
+ */
+async function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void> {
+	const start = Date.now();
+	while (!predicate()) {
+		if (Date.now() - start > timeoutMs) {
+			throw new Error("waitFor timed out");
+		}
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
 }
 
 interface MockParserPoolOptions {
@@ -903,8 +923,10 @@ describe("CodebaseIndexService", () => {
 		expect(result.status).toBe("started");
 		expect(result.reason).toContain("No existing index");
 
-		// Wait a bit for background indexing to complete
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		// Await the fire-and-forget background index (event-driven — the
+		// index is dispatched without await, so a fixed sleep would race it).
+		await waitFor(() => store.codebaseFiles.getFilesByRepo("test-repo").length > 0);
+		await waitFor(() => !indexingRepos.has("test-repo"));
 
 		// Verify index was actually built
 		const files = store.codebaseFiles.getFilesByRepo("test-repo");
@@ -922,8 +944,10 @@ describe("CodebaseIndexService", () => {
 		expect(result.status).toBe("started");
 		expect(result.reason).toContain("Index TTL expired");
 
-		// Wait for background indexing to complete
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		// Await completion of the fire-and-forget re-index (event-driven).
+		// The in-flight guard is added synchronously before the first await
+		// (indexing-repository.ts:127), so this poll cannot pass spuriously.
+		await waitFor(() => !indexingRepos.has("test-repo"));
 
 		// Verify repo is no longer "auto-indexing" (autoIndexingRepos set was cleared)
 		const status = await service().getIndexStatus("test-repo");
@@ -942,8 +966,9 @@ describe("CodebaseIndexService", () => {
 		expect(second.status).toBe("already_indexing");
 		expect(second.reason).toContain("Index already in progress");
 
-		// Wait for background indexing to complete
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		// Await the first background index to finish so teardown
+		// (clearIndexingRepos + store.close) never races it.
+		await waitFor(() => !indexingRepos.has("test-repo"));
 	});
 
 	it("autoIndexIfStale: respects CODEBASE_AUTO_INDEX=false env var", async () => {
@@ -977,7 +1002,9 @@ describe("CodebaseIndexService", () => {
 			process.env.CODEBASE_AUTO_INDEX_TTL = prev;
 		}
 
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		// Await the fire-and-forget re-index to finish so teardown
+		// (clearIndexingRepos + store.close) never races it.
+		await waitFor(() => !indexingRepos.has("test-repo"));
 	});
 
 	it("autoIndexIfStale: options.ttlMs overrides env var", async () => {
