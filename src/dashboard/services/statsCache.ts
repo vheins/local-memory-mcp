@@ -120,11 +120,20 @@ export function setKgGraphCache<T>(key: string, data: T): T {
 	return data;
 }
 
-/** Drop cached KG payloads (`repo` optional; absent clears the whole KG cache). */
+/**
+ * Drop cached KG payloads for `repo`; absent clears the whole KG cache.
+ *
+ * KgService.listGraph stores payloads under `kg/graph/${repo}|${window}|edges:N`,
+ * so a repo-scoped clear matches the repo prefix + `|` — every window of that
+ * repo. The `|` separator keeps e.g. `acme/app` from clearing
+ * `acme/application` entries (TASK-379: the previous filter used
+ * `endsWith(repo)`, which can never match a windowed key, making the `repo`
+ * param dead).
+ */
 export function clearKgGraphCache(repo?: string): void {
 	for (const key of cache.keys()) {
 		if (!key.startsWith(KG_CACHE_PREFIX)) continue;
-		if (repo !== undefined && !key.endsWith(repo)) continue;
+		if (repo !== undefined && !key.startsWith(KG_CACHE_PREFIX + repo + "|")) continue;
 		cache.delete(key);
 	}
 }

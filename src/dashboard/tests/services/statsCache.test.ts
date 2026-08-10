@@ -131,21 +131,25 @@ describe("KG graph cache (getKgGraphCache / setKgGraphCache / clearKgGraphCache)
 		expect(getCachedRepoStats("acme", "app")).toEqual({ stats: true });
 	});
 
-	it("clearKgGraphCache(repo) drops only entries whose stored key ends with that repo (suffix filter)", () => {
-		// Full stored keys are `kg/graph/<key>`; the filter matches a key that
-		// ENDS with the repo string. NOTE: KgService.listGraph builds windowed
-		// keys (`acme/app|page:0:20|edges:1`) which never end with the bare
-		// repo — this test pins the implemented suffix semantics, and the
-		// repo-scoped clear is only effective for repo-shaped keys.
-		setKgGraphCache("acme/app", { v: 1 });
-		setKgGraphCache("acme/app|page:0:20|edges:1", { v: 2 });
-		setKgGraphCache("elsewhere/app", { v: 3 });
+	it("clearKgGraphCache(repo) drops every windowed key for that repo (prefix filter)", () => {
+		// Full stored keys are `kg/graph/<cacheKey>`; KgService.listGraph builds
+		// cacheKey as `${repo}|${window}|edges:N`, so the repo is a `|`-terminated
+		// prefix. The filter matches `kg/graph/${repo}|`, clearing every window of
+		// that repo — unlike the old suffix filter, which could never match a
+		// windowed key (TASK-379).
+		setKgGraphCache("acme/app|page:0:20|edges:1", { v: 1 });
+		setKgGraphCache("acme/app|limit:50|edges:0", { v: 2 });
+		// Prefix boundary: a repo that merely starts with the same string must
+		// survive — the `|` separator distinguishes `acme/app` from `acme/application`.
+		setKgGraphCache("acme/application|page:0:20|edges:1", { v: 3 });
+		// A different owner's repo must survive.
+		setKgGraphCache("elsewhere/app|page:0:20|edges:1", { v: 4 });
 
 		clearKgGraphCache("acme/app");
 
-		expect(getKgGraphCache<unknown>("acme/app")).toBeUndefined();
-		expect(getKgGraphCache<{ v: number }>("acme/app|page:0:20|edges:1")).toEqual({ v: 2 });
-		// A different owner's repo-shaped key does not end with "acme/app" → kept.
-		expect(getKgGraphCache<{ v: number }>("elsewhere/app")).toEqual({ v: 3 });
+		expect(getKgGraphCache<unknown>("acme/app|page:0:20|edges:1")).toBeUndefined();
+		expect(getKgGraphCache<unknown>("acme/app|limit:50|edges:0")).toBeUndefined();
+		expect(getKgGraphCache<{ v: number }>("acme/application|page:0:20|edges:1")).toEqual({ v: 3 });
+		expect(getKgGraphCache<{ v: number }>("elsewhere/app|page:0:20|edges:1")).toEqual({ v: 4 });
 	});
 });
