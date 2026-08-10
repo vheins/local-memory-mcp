@@ -628,6 +628,31 @@ export const api = {
 		return apiFetch<TraceResult>(`/api/codebase/trace?${q}`);
 	},
 
+	// ─── Codebase File Content (TASK-324 CG-B / TASK-328 FileViewer) ────────
+	// GET/POST /api/codebase/file/content?repo=&path=&repoPath=
+	// Raw file content read from DISK (bounded server-side to
+	// FILE_CONTENT_MAX_LINES; `truncated` flags longer files). Path traversal
+	// is rejected by the backend (PATH_TRAVERSAL → 400).
+
+	codebaseFileContent: (repo: string, filePath: string, repoPath?: string) => {
+		const q = new URLSearchParams({ repo, path: filePath });
+		if (repoPath) q.set("repoPath", repoPath);
+		return apiFetch<FileContentResult>(`/api/codebase/file/content?${q}`);
+	},
+
+	// ─── Codebase Symbol Callers (TASK-324 CG-B / TASK-328 CallGraph) ───────
+	// GET /api/codebase/symbol/callers?repo=&name=&kind=&filePath=
+	// Caller→callee PAIRS grouped by caller symbol — the CallGraph DAG edge
+	// list. `filePath` disambiguates duplicate symbol names (TASK-373: absent
+	// scoping → 409 AMBIGUOUS_SYMBOL listing candidates).
+
+	codebaseSymbolCallers: (repo: string, name: string, kind?: string, filePath?: string) => {
+		const q = new URLSearchParams({ repo, name });
+		if (kind) q.set("kind", kind);
+		if (filePath) q.set("filePath", filePath);
+		return apiFetch<SymbolCallersResult>(`/api/codebase/symbol/callers?${q}`);
+	},
+
 	// ─── Codebase File Symbols ─────────────────────────────────────────────
 
 	codebaseSymbols: (repo: string, filePath: string) => {
@@ -823,4 +848,58 @@ export interface TraceDisambiguationCandidate {
 	file: string;
 	line: number | null;
 	exported: boolean;
+}
+
+// ─── Codebase File Content + Symbol Callers (TASK-324 CG-B / TASK-328) ──────
+// Client types mirroring the dashboard codebase-graph service wire shapes
+// (src/dashboard/services/codebase-graph.service.ts) EXACTLY — additive only.
+
+/** GET/POST /api/codebase/file/content response (raw disk read, bounded). */
+export interface FileContentResult {
+	/** Relative file path as requested (codebase_files.file_path form). */
+	file_path: string;
+	/** codebase_files.language for indexed files, extension-derived otherwise. */
+	language: string | null;
+	/** Total lines in the file on disk (unaffected by the content cap). */
+	lines: number;
+	/** Total UTF-8 byte size of the file on disk (unaffected by the cap). */
+	size_bytes: number;
+	/** File content, bounded to FILE_CONTENT_MAX_LINES lines. */
+	content: string;
+	/** True when the file was longer than FILE_CONTENT_MAX_LINES. */
+	truncated: boolean;
+}
+
+/** One directed call-site relationship: caller symbol → callee symbol. */
+export interface CallerCalleePair {
+	caller: {
+		/** Enclosing function/method name at the call site (null when undeterminable). */
+		name: string | null;
+		/** File holding the call site (codebase_references.caller_file). */
+		filePath: string;
+		line: number | null;
+	};
+	callee: {
+		/** The referenced (called/imported/…) symbol name. */
+		name: string;
+		/** Target file when resolvable at parse time (v23), else null. */
+		filePath: string | null;
+	};
+	/** 'call' | 'instantiation' | 'import' | 'extends' | 'implements'. */
+	kind: string;
+}
+
+/** GET /api/codebase/symbol/callers response — CallGraph DAG data. */
+export interface SymbolCallersResult {
+	/** The queried symbol (filePath-scoped when provided; unique name otherwise). */
+	symbol: { name: string; kind: string; filePath: string; line: number | null };
+	/** Flat caller→callee pairs — the CallGraph DAG edge list. */
+	pairs: CallerCalleePair[];
+	/** The same pairs grouped by caller symbol (aggregation for the DAG drill). */
+	groupedByCaller: Array<{
+		caller: { name: string | null; filePath: string; kind: string | null };
+		count: number;
+		pairs: CallerCalleePair[];
+	}>;
+	total: number;
 }

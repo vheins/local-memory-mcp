@@ -4,6 +4,7 @@
 	import SymbolDetailHeader from "./SymbolDetailHeader.svelte";
 	import SymbolDetailCodePreview from "./SymbolDetailCodePreview.svelte";
 	import CodebaseSymbolTrace from "./CodebaseSymbolTrace.svelte";
+	import CodebaseCallGraph from "./CodebaseCallGraph.svelte";
 	import { getKindIcon, getKindLabel, buildLocationText } from "../lib/symbolDetailUtils";
 
 	interface CodeSymbol {
@@ -152,6 +153,9 @@
 			{onSymbolSelect}
 			{onOpenFile}
 		/>
+
+		<!-- ─── Callers DAG (TASK-328 [CG-1] point 12): who calls this symbol ─── -->
+		<CodebaseCallGraph {symbol} {repo} {onSymbolSelect} />
 
 		<!-- ─── Related Symbols ─── -->
 		{#if symbol.relatedSymbols && symbol.relatedSymbols.length > 0}

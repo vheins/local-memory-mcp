@@ -10,6 +10,9 @@
 	import CodebaseEmptyState from "./CodebaseEmptyState.svelte";
 	import CodebaseLanguageBreakdown from "./CodebaseLanguageBreakdown.svelte";
 	import CodebaseDeadCode from "./CodebaseDeadCode.svelte";
+	import CodebaseFileViewer from "./CodebaseFileViewer.svelte";
+	import CodebaseGraphPanel from "./CodebaseGraphPanel.svelte";
+	import { aggregateSymbolCounts } from "../lib/fileTreeUtils";
 
 	let { repo = "" }: { repo: string } = $props();
 
@@ -83,6 +86,10 @@
 
 	// --- Derived: dead-code block (TASK-320) ---
 	let deadCodeBlock = $derived<DeadCodeBlock | null>(architectureData?.deadCode ?? null);
+
+	// --- Derived: per-kind symbol counts aggregated from the ARCHITECTURE
+	// tree (TASK-328 IndexStats "By kind" cell). ---
+	let indexKindCounts = $derived(aggregateSymbolCounts((architectureData?.root as Record<string, unknown>) ?? {}));
 
 	// --- Reactive: load index when repo changes ---
 	$effect(() => {
@@ -225,7 +232,15 @@
 			<main class="codebase-content">
 				<div class="codebase-content-scroll">
 					<div class="glass card card-body">
-						<CodebaseIndexStatus {repo} />
+						<!-- TASK-328: IndexStats strip lives inside CodebaseIndexStatus
+						     (languageCount + kindCounts props). TASK-329: code-graph
+						     force panel below (KGGraphCanvas wrapper) — additive. -->
+						<CodebaseIndexStatus {repo} languageCount={languageEntries.length} kindCounts={indexKindCounts} />
+
+						<!-- TASK-329 [P10-UI]: code-graph force panel — reuses the
+						     generic KGGraphCanvas (GET /api/codebase/graph). Node
+						     click → CodebaseSymbolDetail via handleSymbolSelect. -->
+						<CodebaseGraphPanel {repo} onSymbolSelect={handleSymbolSelect} />
 
 						<div class="search-container">
 							<CodebaseSearchBar {repo} onSymbolSelect={handleSymbolSelect} />
@@ -272,9 +287,9 @@
 								onOpenFile={openCodebaseFile}
 							/>
 						{:else if selectedFile}
-							<div class="muted-text" style="margin-bottom:12px;">
-								Selected file: <code>{selectedFile}</code>
-							</div>
+							<!-- TASK-328: raw file content viewer (disk-backed). The symbol
+						     list below keeps the existing click-symbol → detail flow. -->
+							<CodebaseFileViewer {repo} filePath={selectedFile} />
 							<CodebaseSymbolList
 								symbols={fileSymbols}
 								loading={fileSymbolsLoading}
