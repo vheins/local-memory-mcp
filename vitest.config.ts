@@ -47,7 +47,7 @@ export default defineConfig({
 			// All-of-src semantics: including the pattern pulls untested files
 			// into the report (Vitest's equivalent of jest/nyc `thresholds.all`).
 			include: ["src/**/*.{ts,tsx}"],
-			exclude: ["dist/**", "node_modules/**", "src/dashboard/ui/node_modules/**"],
+			exclude: ["dist/**", "node_modules/**", "src/dashboard/ui/node_modules/**", ".tmp/**"],
 			thresholds: {
 				// Global floors across ALL files matched by `coverage.include`
 				// (docs/testing.md §7). NOTE: `thresholds.all` is a jest/nyc
