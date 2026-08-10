@@ -113,8 +113,10 @@ export interface LanguageVisitor {
 	 * plus heritage edges 'extends' | 'implements', with optional
 	 * targetFile/targetSymbolId for resolvable targets. Implementers return
 	 * references without `callerFile` (the pool fills it); absent references
-	 * resolve to `[]`. Only TS and PHP visitors implement it today — other
-	 * languages continue returning `[]` until their Wave 1 tasks land.
+	 * resolve to `[]`. All tree-sitter language visitors implement it since
+	 * Phase 1.1 (TS/TSX, Vue, Go, Python, PHP, Dart, Rust, Java, Ruby, Kotlin,
+	 * Swift, C, C++ — 14 configs / 13 visitor classes); only Markdown and
+	 * GenericText emit no edges (return `[]`).
 	 */
 	extractReferences?(tree: Tree | null, sourceCode: string): ParsedReference[];
 }
