@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] — 2026-08-10
+
+### Added
+
+- Codebase index Phase 1.1: schema v23 edge targets — `codebase_references` gains `import`/`extends`/`implements`/`embedding` reference kinds plus the emitter contract (migration v23), and symbols gain the `parent_symbol_id` hierarchy for nested-symbol ownership (TASK-299, TASK-300)
+- Multi-language reference edges: 13 visitors / 14 configs — TypeScript/TSX, PHP, Java, Kotlin, Python, Go, Rust, C/C++, Swift, Dart, Vue, Ruby — with the markdown and generic visitors as declaration-only no-ops (TASK-301-313, Wave-1)
+- `codebase-read` CODE mode: content grep over indexed files with symbol enrichment and a shared LRU cache (TASK-316)
+- Dead-code and hotspots blocks in ARCHITECTURE mode with layered entry-point exclusion (TASK-319, TASK-367, TASK-372)
+- Polling file watcher: `ENABLE_FILE_WATCHER` gate, `autoIndexIfStale` integration, mtime/checksum short-circuit, and a per-repo re-entry gate (TASK-322, TASK-354)
+- `codebase://` MCP resources: symbols list, symbol detail, and file content with `search`/`kind`/`limit` params (TASK-323, TASK-368-371)
+- KG auto-population from the codebase index (TASK-293)
+- KG relations confidence (TASK-325): per-kind heuristic writers emit graded edge confidence (1.0 explicit / 0.9 codebase / 0.8 semantic / 0.55 extraction) — migration v24 adds the `relations.confidence` column (REAL, default 1.0, INSERT OR IGNORE first-write-wins backfills existing rows); `codebase_references` extension unchanged (SCHEMA_VERSION 23→24)
+- Queue admin API: list, retry, clear, and retry-all operations with optional repo scoping (TASK-296, TASK-360)
+- Code-graph backend: file content, callers, and code-graph endpoints (TASK-324, TASK-373, TASK-374)
+- Dashboard: Agent Arena 12-column layout engine + minimap + workflow arrows (TASK-249-259, TASK-269-281)
+- Dashboard: KG edge confidence labels + opacity buckets (TASK-330); reference kind labels + hierarchy block (TASK-314, TASK-361)
+- Dashboard: Codebase FileViewer + CallGraph DAG + IndexStats, with the code-graph force panel via KGGraphCanvas (TASK-328, TASK-329, TASK-385-389); Symbols/Code search toggle (TASK-317, TASK-364-365); dead-code/hotspots sections (TASK-320); Queue tab (TASK-297, TASK-362-363); aggregate overview endpoint + polling backoff (TASK-269, TASK-276)
+
+### Changed
+
+- Testing standardization: project partitioned into unit/integration/e2e/perf — 45+ suites, 158 files / 2288 tests (REFACTOR-TST-001..014)
+- CI gate on PR + main: type-check → lint → test (blocking); coverage non-blocking until 70/70/70/60 (TASK-013)
+
+### Performance
+
+- KG degree cache + window-bounded edges: graph load 190s→2s (TASK-268)
+- Render budget + settle-freeze wake (TASK-271, TASK-277)
+- Neural-renderer draw-pass extraction with a zero-allocation frame path (TASK-383, TASK-384)
+
+### Fixed
+
+- vector/chunk/stub null-prototype + guard fixes (TASK-377, TASK-378, TASK-381); coverage positive-only include partition (FIX-381)
+- statsCache KG graph clear repo-prefix (TASK-379); deleteComment 404 asymmetry (TASK-380)
+- Dashboard a11y/responsive: mobile hamburger, light-theme contrast, Escape/focus trap, kanban scroll (TASK-270, TASK-272, TASK-278, TASK-279)
+- Flaky-test hardening: `waitFor` polling over fixed sleeps (TASK-391); stats TTL boundary (TASK-392)
+
+### Security
+
+- js-yaml CVE pin; dompurify/nanoid bumps (TASK-260, TASK-261)
+
+### Refactored
+
+- Visitor/resource/file splits (TASK-267, TASK-346, TASK-348, TASK-357, TASK-366, TASK-371)
+
+### Documentation
+
+- Full docs sync to shipped state (en+id): Phase 11, CODE mode, dead-code, watcher, resources, KG v24, code-graph UI (TASK-315, TASK-318, TASK-321, TASK-326, TASK-327, TASK-331, TASK-333)
+- Doc accuracy sweep + attribution corrections (TASK-282-292)
+
 ## [0.35.0] — 2026-08-07
 
 > **Corrected (2026-08-09):** the `trace_symbol` name used below is the legacy alias — the canonical tool is `codebase-read` (`name` → TRACE mode, per ADR-005). Behavior described is accurate; only the tool name is legacy.
