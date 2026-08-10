@@ -245,16 +245,42 @@ E2E / perf are part of the full suite — run them deliberately:
 
 `test.projects` partitions the suite into `unit` / `integration` / `e2e` /
 `perf`; the scripts in §6 run one group each. Partitioning is exhaustive and
-disjoint — 105 unit / 3 integration / 2 e2e / 1 perf files today (the legacy
-`e2e.test.ts` moved to the `e2e` project as `e2e.e2e.test.ts` by
-REFACTOR-TST-005), no file runs twice. One caveat:
+disjoint — no file runs twice (the legacy `e2e.test.ts` moved to the `e2e`
+project as `e2e.e2e.test.ts` by REFACTOR-TST-005). FIX-381: each project uses
+a **positive-only `test.include` + `test.exclude`** split — the old unit
+`include` embedded `!`-negated patterns (e.g. `"!**/*.integration.test.ts"`),
+and ANY `!` pattern inside a project `include` silently broke coverage
+collection (empty `coverage-final.json`; see §7). Caveats:
 
 - Coverage is NOT included in project-scoped runs (flag-gated, see §7);
   thresholds are evaluated only under `--coverage`, after the full suite runs.
+- Scoped coverage runs (e.g. `npx vitest run <file> --coverage`) still emit
+  the full `src/**` skeleton + fire the global thresholds (correct — the
+  floors apply to all-files semantics regardless of scope).
 
 ## 7. Coverage Policy
 
-`@vitest/coverage-v8` is installed; `npm run test -- --coverage` reports today.
+`@vitest/coverage-v8` is installed; `npm run test -- --coverage` reports
+**real, non-empty coverage since FIX-381**. Verified 2026-08-10 on node
+v24.18.0 + vitest 4.1.7 (suite 165 files / 2287 tests green): report shows
+per-file rows, `coverage/coverage-final.json` has 386 per-file entries, and
+the global floors are evaluated.
+
+Current totals (all-of-src baseline, `include: ["src/**/*.{ts,tsx}"]`):
+`Statements 57.31%`, `Branches 54.34%`, `Functions 63.22%`, `Lines 58.41%`
+(20322 statements). Below the floor — see "Non-blocking today" below.
+
+### 7.0 FIX-381 root cause (do not reintroduce)
+
+The EMPTY v8 coverage reports (empty `coverage-final.json` + degenerate
+totals) were a **config-level bug, NOT a node/vitest version problem**:
+`!`-negated patterns inside a project's `test.include` broke coverage
+collection entirely (reproduced with any negation, even a harmless one; on
+vitest 4.1.7 AND 4.1.10 × node 24, both `v8` and `istanbul` providers, via
+minimal-config bisection — see FIX-381 comment). Fix: partition with
+positive-only `test.include` + `test.exclude` (identical disjoint split).
+Do NOT reintroduce `!` patterns in project `include` arrays.
+
 The config (REFACTOR-TST-003, live) is:
 
 - provider `v8`, coverage `reporter`: `text` + `text-summary` + `json` + `html`,
@@ -267,7 +293,14 @@ The config (REFACTOR-TST-003, live) is:
   report, and the global floors apply to every matched file.
 - Non-blocking today: `coverage.enabled` is `false`, so thresholds are only
   evaluated when coverage runs (`--coverage`). The v8 provider has no warn-only
-  mode — a missed threshold fails the run (exit 1).
+  mode — a missed threshold fails the run (exit 1). Since FIX-381 the suite is
+  BELOW the floor, so `npm run test -- --coverage` exits 1 with
+  `ERROR: Coverage for ... does not meet global threshold` — this is the
+  enforcement working as designed (artifacts are still written before the
+  threshold check: `coverage/coverage-final.json` + html/text reports).
+- Agent environments: vitest auto-sets the `text` reporter's `skipFull: true`,
+  so 100%-covered files are omitted from the console table (token saving);
+  use `coverage/` html or `coverage-final.json` for the complete file list.
 - Thresholds become BLOCKING in CI (REFACTOR-TST-013: `npm run test -- --coverage`
   gate on PR + before publish, `enabled: true`); until the suite reaches the
   floor, coverage failures are non-blocking (REFACTOR-TST-012 is the green gate).

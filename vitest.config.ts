@@ -20,7 +20,20 @@ export default defineConfig({
 		// Coverage (ROOT level only — `coverage` is NOT allowed inside a
 		// project config; vitest.dev/guide/projects "Unsupported Options").
 		//
-		// Thresholds are configured but NOT blocking: the v8 provider fails
+		// Provider: `v8` (native, recommended). FIX-381: EMPTY coverage
+		// reports (empty coverage-final.json + degenerate totals) were
+		// caused by `!`-negated patterns inside each project's
+		// `test.include` — with ANY negation present (even a harmless one),
+		// coverage collection in this repo produced NOTHING. Root cause is
+		// config-level, NOT node/vitest-version: reproduced on vitest
+		// 4.1.7 AND 4.1.10 × node v24.18.0, both v8 and istanbul providers
+		// (verified via minimal-config bisection; scratch projects without
+		// negations collected fine). Fix: partition each project with
+		// positive-only `test.include` + `test.exclude` (identical disjoint
+		// split, no `!` inside include). `npm run test -- --coverage` now
+		// reports real totals (see docs/testing.md §7).
+		//
+		// Thresholds are configured but NOT blocking: the provider fails
 		// the run (exit 1) on missed thresholds with no warn-only mode, and
 		// the suite does not reach the floor yet (docs/testing.md §7 — the
 		// green gate is REFACTOR-TST-012). Coverage is therefore flag-gated
@@ -54,15 +67,18 @@ export default defineConfig({
 		// only global options (reporters/coverage) apply at root. Each project
 		// uses `extends: true` to inherit pool `forks`, env `node`, excludes
 		// and timeouts. `include` patterns PARTITION the taxonomy so no test
-		// file runs in two projects (verified: unit 106 / integration 3 /
-		// e2e 1 / perf 1, zero overlap, zero orphans).
+		// file runs in two projects. FIX-381: the old unit `include` used
+		// `!`-negations (e.g. "!**/*.integration.test.ts") which broke
+		// coverage collection entirely; the split is now positive-only
+		// `include` + `exclude` with identical partition semantics.
 		// ------------------------------------------------------------------
 		projects: [
 			{
 				extends: true,
 				test: {
 					name: "unit",
-					include: ["**/*.test.ts", "!**/*.integration.test.ts", "!**/*.e2e.test.ts", "!**/*.perf.test.ts"]
+					include: ["**/*.test.ts"],
+					exclude: ["**/*.integration.test.ts", "**/*.e2e.test.ts", "**/*.perf.test.ts"]
 				}
 			},
 			{
