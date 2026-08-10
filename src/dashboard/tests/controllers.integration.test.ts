@@ -98,6 +98,22 @@ vi.mock("../../dashboard/lib/context", async () => {
 	};
 });
 
+/**
+ * Poll until `predicate` holds — replaces fixed sleeps so completion is
+ * detected, not guessed (TASK-391 hardening precedent, mirroring
+ * file-watcher.test.ts / indexing-service.test.ts). 20 ms poll / 4000 ms
+ * default timeout, well under vitest's 30 s testTimeout.
+ */
+async function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void> {
+	const start = Date.now();
+	while (!predicate()) {
+		if (Date.now() - start > timeoutMs) {
+			throw new Error("waitFor timed out");
+		}
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+}
+
 // ── Server fixture ───────────────────────────────────────────────────────
 
 describe("Dashboard Controllers", () => {
@@ -258,7 +274,16 @@ describe("Dashboard Controllers", () => {
 
 		it("GET /api/stats?repo=... recomputes after the TTL expires", async () => {
 			const repo = "stats-expiry-repo";
-			process.env.DASHBOARD_STATS_TTL_MS = "100";
+			// FIX(TASK-392): the TTL was 100 ms — the gap between the warm
+			// cache write and the within-TTL fetch below (a direct DB insert +
+			// request round-trip) is unbounded under v8 coverage
+			// instrumentation, so the entry could expire early and recompute
+			// ("expected getDashboardStats called 1×, got 2×"). 2000 ms gives
+			// that window a deterministic ~20× margin while keeping the
+			// post-TTL wait fast. Assertions are unchanged (exact spy counts
+			// and payload totals) — this only widens the timing window.
+			process.env.DASHBOARD_STATS_TTL_MS = "2000";
+			const ttlMs = Number(process.env.DASHBOARD_STATS_TTL_MS);
 			clearRepoStatsCache();
 			const spy = vi.spyOn(db.system, "getDashboardStats");
 
@@ -268,6 +293,11 @@ describe("Dashboard Controllers", () => {
 			expect(spy).toHaveBeenCalledTimes(1);
 			const warmBody = (await warm.json()) as Record<string, any>;
 			const warmTotal = warmBody.data.attributes.total as number;
+			// Upper bound of the cache-write instant: setCachedRepoStats runs
+			// DURING the warm request, so this anchor is >= writeTime. Waiting
+			// until Date.now() - warmReturnedAt >= ttlMs therefore guarantees
+			// the entry has expired (Date.now() >= expiresAt).
+			const warmReturnedAt = Date.now();
 
 			// Mutate the data source directly (bypasses the cache entirely).
 			db.memories.insert({
@@ -300,8 +330,10 @@ describe("Dashboard Controllers", () => {
 			expect(spy).toHaveBeenCalledTimes(1);
 			expect(((await within.json()) as Record<string, any>).data.attributes.total).toBe(warmTotal);
 
-			// Past the TTL: the next call recomputes and sees the new row.
-			await new Promise((r) => setTimeout(r, 400));
+			// Past the TTL: poll the clock past the expiry window instead of a
+			// fixed sleep (TASK-391 waitFor pattern — completion is detected,
+			// not guessed), then the next call must recompute and see the row.
+			await waitFor(() => Date.now() - warmReturnedAt >= ttlMs);
 			const after = await fetch(`${baseUrl}/api/stats?repo=${repo}`);
 			expect(after.status).toBe(200);
 			expect(spy).toHaveBeenCalledTimes(2);
