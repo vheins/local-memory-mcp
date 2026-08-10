@@ -21,6 +21,8 @@ export interface KGEdge {
 	source: string;
 	target: string;
 	relation_type: string;
+	/** Per-edge extraction confidence 0..1 (TASK-325: relations.confidence; 1.0 when absent/unknown). */
+	confidence?: number;
 }
 
 export interface KGEntity {

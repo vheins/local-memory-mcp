@@ -230,7 +230,10 @@
 			.map((e) => ({
 				source: e.source,
 				target: e.target,
-				relation_type: e.relation_type
+				relation_type: e.relation_type,
+				// TASK-330: carry per-edge confidence (server listGraph) through
+				// to the renderers — drives the edge label % + opacity buckets.
+				confidence: e.confidence
 			}));
 
 		layoutNodes = initializeSphereLayout(

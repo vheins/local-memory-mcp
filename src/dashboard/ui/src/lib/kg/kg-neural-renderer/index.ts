@@ -31,7 +31,15 @@ import {
 	SIGNAL_HALO_REF_RADIUS,
 	type NeuralRenderState
 } from "./nodes";
-import { drawEdge3D } from "./edges";
+import { drawEdge3D, drawEdgeLabel3D } from "./edges";
+import {
+	EDGE_ALPHA_MULTIPLIERS,
+	EDGE_BUCKET_COLORS,
+	formatEdgeConfidenceLabel,
+	getEdgeConfidenceBucket,
+	type EdgeConfidenceBucket,
+	type EdgeConfidenceColor
+} from "../edgeConfidence";
 import type { Node3D, ProjectedNode } from "./layout";
 import {
 	updateCamera,
@@ -154,12 +162,33 @@ interface EdgeDrawRecord {
 	edgeAlpha: number;
 	isRelated: boolean;
 	avgDepth: number;
+	/** Confidence bucket index (0=high, 1=medium, 2=low) — static per data update. */
+	bucketIdx: number;
+	/** Midpoint label for hovered/selected edges; "" for batched edges. */
+	label: string;
 }
 const projectedPool: ProjectedNode[] = [];
 const edgeRecordPool: EdgeDrawRecord[] = [];
 const projectedWorking: ProjectedNode[] = [];
 const edgeWorking: EdgeDrawRecord[] = [];
-let projByIndex = new Map<number, ProjectedNode>();
+const projByIndex = new Map<number, ProjectedNode>();
+
+// ─── Edge Confidence Buckets (TASK-330, KGCONF-2) ────────────────────────────
+// The confidence value is static per data update, so bucket index, opacity
+// multiplier and label are precomputed ONCE per animEdges change (in
+// rebuildEdgeIndices) and only READ per frame — the frame loop stays
+// zero-allocation. Bucket 0 (high) uses the renderer's default edge color
+// (BUCKET_COLORS[0] === null); 1=amber, 2=red.
+const BUCKET_COLORS: (EdgeConfidenceColor | null)[] = [
+	EDGE_BUCKET_COLORS.high,
+	EDGE_BUCKET_COLORS.medium,
+	EDGE_BUCKET_COLORS.low
+];
+const BUCKET_ALPHA: number[] = [EDGE_ALPHA_MULTIPLIERS.high, EDGE_ALPHA_MULTIPLIERS.medium, EDGE_ALPHA_MULTIPLIERS.low];
+const BUCKET_IDX: Record<EdgeConfidenceBucket, number> = { high: 0, medium: 1, low: 2 };
+let edgeConfBucket: Uint8Array = new Uint8Array(0);
+let edgeConfAlpha: Float32Array = new Float32Array(0);
+let edgeLabels: string[] = [];
 
 // ─── Spatial Grid for Hit Testing ────────────────────────────────────────────
 // Coarse uniform grid over projected node positions, rebuilt every frame right
@@ -297,9 +326,19 @@ export function startNeuralAnimation(
 	function rebuildEdgeIndices(): void {
 		edgeSrcIdx = new Array(animEdges.length);
 		edgeTgtIdx = new Array(animEdges.length);
+		// Confidence bucket arrays + labels — static per data update, so
+		// precompute here (once) and only read in the frame loop (TASK-330).
+		edgeConfBucket = new Uint8Array(animEdges.length);
+		edgeConfAlpha = new Float32Array(animEdges.length);
+		edgeLabels = new Array(animEdges.length);
 		for (let i = 0; i < animEdges.length; i++) {
-			edgeSrcIdx[i] = nodeIndexById.get(animEdges[i].source);
-			edgeTgtIdx[i] = nodeIndexById.get(animEdges[i].target);
+			const e = animEdges[i];
+			edgeSrcIdx[i] = nodeIndexById.get(e.source);
+			edgeTgtIdx[i] = nodeIndexById.get(e.target);
+			const bucketIdx = BUCKET_IDX[getEdgeConfidenceBucket(e.confidence)];
+			edgeConfBucket[i] = bucketIdx;
+			edgeConfAlpha[i] = BUCKET_ALPHA[bucketIdx];
+			edgeLabels[i] = formatEdgeConfidenceLabel(e.relation_type, e.confidence);
 		}
 	}
 
@@ -550,11 +589,16 @@ export function startNeuralAnimation(
 			const avgZ = (fromP.depth + toP.depth) / 2;
 			const maxZ = FOG_FAR * 1.5;
 			const baseAlpha = Math.max(0.1, Math.min(0.7, (avgZ + maxZ) / (maxZ * 2)));
-			const edgeAlpha = baseAlpha * alphaMultiplier;
+			// Confidence opacity bucket folds into the alpha (TASK-330): high
+			// keeps the full value, medium/low dim the stroke. bucketIdx/label
+			// are precomputed per data update — only read here.
+			const bucketIdx = edgeConfBucket[ei];
+			const edgeAlpha = baseAlpha * alphaMultiplier * edgeConfAlpha[ei];
+			const edgeIsSelected = state.selectedEdge === e;
 
 			let rec = edgeRecordPool[edgeCount];
 			if (!rec) {
-				rec = { from: null!, to: null!, edgeAlpha: 0, isRelated: false, avgDepth: 0 };
+				rec = { from: null!, to: null!, edgeAlpha: 0, isRelated: false, avgDepth: 0, bucketIdx: 0, label: "" };
 				edgeRecordPool[edgeCount] = rec;
 			}
 			rec.from = fromP;
@@ -562,6 +606,10 @@ export function startNeuralAnimation(
 			rec.edgeAlpha = edgeAlpha;
 			rec.isRelated = isRelated;
 			rec.avgDepth = avgZ;
+			rec.bucketIdx = bucketIdx;
+			// Midpoint label only for the active set (hovered/selected) — the
+			// overview stays uncluttered and fillText cost stays bounded.
+			rec.label = isRelated || edgeIsSelected ? edgeLabels[ei] : "";
 			edgeCount++;
 		}
 
@@ -571,41 +619,63 @@ export function startNeuralAnimation(
 		for (let i = 0; i < edgeCount; i++) edgeWorking[i] = edgeRecordPool[i];
 		if (edgeCount > 1) edgeWorking.sort((a, b) => b.avgDepth - a.avgDepth);
 
-		// Single-pass draw: inactive edges are batched into ONE path (one
-		// save/stroke/restore — no per-edge object arrays), active edges draw
-		// individually with the animated dash/shadow effects. Alpha for the
-		// batch uses the FIRST inactive edge (far-to-near), matching the
-		// pre-TASK-271 rendering exactly.
+		// Draw: inactive edges are batched into per-confidence-bucket paths
+		// (≤3 save/stroke/restore — no per-edge object arrays), active edges
+		// draw individually with the animated dash/shadow effects. Alpha for
+		// each bucket batch uses its FIRST (far-to-near) edge, matching the
+		// pre-TASK-330 single-batch behavior. Bucket colors (TASK-330):
+		// 0=high → default edge color, 1=medium amber, 2=low red.
 		const edgeColor = dark ? "0,212,255" : "55,48,163";
-		let batchStarted = false;
+		let batchBucket: number | null = null;
 		for (let i2 = 0; i2 < edgeCount; i2++) {
 			const re = edgeWorking[i2];
 			if (re.isRelated) {
-				if (batchStarted) {
+				if (batchBucket !== null) {
 					ctx.stroke();
 					ctx.restore();
-					batchStarted = false;
+					batchBucket = null;
 				}
-				drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, true, totalElapsed, dark);
+				const bucketColor = BUCKET_COLORS[re.bucketIdx];
+				drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, true, totalElapsed, dark, bucketColor);
 				continue;
 			}
-			if (!batchStarted) {
+			if (batchBucket !== re.bucketIdx) {
+				if (batchBucket !== null) {
+					ctx.stroke();
+					ctx.restore();
+				}
+				batchBucket = re.bucketIdx;
 				const fog = fogFactor(re.avgDepth);
 				const alpha = dark ? Math.min(0.8, re.edgeAlpha * fog) : Math.min(0.9, Math.max(0.08, re.edgeAlpha * fog));
-				if (alpha < 0.01) continue;
+				if (alpha < 0.01) {
+					batchBucket = null;
+					continue;
+				}
 				ctx.save();
-				ctx.strokeStyle = `rgba(${edgeColor},${alpha})`;
+				const bucketColor = BUCKET_COLORS[re.bucketIdx];
+				ctx.strokeStyle = bucketColor
+					? `rgba(${bucketColor.r},${bucketColor.g},${bucketColor.b},${alpha})`
+					: `rgba(${edgeColor},${alpha})`;
 				ctx.lineWidth = dark ? 1.5 : 1.8;
 				ctx.lineCap = "round";
 				ctx.beginPath();
-				batchStarted = true;
 			}
 			ctx.moveTo(re.from.sx, re.from.sy);
 			ctx.lineTo(re.to.sx, re.to.sy);
 		}
-		if (batchStarted) {
+		if (batchBucket !== null) {
 			ctx.stroke();
 			ctx.restore();
+		}
+
+		// Edge confidence labels (TASK-330): midpoint pill for the active set
+		// only (hovered/selected). Drawn in a post-pass so labels always
+		// overlay the strokes; the loop is bounded by edgeCount (array reads
+		// only) and fillText runs only for the few labeled edges.
+		for (let i3 = 0; i3 < edgeCount; i3++) {
+			const re = edgeWorking[i3];
+			if (!re.label) continue;
+			drawEdgeLabel3D(ctx, re.from, re.to, re.label, dark, BUCKET_COLORS[re.bucketIdx]);
 		}
 
 		// ── Draw signals (skipped while dragging — decorative, TASK-271) ──

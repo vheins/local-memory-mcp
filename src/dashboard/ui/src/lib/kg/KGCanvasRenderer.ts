@@ -1,4 +1,12 @@
 import type { LayoutNode, LayoutEdge } from "./KGForceLayout";
+import {
+	EDGE_ALPHA_MULTIPLIERS,
+	EDGE_BUCKET_COLORS,
+	formatEdgeConfidenceLabel,
+	getEdgeConfidenceBucket,
+	type EdgeConfidenceBucket,
+	type EdgeConfidenceColor
+} from "./edgeConfidence";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -116,8 +124,23 @@ function drawEdge(
 	isSelected: boolean,
 	isDark: boolean
 ) {
-	ctx.strokeStyle = isSelected ? "#f59e0b" : isDark ? "rgba(148,163,184,0.4)" : "rgba(100,116,139,0.35)";
-	ctx.lineWidth = isSelected ? 2.5 : 1.5;
+	// Confidence opacity bucket (TASK-330): high = solid default stroke,
+	// medium/low = amber/red tint at reduced opacity. Selection keeps its
+	// highlight — it wins over the confidence tint so the focused edge stays
+	// unambiguous.
+	const bucket = getEdgeConfidenceBucket(edge.confidence);
+	const bucketColor = EDGE_BUCKET_COLORS[bucket];
+	if (isSelected) {
+		ctx.strokeStyle = "#f59e0b";
+		ctx.lineWidth = 2.5;
+	} else if (bucketColor) {
+		const baseAlpha = isDark ? 0.4 : 0.35;
+		ctx.strokeStyle = `rgba(${bucketColor.r},${bucketColor.g},${bucketColor.b},${baseAlpha * EDGE_ALPHA_MULTIPLIERS[bucket]})`;
+		ctx.lineWidth = 1.5;
+	} else {
+		ctx.strokeStyle = isDark ? "rgba(148,163,184,0.4)" : "rgba(100,116,139,0.35)";
+		ctx.lineWidth = 1.5;
+	}
 	ctx.beginPath();
 	ctx.moveTo(from.x, from.y);
 	ctx.lineTo(to.x, to.y);
@@ -127,16 +150,27 @@ function drawEdge(
 	if (edge.relation_type) {
 		const mx = (from.x + to.x) / 2;
 		const my = (from.y + to.y) / 2;
-		const label = edge.relation_type;
+		const label = formatEdgeConfidenceLabel(edge.relation_type, edge.confidence);
 		ctx.font = "9px system-ui,sans-serif";
 		ctx.textAlign = "center";
 		ctx.textBaseline = "bottom";
 		const tw = ctx.measureText(label).width;
 		ctx.fillStyle = isDark ? "rgba(10,14,26,0.8)" : "rgba(240,244,255,0.85)";
 		ctx.fillRect(mx - tw / 2 - 3, my - 10, tw + 6, 14);
-		ctx.fillStyle = isDark ? "rgba(148,163,184,0.8)" : "rgba(71,85,105,0.8)";
+		// Label text carries the confidence bucket color (medium/low) so the
+		// % is readable without relying on stroke alpha alone.
+		ctx.fillStyle = labelTextColor(bucket, bucketColor, isDark);
 		ctx.fillText(label, mx, my);
 	}
+}
+
+function labelTextColor(
+	bucket: EdgeConfidenceBucket,
+	bucketColor: EdgeConfidenceColor | null,
+	isDark: boolean
+): string {
+	if (bucketColor) return `rgba(${bucketColor.r},${bucketColor.g},${bucketColor.b},0.95)`;
+	return isDark ? "rgba(148,163,184,0.8)" : "rgba(71,85,105,0.8)";
 }
 
 function drawNode(

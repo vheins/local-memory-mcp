@@ -27,6 +27,17 @@
 		<span class="kg-stats">
 			{nodeCount} nodes · {edgeCount} edges
 		</span>
+		{#if edgeCount > 0 && !isZeroEdgeOverview}
+			<span
+				class="kg-conf-legend"
+				role="img"
+				aria-label="Edge confidence legend: solid line means at least 85 percent, amber 60 to 85 percent, red below 60 percent"
+			>
+				<span class="kg-conf-item"><i class="kg-conf-swatch kg-conf-high" aria-hidden="true"></i>≥85%</span>
+				<span class="kg-conf-item"><i class="kg-conf-swatch kg-conf-med" aria-hidden="true"></i>60–85%</span>
+				<span class="kg-conf-item"><i class="kg-conf-swatch kg-conf-low" aria-hidden="true"></i>&lt;60%</span>
+			</span>
+		{/if}
 	</div>
 	<div class="kg-toolbar-right">
 		<!-- Zoom controls -->
@@ -131,6 +142,48 @@
 		font-size: 0.72rem;
 		color: var(--color-text-muted);
 		font-weight: 600;
+	}
+
+	/* Edge confidence legend (TASK-330) — swatches mirror the renderer buckets */
+	.kg-conf-legend {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		padding-left: 12px;
+		border-left: 1px solid var(--color-border);
+	}
+
+	:global(.dark) .kg-conf-legend {
+		border-left-color: rgba(148, 163, 184, 0.15);
+	}
+
+	.kg-conf-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 0.65rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+	}
+
+	.kg-conf-swatch {
+		display: inline-block;
+		width: 14px;
+		height: 3px;
+		border-radius: 2px;
+	}
+
+	.kg-conf-high {
+		background: var(--color-text-muted);
+	}
+
+	.kg-conf-med {
+		background: #f59e0b; /* amber — matches EDGE_BUCKET_COLORS.medium */
+	}
+
+	.kg-conf-low {
+		background: #ef4444; /* red — matches EDGE_BUCKET_COLORS.low */
 	}
 
 	.kg-error {

@@ -19,6 +19,8 @@ export interface LayoutEdge {
 	target: string;
 	relation_type: string;
 	color?: string;
+	/** Per-edge extraction confidence 0..1 (TASK-330 — mirrors KGEdge from server; drives label + opacity buckets). */
+	confidence?: number;
 }
 
 export interface ForceLayoutConfig {
