@@ -452,7 +452,15 @@ describe("TaskService.getTimeStats / updateComment / deleteComment", () => {
 		expect(mocks.db.taskComments.updateTaskComment).toHaveBeenCalledWith("c-1", { comment: "note" });
 	});
 
-	it("deleteComment deletes inside the write lock", async () => {
+	it("deleteComment throws 404 for a missing comment and deletes inside the write lock otherwise", async () => {
+		vi.mocked(mocks.db.taskComments.getTaskCommentById).mockReturnValue(null);
+		await expect(TaskService.deleteComment("c-ghost")).rejects.toMatchObject({
+			name: "ServiceError",
+			status: 404,
+			message: "Comment not found"
+		});
+
+		vi.mocked(mocks.db.taskComments.getTaskCommentById).mockReturnValue({ id: "c-1" } as never);
 		await TaskService.deleteComment("c-1");
 		expect(mocks.db.taskComments.deleteTaskComment).toHaveBeenCalledWith("c-1");
 	});

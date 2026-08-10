@@ -305,6 +305,10 @@ export const TaskService = {
 	},
 
 	async deleteComment(id: string): Promise<void> {
+		// Mirror updateComment: an unknown id is a 404, not a silent no-op —
+		// delete-by-id must be symmetric with update-by-id (REFACTOR-TST-008).
+		const existingComment = db.taskComments.getTaskCommentById(id);
+		if (!existingComment) throw new ServiceError(404, "Comment not found");
 		await db.withWrite(() => db.taskComments.deleteTaskComment(id));
 	}
 };

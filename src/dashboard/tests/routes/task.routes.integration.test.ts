@@ -236,13 +236,10 @@ describe("Task routes", () => {
 			await expectJsonApiError(`${baseUrl}/api/tasks/comments/${UNKNOWN_ID}`, 404, /Comment not found/, PUT_JSON);
 		});
 
-		it("DELETE /api/tasks/comments/:id returns 200 for an unknown id (unconditional delete at this layer)", async () => {
-			// TaskService.deleteComment performs no existence check (unlike
-			// updateComment) — the route still resolves and reports success.
-			const res = await fetch(`${baseUrl}/api/tasks/comments/${UNKNOWN_ID}`, { method: "DELETE" });
-			expect(res.status).toBe(200);
-			const body = (await res.json()) as JsonApiBody;
-			expect(!Array.isArray(body.data) && body.data?.type).toBe("status");
+		it("DELETE /api/tasks/comments/:id with an unknown comment id returns 404", async () => {
+			await expectJsonApiError(`${baseUrl}/api/tasks/comments/${UNKNOWN_ID}`, 404, /Comment not found/, {
+				method: "DELETE"
+			});
 		});
 
 		it("GET /api/tasks/<unknown>/deeper returns 404 (unregistered sub-path)", async () => {
