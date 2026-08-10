@@ -21,6 +21,10 @@ jobs:
       # never publish a regression (type-check + lint + full suite).
       - run: npm run type-check
       - run: npm run lint
+      # FIX-393: same grammar-WASM prerequisite as CI — the
+      # reference-emission tests need dist/grammars (kotlin/swift/dart/vue
+      # have no prebuilt WASM in node_modules), so build before the gate.
+      - run: bash scripts/copy-grammar-wasm.sh
       - run: npm run test
       - run: npm publish --access public
         env:
