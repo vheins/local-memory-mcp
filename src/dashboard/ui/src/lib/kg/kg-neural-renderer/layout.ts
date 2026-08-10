@@ -53,7 +53,8 @@ export const PALETTE = [
 	{ r: 139, g: 92, b: 246 }, // violet
 	{ r: 79, g: 70, b: 229 }, // indigo
 	{ r: 236, g: 72, b: 153 }, // soft magenta
-	{ r: 100, g: 180, b: 255 } // light blue
+	{ r: 100, g: 180, b: 255 }, // light blue
+	{ r: 250, g: 204, b: 21 } // amber — codebase symbol kinds (TASK-329)
 ];
 
 export const TYPE_COLOR_INDEX: Record<string, number> = {
@@ -61,7 +62,17 @@ export const TYPE_COLOR_INDEX: Record<string, number> = {
 	place: 2,
 	organization: 3,
 	concept: 0,
-	unknown: 4
+	unknown: 4,
+	// Codebase symbol kinds (TASK-329 code-graph force panel). Additive: KG
+	// entity types keep their indices above; these keys only affect codebase
+	// graph nodes (LayoutNode.type = CodeGraphNode.kind). Any other kind falls
+	// back to index 4 (light blue) via getNodeColor's `?? 4`.
+	function: 0,
+	class: 1,
+	interface: 2,
+	type: 3,
+	enum: 4,
+	variable: 5
 };
 
 export const BG_DARK = "#050a1a";
