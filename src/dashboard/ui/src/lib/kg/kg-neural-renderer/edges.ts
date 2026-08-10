@@ -3,7 +3,13 @@
  */
 
 import { fogFactor } from "./layout";
-import type { EdgeConfidenceColor } from "../edgeConfidence";
+import type { ProjectedNode } from "./layout";
+import {
+	EDGE_ALPHA_MULTIPLIERS,
+	EDGE_BUCKET_COLORS,
+	type EdgeConfidenceBucket,
+	type EdgeConfidenceColor
+} from "../edgeConfidence";
 
 // ─── Internal Types ──────────────────────────────────────────────────────────
 
@@ -13,6 +19,75 @@ export interface Signal {
 	progress: number;
 	createdAt: number;
 	color: { r: number; g: number; b: number };
+}
+
+// ─── Edge Draw Record (TASK-271 / audit F3) ──────────────────────────────────
+// Pooled per-edge draw descriptor filled by the orchestrator's zero-allocation
+// frame loop. Confidence bucket index + label are precomputed ONCE per data
+// update (TASK-330) and only read here.
+
+export interface EdgeDrawRecord {
+	from: ProjectedNode;
+	to: ProjectedNode;
+	edgeAlpha: number;
+	isRelated: boolean;
+	avgDepth: number;
+	/** Confidence bucket index (0=high, 1=medium, 2=low) — static per data update. */
+	bucketIdx: number;
+	/** Midpoint label for hovered/selected edges; "" for batched edges. */
+	label: string;
+}
+
+// ─── Edge Confidence Buckets (TASK-330, KGCONF-2) ────────────────────────────
+// The confidence value is static per data update, so bucket index, opacity
+// multiplier and label are precomputed ONCE per animEdges change (via
+// resetEdgeConfidence/setEdgeConfidence, called from the orchestrator's
+// rebuildEdgeIndices) and only READ per frame — the frame loop stays
+// zero-allocation. Bucket 0 (high) uses the renderer's default edge color
+// (BUCKET_COLORS[0] === null); 1=amber, 2=red.
+const BUCKET_COLORS: (EdgeConfidenceColor | null)[] = [
+	EDGE_BUCKET_COLORS.high,
+	EDGE_BUCKET_COLORS.medium,
+	EDGE_BUCKET_COLORS.low
+];
+
+export const BUCKET_ALPHA: number[] = [
+	EDGE_ALPHA_MULTIPLIERS.high,
+	EDGE_ALPHA_MULTIPLIERS.medium,
+	EDGE_ALPHA_MULTIPLIERS.low
+];
+
+export const BUCKET_IDX: Record<EdgeConfidenceBucket, number> = { high: 0, medium: 1, low: 2 };
+
+// Mutable confidence state owned here so the draw-pass helpers read the same
+// arrays the orchestrator precomputes. The frame loop snapshots the arrays via
+// the getters below once per render — direct array reads, zero allocation.
+let edgeConfBucket = new Uint8Array(0);
+let edgeConfAlpha = new Float32Array(0);
+let edgeLabels: string[] = [];
+
+export function resetEdgeConfidence(count: number): void {
+	edgeConfBucket = new Uint8Array(count);
+	edgeConfAlpha = new Float32Array(count);
+	edgeLabels = new Array(count);
+}
+
+export function setEdgeConfidence(i: number, bucketIdx: number, alpha: number, label: string): void {
+	edgeConfBucket[i] = bucketIdx;
+	edgeConfAlpha[i] = alpha;
+	edgeLabels[i] = label;
+}
+
+export function getEdgeConfBucket(): Uint8Array {
+	return edgeConfBucket;
+}
+
+export function getEdgeConfAlpha(): Float32Array {
+	return edgeConfAlpha;
+}
+
+export function getEdgeConfLabels(): string[] {
+	return edgeLabels;
 }
 
 // ─── Edge Drawing — Very Thin, Semi-Transparent ──────────────────────────────
@@ -92,4 +167,85 @@ export function drawEdgeLabel3D(
 			? "rgba(148,163,184,0.9)"
 			: "rgba(71,85,105,0.9)";
 	ctx.fillText(label, mx, my);
+}
+
+// ─── Batched Edge Draw (per-confidence-bucket paths) ─────────────────────────
+// Inactive edges are batched into per-confidence-bucket paths (≤3
+// save/stroke/restore — no per-edge object arrays); active edges draw
+// individually with the animated dash/shadow effects. Alpha for each bucket
+// batch uses its FIRST (farthest) edge. Bucket colors (TASK-330): 0=high →
+// default edge color, 1=medium amber, 2=low red.
+//
+// Depth layering artifact (TASK-384): far-to-near ordering applies WITHIN each
+// bucket only, not across buckets — the batch flush groups edges by bucket, so
+// a far medium/low edge drawn in a later path can overlay nearer high-bucket
+// edges. The high bucket (dominant case — default confidence 1.0) renders
+// exactly as the pre-TASK-330 single batch; mixed-bucket crossings are an
+// accepted ~1.5px alpha-faded stroke artifact.
+export function drawEdgeBatches(
+	ctx: CanvasRenderingContext2D,
+	records: EdgeDrawRecord[],
+	count: number,
+	edgeColor: string,
+	dark: boolean,
+	time: number
+): void {
+	let batchBucket: number | null = null;
+	for (let i = 0; i < count; i++) {
+		const re = records[i];
+		if (re.isRelated) {
+			if (batchBucket !== null) {
+				ctx.stroke();
+				ctx.restore();
+				batchBucket = null;
+			}
+			drawEdge3D(ctx, re.from, re.to, re.edgeAlpha, true, time, dark, BUCKET_COLORS[re.bucketIdx]);
+			continue;
+		}
+		if (batchBucket !== re.bucketIdx) {
+			if (batchBucket !== null) {
+				ctx.stroke();
+				ctx.restore();
+			}
+			batchBucket = re.bucketIdx;
+			const fog = fogFactor(re.avgDepth);
+			const alpha = dark ? Math.min(0.8, re.edgeAlpha * fog) : Math.min(0.9, Math.max(0.08, re.edgeAlpha * fog));
+			if (alpha < 0.01) {
+				batchBucket = null;
+				continue;
+			}
+			ctx.save();
+			const bucketColor = BUCKET_COLORS[re.bucketIdx];
+			ctx.strokeStyle = bucketColor
+				? `rgba(${bucketColor.r},${bucketColor.g},${bucketColor.b},${alpha})`
+				: `rgba(${edgeColor},${alpha})`;
+			ctx.lineWidth = dark ? 1.5 : 1.8;
+			ctx.lineCap = "round";
+			ctx.beginPath();
+		}
+		ctx.moveTo(re.from.sx, re.from.sy);
+		ctx.lineTo(re.to.sx, re.to.sy);
+	}
+	if (batchBucket !== null) {
+		ctx.stroke();
+		ctx.restore();
+	}
+}
+
+// ─── Edge Confidence Labels — Midpoint Post-Pass (TASK-330) ──────────────────
+// Active set (hovered/selected) only. Drawn in a post-pass so labels always
+// overlay the strokes; the loop is bounded by count (array reads only) and
+// fillText runs only for the few labeled edges.
+
+export function drawEdgeLabels3D(
+	ctx: CanvasRenderingContext2D,
+	records: EdgeDrawRecord[],
+	count: number,
+	dark: boolean
+): void {
+	for (let i = 0; i < count; i++) {
+		const re = records[i];
+		if (!re.label) continue;
+		drawEdgeLabel3D(ctx, re.from, re.to, re.label, dark, BUCKET_COLORS[re.bucketIdx]);
+	}
 }
