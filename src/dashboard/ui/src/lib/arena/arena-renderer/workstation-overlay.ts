@@ -5,7 +5,7 @@ import type { ZoneRect, ArenaScene } from "../arenaTypes";
 // ── Zone aggregate overlay (LOD_AGGREGATE) ─────────────────────────────────
 export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaScene) {
 	const { ctx, isDark } = rc;
-	const { x, y, w, h, color, label } = zone;
+	const { x, y, w, color, label } = zone;
 	let agentCount = 0,
 		healthyCount = 0,
 		degradedCount = 0,

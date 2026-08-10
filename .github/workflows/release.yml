@@ -17,6 +17,11 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org/
       - run: npm install --legacy-peer-deps
+      # REFACTOR-TST-013: publish is gated on the same checks as CI —
+      # never publish a regression (type-check + lint + full suite).
+      - run: npm run type-check
+      - run: npm run lint
+      - run: npm run test
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

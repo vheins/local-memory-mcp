@@ -40,6 +40,20 @@ export default [
 		}
 	},
 	{
-		ignores: ["dist/", "node_modules/", "bin/", "build/", "*.db", "storage/", ".svelte-kit/"]
+		// Generated/scratch dirs (gitignored) must not pollute lint runs —
+		// otherwise `npm run lint` flags regenerated artifacts (.tmp/, coverage/,
+		// .cache/) that do not exist on CI and make the local gate unreproducible.
+		ignores: [
+			"dist/",
+			"node_modules/",
+			"bin/",
+			"build/",
+			"*.db",
+			"storage/",
+			".svelte-kit/",
+			".tmp/",
+			"coverage/",
+			".cache/"
+		]
 	}
 ];
