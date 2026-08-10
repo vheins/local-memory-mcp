@@ -80,6 +80,17 @@ Tab Queue (tab ke-11, setelah Handoffs dan sebelum Knowledge Graph) menampilkan 
 
 Job yang gagal dinamai `poison` di API antrean dan ditampilkan sebagai "Failed" di UI.
 
+### Tab Codebase
+
+Tab Codebase (antara Tasks dan Handoffs) menelusuri indeks codebase dari repo yang dipilih:
+
+- **Pencarian simbol + pohon berkas** — cari simbol (`CodebaseSearchBar`) atau telusuri pohon berkas rekursif; pilih berkas untuk melihat konten terindeksnya di file viewer
+- **Detail simbol** — klik simbol untuk memeriksa definisi, referensi, dan trace-nya; detail menyertakan **DAG call-graph** (pemanggil/terpanggil)
+- **Statistik indeks** — panel status/statistik plus rincian bahasa dan jenis simbol
+- **Panel code-graph** — graf gaya-tarik (force-directed) dari repo (filter jenis All/Calls/Imports/Co-defined, zoom/refresh, footer legenda) yang diisi oleh `GET /api/codebase/graph`; klik node membuka detail simbolnya. Jika repo belum diindeks, muncul "Index required — run codebase-index"
+
+Hasil biasanya **segar**: watcher polling (aktif secara default) mengindeks ulang berkas yang berubah dalam ±30 detik (`FILE_WATCH_INTERVAL_MS`), sehingga perubahan biasanya muncul tanpa re-index eksplisit.
+
 ### Tab Knowledge Graph
 
 Tab Knowledge Graph menyediakan visualisasi graf gaya-tarik (force-directed) interaktif dari entitas dan relasinya.

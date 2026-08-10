@@ -1,6 +1,8 @@
 # Database Schema
 
 > **CORRECTED (2026-08-08):** current schema version is **23** (`SCHEMA_VERSION = 23`, src/mcp/storage/migrations/index.ts), not v16. The tables below are the core set; additional shipped tables not listed here: `codebase_files`/`codebase_symbols` (v01), `memories_fts` (v10), `queue_jobs` (v09, embedding outbox), `codebase_references` (v21), `kg_degrees` (v22), `codebase_references` edge targets (v23). `memory_summary` is written by `repo-summarize` (formerly `memory-summarize`); the "updated via memory-summarize and memory-synthesize" claim below uses legacy names. All columns listed per table verified against migrations (memories incl. supersedes/expires_at/hit/recall stats; tasks incl. task_code/phase/finished_at; coding_standards with `name`/`content`/`scope`/`stack`; KG entities/relations/observations; action_log; _schema_version). The `memory_vectors`/`standard_vectors` (384-dim BLOB, versioned) and soft-delete patterns verified.
+>
+> **CORRECTED (2026-08-10):** schema version is now **24** (`SCHEMA_VERSION = 24`, src/mcp/storage/migrations/index.ts:29) — migration **v23** (`codebase-references-edge-targets`, Phase 1.1) extended `codebase_references` with `target_file`/`target_symbol_id` + `extends`/`implements` kinds; migration **v24** (`relations-confidence`, TASK-325) adds a single display-only `confidence REAL NOT NULL DEFAULT 1.0` column to KG `relations` (no index, no query use — heuristic mapping + first-write-wins gap documented at the `relations` table below). Neither touches the codebase or core entity tables above.
 
 This document specifies the database schema used in the MCP Local Memory system. The implementation logic for these tables is modularly distributed across specialized entities in `src/mcp/entities/` (inheriting from `src/mcp/storage/base.ts`). Schema versioning is managed by `src/mcp/storage/migrations/` (versioned index — `index.ts` + `vNN-*.ts`; current version: v16).
 
@@ -193,15 +195,25 @@ Knowledge graph nodes.
 
 Knowledge graph edges (directed).
 
-| Column                                            | Type | Description                                                  |
-| :------------------------------------------------ | :--- | :----------------------------------------------------------- |
-| `from_entity`                                     | TEXT | FK to `entities(name)` ON DELETE CASCADE.                    |
-| `to_entity`                                       | TEXT | FK to `entities(name)` ON DELETE CASCADE.                    |
-| `relation_type`                                   | TEXT | Type of relation (e.g., `uses`, `depends_on`, `implements`). |
-| `scope_owner`                                     | TEXT | Repository owner.                                            |
-| `scope_repo`                                      | TEXT | Repository name.                                             |
-| `created_at`                                      | TEXT | ISO-8601 timestamp.                                          |
+| Column                                            | Type | Description                                                                                                                                                                          |
+| :------------------------------------------------ | :--- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `from_entity`                                     | TEXT | FK to `entities(name)` ON DELETE CASCADE.                                                                                                                                            |
+| `to_entity`                                       | TEXT | FK to `entities(name)` ON DELETE CASCADE.                                                                                                                                            |
+| `relation_type`                                   | TEXT | Type of relation (e.g., `uses`, `depends_on`, `implements`).                                                                                                                         |
+| `scope_owner`                                     | TEXT | Repository owner.                                                                                                                                                                    |
+| `scope_repo`                                      | TEXT | Repository name.                                                                                                                                                                     |
+| `confidence`                                      | REAL | Per-edge confidence label `0..1`, `NOT NULL DEFAULT 1.0` (migration **v24**, `relations-confidence`, TASK-325). **Display-only** — no index, never used in queries/filters/ORDER BY. |
+| `created_at`                                      | TEXT | ISO-8601 timestamp.                                                                                                                                                                  |
 | **PK**: `(from_entity, to_entity, relation_type)` |
+
+> **VERIFIED vs IMPLEMENTATION (2026-08-10, TASK-325 — confidence v24):** the `confidence` column ships via migration **v24** (`src/mcp/storage/migrations/v24-relations-confidence.ts:61-64` — guarded `ALTER TABLE relations ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0`, idempotent, additive; the DEFAULT backfills every pre-v24 row to 1.0; **no index** is created — it is a display/label field by design). Value is an **insert-time constant chosen per caller site** (the table has no source/creator column — the writer IS the provenance; see `v24-relations-confidence.ts:22-49` for the single source of truth):
+>
+> - `1.0` — explicit/manual (dashboard `createRelation`) + default when omitted (`params.confidence ?? 1.0`, `src/mcp/entities/knowledge-graph/entity.ts:78,336` — backward compatible).
+> - `0.9` — parser-deterministic codebase edges (`saveCodebaseRelations`, `KG_RELATION_CONFIDENCE_CODEBASE`, `src/mcp/tools/kg-archivist/relations.ts:31`): call/instantiation/import/extends/implements from indexed code — no NLP noise, but name-based target resolution (ADR-002).
+> - `0.8` — structured semantic metadata (`KG_RELATION_CONFIDENCE_SEMANTIC`, `relations.ts:21`): task `depends_on`/`inspired_by`, standard `extends`/`related_to` (explicit fields or similarity search).
+> - `0.55` — NLP auto-extraction co-occurrence (`KG_RELATION_CONFIDENCE_AUTO_EXTRACTION`, `src/mcp/tools/kg-archivist/extract.ts:352`): `co_mentioned` from the embedding worker — heaviest discount (spec anchor).
+>
+> **Known gap — first-write-wins:** inserts use `INSERT OR IGNORE` (`entity.ts:69`), so a later writer re-attempting an existing edge is a no-op and the **first writer's confidence sticks**; within one worker cycle `saveExtractions` (0.55) runs before the semantic/codebase writers, so a colliding `co_mentioned` pair keeps 0.55. Full confidence recomputation from observations (scoring from source documents instead of insert-time constants) is deferred.
 
 ### `observations`
 

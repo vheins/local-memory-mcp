@@ -1,6 +1,8 @@
 # Value Proposition — Codebase Index
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** "TypeScript/JavaScript only (MVP)" is superseded — the shipped index supports 15 languages (typescript, tsx, vue, go, python, php, dart, rust, java, ruby, kotlin, swift, c, cpp, markdown) plus a generic regex fallback. The dashboard tab ("Graph UI" row) is **implemented** (CodebasePage + Codebase tab in dashboard). Shared-SQLite, local-first, zero-native-deps, and tree-sitter WASM claims all verified. The unified-KG row (code-specific `CALLS`/`IMPLEMENTS` edges) is partially realized — references ship as `codebase_references` (v21) with `call`/`instantiation`/`import` kinds; **dead-code detection and full code-graph visualization are NEXT PHASE**.
+>
+> **VERIFIED vs IMPLEMENTATION (2026-08-10):** the unified-KG row's edges are now realized — `codebase_references` carries `extends`/`implements` heritage kinds plus edge targets since migration **v23** (Phase 1.1; `src/mcp/storage/migrations/v23-codebase-references-edge-targets.ts`). **Dead-code detection is IMPLEMENTED** via the ARCHITECTURE-mode `deadCode` block (`src/mcp/codebase-index/services/dead-code.ts`, TASK-319). The "full code-graph visualization" (dashboard call-graph/DAG view) remains NEXT PHASE — callers/callees render as lists in symbol detail, not as a rendered graph. The §5 phasing below is normalized to the PRD's numbering (see the phasing note in §5); the old "Phase 3" label for dead code is superseded.
 
 ## One-Sentence Pitch
 
@@ -68,11 +70,14 @@ Instead of a standalone 3D graph UI (codebase-memory-mcp's approach), Codebase I
 
 ### 5. Progressive Enhancement
 
+> **Phasing NORMALIZED (2026-08-10):** the original "Phase 2 / Phase 3" labels below used a different numbering than the PRD/mvp-scope docs (PRD: MVP → Phase 1.1 → Phase 1.2 → Phase 2+). Per the DC-3 docs task (TASK-321), this section now uses the PRD numbering, with ship status annotated: **dead code detection = Phase 1.2 (C5) — IMPLEMENTED** (ARCHITECTURE-mode `deadCode` block, TASK-319); **LSP integration + type inference = Phase 2+ (W2)** — still NEXT PHASE; dashboard graph visualization = Phase 1.2 (C2) — NOT shipped (NEXT PHASE).
+
 The index is built incrementally:
 
-- **MVP**: File discovery + tree-sitter parsing + symbol storage + basic search
-- **Phase 2**: LSP integration, type inference, dashboard graph
-- **Phase 3**: Cross-service linking, dead code detection
+- **MVP (Phase 1.0)**: File discovery + tree-sitter parsing + symbol storage + basic search
+- **Phase 1.1**: Call-site + heritage reference edges (call/instantiation/import since v21; extends/implements since v23) — name-based per ADR-002
+- **Phase 1.2**: Dead code detection (**IMPLEMENTED**, ARCHITECTURE `deadCode` block); dashboard graph visualization (NOT shipped)
+- **Phase 2+**: LSP integration, type inference, cross-service linking (NEXT PHASE)
 
 Users get value from day 1 without configuring anything beyond what local-memory-mcp already requires.
 

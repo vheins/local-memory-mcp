@@ -298,6 +298,8 @@ Auto-index runs asynchronously and does not block server initialization or tool 
 - `search_symbols` and `get_file_symbols` return results from the existing (stale) index
 - `index_repository` called explicitly during auto-index returns a "currently indexing" status
 
+> **IMPLEMENTED (verified 2026-08-10, TASK-322 — polling file watcher):** §6's 24h-TTL auto-index is now complemented by a **polling watcher** that delivers US-08's "index updates automatically" promise. `ENABLE_FILE_WATCHER` (default on) starts a sweep loop in the MCP server process (`src/mcp/codebase-index/services/file-watcher.ts`); every `FILE_WATCH_INTERVAL_MS` (default 30s, `src/mcp/utils/constants.ts:188`) it visits the in-process registry of indexed repos and triggers `autoIndexIfStale` with a short TTL when due — re-index is refused within `FILE_WATCH_TTL_MS` (default 5 min, `constants.ts:205`) per repo, never for never-indexed repos, never for paths that no longer resolve, and never while an index is already in flight. Change detection is delegated to the incremental planner (mtime pre-filter + SHA-256 checksum), so an untouched repo re-runs with zero parses. **Honest limits:** bounded-delay polling (detection latency ≤ interval), NOT `fs.watch` real-time notification (`fs.watch` remains a later-phase recommendation); the dashboard process does not host the loop (single-process hosting avoids double-index); repos indexed only via the dashboard are picked up from the next MCP-process index/restart.
+
 ---
 
 ## 7. Error Handling Matrix

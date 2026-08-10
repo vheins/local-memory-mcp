@@ -1,6 +1,8 @@
 # Codebase Index — Wireframe Layout
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning wireframe. The shipped Codebase tab implements the top bar (search + status + re-index), file tree sidebar, main content (File/Results/Stats→ shipped as symbol list + language breakdown), and right-panel symbol detail. The **Call Graph** sub-tab and **Mermaid DAG** (§2.4/§3) are **NEXT PHASE** (not shipped). The responsive collapse behavior (right panel → drawer on tablet/mobile) matches the dashboard's existing responsive patterns.
+>
+> **IMPLEMENTED (verified 2026-08-10, CG-1/CG-2/TASK-329):** the 2026-08-08 "Call Graph / Mermaid DAG — NEXT PHASE" claim is superseded — the shipped **CallGraph** is a canvas-rendered DAG (not Mermaid): `CodebaseCallGraph.svelte` renders caller/callee edges via `lib/callGraphLayout.ts` inside `CodebaseSymbolDetail` (mounted at `CodebaseSymbolDetail.svelte:158`). Additionally, a full **code-graph force panel** ships: `CodebaseGraphPanel.svelte` reuses `KGGraphCanvas` to render a force-directed code-graph (GET `/api/codebase/graph`, kind filter All/Calls/Imports/Co-defined) — mounted in `CodebasePage` after `CodebaseIndexStatus` (`CodebasePage.svelte:243`), with `CodebaseGraphLegend.svelte` (node-color dots + 6 edge kinds + stats). The Mermaid flowchart design (§2.7/§2.9/§3) stayed design intent only; the actual components use canvas rendering throughout.
 
 This document provides the wireframe layout for the Codebase Index tab, following the established glass-interface design system from the dashboard.
 

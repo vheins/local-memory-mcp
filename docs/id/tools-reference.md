@@ -478,25 +478,27 @@ Mode, terdeteksi otomatis:
 | Standard     | `standard-read`, `standard-write`, `standard-delete`                           | Aturan koding yang dapat digunakan kembali |
 | Coordination | `handoff-read`, `handoff-write`, `claim-manage`                                | Orkestrasi multi-agen                      |
 
-| Alat              | Tujuan                                       |
-| ----------------- | -------------------------------------------- |
-| `memory-read`     | Cari / detail / recap memori                 |
-| `memory-write`    | Buat / perbarui / akui memori                |
-| `memory-delete`   | Hapus memori (tunggal atau massal)           |
-| `repo-summarize`  | Perbarui ringkasan proyek singkat repo       |
-| `synthesize`      | Tanya-jawab berbasis LLM atas memori lokal   |
-| `task-read`       | Cari / detail / list tugas                   |
-| `task-write`      | Buat / perbarui / operasi massal tugas       |
-| `task-delete`     | Hapus tugas (tunggal atau massal)            |
-| `standard-read`   | Cari / detail / list standar koding          |
-| `standard-write`  | Buat / perbarui standar                      |
-| `standard-delete` | Hapus standar (tunggal atau massal)          |
-| `handoff-read`    | Periksa handoff atau klaim aktif             |
-| `handoff-write`   | Buat / perbarui handoff                      |
-| `claim-manage`    | Klaim, lepas, atau list kepemilikan tugas    |
-| `agent-context`   | Konteks sesi dalam satu panggilan            |
-| `codebase-index`  | Bangun / segarkan / status indeks codebase   |
-| `codebase-read`   | Cari / telusuri / simbol berkas / arsitektur |
+| Alat              | Tujuan                                                                 |
+| ----------------- | ---------------------------------------------------------------------- |
+| `memory-read`     | Cari / detail / recap memori                                           |
+| `memory-write`    | Buat / perbarui / akui memori                                          |
+| `memory-delete`   | Hapus memori (tunggal atau massal)                                     |
+| `repo-summarize`  | Perbarui ringkasan proyek singkat repo                                 |
+| `synthesize`      | Tanya-jawab berbasis LLM atas memori lokal                             |
+| `task-read`       | Cari / detail / list tugas                                             |
+| `task-write`      | Buat / perbarui / operasi massal tugas                                 |
+| `task-delete`     | Hapus tugas (tunggal atau massal)                                      |
+| `standard-read`   | Cari / detail / list standar koding                                    |
+| `standard-write`  | Buat / perbarui standar                                                |
+| `standard-delete` | Hapus standar (tunggal atau massal)                                    |
+| `handoff-read`    | Periksa handoff atau klaim aktif                                       |
+| `handoff-write`   | Buat / perbarui handoff                                                |
+| `claim-manage`    | Klaim, lepas, atau list kepemilikan tugas                              |
+| `agent-context`   | Konteks sesi dalam satu panggilan                                      |
+| `codebase-index`  | Bangun / segarkan / status indeks codebase                             |
+| `codebase-read`   | Cari / telusuri / simbol berkas / arsitektur / pencarian konten (CODE) |
+
+> **Mode `codebase-read`** (diinfer otomatis per ADR-005): `name` → TRACE, `filePath` → FILE, `content` → CODE (grep konten berkas terindeks dari disk, kecocokan diperkaya dengan simbol pembungkusnya), `query` → SEARCH, tanpa argumen → ARCHITECTURE (pohon direktori + rincian bahasa + ekspor tingkat atas + kandidat dead-code/hotspot). Nama lama `search_code` (pencarian konten dengan konteks simbol) hanya **desain-intent** — tidak pernah dirilis sebagai tool; fiturnya ada sebagai mode `CODE` dari `codebase-read`.
 
 ---
 
@@ -526,6 +528,8 @@ Knowledge Graph menyimpan entitas, relasi ber-tipe, dan observasi, dengan ekstra
 
 - **Buat / edit / hapus** entitas, relasi, dan observasi dilakukan di **Web Dashboard → tab Knowledge Graph** (dan via API dasbor) — satu-satunya permukaan edit manual.
 - Graf **diisi otomatis dari domain memory, standard, task, dan codebase** — entitas/relasi ditulis oleh outbox embedding dari penulisan memory/standard/task dan eksekusi indeks codebase. Entitas KG codebase berasal dari data simbol/referensi terindeks (bukan dari API simbol terpisah).
+
+> **Label confidence tepi (terverifikasi 2026-08-10, migrasi v24 / TASK-325 + TASK-330):** setiap baris `relations` membawa nilai **`confidence`** (`REAL NOT NULL DEFAULT 1.0`), dan tab KG merendernya — tepi diberi label `relation_type · NN%` di titik tengah dan diredupkan menurut bucket confidence (≥0.85 solid, 0.6–0.85 amber, <0.6 merah redup; tepi bernilai 1.0 atau tanpa nilai menampilkan tipe relasi tanpa `%`). Nilai mencerminkan **confidence pemenang-tulisan-pertama** (konstanta insert-time per penulis — `INSERT OR IGNORE` berarti penulis pertama yang menang): **0.55** default untuk ekstraksi NLP otomatis (`co_mentioned`), **0.8** untuk metadata semantik (task `depends_on`/`inspired_by`, standard `extends`/`related_to`), **0.9** untuk tepi codebase deterministik-parser, dan **1.0** untuk relasi manual/eksplisit (dan tepi pra-v24). API daftar dasbor mengeksposnya sebagai `GET /api/kg/graph` → tepi `{source, target, relation_type, confidence}`.
 
 > **Keputusan (2026-08-09): TIDAK ADA alat MCP KG.** KG adalah infrastruktur yang diisi otomatis (ADR-006): entitas/relasi ditulis oleh outbox embedding dari penulisan memory/standard/task dan eksekusi indeks codebase; pembacaan terjadi melalui field `kg` tertanam di memory-read/task-read/standard-read. Tab Knowledge Graph dasbor tetap menjadi satu-satunya permukaan edit manual (API CRUD).
 >

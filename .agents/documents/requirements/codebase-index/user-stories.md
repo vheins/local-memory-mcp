@@ -3,6 +3,10 @@
 > **Scope**: MVP (Phase 1.0) — File discovery, tree-sitter parsing, SQLite storage, `search_symbols` and `get_file_symbols` MCP tools.
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** tool names in US-03..US-10 are legacy → the shipped pair is `codebase-index`/`codebase-read` (ADR-005). US-01, US-02, US-03, US-04, US-05, US-06, US-07 (trace via `codebase-read({ name })`), US-09 (architecture via `codebase-read()`), US-10 (auto-index) are **implemented**. US-08 (file-watch incremental) is partially implemented — re-index is mtime/checksum-driven, but there is **no real-time file watcher** (NEXT PHASE). US-11 (`search_code` with symbol context) is **NEXT PHASE**. US-12 (Dashboard browse) is **implemented** (Codebase tab).
+>
+> **VERIFIED vs IMPLEMENTATION (2026-08-10, US-11 shipped):** US-11 is **IMPLEMENTED** as the `CODE` mode of `codebase-read` (TASK-316, `src/mcp/codebase-index/services/code-search.ts` / `handleCodeSearchMode` in `src/mcp/tools/codebase.read.ts:656-796`) — disk grep over the indexed `codebase_files` set (never node_modules/.git), each match enriched with its innermost enclosing symbol span, through a process-shared checksum-keyed LRU content cache. The story's acceptance criteria (search file contents + surrounding symbol context) are met by shipped behavior; the `search_code` tool name from this story remains **design intent only** — the feature shipped as `codebase-read` CODE mode, never as a standalone tool. US-08's real-time file watcher stays NEXT PHASE.
+>
+> **VERIFIED vs IMPLEMENTATION (2026-08-10, US-08 shipped):** US-08 is now **IMPLEMENTED by a polling file watcher** (TASK-322, `src/mcp/codebase-index/services/file-watcher.ts`) — the index updates automatically when files change, within bounded delay. Shipped form: `ENABLE_FILE_WATCHER` (default on) starts a sweep loop in the MCP server process that visits every registered repo on `FILE_WATCH_INTERVAL_MS` (default 30s, `src/mcp/utils/constants.ts:188`), triggers `autoIndexIfStale` with a short TTL when due, and lets the incremental planner short-circuit on mtime/checksum — an untouched repo re-runs with zero parses (`file-watcher.ts:38-43`); per-repo re-entry is capped by `FILE_WATCH_TTL_MS` (default 5 min, `constants.ts:205`); concurrent index runs are skipped via the in-flight guard (`file-watcher.ts:44-47`). **Honest limits:** this is a bounded-delay polling sweep, NOT `fs.watch` real-time notification (`fs.watch`/chokidar remain a later-phase recommendation); the dashboard process does not host the loop (single-process MCP hosting, `file-watcher.ts:8-11`), and repos indexed only via the dashboard are watched from the next MCP-process index/restart.
 
 ## Persona Reference
 
@@ -77,6 +81,8 @@
 
 **Priority**: P1 (Should) | **Effort**: L | **Depends on**: File watcher, mtime tracking
 
+> **IMPLEMENTED (verified 2026-08-10, TASK-322):** the story's promise — "index updates automatically when I modify files" — ships as a light **polling watcher**, not `fs.watch`: `ENABLE_FILE_WATCHER` (default on) sweeps registered repos every `FILE_WATCH_INTERVAL_MS` (30s default) and triggers `autoIndexIfStale` when due; the incremental planner re-parses only files whose mtime moved (SHA-256 checksum confirmation), so an untouched repo costs a zero-parse run. Re-entry per repo is capped at `FILE_WATCH_TTL_MS` (5 min default). Hosted by the MCP server process only (`src/mcp/codebase-index/services/file-watcher.ts`; constants in `src/mcp/utils/constants.ts:188-205`). Honest note: bounded-delay polling (≤ interval), NOT real-time `fs.watch` — that remains a later-phase recommendation; the 2026-08-08 header note's "no real-time file watcher" predates this.
+
 ---
 
 ## US-09: Get Architecture Overview
@@ -98,6 +104,8 @@
 ## US-11: Search Code with Symbol Context
 
 > As an **AI agent**, I want to **search file contents and get results enriched with surrounding symbol definitions** so that **I can understand the context of a match without opening the file**.
+
+> **IMPLEMENTED (verified 2026-08-10):** shipped as `codebase-read` CODE mode (TASK-316) — grep `content` over indexed files on disk (`src/mcp/codebase-index/services/code-search.ts`), each match carrying its enclosing symbol (`enclosingSymbol`), plus regex/language/limit/offset options. The `search_code` tool name below is legacy design intent only — it never shipped as a tool; see the header note.
 
 **Priority**: P2 (Could) | **Effort**: M | **Depends on**: tree-sitter parsing
 

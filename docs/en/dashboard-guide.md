@@ -85,6 +85,17 @@ The Queue tab (the 11th tab, after Handoffs and before Knowledge Graph) surfaces
 
 Failed jobs are named `poison` in the queue API and rendered as "Failed" in the UI.
 
+### Codebase Tab
+
+The Codebase tab (between Tasks and Handoffs) browses the codebase index of the selected repo:
+
+- **Symbol search + file tree** — search symbols (`CodebaseSearchBar`) or browse the recursive file tree; select a file to view its indexed content in the file viewer
+- **Symbol detail** — click a symbol to inspect its definition, references, and trace; the detail includes a **call-graph DAG** (callers/callees)
+- **Index stats** — status/statistics panel plus language and symbol-kind breakdown
+- **Code-graph panel** — a force-directed code graph of the repo (kind filter All/Calls/Imports/Co-defined, zoom/refresh, legend footer) fed by `GET /api/codebase/graph`; clicking a node opens its symbol detail. If the repo is not indexed it shows "Index required — run codebase-index"
+
+Results are typically **fresh**: a polling watcher (default on) re-indexes changed files within ~30s (`FILE_WATCH_INTERVAL_MS`), so edits usually appear without an explicit re-index.
+
 ### Knowledge Graph Tab
 
 The Knowledge Graph tab provides an interactive force-directed graph visualization of entities and their relations.

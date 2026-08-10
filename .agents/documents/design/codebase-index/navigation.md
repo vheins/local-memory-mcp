@@ -1,6 +1,8 @@
 # Codebase Index — Navigation Integration
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08), updated for Queue (2026-08-10):** planning navigation. The shipped dashboard does **not** insert `codebase` into the `TABS` constant in `useApp.ts`; instead the Codebase button is hardcoded in App.svelte's tab bar between **Tasks** and **Handoffs** (id `tab-codebase`), `knowledge-graph` sits after `handoffs`, and the **Queue** tab (TASK-297) sits between `handoffs` and `knowledge-graph`. Actual tab list (App.svelte tab bar; `useApp.ts` `TABS` is dead code): arena, dashboard, activity, memories, tasks, **codebase**, handoffs, **queue**, knowledge-graph, standards, reference (11 tabs). The dashboard is a tab-switch SPA without URL routes, so the route table (§2) is a logical state model, not real URL routing — consistent with the doc's own note. Call-graph right-pane and keyboard shortcuts (§6) are **NEXT PHASE** (not shipped).
+>
+> **IMPLEMENTED (verified 2026-08-10, CG-1/CG-2/TASK-329):** the call-graph right-pane (§6) is shipped — `CodebaseCallGraph.svelte` renders the per-symbol canvas call-DAG inside `CodebaseSymbolDetail` (`CodebaseSymbolDetail.svelte:158`), and the tab adds a full **code-graph force panel** (`CodebaseGraphPanel.svelte` + `CodebaseGraphLegend.svelte`, KGGraphCanvas reuse, mounted in `CodebasePage.svelte:243` after `CodebaseIndexStatus`). Keyboard shortcuts remain **NEXT PHASE** (unchanged).
 
 This document specifies how the Codebase tab integrates into the existing dashboard navigation structure.
 

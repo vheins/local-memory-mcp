@@ -50,6 +50,7 @@ Structured entity-relationship storage that maps complex domain knowledge:
 - **Auto-extraction**: offline NLP (compromise.js) extracts named entities when memories, standards, and tasks are stored and when the codebase index runs
 - **Auto-populated** from the **memory | standard | task | codebase** domains — codebase KG entities derive from the indexed symbol/reference data (no separate symbol API)
 - **Dashboard**: interactive force-directed graph visualization with add/edit/delete — the only manual editing surface (see [Dashboard Guide](dashboard-guide.md))
+- **Edge confidence labels**: every relation carries a confidence (`0..1`) and the KG tab labels edges `relation_type · NN%` with dimming by bucket — all-auto NLP extraction defaults to 0.55, semantic metadata 0.8, parser codebase edges 0.9, manual relations 1.0 (first-write-wins under `INSERT OR IGNORE`; see [Schema Notes](mcp-concepts.md) and the [Knowledge Graph reference](tools-reference.md#knowledge-graph-dashboard-managed))
 
 > **Decision (2026-08-09): NO KG MCP tools.** KG is auto-populated infrastructure (ADR-006): entities/relations are written by the embedding outbox from memory/standard/task writes and codebase index runs, and read via the embedded `kg` field in memory-read/task-read/standard-read. There are no MCP tools for direct graph CRUD; graph management happens in the dashboard's Knowledge Graph tab (API CRUD).
 

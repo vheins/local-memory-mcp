@@ -116,7 +116,10 @@ A directed edge connecting two knowledge graph entities.
 - **Attributes:**
   - `from_entity`, `to_entity`: Source and target entities (FKs).
   - `relation_type`: Type of relationship (e.g., `uses`, `depends_on`, `implements`).
+  - `confidence`: Per-edge confidence label `0..1` (migration **v24** / TASK-325, `REAL NOT NULL DEFAULT 1.0`), **display-only** — drives the dashboard KG tab's edge label + opacity buckets; not used in any query or filter.
   - **Composite PK**: `(from_entity, to_entity, relation_type)`.
+
+> **VERIFIED vs IMPLEMENTATION (2026-08-10, TASK-325 — relations.confidence v24):** `confidence` is an **insert-time constant** per writer (the `relations` table has no source/creator column — the writer is the provenance): `1.0` explicit/manual + omitted-default (`entity.ts:78,336`), `0.9` codebase edges (`KG_RELATION_CONFIDENCE_CODEBASE`), `0.8` semantic metadata — task `depends_on`/`inspired_by`, standard `extends`/`related_to` (`KG_RELATION_CONFIDENCE_SEMANTIC`), `0.55` NLP auto-extraction `co_mentioned` (`KG_RELATION_CONFIDENCE_AUTO_EXTRACTION`). **Known gap:** `INSERT OR IGNORE` makes confidence **first-write-wins** — a later writer re-attempting an existing edge is a no-op, so within one worker cycle a colliding auto-extraction pair keeps its 0.55; per-edge recomputation from observations is deferred (see the `relations` table in `design/database/schema.md`).
 
 ### 10. Observation (Knowledge Graph)
 

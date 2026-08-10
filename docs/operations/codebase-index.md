@@ -190,25 +190,29 @@ Stores one row per extracted symbol (function, class, interface, etc.).
 - `idx_cs_name` — on `(name)`
 - `idx_cs_parent` — on `(parent_symbol_id)`
 
-### `codebase_references` (migration v21)
+### `codebase_references` (migrations v21 + v23)
 
-Stores one row per call-site edge discovered during parsing (used by `codebase-read` TRACE):
+Stores one row per reference edge discovered during parsing (used by `codebase-read` TRACE / dead-code / hotspots). Migration **v21** created the call-site table; migration **v23** (Phase 1.1, `codebase-references-edge-targets`) generalized it into an edge table — the `kind` taxonomy gained `extends` / `implements` and two nullable target columns were added:
 
-| Column        | Type      | Description                             |
-| :------------ | :-------- | :-------------------------------------- |
-| `id`          | `TEXT`    | UUID primary key.                       |
-| `repo`        | `TEXT`    | Repository identifier.                  |
-| `symbol_name` | `TEXT`    | Symbol being referenced (the callee).   |
-| `caller_file` | `TEXT`    | File holding the call site.             |
-| `caller_line` | `INTEGER` | Line of the call site.                  |
-| `caller_name` | `TEXT`    | Enclosing symbol name at the call site. |
-| `kind`        | `TEXT`    | Reference kind.                         |
-| `created_at`  | `TEXT`    | Row creation timestamp.                 |
+| Column             | Type      | Description                                                                                                 |
+| :----------------- | :-------- | :---------------------------------------------------------------------------------------------------------- |
+| `id`               | `TEXT`    | UUID primary key.                                                                                           |
+| `repo`             | `TEXT`    | Repository identifier.                                                                                      |
+| `symbol_name`      | `TEXT`    | Symbol being referenced (the callee / base class / interface).                                              |
+| `caller_file`      | `TEXT`    | File holding the call / heritage site.                                                                      |
+| `caller_line`      | `INTEGER` | Line of the call site (or derived-type declaration line).                                                   |
+| `caller_name`      | `TEXT`    | Enclosing symbol name at the call site (`null` for heritage edges).                                         |
+| `kind`             | `TEXT`    | Edge kind: `call` \| `instantiation` \| `import` \| `extends` \| `implements`.                              |
+| `target_file`      | `TEXT`    | File path of the referenced symbol when resolvable (v23, nullable).                                         |
+| `target_symbol_id` | `TEXT`    | `codebase_symbols(id)` of the referenced symbol when resolvable (v23, nullable, plain-TEXT pointer, no FK). |
+| `created_at`       | `TEXT`    | Row creation timestamp.                                                                                     |
 
 **Indexes:**
 
 - `idx_refs_repo_symbol` — on `(repo, symbol_name)`
 - `idx_refs_repo_file` — on `(repo, caller_file)`
+
+> **Extension note (verified against `src/mcp/storage/migrations/v23-codebase-references-edge-targets.ts`):** the v23 migration adds exactly the two nullable columns above and keeps the single `kind` enum-driven taxonomy extended with `extends`/`implements`. Rows are keyed by `caller_file` (the file HOLDING the call/heritage site); delete/transfer helpers operate on `caller_file`. Schema version is now **24** (`SCHEMA_VERSION`, `src/mcp/storage/migrations/index.ts:29`) — v23 was the Phase 1.1 codebase-edge extension; v24 (`relations-confidence`) is KG-only and does not touch codebase tables.
 
 ### FTS5 Virtual Table: `codebase_symbols_fts`
 

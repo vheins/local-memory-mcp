@@ -131,28 +131,33 @@ Unified read-only access to the codebase index. Mode auto-inferred from paramete
 
 - **`name` → TRACE** (was `trace_symbol`) — traces a symbol's definition and references across the codebase
 - **`filePath` → FILE** (was `get_file_symbols`) — returns all indexed symbols declared in a specific file
+- **`content` → CODE** (was `search_code`, design intent only — never shipped as a tool) — greps indexed file contents with symbol-context enrichment
 - **`query` → SEARCH** (was `search_symbols` + `codebase_search`) — searches indexed symbols by name with multi-strategy ranking + vector blending
-- **(nothing) → ARCHITECTURE** (was `get_architecture`) — directory tree overview, language breakdown, top-level exports
+- **(nothing) → ARCHITECTURE** (was `get_architecture`) — directory tree overview, language breakdown, top-level exports, dead-code candidates + hotspots
 
 ### 2.2 Input Schema
 
-| Parameter             | Type                 | Required | Default | Mode         | Description                                                                                                                    |
-| :-------------------- | :------------------- | :------- | :------ | :----------- | :----------------------------------------------------------------------------------------------------------------------------- |
-| `repo`                | `string`             | No*      | —       | all          | Repository name (normalized). **SEARCH requires `repo` or `repos`** — without either it rejects to prevent cross-tenant leaks. |
-| `repos`               | `array<string>`      | No       | —       | SEARCH       | Cross-repo search scope; each value normalized. Capped at 50.                                                                  |
-| `owner`               | `string`             | No       | `""`    | all          | GitHub owner/org; auto-inferred from session when omitted.                                                                     |
-| `name`                | `string`             | No       | —       | TRACE        | Symbol name to trace (exact match with fallback variants).                                                                     |
-| `filePath`            | `string`             | No       | —       | FILE         | Relative file path from repository root.                                                                                       |
-| `query`               | `string`             | No       | —       | SEARCH       | Search query (code-like term or natural language).                                                                             |
-| `depth`               | `number`             | No       | `2`     | ARCHITECTURE | Directory tree depth limit (1–5).                                                                                              |
-| `includeSymbolCounts` | `boolean`            | No       | `true`  | ARCHITECTURE | Include per-file symbol kind counts in tree.                                                                                   |
-| `includeReferences`   | `boolean`            | No       | `true`  | TRACE        | Include call-site references in TRACE output.                                                                                  |
-| `kind`                | `string \| string[]` | No       | —       | SEARCH       | Filter by symbol kind (e.g. `function`, `class`).                                                                              |
-| `filePath`            | `string`             | No       | —       | SEARCH       | Filter to symbols declared in a specific file.                                                                                 |
-| `exportedOnly`        | `boolean`            | No       | —       | SEARCH       | When `true`, only return exported symbols.                                                                                     |
-| `limit`               | `number`             | No       | `50`    | SEARCH       | Maximum results to return (1–200).                                                                                             |
-| `offset`              | `number`             | No       | `0`     | SEARCH       | Pagination offset.                                                                                                             |
-| `json`                | `boolean`            | No       | `false` | all          | Return raw JSON without Markdown wrapping.                                                                                     |
+| Parameter             | Type                 | Required | Default | Mode               | Description                                                                                                                                                                     |
+| :-------------------- | :------------------- | :------- | :------ | :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `repo`                | `string`             | No*      | —       | all                | Repository name (normalized). **SEARCH requires `repo` or `repos`** — without either it rejects to prevent cross-tenant leaks.                                                  |
+| `repos`               | `array<string>`      | No       | —       | SEARCH             | Cross-repo search scope; each value normalized. Capped at 50.                                                                                                                   |
+| `owner`               | `string`             | No       | `""`    | all                | GitHub owner/org; auto-inferred from session when omitted.                                                                                                                      |
+| `name`                | `string`             | No       | —       | TRACE              | Symbol name to trace (exact match with fallback variants).                                                                                                                      |
+| `filePath`            | `string`             | No       | —       | FILE               | Relative file path from repository root.                                                                                                                                        |
+| `query`               | `string`             | No       | —       | SEARCH             | Search query (code-like term or natural language).                                                                                                                              |
+| `content`             | `string`             | No       | —       | CODE               | Substring or regex needle to grep in indexed file contents (trimmed; empty → no-op empty result).                                                                               |
+| `regex`               | `boolean`            | No       | `false` | CODE               | Treat `content` as a regular expression (case-insensitive; ReDoS-guarded).                                                                                                      |
+| `language`            | `string`             | No       | —       | CODE               | Only grep files whose `codebase_files.language` matches (case-insensitive).                                                                                                     |
+| `repoPath`            | `string`             | No       | —       | CODE, ARCHITECTURE | Absolute path of the indexed repo on disk. **Required for CODE** (content is read from disk); optional for ARCHITECTURE (enables `package.json`/shebang entry-point exclusion). |
+| `depth`               | `number`             | No       | `2`     | ARCHITECTURE       | Directory tree depth limit (1–5).                                                                                                                                               |
+| `includeSymbolCounts` | `boolean`            | No       | `true`  | ARCHITECTURE       | Include per-file symbol kind counts in tree.                                                                                                                                    |
+| `includeReferences`   | `boolean`            | No       | `true`  | TRACE              | Include call-site references in TRACE output.                                                                                                                                   |
+| `kind`                | `string \| string[]` | No       | —       | SEARCH             | Filter by symbol kind (e.g. `function`, `class`).                                                                                                                               |
+| `filePath`            | `string`             | No       | —       | SEARCH             | Filter to symbols declared in a specific file.                                                                                                                                  |
+| `exportedOnly`        | `boolean`            | No       | —       | SEARCH             | When `true`, only return exported symbols.                                                                                                                                      |
+| `limit`               | `number`             | No       | `50`    | SEARCH             | Maximum results to return (1–200).                                                                                                                                              |
+| `offset`              | `number`             | No       | `0`     | SEARCH             | Pagination offset.                                                                                                                                                              |
+| `json`                | `boolean`            | No       | `false` | all                | Return raw JSON without Markdown wrapping.                                                                                                                                      |
 
 ### 2.3 SEARCH Strategy (Ranking Tiers)
 
@@ -175,8 +180,18 @@ Results are further refined by **vector similarity blending** within each tier (
 	mode: "trace";
 	symbol: CodebaseSymbol;
 	definition: { file: string; line: number; column: number; endLine: number; };
-	references: Array<{ filePath: string; startLine: number; startCol: number; context: string; }>;
+	references: Array<{
+		filePath: string;
+		startLine: number;
+		startCol: number;
+		context: string;
+		kind?: "call" | "instantiation" | "import" | "extends" | "implements"; // table-backed refs (v21 + v23)
+		targetFile?: string | null; // v23, when resolvable
+		targetSymbolId?: string | null; // v23, when resolvable
+	}>;
 	exportChain: { exported: boolean; defaultExport: boolean; };
+	parent: { id: string; name: string; kind: string; filePath: string; line: number | null } | null; // enclosing container (v23 parent_symbol_id hierarchy)
+	children: CodebaseSymbol[]; // direct children, ordered by start line
 	originalName?: string; // present when trace fell back to a variant name
 }
 ```
@@ -192,6 +207,32 @@ Results are further refined by **vector similarity blending** within each tier (
 }
 ```
 
+**CODE:**
+
+```typescript
+{
+	mode: "code";
+	content: string;
+	regex: boolean;
+	language: string | null;
+	matches: Array<{
+		filePath: string; // codebase_files.file_path
+		language: string | null;
+		line: number; // 1-based
+		snippet: string; // ~80 chars around the match, ellipsis-padded
+		matchIndex: number; // char index of the match within the line
+		enclosingSymbol: { name: string; kind: string; startLine: number; endLine: number } | null; // innermost enclosing symbol
+	}>;
+	total: number; // matches up to the stop point
+	hasMore: boolean; // true when matches remain beyond this page
+	filesScanned: number; // indexed files actually scanned (after language filter + readability)
+	fileCount: number; // indexed files in scope (after language filter)
+	indexedFiles: number; // total indexed files (0 ⇒ repo not indexed)
+	offset: number;
+	limit: number;
+}
+```
+
 **ARCHITECTURE:**
 
 ```typescript
@@ -199,6 +240,17 @@ Results are further refined by **vector similarity blending** within each tier (
 	mode: "architecture";
 	root: DirectoryNode;
 	summary: { totalFiles: number; totalSymbols: number; languageBreakdown: Record<string, number>; topLevelExports: CodebaseSymbol[]; };
+	deadCode?: { // present when includeSymbolCounts is true
+		unreferenced: Array<{
+			name: string; kind: string; file_path: string; line: number | null;
+			kinds: Record<string, number>; // all-zero = dead candidate
+			entryPoint?: { type: "bin" | "manifest" | "shebang" | "public-api"; reason: string }; // present ONLY when excluded as an entry point
+		}>; // truly-dead candidates ordered FIRST
+		hotspots: Array<{ name: string; kind: string; file_path: string; refCount: number; topKinds: Record<string, number> }>;
+		languageCoverage: { reliable: string[]; unreliable: string[] };
+		totals: { scanned: number; dead: number; entryExcluded: number; truncated: boolean };
+		coverageNote: string;
+	};
 }
 ```
 
@@ -218,11 +270,17 @@ Results are further refined by **vector similarity blending** within each tier (
 
 ### 2.5 Error Codes
 
-| Scenario         | Code               | Behavior                                                                            |
-| :--------------- | :----------------- | :---------------------------------------------------------------------------------- |
-| Symbol not found | `SYMBOL_NOT_FOUND` | `{ error: "Symbol \"X\" not found", code: "SYMBOL_NOT_FOUND" }`                     |
-| Multiple matches | `AMBIGUOUS_SYMBOL` | `{ error: "Ambiguous symbol \"X\"", code: "AMBIGUOUS_SYMBOL", disambiguation: [] }` |
-| File not indexed | `FILE_NOT_INDEXED` | `{ error: "File not indexed...", code: "FILE_NOT_INDEXED" }`                        |
+| Scenario               | Code                  | Behavior                                                                                |
+| :--------------------- | :-------------------- | :-------------------------------------------------------------------------------------- |
+| Symbol not found       | `SYMBOL_NOT_FOUND`    | `{ error: "Symbol \"X\" not found", code: "SYMBOL_NOT_FOUND" }`                         |
+| Multiple matches       | `AMBIGUOUS_SYMBOL`    | `{ error: "Ambiguous symbol \"X\"", code: "AMBIGUOUS_SYMBOL", disambiguation: [] }`     |
+| File not indexed       | `FILE_NOT_INDEXED`    | `{ error: "File not indexed...", code: "FILE_NOT_INDEXED" }`                            |
+| CODE: no repo          | `REPO_REQUIRED`       | `{ error: "Mode 'code' requires a concrete 'repo'", code: "REPO_REQUIRED" }`            |
+| CODE: no path          | `REPO_PATH_REQUIRED`  | `{ error: "Code search requires `repoPath`...", code: "REPO_PATH_REQUIRED" }`           |
+| CODE: bad path         | `REPO_PATH_NOT_FOUND` | `{ error: "Repository path not found...", code: "REPO_PATH_NOT_FOUND" }`                |
+| CODE: not indexed      | `REPO_NOT_INDEXED`    | `{ error: "Repo \"X\" has no indexed files...", code: "REPO_NOT_INDEXED" }`             |
+| CODE: files unreadable | `REPO_FILES_MISSING`  | `{ error: "None of the N indexed files could be read...", code: "REPO_FILES_MISSING" }` |
+| CODE: bad regex        | `INVALID_REGEX`       | `{ error: "Invalid regex for code search...", code: "INVALID_REGEX" }`                  |
 
 ### 2.6 Runnable Examples
 
@@ -298,18 +356,40 @@ Results are further refined by **vector similarity blending** within each tier (
 }
 ```
 
+**CODE:**
+
+```json
+{
+	"jsonrpc": "2.0",
+	"id": 304,
+	"method": "tools/call",
+	"params": {
+		"name": "codebase-read",
+		"arguments": {
+			"content": "formatOrder",
+			"repo": "my-org/my-project",
+			"repoPath": "/home/user/projects/my-app",
+			"language": "typescript",
+			"limit": 20
+		}
+	}
+}
+```
+
 ---
 
 ## Known Limitations
 
-| Limitation                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                          | Planned For |
-| :------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------- |
-| **Name-based reference resolution**    | Symbol tracing and relation detection are name-matched only. No type-graph or semantic resolution.                                                                                                                                                                                                                                                                                                              | Phase 1.1   |
-| **Multi-language parsing**             | 15 languages registered (14 via tree-sitter grammars + a dedicated Markdown visitor with no WASM), implemented by **14 visitor classes** (TypeScript/TSX/JS/JSX share the TypeScript visitor; Vue, Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, C++, Markdown). A generic text visitor covers every other extension (JSON, YAML, CSS, shell, …). `TypeScript/TSX` also covers `.svelte`/`.astro`. | N/A         |
-| **Reference storage (call sites)**     | Call-site references ARE persisted since migration **v21** (`codebase_references`: `repo`, `symbol_name`, `caller_file`, `caller_symbol`, line/col — callers find them via TRACE). Import graphs and inheritance chains are still **not** built — only call-site edges discovered during indexing are stored.                                                                                                   | Phase 1.1   |
-| **No file watching**                   | No file watcher; freshness comes from incremental re-indexes. Indexing is triggered by the `codebase-index` tool (INDEX), the CLI `--index` flag, or the startup auto-index (`autoIndexIfStale` — on by default via `CODEBASE_AUTO_INDEX`, 24h TTL via `CODEBASE_AUTO_INDEX_TTL`).                                                                                                                              | N/A         |
-| **Progress is emitted, not persisted** | The pipeline emits per-batch progress through the `onProgress` callback (parsing/storing/cleaning stages). `index_status.progress` is **always `null`** — `getIndexStatus` never persists progress (`src/mcp/codebase-index/services/indexing-repository.ts`).                                                                                                                                                  | N/A         |
-| **Database growth**                    | Indexing large projects adds to `memory.db` (~10-50MB per 10K files). WAL mode prevents write contention.                                                                                                                                                                                                                                                                                                       | N/A         |
+| Limitation                              | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Planned For |
+| :-------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------- |
+| **Name-based reference resolution**     | Symbol tracing and relation detection are name-matched only (ADR-002). No type-graph or semantic resolution — two same-name symbols may conflate; LSP-based type resolution remains future work.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | N/A         |
+| **Multi-language parsing**              | 15 languages registered (14 via tree-sitter grammars + a dedicated Markdown visitor with no WASM) + a generic catch-all = **16 configs**, implemented by **15 visitor classes** (TypeScript/TSX/JS/JSX share the TypeScript visitor; Vue, Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, C++, Markdown). A generic text visitor covers every other extension (JSON, YAML, CSS, shell, …). `TypeScript/TSX` also covers `.svelte`/`.astro`. **14 of the 16 configs emit reference edges** (all but Markdown + generic — see the [MD-Generic decision](../../.agents/documents/design/codebase-index/reference-edge-markdown-generic.md)).                                                                                                                                                                                 | N/A         |
+| **Reference storage (edges, v21+v23)**  | Reference edges ARE persisted: call-site edges (call/instantiation/import) since migration **v21**; heritage edges (**extends/implements**) + edge targets (`target_file`/`target_symbol_id`) since migration **v23** (Phase 1.1). TRACE lists them with kind + resolved targets. Per-language edge coverage differs (see the feature-guide matrix); resolution is name-based, not a resolved type-graph.                                                                                                                                                                                                                                                                                                                                                                                                                            | N/A         |
+| **Content search = disk grep (CODE)**   | The `CODE` mode greps indexed files **on disk** through a process-shared LRU cache (validity keyed to the `codebase_files` row checksum) — it is **not** an FTS/database content scan. `repoPath` is required and validated; regex mode is ReDoS-guarded; no type resolution.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | N/A         |
+| **Dead-code & hotspots (ARCHITECTURE)** | `deadCode` block covers zero-reference top-level candidates (entry-point-excluded: package.json `bin`/`main`/`exports`/`browser`, shebang, exported public API) and top in-degree hotspots. Candidates exist only for languages with OBSERVED reference rows in the index (reliable emission); others are reported declaration-only. Name aggregation, bounded by `DEAD_CODE_SCAN_LIMIT`.                                                                                                                                                                                                                                                                                                                                                                                                                                            | N/A         |
+| **Polling file watcher (not fs.watch)** | Freshness comes from incremental re-indexes. Indexing is triggered by the `codebase-index` tool (INDEX), the CLI `--index` flag, the startup auto-index (`autoIndexIfStale` — on by default via `CODEBASE_AUTO_INDEX`, 24h TTL via `CODEBASE_AUTO_INDEX_TTL`), or a light **polling watcher** (`ENABLE_FILE_WATCHER`, default on): every `FILE_WATCH_INTERVAL_MS` (default 30s) it sweeps registered repos and triggers `autoIndexIfStale` with a short TTL when due (per-repo re-entry cap `FILE_WATCH_TTL_MS`, default 5 min); change detection is the incremental planner's mtime/checksum short-circuit, so an untouched repo costs a zero-parse run. Hosted by the MCP server process only (the dashboard does not host it). This is **not** `fs.watch` real-time notification — detection latency is up to the sweep interval. | N/A         |
+| **Progress is emitted, not persisted**  | The pipeline emits per-batch progress through the `onProgress` callback (parsing/storing/cleaning stages). `index_status.progress` is **always `null`** — `getIndexStatus` never persists progress (`src/mcp/codebase-index/services/indexing-repository.ts`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | N/A         |
+| **Database growth**                     | Indexing large projects adds to `memory.db` (~10-50MB per 10K files). WAL mode prevents write contention.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | N/A         |
 
 ---
 
@@ -322,6 +402,7 @@ Results are further refined by **vector similarity blending** within each tier (
 | `codebase-read`  | ARCHITECTURE | 2-3 queries + tree construction | All symbols counted via `GROUP BY`.                                                                               |
 | `codebase-read`  | FILE         | 2 SELECT queries                | `idx_codebase_files_repo_path`, `idx_cs_repo_file`.                                                               |
 | `codebase-read`  | SEARCH       | FTS5 + LIKE + in-memory ranking | FTS5 virtual table; indexes on `name`, `kind`, `file_path`.                                                       |
+| `codebase-read`  | CODE         | Disk grep over indexed files    | LRU-cached file contents (checksum-keyed validity); language filter prunes the file set before reads.             |
 | `codebase-read`  | TRACE        | 1-2 full scans (in-memory)      | No DB-level index needed; operates on fetched symbol array.                                                       |
 
 All read operations run without blocking writes (WAL mode). For projects up to 20,000 files, typical query times are <100ms for read operations.

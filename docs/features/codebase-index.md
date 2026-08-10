@@ -75,27 +75,29 @@ Database records for files that no longer exist on disk are removed, keeping the
 
 ## Supported Languages
 
-| Language   | File Extensions                                    | Status   |
-| :--------- | :------------------------------------------------- | :------- |
-| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts`, `.svelte`, `.astro` | ✅ Full  |
-| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs`                      | ✅ Full  |
-| Vue        | `.vue`                                             | ✅ Full  |
-| Go         | `.go`                                              | ✅ Full  |
-| Python     | `.py`                                              | ✅ Full  |
-| PHP        | `.php`                                             | ✅ Full  |
-| Rust       | `.rs`                                              | ✅ Full  |
-| Java       | `.java`                                            | ✅ Full  |
-| Dart       | `.dart`                                            | ✅ Full* |
-| Kotlin     | `.kt`, `.kts`                                      | ✅ Full  |
-| Ruby       | `.rb`                                              | ✅ Full  |
-| Swift      | `.swift`                                           | ✅ Full  |
-| C          | `.c`, `.h`                                         | ✅ Full  |
-| C++        | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`       | ✅ Full  |
-| Markdown   | `.md`, `.mdx`                                      | ✅ Full  |
+| Language   | File Extensions                                    | Status   | Reference edges (Phase 1.1)                          |
+| :--------- | :------------------------------------------------- | :------- | :--------------------------------------------------- |
+| TypeScript | `.ts`, `.tsx`, `.mts`, `.cts`, `.svelte`, `.astro` | ✅ Full  | call · instantiation · import · extends · implements |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs`                      | ✅ Full  | call · instantiation · import · extends · implements |
+| Vue        | `.vue`                                             | ✅ Full  | import · instantiation (template component tags)     |
+| Go         | `.go`                                              | ✅ Full  | call · import · extends                              |
+| Python     | `.py`                                              | ✅ Full  | call · import · extends                              |
+| PHP        | `.php`                                             | ✅ Full  | call · instantiation · import · extends · implements |
+| Rust       | `.rs`                                              | ✅ Full  | call · import · extends · implements                 |
+| Java       | `.java`                                            | ✅ Full  | call · import · extends · implements                 |
+| Dart       | `.dart`                                            | ✅ Full* | call · import · extends · implements                 |
+| Kotlin     | `.kt`, `.kts`                                      | ✅ Full  | call · import · extends · implements                 |
+| Ruby       | `.rb`                                              | ✅ Full  | call · import · extends                              |
+| Swift      | `.swift`                                           | ✅ Full  | call · import · extends · implements                 |
+| C          | `.c`, `.h`                                         | ✅ Full  | call · import                                        |
+| C++        | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`       | ✅ Full  | call · import · extends · implements                 |
+| Markdown   | `.md`, `.mdx`                                      | ✅ Full  | — (declarations only)                                |
 
 > _\* Dart requires a compatible tree-sitter grammar WASM — see ABI compatibility notes in operational guide._
 
-15 languages are registered in `createRegistry()` (`parser/language-routing.ts`): 14 are parsed through tree-sitter grammars and Markdown uses a dedicated visitor without WASM. They are implemented by **14 visitor classes** — the TypeScript visitor handles TypeScript/TSX/JSX (`.svelte` and `.astro` route to TS too), and a generic text visitor covers every other extension (JSON, YAML, CSS, shell scripts, etc.).
+15 languages are registered in `createRegistry()` (`parser/language-routing.ts`) plus a generic catch-all config — **16 configs total**. Of these, 14 are parsed through tree-sitter grammars, Markdown uses a dedicated visitor without WASM, and the generic text visitor covers every other extension (JSON, YAML, CSS, shell scripts, etc.). They are implemented by **15 visitor classes** — the TypeScript visitor handles TypeScript/TSX/JS/JSX (`.svelte` and `.astro` route to TS too).
+
+Since Phase 1.1 (migration **v23**, edge targets), **14 of the 16 configs emit reference edges** via 13 visitor classes (`extractReferences`): all tree-sitter languages except Markdown and the generic catch-all, which are declarations-only by design (see [MD-Generic decision](../../.agents/documents/design/codebase-index/reference-edge-markdown-generic.md)). The edge kinds above are the actual per-language emission surface — verified against visitor code (`parser/visitors/` + `parser/ts-reference-emission.ts`); languages without `instantiation`/`implements` simply do not detect those constructs (name-based, no true type resolution — see [Known Limitations](#known-limitations)).
 
 The parser architecture uses a registry pattern. Each language is defined by a `LanguageConfig` entry in `createRegistry()` (`parser/language-routing.ts`), which maps file extensions to a tree-sitter grammar WASM and a `LanguageVisitor` implementation. Adding a new language requires:
 
@@ -143,12 +145,12 @@ Progress is printed to stderr with timestamps. Exit code is `0` on success, `1` 
 
 The Codebase Index exposes **2 unified MCP tools** via `tools/call` (mode auto-inferred from parameters per ADR-005):
 
-| Tool             | Modes (auto-inferred)                     | Description                                       |
-| :--------------- | :---------------------------------------- | :------------------------------------------------ |
-| `codebase-index` | `INDEX`, `STATUS`                         | Index/re-index a repository, or check its status. |
-| `codebase-read`  | `TRACE`, `FILE`, `SEARCH`, `ARCHITECTURE` | Read-only queries of the index.                   |
+| Tool             | Modes (auto-inferred)                             | Description                                             |
+| :--------------- | :------------------------------------------------ | :------------------------------------------------------ |
+| `codebase-index` | `INDEX`, `STATUS`                                 | Index/re-index a repository, or check its status.       |
+| `codebase-read`  | `TRACE`, `FILE`, `SEARCH`, `ARCHITECTURE`, `CODE` | Read-only queries of the index, including content grep. |
 
-> **Legacy aliases:** the pre-unification tools (`index_repository`, `index_status`, `search_symbols`, `get_file_symbols`, `get_architecture`, `trace_symbol`, `codebase_search`) still route to the unified handlers for backward compatibility.
+> **Legacy aliases:** the pre-unification tools (`index_repository`, `index_status`, `search_symbols`, `get_file_symbols`, `get_architecture`, `trace_symbol`, `codebase_search`) still route to the unified handlers for backward compatibility. `search_code` (content grep with symbol context) was **design intent only** — it never shipped as a tool; the feature landed directly as the `CODE` mode of `codebase-read`.
 
 See the [API Reference](../api/codebase-index.md) for complete input/output schemas and examples.
 
@@ -223,22 +225,26 @@ The Codebase Index uses three tables in the existing `memory.db` (plus the FTS5 
 
 Full-text search index on `name`, `doc_comment`, and `signature` (the `signature` column was added by migration **v18**, which rebuilt the table), auto-synchronized via database triggers (INSERT/UPDATE/DELETE).
 
-### `codebase_references` (migration v21)
+### `codebase_references` (migrations v21 + v23)
 
-One row per call-site edge discovered during parsing:
+One row per reference edge discovered during parsing — since Phase 1.1 (migration **v23**) this is a generalized **edge table** holding both call-site edges (v21) and heritage edges:
 
-| Column        | Type      | Description                                    |
-| :------------ | :-------- | :--------------------------------------------- |
-| `id`          | `TEXT`    | UUID primary key.                              |
-| `repo`        | `TEXT`    | Repository identifier.                         |
-| `symbol_name` | `TEXT`    | Symbol being referenced (the callee).          |
-| `caller_file` | `TEXT`    | File holding the call site.                    |
-| `caller_line` | `INTEGER` | Line of the call site.                         |
-| `caller_name` | `TEXT`    | Name of the enclosing symbol at the call site. |
-| `kind`        | `TEXT`    | Reference kind.                                |
-| `created_at`  | `TEXT`    | Row creation timestamp.                        |
+| Column             | Type      | Description                                                                      |
+| :----------------- | :-------- | :------------------------------------------------------------------------------- |
+| `id`               | `TEXT`    | UUID primary key.                                                                |
+| `repo`             | `TEXT`    | Repository identifier.                                                           |
+| `symbol_name`      | `TEXT`    | Symbol being referenced (the callee / base class / implemented interface).       |
+| `caller_file`      | `TEXT`    | File holding the call / heritage site.                                           |
+| `caller_line`      | `INTEGER` | Line of the call site (or the derived type's declaration line).                  |
+| `caller_name`      | `TEXT`    | Name of the enclosing symbol at the call site (`null` for heritage edges).       |
+| `kind`             | `TEXT`    | Edge kind: `call` \| `instantiation` \| `import` \| `extends` \| `implements`.   |
+| `target_file`      | `TEXT`    | File path of the referenced symbol when resolvable (v23, nullable).              |
+| `target_symbol_id` | `TEXT`    | `codebase_symbols(id)` of the referenced symbol when resolvable (v23, nullable). |
+| `created_at`       | `TEXT`    | Row creation timestamp.                                                          |
 
 **Indexes:** `idx_refs_repo_symbol` — on `(repo, symbol_name)`; `idx_refs_repo_file` — on `(repo, caller_file)`.
+
+Resolution remains **name-based** (ADR-002): `target_file` / `target_symbol_id` are populated when the referenced name resolves at parse time; unresolved names keep them `NULL` and resolution falls back to query-time name matching.
 
 ---
 
@@ -250,20 +256,43 @@ Symbol tracing and reference detection work by exact name string matching across
 
 See [ADR-002 §Consequences](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for the full discussion of name-based vs type-based resolution.
 
-### Reference Storage (call-site edges, since migration v21)
+### Reference Storage (call-site + heritage edges, since migrations v21 + v23)
 
-Call-site edges ARE persisted since migration **v21** (`codebase_references`): each reference records `symbol_name`, `caller_file`, `caller_line`, `caller_name`, and `kind`, with indexes on `(repo, symbol_name)` and `(repo, caller_file)`. TRACE mode reads these edges to list where a symbol is used.
+Reference edges ARE persisted: call-site edges (call / instantiation / import) since migration **v21**, and **heritage edges (extends / implements) plus edge targets (`target_file` / `target_symbol_id`) since migration v23 (Phase 1.1)**. Each edge records `symbol_name`, `caller_file`, `caller_line`, `caller_name`, and `kind`, with indexes on `(repo, symbol_name)` and `(repo, caller_file)`. TRACE mode reads these edges to list where a symbol is used.
 
-What is still **not** built is a type-graph: import graphs and inheritance chains are not resolved (only name-matched call-site edges are stored). That remains Phase 1.1 — see [ADR-002 §Consequences](../../.agents/documents/design/decisions/adr-002-codebase-index.md).
+Phase 1.1 closed the import-graph and inheritance-chain gap: **import, extends, and implements edges are now resolved name-based** for the 14 ref-emitting language configs (see the [Supported Languages](#supported-languages) matrix — per-language coverage differs, e.g. Go/Python/Ruby emit `extends` but not `implements`; Vue emits `import` + `instantiation` only; Markdown and the generic catch-all are declarations-only by design).
 
-### Incremental Refresh, No File Watching
+What is still **not** built is a true **type-graph**: edges are name-matched (ADR-002), not semantically resolved — two same-name symbols may conflate, and LSP-based type resolution remains future work. See [ADR-002 §Consequences](../../.agents/documents/design/decisions/adr-002-codebase-index.md).
+
+### Content Search (CODE mode) — Disk Grep, Not FTS
+
+Content search IS shipped as the `CODE` mode of `codebase-read` (since the SC-3 wave): it greps the **indexed** files on disk (`codebase_files` scope only — `node_modules`/`.git`/untracked files are excluded by construction), enriched with each match's enclosing symbol span. It is **not** a database FTS query: content is read from the caller-supplied `repoPath` through a process-shared LRU cache whose validity is keyed to the `codebase_files` row checksum (a re-index invalidates cached content; an edit without re-index keeps serving the indexed content). Honest limits: per-query disk I/O (amortized by the cache), no type resolution, and `regex: true` is guarded against ReDoS-style patterns (length cap + nested-quantifier rejection → `INVALID_REGEX`). See the [API Reference](../api/codebase-index.md#code-mode) for the full contract.
+
+### Dead-Code & Hotspots (ARCHITECTURE mode)
+
+The `ARCHITECTURE` mode of `codebase-read` appends a `deadCode` block (dead-code candidates + hotspots) when `includeSymbolCounts` is true: `unreferenced[]` (zero-reference top-level symbols, per-kind breakdown), `hotspots[]` (top in-degree symbols), and `languageCoverage` (which repo languages have observed reference emission). Only top-level symbols are scanned (bounded by `DEAD_CODE_SCAN_LIMIT`), and entry-point exclusion is layered — `package.json` `bin`/`main`/`exports`/`browser`, `#!` shebang, and exported top-level symbols (public API). Honest limits: name-based aggregation (ADR-002), candidates only for languages with observed reference rows in the index, and Markdown/generic languages are reported as declaration-only. See [ADR-002](../../.agents/documents/design/decisions/adr-002-codebase-index.md) and the [API Reference](../api/codebase-index.md#architecture-mode).
+
+### Incremental Refresh + Polling File Watcher
 
 The index is refreshed by an **incremental re-index** — only changed files are parsed. Indexing is triggered by:
 
 - The `codebase-index` tool (INDEX mode) or the CLI `--index` flag — for an explicit, immediate re-index
 - **Startup auto-index** (`autoIndexIfStale`) — enabled by default (`CODEBASE_AUTO_INDEX`), it re-indexes the current working directory when the last index is older than 24h (`CODEBASE_AUTO_INDEX_TTL`)
+- **Polling file watcher** (`ENABLE_FILE_WATCHER`, default on) — a light polling sweep over all registered repos on a fixed interval (`FILE_WATCH_INTERVAL_MS`, default 30s). Per-repo re-entry is capped by `FILE_WATCH_TTL_MS` (default 5 min). The sweep delegates change detection to the incremental planner's mtime pre-filter + SHA-256 checksum confirmation — an untouched repo re-runs with zero parses (negligible cost). The watcher is hosted by the MCP server process only; the dashboard does NOT host it (would double-index). Single-process caveat: repos indexed only through the dashboard process are picked up from the next MCP-process index or tool call.
 
-There is **no file watching** — after code changes, the index may be stale until the next re-index (TTL expiry, startup, or an explicit call). The `lastIndexedAt` field in `index_status`, and the `FILE` mode of `codebase-read`, help agents assess staleness.
+The watcher is a **bounded-delay polling sweep**, not a real-time filesystem notification (`fs.watch`). Detection latency is up to the configured interval. `fs.watch` / chokidar remain a recommendation for a future phase — the polling approach avoids per-process watcher lifecycle, cross-platform leaks, and double-index races. The `lastIndexedAt` field in `index_status`, and the `FILE` mode of `codebase-read`, help agents assess staleness.
+
+### Dashboard Codebase Tab (UI)
+
+The dashboard's **Codebase tab** (`CodebasePage.svelte`, second tab after Tasks in the tab bar) is a full browsing surface over the index (verified 2026-08-10, components in `src/dashboard/ui/src/components/`):
+
+- **Search & tree** — `CodebaseSearchBar.svelte` (symbol search), `CodebaseFileTree.svelte` + `FileTreeNode.svelte` (recursive file browsing)
+- **File viewing** — `CodebaseFileViewer.svelte` renders indexed file content when a file is selected
+- **Symbol detail** — `CodebaseSymbolDetail.svelte` + `CodebaseSymbolTrace.svelte` (definition, references, parent/children); each symbol's **call graph** renders as a canvas DAG in `CodebaseCallGraph.svelte` (callers/callees via `lib/callGraphLayout.ts`, mounted inside the detail view)
+- **Index stats** — `CodebaseIndexStatus.svelte` (`IndexProgress.svelte`/`IndexStatusBadge.svelte`) plus `CodebaseLanguageBreakdown.svelte` (kind/file breakdown); dead-code candidates surface in `CodebaseDeadCode.svelte` (ARCHITECTURE mode)
+- **Code-graph force panel** — `CodebaseGraphPanel.svelte` visualizes the repo as a force-directed graph by reusing the KG canvas (`KGGraphCanvas`), fed by `GET /api/codebase/graph`: kind filter (All/Calls/Imports/Co-defined), zoom/refresh, node click → symbol detail, and explicit index-required / error / empty overlays; `CodebaseGraphLegend.svelte` is the legend footer (node-kind color dots + six edge kinds + `N nodes · M edges` stats). Shared color mapping: `PALETTE`/`TYPE_COLOR_INDEX` in `lib/kg/kg-neural-renderer/layout.ts`, legend vocabulary in `lib/codebaseGraph.ts`.
+
+Because of the polling watcher above, the Codebase tab may show fresh results by default — edits to an indexed repo are picked up within the sweep interval (default 30s) without an explicit re-index.
 
 ### Database Growth
 

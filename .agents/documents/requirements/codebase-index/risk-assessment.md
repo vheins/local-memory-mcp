@@ -4,6 +4,8 @@
 > **Response strategies**: Avoid, Mitigate, Transfer, Accept.
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** risk register is planning-forecast (no stale tool claims); the mitigations cited (single cached WASM instance, codebase_ prefix, in-memory mutex, size/line guards, per-file indexed_at) all match shipped code. R-18 cross-file call resolution ships as `codebase_references` (v21) without per-edge confidence labels — confidence labeling remains **NEXT PHASE**.
+>
+> **IMPLEMENTED (verified 2026-08-10, TASK-325):** the 2026-08-08 "confidence labeling NEXT PHASE" claim is superseded for the **dashboard KG graph**: per-edge confidence labels are shipped on the KG `relations` table (migration **v24**, `confidence REAL NOT NULL DEFAULT 1.0`, `src/mcp/storage/migrations/v24-relations-confidence.ts:61-64`; UI rendering in TASK-330). Shipped form differs from R-18's design-intent mitigation: instead of the `confirmed`/`ambiguous`/`best_effort` enum on call edges, it is a numeric `0..1` insert-time constant (0.55 auto-extraction, 0.8 semantic, 0.9 codebase, 1.0 manual — first-write-wins under `INSERT OR IGNORE`). The `codebase_references` table itself still carries **no** confidence column — R-18's call-edge-level labels remain design intent only.
 
 ---
 

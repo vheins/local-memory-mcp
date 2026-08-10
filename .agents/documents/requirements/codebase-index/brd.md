@@ -6,6 +6,8 @@
 - **Date:** 2026-07-22
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** this BRD is the pre-implementation plan. The shipped feature is a unified 2-tool pair (`codebase-index` / `codebase-read`, per ADR-005) instead of the 6+1 legacy tools below (`index_repository`, `index_status`, `search_symbols`, `get_file_symbols`, `get_architecture`, `trace_symbol` — none exist in the 17 canonical tools). Schema is **not** "migration v3": `codebase_files`/`codebase_symbols` live in v01, symbol vectors in v06, FTS in v18, and relation data ships as `codebase_references` (migration v21) — there is **no** `codebase_relations` or `codebase_index_queue` table. Language support is 15 languages (not TS/JS-only); the Dashboard Codebase tab is implemented (Phase 1.2 item C1 landed).
+>
+> **VERIFIED vs IMPLEMENTATION (2026-08-10):** the two content-analysis Phase 1.2 rows below are **IMPLEMENTED** — `search_code` shipped as `codebase-read` **CODE** mode (TASK-316; the tool name never existed, design intent only) and **dead code detection** shipped as the ARCHITECTURE-mode `deadCode` block (`src/mcp/codebase-index/services/dead-code.ts`, TASK-319). Phase 1.2 item C2 (graph visualization) remains NEXT PHASE.
 
 ---
 
@@ -107,6 +109,8 @@ This transforms local-memory-mcp from a memory-and-task server into a full-stack
 | Multi-language support | Python, Rust, Go, PHP parsing                           |
 | Dead code detection    | Zero-caller function identification                     |
 
+> **`search_code` IMPLEMENTED (verified 2026-08-10):** shipped as `codebase-read` **CODE** mode (TASK-316); the `search_code` tool name never existed (design intent only). **Dead code detection IMPLEMENTED** as the ARCHITECTURE-mode `deadCode` block (TASK-319).
+
 ### Out-of-Scope (Phase 2+ or Rejected)
 
 | Feature                     | Rationale                                                                  |
@@ -144,6 +148,8 @@ This transforms local-memory-mcp from a memory-and-task server into a full-stack
 | C4  | **Backward compatibility**: Existing memory, task, standard, and handoff tools must be unaffected.       | Schema migration v3 is additive-only; no changes to existing tables.           |
 | C5  | **MCP protocol compliance**: All tools must follow JSON-RPC 2.0 and the project's `McpResponse` format.  | No custom protocols or transport layers.                                       |
 | C6  | **No real-time file watching (MVP)**: `fs.watch` adds significant complexity for marginal initial value. | Users/agents must explicitly trigger re-index or wait for auto-index on start. |
+
+> **C6 NOTE (verified 2026-08-10, TASK-322):** the constraint's _rationale_ (no `fs.watch`) is preserved, but its _consequence_ is superseded — a light **polling file watcher** now ships (`ENABLE_FILE_WATCHER`, default on; `src/mcp/codebase-index/services/file-watcher.ts`): registered repos are swept every `FILE_WATCH_INTERVAL_MS` (30s default) with a per-repo re-entry cap (`FILE_WATCH_TTL_MS`, 5 min default) and mtime/checksum short-circuiting, so the index stays fresh without an explicit trigger or a 24h wait. This is a bounded-delay polling sweep, **not** `fs.watch` real-time notification — `fs.watch` still carries the complexity the constraint cites and remains a recommendation for a later phase.
 
 ---
 

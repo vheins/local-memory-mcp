@@ -1,6 +1,8 @@
 # Codebase Index — Architecture Design
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning architecture. The MCP tool layer shipped as `codebase-index` + `codebase-read` (ADR-005) — `index_repository`, `get_file_symbols`, `search_symbols`, `get_architecture`, `trace_symbol`, `index_status` are legacy names. Storage tables differ: `codebase_files`/`codebase_symbols` (migration v01, not "v3"), symbol vectors v06, symbols FTS v18, references v21 — **no** `codebase_relations`/`codebase_index_queue`. Implementation lives in `src/mcp/codebase-index/` (services/, parser/; 15 languages), not `src/codebase-index/`. Multi-pass pipeline §6: pass-1 symbols are shipped with single-pass parse pipeline; Pass 2 relations ship as **references** (v21); Pass 3 dead-code/hotspot analysis is **NEXT PHASE**. Auto-index hook (§12) is implemented (`autoIndexIfStale`, `CODEBASE_AUTO_INDEX`).
+>
+> **VERIFIED vs IMPLEMENTATION (2026-08-10, Phase 1.1 + dead-code shipped):** Pass 2 relations now include **heritage edges (extends/implements)** + edge targets via migration **v23** (`src/mcp/storage/migrations/v23-codebase-references-edge-targets.ts`, TASK-299) — name-based per ADR-002, per-language coverage (14 of 16 configs emit edges; markdown + generic are declarations-only). **Pass 3 dead-code/hotspot analysis is IMPLEMENTED** — not a parse pass but the ARCHITECTURE-mode `deadCode` block (`src/mcp/codebase-index/services/dead-code.ts`, TASK-319): `unreferenced[]`/`hotspots[]`/`languageCoverage` (+ `totals`/`coverageNote`), entry-point exclusion layered as package.json bin/main/exports/browser → shebang → exported top-level public API (`dead-code.ts:260-290`). DB stays flat — no schema change beyond v23's two nullable columns; schema version is now **24** (`src/mcp/storage/migrations/index.ts:29`; v24 is KG-only).
 
 This document specifies the system architecture for the Codebase Index feature, describing how it integrates into the existing local-memory-mcp MCP server.
 
@@ -310,6 +312,8 @@ Pass 2: [RESOLVE RELATIONS]
 ```
 
 ### Phase 3: Phase 1.2+ (Three-Pass, Full Graph)
+
+> **IMPLEMENTED (verified 2026-08-10):** Pass 3 dead-code/hotspot analysis shipped as the ARCHITECTURE-mode `deadCode` block (TASK-319, `src/mcp/codebase-index/services/dead-code.ts`), not as a parse pass: `unreferenced[]` (zero-reference top-level symbols, entry-point-excluded via package.json bin/main/exports/browser → shebang → exported public API), `hotspots[]` (top in-degree symbols), `languageCoverage` (reliable = ref emission observed in the index), `totals`, `coverageNote`. The design text below is preserved as the historical record — the "Update symbol metadata with computed properties" line is the one deviation (dead-code results are computed per query, never written back to symbol rows; the DB stays flat).
 
 ```
 Pass 1: [FILE DISCOVERY] → [PARSE DECLARATIONS] → [STORE SYMBOLS]

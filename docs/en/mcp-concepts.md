@@ -120,6 +120,17 @@ Resources provide read-only access to specialized data views and global knowledg
 - **`repository://{name}/actions`**: Paginated stream of all agent tool actions logged within a repository.
 - **`action://{id}`**: Direct access to a specific action audit log entry by its integer ID.
 
+### Codebase Resources (Templates)
+
+Read-only views over a repo's codebase index (shipped with RS-1/TASK-323; templates registered in `src/mcp/resources/sdk-index.ts:183-279`, URIs listed in `src/mcp/resources/codebase.ts:246-260`). The `{repo}` argument is auto-completed from the indexed repositories. Every read requires the repo to be indexed — otherwise the server returns a `RecoverableError` ("Repo … not indexed. Run codebase-index on repo.").
+
+- **`codebase://{repo}/symbols`**: Symbol records for a repo (name, kind, file_path, start/end line, signature, exported, defaultExport). Optional query params (`search`, `kind`, `limit`, `offset`) filter and paginate; the payload mirrors the SEARCH mode of `codebase-read`.
+- **`codebase://{repo}/symbols?search={search}&kind={kind}&limit={limit}`** (plus single-param forms `?search=`, `?kind=`, `?limit=`, `?offset=`): the filtered/paginated forms are registered as separate templates because the MCP SDK's `{?...}` operator matches all listed params or none.
+- **`codebase://{repo}/symbols/{name}`**: Full trace payload for one symbol — definition, references (stored + in-memory merged), export chain, and parent/children — the same shape as the TRACE mode of `codebase-read`. Ambiguous names return a disambiguation payload; a missing symbol returns the `-32002` resource-not-found error.
+- **`codebase://{repo}/files/{file_path}`**: File **landmark** — indexed file metadata (path, language, checksum, line count, size, last indexed) plus its symbols. Raw file content is **not** served: it is disk-only and never stored — the payload carries an explicit `content: null`. Use the `CODE` mode of `codebase-read` (with `repoPath`) to grep file contents.
+
+All codebase:// reads are strictly read-only and DB-flat: the payloads contain **symbols and spans only**, never raw content. Query params on the `symbols` templates are optional in the dispatcher; over production SDK transport, use the exact template forms listed above.
+
 ---
 
 ## 3. Prompts (User Control)

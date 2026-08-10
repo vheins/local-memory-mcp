@@ -478,25 +478,27 @@ Modes, auto-inferred:
 | Standard     | `standard-read`, `standard-write`, `standard-delete`                           | Reusable coding rules       |
 | Coordination | `handoff-read`, `handoff-write`, `claim-manage`                                | Multi-agent orchestration   |
 
-| Tool              | Purpose                                        |
-| ----------------- | ---------------------------------------------- |
-| `memory-read`     | Search / detail / recap memories               |
-| `memory-write`    | Create / update / acknowledge memories         |
-| `memory-delete`   | Remove memories (single or bulk)               |
-| `repo-summarize`  | Update a repo's short project summary          |
-| `synthesize`      | LLM-grounded Q&A over local memories           |
-| `task-read`       | Search / detail / list tasks                   |
-| `task-write`      | Create / update / bulk task operations         |
-| `task-delete`     | Delete tasks (single or bulk)                  |
-| `standard-read`   | Search / detail / list coding standards        |
-| `standard-write`  | Create / update standards                      |
-| `standard-delete` | Delete standards (single or bulk)              |
-| `handoff-read`    | Inspect handoffs or active claims              |
-| `handoff-write`   | Create / update handoffs                       |
-| `claim-manage`    | Claim, release, or list task ownership         |
-| `agent-context`   | One-call session context                       |
-| `codebase-index`  | Build / refresh / status of the codebase index |
-| `codebase-read`   | Search / trace / file symbols / architecture   |
+| Tool              | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `memory-read`     | Search / detail / recap memories                                   |
+| `memory-write`    | Create / update / acknowledge memories                             |
+| `memory-delete`   | Remove memories (single or bulk)                                   |
+| `repo-summarize`  | Update a repo's short project summary                              |
+| `synthesize`      | LLM-grounded Q&A over local memories                               |
+| `task-read`       | Search / detail / list tasks                                       |
+| `task-write`      | Create / update / bulk task operations                             |
+| `task-delete`     | Delete tasks (single or bulk)                                      |
+| `standard-read`   | Search / detail / list coding standards                            |
+| `standard-write`  | Create / update standards                                          |
+| `standard-delete` | Delete standards (single or bulk)                                  |
+| `handoff-read`    | Inspect handoffs or active claims                                  |
+| `handoff-write`   | Create / update handoffs                                           |
+| `claim-manage`    | Claim, release, or list task ownership                             |
+| `agent-context`   | One-call session context                                           |
+| `codebase-index`  | Build / refresh / status of the codebase index                     |
+| `codebase-read`   | Search / trace / file symbols / architecture / content grep (CODE) |
+
+> **`codebase-read` modes** (auto-inferred per ADR-005): `name` → TRACE, `filePath` → FILE, `content` → CODE (grep indexed file contents on disk, matches enriched with their enclosing symbol), `query` → SEARCH, nothing → ARCHITECTURE (tree + language breakdown + top-level exports + dead-code candidates/hotspots). The legacy name `search_code` (content search with symbol context) was **design intent only** — it never shipped as a tool; the feature exists as the `CODE` mode of `codebase-read`.
 
 ---
 
@@ -526,6 +528,8 @@ The Knowledge Graph stores entities, typed relations, and observations, with aut
 
 - **Create / edit / delete** entities, relations, and observations happen in the **Web Dashboard → Knowledge Graph tab** (and via the dashboard API) — the only manual editing surface.
 - The graph is **auto-populated from the memory, standard, task, and codebase domains** — entities/relations are written by the embedding outbox from memory/standard/task writes and codebase index runs. Codebase KG entities derive from the indexed symbol/reference data (not from a separate symbol API).
+
+> **Edge confidence labels (verified 2026-08-10, migration v24 / TASK-325 + TASK-330):** every `relations` row carries a **`confidence`** value (`REAL NOT NULL DEFAULT 1.0`), and the KG tab renders it — edges are labeled `relation_type · NN%` at the midpoint and dimmed by confidence bucket (≥0.85 solid, 0.6–0.85 amber, <0.6 dimmed red; edges at 1.0 or with no value show the relation type without a `%`). The value reflects **first-write confidence** (insert-time constant per writer — `INSERT OR IGNORE` means the first writer wins): **0.55** default for all-auto NLP extraction (`co_mentioned`), **0.8** for semantic metadata (task `depends_on`/`inspired_by`, standard `extends`/`related_to`), **0.9** for parser-deterministic codebase edges, and **1.0** for manual/explicit relations (and any pre-v24 edge). The dashboard list API exposes it as `GET /api/kg/graph` → edge `{source, target, relation_type, confidence}`.
 
 > **Decision (2026-08-09): NO KG MCP tools.** KG is auto-populated infrastructure (ADR-006): entities/relations are written by the embedding outbox from memory/standard/task writes and codebase index runs; reading happens via the embedded `kg` field in memory-read/task-read/standard-read. The dashboard KG tab remains the only manual editing surface (API CRUD).
 >

@@ -50,6 +50,7 @@ Penyimpanan relasi entitas terstruktur yang memetakan pengetahuan domain yang ko
 - **Ekstraksi otomatis**: NLP offline (compromise.js) mengekstrak entitas bernama saat memori, standar, dan tugas disimpan serta saat indeks codebase dijalankan
 - **Diisi otomatis (auto-populated)** dari domain **memory | standard | task | codebase** — entitas KG codebase berasal dari data simbol/referensi terindeks (tidak ada API simbol terpisah)
 - **Dashboard**: visualisasi graf gaya-tarik (force-directed) interaktif dengan tambah/edit/hapus — satu-satunya permukaan edit manual (lihat [Panduan Dasbor](dashboard-guide.md))
+- **Label confidence tepi**: setiap relasi membawa confidence (`0..1`) dan tab KG memberi label tepi `relation_type · NN%` dengan peredupan menurut bucket — ekstraksi NLP otomatis default 0.55, metadata semantik 0.8, tepi codebase parser 0.9, relasi manual 1.0 (pemenang-tulisan-pertama di bawah `INSERT OR IGNORE`; lihat [Schema Notes](mcp-concepts.md) dan [referensi Knowledge Graph](tools-reference.md#knowledge-graph-dikelola-via-dasbor))
 
 > **Keputusan (2026-08-09): TIDAK ADA alat MCP KG.** KG adalah infrastruktur yang diisi otomatis (ADR-006): entitas/relasi ditulis oleh outbox embedding dari penulisan memory/standard/task dan eksekusi indeks codebase, serta dibaca melalui field `kg` tertanam di memory-read/task-read/standard-read. Tidak ada alat MCP untuk CRUD graf langsung; pengelolaan graf dilakukan di tab Knowledge Graph dasbor (API CRUD).
 

@@ -1,6 +1,8 @@
 # Codebase Index — User Flow Descriptions
 
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** planning UI flows. The Codebase tab ships with file-tree browsing, symbol search (CodebaseSearchBar + CodebaseSymbolList), symbol detail (CodebaseSymbolDetail), index status (CodebaseIndexStatus), and language breakdown (CodebaseLanguageBreakdown) — Flows 1, 2, 4, 5 match. Flow 3's Mermaid call-graph tab (Callers/Callees/References) is **NEXT PHASE** — callers/callees are shown as lists in the symbol detail, not as a rendered Mermaid graph. Re-index trigger (Flow 4) is available in the UI; auto-index on server start is implemented at the MCP layer.
+>
+> **IMPLEMENTED (verified 2026-08-10, CG-1/CG-2/TASK-329):** Flow 3's "call graph" step is now shipped — `CodebaseCallGraph.svelte` renders a **canvas call-DAG** (callers/callees via `lib/callGraphLayout.ts`) inside `CodebaseSymbolDetail` (`CodebaseSymbolDetail.svelte:158`), and the tab additionally exposes a full **code-graph force panel**: `CodebaseGraphPanel.svelte` (KGGraphCanvas reuse, kind filter All/Calls/Imports/Co-defined, zoom/refresh, index-required + error/empty overlays, node click → symbol detail) + `CodebaseGraphLegend.svelte` (legend + stats), mounted in `CodebasePage.svelte:243` after `CodebaseIndexStatus`. The design's Mermaid rendering stayed design intent only — the shipped graphs are canvas-based.
 
 This document maps the primary user journeys within the Codebase Index tab of the Local Memory Dashboard.
 

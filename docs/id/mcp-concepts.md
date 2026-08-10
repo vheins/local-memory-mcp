@@ -120,6 +120,17 @@ Resources menyediakan akses hanya-baca ke tampilan data khusus dan pengetahuan g
 - **`repository://{name}/actions`**: Stream dengan paginasi dari semua tindakan alat agen yang dicatat dalam repositori.
 - **`action://{id}`**: Akses langsung ke entri log audit tindakan tertentu berdasarkan ID integernya.
 
+### Resources Codebase (Templat)
+
+Tampilan hanya-baca atas indeks codebase sebuah repo (dirilis bersama RS-1/TASK-323; templat didaftarkan di `src/mcp/resources/sdk-index.ts:183-279`, daftar URI di `src/mcp/resources/codebase.ts:246-260`). Argumen `{repo}` dilengkapi autocompletion dari repositori terindeks. Setiap pembacaan mensyaratkan repo sudah diindeks — jika belum, server mengembalikan `RecoverableError` ("Repo … not indexed. Run codebase-index on repo.").
+
+- **`codebase://{repo}/symbols`**: Rekam simbol untuk sebuah repo (name, kind, file_path, baris awal/akhir, signature, exported, defaultExport). Parameter kueri opsional (`search`, `kind`, `limit`, `offset`) memfilter dan melakukan paginasi; payload mencerminkan mode SEARCH dari `codebase-read`.
+- **`codebase://{repo}/symbols?search={search}&kind={kind}&limit={limit}`** (plus bentuk satu-parameter `?search=`, `?kind=`, `?limit=`, `?offset=`): bentuk terfilter/terpaginasi didaftarkan sebagai templat terpisah karena operator `{?...}` SDK MCP mencocokkan semua parameter yang terdaftar atau tidak sama sekali.
+- **`codebase://{repo}/symbols/{name}`**: Payload trace lengkap untuk satu simbol — definisi, referensi (tersimpan + dalam memori digabung), rantai ekspor, serta parent/children — bentuk yang sama dengan mode TRACE dari `codebase-read`. Nama ambigu mengembalikan payload disambiguasi; simbol yang tidak ada mengembalikan error resource-not-found `-32002`.
+- **`codebase://{repo}/files/{file_path}`**: **Landmark** berkas — metadata berkas terindeks (path, bahasa, checksum, jumlah baris, ukuran, waktu indeks terakhir) beserta simbol-simbolnya. Konten mentah berkas **tidak** disajikan: konten hanya ada di disk dan tidak pernah disimpan — payload membawa `content: null` yang eksplisit. Gunakan mode `CODE` dari `codebase-read` (dengan `repoPath`) untuk grep konten berkas.
+
+Semua pembacaan `codebase://` bersifat read-only dan DB-flat: payload hanya berisi **simbol dan span, tidak pernah konten mentah**. Parameter kueri pada templat `symbols` bersifat opsional di dispatcher; pada transport SDK produksi, gunakan bentuk templat persis seperti yang tercantum di atas.
+
 ---
 
 ## 3. Prompts (Kontrol Pengguna)
