@@ -10,10 +10,18 @@ import { tokenize } from "./normalize";
  * Tokenizes via the shared normalizer (lowercase; keeps alphanumeric plus
  * underscore/hyphen/dot; strips stopwords) and counts token occurrences.
  * Returns a sparse Record keyed by token.
+ *
+ * The accumulator is a null-prototype object: with a plain `{}`, tokens that
+ * collide with `Object.prototype` members defeat the `vector[token] || 0`
+ * guard — `vector["constructor"]` reads the inherited Function (truthy) so the
+ * count becomes a string, and `vector["__proto__"] = n` hits the inherited
+ * setter and is silently dropped. Both corrupt downstream cosine similarity
+ * into NaN. A null-prototype accumulator reads only own properties and
+ * creates genuine own keys for every token.
  */
 export function computeVector(text: string): Record<string, number> {
 	const tokens = tokenize(text);
-	const vector: Record<string, number> = {};
+	const vector: Record<string, number> = Object.create(null);
 	tokens.forEach((token) => {
 		vector[token] = (vector[token] || 0) + 1;
 	});
@@ -23,6 +31,11 @@ export function computeVector(text: string): Record<string, number> {
 /**
  * Cosine similarity between two sparse term-frequency vectors.
  * Returns 0 when either vector is empty.
+ *
+ * Cross-vector reads are guarded with `Object.hasOwn`: a sparse vector can
+ * arrive as a plain object (e.g. JSON.parse round-trip in the stub vector
+ * store), where a missing key like "constructor" would otherwise resolve to
+ * the inherited Object.prototype member and produce NaN in the dot product.
  */
 export function cosineSimilarity(v1: Record<string, number>, v2: Record<string, number>): number {
 	const keys1 = Object.keys(v1);
@@ -31,7 +44,7 @@ export function cosineSimilarity(v1: Record<string, number>, v2: Record<string, 
 
 	let dotProduct = 0;
 	for (const key of keys1) {
-		if (v2[key]) dotProduct += v1[key] * v2[key];
+		if (Object.hasOwn(v2, key)) dotProduct += v1[key] * v2[key];
 	}
 
 	let mag1 = 0;

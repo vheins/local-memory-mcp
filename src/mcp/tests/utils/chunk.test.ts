@@ -20,7 +20,20 @@ describe("chunksOf", () => {
 
 	it("returns an empty array for an empty input", () => {
 		expect(chunksOf([], 10)).toEqual([]);
-		expect(chunksOf([], 0)).toEqual([]);
+	});
+
+	it("throws RangeError for size=0 instead of looping forever (regression TASK-378)", () => {
+		// size=0 previously made the loop advance by 0, pushing empty chunks
+		// indefinitely (OOM); negative sizes walk the index backwards the same
+		// way. The size is invalid regardless of the item count.
+		expect(() => chunksOf([1, 2, 3], 0)).toThrow(RangeError);
+		expect(() => chunksOf([1, 2, 3], -1)).toThrow(RangeError);
+		expect(() => chunksOf([], 0)).toThrow(RangeError);
+	});
+
+	it("throws RangeError for non-finite sizes", () => {
+		expect(() => chunksOf([1, 2, 3], Number.NaN)).toThrow(RangeError);
+		expect(() => chunksOf([1, 2, 3], Number.POSITIVE_INFINITY)).toThrow(RangeError);
 	});
 
 	it("handles a size of 1", () => {
@@ -28,6 +41,9 @@ describe("chunksOf", () => {
 	});
 
 	it("preserves order, covers every item and bounds chunk sizes (property)", () => {
+		// Non-positive and non-finite sizes (0, negatives, NaN, Infinity) are
+		// outside the contract domain: chunksOf throws RangeError for them (see
+		// negative tests above), so the property samples the valid domain only.
 		fc.assert(
 			fc.property(fc.array(fc.integer()), fc.integer({ min: 1, max: 50 }), (items, size) => {
 				const chunks = chunksOf(items, size);

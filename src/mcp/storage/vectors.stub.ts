@@ -31,8 +31,19 @@ export class StubVectorStore implements VectorStore {
 	}
 
 	// Convert token array to frequency vector for cosine similarity
+	//
+	// The accumulator is a null-prototype object (same treatment as
+	// computeVector in utils/vector.ts, TASK-377): with a plain `{}`, tokens
+	// that collide with Object.prototype members defeat the `vector[token] || 0`
+	// guard — `vector["constructor"]` reads the inherited Function (truthy) so
+	// the count becomes a string, and `vector["__proto__"] = n` hits the
+	// inherited setter and is silently dropped. Both corrupt the serialized
+	// vector (memory_vectors / coding_standard_vectors / task_vectors) into
+	// NaN downstream cosine similarity once JSON.parse'd back in search().
+	// A null-prototype accumulator reads only own properties and creates
+	// genuine own keys for every token; JSON round-trip is unaffected.
 	private computeFrequencyVector(tokens: string[]): Record<string, number> {
-		const vector: Record<string, number> = {};
+		const vector: Record<string, number> = Object.create(null);
 		for (const token of tokens) {
 			vector[token] = (vector[token] || 0) + 1;
 		}

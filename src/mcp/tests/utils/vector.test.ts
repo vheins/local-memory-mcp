@@ -3,8 +3,11 @@ import * as fc from "fast-check";
 import { computeVector, cosineSimilarity, cosineSimilarityArrays, createTfVectorCache } from "../../utils/vector";
 import { tokenize } from "../../utils/normalize";
 
+// Null-prototype accumulator so arbitrary tokens (including Object.prototype
+// collisions like "constructor"/"__proto__") become own numeric properties —
+// mirrors computeVector's post-TASK-377 semantics.
 function buildVector(pairs: readonly (readonly [string, number])[]): Record<string, number> {
-	const vector: Record<string, number> = {};
+	const vector: Record<string, number> = Object.create(null);
 	for (const [token, count] of pairs) vector[token] = (vector[token] ?? 0) + count;
 	return vector;
 }
@@ -27,21 +30,32 @@ describe("computeVector", () => {
 		expect(computeVector("the and of a an")).toEqual({});
 	});
 
+	it("counts 'constructor' as a numeric own property, not the inherited Function (TASK-377)", () => {
+		const vector = computeVector("constructor foo constructor");
+		expect(typeof vector.constructor).toBe("number");
+		expect(vector.constructor).toBe(2);
+		expect(vector.foo).toBe(1);
+		expect(Object.values(vector).every((n) => typeof n === "number")).toBe(true);
+	});
+
+	it("keeps '__proto__' as an own numeric count instead of silently dropping it (TASK-377)", () => {
+		const vector = computeVector("__proto__ getter __proto__");
+		expect(Object.hasOwn(vector, "__proto__")).toBe(true);
+		expect(vector["__proto__"]).toBe(2);
+	});
+
 	it("token totals equal the tokenizer output length (property)", () => {
-		// Tokens that collide with Object.prototype members (e.g. "constructor",
-		// "__proto__", "toString") are excluded: computeVector currently reads
-		// inherited members via `vector[token] || 0`, which corrupts the vector.
-		// That bug is tracked separately (fix task) — this property covers the
-		// non-pathological token domain.
+		// Full token domain — no Object.prototype exclusions: computeVector now
+		// uses a null-prototype accumulator, so prototype-colliding tokens
+		// ("constructor", "__proto__", ...) yield numeric counts and the total
+		// invariant holds for every possible string (regression guard TASK-377).
 		fc.assert(
-			fc.property(
-				fc.string({ minLength: 0, maxLength: 100 }).filter((s) => !(s.toLowerCase() in Object.prototype)),
-				(text) => {
-					const vector = computeVector(text);
-					const total = Object.values(vector).reduce((sum, n) => sum + n, 0);
-					expect(total).toBe(tokenize(text).length);
-				}
-			)
+			fc.property(fc.string({ minLength: 0, maxLength: 100 }), (text) => {
+				const vector = computeVector(text);
+				expect(Object.values(vector).every((n) => typeof n === "number")).toBe(true);
+				const total = Object.values(vector).reduce((sum, n) => sum + n, 0);
+				expect(total).toBe(tokenize(text).length);
+			})
 		);
 	});
 });
@@ -67,14 +81,30 @@ describe("cosineSimilarity", () => {
 		expect(cosineSimilarity({}, {})).toBe(0);
 	});
 
+	it("stays finite in [0, 1] for vectors with prototype-colliding tokens (TASK-377)", () => {
+		const sim = cosineSimilarity(computeVector("constructor foo constructor"), computeVector("constructor foo"));
+		expect(Number.isFinite(sim)).toBe(true);
+		expect(sim).toBeGreaterThan(0);
+		expect(sim).toBeLessThanOrEqual(1);
+	});
+
+	it("does not read inherited Object.prototype members when one vector lacks the key (TASK-377)", () => {
+		// Plain-object vectors: v2 has no own "constructor", so the pre-fix
+		// `if (v2[key])` read the inherited Function and computed NaN.
+		const sim = cosineSimilarity({ constructor: 1, foo: 1 }, { foo: 1 });
+		expect(Number.isFinite(sim)).toBe(true);
+		expect(sim).toBeGreaterThan(0);
+		expect(sim).toBeLessThan(1);
+	});
+
 	it("is symmetric and bounded in [0, 1] for arbitrary sparse vectors (property)", () => {
-		// See the computeVector property: Object.prototype-colliding tokens are
-		// excluded because the module currently mishandles them (separate fix task).
-		const safeToken = fc.string().filter((token) => !(token in Object.prototype));
+		// No token exclusions: cosineSimilarity guards cross-vector reads with
+		// Object.hasOwn, so inherited Object.prototype members can never leak
+		// into the math regardless of vector shape (regression guard TASK-377).
 		fc.assert(
 			fc.property(
-				fc.array(fc.tuple(safeToken, fc.integer({ min: 1, max: 10 }))),
-				fc.array(fc.tuple(safeToken, fc.integer({ min: 1, max: 10 }))),
+				fc.array(fc.tuple(fc.string(), fc.integer({ min: 1, max: 10 }))),
+				fc.array(fc.tuple(fc.string(), fc.integer({ min: 1, max: 10 }))),
 				(pairs1, pairs2) => {
 					const v1 = buildVector(pairs1);
 					const v2 = buildVector(pairs2);
