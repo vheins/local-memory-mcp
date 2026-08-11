@@ -88,10 +88,11 @@
 					class="form-input ref-search-input"
 					type="text"
 					placeholder="Search tools & prompts…"
+					aria-label="Search tools and prompts"
 					bind:value={$appState.referenceSearch}
 				/>
 				{#if state.referenceSearch}
-					<button class="ref-clear-btn" on:click={() => handler.setReferenceSearch("")}>
+					<button class="ref-clear-btn" on:click={() => handler.setReferenceSearch("")} aria-label="Clear search">
 						<Icon name="x" size={11} strokeWidth={2.5} />
 					</button>
 				{/if}

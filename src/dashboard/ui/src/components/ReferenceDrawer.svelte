@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { currentRepo } from "../lib/stores";
 	import type { ReferenceItem } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
@@ -39,6 +40,15 @@
 		trapFocus?.deactivate();
 		trapFocus = null;
 	}
+
+	// TASK-399 belt-and-braces: never let the trap's keydown listener survive
+	// component destruction (idempotent — deactivate() early-returns when not
+	// active). Together with the else-branch above, Tab can never stay frozen
+	// on one element after the drawer closes.
+	onDestroy(() => {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	});
 </script>
 
 {#if open && $handler.item}
@@ -160,6 +170,7 @@
 									class="btn btn-ghost btn-icon"
 									on:click={() => handler.copyToClipboardWrapper($handler.toolResult || "")}
 									title="Copy to clipboard"
+									aria-label="Copy tool result to clipboard"
 									style="width:24px; height:24px; padding:0; border:none; background:transparent;"
 								>
 									<Icon

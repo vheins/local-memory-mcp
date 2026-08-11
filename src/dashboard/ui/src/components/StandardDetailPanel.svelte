@@ -144,6 +144,7 @@
 				class="btn btn-ghost btn-icon"
 				on:click={() => handler.handleCopyStandardContent($handler.standard?.content || "")}
 				title="Copy to clipboard"
+				aria-label="Copy standard content to clipboard"
 				style="width:20px;height:20px;padding:0;border:none;background:transparent;"
 			>
 				<Icon

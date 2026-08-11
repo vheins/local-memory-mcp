@@ -93,6 +93,7 @@
 				class="btn btn-ghost btn-icon"
 				on:click={() => handler.handleCopyDesc($handler.task?.description || "")}
 				title="Copy to clipboard"
+				aria-label="Copy task description to clipboard"
 				style="width:20px; height:20px; padding:0; border:none; background:transparent; margin-right:4px;"
 			>
 				<Icon
@@ -184,13 +185,15 @@
 										class="btn btn-ghost"
 										style="padding:1px 5px;font-size:0.65rem;"
 										on:click={() => handler.startEditComment(c)}
-										title="Edit comment">✏️</button
+										title="Edit comment"
+										aria-label="Edit comment">✏️</button
 									>
 									<button
 										class="btn btn-ghost"
 										style="padding:1px 5px;font-size:0.65rem;color:#ef4444;"
 										on:click={() => handler.deleteComment(c.id, onTaskUpdated)}
-										title="Delete comment">🗑</button
+										title="Delete comment"
+										aria-label="Delete comment">🗑</button
 									>
 								{/if}
 							</div>

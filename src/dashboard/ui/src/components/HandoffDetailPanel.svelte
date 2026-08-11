@@ -128,6 +128,7 @@
 					class="btn btn-ghost btn-icon"
 					on:click={() => handler.handleCopyHandoffContext($handler.handoff?.context || {})}
 					title="Copy to clipboard"
+					aria-label="Copy handoff context to clipboard"
 					style="width:20px;height:20px;padding:0;border:none;background:transparent;"
 				>
 					<Icon

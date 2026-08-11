@@ -116,8 +116,10 @@
 	}
 
 	.kg-zoom-btn {
-		padding: 4px 6px !important;
-		min-width: 28px;
+		/* TASK-403: ≥32px tap target at 390px (audit: zoom −/+ were 28px). */
+		padding: 6px 8px !important;
+		min-width: 32px;
+		min-height: 32px;
 		justify-content: center;
 		border-radius: 0 !important;
 		border-right: 1px solid var(--color-border);
@@ -130,6 +132,7 @@
 	.kg-zoom-label {
 		padding: 4px 8px !important;
 		min-width: 42px;
+		min-height: 32px;
 		justify-content: center;
 		border-radius: 0 !important;
 		font-size: 0.68rem;

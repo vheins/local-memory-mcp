@@ -38,6 +38,10 @@
 	let totalItems = $state(0);
 	let totalPages = $state(0);
 
+	// ARIA live region (STD-002 / TASK-400): scoped sr-only announcements for
+	// async queue updates (loads, re-run, clear, retry-all).
+	let liveAnnounce = $state("");
+
 	// ── Data loading ──────────────────────────────────────────────────────────
 	// NIT fix: reset to the first page when switching repos so a stale page
 	// (e.g. "Page 3 of 2") can never render an empty table for a smaller repo.
@@ -79,6 +83,7 @@
 			jobs = result.jobs || [];
 			totalItems = result.pagination?.totalItems ?? jobs.length;
 			totalPages = result.pagination?.totalPages ?? 1;
+			liveAnnounce = `Loaded ${totalItems} failed queue jobs`;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -99,6 +104,7 @@
 		error = "";
 		try {
 			await api.queueRetryJob(job.id, repo);
+			liveAnnounce = "Queue job re-queued";
 			await loadAll();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -114,6 +120,7 @@
 		error = "";
 		try {
 			await api.queueClearJob(job.id, repo);
+			liveAnnounce = "Queue job cleared";
 			await loadAll();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -130,6 +137,7 @@
 		try {
 			const result = await api.queueRetryAll(repo);
 			if (result.retried > 0) {
+				liveAnnounce = `Re-queued ${result.retried} failed jobs`;
 				await loadAll();
 			}
 		} catch (e) {
@@ -141,6 +149,9 @@
 </script>
 
 <div class="feature-shell animate-fade-in">
+	<!-- ARIA live region (STD-002 / TASK-400): scoped, never the whole shell -->
+	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveAnnounce}</div>
+
 	<!-- ════ Header (exactly one h1 per tab — STD-002) ════ -->
 	<div class="queue-header">
 		<div class="flex items-center gap-2">

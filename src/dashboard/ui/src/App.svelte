@@ -2,7 +2,14 @@
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import "./app.css";
-	import { activeTab, currentRepo, recentActionsTotalItems, initPersistedState } from "./lib/stores";
+	import {
+		activeTab,
+		currentRepo,
+		recentActionsTotalItems,
+		initPersistedState,
+		dashboardStats,
+		taskTimeStats
+	} from "./lib/stores";
 	import { createAppHandler } from "./lib/composables/useApp";
 	import { api } from "./lib/api";
 	import { createChatTask } from "./lib/utils";
@@ -67,11 +74,28 @@
 	const appState = { subscribe: app.subscribe, set: app.set, update: app.update };
 	const { filteredTools, filteredPrompts, filteredResources, sidebarCollapsed } = app;
 
-	onMount(async () => {
-		initPersistedState();
-		await app.loadRepos();
-		await app.loadHealth();
-		await app.loadData();
+	// ARIA live region (STD-002 / TASK-400): scoped sr-only announcement for
+	// the dashboard view's async stats refresh. Subscribes announce on every
+	// stats load (initial + 30s polling), never wrap the whole shell.
+	let dashboardLiveText = "";
+
+	onMount(() => {
+		const unsubStats = dashboardStats.subscribe((s) => {
+			if (s) dashboardLiveText = "Dashboard stats refreshed";
+		});
+		const unsubTimeStats = taskTimeStats.subscribe((ts) => {
+			if (ts) dashboardLiveText = "Dashboard stats refreshed";
+		});
+		void (async () => {
+			initPersistedState();
+			await app.loadRepos();
+			await app.loadHealth();
+			await app.loadData();
+		})();
+		return () => {
+			unsubStats();
+			unsubTimeStats();
+		};
 	});
 
 	$: if ($activeTab === "reference") {
@@ -128,7 +152,33 @@
 				</div>
 			{:else}
 				<div class="tabs-wrap">
-					<div class="tab-nav" style="display:inline-flex;" role="tablist">
+					<!-- TASK-405 (STD-002): tablist needs an accessible name; all
+					     11 views are now reachable from this single surface (the
+					     RepoSidebar nav remains as a secondary shortcut — both
+					     write the same activeTab store). -->
+					<div class="tab-nav" style="display:inline-flex;" role="tablist" aria-label="Dashboard sections">
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "arena"}
+							on:click={() => app.onTabChange("arena")}
+							id="tab-arena"
+							role="tab"
+							aria-selected={$activeTab === "arena"}
+						>
+							<Icon name="cpu" size={14} strokeWidth={1.75} />
+							<span>Arena</span>
+						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "dashboard"}
+							on:click={() => app.onTabChange("dashboard")}
+							id="tab-dashboard"
+							role="tab"
+							aria-selected={$activeTab === "dashboard"}
+						>
+							<Icon name="layout-dashboard" size={14} strokeWidth={1.75} />
+							<span>Dashboard</span>
+						</button>
 						<button
 							class="tab-btn"
 							class:active={$activeTab === "activity"}
@@ -206,11 +256,35 @@
 							<Icon name="share-2" size={14} strokeWidth={1.75} />
 							<span>Knowledge Graph</span>
 						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "standards"}
+							on:click={() => app.onTabChange("standards")}
+							id="tab-standards"
+							role="tab"
+							aria-selected={$activeTab === "standards"}
+						>
+							<Icon name="check" size={14} strokeWidth={1.75} />
+							<span>Standards</span>
+						</button>
+						<button
+							class="tab-btn"
+							class:active={$activeTab === "reference"}
+							on:click={() => app.onTabChange("reference")}
+							id="tab-reference"
+							role="tab"
+							aria-selected={$activeTab === "reference"}
+						>
+							<Icon name="book-open" size={14} strokeWidth={1.75} />
+							<span>Reference</span>
+						</button>
 					</div>
 				</div>
 
 				<!-- ════ DASHBOARD TAB ════ -->
 				{#if $activeTab === "dashboard"}
+					<!-- ARIA live region (STD-002 / TASK-400): scoped, never the whole shell -->
+					<div class="sr-only" aria-live="polite" aria-atomic="true">{dashboardLiveText}</div>
 					<div style="display:grid;grid-template-columns:1fr;gap:12px;align-items:start;" class="dashboard-grid">
 						<GlobalCommandCenter />
 

@@ -56,6 +56,9 @@
 	let architectureData = $state<ArchitectureData | null>(null);
 	let architectureLoading = $state(false);
 	let architectureError = $state("");
+	// ARIA live region (STD-002 / TASK-400): scoped sr-only announcements for
+	// async index state changes (loaded / not-found / error / indexing).
+	let liveAnnounce = $state("");
 
 	// --- Derived: language breakdown ---
 	let languageEntries = $derived.by<LanguageEntry[]>(() => {
@@ -111,16 +114,19 @@
 			if (result?.indexed === true) {
 				hasIndex = true;
 				indexData = result as unknown as Record<string, unknown>;
+				liveAnnounce = "Codebase index loaded";
 				void loadArchitecture();
 			} else {
 				hasIndex = false;
 				indexData = null;
 				architectureData = null;
+				liveAnnounce = "No codebase index found";
 			}
 		} catch {
 			hasIndex = false;
 			indexData = null;
 			architectureData = null;
+			liveAnnounce = "Failed to load codebase index";
 		} finally {
 			loading = false;
 		}
@@ -152,6 +158,7 @@
 		if (!repo) return;
 		try {
 			await api.codebaseReindex(repo);
+			liveAnnounce = "Codebase indexing started";
 			// After triggering, reload the index status (loadCodebaseIndex also loads architecture)
 			await loadCodebaseIndex();
 		} catch (err) {
@@ -190,15 +197,29 @@
 </script>
 
 <div class="codebase-page animate-fade-in">
+	<!-- ARIA live region (STD-002 / TASK-400): scoped, never the whole shell -->
+	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveAnnounce}</div>
+
 	{#if !repo || loading || error || !hasIndex}
-		<CodebaseEmptyState
-			{repo}
-			{hasIndex}
-			{loading}
-			{error}
-			onRetry={() => void loadCodebaseIndex()}
-			onStartIndexing={startIndexing}
-		/>
+		<!-- TASK-397 (STD-002): exactly one h1 must survive the empty state.
+		     The indexed branch renders "Codebase Overview" below; here the same
+		     canonical h1 stays visible above the empty-state message so SR
+		     users always get a page heading. CodebaseEmptyState adds none. -->
+		<div class="codebase-empty-head">
+			<div class="flex items-center gap-2" style="margin-bottom:14px;">
+				<Icon name="code" size={14} strokeWidth={1.75} />
+				<h1 class="section-label">Codebase Overview</h1>
+				{#if repo}<div class="repo-badge">{$currentRepo}</div>{/if}
+			</div>
+			<CodebaseEmptyState
+				{repo}
+				{hasIndex}
+				{loading}
+				{error}
+				onRetry={() => void loadCodebaseIndex()}
+				onStartIndexing={startIndexing}
+			/>
+		</div>
 	{:else}
 		<!-- ─── Indexed Content (Sidebar + Content) ─── -->
 		<div class="codebase-layout" class:sidebar-collapsed={!sidebarOpen}>

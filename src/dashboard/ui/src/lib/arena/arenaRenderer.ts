@@ -77,13 +77,109 @@ export class ArenaRenderer {
 	private viewportPanX = 0;
 	private viewportPanY = 0;
 
+	// ── Settle / Freeze Control (TASK-402 — mirrors the KG neural renderer's
+	// TASK-277 pattern: settle-detect → freeze → O(1) wake check) ────────────
+	// Root cause of the idle burn (audit: ~25-26fps continuous while at rest):
+	// the loop rendered the full scene + wander sim every frame forever. Fix:
+	// after SETTLE_FREEZE_FRAMES consecutive "quiet" frames (or SETTLE_FREEZE_MS
+	// of quiet time) the arena enters frozen mode — the rAF slot keeps firing
+	// but each frozen frame only performs the cheap O(1) wake check below: NO
+	// sim, NO render, NO draw. Any external activity signal (viewport / hover /
+	// selection / filter / reduced-motion / scene|layout|isDark mutation)
+	// unfreezes the loop on the next tick. The ambient wander sim is NOT an
+	// activity signal — it runs while unfrozen and freezes with the frame, so a
+	// static arena costs ~0 main-thread work until the user interacts or a poll
+	// delivers new data. The freeze-gap clock re-anchor prevents agents from
+	// teleporting across a frozen stretch when the loop resumes.
+	private static readonly SETTLE_FREEZE_FRAMES = 20;
+	private static readonly SETTLE_FREEZE_MS = 600;
+	private quietFrames = 0;
+	private frozen = false;
+	private lastActivityTimestamp = 0;
+	private freezeGapPending = false;
+	/**
+	 * Content signature of the last scene handed to update() (see
+	 * sceneSignature). The polling layer rebuilds the scene with NEW object
+	 * references every poll (buildArenaScene allocates fresh Maps), so a
+	 * reference comparison would treat an identical poll as activity and
+	 * re-render. Comparing content lets an unchanged poll keep the arena
+	 * frozen — "no state change" stays frozen (TASK-407 follow-up).
+	 */
+	private lastIncomingSignature: string | null = null;
+	/** Set by update() when the incoming scene CONTENT differs from the last. */
+	private sceneDirty = false;
+	/** Snapshot of the state the last rendered frame was produced from. */
+	private lastRenderedLayout: ArenaLayoutConfig | null = null;
+	private lastRenderedIsDark = false;
+	private lastRenderedHoveredId: string | null = null;
+	private lastRenderedSelectedId: string | null = null;
+	private lastRenderedSelectedType: "agent" | "task" | "repository" | null = null;
+	private lastRenderedViewport = { zoom: 1.0, panX: 0, panY: 0 };
+	/**
+	 * Deep-ish snapshot of the filter the last rendered frame was produced
+	 * from (arrays cloned — setFilter Object.assign-mutates the SAME
+	 * activeFilter object in place, arenaStateManager.ts:270, so a shared
+	 * array ref would never see in-place pushes/splices). null = never
+	 * rendered → always wake.
+	 */
+	private lastRenderedFilter: FilterState | null = null;
+	private lastRenderedReducedMotion = false;
+	private lastRenderedReducedTransparency = false;
+
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		this.ctx = canvas.getContext("2d")!;
 	}
 
+	/**
+	 * Cheap O(n) content digest of a scene — entity counts + per-entity
+	 * visual state (positions rounded to px, status, action, speech bubble).
+	 * Used to detect REAL scene changes across polls without allocating a
+	 * comparison structure. Hash collisions are acceptable: a false "changed"
+	 * only costs one extra render, never a missed one.
+	 */
+	private sceneSignature(scene: ArenaScene): string {
+		let h = 0;
+		const mix = (v: string | number) => {
+			h = (h * 31 + (typeof v === "string" ? v.length * 7 + (v.charCodeAt(0) || 0) : v)) | 0;
+		};
+		mix(scene.agents.size);
+		mix(scene.tasks.size);
+		mix(scene.handoffs.length);
+		mix(scene.repositories.size);
+		for (const a of scene.agents.values()) {
+			mix(a.id);
+			mix(Math.round(a.x));
+			mix(Math.round(a.y));
+			mix(Math.round(a.targetX));
+			mix(Math.round(a.targetY));
+			mix(a.state);
+			mix(a.currentAction);
+			mix(a.health);
+			mix(a.speechBubble ?? "");
+		}
+		for (const t of scene.tasks.values()) {
+			mix(t.id);
+			mix(Math.round(t.x));
+			mix(Math.round(t.y));
+			mix(t.status);
+			mix(t.progress);
+			mix(t.priorityLevel);
+		}
+		for (const hp of scene.handoffs) mix(hp.id ?? "");
+		for (const r of scene.repositories.values()) mix(r.id);
+		return String(h);
+	}
+
 	// ── Public API ───────────────────────────────────────────────────────
 	update(scene: ArenaScene, layout: ArenaLayoutConfig, isDark: boolean) {
+		// Content-aware change detection: buildArenaScene allocates fresh Maps
+		// on every poll even when backend data is unchanged — comparing object
+		// refs would wake the renderer on every poll. A content signature lets
+		// an identical poll keep the arena frozen (TASK-407).
+		const sig = this.sceneSignature(scene);
+		this.sceneDirty = sig !== this.lastIncomingSignature;
+		this.lastIncomingSignature = sig;
 		this.scene = scene;
 		this.layout = layout;
 		this.layoutManager = layout.layoutManager ?? getArenaLayoutManager();
@@ -109,6 +205,19 @@ export class ArenaRenderer {
 		return { id: this.selectedId, type: this.selectedType };
 	}
 	start() {
+		// Reset settle state so a restart always renders (and a stale "frozen"
+		// flag from a previous session can never leave a dead canvas).
+		this.quietFrames = 0;
+		this.frozen = false;
+		this.freezeGapPending = false;
+		this.lastActivityTimestamp = performance.now();
+		this.lastIncomingSignature = null;
+		this.sceneDirty = true;
+		this.lastRenderedLayout = null;
+		this.lastRenderedViewport = { zoom: 1.0, panX: 0, panY: 0 };
+		this.lastRenderedFilter = null;
+		this.lastRenderedReducedMotion = false;
+		this.lastRenderedReducedTransparency = false;
 		this.rafId = requestAnimationFrame(this.loop);
 	}
 	stop() {
@@ -302,17 +411,129 @@ export class ArenaRenderer {
 
 	// ── Loop ────────────────────────────────────────────────────────────
 	/**
+	 * Content comparison for FilterState. The filter object is mutated IN
+	 * PLACE by the arena state manager (arenaStateManager.ts:270 Object.assign)
+	 * and its arrays can be replaced or spliced — a reference comparison would
+	 * miss every change (TASK-409).
+	 */
+	private filterEquals(a: FilterState, b: FilterState): boolean {
+		return (
+			a.repository === b.repository &&
+			a.search === b.search &&
+			a.roles.length === b.roles.length &&
+			a.roles.every((v, i) => v === b.roles[i]) &&
+			a.priorities.length === b.priorities.length &&
+			a.priorities.every((v, i) => v === b.priorities[i]) &&
+			a.statuses.length === b.statuses.length &&
+			a.statuses.every((v, i) => v === b.statuses[i])
+		);
+	}
+
+	/**
+	 * True when anything invalidates the last rendered frame: a viewport
+	 * change (drag / zoom / focusEntity), a hover/selection change, a FILTER
+	 * change, a reduced-motion/transparency toggle, or a scene/layout/isDark
+	 * mutation from the polling layer. This is the frozen-frame wake check —
+	 * O(1), zero allocation, no DOM reads (mirrors the KG renderer's
+	 * renderStateChanged). Filter/reduced-motion fields are compared per-field
+	 * because setFilter mutates the shared object in place (TASK-409).
+	 */
+	private hasRenderWork(): boolean {
+		return (
+			this.sceneDirty ||
+			this.layout !== this.lastRenderedLayout ||
+			this.isDark !== this.lastRenderedIsDark ||
+			this.hoveredId !== this.lastRenderedHoveredId ||
+			this.selectedId !== this.lastRenderedSelectedId ||
+			this.selectedType !== this.lastRenderedSelectedType ||
+			this.viewportZoom !== this.lastRenderedViewport.zoom ||
+			this.viewportPanX !== this.lastRenderedViewport.panX ||
+			this.viewportPanY !== this.lastRenderedViewport.panY ||
+			this.reducedMotion !== this.lastRenderedReducedMotion ||
+			this.reducedTransparency !== this.lastRenderedReducedTransparency ||
+			!this.lastRenderedFilter ||
+			!this.filterEquals(this.activeFilter, this.lastRenderedFilter)
+		);
+	}
+
+	/** Remember the state the just-rendered frame was produced from. */
+	private snapshotRenderedState(): void {
+		this.sceneDirty = false;
+		this.lastRenderedLayout = this.layout;
+		this.lastRenderedIsDark = this.isDark;
+		this.lastRenderedHoveredId = this.hoveredId;
+		this.lastRenderedSelectedId = this.selectedId;
+		this.lastRenderedSelectedType = this.selectedType;
+		this.lastRenderedViewport.zoom = this.viewportZoom;
+		this.lastRenderedViewport.panX = this.viewportPanX;
+		this.lastRenderedViewport.panY = this.viewportPanY;
+		this.lastRenderedReducedMotion = this.reducedMotion;
+		this.lastRenderedReducedTransparency = this.reducedTransparency;
+		// Clone arrays: the shared activeFilter object is mutated in place by
+		// the arena state manager, so a snapshot sharing refs would mask
+		// in-place array edits (TASK-409).
+		this.lastRenderedFilter = {
+			repository: this.activeFilter.repository,
+			roles: [...this.activeFilter.roles],
+			priorities: [...this.activeFilter.priorities],
+			statuses: [...this.activeFilter.statuses],
+			search: this.activeFilter.search
+		};
+	}
+
+	/**
 	 * Frame scheduling is exception-safe: the next rAF is always re-requested
 	 * in a finally, so a single render() throw (e.g. a transient degenerate
 	 * geometry or a context state hiccup) can never permanently freeze the
 	 * canvas. Errors are logged once per distinct message to avoid console
 	 * spam while the loop keeps animating. On a successful frame the dedup
 	 * key resets so an intermittent error is reported again when it recurs.
+	 *
+	 * Settle/freeze (TASK-402): frozen frames perform NO sim and NO render —
+	 * only the O(1) wake check — which turns "idle" into ~0 main-thread work.
 	 */
 	private loop = (ts: number) => {
+		this.ts = ts;
+
+		// ── Settle detection + freeze ──
+		if (this.frozen) {
+			if (!this.hasRenderWork()) {
+				// At rest — retain the last frame; just re-schedule the cheap
+				// wake check. No sim, no render.
+				this.rafId = requestAnimationFrame(this.loop);
+				return;
+			}
+			this.frozen = false;
+			this.quietFrames = 0;
+			this.lastActivityTimestamp = ts;
+		} else {
+			if (this.hasRenderWork()) {
+				this.quietFrames = 0;
+				this.lastActivityTimestamp = ts;
+			} else {
+				this.quietFrames++;
+				// Freeze after N quiet frames OR ~SETTLE_FREEZE_MS of quiet
+				// time — whichever comes first (expensive first frames after an
+				// interaction would otherwise stretch the frame-count delay).
+				if (
+					this.quietFrames >= ArenaRenderer.SETTLE_FREEZE_FRAMES ||
+					ts - this.lastActivityTimestamp >= ArenaRenderer.SETTLE_FREEZE_MS
+				) {
+					this.frozen = true;
+					this.freezeGapPending = true;
+				}
+			}
+		}
+
+		if (this.freezeGapPending) {
+			// First frame after a freeze gap: re-anchor the frame clock so the
+			// gap doesn't produce a huge dt that teleports the wander sim.
+			this.freezeGapPending = false;
+			this.prevTs = ts;
+		}
+
 		const dt = Math.min((ts - this.prevTs) / 1000, 0.05);
 		this.prevTs = ts;
-		this.ts = ts;
 		try {
 			if (this.scene && this.layout) {
 				// Wander bounds = the in_progress content area (where the desks
@@ -336,6 +557,7 @@ export class ArenaRenderer {
 			}
 			this.render();
 			this.lastFrameError = null;
+			this.snapshotRenderedState();
 		} catch (err) {
 			this.logFrameError(err);
 		} finally {

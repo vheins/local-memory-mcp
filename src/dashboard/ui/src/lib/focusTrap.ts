@@ -45,8 +45,12 @@ export function createFocusTrap(container: HTMLElement, options: FocusTrapOption
 	function getFocusable(): HTMLElement[] {
 		const all = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
 		// `offsetParent === null` filters hidden elements; the active element is
-		// always kept so focus never gets stranded mid-tab.
-		return all.filter((el) => el.offsetParent !== null || el === document.activeElement);
+		// always kept so focus never gets stranded mid-tab. TASK-398: `isConnected`
+		// additionally excludes DETACHED descendants — after the drawer unmounts
+		// ({#if open}) the container subtree is gone, and .focus() on a detached
+		// node silently no-ops, which used to strand focus on <body> and left Tab
+		// with no working starting point (the post-drawer Tab-freeze precondition).
+		return all.filter((el) => el.isConnected && (el.offsetParent !== null || el === document.activeElement));
 	}
 
 	/**
@@ -141,6 +145,11 @@ export function createFocusTrap(container: HTMLElement, options: FocusTrapOption
 				container.focus();
 				return;
 			}
+			// TASK-398: after the panel unmounts, `getFocusable()` (now
+			// isConnected-filtered) returns [] for the detached subtree, so the
+			// fallback lands on the first focusable still IN the document —
+			// never on a detached node (whose .focus() would no-op) and never
+			// on <body>.
 			const fallback = getFocusable()[0] ?? document.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
 			fallback?.focus();
 		}, 0);

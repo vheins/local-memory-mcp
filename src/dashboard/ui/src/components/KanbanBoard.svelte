@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { taskSearch } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
 	import TaskCard from "./TaskCard.svelte";
@@ -20,6 +21,25 @@
 
 	$: selectedCount = $kanbanState.selectedTaskIds.size;
 
+	// ── ARIA live region (STD-002 / TASK-400) ─────────────────────────────
+	// One scoped sr-only polite region for the tasks view: announce async
+	// loads (total task count) and status moves (drag-drop / bulk move).
+	let liveRegionText = "";
+	let lastTotal = -1;
+	// TASK-410: unsubscribe on destroy — KanbanBoard mounts per-tab
+	// ({#if $activeTab === "tasks"}) and is destroyed on tab switch; without
+	// cleanup every visit registers a permanent store subscriber that keeps
+	// the destroyed instance alive and runs this reduce on every kanban store
+	// mutation forever (matches MemoryList/AgentArena cleanup pattern).
+	const unsubLiveRegion = kanbanState.subscribe((s) => {
+		const total = Object.values(s.pagination).reduce((sum: number, p) => sum + (p?.totalItems || 0), 0);
+		if (total !== lastTotal) {
+			lastTotal = total;
+			if (total > 0) liveRegionText = `Loaded ${total} tasks`;
+		}
+	});
+	onDestroy(() => unsubLiveRegion());
+
 	async function confirmBulkDelete() {
 		if (await confirmDelete(`Are you sure you want to delete ${selectedCount} tasks?`)) {
 			await kanban.handleBulkDelete();
@@ -28,6 +48,8 @@
 </script>
 
 <div>
+	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveRegionText}</div>
+
 	<!-- Toolbar -->
 	<div class="flex items-center justify-between mb-4">
 		<div class="search-wrap">
@@ -60,7 +82,10 @@
 				style="background:{col.bg};border:1px solid {col.border};padding:12px;border-radius:16px;transition: border-color 0.2s;"
 				on:dragover={(e) => kanban.handleDragOver(e, col.status)}
 				on:dragleave={() => kanban.handleDragLeave(col.status)}
-				on:drop={() => kanban.handleDrop(col.status)}
+				on:drop={() => {
+					kanban.handleDrop(col.status);
+					liveRegionText = `Task moved to ${col.label}`;
+				}}
 			>
 				<!-- Column header -->
 				<div class="flex items-center gap-2 mb-3">
@@ -148,7 +173,10 @@
 				style="width:140px;font-size:0.8rem;"
 				on:change={(e) => {
 					const target = e.currentTarget.value;
-					if (target) kanban.handleBulkStatusMove(target);
+					if (target) {
+						kanban.handleBulkStatusMove(target);
+						liveRegionText = `Tasks moved to ${target}`;
+					}
 					e.currentTarget.value = "";
 				}}
 			>

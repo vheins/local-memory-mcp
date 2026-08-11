@@ -34,6 +34,12 @@
 	let wrapEl: HTMLDivElement;
 	let renderer: ArenaRenderer | null = null;
 	let layout: ArenaLayoutConfig | null = null;
+	/** Last measured wrapEl size key — re-inits are idempotent so the
+	 * ResizeObserver cannot feedback-loop (canvas attr changes alter the
+	 * CSS `height:auto` wrap size → RO fires → re-init with identical dims).
+	 * Also avoids the transient "ResizeObserver loop completed with
+	 * undelivered notifications" console error on mount. */
+	let lastInitKey = "";
 
 	/**
 	 * Re-place task workstations after a resize: the shared layout manager has
@@ -65,6 +71,9 @@
 		if (!canvas || !wrapEl) return;
 		const w = wrapEl.clientWidth || 960;
 		const h = Math.max(520, Math.min(window.innerHeight - 220, 800));
+		const key = `${w}x${h}`;
+		if (key === lastInitKey) return;
+		lastInitKey = key;
 		canvas.width = w;
 		canvas.height = h;
 		// The shared ArenaLayoutManager (module singleton) is the single source

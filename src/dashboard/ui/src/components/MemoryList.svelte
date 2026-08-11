@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import {
 		memories,
 		memoriesTotal,
@@ -31,9 +32,25 @@
 	}
 
 	$: allSelected = $memories.length > 0 && $selectedMemoryIds.size === $memories.length;
+
+	// ── ARIA live region (STD-002 / TASK-400) ─────────────────────────────
+	// One scoped sr-only polite region per async view: announce when the
+	// async memories list settles (count or error), never the whole shell.
+	let liveRegionText = "";
+	// memoriesTotal starts at 0 — initialized to the store's initial value so
+	// the pre-load 0 fires no announcement (only real loads announce).
+	let lastAnnouncedTotal = 0;
+	const unsubLiveRegion = memoriesTotal.subscribe((total) => {
+		if (total === lastAnnouncedTotal) return;
+		lastAnnouncedTotal = total;
+		liveRegionText = `Loaded ${total} memories`;
+	});
+	onDestroy(() => unsubLiveRegion());
 </script>
 
 <div>
+	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveRegionText}</div>
+
 	<!-- Toolbar -->
 	<div class="flex items-center gap-2 mb-3" style="flex-wrap:wrap;">
 		<div style="position:relative;flex:1;min-width:160px;">
@@ -45,6 +62,7 @@
 				style="padding-left:32px;font-size:0.8rem;"
 				type="text"
 				placeholder="Search memories..."
+				aria-label="Search memories"
 				bind:value={$memoriesSearch}
 				on:input={() => memoryHandler.onSearchInput()}
 			/>
@@ -53,6 +71,7 @@
 		<select
 			class="form-select"
 			style="width:140px;font-size:0.8rem;"
+			aria-label="Filter memories by type"
 			bind:value={$memoriesTypeFilter}
 			on:change={() => memoryHandler.onFilterChange()}
 		>
@@ -65,6 +84,7 @@
 		<select
 			class="form-select"
 			style="width:100px;font-size:0.8rem;"
+			aria-label="Minimum importance"
 			bind:value={$memoriesImportanceMin}
 			on:change={() => memoryHandler.onFilterChange()}
 		>
@@ -77,6 +97,7 @@
 		<select
 			class="form-select"
 			style="width:100px;font-size:0.8rem;"
+			aria-label="Memories per page"
 			bind:value={$memoriesPageSize}
 			on:change={() => {
 				memoriesPage.set(1);
@@ -427,8 +448,10 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		/* TASK-403: ≥32px tap target at 390px (audit counted 22 buttons <32px);
+		   icon stays 13px centered, row height grows 4px only. */
+		width: 32px;
+		height: 32px;
 		border-radius: 7px;
 		border: none;
 		cursor: pointer;

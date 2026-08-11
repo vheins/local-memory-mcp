@@ -331,9 +331,17 @@
 		font-size: 0.62rem;
 		font-weight: 700;
 		background: rgba(14, 165, 233, 0.12);
-		color: #0ea5e9;
+		/* TASK-404: #0ea5e9 @ ~9.92px = 2.77:1 on the light sidebar (fails WCAG
+		   AA 4.5:1). sky-700 #0369a1 ≈ 5.6:1 on white — passes AA for small text. */
+		color: #0369a1;
 		padding: 1px 7px;
 		border-radius: 9999px;
 		border: 1px solid rgba(14, 165, 233, 0.22);
+	}
+
+	/* Dark theme: #0369a1 is too dim on the navy surface — restore a lighter
+	   sky blue that keeps ≥4.5:1 there. */
+	:global(html.dark) .repo-count-chip {
+		color: #38bdf8;
 	}
 </style>

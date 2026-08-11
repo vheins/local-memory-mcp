@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import type { Memory, Task, CodingStandard, Handoff } from "../lib/stores";
 	import { getStatusColor, getStatusLabel } from "../lib/utils";
 	import { createDetailHandler } from "../lib/composables/useDetail";
@@ -69,6 +70,15 @@
 		trapFocus?.deactivate();
 		trapFocus = null;
 	}
+
+	// TASK-399 belt-and-braces: never let the trap's keydown listener survive
+	// component destruction (idempotent — deactivate() early-returns when not
+	// active). Together with the else-branch above, Tab can never stay frozen
+	// on one element after the drawer closes.
+	onDestroy(() => {
+		trapFocus?.deactivate();
+		trapFocus = null;
+	});
 </script>
 
 {#if open && $handlerMode}
