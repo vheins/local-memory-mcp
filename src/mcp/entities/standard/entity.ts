@@ -149,55 +149,132 @@ export class StandardEntity extends BaseEntity {
 			}
 		}
 
-		const where: string[] = [];
-		const params: (string | number | null)[] = [];
-
-		if (query) {
-			where.push("(title LIKE ? OR content LIKE ? OR context LIKE ?)");
-			params.push(`%${query}%`, `%${query}%`, `%${query}%`);
-		}
-		if (context) {
-			where.push("context = ?");
-			params.push(context);
-		}
-		if (version) {
-			where.push("version = ?");
-			params.push(version);
-		}
-		if (language) {
-			where.push("language = ?");
-			params.push(language);
-		}
-		if (stack) {
-			// Indexed child-table equality (OPT-PERF-07) — replaces the
-			// `stack LIKE '%stack%'` scan on the stack JSON text column.
-			where.push("EXISTS (SELECT 1 FROM standard_stack s WHERE s.standard_id = coding_standards.id AND s.stack = ?)");
-			params.push(stack);
-		}
-		if (tag) {
-			where.push("EXISTS (SELECT 1 FROM standard_tags t WHERE t.standard_id = coding_standards.id AND t.tag = ?)");
-			params.push(tag);
-		}
-		if (repo !== undefined) {
-			if (owner !== undefined) {
-				where.push("((owner = ? AND repo = ?) OR is_global = 1)");
-				params.push(owner, repo);
-			} else {
-				where.push("(repo = ? OR is_global = 1)");
-				params.push(repo);
-			}
-		}
-		if (is_global !== undefined) {
-			where.push("is_global = ?");
-			params.push(is_global ? 1 : 0);
-		}
-
-		const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+		const { clauses, params } = this.buildNonFtsFilters({
+			query,
+			context,
+			version,
+			language,
+			stack,
+			tag,
+			owner,
+			repo,
+			is_global
+		});
+		const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 		const sql = `SELECT * FROM coding_standards ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
 		params.push(limit, offset);
 
 		const rows = this.all<CodingStandardRow>(sql, params);
 		return rows.map((r) => this.rowToEntry(r));
+	}
+
+	/**
+	 * Count coding standards matching the same filters as search(), without
+	 * materializing any rows. The dashboard list path previously re-ran
+	 * search() with a 100k limit and counted `.length`, which fetched every
+	 * matching row (full column payloads) and JSON-parsed stack/tags/metadata
+	 * per row just to produce a total (TASK-406). Mirrors the memory entity's
+	 * COUNT(*) pattern (memory/search.ts) so the total is O(matches) on the
+	 * index instead of O(matches) row materialization.
+	 */
+	count(options: {
+		query?: string;
+		context?: string;
+		version?: string;
+		language?: string;
+		stack?: string;
+		tag?: string;
+		owner?: string;
+		repo?: string;
+		is_global?: boolean;
+	}): number {
+		const { query, context, version, language, stack, tag, owner, repo, is_global } = options;
+
+		if (query) {
+			try {
+				return this.ftsCount({ query, context, version, language, stack, tag, owner, repo, is_global });
+			} catch {
+				// Fall through to LIKE count (matches search()'s fallback)
+			}
+		}
+
+		const { clauses, params } = this.buildNonFtsFilters({
+			query,
+			context,
+			version,
+			language,
+			stack,
+			tag,
+			owner,
+			repo,
+			is_global
+		});
+		const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+		const row = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM coding_standards ${whereClause}`, params);
+		return row?.count ?? 0;
+	}
+
+	/**
+	 * Shared WHERE-clause builder for the non-FTS search/count paths.
+	 * `query` maps to the LIKE fallback used by both search() and count()
+	 * when FTS is unavailable or throws.
+	 */
+	private buildNonFtsFilters(options: {
+		query?: string;
+		context?: string;
+		version?: string;
+		language?: string;
+		stack?: string;
+		tag?: string;
+		owner?: string;
+		repo?: string;
+		is_global?: boolean;
+	}): { clauses: string[]; params: (string | number | null)[] } {
+		const { query, context, version, language, stack, tag, owner, repo, is_global } = options;
+		const clauses: string[] = [];
+		const params: (string | number | null)[] = [];
+
+		if (query) {
+			clauses.push("(title LIKE ? OR content LIKE ? OR context LIKE ?)");
+			params.push(`%${query}%`, `%${query}%`, `%${query}%`);
+		}
+		if (context) {
+			clauses.push("context = ?");
+			params.push(context);
+		}
+		if (version) {
+			clauses.push("version = ?");
+			params.push(version);
+		}
+		if (language) {
+			clauses.push("language = ?");
+			params.push(language);
+		}
+		if (stack) {
+			// Indexed child-table equality (OPT-PERF-07) — replaces the
+			// `stack LIKE '%stack%'` scan on the stack JSON text column.
+			clauses.push("EXISTS (SELECT 1 FROM standard_stack s WHERE s.standard_id = coding_standards.id AND s.stack = ?)");
+			params.push(stack);
+		}
+		if (tag) {
+			clauses.push("EXISTS (SELECT 1 FROM standard_tags t WHERE t.standard_id = coding_standards.id AND t.tag = ?)");
+			params.push(tag);
+		}
+		if (repo !== undefined) {
+			if (owner !== undefined) {
+				clauses.push("((owner = ? AND repo = ?) OR is_global = 1)");
+				params.push(owner, repo);
+			} else {
+				clauses.push("(repo = ? OR is_global = 1)");
+				params.push(repo);
+			}
+		}
+		if (is_global !== undefined) {
+			clauses.push("is_global = ?");
+			params.push(is_global ? 1 : 0);
+		}
+
+		return { clauses, params };
 	}
 
 	private ftsSearch(options: {
@@ -213,7 +290,72 @@ export class StandardEntity extends BaseEntity {
 		limit?: number;
 		offset?: number;
 	}): CodingStandardEntry[] {
-		const { query, context, version, language, stack, tag, owner, repo, is_global, limit = 20, offset = 0 } = options;
+		const { limit = 20, offset = 0 } = options;
+
+		const { conditions, params } = this.buildFtsFilters(options);
+
+		params.push(limit, offset);
+
+		const sql = `
+			SELECT cs.*
+			FROM coding_standards_fts fts
+			JOIN coding_standards cs ON cs.rowid = fts.rowid
+			WHERE ${conditions.join(" AND ")}
+			ORDER BY rank
+			LIMIT ? OFFSET ?
+		`;
+
+		const rows = this.all<CodingStandardRow>(sql, params);
+		return rows.map((r) => this.rowToEntry(r));
+	}
+
+	/**
+	 * COUNT(*) counterpart of ftsSearch — same FTS join + filters, no row
+	 * materialization (TASK-406). Shared conditions via buildFtsFilters.
+	 */
+	private ftsCount(options: {
+		query: string;
+		context?: string;
+		version?: string;
+		language?: string;
+		stack?: string;
+		tag?: string;
+		owner?: string;
+		repo?: string;
+		is_global?: boolean;
+	}): number {
+		const { conditions, params } = this.buildFtsFilters(options);
+
+		const row = this.get<{ count: number }>(
+			`
+			SELECT COUNT(*) as count
+			FROM coding_standards_fts fts
+			JOIN coding_standards cs ON cs.rowid = fts.rowid
+			WHERE ${conditions.join(" AND ")}
+			`,
+			params
+		);
+		return row?.count ?? 0;
+	}
+
+	/**
+	 * Shared WHERE-clause builder for the FTS search/count paths (alias-aware:
+	 * `cs` refers to the joined coding_standards row, matching ftsSearch).
+	 * Throws when the sanitized query yields no usable FTS5 term so callers
+	 * fall back to the LIKE path — identical to the pre-refactor behavior.
+	 */
+	private buildFtsFilters(options: {
+		query: string;
+		context?: string;
+		version?: string;
+		language?: string;
+		stack?: string;
+		tag?: string;
+		owner?: string;
+		repo?: string;
+		is_global?: boolean;
+	}): { conditions: string[]; params: unknown[] } {
+		const { query, context, version, language, stack, tag, owner, repo, is_global } = options;
 
 		const safeTerm = sanitizeFtsTerm(query);
 		if (!safeTerm) throw new Error("Invalid FTS5 query");
@@ -257,19 +399,7 @@ export class StandardEntity extends BaseEntity {
 			params.push(is_global ? 1 : 0);
 		}
 
-		params.push(limit, offset);
-
-		const sql = `
-			SELECT cs.*
-			FROM coding_standards_fts fts
-			JOIN coding_standards cs ON cs.rowid = fts.rowid
-			WHERE ${conditions.join(" AND ")}
-			ORDER BY rank
-			LIMIT ? OFFSET ?
-		`;
-
-		const rows = this.all<CodingStandardRow>(sql, params);
-		return rows.map((r) => this.rowToEntry(r));
+		return { conditions, params };
 	}
 
 	searchBySimilarity(

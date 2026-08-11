@@ -40,27 +40,27 @@ export const StandardsService = {
 	} {
 		const { query, language, stack, tags, repo, is_global, limit, offset } = params;
 
-		const items = db.standards.search({
+		const filters = {
 			query,
 			language,
 			stack: stack?.[0],
 			tag: tags?.[0],
 			repo,
-			is_global,
+			is_global
+		};
+
+		const items = db.standards.search({
+			...filters,
 			limit,
 			offset
 		});
 
-		const total = db.standards.search({
-			query,
-			language,
-			stack: stack?.[0],
-			tag: tags?.[0],
-			repo,
-			is_global,
-			limit: 100000,
-			offset: 0
-		}).length;
+		// Total via COUNT(*) (TASK-406): the previous limit-100000 +
+		// `.length` approach materialized every matching row (full column
+		// payloads, JSON-parsed stack/tags/metadata per row) on every list
+		// request just to produce a total — the dominant cost of the
+		// 2288ms standards first-load.
+		const total = db.standards.count(filters);
 
 		return { items, total };
 	},
