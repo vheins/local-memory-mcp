@@ -495,6 +495,16 @@ export class EmbeddingWorker {
 			// >= backfillMinQueue → 0). Log the queue depth so users can see
 			// whether the backlog is draining (TASK-069 observability).
 			const counts = this.outbox.countByStatus();
+			// Log the backfill scope BEFORE it runs: backfillMissingVectors is
+			// intentionally GLOBAL (no repo filter — enqueue.ts:393) — it scans
+			// memories, standards, and tasks across every repo in the store, so
+			// the cross-repo nature must be visible in logs (TASK-412, RCA
+			// TASK-395 #2). cap/gate are surfaced so the log is actionable.
+			logger.info("[EmbeddingWorker] startup backfill scope: GLOBAL across all repos", {
+				scope: "global",
+				cap: this.opts.backfillCap,
+				minQueue: this.opts.backfillMinQueue
+			});
 			const backfilled = this.outbox.backfillMissingVectors(this.opts.backfillCap, this.opts.backfillMinQueue);
 			const purged = this.outbox.purge(this.opts.doneTtlMs, this.opts.poisonTtlMs);
 			logger.info("[EmbeddingWorker] startup maintenance complete", {
