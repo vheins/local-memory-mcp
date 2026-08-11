@@ -164,6 +164,14 @@
 	<!-- ════ Status summary (global counts from /api/queue/status) ════ -->
 	<QueueStatusCards {status} />
 
+	<!-- Global-mode explanation (TASK-411): with no repo filter the queue is
+		server-wide by design — the embedding/KG outbox spans all repos. The
+		banner makes that scope explicit so users don't misread it as a
+		cross-repo scan. Rendered only in global view (no repo selected). -->
+	{#if !repo}
+		<div class="notice-banner" role="note">Global queue — jobs from all repos (embedding/KG outbox)</div>
+	{/if}
+
 	{#if error}
 		<div class="error-banner" role="status" aria-live="polite">{error}</div>
 	{/if}
@@ -214,6 +222,18 @@
 		border: 1px solid #fecaca;
 		background: #fef2f2;
 		color: #dc2626;
+		border-radius: 8px;
+		padding: 10px 12px;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+
+	/* ── Global-mode notice banner (TASK-411) — mirrors the .notice-banner
+		style used in StandardsPanel so both panels read the same. ── */
+	.notice-banner {
+		border: 1px solid #bae6fd;
+		background: #f0f9ff;
+		color: #0369a1;
 		border-radius: 8px;
 		padding: 10px 12px;
 		font-size: 0.82rem;
