@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
 	const db = {
 		standards: {
 			search: vi.fn(),
+			count: vi.fn(),
 			getById: vi.fn(),
 			getByCode: vi.fn(),
 			incrementHitCounts: vi.fn(),
@@ -97,6 +98,7 @@ beforeEach(() => {
 	// so later cases get a clean no-op enqueue.
 	vi.mocked(mocks.enqueue).mockReset();
 	vi.mocked(mocks.db.standards.search).mockReturnValue([]);
+	vi.mocked(mocks.db.standards.count).mockReturnValue(0);
 	vi.mocked(mocks.db.standards.getById).mockReturnValue(null);
 	vi.mocked(mocks.db.standards.getByCode).mockReturnValue(null);
 	vi.mocked(mocks.db.standards.getByIds).mockReturnValue([]);
@@ -107,8 +109,9 @@ afterEach(() => {
 });
 
 describe("StandardsService.list / exists", () => {
-	it("returns items + a 100k-window total", () => {
-		vi.mocked(mocks.db.standards.search).mockReturnValueOnce([makeStandard()]).mockReturnValueOnce([]);
+	it("returns items + a COUNT-based total without re-fetching rows", () => {
+		vi.mocked(mocks.db.standards.search).mockReturnValueOnce([makeStandard()]);
+		vi.mocked(mocks.db.standards.count).mockReturnValue(7);
 
 		const result = StandardsService.list({
 			repo: "app",
@@ -120,7 +123,7 @@ describe("StandardsService.list / exists", () => {
 		});
 
 		expect(result.items).toHaveLength(1);
-		expect(result.total).toBe(0);
+		expect(result.total).toBe(7);
 		expect(mocks.db.standards.search).toHaveBeenCalledWith({
 			query: undefined,
 			language: "typescript",
@@ -131,7 +134,17 @@ describe("StandardsService.list / exists", () => {
 			limit: 10,
 			offset: 0
 		});
-		expect(mocks.db.standards.search).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 100000, offset: 0 }));
+		// total comes from COUNT(*) — the old limit-100000 full materialization
+		// is gone (TASK-406)
+		expect(mocks.db.standards.count).toHaveBeenCalledWith({
+			query: undefined,
+			language: "typescript",
+			stack: "react",
+			tag: "ui",
+			repo: "app",
+			is_global: undefined
+		});
+		expect(mocks.db.standards.search).not.toHaveBeenCalledWith(expect.objectContaining({ limit: 100000 }));
 	});
 
 	it("exists() reflects the row presence", () => {

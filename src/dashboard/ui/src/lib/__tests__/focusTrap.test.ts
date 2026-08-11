@@ -126,3 +126,65 @@ describe("createFocusTrap restore (TASK-278)", () => {
 		expect(document.activeElement).toBe(btnA);
 	});
 });
+
+// ── Post-drawer Tab-freeze regression (TASK-399) ────────────────────────────
+// Audit finding: after closing a drawer via Escape, Tab navigation froze on one
+// button until reload — suspected always-mounted overlay keeping a live trap
+// listener on a hidden container. Source investigation showed no always-mounted
+// trap exists (FloatingChat has none; every overlay mounts its panel under
+// {#if open} and deactivates on close/unmount). These tests lock in the two
+// invariants that guarantee Tab can never freeze: (1) deactivate() detaches the
+// keydown listener, and (2) the focus-restore fallback never targets a detached
+// node (whose .focus() silently no-ops → focus stranded on <body>, the freeze
+// precondition).
+describe("post-close Tab freedom (TASK-399)", () => {
+	it("detaches the keydown listener on deactivate so Tab is not intercepted after close", () => {
+		const panel = makePanel();
+		const trap = createFocusTrap(panel, { onEscape: () => {} });
+		trap.activate();
+		expect(trap.active).toBe(true);
+
+		const removeSpy = vi.spyOn(panel, "removeEventListener");
+		trap.deactivate();
+		expect(trap.active).toBe(false);
+		// The capture-phase keydown listener must be removed on close.
+		expect(removeSpy).toHaveBeenCalledWith("keydown", expect.any(Function), true);
+
+		// Simulate the Svelte {#if} unmount right after deactivate.
+		panel.remove();
+
+		// A Tab keydown dispatched after close must NOT be preventDefault'd
+		// (no lingering trap wrap on a hidden/removed container).
+		const outside = document.createElement("button");
+		outside.textContent = "outside";
+		document.body.appendChild(outside);
+		outside.focus();
+		const ev = new KeyboardEvent("keydown", { key: "Tab", bubbles: true });
+		ev.preventDefault = vi.fn();
+		document.body.dispatchEvent(ev);
+		expect(ev.preventDefault).not.toHaveBeenCalled();
+		expect(document.activeElement).toBe(outside);
+	});
+
+	it("never restores focus to a detached node after the panel unmounts (no body-strand)", () => {
+		document.body.focus();
+		const panel = makePanel();
+		// A detached (unmounted) copy of the panel would previously win the
+		// fallback and .focus() would silently no-op. A connected button must
+		// win instead.
+		const outside = document.createElement("button");
+		outside.textContent = "outside";
+		document.body.appendChild(outside);
+
+		const trap = createFocusTrap(panel, { onEscape: () => {} });
+		trap.activate();
+		vi.useFakeTimers();
+		panel.remove();
+		trap.deactivate();
+		vi.advanceTimersByTime(0);
+		vi.useRealTimers();
+
+		expect(document.activeElement).not.toBe(document.body);
+		expect(document.activeElement).toBe(outside);
+	});
+});
