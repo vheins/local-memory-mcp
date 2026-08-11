@@ -78,6 +78,8 @@ This means the dashboard is no longer a separate mutation path for tasks. Coordi
 
 The Queue tab (the 11th tab, after Handoffs and before Knowledge Graph) surfaces the embedding/KG outbox worker and its failed jobs.
 
+> **Server-wide by design:** the queue is a shared outbox for the whole local-memory-mcp server, not per-repo. When no repository is selected, the Queue tab shows jobs from **all repos** (each job row is tagged with its entity's repo) — this is intentional. Select a repository in the sidebar to filter the view (`?repo=`).
+
 - **Status summary:** counts by state (pending/claimed/done/failed) with lifetime processed/failed/poisoned counters and a worker running indicator — from `GET /api/queue/status`
 - **Failed jobs table:** terminal `poison` jobs with entity kind/id, attempts/max attempts, enqueued/processed timestamps, and the last error
 - **Re-run:** re-queue a failed job so the worker processes it again (per row, or all at once)
