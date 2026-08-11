@@ -135,13 +135,37 @@ export class ArenaRenderer {
 	 * Cheap O(n) content digest of a scene — entity counts + per-entity
 	 * visual state (positions rounded to px, status, action, speech bubble).
 	 * Used to detect REAL scene changes across polls without allocating a
-	 * comparison structure. Hash collisions are acceptable: a false "changed"
-	 * only costs one extra render, never a missed one.
+	 * comparison structure. Each contributing string mixes its LENGTH + first
+	 * + last + middle chars + a full-string FNV-1a rolling hash, so distinct
+	 * same-length strings sharing a first char (e.g. ids "agent-1"/"agent-2")
+	 * can no longer collide per field — the old length+first-char-only mix
+	 * made those deterministic collisions, which a change detector can't
+	 * afford for the "changed" side (a missed change = a stale render).
+	 * Remaining collisions are genuine 32-bit hash collisions only (~2^-32
+	 * per field pair): a false "changed" costs one extra render, never a
+	 * missed one. Integer ops only, no allocation — cheap enough per poll.
 	 */
 	private sceneSignature(scene: ArenaScene): string {
 		let h = 0;
 		const mix = (v: string | number) => {
-			h = (h * 31 + (typeof v === "string" ? v.length * 7 + (v.charCodeAt(0) || 0) : v)) | 0;
+			if (typeof v === "number") {
+				h = (h * 31 + v) | 0;
+				return;
+			}
+			const len = v.length;
+			h = (h * 31 + len) | 0;
+			h = (h * 31 + (v.charCodeAt(0) || 0)) | 0;
+			h = (h * 31 + (v.charCodeAt(len - 1) || 0)) | 0;
+			if (len > 2) h = (h * 31 + (v.charCodeAt(len >> 1) || 0)) | 0;
+			// FNV-1a over the whole string — the full content, so any two
+			// different strings differ in the digest regardless of the sampled
+			// chars above (shared prefixes, flipped middles, same-length diffs).
+			let roll = 0x811c9dc5;
+			for (let i = 0; i < len; i++) {
+				roll ^= v.charCodeAt(i);
+				roll = Math.imul(roll, 0x01000193);
+			}
+			h = (h * 31 + roll) | 0;
 		};
 		mix(scene.agents.size);
 		mix(scene.tasks.size);

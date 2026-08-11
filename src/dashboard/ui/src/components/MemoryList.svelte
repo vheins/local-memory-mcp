@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from "svelte";
+	import { get } from "svelte/store";
 	import {
 		memories,
 		memoriesTotal,
@@ -37,9 +38,12 @@
 	// One scoped sr-only polite region per async view: announce when the
 	// async memories list settles (count or error), never the whole shell.
 	let liveRegionText = "";
-	// memoriesTotal starts at 0 — initialized to the store's initial value so
-	// the pre-load 0 fires no announcement (only real loads announce).
-	let lastAnnouncedTotal = 0;
+	// Dedup baseline seeded from the STORE's CURRENT value (not a hardcoded
+	// 0, TASK-414): a future store-init change (e.g. a cached total) must
+	// never fire a spurious "Loaded N memories" announcement on mount — the
+	// subscribe callback receives the same value it was seeded with, so only
+	// real post-mount loads announce.
+	let lastAnnouncedTotal = get(memoriesTotal);
 	const unsubLiveRegion = memoriesTotal.subscribe((total) => {
 		if (total === lastAnnouncedTotal) return;
 		lastAnnouncedTotal = total;

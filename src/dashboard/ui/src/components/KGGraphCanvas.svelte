@@ -53,6 +53,27 @@
 	let animationCleanup: (() => void) | null = null;
 	let canvasReady = false;
 
+	// Idempotent-resize guard (TASK-415, mirrors ArenaViewportCanvas's
+	// lastInitKey pattern). handleResize → updateNeuralDimensions writes
+	// canvas.style.width/height (layout-affecting) + the backing store and
+	// re-notifies the parent — running that on EVERY ResizeObserver fire,
+	// including unchanged/mount-time fires, writes layout mid-observe and
+	// triggers the transient "ResizeObserver loop completed with undelivered
+	// notifications" console warning. Keying on the CSS-pixel size makes a
+	// no-op resize a true no-op (no canvas writes, no parent notify), which
+	// breaks the feedback cycle; real resizes still re-init.
+	let lastCanvasKey = "";
+
+	/** CSS-pixel size key of the observed parent (both the guard COMPARES and
+	 * the seed INITIALIZES with this — one source, one rounding, so the
+	 * mount-time RO notification can never mismatch the seed). */
+	function canvasSizeKey(): string {
+		const rect = canvas?.parentElement?.getBoundingClientRect();
+		const w = rect ? rect.width : 800;
+		const h = rect ? rect.height : 600;
+		return `${Math.round(w)}x${Math.round(h)}`;
+	}
+
 	// ─── Lifecycle ─────────────────────────────────────────────────────────────
 	let resizeObserver: ResizeObserver | null = null;
 
@@ -65,6 +86,12 @@
 		const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
 		canvasWidth = canvas.width / dpr;
 		canvasHeight = canvas.height / dpr;
+		// Seed the guard with the initial size so the ResizeObserver's first
+		// (always-delivered) notification is a no-op — no canvas writes or
+		// parent notify mid-observe on mount (TASK-415). Seeded from the SAME
+		// source/rounding the guard compares (canvasSizeKey), so the initial
+		// notification can never mismatch and re-trigger the loop.
+		lastCanvasKey = canvasSizeKey();
 		ctx = canvas.getContext("2d");
 		canvasReady = true;
 		dispatch("ready");
@@ -84,6 +111,16 @@
 
 	function handleResize() {
 		if (!canvas) return;
+		// Idempotent re-init (TASK-415): act only when the CSS-pixel size
+		// actually changed. The rect is read BEFORE any write so the guard
+		// compares the same source the re-init applies; rounding keeps
+		// sub-pixel jitter from re-triggering. updateNeuralDimensions writes
+		// canvas.style.width/height + backing store and wakes the renderer,
+		// and onResize notifies the parent — both must stay skipped when the
+		// size is unchanged or the mount-time RO feedback loop fires.
+		const key = canvasSizeKey();
+		if (key === lastCanvasKey) return;
+		lastCanvasKey = key;
 		updateNeuralDimensions(canvas);
 		const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
 		canvasWidth = canvas.width / dpr;
