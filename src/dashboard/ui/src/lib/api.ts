@@ -674,8 +674,9 @@ export const api = {
 
 	queueStatus: () => apiFetch<QueueStatus>("/api/queue/status"),
 
-	queueJobs: (params: { repo: string; status?: string; page?: number; pageSize?: number }) => {
-		const q = new URLSearchParams({ repo: params.repo });
+	queueJobs: (params: { repo?: string; status?: string; page?: number; pageSize?: number }) => {
+		const q = new URLSearchParams();
+		if (params.repo) q.set("repo", params.repo);
 		if (params.status) q.set("status", params.status);
 		if (params.page) q.set("page", String(params.page));
 		if (params.pageSize) q.set("pageSize", String(params.pageSize));

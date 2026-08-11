@@ -142,7 +142,10 @@
 
 		<!-- Content Shell -->
 		<main id="dashboardShell" class="dashboard-shell">
-			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena"}
+			<!-- TASK-418: `queue` is global-scope by design (server-wide embedding/KG
+			     outbox — MEM-1457), so it must stay reachable without a repo like
+			     dashboard/arena. All other tabs are per-repo and stay gated. -->
+			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena" && $activeTab !== "queue"}
 				<div class="empty-state animate-fade-in">
 					<div class="empty-state-icon animate-float">
 						<Icon name="brain" size={32} strokeWidth={1.5} />

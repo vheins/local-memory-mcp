@@ -43,19 +43,18 @@
 	let liveAnnounce = $state("");
 
 	// ── Data loading ──────────────────────────────────────────────────────────
-	// NIT fix: reset to the first page when switching repos so a stale page
-	// (e.g. "Page 3 of 2") can never render an empty table for a smaller repo.
-	// `prevRepo` is a plain (non-reactive) local: the guard keeps the reset
-	// from re-triggering this effect and double-fetching on repo change.
-	let prevRepo = "";
+	// NIT fix: reset to the first page when the scope changes (repo switch OR
+	// repo→global) so a stale page (e.g. "Page 3 of 2") can never render an
+	// empty table for a smaller scope. `prevRepo` is a plain (non-reactive)
+	// local initialized to `null` so the FIRST run always fires — including
+	// global mode (repo="") — while the guard still prevents re-fetching on
+	// unrelated re-runs (e.g. `page` tracking) and double-fetching on change.
+	let prevRepo: string | null = null;
 	$effect(() => {
-		if (repo) {
-			const repoChanged = repo !== prevRepo;
+		if (repo !== prevRepo) {
 			prevRepo = repo;
-			if (repoChanged) {
-				page = 1;
-				void loadAll();
-			}
+			page = 1;
+			void loadAll();
 		}
 	});
 
@@ -72,13 +71,15 @@
 	}
 
 	async function loadJobs() {
-		if (!repo) return;
 		loading = true;
 		error = "";
 		try {
 			// F1: scope the table to terminal `poison` rows (TASK-363) — without
 			// the filter the backend default (pending,poison) would surface live
 			// PENDING rows under "Failed jobs" whose Re-run/Clear 409.
+			// TASK-418: `repo` is optional — when empty the client omits ?repo=
+			// and the backend serves the GLOBAL queue (server-wide outbox,
+			// MEM-1457), so global mode renders real jobs instead of an empty table.
 			const result = await api.queueJobs({ repo, page, pageSize: PAGE_SIZE, status: "poison" });
 			jobs = result.jobs || [];
 			totalItems = result.pagination?.totalItems ?? jobs.length;
