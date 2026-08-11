@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.37.0] — 2026-08-11
+
+Dashboard accessibility & developer-experience release — the result of a full UI/UX audit of every Agent Arena view (TASK-393/394) against the STD-002 dashboard baseline (one h1 per tab, scoped aria-live, focus trap, WCAG AA, real labels), plus a global-mode Queue view and a 50-150x standards-list speedup.
+
+### Added
+
+- Queue tab now works **without a selected repository** — the shell gate is relaxed so the server-wide embedding/KG outbox (by design, all repos) is directly inspectable; the global queue banner explains the scope ("Global queue — jobs from all repos") (TASK-411, TASK-418)
+- Unified 11-tab navigation: all views (Arena, Dashboard, Activity, Memories, Tasks, Codebase, Handoffs, Queue, Knowledge Graph, Standards, Reference) are reachable from a single visible top tab-nav with an accessible name (`aria-label="Dashboard sections"`) (TASK-405)
+- Scoped `aria-live` regions on async views — Dashboard stats, Memories table, Tasks kanban, Codebase index, Queue jobs — announcing loads/status moves without wrapping the shell (TASK-400)
+- Real labels on interactive controls: aria-labels on placeholder-only search inputs (Memories, Reference), unnamed type/importance/page-size selects, and title-only icon buttons (TASK-401)
+- Startup observability: embedding-worker backfill logs its global scope (`startup backfill scope: GLOBAL across all repos`) so cross-repo outbox fills are explainable in logs (TASK-412)
+
+### Fixed
+
+- A11y hardening (STD-002) across all views: exactly one h1 in the Codebase empty state; focus trap now restores to the trigger element (root cause: `.focus()` on a detached node silently no-ops, which also caused the post-drawer Tab-freeze — fixed once in the shared trap instead of per-drawer) (TASK-397, TASK-398, TASK-399)
+- Arena canvas no longer burns ~26fps while idle — settle-detection + freeze + O(1) wake-check (KG TASK-277 pattern), with wake on viewport/hover/selection/filter/reduced-motion changes including in-place-mutated filter state (TASK-402, TASK-409)
+- `sceneSignature` fingerprint upgraded to a 32-bit-safe FNV-1a hash — distinct scene states can no longer collide per-field (TASK-413)
+- KGGraphCanvas `ResizeObserver` loop warning eliminated via an idempotent resize guard (ArenaViewportCanvas pattern) (TASK-415)
+- MemoryList live-region dedup seeded from the store value — no spurious "Loaded N memories" announcement (TASK-414)
+- Tap targets: Memories row actions 28→32px, KG zoom controls ≥32px at 390px (TASK-403)
+- Sidebar repo-count contrast 2.77:1 → ~5.9:1 (`#0369a1`, WCAG AA) with dark-theme override (TASK-404)
+
+### Performance
+
+- Standards list first-load **2288ms → 180-315ms** (~50-150x SQL reduction): `total` now uses `COUNT(*)` instead of materializing all matching rows, and migration v25 adds composite `(repo, created_at)` / `(is_global, created_at)` indexes (TASK-406)
+
+### Documentation
+
+- New UI/UX + a11y audit report: `docs/en/dashboard-audit-2026-08-11.md` (per-view scores, STD-002 status, priority fixes) (TASK-394)
+- Queue server-wide behavior documented in `docs/en/dashboard-guide.md` (TASK-416)
+
+### Tests
+
+- Focus-trap regression tests: post-close Tab freedom + detached-node restore (TASK-399)
+- Standard count parity tests: `count()` == `search()` total for plain + FTS paths (TASK-406)
+- App shell gate tests: queue renders in global mode, per-repo tabs stay gated (TASK-419)
+- `api.queueJobs` repo-optional param tests (TASK-419)
+
 ## [0.36.0] — 2026-08-10
 
 ### Added
