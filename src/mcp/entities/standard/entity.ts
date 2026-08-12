@@ -1,6 +1,5 @@
 import { BaseEntity } from "../../storage/base";
 import { CodingStandardEntry, CodingStandardRow } from "../../types";
-import { sanitizeFtsTerm } from "../../utils/fts";
 import { computeVector, cosineSimilarity, createTfVectorCache } from "../../utils/vector";
 import { buildUpdateClause } from "../../utils/sql-builder";
 import { chunksOf } from "../../utils/chunk";
@@ -11,6 +10,8 @@ import {
 	VECTOR_CANDIDATE_CAP,
 	BULK_UPDATE_CHUNK_SIZE
 } from "../../utils/constants";
+import { buildStandardInsert, buildStandardUpdateMap } from "./serializers";
+import { buildNonFtsFilters, buildFtsFilters } from "./filters";
 
 // Int-coerced / immutable columns for the shared update-clause builder
 // (TASK-109). is_global is stored as 0/1; id/created_at are never writable.
@@ -22,44 +23,8 @@ export class StandardEntity extends BaseEntity {
 	// coding_standards.updated_at — self-invalidates on writes.
 	private readonly tfCache = createTfVectorCache();
 
-	/**
-	 * Single source of truth for the coding_standards INSERT statement
-	 * (TASK-108) — shared by insert() and bulkInsertStandards() so a column
-	 * change is made in exactly one place.
-	 */
-	private buildInsert(entry: CodingStandardEntry): { sql: string; params: unknown[] } {
-		return {
-			sql: `INSERT INTO coding_standards (
-				id, code, title, content, parent_id, context, version, language, stack,
-				is_global, owner, repo, tags, metadata, created_at, updated_at, hit_count, last_used_at, agent, model
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			params: [
-				entry.id,
-				entry.code ?? null,
-				entry.title,
-				entry.content,
-				entry.parent_id,
-				entry.context,
-				entry.version,
-				entry.language ?? null,
-				entry.stack.length > 0 ? JSON.stringify(entry.stack) : null,
-				entry.is_global ? 1 : 0,
-				entry.owner ?? "",
-				entry.repo ?? null,
-				entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
-				Object.keys(entry.metadata).length > 0 ? JSON.stringify(entry.metadata) : null,
-				entry.created_at,
-				entry.updated_at,
-				entry.hit_count,
-				entry.last_used_at,
-				entry.agent,
-				entry.model
-			]
-		};
-	}
-
 	insert(entry: CodingStandardEntry): void {
-		const { sql, params } = this.buildInsert(entry);
+		const { sql, params } = buildStandardInsert(entry);
 		this.run(sql, params);
 	}
 
@@ -67,7 +32,7 @@ export class StandardEntity extends BaseEntity {
 		return this.transaction(() => {
 			let count = 0;
 			for (const entry of entries) {
-				const { sql, params } = this.buildInsert(entry);
+				const { sql, params } = buildStandardInsert(entry);
 				this.run(sql, params);
 				count++;
 			}
@@ -149,7 +114,7 @@ export class StandardEntity extends BaseEntity {
 			}
 		}
 
-		const { clauses, params } = this.buildNonFtsFilters({
+		const { clauses, params } = buildNonFtsFilters({
 			query,
 			context,
 			version,
@@ -198,7 +163,7 @@ export class StandardEntity extends BaseEntity {
 			}
 		}
 
-		const { clauses, params } = this.buildNonFtsFilters({
+		const { clauses, params } = buildNonFtsFilters({
 			query,
 			context,
 			version,
@@ -212,69 +177,6 @@ export class StandardEntity extends BaseEntity {
 		const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 		const row = this.get<{ count: number }>(`SELECT COUNT(*) as count FROM coding_standards ${whereClause}`, params);
 		return row?.count ?? 0;
-	}
-
-	/**
-	 * Shared WHERE-clause builder for the non-FTS search/count paths.
-	 * `query` maps to the LIKE fallback used by both search() and count()
-	 * when FTS is unavailable or throws.
-	 */
-	private buildNonFtsFilters(options: {
-		query?: string;
-		context?: string;
-		version?: string;
-		language?: string;
-		stack?: string;
-		tag?: string;
-		owner?: string;
-		repo?: string;
-		is_global?: boolean;
-	}): { clauses: string[]; params: (string | number | null)[] } {
-		const { query, context, version, language, stack, tag, owner, repo, is_global } = options;
-		const clauses: string[] = [];
-		const params: (string | number | null)[] = [];
-
-		if (query) {
-			clauses.push("(title LIKE ? OR content LIKE ? OR context LIKE ?)");
-			params.push(`%${query}%`, `%${query}%`, `%${query}%`);
-		}
-		if (context) {
-			clauses.push("context = ?");
-			params.push(context);
-		}
-		if (version) {
-			clauses.push("version = ?");
-			params.push(version);
-		}
-		if (language) {
-			clauses.push("language = ?");
-			params.push(language);
-		}
-		if (stack) {
-			// Indexed child-table equality (OPT-PERF-07) — replaces the
-			// `stack LIKE '%stack%'` scan on the stack JSON text column.
-			clauses.push("EXISTS (SELECT 1 FROM standard_stack s WHERE s.standard_id = coding_standards.id AND s.stack = ?)");
-			params.push(stack);
-		}
-		if (tag) {
-			clauses.push("EXISTS (SELECT 1 FROM standard_tags t WHERE t.standard_id = coding_standards.id AND t.tag = ?)");
-			params.push(tag);
-		}
-		if (repo !== undefined) {
-			if (owner !== undefined) {
-				clauses.push("((owner = ? AND repo = ?) OR is_global = 1)");
-				params.push(owner, repo);
-			} else {
-				clauses.push("(repo = ? OR is_global = 1)");
-				params.push(repo);
-			}
-		}
-		if (is_global !== undefined) {
-			clauses.push("is_global = ?");
-			params.push(is_global ? 1 : 0);
-		}
-
-		return { clauses, params };
 	}
 
 	private ftsSearch(options: {
@@ -292,7 +194,7 @@ export class StandardEntity extends BaseEntity {
 	}): CodingStandardEntry[] {
 		const { limit = 20, offset = 0 } = options;
 
-		const { conditions, params } = this.buildFtsFilters(options);
+		const { conditions, params } = buildFtsFilters(options);
 
 		params.push(limit, offset);
 
@@ -324,7 +226,7 @@ export class StandardEntity extends BaseEntity {
 		repo?: string;
 		is_global?: boolean;
 	}): number {
-		const { conditions, params } = this.buildFtsFilters(options);
+		const { conditions, params } = buildFtsFilters(options);
 
 		const row = this.get<{ count: number }>(
 			`
@@ -336,70 +238,6 @@ export class StandardEntity extends BaseEntity {
 			params
 		);
 		return row?.count ?? 0;
-	}
-
-	/**
-	 * Shared WHERE-clause builder for the FTS search/count paths (alias-aware:
-	 * `cs` refers to the joined coding_standards row, matching ftsSearch).
-	 * Throws when the sanitized query yields no usable FTS5 term so callers
-	 * fall back to the LIKE path — identical to the pre-refactor behavior.
-	 */
-	private buildFtsFilters(options: {
-		query: string;
-		context?: string;
-		version?: string;
-		language?: string;
-		stack?: string;
-		tag?: string;
-		owner?: string;
-		repo?: string;
-		is_global?: boolean;
-	}): { conditions: string[]; params: unknown[] } {
-		const { query, context, version, language, stack, tag, owner, repo, is_global } = options;
-
-		const safeTerm = sanitizeFtsTerm(query);
-		if (!safeTerm) throw new Error("Invalid FTS5 query");
-
-		const conditions: string[] = ["coding_standards_fts MATCH ?"];
-		const params: unknown[] = [safeTerm];
-
-		if (context) {
-			conditions.push("cs.context = ?");
-			params.push(context);
-		}
-		if (version) {
-			conditions.push("cs.version = ?");
-			params.push(version);
-		}
-		if (language) {
-			conditions.push("cs.language = ?");
-			params.push(language);
-		}
-		if (stack) {
-			// Indexed child-table equality (OPT-PERF-07), alias-aware for the
-			// FTS join (cs.id) — replaces `cs.stack LIKE`.
-			conditions.push("EXISTS (SELECT 1 FROM standard_stack s WHERE s.standard_id = cs.id AND s.stack = ?)");
-			params.push(stack);
-		}
-		if (tag) {
-			conditions.push("EXISTS (SELECT 1 FROM standard_tags t WHERE t.standard_id = cs.id AND t.tag = ?)");
-			params.push(tag);
-		}
-		if (repo !== undefined) {
-			if (owner !== undefined) {
-				conditions.push("((cs.owner = ? AND cs.repo = ?) OR cs.is_global = 1)");
-				params.push(owner, repo);
-			} else {
-				conditions.push("(cs.repo = ? OR cs.is_global = 1)");
-				params.push(repo);
-			}
-		}
-		if (is_global !== undefined) {
-			conditions.push("cs.is_global = ?");
-			params.push(is_global ? 1 : 0);
-		}
-
-		return { conditions, params };
 	}
 
 	searchBySimilarity(
@@ -534,7 +372,7 @@ export class StandardEntity extends BaseEntity {
 	}
 
 	update(id: string, updates: Partial<CodingStandardEntry>): void {
-		const { fields, values } = buildUpdateClause(this.buildUpdateMap(updates), {
+		const { fields, values } = buildUpdateClause(buildStandardUpdateMap(updates), {
 			intKeys: STANDARD_INT_KEYS,
 			excludeKeys: STANDARD_EXCLUDE_KEYS
 		});
@@ -546,27 +384,6 @@ export class StandardEntity extends BaseEntity {
 		values.push(id);
 
 		this.run(`UPDATE coding_standards SET ${fields.join(", ")} WHERE id = ?`, values as (string | number | null)[]);
-	}
-
-	/**
-	 * Pre-serialize stack/tags/metadata for the shared update-clause builder
-	 * (TASK-109), preserving the exact pre-refactor guards: arrays and objects
-	 * are JSON-serialized, anything else passes through raw. is_global
-	 * coercion and the id/created_at exclusion are handled by builder options.
-	 */
-	private buildUpdateMap(updates: Partial<CodingStandardEntry>): Record<string, unknown> {
-		const result: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(updates)) {
-			if (value === undefined) continue;
-			if ((key === "stack" || key === "tags") && Array.isArray(value)) {
-				result[key] = JSON.stringify(value);
-			} else if (key === "metadata" && typeof value === "object" && value !== null) {
-				result[key] = JSON.stringify(value);
-			} else {
-				result[key] = value;
-			}
-		}
-		return result;
 	}
 
 	delete(id: string): void {

@@ -3,11 +3,26 @@ import { logger } from "../../utils/logger";
 import { KG_MAX_CONTEXT_ENTITIES, KG_MAX_GRAPH_EDGES } from "../../utils/constants";
 import * as queries from "./queries";
 import type { KgQueryRunner, KgEntityRow, KgRelationRow, KgObservationRow } from "./queries";
+import {
+	upsertEntity as writeUpsertEntity,
+	upsertRelation as writeUpsertRelation,
+	insertObservation as writeInsertObservation,
+	createEntity as writeCreateEntity,
+	createRelation as writeCreateRelation,
+	type KgWriteRunner,
+	type UpsertEntityParams,
+	type UpsertRelationParams,
+	type InsertObservationParams,
+	type CreateEntityParams,
+	type CreateRelationParams
+} from "./writers";
 
 /**
  * Single encapsulation point for ALL raw SQL against the knowledge-graph
- * tables. Read/query SQL lives in `./queries` (TASK-176); writes and
- * cascade deletes stay here and run inside `db.transaction`.
+ * tables. Read/query SQL lives in `./queries` (TASK-176); leaf INSERT
+ * writers live in `./writers` (TASK-432) — both execute through the shared
+ * prepared-statement cache. Orchestration and cascade deletes stay here and
+ * run inside `db.transaction`.
  */
 export class KnowledgeGraphEntity extends BaseEntity {
 	/** Read accessor exposing protected BaseEntity helpers to `./queries` (TASK-176). */
@@ -18,66 +33,28 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		};
 	}
 
+	/** Write accessor exposing BaseEntity's `run`/`transaction` to `./writers` (TASK-432). */
+	private get writerRunner(): KgWriteRunner {
+		return {
+			run: (sql: string, params?: unknown[]) => this.run(sql, params),
+			transaction: <T>(fn: () => T): T => this.transaction(fn)
+		};
+	}
+
 	// -----------------------------------------------------------------------
 	// Writes
 	// -----------------------------------------------------------------------
 
 	/** Insert an entity, ignoring duplicates (entities.name is the primary key). */
-	upsertEntity(params: {
-		name: string;
-		type: string;
-		description: string | null;
-		repo: string;
-		owner: string;
-		created_at: string;
-		updated_at: string;
-	}): void {
-		this.run(
-			`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			[params.name, params.type, params.description, params.repo, params.owner, params.created_at, params.updated_at]
-		);
+	upsertEntity(params: UpsertEntityParams): void {
+		writeUpsertEntity(this.writerRunner, params);
 	}
 
 	/**
 	 * Insert a relation, ignoring duplicates (composite PK on from_entity, to_entity, relation_type).
-	 *
-	 * `confidence` is the per-edge KG confidence label (migration v24, [KGCONF-1]
-	 * / TASK-325): an INSERT-TIME constant chosen by the CALLER SITE (the
-	 * relations table has no source column — the writer that creates the row
-	 * is the provenance). Default 1.0 when omitted (explicit-grade, backward
-	 * compatible — pre-v24 rows and legacy callers read 1.0). The mapping is
-	 * documented in the v24 migration: NLP auto-extraction (saveExtractions)
-	 * 0.55, structured semantic writers 0.8, parser-deterministic codebase
-	 * edges 0.9, explicit/manual + default 1.0.
-	 *
-	 * INSERT OR IGNORE first-write-wins: re-inserting an existing edge is a
-	 * no-op, so the FIRST writer's confidence sticks (a later writer can never
-	 * overwrite a row already present — including one carrying a lower
-	 * auto-extraction confidence).
 	 */
-	upsertRelation(params: {
-		from_entity: string;
-		to_entity: string;
-		relation_type: string;
-		repo: string;
-		owner: string;
-		created_at: string;
-		confidence?: number;
-	}): void {
-		this.run(
-			`INSERT OR IGNORE INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			[
-				params.from_entity,
-				params.to_entity,
-				params.relation_type,
-				params.repo,
-				params.owner,
-				params.created_at,
-				params.confidence ?? 1.0
-			]
-		);
+	upsertRelation(params: UpsertRelationParams): void {
+		writeUpsertRelation(this.writerRunner, params);
 	}
 
 	/**
@@ -173,19 +150,8 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 * INSERT OR IGNORE against the unique (entity_name, observation) index (v9)
 	 * so lease-recovery reprocessing never duplicates (TASK-013).
 	 */
-	insertObservation(params: {
-		id: string;
-		entity_name: string;
-		observation: string;
-		repo: string;
-		owner: string;
-		created_at: string;
-	}): void {
-		this.run(
-			`INSERT OR IGNORE INTO observations (id, entity_name, observation, repo, owner, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
-			[params.id, params.entity_name, params.observation, params.repo, params.owner, params.created_at]
-		);
+	insertObservation(params: InsertObservationParams): void {
+		writeInsertObservation(this.writerRunner, params);
 	}
 
 	// -----------------------------------------------------------------------
@@ -199,6 +165,10 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	 * log warn" contract (TASK-013); relation failures are silent. Boundary
 	 * guard (TASK-175): only the transaction call is try/catch-wrapped so a
 	 * cross-process SQLITE_BUSY can't bubble into saveExtractions.
+	 *
+	 * Composes the leaf writers via `this.upsertEntity` / `this.insertObservation`
+	 * / `this.upsertRelation` (NOT the `./writers` functions directly) so the
+	 * write path stays observable on the instance.
 	 */
 	saveExtractionBatch(params: {
 		observations: Array<{
@@ -297,45 +267,13 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	}
 
 	/** Dashboard/admin create: plain INSERT (throws on duplicate name → PK conflict). */
-	createEntity(params: {
-		name: string;
-		type: string;
-		description: string | null;
-		repo: string;
-		owner: string;
-		created_at: string;
-		updated_at: string;
-	}): void {
-		this.run(
-			`INSERT INTO entities (name, type, description, repo, owner, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			[params.name, params.type, params.description, params.repo, params.owner, params.created_at, params.updated_at]
-		);
+	createEntity(params: CreateEntityParams): void {
+		writeCreateEntity(this.writerRunner, params);
 	}
 
 	/** Dashboard/admin create: plain INSERT (throws on duplicate relation → 409). */
-	createRelation(params: {
-		from_entity: string;
-		to_entity: string;
-		relation_type: string;
-		repo: string;
-		owner: string;
-		created_at: string;
-		confidence?: number;
-	}): void {
-		this.run(
-			`INSERT INTO relations (from_entity, to_entity, relation_type, repo, owner, created_at, confidence)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			[
-				params.from_entity,
-				params.to_entity,
-				params.relation_type,
-				params.repo,
-				params.owner,
-				params.created_at,
-				params.confidence ?? 1.0
-			]
-		);
+	createRelation(params: CreateRelationParams): void {
+		writeCreateRelation(this.writerRunner, params);
 	}
 
 	// -----------------------------------------------------------------------
