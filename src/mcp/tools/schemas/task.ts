@@ -70,6 +70,14 @@ export const TaskReadSchema = z.object({
 	status: TaskStatusListSchema.optional(),
 	phase: z.string().optional(),
 	priority: z.coerce.number().min(1).max(5).optional(),
+	// SEARCH filter (TASK-422) — restrict results to tasks STRUCTURALLY linked
+	// to a GitHub-style issue reference (#NNN). Accepts "#544" or "544"
+	// (normalized to "544"); present without `query`, it still triggers SEARCH
+	// mode listing every task linked to that issue.
+	issue_ref: z
+		.string()
+		.optional()
+		.transform((v) => (v === undefined ? undefined : v.trim().replace(/^#+/, "") || undefined)),
 
 	// Pagination (defaults set per-mode in handler: 10 for SEARCH, 15 for LIST)
 	limit: z.coerce.number().min(1).max(100).optional(),

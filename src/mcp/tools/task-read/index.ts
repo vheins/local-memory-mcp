@@ -40,6 +40,7 @@ export async function handleTaskRead(args: unknown, storage: SQLiteStore, vector
 		status,
 		phase,
 		priority,
+		issue_ref,
 		json: isJsonRequest = false
 	} = validated;
 	const { offset = 0 } = validated;
@@ -55,7 +56,9 @@ export async function handleTaskRead(args: unknown, storage: SQLiteStore, vector
 		{ ...validated, code: effectiveCode, codes: effectiveCodes },
 		{
 			rules: [
-				{ mode: "search", fields: ["query"] },
+				// issue_ref also enters SEARCH: listing tasks linked to an issue
+				// is a search-style filter even when no free-text query is given.
+				{ mode: "search", fields: ["query", "issue_ref"] },
 				{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
 			],
 			fallback: "list"
@@ -68,10 +71,11 @@ export async function handleTaskRead(args: unknown, storage: SQLiteStore, vector
 		return handleSearchMode(
 			owner,
 			repo,
-			query!,
+			query,
 			status,
 			phase,
 			priority,
+			issue_ref,
 			limit,
 			offset,
 			isJsonRequest,

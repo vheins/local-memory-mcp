@@ -251,11 +251,11 @@ Mode, terdeteksi otomatis dalam urutan ini:
 
 Mode, terdeteksi otomatis:
 
-| Mode       | Pemicunya                       | Contoh                                                            |
-| ---------- | ------------------------------- | ----------------------------------------------------------------- |
-| **Search** | `query` ada                     | pencarian kata kunci + semantik di seluruh tugas                  |
-| **Detail** | `task_code` / `id` (atau array) | tugas lengkap incl. komentar + status koordinasi (klaim, handoff) |
-| **List**   | tidak ada parameter lain        | daftar halaman, difilter oleh `status`                            |
+| Mode       | Pemicunya                       | Contoh                                                                         |
+| ---------- | ------------------------------- | ------------------------------------------------------------------------------ |
+| **Search** | `query` dan/atau `issue_ref`    | pencarian kata kunci + semantik di seluruh tugas, opsional filter tautan issue |
+| **Detail** | `task_code` / `id` (atau array) | tugas lengkap incl. komentar + status koordinasi (klaim, handoff)              |
+| **List**   | tidak ada parameter lain        | daftar halaman, difilter oleh `status`                                         |
 
 **Contoh List:**
 
@@ -267,6 +267,22 @@ Secara default menyaring ke `in_progress` dan `pending`. Gunakan `status` untuk 
 
 ```json
 { "repo": "my-project", "status": "backlog", "limit": 20 }
+```
+
+**Contoh Search** — hasil membedakan _text match_ dari tugas yang _secara struktural tertaut issue_ GitHub (`#NNN` di judul/deskripsi/komentar):
+
+```json
+{ "repo": "my-project", "query": "issue 544" }
+```
+
+Setiap baris hasil mengekspos `issue_refs` (ref `#NNN` terdeteksi) dan `match_reason` (`issue` saat tugas mereferensikan issue yang dimaksud query, selain itu `text`); ringkasan teks menambahkan baris `- N linked to issue #544 · M text matches` agar jumlah tidak disalahartikan.
+
+> **Catatan (TASK-436):** konten komentar dipindai untuk ref `#NNN` hanya pada search ber-scope issue (`issue_ref` eksplisit atau query yang membawa token issue seperti `issue 544` / `#544`). Pada query kata kunci generik, `issue_refs` diisi dari judul/deskripsi saja — ref yang hanya ada di komentar tetap tampil pada search ber-scope issue, tempat analisis tautan dijalankan.
+
+Filter ke tugas yang benar-benar menautkan issue #544 (juga berfungsi tanpa `query` — mendaftar semua tugas yang tertaut issue tersebut):
+
+```json
+{ "repo": "my-project", "query": "issue 544", "issue_ref": "544" }
 ```
 
 **Contoh Detail** — mengembalikan deskripsi lengkap, komentar, status koordinasi (klaim, handoff), dan riwayat status:

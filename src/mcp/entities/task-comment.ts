@@ -66,6 +66,29 @@ export class TaskCommentEntity extends BaseEntity {
 		]);
 	}
 
+	/**
+	 * Batched comment fetch by task ids (TASK-422) — lets the task-read search
+	 * engine detect issue refs (`#NNN`) in comments for a whole result pool
+	 * with ONE query instead of N+1. Chunked to stay under SQLite's default
+	 * variable limit (999).
+	 */
+	getTaskCommentsByTaskIds(taskIds: string[]): TaskComment[] {
+		if (taskIds.length === 0) return [];
+		const CHUNK = 500;
+		const out: TaskComment[] = [];
+		for (let i = 0; i < taskIds.length; i += CHUNK) {
+			const chunk = taskIds.slice(i, i + CHUNK);
+			const placeholders = chunk.map(() => "?").join(",");
+			out.push(
+				...this.all<TaskComment>(
+					`SELECT * FROM task_comments WHERE task_id IN (${placeholders}) ORDER BY created_at DESC, id DESC`,
+					chunk
+				)
+			);
+		}
+		return out;
+	}
+
 	getAllTaskCommentsByRepo(owner: string, repo: string, limit?: number, offset?: number): TaskComment[] {
 		let sql = `SELECT * FROM task_comments WHERE owner = ? AND repo = ? ORDER BY created_at DESC, id DESC`;
 		const params: (string | number)[] = [owner, repo];

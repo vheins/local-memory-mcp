@@ -251,11 +251,11 @@ Modes, auto-inferred in this order:
 
 Modes, auto-inferred:
 
-| Mode       | What triggers it               | Example                                                          |
-| ---------- | ------------------------------ | ---------------------------------------------------------------- |
-| **Search** | `query` present                | keyword + semantic search across tasks                           |
-| **Detail** | `task_code` / `id` (or arrays) | full task incl. comments + coordination state (claims, handoffs) |
-| **List**   | nothing else                   | paginated list, filtered by `status`                             |
+| Mode       | What triggers it               | Example                                                                 |
+| ---------- | ------------------------------ | ----------------------------------------------------------------------- |
+| **Search** | `query` and/or `issue_ref`     | keyword + semantic search across tasks, with optional issue-link filter |
+| **Detail** | `task_code` / `id` (or arrays) | full task incl. comments + coordination state (claims, handoffs)        |
+| **List**   | nothing else                   | paginated list, filtered by `status`                                    |
 
 **List example:**
 
@@ -267,6 +267,22 @@ Filters by default to `in_progress` and `pending`. Use `status` for custom filte
 
 ```json
 { "repo": "my-project", "status": "backlog", "limit": 20 }
+```
+
+**Search examples** — results distinguish _text matches_ from tasks _structurally linked to a GitHub issue_ (`#NNN` in title/description/comments):
+
+```json
+{ "repo": "my-project", "query": "issue 544" }
+```
+
+Every result row exposes `issue_refs` (detected `#NNN` refs) and `match_reason` (`issue` when the task references an issue the query is about, `text` otherwise); the text summary adds a `- N linked to issue #544 · M text matches` breakdown so counts are not misread.
+
+> **Note (TASK-436):** comment content is scanned for `#NNN` refs only on issue-scoped searches (an explicit `issue_ref` or a query carrying issue tokens like `issue 544` / `#544`). On generic keyword queries, `issue_refs` is filled from title/description alone — a ref that exists only in a comment is still displayed on issue-scoped searches, where the link analysis runs.
+
+Filter to tasks that really link issue #544 (also works without `query` — lists every task linked to the issue):
+
+```json
+{ "repo": "my-project", "query": "issue 544", "issue_ref": "544" }
 ```
 
 **Detail example** — returns full description, comments, coordination state (claims, handoffs), and status history:
