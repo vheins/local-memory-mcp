@@ -1,37 +1,15 @@
-import type { ArenaScene, ArenaLayoutConfig, ZoneRect, VisualAgent, VisualTask } from "./arenaTypes";
+import type { ArenaScene, ArenaLayoutConfig, ZoneRect } from "./arenaTypes";
 import { sectionsToZones } from "./arenaTransform-layout";
-import { STATUS_TO_ZONE } from "./arenaTransform-utils";
 import { getArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
 import type { ArenaLayoutManager } from "./arena-layout/ArenaLayoutManager";
-import type { SectionBounds, WorkflowEdge } from "./arena-layout/types";
 import type { FilterState } from "./arenaEvents";
 
 // ─── Re-export LOD constants & type ──────────────────────────────────────
 export { LOD_FULL, LOD_NORMAL, LOD_SIMPLIFIED, LOD_AGGREGATE } from "./arena-renderer/utils";
 export type { LODLevel } from "./arena-renderer/utils";
-import {
-	LOD_FULL,
-	LOD_NORMAL,
-	LOD_SIMPLIFIED,
-	LOD_AGGREGATE,
-	type LODLevel,
-	type RenderCtx,
-	type WanderState,
-	pointInRect,
-	matchesAgentFilter as utilMatchesAgentFilter,
-	matchesTaskFilter as utilMatchesTaskFilter,
-	isFilterActive as utilIsFilterActive,
-	ZOOM_MIN,
-	ZOOM_MAX,
-	makeCtx
-} from "./arena-renderer/utils";
+import { LOD_NORMAL, ZOOM_MAX, ZOOM_MIN, filterEquals, sceneSignature, type WanderState } from "./arena-renderer/utils";
 
-import { drawGlobalFloor, drawRoom } from "./arena-renderer/scene";
-import { drawCharacter, drawCharacterSimplified, drawCharacterAggregate } from "./arena-renderer/agents";
-import { drawClaimLinks, drawHandoffBeams, drawWorkflowArrows } from "./arena-renderer/connections";
-import type { ZoneStats } from "./arena-renderer/zones";
-import { drawHandoffTrail, drawHandoffGroup } from "./arena-renderer/effects";
-import { drawWorkstation, drawWorkstationSimplified, drawZoneAggregate } from "./arena-renderer/workstations";
+import { renderArenaFrame, type ArenaCaches } from "./arena-renderer/frame";
 import { updateAgents, updateHandoffAnim } from "./arena-renderer/physics";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -45,20 +23,21 @@ export class ArenaRenderer {
 	private layout: ArenaLayoutConfig | null = null;
 	/** Shared layout manager — single source of truth for zone geometry. */
 	private layoutManager: ArenaLayoutManager = getArenaLayoutManager();
-	/** Cached sections (identity-compared to detect manager cache invalidation). */
-	private cachedSections: SectionBounds[] | null = null;
-	/** Manager sections mapped to the legacy ZoneRect shape (full rects). */
-	private zones: ZoneRect[] = [];
-	/** Section id → section color (for workstation monitor accents). */
-	private zoneColorById = new Map<string, string>();
-	/** Workflow pipeline edges (cached alongside zones — same invalidation). */
-	private workflowEdges: WorkflowEdge[] = [];
-	/** Cached per-section task/agent counts for the stats strip (see computeZoneStats). */
-	private zoneStats = new Map<string, ZoneStats>();
-	/** Sections identity the cached task-count portion was computed from. */
-	private statsSections: SectionBounds[] | null = null;
-	/** Scene reference the cached task-count portion was computed from. */
-	private statsScene: ArenaScene | null = null;
+	/**
+	 * Per-frame render caches (zones/colors/workflow/stats/LOD) — owned here,
+	 * mutated in place by the render pass (arena-renderer/frame.ts) so cached
+	 * geometry and stats survive across frames without per-frame recompute.
+	 */
+	private frameCaches: ArenaCaches = {
+		zones: [],
+		cachedSections: null,
+		zoneColorById: new Map(),
+		workflowEdges: [],
+		zoneStats: new Map(),
+		statsSections: null,
+		statsScene: null,
+		currentLod: LOD_NORMAL
+	};
 	private isDark = false;
 	private hoveredId: string | null = null;
 	private selectedId: string | null = null;
@@ -70,7 +49,6 @@ export class ArenaRenderer {
 	private lastFrameError: string | null = null;
 	private wander = new Map<string, WanderState>();
 	private activeFilter: FilterState = { repository: null, roles: [], priorities: [], statuses: [], search: "" };
-	private currentLod: LODLevel = LOD_NORMAL;
 	private reducedMotion = false;
 	private reducedTransparency = false;
 	private viewportZoom = 1.0;
@@ -99,11 +77,11 @@ export class ArenaRenderer {
 	private freezeGapPending = false;
 	/**
 	 * Content signature of the last scene handed to update() (see
-	 * sceneSignature). The polling layer rebuilds the scene with NEW object
-	 * references every poll (buildArenaScene allocates fresh Maps), so a
-	 * reference comparison would treat an identical poll as activity and
-	 * re-render. Comparing content lets an unchanged poll keep the arena
-	 * frozen — "no state change" stays frozen (TASK-407 follow-up).
+	 * sceneSignature in arena-renderer/utils.ts). The polling layer rebuilds
+	 * the scene with NEW object references every poll (buildArenaScene
+	 * allocates fresh Maps), so a reference comparison would treat an
+	 * identical poll as activity and re-render. Comparing content lets an
+	 * unchanged poll keep the arena frozen (TASK-407 follow-up).
 	 */
 	private lastIncomingSignature: string | null = null;
 	/** Set by update() when the incoming scene CONTENT differs from the last. */
@@ -131,77 +109,13 @@ export class ArenaRenderer {
 		this.ctx = canvas.getContext("2d")!;
 	}
 
-	/**
-	 * Cheap O(n) content digest of a scene — entity counts + per-entity
-	 * visual state (positions rounded to px, status, action, speech bubble).
-	 * Used to detect REAL scene changes across polls without allocating a
-	 * comparison structure. Each contributing string mixes its LENGTH + first
-	 * + last + middle chars + a full-string FNV-1a rolling hash, so distinct
-	 * same-length strings sharing a first char (e.g. ids "agent-1"/"agent-2")
-	 * can no longer collide per field — the old length+first-char-only mix
-	 * made those deterministic collisions, which a change detector can't
-	 * afford for the "changed" side (a missed change = a stale render).
-	 * Remaining collisions are genuine 32-bit hash collisions only (~2^-32
-	 * per field pair): a false "changed" costs one extra render, never a
-	 * missed one. Integer ops only, no allocation — cheap enough per poll.
-	 */
-	private sceneSignature(scene: ArenaScene): string {
-		let h = 0;
-		const mix = (v: string | number) => {
-			if (typeof v === "number") {
-				h = (h * 31 + v) | 0;
-				return;
-			}
-			const len = v.length;
-			h = (h * 31 + len) | 0;
-			h = (h * 31 + (v.charCodeAt(0) || 0)) | 0;
-			h = (h * 31 + (v.charCodeAt(len - 1) || 0)) | 0;
-			if (len > 2) h = (h * 31 + (v.charCodeAt(len >> 1) || 0)) | 0;
-			// FNV-1a over the whole string — the full content, so any two
-			// different strings differ in the digest regardless of the sampled
-			// chars above (shared prefixes, flipped middles, same-length diffs).
-			let roll = 0x811c9dc5;
-			for (let i = 0; i < len; i++) {
-				roll ^= v.charCodeAt(i);
-				roll = Math.imul(roll, 0x01000193);
-			}
-			h = (h * 31 + roll) | 0;
-		};
-		mix(scene.agents.size);
-		mix(scene.tasks.size);
-		mix(scene.handoffs.length);
-		mix(scene.repositories.size);
-		for (const a of scene.agents.values()) {
-			mix(a.id);
-			mix(Math.round(a.x));
-			mix(Math.round(a.y));
-			mix(Math.round(a.targetX));
-			mix(Math.round(a.targetY));
-			mix(a.state);
-			mix(a.currentAction);
-			mix(a.health);
-			mix(a.speechBubble ?? "");
-		}
-		for (const t of scene.tasks.values()) {
-			mix(t.id);
-			mix(Math.round(t.x));
-			mix(Math.round(t.y));
-			mix(t.status);
-			mix(t.progress);
-			mix(t.priorityLevel);
-		}
-		for (const hp of scene.handoffs) mix(hp.id ?? "");
-		for (const r of scene.repositories.values()) mix(r.id);
-		return String(h);
-	}
-
 	// ── Public API ───────────────────────────────────────────────────────
 	update(scene: ArenaScene, layout: ArenaLayoutConfig, isDark: boolean) {
 		// Content-aware change detection: buildArenaScene allocates fresh Maps
 		// on every poll even when backend data is unchanged — comparing object
 		// refs would wake the renderer on every poll. A content signature lets
 		// an identical poll keep the arena frozen (TASK-407).
-		const sig = this.sceneSignature(scene);
+		const sig = sceneSignature(scene);
 		this.sceneDirty = sig !== this.lastIncomingSignature;
 		this.lastIncomingSignature = sig;
 		this.scene = scene;
@@ -322,135 +236,9 @@ export class ArenaRenderer {
 	}
 
 	// ── Private helpers ─────────────────────────────────────────────────
-	private getViewportCullBounds() {
-		const z = this.viewportZoom || 1,
-			m = z < 0.5 ? 100 : 50;
-		const l = -this.viewportPanX / z,
-			t = -this.viewportPanY / z;
-		return { left: l - m, top: t - m, right: l + this.canvas.width / z + m, bottom: t + this.canvas.height / z + m };
-	}
-	private isInViewport(x: number, y: number, b: { left: number; top: number; right: number; bottom: number }) {
-		return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
-	}
-	private computeLOD(): LODLevel {
-		const z = this.viewportZoom;
-		return z >= 1 ? LOD_FULL : z >= 0.5 ? LOD_NORMAL : z >= 0.25 ? LOD_SIMPLIFIED : LOD_AGGREGATE;
-	}
 	private screenToWorld(sx: number, sy: number) {
 		const z = this.viewportZoom || 1;
 		return { x: (sx - this.viewportPanX) / z, y: (sy - this.viewportPanY) / z };
-	}
-	private rc(): RenderCtx {
-		return makeCtx(
-			this.ctx,
-			this.canvas.width,
-			this.canvas.height,
-			this.isDark,
-			this.ts,
-			this.viewportZoom,
-			this.viewportPanX,
-			this.viewportPanY,
-			this.currentLod,
-			this.hoveredId,
-			this.reducedMotion,
-			this.reducedTransparency
-		);
-	}
-	private mAF(a: VisualAgent) {
-		return utilMatchesAgentFilter(a, this.activeFilter, this.scene?.tasks ?? null);
-	}
-	private mTF(t: VisualTask) {
-		return utilMatchesTaskFilter(t, this.activeFilter, this.scene?.agents ?? null);
-	}
-	private iFA() {
-		return utilIsFilterActive(this.activeFilter);
-	}
-
-	/**
-	 * Refresh cached zones/colors when the manager's layout cache was
-	 * invalidated (dims/occupancy changed). The manager returns the same
-	 * sections array until its cache key changes — identity comparison makes
-	 * this a single O(1) check per frame, with no per-frame zone math.
-	 */
-	private syncSections() {
-		const sections = this.layoutManager.getSections();
-		if (sections === this.cachedSections) return;
-		this.cachedSections = sections;
-		this.zones = sectionsToZones(sections);
-		this.zoneColorById = new Map(sections.map((s) => [s.id, s.visual.color]));
-		this.workflowEdges = this.layoutManager.getWorkflow();
-	}
-
-	/**
-	 * Per-section task/agent counts for the header stats strip — geometric
-	 * membership mirrors the aggregate overlay (both use the shared pointInRect
-	 * helper). Task positions are baked at scene build, so the task-count
-	 * portion is cached: it is recomputed only when the sections array identity
-	 * (layout cache invalidation) or the scene reference (re-baked positions)
-	 * changes. Agent counts refresh on every call because agents move per frame.
-	 * Callers only invoke this when the strip will actually be drawn.
-	 */
-	private computeZoneStats(scene: ArenaScene): Map<string, ZoneStats> {
-		const sections = this.layoutManager.getSections();
-		if (sections !== this.statsSections || scene !== this.statsScene) {
-			this.statsSections = sections;
-			this.statsScene = scene;
-			this.zoneStats.clear();
-			for (const zr of this.zones) {
-				let tasks = 0;
-				for (const t of scene.tasks.values()) {
-					if (pointInRect(t.x, t.y, zr)) tasks++;
-				}
-				this.zoneStats.set(zr.id, { tasks, agents: 0 });
-			}
-		}
-		// Agents move every frame — refresh their counts whenever the strip draws.
-		for (const zr of this.zones) {
-			let agents = 0;
-			for (const a of scene.agents.values()) {
-				if (pointInRect(a.targetX, a.targetY, zr)) agents++;
-			}
-			const prev = this.zoneStats.get(zr.id) ?? { tasks: 0, agents: 0 };
-			this.zoneStats.set(zr.id, { tasks: prev.tasks, agents });
-		}
-		return this.zoneStats;
-	}
-
-	/** Section accent color for a task's workstation (matches its room tint). */
-	private zoneColorForTask(t: VisualTask): string {
-		const zoneId = STATUS_TO_ZONE[t.status] ?? "";
-		return this.zoneColorById.get(zoneId) ?? this.zones[0]?.color ?? "#64748b";
-	}
-
-	/**
-	 * Section accent color for a claim link's target task — the same manager
-	 * section tokens rooms use (status → zone → section color). Statuses with
-	 * no registered zone (completed / canceled render no room) get the neutral
-	 * fallback instead of borrowing another section's tint.
-	 */
-	private zoneColorForStatus(status: string): string {
-		const zoneId = STATUS_TO_ZONE[status] ?? "";
-		return this.zoneColorById.get(zoneId) ?? "#64748b";
-	}
-
-	// ── Loop ────────────────────────────────────────────────────────────
-	/**
-	 * Content comparison for FilterState. The filter object is mutated IN
-	 * PLACE by the arena state manager (arenaStateManager.ts:270 Object.assign)
-	 * and its arrays can be replaced or spliced — a reference comparison would
-	 * miss every change (TASK-409).
-	 */
-	private filterEquals(a: FilterState, b: FilterState): boolean {
-		return (
-			a.repository === b.repository &&
-			a.search === b.search &&
-			a.roles.length === b.roles.length &&
-			a.roles.every((v, i) => v === b.roles[i]) &&
-			a.priorities.length === b.priorities.length &&
-			a.priorities.every((v, i) => v === b.priorities[i]) &&
-			a.statuses.length === b.statuses.length &&
-			a.statuses.every((v, i) => v === b.statuses[i])
-		);
 	}
 
 	/**
@@ -476,7 +264,7 @@ export class ArenaRenderer {
 			this.reducedMotion !== this.lastRenderedReducedMotion ||
 			this.reducedTransparency !== this.lastRenderedReducedTransparency ||
 			!this.lastRenderedFilter ||
-			!this.filterEquals(this.activeFilter, this.lastRenderedFilter)
+			!filterEquals(this.activeFilter, this.lastRenderedFilter)
 		);
 	}
 
@@ -599,104 +387,23 @@ export class ArenaRenderer {
 
 	// ── Main render ──────────────────────────────────────────────────────
 	private render() {
-		const { canvas, ctx, scene, layout, isDark, viewportZoom: z, viewportPanX: px, viewportPanY: py } = this;
-		if (!layout) return;
-		this.syncSections();
-		const zones = this.zones;
-		this.currentLod = this.computeLOD();
-		const lod = this.currentLod;
-		const rc = this.rc();
-
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		ctx.fillStyle = isDark ? "#0a0e1a" : "#dde3ed";
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-		ctx.save();
-		ctx.translate(px, py);
-		ctx.scale(z, z);
-
-		// try/finally guarantees the ctx.save() above is always balanced by a
-		// restore — even if a draw call throws, the transform stack stays clean
-		// and subsequent frames render at the correct scale (no accumulation).
-		try {
-			drawGlobalFloor(rc);
-			const sections = this.cachedSections ?? [];
-
-			// Per-section task/agent counts for the header stats strip — computed
-			// only when the strip will actually be drawn (FULL/NORMAL LOD; drawRoom
-			// skips it at SIMPLIFIED/AGGREGATE). Task counts are cached inside
-			// computeZoneStats (baked positions), so this is not a per-frame
-			// recompute of layout or task geometry.
-			const zoneStats = scene && lod < LOD_SIMPLIFIED ? this.computeZoneStats(scene) : null;
-
-			for (let i = 0; i < sections.length; i++) {
-				drawRoom(rc, zones[i], sections[i].visual, zoneStats?.get(zones[i].id), this.layoutManager);
-			}
-
-			// Workflow arrows: infrastructure between rooms — drawn after rooms,
-			// before workstations/agents so they read as the pipeline, not content.
-			if (lod < LOD_AGGREGATE) drawWorkflowArrows(rc, this.workflowEdges);
-
-			if (!scene) return;
-
-			if (lod === LOD_AGGREGATE) for (const zr of zones) drawZoneAggregate(rc, zr, scene);
-
-			const hasFilter = this.iFA();
-			const cull = lod < LOD_SIMPLIFIED ? this.getViewportCullBounds() : undefined;
-			const sortedTasks = Array.from(scene.tasks.values())
-				.filter((t) => (!hasFilter || this.mTF(t)) && (lod >= LOD_SIMPLIFIED || this.isInViewport(t.x, t.y, cull!)))
-				.sort((a, b) => a.y - b.y);
-
-			if (lod === LOD_AGGREGATE) {
-				// Aggregate workstations are drawn via drawZoneAggregate above.
-			} else if (lod === LOD_SIMPLIFIED) {
-				for (const t of sortedTasks) drawWorkstationSimplified(rc, t);
-			} else {
-				for (const t of sortedTasks) {
-					drawWorkstation(rc, t, this.reducedMotion, this.reducedTransparency, scene.agents, this.zoneColorForTask(t));
-				}
-			}
-
-			if (lod < LOD_SIMPLIFIED) {
-				drawClaimLinks(
-					rc,
-					scene,
-					(id) => this.mAF(scene.agents.get(id)!),
-					(id) => this.mTF(scene.tasks.get(id)!),
-					() => this.iFA(),
-					lod,
-					(status) => this.zoneColorForStatus(status)
-				);
-				drawHandoffBeams(
-					rc,
-					scene,
-					(id) => this.mAF(scene.agents.get(id)!),
-					(id) => this.mTF(scene.tasks.get(id)!),
-					() => this.iFA(),
-					lod
-				);
-				for (const a of scene.agents.values()) {
-					if (a.handoffAnim && (!hasFilter || this.mAF(a)) && this.isInViewport(a.x, a.y, cull!)) {
-						drawHandoffTrail(rc, a);
-					}
-				}
-			}
-
-			const sortedAgents = Array.from(scene.agents.values())
-				.filter((a) => (!hasFilter || this.mAF(a)) && (lod >= LOD_SIMPLIFIED || this.isInViewport(a.x, a.y, cull!)))
-				.sort((a, b) => a.y - b.y || (a.id === this.hoveredId ? 1 : -1));
-
-			for (const a of sortedAgents) {
-				if (a.handoffAnim) {
-					drawHandoffGroup(rc, a);
-					continue;
-				}
-				if (lod === LOD_AGGREGATE) drawCharacterAggregate(rc, a);
-				else if (lod === LOD_SIMPLIFIED) drawCharacterSimplified(rc, a);
-				else drawCharacter(rc, a);
-			}
-		} finally {
-			ctx.restore();
-		}
+		if (!this.layout) return;
+		renderArenaFrame({
+			canvas: this.canvas,
+			ctx: this.ctx,
+			scene: this.scene,
+			layout: this.layout,
+			isDark: this.isDark,
+			zoom: this.viewportZoom,
+			panX: this.viewportPanX,
+			panY: this.viewportPanY,
+			ts: this.ts,
+			hoveredId: this.hoveredId,
+			reducedMotion: this.reducedMotion,
+			reducedTransparency: this.reducedTransparency,
+			layoutManager: this.layoutManager,
+			activeFilter: this.activeFilter,
+			caches: this.frameCaches
+		});
 	}
 }

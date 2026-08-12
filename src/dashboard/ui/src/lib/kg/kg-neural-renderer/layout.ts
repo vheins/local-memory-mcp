@@ -212,6 +212,49 @@ export function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: numb
 	ctx.fillRect(0, 0, w, h);
 }
 
+/**
+ * Background with per-size/theme gradient caching. First call renders the full
+ * background (base fill + vignette via drawBackground) and caches the vignette
+ * gradient; later frames with matching size + theme only repaint the cached
+ * gradient (identical to the historical per-frame cache in the animation loop).
+ */
+let cachedBackgroundGradient: CanvasGradient | null = null;
+let cachedBackgroundWidth = 0;
+let cachedBackgroundHeight = 0;
+let cachedBackgroundDark = false;
+
+export function drawBackgroundCached(ctx: CanvasRenderingContext2D, w: number, h: number, dark: boolean): void {
+	if (
+		cachedBackgroundGradient &&
+		cachedBackgroundWidth === w &&
+		cachedBackgroundHeight === h &&
+		cachedBackgroundDark === dark
+	) {
+		ctx.fillStyle = cachedBackgroundGradient;
+		ctx.fillRect(0, 0, w, h);
+		return;
+	}
+	drawBackground(ctx, w, h);
+	// Cache the gradient for next frame
+	const centerX = w / 2;
+	const centerY = h / 2;
+	const maxR = Math.hypot(centerX, centerY);
+	const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxR);
+	if (dark) {
+		grad.addColorStop(0, "rgba(10,14,42,0)");
+		grad.addColorStop(0.6, "rgba(10,14,42,0.1)");
+		grad.addColorStop(1, "rgba(2,4,12,0.6)");
+	} else {
+		grad.addColorStop(0, "rgba(226,232,240,0)");
+		grad.addColorStop(0.5, "rgba(203,213,225,0.15)");
+		grad.addColorStop(1, "rgba(148,163,184,0.3)");
+	}
+	cachedBackgroundGradient = grad;
+	cachedBackgroundWidth = w;
+	cachedBackgroundHeight = h;
+	cachedBackgroundDark = dark;
+}
+
 // ─── Utility: Rounded Rectangle ──────────────────────────────────────────────
 
 export function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

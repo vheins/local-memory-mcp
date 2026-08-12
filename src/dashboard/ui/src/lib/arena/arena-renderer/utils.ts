@@ -1,4 +1,4 @@
-import type { HelperVariant } from "../arenaTypes";
+import type { HelperVariant, ArenaScene } from "../arenaTypes";
 import type { FilterState } from "../arenaEvents";
 
 // ─── Level of Detail ────────────────────────────────────────────────────────
@@ -241,4 +241,87 @@ export function isFilterActive(filter: FilterState): boolean {
 		filter.statuses.length > 0 ||
 		filter.search !== ""
 	);
+}
+
+/**
+ * Content comparison for FilterState. The filter object is mutated IN PLACE
+ * by the arena state manager (arenaStateManager.ts Object.assign) and its
+ * arrays can be replaced or spliced — a reference comparison would miss every
+ * change (TASK-409).
+ */
+export function filterEquals(a: FilterState, b: FilterState): boolean {
+	return (
+		a.repository === b.repository &&
+		a.search === b.search &&
+		a.roles.length === b.roles.length &&
+		a.roles.every((v, i) => v === b.roles[i]) &&
+		a.priorities.length === b.priorities.length &&
+		a.priorities.every((v, i) => v === b.priorities[i]) &&
+		a.statuses.length === b.statuses.length &&
+		a.statuses.every((v, i) => v === b.statuses[i])
+	);
+}
+
+/**
+ * Cheap O(n) content digest of a scene — entity counts + per-entity visual
+ * state (positions rounded to px, status, action, speech bubble). Used by the
+ * renderer to detect REAL scene changes across polls without allocating a
+ * comparison structure. Each contributing string mixes its LENGTH + first +
+ * last + middle chars + a full-string FNV-1a rolling hash, so distinct
+ * same-length strings sharing a first char (e.g. ids "agent-1"/"agent-2")
+ * can no longer collide per field — the old length+first-char-only mix made
+ * those deterministic collisions, which a change detector can't afford for
+ * the "changed" side (a missed change = a stale render). Remaining collisions
+ * are genuine 32-bit hash collisions only (~2^-32 per field pair): a false
+ * "changed" costs one extra render, never a missed one. Integer ops only, no
+ * allocation — cheap enough per poll.
+ */
+export function sceneSignature(scene: ArenaScene): string {
+	let h = 0;
+	const mix = (v: string | number) => {
+		if (typeof v === "number") {
+			h = (h * 31 + v) | 0;
+			return;
+		}
+		const len = v.length;
+		h = (h * 31 + len) | 0;
+		h = (h * 31 + (v.charCodeAt(0) || 0)) | 0;
+		h = (h * 31 + (v.charCodeAt(len - 1) || 0)) | 0;
+		if (len > 2) h = (h * 31 + (v.charCodeAt(len >> 1) || 0)) | 0;
+		// FNV-1a over the whole string — the full content, so any two
+		// different strings differ in the digest regardless of the sampled
+		// chars above (shared prefixes, flipped middles, same-length diffs).
+		let roll = 0x811c9dc5;
+		for (let i = 0; i < len; i++) {
+			roll ^= v.charCodeAt(i);
+			roll = Math.imul(roll, 0x01000193);
+		}
+		h = (h * 31 + roll) | 0;
+	};
+	mix(scene.agents.size);
+	mix(scene.tasks.size);
+	mix(scene.handoffs.length);
+	mix(scene.repositories.size);
+	for (const a of scene.agents.values()) {
+		mix(a.id);
+		mix(Math.round(a.x));
+		mix(Math.round(a.y));
+		mix(Math.round(a.targetX));
+		mix(Math.round(a.targetY));
+		mix(a.state);
+		mix(a.currentAction);
+		mix(a.health);
+		mix(a.speechBubble ?? "");
+	}
+	for (const t of scene.tasks.values()) {
+		mix(t.id);
+		mix(Math.round(t.x));
+		mix(Math.round(t.y));
+		mix(t.status);
+		mix(t.progress);
+		mix(t.priorityLevel);
+	}
+	for (const hp of scene.handoffs) mix(hp.id ?? "");
+	for (const r of scene.repositories.values()) mix(r.id);
+	return String(h);
 }

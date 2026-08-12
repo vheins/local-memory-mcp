@@ -5,11 +5,7 @@
 		memories,
 		memoriesTotal,
 		memoriesPage,
-		memoriesPageSize,
 		memoriesTotalPages,
-		memoriesSearch,
-		memoriesTypeFilter,
-		memoriesImportanceMin,
 		memoriesSortBy,
 		memoriesSortOrder,
 		selectedMemoryIds
@@ -18,8 +14,10 @@
 	import { formatDate } from "../lib/utils";
 	import type { Memory } from "../lib/stores";
 	import Icon from "../lib/Icon.svelte";
-	import ExportToolbar from "./ExportToolbar.svelte";
-	import { TYPES, TYPE_LABELS, importanceColor, importanceBg } from "../lib/memoryConfig";
+	import { TYPE_LABELS, importanceColor, importanceBg } from "../lib/memoryConfig";
+	import MemoryListToolbar from "./MemoryListToolbar.svelte";
+	import MemoryListPagination from "./MemoryListPagination.svelte";
+	import MemoryBulkActions from "./MemoryBulkActions.svelte";
 
 	export let onMemoryClick: (mem: Memory) => void = () => {};
 	/** Called when user wants to create a new memory */
@@ -33,6 +31,15 @@
 	}
 
 	$: allSelected = $memories.length > 0 && $selectedMemoryIds.size === $memories.length;
+
+	function handlePageSizeChange() {
+		memoriesPage.set(1);
+		memoryHandler.loadMemories();
+	}
+
+	function sortIndicator(col: string): string {
+		return $memoriesSortBy === col ? ($memoriesSortOrder === "desc" ? "↓" : "↑") : "";
+	}
 
 	// ── ARIA live region (STD-002 / TASK-400) ─────────────────────────────
 	// One scoped sr-only polite region per async view: announce when the
@@ -55,72 +62,14 @@
 <div>
 	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveRegionText}</div>
 
-	<!-- Toolbar -->
-	<div class="flex items-center gap-2 mb-3" style="flex-wrap:wrap;">
-		<div style="position:relative;flex:1;min-width:160px;">
-			<span class="search-icon-inner">
-				<Icon name="search" size={20} />
-			</span>
-			<input
-				class="form-input"
-				style="padding-left:32px;font-size:0.8rem;"
-				type="text"
-				placeholder="Search memories..."
-				aria-label="Search memories"
-				bind:value={$memoriesSearch}
-				on:input={() => memoryHandler.onSearchInput()}
-			/>
-		</div>
-
-		<select
-			class="form-select"
-			style="width:140px;font-size:0.8rem;"
-			aria-label="Filter memories by type"
-			bind:value={$memoriesTypeFilter}
-			on:change={() => memoryHandler.onFilterChange()}
-		>
-			<option value="">All Types</option>
-			{#each TYPES as t (t)}
-				<option value={t}>{TYPE_LABELS[t]}</option>
-			{/each}
-		</select>
-
-		<select
-			class="form-select"
-			style="width:100px;font-size:0.8rem;"
-			aria-label="Minimum importance"
-			bind:value={$memoriesImportanceMin}
-			on:change={() => memoryHandler.onFilterChange()}
-		>
-			<option value={null}>Min Imp.</option>
-			{#each [1, 2, 3, 4, 5] as i (i)}
-				<option value={i}>{i}</option>
-			{/each}
-		</select>
-
-		<select
-			class="form-select"
-			style="width:100px;font-size:0.8rem;"
-			aria-label="Memories per page"
-			bind:value={$memoriesPageSize}
-			on:change={() => {
-				memoriesPage.set(1);
-				memoryHandler.loadMemories();
-			}}
-		>
-			{#each [10, 25, 50, 100] as n (n)}
-				<option value={n}>{n} / page</option>
-			{/each}
-		</select>
-
-		<ExportToolbar onExport={(f) => memoryHandler.handleExport(f)} onImport={onBulkImport} />
-
-		<!-- New Memory CTA -->
-		<button class="btn btn-accent btn-sm" on:click={onNewMemory} id="newMemoryBtn" style="margin-left:auto;">
-			<Icon name="plus" size={13} strokeWidth={2.5} />
-			New Memory
-		</button>
-	</div>
+	<MemoryListToolbar
+		onSearchInput={() => memoryHandler.onSearchInput()}
+		onFilterChange={() => memoryHandler.onFilterChange()}
+		onPageSizeChange={handlePageSizeChange}
+		{onNewMemory}
+		onExport={(f) => memoryHandler.handleExport(f)}
+		onImport={onBulkImport}
+	/>
 
 	<!-- Count -->
 	<div style="font-size:0.72rem;color:var(--color-text-muted);margin-bottom:8px;">
@@ -151,7 +100,7 @@
 						/>
 					</th>
 					<th class="mem-th sortable" on:click={() => memoryHandler.toggleSort("title")}>
-						Title {$memoriesSortBy === "title" ? ($memoriesSortOrder === "desc" ? "↓" : "↑") : ""}
+						Title {sortIndicator("title")}
 					</th>
 					<th class="mem-th">Type</th>
 					<th
@@ -159,10 +108,10 @@
 						style="text-align:center;cursor:pointer;"
 						on:click={() => memoryHandler.toggleSort("importance")}
 					>
-						Imp. {$memoriesSortBy === "importance" ? ($memoriesSortOrder === "desc" ? "↓" : "↑") : ""}
+						Imp. {sortIndicator("importance")}
 					</th>
 					<th class="mem-th sortable" on:click={() => memoryHandler.toggleSort("updated_at")}>
-						Updated {$memoriesSortBy === "updated_at" ? ($memoriesSortOrder === "desc" ? "↓" : "↑") : ""}
+						Updated {sortIndicator("updated_at")}
 					</th>
 					<th class="mem-th" style="text-align:center;">Hits</th>
 					<th class="mem-th" style="width:80px;"></th>
@@ -266,68 +215,18 @@
 		</table>
 	</div>
 
-	<!-- Pagination -->
-	{#if $memoriesTotalPages > 1}
-		<div class="flex items-center justify-between mt-3">
-			<span style="font-size:0.75rem;color:var(--color-text-muted);">
-				Page {$memoriesPage} of {$memoriesTotalPages}
-			</span>
-			<div class="flex gap-1">
-				<button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.goToPage(1)} disabled={$memoriesPage <= 1}
-					>«</button
-				>
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => memoryHandler.goToPage($memoriesPage - 1)}
-					disabled={$memoriesPage <= 1}>‹</button
-				>
-				{#each Array.from({ length: Math.min(5, $memoriesTotalPages) }, (_, i) => {
-					const start = Math.max(1, Math.min($memoriesPage - 2, $memoriesTotalPages - 4));
-					return start + i;
-				}) as p (p)}
-					<button
-						class="btn btn-sm"
-						class:btn-primary={p === $memoriesPage}
-						class:btn-ghost={p !== $memoriesPage}
-						on:click={() => memoryHandler.goToPage(p)}>{p}</button
-					>
-				{/each}
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => memoryHandler.goToPage($memoriesPage + 1)}
-					disabled={$memoriesPage >= $memoriesTotalPages}>›</button
-				>
-				<button
-					class="btn btn-ghost btn-sm"
-					on:click={() => memoryHandler.goToPage($memoriesTotalPages)}
-					disabled={$memoriesPage >= $memoriesTotalPages}>»</button
-				>
-			</div>
-		</div>
-	{/if}
+	<MemoryListPagination
+		page={$memoriesPage}
+		totalPages={$memoriesTotalPages}
+		onGoToPage={(p) => memoryHandler.goToPage(p)}
+	/>
 
-	<!-- Bulk Action Toolbar -->
-	{#if $selectedMemoryIds.size > 0}
-		<div class="bulk-actions-bar">
-			<span><b>{$selectedMemoryIds.size}</b> selected</span>
-			<div style="width:12px;"></div>
-			<button
-				class="btn btn-sm"
-				style="background:rgba(120,120,120,0.2);color:inherit;"
-				on:click={() => selectedMemoryIds.set(new Set())}>Cancel</button
-			>
-			<button
-				class="btn btn-sm"
-				style="background:#52525b;color:white;border:none;"
-				on:click={() => memoryHandler.handleBulkArchive()}>Archive</button
-			>
-			<button
-				class="btn btn-sm btn-accent"
-				style="background:#ef4444;color:white;border:none;"
-				on:click={() => memoryHandler.handleBulkDelete()}>Delete</button
-			>
-		</div>
-	{/if}
+	<MemoryBulkActions
+		count={$selectedMemoryIds.size}
+		onCancel={() => selectedMemoryIds.set(new Set())}
+		onArchive={() => memoryHandler.handleBulkArchive()}
+		onDelete={() => memoryHandler.handleBulkDelete()}
+	/>
 </div>
 
 <style>
@@ -343,16 +242,6 @@
 		font-weight: 600;
 		border-radius: 10px;
 		border: 1px solid rgba(239, 68, 68, 0.15);
-	}
-
-	.search-icon-inner {
-		position: absolute;
-		left: 10px;
-		top: 50%;
-		transform: translateY(-50%);
-		color: var(--color-text-muted);
-		display: flex;
-		pointer-events: none;
 	}
 
 	/* ── Table wrapper ── */
@@ -484,44 +373,5 @@
 	:global(html.dark) .delete-btn:hover {
 		background: rgba(239, 68, 68, 0.15);
 		color: #fca5a5;
-	}
-
-	/* ── Bulk Actions Bar ── */
-	.bulk-actions-bar {
-		position: fixed;
-		bottom: 32px;
-		left: 50%;
-		transform: translateX(-50%);
-		background: rgba(30, 41, 59, 0.95);
-		backdrop-filter: blur(12px);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 9999px;
-		padding: 10px 16px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-		z-index: 1000;
-		color: white;
-		font-size: 0.85rem;
-		animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-	}
-
-	:global(html:not(.dark)) .bulk-actions-bar {
-		background: rgba(255, 255, 255, 0.95);
-		color: var(--color-text);
-		border-color: var(--color-border);
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-	}
-
-	@keyframes slideUp {
-		from {
-			opacity: 0;
-			transform: translate(-50%, 20px) scale(0.95);
-		}
-		to {
-			opacity: 1;
-			transform: translate(-50%, 0) scale(1);
-		}
 	}
 </style>

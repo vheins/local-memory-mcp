@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { untrack } from "svelte";
-	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import { onMount, onDestroy } from "svelte";
-	import { get } from "svelte/store";
 	import { api } from "$lib/api";
 	import Icon from "$lib/Icon.svelte";
 	import type { KGNode, KGEdge } from "$lib/interfaces";
 	import { kgGraphLimit, kgTotalItems } from "$lib/stores";
 	import { createGraphLoader, MAX_GRAPH_LIMIT } from "$lib/kg/graphLoader";
+	import { buildGraphLayout, buildNodeLookup, EMPTY_NODE_LOOKUP } from "$lib/kg/kgLayoutBuilder";
 	import { stopNeuralAnimation } from "$lib/kg/KGNeuralRenderer";
-	import { initializeSphereLayout, initializeZeroEdgeOverviewLayout } from "$lib/kg/KGForceLayout";
 	import type { LayoutNode, LayoutEdge } from "$lib/kg/KGForceLayout";
 	import { handleGraphKeyDown } from "$lib/kg/kgKeyboardShortcuts";
 	import KGGraphHeader from "./KGGraphHeader.svelte";
@@ -108,18 +106,6 @@
 
 	// ─── Helpers ────────────────────────────────────────────────────────────────
 
-	const EMPTY_NODE_LOOKUP = new Map<string, LayoutNode>();
-
-	function buildNodeLookup(layoutNodes: LayoutNode[]): Map<string, LayoutNode> {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Lookup is built once and treated as immutable.
-		const lookup = new Map<string, LayoutNode>();
-		for (const n of layoutNodes) {
-			lookup.set(n.id, n);
-			lookup.set(n.name, n);
-		}
-		return lookup;
-	}
-
 	// ─── Graph fetch orchestration (delegated to graphLoader, TASK-196) ───────
 	// The edge cache, AbortController lifecycle, show-more debounce, and the
 	// loadGraph/clearGraph/showMore flow live in $lib/kg/graphLoader.ts. This
@@ -152,110 +138,11 @@
 	});
 
 	function initLayout() {
-		isZeroEdgeOverview = edges.length === 0 && nodes.length > 0;
-
-		if (isZeroEdgeOverview) {
-			const result = initializeZeroEdgeOverviewLayout(
-				nodes.map((n) => ({
-					id: n.id || n.name,
-					name: n.name,
-					type: n.type,
-					description: n.description,
-					memoryCount: n.memoryCount,
-					x: 0,
-					y: 0,
-					z: 0,
-					vx: 0,
-					vy: 0,
-					pinned: false
-				})),
-				canvasWidth,
-				canvasHeight
-			);
-			layoutNodes = result;
-			hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - result.length);
-			layoutEdges = [];
-			nodeLookup = buildNodeLookup(layoutNodes);
-			return;
-		}
-
-		// Select top nodes by edge connectivity (degree) to maximize edge coverage
-		const degreeMap = new SvelteMap<string, number>();
-		for (const e of edges) {
-			degreeMap.set(e.source, (degreeMap.get(e.source) ?? 0) + 1);
-			degreeMap.set(e.target, (degreeMap.get(e.target) ?? 0) + 1);
-		}
-
-		const sortedNodes = [...nodes].sort((a, b) => {
-			const degA = degreeMap.get(a.name) ?? 0;
-			const degB = degreeMap.get(b.name) ?? 0;
-			if (degB !== degA) return degB - degA;
-			return a.name.localeCompare(b.name);
-		});
-
-		const edgeNodeNames = new SvelteSet<string>();
-		for (const e of edges) {
-			edgeNodeNames.add(e.source);
-			edgeNodeNames.add(e.target);
-		}
-
-		// Cap the selection at the fetched top-N window (graphLimit) so 'Show
-		// more' renders a true superset 300 → 600 → 900 → 1000 (TASK-214).
-		// MAX_GRAPH_LIMIT is the server-side hard cap — defense in depth in
-		// case the store ever holds a value above it.
-		const layoutNodeCap = Math.min(get(kgGraphLimit), MAX_GRAPH_LIMIT);
-
-		const selectedNames = new SvelteSet<string>();
-		const selectedNodes: typeof nodes = [];
-		for (const n of sortedNodes) {
-			if (selectedNodes.length >= layoutNodeCap) break;
-			if (!selectedNames.has(n.name)) {
-				selectedNames.add(n.name);
-				selectedNodes.push(n);
-			}
-		}
-		for (const n of nodes) {
-			if (selectedNodes.length >= layoutNodeCap) break;
-			if (edgeNodeNames.has(n.name) && !selectedNames.has(n.name)) {
-				selectedNames.add(n.name);
-				selectedNodes.push(n);
-			}
-		}
-
-		const cappedNodes = selectedNodes;
-		const cappedNodeNames = selectedNames;
-
-		layoutEdges = edges
-			.filter((e) => cappedNodeNames.has(e.source) && cappedNodeNames.has(e.target))
-			.map((e) => ({
-				source: e.source,
-				target: e.target,
-				relation_type: e.relation_type,
-				// TASK-330: carry per-edge confidence (server listGraph) through
-				// to the renderers — drives the edge label % + opacity buckets.
-				confidence: e.confidence
-			}));
-
-		layoutNodes = initializeSphereLayout(
-			cappedNodes.map((n) => ({
-				id: n.id || n.name,
-				name: n.name,
-				type: n.type,
-				description: n.description,
-				memoryCount: n.memoryCount,
-				x: 0,
-				y: 0,
-				z: 0,
-				vx: 0,
-				vy: 0,
-				pinned: false
-			})),
-			layoutEdges,
-			canvasWidth,
-			canvasHeight
-		);
-
-		hiddenZeroEdgeNodeCount = Math.max(0, nodes.length - cappedNodes.length);
+		const result = buildGraphLayout(nodes, edges, canvasWidth, canvasHeight);
+		layoutNodes = result.layoutNodes;
+		layoutEdges = result.layoutEdges;
+		isZeroEdgeOverview = result.isZeroEdgeOverview;
+		hiddenZeroEdgeNodeCount = result.hiddenZeroEdgeNodeCount;
 		nodeLookup = buildNodeLookup(layoutNodes);
 	}
 

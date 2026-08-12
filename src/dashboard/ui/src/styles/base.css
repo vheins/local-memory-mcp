@@ -1,0 +1,239 @@
+/* ─── Agentic Glass Design System v2.0 ──────────────────────────────────── */
+
+/* Fix 7: Duplicate Google Fonts @import removed — kept only in index.html <link> */
+
+:root {
+	/* ── Glass Surface Tokens ─── */
+	--glass-bg: rgba(255, 255, 255, 0.52);
+	--glass-bg-strong: rgba(255, 255, 255, 0.72);
+	--glass-bg-ultra: rgba(255, 255, 255, 0.88);
+	--glass-border: rgba(255, 255, 255, 0.4);
+	--glass-border-inner: rgba(255, 255, 255, 0.7);
+	--glass-shadow: 0 20px 70px rgba(15, 23, 42, 0.1), 0 4px 16px rgba(15, 23, 42, 0.06);
+	--glass-shadow-elevated: 0 32px 96px rgba(15, 23, 42, 0.16), 0 8px 32px rgba(15, 23, 42, 0.08);
+	--glass-blur: blur(28px) saturate(1.2);
+
+	/* ── Dark Panel Tokens ─── */
+	--panel-dark: rgba(6, 12, 28, 0.7);
+	--panel-dark-strong: rgba(4, 9, 22, 0.88);
+	--panel-dark-ultra: rgba(2, 6, 16, 0.96);
+	--panel-dark-border: rgba(148, 163, 184, 0.1);
+	--panel-dark-border-glow: rgba(56, 189, 248, 0.2);
+	--panel-dark-shadow: 0 28px 90px rgba(2, 6, 23, 0.6), inset 0 1px 0 rgba(148, 163, 184, 0.06);
+
+	/* ── Glow Tokens ─── */
+	--glow-primary: rgba(14, 165, 233, 0.35);
+	--glow-accent: rgba(99, 102, 241, 0.35);
+	--glow-success: rgba(16, 185, 129, 0.35);
+	--glow-danger: rgba(239, 68, 68, 0.35);
+	--glow-purple: rgba(168, 85, 247, 0.35);
+	--glow-cyan: rgba(6, 182, 212, 0.35);
+
+	/* ── Layout ─── */
+	--sidebar-width: 280px;
+	--sidebar-collapsed-width: 72px;
+	--header-height: 61px;
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 20px;
+	--radius-2xl: 24px;
+
+	/* ── Color Palette ─── */
+	--color-bg: #f0f8ff;
+	--color-surface: #ffffff;
+	--color-border: #e1ecf7;
+	--color-text: #0a1628;
+	/* TASK-274 / audit F6 (WCAG AA, LIGHT THEME ONLY):
+	   17/21 sampled light-theme text pairs were < 4.5:1 because muted/faint
+	   were too light against the glass surfaces. Darkened here; the .dark
+	   block below is untouched so dark theme keeps its (passing) palette.
+	   - muted #556f8a → #51647a : 6.09:1 on white, ~5.8:1 on glass surfaces
+	   - faint #8faec4 → #64748b : 4.76:1 on white (was ~2.3:1) */
+	--color-text-muted: #51647a;
+	--color-text-faint: #64748b;
+	--color-primary: #0ea5e9;
+	--color-primary-dark: #0284c7;
+	--color-primary-light: #38bdf8;
+	--color-accent: #6366f1;
+	--color-accent-dark: #4f46e5;
+	--color-success: #10b981;
+	--color-warning: #f59e0b;
+	--color-danger: #ef4444;
+	--color-purple: #a855f7;
+
+	/* ── Semantic status/accent TEXT colors (TASK-274) ───
+	   Components that draw colored text/icons on tinted backgrounds (summary
+	   cards, stat chips, pressure pills, repo-focus badges) use these tokens.
+	   Light values are Tailwind-700-class shades that clear 4.5:1 on their
+	   tinted backgrounds (computed per pair); dark values are the original
+	   bright shades, so dark theme visuals are unchanged. */
+	--stat-sky: #0369a1;
+	--stat-violet: #6d28d9;
+	--stat-amber: #b45309;
+	--stat-emerald: #047857;
+	--stat-indigo: #4338ca;
+	--stat-red: #b91c1c;
+	--stat-orange: #c2410c;
+	--stat-slate: #475569;
+
+	/* ── Motion ─── */
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+	--ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+	--duration-fast: 0.15s;
+	--duration-base: 0.25s;
+	--duration-slow: 0.4s;
+}
+
+.dark {
+	--color-bg: #010c1e;
+	--color-surface: #070f1f;
+	--color-border: rgba(148, 163, 184, 0.1);
+	--color-text: #e9f1fa;
+	--color-text-muted: #7fa3be;
+	--color-text-faint: #4a6782;
+	--color-primary: #38bdf8;
+	--color-primary-dark: #0ea5e9;
+	--color-primary-light: #7dd3fc;
+
+	/* Dark-theme stat accent text colors — original bright shades, unchanged
+	   from before TASK-274 (dark theme passed 15/20 samples; no regression). */
+	--stat-sky: #38bdf8;
+	--stat-violet: #a78bfa;
+	--stat-amber: #fbbf24;
+	--stat-emerald: #34d399;
+	--stat-indigo: #818cf8;
+	--stat-red: #f87171;
+	--stat-orange: #fb923c;
+	--stat-slate: #94a3b8;
+}
+
+/* ─── Reset & Base ────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	font-family: "Inter", system-ui, sans-serif;
+	font-size: 16px;
+	line-height: 1.5;
+	background:
+		radial-gradient(ellipse at 8% 10%, rgba(56, 189, 248, 0.28) 0%, transparent 38%),
+		radial-gradient(ellipse at 92% 8%, rgba(99, 102, 241, 0.18) 0%, transparent 32%),
+		radial-gradient(ellipse at 75% 88%, rgba(168, 85, 247, 0.12) 0%, transparent 28%),
+		radial-gradient(ellipse at 20% 75%, rgba(14, 165, 233, 0.1) 0%, transparent 26%),
+		linear-gradient(160deg, #eef8ff 0%, #f0f4ff 45%, #f5f0ff 100%) fixed;
+	min-height: 100vh;
+	transition: background 0.5s ease;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+html.dark {
+	background:
+		radial-gradient(ellipse at 8% 10%, rgba(14, 165, 233, 0.14) 0%, transparent 38%),
+		radial-gradient(ellipse at 92% 8%, rgba(67, 56, 202, 0.12) 0%, transparent 32%),
+		radial-gradient(ellipse at 75% 88%, rgba(88, 28, 135, 0.1) 0%, transparent 28%),
+		radial-gradient(ellipse at 20% 75%, rgba(14, 165, 233, 0.06) 0%, transparent 26%),
+		linear-gradient(160deg, #010c1e 0%, #040d1e 45%, #050c1a 100%) fixed;
+}
+
+body {
+	min-height: 100vh;
+	background: transparent;
+	color: var(--color-text);
+	transition: color var(--duration-base) ease;
+	overflow-x: hidden;
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────── */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-weight: 700;
+	line-height: 1.3;
+}
+code,
+pre {
+	font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+a {
+	color: var(--color-primary);
+	text-decoration: none;
+}
+a:hover {
+	color: var(--color-primary-dark);
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: rgba(148, 163, 184, 0.25);
+	border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(148, 163, 184, 0.45);
+}
+.dark ::-webkit-scrollbar-thumb {
+	background: rgba(51, 65, 85, 0.55);
+}
+
+/* ─── Agentic Glass Panels ───────────────────────────────────────────────── */
+.glass {
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--glass-shadow);
+	backdrop-filter: var(--glass-blur);
+	-webkit-backdrop-filter: var(--glass-blur);
+	position: relative;
+}
+
+/* Etched glass inner-border effect via pseudo-element */
+.glass::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	border: 1px solid var(--glass-border-inner);
+	border-bottom-color: transparent;
+	border-right-color: transparent;
+	opacity: 0.6;
+	pointer-events: none;
+	z-index: 0;
+}
+
+.dark .glass {
+	background: var(--panel-dark);
+	border-color: var(--panel-dark-border);
+	box-shadow: var(--panel-dark-shadow);
+}
+
+.dark .glass::before {
+	border-color: rgba(148, 163, 184, 0.07);
+	border-bottom-color: transparent;
+	border-right-color: transparent;
+	opacity: 0.8;
+}
+
+.glass-strong {
+	background: var(--glass-bg-strong) !important;
+}
+
+.dark .glass-strong {
+	background: var(--panel-dark-strong) !important;
+}
+
