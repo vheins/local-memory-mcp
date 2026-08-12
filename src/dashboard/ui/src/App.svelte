@@ -79,6 +79,15 @@
 	// stats load (initial + 30s polling), never wrap the whole shell.
 	let dashboardLiveText = "";
 
+	// TASK-425: the sidebar nav is the single navigation surface. Route tab
+	// switches through app.onTabChange (same handler the old horizontal tablist
+	// used) so lazy loads (memories/tasks/reference) keep working, and close
+	// the mobile menu when navigating from it.
+	function handleTabSelect(tab: string) {
+		app.onTabChange(tab);
+		if (get(appState).mobileMenuOpen) app.toggleMobileMenu();
+	}
+
 	onMount(() => {
 		const unsubStats = dashboardStats.subscribe((s) => {
 			if (s) dashboardLiveText = "Dashboard stats refreshed";
@@ -113,7 +122,7 @@
 
 <div class="app-layout">
 	<!-- Sidebar -->
-	<RepoSidebar onRepoSelect={app.onRepoSelect} />
+	<RepoSidebar onRepoSelect={app.onRepoSelect} onTabSelect={handleTabSelect} />
 
 	<!-- Main content -->
 	<div class="main-content" class:sidebar-collapsed={$sidebarCollapsed}>
@@ -136,7 +145,7 @@
 				aria-label="Close menu"
 			></div>
 			<div class="mobile-sidebar-shell">
-				<RepoSidebar onRepoSelect={app.onRepoSelect} />
+				<RepoSidebar onRepoSelect={app.onRepoSelect} onTabSelect={handleTabSelect} />
 			</div>
 		{/if}
 
@@ -154,135 +163,11 @@
 					<div class="empty-state-text">Select a repository from the sidebar to get started.</div>
 				</div>
 			{:else}
-				<div class="tabs-wrap">
-					<!-- TASK-405 (STD-002): tablist needs an accessible name; all
-					     11 views are now reachable from this single surface (the
-					     RepoSidebar nav remains as a secondary shortcut — both
-					     write the same activeTab store). -->
-					<div class="tab-nav" style="display:inline-flex;" role="tablist" aria-label="Dashboard sections">
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "arena"}
-							on:click={() => app.onTabChange("arena")}
-							id="tab-arena"
-							role="tab"
-							aria-selected={$activeTab === "arena"}
-						>
-							<Icon name="cpu" size={14} strokeWidth={1.75} />
-							<span>Arena</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "dashboard"}
-							on:click={() => app.onTabChange("dashboard")}
-							id="tab-dashboard"
-							role="tab"
-							aria-selected={$activeTab === "dashboard"}
-						>
-							<Icon name="layout-dashboard" size={14} strokeWidth={1.75} />
-							<span>Dashboard</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "activity"}
-							on:click={() => app.onTabChange("activity")}
-							id="tab-activity"
-							role="tab"
-							aria-selected={$activeTab === "activity"}
-						>
-							<Icon name="activity" size={14} strokeWidth={1.75} />
-							<span>Activity</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "memories"}
-							on:click={() => app.onTabChange("memories")}
-							id="tab-memories"
-							role="tab"
-							aria-selected={$activeTab === "memories"}
-						>
-							<Icon name="brain" size={14} strokeWidth={1.75} />
-							<span>Memories</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "tasks"}
-							on:click={() => app.onTabChange("tasks")}
-							id="tab-tasks"
-							role="tab"
-							aria-selected={$activeTab === "tasks"}
-						>
-							<Icon name="clipboard-list" size={14} strokeWidth={1.75} />
-							<span>Tasks</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "codebase"}
-							on:click={() => app.onTabChange("codebase")}
-							id="tab-codebase"
-							role="tab"
-							aria-selected={$activeTab === "codebase"}
-						>
-							<Icon name="code" size={14} strokeWidth={1.75} />
-							<span>Codebase</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "handoffs"}
-							on:click={() => app.onTabChange("handoffs")}
-							id="tab-handoffs"
-							role="tab"
-							aria-selected={$activeTab === "handoffs"}
-						>
-							<Icon name="git-branch" size={14} strokeWidth={1.75} />
-							<span>Handoffs</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "queue"}
-							on:click={() => app.onTabChange("queue")}
-							id="tab-queue"
-							role="tab"
-							aria-selected={$activeTab === "queue"}
-						>
-							<Icon name="list" size={14} strokeWidth={1.75} />
-							<span>Queue</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "knowledge-graph"}
-							on:click={() => app.onTabChange("knowledge-graph")}
-							id="tab-knowledge-graph"
-							role="tab"
-							aria-selected={$activeTab === "knowledge-graph"}
-						>
-							<Icon name="share-2" size={14} strokeWidth={1.75} />
-							<span>Knowledge Graph</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "standards"}
-							on:click={() => app.onTabChange("standards")}
-							id="tab-standards"
-							role="tab"
-							aria-selected={$activeTab === "standards"}
-						>
-							<Icon name="check" size={14} strokeWidth={1.75} />
-							<span>Standards</span>
-						</button>
-						<button
-							class="tab-btn"
-							class:active={$activeTab === "reference"}
-							on:click={() => app.onTabChange("reference")}
-							id="tab-reference"
-							role="tab"
-							aria-selected={$activeTab === "reference"}
-						>
-							<Icon name="book-open" size={14} strokeWidth={1.75} />
-							<span>Reference</span>
-						</button>
-					</div>
-				</div>
+				<!-- TASK-425: no horizontal tablist in the content area — all
+				     navigation (Arena/Dashboard/Activity/Memories/Tasks/Codebase/
+				     Handoffs/Queue/Knowledge Graph/Standards/Reference) lives in
+				     the RepoSidebar nav (lib/navigation.ts, single source). The
+				     active view below is gated by the same activeTab store. -->
 
 				<!-- ════ DASHBOARD TAB ════ -->
 				{#if $activeTab === "dashboard"}

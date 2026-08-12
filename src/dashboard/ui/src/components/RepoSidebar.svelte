@@ -7,18 +7,13 @@
 		repoSearchQuery,
 		activeTab
 	} from "../lib/stores";
+	import { NAV_ITEMS } from "../lib/navigation";
 	import { createRepoSidebarHandler } from "../lib/composables/useRepoSidebar";
 	import Icon from "../lib/Icon.svelte";
 	import RepoItem from "./RepoItem.svelte";
 
 	export let onRepoSelect: (repo: string) => void = () => {};
-
-	const SIDEBAR_TABS = [
-		{ id: "arena", label: "Agent Arena", icon: "cpu" },
-		{ id: "dashboard", label: "Dashboard", icon: "layout-dashboard" },
-		{ id: "standards", label: "Standards", icon: "check" },
-		{ id: "reference", label: "Reference", icon: "book-open" }
-	];
+	export let onTabSelect: (tab: string) => void = () => {};
 
 	const handler = createRepoSidebarHandler(onRepoSelect);
 
@@ -63,18 +58,23 @@
 		</button>
 	</div>
 
-	<!-- Navigation -->
-	<div class="nav-section" class:collapsed>
-		{#each SIDEBAR_TABS as tab (tab.id)}
+	<!-- Navigation — TASK-425: single nav surface (moved from the content-area
+	     horizontal tablist; model lives in lib/navigation.ts). Keeps the
+	     TASK-405 a11y pattern: accessible name on the tablist + role=tab +
+	     aria-selected on each item. -->
+	<div class="nav-section" class:collapsed role="tablist" aria-label="Dashboard sections">
+		{#each NAV_ITEMS as tab (tab.id)}
 			<button
 				class="nav-item"
 				class:active={$activeTab === tab.id}
 				class:collapsed
-				on:click={() => activeTab.set(tab.id)}
+				on:click={() => onTabSelect(tab.id)}
 				title={collapsed ? tab.label : ""}
 				id="nav-{tab.id}"
+				role="tab"
+				aria-selected={$activeTab === tab.id}
 			>
-				<Icon name={tab.icon} size={collapsed ? 18 : 15} strokeWidth={collapsed ? 1.75 : 1.75} />
+				<Icon name={tab.icon} size={collapsed ? 18 : 15} strokeWidth={1.75} />
 				{#if !collapsed}
 					<span class="nav-label">{tab.label}</span>
 					{#if $activeTab === tab.id}

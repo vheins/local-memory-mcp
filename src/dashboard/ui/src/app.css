@@ -332,57 +332,10 @@ a:hover {
 	z-index: var(--z-topbar, 30);
 }
 
-/* ─── Tabs ──────────────────────────────────────────────────────────────────── */
-.tab-nav {
-	display: flex;
-	gap: 3px;
-	padding: 4px;
-	background: rgba(241, 245, 249, 0.7);
-	border-radius: var(--radius-md);
-	border: 1px solid rgba(226, 232, 240, 0.8);
-	backdrop-filter: blur(12px);
-}
-
-.tabs-wrap {
-	margin-bottom: 20px;
-	max-width: 100%;
-	overflow-x: auto;
-	overflow-y: hidden;
-	scrollbar-width: none;
-}
-
-.tabs-wrap::-webkit-scrollbar {
-	display: none;
-}
-
-/* TASK-275 / audit F13: on phones the tab strip previously hid its scrollbar
-   entirely (overflow-x:auto + scrollbar:none), so tabs beyond the fold were
-   undiscoverable. ≤480px: show a thin styled scrollbar as a scroll affordance. */
-@media (max-width: 480px) {
-	.tabs-wrap {
-		scrollbar-width: thin;
-		scrollbar-color: rgba(99, 102, 241, 0.5) rgba(148, 163, 184, 0.15);
-		-webkit-overflow-scrolling: touch;
-	}
-	.tabs-wrap::-webkit-scrollbar {
-		display: block;
-		height: 4px;
-	}
-	.tabs-wrap::-webkit-scrollbar-track {
-		background: rgba(148, 163, 184, 0.15);
-		border-radius: 9999px;
-	}
-	.tabs-wrap::-webkit-scrollbar-thumb {
-		background: rgba(99, 102, 241, 0.5);
-		border-radius: 9999px;
-	}
-}
-
-.dark .tab-nav {
-	background: rgba(15, 23, 42, 0.6);
-	border-color: rgba(148, 163, 184, 0.1);
-}
-
+/* ─── Tab Buttons ───────────────────────────────────────────────────────────── */
+/* NOTE (TASK-425): the content-area horizontal tab strip (.tab-nav/.tabs-wrap)
+   was removed — navigation lives in the RepoSidebar (lib/navigation.ts). The
+   .tab-btn style below is retained for TimeStatsWidget's period tabs. */
 .tab-btn {
 	display: flex;
 	align-items: center;
@@ -1863,15 +1816,6 @@ a:hover {
 
 	.dashboard-shell {
 		padding: 12px;
-	}
-
-	.tabs-wrap {
-		margin: 0 -12px 12px;
-		padding: 0 12px;
-	}
-
-	.tab-nav {
-		max-width: max-content;
 	}
 
 	.tab-btn {

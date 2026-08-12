@@ -17,6 +17,20 @@ export default defineConfig({
 		hookTimeout: 30_000,
 
 		// ------------------------------------------------------------------
+		// @testing-library/svelte — inline required so vite-node transforms
+		// svelte-core's runtime `import('./wrapper-scaffold.svelte')` (the
+		// wrapper setup path) instead of handing the .svelte file to Node
+		// directly ("Unknown file extension .svelte"). Required by the
+		// RepoSidebar navigation tests (TASK-435); documented in the Svelte
+		// Testing Library setup guide.
+		// ------------------------------------------------------------------
+		server: {
+			deps: {
+				inline: ["@testing-library/svelte", "@testing-library/svelte-core"]
+			}
+		},
+
+		// ------------------------------------------------------------------
 		// Coverage (ROOT level only — `coverage` is NOT allowed inside a
 		// project config; vitest.dev/guide/projects "Unsupported Options").
 		//
