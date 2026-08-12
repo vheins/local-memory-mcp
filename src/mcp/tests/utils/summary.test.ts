@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { renderGroupedSummary, enumOrderComparator, type GroupedSummaryOptions } from "../../utils/summary";
+import {
+	renderGroupedSummary,
+	enumOrderComparator,
+	formatOutputLegend,
+	type GroupedSummaryOptions
+} from "../../utils/summary";
 
 interface SampleItem {
 	group: string;
@@ -106,5 +111,45 @@ describe("enumOrderComparator", () => {
 		const cmp = enumOrderComparator(["active", "done"]);
 		expect(cmp("done", "zzz")).toBeLessThan(0);
 		expect(cmp("zzz", "done")).toBeGreaterThan(0);
+	});
+});
+
+describe("formatOutputLegend (TASK-424)", () => {
+	it("documents relevance-score semantics with a numeric cap", () => {
+		expect(
+			formatOutputLegend({ scoreLabel: "relevance score", scoreRange: "0.00–1.00", groupBy: "status", perGroupCap: 5 })
+		).toBe("> [N] = relevance score (0.00–1.00) · grouped by status, ≤5 shown per group (+N more)");
+	});
+
+	it("documents importance semantics with an exception-describing cap", () => {
+		expect(
+			formatOutputLegend({
+				scoreLabel: "importance",
+				scoreRange: "1–5",
+				groupBy: "type",
+				perGroupCap: "5 (task_archive 2)"
+			})
+		).toBe("> [N] = importance (1–5) · grouped by type, ≤5 (task_archive 2) shown per group (+N more)");
+	});
+
+	it("uses the same template for both tools so [N] semantics stay consistent", () => {
+		const taskLegend = formatOutputLegend({
+			scoreLabel: "relevance score",
+			scoreRange: "0.00–1.00",
+			groupBy: "status",
+			perGroupCap: 5
+		});
+		const memLegend = formatOutputLegend({
+			scoreLabel: "importance",
+			scoreRange: "1–5",
+			groupBy: "type",
+			perGroupCap: "5 (task_archive 2)"
+		});
+		// Both start with the documented [N] marker and end with the same
+		// per-group cap + overflow-marker phrasing — the contract consumers rely on.
+		expect(taskLegend.startsWith("> [N] =")).toBe(true);
+		expect(memLegend.startsWith("> [N] =")).toBe(true);
+		expect(taskLegend.endsWith("shown per group (+N more)")).toBe(true);
+		expect(memLegend.endsWith("shown per group (+N more)")).toBe(true);
 	});
 });

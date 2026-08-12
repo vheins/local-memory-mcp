@@ -31,7 +31,7 @@ import {
 	MEMORY_TASK_ARCHIVE_DOMAIN_PENALTY
 } from "../utils/constants";
 import { isMemoryAcknowledged } from "../utils/memory-utils";
-import { renderGroupedSummary, enumOrderComparator } from "../utils/summary";
+import { renderGroupedSummary, enumOrderComparator, formatOutputLegend } from "../utils/summary";
 import { FTS_CANDIDATE_CAP } from "../utils/fts";
 import { handleDetailMode } from "./memory-read/detail";
 
@@ -308,10 +308,22 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	if (paginatedResults.length > 0) {
 		const parts: string[] = [];
 
-		// Header: query + pagination
+		// Header: query + pagination. (showing N) = paginated result rows fed
+		// to the grouped renderer; unackedCount is the work-queue signal.
 		const unackedCount = paginatedResults.filter((m: MemoryEntry) => !isMemoryAcknowledged(m)).length;
 		parts.push(
 			`### Results: ${total} memories for "${params.query}" (showing ${paginatedResults.length} · ${unackedCount} unacknowledged)`
+		);
+		// Shared metadata legend (TASK-424): documents [N] = importance (1–5)
+		// and the per-group cap (+N more). task_archive is capped at 2 (see
+		// `cap` below) — noted in the legend string for transparency.
+		parts.push(
+			formatOutputLegend({
+				scoreLabel: "importance",
+				scoreRange: "1–5",
+				groupBy: "type",
+				perGroupCap: "5 (task_archive 2)"
+			})
 		);
 		parts.push("");
 
@@ -405,6 +417,10 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 			.map(([t, c]) => `${t}: ${c}`)
 			.join(" · ");
 		parts.push(`Memory Timeline — ${total} total${rows.length < total ? ` (showing ${rows.length})` : ""}`);
+		// Shared [N] legend (TASK-424): recap reuses the importance scale but is
+		// a full by-date timeline (no per-group cap), so the marker differs from
+		// search mode's grouped renderer.
+		parts.push("> [N] = importance (1–5) · Memory Timeline shows every match by date (no per-group cap)");
 		if (statsLine) parts.push(statsLine);
 		parts.push("");
 

@@ -9,7 +9,7 @@ import { TASK_SCORING } from "../../utils/scoring";
 import { HybridSearchEngine } from "../../utils/hybrid-search";
 import type { ScoredEntity } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
-import { renderGroupedSummary, enumOrderComparator } from "../../utils/summary";
+import { renderGroupedSummary, enumOrderComparator, formatOutputLegend } from "../../utils/summary";
 import { collectIssueRefsFrom, extractQueryIssueTokens } from "../../utils/issue-ref";
 
 // ── Task-specific scoring helpers ─────────────────────────────────────
@@ -343,13 +343,15 @@ export async function handleSearchMode(
 			const lines: string[] = [];
 			// Header shows TOTAL matches; the grouped body below represents the
 			// entire pool (all statuses), capped at 5 visible lines per group.
+			// (showing N) = number of result rows fed to the grouped renderer
+			// (= total here, since TASK-421 renders the full eligible pool).
 			// TASK-422: an issue_ref filter makes the header state the linkage
 			// explicitly, and an issue-intent query gets a text-vs-linked
 			// breakdown so "N tasks" cannot be misread as "N tasks FOR the issue".
 			if (issueRef) {
-				lines.push(`### Results: ${total} tasks linked to issue #${issueRef}`);
+				lines.push(`### Results: ${total} tasks linked to issue #${issueRef} (showing ${scoredPool.length})`);
 			} else {
-				lines.push(`### Results: ${total} tasks for "${queryText}"`);
+				lines.push(`### Results: ${total} tasks for "${queryText}" (showing ${scoredPool.length})`);
 				if (queryIssueTokens.length > 0) {
 					const linkedCount = scoredPool.filter((st) =>
 						queryIssueTokens.some((t) => (issueRefsByTaskId.get(st.task.id) ?? []).includes(t))
@@ -361,6 +363,16 @@ export async function handleSearchMode(
 					);
 				}
 			}
+			// Shared metadata legend (TASK-424): documents [N] = relevance score
+			// and the per-group cap (+N more) so the output is unambiguous.
+			lines.push(
+				formatOutputLegend({
+					scoreLabel: "relevance score",
+					scoreRange: "0.00–1.00",
+					groupBy: "status",
+					perGroupCap: 5
+				})
+			);
 			lines.push("");
 
 			// Fused grouped by status (enum order), with global rank #N.
