@@ -104,6 +104,22 @@ export const SIMILARITY_ZERO_FALLBACK = 0.16;
 // repo (memory.vector searchBySimilarity).
 export const REPO_MATCH_BOOST = 0.1;
 
+// ── Memory search knowledge-debt signals (TASK-423) ──────────────────────
+// Unacknowledged memories (recall_count === 0, see isMemoryAcknowledged)
+// represent knowledge debt — never recalled/used via acknowledge("used").
+// They get a small boost riding the 0.15 domain slot (max +0.0225 on the
+// composite) so they surface above equal-relevance acknowledged memories for
+// work-themed queries, without overriding genuine relevance.
+export const MEMORY_UNACKNOWLEDGED_DOMAIN_BOOST = 0.15;
+// task_archive entries are completed-work records (session summaries), not
+// active knowledge. On keyword-heavy queries ("task", "completed") their
+// bm25 title match would otherwise dominate work-themed results via
+// title-keyword collision ("Completed Task: ..."). A small domain penalty
+// (max -0.03 on the composite) keeps them from crowding out
+// decision/pattern/code_fact at comparable relevance. Display is further
+// capped per group by the search renderer.
+export const MEMORY_TASK_ARCHIVE_DOMAIN_PENALTY = 0.2;
+
 // ── Conflict thresholds ──────────────────────────────────────────────────
 // memory-write rejects creates whose content overlaps an existing memory
 // above this cosine threshold.

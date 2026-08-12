@@ -14,6 +14,7 @@ import { MemoryEntry } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
+import { isMemoryAcknowledged } from "../../utils/memory-utils";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query";
 import { MemoryReadInput } from "../schemas/index";
 
@@ -27,6 +28,7 @@ export function formatMemoryDetail(memory: MemoryEntry, showId?: boolean): strin
 		`Type: ${memory.type}`,
 		`Importance: ${memory.importance}`,
 		`Status: ${memory.status}`,
+		`Acknowledged: ${isMemoryAcknowledged(memory) ? "yes" : "no"}`,
 		`Tags: ${memory.tags.length > 0 ? memory.tags.join(", ") : "-"}`,
 		`Created: ${memory.created_at}`,
 		`Updated: ${memory.updated_at}`
@@ -36,6 +38,11 @@ export function formatMemoryDetail(memory: MemoryEntry, showId?: boolean): strin
 	if (memory.scope?.language) lines.push(`Language: ${memory.scope.language}`);
 	if (memory.content) lines.push("", "--- Content ---", memory.content);
 	return lines.join("\n");
+}
+
+/** Spreads the derived acknowledged flag onto a memory for structured output (TASK-423). */
+function withAcknowledged(memory: MemoryEntry): MemoryEntry & { acknowledged: boolean } {
+	return { ...memory, acknowledged: isMemoryAcknowledged(memory) };
 }
 
 export function formatBulkDetail(memories: MemoryEntry[]): string {
@@ -59,7 +66,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 			memories.map((m: MemoryEntry) => m.title),
 			"memory"
 		);
-		const data: Record<string, unknown> = { memories };
+		const data: Record<string, unknown> = { memories: memories.map(withAcknowledged) };
 		if (kgContext) data.kg = kgContext;
 		return createMcpResponse(data, contentSummary, {
 			contentSummary,
@@ -77,7 +84,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 			memories.map((m: MemoryEntry) => m.title),
 			"memory"
 		);
-		const data: Record<string, unknown> = { memories };
+		const data: Record<string, unknown> = { memories: memories.map(withAcknowledged) };
 		if (kgContext) data.kg = kgContext;
 		return createMcpResponse(data, contentSummary, {
 			contentSummary,
@@ -104,7 +111,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 	const content = formatMemoryDetail(memory);
 
 	const kgContext = fetchKgContext(db, repo, memory.title, "memory");
-	const data: Record<string, unknown> = { memory };
+	const data: Record<string, unknown> = { memory: withAcknowledged(memory) };
 	if (kgContext) data.kg = kgContext;
 
 	return createMcpResponse(data, content, {

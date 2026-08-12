@@ -64,7 +64,7 @@ describe("MCP Local Memory - memory-read (Search, Detail, Recap)", () => {
 		});
 
 		const results = searchRes.structuredContent;
-		expect(results.columns).toEqual(["id", "code", "title", "type", "importance"]);
+		expect(results.columns).toEqual(["id", "code", "title", "type", "importance", "acknowledged"]);
 		expect(results.count).toBeGreaterThanOrEqual(1);
 		expect(results.rows.some((r: string[]) => r[2] === "Search Target Alpha")).toBe(true);
 	});
@@ -326,7 +326,7 @@ describe("MCP Local Memory - memory-read (Search, Detail, Recap)", () => {
 		expect(content.stats).toBeDefined();
 		expect(content.stats.byType).toBeDefined();
 		expect(content.top).toBeDefined();
-		expect(content.top.columns).toEqual(["id", "code", "title", "type", "importance"]);
+		expect(content.top.columns).toEqual(["id", "code", "title", "type", "importance", "acknowledged"]);
 		expect(content.total).toBeGreaterThanOrEqual(1);
 	});
 

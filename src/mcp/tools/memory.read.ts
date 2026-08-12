@@ -25,7 +25,12 @@ import { parseRelativeDate, TimeTunnelResult } from "./time-tunnel";
 import { fetchAggregatedKgContext } from "./kg-archivist/query";
 import { MEMORY_SCORING } from "../utils/scoring";
 import { HybridSearchEngine } from "../utils/hybrid-search";
-import { SEARCH_THRESHOLDS } from "../utils/constants";
+import {
+	SEARCH_THRESHOLDS,
+	MEMORY_UNACKNOWLEDGED_DOMAIN_BOOST,
+	MEMORY_TASK_ARCHIVE_DOMAIN_PENALTY
+} from "../utils/constants";
+import { isMemoryAcknowledged } from "../utils/memory-utils";
 import { renderGroupedSummary, enumOrderComparator } from "../utils/summary";
 import { FTS_CANDIDATE_CAP } from "../utils/fts";
 import { handleDetailMode } from "./memory-read/detail";
@@ -41,11 +46,31 @@ type MemoryReadParams = MemoryReadInput;
 
 // ── Constants ───────────────────────────────────────────────────────────
 
-const SEARCH_COLUMNS = ["id", "code", "title", "type", "importance"] as const;
-const TOP_COLUMNS = ["id", "code", "title", "type", "importance"] as const;
+const SEARCH_COLUMNS = ["id", "code", "title", "type", "importance", "acknowledged"] as const;
+const TOP_COLUMNS = ["id", "code", "title", "type", "importance", "acknowledged"] as const;
 const TYPE_ORDER = ["code_fact", "decision", "mistake", "pattern", "task_archive"];
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+/** Acknowledged-state marker appended to every rendered result line (TASK-423). */
+function ackMarker(memory: MemoryEntry): string {
+	return isMemoryAcknowledged(memory) ? " [acked]" : " [unacked]";
+}
+
+/**
+ * Memory domain signal with TASK-423 knowledge-debt adjustments, riding the
+ * shared 0.15 domain slot WITHOUT touching the hybrid engine:
+ *   - unacknowledged memories (+MEMORY_UNACKNOWLEDGED_DOMAIN_BOOST) surface
+ *     above equal-relevance acknowledged ones for work queries,
+ *   - task_archive completion records (−MEMORY_TASK_ARCHIVE_DOMAIN_PENALTY)
+ *     no longer dominate work queries via "Task"-in-title keyword collision.
+ */
+function memoryDomainSignal(memory: MemoryEntry, queryTerms: string[]): number {
+	let domain = MEMORY_SCORING.domain(memory, { queryTerms });
+	if (!isMemoryAcknowledged(memory)) domain += MEMORY_UNACKNOWLEDGED_DOMAIN_BOOST;
+	if (memory.type === "task_archive") domain -= MEMORY_TASK_ARCHIVE_DOMAIN_PENALTY;
+	return Math.max(0, Math.min(1, domain));
+}
 
 function applyTimeFilter(memories: MemoryEntry[], tunnel: TimeTunnelResult): MemoryEntry[] {
 	const sinceMs = tunnel.since ? new Date(tunnel.since).getTime() : 0;
@@ -223,19 +248,21 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 				similarity,
 				keyword: ftsScoreMap.get(memory.id) ?? 0,
 				recency: MEMORY_SCORING.recency(memory),
-				domain: MEMORY_SCORING.domain(memory, { queryTerms: terms })
+				// TASK-423: unacknowledged boost + task_archive penalty ride the
+				// domain slot (engine untouched).
+				domain: memoryDomainSignal(memory, terms)
 			}),
 			scoreVectorOnly: (memory, hit, terms) => ({
 				similarity: hit.score,
 				keyword: 0,
 				recency: MEMORY_SCORING.recency(memory),
-				domain: MEMORY_SCORING.domain(memory, { queryTerms: terms })
+				domain: memoryDomainSignal(memory, terms)
 			}),
 			scoreFallback: (memory, similarity, terms) => ({
 				similarity,
 				keyword: ftsScoreMap.get(memory.id) ?? 0,
 				recency: MEMORY_SCORING.recency(memory),
-				domain: MEMORY_SCORING.domain(memory, { queryTerms: terms })
+				domain: memoryDomainSignal(memory, terms)
 			})
 		},
 		thresholds: SEARCH_THRESHOLDS.memory,
@@ -273,7 +300,8 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		m.code || "-",
 		m.title ?? "Untitled",
 		m.type,
-		m.importance
+		m.importance,
+		isMemoryAcknowledged(m)
 	]);
 
 	let contentSummary: string;
@@ -281,7 +309,10 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		const parts: string[] = [];
 
 		// Header: query + pagination
-		parts.push(`### Results: ${total} memories for "${params.query}" (showing ${paginatedResults.length})`);
+		const unackedCount = paginatedResults.filter((m: MemoryEntry) => !isMemoryAcknowledged(m)).length;
+		parts.push(
+			`### Results: ${total} memories for "${params.query}" (showing ${paginatedResults.length} · ${unackedCount} unacknowledged)`
+		);
 		parts.push("");
 
 		// Fused grouped by type (enum order), with global rank #N
@@ -291,7 +322,7 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 				getGroup: (m) => m.type || "unknown",
 				groupOrder: enumOrderComparator(TYPE_ORDER),
 				cap: (key) => (key === "task_archive" ? 2 : 5),
-				formatLine: (m, rank) => `#${rank} ${m.code || "-"} [${m.importance}] ${m.title}`,
+				formatLine: (m, rank) => `#${rank} ${m.code || "-"} [${m.importance}] ${m.title}${ackMarker(m)}`,
 				footer: "Use memory-read with id (or code) for full content."
 			})
 		);
@@ -360,7 +391,8 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 		row.code || "-",
 		row.title ?? "Untitled",
 		row.type,
-		row.importance
+		row.importance,
+		isMemoryAcknowledged(row)
 	]);
 
 	let contentSummary: string;
@@ -394,7 +426,7 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 			for (const entry of entries) {
 				const code = (entry.code || "-").padEnd(8);
 				const type = (entry.type || "").padEnd(10);
-				parts.push(`  ${code} [${entry.importance}]  ${type}  ${entry.title}`);
+				parts.push(`  ${code} [${entry.importance}]  ${type}  ${entry.title}${ackMarker(entry)}`);
 			}
 			parts.push("");
 		}

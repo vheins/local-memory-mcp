@@ -1,4 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite";
+import type { MemoryEntry } from "../types";
 import { resolveEntityRef } from "./entity-ref";
 
 /**
@@ -26,4 +27,22 @@ export function resolveMemorySupersedes(
 	repo?: string
 ): string | null {
 	return resolveEntityRef(db, "memory", value, owner, repo);
+}
+
+/**
+ * Whether a memory has been explicitly acknowledged as used.
+ *
+ * The only persisted "acknowledged" signal is `recall_count` — it is
+ * incremented EXCLUSIVELY by the `acknowledge: "used"` write path
+ * (memory-write update/bulk → incrementRecallCount), so `recall_count > 0`
+ * means the memory was recalled/used at least once. An acknowledge of
+ * "irrelevant" or "contradictory" is logged but NOT persisted as a counter,
+ * so it does not flip this flag (documented limitation of the data model).
+ *
+ * This is the single source of the acknowledged derivation so the search
+ * ranking boost (TASK-423), the per-item markers, and the detail view cannot
+ * drift apart.
+ */
+export function isMemoryAcknowledged(memory: Pick<MemoryEntry, "recall_count">): boolean {
+	return memory.recall_count > 0;
 }
