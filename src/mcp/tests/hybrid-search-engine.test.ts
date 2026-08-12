@@ -125,6 +125,22 @@ describe("HybridSearchEngine — rank, threshold, pagination", () => {
 		// All tied at 0.30 → stable sort preserves insertion order.
 		expect(result.items.map((s) => s.entity.id)).toEqual(["b", "c"]);
 	});
+
+	it("exposes the FULL post-filtered pool via eligible, independent of pagination (TASK-421)", () => {
+		const result = runEngine({
+			candidates: ["a", "b", "c", "d"].map((id) => ({ entity: item(id, 1, 0, 0), similarity: 0 })),
+			thresholds: { smallSet: 0, largeSet: 0 },
+			offset: 1,
+			limit: 2
+		});
+		// Paginated page is only [b, c]…
+		expect(result.items.map((s) => s.entity.id)).toEqual(["b", "c"]);
+		// …but eligible carries the WHOLE match set (same length as total).
+		expect(result.eligible.map((s) => s.entity.id)).toEqual(["a", "b", "c", "d"]);
+		expect(result.eligible).toHaveLength(result.total);
+		// items is always eligible.slice(offset, offset + limit)
+		expect(result.items).toEqual(result.eligible.slice(1, 3));
+	});
 });
 
 // ── Vector + keyword merge modes ─────────────────────────────────────────
@@ -167,14 +183,12 @@ describe("HybridSearchEngine — vector + keyword merge", () => {
 	});
 
 	it("null vectorResults (vector-store failure) scores candidates via the fallback scorer", () => {
-		const fallbackSpy = vi.fn(
-			(_entity: Item, _similarity: number): HybridScores => ({
-				similarity: 0,
-				keyword: 1,
-				recency: 0,
-				domain: 0
-			})
-		);
+		const fallbackSpy = vi.fn((_entity: Item, _similarity: number): HybridScores => ({
+			similarity: 0,
+			keyword: 1,
+			recency: 0,
+			domain: 0
+		}));
 		const result = runEngine({
 			candidates: [{ entity: item("a", 0, 0, 0), similarity: 0.4 }],
 			vectorResults: null,

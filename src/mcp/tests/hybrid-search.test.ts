@@ -3,6 +3,7 @@ import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import { handleMemoryRead } from "../tools/memory.read";
 import { handleTaskRead } from "../tools/task.read";
+import { getPrimaryTextContent } from "../utils/mcp-response";
 import type { VectorStore, VectorResult } from "../types";
 
 const VALID_UUID_1 = "11111111-1111-4111-a111-111111111111";
@@ -243,6 +244,116 @@ describe("Hybrid Search Scoring — vector + keyword + recency + domain", () => 
 
 			const data = result.structuredContent as Record<string, unknown>;
 			expect(data.count).toBeGreaterThanOrEqual(1);
+			db.close();
+		});
+
+		// TASK-434 — regression lock for TASK-421: the text summary must render
+		// EVERY status group with matches (count per group, cap-5 + "+N more"),
+		// not just the groups that happen to land on the current page. Guards the
+		// exact wiring fixed in task-read/search.ts (`items: scoredPool` — the
+		// pre-pagination eligible pool is grouped, while the wire stays paginated).
+		it("renders every status group with matches in the text summary, capped per group (TASK-421 AC)", async () => {
+			const db = await createTestStore();
+			const repo = "task-hybrid-repo";
+			const { handleTaskWrite } = await import("../tools/task.write");
+			const query = "integration-ac";
+
+			// Fixture: 11 tasks all matching the query, spanning 3 statuses.
+			// pending (7) exceeds the 5-line cap; in_progress (2) and completed (2)
+			// stay under it. completed cannot be CREATed directly (state machine
+			// allows only backlog/pending), so it is reached via the
+			// pending → in_progress → completed transition chain.
+			const pendingCodes = ["IA-AC-P01", "IA-AC-P02", "IA-AC-P03", "IA-AC-P04", "IA-AC-P05", "IA-AC-P06", "IA-AC-P07"];
+			const inProgressCodes = ["IA-AC-I01", "IA-AC-I02"];
+			const completedCodes = ["IA-AC-C01", "IA-AC-C02"];
+			const total = pendingCodes.length + inProgressCodes.length + completedCodes.length;
+
+			for (const code of [...pendingCodes, ...inProgressCodes, ...completedCodes]) {
+				await handleTaskWrite(
+					{
+						owner: "test",
+						repo,
+						task_code: code,
+						phase: "testing",
+						title: `Integration AC task ${code}`,
+						description: `Regression fixture for the integration-ac search wiring.`,
+						status: "pending",
+						json: false
+					},
+					db,
+					mockVectorStore([])
+				);
+			}
+
+			for (const code of inProgressCodes) {
+				await handleTaskWrite(
+					{ owner: "test", repo, code, status: "in_progress", comment: "Started integration-ac work." },
+					db,
+					mockVectorStore([])
+				);
+			}
+
+			for (const code of completedCodes) {
+				await handleTaskWrite(
+					{ owner: "test", repo, code, status: "in_progress", comment: "Started integration-ac work." },
+					db,
+					mockVectorStore([])
+				);
+				await handleTaskWrite(
+					{ owner: "test", repo, code, status: "completed", comment: "Finished integration-ac work." },
+					db,
+					mockVectorStore([])
+				);
+			}
+
+			// Act — text mode with a page limit (5) smaller than the total (11):
+			// the structured page holds 5 rows, yet the summary must show all groups.
+			const result = await handleTaskRead(
+				{ query, owner: "test", repo, json: false, limit: 5 },
+				db,
+				mockVectorStore([])
+			);
+			const text = getPrimaryTextContent(result);
+
+			// 1. Header reflects TOTAL matches, not the page length.
+			expect(text).toContain(`### Results: ${total} tasks for "${query}"`);
+
+			// 2. EVERY status group with matches is rendered with its count —
+			//    including groups absent from the 5-row page (AC1/AC2).
+			expect(text).toContain(`**Pending (${pendingCodes.length})**`);
+			expect(text).toContain(`**In Progress (${inProgressCodes.length})**`);
+			expect(text).toContain(`**Completed (${completedCodes.length})**`);
+
+			// 3. Cap convention (AC3): only the group with >5 matches appends a
+			//    "+N more in this group" line (7 pending → 5 shown + 2 hidden).
+			//    Groups at/under the cap get no "more" line — exactly one occurrence.
+			const moreLines = text.match(/\.\.\. \+(\d+) more in this group/g) ?? [];
+			expect(moreLines).toHaveLength(1);
+			expect(moreLines).toEqual(["... +2 more in this group"]);
+
+			// 4. Negative control: statuses with no matches must NOT appear.
+			expect(text).not.toContain("**Blocked");
+			expect(text).not.toContain("**Backlog");
+			expect(text).not.toContain("**Canceled");
+
+			// 5. Wire contract: structured data stays paginated — count equals the
+			//    PAGE length (limit), while total carries the full match pool.
+			const jsonResult = await handleTaskRead(
+				{ query, owner: "test", repo, json: true, limit: 5 },
+				db,
+				mockVectorStore([])
+			);
+			const structured = jsonResult.structuredContent as {
+				count: number;
+				total: number;
+				limit: number;
+				results: { rows: unknown[][] };
+			};
+			expect(structured.count).toBe(5);
+			expect(structured.limit).toBe(5);
+			expect(structured.results.rows).toHaveLength(5);
+			expect(structured.total).toBe(total);
+
 			db.close();
 		});
 	});

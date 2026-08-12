@@ -7,6 +7,7 @@ import { fetchAggregatedTaskKgContext } from "../kg-archivist/query";
 import { capitalize } from "./shared";
 import { TASK_SCORING } from "../../utils/scoring";
 import { HybridSearchEngine } from "../../utils/hybrid-search";
+import type { ScoredEntity } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
 import { renderGroupedSummary, enumOrderComparator } from "../../utils/summary";
 
@@ -25,6 +26,17 @@ interface ScoredTask {
 	recencyScore: number;
 	domainScore: number;
 	finalScore: number;
+}
+
+function toScoredTask(st: ScoredEntity<Task>): ScoredTask {
+	return {
+		task: st.entity,
+		similarityScore: st.similarityScore,
+		keywordScore: st.keywordScore,
+		recencyScore: st.recencyScore,
+		domainScore: st.domainScore,
+		finalScore: st.finalScore
+	};
 }
 
 // ── SEARCH mode — Hybrid vector + keyword + recency + domain scoring ──────
@@ -106,7 +118,7 @@ export async function handleSearchMode(
 		}
 	}
 
-	const { items, total } = HybridSearchEngine.run<Task>({
+	const { items, total, eligible } = HybridSearchEngine.run<Task>({
 		candidates: keywordTasks.map((t: Task) => ({ entity: t, similarity: vectorScoreMap.get(t.id) ?? 0 })),
 		queryTerms,
 		vectorResults,
@@ -161,14 +173,13 @@ export async function handleSearchMode(
 		}
 	});
 
-	const paginated: ScoredTask[] = items.map((st) => ({
-		task: st.entity,
-		similarityScore: st.similarityScore,
-		keywordScore: st.keywordScore,
-		recencyScore: st.recencyScore,
-		domainScore: st.domainScore,
-		finalScore: st.finalScore
-	}));
+	const paginated: ScoredTask[] = items.map(toScoredTask);
+
+	// FULL match pool (pre-pagination, post-filter) — used so the text
+	// summary groups EVERY status that matched, not just the top-N page.
+	// Without this, a page that happens to be all `completed` hides the
+	// pending/in_progress/backlog/blocked matches entirely (TASK-421).
+	const scoredPool: ScoredTask[] = eligible.map(toScoredTask);
 
 	const COLUMNS = [
 		"id",
@@ -215,16 +226,20 @@ export async function handleSearchMode(
 
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {
-		if (paginated.length > 0) {
+		if (scoredPool.length > 0) {
 			const lines: string[] = [];
+			// Header shows TOTAL matches; the grouped body below represents the
+			// entire pool (all statuses), capped at 5 visible lines per group.
 			lines.push(`### Results: ${total} tasks for "${query}"`);
 			lines.push("");
 
-			// Fused grouped by status (enum order), with global rank #N
+			// Fused grouped by status (enum order), with global rank #N.
+			// Renders EVERY status group with matches (cap 5 per group +
+			// "+N more in this group"), not just the highest-scored page.
 			const STATUS_ORDER = [...TASK_STATUSES];
 			lines.push(
 				renderGroupedSummary<ScoredTask>({
-					items: paginated,
+					items: scoredPool,
 					getGroup: (st) => st.task.status,
 					groupOrder: enumOrderComparator(STATUS_ORDER),
 					formatGroupLabel: (key) => (key === "in_progress" ? "In Progress" : capitalize(key)),

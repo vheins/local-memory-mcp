@@ -128,6 +128,13 @@ export interface HybridSearchOptions<E> {
 export interface HybridSearchResult<E> {
 	/** Paginated scored entities (engine-owned `.slice(offset, offset + limit)`). */
 	items: Array<ScoredEntity<E>>;
+	/**
+	 * FULL post-filtered pool (before pagination) — every entity that cleared
+	 * threshold/guarantee/postFilter, sorted by finalScore desc. Lets renderers
+	 * group the whole match set (e.g. all status groups) instead of only the
+	 * current page. Same length as `total`; `items` is `eligible.slice(offset, offset + limit)`.
+	 */
+	eligible: Array<ScoredEntity<E>>;
 	/** Count before pagination, after threshold/guarantee/postFilter. */
 	total: number;
 	offset: number;
@@ -200,6 +207,7 @@ export class HybridSearchEngine {
 
 		return {
 			items: eligible.slice(offset, offset + limit),
+			eligible,
 			total: eligible.length,
 			offset,
 			limit
