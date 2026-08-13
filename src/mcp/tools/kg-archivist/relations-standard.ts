@@ -4,7 +4,6 @@ import { logger } from "../../utils/logger";
 import { KG_RELATION_CONFIDENCE_SEMANTIC } from "./relations-conf";
 import { extractEntities, type ExtractedEntity } from "./extract";
 import { observationText } from "./observation-text";
-import type { CodingStandardEntry } from "../../types";
 
 // ---------------------------------------------------------------------------
 // Standard-specific semantic relations

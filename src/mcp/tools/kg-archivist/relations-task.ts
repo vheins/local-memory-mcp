@@ -3,7 +3,6 @@ import type { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
 import { KG_RELATION_CONFIDENCE_SEMANTIC } from "./relations-conf";
 import { extractEntities, type ExtractedEntity } from "./extract";
-import { observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
 // Task-specific semantic relations
