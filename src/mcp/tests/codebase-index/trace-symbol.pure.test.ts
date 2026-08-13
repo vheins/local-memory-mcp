@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { traceSymbol } from "../../codebase-index/services/trace-service.js";
 import { SymbolNotFoundError } from "../../codebase-index/services/trace-service.js";
 import { AmbiguousSymbolError } from "../../codebase-index/services/trace-service.js";
-import type { SQLiteStore } from "../../storage/sqlite.js";
 import type { CodebaseSymbol } from "../../types/codebase-symbol.js";
 
 function makeSym(overrides: Partial<CodebaseSymbol> & Pick<CodebaseSymbol, "name" | "file_path">): CodebaseSymbol {
@@ -154,29 +153,4 @@ describe("traceSymbol (pure unit)", () => {
 	});
 });
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-function seedSymbols(
-	store: SQLiteStore,
-	symbols: Array<{
-		id?: string;
-		repo: string;
-		file_path: string;
-		name: string;
-		kind: string;
-		exported?: boolean;
-		default_export?: boolean;
-		start_line?: number;
-		start_col?: number;
-		end_line?: number;
-		end_col?: number;
-		doc_comment?: string;
-		signature?: string;
-		parent_symbol_id?: string;
-	}>
-): void {
-	store.codebaseSymbols.bulkUpsertSymbols(symbols);
-}
-
 // ── Tests ───────────────────────────────────────────────────────────────
-

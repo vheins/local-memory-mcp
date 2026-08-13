@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("VueVisitor reference emission (TASK-312)", () => {
 	it("emits import edges per binding inside <script setup> and <script> blocks", async () => {

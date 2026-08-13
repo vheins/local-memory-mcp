@@ -4,7 +4,7 @@ import { Outbox, enqueueTask, enqueueMemory, enqueueStandard } from "../embeddin
 import { taskJobPayload, memoryJobPayload, standardJobPayload } from "../embedding-queue/enqueue";
 import { embedPayloadContentHash } from "../embedding-queue/content-hash";
 import type { Task } from "../types";
-import { makeTask, makeMemory, makeStandard, getJob, countRows, REPO } from "./embedding-queue.helpers";
+import { makeTask, makeMemory, makeStandard, getJob, REPO } from "./embedding-queue.helpers";
 
 // ---------------------------------------------------------------------------
 // Content-hash dedup regression tests (OPT-FLOW-03).

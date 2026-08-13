@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("PythonVisitor reference emission (TASK-305)", () => {
 	it("emits import edges per binding with alias / last-segment resolution", async () => {
@@ -162,4 +162,3 @@ def top():
 		expect(calls.some((r) => r.symbolName === "self")).toBe(false);
 	});
 });
-

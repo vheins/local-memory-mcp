@@ -4,7 +4,6 @@ import { createTestStore, SQLiteStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import { Outbox, enqueueTask } from "../embedding-queue/outbox";
 import { observationText, saveExtractions } from "../tools/kg-archivist";
-import { handleTaskDelete } from "../tools/task.delete";
 import { handleMemoryDelete } from "../tools/memory.delete";
 import { makeTask, getJob, countRows } from "./embedding-queue.helpers";
 

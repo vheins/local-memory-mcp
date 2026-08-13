@@ -12,7 +12,6 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "crypto";
 // Resolves to the mocked context module (vi.mock lives in controllers.shared.ts,
 // which must be imported before any route module). `db` is re-exported from the
 // shared module so the test seeds the SAME in-memory store the route mounts.

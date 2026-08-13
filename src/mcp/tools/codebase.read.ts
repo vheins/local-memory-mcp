@@ -18,7 +18,7 @@
 import { CodebaseReadSchema, type CodebaseReadInput, type CodebaseReadMode } from "./schemas/codebase-read";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
-import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { McpResponse } from "../utils/mcp-response";
 import { inferReadMode } from "../utils/auto-infer";
 import { requireRepoScope } from "./codebase-read/scope";
 import { handleTraceMode } from "./codebase-read/trace";

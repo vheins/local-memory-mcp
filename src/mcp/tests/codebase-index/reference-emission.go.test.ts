@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("GoVisitor reference emission (TASK-306)", () => {
 	it("emits import edges per binding with alias / last-segment resolution — blank and dot imports emit nothing", async () => {
@@ -237,4 +237,3 @@ func main() {
 		expect(fnCall!.callerName).toBe("main");
 	});
 });
-

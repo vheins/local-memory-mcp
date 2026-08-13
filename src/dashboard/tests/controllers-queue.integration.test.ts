@@ -12,7 +12,7 @@
  * behavior change.
  */
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
 // Resolves to the mocked context module (vi.mock lives in controllers.shared.ts,
 // which must be imported before any route module). `db` and `embeddingWorker`

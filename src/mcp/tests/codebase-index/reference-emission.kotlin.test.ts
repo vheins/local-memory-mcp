@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("KotlinVisitor reference emission (TASK-304)", () => {
 	it("emits import edges per binding with alias / last-segment resolution", async () => {
@@ -225,4 +225,3 @@ fun top() {
 		expect(heritage).toHaveLength(0);
 	});
 });
-

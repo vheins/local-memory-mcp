@@ -7,7 +7,6 @@
  * exactly — SQLite exposes no reliable per-table page count.
  */
 
-import fs from "fs";
 import path from "path";
 
 function dbFileSize(fs, p) {

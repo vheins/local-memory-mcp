@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import type { ParserPool, ParseResult, ParsedSymbol } from "../../codebase-index/parser/language-visitor.js";
 import { SymbolKind } from "../../codebase-index/parser/language-visitor.js";
 

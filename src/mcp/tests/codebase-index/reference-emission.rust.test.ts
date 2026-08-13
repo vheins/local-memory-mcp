@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("RustVisitor reference emission (TASK-307)", () => {
 	it("emits 'import' edges per use binding — alias wins, last segment, glob/self emit nothing", async () => {
@@ -235,4 +235,3 @@ pub fn run() {
 		expect(calls.some((r) => r.symbolName === "println")).toBe(false);
 	});
 });
-

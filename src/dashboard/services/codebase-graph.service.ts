@@ -44,15 +44,12 @@
  */
 
 import fs from "node:fs";
-import path from "node:path";
 import { db } from "../lib/context";
 import { ServiceError } from "../lib/jsonApi";
 import { codeSearchCache } from "../../mcp/codebase-index/services/code-search";
 import { detectLanguage } from "../../mcp/codebase-index/services/file-discovery";
 import { FILE_CONTENT_MAX_LINES } from "../../mcp/utils/constants";
 import { resolveInsideRepo } from "./codebase-graph/path";
-import { getSymbolCallers } from "./codebase-graph/callers";
-import { buildCodeGraph, CODE_GRAPH_KINDS } from "./codebase-graph/builder";
 import type { FileContentResult } from "./codebase-graph/types";
 
 // Re-export the public API for backward compatibility (CodebaseService and

@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { searchCodeInRepo } from "../../codebase-index/services/code-search.js";
-import { grepContent } from "../../codebase-index/services/code-search.js";
-import { compileCodeSearchRegex } from "../../codebase-index/services/code-search.js";
-import { InvalidCodeSearchRegexError } from "../../codebase-index/services/code-search.js";
-import { findEnclosingSymbol } from "../../codebase-index/services/code-search.js";
+import { describe, it, expect } from "vitest";
+import {
+	grepContent,
+	compileCodeSearchRegex,
+	InvalidCodeSearchRegexError,
+	findEnclosingSymbol
+} from "../../codebase-index/services/code-search.js";
 import type { CodebaseSymbol } from "../../types.js";
 import { CODE_SEARCH_MAX_REGEX_LENGTH } from "../../utils/constants.js";
 
@@ -165,4 +166,3 @@ describe("findEnclosingSymbol", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ORCHESTRATOR — searchCodeInRepo
 // ═══════════════════════════════════════════════════════════════════════════
-

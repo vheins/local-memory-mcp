@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("PhpVisitor heritage + import reference emission (TASK-302)", () => {
 	it("emits import edges per binding with alias / last-segment resolution", async () => {
@@ -163,4 +163,3 @@ class Foo {
 		expect(refs.some((r) => r.symbolName === "hi" && r.kind === "call")).toBe(true);
 	});
 });
-

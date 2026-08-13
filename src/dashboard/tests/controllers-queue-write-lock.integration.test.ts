@@ -18,7 +18,6 @@ import { randomUUID } from "crypto";
 // which must be imported before any route module). `db` is re-exported from the
 // shared module so the test seeds the SAME in-memory store the route mounts.
 import { db } from "./controllers.shared";
-import { EMBEDDING_QUEUE_POISON_THRESHOLD } from "../../mcp/utils/constants";
 import { startControllersServer } from "./controllers.shared";
 
 describe("Dashboard Controllers — Queue Write-lock Scope", () => {
@@ -72,9 +71,6 @@ describe("Dashboard Controllers — Queue Write-lock Scope", () => {
 			);
 		return id;
 	};
-
-	const getQueueRow = (id: string): Record<string, any> =>
-		db.db.prepare("SELECT * FROM queue_jobs WHERE id = ?").get(id) as Record<string, any>;
 
 	// ── Write-lock scope (TASK-102) — Queue subset ─────────────────────────
 	// Regression guard: every dashboard mutation endpoint must mutate through

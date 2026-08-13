@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("DartVisitor reference emission (TASK-311)", () => {
 	it("emits one 'import' edge per library import with the full URI (quotes stripped) as the name; exports and parts emit nothing", async () => {
@@ -215,4 +215,3 @@ int foo(int x) => x;
 		expect(greetCall!.targetSymbolId).toBeNull();
 	});
 });
-

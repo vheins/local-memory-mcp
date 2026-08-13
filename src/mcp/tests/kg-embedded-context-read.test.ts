@@ -5,7 +5,7 @@ import { handleStandardRead } from "../tools/standard.read";
 import { createTestStore, SQLiteStore } from "../storage/sqlite";
 import type { VectorStore } from "../types/vector";
 import type { Task } from "../types";
-import { makeMockVectorStore, drainOutbox } from "./kg-archivist.shared";
+import { makeMockVectorStore } from "./kg-archivist.shared";
 
 // ---------------------------------------------------------------------------
 // Embedded KG context: task-read responses

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("CppVisitor & CVisitor reference emission (TASK-308)", () => {
 	it("C++: emits 'import' edges per preproc_include with the FULL stripped header path", async () => {
@@ -329,4 +329,3 @@ class Z : public B1, I3 {};
 		expect(line3.map((r) => `${r.symbolName}:${r.kind}`).sort()).toEqual(["B1:extends", "I3:implements"]);
 	});
 });
-

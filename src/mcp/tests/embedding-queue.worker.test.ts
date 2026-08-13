@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestStore, SQLiteStore } from "../storage/sqlite";
-import { Outbox, enqueueTask, enqueueMemory, enqueueCodebaseSymbols } from "../embedding-queue/outbox";
+import { enqueueTask, enqueueMemory, enqueueCodebaseSymbols } from "../embedding-queue/outbox";
 import { codebaseEntityId } from "../embedding-queue/enqueue";
 import { EmbeddingWorker } from "../embedding-queue/worker";
 import { RealVectorStore } from "../storage/vectors";

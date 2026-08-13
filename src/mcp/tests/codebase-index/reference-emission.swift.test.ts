@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("SwiftVisitor reference emission (TASK-309)", () => {
 	it("emits 'import' edges per import_declaration with LAST-segment binding; the import-kind keyword is anonymous", async () => {
@@ -209,4 +209,3 @@ class Generic<T>: Base<T>, ns.GenericProto {
 		}
 	});
 });
-

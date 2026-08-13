@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("RubyVisitor reference emission (TASK-310)", () => {
 	it("emits 'import' edges for require/require_relative/load with the full literal path as the name; interpolated/non-literal args emit nothing", async () => {
@@ -144,4 +144,3 @@ end
 		}
 	});
 });
-

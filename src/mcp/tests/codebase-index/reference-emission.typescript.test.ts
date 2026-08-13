@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("TypeScriptVisitor reference emission", () => {
 	it("emits call, instantiation and import references with enclosing caller name", async () => {
@@ -62,4 +62,3 @@ export class Svc {
 		expect(names).toContain("new:call"); // `foo.new()` — member property is `new`
 	});
 });
-

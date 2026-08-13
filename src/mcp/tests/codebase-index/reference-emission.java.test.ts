@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pool, wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
+import { wasmAvailable, parseOrSkip } from "./reference-emission.shared.js";
 
 describe("JavaVisitor reference emission (TASK-303)", () => {
 	it("emits import edges per binding with static-member / last-segment resolution", async () => {
@@ -210,4 +210,3 @@ class AlsoNoRef {
 		expect(helper!.callerName).toBe("m");
 	});
 });
-
