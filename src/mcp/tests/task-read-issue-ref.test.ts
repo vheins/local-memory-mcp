@@ -339,4 +339,176 @@ describe("task-read issue-reference differentiation (TASK-422)", () => {
 		spy.mockRestore();
 		db.close();
 	});
+
+	it("TASK-437: comment-ref detection survives the >500 id batch boundary in getTaskCommentsByTaskIds", async () => {
+		const db = await createTestStore();
+		const repo = "issue-ref-chunk-500";
+		const LINKED_CODE = "CHK-519";
+		// 520 tasks: 519 filler (no refs) + 1 whose ONLY #701 link lives in a
+		// comment. All `backlog` → ordered by created_at ASC (queries.ts:
+		// taskStatusOrderBy), so CHK-519 (created last) lands at the tail
+		// (index 519) — INSIDE the SECOND 500-chunk of the batched comment
+		// fetch. This is the boundary the regression must hold.
+		for (let i = 0; i < 520; i++) {
+			const code = i === 519 ? LINKED_CODE : `CHK-${i}`;
+			await handleTaskWrite(
+				{
+					owner: "test",
+					repo,
+					task_code: code,
+					phase: "fix",
+					title: `Filler task ${i}`,
+					description: "no refs here",
+					status: "backlog",
+					json: true,
+					agent: "test",
+					role: "dev"
+				},
+				db,
+				vectors
+			);
+		}
+		// Attach the #701 reference ONLY as a status-transition comment on the
+		// tail task (comment-only, no title/description ref) — keeps it in the
+		// backlog group so it stays at the chunk-2 position.
+		await handleTaskWrite(
+			{
+				owner: "test",
+				repo,
+				code: LINKED_CODE,
+				status: "backlog",
+				comment: "root cause tracked in #701",
+				agent: "test",
+				role: "dev"
+			},
+			db,
+			vectors
+		);
+
+		const spy = vi.spyOn(db.taskComments, "getTaskCommentsByTaskIds");
+		const result = await handleTaskRead({ issue_ref: "701", owner: "test", repo, json: true }, db, mockVectorStore());
+		const structured = result.structuredContent as { total: number; results: { rows: unknown[][] } };
+
+		// >500 task ids were handed to the batched fetcher in ONE call — the
+		// 500-chunk split happens internally, so this proves the >500 path is
+		// exercised (not just the first chunk).
+		expect(spy).toHaveBeenCalledTimes(1);
+		expect((spy.mock.calls[0][0] as string[]).length).toBeGreaterThan(500);
+		// The link that lives in chunk 2 is still detected correctly.
+		expect(structured.total).toBe(1);
+		expect(structured.results.rows[0][1]).toBe(LINKED_CODE);
+		expect(structured.results.rows[0][9]).toBe("#701");
+		expect(structured.results.rows[0][10]).toBe("issue");
+		spy.mockRestore();
+		db.close();
+	});
+
+	it("TASK-437: query '#544' (hash prefix) normalizes to issue token 544 and links the task", async () => {
+		const db = await createTestStore();
+		const repo = "issue-ref-hash-query";
+		await seedLinkedFixture(db, repo);
+
+		// "#544" → extractQueryIssueTokens strips the '#' to token "544", so
+		// IR-001 (which carries [#544] in its title) is matched as a structural
+		// link, not a bare text hit.
+		const result = await handleTaskRead({ query: "#544", owner: "test", repo, json: true }, db, mockVectorStore());
+		const structured = result.structuredContent as { total: number; results: { rows: unknown[][] } };
+		expect(structured.total).toBe(1);
+		const row = structured.results.rows[0];
+		expect(row[1]).toBe("IR-001");
+		expect(row[9]).toBe("#544");
+		expect(row[10]).toBe("issue");
+
+		// Text mode states the linkage explicitly (hash-prefixed query is still
+		// parsed as an issue intent, not a fuzzy text match).
+		const text = getPrimaryTextContent(
+			await handleTaskRead({ query: "#544", owner: "test", repo, json: false }, db, mockVectorStore())
+		);
+		expect(text).toContain('### Results: 1 tasks for "#544"');
+		expect(text).toContain("- 1 linked to issue #544 · 0 text matches");
+		db.close();
+	});
+
+	it("TASK-437: plural 'issues 544' query is detected as an issue token and links the task", async () => {
+		const db = await createTestStore();
+		const repo = "issue-ref-plural";
+		// A task whose text literally contains the plural phrase "issues 544"
+		// AND carries the structural #544 ref.
+		await handleTaskWrite(
+			{
+				owner: "test",
+				repo,
+				task_code: "ISS-001",
+				phase: "fix",
+				title: "Fix regression issues 544 [#544]",
+				description: "Flaky on CI, needs investigation",
+				status: "pending",
+				json: true,
+				agent: "test",
+				role: "dev"
+			},
+			db,
+			vectors
+		);
+
+		// "issues 544" → QUERY_ISSUE_WORD_RE matches the plural form → token
+		// "544" (same as the singular "issue 544").
+		const result = await handleTaskRead(
+			{ query: "issues 544", owner: "test", repo, json: true },
+			db,
+			mockVectorStore()
+		);
+		const structured = result.structuredContent as { total: number; results: { rows: unknown[][] } };
+		expect(structured.total).toBe(1);
+		const row = structured.results.rows[0];
+		expect(row[1]).toBe("ISS-001");
+		expect(row[9]).toBe("#544");
+		expect(row[10]).toBe("issue");
+
+		// Plural phrasing still renders the singular "issue" label + token.
+		const text = getPrimaryTextContent(
+			await handleTaskRead({ query: "issues 544", owner: "test", repo, json: false }, db, mockVectorStore())
+		);
+		expect(text).toContain('### Results: 1 tasks for "issues 544"');
+		expect(text).toContain("- 1 linked to issue #544 · 0 text matches");
+		db.close();
+	});
+
+	it("TASK-437: a #ref present ONLY in the DESCRIPTION (not the title) is detected as a link", async () => {
+		const db = await createTestStore();
+		const repo = "issue-ref-description";
+		await handleTaskWrite(
+			{
+				owner: "test",
+				repo,
+				task_code: "DESC-001",
+				phase: "fix",
+				title: "Investigate sporadic crash",
+				description: "Root cause traced to module X; see #544 for the upstream report",
+				status: "pending",
+				json: true,
+				agent: "test",
+				role: "dev"
+			},
+			db,
+			vectors
+		);
+
+		// issue_ref search (no query) lists the whole repo, then filters by the
+		// structural ref. The description-only #544 must be caught by the
+		// title+description scan — NOT require a comment fetch.
+		const spy = vi.spyOn(db.taskComments, "getTaskCommentsByTaskIds");
+		const result = await handleTaskRead({ issue_ref: "544", owner: "test", repo, json: true }, db, mockVectorStore());
+		const structured = result.structuredContent as { total: number; results: { rows: unknown[][] } };
+
+		// Detected from title+description → pre-matched, so no comment I/O.
+		expect(spy).not.toHaveBeenCalled();
+		expect(structured.total).toBe(1);
+		const row = structured.results.rows[0];
+		expect(row[1]).toBe("DESC-001");
+		expect(row[9]).toBe("#544");
+		expect(row[10]).toBe("issue");
+		spy.mockRestore();
+		db.close();
+	});
 });
