@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.0] — 2026-08-13
+
+Smarter tool output, sidebar navigation, and large-file hygiene release.
+
+### Added
+
+- **task-read / memory-read output (MCP tools)**
+  - **All status groups rendered (TASK-421)** — task-read text output no longer hides tasks in non-completed statuses; every status group with matches is shown with per-group counts and a consistent "5 + N more" truncation convention.
+  - **Issue-linked filtering (TASK-422)** — new `issue_ref` filter distinguishes tasks truly linked to a GitHub issue (`#NNN`) from fuzzy keyword matches; response rows gain `issue_refs` and `match_reason` (`issue`|`text`); the text summary breaks down linked vs text matches.
+  - **Acknowledged-state surfacing (TASK-423)** — memory-read shows `[acked]`/`[unacked]` markers and an `acknowledged` field; unacknowledged (knowledge-debt) memories are boosted in ranking; `task_archive` entries are de-prioritized for work-oriented queries.
+  - **Consistent metadata & truncation (TASK-424)** — `[N]` semantics documented per tool (task-read = relevance 0.00–1.00, memory-read = importance 1–5); `(showing N)` and per-group cap conventions unified via a shared legend helper.
+- **Dashboard — sidebar navigation (TASK-425)** — Arena, Dashboard, Queue, Standards, and Reference moved out of content-area horizontal tabs into the left sidebar nav: single-source nav model, accessible tablist/`aria-selected` (WCAG), lazy-load preserved, mobile menu closes on navigation.
+
+### Performance
+
+- **File-size hygiene (no behavior change)** — 44 oversized files (>500 lines) split into ~200 focused modules across test suites, dashboard UI, MCP tools/services, parser visitors, entities, and the fts-trigram benchmark. All public APIs, wire contracts, and behavior preserved (verified by test-parity reviews); 37 unused-import lint errors cleared.
+
+### Tests
+
+- **2,326 tests green** (229 files) · type-check clean (tsc + svelte-check) · ESLint clean.
+
 ## [0.37.0] — 2026-08-11
 
 Dashboard accessibility & developer-experience release — the result of a full UI/UX audit of every Agent Arena view (TASK-393/394) against the STD-002 dashboard baseline (one h1 per tab, scoped aria-live, focus trap, WCAG AA, real labels), plus a global-mode Queue view and a 50-150x standards-list speedup.
