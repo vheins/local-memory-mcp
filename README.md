@@ -74,13 +74,13 @@ This method ensures the fastest startup times and maximum reliability for daily 
 
 Visualize and manage your Agent's memory through a modern web interface.
 
-|                  Dashboard Overview                   |                  Memories Management                  |
-| :---------------------------------------------------: | :---------------------------------------------------: |
-| ![Dashboard Overview](docs/screenshots/dashboard.png) | ![Memories Management](docs/screenshots/memories.png) |
+|                                               Dashboard Overview                                                |                                               Memories Management                                               |
+| :-------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
+| ![Dashboard Overview](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/dashboard.png) | ![Memories Management](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/memories.png) |
 
-|                Task Tracking                 |                  Available Tools & Reference                   |
-| :------------------------------------------: | :------------------------------------------------------------: |
-| ![Task Tracking](docs/screenshots/tasks.png) | ![Available Tools & Reference](docs/screenshots/reference.png) |
+|                                             Task Tracking                                              |                                               Available Tools & Reference                                                |
+| :----------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
+| ![Task Tracking](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/tasks.png) | ![Available Tools & Reference](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/reference.png) |
 
 ### How to Run
 
@@ -116,28 +116,28 @@ npm run build
 
 The dashboard can auto-start when you open a project in VS Code, Cursor, Windsurf, Zed, or JetBrains IDEs.
 
-📖 **[See the auto-start guide →](docs/en/auto-start-dashboard.md)**
+📖 **[See the auto-start guide →](https://github.com/vheins/local-memory-mcp/wiki/en/Auto-Start-Dashboard)**
 
 ## 📖 Documentation
 
-- [Getting Started & Setup](docs/en/getting-started.md) — Installation & client configuration
-- [Tool Reference & Usage Guide](docs/en/tools-reference.md) — Complete tool docs with examples and workflows
-- [Troubleshooting Guide](docs/en/troubleshooting.md) — Fix common issues
-- [Features & How It Works](docs/en/features.md) — Semantic search, anti-hallucination, memory decay
-- [Hybrid Search Logic](docs/en/hybrid-search.md) — How search scoring works
-- [Dashboard Guide](docs/en/dashboard-guide.md) — Web UI for memory & task management
-- [Codebase Index — Feature Overview](docs/features/codebase-index.md) — Index, search, and trace source code symbols
-- [Feature Deep-Dives](docs/features/) — memory, task, standard, handoff, agentic, knowledge graph, codebase index
+- [Getting Started & Setup](https://github.com/vheins/local-memory-mcp/wiki/en/Getting-Started) — Installation & client configuration
+- [Tool Reference & Usage Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Tools-Reference) — Complete tool docs with examples and workflows
+- [Troubleshooting Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Troubleshooting) — Fix common issues
+- [Features & How It Works](https://github.com/vheins/local-memory-mcp/wiki/en/Features) — Semantic search, anti-hallucination, memory decay
+- [Hybrid Search Logic](https://github.com/vheins/local-memory-mcp/wiki/en/Hybrid-Search) — How search scoring works
+- [Dashboard Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Dashboard-Guide) — Web UI for memory & task management
+- [Codebase Index — Feature Overview](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) — Index, search, and trace source code symbols
+- [Feature Deep-Dives](https://github.com/vheins/local-memory-mcp/wiki/Home) — memory, task, standard, handoff, agentic, knowledge graph, codebase index
 - [Codebase Index — API Reference](.agents/documents/api/codebase-index.md) — Complete MCP tool documentation for the 2 unified Codebase Index tools (`codebase-index` + `codebase-read`)
-- [MCP Protocol Reference](docs/en/mcp-concepts.md) — Technical protocol details
-- [Claude Code Integration](docs/en/claude-code-integration.md) — Setup for Claude Code CLI
-- [Codex (OpenAI) Integration](docs/en/codex-integration.md) — Setup for Codex CLI
-- [Kiro Integration](docs/en/kiro-integration.md) — Setup for Kiro IDE
-- [Auto-Start Dashboard in IDEs](docs/en/auto-start-dashboard.md) — tasks.json for VS Code, Cursor, Windsurf, Zed, JetBrains
+- [MCP Protocol Reference](https://github.com/vheins/local-memory-mcp/wiki/en/MCP-Concepts) — Technical protocol details
+- [Claude Code Integration](https://github.com/vheins/local-memory-mcp/wiki/en/Claude-Code-Integration) — Setup for Claude Code CLI
+- [Codex (OpenAI) Integration](https://github.com/vheins/local-memory-mcp/wiki/en/Codex-Integration) — Setup for Codex CLI
+- [Kiro Integration](https://github.com/vheins/local-memory-mcp/wiki/en/Kiro-Integration) — Setup for Kiro IDE
+- [Auto-Start Dashboard in IDEs](https://github.com/vheins/local-memory-mcp/wiki/en/Auto-Start-Dashboard) — tasks.json for VS Code, Cursor, Windsurf, Zed, JetBrains
 
-> `docs/` is **consumer-facing** (end users / AI agents using this MCP server). Contributor & developer docs (testing standard, API references, ops runbooks, design/optimization, audits) live in `.agents/documents/`.
+> User documentation lives on the **GitHub Wiki** (`https://github.com/vheins/local-memory-mcp/wiki/Home`). Contributor & developer docs (testing standard, API references, ops runbooks, design/optimization, audits) live in `.agents/documents/`.
 
-> 🇮🇩 **Indonesian version available:** [`README.id.md`](README.id.md) & docs in [`docs/id/`](docs/id/)
+> 🇮🇩 **Indonesian version available:** [`README.id.md`](README.id.md) & docs on the Wiki under [`id/`](https://github.com/vheins/local-memory-mcp/wiki/id/Getting-Started)
 
 ### 🤝 Community & Support
 

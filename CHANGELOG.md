@@ -73,8 +73,8 @@ Dashboard accessibility & developer-experience release — the result of a full 
 
 ### Documentation
 
-- New UI/UX + a11y audit report: `docs/en/dashboard-audit-2026-08-11.md` (per-view scores, STD-002 status, priority fixes) (TASK-394)
-- Queue server-wide behavior documented in `docs/en/dashboard-guide.md` (TASK-416)
+- New UI/UX + a11y audit report: `.agents/documents/audits/dashboard-audit-2026-08-11.md` (per-view scores, STD-002 status, priority fixes) (TASK-394)
+- Queue server-wide behavior documented in the [Dashboard Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Dashboard-Guide) (TASK-416)
 
 ### Tests
 
@@ -178,7 +178,7 @@ Dashboard accessibility & developer-experience release — the result of a full 
 
 ### Documentation
 
-- Codebase index: index performance optimization options documented (`docs/operations/codebase-index.md` — e.g. `CODEBASE_AUTO_INDEX=false` to disable auto-index on startup)
+- Codebase index: index performance optimization options documented (`.agents/documents/operations/codebase-index.md` — e.g. `CODEBASE_AUTO_INDEX=false` to disable auto-index on startup)
 
 ## [0.34.0] — 2026-08-04
 
@@ -244,7 +244,7 @@ Dashboard accessibility & developer-experience release — the result of a full 
 
 ### Documentation
 
-- Optimization roadmap findings marked "verified complete" in `docs/en/optimization-roadmap.md` and `docs/id/optimization-roadmap.md`
+- Optimization roadmap findings marked "verified complete" in `.agents/documents/optimization/optimization-roadmap.md` and `.agents/documents/optimization/id/optimization-roadmap.md`
 
 ## [0.32.0] — 2026-08-04
 

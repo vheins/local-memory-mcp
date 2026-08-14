@@ -1,6 +1,6 @@
 # FTS5 Tokenizer Evaluation — `unicode61` (prefix `*`) vs `trigram` for `memories_fts`
 
-> **Decision gate** — TASK-295 (phase `fts5-trigram-eval`, P5 of `docs/en/optimization-memories-fts5.md` §9).
+> **Decision gate** — TASK-295 (phase `fts5-trigram-eval`, P5 of `.agents/documents/optimization/optimization-memories-fts5.md` §9).
 > **Question:** keep `unicode61` (+ permanent LIKE fallback) or switch `memories_fts` to the fts5 `trigram` tokenizer?
 > **Verdict: KEEP `unicode61`. NO-GO for `trigram` on measured evidence.**
 >

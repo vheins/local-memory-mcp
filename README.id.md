@@ -74,13 +74,13 @@ Metode ini memastikan waktu startup tercepat dan keandalan maksimal untuk penggu
 
 Visualisasikan dan kelola memori Agent Anda melalui antarmuka web modern.
 
-|                    Ikhtisar Dasbor                    |                   Manajemen Memori                    |
-| :---------------------------------------------------: | :---------------------------------------------------: |
-| ![Dashboard Overview](docs/screenshots/dashboard.png) | ![Memories Management](docs/screenshots/memories.png) |
+|                                                 Ikhtisar Dasbor                                                 |                                                Manajemen Memori                                                 |
+| :-------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
+| ![Dashboard Overview](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/dashboard.png) | ![Memories Management](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/memories.png) |
 
-|               Pelacakan Tugas                |                  Referensi Alat yang Tersedia                  |
-| :------------------------------------------: | :------------------------------------------------------------: |
-| ![Task Tracking](docs/screenshots/tasks.png) | ![Available Tools & Reference](docs/screenshots/reference.png) |
+|                                            Pelacakan Tugas                                             |                                               Referensi Alat yang Tersedia                                               |
+| :----------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
+| ![Task Tracking](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/tasks.png) | ![Available Tools & Reference](https://raw.githubusercontent.com/wiki/vheins/local-memory-mcp/screenshots/reference.png) |
 
 ### Cara Menjalankan
 
@@ -115,27 +115,27 @@ npm run build
 
 Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Windsurf, Zed, atau IDE JetBrains.
 
-📖 **[Lihat panduan auto-start →](docs/id/auto-start-dashboard.md)**
+📖 **[Lihat panduan auto-start →](https://github.com/vheins/local-memory-mcp/wiki/id/Auto-Start-Dashboard)**
 
 ## 📖 Dokumentasi
 
-- [Memulai & Pengaturan](docs/id/getting-started.md) — Instalasi & konfigurasi klien
-- [Referensi Alat & Panduan Penggunaan](docs/id/tools-reference.md) — Dokumentasi alat lengkap dengan contoh dan alur kerja
-- [Panduan Pemecahan Masalah](docs/id/troubleshooting.md) — Mengatasi masalah umum
-- [Fitur & Cara Kerja](docs/id/features.md) — Pencarian semantik, anti-halusinasi, decay memori
-- [Logika Pencarian Hibrida](docs/id/hybrid-search.md) — Cara kerja skoring pencarian
-- [Panduan Dasbor](docs/id/dashboard-guide.md) — UI web untuk manajemen memori & tugas
-- [Codebase Index — Ikhtisar Fitur](docs/features/codebase-index.md) — Mengindeks, mencari, dan menelusuri simbol kode sumber
+- [Memulai & Pengaturan](https://github.com/vheins/local-memory-mcp/wiki/id/Getting-Started) — Instalasi & konfigurasi klien
+- [Referensi Alat & Panduan Penggunaan](https://github.com/vheins/local-memory-mcp/wiki/id/Tools-Reference) — Dokumentasi alat lengkap dengan contoh dan alur kerja
+- [Panduan Pemecahan Masalah](https://github.com/vheins/local-memory-mcp/wiki/id/Troubleshooting) — Mengatasi masalah umum
+- [Fitur & Cara Kerja](https://github.com/vheins/local-memory-mcp/wiki/id/Features) — Pencarian semantik, anti-halusinasi, decay memori
+- [Logika Pencarian Hibrida](https://github.com/vheins/local-memory-mcp/wiki/id/Hybrid-Search) — Cara kerja skoring pencarian
+- [Panduan Dasbor](https://github.com/vheins/local-memory-mcp/wiki/id/Dashboard-Guide) — UI web untuk manajemen memori & tugas
+- [Codebase Index — Ikhtisar Fitur](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) — Mengindeks, mencari, dan menelusuri simbol kode sumber
 - [Codebase Index — Referensi API](.agents/documents/api/codebase-index.md) — Dokumentasi lengkap alat MCP untuk 2 alat Codebase Index terpadu (`codebase-index` + `codebase-read`)
-- [Referensi Protokol MCP](docs/id/mcp-concepts.md) — Detail teknis protokol
-- [Integrasi dengan Claude Code](docs/id/claude-code-integration.md) — Panduan setup untuk Claude Code CLI
-- [Integrasi dengan Codex (OpenAI)](docs/id/codex-integration.md) — Panduan setup untuk Codex CLI
-- [Integrasi dengan Kiro](docs/id/kiro-integration.md) — Panduan setup untuk Kiro IDE
-- [Auto-Start Dasbor di IDE](docs/id/auto-start-dashboard.md) — tasks.json untuk VS Code, Cursor, Windsurf, Zed, JetBrains
+- [Referensi Protokol MCP](https://github.com/vheins/local-memory-mcp/wiki/id/MCP-Concepts) — Detail teknis protokol
+- [Integrasi dengan Claude Code](https://github.com/vheins/local-memory-mcp/wiki/id/Claude-Code-Integration) — Panduan setup untuk Claude Code CLI
+- [Integrasi dengan Codex (OpenAI)](https://github.com/vheins/local-memory-mcp/wiki/id/Codex-Integration) — Panduan setup untuk Codex CLI
+- [Integrasi dengan Kiro](https://github.com/vheins/local-memory-mcp/wiki/id/Kiro-Integration) — Panduan setup untuk Kiro IDE
+- [Auto-Start Dasbor di IDE](https://github.com/vheins/local-memory-mcp/wiki/id/Auto-Start-Dashboard) — tasks.json untuk VS Code, Cursor, Windsurf, Zed, JetBrains
 
-> `docs/` adalah dokumentasi **konsumen** (end user / AI agent yang menggunakan MCP server ini). Dokumentasi kontributor & pengembang (standar pengujian, referensi API, runbook ops, desain/optimasi, audit) berada di `.agents/documents/`.
+> Dokumentasi untuk pengguna (consumer) kini berada di **GitHub Wiki** (`https://github.com/vheins/local-memory-mcp/wiki/Home`). Dokumentasi kontributor & pengembang (standar pengujian, referensi API, runbook ops, desain/optimasi, audit) berada di `.agents/documents/`.
 
-> 🇬🇧 **Versi bahasa Inggris tersedia:** [`README.md`](README.md) & dokumentasi di [`docs/en/`](docs/en/)
+> 🇬🇧 **Versi bahasa Inggris tersedia:** [`README.md`](README.md) & dokumentasi di Wiki pada [`en/`](https://github.com/vheins/local-memory-mcp/wiki/en/Getting-Started)
 
 ### 🤝 Komunitas & Dukungan
 

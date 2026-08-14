@@ -117,7 +117,7 @@ The feature must integrate with the existing MCP server architecture, reuse the 
 
 - **WASM startup latency**: tree-sitter WASM initialization adds ~500ms-1s to first parse call.
 - **No type resolution**: tree-sitter provides syntactic trees, not semantic type graphs. Cross-file type resolution is limited to name matching (future LSP integration would be needed for full type fidelity).
-- **Multi-language parsing**: Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, and C++ visitors added in v0.21.0. See [Feature Overview](../../../../docs/features/codebase-index.md) for the full language matrix.
+- **Multi-language parsing**: Go, Python, PHP, Rust, Java, Dart, Kotlin, Ruby, Swift, C, and C++ visitors added in v0.21.0. See [Feature Overview](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) for the full language matrix.
 - **Database growth**: Indexing large projects adds up to 150MB to `memory.db`, increasing memory usage and backup size.
 - **Staleness window**: Between edits and next index run, symbols may be stale. Agents may see outdated results.
 

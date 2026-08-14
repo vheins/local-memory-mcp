@@ -3,8 +3,8 @@
 Thank you for your interest in contributing to the MCP Local Memory Service!
 
 - **Project overview:** See the [README](README.md) for features and usage.
-- **Setup & client integration:** See [docs/en/getting-started.md](docs/en/getting-started.md) (Gemini CLI, Claude Code, OpenCode, and more).
-- **API & internals:** See [docs/en/tools-reference.md](docs/en/tools-reference.md) and [docs/en/mcp-concepts.md](docs/en/mcp-concepts.md).
+- **Setup & client integration:** See the [GitHub Wiki — Getting Started](https://github.com/vheins/local-memory-mcp/wiki/en/Getting-Started) (Gemini CLI, Claude Code, OpenCode, and more).
+- **API & internals:** See the [GitHub Wiki — Tools Reference](https://github.com/vheins/local-memory-mcp/wiki/en/Tools-Reference) and [GitHub Wiki — MCP Concepts](https://github.com/vheins/local-memory-mcp/wiki/en/MCP-Concepts).
 
 ## Reporting Issues
 

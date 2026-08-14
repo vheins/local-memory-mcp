@@ -35,8 +35,8 @@ Default NO-OP chosen per spec; no code change.
 
 ## Doc follow-ups (belongs to later docs task, TASK-315)
 
-1. `docs/features/codebase-index.md` matrix: currently declares all 15 languages `✅ Full` with no reference-edge differentiation. After W1: **14 background languages emit edges; Markdown + generic emit declarations only** — add a per-language "reference edges" note/column.
-2. `docs/features/codebase-index.md` §codebase_references table still documents **v21** (8 columns) — schema is now **v23** (10 columns: `target_file`, `target_symbol_id`).
-3. `docs/features/codebase-index.md` "Known Limitations" still claims import/inheritance chains are "not resolved" — stale post-W1 (edges land for 14 languages).
+1. [Codebase-Index wiki page](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) matrix: currently declares all 15 languages `✅ Full` with no reference-edge differentiation. After W1: **14 background languages emit edges; Markdown + generic emit declarations only** — add a per-language "reference edges" note/column.
+2. [Codebase-Index wiki page](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) §codebase_references table still documents **v21** (8 columns) — schema is now **v23** (10 columns: `target_file`, `target_symbol_id`).
+3. [Codebase-Index wiki page](https://github.com/vheins/local-memory-mcp/wiki/features/Codebase-Index) "Known Limitations" still claims import/inheritance chains are "not resolved" — stale post-W1 (edges land for 14 languages).
 4. `language-visitor.ts:110` JSDoc says "only TS and PHP implement it today" — stale post-W1 (all 14 do); comment/file is code, so report-only per scope.
 5. `parser/markdown-visitor.ts` — if fenced-code _symbol_ extraction (declarations inside fences) is ever desired, that is a separate feature (nested parse), explicitly out of Wave 1 scope.

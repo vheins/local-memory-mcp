@@ -6,4 +6,4 @@
 
 ## Gemini CLI
 
-For running this MCP server inside Gemini CLI, see [docs/en/getting-started.md](docs/en/getting-started.md) → "Gemini CLI & Antigravity" (`~/.gemini/settings.json`).
+For running this MCP server inside Gemini CLI, see the [GitHub Wiki — Getting Started](https://github.com/vheins/local-memory-mcp/wiki/en/Getting-Started) → "Gemini CLI & Antigravity" (`~/.gemini/settings.json`).

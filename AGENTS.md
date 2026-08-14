@@ -267,7 +267,7 @@ worker starts inline at startup).
 
 - `CONTRIBUTING.md` — workflow, commit & quality rules.
 - `.agents/documents/testing.md` — single authoritative testing standard (above is a summary).
-- Published consumer docs: `docs/en/tools-reference.md`, `docs/en/mcp-concepts.md` — MCP tool/API usage from the consuming agent's perspective.
+- Published consumer docs: the **GitHub Wiki** — Home (`https://github.com/vheins/local-memory-mcp/wiki/Home`). MCP tool/API usage from the consuming agent's perspective lives at `en/Tools-Reference` (`https://github.com/vheins/local-memory-mcp/wiki/en/Tools-Reference`) and `en/MCP-Concepts` (`https://github.com/vheins/local-memory-mcp/wiki/en/MCP-Concepts`).
 - `GEMINI.md` — commit-message rules.
 - Repo coding standards stored in MCP: `STD-001` (Arena layout manager-driven),
   `STD-002` (Dashboard UI a11y/focus/polling baseline).
@@ -278,11 +278,11 @@ The repository carries documentation for **two distinct audiences** plus
 **cross-project global standards**. Knowing which bucket a doc lives in tells you
 who it is written for.
 
-- **`docs/` = MCP consumer documentation** — for **end users / AI agents that
-  consume this MCP server**: `docs/en/` (English) and `docs/id/` (Indonesian)
-  user-facing guides (getting-started, integrations, features, dashboard guide,
-  troubleshooting) that explain _what the product does_ and _how to use it_, plus
-  `docs/features/` (per-feature overviews) and `docs/screenshots/`.
+- **GitHub Wiki = MCP consumer documentation** — for **end users / AI agents that
+  consume this MCP server**. The repo's user docs live **OUTSIDE this repo** at the
+  GitHub Wiki (`https://github.com/vheins/local-memory-mcp/wiki/Home`); in-repo
+  `docs/` no longer holds consumer docs (the wiki covers `en/` and `id/` language
+  versions, per-feature overviews, and screenshots).
 - **`.agents/` = developer, contributor & AI-agent documentation** — internal
   engineering docs for people and agents building on this repo:
   `.agents/documents/testing.md` (the authoritative testing standard),

@@ -7,17 +7,17 @@ project information, see the [README](README.md).
 
 Start with the official documentation — most questions are answered there:
 
-- [Getting Started](docs/en/getting-started.md) — installation & client
+- [Getting Started](https://github.com/vheins/local-memory-mcp/wiki/en/Getting-Started) — installation & client
   configuration (Claude Desktop, Cursor, Windsurf, Gemini CLI, and more)
-- [Tool Reference & Usage Guide](docs/en/tools-reference.md) — all MCP tools
+- [Tool Reference & Usage Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Tools-Reference) — all MCP tools
   with examples and workflows
-- [Dashboard Guide](docs/en/dashboard-guide.md) — the web UI for memory & task
+- [Dashboard Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Dashboard-Guide) — the web UI for memory & task
   management
-- [Troubleshooting Guide](docs/en/troubleshooting.md) — fix common issues
-- [Features & How It Works](docs/en/features.md), [MCP Concepts](docs/en/mcp-concepts.md),
-  and other guides under [`docs/en/`](docs/en/)
+- [Troubleshooting Guide](https://github.com/vheins/local-memory-mcp/wiki/en/Troubleshooting) — fix common issues
+- [Features & How It Works](https://github.com/vheins/local-memory-mcp/wiki/en/Features), [MCP Concepts](https://github.com/vheins/local-memory-mcp/wiki/en/MCP-Concepts),
+  and other guides on the [GitHub Wiki](https://github.com/vheins/local-memory-mcp/wiki/Home)
 
-> 🇮🇩 Indonesian documentation is available under [`docs/id/`](docs/id/)
+> 🇮🇩 Indonesian documentation is available on the Wiki under [`id/`](https://github.com/vheins/local-memory-mcp/wiki/id/Getting-Started)
 > (getting-started, dashboard-guide, troubleshooting, and more).
 
 ## 🐛 GitHub Issues
@@ -39,10 +39,10 @@ Before opening an issue, please:
 
 Setup guides for specific AI agent CLIs and IDEs:
 
-- [Claude Code](docs/en/claude-code-integration.md) — Claude Code CLI
-- [Codex (OpenAI)](docs/en/codex-integration.md) — Codex CLI
-- [Kiro](docs/en/kiro-integration.md) — Kiro IDE
-- [Auto-Start Dashboard in IDEs](docs/en/auto-start-dashboard.md) — VS Code,
+- [Claude Code](https://github.com/vheins/local-memory-mcp/wiki/en/Claude-Code-Integration) — Claude Code CLI
+- [Codex (OpenAI)](https://github.com/vheins/local-memory-mcp/wiki/en/Codex-Integration) — Codex CLI
+- [Kiro](https://github.com/vheins/local-memory-mcp/wiki/en/Kiro-Integration) — Kiro IDE
+- [Auto-Start Dashboard in IDEs](https://github.com/vheins/local-memory-mcp/wiki/en/Auto-Start-Dashboard) — VS Code,
   Cursor, Windsurf, Zed, JetBrains
 
 ## 🤝 Contributing
