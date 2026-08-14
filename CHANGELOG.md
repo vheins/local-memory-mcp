@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.0] — 2026-08-14
+
+### Added
+
+- **Tolerant `key:value` tag extraction from query fields** (TASK-443) for `standard-read`, `memory-read`, and `codebase-read`. Inline tags such as `language:php stack:laravel tag:a,b` are auto-extracted into structured filters, then stripped from the residual query before FTS — so AI models that ignore structured params still get correct scoping.
+  - Arrays union + dedupe; inline scalar wins on conflict; `owner`/`repo` scope is protected from override.
+  - Multi-value via comma: `tag:a,b,c` → `["a","b","c"]`. Unknown keys (e.g. `label:`) are left as plain text.
+  - `standard-read` keys: `language`/`lang`, `framework`/`stack`, `tag`/`tags`, `context`, `version`, `is_global`.
+  - `memory-read` keys: `tag`/`tags` → `current_tags`; `lang`/`language` → `scope.language`; `branch`; `folder`; `path` → `current_file_path`.
+  - `codebase-read` keys: `language`/`lang` (CODE/grep mode); `kind` (symbol mode, now OR via `cs.kind IN (...)`); `file`/`path` → `filePath`.
+  - New module `src/mcp/utils/query-tags.ts` (`parseTaggedQuery`) + tests `src/mcp/tests/query-tags.test.ts` and `query-tags.integration.test.ts`.
+  - Docs: `query` field `.describe()` updated; `AGENTS.md` and `tools-reference.md` (en/id) note inline tagging is supported.
+
+### Fixed
+
+- `memory-read`: inline `lang:`/`folder:` tags now influence affinity ranking (were silent no-ops) — TASK-444.
+- `codebase-read`: `kind:function,class` now returns both kinds instead of truncating to the first — TASK-445.
+- Added per-tag integration tests for `memory-read` to prevent regressions — TASK-446.
+
 ## [0.38.0] — 2026-08-13
 
 Smarter tool output, sidebar navigation, and large-file hygiene release.
