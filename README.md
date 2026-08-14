@@ -127,6 +127,7 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 - [Hybrid Search Logic](docs/en/hybrid-search.md) — How search scoring works
 - [Dashboard Guide](docs/en/dashboard-guide.md) — Web UI for memory & task management
 - [Codebase Index — Feature Overview](docs/features/codebase-index.md) — Index, search, and trace source code symbols
+- [Feature Deep-Dives](docs/features/) — memory, task, standard, handoff, agentic, knowledge graph, codebase index
 - [Codebase Index — API Reference](.agents/documents/api/codebase-index.md) — Complete MCP tool documentation for the 2 unified Codebase Index tools (`codebase-index` + `codebase-read`)
 - [MCP Protocol Reference](docs/en/mcp-concepts.md) — Technical protocol details
 - [Claude Code Integration](docs/en/claude-code-integration.md) — Setup for Claude Code CLI

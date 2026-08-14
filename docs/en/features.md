@@ -2,6 +2,18 @@
 
 This project is more than just text storage; it is a "brain" system for AI agents designed for long-term stability and project consistency.
 
+## 📚 Feature Deep-Dives
+
+Long-form, consumer-facing guides for each feature domain (how it works, MCP examples, dashboard usage, tips & limitations):
+
+- [Long-Term Semantic Memory](features/memory.md) — types, hybrid search, Time Tunnel, Soul Maintenance, anti-hallucination.
+- [Task & Project Tracking](features/task.md) — lifecycle, statuses, comments, claims.
+- [Coding Standards Vault](features/standard.md) — typed rules, language/stack scope, conflict guard.
+- [Handoff & Claim Coordination](features/handoff.md) — agent-to-agent context passing and task ownership.
+- [Agentic Session Tools](features/agentic.md) — `agent-context`, `synthesize`, `repo-summarize`.
+- [Knowledge Graph](features/knowledge-graph.md) — auto-extracted entities, relations, observations.
+- [Codebase Index](features/codebase-index.md) — index, search, and trace source code symbols.
+
 ## 🧠 Hybrid Semantic Search
 
 The system blends four signals to find the most relevant memories:
