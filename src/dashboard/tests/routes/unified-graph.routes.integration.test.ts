@@ -12,7 +12,7 @@
  *
  * Conventions: mocked context with an in-memory SQLiteStore (same pattern as
  * controllers.integration.test.ts); `*.integration.test.ts` suffix and
- * module-mirrored path per docs/testing.md §2.1/§3.
+ * module-mirrored path per .agents/documents/testing.md §2.1/§3.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";

@@ -152,7 +152,7 @@ The Codebase Index exposes **2 unified MCP tools** via `tools/call` (mode auto-i
 
 > **Legacy aliases:** the pre-unification tools (`index_repository`, `index_status`, `search_symbols`, `get_file_symbols`, `get_architecture`, `trace_symbol`, `codebase_search`) still route to the unified handlers for backward compatibility. `search_code` (content grep with symbol context) was **design intent only** — it never shipped as a tool; the feature landed directly as the `CODE` mode of `codebase-read`.
 
-See the [API Reference](../api/codebase-index.md) for complete input/output schemas and examples.
+See the [API Reference](../../.agents/documents/api/codebase-index.md) for complete input/output schemas and examples.
 
 ### Dashboard
 
@@ -266,11 +266,11 @@ What is still **not** built is a true **type-graph**: edges are name-matched (AD
 
 ### Content Search (CODE mode) — Disk Grep, Not FTS
 
-Content search IS shipped as the `CODE` mode of `codebase-read` (since the SC-3 wave): it greps the **indexed** files on disk (`codebase_files` scope only — `node_modules`/`.git`/untracked files are excluded by construction), enriched with each match's enclosing symbol span. It is **not** a database FTS query: content is read from the caller-supplied `repoPath` through a process-shared LRU cache whose validity is keyed to the `codebase_files` row checksum (a re-index invalidates cached content; an edit without re-index keeps serving the indexed content). Honest limits: per-query disk I/O (amortized by the cache), no type resolution, and `regex: true` is guarded against ReDoS-style patterns (length cap + nested-quantifier rejection → `INVALID_REGEX`). See the [API Reference](../api/codebase-index.md#code-mode) for the full contract.
+Content search IS shipped as the `CODE` mode of `codebase-read` (since the SC-3 wave): it greps the **indexed** files on disk (`codebase_files` scope only — `node_modules`/`.git`/untracked files are excluded by construction), enriched with each match's enclosing symbol span. It is **not** a database FTS query: content is read from the caller-supplied `repoPath` through a process-shared LRU cache whose validity is keyed to the `codebase_files` row checksum (a re-index invalidates cached content; an edit without re-index keeps serving the indexed content). Honest limits: per-query disk I/O (amortized by the cache), no type resolution, and `regex: true` is guarded against ReDoS-style patterns (length cap + nested-quantifier rejection → `INVALID_REGEX`). See the [API Reference](../../.agents/documents/api/codebase-index.md#code-mode) for the full contract.
 
 ### Dead-Code & Hotspots (ARCHITECTURE mode)
 
-The `ARCHITECTURE` mode of `codebase-read` appends a `deadCode` block (dead-code candidates + hotspots) when `includeSymbolCounts` is true: `unreferenced[]` (zero-reference top-level symbols, per-kind breakdown), `hotspots[]` (top in-degree symbols), and `languageCoverage` (which repo languages have observed reference emission). Only top-level symbols are scanned (bounded by `DEAD_CODE_SCAN_LIMIT`), and entry-point exclusion is layered — `package.json` `bin`/`main`/`exports`/`browser`, `#!` shebang, and exported top-level symbols (public API). Honest limits: name-based aggregation (ADR-002), candidates only for languages with observed reference rows in the index, and Markdown/generic languages are reported as declaration-only. See [ADR-002](../../.agents/documents/design/decisions/adr-002-codebase-index.md) and the [API Reference](../api/codebase-index.md#architecture-mode).
+The `ARCHITECTURE` mode of `codebase-read` appends a `deadCode` block (dead-code candidates + hotspots) when `includeSymbolCounts` is true: `unreferenced[]` (zero-reference top-level symbols, per-kind breakdown), `hotspots[]` (top in-degree symbols), and `languageCoverage` (which repo languages have observed reference emission). Only top-level symbols are scanned (bounded by `DEAD_CODE_SCAN_LIMIT`), and entry-point exclusion is layered — `package.json` `bin`/`main`/`exports`/`browser`, `#!` shebang, and exported top-level symbols (public API). Honest limits: name-based aggregation (ADR-002), candidates only for languages with observed reference rows in the index, and Markdown/generic languages are reported as declaration-only. See [ADR-002](../../.agents/documents/design/decisions/adr-002-codebase-index.md) and the [API Reference](../../.agents/documents/api/codebase-index.md#architecture-mode).
 
 ### Incremental Refresh + Polling File Watcher
 

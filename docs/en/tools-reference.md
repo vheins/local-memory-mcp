@@ -4,7 +4,7 @@ A practical guide to the tools this MCP server exposes to AI agents. Each tool i
 
 > **`owner` & `repo` — critical requirement:** Most tools accept `owner` (GitHub org/username) and `repo` (project name). If omitted, the server tries to infer them from the workspace roots / working directory — but this is unreliable. **Always pass both explicitly** to avoid failures. As a shortcut, you can use `"owner/repo-name"` format for `repo` and the server will auto-extract `owner`. You can also pass `scope: { owner, repo }`.
 
-> **One tool, many modes:** The server exposes **17 unified tools**. Each tool auto-detects what you want from the parameters you pass (see per-tool "Auto-infer" notes below). Older dotted names such as `memory-store`, `memory-search`, or `task-create` are **not** separate tools — they are described here as _modes_ of the unified tools.
+> **One tool, many modes:** The server exposes **17 canonical tools**. Each tool auto-detects what you want from the parameters you pass (see per-tool "Auto-infer" notes below). `synthesize` is **conditional** — it is only registered when the client advertises sampling support (`session.supportsSampling`), so non-sampling clients see **16** tools. The only real router aliases are `claim-release` → `claim-manage` and `task-update` → `task-write` (plus dot→hyphen normalization, e.g. `memory.store` → `memory-store`); all other legacy names (`index_repository`, `trace_symbol`, `get_file_symbols`, `search_symbols`, `codebase_search`, `get_architecture`, `index_status`, `task-claim`, `handoff-list`, …) appear **only as historical notes in tool descriptions** and are NOT resolvable — always call the canonical names.
 
 ---
 

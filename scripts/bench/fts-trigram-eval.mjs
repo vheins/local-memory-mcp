@@ -2,7 +2,7 @@
 /**
  * FTS5 tokenizer evaluation: unicode61 (prefix-`*`, production) vs trigram
  * for the memories_fts index (TASK-295 / design P5 of
- * docs/en/optimization-memories-fts5.md §9).
+ * .agents/documents/optimization/optimization-memories-fts5.md §9).
  *
  * Decision-gate harness — measurement only, NO production code is touched:
  * it builds an isolated temp SQLite DB (pragmas mirrored from

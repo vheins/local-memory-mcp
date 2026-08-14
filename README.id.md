@@ -126,12 +126,14 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 - [Logika Pencarian Hibrida](docs/id/hybrid-search.md) — Cara kerja skoring pencarian
 - [Panduan Dasbor](docs/id/dashboard-guide.md) — UI web untuk manajemen memori & tugas
 - [Codebase Index — Ikhtisar Fitur](docs/features/codebase-index.md) — Mengindeks, mencari, dan menelusuri simbol kode sumber
-- [Codebase Index — Referensi API](docs/api/codebase-index.md) — Dokumentasi lengkap alat MCP untuk 2 alat Codebase Index terpadu (`codebase-index` + `codebase-read`)
+- [Codebase Index — Referensi API](.agents/documents/api/codebase-index.md) — Dokumentasi lengkap alat MCP untuk 2 alat Codebase Index terpadu (`codebase-index` + `codebase-read`)
 - [Referensi Protokol MCP](docs/id/mcp-concepts.md) — Detail teknis protokol
 - [Integrasi dengan Claude Code](docs/id/claude-code-integration.md) — Panduan setup untuk Claude Code CLI
 - [Integrasi dengan Codex (OpenAI)](docs/id/codex-integration.md) — Panduan setup untuk Codex CLI
 - [Integrasi dengan Kiro](docs/id/kiro-integration.md) — Panduan setup untuk Kiro IDE
 - [Auto-Start Dasbor di IDE](docs/id/auto-start-dashboard.md) — tasks.json untuk VS Code, Cursor, Windsurf, Zed, JetBrains
+
+> `docs/` adalah dokumentasi **konsumen** (end user / AI agent yang menggunakan MCP server ini). Dokumentasi kontributor & pengembang (standar pengujian, referensi API, runbook ops, desain/optimasi, audit) berada di `.agents/documents/`.
 
 > 🇬🇧 **Versi bahasa Inggris tersedia:** [`README.md`](README.md) & dokumentasi di [`docs/en/`](docs/en/)
 

@@ -127,12 +127,14 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 - [Hybrid Search Logic](docs/en/hybrid-search.md) — How search scoring works
 - [Dashboard Guide](docs/en/dashboard-guide.md) — Web UI for memory & task management
 - [Codebase Index — Feature Overview](docs/features/codebase-index.md) — Index, search, and trace source code symbols
-- [Codebase Index — API Reference](docs/api/codebase-index.md) — Complete MCP tool documentation for the 2 unified Codebase Index tools (`codebase-index` + `codebase-read`)
+- [Codebase Index — API Reference](.agents/documents/api/codebase-index.md) — Complete MCP tool documentation for the 2 unified Codebase Index tools (`codebase-index` + `codebase-read`)
 - [MCP Protocol Reference](docs/en/mcp-concepts.md) — Technical protocol details
 - [Claude Code Integration](docs/en/claude-code-integration.md) — Setup for Claude Code CLI
 - [Codex (OpenAI) Integration](docs/en/codex-integration.md) — Setup for Codex CLI
 - [Kiro Integration](docs/en/kiro-integration.md) — Setup for Kiro IDE
 - [Auto-Start Dashboard in IDEs](docs/en/auto-start-dashboard.md) — tasks.json for VS Code, Cursor, Windsurf, Zed, JetBrains
+
+> `docs/` is **consumer-facing** (end users / AI agents using this MCP server). Contributor & developer docs (testing standard, API references, ops runbooks, design/optimization, audits) live in `.agents/documents/`.
 
 > 🇮🇩 **Indonesian version available:** [`README.id.md`](README.id.md) & docs in [`docs/id/`](docs/id/)
 

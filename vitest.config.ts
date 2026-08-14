@@ -45,11 +45,11 @@ export default defineConfig({
 		// negations collected fine). Fix: partition each project with
 		// positive-only `test.include` + `test.exclude` (identical disjoint
 		// split, no `!` inside include). `npm run test -- --coverage` now
-		// reports real totals (see docs/testing.md §7).
+		// reports real totals (see .agents/documents/testing.md §7).
 		//
 		// Thresholds are configured but NOT blocking: the provider fails
 		// the run (exit 1) on missed thresholds with no warn-only mode, and
-		// the suite does not reach the floor yet (docs/testing.md §7 — the
+		// the suite does not reach the floor yet (.agents/documents/testing.md §7 — the
 		// green gate is REFACTOR-TST-012). Coverage is therefore flag-gated
 		// (`--coverage`); REFACTOR-TST-013 flips `enabled: true` for the CI
 		// gate once the floor is met.
@@ -64,7 +64,7 @@ export default defineConfig({
 			exclude: ["dist/**", "node_modules/**", "src/dashboard/ui/node_modules/**", ".tmp/**"],
 			thresholds: {
 				// Global floors across ALL files matched by `coverage.include`
-				// (docs/testing.md §7). NOTE: `thresholds.all` is a jest/nyc
+				// (.agents/documents/testing.md §7). NOTE: `thresholds.all` is a jest/nyc
 				// option with NO Vitest equivalent — Vitest would parse `all`
 				// as a file-glob key (silent no-op). `coverage.include` + these
 				// global floors is the correct all-files encoding.

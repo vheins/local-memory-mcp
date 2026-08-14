@@ -15,7 +15,7 @@ import {
 // at import time, so the directory cannot be injected. This suite therefore
 // mocks the "fs" module and redirects every filesystem access under
 // src/mcp/prompts into a throwaway temp directory (fs.mkdtemp inside
-// os.tmpdir, removed in afterAll — docs/testing.md §5). All other fs paths
+// os.tmpdir, removed in afterAll — .agents/documents/testing.md §5). All other fs paths
 // (git-config reads, native addon loading, …) pass through to the real
 // filesystem untouched. Fixture files are written inside the mock factory
 // (which runs before the loader module body), so PROMPT_DIR selection is

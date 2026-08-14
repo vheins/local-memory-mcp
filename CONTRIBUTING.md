@@ -19,17 +19,17 @@ If you find a bug or have a feature idea:
 1. Fork this repository.
 2. Create a new branch (`feat/feature-name` or `fix/bug-description`).
 3. Ensure your code follows the project's TypeScript standards.
-4. **Mandatory:** Add tests for your change per the [Testing Standard](docs/testing.md) — server tests under `src/**/tests/`, dashboard UI tests in colocated `__tests__/`; new code ships its tests in the same commit.
+4. **Mandatory:** Add tests for your change per the [Testing Standard](.agents/documents/testing.md) — server tests under `src/**/tests/`, dashboard UI tests in colocated `__tests__/`; new code ships its tests in the same commit.
 5. Run tests: `npm run test`.
 6. Submit a Pull Request (PR) to the `main` branch.
 
 ## Testing
 
-The single authoritative testing standard is **[docs/testing.md](docs/testing.md)** — location policy, naming taxonomy, scope/layer rules, fixtures, and coverage requirements. Key points:
+The single authoritative testing standard is **[.agents/documents/testing.md](.agents/documents/testing.md)** — location policy, naming taxonomy, scope/layer rules, fixtures, and coverage requirements. Key points:
 
 - **Location:** server/dashboard non-UI tests under `src/**/tests/`; dashboard UI tests in `__tests__/` colocated beside the component/lib.
 - **Naming:** `*.test.ts` (unit) | `*.integration.test.ts` | `*.e2e.test.ts` | `*.perf.test.ts`. No snake_case names.
-- **Coverage:** every change ships its tests in the same commit; targets configured per docs/testing.md §7.
+- **Coverage:** every change ships its tests in the same commit; targets configured per .agents/documents/testing.md §7.
 
 Commands:
 
