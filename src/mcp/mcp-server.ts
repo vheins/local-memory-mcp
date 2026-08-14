@@ -38,7 +38,7 @@ export function createMcpServer(
 		}
 	);
 
-	// Register all 27 tools via SDK registerTool()
+	// Register all 17 canonical tools via SDK registerTool()
 	registerAllTools(server, store, vectors, ctx);
 
 	// Register all resources and resource templates via SDK registerResource()
