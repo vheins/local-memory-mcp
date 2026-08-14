@@ -137,7 +137,12 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 
 > 🇬🇧 **Versi bahasa Inggris tersedia:** [`README.md`](README.md) & dokumentasi di [`docs/en/`](docs/en/)
 
-- [Panduan Kontribusi](CONTRIBUTING.md)
+### 🤝 Komunitas & Dukungan
+
+- [Panduan Kontribusi](CONTRIBUTING.md) — Cara melaporkan masalah dan berkontribusi kode
+- [Kode Etik](CODE_OF_CONDUCT.md) — Standar komunitas bagi semua kontributor
+- [Kebijakan Keamanan](SECURITY.md) — Cara melaporkan kerentanan keamanan
+- [Dukungan](SUPPORT.md) — Tempat mendapatkan bantuan (dokumentasi, isu, integrasi)
 
 ## ⚠️ Penyangkalan
 
@@ -145,7 +150,7 @@ Dasbor bisa otomatis menyala saat Anda membuka project di VS Code, Cursor, Winds
 
 ## ⚖️ Lisensi
 
-MIT © Muhammad Rheza Alfin
+MIT © Muhammad Rheza Alfin — lihat teks lengkap di [LICENSE.md](LICENSE.md).
 
 ## 🙏 Ucapan Terima Kasih
 

@@ -139,7 +139,12 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 
 > 🇮🇩 **Indonesian version available:** [`README.id.md`](README.id.md) & docs in [`docs/id/`](docs/id/)
 
-- [Contribution Guidelines](CONTRIBUTING.md)
+### 🤝 Community & Support
+
+- [Contribution Guidelines](CONTRIBUTING.md) — How to report issues and contribute code
+- [Code of Conduct](CODE_OF_CONDUCT.md) — Community standards for all contributors
+- [Security Policy](SECURITY.md) — How to report a security vulnerability
+- [Support](SUPPORT.md) — Where to get help (docs, issues, integrations)
 
 ## ⚠️ Disclaimer
 
@@ -147,7 +152,7 @@ The dashboard can auto-start when you open a project in VS Code, Cursor, Windsur
 
 ## ⚖️ License
 
-MIT © Muhammad Rheza Alfin
+MIT © Muhammad Rheza Alfin — see the full text in [LICENSE.md](LICENSE.md).
 
 ## 🙏 Acknowledgements
 
