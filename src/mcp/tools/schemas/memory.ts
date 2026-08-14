@@ -32,7 +32,12 @@ export const MemorySummarizeSchema = z.object({
 
 export const MemoryReadSchema = z
 	.object({
-		query: z.string().optional().describe("Search keyword for memory titles"),
+		query: z
+			.string()
+			.optional()
+			.describe(
+				"Search keyword for memory titles. Supports inline key:value tags (e.g. tag:a,b lang:php branch:main) which are auto-extracted into filters."
+			),
 		id: z.string().optional().describe("Memory UUID (detail mode)"),
 		code: z.string().max(20).optional().describe("Short memory code (detail mode)"),
 		ids: z.array(z.string()).optional().describe("Array of memory UUIDs (bulk detail)"),

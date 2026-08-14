@@ -125,6 +125,7 @@ Three modes, auto-inferred:
 - Use `current_tags: ["react", "typescript"]` to pull tech-stack relevant memories from other projects (Tech-Stack Affinity).
 - Use `type` filter (e.g. `"decision"`, `"pattern"`), importance range (`min`/`max`), and `include_archived: true` to include archived/decayed memories.
 - Natural-language dates work in the query: `"yesterday"`, `"last week"`, `"last 3 days"` (Time Tunnel).
+- The `query` field also accepts inline `key:value` tags (e.g. `tag:a,b lang:php branch:main`) which are auto-extracted into filters — equivalent to the structured `current_tags` / `scope` params; unknown keys stay as plain text.
 
 **Detail example** — lookup by `id` (UUID) or `code` (e.g. `MEM-001`):
 
@@ -347,6 +348,8 @@ Modes, auto-inferred:
 { "stack": ["react", "typescript"] }
 ```
 
+> The `query` field also accepts inline `key:value` tags (e.g. `language:php stack:laravel tag:a,b`) which are auto-extracted into filters — equivalent to the structured `language` / `stack` / `tags` params; unknown keys stay as plain text.
+
 **Detail example:**
 
 ```json
@@ -515,6 +518,8 @@ Modes, auto-inferred:
 | `codebase-read`   | Search / trace / file symbols / architecture / content grep (CODE) |
 
 > **`codebase-read` modes** (auto-inferred per ADR-005): `name` → TRACE, `filePath` → FILE, `content` → CODE (grep indexed file contents on disk, matches enriched with their enclosing symbol), `query` → SEARCH, nothing → ARCHITECTURE (tree + language breakdown + top-level exports + dead-code candidates/hotspots). The legacy name `search_code` (content search with symbol context) was **design intent only** — it never shipped as a tool; the feature exists as the `CODE` mode of `codebase-read`.
+>
+> In SEARCH mode the `query` field also accepts inline `key:value` tags (e.g. `kind:function language:php file:src/foo.ts`) which are auto-extracted into filters (`kind` applies to symbol search, `language` to CODE-mode grep); unknown keys stay as plain text.
 
 ---
 

@@ -125,6 +125,7 @@ Tiga mode, terdeteksi otomatis:
 - Gunakan `current_tags: ["react", "typescript"]` untuk menarik memori yang relevan dengan tech-stack dari proyek lain (Tech-Stack Affinity).
 - Gunakan filter `type` (mis. `"decision"`, `"pattern"`), rentang importance (`min`/`max`), dan `include_archived: true` untuk menyertakan memori yang diarsipkan/meluruh.
 - Tanggal bahasa alami bekerja di query: `"yesterday"`, `"last week"`, `"last 3 days"` (Time Tunnel).
+- Field `query` juga menerima tag inline `key:value` (mis. `tag:a,b lang:php branch:main`) yang otomatis diekstrak menjadi filter — setara dengan param terstruktur `current_tags` / `scope`; key yang tidak dikenal tetap sebagai teks biasa.
 
 **Contoh Detail** — pencarian berdasarkan `id` (UUID) atau `code` (mis. `MEM-001`):
 
@@ -347,6 +348,8 @@ Mode, terdeteksi otomatis:
 { "stack": ["react", "typescript"] }
 ```
 
+> Field `query` juga menerima tag inline `key:value` (mis. `language:php stack:laravel tag:a,b`) yang otomatis diekstrak menjadi filter — setara dengan param terstruktur `language` / `stack` / `tags`; key yang tidak dikenal tetap sebagai teks biasa.
+
 **Contoh Detail:**
 
 ```json
@@ -515,6 +518,8 @@ Mode, terdeteksi otomatis:
 | `codebase-read`   | Cari / telusuri / simbol berkas / arsitektur / pencarian konten (CODE) |
 
 > **Mode `codebase-read`** (diinfer otomatis per ADR-005): `name` → TRACE, `filePath` → FILE, `content` → CODE (grep konten berkas terindeks dari disk, kecocokan diperkaya dengan simbol pembungkusnya), `query` → SEARCH, tanpa argumen → ARCHITECTURE (pohon direktori + rincian bahasa + ekspor tingkat atas + kandidat dead-code/hotspot). Nama lama `search_code` (pencarian konten dengan konteks simbol) hanya **desain-intent** — tidak pernah dirilis sebagai tool; fiturnya ada sebagai mode `CODE` dari `codebase-read`.
+>
+> Di mode SEARCH, field `query` juga menerima tag inline `key:value` (mis. `kind:function language:php file:src/foo.ts`) yang otomatis diekstrak menjadi filter (`kind` berlaku untuk pencarian simbol, `language` untuk grep mode CODE); key yang tidak dikenal tetap sebagai teks biasa.
 
 ---
 

@@ -11,7 +11,12 @@ import { normalizeRepo } from "../../utils/normalize";
  */
 export const StandardReadSchema = z.object({
 	// ── SEARCH ──────────────────────────────────────────────────────────
-	query: z.string().optional(),
+	query: z
+		.string()
+		.optional()
+		.describe(
+			"Free-text search. Supports inline key:value tags (e.g. language:php stack:laravel tag:a,b) which are auto-extracted into filters."
+		),
 
 	// ── DETAIL ──────────────────────────────────────────────────────────
 	id: z.string().optional(),

@@ -22,8 +22,16 @@ export const CodebaseReadSchema = z.object({
 	/**
 	 * Search query — code-like term or natural language. Presence triggers
 	 * SEARCH mode (symbol names / signatures).
+	 *
+	 * Supports inline key:value tags (e.g. `kind:function language:php`) which
+	 * are auto-extracted into filters.
 	 */
-	query: z.string().optional(),
+	query: z
+		.string()
+		.optional()
+		.describe(
+			"Search query for symbols. Supports inline key:value tags (e.g. kind:function language:php file:src/foo.ts) which are auto-extracted into filters."
+		),
 	/**
 	 * Content to grep for in indexed file CONTENTS. Presence triggers CODE
 	 * mode (TASK-316): substring (case-insensitive) or regex match against

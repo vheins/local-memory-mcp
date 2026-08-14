@@ -114,6 +114,12 @@ that exit as a real failure — the coverage artifacts are still written.
 - `codebase-read` is ONE tool with auto-detected modes: `query`→ranked symbol
   search, `name`→trace definition/call sites, `filePath`→file symbols, `depth`→
   architecture tree, empty→index status. `codebase-index` builds/refreshes the index.
+- **Inline `key:value` tags in `query`** (standard-read / memory-read / codebase-read):
+  these are auto-extracted into structured filters, so both structured params AND
+  inline tags work. Examples now VALID: `query:"language:php framework:filament"`,
+  `query:"auth tag:a,b lang:php"`, `query:"foo kind:function"`. Unknown keys
+  (e.g. `label:ddd`) stay as plain free-text. Tags are stripped from the residual
+  query so FTS won't mis-tokenize `language:php` (see `src/mcp/utils/query-tags.ts`).
 - **`CODEBASE_REPOS_DIR` is DASHBOARD-ONLY** (read by `src/dashboard/services/
 codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
 
