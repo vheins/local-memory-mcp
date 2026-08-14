@@ -17,6 +17,7 @@ import { STANDARD_SCORING } from "../../utils/scoring";
 import { HybridSearchEngine } from "../../utils/hybrid-search";
 import { SEARCH_THRESHOLDS } from "../../utils/constants";
 import { renderGroupedSummary } from "../../utils/summary";
+import { parseTaggedQuery, unionStrings, STANDARD_READ_TAG_KEYS } from "../../utils/query-tags";
 
 // ── SPEC-001 Hybrid weights ──────────────────────────────────────────────
 // All scoring paths now blend through the shared HybridSearchEngine
@@ -122,39 +123,63 @@ export async function handleSearchMode(
 	db: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {
-	const searchQuery = expandQuery(validated.query || "", undefined);
+	// Defensive inline tag extraction (TASK-443): pull `key:value` filters out of
+	// the free-text query so non-compliant callers still get correct filtering,
+	// and strip them from the residual text so FTS won't see "language:php".
+	const tagged = parseTaggedQuery(validated.query || "", STANDARD_READ_TAG_KEYS);
+	const tf = tagged.filters as {
+		language?: string;
+		context?: string;
+		version?: string;
+		is_global?: boolean;
+		stack?: string[];
+		tags?: string[];
+		scope?: { owner?: string; repo?: string };
+	};
+	const cleanQuery = tagged.query;
+
+	// Merge rule (union/B): arrays union+dedupe; scalar inline (tag) wins if
+	// present else fill gap; owner/repo scope is protected (structured wins).
+	const stack = unionStrings(validated.stack, tf.stack);
+	const tags = unionStrings(validated.tags, tf.tags);
+	const language = tf.language ?? validated.language;
+	const context = tf.context ?? validated.context;
+	const version = tf.version ?? validated.version;
+	const is_global = "is_global" in tf ? tf.is_global : validated.is_global;
+
+	const searchQuery = expandQuery(cleanQuery, undefined);
 
 	const fetchLimit = (validated.offset + validated.limit) * 3;
 	const similarityResults = searchQuery
 		? db.standards.searchBySimilarity(searchQuery, {
-				context: validated.context,
-				version: validated.version,
-				language: validated.language,
-				stack: validated.stack,
-				tags: validated.tags,
+				context,
+				version,
+				language,
+				stack,
+				tags,
 				repo: validated.repo,
-				is_global: validated.is_global,
+				is_global,
 				limit: fetchLimit
 			})
 		: db.standards
 				.search({
-					context: validated.context,
-					version: validated.version,
-					language: validated.language,
-					stack: validated.stack?.[0],
-					tag: validated.tags?.[0],
+					context,
+					version,
+					language,
+					stack: stack[0],
+					tag: tags[0],
 					repo: validated.repo,
-					is_global: validated.is_global,
+					is_global,
 					limit: fetchLimit,
 					offset: 0
 				})
 				.map((standard) => ({ ...standard, similarity: 0.5 }));
 
 	const domainFilters = {
-		stack: validated.stack,
-		tags: validated.tags,
-		language: validated.language,
-		context: validated.context
+		stack,
+		tags,
+		language,
+		context
 	};
 
 	// Per-entity signal computation (OPT-DRY-01): the engine owns vector+keyword
@@ -165,7 +190,7 @@ export async function handleSearchMode(
 	// slot (the old bit-exact remainingWeight expression was exactly this).
 	const standardSignals = (standard: CodingStandardEntry, similarity: number): HybridScores => ({
 		similarity,
-		keyword: scoreKeywordRelevance(validated.query || "", standard),
+		keyword: scoreKeywordRelevance(cleanQuery, standard),
 		recency: STANDARD_SCORING.recency(standard),
 		domain: STANDARD_SCORING.domain(standard, domainFilters)
 	});
@@ -196,7 +221,7 @@ export async function handleSearchMode(
 
 	const { items, total } = HybridSearchEngine.run<CodingStandardEntry>({
 		candidates: similarityResults.map((candidate) => ({ entity: candidate, similarity: candidate.similarity })),
-		queryTerms: (validated.query || "").split(/\s+/).filter(Boolean),
+		queryTerms: cleanQuery.split(/\s+/).filter(Boolean),
 		vectorResults,
 		vectorEntities,
 		scorer: {
@@ -220,7 +245,7 @@ export async function handleSearchMode(
 		keywordScore: scored.keywordScore,
 		recencyScore: scored.recencyScore,
 		domainScore: scored.domainScore,
-		matchedTerms: collectMatchedTerms(validated.query || "", scored.entity),
+		matchedTerms: collectMatchedTerms(cleanQuery, scored.entity),
 		finalScore: scored.finalScore,
 		confidence: STANDARD_SCORING.confidence({ finalScore: scored.finalScore, keywordScore: scored.keywordScore })
 	}));

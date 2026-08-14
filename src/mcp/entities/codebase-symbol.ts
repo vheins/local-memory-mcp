@@ -287,8 +287,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 				params.push(query.repo);
 			}
 			if (query.kind) {
-				conditions.push("cs.kind = ?");
-				params.push(query.kind);
+				if (Array.isArray(query.kind) && query.kind.length > 0) {
+					const placeholders = query.kind.map(() => "?").join(", ");
+					conditions.push(`cs.kind IN (${placeholders})`);
+					params.push(...query.kind);
+				} else if (typeof query.kind === "string") {
+					conditions.push("cs.kind = ?");
+					params.push(query.kind);
+				}
 			}
 			if (query.filePath) {
 				conditions.push("cs.file_path = ?");
@@ -352,8 +358,14 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			params.push(query.repo);
 		}
 		if (query.kind) {
-			conditions.push("cs.kind = ?");
-			params.push(query.kind);
+			if (Array.isArray(query.kind) && query.kind.length > 0) {
+				const placeholders = query.kind.map(() => "?").join(", ");
+				conditions.push(`cs.kind IN (${placeholders})`);
+				params.push(...query.kind);
+			} else if (typeof query.kind === "string") {
+				conditions.push("cs.kind = ?");
+				params.push(query.kind);
+			}
 		}
 		if (query.filePath) {
 			conditions.push("cs.file_path = ?");

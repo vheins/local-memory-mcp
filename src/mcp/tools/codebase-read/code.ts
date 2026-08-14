@@ -10,6 +10,7 @@ import {
 } from "../../codebase-index/services/code-search";
 import { CODE_SEARCH_DEFAULT_LIMIT } from "../../utils/constants";
 import { logger } from "../../utils/logger";
+import { parseTaggedQuery, CODEBASE_READ_TAG_KEYS } from "../../utils/query-tags";
 
 // ── CODE (content grep) ─────────────────────────────────────────────────
 
@@ -66,6 +67,14 @@ function formatCodeMatchesGrouped(matches: CodeSearchMatch[], total: number, con
 async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const content = (validated.content ?? "").trim();
 
+	// Defensive inline tag extraction (TASK-443): `language:php` in the (optional)
+	// free-text query is auto-extracted into the CODE-mode language filter. The
+	// owner/repo scope tags are protected and ignored here — `validated.repo` /
+	// `repoPath` drive scoping. Inline `language` wins if present, else the
+	// structured `validated.language` is used.
+	const tagged = parseTaggedQuery(validated.query ?? "", CODEBASE_READ_TAG_KEYS);
+	const language = (tagged.filters as { language?: string }).language ?? validated.language;
+
 	// Empty query → no-op: return an empty result, never a full-file dump.
 	if (content.length === 0) {
 		return createMcpResponse(
@@ -73,7 +82,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 				mode: "code",
 				content: "",
 				regex: validated.regex,
-				language: validated.language ?? null,
+				language: language ?? null,
 				matches: [],
 				total: 0,
 				hasMore: false,
@@ -140,7 +149,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 		const result = await searchCodeInRepo(db, repo, resolvedPath, {
 			needle: content,
 			regex: validated.regex,
-			language: validated.language,
+			language,
 			limit,
 			offset
 		});
@@ -180,7 +189,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 				mode: "code",
 				content,
 				regex: validated.regex,
-				language: validated.language ?? null,
+				language: language ?? null,
 				matches: result.matches,
 				total: result.total,
 				hasMore: result.hasMore,

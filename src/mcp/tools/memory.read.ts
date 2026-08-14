@@ -34,6 +34,7 @@ import { isMemoryAcknowledged } from "../utils/memory-utils";
 import { renderGroupedSummary, enumOrderComparator, formatOutputLegend } from "../utils/summary";
 import { FTS_CANDIDATE_CAP } from "../utils/fts";
 import { handleDetailMode } from "./memory-read/detail";
+import { parseTaggedQuery, unionStrings, MEMORY_READ_TAG_KEYS } from "../utils/query-tags";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -117,11 +118,32 @@ export async function handleMemoryRead(params: unknown, db: SQLiteStore, vectors
 // =====================================================================
 
 async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: VectorStore): Promise<McpResponse> {
-	const query = params.query!;
+	// Defensive inline tag extraction (TASK-443): pull `key:value` filters out of
+	// the free-text query so non-compliant callers still get correct filtering,
+	// and strip them from the residual text so FTS won't see "language:php".
+	const tagged = parseTaggedQuery(params.query!, MEMORY_READ_TAG_KEYS);
+	const tf = tagged.filters as {
+		current_tags?: string[];
+		current_file_path?: string;
+		scope?: { language?: string; branch?: string; folder?: string; owner?: string; repo?: string };
+	};
+	const cleanQuery = tagged.query;
+
+	// Merge rule (union/B): current_tags union+dedupe; scope branch inline wins
+	// if present else fill gap; owner/repo scope is protected (structured wins).
+	const currentTags = unionStrings(params.current_tags, tf.current_tags);
+	const currentFilePath = tf.current_file_path ?? params.current_file_path;
+	const scopeBranch = tf.scope?.branch ?? params.scope?.branch;
+	// Inline `lang:`/`language:`/`folder:` tags (TASK-443) populate
+	// `tf.scope.language`/`tf.scope.folder`; the structured `scope.language`/
+	// `scope.folder` params fall back here. Both must feed the affinity boost
+	// (TASK-444) so inline tags rank identically to the structured params.
+	const queryLang = tf.scope?.language ?? params.scope?.language;
+	const queryFolder = tf.scope?.folder ?? params.scope?.folder;
 
 	// Time Tunnel: extract relative date phrases
-	const timeTunnel = parseRelativeDate(query);
-	const effectiveQuery = timeTunnel ? timeTunnel.cleanedQuery : query;
+	const timeTunnel = parseRelativeDate(cleanQuery);
+	const effectiveQuery = timeTunnel ? timeTunnel.cleanedQuery : cleanQuery;
 	const searchQuery = expandQuery(effectiveQuery);
 
 	// 1. Get candidates from SQLite similarity
@@ -132,7 +154,7 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		params.repo,
 		fetchLimit,
 		params.include_archived,
-		params.current_tags ?? []
+		currentTags
 	);
 
 	interface Candidate {
@@ -187,9 +209,15 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 
 	// 2. Workspace & Tag Affinity Boost
 	if (candidates.length > 0) {
-		const currentPath = params.current_file_path?.toLowerCase();
-		const currentTags = (params.current_tags || []).map((tag: string) => tag.toLowerCase());
-		const currentBranch = params.scope?.branch;
+		const currentPath = currentFilePath?.toLowerCase();
+		const currentTagsLc = currentTags.map((tag: string) => tag.toLowerCase());
+		const currentBranch = scopeBranch;
+		// Structured `scope.language`/`scope.folder` and the inline `lang:`/
+		// `folder:` tags resolve into these (see merge rule above). They feed the
+		// same affinity-boost shape as `scopeBranch`/`currentPath` (TASK-444) so
+		// inline `lang:php` / `folder:src/foo` rank like the structured params.
+		const queryLangLc = queryLang?.toLowerCase();
+		const queryFolderLc = queryFolder?.toLowerCase();
 
 		candidates = candidates.map((c: Candidate) => {
 			let boost = 0;
@@ -200,7 +228,13 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 				const ext = currentPath.split(".").pop();
 				if (ext && ext.includes(c.memory.scope.language.toLowerCase())) boost += 0.1;
 			}
-			if (currentTags.length > 0 && c.memory.tags.some((tag: string) => currentTags.includes(tag.toLowerCase())))
+			// Structured `scope.folder` / inline `folder:` affinity.
+			if (queryFolderLc && c.memory.scope.folder && queryFolderLc.includes(c.memory.scope.folder.toLowerCase()))
+				boost += 0.15;
+			// Structured `scope.language` / inline `lang:` affinity.
+			if (queryLangLc && c.memory.scope.language && queryLangLc.includes(c.memory.scope.language.toLowerCase()))
+				boost += 0.1;
+			if (currentTagsLc.length > 0 && c.memory.tags.some((tag: string) => currentTagsLc.includes(tag.toLowerCase())))
 				boost += 0.2;
 			return { ...c, similarityScore: Math.min(1.0, c.similarityScore + boost) };
 		});

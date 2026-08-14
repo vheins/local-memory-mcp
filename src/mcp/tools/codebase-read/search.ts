@@ -5,6 +5,7 @@ import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../../codebase-index/services/symbol-ranking";
 import { blendVectorRanking } from "../../codebase-index/services/vector-ranking";
 import { CODEBASE_SEARCH_DEFAULT_LIMIT } from "../../utils/constants";
+import { parseTaggedQuery, unionStrings, CODEBASE_READ_TAG_KEYS } from "../../utils/query-tags";
 
 // ── UNIFIED SEARCH ───────────────────────────────────────────────────────
 
@@ -70,8 +71,8 @@ async function handleSearchMode(
 	db: SQLiteStore,
 	vectors: VectorStore
 ): Promise<McpResponse> {
-	const query = (validated.query ?? "").trim();
-	if (query.length < 2) {
+	const rawQuery = (validated.query ?? "").trim();
+	if (rawQuery.length < 2) {
 		return createMcpResponse(
 			{ symbols: [], total: 0, hasMore: false, mode: "search" },
 			"Search query too short (minimum 2 characters)",
@@ -79,8 +80,27 @@ async function handleSearchMode(
 		);
 	}
 
-	// Normalize kind: accept string or string[], use first if array
-	const kindFilter: string | undefined = Array.isArray(validated.kind) ? validated.kind[0] : validated.kind;
+	// Defensive inline tag extraction (TASK-443): pull `key:value` filters out of
+	// the free-text query so non-compliant callers still get correct filtering,
+	// and strip them from the residual text so FTS won't see "language:php".
+	// Symbol mode applies `kind`/`file`/`path`; `language` is CODE-mode only and
+	// is ignored here.
+	const tagged = parseTaggedQuery(validated.query ?? "", CODEBASE_READ_TAG_KEYS);
+	const tf = tagged.filters as { kind?: string[]; filePath?: string; language?: string };
+	const query = tagged.query;
+
+	// Merge rule (union/B): kind union+dedupe with structured `validated.kind`.
+	const kindMerged = unionStrings(
+		Array.isArray(validated.kind) ? validated.kind : validated.kind ? [validated.kind] : [],
+		tf.kind
+	);
+	const filePath = tf.filePath ?? validated.filePath;
+
+	// Single kind stays a scalar (unchanged DB path `cs.kind = ?`); a multi-kind
+	// OR (`kind:function,class`) is passed as an array so searchSymbols builds
+	// `cs.kind IN (?, ?, ...)` at the DB level (TASK-445).
+	const kindQuery: string | string[] | undefined =
+		kindMerged.length === 1 ? kindMerged[0] : kindMerged.length > 1 ? kindMerged : undefined;
 
 	// Cross-repo scope wins over single-repo scope. When `repos` is provided
 	// (even alongside a session-injected `repo`), results are restricted to the
@@ -98,8 +118,8 @@ async function handleSearchMode(
 		query,
 		repo,
 		repos,
-		kind: kindFilter,
-		filePath: validated.filePath,
+		kind: kindQuery,
+		filePath,
 		exportedOnly: validated.exportedOnly,
 		limit: 200,
 		offset: 0
@@ -108,17 +128,11 @@ async function handleSearchMode(
 	let symbols: CodebaseSymbol[] = dbResult.symbols;
 
 	// Apply in-memory filters as complement — filterSymbols accepts string[]
-	const inMemoryKind: string[] | undefined = Array.isArray(validated.kind)
-		? validated.kind
-		: validated.kind
-			? [validated.kind]
-			: undefined;
-
 	symbols = filterSymbols(symbols, {
-		kind: inMemoryKind,
+		kind: kindMerged,
 		repo,
 		repos,
-		filePath: validated.filePath,
+		filePath,
 		exportedOnly: validated.exportedOnly
 	});
 
@@ -130,18 +144,18 @@ async function handleSearchMode(
 				query: word,
 				repo,
 				repos,
-				kind: kindFilter,
-				filePath: validated.filePath,
+				kind: kindQuery,
+				filePath,
 				exportedOnly: validated.exportedOnly,
 				limit: 200,
 				offset: 0
 			});
 			if (wordResult.symbols.length > 0) {
 				symbols = filterSymbols(wordResult.symbols, {
-					kind: inMemoryKind,
+					kind: kindMerged,
 					repo,
 					repos,
-					filePath: validated.filePath,
+					filePath,
 					exportedOnly: validated.exportedOnly
 				});
 				break;

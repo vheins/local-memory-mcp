@@ -73,7 +73,12 @@ export interface SymbolSearchQuery {
 	 * (callers must guard against this: codebase_symbols has no owner column).
 	 */
 	repos?: string[];
-	kind?: string;
+	/**
+	 * Symbol kind filter. A single kind filters `cs.kind = ?`; an array filters
+	 * `cs.kind IN (?, ?, ...)` (OR). Multi-kind OR is honored at the DB level
+	 * (TASK-445) so `kind:function,class` returns both kinds.
+	 */
+	kind?: string | string[];
 	filePath?: string;
 	exportedOnly?: boolean;
 	limit?: number;
