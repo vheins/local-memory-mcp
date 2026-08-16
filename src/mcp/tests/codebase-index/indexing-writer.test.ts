@@ -222,6 +222,48 @@ describe("indexing-writer", () => {
 		).toBe(0);
 	});
 
+	it("cleanStaleFiles with > 200 stale paths clears files/symbols/jobs across chunks (TASK-457)", async () => {
+		const store = await makeStore();
+		const repo = "test-repo";
+
+		// CLEANUP_TXN_CHUNK = 200 (indexing-writer.ts): 250 stale files →
+		// 2 immediate write transactions. Seed via writeParseBatch so file +
+		// symbol + codebase_symbol queue rows all exist for every stale path.
+		const COUNT = 250;
+		const fileInserts: CodebaseFileInsert[] = [];
+		const symbolInserts: CodebaseSymbolInsert[] = [];
+		const stale = new Set<string>();
+		for (let i = 0; i < COUNT; i++) {
+			const path = `gone-${i}.ts`;
+			fileInserts.push({ repo, file_path: path });
+			symbolInserts.push({ repo, file_path: path, name: `goneSym-${i}`, kind: "function" });
+			stale.add(path);
+		}
+		expect(await writeParseBatch(base(store, repo), fileInserts, symbolInserts, new Map())).toBe(0);
+		expect(
+			(
+				store.db.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol'").get() as {
+					cnt: number;
+				}
+			).cnt
+		).toBe(COUNT);
+
+		expect(await cleanStaleFiles(base(store, repo), stale)).toBe(0);
+
+		// Every chunk's per-file ops ran: file records, symbols, and queue
+		// jobs for ALL stale paths are gone — chunking preserved the per-file
+		// delete contract without dropping rows at chunk boundaries.
+		expect(store.codebaseFiles.getFilesByRepo(repo)).toEqual([]);
+		expect(store.codebaseSymbols.getAllSymbols().length).toBe(0);
+		expect(
+			(
+				store.db.prepare("SELECT COUNT(*) as cnt FROM queue_jobs WHERE entity_kind = 'codebase_symbol'").get() as {
+					cnt: number;
+				}
+			).cnt
+		).toBe(0);
+	});
+
 	it("applyRenames: purges old-path queue job, enqueues the new path, removes old-path KG observation (rename path)", async () => {
 		const store = await makeStore();
 		const repo = "test-repo";

@@ -241,9 +241,12 @@ export function countByStatus(store: SQLiteStore): QueueCounts {
  * - Rows another worker just embedded are skipped by the freshness
  *   comparison (vector updated_at >= entity updated_at).
  *
- * Runs inside a BEGIN IMMEDIATE transaction (TASK-064 / MEM-475): the read-
- * then-write sequence grabs the SQLite write lock upfront instead of failing
- * with SQLITE_BUSY_SNAPSHOT under concurrent writers.
+ * Runs in chunked BEGIN IMMEDIATE transactions (TASK-064 / MEM-475 +
+ * TASK-457): the read-then-write sequence grabs the SQLite write lock upfront
+ * instead of failing with SQLITE_BUSY_SNAPSHOT under concurrent writers, and
+ * each transaction commits at most BACKFILL_TXN_CHUNK rows so a large
+ * backfill never holds the SQLite write lock long enough to starve sibling
+ * writers past busy_timeout (see the implementation note below).
  */
 export function backfillMissingVectors(
 	store: SQLiteStore,
@@ -264,164 +267,187 @@ export function backfillMissingVectors(
 
 	let enqueued = 0;
 
-	store.db
-		.transaction(() => {
-			const memories = store.db
-				.prepare(
-					`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
+	// Chunked backfill write transactions (TASK-457): the old single
+	// BEGIN IMMEDIATE held the SQLite write lock for the WHOLE cap (up to
+	// EMBEDDING_QUEUE_BACKFILL_CAP=2000 upserts under one transaction) — on a
+	// CPU-loaded multi-process boot that starved sibling writers (dashboard /
+	// another per-client MCP server / the codebase indexer) past
+	// busy_timeout=5000 ("database is locked"). Now each immediate transaction
+	// writes at most BACKFILL_TXN_CHUNK rows, so the per-transaction write-lock
+	// hold drops from seconds to milliseconds. The candidate SELECTs run
+	// OUTSIDE any write transaction (plain reads hold no write lock), and each
+	// chunked INSERT is a single `INSERT ... ON CONFLICT DO NOTHING`
+	// (enqueueIfAbsent) — SNAPSHOT-immune — so the reads-before-writes split
+	// cannot hit SQLITE_BUSY_SNAPSHOT. Candidate selection per phase (memory →
+	// standards → tasks, each bounded by the original LIMIT against the shared
+	// `cap` budget) and the returned insert count are unchanged.
+	const BACKFILL_TXN_CHUNK = 200;
+	const enqueueInChunks = (inputs: EmbeddingJobInput[]): number => {
+		let inserted = 0;
+		for (let i = 0; i < inputs.length; i += BACKFILL_TXN_CHUNK) {
+			const slice = inputs.slice(i, i + BACKFILL_TXN_CHUNK);
+			store.db
+				.transaction(() => {
+					for (const input of slice) {
+						if (enqueueIfAbsent(store, input)) inserted++;
+					}
+				})
+				.immediate();
+		}
+		return inserted;
+	};
+
+	// Phase 1 — memories (up to `cap` candidates, same SELECT as before).
+	{
+		const memories = store.db
+			.prepare(
+				`SELECT m.id, m.repo, m.owner, m.title, m.content, m.updated_at
              FROM ${TABLE_MEMORIES} m LEFT JOIN memory_vectors mv ON mv.memory_id = m.id
              WHERE m.status = '${MEMORY_STATUS_ACTIVE}' AND (mv.memory_id IS NULL OR mv.updated_at < m.updated_at)
              LIMIT ?`
-				)
-				.all(cap) as Array<{
-				id: string;
-				repo: string;
-				owner: string;
-				title: string | null;
-				content: string;
-				updated_at: string;
-			}>;
+			)
+			.all(cap) as Array<{
+			id: string;
+			repo: string;
+			owner: string;
+			title: string | null;
+			content: string;
+			updated_at: string;
+		}>;
 
-			for (const m of memories) {
-				if (
-					enqueueIfAbsent(store, {
-						kind: "memory",
-						id: m.id,
-						repo: m.repo,
-						owner: m.owner,
-						payload: memoryJobPayload({
-							title: m.title,
-							content: m.content,
-							owner: m.owner,
-							repo: m.repo,
-							updatedAt: m.updated_at
-						})
-					})
-				) {
-					enqueued++;
-				}
-			}
+		enqueued += enqueueInChunks(
+			memories.map((m) => ({
+				kind: "memory" as const,
+				id: m.id,
+				repo: m.repo,
+				owner: m.owner,
+				payload: memoryJobPayload({
+					title: m.title,
+					content: m.content,
+					owner: m.owner,
+					repo: m.repo,
+					updatedAt: m.updated_at
+				})
+			}))
+		);
+	}
 
-			if (enqueued < cap) {
-				const standards = store.db
-					.prepare(
-						`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.stack, s.parent_id, s.updated_at
+	// Phase 2 — standards fill the remaining budget (same cap - enqueued limit).
+	if (enqueued < cap) {
+		const standards = store.db
+			.prepare(
+				`SELECT s.id, s.repo, s.owner, s.title, s.content, s.context, s.stack, s.parent_id, s.updated_at
              FROM coding_standards s LEFT JOIN standard_vectors sv ON sv.standard_id = s.id
              WHERE sv.standard_id IS NULL OR sv.updated_at < s.updated_at
              LIMIT ?`
-					)
-					.all(cap - enqueued) as Array<{
-					id: string;
-					repo: string | null;
-					owner: string;
-					title: string;
-					content: string;
-					context: string;
-					stack: string | null;
-					parent_id: string | null;
-					updated_at: string;
-				}>;
+			)
+			.all(cap - enqueued) as Array<{
+			id: string;
+			repo: string | null;
+			owner: string;
+			title: string;
+			content: string;
+			context: string;
+			stack: string | null;
+			parent_id: string | null;
+			updated_at: string;
+		}>;
 
-				for (const s of standards) {
-					const standard: CodingStandardEntry = {
-						id: s.id,
-						code: undefined,
-						title: s.title,
-						content: s.content,
-						parent_id: s.parent_id,
-						context: s.context,
-						version: "",
-						language: null,
-						stack: parseStringArray(s.stack),
-						is_global: false,
-						owner: s.owner,
-						repo: s.repo,
-						tags: [],
-						metadata: {},
-						created_at: s.updated_at,
-						updated_at: s.updated_at,
-						hit_count: 0,
-						last_used_at: null,
-						agent: "backfill",
-						model: "backfill"
-					};
-					if (
-						enqueueIfAbsent(store, {
-							kind: "standard",
-							id: s.id,
-							repo: s.repo ?? "",
-							owner: s.owner,
-							payload: standardJobPayload(standard)
-						})
-					) {
-						enqueued++;
-					}
-				}
-			}
+		enqueued += enqueueInChunks(
+			standards.map((s) => {
+				const standard: CodingStandardEntry = {
+					id: s.id,
+					code: undefined,
+					title: s.title,
+					content: s.content,
+					parent_id: s.parent_id,
+					context: s.context,
+					version: "",
+					language: null,
+					stack: parseStringArray(s.stack),
+					is_global: false,
+					owner: s.owner,
+					repo: s.repo,
+					tags: [],
+					metadata: {},
+					created_at: s.updated_at,
+					updated_at: s.updated_at,
+					hit_count: 0,
+					last_used_at: null,
+					agent: "backfill",
+					model: "backfill"
+				};
+				return {
+					kind: "standard" as const,
+					id: s.id,
+					repo: s.repo ?? "",
+					owner: s.owner,
+					payload: standardJobPayload(standard)
+				};
+			})
+		);
+	}
 
-			if (enqueued < cap) {
-				const tasks = store.db
-					.prepare(
-						`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
+	// Phase 3 — tasks fill the remaining budget (same cap - enqueued limit).
+	if (enqueued < cap) {
+		const tasks = store.db
+			.prepare(
+				`SELECT t.id, t.repo, t.owner, t.phase, t.title, t.description, t.parent_id, t.metadata, t.updated_at
              FROM ${TABLE_TASKS} t LEFT JOIN task_vectors tv ON tv.task_id = t.id
               WHERE t.status != '${TASK_STATUS_CANCELED}' AND (tv.task_id IS NULL OR tv.updated_at < t.updated_at)
              LIMIT ?`
-					)
-					.all(cap - enqueued) as Array<{
-					id: string;
-					repo: string;
-					owner: string;
-					phase: string;
-					title: string;
-					description: string | null;
-					parent_id: string | null;
-					metadata: string | null;
-					updated_at: string;
-				}>;
+			)
+			.all(cap - enqueued) as Array<{
+			id: string;
+			repo: string;
+			owner: string;
+			phase: string;
+			title: string;
+			description: string | null;
+			parent_id: string | null;
+			metadata: string | null;
+			updated_at: string;
+		}>;
 
-				for (const t of tasks) {
-					const task: Task = {
-						id: t.id,
-						owner: t.owner,
-						repo: t.repo,
-						task_code: "",
-						phase: t.phase,
-						title: t.title,
-						description: t.description,
-						status: "backlog",
-						priority: 3,
-						agent: "backfill",
-						role: "backfill",
-						doc_path: null,
-						created_at: t.updated_at,
-						updated_at: t.updated_at,
-						in_progress_at: null,
-						finished_at: null,
-						canceled_at: null,
-						est_tokens: 0,
-						tags: [],
-						suggested_skills: [],
-						commit_id: null,
-						changed_files: [],
-						metadata: safeJson(t.metadata),
-						parent_id: t.parent_id,
-						depends_on: null
-					};
-					if (
-						enqueueIfAbsent(store, {
-							kind: "task",
-							id: t.id,
-							repo: t.repo,
-							owner: t.owner,
-							payload: taskJobPayload(task)
-						})
-					) {
-						enqueued++;
-					}
-				}
-			}
-		})
-		.immediate();
+		enqueued += enqueueInChunks(
+			tasks.map((t) => {
+				const task: Task = {
+					id: t.id,
+					owner: t.owner,
+					repo: t.repo,
+					task_code: "",
+					phase: t.phase,
+					title: t.title,
+					description: t.description,
+					status: "backlog",
+					priority: 3,
+					agent: "backfill",
+					role: "backfill",
+					doc_path: null,
+					created_at: t.updated_at,
+					updated_at: t.updated_at,
+					in_progress_at: null,
+					finished_at: null,
+					canceled_at: null,
+					est_tokens: 0,
+					tags: [],
+					suggested_skills: [],
+					commit_id: null,
+					changed_files: [],
+					metadata: safeJson(t.metadata),
+					parent_id: t.parent_id,
+					depends_on: null
+				};
+				return {
+					kind: "task" as const,
+					id: t.id,
+					repo: t.repo,
+					owner: t.owner,
+					payload: taskJobPayload(task)
+				};
+			})
+		);
+	}
 
 	return enqueued;
 }

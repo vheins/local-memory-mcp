@@ -100,6 +100,13 @@ process.on("uncaughtException", (err: Error) => {
 const db = await SQLiteStore.create();
 const vectors = new RealVectorStore(db);
 
+// Register file log sink (same dir as DB, retain last 5 files) BEFORE the
+// embedding worker starts (TASK-457 fix8): embeddingWorker.start() runs the
+// startup reconcile/backfill immediately, which is exactly the window where
+// a multi-process "database is locked" burst is logged — a sink registered
+// after start() would lose those first failure logs.
+addLogSink(createFileSink(path.dirname(db.getDbPath())));
+
 // Start the embedding/KG outbox worker (TASK-013): drains queue_jobs with
 // batched ONNX inference + KG extraction OUTSIDE the write lock. Startup
 // reconcile/backfill/purge run inside the worker.
@@ -123,8 +130,6 @@ const parserPool = new TreeSitterParserPool();
 const fileWatcher = new FileWatcher(db, parserPool);
 fileWatcher.start();
 
-// Register file log sink (same dir as DB, retain last 5 files)
-addLogSink(createFileSink(path.dirname(db.getDbPath())));
 logger.info("[Server] startup", { pid: process.pid, version: CAPABILITIES.serverInfo.version, db: db.getDbPath() });
 
 // Pre-load vector model — block startup until ready or timeout (30s)

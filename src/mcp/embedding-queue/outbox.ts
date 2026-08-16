@@ -116,6 +116,25 @@ export class Outbox {
 	}
 
 	/**
+	 * Release a claim back to `pending` WITHOUT touching attempts/backoff
+	 * (TASK-457). Used when transient SQLite lock contention (SQLITE_BUSY /
+	 * SQLITE_BUSY_SNAPSHOT) interrupts a job mid-processing: the job must be
+	 * retried with its attempt/backoff state intact — a lock contention is not
+	 * a job failure and must never move the job toward poison. Same conditional
+	 * guard as complete()/fail() (`status = 'claimed' AND locked_by = ?`): if
+	 * the row was re-enqueued (LWW) or re-claimed after lease expiry, this
+	 * no-ops. Single conditional UPDATE — SNAPSHOT-immune like complete/fail.
+	 */
+	release(id: string, lockedBy: string): boolean {
+		const result = this.store.db
+			.prepare(
+				"UPDATE queue_jobs SET status = 'pending', lease_until = NULL, locked_by = NULL, updated_at = ? WHERE id = ? AND status = 'claimed' AND locked_by = ?"
+			)
+			.run(new Date().toISOString(), id, lockedBy);
+		return result.changes > 0;
+	}
+
+	/**
 	 * Conditional failure: increments attempts; poisons at `poisonThreshold`,
 	 * otherwise re-queues with exponential backoff (base * 2^(attempt-1),
 	 * capped at `backoffMaxMs`). No-ops if the row was re-enqueued or

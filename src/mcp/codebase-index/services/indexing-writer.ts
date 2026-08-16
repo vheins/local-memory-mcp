@@ -363,33 +363,44 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 	try {
 		await retryDbWrite(async () => {
 			await db.withExclusiveWrite(async () => {
-				// ONE SQLite transaction for the whole cleanup (issue #69): all
-				// stale symbol + file deletions commit atomically — a failure
-				// mid-cleanup rolls back instead of leaving half-deleted records.
-				db.db
-					.transaction(() => {
-						let cleanedCount = 0;
-						for (const fp of stalePaths) {
-							db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
-							db.codebaseReferences.deleteReferencesByFile(repo, fp);
-							// Purge pending codebase jobs for the deleted files so a
-							// stale job can never re-run KG extraction for a file
-							// that no longer exists (TASK-293 — mirrors the
-							// memory/task/standard delete-tool purge contract).
-							db.db
-								.prepare("DELETE FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
-								.run(codebaseEntityId(repo, fp));
-							db.codebaseFiles.deleteFile(repo, fp);
-							cleanedCount++;
-							emitProgress(options, {
-								stage: "cleaning",
-								current: cleanedCount,
-								total: stalePaths.size,
-								message: `Cleaned ${cleanedCount}/${stalePaths.size}: ${fp}`
-							});
-						}
-					})
-					.immediate();
+				// Chunked cleanup (TASK-457): the old ONE transaction for every
+				// stale path (issue #69) held the SQLite write lock for the whole
+				// sweep — on a large cleanup (hundreds of deleted files) that
+				// starved sibling writers (embedding worker / another MCP server)
+				// past busy_timeout=5000 ("database is locked"). Each chunk still
+				// commits atomically (a failure mid-chunk rolls back just that
+				// chunk), bounding the per-transaction write-lock hold to
+				// CLEANUP_TXN_CHUNK paths while preserving the per-file operations
+				// (symbol/ref/job/file deletion) exactly.
+				const CLEANUP_TXN_CHUNK = 200;
+				const paths = [...stalePaths];
+				let cleanedCount = 0;
+				for (let start = 0; start < paths.length; start += CLEANUP_TXN_CHUNK) {
+					const chunk = paths.slice(start, start + CLEANUP_TXN_CHUNK);
+					db.db
+						.transaction(() => {
+							for (const fp of chunk) {
+								db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
+								db.codebaseReferences.deleteReferencesByFile(repo, fp);
+								// Purge pending codebase jobs for the deleted files so a
+								// stale job can never re-run KG extraction for a file
+								// that no longer exists (TASK-293 — mirrors the
+								// memory/task/standard delete-tool purge contract).
+								db.db
+									.prepare("DELETE FROM queue_jobs WHERE entity_kind = 'codebase_symbol' AND entity_id = ?")
+									.run(codebaseEntityId(repo, fp));
+								db.codebaseFiles.deleteFile(repo, fp);
+								cleanedCount++;
+								emitProgress(options, {
+									stage: "cleaning",
+									current: cleanedCount,
+									total: stalePaths.size,
+									message: `Cleaned ${cleanedCount}/${stalePaths.size}: ${fp}`
+								});
+							}
+						})
+						.immediate();
+				}
 			});
 		}, "stale-cleanup");
 	} catch (err) {

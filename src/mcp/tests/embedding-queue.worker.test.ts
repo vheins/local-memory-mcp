@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestStore, SQLiteStore } from "../storage/sqlite";
-import { enqueueTask, enqueueMemory, enqueueCodebaseSymbols } from "../embedding-queue/outbox";
+import { Outbox, enqueueTask, enqueueMemory, enqueueCodebaseSymbols } from "../embedding-queue/outbox";
 import { codebaseEntityId } from "../embedding-queue/enqueue";
-import { EmbeddingWorker } from "../embedding-queue/worker";
+import { EmbeddingWorker, isBusyError } from "../embedding-queue/worker";
 import { RealVectorStore } from "../storage/vectors";
 import { observationText } from "../tools/kg-archivist";
 import { handleTaskDelete } from "../tools/task.delete";
@@ -414,5 +414,104 @@ describe("EmbeddingWorker — codebase_symbol → KG auto-population (TASK-293)"
 		expect(_queueJobKindInvariant).toBe(true);
 		const kinds: QueueJobKind[] = ["memory", "standard", "task", "codebase_symbol"];
 		expect(kinds).toHaveLength(4);
+	});
+});
+
+describe("EmbeddingWorker — isBusyError classification matrix (TASK-457)", () => {
+	it("classifies the transient SQLite lock-contention codes as busy", () => {
+		// The better-sqlite3 SqliteError extended codes, per the better-sqlite3
+		// convention already used by SQLITE_CONSTRAINT_UNIQUE (TASK-457). WAL
+		// makes SQLITE_BUSY_RECOVERY uncommon, but it is the same transient
+		// write-lock contention and must never poison a healthy job (F3).
+		expect(isBusyError({ code: "SQLITE_BUSY" })).toBe(true);
+		expect(isBusyError({ code: "SQLITE_BUSY_SNAPSHOT" })).toBe(true);
+		expect(isBusyError({ code: "SQLITE_BUSY_RECOVERY" })).toBe(true);
+	});
+
+	it("treats non-busy codes, plain Errors, and malformed inputs as NOT busy", () => {
+		expect(isBusyError({ code: "SQLITE_CONSTRAINT_UNIQUE" })).toBe(false);
+		expect(isBusyError({ code: "SQLITE_READONLY" })).toBe(false);
+		// A plain Error with a busy-looking MESSAGE is NOT busy: only the
+		// SqliteError `code` discriminates — message-text sniffing would
+		// misclassify real failures as transient (anti-hallucination guard).
+		expect(isBusyError(new Error("database is locked"))).toBe(false);
+		expect(isBusyError({})).toBe(false);
+		expect(isBusyError(null)).toBe(false);
+		expect(isBusyError(undefined)).toBe(false);
+		expect(isBusyError("SQLITE_BUSY")).toBe(false);
+		expect(isBusyError(42)).toBe(false);
+	});
+});
+
+describe("EmbeddingWorker — SQLITE_BUSY is never a job failure (TASK-457 anti-poison)", () => {
+	let db: SQLiteStore;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("a per-job BUSY releases the claim with attempts/backoff untouched and failed NOT incremented", async () => {
+		const task = makeTask();
+		db.tasks.insertTask(task);
+		enqueueTask(db, task);
+
+		// Inject BUSY on the per-job complete (the write immediately after
+		// applyJob's vector write) — exercising the per-job catch
+		// (worker.ts runOnce). The catch must release the claim and retry
+		// next cycle instead of counting an attempt or poisoning the job.
+		const completeSpy = vi.spyOn(Outbox.prototype, "complete").mockImplementation((): boolean => {
+			throw { code: "SQLITE_BUSY" };
+		});
+		const worker = makeWorker(db);
+		try {
+			const claimed = await worker.runOnce();
+			expect(claimed).toBe(1);
+		} finally {
+			completeSpy.mockRestore();
+		}
+
+		// Job re-pended (release), NOT poison; attempts — the poison gauge —
+		// stay 0 (lock contention is not a job failure).
+		const row = getJob(db, "task", task.id)!;
+		expect(row.status).toBe("pending");
+		expect(row.attempts).toBe(0);
+		expect(row.locked_by).toBeNull();
+		expect(row.lease_until).toBeNull();
+
+		// The linchpin: failed is NOT incremented on the BUSY path.
+		const stats = worker.getStats();
+		expect(stats.failed).toBe(0);
+	});
+
+	it("a deferred Phase-1 complete (unparseable payload + BUSY) does not bump stats.failed (F2)", async () => {
+		// Directly insert an unparseable job — parsePayload returns null, so
+		// runOnce routes it through the Phase-1 no-op complete. When that
+		// complete defers on BUSY, `failed` must stay 0 (the row stays
+		// 'claimed' and self-heals via lease expiry — it is lock contention,
+		// not a job failure).
+		const now = new Date().toISOString();
+		db.db
+			.prepare(
+				`INSERT INTO queue_jobs (id, entity_kind, entity_id, entity_repo, payload, content_hash, status, attempts, created_at, updated_at)
+				 VALUES (?, 'task', ?, '', ?, NULL, 'pending', 0, ?, ?)`
+			)
+			.run("job-unparseable-1", "unparseable-1", "not-json", now, now);
+
+		const completeSpy = vi.spyOn(Outbox.prototype, "complete").mockImplementation((): boolean => {
+			throw { code: "SQLITE_BUSY" };
+		});
+		const worker = makeWorker(db);
+		try {
+			const claimed = await worker.runOnce();
+			expect(claimed).toBe(1);
+		} finally {
+			completeSpy.mockRestore();
+		}
+
+		expect(worker.getStats().failed).toBe(0);
 	});
 });

@@ -96,6 +96,77 @@ describe("Outbox — claim/complete/fail bound to the claim batch token (TASK-04
 		expect(row.attempts).toBe(2);
 		expect(row.backoff_until).toBeNull();
 	});
+
+	it("release returns a claim to pending with attempts/backoff untouched (TASK-457)", () => {
+		const task = makeTask();
+		db.tasks.insertTask(task);
+		enqueueTask(db, task);
+
+		const [claim] = outbox.claim(10, 60_000);
+		const token = claim!.locked_by as string;
+
+		// Give the row an existing attempt history to prove release preserves it
+		// (a lock contention must never accumulate attempts toward poison).
+		const futureBackoff = new Date(Date.now() + 60_000).toISOString();
+		db.db
+			.prepare("UPDATE queue_jobs SET attempts = 2, backoff_until = ?, last_error = 'prev' WHERE id = ?")
+			.run(futureBackoff, claim!.id);
+
+		expect(outbox.release(claim!.id, token)).toBe(true);
+
+		const row = getJob(db, "task", task.id)!;
+		expect(row.status).toBe("pending");
+		expect(row.locked_by).toBeNull();
+		expect(row.lease_until).toBeNull();
+		// attempts + backoff_until preserved verbatim.
+		expect(row.attempts).toBe(2);
+		expect(row.backoff_until).toBe(futureBackoff);
+		expect(row.last_error).toBe("prev");
+	});
+
+	it("release with a foreign (stale) token is a no-op — never releases another worker's claim (TASK-457)", () => {
+		const task = makeTask();
+		db.tasks.insertTask(task);
+		enqueueTask(db, task);
+
+		const [claim] = outbox.claim(10, 60_000);
+		const token = claim!.locked_by as string;
+
+		// A sibling worker's token must NOT release this claim.
+		expect(outbox.release(claim!.id, "other-worker-token")).toBe(false);
+
+		const row = getJob(db, "task", task.id)!;
+		expect(row.status).toBe("claimed");
+		expect(row.locked_by).toBe(token);
+	});
+});
+
+describe("Outbox — backfill chunking across transactions (TASK-457)", () => {
+	let db: SQLiteStore;
+	let outbox: Outbox;
+
+	beforeEach(async () => {
+		db = await createTestStore();
+		outbox = new Outbox(db);
+	});
+
+	afterEach(() => {
+		db.close();
+	});
+
+	it("backfill with cap > 200 enqueues every row across multiple chunks", () => {
+		// BACKFILL_TXN_CHUNK = 200 (enqueue.ts): 250 candidates → 2 immediate
+		// write transactions. Every candidate must still land exactly once —
+		// chunking must not drop or duplicate any row.
+		const COUNT = 250;
+		for (let i = 0; i < COUNT; i++) {
+			db.tasks.insertTask(makeTask({ title: `Chunked backfill task ${i}` }));
+		}
+
+		const enqueued = outbox.backfillMissingVectors(COUNT);
+		expect(enqueued).toBe(COUNT);
+		expect(countRows(db, "SELECT COUNT(*) as cnt FROM queue_jobs")).toBe(COUNT);
+	});
 });
 
 describe("Outbox — backfill excludes canceled tasks (TASK-042)", () => {

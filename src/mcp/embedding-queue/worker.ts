@@ -17,6 +17,15 @@
  * (enqueue.ts). The idle poll loop uses exponential backoff + jitter so two
  * workers never busy-spin or thundering-herd the same poll times.
  *
+ * SQLITE_BUSY tolerance (TASK-457): a sibling process (dashboard / another
+ * per-client MCP server / the codebase indexer) holding the write lock past
+ * busy_timeout surfaces as a better-sqlite3 SqliteError with `code`
+ * 'SQLITE_BUSY' or 'SQLITE_BUSY_SNAPSHOT' on any of the outbox writes. Those
+ * are TRANSIENT — they are never a job attempt and never poison: the cycle
+ * backs off with jitter instead of logging a fatal "cycle failed", a per-job
+ * BUSY releases the claim (attempts/backoff untouched) so it is retried, and
+ * the outbox writes are wrapped so their own BUSY can never kill the cycle.
+ *
  * Crash-safety: a lease expires after 60s; the next claim cycle (or startup
  * reconcile) re-queues the job. KG observation inserts are idempotent
  * (unique index + INSERT OR IGNORE), so reprocessing never duplicates data.
@@ -50,6 +59,26 @@ import {
 	loadExistingEntityIds as loadExistingIds,
 	applyJob as applyJobToStore
 } from "./worker-jobs";
+
+/**
+ * better-sqlite3 surfaces SQLite lock contention as a SqliteError with a
+ * string `code`: 'SQLITE_BUSY' (busy_timeout expired while waiting for a
+ * writer), 'SQLITE_BUSY_SNAPSHOT' (a read-then-write transaction hit a
+ * concurrent commit — thrown immediately, busy_timeout-immune), or
+ * 'SQLITE_BUSY_RECOVERY' (extended 261 — another process is mid-recovery,
+ * also transient). All three mean another process holds the SQLite write
+ * lock, NOT that the current job failed, so they are TRANSIENT (TASK-457):
+ * never count as a job attempt, never poison a job, never abort the worker
+ * cycle as a fatal error. Mirrors the isSqliteError pattern in
+ * entities/task/validation.ts.
+ */
+export function isBusyError(err: unknown): boolean {
+	if (err && typeof err === "object" && "code" in err) {
+		const code = (err as { code?: unknown }).code;
+		return code === "SQLITE_BUSY" || code === "SQLITE_BUSY_SNAPSHOT" || code === "SQLITE_BUSY_RECOVERY";
+	}
+	return false;
+}
 
 export interface EmbeddingWorkerOptions {
 	pollIntervalMs?: number;
@@ -196,8 +225,24 @@ export class EmbeddingWorker {
 			// workers don't busy-poll or thundering-herd (TASK-064 / MEM-475).
 			this.schedule(this.nextDelay(processed));
 		} catch (err) {
-			logger.warn("[EmbeddingWorker] cycle failed", { error: String(err) });
-			this.schedule(this.opts.pollIntervalMs);
+			if (isBusyError(err)) {
+				// Transient SQLite lock contention (TASK-457): a sibling
+				// process holds the write lock past busy_timeout. The queue is
+				// untouched — a failed claim leaves jobs pending, and rows
+				// interrupted mid-batch self-heal via lease expiry. This is NOT
+				// a cycle failure: no attempt was consumed and nothing was
+				// poisoned, so log a calm retry and back off with jitter
+				// instead of the old fatal "cycle failed" every 5.5s.
+				const delayMs = this.nextDelay(0);
+				logger.warn("[EmbeddingWorker] cycle deferred (database busy) — retrying with backoff", {
+					error: String(err),
+					nextDelayMs: delayMs
+				});
+				this.schedule(delayMs);
+			} else {
+				logger.warn("[EmbeddingWorker] cycle failed", { error: String(err) });
+				this.schedule(this.opts.pollIntervalMs);
+			}
 		} finally {
 			this.running = false;
 		}
@@ -253,9 +298,20 @@ export class EmbeddingWorker {
 				// Unparseable payload — nothing to enrich. Complete bound to
 				// OUR batch token: if the lease expired and another worker
 				// re-claimed the row, this no-ops and that worker keeps
-				// processing it.
-				this.outbox.complete(job.id, job.locked_by ?? "");
-				this.stats.failed++;
+				// processing it. Wrapped so a transient SQLITE_BUSY here
+				// defers the write (lease-expiry self-heals) instead of
+				// killing the whole cycle (TASK-457). The no-op complete
+				// counts as a failure ONLY when it actually ran: a deferred
+				// (BUSY) complete leaves the row claimed and self-healing,
+				// and must not inflate `failed` with lock contention
+				// (TASK-457-F2, mirrors the per-job BUSY path which skips it).
+				const completedNoOp = this.runOutboxWrite(
+					() => this.outbox.complete(job.id, job.locked_by ?? ""),
+					"complete-unparseable"
+				);
+				if (completedNoOp) {
+					this.stats.failed++;
+				}
 				continue;
 			}
 			parsed.push({ job, payload });
@@ -272,8 +328,19 @@ export class EmbeddingWorker {
 			const existingById = this.loadExistingEntityIds(parsed);
 			for (const item of parsed) {
 				if (!existingById.get(item.job.entity_kind)?.has(item.job.entity_id)) {
-					this.outbox.complete(item.job.id, item.job.locked_by ?? "");
-					this.stats.failed++;
+					// Wrapped — a transient SQLITE_BUSY defers the no-op
+					// complete (lease-expiry self-heals) instead of killing
+					// the cycle (TASK-457). Count as failed ONLY when the
+					// complete actually ran — a deferred complete is lock
+					// contention, not a job failure, so it must not inflate
+					// `failed` (TASK-457-F2, mirrors the per-job BUSY path).
+					const completedMissing = this.runOutboxWrite(
+						() => this.outbox.complete(item.job.id, item.job.locked_by ?? ""),
+						"complete-missing-entity"
+					);
+					if (completedMissing) {
+						this.stats.failed++;
+					}
 					continue;
 				}
 				resolved.push(item);
@@ -317,14 +384,38 @@ export class EmbeddingWorker {
 					this.outbox.complete(job.id, job.locked_by ?? "");
 					this.stats.processed++;
 				} catch (err) {
+					if (isBusyError(err)) {
+						// Transient lock contention (TASK-457): writeVector (or
+						// the complete right after it) hit SQLITE_BUSY. This is
+						// NOT a job failure — counting it as an attempt would
+						// move a healthy job toward poison after just 5 lock-out
+						// windows (EMBEDDING_QUEUE_POISON_THRESHOLD). Release the
+						// claim (attempts/backoff untouched) so the next cycle
+						// retries the same snapshot, and never increment failed.
+						logger.warn("[EmbeddingWorker] job deferred (database busy) — requeued", {
+							job: job.id,
+							error: String(err)
+						});
+						this.runOutboxWrite(() => this.outbox.release(job.id, job.locked_by ?? ""), "release-busy");
+						continue;
+					}
 					this.stats.failed++;
-					this.outbox.fail(
-						job.id,
-						job.locked_by ?? "",
-						err instanceof Error ? err.message : String(err),
-						this.opts.poisonThreshold,
-						this.opts.backoffBaseMs,
-						this.opts.backoffMaxMs
+					// Wrapped so a transient SQLITE_BUSY on fail()'s own
+					// SELECT/UPDATE defers the write (the row stays claimed and
+					// self-heals via lease expiry) instead of escaping the
+					// catch and killing the cycle (TASK-457). Real failures
+					// still increment attempts + backoff exactly as before.
+					this.runOutboxWrite(
+						() =>
+							this.outbox.fail(
+								job.id,
+								job.locked_by ?? "",
+								err instanceof Error ? err.message : String(err),
+								this.opts.poisonThreshold,
+								this.opts.backoffBaseMs,
+								this.opts.backoffMaxMs
+							),
+						"fail"
 					);
 				}
 			}
@@ -369,6 +460,33 @@ export class EmbeddingWorker {
 		// Delegates to the pipeline module (worker-jobs.ts) — implementation
 		// documented there (TASK-430).
 		await applyJobToStore(this.store, this.vectors, job, payload, vector);
+	}
+
+	/**
+	 * Run an outbox write tolerating transient SQLite lock contention
+	 * (TASK-457). better-sqlite3 SqliteError codes 'SQLITE_BUSY' (busy_timeout
+	 * expired) and 'SQLITE_BUSY_SNAPSHOT' (read-then-write hit a concurrent
+	 * commit) mean a sibling process holds the SQLite write lock. The write is
+	 * skipped — the row stays claimed and self-heals via lease expiry — and
+	 * NEVER counts as a job attempt or a cycle failure. Non-busy errors are
+	 * rethrown so the caller's real-failure handling applies unchanged.
+	 *
+	 * @returns true when the write ran to completion, false when deferred.
+	 */
+	private runOutboxWrite(fn: () => void, context: string): boolean {
+		try {
+			fn();
+			return true;
+		} catch (err) {
+			if (isBusyError(err)) {
+				logger.warn("[EmbeddingWorker] outbox write deferred (database busy)", {
+					context,
+					error: String(err)
+				});
+				return false;
+			}
+			throw err;
+		}
 	}
 
 	// -----------------------------------------------------------------------
