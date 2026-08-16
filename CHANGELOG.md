@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0] — 2026-08-16
+
+Embedding-worker concurrency & MCP resource discovery release — the worker stops
+treating transient SQLite `database is locked` as a fatal cycle failure, and
+OpenCode/MCP SDK clients can finally enumerate and read the server's resources.
+
+### Added
+
+- **Concrete MCP resources** (TASK-442) — `list_mcp_resources` /
+  `read_mcp_resource` / `list_mcp_resource_templates` now return real content
+  instead of an empty list: `repository://index` and `session://roots` concrete
+  resources, plus collection templates for memories/tasks/summary/actions in
+  plain, single-param, and full-query forms, and `memory://{id}` / `task://{id}` /
+  `action://{id}` detail templates.
+  - Fixed SDK v2 UriTemplate `{?a,b,c}` all-or-nothing matching: sibling
+    per-param templates are registered, so realistic reads
+    (`repository://x/memories?search=foo`, `?limit=`/`?offset=`) resolve instead
+    of returning `ResourceNotFound (-32002)`.
+  - Shared `readResource(uri, db, session)` dispatcher with exact-match, repo
+    parsing, UUID detail, codebase symbols/files, and unknown-URI rejection.
+  - Completion matching generalized to family regexes so every listed URI
+    completes without `-32602`.
+  - New SDK regression suite `src/mcp/tests/sdk-resources.test.ts` (11 tests)
+    driving the real server over `InMemoryTransport` (capability gate, concrete +
+    template listing, plain/partial-query reads, completion, unknown-URI).
+
+### Fixed
+
+- **Embedding worker treats SQLite BUSY as transient** (TASK-457) — per-cycle
+  `claim`/`complete`/`fail` writes no longer log fatal `[EmbeddingWorker] cycle
+failed` when the database is temporarily locked by another process; `isBusyError()`
+  classifies `SQLITE_BUSY` / `SQLITE_BUSY_SNAPSHOT` / `SQLITE_BUSY_RECOVERY` and
+  applies a jittered backoff instead. Transient lock contention no longer counts
+  toward a job's attempts/poison limit, and a BUSY-failed job's claim is released
+  (token-guarded `Outbox.release()`) so the lease self-heals.
+- **Backfill lock-hold shrunk** — startup backfill split from one giant
+  deferred transaction into bounded ≤200-row immediate transactions
+  (`BACKFILL_TXN_CHUNK`), so a competing writer never outwaits `busy_timeout`.
+- **Codebase-index cleanup chunked** — `cleanStaleFiles` writes in ≤200-path
+  immediate transactions (`CLEANUP_TXN_CHUNK`).
+- **Single-owner backfill by default** — dashboard worker honors
+  `EMBEDDING_QUEUE_BACKFILL_CAP` (default 2000, env-tunable; `0` restores
+  MCP-server-only), eliminating cross-process startup backfill contention while
+  keeping dashboard-only deployments functional.
+- **Worker startup logs captured** — file log sink is registered before
+  `embeddingWorker.start()`, so startup maintenance/busy errors are no longer
+  lost.
+
+### Tests
+
+- **TASK-457**: isBusyError matrix (3 busy codes + negatives), per-job BUSY
+  no-poison path, `Outbox.release()` token guard, multi-chunk backfill
+  (>200 rows), `cleanStaleFiles` >200 paths — 157 tests across 10 scoped suites
+  green; 109/109 for the TASK-442 resource surface.
+
 ## [0.39.0] — 2026-08-14
 
 ### Added
