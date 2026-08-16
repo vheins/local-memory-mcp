@@ -23,18 +23,28 @@ import { readResource } from "./index";
  *   - session://roots
  *
  * Template resources:
- *   - repository://{name}/memories{?search,type,tag,limit,offset}
+ *   - repository://{name}/memories  (plain; + {?search} / {?type} / {?tag} /
+ *     {?limit} / {?offset} / full-query siblings, TASK-442)
  *   - memory://{id}
- *   - repository://{name}/tasks{?status,priority,limit,offset}
+ *   - repository://{name}/tasks  (plain; + {?status} / {?priority} /
+ *     {?limit} / {?offset} / full-query siblings, TASK-442)
  *   - task://{id}
  *   - repository://{name}/summary
- *   - repository://{name}/actions{?limit,offset}
+ *   - repository://{name}/actions  (plain; + {?limit} / {?offset} /
+ *     full-query sibling, TASK-442)
  *   - action://{id}
  *   - codebase://{repo}/symbols  (RS-1/TASK-323)
  *   - codebase://{repo}/symbols{?search,kind,limit}
  *   - codebase://{repo}/symbols{?search} / {?kind} / {?limit} / {?offset}
  *   - codebase://{repo}/symbols/{name}
  *   - codebase://{repo}/files/{+file_path}
+ *
+ * TASK-442 note: this SDK's UriTemplate treats `{?a,b,c}` as ALL-or-NOTHING —
+ * a concrete URI with ZERO or a SUBSET of the listed params matches NO
+ * template and answers ResourceNotFound. Every collection with query params
+ * therefore registers a plain no-query form PLUS one sibling template per
+ * documented param (same pattern the codebase family adopted in TASK-323), so
+ * clients like OpenCode that expand templates minimally can actually read them.
  */
 export function registerAllResources(
 	server: McpServer,
@@ -77,15 +87,83 @@ export function registerAllResources(
 	);
 
 	// ── Template: Repository Memories ─────────────────────────────────
+	// TASK-442: `{?search,type,tag,limit,offset}` alone matches ONLY the URI
+	// with ALL five params (all-or-nothing operator), so the plain form and
+	// one sibling per documented param are registered too — otherwise clients
+	// reading repository://{name}/memories or ?search=… hit ResourceNotFound.
 
 	server.registerResource(
 		"repository-memories",
-		new ResourceTemplate("repository://{name}/memories{?search,type,tag,limit,offset}", {
-			list: undefined
-		}),
+		new ResourceTemplate("repository://{name}/memories", { list: undefined }),
 		{
 			title: "Repository Memories",
-			description: "Active memory entries for a repo, filtered by search/type/tag",
+			description: "Active memory entries for a repo (no filters)",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-memories-filtered",
+		new ResourceTemplate("repository://{name}/memories{?search,type,tag,limit,offset}", { list: undefined }),
+		{
+			title: "Filtered Repository Memories",
+			description: "Filter memories in a repo by keyword, type, or tag",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-memories-search",
+		new ResourceTemplate("repository://{name}/memories{?search}", { list: undefined }),
+		{
+			title: "Repository Memories by Search",
+			description: "Filter memories in a repo by keyword",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-memories-type",
+		new ResourceTemplate("repository://{name}/memories{?type}", { list: undefined }),
+		{
+			title: "Repository Memories by Type",
+			description: "Filter memories in a repo by memory type",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-memories-tag",
+		new ResourceTemplate("repository://{name}/memories{?tag}", { list: undefined }),
+		{
+			title: "Repository Memories by Tag",
+			description: "Filter memories in a repo by tag",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-memories-limit",
+		new ResourceTemplate("repository://{name}/memories{?limit}", { list: undefined }),
+		{
+			title: "Repository Memories with Page Size",
+			description: "Page the memory list with an explicit page size",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-memories-offset",
+		new ResourceTemplate("repository://{name}/memories{?offset}", { list: undefined }),
+		{
+			title: "Repository Memories with Pagination Offset",
+			description: "Page the memory list by offset",
 			mimeType: "application/json"
 		},
 		(uri) => read(uri)
@@ -105,15 +183,69 @@ export function registerAllResources(
 	);
 
 	// ── Template: Repository Tasks ────────────────────────────────────
+	// TASK-442: plain + per-param siblings (see Repository Memories note).
 
 	server.registerResource(
 		"repository-tasks",
-		new ResourceTemplate("repository://{name}/tasks{?status,priority,limit,offset}", {
-			list: undefined
-		}),
+		new ResourceTemplate("repository://{name}/tasks", { list: undefined }),
 		{
 			title: "Repository Tasks",
-			description: "Active tasks for a repo, filtered by status/priority",
+			description: "Active tasks for a repo (no filters)",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-tasks-filtered",
+		new ResourceTemplate("repository://{name}/tasks{?status,priority,limit,offset}", { list: undefined }),
+		{
+			title: "Filtered Repository Tasks",
+			description: "Filter tasks in a repo by status or priority",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-tasks-status",
+		new ResourceTemplate("repository://{name}/tasks{?status}", { list: undefined }),
+		{
+			title: "Repository Tasks by Status",
+			description: "Filter tasks in a repo by status",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-tasks-priority",
+		new ResourceTemplate("repository://{name}/tasks{?priority}", { list: undefined }),
+		{
+			title: "Repository Tasks by Priority",
+			description: "Filter tasks in a repo by priority",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-tasks-limit",
+		new ResourceTemplate("repository://{name}/tasks{?limit}", { list: undefined }),
+		{
+			title: "Repository Tasks with Page Size",
+			description: "Page the task list with an explicit page size",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-tasks-offset",
+		new ResourceTemplate("repository://{name}/tasks{?offset}", { list: undefined }),
+		{
+			title: "Repository Tasks with Pagination Offset",
+			description: "Page the task list by offset",
 			mimeType: "application/json"
 		},
 		(uri) => read(uri)
@@ -148,15 +280,47 @@ export function registerAllResources(
 	);
 
 	// ── Template: Repository Actions ─────────────────────────────────
+	// TASK-442: plain + per-param siblings (see Repository Memories note).
 
 	server.registerResource(
 		"repository-actions",
-		new ResourceTemplate("repository://{name}/actions{?limit,offset}", {
-			list: undefined
-		}),
+		new ResourceTemplate("repository://{name}/actions", { list: undefined }),
 		{
 			title: "Repository Actions",
-			description: "Audit log of tool actions for a repo",
+			description: "Audit log of tool actions for a repo (no filters)",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-actions-filtered",
+		new ResourceTemplate("repository://{name}/actions{?limit,offset}", { list: undefined }),
+		{
+			title: "Filtered Repository Actions",
+			description: "Page the audit log for a repo",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-actions-limit",
+		new ResourceTemplate("repository://{name}/actions{?limit}", { list: undefined }),
+		{
+			title: "Repository Actions with Page Size",
+			description: "Page the audit log with an explicit page size",
+			mimeType: "application/json"
+		},
+		(uri) => read(uri)
+	);
+
+	server.registerResource(
+		"repository-actions-offset",
+		new ResourceTemplate("repository://{name}/actions{?offset}", { list: undefined }),
+		{
+			title: "Repository Actions with Pagination Offset",
+			description: "Page the audit log by offset",
 			mimeType: "application/json"
 		},
 		(uri) => read(uri)

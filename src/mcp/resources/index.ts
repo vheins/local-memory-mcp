@@ -141,15 +141,15 @@ export function completeResourceArgument(
 		tags: string[];
 	}
 ) {
-	// Repo autocomplete for all repository://{name}/... templates
-	if (
-		resourceUri === "repository://{name}/memories" ||
-		resourceUri === "repository://{name}/memories?search={search}&type={type}&tag={tag}" ||
-		resourceUri === "repository://{name}/tasks" ||
-		resourceUri === "repository://{name}/tasks?status={status}&priority={priority}" ||
-		resourceUri === "repository://{name}/summary" ||
-		resourceUri === "repository://{name}/actions"
-	) {
+	// Repo autocomplete for ALL repository://{name}/... collection templates —
+	// plain, full-query, and single-param sibling forms (TASK-442).
+	// completion/complete passes the client's ref.uri verbatim, and the SDK
+	// lists every sibling URI template, so the match set must cover each
+	// registered form or a listed template answers -32602 (mirrors the
+	// CODEBASE_TEMPLATE_URIS approach below).
+	const REPOSITORY_COLLECTION_TEMPLATE_RE =
+		/^repository:\/\/\{name\}\/(memories|tasks|summary|actions)(?:\{[^}]*\}|\?[^ ]*)?$/;
+	if (REPOSITORY_COLLECTION_TEMPLATE_RE.test(resourceUri)) {
 		if (argumentName === "name") {
 			return rankCompletionValues(dataSources.repos, argumentValue);
 		}
@@ -165,8 +165,10 @@ export function completeResourceArgument(
 		}
 	}
 
-	// Tag autocomplete for filtered memories
-	if (resourceUri === "repository://{name}/memories?search={search}&type={type}&tag={tag}") {
+	// Tag autocomplete for any memories template that exposes the tag param —
+	// legacy filtered form plus the SDK {?tag} / full-query siblings (TASK-442).
+	const MEMORIES_WITH_TAG_RE = /^repository:\/\/\{name\}\/memories(?:\{[^}]*tag[^}]*\}|\?.*tag=)/;
+	if (MEMORIES_WITH_TAG_RE.test(resourceUri)) {
 		if (argumentName === "tag") {
 			return rankCompletionValues(dataSources.tags, argumentValue);
 		}
