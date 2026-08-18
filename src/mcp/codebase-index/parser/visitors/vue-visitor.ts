@@ -28,6 +28,7 @@
 import type { Tree } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 import {
 	collectScriptImports,
 	walkTemplate,
@@ -97,17 +98,43 @@ const JS_DECLARATIONS: RegexDeclaration[] = [
 ];
 
 // ── Helper: extract JS/TS doc comment from preceding lines ────────────
+// Canonicalizes via serializeDocBlock after collecting raw lines so
+// @param/@return/@deprecated stay searchable and deprecated is marked
+// `[DEPRECATED]`. Fixes a pre-existing artifact that appended stray "/"
+// characters from closing `*/` lines and keeps the sibling scan local to
+// the doc block — non-doc content stops the walk instead of being folded
+// into the comment.
 
 function extractDocComment(lines: string[], lineIndex: number): string | null {
 	const commentLines: string[] = [];
 	let i = lineIndex - 1;
+	// Tracks whether the walk has passed the JSDoc closing line (and thus
+	// whether subsequent empty lines belong to the comment gap).
+	let seenBlockClose = false;
 	while (i >= 0) {
 		const line = lines[i];
 		const trimmed = line.trim();
 
-		// Single-line JSDoc: /** or /// style
-		if (trimmed.startsWith("/**") || trimmed.startsWith("*") || trimmed.startsWith("*/")) {
-			commentLines.unshift(trimmed.replace(/^\s*\/?\*+\s*/, "").replace(/\s*\*\/\s*$/, ""));
+		if (trimmed.startsWith("*/")) {
+			// Closing delimiter: keep the optional suffix on the same line but
+			// drop the bare `*/` — previous code had `.replace(/\s*\*\/\s*$/, "")`
+			// inside a leading-char strip that mangled the remainder and pushed a
+			// trailing `/` into the join.
+			const suffix = trimmed.replace(/^\s*\*\/\s*/, "").trim();
+			if (suffix) commentLines.unshift(suffix);
+			seenBlockClose = true;
+			i--;
+			continue;
+		}
+		if (trimmed.startsWith("/**")) {
+			const inner = trimmed.replace(/^\/\*\*?\s*/, "").trim();
+			if (inner) commentLines.unshift(inner);
+			// The opening line caps the comment — stop even if the loop would
+			// otherwise continue past leading star lines.
+			break;
+		}
+		if (trimmed.startsWith("*")) {
+			commentLines.unshift(trimmed.replace(/^\s*\*\s?/, "").trim());
 			i--;
 			continue;
 		}
@@ -116,13 +143,17 @@ function extractDocComment(lines: string[], lineIndex: number): string | null {
 			i--;
 			continue;
 		}
-		// Single-line // comments (not JSDoc — only take one line)
+		// Single-line // comments (not JSDoc — only take the one immediately
+		// above the declaration).
 		if (trimmed.startsWith("//") && i === lineIndex - 1) {
-			return trimmed.replace(/^\s*\/\/\s*/, "").trim();
+			const raw = trimmed.replace(/^\s*\/\/\s*/, "").trim();
+			return raw ? (serializeDocBlock(raw) ?? raw) : null;
 		}
 		// Empty line within doc comment block
-		if (trimmed === "" && i < lineIndex - 1 && commentLines.length > 0) {
-			commentLines.unshift("");
+		if (trimmed === "" && seenBlockClose && commentLines.length > 0) {
+			// Preserve a blank gap inside the comment (currently filtered by
+			// serializeDocBlock anyway — kept so future prose-preservation is
+			// a doc-comment.ts tweak, not a Vue-side fix).
 			i--;
 			continue;
 		}
@@ -131,12 +162,9 @@ function extractDocComment(lines: string[], lineIndex: number): string | null {
 
 	if (commentLines.length === 0) return null;
 
-	return (
-		commentLines
-			.filter((l) => l !== "" || commentLines.indexOf(l) > 0)
-			.join("\n")
-			.trim() || null
-	);
+	const raw = commentLines.join("\n").trim();
+	if (!raw) return null;
+	return serializeDocBlock(raw) ?? raw;
 }
 
 // ── Line skipping helpers ─────────────────────────────────────────────
@@ -301,9 +329,12 @@ export class VueVisitor implements LanguageVisitor {
 
 			// Skip empty lines, comments, and import/export lines
 			if (trimmed === "") continue;
+			// Single-line // comments are skipped; multi-line /** */ doc blocks
+			// are intentionally NOT skipped here — they are consumed by
+			// extractDocComment when it walks preceding lines.
 			if (trimmed.startsWith("//")) continue;
-			if (trimmed.startsWith("/*")) {
-				// Skip block comments
+			if (trimmed.startsWith("/*") && !trimmed.startsWith("/**")) {
+				// Skip non-doc block comments
 				while (i < lines.length && !lines[i].includes("*/")) i++;
 				continue;
 			}
