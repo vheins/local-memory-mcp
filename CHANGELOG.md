@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.0] — 2026-08-18
+
+Codebase-index docblock release — symbols are now discoverable by their purpose:
+`codebase-read` text output surfaces each symbol's docblock, docblock extraction
+is canonicalized across all tree-sitter visitors, and the `.agents/**`
+developer/contributor docs tree is indexed so it is searchable like source code.
+
+### Added
+
+- **`.agents/**` dot-directory indexing** (TASK-459) — the codebase indexer now
+  discovers files under `.agents` (dev/contributor/AI documentation) via an
+  explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
+  `.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
+  dashboard, CLI, startup auto-index, file watcher) since they all funnel through
+  `discoverFiles`.
+- **`doc_comment` surfaced in all 5 `codebase-read` text formatters** (TASK-460) —
+  TRACE (new `Doc:` line), FILE, SEARCH, ARCHITECTURE (new `Top Exports` doc
+  block, ~120 chars), and CODE/content modes (enclosing-symbol doc hint via
+  `EnclosingSymbol.docComment`) now show each symbol's purpose as a compact
+  truncated summary (`src/mcp/utils/doc-comment-format.ts`: `formatDocComment` /
+  `docSuffix`); structuredContent JSON unchanged.
+
+### Fixed
+
+- **Docblock normalization across 12 tree-sitter visitors** (TASK-461,
+  FIX-462/464-467) — `serializeDocBlock` is now the single canonical path:
+  C/C++/Java/Kotlin `/**` blocks, Go `//` runs (incl. `type_spec` via parent
+  `type_declaration`), Dart `///` + `/**` runs (`documentation_comment` node
+  type), Ruby `#` runs (incl. first-member-of-class-body docs), Rust `///`/`//!`
+  runs, Swift `///` runs, and Python triple-quoted docstrings all emit the
+  `[DEPRECATED]` + `@tag` contract; `//!`/`#` line markers normalized in
+  `serializeDocBlock`; generic-visitor handles `/**` blocks.
+- **Vue doc-comment extraction rewrite** (TASK-473) — `extractDocComment` no
+  longer appends a stray trailing `/` from the closing `*/` line, the sibling
+  scan stops at non-doc content, and the `*/`-branch decrement fix removes the
+  infinite-loop regression; single-line `/** */` and `//` docs canonicalized too.
+
+### Tests
+
+- **TASK-460**: doc_comment presence/absence in all 5 formatter suites plus
+  `EnclosingSymbol.docComment` (code-search.primitives/repo, get-file-symbols,
+  search-symbols, trace-symbol.mode, architecture, mcp-tools.integration.code).
+- **TASK-461 + FIX-462/464-467**: docblock-extraction assertions for
+  c/cpp/dart/go/java/kotlin/python/ruby/rust/swift visitors — `[DEPRECATED]`,
+  `@param`/`@return`, no neighbour-comment bleed; TEST_BUG fixture fixes
+  (TASK-468/469/470: dart/go/vue).
+- Full suite: 233 files / 2385 tests, all green; type-check + lint clean.
+
 ## [0.40.0] — 2026-08-16
 
 Embedding-worker concurrency & MCP resource discovery release — the worker stops
