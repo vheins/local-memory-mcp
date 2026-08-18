@@ -7,6 +7,7 @@ import {
 } from "../../codebase-index/services/code-search.js";
 import type { CodebaseSymbol } from "../../types.js";
 import { CODE_SEARCH_MAX_REGEX_LENGTH } from "../../utils/constants.js";
+import { formatDocComment } from "../../utils/doc-comment-format.js";
 
 function mkSymbol(name: string, kind: string, startLine: number | null, endLine: number | null): CodebaseSymbol {
 	return {
@@ -127,13 +128,15 @@ describe("findEnclosingSymbol", () => {
 			name: "inner",
 			kind: "method",
 			startLine: 10,
-			endLine: 15
+			endLine: 15,
+			docComment: null
 		});
 		expect(findEnclosingSymbol(symbols, 3)).toEqual({
 			name: "outer",
 			kind: "class",
 			startLine: 1,
-			endLine: 30
+			endLine: 30,
+			docComment: null
 		});
 		expect(findEnclosingSymbol(symbols, 50)).toBeNull();
 	});
@@ -145,7 +148,7 @@ describe("findEnclosingSymbol", () => {
 		// first-in-order precedence.
 		const symbols = [mkSymbol("a", "function", 12, 22), mkSymbol("b", "function", 10, 20)];
 		const result = findEnclosingSymbol(symbols, 15);
-		expect(result).toEqual({ name: "b", kind: "function", startLine: 10, endLine: 20 });
+		expect(result).toEqual({ name: "b", kind: "function", startLine: 10, endLine: 20, docComment: null });
 	});
 
 	it("identical span and start lines keep the first symbol in order", () => {
@@ -159,7 +162,48 @@ describe("findEnclosingSymbol", () => {
 
 	it("ignores symbols without spans", () => {
 		const symbols = [mkSymbol("noSpan", "function", null, null), mkSymbol("real", "function", 1, 5)];
-		expect(findEnclosingSymbol(symbols, 2)).toEqual({ name: "real", kind: "function", startLine: 1, endLine: 5 });
+		expect(findEnclosingSymbol(symbols, 2)).toEqual({
+			name: "real",
+			kind: "function",
+			startLine: 1,
+			endLine: 5,
+			docComment: null
+		});
+	});
+
+	it("docComment is carried into EnclosingSymbol (TASK-460)", () => {
+		const symbols: CodebaseSymbol[] = [
+			{
+				id: "1",
+				repo: "unit",
+				file_path: "f.ts",
+				name: "docced",
+				kind: "function",
+				exported: true,
+				default_export: false,
+				start_line: 1,
+				start_col: 0,
+				end_line: 10,
+				end_col: 1,
+				signature: null,
+				doc_comment: "Does the thing",
+				parent_symbol_id: null,
+				created_at: "",
+				updated_at: ""
+			}
+		];
+		expect(findEnclosingSymbol(symbols, 5)?.docComment).toBe("Does the thing");
+		expect(findEnclosingSymbol(symbols, 50)).toBeNull();
+	});
+
+	it("formatDocComment collapses to compact line and truncates >140 chars with ellipsis", () => {
+		expect(formatDocComment(null)).toBeNull();
+		expect(formatDocComment("")).toBeNull();
+		expect(formatDocComment("Short summary.")).toBe("Short summary.");
+		const long = `${"x".repeat(200)}\nsecond line @param y`;
+		const out = formatDocComment(long)!;
+		expect(out.length).toBeLessThanOrEqual(140);
+		expect(out.endsWith("…")).toBe(true);
 	});
 });
 

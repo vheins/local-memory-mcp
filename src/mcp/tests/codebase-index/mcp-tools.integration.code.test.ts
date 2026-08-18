@@ -106,13 +106,15 @@ describe("handleCodebaseRead (code mode)", () => {
 			name: "greet",
 			kind: "function",
 			startLine: 4,
-			endLine: 6
+			endLine: 6,
+			docComment: null
 		});
 		expect(byLine.get(16)!.enclosingSymbol).toEqual({
 			name: "Greeter",
 			kind: "class",
 			startLine: 8,
-			endLine: 18
+			endLine: 18,
+			docComment: null
 		});
 		for (const m of matches) {
 			expect(m.filePath).toBe(CODE_FILE);

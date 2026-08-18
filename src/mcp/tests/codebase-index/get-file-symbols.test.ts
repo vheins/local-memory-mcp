@@ -260,4 +260,31 @@ describe("handleCodebaseRead (file mode)", () => {
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.mode).toBe("architecture");
 	});
+
+	it("FILE text includes doc_comment suffix and omits it when absent (TASK-460)", async () => {
+		const { getPrimaryTextContent } = await import("../../utils/mcp-response.js");
+		const repo = "doc-file-repo";
+		const filePath = "src/docced.ts";
+		seedFile(store, repo, filePath);
+		seedSymbols(store, [
+			{
+				repo,
+				file_path: filePath,
+				name: "doccedFn",
+				kind: "function",
+				start_line: 1,
+				end_line: 5,
+				doc_comment: "Does the thing"
+			},
+			{ repo, file_path: filePath, name: "plainFn", kind: "function", start_line: 10, end_line: 12 }
+		]);
+		const res = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
+		const text = getPrimaryTextContent(res);
+		expect(text).toMatch(/doccedFn/);
+		expect(text).toMatch(/Does the thing/);
+		// plainFn line must not have a trailing " — " doc suffix after its entry
+		expect(text).toMatch(/plainFn/);
+		const plainLine = text.split("\n").find((l) => l.includes("plainFn")) ?? "";
+		expect(plainLine).not.toMatch(/ — /);
+	});
 });

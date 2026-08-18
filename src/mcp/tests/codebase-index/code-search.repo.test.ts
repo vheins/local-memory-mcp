@@ -91,11 +91,12 @@ describe("searchCodeInRepo", () => {
 			name: "greet",
 			kind: "function",
 			startLine: 1,
-			endLine: 3
+			endLine: 3,
+			docComment: null
 		});
 		// Lines 5 (class name) / 6 (method) / 7 (call) are inside the class.
 		for (const m of result.matches.slice(1)) {
-			expect(m.enclosingSymbol).toEqual({ name: "Greeter", kind: "class", startLine: 5, endLine: 9 });
+			expect(m.enclosingSymbol).toEqual({ name: "Greeter", kind: "class", startLine: 5, endLine: 9, docComment: null });
 		}
 		for (const m of result.matches) {
 			expect(m.filePath).toBe(filePath);
@@ -234,4 +235,3 @@ describe("searchCodeInRepo", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // CACHE — checksum-keyed validity
 // ═══════════════════════════════════════════════════════════════════════════
-

@@ -286,3 +286,57 @@ describe("buildArchitecture deadCode passthrough (TASK-319)", () => {
 		expect(result.deadCode).toBeUndefined();
 	});
 });
+
+// ── TASK-460 doc_comment via architecture handler (ARCH text surface) ──
+
+describe("ARCHITECTURE doc_comment text surface (TASK-460)", () => {
+	it("ARCH text includes Top Exports doc lines for docced exports and omits undocced", async () => {
+		const { handleCodebaseRead } = await import("../../tools/codebase.read.js");
+		const { createTestStore } = await import("../../storage/sqlite.js");
+		const { getPrimaryTextContent } = await import("../../utils/mcp-response.js");
+		const store = await createTestStore();
+		const vectors = {
+			async upsert(): Promise<void> {},
+			async remove(): Promise<void> {},
+			async search(): Promise<[]> {
+				return [];
+			}
+		};
+		const repo = "arch-doc-test";
+		store.codebaseFiles.upsertFile({ repo, file_path: "src/a.ts", language: "typescript", lines: 10, size_bytes: 100 });
+		store.codebaseSymbols.bulkUpsertSymbols([
+			{
+				repo,
+				file_path: "src/a.ts",
+				name: "DoccedExport",
+				kind: "function",
+				exported: true,
+				start_line: 1,
+				doc_comment: "Does the docced thing"
+			},
+			{ repo, file_path: "src/a.ts", name: "PlainExport", kind: "function", exported: true, start_line: 5 }
+		]);
+		const res = await handleCodebaseRead(
+			{ repo, owner: "vheins", includeSymbolCounts: true },
+			store as unknown as never,
+			vectors as never
+		);
+		const text = getPrimaryTextContent(res);
+		expect(text).toMatch(/DoccedExport/);
+		expect(text).toMatch(/Does the docced thing/);
+		// PlainExport has no doc_comment — its export line must not carry a " — " doc suffix
+		const plainLine = text.split("\n").find((l) => l.includes("PlainExport")) ?? "";
+		// PlainExport may appear in counts without a doc-labeled export line — if it does appear there its line has no suffix
+		if (plainLine) expect(plainLine).not.toMatch(/ — /);
+		store.close();
+	});
+
+	it("long doc_comment is truncated with ellipsis (~120 chars) for compact tree mode", async () => {
+		const { formatDocComment } = await import("../../utils/doc-comment-format.js");
+		const long = "A".repeat(300);
+		const out = formatDocComment(long, 120);
+		expect(out).not.toBeNull();
+		expect(out!.length).toBeLessThanOrEqual(120);
+		expect(out!.endsWith("…")).toBe(true);
+	});
+});

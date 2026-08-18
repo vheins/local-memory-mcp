@@ -18,6 +18,7 @@ export interface EnclosingSymbol {
 	kind: string;
 	startLine: number;
 	endLine: number;
+	docComment: string | null;
 }
 
 /**
@@ -95,6 +96,12 @@ export function findEnclosingSymbol(symbols: CodebaseSymbol[], line: number): En
 		}
 	}
 	return best
-		? { name: best.symbol.name, kind: best.symbol.kind, startLine: best.startLine, endLine: best.endLine }
+		? {
+				name: best.symbol.name,
+				kind: best.symbol.kind,
+				startLine: best.startLine,
+				endLine: best.endLine,
+				docComment: best.symbol.doc_comment
+			}
 		: null;
 }

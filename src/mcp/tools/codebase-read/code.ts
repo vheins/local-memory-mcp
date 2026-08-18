@@ -9,6 +9,7 @@ import {
 	type CodeSearchMatch
 } from "../../codebase-index/services/code-search";
 import { CODE_SEARCH_DEFAULT_LIMIT } from "../../utils/constants";
+import { docSuffix } from "../../utils/doc-comment-format";
 import { logger } from "../../utils/logger";
 import { parseTaggedQuery, CODEBASE_READ_TAG_KEYS } from "../../utils/query-tags";
 
@@ -42,7 +43,7 @@ function formatCodeMatchesGrouped(matches: CodeSearchMatch[], total: number, con
 		out += `\n**${filePath}**\n`;
 		for (const m of groups.get(filePath)!) {
 			const sym = m.enclosingSymbol
-				? ` (in \`${m.enclosingSymbol.kind} ${m.enclosingSymbol.name}\` L${m.enclosingSymbol.startLine}-${m.enclosingSymbol.endLine})`
+				? ` (in \`${m.enclosingSymbol.kind} ${m.enclosingSymbol.name}\` L${m.enclosingSymbol.startLine}-${m.enclosingSymbol.endLine}${docSuffix(m.enclosingSymbol.docComment)})`
 				: "";
 			out += `- L${m.line}${sym}: \`${m.snippet}\`\n`;
 		}

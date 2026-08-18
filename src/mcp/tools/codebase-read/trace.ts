@@ -3,6 +3,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import type { CodebaseSymbol } from "../../types";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
 import { traceSymbol, AmbiguousSymbolError } from "../../codebase-index/services/trace-service";
+import { formatDocComment } from "../../utils/doc-comment-format";
 import { logger } from "../../utils/logger";
 
 // ── TRACE ────────────────────────────────────────────────────────────────
@@ -61,7 +62,11 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 							.join("\n")}${result.children.length > 20 ? `\n... and ${result.children.length - 20} more` : ""}`
 					: "";
 
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${refList}${hierarchy}`;
+			const docPart = (() => {
+				const d = formatDocComment(result.symbol.doc_comment);
+				return d ? `\nDoc: ${d}` : "";
+			})();
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${refList}${hierarchy}`;
 
 			return createMcpResponse(
 				{ ...result, mode: "trace", originalName: traceName !== name ? name : undefined },

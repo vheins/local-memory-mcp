@@ -342,4 +342,40 @@ describe("handleCodebaseRead (trace mode)", () => {
 		});
 		expect(methodData.children).toEqual([]);
 	});
+
+	// ── TASK-460 doc_comment text surface ──────────────────────────────
+
+	it("TRACE text includes doc_comment for the symbol (and omits when null)", async () => {
+		const { getPrimaryTextContent } = await import("../../utils/mcp-response.js");
+		seedSymbols(store, [
+			{
+				repo,
+				file_path: "src/docs/docced.ts",
+				name: "doccedFn",
+				kind: "function",
+				exported: true,
+				start_line: 1,
+				start_col: 0,
+				doc_comment: "Does the docced thing.\n@param x the input",
+				signature: "function doccedFn(x: string)"
+			},
+			{
+				repo,
+				file_path: "src/docs/nodoc.ts",
+				name: "nodocFn",
+				kind: "function",
+				exported: true,
+				start_line: 10,
+				start_col: 0,
+				doc_comment: undefined,
+				signature: "function nodocFn()"
+			}
+		]);
+		const docced = await handleCodebaseRead({ name: "doccedFn", repo, owner: "vheins" }, store, vectors);
+		expect(getPrimaryTextContent(docced)).toMatch(/Doc:/);
+		expect(getPrimaryTextContent(docced)).toMatch(/Does the docced thing/);
+
+		const nodoc = await handleCodebaseRead({ name: "nodocFn", repo, owner: "vheins" }, store, vectors);
+		expect(getPrimaryTextContent(nodoc)).not.toMatch(/Doc:/);
+	});
 });

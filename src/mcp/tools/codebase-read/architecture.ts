@@ -10,6 +10,7 @@ import {
 } from "../../codebase-index/services/architecture-service";
 import { analyzeDeadCode, renderDeadCodeText } from "../../codebase-index/services/dead-code";
 import { ARCHITECTURE_TOP_LEVEL_EXPORTS_LIMIT } from "../../utils/constants";
+import { formatDocComment } from "../../utils/doc-comment-format";
 
 // ── ARCHITECTURE ─────────────────────────────────────────────────────────
 
@@ -93,6 +94,19 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 
 	const dirTreeOutput = renderDirTree(result.root, depth);
 	archSummary += `\n\n### Project Structure\n\n\`\`\`\n${dirTreeOutput}\n\`\`\``;
+
+	// Surface doc_comment for exported top-level symbols (compact, ~120 chars
+	// per the task spec for tree mode). Existing behavior preserved when no doc.
+	if (validated.includeSymbolCounts && result.summary.topLevelExports.length > 0) {
+		const lines: string[] = [];
+		for (const sym of result.summary.topLevelExports) {
+			const doc = formatDocComment(sym.doc_comment, 120);
+			if (doc) lines.push(`- \`${sym.kind}\` ${sym.name} — ${doc}`);
+		}
+		if (lines.length > 0) {
+			archSummary += `\n\n### Top Exports\n\n${lines.join("\n")}`;
+		}
+	}
 
 	if (deadCode) {
 		archSummary += renderDeadCodeText(deadCode);

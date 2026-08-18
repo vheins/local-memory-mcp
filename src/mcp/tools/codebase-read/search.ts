@@ -5,6 +5,7 @@ import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
 import { rankSymbols, filterSymbols, RankTier, type RankedSymbol } from "../../codebase-index/services/symbol-ranking";
 import { blendVectorRanking } from "../../codebase-index/services/vector-ranking";
 import { CODEBASE_SEARCH_DEFAULT_LIMIT } from "../../utils/constants";
+import { docSuffix } from "../../utils/doc-comment-format";
 import { parseTaggedQuery, unionStrings, CODEBASE_READ_TAG_KEYS } from "../../utils/query-tags";
 
 // ── UNIFIED SEARCH ───────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ function formatSearchResultsGrouped(
 						: `L${s.start_line}`
 					: "-";
 			const scorePart = s.score != null ? ` (score: ${s.score.toFixed(2)})` : "";
-			out += `- \`${s.kind}\` ${s.name} ${lineRange}${scorePart}\n`;
+			out += `- \`${s.kind}\` ${s.name} ${lineRange}${scorePart}${docSuffix(s.doc_comment)}\n`;
 		}
 	}
 

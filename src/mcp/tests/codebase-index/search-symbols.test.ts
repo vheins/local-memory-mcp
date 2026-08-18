@@ -310,4 +310,21 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 			expect(sym.repo).toBe("other-repo");
 		}
 	});
+
+	it("SEARCH text includes doc_comment per match and omits it when absent (TASK-460)", async () => {
+		const { getPrimaryTextContent } = await import("../../utils/mcp-response.js");
+		const res = await handleCodebaseRead({ query: "createUser", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const text = getPrimaryTextContent(res);
+		// createUser has doc_comment "Creates a new user" — surfaced as suffix in text lines.
+		expect(text).toMatch(/Creates a new user/);
+		// internalHelper has no doc_comment — its SEARCH line must not have " — " suffix.
+		const internalRes = await handleCodebaseRead(
+			{ query: "internalHelper", repo: "test-repo", owner: "vheins" },
+			store,
+			vectors
+		);
+		const internalText = getPrimaryTextContent(internalRes);
+		const line = internalText.split("\n").find((l) => l.includes("internalHelper")) ?? "";
+		expect(line).not.toMatch(/ — /);
+	});
 });

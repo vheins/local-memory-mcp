@@ -1,6 +1,7 @@
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
+import { docSuffix } from "../../utils/doc-comment-format";
 
 // ── FILE SYMBOLS ─────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 								? `L${s.start_line}-L${s.end_line}`
 								: `L${s.start_line}`
 							: "-";
-					return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}`;
+					return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}${docSuffix(s.doc_comment)}`;
 				})
 				.join("\n");
 		if (symbols.length > 30) {
