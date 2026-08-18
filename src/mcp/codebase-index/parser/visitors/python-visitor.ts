@@ -26,6 +26,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 
 const FUNCTION_DEFINITION = "function_definition";
 const ASYNC_FUNCTION_DEFINITION = "async_function_definition";
@@ -418,19 +419,18 @@ export class PythonVisitor implements LanguageVisitor {
 	}
 
 	private extractDocComment(node: TSNode): string | null {
-		// Python docstrings are the first statement inside the function/class body block
+		// Python docstrings are the first statement inside the function/class body block.
+		// Canonicalize the raw triple-quoted string via serializeDocBlock so the
+		// [DEPRECATED] + @param/@return/@deprecated surface matches PHP/TS/JS.
 		const block = node.namedChildren.find((c) => c.type === BLOCK);
 		if (!block) return null;
 		const first = block.namedChildren[0];
 		if (first?.type === EXPRESSION_STATEMENT) {
 			const str = first.namedChildren[0];
 			if (str?.type === STRING) {
-				return (
-					str.text
-						.replace(/^['"]{3}/, "")
-						.replace(/['"]{3}$/, "")
-						.trim() || null
-				);
+				const raw = str.text.replace(/^['"]{3}/, "").replace(/['"]{3}$/, "");
+				if (raw.trim().length === 0) return null;
+				return serializeDocBlock(raw);
 			}
 		}
 		return null;

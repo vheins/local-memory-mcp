@@ -89,7 +89,60 @@ end
 		expect(inc.parentName).toBe("Service");
 		expect(inc.signature).toBe("include OtherModule");
 	});
+	it("extracts structured doc-comment from preceding # comments", async () => {
+		const result = await parseOrSkip(
+			"test.rb",
+			`
+# Computes a total cost.
+# @param items the line items
+# @return the computed total
+# @deprecated use calculate_total() instead
+def compute_total(items)
+  items.sum
+end
+
+# A shopping cart.
+class Cart
+  # Adds an item.
+  # @param item the item to add
+  def add(item)
+  end
+end
+
+class NoDoc
+  def plain
+  end
+end
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		const total = result.symbols.find((s) => s.name === "compute_total");
+		expect(total).toBeDefined();
+		expect(total!.docComment).toContain("Computes a total cost.");
+		expect(total!.docComment).toContain("@param items the line items");
+		expect(total!.docComment).toContain("@return the computed total");
+		expect(total!.docComment).toContain("@deprecated use calculate_total() instead");
+		expect(total!.docComment).toContain("[DEPRECATED]");
+
+		const cart = result.symbols.find((s) => s.name === "Cart");
+		expect(cart).toBeDefined();
+		expect(cart!.docComment).toBe("A shopping cart.");
+
+		const add = result.symbols.find((s) => s.name === "add" && s.parentName === "Cart");
+		expect(add).toBeDefined();
+		expect(add!.docComment).toContain("Adds an item.");
+		expect(add!.docComment).toContain("@param item the item to add");
+
+		// A declaration without its own doc comment must NOT inherit a neighbour's.
+		const noDoc = result.symbols.find((s) => s.name === "NoDoc");
+		expect(noDoc).toBeDefined();
+		expect(noDoc!.docComment).toBeNull();
+		const plain = result.symbols.find((s) => s.name === "plain" && s.parentName === "NoDoc");
+		expect(plain).toBeDefined();
+		expect(plain!.docComment).toBeNull();
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
-

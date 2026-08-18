@@ -65,6 +65,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol, ReferenceKind } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 
 const CLASS_DEFINITION = "class_definition";
 const ENUM_DECLARATION = "enum_declaration";
@@ -77,7 +78,7 @@ const TYPE_ALIAS = "type_alias";
 const INITIALIZED_VARIABLE_DEFINITION = "initialized_variable_definition";
 const CLASS_BODY = "class_body";
 const ENUM_BODY = "enum_body";
-const COMMENT = "comment";
+const DOCUMENTATION_COMMENT = "documentation_comment";
 
 // Reference-emission node types (TASK-311 / Phase 1.1) — verified against the
 // SHIPPED tree-sitter-dart WASM, NOT guessed (see header comment).
@@ -476,13 +477,29 @@ export class DartVisitor implements LanguageVisitor {
 	}
 
 	private extractDocComment(node: TSNode): string | null {
+		// Dart uses /// line doc comments and /** blocks — tree-sitter-dart
+		// emits BOTH as `documentation_comment` (NOT `comment`), verified
+		// against the shipped dist/grammars WASM. Plain `comment` (//, /* */)
+		// is not a doc comment. TASK-462 routing kept, FIX-464 node-type fix.
+		const raw = this.collectDocCommentRaw(node);
+		if (raw !== null) return serializeDocBlock(raw);
 		const prev = node.previousNamedSibling;
-		if (prev && prev.type === COMMENT) {
-			return prev.text
-				.replace(/^\/\/\/\s?/, "")
-				.replace(/^\/\/\s?/, "")
-				.trim();
+		if (prev && prev.type === DOCUMENTATION_COMMENT && prev.text.startsWith("/**")) {
+			return serializeDocBlock(prev.text);
 		}
 		return null;
+	}
+
+	/** Gather the contiguous run of /// `documentation_comment` siblings that
+	 *  immediately precede `node` (walking backwards), in source order.
+	 *  Returns null when no doc-comment run is adjacent. */
+	private collectDocCommentRaw(node: TSNode): string | null {
+		const lines: string[] = [];
+		let sibling: TSNode | null = node.previousNamedSibling;
+		while (sibling && sibling.type === DOCUMENTATION_COMMENT && sibling.text.startsWith("///")) {
+			lines.unshift(sibling.text);
+			sibling = sibling.previousNamedSibling;
+		}
+		return lines.length > 0 ? lines.join("\n") : null;
 	}
 }

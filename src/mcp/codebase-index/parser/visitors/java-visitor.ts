@@ -31,6 +31,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 
 const CLASS_DECLARATION = "class_declaration";
 const INTERFACE_DECLARATION = "interface_declaration";
@@ -455,14 +456,8 @@ export class JavaVisitor implements LanguageVisitor {
 
 	private extractDocComment(node: TSNode): string | null {
 		const prev = node.previousNamedSibling;
-		if (prev && (prev.type === BLOCK_COMMENT || prev.type === LINE_COMMENT)) {
-			const text = prev.text;
-			if (text.startsWith("/**")) {
-				return text
-					.replace(/^\/\*\*?\s?/, "")
-					.replace(/\s?\*\/$/, "")
-					.trim();
-			}
+		if (prev && (prev.type === BLOCK_COMMENT || prev.type === LINE_COMMENT) && prev.text.startsWith("/**")) {
+			return serializeDocBlock(prev.text);
 		}
 		return null;
 	}

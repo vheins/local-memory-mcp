@@ -46,11 +46,17 @@ export interface StructuredDoc {
  */
 export function cleanDocBlock(raw: string): string {
 	return raw
-		.replace(/^\/\/\/?\s*/, "") // leading `//` or `///`
+		.replace(/^\/\/[/!]?\s*/, "") // leading `//`, `///` or `//!`
 		.replace(/^\/\*\*?\s*/, "") // leading `/**` or `/*`
 		.replace(/\s*\*\/\s*$/, "") // trailing `*/`
 		.split("\n")
-		.map((line) => line.replace(/^\s*\*\s?/, "").trim())
+		.map((line) =>
+			line
+				.replace(/^\s*\/\/[/!]?\s?/, "")
+				.replace(/^\s*#\s?/, "")
+				.replace(/^\s*\*\s?/, "")
+				.trim()
+		)
 		.filter((line) => line.length > 0)
 		.join("\n")
 		.trim();

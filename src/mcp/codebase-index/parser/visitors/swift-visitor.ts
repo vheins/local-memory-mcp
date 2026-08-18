@@ -21,6 +21,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 import { extractSwiftReferences } from "./swift-reference-emission";
 import { buildFirstLineSignature } from "./visitor-shared";
 
@@ -192,16 +193,26 @@ export class SwiftVisitor implements LanguageVisitor {
 	}
 
 	private extractDocComment(node: TSNode): string | null {
+		// Swift uses /// line docs (one COMMENT per line → run of siblings) and
+		// /** block doc comments. Aggregate contiguous /// lines, else a single
+		// /** block, and canonicalize.
+		const raw = this.collectDocCommentRaw(node);
+		if (raw !== null) return serializeDocBlock(raw);
 		const prev = node.previousNamedSibling;
-		if (prev && (prev.type === COMMENT || prev.type === MULTILINE_COMMENT)) {
-			const text = prev.text;
-			if (text.startsWith("///")) return text.replace(/^\/\/\/\s?/, "").trim();
-			if (text.startsWith("/**"))
-				return text
-					.replace(/^\/\*\*?\s?/, "")
-					.replace(/\s?\*\/$/, "")
-					.trim();
+		if (prev && (prev.type === COMMENT || prev.type === MULTILINE_COMMENT) && prev.text.startsWith("/**")) {
+			return serializeDocBlock(prev.text);
 		}
 		return null;
+	}
+
+	/** Aggregate contiguous preceding /// line COMMENT siblings for `node`. */
+	private collectDocCommentRaw(node: TSNode): string | null {
+		const lines: string[] = [];
+		let sibling: TSNode | null = node.previousNamedSibling;
+		while (sibling && sibling.type === COMMENT && sibling.text.startsWith("///")) {
+			lines.unshift(sibling.text);
+			sibling = sibling.previousNamedSibling;
+		}
+		return lines.length > 0 ? lines.join("\n") : null;
 	}
 }

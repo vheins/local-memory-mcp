@@ -18,6 +18,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 import { extractKotlinReferences } from "./kotlin-reference-emission";
 import { buildFirstLineSignature } from "./visitor-shared";
 
@@ -29,6 +30,8 @@ const CLASS_BODY = "class_body";
 const MODIFIERS = "modifiers";
 const LINE_COMMENT = "line_comment";
 const BLOCK_COMMENT = "block_comment";
+const KDOC_COMMENT = "kdoc_comment";
+const MULTILINE_COMMENT = "multiline_comment";
 
 export class KotlinVisitor implements LanguageVisitor {
 	extractSymbols(tree: Tree, _sourceCode: string): ParsedSymbol[] {
@@ -159,14 +162,20 @@ export class KotlinVisitor implements LanguageVisitor {
 
 	private extractDocComment(node: TSNode): string | null {
 		const prev = node.previousNamedSibling;
-		if (prev && (prev.type === BLOCK_COMMENT || prev.type === LINE_COMMENT)) {
-			const text = prev.text;
-			if (text.startsWith("/**")) {
-				return text
-					.replace(/^\/\*\*?\s?/, "")
-					.replace(/\s?\*\/$/, "")
-					.trim();
-			}
+		// Shipped tree-sitter-kotlin v0.3.8 emits KDoc /** ... */ as
+		// `multiline_comment` (an external — see grammar.js `externals` /
+		// `extras`), not `kdoc_comment`. Handle both so a grammar swap stays
+		// correct. Keep the /** guard so a plain /* ... */ is not treated as a
+		// doc comment.
+		if (
+			prev &&
+			(prev.type === KDOC_COMMENT ||
+				prev.type === BLOCK_COMMENT ||
+				prev.type === LINE_COMMENT ||
+				prev.type === MULTILINE_COMMENT) &&
+			prev.text.startsWith("/**")
+		) {
+			return serializeDocBlock(prev.text);
 		}
 		return null;
 	}

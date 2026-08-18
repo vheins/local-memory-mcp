@@ -22,6 +22,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 import { walkReferences } from "./go-reference-emission";
 export {
 	callTargetName,
@@ -240,10 +241,31 @@ export class GoVisitor implements LanguageVisitor {
 	}
 
 	private extractDocComment(node: TSNode): string | null {
+		// Go doc comments are // line comments (tree-sitter: one COMMENT per
+		// line). Aggregate contiguous preceding // lines and canonicalize so
+		// // /** ... */ style and @tags round-trip via serializeDocBlock.
+		// FIX-465: for `type_spec` the doc lives on its parent
+		// `type_declaration` sibling, not on the spec itself (the spec is
+		// the only named child of the declaration — no comment siblings).
+		// Fall back to the declaration ancestor while KEEPING the
+		// function // aggregation from FIX-462 intact.
+		let raw = this.collectDocCommentRaw(node);
+		if (raw === null && node.type === TYPE_SPEC && node.parent?.type === TYPE_DECLARATION) {
+			raw = this.collectDocCommentRaw(node.parent);
+		}
+		if (raw === null) return null;
+		// Plain `/* ... */` (godoc) never sits as a named sibling in this
+		// grammar, but if the run looks like a block delimiter, skip it —
+		// only // line doc comments are canonical here.
+		return serializeDocBlock(raw);
+	}
+
+	/** Gather contiguous // COMMENT siblings immediately preceding `node`. */
+	private collectDocCommentRaw(node: TSNode): string | null {
 		const lines: string[] = [];
 		let sibling: TSNode | null = node.previousNamedSibling;
-		while (sibling?.type === COMMENT && sibling.text.startsWith("//")) {
-			lines.unshift(sibling.text.replace(/^\/\/\s?/, "").trimEnd());
+		while (sibling && sibling.type === COMMENT && sibling.text.startsWith("//")) {
+			lines.unshift(sibling.text);
 			sibling = sibling.previousNamedSibling;
 		}
 		return lines.length > 0 ? lines.join("\n") : null;

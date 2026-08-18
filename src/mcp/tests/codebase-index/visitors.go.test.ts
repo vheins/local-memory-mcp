@@ -248,7 +248,65 @@ type S struct {
 		expect(y!.kind).toBe("variable");
 		expect(y!.parentName).toBe("S");
 	});
+
+	it("extracts structured doc-comment from preceding line comments", async () => {
+		const result = await parseOrSkip(
+			"test.go",
+			`
+package main
+
+// ComputeTotal computes a total cost.
+// @param items - the line items
+// @return the computed total
+// @deprecated use CalculateTotal() instead
+func ComputeTotal(items []int) int {
+	return 0
+}
+
+// A shopping cart.
+type Cart struct {
+	items []int
+}
+
+// Adds an item.
+// @param item - the item to add
+func (c *Cart) Add(item int) {
+}
+
+type NoDoc struct{}
+
+func Plain() {}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		const total = result.symbols.find((s) => s.name === "ComputeTotal");
+		expect(total).toBeDefined();
+		expect(total!.docComment).toContain("ComputeTotal computes a total cost.");
+		expect(total!.docComment).toContain("@param items - the line items");
+		expect(total!.docComment).toContain("@return the computed total");
+		expect(total!.docComment).toContain("@deprecated use CalculateTotal() instead");
+		expect(total!.docComment).toContain("[DEPRECATED]");
+
+		const cart = result.symbols.find((s) => s.name === "Cart");
+		expect(cart).toBeDefined();
+		expect(cart!.docComment).toBe("A shopping cart.");
+
+		const add = result.symbols.find((s) => s.name === "Add");
+		expect(add).toBeDefined();
+		expect(add!.parentName).toBeNull();
+		expect(add!.docComment).toContain("Adds an item.");
+		expect(add!.docComment).toContain("@param item - the item to add");
+
+		// A declaration without its own doc comment must NOT inherit a neighbour's.
+		const noDoc = result.symbols.find((s) => s.name === "NoDoc");
+		expect(noDoc).toBeDefined();
+		expect(noDoc!.docComment).toBeNull();
+		const plain = result.symbols.find((s) => s.name === "Plain");
+		expect(plain).toBeDefined();
+		expect(plain!.docComment).toBeNull();
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
-

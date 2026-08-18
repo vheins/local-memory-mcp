@@ -142,7 +142,63 @@ pub use crate::module::Public;
 		expect(modules).not.toContain("thing");
 		expect(modules).not.toContain("Visible");
 	});
+
+	it("extracts structured doc-comment from preceding /// and /** block comments", async () => {
+		const result = await parseOrSkip(
+			"test.rs",
+			`
+/// Computes a total cost.
+/// @param items - the line items
+/// @return the computed total
+/// @deprecated use calculate_total() instead
+pub fn compute_total(items: &[i32]) -> i32 {
+    items.iter().sum()
+}
+
+/** A shopping cart. */
+pub struct Cart {
+    items: Vec<i32>,
+}
+
+impl Cart {
+    /// Adds an item.
+    /// @param item - the item to add
+    pub fn add(&mut self, item: i32) {}
+}
+
+pub struct NoDoc;
+
+pub fn plain() {}
+`
+		);
+		assertNoError(result);
+		guardEmpty(result);
+
+		const total = result.symbols.find((s) => s.name === "compute_total");
+		expect(total).toBeDefined();
+		expect(total!.docComment).toContain("Computes a total cost.");
+		expect(total!.docComment).toContain("@param items - the line items");
+		expect(total!.docComment).toContain("@return the computed total");
+		expect(total!.docComment).toContain("@deprecated use calculate_total() instead");
+		expect(total!.docComment).toContain("[DEPRECATED]");
+
+		const cart = result.symbols.find((s) => s.name === "Cart");
+		expect(cart).toBeDefined();
+		expect(cart!.docComment).toBe("A shopping cart.");
+
+		const add = result.symbols.find((s) => s.name === "add" && s.parentName === "Cart");
+		expect(add).toBeDefined();
+		expect(add!.docComment).toContain("Adds an item.");
+		expect(add!.docComment).toContain("@param item - the item to add");
+
+		// A declaration without its own doc comment must NOT inherit a neighbour's.
+		const noDoc = result.symbols.find((s) => s.name === "NoDoc");
+		expect(noDoc).toBeDefined();
+		expect(noDoc!.docComment).toBeNull();
+		const plain = result.symbols.find((s) => s.name === "plain");
+		expect(plain).toBeDefined();
+		expect(plain!.docComment).toBeNull();
+	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
-

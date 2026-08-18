@@ -26,6 +26,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 import { walkReferences } from "./rust-reference-emission";
 export {
 	callTargetName,
@@ -261,16 +262,31 @@ export class RustVisitor implements LanguageVisitor {
 	}
 
 	private extractDocComment(node: TSNode): string | null {
+		// Rust doc comments are /// and //! line docs (one node per line,
+		// so a multi-line block is a run of siblings) plus /** blocks.
+		// Aggregate contiguous preceding /// / //! lines, else fall back to
+		// a single /** block, and canonicalize.
+		const raw = this.collectDocCommentRaw(node);
+		if (raw !== null) return serializeDocBlock(raw);
 		const prev = node.previousNamedSibling;
-		if (prev && (prev.type === COMMENT || prev.type === LINE_COMMENT || prev.type === BLOCK_COMMENT)) {
-			const text = prev.text;
-			if (text.startsWith("///")) return text.replace(/^\/\/\/\s?/, "").trim();
-			if (text.startsWith("/**"))
-				return text
-					.replace(/^\/\*\*?\s?/, "")
-					.replace(/\s?\*\/$/, "")
-					.trim();
+		if (prev && (prev.type === COMMENT || prev.type === BLOCK_COMMENT) && prev.text.startsWith("/**")) {
+			return serializeDocBlock(prev.text);
 		}
 		return null;
+	}
+
+	/** Aggregate contiguous preceding /// / //! line_comment nodes. */
+	private collectDocCommentRaw(node: TSNode): string | null {
+		const lines: string[] = [];
+		let sibling: TSNode | null = node.previousNamedSibling;
+		while (
+			sibling &&
+			(sibling.type === COMMENT || sibling.type === LINE_COMMENT) &&
+			(sibling.text.startsWith("///") || sibling.text.startsWith("//!"))
+		) {
+			lines.unshift(sibling.text);
+			sibling = sibling.previousNamedSibling;
+		}
+		return lines.length > 0 ? lines.join("\n") : null;
 	}
 }

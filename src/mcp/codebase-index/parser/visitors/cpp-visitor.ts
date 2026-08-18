@@ -17,6 +17,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 import { extractCppReferences } from "./cpp-reference-emission";
 import { buildFirstLineSignature } from "./visitor-shared";
 
@@ -190,13 +191,8 @@ export class CppVisitor implements LanguageVisitor {
 
 	private extractDocComment(node: TSNode): string | null {
 		const prev = node.previousNamedSibling;
-		if (prev && prev.type === COMMENT) {
-			if (prev.text.startsWith("/**")) {
-				return prev.text
-					.replace(/^\/\*\*?\s?/, "")
-					.replace(/\s?\*\/$/, "")
-					.trim();
-			}
+		if (prev && prev.type === COMMENT && prev.text.startsWith("/**")) {
+			return serializeDocBlock(prev.text);
 		}
 		return null;
 	}

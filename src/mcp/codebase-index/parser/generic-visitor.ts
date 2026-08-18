@@ -49,13 +49,13 @@ export class GenericTextVisitor implements LanguageVisitor {
 				while (j < totalLines && !lines[j].includes(endPattern)) {
 					const cl = lines[j].trim();
 					// Strip comment delimiters from content lines
-					const stripped = cl.replace(/^\s*\/\*\s*/, "").replace(/\s*\*\/\s*$/, "");
+					const stripped = cl.replace(/^\s*\/\*\*?\s*/, "").replace(/\s*\*\/\s*$/, "");
 					if (stripped) commentLines.push(stripped);
 					j++;
 				}
 				if (j < totalLines) {
 					const cl = lines[j].trim();
-					const stripped = cl.replace(/^\s*\/\*\s*/, "").replace(/\s*\*\/\s*$/, "");
+					const stripped = cl.replace(/^\s*\/\*\*?\s*/, "").replace(/\s*\*\/\s*$/, "");
 					if (stripped) commentLines.push(stripped);
 				}
 				if (commentLines.length > 0) {

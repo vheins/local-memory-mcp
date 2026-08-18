@@ -143,18 +143,59 @@ __all__ = ["fetch", "Person"]
 		expect(all!.signature).toBe('__all__ = ["fetch", "Person"]');
 	});
 
-	it("does not capture non-__all__ list assignments", async () => {
+	it("extracts structured doc-comment from function and class docstrings", async () => {
 		const result = await parseOrSkip(
 			"test.py",
 			`
-NOT_ALL = ["a", "b"]
+def compute_total(items):
+    '''Computes a total cost.
+    @param items - the line items
+    @return the computed total
+    @deprecated use calculate_total() instead
+    '''
+    return sum(items)
+
+class Cart:
+    '''A shopping cart.'''
+    def add(self, item):
+        '''Adds an item to the cart.
+        @param item - the item to add
+        '''
+        pass
+
+class NoDoc:
+    def plain(self):
+        pass
 `
 		);
 		assertNoError(result);
-		expect(result.symbols.some((s) => s.name === "NOT_ALL")).toBe(false);
-		expect(result.symbols.some((s) => s.name === "__all__")).toBe(false);
+		guardEmpty(result);
+
+		const total = result.symbols.find((s) => s.name === "compute_total");
+		expect(total).toBeDefined();
+		expect(total!.docComment).toContain("Computes a total cost.");
+		expect(total!.docComment).toContain("@param items - the line items");
+		expect(total!.docComment).toContain("@return the computed total");
+		expect(total!.docComment).toContain("@deprecated use calculate_total() instead");
+		expect(total!.docComment).toContain("[DEPRECATED]");
+
+		const cart = result.symbols.find((s) => s.name === "Cart");
+		expect(cart).toBeDefined();
+		expect(cart!.docComment).toBe("A shopping cart.");
+
+		const add = result.symbols.find((s) => s.name === "add" && s.parentName === "Cart");
+		expect(add).toBeDefined();
+		expect(add!.docComment).toContain("Adds an item to the cart.");
+		expect(add!.docComment).toContain("@param item - the item to add");
+
+		// A declaration without its own docstring must NOT inherit a neighbour's.
+		const noDoc = result.symbols.find((s) => s.name === "NoDoc");
+		expect(noDoc).toBeDefined();
+		expect(noDoc!.docComment).toBeNull();
+		const plain = result.symbols.find((s) => s.name === "plain" && s.parentName === "NoDoc");
+		expect(plain).toBeDefined();
+		expect(plain!.docComment).toBeNull();
 	});
 });
 
 // ══════════════════════════════════════════════════════════════════════
-

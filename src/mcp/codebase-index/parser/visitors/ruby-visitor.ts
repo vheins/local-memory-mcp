@@ -36,6 +36,7 @@
 import type { Tree, Node as TSNode } from "web-tree-sitter";
 import type { LanguageVisitor, ParsedReference, ParsedSymbol, ReferenceKind } from "../language-visitor";
 import { SymbolKind } from "../language-visitor";
+import { serializeDocBlock } from "../doc-comment";
 
 const METHOD = "method";
 const SINGLETON_METHOD = "singleton_method";
@@ -358,10 +359,48 @@ export class RubyVisitor implements LanguageVisitor {
 	}
 
 	private extractDocComment(node: TSNode): string | null {
-		const prev = node.previousNamedSibling;
-		if (prev && prev.type === COMMENT) {
-			return prev.text.replace(/^#\s?/, "").trim();
+		// Ruby uses # line comments (tree-sitter: one COMMENT per line, even
+		// for a contiguous block). Aggregate the contiguous preceding # comments
+		// and canonicalize so [DEPRECATED] + @tags work like PHP/TS/JS.
+		const raw = this.collectDocCommentRaw(node);
+		if (raw === null) return null;
+		return serializeDocBlock(raw);
+	}
+
+	/** Gather contiguous # line-COMMENT siblings immediately preceding `node`
+	 *  in source order. Returns null when none found.
+	 *
+	 *  Tree-sitter-ruby places docs for the *first* member of a class body as
+	 *  siblings of the enclosing `class` node (before `body_statement`), not as
+	 *  siblings of the member itself — see the shipped WASM dumps in TASK-465
+	 *  (class Cart children: [constant, comment, comment, body_statement{method}]).
+	 *  So when a member has no direct previousNamedSibling and it is the first
+	 *  child of its `body_statement`, walk the `body_statement`'s own preceding
+	 *  siblings for the contiguous # run. Later members' docs sit inside the
+	 *  same body_statement as direct previous siblings and are handled by the
+	 *  primary walk.
+	 */
+	private collectDocCommentRaw(node: TSNode): string | null {
+		let lines = this.collectContiguousComments(node.previousNamedSibling);
+		if (lines.length > 0) return lines.join("\n");
+
+		// Fallback: first member inside a class body_statement — docs are on
+		// the class node before the body_statement.
+		const parent = node.parent;
+		if (parent && parent.type === BODY_STATEMENT && parent.namedChildren[0]?.id === node.id) {
+			lines = this.collectContiguousComments(parent.previousNamedSibling);
+			if (lines.length > 0) return lines.join("\n");
 		}
 		return null;
+	}
+
+	private collectContiguousComments(start: TSNode | null): string[] {
+		const lines: string[] = [];
+		let cur: TSNode | null = start;
+		while (cur && cur.type === COMMENT && cur.text.startsWith("#")) {
+			lines.unshift(cur.text);
+			cur = cur.previousNamedSibling;
+		}
+		return lines;
 	}
 }
