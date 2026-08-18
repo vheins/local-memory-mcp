@@ -181,6 +181,9 @@ const DEFAULT_EXCLUDE_PATTERNS: readonly string[] = Object.freeze([
 	"**/.DS_Store"
 ]);
 
+/** Dot-directories explicitly allowlisted — discovered via a second dot:true stream. */
+const ALLOWED_DOT_DIRS: readonly string[] = Object.freeze([".agents"]);
+
 // ── Nested .gitignore collection ──────────────────────────────────────
 
 /**
@@ -397,6 +400,73 @@ export async function discoverFiles(options: FileDiscoveryOptions): Promise<Disc
 				path: absolutePath,
 				error: message
 			});
+		}
+	}
+
+	// ── Allowlisted dot-directory stream (.agents) ───────────────
+	// Main stream uses dot:false so dot-directories are skipped. Run a
+	// second targeted stream with dot:true over ALLOWED_DOT_DIRS only, then
+	// merge results before the deterministic sort. Other dot dirs (.git,
+	// .github, .opencode, .cache, …) remain excluded via dot:false on the
+	// main stream and DEFAULT_EXCLUDE_PATTERNS.
+	if (ALLOWED_DOT_DIRS.length > 0) {
+		const allowedDotPatterns = ALLOWED_DOT_DIRS.map((dir) => `**/${dir}/**`);
+		const dotStream = fg.stream(allowedDotPatterns, {
+			cwd: root,
+			absolute: true,
+			dot: true,
+			onlyFiles: true,
+			stats: true,
+			followSymbolicLinks: false,
+			ignore: allExcludeGlobs
+		});
+
+		for await (const entry of dotStream) {
+			// Respect global maxFiles cap across both streams
+			if (maxFiles !== undefined && discovered.length >= maxFiles) {
+				break;
+			}
+			totalFiles++;
+			const item = entry as unknown as { path: string; stats: fs.Stats; dirent: fs.Dirent };
+			const absolutePath = item.path;
+
+			try {
+				if (item.dirent.isSymbolicLink()) {
+					skippedFiles++;
+					continue;
+				}
+
+				const relativePath = path.relative(root, absolutePath);
+
+				if (gitignoreFilter && gitignoreFilter.ignores(relativePath)) {
+					skippedFiles++;
+					skippedByGitignore++;
+					continue;
+				}
+
+				const language = detectLanguage(relativePath);
+				if (language === null) {
+					skippedFiles++;
+					skippedByExtension++;
+					continue;
+				}
+
+				discovered.push({
+					path: relativePath,
+					absolutePath,
+					language,
+					sizeBytes: item.stats.size,
+					mtimeMs: item.stats.mtimeMs
+				});
+				supportedFiles++;
+			} catch (err) {
+				skippedFiles++;
+				const message = err instanceof Error ? err.message : String(err);
+				errors.push({
+					path: absolutePath,
+					error: message
+				});
+			}
 		}
 	}
 
