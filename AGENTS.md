@@ -99,29 +99,20 @@ that exit as a real failure — the coverage artifacts are still written.
   registers tools/resources/prompts. Startup also: auto-indexes its **own CWD**
   (`CODEBASE_AUTO_INDEX`), starts the file-watcher sweep (`ENABLE_FILE_WATCHER`),
   preloads the vector model (30s timeout), and starts the offloaded embedding worker.
-- **17 canonical tools** (consolidated, auto-inferring modes):
-  - Memory: `memory-write`, `memory-read`, `memory-delete`
-  - Task: `task-write`, `task-read`, `task-delete`
-  - Handoff/Claims: `handoff-write`, `handoff-read`, `claim-manage`
-  - Standard: `standard-write`, `standard-read`, `standard-delete`
-  - Agent: `agent-context`, `synthesize`, `repo-summarize`
-  - Codebase: `codebase-index`, `codebase-read`
-  - **Only 2 real router aliases exist** in `src/mcp/router.ts` (`TOOL_ALIASES`):
-    `claim-release` → `claim-manage` and `task-update` → `task-write`, plus
-    **dot→hyphen normalization** (e.g. `memory.store` → `memory-store`). Other
-    legacy names (`index_repository`, `trace_symbol`, `get_file_symbols`,
-    `search_symbols`, `codebase_search`, `get_architecture`, `index_status`,
-    `task-claim`, `handoff-list`, …) appear **only inside tool descriptions as
-    historical notes** — they are NOT resolvable aliases. Always call the
-    canonical names above. (`mcp-server.ts` still says "27 tools"; that comment
-    is stale post-consolidation.)
-- `codebase-read` is ONE tool with auto-detected modes (first match wins, per
-  `src/mcp/tools/codebase.read.ts` `inferMode`): `name`→trace definition/call
-  sites, `filePath`→file symbols, `content`→grep indexed file contents (CODE
-  mode), `query`→ranked symbol search, **no discriminator (empty)→architecture
-  tree**. `depth` is ONLY a parameter inside architecture mode, NOT a separate
-  mode. Index status is a `codebase-index` mode (no `repoPath` → status), not
-  `codebase-read`. `codebase-index` builds/refreshes the index (with `repoPath`).
+- **Tool contract is CANONICAL in `src/mcp/prompts/server/instructions.md`**
+  (injected as the MCP server's instructions): registered tool names, auto-infer
+  semantics, the who/when matrix, and micro-flows. Do NOT re-document the contract
+  here — reference that file.
+- Router gotcha: only 2 real aliases exist in `src/mcp/router.ts` (`TOOL_ALIASES`)
+  — `claim-release` → `claim-manage` and `task-update` → `task-write`, plus
+  **dot→hyphen normalization** (e.g. `memory.store` → `memory-store`). Legacy
+  names (`index_repository`, `trace_symbol`, `codebase_search`, `index_status`,
+  `task-claim`, …) are historical notes only — NOT resolvable aliases.
+  (`mcp-server.ts` still says "27 tools"; that comment is stale post-consolidation.)
+- `codebase-read` mode inference (`name`/`filePath`/`content`/`query`/empty) lives
+  in `src/mcp/tools/codebase.read.ts` (`inferMode`) — see the tool contract for
+  exact semantics. `depth` is ONLY a parameter inside architecture mode. Index
+  status is a `codebase-index` mode (no `repoPath` → status), not `codebase-read`.
 - **Inline `key:value` tags in `query`** (standard-read / memory-read / codebase-read):
   these are auto-extracted into structured filters, so both structured params AND
   inline tags work. Examples now VALID: `query:"language:php framework:filament"`,

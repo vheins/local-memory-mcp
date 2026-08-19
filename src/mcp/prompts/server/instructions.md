@@ -5,6 +5,20 @@ description: Main instructions for the MCP server
 
 Local Memory MCP — persistent memory, task coordination, and coding standards for AI agents.
 
+## Contract Ownership
+
+This file is the CANONICAL tool contract for `local-memory-mcp`. It is the SINGLE SOURCE OF TRUTH for:
+
+- data scoping rules
+- registered (canonical) tool names — no legacy/unregistered names
+- required/optional fields and auto-infer semantics
+- who may call each operation and when (who/when) — see Who / When matrix
+- micro-flows for every multi-step operation
+
+Process/orchestration (macro workflow S0→Synthesize→S1→S2→Execute→Close, gates, pipeline, fallback, git safety) lives in `AGENTS.md`. Do NOT redefine the tool contract in `AGENTS.md`, and do NOT duplicate this contract anywhere else.
+
+> **Workflow note**: These MCP tools are the mechanism. The macro workflow (S0→Synthesize→S1→S2→Execute→Close) is the orchestration, defined in `AGENTS.md`.
+
 ## Data Scoping
 
 All data (memories, tasks, handoffs, claims) is scoped by **owner/repo**:
@@ -53,21 +67,22 @@ Setting these explicitly in the tool call always takes priority over session def
 
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
 
-> **Workflow**: This server provides tools for memory, tasks, standards, and handoffs. The canonical workflow is defined in `AGENTS.md` (WORKFLOW section: S0→Synthesize→S1→S2→Execute→Close). These MCP tools are the mechanism — the AGENTS.md workflow is the orchestration.
-
 ## Core Workflows
 
-**Memory**: memory-search → memory-detail → memory-store | memory-update | memory-synthesize
+**Memory**: `memory-read` (search/detail/recap) → `memory-write` (create/update/acknowledge/bulk) → `memory-delete`
 
+- Auto-infer: `content` → create; `id`/`code` → update or acknowledge; `memories[]` → bulk
 - Durable only (arch, patterns, decisions, fixes)
-- memory-acknowledge after code gen from memory
+- `memory-write` with `acknowledge` after code gen from memory
 - Global scope = cross-repo only; prefer repo-specific
-- decision-log = shortcut for storing decision-type memories (auto-sets type=decision, importance=4, agent=current, model=current, scope=current)
-- session-summarize = archive session as task_archive memory (type=task_archive, importance=3)
+- `memory-write` with `type=decision` = shortcut for decision memories (auto-sets type=decision, importance=4, agent=current, model=current, scope=current)
+- `repo-summarize` = archive session signals as task_archive summary (type=task_archive, importance=3)
+- `agent-context` = recall memories + tasks for the current agent
+- `synthesize` = composite contextual synthesis via MCP sampling (requires client sampling support)
 
-### memory-store required fields
+### memory-write required fields (create)
 
-Every `memory-store` call MUST include these fields:
+Every create `memory-write` call MUST include these fields:
 
 | Field        | Type                                                                | Description                                   |
 | :----------- | :------------------------------------------------------------------ | :-------------------------------------------- |
@@ -89,28 +104,60 @@ Every `memory-store` call MUST include these fields:
 }
 ```
 
-### memory-update optional fields
+### memory-write update fields
 
-`memory-update` accepts the same fields as `memory-store` but all are optional (only provide the fields to change). Either `id` (UUID) or `code` (string) is required to identify the target memory.
+A `memory-write` update accepts the same fields as create but all are optional (only provide the fields to change). Either `id` (UUID) or `code` (string) is required to identify the target memory.
 
-**Tasks**: task-list → task-claim(auto → in_progress) → task-update(completed)
+**Tasks**: `task-read` (list/search/detail) → `claim-manage` (claim → in_progress) → `task-write` (update / status=completed); cleanup via `task-delete`
 
-- Register via task-create before execution
+- Register via `task-write` before execution
 - NEVER skip in_progress
 - Commit: `type(scope): [task-code] message` + `- [Title]` + `[Summary]`
 - Complete auto-releases claims + expires linked handoffs
 
-**Standards**: standard-search → standard-store
+**Standards**: `standard-read` → `standard-write`; cleanup via `standard-delete`
 
 - MANDATORY pre-implementation gate
 - 1 rule/entry, normative contract
 
-**Handoffs/Claims**: handoff-list → handoff-create | handoff-update | task-claim | claim-release
+**Handoffs/Claims**: `handoff-read` → `handoff-write` | `claim-manage`
 
 - Create ONLY for unfinished work (concrete next owner/steps)
-- NO handoff for completion summaries → use task-update comments
+- NO handoff for completion summaries → use task comments (`task-write` with `comment`)
 
-**Codebase Index**: index_status → index_repository → search_symbols / codebase_search / trace_symbol / get_architecture / get_file_symbols
+**Codebase Index**: `codebase-index` → `codebase-read`
 
-- Always check index_status first. If stale, trigger index_repository before querying.
+- `codebase-index(repo)` = status (freshness + count); `codebase-index(repoPath + repo)` = index (tree-sitter scan)
+- Always check status first. If stale, trigger index before querying.
+- `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, none → architecture. `depth` only applies inside architecture mode.
 - Agents: use codebase index tools FIRST, fall back to explore sub-agent only when index can't answer.
+
+## Who / When
+
+| Operation                         | When                                                                   | Who                                    |
+| :-------------------------------- | :--------------------------------------------------------------------- | :------------------------------------- |
+| `memory-read(query)`              | Start of task, during work — find past decisions, patterns, code facts | All agents (orchestrator + sub-agents) |
+| `memory-write`                    | After completing work — persist decisions, patterns, code facts        | All agents (orchestrator + sub-agents) |
+| `memory-read(id/code)`            | When task prompt includes a memory code — retrieve full context        | Sub-agents only                        |
+| `memory-write` (acknowledge)      | After consuming a memory — mark it as used/reviewed                    | Sub-agents only                        |
+| `memory-read` (recap)             | At macro-workflow start (S0) — summary of recent memory activity       | Orchestrator                           |
+| `memory-write` (`type=decision`)  | Log a structured architectural decision (importance=4)                 | All agents                             |
+| `task-read`                       | Sync — list/search/detail of pending, backlog, in_progress             | Orchestrator + sub-agents              |
+| `claim-manage`                    | Claim task start (`task_code` + `agent`) → `in_progress`               | Agent executing the task               |
+| `task-write(status=completed)`    | Mark task done — auto-releases claim, expires linked handoffs          | Agent executing the task               |
+| `handoff-read`                    | Check incoming handoffs (S0); search/list pending                      | Orchestrator                           |
+| `handoff-write`                   | Create handoff ONLY for unfinished work (concrete next owner + steps)  | Agent leaving work behind              |
+| `standard-read(query)`            | Hydrate (S1) — load applicable coding standards                        | All agents                             |
+| `standard-write`                  | Persist a new standards entry                                          | All agents                             |
+| `codebase-index(repo)`            | Check index freshness/status before querying                           | Orchestrator                           |
+| `codebase-index(repoPath + repo)` | Refresh a stale index                                                  | Orchestrator                           |
+| `codebase-read(query)`            | Primary codebase exploration (symbol/NL search)                        | Orchestrator                           |
+| `codebase-read(name)`             | Trace definition & usage cross-file                                    | Orchestrator                           |
+
+## Rules
+
+- Do NOT invent method names — use ONLY the registered tools listed above.
+- `memory-write` is **mandatory** after every task (min 1 entry).
+- Sub-agents **MUST** call `memory-read(query)` during work and `memory-write` (acknowledge) after consuming a memory.
+- Orchestrator calls `memory-read` (recap) at S0.
+- Codebase exploration: codebase index tools FIRST; fall back to explore sub-agent only when the index cannot answer.
