@@ -120,7 +120,7 @@ export async function measureScenarioFailedJobs(tmpDir) {
 				"UPDATE queue_jobs SET status='pending', attempts=0, backoff_until=NULL, last_error=NULL, lease_until=NULL, locked_by=NULL WHERE status='poison'"
 			).run();
 			const retryVisMap = new Map();
-			const drain = await drainAll(db, {
+			await drainAll(db, {
 				embedDelayMs: 1,
 				batchSize: 32,
 				clock,
@@ -139,7 +139,6 @@ export async function measureScenarioFailedJobs(tmpDir) {
 					else retryVisibilityFailures++;
 				}
 			}
-			_ = drain;
 		}
 		const backoffAssertions = backoffEvents.map((ev) => {
 			const attemptForDelay = ev.attempt;

@@ -151,7 +151,7 @@ async function main() {
 					)
 				)
 			};
-			if (k === "worker_restart" && v.restartDelays) perScenario[k].queueDelay = toLatencyStats(v.restartDelays);
+			if (k === "worker_restart") perScenario[k].queueDelay = toLatencyStats(v.restartDelays || []);
 			if (k === "lease_expiry" && v.queueDelays) perScenario[k].queueDelay = toLatencyStats(v.queueDelays);
 		}
 		const result = {
