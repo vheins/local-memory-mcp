@@ -1,0 +1,986 @@
+{
+  "meta": {
+    "task": "TASK-478",
+    "seed": 1144,
+    "commitSha": "77508e5c5c81dabd5929a4fb4500cda1cae91b0d",
+    "date": "2026-08-22T11:14:25.207Z",
+    "node": "v24.18.0",
+    "betterSqlite3": "12.9.0",
+    "sqliteVersion": "3.53.0",
+    "pageSize": 4096,
+    "owner": "bench",
+    "repo": "bench-repo",
+    "scales": [
+      1000,
+      10000,
+      100000
+    ],
+    "requestedScales": [
+      1000,
+      10000,
+      100000
+    ],
+    "iterations": 30,
+    "vectorBackend": "stub (TF cosine, no ONNX)",
+    "queryKinds": [
+      "empty",
+      "short",
+      "normal",
+      "long",
+      "high-result",
+      "no-result",
+      "phrase",
+      "cjk",
+      "special"
+    ],
+    "queryCount": 24,
+    "memory": {
+      "heapUsed": 225588512,
+      "dbBytes": 117080064
+    }
+  },
+  "scales": [
+    {
+      "rows": 1000,
+      "dbBytes": 1245184,
+      "heapBytes": 9232240,
+      "pageSize": 4096,
+      "sqliteVersion": "3.53.0",
+      "write": {
+        "latency": {
+          "p50": 0.116819,
+          "p95": 0.435843,
+          "p99": 1.550774,
+          "mean": 0.20235841099999965,
+          "min": 0.05909,
+          "max": 13.569621,
+          "n": 1000
+        },
+        "throughput": 4120.888947614303,
+        "errors": 0,
+        "total": 1000,
+        "elapsedMs": 242.666088
+      },
+      "search": {
+        "fts": {
+          "latency": {
+            "p50": 0.765549,
+            "p95": 2.43859,
+            "p99": 7.609149,
+            "mean": 1.136710805555555,
+            "min": 0.000501,
+            "max": 32.552164,
+            "n": 720
+          },
+          "throughput": 876.3450449557888,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 7.083333333333333,
+          "elapsedMs": 821.594193
+        },
+        "semantic": {
+          "latency": {
+            "p50": 3.143526,
+            "p95": 8.012182,
+            "p99": 15.973107,
+            "mean": 4.032488220833331,
+            "min": 2.103456,
+            "max": 48.860958,
+            "n": 720
+          },
+          "throughput": 247.30790821159155,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 10,
+          "elapsedMs": 2911.350491
+        },
+        "hybrid": {
+          "latency": {
+            "p50": 13.390868,
+            "p95": 35.360055,
+            "p99": 52.529745,
+            "mean": 16.29403624722223,
+            "min": 6.132503,
+            "max": 81.989988,
+            "n": 720
+          },
+          "throughput": 61.313600991950786,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 4.208333333333333,
+          "elapsedMs": 11742.908398
+        }
+      },
+      "queryBreakdown": [
+        {
+          "kind": "empty",
+          "query": "(empty)",
+          "p50": 8.522755,
+          "p95": 17.718564,
+          "p99": 17.718564,
+          "mean": 9.3394688,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "empty",
+          "query": "   ",
+          "p50": 9.384392,
+          "p95": 27.52268,
+          "p99": 27.52268,
+          "mean": 10.770233800000002,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "go",
+          "p50": 12.127632,
+          "p95": 19.096646,
+          "p99": 19.096646,
+          "mean": 12.959938350000002,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "ui",
+          "p50": 15.322564,
+          "p95": 31.167441,
+          "p99": 31.167441,
+          "mean": 15.752460749999997,
+          "avgResults": 7,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "id",
+          "p50": 15.478785,
+          "p95": 47.801801,
+          "p99": 47.801801,
+          "mean": 18.584345649999996,
+          "avgResults": 4,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "e",
+          "p50": 15.038823,
+          "p95": 46.996879,
+          "p99": 46.996879,
+          "mean": 20.00912915,
+          "avgResults": 2,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "AI",
+          "p50": 9.24439,
+          "p95": 33.420625,
+          "p99": 33.420625,
+          "mean": 11.37617185,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "vector",
+          "p50": 15.742257,
+          "p95": 36.974406,
+          "p99": 36.974406,
+          "mean": 16.719825,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "memory",
+          "p50": 18.325758,
+          "p95": 23.542031,
+          "p99": 23.542031,
+          "mean": 19.1540521,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "sqlite",
+          "p50": 13.897333,
+          "p95": 248.967033,
+          "p99": 248.967033,
+          "mean": 27.024368200000005,
+          "avgResults": 4,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "cache",
+          "p50": 15.536643,
+          "p95": 164.563899,
+          "p99": 164.563899,
+          "mean": 23.811919,
+          "avgResults": 8,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "search index",
+          "p50": 12.210596,
+          "p95": 16.083554,
+          "p99": 16.083554,
+          "mean": 12.641725949999998,
+          "avgResults": 5,
+          "errors": 0
+        },
+        {
+          "kind": "long",
+          "query": "vector embedding semantic search hybrid scoring with bm25 and recency",
+          "p50": 10.747435,
+          "p95": 15.801828,
+          "p99": 15.801828,
+          "mean": 11.255801299999998,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "long",
+          "query": "workspace memory is indexed for fast semantic search across the project with multi-tenant isolation",
+          "p50": 15.204532,
+          "p95": 90.979827,
+          "p99": 90.979827,
+          "mean": 22.907244150000004,
+          "avgResults": 4,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "memory",
+          "p50": 20.252924,
+          "p95": 86.238468,
+          "p99": 86.238468,
+          "mean": 31.883011949999997,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "vector",
+          "p50": 28.869523,
+          "p95": 75.411784,
+          "p99": 75.411784,
+          "mean": 31.401203549999998,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "search",
+          "p50": 13.97047,
+          "p95": 136.211382,
+          "p99": 136.211382,
+          "mean": 24.169402699999996,
+          "avgResults": 2,
+          "errors": 0
+        },
+        {
+          "kind": "no-result",
+          "query": "zz_nonexistent_token_xyz_999",
+          "p50": 9.66213,
+          "p95": 12.774829,
+          "p99": 12.774829,
+          "mean": 9.909659299999998,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "no-result",
+          "query": "qqq_zzz_no_match_12345",
+          "p50": 9.416232,
+          "p95": 16.602031,
+          "p99": 16.602031,
+          "mean": 9.996816950000001,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "phrase",
+          "query": "\"semantic search\"",
+          "p50": 11.776477,
+          "p95": 112.64681,
+          "p99": 112.64681,
+          "mean": 18.805495049999998,
+          "avgResults": 4,
+          "errors": 0
+        },
+        {
+          "kind": "cjk",
+          "query": "记忆",
+          "p50": 12.350767,
+          "p95": 31.795143,
+          "p99": 31.795143,
+          "mean": 14.825393850000001,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "cjk",
+          "query": "向量",
+          "p50": 9.531776,
+          "p95": 17.11094,
+          "p99": 17.11094,
+          "mean": 10.53323795,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "special",
+          "query": "data-pipeline",
+          "p50": 12.14775,
+          "p95": 23.63767,
+          "p99": 23.63767,
+          "mean": 13.3225065,
+          "avgResults": 2,
+          "errors": 0
+        },
+        {
+          "kind": "special",
+          "query": "better-sqlite3",
+          "p50": 11.608432,
+          "p95": 15.656136,
+          "p99": 15.656136,
+          "mean": 11.792452200000003,
+          "avgResults": 1,
+          "errors": 0
+        }
+      ]
+    },
+    {
+      "rows": 10000,
+      "dbBytes": 11644928,
+      "heapBytes": 70578216,
+      "pageSize": 4096,
+      "sqliteVersion": "3.53.0",
+      "write": {
+        "latency": {
+          "p50": 0.128399,
+          "p95": 0.358969,
+          "p99": 1.037045,
+          "mean": 0.22602247339999976,
+          "min": 0.049743,
+          "max": 42.332656,
+          "n": 10000
+        },
+        "throughput": 4249.775091277732,
+        "errors": 0,
+        "total": 10000,
+        "elapsedMs": 2353.0657
+      },
+      "search": {
+        "fts": {
+          "latency": {
+            "p50": 4.357902,
+            "p95": 21.265534,
+            "p99": 32.28156,
+            "mean": 6.229570758333329,
+            "min": 0.000511,
+            "max": 43.976023,
+            "n": 720
+          },
+          "throughput": 160.22054001287128,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 7.083333333333333,
+          "elapsedMs": 4493.80585
+        },
+        "semantic": {
+          "latency": {
+            "p50": 9.254098,
+            "p95": 24.877957,
+            "p99": 42.405443,
+            "mean": 11.355504634722225,
+            "min": 6.492506,
+            "max": 65.133646,
+            "n": 720
+          },
+          "throughput": 87.95510097421564,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 10,
+          "elapsedMs": 8185.994809
+        },
+        "hybrid": {
+          "latency": {
+            "p50": 31.286965,
+            "p95": 71.888413,
+            "p99": 92.243758,
+            "mean": 36.29270573749997,
+            "min": 12.054756,
+            "max": 137.211053,
+            "n": 720
+          },
+          "throughput": 27.543911966005034,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 4.666666666666667,
+          "elapsedMs": 26140.077738
+        }
+      },
+      "queryBreakdown": [
+        {
+          "kind": "empty",
+          "query": "(empty)",
+          "p50": 14.870791,
+          "p95": 16.577395,
+          "p99": 16.577395,
+          "mean": 15.023197349999998,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "empty",
+          "query": "   ",
+          "p50": 15.445574,
+          "p95": 29.57993,
+          "p99": 29.57993,
+          "mean": 17.31130305,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "go",
+          "p50": 33.701702,
+          "p95": 68.870523,
+          "p99": 68.870523,
+          "mean": 39.378837350000005,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "ui",
+          "p50": 33.141166,
+          "p95": 56.227077,
+          "p99": 56.227077,
+          "mean": 33.8510198,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "id",
+          "p50": 30.548698,
+          "p95": 51.750432,
+          "p99": 51.750432,
+          "mean": 34.07940874999999,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "e",
+          "p50": 35.178368,
+          "p95": 41.511617,
+          "p99": 41.511617,
+          "mean": 35.595379449999996,
+          "avgResults": 3,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "AI",
+          "p50": 16.025646,
+          "p95": 47.627322,
+          "p99": 47.627322,
+          "mean": 19.514273999999997,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "vector",
+          "p50": 47.987492,
+          "p95": 84.254079,
+          "p99": 84.254079,
+          "mean": 51.51499599999998,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "memory",
+          "p50": 72.668309,
+          "p95": 150.156304,
+          "p99": 150.156304,
+          "mean": 85.6347064,
+          "avgResults": 7,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "sqlite",
+          "p50": 42.734158,
+          "p95": 63.807654,
+          "p99": 63.807654,
+          "mean": 43.816450249999995,
+          "avgResults": 4,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "cache",
+          "p50": 43.446177,
+          "p95": 64.859036,
+          "p99": 64.859036,
+          "mean": 46.40945974999999,
+          "avgResults": 3,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "search index",
+          "p50": 38.970155,
+          "p95": 69.687044,
+          "p99": 69.687044,
+          "mean": 42.1760532,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "long",
+          "query": "vector embedding semantic search hybrid scoring with bm25 and recency",
+          "p50": 19.099152,
+          "p95": 63.775605,
+          "p99": 63.775605,
+          "mean": 30.08380735,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "long",
+          "query": "workspace memory is indexed for fast semantic search across the project with multi-tenant isolation",
+          "p50": 34.888156,
+          "p95": 65.882556,
+          "p99": 65.882556,
+          "mean": 40.53232824999999,
+          "avgResults": 7,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "memory",
+          "p50": 70.238886,
+          "p95": 92.0665,
+          "p99": 92.0665,
+          "mean": 70.09062085,
+          "avgResults": 7,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "vector",
+          "p50": 46.681044,
+          "p95": 81.56401,
+          "p99": 81.56401,
+          "mean": 51.16014249999999,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "search",
+          "p50": 42.816763,
+          "p95": 191.494617,
+          "p99": 191.494617,
+          "mean": 63.11373010000002,
+          "avgResults": 6,
+          "errors": 0
+        },
+        {
+          "kind": "no-result",
+          "query": "zz_nonexistent_token_xyz_999",
+          "p50": 16.811093,
+          "p95": 55.829536,
+          "p99": 55.829536,
+          "mean": 22.808171650000002,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "no-result",
+          "query": "qqq_zzz_no_match_12345",
+          "p50": 16.195835,
+          "p95": 19.039131,
+          "p99": 19.039131,
+          "mean": 16.089539050000003,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "phrase",
+          "query": "\"semantic search\"",
+          "p50": 22.477637,
+          "p95": 83.439481,
+          "p99": 83.439481,
+          "mean": 26.967199900000004,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "cjk",
+          "query": "记忆",
+          "p50": 30.65664,
+          "p95": 43.232559,
+          "p99": 43.232559,
+          "mean": 30.830932250000007,
+          "avgResults": 5,
+          "errors": 0
+        },
+        {
+          "kind": "cjk",
+          "query": "向量",
+          "p50": 16.532812,
+          "p95": 25.835182,
+          "p99": 25.835182,
+          "mean": 16.91234745,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "special",
+          "query": "data-pipeline",
+          "p50": 22.661711,
+          "p95": 39.739891,
+          "p99": 39.739891,
+          "mean": 24.37846845,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "special",
+          "query": "better-sqlite3",
+          "p50": 26.524048,
+          "p95": 67.094357,
+          "p99": 67.094357,
+          "mean": 32.108212449999996,
+          "avgResults": 1,
+          "errors": 0
+        }
+      ]
+    },
+    {
+      "rows": 100000,
+      "dbBytes": 117080064,
+      "heapBytes": 225588512,
+      "pageSize": 4096,
+      "sqliteVersion": "3.53.0",
+      "write": {
+        "latency": {
+          "p50": 0.167734,
+          "p95": 0.4234,
+          "p99": 0.954231,
+          "mean": 0.23782902905,
+          "min": 0.050314,
+          "max": 166.618246,
+          "n": 100000
+        },
+        "throughput": 4079.1291824276987,
+        "errors": 0,
+        "total": 100000,
+        "elapsedMs": 24515.036305
+      },
+      "search": {
+        "fts": {
+          "latency": {
+            "p50": 52.792011,
+            "p95": 201.716157,
+            "p99": 257.803399,
+            "mean": 59.33422661388898,
+            "min": 0.001543,
+            "max": 318.739147,
+            "n": 720
+          },
+          "throughput": 16.849942372766478,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 7.083333333333333,
+          "elapsedMs": 42730.116464
+        },
+        "semantic": {
+          "latency": {
+            "p50": 72.449768,
+            "p95": 112.469826,
+            "p99": 167.922529,
+            "mean": 78.67699173194437,
+            "min": 56.704826,
+            "max": 371.42646,
+            "n": 720
+          },
+          "throughput": 12.707761631000785,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 10,
+          "elapsedMs": 56658.286558
+        },
+        "hybrid": {
+          "latency": {
+            "p50": 196.580112,
+            "p95": 521.563937,
+            "p99": 650.630455,
+            "mean": 215.43622781249994,
+            "min": 69.768652,
+            "max": 835.045951,
+            "n": 720
+          },
+          "throughput": 4.641468973725499,
+          "errors": 0,
+          "total": 720,
+          "avgResults": 5.625,
+          "elapsedMs": 155123.303436
+        }
+      },
+      "queryBreakdown": [
+        {
+          "kind": "empty",
+          "query": "(empty)",
+          "p50": 82.427802,
+          "p95": 114.395667,
+          "p99": 114.395667,
+          "mean": 85.08194169999999,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "empty",
+          "query": "   ",
+          "p50": 81.654129,
+          "p95": 93.554489,
+          "p99": 93.554489,
+          "mean": 82.34252575000001,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "go",
+          "p50": 200.223975,
+          "p95": 284.391936,
+          "p99": 284.391936,
+          "mean": 209.05314114999996,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "ui",
+          "p50": 208.06483,
+          "p95": 270.012489,
+          "p99": 270.012489,
+          "mean": 212.52552729999996,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "id",
+          "p50": 235.590856,
+          "p95": 436.176256,
+          "p99": 436.176256,
+          "mean": 247.83073649999997,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "e",
+          "p50": 297.307302,
+          "p95": 402.787401,
+          "p99": 402.787401,
+          "mean": 302.9897812,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "short",
+          "query": "AI",
+          "p50": 104.645089,
+          "p95": 179.070867,
+          "p99": 179.070867,
+          "mean": 108.307005,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "vector",
+          "p50": 303.985057,
+          "p95": 384.196555,
+          "p99": 384.196555,
+          "mean": 313.2542307,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "memory",
+          "p50": 514.041359,
+          "p95": 608.640881,
+          "p99": 608.640881,
+          "mean": 519.64549105,
+          "avgResults": 5,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "sqlite",
+          "p50": 237.191987,
+          "p95": 353.350788,
+          "p99": 353.350788,
+          "mean": 242.92113554999997,
+          "avgResults": 7,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "cache",
+          "p50": 290.351125,
+          "p95": 401.052509,
+          "p99": 401.052509,
+          "mean": 297.89075045,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "normal",
+          "query": "search index",
+          "p50": 173.48724,
+          "p95": 278.794928,
+          "p99": 278.794928,
+          "mean": 178.97679639999998,
+          "avgResults": 4,
+          "errors": 0
+        },
+        {
+          "kind": "long",
+          "query": "vector embedding semantic search hybrid scoring with bm25 and recency",
+          "p50": 89.19171,
+          "p95": 105.051089,
+          "p99": 105.051089,
+          "mean": 89.43101204999999,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "long",
+          "query": "workspace memory is indexed for fast semantic search across the project with multi-tenant isolation",
+          "p50": 196.614615,
+          "p95": 246.877216,
+          "p99": 246.877216,
+          "mean": 196.20486185000001,
+          "avgResults": 2,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "memory",
+          "p50": 460.493446,
+          "p95": 564.758096,
+          "p99": 564.758096,
+          "mean": 470.46554875000004,
+          "avgResults": 5,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "vector",
+          "p50": 311.64384,
+          "p95": 516.305616,
+          "p99": 516.305616,
+          "mean": 329.11682759999997,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "high-result",
+          "query": "search",
+          "p50": 247.064167,
+          "p95": 361.949152,
+          "p99": 361.949152,
+          "mean": 250.02096490000002,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "no-result",
+          "query": "zz_nonexistent_token_xyz_999",
+          "p50": 77.135327,
+          "p95": 110.110053,
+          "p99": 110.110053,
+          "mean": 80.45665944999998,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "no-result",
+          "query": "qqq_zzz_no_match_12345",
+          "p50": 83.320894,
+          "p95": 105.854791,
+          "p99": 105.854791,
+          "mean": 85.8156256,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "phrase",
+          "query": "\"semantic search\"",
+          "p50": 127.692339,
+          "p95": 177.091089,
+          "p99": 177.091089,
+          "mean": 125.94309070000001,
+          "avgResults": 9,
+          "errors": 0
+        },
+        {
+          "kind": "cjk",
+          "query": "记忆",
+          "p50": 196.894671,
+          "p95": 269.408684,
+          "p99": 269.408684,
+          "mean": 201.04198030000003,
+          "avgResults": 10,
+          "errors": 0
+        },
+        {
+          "kind": "cjk",
+          "query": "向量",
+          "p50": 81.823008,
+          "p95": 108.985093,
+          "p99": 108.985093,
+          "mean": 82.84320599999998,
+          "avgResults": 1,
+          "errors": 0
+        },
+        {
+          "kind": "special",
+          "query": "data-pipeline",
+          "p50": 102.261404,
+          "p95": 153.898002,
+          "p99": 153.898002,
+          "mean": 107.46899349999998,
+          "avgResults": 5,
+          "errors": 0
+        },
+        {
+          "kind": "special",
+          "query": "better-sqlite3",
+          "p50": 107.516463,
+          "p95": 189.635022,
+          "p99": 189.635022,
+          "mean": 118.81286799999998,
+          "avgResults": 1,
+          "errors": 0
+        }
+      ]
+    }
+  ]
+}
