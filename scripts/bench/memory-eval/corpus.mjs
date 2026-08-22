@@ -101,6 +101,10 @@ export const TAG_POOL = [
 ];
 export const MEMORY_TYPES = ["code_fact", "decision", "mistake", "pattern", "task_archive"];
 
+export const BENCH_EPOCH_MS = Date.UTC(2026, 0, 1, 0, 0, 0, 0);
+export const BENCH_EPOCH_ISO = "2026-01-01T00:00:00.000Z";
+export const BENCH_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 function pickTags(rand) {
 	const n = 1 + Math.floor(rand() * 3);
 	const tags = [];
@@ -111,7 +115,9 @@ function pickTags(rand) {
 	return tags;
 }
 
-export function buildMemoryCorpus(rows, seed = 0x478, owner = "bench", repo = "bench-repo") {
+export function buildMemoryCorpus(rows, seed = 0x478, owner = "bench", repo = "bench-repo", opts = {}) {
+	const benchEpochMs = Number.isFinite(opts.benchEpochMs) ? opts.benchEpochMs : BENCH_EPOCH_MS;
+	const maxAgeMs = Number.isFinite(opts.maxAgeMs) ? opts.maxAgeMs : BENCH_MAX_AGE_MS;
 	const rand = mulberry32(seed);
 	const sentences = [...EN_SENTENCES, ...ID_SENTENCES, ...CJK_SENTENCES, ...MIXED_SENTENCES, ...TECH_PHRASES];
 	const out = [];
@@ -129,6 +135,11 @@ export function buildMemoryCorpus(rows, seed = 0x478, owner = "bench", repo = "b
 			(i % 17 === 0 ? " café menu" : "") +
 			(i % 11 === 0 ? " WORKSPACE-BINARY" : "") +
 			` ${CJK_SENTENCES[i % CJK_SENTENCES.length]}`;
+		const rowJitterMs = ((seed * 1000003) ^ (i * 2654435761)) >>> 0;
+		const ageJitterMs = rowJitterMs % Math.max(1, maxAgeMs);
+		const createdAtMs = benchEpochMs - ageJitterMs;
+		const bumpMs = ((seed * 977) ^ (i * 1013904223) ^ importance) % 60_000;
+		const updatedAtMs = createdAtMs + ((bumpMs >>> 0) % 60_000);
 		out.push({
 			id: `00000000-0000-4000-a000-${String(i).padStart(12, "0")}`,
 			code: `MEM-${String(i).padStart(6, "0")}`,
@@ -140,8 +151,8 @@ export function buildMemoryCorpus(rows, seed = 0x478, owner = "bench", repo = "b
 			role: "benchmark",
 			model: "bench-model",
 			scope: { owner, repo },
-			created_at: new Date(Date.now() - Math.floor(rand() * 30 * 24 * 60 * 60 * 1000)).toISOString(),
-			updated_at: new Date().toISOString(),
+			created_at: new Date(createdAtMs).toISOString(),
+			updated_at: new Date(updatedAtMs).toISOString(),
 			completed_at: null,
 			hit_count: 0,
 			recall_count: 0,

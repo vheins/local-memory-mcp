@@ -6,10 +6,27 @@ import { execSync } from "child_process";
 import { createRequire } from "module";
 import Database from "better-sqlite3";
 
-import { buildMemoryCorpus } from "./memory-eval/corpus.mjs";
+import { buildMemoryCorpus, BENCH_EPOCH_MS, BENCH_EPOCH_ISO, BENCH_MAX_AGE_MS } from "./memory-eval/corpus.mjs";
 import { QUERY_SETS } from "./memory-eval/queries.mjs";
 import { percentiles, throughput } from "./memory-eval/metrics.mjs";
 import { printReport, writeResult } from "./memory-eval/report.mjs";
+
+const VECTOR_CANDIDATE_CAP = (() => {
+	const v = parseInt(process.env.VECTOR_CANDIDATE_CAP || "", 10);
+	return Number.isFinite(v) && v > 0 ? v : 100;
+})();
+const MIN_CANDIDATES = (() => {
+	const v = parseInt(process.env.VECTOR_MIN_CANDIDATES || "", 10);
+	return Number.isFinite(v) && v > 0 ? v : 10;
+})();
+
+class SearchError extends Error {
+	constructor(message, mode) {
+		super(message);
+		this.name = "SearchError";
+		this.mode = mode;
+	}
+}
 
 const require = createRequire(import.meta.url);
 
@@ -158,42 +175,65 @@ function createBenchDb(dbPath) {
 }
 
 function searchFts(db, query, owner, repo, limit = 10) {
+	const safeQuery = buildFtsMatchQuery(query);
+	if (!safeQuery) return [];
 	try {
-		const safeQuery = buildFtsMatchQuery(query);
-		if (!safeQuery) return [];
 		const rows = db
 			.prepare(
 				`SELECT m.* FROM memories_fts fts JOIN memories m ON m.rowid = fts.rowid WHERE memories_fts MATCH ? AND m.owner = ? AND m.repo = ? AND m.status = 'active' AND (m.expires_at IS NULL OR m.expires_at > ?) ORDER BY bm25(memories_fts), m.importance DESC, m.created_at DESC LIMIT ?`
 			)
-			.all(safeQuery, owner, repo, new Date().toISOString(), limit);
+			.all(safeQuery, owner, repo, new Date(BENCH_EPOCH_MS).toISOString(), limit);
 		return rows;
-	} catch {
-		return [];
+	} catch (cause) {
+		throw new SearchError(`FTS search failed for ${JSON.stringify(query)}: ${cause?.message || cause}`, "fts");
+	}
+}
+
+function getPersistedVector(db, memoryId) {
+	let row;
+	try {
+		row = db.prepare(`SELECT vector FROM memory_vectors WHERE memory_id = ?`).get(memoryId);
+	} catch (cause) {
+		throw new SearchError(`persisted vector read failed for ${memoryId}: ${cause?.message || cause}`, "vector");
+	}
+	if (!row?.vector) return null;
+	try {
+		const parsed = JSON.parse(row.vector);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+		throw new SearchError(`persisted vector for ${memoryId} is not an object`, "vector");
+	} catch (cause) {
+		if (cause instanceof SearchError) throw cause;
+		throw new SearchError(`persisted vector parse failed for ${memoryId}: ${cause?.message || cause}`, "vector");
 	}
 }
 
 function searchSemantic(db, query, owner, repo, limit = 10, tfCache = new Map()) {
 	const queryVector = computeVector(query);
-	const now = new Date();
+	const candidateLimit = Math.max(limit, MIN_CANDIDATES);
+	const capLimited = Math.min(candidateLimit, VECTOR_CANDIDATE_CAP);
+	const nowIso = new Date(BENCH_EPOCH_MS).toISOString();
 	const candidates = db
 		.prepare(
 			`SELECT * FROM memories WHERE owner = ? AND repo = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?) ORDER BY importance DESC, created_at DESC LIMIT ?`
 		)
-		.all(owner, repo, now.toISOString(), Math.max(limit * 3, 100));
+		.all(owner, repo, nowIso, capLimited);
 	const scored = candidates
 		.map((row) => {
-			let vec = tfCache.get(row.id);
-			if (!vec || tfCache.get(row.id + ":updated") !== row.updated_at) {
-				vec = computeVector(row.content);
-				tfCache.set(row.id, vec);
-				tfCache.set(row.id + ":updated", row.updated_at);
-				if (tfCache.size > 2048) {
-					const keys = [...tfCache.keys()].slice(0, 1024);
-					for (const k of keys) tfCache.delete(k);
+			let vec = getPersistedVector(db, row.id);
+			if (!vec) {
+				vec = tfCache.get(row.id);
+				if (!vec || tfCache.get(row.id + ":updated") !== row.updated_at) {
+					vec = computeVector(row.content);
+					tfCache.set(row.id, vec);
+					tfCache.set(row.id + ":updated", row.updated_at);
+					if (tfCache.size > 2048) {
+						const keys = [...tfCache.keys()].slice(0, 1024);
+						for (const k of keys) tfCache.delete(k);
+					}
 				}
 			}
-			const sim = cosineSimilarity(queryVector, vec) || 0;
-			return { row, sim: sim || 0.16 };
+			const sim = cosineSimilarity(queryVector, vec);
+			return { row, sim };
 		})
 		.filter((r) => r.sim > 0)
 		.sort((a, b) => b.sim - a.sim)
@@ -205,19 +245,22 @@ function hybridSearch(db, query, owner, repo, limit = 10, tfCache) {
 	const ftsRows = searchFts(db, query, owner, repo, 100);
 	const ftsScoreMap = new Map();
 	if (ftsRows.length > 0) {
-		const bm25Rows = (() => {
-			try {
-				const safeQuery = buildFtsMatchQuery(query);
-				if (!safeQuery) return [];
-				return db
+		let bm25Rows;
+		try {
+			const safeQuery = buildFtsMatchQuery(query);
+			if (!safeQuery) bm25Rows = [];
+			else
+				bm25Rows = db
 					.prepare(
 						`SELECT m.*, bm25(memories_fts) AS bm25_score FROM memories_fts fts JOIN memories m ON m.rowid = fts.rowid WHERE memories_fts MATCH ? AND ((m.owner = ? AND m.repo = ?) OR m.is_global = 1) AND m.status = 'active' AND (m.expires_at IS NULL OR m.expires_at > ?) ORDER BY bm25_score LIMIT ?`
 					)
-					.all(safeQuery, owner, repo, new Date().toISOString(), 100);
-			} catch {
-				return [];
-			}
-		})();
+					.all(safeQuery, owner, repo, new Date(BENCH_EPOCH_MS).toISOString(), 100);
+		} catch (cause) {
+			throw new SearchError(
+				`hybrid bm25 segment failed for ${JSON.stringify(query)}: ${cause?.message || cause}`,
+				"hybrid"
+			);
+		}
 		if (bm25Rows.length > 0) {
 			let minB = Infinity,
 				maxB = -Infinity;
@@ -234,14 +277,17 @@ function hybridSearch(db, query, owner, repo, limit = 10, tfCache) {
 	}
 	const semRows = searchSemantic(db, query, owner, repo, 100, tfCache);
 	const candidates = new Map();
-	for (const r of semRows)
-		candidates.set(r.id, { row: r, sim: cosineSimilarity(computeVector(query), computeVector(r.content)) || 0.16 });
+	for (const r of semRows) {
+		const persisted = getPersistedVector(db, r.id);
+		const vec = persisted || computeVector(r.content);
+		candidates.set(r.id, { row: r, sim: cosineSimilarity(computeVector(query), vec) });
+	}
 	for (const r of ftsRows) if (!candidates.has(r.id)) candidates.set(r.id, { row: r, sim: 0 });
 	const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
 	const scored = [...candidates.values()]
 		.map(({ row, sim }) => {
 			const keyword = ftsScoreMap.get(row.id) ?? 0;
-			const recency = Math.pow(2, -(Date.now() - new Date(row.created_at).getTime()) / (30 * 24 * 60 * 60 * 1000));
+			const recency = Math.pow(2, -(BENCH_EPOCH_MS - new Date(row.created_at).getTime()) / (30 * 24 * 60 * 60 * 1000));
 			const domain = row.tags
 				? (() => {
 						try {
@@ -257,9 +303,8 @@ function hybridSearch(db, query, owner, repo, limit = 10, tfCache) {
 			return { row, final };
 		})
 		.sort((a, b) => b.final - a.final);
-	const threshold = scored.length <= 5 ? 0.1 : 0.4;
-	let eligible = scored.filter((s) => s.final >= threshold);
-	if (eligible.length === 0 && scored.length > 0) eligible = [scored[0]];
+	const threshold = 0.4;
+	const eligible = scored.filter((s) => s.final >= threshold);
 	return eligible.slice(0, limit).map((s) => s.row);
 }
 
@@ -299,7 +344,10 @@ async function main() {
 				db = createBenchDb(dbPath);
 				const sqliteVersion = db.prepare("SELECT sqlite_version()").pluck().get();
 				const pageSize = db.pragma("page_size", { simple: true });
-				const corpus = buildMemoryCorpus(rows, seed + rows, owner, repo);
+				const corpus = buildMemoryCorpus(rows, seed + rows, owner, repo, {
+					benchEpochMs: BENCH_EPOCH_MS,
+					maxAgeMs: BENCH_MAX_AGE_MS
+				});
 
 				const insertStmt = db.prepare(
 					`INSERT INTO memories (id, code, repo, owner, type, title, content, importance, folder, language, branch, created_at, updated_at, hit_count, recall_count, last_used_at, agent, role, model, completed_at, expires_at, supersedes, status, is_global, tags, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -309,42 +357,49 @@ async function main() {
 				);
 				const tagStmt = db.prepare(`INSERT OR IGNORE INTO memory_tags (memory_id, tag) VALUES (?, ?)`);
 
+				function insertEntries(entries, epochIso) {
+					for (const entry of entries) {
+						insertStmt.run(
+							entry.id,
+							entry.code || null,
+							entry.scope.repo,
+							entry.scope.owner,
+							entry.type,
+							entry.title || null,
+							entry.content,
+							entry.importance,
+							entry.scope.folder || null,
+							entry.scope.language || null,
+							entry.scope.branch || null,
+							entry.created_at,
+							entry.updated_at,
+							entry.agent || "unknown",
+							entry.role || "unknown",
+							entry.model || "unknown",
+							entry.completed_at || null,
+							entry.expires_at ?? null,
+							entry.supersedes ?? null,
+							entry.status || "active",
+							entry.is_global ? 1 : 0,
+							entry.tags ? JSON.stringify(entry.tags) : null,
+							entry.metadata ? JSON.stringify(entry.metadata) : null
+						);
+						const text = entry.content;
+						const freq = computeVector(text);
+						vectorStmt.run(entry.id, JSON.stringify(freq), epochIso || new Date(BENCH_EPOCH_MS).toISOString());
+						for (const tag of entry.tags) tagStmt.run(entry.id, tag);
+					}
+				}
+
 				const writeSamples = [];
 				let writeErrors = 0;
 				const writeStart = process.hrtime.bigint();
+				const writeEpochIso = new Date(BENCH_EPOCH_MS).toISOString();
 				const tx = db.transaction((entries) => {
 					for (const entry of entries) {
 						const t0 = process.hrtime.bigint();
 						try {
-							insertStmt.run(
-								entry.id,
-								entry.code || null,
-								entry.scope.repo,
-								entry.scope.owner,
-								entry.type,
-								entry.title || null,
-								entry.content,
-								entry.importance,
-								entry.scope.folder || null,
-								entry.scope.language || null,
-								entry.scope.branch || null,
-								entry.created_at,
-								entry.updated_at,
-								entry.agent || "unknown",
-								entry.role || "unknown",
-								entry.model || "unknown",
-								entry.completed_at || null,
-								entry.expires_at ?? null,
-								entry.supersedes ?? null,
-								entry.status || "active",
-								entry.is_global ? 1 : 0,
-								entry.tags ? JSON.stringify(entry.tags) : null,
-								entry.metadata ? JSON.stringify(entry.metadata) : null
-							);
-							const text = `${entry.title} ${entry.content} ${entry.tags.join(" ")}`;
-							const freq = computeVector(text);
-							vectorStmt.run(entry.id, JSON.stringify(freq), new Date().toISOString());
-							for (const tag of entry.tags) tagStmt.run(entry.id, tag);
+							insertEntries([entry], writeEpochIso);
 						} catch {
 							writeErrors++;
 						}
@@ -352,6 +407,51 @@ async function main() {
 					}
 				});
 				tx(corpus);
+				const foreignOwner = "bench-foreign";
+				const foreignRepo = "bench-foreign-repo";
+				const foreignCount = Math.min(200, Math.max(50, Math.floor(rows * 0.05)));
+				const rawForeign = buildMemoryCorpus(foreignCount, seed + rows + 99991, foreignOwner, foreignRepo, {
+					benchEpochMs: BENCH_EPOCH_MS,
+					maxAgeMs: BENCH_MAX_AGE_MS
+				});
+				const foreignCorpus = rawForeign.map((e, idx) => ({
+					...e,
+					id: `00000000-0000-4000-b000-${String(700000 + idx).padStart(12, "0")}`,
+					code: `MEM-FGN-${String(idx).padStart(6, "0")}`
+				}));
+				const corpusIds = new Set(corpus.map((e) => e.id));
+				for (const fe of foreignCorpus) corpusIds.add(fe.id);
+				const foreignTx = db.transaction((entries) => insertEntries(entries, writeEpochIso));
+				foreignTx(foreignCorpus);
+				const globalId = corpusIds.has("00000000-0000-4000-a000-999999999999")
+					? "00000000-0000-4000-c000-999999999999"
+					: "00000000-0000-4000-a000-999999999999";
+				const globalEntry = {
+					id: globalId,
+					code: "MEM-GLOBAL-000001",
+					type: "code_fact",
+					title: "Global memory anchor",
+					content: "Global shared context visible across tenants via is_global flag for bench isolation checks.",
+					importance: 5,
+					scope: { owner, repo },
+					created_at: new Date(BENCH_EPOCH_MS - 1000).toISOString(),
+					updated_at: new Date(BENCH_EPOCH_MS - 500).toISOString(),
+					completed_at: null,
+					hit_count: 0,
+					recall_count: 0,
+					last_used_at: null,
+					expires_at: null,
+					supersedes: null,
+					status: "active",
+					agent: "bench",
+					role: "benchmark",
+					model: "bench-model",
+					tags: ["global", "shared"],
+					metadata: {},
+					is_global: true
+				};
+				const globalTx = db.transaction(() => insertEntries([globalEntry], writeEpochIso));
+				globalTx();
 				const writeElapsedMs = Number(process.hrtime.bigint() - writeStart) / 1e6;
 				const writeLatency = percentiles(writeSamples);
 				const writeThroughput = throughput(corpus.length, writeElapsedMs);
@@ -379,9 +479,11 @@ async function main() {
 
 				for (const mode of searchModes) {
 					const samples = [];
-					let errors = 0;
+					let searchErrors = 0;
+					let zeroResults = 0;
 					let totalResults = 0;
 					let totalOps = 0;
+					const errorByType = { SearchError: 0, other: 0 };
 					const modeStart = process.hrtime.bigint();
 					for (let iter = 0; iter < ITERS; iter++) {
 						for (const { query } of QUERY_SETS) {
@@ -391,9 +493,13 @@ async function main() {
 								if (mode === "fts") results = searchFts(db, query, owner, repo, 10);
 								else if (mode === "semantic") results = searchSemantic(db, query, owner, repo, 10, tfCache);
 								else results = hybridSearch(db, query, owner, repo, 10, tfCache);
-								totalResults += Array.isArray(results) ? results.length : 0;
-							} catch {
-								errors++;
+								const len = Array.isArray(results) ? results.length : 0;
+								totalResults += len;
+								if (len === 0) zeroResults++;
+							} catch (err) {
+								searchErrors++;
+								if (err?.name === "SearchError") errorByType.SearchError++;
+								else errorByType.other++;
 							}
 							samples.push(Number(process.hrtime.bigint() - t0) / 1e6);
 							totalOps++;
@@ -403,22 +509,34 @@ async function main() {
 					const latency = percentiles(samples);
 					const tp = throughput(totalOps, elapsedMs);
 					const avgResults = totalOps > 0 ? totalResults / totalOps : 0;
-					searchResults[mode] = { latency, throughput: tp, errors, total: totalOps, avgResults, elapsedMs };
+					searchResults[mode] = {
+						latency,
+						throughput: tp,
+						errors: searchErrors,
+						zeroResults,
+						errorByType,
+						total: totalOps,
+						avgResults,
+						elapsedMs
+					};
 				}
 
 				const perQueryBreakdown = [];
 				for (const { kind, query } of QUERY_SETS) {
 					const qSamples = [];
-					let qErrors = 0;
+					let qSearchErrors = 0;
+					let qZeroResults = 0;
 					let qTotalResults = 0;
 					const iters = Math.min(ITERS, 20);
 					for (let iter = 0; iter < iters; iter++) {
 						const t0 = process.hrtime.bigint();
 						try {
 							const results = hybridSearch(db, query, owner, repo, 10, tfCache);
-							qTotalResults += Array.isArray(results) ? results.length : 0;
+							const len = Array.isArray(results) ? results.length : 0;
+							qTotalResults += len;
+							if (len === 0) qZeroResults++;
 						} catch {
-							qErrors++;
+							qSearchErrors++;
 						}
 						qSamples.push(Number(process.hrtime.bigint() - t0) / 1e6);
 					}
@@ -431,9 +549,78 @@ async function main() {
 						p99: lat.p99,
 						mean: lat.mean,
 						avgResults: qSamples.length ? qTotalResults / qSamples.length : 0,
-						errors: qErrors
+						errors: qSearchErrors,
+						zeroResults: qZeroResults
 					});
 				}
+
+				const isolationProbes = [];
+				const isolationQueries = [
+					{ corpusQuery: "vector", probeTenant: { owner: foreignOwner, repo: foreignRepo }, expectLeak: false },
+					{ corpusQuery: "memory", probeTenant: { owner: foreignOwner, repo: foreignRepo }, expectLeak: false },
+					{ corpusQuery: "cache", probeTenant: { owner: foreignOwner, repo: foreignRepo }, expectLeak: false }
+				];
+				for (const { corpusQuery, probeTenant, expectLeak } of isolationQueries) {
+					const ftsLeak = searchFts(db, corpusQuery, probeTenant.owner, probeTenant.repo, 10);
+					const semLeak = searchSemantic(db, corpusQuery, probeTenant.owner, probeTenant.repo, 10, tfCache);
+					const leakedFts = ftsLeak.filter((r) => r.owner === owner && r.repo === repo && !r.is_global).length;
+					const leakedSem = semLeak.filter((r) => r.owner === owner && r.repo === repo && !r.is_global).length;
+					isolationProbes.push({
+						query: corpusQuery,
+						probeOwner: probeTenant.owner,
+						probeRepo: probeTenant.repo,
+						expectLeak,
+						fts: { returned: ftsLeak.length, leaked: leakedFts, isolated: leakedFts === 0 },
+						semantic: { returned: semLeak.length, leaked: leakedSem, isolated: leakedSem === 0 }
+					});
+				}
+				const isolatedOk = isolationProbes.every((p) => p.fts.isolated && p.semantic.isolated);
+				const relevance = (() => {
+					const noResultKinds = QUERY_SETS.filter((q) => q.kind === "no-result");
+					let noResultViolations = 0;
+					let probeErrors = 0;
+					const probeErrorByType = { SearchError: 0, other: 0 };
+					for (const { query } of noResultKinds) {
+						try {
+							const ftsRes = searchFts(db, query, owner, repo, 10);
+							if (ftsRes.length > 0) noResultViolations++;
+						} catch (err) {
+							probeErrors++;
+							if (err?.name === "SearchError") probeErrorByType.SearchError++;
+							else probeErrorByType.other++;
+							noResultViolations++;
+						}
+						try {
+							const hyRes = hybridSearch(db, query, owner, repo, 10, tfCache);
+							if (hyRes.length > 0) noResultViolations++;
+						} catch (err) {
+							probeErrors++;
+							if (err?.name === "SearchError") probeErrorByType.SearchError++;
+							else probeErrorByType.other++;
+							noResultViolations++;
+						}
+					}
+					const positiveKinds = QUERY_SETS.filter((q) => ["normal", "high-result", "phrase"].includes(q.kind));
+					let emptyPositive = 0;
+					for (const { query } of positiveKinds.slice(0, 6)) {
+						try {
+							const hyRes = hybridSearch(db, query, owner, repo, 10, tfCache);
+							if (hyRes.length === 0) emptyPositive++;
+						} catch (err) {
+							probeErrors++;
+							if (err?.name === "SearchError") probeErrorByType.SearchError++;
+							else probeErrorByType.other++;
+							emptyPositive++;
+						}
+					}
+					return {
+						noResultViolations,
+						emptyPositive,
+						probeErrors,
+						probeErrorByType,
+						pass: noResultViolations === 0 && emptyPositive === 0 && probeErrors === 0
+					};
+				})();
 
 				scaleResults.push({
 					rows,
@@ -449,7 +636,18 @@ async function main() {
 						elapsedMs: writeElapsedMs
 					},
 					search: searchResults,
-					queryBreakdown: perQueryBreakdown
+					queryBreakdown: perQueryBreakdown,
+					isolation: { probes: isolationProbes, isolatedOk },
+					relevance: { ...relevance, noResultKind: "no-result" },
+					vectorMeta: {
+						candidateCap: VECTOR_CANDIDATE_CAP,
+						minCandidates: MIN_CANDIDATES,
+						persistedVectors: true,
+						zeroFallback: null,
+						hybridThreshold: 0.4
+					},
+					benchEpoch: BENCH_EPOCH_ISO,
+					foreignPartition: { owner: foreignOwner, repo: foreignRepo, rows: foreignCorpus.length }
 				});
 				db.close();
 				db = null;
@@ -496,12 +694,43 @@ async function main() {
 		}
 
 		const lastScale = scaleResults[scaleResults.length - 1];
+		const revisionMeta = (() => {
+			let branch = null;
+			let dirty = false;
+			try {
+				branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
+			} catch {}
+			try {
+				const porcel = execSync("git status --porcelain", { encoding: "utf8" }).trim();
+				dirty = porcel.length > 0;
+			} catch {}
+			return { branch, dirty };
+		})();
+		const benchRevision = (() => {
+			try {
+				const files = [
+					"scripts/bench/memory-write-search-bench.mjs",
+					"scripts/bench/memory-eval/corpus.mjs",
+					"scripts/bench/memory-eval/queries.mjs",
+					"scripts/bench/memory-eval/metrics.mjs",
+					"scripts/bench/memory-eval/report.mjs"
+				];
+				const h = execSync(`git hash-object ${files.join(" ")}`, { encoding: "utf8" }).trim();
+				return h || null;
+			} catch {
+				return null;
+			}
+		})();
 		const result = {
 			meta: {
 				task: "TASK-478",
 				seed,
 				commitSha: commitShaFinal,
+				benchRevision,
+				branch: revisionMeta.branch,
+				dirty: revisionMeta.dirty,
 				date: new Date().toISOString(),
+				benchEpoch: BENCH_EPOCH_ISO,
 				node: process.version,
 				betterSqlite3: require("better-sqlite3/package.json").version,
 				sqliteVersion: referenceSqliteVersion,
@@ -511,7 +740,9 @@ async function main() {
 				scales: scales.slice(0, scaleResults.length),
 				requestedScales: scales,
 				iterations: ITERS,
-				vectorBackend: "stub (TF cosine, no ONNX)",
+				vectorBackend: "persisted TF cosine (memory_vectors, no ONNX)",
+				vectorCandidateCap: VECTOR_CANDIDATE_CAP,
+				vectorMinCandidates: MIN_CANDIDATES,
 				queryKinds: [...new Set(QUERY_SETS.map((q) => q.kind))],
 				queryCount: QUERY_SETS.length,
 				...(hardwareLimit ? { hardwareLimit } : {}),
