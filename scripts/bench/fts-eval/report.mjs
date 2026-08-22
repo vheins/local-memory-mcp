@@ -28,7 +28,7 @@ export function printReport({
 	const line = (s = "") => console.log(s);
 	const pct = (v) => (v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
 	line("======================================================================");
-	line(`FTS5 TOKENIZER EVAL — TASK-295 (unicode61 prefix-* vs trigram)`);
+	line(`FTS5 TOKENIZER EVAL — TASK-477 (unicode61 prefix-* vs trigram)`);
 	line(`sqlite ${sqliteVersion} · corpus ${ROWS} rows · ${ITERS} latency iters · page ${pageSize}B`);
 	line("----------------------------------------------------------------------");
 	line(
@@ -91,8 +91,50 @@ export function printReport({
 	line("======================================================================");
 }
 
-export function writeResult(jsonOut, result) {
+export function writeResult(jsonOut, result, markdownOut) {
 	fs.mkdirSync(path.dirname(jsonOut), { recursive: true });
 	fs.writeFileSync(jsonOut, JSON.stringify(result, null, 2));
 	console.log(`\nJSON → ${jsonOut}`);
+	if (markdownOut) {
+		fs.mkdirSync(path.dirname(markdownOut), { recursive: true });
+		const { meta, recall, latency } = result;
+		const lines = [
+			`# FTS5 Tokenizer Baseline — TASK-477`,
+			``,
+			`- Task: ${meta.task}`,
+			`- Seed: ${meta.seed}`,
+			`- Node: ${meta.node}`,
+			`- SQLite: ${meta.sqliteVersion}`,
+			`- Corpus rows: ${meta.corpusRows}`,
+			``,
+			`## Recall`,
+			``,
+			`| Class | Queries | Oracle rows | Unicode61 @10 | Unicode61 @50 | Trigram @10 | Trigram @50 |`,
+			`| --- | ---: | ---: | ---: | ---: | ---: | ---: |`,
+			...recall.classSummary.map(
+				(item) =>
+					`| ${item.cls} | ${item.queries} | ${item.oracleRows} | ${formatPercent(item.uni_recall10)} | ${formatPercent(item.uni_recall50)} | ${formatPercent(item.tri_recall10)} | ${formatPercent(item.tri_recall50)} |`
+			),
+			``,
+			`## Latency`,
+			``,
+			`| Query | Unicode61 p50/p95 (ms) | Trigram p50/p95 (ms) | LIKE p50/p95 (ms) |`,
+			`| --- | ---: | ---: | ---: |`,
+			...latency.map(
+				(item) =>
+					`| ${item.name} | ${formatLatency(item.unicode_ms)} | ${formatLatency(item.trigram_ms)} | ${formatLatency(item.like_ms)} |`
+			),
+			``
+		].join("\n");
+		fs.writeFileSync(markdownOut, `${lines}\n`);
+		console.log(`Markdown → ${markdownOut}`);
+	}
+}
+
+function formatPercent(value) {
+	return value === null || value === undefined ? "—" : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatLatency(value) {
+	return `${value.p50.toFixed(3)} / ${value.p95.toFixed(3)}`;
 }
