@@ -320,11 +320,12 @@ function readSymbolDetail(parsed: CodebaseUriParts, db: SQLiteStore, uri: string
 		startCol: 0,
 		endLine: r.caller_line ?? 0,
 		endCol: 0,
-		context: `${r.kind} ${r.symbol_name}${r.caller_name ? ` (in ${r.caller_name})` : ""}`,
+		context: `${r.kind} ${r.symbol_name}${r.role ? ` (${r.role})` : ""}${r.caller_name ? ` (in ${r.caller_name})` : ""}`,
 		kind: r.kind,
 		callerName: r.caller_name,
 		targetFile: r.target_file,
-		targetSymbolId: r.target_symbol_id
+		targetSymbolId: r.target_symbol_id,
+		role: r.role ?? null
 	}));
 
 	try {

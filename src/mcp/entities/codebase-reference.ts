@@ -29,8 +29,8 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			const stmt = this.db.prepare(`
 				INSERT INTO codebase_references (
 					id, repo, symbol_name, caller_file, caller_line, caller_name, kind,
-					target_file, target_symbol_id, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					target_file, target_symbol_id, role, created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`);
 
 			let count = 0;
@@ -45,6 +45,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 					r.kind,
 					r.target_file ?? null,
 					r.target_symbol_id ?? null,
+					r.role ?? null,
 					now
 				);
 				count++;
@@ -218,6 +219,7 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			kind: row.kind,
 			target_file: row.target_file,
 			target_symbol_id: row.target_symbol_id,
+			role: row.role ?? null,
 			created_at: row.created_at
 		};
 	}

@@ -52,7 +52,13 @@ import {
 import { scanExports, getNameFromDeclaration } from "./ts-export-scanner";
 import { extractDocComment } from "./ts-doc-comment";
 import { buildSignature, collectDecorators, symbolIdentifier, withDecorators } from "./ts-signature";
-import { calledExpressionName, constructorName, emitHeritage, emitImports } from "./ts-reference-emission";
+import {
+	calledExpressionName,
+	constructorName,
+	emitHeritage,
+	emitImports,
+	emitTypeReferences
+} from "./ts-reference-emission";
 
 // ── Visitor implementation ───────────────────────────────────────────
 
@@ -166,6 +172,21 @@ export class TypeScriptVisitor implements LanguageVisitor {
 			case ABSTRACT_CLASS_DECLARATION:
 			case INTERFACE_DECLARATION: {
 				emitHeritage(node, refs);
+				// Type edges (TASK-008 / issue #82): the declaration's own
+				// generic constraints + (for interfaces) property/method type
+				// surfaces. Class fields/methods are reached when the walker
+				// descends into the body below.
+				emitTypeReferences(node, this.declaredName(node), refs);
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
+				return;
+			}
+			// Type-alias declarations (TASK-008 / issue #82): emit the alias
+			// value's type edges + generic constraints, then descend so nested
+			// call sites still emit.
+			case TYPE_ALIAS_DECLARATION: {
+				emitTypeReferences(node, this.declaredName(node), refs);
 				for (const child of node.namedChildren) {
 					this.walkReferences(child, callerName, refs);
 				}
@@ -178,6 +199,9 @@ export class TypeScriptVisitor implements LanguageVisitor {
 			case "function_expression":
 			case "arrow_function": {
 				const fnName = this.declaredName(node);
+				// Type edges (TASK-008 / issue #82): parameter + return types of
+				// the function's own signature.
+				emitTypeReferences(node, fnName, refs);
 				for (const child of node.namedChildren) {
 					this.walkReferences(child, fnName ?? callerName, refs);
 				}
@@ -185,8 +209,28 @@ export class TypeScriptVisitor implements LanguageVisitor {
 			}
 			case "method_definition": {
 				const methodName = this.declaredName(node) ?? symbolIdentifier(node);
+				// Type edges: the method's own parameter + return types.
+				emitTypeReferences(node, methodName, refs);
 				for (const child of node.namedChildren) {
 					this.walkReferences(child, methodName ?? callerName, refs);
+				}
+				return;
+			}
+			case "method_signature":
+			case "abstract_method_signature": {
+				// Type edges for interface/abstract method signatures — these
+				// have no body to descend into, so emit + return.
+				const sigName = this.declaredName(node) ?? symbolIdentifier(node);
+				emitTypeReferences(node, sigName, refs);
+				return;
+			}
+			case "public_field_definition":
+			case "field_definition":
+			case "property_signature": {
+				// Type edges for class fields / interface properties.
+				emitTypeReferences(node, callerName, refs);
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
 				}
 				return;
 			}

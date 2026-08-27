@@ -60,3 +60,15 @@ export const GENERIC_TYPE = "generic_type";
 export const TYPE_PARAMETER = "type_parameter";
 export const TYPE_PARAMETERS = "type_parameters";
 export const CONSTRAINT = "constraint";
+
+// Type-annotation / structural type node types (type-reference emission,
+// TASK-008 / issue #82).
+export const TYPE_ANNOTATION = "type_annotation";
+export const UNION_TYPE = "union_type";
+export const INTERSECTION_TYPE = "intersection_type";
+export const ARRAY_TYPE = "array_type";
+export const PAREN_TYPE = "parenthesized_type";
+export const REQUIRED_PARAMETER = "required_parameter";
+export const OPTIONAL_PARAMETER = "optional_parameter";
+export const FORMAL_PARAMETERS = "formal_parameters";
+export const FUNCTION_SIGNATURE = "function_signature";

@@ -26,8 +26,9 @@ import { migration as v22 } from "./v22-kg-degree-cache";
 import { migration as v23 } from "./v23-codebase-references-edge-targets";
 import { migration as v24 } from "./v24-relations-confidence";
 import { migration as v25 } from "./v25-coding-standards-created-at-indexes";
+import { migration as v26 } from "./v26-codebase-references-role";
 
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 26;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -68,7 +69,8 @@ const MIGRATIONS: Migration[] = [
 	v22,
 	v23,
 	v24,
-	v25
+	v25,
+	v26
 ];
 
 // ──────────────────────────────────────────────

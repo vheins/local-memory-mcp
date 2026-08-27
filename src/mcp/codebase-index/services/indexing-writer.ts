@@ -150,7 +150,8 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 					caller_name: r.caller_name,
 					kind: r.kind,
 					target_file: r.target_file,
-					target_symbol_id: r.target_symbol_id
+					target_symbol_id: r.target_symbol_id,
+					role: r.role
 				}));
 				if (symbols.length > 0 || refs.length > 0) {
 					enqueueCodebaseSymbols(db, repo, newPath, symbols, refs);

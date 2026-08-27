@@ -187,6 +187,52 @@ describe("analyzeDeadCode — candidate selection", () => {
 		expect(block.totals.dead).toBe(4); // deadHelper, utilDead, cliMain, execMain
 	});
 
+	it("treats a type-only referenced symbol as referenced — NOT dead (TASK-008 / issue #82)", () => {
+		// The dead-code fix: a symbol used ONLY as a type annotation (kind
+		// 'type', e.g. a DTO referenced from a function parameter/return) has a
+		// reference row of kind 'type', so it must NOT appear as a dead-code
+		// candidate. Pre-#82 the row set had no 'type' kind and this symbol
+		// would have been flagged dead.
+		const files = [makeFile("src/app.ts"), makeFile("src/dto.ts")];
+		for (const f of files) store.codebaseFiles.upsertFile(f);
+
+		store.codebaseSymbols.bulkUpsertSymbols([
+			makeSymbol("usedFn", "src/app.ts", true, null),
+			makeSymbol("CreateOrderDto", "src/dto.ts", true, null),
+			makeSymbol("trulyDead", "src/app.ts", false, null)
+		]);
+
+		// One type edge to CreateOrderDto (parameter role) — the ONLY reference.
+		store.codebaseReferences.bulkUpsertReferences(REPO, [
+			{
+				repo: REPO,
+				symbol_name: "CreateOrderDto",
+				caller_file: "src/app.ts",
+				caller_line: 4,
+				caller_name: "usedFn",
+				kind: "type",
+				role: "parameter"
+			}
+		]);
+
+		const block = analyzeDeadCode(store, REPO, null, files);
+		const names = block.unreferenced.map((u) => u.name);
+
+		// Type-only referenced → excluded from candidates entirely.
+		expect(names).not.toContain("CreateOrderDto");
+		// usedFn is itself unreferenced by any OTHER symbol → still a candidate.
+		expect(names).toContain("usedFn");
+		expect(names).toContain("trulyDead");
+		expect(block.totals.dead).toBe(2);
+
+		// Hotspots reflect the type edge: CreateOrderDto has refCount 1 with
+		// the per-kind breakdown showing type: 1 (visible in TRACE/dead-code).
+		const dtoHotspot = block.hotspots.find((h) => h.name === "CreateOrderDto");
+		expect(dtoHotspot).toBeDefined();
+		expect(dtoHotspot!.refCount).toBe(1);
+		expect(dtoHotspot!.topKinds).toEqual({ type: 1 });
+	});
+
 	it("orders output dead-first with entry anchors AFTER (public-api anchor tagged)", () => {
 		const files = seedBasicRepo();
 
@@ -202,7 +248,7 @@ describe("analyzeDeadCode — candidate selection", () => {
 		const anchor = unreferenced[anchorIdx];
 		expect(anchor.entryPoint?.type).toBe("public-api");
 		expect(anchor.entryPoint?.reason).toContain("public API");
-		expect(anchor.kinds).toEqual({ call: 0, instantiation: 0, import: 0, extends: 0, implements: 0 });
+		expect(anchor.kinds).toEqual({ call: 0, instantiation: 0, import: 0, extends: 0, implements: 0, type: 0 });
 		// Untagged = truly dead.
 		expect(unreferenced[deadIdx].entryPoint).toBeUndefined();
 	});

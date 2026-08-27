@@ -9,9 +9,11 @@
  *
  * ## Definition of "used" (locked decision, TASK-319)
  * ANY reference kind counts (call / instantiation / import / extends /
- * implements) → a symbol with ZERO reference rows of all kinds is a dead-code
- * candidate. Aggregation is name-based (ADR-002), so same-name symbols share
- * their reference rows — the established traceSymbol model.
+ * implements / type — 'type' added by TASK-008 / issue #82 so a symbol used
+ * ONLY as a type annotation is NOT dead) → a symbol with ZERO reference rows
+ * of all kinds is a dead-code candidate. Aggregation is name-based (ADR-002),
+ * so same-name symbols share their reference rows — the established
+ * traceSymbol model.
  *
  * ## Candidate universe (bounded, documented)
  * Only TOP-LEVEL symbols (parent_symbol_id IS NULL — exported OR internal)
@@ -98,7 +100,7 @@ export interface HotspotSymbol {
 	kind: string;
 	file_path: string;
 	refCount: number;
-	/** Per-kind reference breakdown (call/instantiation/import/extends/implements). */
+	/** Per-kind reference breakdown (call/instantiation/import/extends/implements/type). */
 	topKinds: Record<string, number>;
 }
 
@@ -295,7 +297,7 @@ export function classifyEntryPoint(
 
 /** The spec's per-kind breakdown for an unreferenced symbol — all zeros, explicit. */
 function zeroKinds(): Record<string, number> {
-	return { call: 0, instantiation: 0, import: 0, extends: 0, implements: 0 };
+	return { call: 0, instantiation: 0, import: 0, extends: 0, implements: 0, type: 0 };
 }
 
 /**

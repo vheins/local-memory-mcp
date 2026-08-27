@@ -15,9 +15,30 @@
  * `target_file` / `target_symbol_id` (added v23) locate the referenced symbol
  * when resolvable at parse time (name-based resolution per ADR-002 — no LSP);
  * both are null for unresolved names. `kind` is the single enum-driven
- * taxonomy: 'call' | 'instantiation' | 'import' | 'extends' | 'implements'.
+ * taxonomy: 'call' | 'instantiation' | 'import' | 'extends' | 'implements' |
+ * 'type'. The 'type' kind (added v26, issue #82) represents type-only
+ * dependencies (parameter/return/property/alias/generic/union/intersection
+ * usage) — distinguished further by an optional `role` column.
  */
-export type CodebaseReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements";
+export type CodebaseReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements" | "type";
+
+/**
+ * Optional relation role for a 'type' reference edge (issue #82, migration
+ * v26). `null` (the stored value for non-type kinds and for type edges where
+ * the role was not determinable) means "no role". Roles are set by type-edge
+ * emission in the TS/TSX visitor and surfaced in TRACE output.
+ */
+export type CodebaseReferenceRole =
+	| "parameter"
+	| "return"
+	| "property"
+	| "field"
+	| "alias"
+	| "generic"
+	| "constraint"
+	| "union"
+	| "intersection"
+	| null;
 
 export interface CodebaseReference {
 	/** UUID. */
@@ -37,6 +58,8 @@ export interface CodebaseReference {
 	target_file: string | null;
 	/** codebase_symbols(id) of the referenced symbol, when resolvable (else null). */
 	target_symbol_id: string | null;
+	/** Optional relation role for 'type' edges (issue #82, v26); null otherwise. */
+	role: CodebaseReferenceRole;
 	created_at: string;
 }
 
@@ -50,6 +73,7 @@ export interface CodebaseReferenceRow {
 	kind: string;
 	target_file: string | null;
 	target_symbol_id: string | null;
+	role: CodebaseReferenceRole;
 	created_at: string;
 }
 
@@ -64,6 +88,8 @@ export interface CodebaseReferenceInsert {
 	target_file?: string | null;
 	/** codebase_symbols(id) of the referenced symbol when resolvable. */
 	target_symbol_id?: string | null;
+	/** Optional relation role for 'type' edges (issue #82, v26). */
+	role?: CodebaseReferenceRole;
 }
 
 /**
@@ -76,7 +102,7 @@ export interface CodebaseReferenceInsert {
  * stored on codebase_symbols (DB stays flat — this is a query-level compute).
  */
 export interface SymbolReferenceCounts {
-	/** Total reference rows across ALL kinds (call + instantiation + import + extends + implements). */
+	/** Total reference rows across ALL kinds (call + instantiation + import + extends + implements + type). */
 	total: number;
 	/** Per-kind row counts, keyed by CodebaseReferenceKind. */
 	countsByKind: Record<string, number>;

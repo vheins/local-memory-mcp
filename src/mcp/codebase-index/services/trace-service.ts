@@ -49,9 +49,9 @@ export interface TraceReference {
 	endCol: number;
 	context: string;
 	/**
-	 * 'call' | 'instantiation' | 'import' | 'extends' | 'implements' — present
-	 * for table-backed references (TASK-236 / #64; heritage kinds added by
-	 * Phase 1.1 / TASK-299).
+	 * 'call' | 'instantiation' | 'import' | 'extends' | 'implements' | 'type' —
+	 * present for table-backed references (TASK-236 / #64; heritage kinds added
+	 * by Phase 1.1 / TASK-299; 'type' by TASK-008 / issue #82).
 	 */
 	kind?: string;
 	/** Enclosing function/method at the call / heritage site, when determinable. */
@@ -60,6 +60,8 @@ export interface TraceReference {
 	targetFile?: string | null;
 	/** codebase_symbols(id) of the referenced symbol when resolvable (table-backed, v23). */
 	targetSymbolId?: string | null;
+	/** Relation role of a 'type' edge (v26, issue #82): parameter/return/property/… Null otherwise. */
+	role?: string | null;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────

@@ -357,7 +357,8 @@ export async function runParsePipeline(
 						caller_name: ref.callerName,
 						kind: ref.kind,
 						target_file: ref.targetFile ?? null,
-						target_symbol_id: ref.targetSymbolId ?? null
+						target_symbol_id: ref.targetSymbolId ?? null,
+						role: ref.role ?? null
 					});
 				}
 

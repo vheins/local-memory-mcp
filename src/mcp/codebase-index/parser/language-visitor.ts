@@ -7,8 +7,27 @@
 
 import type { Tree } from "web-tree-sitter";
 
-/** Coarse taxonomy of a reference edge (call-site or heritage). */
-export type ReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements";
+/**
+ * Coarse taxonomy of a reference edge (call-site, heritage, or type-only).
+ * 'call' | 'instantiation' | 'import' are runtime/structural edges (TASK-236);
+ * 'extends' | 'implements' are heritage edges (Phase 1.1, TASK-301); 'type'
+ * (issue #82, v26) is a type-only dependency edge (parameter/return/property/
+ * alias/generic/union/intersection usage) distinguished by an optional `role`.
+ */
+export type ReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements" | "type";
+
+/** Relation role of a 'type' reference edge (issue #82). Null = no role. */
+export type ReferenceRole =
+	| "parameter"
+	| "return"
+	| "property"
+	| "field"
+	| "alias"
+	| "generic"
+	| "constraint"
+	| "union"
+	| "intersection"
+	| null;
 
 /**
  * A single reference edge emitted by a language visitor — two families:
@@ -39,6 +58,8 @@ export interface ParsedReference {
 	targetFile?: string | null;
 	/** codebase_symbols(id) of the referenced symbol when resolvable. */
 	targetSymbolId?: string | null;
+	/** Relation role for 'type' edges (issue #82, v26) — null/absent otherwise. */
+	role?: ReferenceRole;
 }
 
 /** Classification of a parsed symbol. */

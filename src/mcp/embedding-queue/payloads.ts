@@ -101,7 +101,11 @@ function codebaseRefDigest(refs: CodebaseReferenceInsert[]): string {
 		c: r.caller_name ?? null,
 		n: r.symbol_name,
 		k: r.kind,
-		t: r.target_file ?? null
+		t: r.target_file ?? null,
+		// role (v26, issue #82) is part of the edge identity like kind — a
+		// pure type-role change (e.g. parameter → return) must invalidate the
+		// KG content hash the same way a kind change does.
+		r: r.role ?? null
 	}));
 	return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
