@@ -97,6 +97,7 @@
 		"tree-sitter-swift": "^0.7.1",
 		"tree-sitter-typescript": "^0.23.2",
 		"tree-sitter-vue": "^0.2.1",
+		"typescript": "^5.7.3",
 		"web-tree-sitter": "^0.26.11",
 		"zod": "^4.3.5"
 	},
@@ -127,7 +128,6 @@
 		"svelte-eslint-parser": "^1.6.0",
 		"tsup": "^8.5.1",
 		"tsx": "^4.21.0",
-		"typescript": "^5.7.3",
 		"typescript-eslint": "^8.58.1",
 		"vite": "^8.0.6",
 		"vitest": "^4.1.7"

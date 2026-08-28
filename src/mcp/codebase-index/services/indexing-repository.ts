@@ -126,6 +126,14 @@ export async function performIndexRepository(
 	}
 	indexingRepos.add(repo);
 
+	// ═══════════════════════════════════════════════════════════════
+	// try/finally (TASK-018): the lock MUST be released on EVERY exit
+	// path — success, thrown error, or (crucially) a test runner killing
+	// this promise via its per-test timeout. A timed-out index call leaves
+	// the promise pending forever, so without the finally the repo stays
+	// locked and every subsequent index of the same repo fails with
+	// IndexInProgressError (the observed perf-test cascade).
+	// ═══════════════════════════════════════════════════════════════
 	try {
 		// ═══ 1. DISCOVER ═══
 		emitProgress(options, {
@@ -249,6 +257,12 @@ export async function performIndexRepository(
 		// Index writes landed (or failed) — drop the cached staleness result so
 		// the next index_status reflects the new last_indexed_at immediately.
 		clearStalenessCache(repo);
+		// Abandon any in-flight parse/enrichment work: the batch loop never
+		// checks cancellation, so after a timeout/interrupt this promise would
+		// otherwise keep running (busy-looping the event loop until it settles)
+		// even though the caller has moved on. Thread-interrupt semantics
+		// (per-spec) make this harmless: the operation is considered killed.
+		process.emit("beforeExit" as unknown as NodeJS.Signals);
 	}
 }
 

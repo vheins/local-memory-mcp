@@ -337,8 +337,15 @@ export const FILE_CONTENT_MAX_LINES = envInt("FILE_CONTENT_MAX_LINES", 2000);
 // already-structurally-indexed files to infer return/param/property types. It
 // is ALWAYS isolated behind try/catch + a timeout (never fails structural
 // indexing) and degrades gracefully when no tsconfig / TS deps are available.
-/** Master gate for the semantic enrichment pass. "false" disables it entirely. */
-export const CODEBASE_SEMANTIC_ENRICH = envBool("CODEBASE_SEMANTIC_ENRICH", true);
+/**
+ * Master gate for the semantic enrichment pass. "false" disables it entirely.
+ * DEFAULT IS OFF (TASK-018): the feature is documented as opt-in (CHANGELOG
+ * 0.43.0, migration v28), and the per-file TS program+typecheck pass costs
+ * ~0.3-1s/file — on by default it makes a 1000-file first index run several
+ * minutes and blows the index perf budget. Operators opt in explicitly via
+ * `CODEBASE_SEMANTIC_ENRICH=true`.
+ */
+export const CODEBASE_SEMANTIC_ENRICH = envBool("CODEBASE_SEMANTIC_ENRICH", false);
 /** Per-file wall-clock ceiling for the enrichment pass (issue #89). */
 export const CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS = envInt("CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS", 3_000);
 /**
