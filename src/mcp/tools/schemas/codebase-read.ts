@@ -20,6 +20,25 @@ export const CodebaseReadSchema = z.object({
 	/** Relative file path to get symbols for. Presence triggers FILE mode. */
 	filePath: z.string().optional(),
 	/**
+	 * FILE mode: 1-based inclusive START line of a range (issue #88 / TASK-014).
+	 * When provided (with `endLine`), FILE mode returns only the symbols
+	 * overlapping/enclosing the range as the primary context, plus the
+	 * references those enclosing symbols emit and (optionally) their
+	 * related-type graph (`includeRelatedTypes`) and a token-bounded enrichment
+	 * (`contextBudget`). Omit BOTH `startLine`/`endLine` for the unchanged
+	 * full-file behavior. Requires `endLine` too — a lone value is a
+	 * `RANGE_INCOMPLETE` validation error.
+	 */
+	startLine: z.coerce.number().int().min(1).optional(),
+	/**
+	 * FILE mode: 1-based inclusive END line of the range (issue #88 /
+	 * TASK-014). Requires `startLine` too. Clear `RANGE_*` validation errors
+	 * are returned when a value is missing, non-positive, below `startLine`
+	 * (`RANGE_OUT_OF_ORDER`), or beyond the indexed file's line count
+	 * (`RANGE_OUT_OF_BOUNDS`).
+	 */
+	endLine: z.coerce.number().int().min(1).optional(),
+	/**
 	 * Search query — code-like term or natural language. Presence triggers
 	 * SEARCH mode (symbol names / signatures).
 	 *
