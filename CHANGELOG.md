@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.1] — 2026-08-28
+
+Patch release fixing a broken v0.43.0 published package and an enrichment performance regression.
+
+### Fixed
+
+- **Published package crashed on load (P0, TASK-020)** — `npx @vheins/local-memory-mcp@latest dashboard` / the MCP server threw `Dynamic require of "fs" is not supported` because the #89/#90 TypeScript semantic enricher pulled `typescript` into the tsup ESM bundle, whose `require` shim cannot load Node builtins. Fixed by adding an ESM banner (`createRequire` + `__filename`/`__dirname`) to `tsup.config.ts` and moving `typescript` from `devDependencies` to `dependencies` so it is externalized at build time (dist 32 MB → 23 MB, no longer bundled). **Do NOT use v0.43.0** — upgrade to v0.43.1.
+- **Semantic enrichment on by default (TASK-018)** — `CODEBASE_SEMANTIC_ENRICH` now defaults to `false` (opt-in, matching the documented design). This restores default indexing performance and removes a stale `indexingRepos` lock cascade that failed subsequent index calls on timeout. Operators enable it with `CODEBASE_SEMANTIC_ENRICH=true`.
+
 ## [0.43.0] — 2026-08-28
 
 Codebase Index Semantic Intelligence release — `codebase-read` TRACE/FILE modes now
