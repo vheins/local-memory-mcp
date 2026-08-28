@@ -230,7 +230,9 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 								? `L${s.start_line}-L${s.end_line}`
 								: `L${s.start_line}`
 							: "-";
-					return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}${docSuffix(s.doc_comment)}`;
+					const semanticNote =
+						validated.includeSemantic && s.semantic_signature ? ` (semantic: ${s.semantic_signature})` : "";
+					return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}${docSuffix(s.doc_comment)}${semanticNote}`;
 				})
 				.join("\n");
 		if (symbols.length > 30) {
@@ -352,7 +354,9 @@ async function handleFileRangeMode(
 									? `L${s.start_line}-L${s.end_line}`
 									: `L${s.start_line}`
 								: "-";
-						return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}${docSuffix(s.doc_comment)}`;
+						const semanticNote =
+							validated.includeSemantic && s.semantic_signature ? ` (semantic: ${s.semantic_signature})` : "";
+						return `- \`${s.kind}\` ${s.name} ${lineRange}${s.exported ? " [exported]" : ""}${docSuffix(s.doc_comment)}${semanticNote}`;
 					})
 					.join("\n")
 			: `\n\n**Primary Symbols (range L${range.startLine}-L${range.endLine})**\n(none overlap the given range)`;

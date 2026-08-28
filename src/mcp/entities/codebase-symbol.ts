@@ -21,11 +21,13 @@ export class CodebaseSymbolEntity extends BaseEntity {
 				INSERT INTO codebase_symbols (
 					id, repo, file_path, name, kind, exported, default_export,
 					start_line, start_col, end_line, end_col, signature, doc_comment,
-					parent_symbol_id, created_at, updated_at
+					parent_symbol_id, semantic_signature, semantic_source, semantic_updated_at,
+					created_at, updated_at
 				) VALUES (
 					?, ?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?,
-					?, ?, ?
+					?, ?, ?, ?,
+					?, ?
 				)
 			`);
 
@@ -49,6 +51,9 @@ export class CodebaseSymbolEntity extends BaseEntity {
 					sym.signature ?? null,
 					sym.doc_comment ?? null,
 					sym.parent_symbol_id ?? null,
+					sym.semantic_signature ?? null,
+					sym.semantic_source ?? null,
+					sym.semantic_updated_at ?? null,
 					now,
 					now
 				);
@@ -56,6 +61,28 @@ export class CodebaseSymbolEntity extends BaseEntity {
 			}
 			return count;
 		});
+	}
+
+	/**
+	 * Persist an incremental semantic-signature enrichment for a single symbol
+	 * (issue #89, TASK-015). Used by the bounded two-phase enrichment pass AFTER
+	 * structural indexing so the optional TS-compiler inference never blocks or
+	 * overwrites the structural `signature`. Idempotent — safe to re-run on
+	 * incremental re-index; only writes the inferred fields.
+	 */
+	updateSymbolSemantic(
+		id: string,
+		semanticSignature: string,
+		semanticSource: string,
+		semanticUpdatedAt: string = new Date().toISOString()
+	): void {
+		this.db
+			.prepare(
+				`UPDATE codebase_symbols
+				 SET semantic_signature = ?, semantic_source = ?, semantic_updated_at = ?, updated_at = ?
+				 WHERE id = ?`
+			)
+			.run(semanticSignature, semanticSource, semanticUpdatedAt, semanticUpdatedAt, id);
 	}
 
 	getSymbolsByFile(repo: string, filePath: string): CodebaseSymbol[] {

@@ -34,6 +34,8 @@ import {
 	buildReexportResolverContext,
 	reexportSpecFromParsedReference
 } from "../parser/reexport-resolution";
+import { enrichFileSemanticWithTimeout, symbolKey } from "../semantic/typescript-enricher";
+import { CODEBASE_SEMANTIC_ENRICH, CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS } from "../../utils/constants";
 
 /** Build a canonical {@link CodebaseReferenceInsert} from a visitor reference. */
 function referenceInsert(ref: ParsedReference, filePath: string, repo: string): CodebaseReferenceInsert {
@@ -87,6 +89,8 @@ export interface ParsePipelineResult {
 	timeoutErrors: number;
 	permissionErrors: number;
 	dbWriteErrors: number;
+	/** Count of symbols that received a semantic signature from the optional TS enrichment pass (issue #89). */
+	semanticEnriched: number;
 	errors: IndexFileError[];
 }
 
@@ -160,6 +164,7 @@ export async function runParsePipeline(
 	let timeoutErrors = 0;
 	let permissionErrors = 0;
 	let dbWriteErrors = 0;
+	let semanticEnriched = 0;
 
 	emitProgress(options, {
 		stage: "parsing",
@@ -299,15 +304,15 @@ export async function runParsePipeline(
 				parseCandidates.map(async ({ plan, checksum, lineCount, content }) => {
 					try {
 						const parseResult = await parserPool.parseFile(plan.filePath, content);
-						return { plan, checksum, lineCount, parseResult, error: null as string | null };
+						return { plan, checksum, lineCount, content, parseResult, error: null as string | null };
 					} catch (err) {
 						const message = err instanceof Error ? err.message : String(err);
-						return { plan, checksum, lineCount, parseResult: null as ParseResult | null, error: message };
+						return { plan, checksum, lineCount, content, parseResult: null as ParseResult | null, error: message };
 					}
 				})
 			);
 
-			for (const { plan, checksum, lineCount, parseResult, error } of parseResults) {
+			for (const { plan, checksum, lineCount, content, parseResult, error } of parseResults) {
 				if (error) {
 					failedFiles++;
 					processedSoFar++;
@@ -368,7 +373,34 @@ export async function runParsePipeline(
 				// the entity honors the pre-assigned id. The whole parent map is
 				// recomputed per parse and replaced atomically per file by the
 				// indexing writer (delete-by-file + bulk-insert in one txn).
-				for (const sym of resolveFileParents(parseResult.symbols)) {
+				const parsedSymbols = resolveFileParents(parseResult.symbols);
+
+				// ── Optional two-phase semantic enrichment (issue #89, TASK-015) ──
+				// Tree-sitter structural indexing above is the PRIMARY indexer and
+				// is ALWAYS applied. This bounded, isolated pass infers type
+				// signatures via the TS compiler API for TS-family files and
+				// attaches them to a SEPARATE set of columns so the structural
+				// `signature` is never overwritten. It is fully guarded: master
+				// flag off ⇒ skip; timeout ⇒ skip; any failure ⇒ degraded (no-op).
+				// Structural indexing proceeds regardless of this pass's outcome.
+				const semanticMap =
+					CODEBASE_SEMANTIC_ENRICH && parsedSymbols.length > 0 && isTypeScriptFamily(plan.filePath)
+						? await safeEnrichSemantic(plan.filePath, content, parsedSymbols)
+						: null;
+
+				for (const sym of parsedSymbols) {
+					let semanticSignature: string | null = null;
+					let semanticSource: string | null = null;
+					let semanticUpdatedAt: string | null = null;
+					if (semanticMap && semanticMap.size > 0) {
+						const hit = semanticMap.get(symbolKey(sym.name, sym.startLine));
+						if (hit) {
+							semanticSignature = hit.semanticSignature;
+							semanticSource = hit.semanticSource;
+							semanticUpdatedAt = new Date().toISOString();
+							semanticEnriched++;
+						}
+					}
 					symbolInserts.push({
 						id: sym.id,
 						repo,
@@ -383,7 +415,10 @@ export async function runParsePipeline(
 						end_col: sym.endCol,
 						signature: sym.signature,
 						doc_comment: sym.docComment,
-						parent_symbol_id: sym.resolvedParentSymbolId
+						parent_symbol_id: sym.resolvedParentSymbolId,
+						semantic_signature: semanticSignature,
+						semantic_source: semanticSource,
+						semantic_updated_at: semanticUpdatedAt
 					});
 					totalSymbols++;
 				}
@@ -472,8 +507,43 @@ export async function runParsePipeline(
 		timeoutErrors,
 		permissionErrors,
 		dbWriteErrors,
+		semanticEnriched,
 		errors
 	};
+}
+
+/** True for file extensions the TS compiler can structurally check (issue #89). */
+function isTypeScriptFamily(filePath: string): boolean {
+	return /\.(m?tsx?|jsx?)$/i.test(filePath);
+}
+
+/**
+ * Run the optional semantic enrichment pass in a crash/timeout-isolated way
+ * (issue #89). Returns a `name#startLine` → enrichment map, or null on gate
+ * skip. NEVER throws — every failure path degrades to an empty/null result so
+ * structural indexing is never affected.
+ */
+async function safeEnrichSemantic(
+	filePath: string,
+	content: string,
+	symbols: { name: string; startLine: number; kind: string }[]
+): Promise<Map<string, { semanticSignature: string; semanticSource: string }> | null> {
+	try {
+		const result = await enrichFileSemanticWithTimeout(
+			filePath,
+			content,
+			symbols as Parameters<typeof enrichFileSemanticWithTimeout>[2],
+			CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS
+		);
+		if (result.degraded) return null;
+		return result.bySymbolKey;
+	} catch (err) {
+		logger.debug("[ParsePipeline] semantic enrichment degraded (structural indexing unaffected)", {
+			filePath,
+			error: err instanceof Error ? err.message : String(err)
+		});
+		return null;
+	}
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────

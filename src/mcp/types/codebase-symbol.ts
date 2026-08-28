@@ -19,6 +19,21 @@ export interface CodebaseSymbol {
 	signature: string | null;
 	doc_comment: string | null;
 	parent_symbol_id: string | null;
+	/**
+	 * Semantic signature (issue #89, TASK-015): type-inferred signature
+	 * produced by the OPTIONAL TypeScript compiler enrichment pass. Always
+	 * preserves the original structural `signature`; this field is only ever
+	 * populated when the enricher ran successfully and NEVER overwrites an
+	 * explicit source signature. Null/undefined when enrichment was skipped.
+	 */
+	semantic_signature?: string | null;
+	/**
+	 * Provenance of `semantic_signature` (issue #89): e.g. "typescript-compiler"
+	 * or "adapter". Null/undefined when no semantic signature is present.
+	 */
+	semantic_source?: string | null;
+	/** ISO timestamp of the last successful semantic-enrichment pass (issue #89). */
+	semantic_updated_at?: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -38,6 +53,9 @@ export interface CodebaseSymbolRow {
 	signature: string | null;
 	doc_comment: string | null;
 	parent_symbol_id: string | null;
+	semantic_signature: string | null;
+	semantic_source: string | null;
+	semantic_updated_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -62,6 +80,16 @@ export interface CodebaseSymbolInsert {
 	signature?: string | null;
 	doc_comment?: string | null;
 	parent_symbol_id?: string | null;
+	/**
+	 * Semantic signature (issue #89, TASK-015): type-inferred signature from
+	 * the optional TS compiler enrichment pass. Populated only when enrichment
+	 * ran and succeeded; never overwrites an explicit source `signature`.
+	 */
+	semantic_signature?: string | null;
+	/** Provenance of `semantic_signature` (e.g. "typescript-compiler"). */
+	semantic_source?: string | null;
+	/** ISO timestamp of the last semantic-enrichment pass. */
+	semantic_updated_at?: string | null;
 }
 
 export interface SymbolSearchQuery {

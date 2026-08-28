@@ -159,7 +159,15 @@ export const CodebaseReadSchema = z.object({
 
 	// ── Output ─────────────────────────────────────────────────────────────
 	/** Return raw JSON without Markdown wrapping. */
-	json: z.boolean().default(false)
+	json: z.boolean().default(false),
+	/**
+	 * Opt-in exposure of the optional semantic signatures (issue #89, TASK-015)
+	 * when present. When true, TRACE / FILE / SEARCH responses surface each
+	 * symbol's `semanticSignature` / `semanticSource` / `semanticUpdatedAt` and
+	 * (for TRACE) a dedicated `### Semantic` section. Off by default — existing
+	 * clients are unaffected; the structural `signature` is always authoritative.
+	 */
+	includeSemantic: z.coerce.boolean().default(false)
 });
 
 export type CodebaseReadInput = z.infer<typeof CodebaseReadSchema>;

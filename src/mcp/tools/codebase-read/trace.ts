@@ -237,7 +237,19 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 
 			const apiPart = apiSurface ? `\n\n### API Surface\n\n\`\`\`\n${formatApiSurface(apiSurface)}\n\`\`\`` : "";
 
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${apiPart}${refList}${hierarchy}${relatedList}${packList}`;
+			// Opt-in semantic signature (issue #89, TASK-015): when includeSemantic
+			// is set and the traced symbol carries an inferred signature, surface it
+			// in a dedicated section. Purely additive — the legacy TRACE text body
+			// is untouched when the flag is omitted. The JSON envelope already
+			// carries `result.symbol.semantic_signature` et al.
+			const semanticPart =
+				validated.includeSemantic && result.symbol.semantic_signature
+					? `\n\n### Semantic\n\n\`\`\`\n${result.symbol.semantic_signature}\n\`\`\`${
+							result.symbol.semantic_source ? ` (source: ${result.symbol.semantic_source})` : ""
+						}`
+					: "";
+
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${apiPart}${refList}${hierarchy}${relatedList}${packList}${semanticPart}`;
 
 			return createMcpResponse(
 				{
@@ -247,7 +259,15 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 					relatedTypes: relatedTypes ? relatedTypes.edges : undefined,
 					relatedTypesSkippedUnresolved: relatedTypes?.skippedUnresolved,
 					contextPack: contextPack ?? undefined,
-					apiSurface: apiSurface ?? undefined
+					apiSurface: apiSurface ?? undefined,
+					semantic:
+						validated.includeSemantic && result.symbol.semantic_signature
+							? {
+									signature: result.symbol.semantic_signature,
+									source: result.symbol.semantic_source ?? null,
+									updatedAt: result.symbol.semantic_updated_at ?? null
+								}
+							: undefined
 				},
 				`Symbol "${traceName}": defined in ${result.definition.file}:${result.definition.line}, ` +
 					`${result.references.length} references, ` +

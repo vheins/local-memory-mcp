@@ -28,8 +28,9 @@ import { migration as v24 } from "./v24-relations-confidence";
 import { migration as v25 } from "./v25-coding-standards-created-at-indexes";
 import { migration as v26 } from "./v26-codebase-references-role";
 import { migration as v27 } from "./v27-codebase-references-import-metadata";
+import { migration as v28 } from "./v28-codebase-symbols-semantic";
 
-export const SCHEMA_VERSION = 27;
+export const SCHEMA_VERSION = 28;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -72,7 +73,8 @@ const MIGRATIONS: Migration[] = [
 	v24,
 	v25,
 	v26,
-	v27
+	v27,
+	v28
 ];
 
 // ──────────────────────────────────────────────

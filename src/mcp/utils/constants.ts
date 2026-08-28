@@ -31,6 +31,13 @@ function envInt(name: string, fallback: number): number {
 	return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/** Parse a boolean env var: "true"/"1"/"yes" (case-insensitive) ⇒ true. */
+function envBool(name: string, fallback: boolean): boolean {
+	const raw = process.env[name];
+	if (raw === undefined || raw === "") return fallback;
+	return /^(true|1|yes)$/i.test(raw.trim());
+}
+
 // ── Table names (single source of truth for SQL) ────────────────────────
 // Canonical SQLite table names. Use these in ALL SQL strings (entities,
 // migrations, services, tools) — never inline the literal. Virtual/aux
@@ -324,3 +331,13 @@ export const CODE_GRAPH_MAX_NODES = 240;
 // this many lines; `truncated` flags when the file was longer. Env-overridable
 // so the truncation test can use a tiny cap.
 export const FILE_CONTENT_MAX_LINES = envInt("FILE_CONTENT_MAX_LINES", 2000);
+
+// ── TS semantic-signature enrichment (issue #89, TASK-015) ─────────────────
+// The optional two-phase enrichment pass runs the TypeScript compiler API over
+// already-structurally-indexed files to infer return/param/property types. It
+// is ALWAYS isolated behind try/catch + a timeout (never fails structural
+// indexing) and degrades gracefully when no tsconfig / TS deps are available.
+/** Master gate for the semantic enrichment pass. "false" disables it entirely. */
+export const CODEBASE_SEMANTIC_ENRICH = envBool("CODEBASE_SEMANTIC_ENRICH", true);
+/** Per-file wall-clock ceiling for the enrichment pass (issue #89). */
+export const CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS = envInt("CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS", 3_000);

@@ -218,6 +218,9 @@ export abstract class BaseEntity {
 			signature: row.signature,
 			doc_comment: row.doc_comment,
 			parent_symbol_id: row.parent_symbol_id,
+			semantic_signature: row.semantic_signature ?? null,
+			semantic_source: row.semantic_source ?? null,
+			semantic_updated_at: row.semantic_updated_at ?? null,
 			created_at: row.created_at,
 			updated_at: row.updated_at
 		};
