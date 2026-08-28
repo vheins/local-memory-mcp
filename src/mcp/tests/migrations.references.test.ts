@@ -33,7 +33,10 @@ describe("migration v21 codebase references", () => {
 		expect(applied.map((r) => r.version)).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1));
 
 		// Table exists with the required columns: the v21 set plus the v23
-		// edge-target columns (target_file, target_symbol_id).
+		// edge-target columns (target_file, target_symbol_id), the v26 `role`
+		// column (type-reference edges, issue #82) and the v27 import-metadata
+		// columns (local_name, imported_name, module_specifier, import_kind,
+		// issue #83).
 		const cols = db.prepare("PRAGMA table_info(codebase_references)").all() as { name: string; type: string }[];
 		const colNames = cols.map((c) => c.name).sort();
 		expect(colNames).toEqual([
@@ -42,8 +45,13 @@ describe("migration v21 codebase references", () => {
 			"caller_name",
 			"created_at",
 			"id",
+			"import_kind",
+			"imported_name",
 			"kind",
+			"local_name",
+			"module_specifier",
 			"repo",
+			"role",
 			"symbol_name",
 			"target_file",
 			"target_symbol_id"

@@ -24,6 +24,7 @@ import {
 	IMPORT_SPECIFIER,
 	INTERSECTION_TYPE,
 	MEMBER_EXPRESSION,
+	NAMED_EXPORTS,
 	NAMED_IMPORTS,
 	NAMESPACE_IMPORT,
 	NESTED_TYPE_IDENTIFIER,
@@ -220,7 +221,10 @@ export function emitReexports(node: TSNode, callerName: string | null, refs: Par
 	if (!moduleSpecifier) return;
 
 	// `export * from './types'` — wildcard re-export: NO export_clause node.
-	const clause = node.childForFieldName("export_clause");
+	// For named re-exports the export_clause is an UNNAMED child of
+	// export_statement (the grammar exposes only `source` as a field), so fall
+	// back to scanning named children.
+	const clause = node.childForFieldName("export_clause") ?? node.namedChildren.find((c) => c.type === NAMED_EXPORTS);
 	if (!clause) {
 		refs.push({
 			symbolName: moduleSpecifier,
@@ -506,9 +510,34 @@ export function emitTypeRefs(
 		return;
 	}
 
-	// Structural / anonymous types (object_type, tuple_type, function_type,
-	// conditional_type, template_literal_type, lookup_type, ...): not nameable
-	// themselves — walk named children so nested named types are still found.
+	// Function types (e.g. `(cb: (a: Input) => Output)`): the parameters and
+	// the return type are DISTINCT call sites — parameters get the 'parameter'
+	// role, the return type gets 'return' (a nested function type must not
+	// inherit the outer role, e.g. `Output` inside `Promise<...>` stays
+	// 'return' even when the enclosing usage is a parameter). The `return_type`
+	// field of `function_type` is a DIRECT type node (not a type_annotation),
+	// and `parameters` is a `formal_parameters` node.
+	if (node.type === "function_type" || node.type === "constructor_type") {
+		const params = node.childForFieldName("parameters");
+		if (params && params.type === FORMAL_PARAMETERS) {
+			for (const p of params.namedChildren) {
+				const ann = p.childForFieldName("type");
+				if (!ann || ann.type !== TYPE_ANNOTATION) continue;
+				for (const t of ann.namedChildren) {
+					emitTypeRefs(t, line, callerName, "parameter", refs);
+				}
+			}
+		}
+		const ret = node.childForFieldName("return_type");
+		if (ret) {
+			emitTypeRefs(ret, line, callerName, "return", refs);
+		}
+		return;
+	}
+
+	// Structural / anonymous types (object_type, tuple_type, conditional_type,
+	// template_literal_type, lookup_type, ...): not nameable themselves — walk
+	// named children so nested named types are still found.
 	for (const child of node.namedChildren) {
 		emitTypeRefs(child, line, callerName, role, refs);
 	}
@@ -543,21 +572,25 @@ export function emitTypeRefs(
  * Type-annotation-less declarations emit nothing (existing behavior unchanged).
  */
 export function emitTypeReferences(node: TSNode, declaredName: string | null, refs: ParsedReference[]): void {
-	const line = node.startPosition.row + 1;
+	// Site lines are computed per-construct below (param/return/constraint/
+	// alias/property), so the declaration's own start line is not used here.
 
 	// ── Generic type parameters (constraints + defaults) — all declarations ──
 	const ownTypeParams = node.namedChildren.find((c) => c.type === TYPE_PARAMETERS);
 	if (ownTypeParams) {
 		for (const param of ownTypeParams.namedChildren) {
 			if (param.type !== TYPE_PARAMETER) continue;
+			// The constraint/default site is the `type_parameter` itself (its
+			// own line), not the declaration's start line.
+			const siteLine = param.startPosition.row + 1;
 			for (const child of param.namedChildren) {
 				if (child.type === CONSTRAINT) {
 					for (const target of child.namedChildren) {
-						emitTypeRefs(target, line, declaredName, "constraint", refs);
+						emitTypeRefs(target, siteLine, declaredName, "constraint", refs);
 					}
 				} else if (child.type === "default_type") {
 					for (const target of child.namedChildren) {
-						emitTypeRefs(target, line, declaredName, "generic", refs);
+						emitTypeRefs(target, siteLine, declaredName, "generic", refs);
 					}
 				}
 			}
@@ -571,15 +604,19 @@ export function emitTypeReferences(node: TSNode, declaredName: string | null, re
 			if (p.type !== REQUIRED_PARAMETER && p.type !== OPTIONAL_PARAMETER) continue;
 			const ann = p.childForFieldName("type");
 			if (!ann || ann.type !== TYPE_ANNOTATION) continue;
+			// Caller site = the parameter's type annotation line.
+			const siteLine = ann.startPosition.row + 1;
 			for (const t of ann.namedChildren) {
-				emitTypeRefs(t, line, declaredName, "parameter", refs);
+				emitTypeRefs(t, siteLine, declaredName, "parameter", refs);
 			}
 		}
 	}
 	const returnType = node.childForFieldName("return_type");
 	if (returnType && returnType.type === TYPE_ANNOTATION) {
+		// Caller site = the return type annotation line.
+		const siteLine = returnType.startPosition.row + 1;
 		for (const t of returnType.namedChildren) {
-			emitTypeRefs(t, line, declaredName, "return", refs);
+			emitTypeRefs(t, siteLine, declaredName, "return", refs);
 		}
 	}
 
@@ -587,9 +624,12 @@ export function emitTypeReferences(node: TSNode, declaredName: string | null, re
 	if (node.type === TYPE_ALIAS_DECLARATION) {
 		const value = node.childForFieldName("value");
 		if (value) {
-			for (const t of value.namedChildren) {
-				emitTypeRefs(t, line, null, "alias", refs);
-			}
+			// The alias VALUE is a single type node (possibly union/intersection
+			// — whose member roles are preserved by emitTypeRefs). Emitting it
+			// once, rather than iterating its named children with role 'alias',
+			// keeps union/intersection member roles intact.
+			const siteLine = value.startPosition.row + 1;
+			emitTypeRefs(value, siteLine, null, "alias", refs);
 		}
 	}
 	if (
@@ -599,8 +639,10 @@ export function emitTypeReferences(node: TSNode, declaredName: string | null, re
 	) {
 		const ann = node.childForFieldName("type");
 		if (ann && ann.type === TYPE_ANNOTATION) {
+			// Caller site = the property's type annotation line.
+			const siteLine = ann.startPosition.row + 1;
 			for (const t of ann.namedChildren) {
-				emitTypeRefs(t, line, declaredName, "property", refs);
+				emitTypeRefs(t, siteLine, declaredName, "property", refs);
 			}
 		}
 	}

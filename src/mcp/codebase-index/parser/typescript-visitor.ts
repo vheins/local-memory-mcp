@@ -191,8 +191,11 @@ export class TypeScriptVisitor implements LanguageVisitor {
 				// Type edges (TASK-008 / issue #82): the declaration's own
 				// generic constraints + (for interfaces) property/method type
 				// surfaces. Class fields/methods are reached when the walker
-				// descends into the body below.
-				emitTypeReferences(node, this.declaredName(node), refs);
+				// descends into the body below. callerName is null at the
+				// declaration level — only functions/methods carry their name
+				// (constraint edges on classes/interfaces are attributed to the
+				// declaration, i.e. no caller).
+				emitTypeReferences(node, null, refs);
 				for (const child of node.namedChildren) {
 					this.walkReferences(child, callerName, refs);
 				}

@@ -181,6 +181,11 @@ function inferSemanticForNode(
 				return checker.signatureToString(sig);
 			}
 			case SymbolKind.Variable: {
+				// An explicit type annotation wins over resolution: `const x: ID`
+				// surfaces `ID` (the declared alias), not the resolved `string`.
+				if (ts.isVariableDeclaration(node) && node.type) {
+					return node.type.getText(sourceFile);
+				}
 				const t = checker.getTypeAtLocation(node);
 				return checker.typeToString(t);
 			}

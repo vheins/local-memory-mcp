@@ -197,7 +197,11 @@ describe("analyzeDeadCode — candidate selection", () => {
 		for (const f of files) store.codebaseFiles.upsertFile(f);
 
 		store.codebaseSymbols.bulkUpsertSymbols([
-			makeSymbol("usedFn", "src/app.ts", true, null),
+			// NOT exported: an exported symbol with zero references is a
+			// public-api anchor (entry point), not a dead-code candidate. This
+			// test exercises the type-edge counting, so usedFn must be an
+			// internal symbol to be evaluated.
+			makeSymbol("usedFn", "src/app.ts", false, null),
 			makeSymbol("CreateOrderDto", "src/dto.ts", true, null),
 			makeSymbol("trulyDead", "src/app.ts", false, null)
 		]);

@@ -33,7 +33,6 @@ import type {
 	SemanticSymbolEnrichment
 } from "./adapter";
 import { symbolKey } from "./typescript-enricher";
-import { CODEBASE_SEMANTIC_PHPSTAN_ENABLED } from "../../utils/constants";
 
 /** Provenance tag persisted to `semantic_source` for PHP enrichment. */
 export const SEMANTIC_SOURCE_PHPSTAN = "phpstan";
@@ -81,7 +80,11 @@ export class PhpStanSemanticAdapter implements SemanticAdapter {
 	}
 
 	async enrich(input: SemanticEnrichmentInput): Promise<SemanticEnrichmentResult> {
-		if (!CODEBASE_SEMANTIC_PHPSTAN_ENABLED) {
+		// Read the env var at CALL time (not module load): the module-level
+		// constant is frozen when the adapter module is first imported, which
+		// breaks tests that toggle the flag mid-run. "true"/"1" → enabled.
+		const enabled = ["true", "1"].includes((process.env.CODEBASE_SEMANTIC_PHPSTAN_ENABLED ?? "").toLowerCase());
+		if (!enabled) {
 			// Graceful "not configured" — pipeline skips persistence, indexing continues.
 			return {
 				bySymbolKey: new Map(),

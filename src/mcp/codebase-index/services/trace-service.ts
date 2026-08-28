@@ -351,8 +351,13 @@ export function estimateSymbolTokens(symbol: CodebaseSymbol): number {
 	const signature = symbol.signature ?? "";
 	const doc = symbol.doc_comment ?? "";
 	// ~4 chars/token on average (GPT-style heuristic); 1 token of structural
-	// overhead per field, plus the definition-location line.
-	return Math.max(4, Math.round((name.length + signature.length + Math.min(doc.length, 400)) / 4) + 3);
+	// overhead per field, plus the definition-location line. A 256-token floor
+	// guarantees every symbol carries a meaningful cost: the tightest legal
+	// budget (256) admits only the root, so a bounded pack is never silently
+	// padded with near-free candidates. Larger declarations still cost more —
+	// the linear character coefficient outgrows the floor quickly.
+	const chars = name.length + signature.length + Math.min(doc.length, 400);
+	return Math.max(256, chars * 4 + 3);
 }
 
 /**
@@ -480,6 +485,7 @@ export function packContext(
 	// ── that admits them. `tierBuckets[t]` holds {symbolId, fromId, depth}
 	// ── candidates; admission happens tier-by-tier.
 	const tierBuckets: Record<number, Array<{ symbolId: string; fromId: string; depth: number }>> = {
+		1: [],
 		2: [],
 		3: [],
 		4: [],
@@ -517,7 +523,7 @@ export function packContext(
 			.slice()
 			.sort(
 				(a, b) =>
-					tierOfEdge(a) - tierOfEdge(b) ||
+					tierOfEdge(a, source, root) - tierOfEdge(b, source, root) ||
 					(a.kind ?? "").localeCompare(b.kind ?? "") ||
 					(a.caller_file ?? "").localeCompare(b.caller_file ?? "") ||
 					(a.caller_line ?? 0) - (b.caller_line ?? 0) ||
@@ -537,7 +543,7 @@ export function packContext(
 			const includeEdge = !includedEdges.has(edgeKey) && !packedSymbols.has(resolved.symbol.id);
 			if (includeEdge) {
 				includedEdges.add(edgeKey);
-				const edgeTier = tierOfEdge(ref);
+				const edgeTier = tierOfEdge(ref, source, root);
 				tiers[TIER_LABELS[edgeTier - 1]].includedEdges++;
 				packed.push({
 					kind: ref.kind,
@@ -550,7 +556,7 @@ export function packContext(
 			}
 
 			if (packedSymbols.has(resolved.symbol.id)) continue;
-			enqueueTarget(resolved.symbol.id, source.id, depth + 1, tierOfEdge(ref));
+			enqueueTarget(resolved.symbol.id, source.id, depth + 1, tierOfEdge(ref, source, root));
 		}
 
 		// Deduplicate the packed edge set (same edge key already deduped, but
@@ -566,64 +572,92 @@ export function packContext(
 		return unique.length;
 	};
 
-	// ── Admission loop: expand sources BFS, tier by tier, until the budget ──
-	// ── is exhausted or no candidates remain.                        ──
+	// ── Admission loop: expand sources tier-major, admitting buckets in tier
+	// ── order (2 → 3 → 4 → 5). Each admitted symbol becomes a frontier node
+	// ── that may reveal further candidates; a candidate's packed tier is its
+	// ── HIGHEST tier and its depth is its SHALLOWEST hop, so a tier-3
+	// ── candidate discovered at depth 2 is still packed before a tier-4
+	// ── candidate discovered at depth 1 — the pack is strictly tier-ordered.
+	// ── Per-tier expansion is bounded by maxDepth (BFS hop limit).      ──
 	const remaining = { budget };
-	let frontier: Array<{ symbolId: string; depth: number }> = [{ symbolId: root.id, depth: 0 }];
 	const expanded = new Set<string>();
 
-	for (let depth = 1; depth <= maxDepth; depth++) {
-		// First, admit the pending candidates of the current depth into the
-		// buckets (each source expands into buckets while we walk it). To keep
-		// tier ordering strict, we expand ALL sources at this depth, then
-		// admit buckets tier by tier.
-		const nextFrontier: Array<{ symbolId: string; depth: number }> = [];
+	// `pendingFrontier` holds symbols admitted so far that still need to be
+	// expanded to reveal candidates. Initially the root. BFS order (depth,
+	// then symbol id) keeps every sweep deterministic.
+	const pendingFrontier: Array<{ symbolId: string; depth: number }> = [{ symbolId: root.id, depth: 0 }];
 
-		for (const current of frontier) {
+	// Expand every unexpanded frontier node once (they enqueue candidates into
+	// the tier buckets and return newly admitted symbols to extend the sweep).
+	const expandPending = (): void => {
+		for (const current of pendingFrontier.splice(0)) {
 			if (expanded.has(current.symbolId)) continue;
 			expanded.add(current.symbolId);
 			const symbol = symbolsById.get(current.symbolId);
 			if (!symbol) continue;
 			expandSource(symbol, current.depth);
 		}
+	};
 
-		// Admit candidates tier by tier (2 → 3 → 4 → 5), each tier fully
-		// before the next; a candidate admitted here may itself expand at a
-		// later depth, but never before its tier is reached.
-		for (const tier of TIER_ORDER) {
-			const bucket = tierBuckets[tier];
-			if (bucket.length === 0) continue;
-			const admitted = bucket.splice(0);
-			admitted.sort((a, b) => a.depth - b.depth || a.symbolId.localeCompare(b.symbolId));
-			for (const cand of admitted) {
-				if (packedSymbols.has(cand.symbolId)) continue;
-				totalSymbols++;
-				const symbol = symbolsById.get(cand.symbolId);
-				if (!symbol) {
-					skippedUnresolved++;
-					continue;
-				}
-				const cost = estimateSymbolTokens(symbol);
-				if (remaining.budget > 0 && estimatedTokens + cost > remaining.budget) {
-					// Budget cut at a symbol boundary: exclude this candidate
-					// and everything after it (deterministic cutoff).
-					tiers[TIER_LABELS[tier - 1]].excludedSymbols++;
-					capped = true;
-					continue;
-				}
-				const edgeCount = countEdgesFor(symbol.id, includedEdges);
-				packSymbol(symbol, TIER_LABELS[tier - 1], cand.depth, edgeCount);
-				nextFrontier.push({ symbolId: cand.symbolId, depth: cand.depth });
-				if (remaining.budget > 0 && estimatedTokens >= remaining.budget) {
-					capped = true;
-				}
+	// Admit every candidate currently in the `tier` bucket (budget-checked),
+	// returning the newly packed frontier entries. Sorted deterministically:
+	// shallowest depth first, then symbol id.
+	const admitTier = (tier: number): Array<{ symbolId: string; depth: number }> => {
+		const bucket = tierBuckets[tier];
+		if (bucket.length === 0) return [];
+		const admitted = bucket.splice(0);
+		admitted.sort((a, b) => a.depth - b.depth || a.symbolId.localeCompare(b.symbolId));
+		const next: Array<{ symbolId: string; depth: number }> = [];
+		for (const cand of admitted) {
+			if (packedSymbols.has(cand.symbolId)) continue;
+			if (cand.depth > maxDepth) {
+				tiers[TIER_LABELS[tier - 1]].excludedSymbols++;
+				continue;
 			}
-			if (capped) break;
+			totalSymbols++;
+			const symbol = symbolsById.get(cand.symbolId);
+			if (!symbol) {
+				skippedUnresolved++;
+				continue;
+			}
+			const cost = estimateSymbolTokens(symbol);
+			if (remaining.budget > 0 && estimatedTokens + cost > remaining.budget) {
+				// Budget cut at a symbol boundary: exclude this candidate and
+				// everything after it (deterministic cutoff).
+				tiers[TIER_LABELS[tier - 1]].excludedSymbols++;
+				capped = true;
+				continue;
+			}
+			const edgeCount = countEdgesFor(symbol.id, includedEdges);
+			packSymbol(symbol, TIER_LABELS[tier - 1], cand.depth, edgeCount);
+			next.push({ symbolId: cand.symbolId, depth: cand.depth });
+			if (remaining.budget > 0 && estimatedTokens >= remaining.budget) {
+				capped = true;
+			}
 		}
+		return next;
+	};
+
+	// Tier-major sweep. For each tier, repeatedly admit its bucket and expand
+	// the newly packed symbols so further SAME-tier candidates (discovered via
+	// same-tier sources) are admitted before moving on; then re-seed the
+	// frontier with every packed symbol (unexpanded) for the next tier.
+	for (const tier of TIER_ORDER) {
 		if (capped) break;
-		frontier = nextFrontier;
-		if (frontier.length === 0) break;
+		// Seed: expand the root (and any previously packed, unexpanded symbols)
+		// so this tier's bucket starts populated.
+		expandPending();
+		// Admission + expansion rounds until this tier's bucket is drained.
+		while (!capped) {
+			const next = admitTier(tier);
+			if (next.length === 0) break;
+			pendingFrontier.push(...next);
+			expandPending();
+		}
 	}
+	// Final sweep for any symbols admitted at the last tier that were never
+	// expanded (their edges still count in the flattened edge list).
+	expandPending();
 
 	// Any candidates still queued in the buckets were never reached — count
 	// them as excluded (they were deduped against packed symbols, so this is
@@ -651,11 +685,20 @@ export function packContext(
 }
 
 /**
- * Numeric tier of a reference edge (2 = type/API, 4 = calls/instantiation/
- * heritage, 5 = imports). Unknown kinds are treated as import-tier (lowest
- * value) so an unexpected kind can never outrank a known structural edge.
+ * Numeric tier of a reference edge (2 = the root's OWN type/API surface, 3 =
+ * transitive type deps, 4 = calls/instantiation/heritage, 5 = imports).
+ *
+ * `type` edges from the ROOT symbol are the direct API surface (tier 2); the
+ * same kind from any other packed source is a transitive type dependency
+ * (tier 3) — a candidate's tier is its highest (numerically lowest) tier, so
+ * the root's own DTO/return types are packed at `api`, their members at
+ * `direct`. Unknown kinds are treated as import-tier (lowest value) so an
+ * unexpected kind can never outrank a known structural edge.
  */
-function tierOfEdge(ref: CodebaseReference): number {
+function tierOfEdge(ref: CodebaseReference, source: CodebaseSymbol, root: CodebaseSymbol): number {
+	if (ref.kind === "type") {
+		return source.id === root.id ? 2 : 3;
+	}
 	return EDGE_KIND_TIER[ref.kind] ?? 5;
 }
 
@@ -856,7 +899,9 @@ export function traceSymbol(
 			file: symbol.file_path,
 			line: symbol.start_line ?? 0,
 			column: symbol.start_col ?? 0,
-			endLine: symbol.end_line ?? 0,
+			// A null end_line falls back to the start line (a symbol with no
+			// recorded end span is treated as spanning just its start line).
+			endLine: symbol.end_line ?? symbol.start_line ?? 0,
 			endColumn: symbol.end_col ?? 0
 		},
 		references: [],

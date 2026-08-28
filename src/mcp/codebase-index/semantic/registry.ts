@@ -24,8 +24,9 @@ import { phpstanSemanticAdapter } from "./phpstan-adapter";
 
 /**
  * Registry of built-in semantic adapters, selectable by language. Adapters are
- * registered in priority order; `select` returns the first that supports the
- * language, so later registrations act as fallbacks.
+ * registered in priority order; `select` returns the LAST adapter that supports
+ * the language, so later registrations act as overrides (a more specific
+ * adapter registered later wins over an earlier general one).
  */
 export class SemanticAdapterRegistry {
 	private readonly adapters: SemanticAdapter[] = [];
@@ -42,14 +43,15 @@ export class SemanticAdapterRegistry {
 	}
 
 	/**
-	 * Select the first adapter (registration order) that supports the language.
-	 * A throwing `supports()` is treated as "not supported" so a broken adapter
-	 * can never break selection.
+	 * Select the last adapter (registration order) that supports the language —
+	 * later registrations override earlier ones. A throwing `supports()` is
+	 * treated as "not supported" so a broken adapter can never break selection.
 	 */
 	select(language: string, repoPath: string): SemanticAdapter | null {
+		let selected: SemanticAdapter | null = null;
 		for (const adapter of this.adapters) {
 			try {
-				if (adapter.supports(language, repoPath)) return adapter;
+				if (adapter.supports(language, repoPath)) selected = adapter;
 			} catch (err) {
 				logger.debug("[SemanticRegistry] adapter.supports threw — skipping", {
 					provider: adapter.name,
@@ -57,7 +59,7 @@ export class SemanticAdapterRegistry {
 				});
 			}
 		}
-		return null;
+		return selected;
 	}
 }
 

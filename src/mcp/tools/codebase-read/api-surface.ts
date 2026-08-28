@@ -99,11 +99,16 @@ function stripAccessibility(signature: string): string {
 	return signature.replace(/^(public|private|protected)\s+/i, "");
 }
 
-/** Render a compact signature for a member, falling back to kind-based guess. */
+/**
+ * Render a compact signature for a member, falling back to kind-based guess.
+ * A trailing `;` is appended when absent so every rendered member line is a
+ * complete contract statement (`mN(x: number): void;`) — both in the JSON
+ * envelope and the block output.
+ */
 function compactSignature(sym: CodebaseSymbol): string {
 	const raw = (sym.signature ?? "").trim();
-	if (raw) return stripAccessibility(toSingleLine(raw));
-	return fallbackSignature(sym);
+	const base = raw ? stripAccessibility(toSingleLine(raw)) : fallbackSignature(sym);
+	return base.endsWith(";") ? base : `${base};`;
 }
 
 /** Kind-based signature fallback when no stored signature exists. */
@@ -249,7 +254,8 @@ export function formatApiSurface(surface: ApiSurface): string {
 	}
 	const lines: string[] = [surface.signature];
 	for (const m of surface.members) {
-		lines.push(`  ${m.signature};`);
+		// Member signatures already carry their trailing `;` (compactSignature).
+		lines.push(`  ${m.signature}`);
 	}
 	lines.push("}");
 	return lines.join("\n");

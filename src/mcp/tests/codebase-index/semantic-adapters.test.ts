@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -165,6 +166,11 @@ describe("no-adapter fallback", () => {
 			}
 		]);
 		const emptyRegistry = new SemanticAdapterRegistry();
+		// The pipeline reads the plan's absolutePath from disk — create the
+		// fixture so the file exists (test-environment setup, not a code path).
+		const filePath = path.join(os.tmpdir(), "repo", "src", "Model.php");
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, "<?php\nclass Model { public function getUser() {} }\n");
 		const result = await runParsePipeline(
 			db,
 			pool,
@@ -173,7 +179,7 @@ describe("no-adapter fallback", () => {
 				{
 					action: "parse",
 					filePath: "src/Model.php",
-					absolutePath: path.join(os.tmpdir(), "repo", "src", "Model.php"),
+					absolutePath: filePath,
 					language: "php",
 					sizeBytes: 50
 				}
@@ -230,6 +236,11 @@ describe("failed enrichment isolation", () => {
 			}
 		]);
 		const failingRegistry = new SemanticAdapterRegistry().register(new ThrowingAdapter());
+		// The pipeline reads the plan's absolutePath from disk — create the
+		// fixture so the file exists (test-environment setup, not a code path).
+		const filePath = path.join(os.tmpdir(), "repo", "src", "Model.php");
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, "<?php\nclass Model { public function getUser() {} }\n");
 		const result = await runParsePipeline(
 			db,
 			pool,
@@ -238,7 +249,7 @@ describe("failed enrichment isolation", () => {
 				{
 					action: "parse",
 					filePath: "src/Model.php",
-					absolutePath: path.join(os.tmpdir(), "repo", "src", "Model.php"),
+					absolutePath: filePath,
 					language: "x-test",
 					sizeBytes: 50
 				}
