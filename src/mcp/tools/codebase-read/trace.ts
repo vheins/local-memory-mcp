@@ -1,12 +1,45 @@
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
-import type { CodebaseSymbol } from "../../types";
+import type { CodebaseSymbol, CodebaseReference } from "../../types";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
-import { traceSymbol, AmbiguousSymbolError } from "../../codebase-index/services/trace-service";
+import { traceSymbol, AmbiguousSymbolError, type TraceReference } from "../../codebase-index/services/trace-service";
 import { formatDocComment } from "../../utils/doc-comment-format";
 import { logger } from "../../utils/logger";
 
 // ── TRACE ────────────────────────────────────────────────────────────────
+
+/**
+ * Map a stored codebase_references row to a TraceReference (the trace-service
+ * input contract), building the human-readable context line.
+ *
+ * Import metadata (v27, issue #83) is surfaced: for an aliased import the
+ * context shows `import <imported> as <local> from '<specifier>'` and the
+ * canonical target fields (targetFile/targetSymbolId) ride along on the
+ * reference.
+ */
+export function storedReferenceToTraceReference(r: CodebaseReference): TraceReference {
+	const importNote = r.import_kind ? ` (${r.import_kind}${r.local_name ? `, local=${r.local_name}` : ""})` : "";
+	const context = `${r.kind} ${r.symbol_name}${importNote}${r.role ? ` (${r.role})` : ""}${
+		r.module_specifier ? ` from '${r.module_specifier}'` : ""
+	}${r.caller_name ? ` (in ${r.caller_name})` : ""}`;
+	return {
+		filePath: r.caller_file,
+		startLine: r.caller_line ?? 0,
+		startCol: 0,
+		endLine: r.caller_line ?? 0,
+		endCol: 0,
+		context,
+		kind: r.kind,
+		callerName: r.caller_name,
+		targetFile: r.target_file,
+		targetSymbolId: r.target_symbol_id,
+		role: r.role ?? null,
+		localName: r.local_name ?? null,
+		importedName: r.imported_name ?? null,
+		moduleSpecifier: r.module_specifier ?? null,
+		importKind: r.import_kind ?? null
+	};
+}
 
 async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const name = validated.name!.trim();
@@ -26,21 +59,9 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 			// mode requires a concrete repo, so this is always scoped. Reflected
 			// into TraceReference for the trace result; the service merges them
 			// with the in-memory doc_comment scan and dedupes by call-site line.
-			const storedRefs =
+			const storedRefs: TraceReference[] =
 				validated.includeReferences && repo
-					? db.codebaseReferences.getReferencesBySymbol(repo, traceName).map((r) => ({
-							filePath: r.caller_file,
-							startLine: r.caller_line ?? 0,
-							startCol: 0,
-							endLine: r.caller_line ?? 0,
-							endCol: 0,
-							context: `${r.kind} ${r.symbol_name}${r.role ? ` (${r.role})` : ""}${r.caller_name ? ` (in ${r.caller_name})` : ""}`,
-							kind: r.kind,
-							callerName: r.caller_name,
-							targetFile: r.target_file,
-							targetSymbolId: r.target_symbol_id,
-							role: r.role ?? null
-						}))
+					? db.codebaseReferences.getReferencesBySymbol(repo, traceName).map(storedReferenceToTraceReference)
 					: [];
 
 			const result = traceSymbol(traceName, repo, symbols, validated.includeReferences, storedRefs);

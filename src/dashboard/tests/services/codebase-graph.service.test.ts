@@ -106,6 +106,10 @@ function makeRef(overrides: Partial<CodebaseReference> = {}): CodebaseReference 
 		target_file: "src/b.ts",
 		target_symbol_id: "sym-2",
 		role: null,
+		local_name: null,
+		imported_name: null,
+		module_specifier: null,
+		import_kind: null,
 		created_at: "2026-01-01T00:00:00.000Z",
 		...overrides
 	};

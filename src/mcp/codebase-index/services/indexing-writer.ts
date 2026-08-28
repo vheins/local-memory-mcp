@@ -151,7 +151,11 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 					kind: r.kind,
 					target_file: r.target_file,
 					target_symbol_id: r.target_symbol_id,
-					role: r.role
+					role: r.role,
+					local_name: r.local_name,
+					imported_name: r.imported_name,
+					module_specifier: r.module_specifier,
+					import_kind: r.import_kind
 				}));
 				if (symbols.length > 0 || refs.length > 0) {
 					enqueueCodebaseSymbols(db, repo, newPath, symbols, refs);

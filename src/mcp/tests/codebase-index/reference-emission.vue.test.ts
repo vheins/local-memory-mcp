@@ -63,12 +63,35 @@ export default {
 		// A second plain <script> block is scanned too.
 		expect(names).toContain("LegacyThing@21");
 
-		// Side-effect imports (`import './styles.css'`) carry no binding → no edge;
-		// dynamic `import('./lazy')` is not an import statement → no edge; the
-		// `const msg = ref(...)` line never produces an import edge.
-		expect(names).not.toContain("styles");
+		// Side-effect imports (`import './styles.css'`) carry no binding → ONE
+		// row with null importedName (issue #83: imports stay VISIBLE, never
+		// dropped); dynamic `import('./lazy')` is not an import statement → no
+		// edge; the `const msg = ref(...)` line never produces an import edge.
+		const sideEffect = imports.find((r) => r.symbolName === "./styles.css");
+		expect(sideEffect).toBeDefined();
+		expect(sideEffect!.importInfo).toEqual({
+			localName: "./styles.css",
+			importedName: null,
+			moduleSpecifier: "./styles.css",
+			importKind: "side-effect"
+		});
 		expect(names).not.toContain("lazy");
-		expect(imports.filter((r) => r.callerLine === 14)).toHaveLength(0);
+		// Only the side-effect row may live on line 14 (its own statement).
+		expect(imports.filter((r) => r.callerLine === 14 && r.symbolName !== "./styles.css")).toHaveLength(0);
+
+		// Import metadata is emitted per binding (issue #83): default vs named
+		// vs namespace forms are attributed on the edge.
+		const myComp = imports.find((r) => r.symbolName === "MyComponent");
+		expect(myComp!.importInfo!.importKind).toBe("default");
+		expect(myComp!.importInfo!.moduleSpecifier).toBe("./components/MyComponent.vue");
+		const storeNs = imports.find((r) => r.symbolName === "store");
+		expect(storeNs!.importInfo!.importKind).toBe("namespace");
+		const refBinding = imports.find((r) => r.symbolName === "ref");
+		expect(refBinding!.importInfo!.importKind).toBe("named");
+		// Aliased named binding: imported name wins, local alias recorded.
+		const barBinding = imports.find((r) => r.symbolName === "Bar");
+		expect(barBinding!.importInfo!.localName).toBe("Baz");
+		expect(barBinding!.importInfo!.importedName).toBe("Bar");
 
 		// Imports are file-scope: callerName null; the pool fills callerFile;
 		// targets are explicit null (canonical TASK-347 pattern).

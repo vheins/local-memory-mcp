@@ -19,8 +19,21 @@
  * 'type'. The 'type' kind (added v26, issue #82) represents type-only
  * dependencies (parameter/return/property/alias/generic/union/intersection
  * usage) — distinguished further by an optional `role` column.
+ *
+ * Import metadata (added v27, issue #83): 'import' rows additionally carry
+ * `local_name` / `imported_name` / `module_specifier` / `import_kind` so an
+ * aliased import like `import { User as DomainUser } from '@/domain/user'`
+ * records BOTH the local binding (DomainUser) and the canonical exported
+ * name (User) with the raw module specifier — the info TRACE needs to expose
+ * canonical targets for aliased imports.
  */
 export type CodebaseReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements" | "type";
+
+/**
+ * Import form of an 'import' reference edge (issue #83, migration v27).
+ * `null` (the stored value for non-import kinds) means "not an import edge".
+ */
+export type ImportKind = "default" | "named" | "namespace" | "side-effect" | null;
 
 /**
  * Optional relation role for a 'type' reference edge (issue #82, migration
@@ -52,7 +65,7 @@ export interface CodebaseReference {
 	caller_line: number | null;
 	/** Enclosing function/method name, when determinable. */
 	caller_name: string | null;
-	/** 'call' | 'instantiation' | 'import' | 'extends' | 'implements'. */
+	/** 'call' | 'instantiation' | 'import' | 'extends' | 'implements' | 'type'. */
 	kind: string;
 	/** File path of the referenced symbol, when resolvable at parse time (else null). */
 	target_file: string | null;
@@ -60,6 +73,14 @@ export interface CodebaseReference {
 	target_symbol_id: string | null;
 	/** Optional relation role for 'type' edges (issue #82, v26); null otherwise. */
 	role: CodebaseReferenceRole;
+	/** Local binding name in the importing file (v27, issue #83); null for non-import edges. */
+	local_name: string | null;
+	/** Exported name as written in the module (v27, issue #83); null for non-import / side-effect edges. */
+	imported_name: string | null;
+	/** Raw module specifier as written in the import statement (v27, issue #83); null for non-import edges. */
+	module_specifier: string | null;
+	/** 'default' | 'named' | 'namespace' | 'side-effect' (v27, issue #83); null for non-import edges. */
+	import_kind: ImportKind;
 	created_at: string;
 }
 
@@ -74,6 +95,10 @@ export interface CodebaseReferenceRow {
 	target_file: string | null;
 	target_symbol_id: string | null;
 	role: CodebaseReferenceRole;
+	local_name: string | null;
+	imported_name: string | null;
+	module_specifier: string | null;
+	import_kind: ImportKind;
 	created_at: string;
 }
 
@@ -90,6 +115,28 @@ export interface CodebaseReferenceInsert {
 	target_symbol_id?: string | null;
 	/** Optional relation role for 'type' edges (issue #82, v26). */
 	role?: CodebaseReferenceRole;
+	/** Local binding name in the importing file (v27, issue #83). */
+	local_name?: string | null;
+	/** Exported name as written in the module (v27, issue #83). */
+	imported_name?: string | null;
+	/** Raw module specifier as written in the import statement (v27, issue #83). */
+	module_specifier?: string | null;
+	/** 'default' | 'named' | 'namespace' | 'side-effect' (v27, issue #83). */
+	import_kind?: ImportKind;
+}
+
+/**
+ * Resolved canonical target of an import (issue #83) — produced by
+ * resolveImport at parse time and persisted onto the 'import' reference row's
+ * target_file / target_symbol_id columns. `targetFile` is null when the module
+ * specifier could not be mapped to an indexed file; `targetSymbolId` is null
+ * when the module resolved but the imported name has no same-file exported
+ * symbol (namespace / side-effect imports, barrel re-exports, unresolved
+ * names). Never-throwing: every resolution failure degrades to nulls.
+ */
+export interface ImportResolution {
+	targetFile: string | null;
+	targetSymbolId: string | null;
 }
 
 /**

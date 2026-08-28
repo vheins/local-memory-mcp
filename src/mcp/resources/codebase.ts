@@ -31,6 +31,7 @@ import {
 } from "../codebase-index/services/trace-service";
 import { RecoverableError } from "../codebase-index/types/errors";
 import { CODEBASE_SEARCH_DEFAULT_LIMIT } from "../utils/constants";
+import { storedReferenceToTraceReference } from "../tools/codebase-read/trace";
 
 /** Upper bound for the symbols-list `limit` param (entity caps at 200 internally). */
 const CODEBASE_RESOURCE_MAX_LIMIT = 200;
@@ -314,19 +315,9 @@ function readSymbolDetail(parsed: CodebaseUriParts, db: SQLiteStore, uri: string
 	const name = parsed.name as string;
 
 	const allSymbols = db.codebaseSymbols.getSymbolsByRepo(repo);
-	const storedRefs: TraceReference[] = db.codebaseReferences.getReferencesBySymbol(repo, name).map((r) => ({
-		filePath: r.caller_file,
-		startLine: r.caller_line ?? 0,
-		startCol: 0,
-		endLine: r.caller_line ?? 0,
-		endCol: 0,
-		context: `${r.kind} ${r.symbol_name}${r.role ? ` (${r.role})` : ""}${r.caller_name ? ` (in ${r.caller_name})` : ""}`,
-		kind: r.kind,
-		callerName: r.caller_name,
-		targetFile: r.target_file,
-		targetSymbolId: r.target_symbol_id,
-		role: r.role ?? null
-	}));
+	const storedRefs: TraceReference[] = db.codebaseReferences
+		.getReferencesBySymbol(repo, name)
+		.map(storedReferenceToTraceReference);
 
 	try {
 		const result = traceSymbol(name, repo, allSymbols, true, storedRefs);

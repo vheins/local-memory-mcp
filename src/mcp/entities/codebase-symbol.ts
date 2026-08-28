@@ -65,6 +65,21 @@ export class CodebaseSymbolEntity extends BaseEntity {
 		).map((r) => this.rowToSymbol(r));
 	}
 
+	/**
+	 * Exported symbols of one file (exported=1 OR default_export=1) — the
+	 * canonical import-target surface (issue #83). Used by import-resolution
+	 * to map an imported name to its same-file exported symbol; ordered by
+	 * start line so the first default export wins deterministically.
+	 */
+	getExportedSymbolsByFile(repo: string, filePath: string): CodebaseSymbol[] {
+		return this.all<CodebaseSymbolRow>(
+			`SELECT * FROM codebase_symbols
+			 WHERE repo = ? AND file_path = ? AND (exported = 1 OR default_export = 1)
+			 ORDER BY start_line ASC`,
+			[repo, filePath]
+		).map((r) => this.rowToSymbol(r));
+	}
+
 	getSymbolByName(repo: string, name: string): CodebaseSymbol[] {
 		return this.all<CodebaseSymbolRow>(
 			"SELECT * FROM codebase_symbols WHERE repo = ? AND name = ? ORDER BY file_path ASC, start_line ASC",

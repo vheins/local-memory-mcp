@@ -30,6 +30,7 @@ import {
 	OPTIONAL_PARAMETER,
 	PAREN_TYPE,
 	REQUIRED_PARAMETER,
+	STRING,
 	TYPE_ALIAS_DECLARATION,
 	TYPE_ANNOTATION,
 	TYPE_IDENTIFIER,
@@ -69,12 +70,60 @@ export function constructorName(ctor: TSNode | null | undefined): string | null 
 	return ctor.text;
 }
 
-/** Emit one 'import' reference per imported binding in an import_statement. */
+/** Extract the `'./x'` module specifier of an import_statement (null if absent). */
+function moduleSpecifierOf(node: TSNode): string | null {
+	const source = node.childForFieldName("source");
+	if (!source) return null;
+	// tree-sitter-typescript models the specifier as a `string` node whose
+	// text INCLUDES the quotes — strip them for the raw specifier.
+	const raw = source.type === STRING ? source.text.slice(1, -1) : source.text;
+	return raw.length > 0 ? raw : null;
+}
+
+/**
+ * Emit one 'import' reference per imported binding in an import_statement,
+ * carrying the import metadata (issue #83, migration v27).
+ *
+ * Per binding the row's contract:
+ *   - symbol_name   = the IMPORTED name as written in the module (the
+ *     canonical name for name-based aggregation — ADR-002; the `User` of
+ *     `import { User as DomainUser }`). Namespace imports index the alias
+ *     (`* as ns` → 'ns' — the imported namespace has no single name).
+ *   - importInfo.localName     = the LOCAL binding in the importing file
+ *     (`DomainUser`; the default-import binding; the namespace alias).
+ *   - importInfo.importedName  = the exported name (`User`); 'default' for
+ *     default imports; '*' for namespace imports; null for side-effect.
+ *   - importInfo.moduleSpecifier = the RAW specifier as written (`'@/domain/user'`).
+ *   - importInfo.importKind    = 'default' | 'named' | 'namespace' |
+ *     'side-effect'.
+ *
+ * `symbol_name` keeps its historical meaning (imported name wins over the
+ * `as` alias) so existing name-based aggregation (dead-code, hotspots, KG)
+ * and the existing reference-emission tests are unchanged. The local alias is
+ * carried separately in importInfo for TRACE's canonical-target exposure.
+ */
 export function emitImports(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
 	const clause = node.childForFieldName("import_clause") ?? node.namedChildren.find((c) => c.type === IMPORT_CLAUSE);
-	if (!clause) return; // `import "x";` side-effect import — no binding to reference
-
 	const line = node.startPosition.row + 1;
+	const moduleSpecifier = moduleSpecifierOf(node);
+
+	// `import "x";` — side-effect import: ONE row with null imported name.
+	if (!clause) {
+		refs.push({
+			symbolName: moduleSpecifier ?? "(side-effect)",
+			callerFile: "",
+			callerLine: line,
+			callerName: callerName,
+			kind: "import",
+			importInfo: {
+				localName: moduleSpecifier ?? "",
+				importedName: null,
+				moduleSpecifier: moduleSpecifier ?? null,
+				importKind: "side-effect"
+			}
+		});
+		return;
+	}
 
 	// Default-import binding: `import Foo from "x"` → clause's first named child is an identifier.
 	const defaultImport = clause.namedChildren.find((c) => c.type === "identifier");
@@ -84,11 +133,17 @@ export function emitImports(node: TSNode, callerName: string | null, refs: Parse
 			callerFile: "",
 			callerLine: line,
 			callerName: callerName,
-			kind: "import"
+			kind: "import",
+			importInfo: {
+				localName: defaultImport.text,
+				importedName: "default",
+				moduleSpecifier: moduleSpecifier ?? null,
+				importKind: "default"
+			}
 		});
 	}
 
-	// Named imports: `import { a, b } from "x"`.
+	// Named imports: `import { a, b as c } from "x"`.
 	const named = clause.namedChildren.find((c) => c.type === NAMED_IMPORTS);
 	if (named) {
 		for (const spec of named.namedChildren) {
@@ -96,17 +151,43 @@ export function emitImports(node: TSNode, callerName: string | null, refs: Parse
 			const nameNode = spec.childForFieldName("name");
 			const imported = nameNode?.text;
 			if (!imported || imported === "default") continue; // skip rebindings aliased to `default`
-			refs.push({ symbolName: imported, callerFile: "", callerLine: line, callerName: callerName, kind: "import" });
+			const aliasNode = spec.childForFieldName("alias");
+			const local = aliasNode?.text ?? imported;
+			refs.push({
+				symbolName: imported,
+				callerFile: "",
+				callerLine: line,
+				callerName: callerName,
+				kind: "import",
+				importInfo: {
+					localName: local,
+					importedName: imported,
+					moduleSpecifier: moduleSpecifier ?? null,
+					importKind: "named"
+				}
+			});
 		}
 	}
 
 	// Namespace import `import * as ns` — the imported (namespace) binding is
-	// ambiguous; index the specifier so `ns` appears as the referenced symbol.
+	// ambiguous; index the alias so `ns` appears as the referenced symbol.
 	const nsImport = clause.namedChildren.find((c) => c.type === NAMESPACE_IMPORT);
 	if (nsImport) {
 		const alias = (nsImport.lastNamedChild?.text ?? "").replace(/^as\s*/, "");
 		if (alias) {
-			refs.push({ symbolName: alias, callerFile: "", callerLine: line, callerName: callerName, kind: "import" });
+			refs.push({
+				symbolName: alias,
+				callerFile: "",
+				callerLine: line,
+				callerName: callerName,
+				kind: "import",
+				importInfo: {
+					localName: alias,
+					importedName: "*",
+					moduleSpecifier: moduleSpecifier ?? null,
+					importKind: "namespace"
+				}
+			});
 		}
 	}
 }

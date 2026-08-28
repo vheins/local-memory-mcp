@@ -48,6 +48,7 @@ export const IMPORT_CLAUSE = "import_clause";
 export const NAMED_IMPORTS = "named_imports";
 export const IMPORT_SPECIFIER = "import_specifier";
 export const NAMESPACE_IMPORT = "namespace_import";
+export const STRING = "string";
 
 // Heritage / type-reference node types (reference emission, TASK-301).
 export const CLASS_HERITAGE = "class_heritage";

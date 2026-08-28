@@ -29,8 +29,9 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			const stmt = this.db.prepare(`
 				INSERT INTO codebase_references (
 					id, repo, symbol_name, caller_file, caller_line, caller_name, kind,
-					target_file, target_symbol_id, role, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					target_file, target_symbol_id, role,
+					local_name, imported_name, module_specifier, import_kind, created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`);
 
 			let count = 0;
@@ -46,6 +47,10 @@ export class CodebaseReferenceEntity extends BaseEntity {
 					r.target_file ?? null,
 					r.target_symbol_id ?? null,
 					r.role ?? null,
+					r.local_name ?? null,
+					r.imported_name ?? null,
+					r.module_specifier ?? null,
+					r.import_kind ?? null,
 					now
 				);
 				count++;
@@ -66,6 +71,31 @@ export class CodebaseReferenceEntity extends BaseEntity {
 		return this.all<CodebaseReferenceRow>(
 			"SELECT * FROM codebase_references WHERE repo = ? AND symbol_name = ? ORDER BY caller_file ASC, caller_line ASC",
 			[repo, symbolName]
+		).map((r) => this.rowToReference(r));
+	}
+
+	/**
+	 * 'import' reference rows for a resolved module target (issue #83) — the
+	 * inverse of getReferencesBySymbol: given a repo-relative target file,
+	 * return the import edges that point AT it (target_file resolved at parse
+	 * time). Served by the (repo, caller_file) index prefix when `callerFile`
+	 * is provided; without it the kind filter is a cheap row scan (import
+	 * rows are a small fraction of a repo's reference set).
+	 */
+	getImportsByTargetFile(repo: string, targetFile: string, callerFile?: string): CodebaseReference[] {
+		if (callerFile) {
+			return this.all<CodebaseReferenceRow>(
+				`SELECT * FROM codebase_references
+				 WHERE repo = ? AND caller_file = ? AND kind = 'import' AND target_file = ?
+				 ORDER BY caller_line ASC`,
+				[repo, callerFile, targetFile]
+			).map((r) => this.rowToReference(r));
+		}
+		return this.all<CodebaseReferenceRow>(
+			`SELECT * FROM codebase_references
+			 WHERE repo = ? AND kind = 'import' AND target_file = ?
+			 ORDER BY caller_file ASC, caller_line ASC`,
+			[repo, targetFile]
 		).map((r) => this.rowToReference(r));
 	}
 
@@ -220,6 +250,10 @@ export class CodebaseReferenceEntity extends BaseEntity {
 			target_file: row.target_file,
 			target_symbol_id: row.target_symbol_id,
 			role: row.role ?? null,
+			local_name: row.local_name ?? null,
+			imported_name: row.imported_name ?? null,
+			module_specifier: row.module_specifier ?? null,
+			import_kind: row.import_kind ?? null,
 			created_at: row.created_at
 		};
 	}

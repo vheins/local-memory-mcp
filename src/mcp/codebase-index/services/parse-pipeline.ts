@@ -347,7 +347,9 @@ export async function runParsePipeline(
 				// caller_file is the parsed file; the caller line/name/kind come
 				// from the visitor. target_file/target_symbol_id (v23) locate the
 				// referenced symbol when the visitor could resolve it at parse
-				// time (name-based resolution per ADR-002 — else null).
+				// time (name-based resolution per ADR-002 — else null). Import
+				// metadata (v27, issue #83) is carried on ref.importInfo for
+				// 'import' edges; absent for every other kind (null-persisted).
 				for (const ref of parseResult.references ?? []) {
 					referenceInserts.push({
 						repo,
@@ -358,7 +360,11 @@ export async function runParsePipeline(
 						kind: ref.kind,
 						target_file: ref.targetFile ?? null,
 						target_symbol_id: ref.targetSymbolId ?? null,
-						role: ref.role ?? null
+						role: ref.role ?? null,
+						local_name: ref.importInfo?.localName ?? null,
+						imported_name: ref.importInfo?.importedName ?? null,
+						module_specifier: ref.importInfo?.moduleSpecifier ?? null,
+						import_kind: ref.importInfo?.importKind ?? null
 					});
 				}
 

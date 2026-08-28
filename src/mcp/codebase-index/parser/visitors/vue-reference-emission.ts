@@ -13,6 +13,11 @@
  *   SCRIPT_IMPORT_RE above). Imported name wins over an `as` alias (mirroring
  *   the TS emitImports convention); `default` rebindings, side-effect imports
  *   (`import 'x'`) and dynamic imports (`import('x')`) emit nothing.
+ *   Import metadata (issue #83): each binding row carries importInfo
+ *   {localName, importedName, moduleSpecifier, importKind} — localName is the
+ *   LOCAL alias for `name as alias` bindings (TS parity), importedName the
+ *   exported name (null for side-effect imports), moduleSpecifier the raw
+ *   path as written.
  * - 'instantiation' — one edge per template component tag (PascalCase or
  *   kebab-case — Vue components can never be lowercase single words). Native
  *   elements and built-in lowercase tags (`div`, `span`, `template`,
@@ -25,7 +30,7 @@
  */
 
 import type { Node } from "web-tree-sitter";
-import type { ParsedReference, ReferenceKind } from "../language-visitor";
+import type { ParsedReference, ReferenceKind, ImportInfo } from "../language-visitor";
 
 // ── SFC block + template node types (verified against the shipped
 //    tree-sitter-vue WASM) ────────────────────────────────────────────
@@ -46,10 +51,13 @@ const TAG_NAME = "tag_name";
 // ── ES import-statement matcher over a <script> raw_text block ────────
 //
 // Group 1 captures the specifier list of `import <specifier> from 'path'`;
-// the ALTERNATIVE branch matches side-effect imports (`import 'path'`) which
-// have no specifier (group undefined → no edge). The lookahead stops the
-// specifier group from crossing into a following import/export statement, so
-// a side-effect import cannot swallow the next statement's specifier.
+// group 2 captures the QUOTED module specifier path ('path' — without the
+// quotes); the ALTERNATIVE branch matches side-effect imports (`import 'path'`)
+// which have no specifier (group 1 undefined → no binding, but group 2 still
+// captures the path so a single side-effect row with importKind
+// 'side-effect' can be emitted). The lookahead stops the specifier group
+// from crossing into a following import/export statement, so a side-effect
+// import cannot swallow the next statement's specifier.
 //
 // KNOWN LIMITATION (review FIX-3): the regex is line-anchored and
 // context-blind over the raw_text — a line that BEGINS with import-looking
@@ -61,13 +69,20 @@ const TAG_NAME = "tag_name";
 // require the import at a line start. Garbage is additionally contained by
 // importBindings, which only pushes names matching /^[A-Za-z_$][\w$]*$/.
 export const SCRIPT_IMPORT_RE =
-	/^\s*import\s+(?:type\s+)?(?:((?:(?!\n\s*(?:import|export))[\s\S])*?)\s+from\s+['"][^'"]+['"]|['"][^'"]+['"])\s*;?/gm;
+	/^\s*import\s+(?:type\s+)?(?:(?:((?:(?!\n\s*(?:import|export))[\s\S])*?)\s+from\s+)?(['"][^'"]+['"]))\s*;?/gm;
 
 /** A binding name must be a valid JS/TS identifier — rejects garbage and `default`. */
 const BINDING_NAME_RE = /^[A-Za-z_$][\w$]*$/;
 
 function isBindingName(name: string): boolean {
 	return name !== "default" && BINDING_NAME_RE.test(name);
+}
+
+/** A structured import binding: local alias + imported (exported) name + import form. */
+export interface VueImportBinding {
+	localName: string;
+	importedName: string | null;
+	importKind: "default" | "named" | "namespace";
 }
 
 /** Emit one 'import' edge per binding of every import statement in the raw_text. */
@@ -81,33 +96,73 @@ export function collectScriptImports(scriptEl: Node, refs: ParsedReference[]): v
 	let match: RegExpExecArray | null;
 	while ((match = SCRIPT_IMPORT_RE.exec(content)) !== null) {
 		const line = baseLine + content.slice(0, match.index).split("\n").length - 1;
-		for (const binding of importBindings(match[1])) {
-			pushRef(refs, binding, line, null, "import");
+		const moduleSpecifier = match[2] ? unquoteSpecifier(match[2]) : null;
+		const bindings = importBindings(match[1]);
+		if (bindings.length === 0) {
+			// Side-effect import (`import 'x'`) or unparseable specifier group:
+			// still emit ONE row with null imported name so the import stays
+			// VISIBLE in the graph (issue #83 — imports are never dropped).
+			if (moduleSpecifier) {
+				pushRef(refs, moduleSpecifier, line, null, "import", {
+					localName: moduleSpecifier,
+					importedName: null,
+					moduleSpecifier,
+					importKind: "side-effect"
+				});
+			}
+			if (match.index === SCRIPT_IMPORT_RE.lastIndex) SCRIPT_IMPORT_RE.lastIndex++;
+			continue;
+		}
+		for (const binding of bindings) {
+			pushRef(refs, binding.importedName ?? binding.localName, line, null, "import", {
+				localName: binding.localName,
+				importedName: binding.importedName,
+				moduleSpecifier,
+				importKind: binding.importKind
+			});
 		}
 		if (match.index === SCRIPT_IMPORT_RE.lastIndex) SCRIPT_IMPORT_RE.lastIndex++;
 	}
 }
 
+/** Strip the surrounding quotes from a captured specifier (`'./x'` → `./x`). */
+function unquoteSpecifier(raw: string): string {
+	const trimmed = raw.trim();
+	if (trimmed.length >= 2) {
+		const first = trimmed[0];
+		const last = trimmed[trimmed.length - 1];
+		if ((first === "'" && last === "'") || (first === '"' && last === '"')) {
+			return trimmed.slice(1, -1);
+		}
+	}
+	return trimmed;
+}
+
 /**
- * Resolve the binding names of an import specifier group (SCRIPT_IMPORT_RE
+ * Resolve the bindings of an import specifier group (SCRIPT_IMPORT_RE
  * group 1). `undefined` = side-effect import (`import 'x'`) → no bindings.
- * Semantics mirror TS emitImports: the IMPORTED name wins over an `as`
- * alias (`available as New` → 'available'), `default` rebindings are skipped,
- * `type` modifiers are stripped, and namespace imports resolve to their alias
- * (`* as ns` → 'ns'). Names that are not valid identifiers — e.g. a `{\n`
- * fragment left when a comment inside a multi-line named list truncates the
- * specifier group, or a template-literal line — are rejected, so no garbage
- * rows reach codebase_references.symbol_name.
+ * Semantics mirror TS emitImports: the IMPORTED name wins over an `as` alias
+ * (`available as New` → importedName 'available', localName 'New'), `default`
+ * rebindings are skipped, `type` modifiers are stripped, and namespace
+ * imports resolve to their alias (`* as ns` → localName/importedName 'ns' —
+ * a namespace has no single exported name, so both sides are the alias).
+ * importKind attribution follows the TS import forms: a top-level braced
+ * block → 'named', a bare leading identifier → 'default', a `* as x` part →
+ * 'namespace'. Names that are not valid identifiers — e.g. a `{\n` fragment
+ * left when a comment inside a multi-line named list truncates the specifier
+ * group, or a template-literal line — are rejected, so no garbage rows reach
+ * codebase_references.symbol_name.
  */
-function importBindings(group: string | undefined): string[] {
+function importBindings(group: string | undefined): VueImportBinding[] {
 	if (group === undefined) return [];
 	let specifiers = group.trim();
 	if (!specifiers) return [];
 	const ns = specifiers.match(/^\*\s*as\s+([\w$]+)$/);
-	if (ns) return isBindingName(ns[1]) ? [ns[1]] : [];
+	if (ns) return isBindingName(ns[1]) ? [{ localName: ns[1], importedName: ns[1], importKind: "namespace" }] : [];
 	// Whole-group named block: strip the outer braces first so the inner
 	// commas split into per-binding parts.
-	if (specifiers.startsWith("{") && specifiers.endsWith("}")) {
+	const wasBraced = specifiers.startsWith("{") && specifiers.endsWith("}");
+	if (wasBraced) {
 		specifiers = specifiers.slice(1, -1).trim();
 	}
 	if (!specifiers) return [];
@@ -129,24 +184,33 @@ function importBindings(group: string | undefined): string[] {
 	}
 	parts.push(current);
 
-	const bindings: string[] = [];
+	const bindings: VueImportBinding[] = [];
 	for (const part of parts) {
 		let p = part.trim();
 		if (!p) continue;
-		if (p.startsWith("{") && p.endsWith("}")) p = p.slice(1, -1).trim();
+		const innerBraced = p.startsWith("{") && p.endsWith("}");
+		if (innerBraced) p = p.slice(1, -1).trim();
 		if (!p) continue;
 		p = p.replace(/^\s*type\s+/, "").trim(); // inline `type` modifier
 		const nsPart = p.match(/^\*\s*as\s+([\w$]+)$/);
 		if (nsPart) {
-			if (isBindingName(nsPart[1])) bindings.push(nsPart[1]);
+			if (isBindingName(nsPart[1])) {
+				bindings.push({ localName: nsPart[1], importedName: nsPart[1], importKind: "namespace" });
+			}
 			continue;
 		}
 		if (p === "*") continue;
-		let name = p;
-		const asIdx = name.search(/\s+as\s+/);
-		if (asIdx >= 0) name = name.slice(0, asIdx).trim();
-		if (!isBindingName(name)) continue;
-		bindings.push(name);
+		const asIdx = p.search(/\s+as\s+/);
+		const importedName = asIdx >= 0 ? p.slice(0, asIdx).trim() : p;
+		const localName = asIdx >= 0 ? p.slice(asIdx + 3).trim() : importedName;
+		// TS emitImports semantics: `default` rebindings (`default as Foo`)
+		// and non-identifier names are skipped.
+		if (!isBindingName(importedName) && !(importedName === "default" && isBindingName(localName))) continue;
+		if (importedName === "default" && isBindingName(localName)) {
+			bindings.push({ localName, importedName: "default", importKind: "named" });
+			continue;
+		}
+		bindings.push({ localName, importedName, importKind: innerBraced || wasBraced ? "named" : "default" });
 	}
 	return bindings;
 }
@@ -210,7 +274,17 @@ function pushRef(
 	symbolName: string,
 	callerLine: number,
 	callerName: string | null,
-	kind: ReferenceKind
+	kind: ReferenceKind,
+	importInfo?: ImportInfo
 ): void {
-	refs.push({ symbolName, callerFile: "", callerLine, callerName, kind, targetFile: null, targetSymbolId: null });
+	refs.push({
+		symbolName,
+		callerFile: "",
+		callerLine,
+		callerName,
+		kind,
+		targetFile: null,
+		targetSymbolId: null,
+		importInfo
+	});
 }

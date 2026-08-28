@@ -30,6 +30,25 @@ export type ReferenceRole =
 	| null;
 
 /**
+ * Import form of an 'import' reference edge (issue #83, migration v27):
+ * 'default' | 'named' | 'namespace' | 'side-effect'.
+ */
+export type ImportKind = "default" | "named" | "namespace" | "side-effect" | null;
+
+/**
+ * Import metadata for an 'import' reference edge (issue #83) — persisted by
+ * the parse pipeline onto the v27 columns and surfaced by TRACE. `importedName`
+ * is null only for side-effect imports (`import 'x'`); `localName` is the
+ * LOCAL binding name (`import { User as DomainUser }` → 'DomainUser').
+ */
+export interface ImportInfo {
+	localName: string;
+	importedName: string | null;
+	moduleSpecifier: string | null;
+	importKind: ImportKind;
+}
+
+/**
  * A single reference edge emitted by a language visitor — two families:
  *
  *   1. Call-site edges (existing): `symbolName` is the referenced symbol (the
@@ -60,6 +79,11 @@ export interface ParsedReference {
 	targetSymbolId?: string | null;
 	/** Relation role for 'type' edges (issue #82, v26) — null/absent otherwise. */
 	role?: ReferenceRole;
+	/**
+	 * Import metadata for 'import' edges (issue #83, v27): local/imported
+	 * names + module specifier + import form. Absent for non-import kinds.
+	 */
+	importInfo?: ImportInfo;
 }
 
 /** Classification of a parsed symbol. */

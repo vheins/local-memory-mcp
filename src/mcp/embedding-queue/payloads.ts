@@ -94,6 +94,14 @@ const CODEBASE_SYMBOL_LINE_CHARS = 160;
  * Wave 1 visitors resolve targets — defeating the content-hash dedup this
  * digest exists to protect. `target_file` is a stable file path across
  * re-parses, so it captures the resolved-target identity without the churn.
+ *
+ * Import metadata (v27, issue #83) is part of the edge identity: `i` is the
+ * import form, `l` the local binding, `m` the module specifier. `imported_name`
+ * is DELIBERATELY EXCLUDED — for named imports it equals `symbol_name`
+ * (`n`), and for the aliasing story `l` + `m` already capture what a KG
+ * relation would need (the local alias + the raw specifier). Adding the
+ * redundant field would churn the digest on re-parses that only differ in
+ * how the alias was written, without changing the relation.
  */
 function codebaseRefDigest(refs: CodebaseReferenceInsert[]): string {
 	if (refs.length === 0) return "";
@@ -105,7 +113,11 @@ function codebaseRefDigest(refs: CodebaseReferenceInsert[]): string {
 		// role (v26, issue #82) is part of the edge identity like kind — a
 		// pure type-role change (e.g. parameter → return) must invalidate the
 		// KG content hash the same way a kind change does.
-		r: r.role ?? null
+		r: r.role ?? null,
+		// Import metadata (v27, issue #83) — see above for the exclusions.
+		i: r.import_kind ?? null,
+		l: r.local_name ?? null,
+		m: r.module_specifier ?? null
 	}));
 	return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }

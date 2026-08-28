@@ -62,6 +62,14 @@ export interface TraceReference {
 	targetSymbolId?: string | null;
 	/** Relation role of a 'type' edge (v26, issue #82): parameter/return/property/… Null otherwise. */
 	role?: string | null;
+	/** Local binding name of an 'import' edge (v27, issue #83); absent for other kinds. */
+	localName?: string | null;
+	/** Exported name as written in the module for an 'import' edge (v27, issue #83). */
+	importedName?: string | null;
+	/** Raw module specifier of an 'import' edge (v27, issue #83), e.g. `'@/domain/user'`. */
+	moduleSpecifier?: string | null;
+	/** 'default' | 'named' | 'namespace' | 'side-effect' (v27, issue #83); absent for other kinds. */
+	importKind?: string | null;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────
