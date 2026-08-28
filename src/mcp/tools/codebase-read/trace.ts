@@ -1,11 +1,12 @@
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
-import type { CodebaseSymbol, CodebaseReference, RelatedTypeEdge } from "../../types";
+import type { CodebaseSymbol, CodebaseReference, RelatedTypeEdge, PackedContextResult } from "../../types";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
 import {
 	traceSymbol,
 	AmbiguousSymbolError,
 	collectRelatedTypes,
+	packContext,
 	type TraceReference
 } from "../../codebase-index/services/trace-service";
 import { formatDocComment } from "../../utils/doc-comment-format";
@@ -100,9 +101,44 @@ export function formatRelatedTypeTree(rootName: string, edges: RelatedTypeEdge[]
 	return lines.join("\n");
 }
 
+/**
+ * Render a token-budgeted context pack (issue #85) as compact Markdown.
+ *
+ * Items are already tier-ranked (root first) with per-item tier/edgeCount and
+ * a total estimated-token figure; this surfaces the pack + its accounting so
+ * the agent sees exactly what was included, what was cut, and why.
+ */
+export function formatContextPack(pack: PackedContextResult): string {
+	const header = `### Context Pack\n\nEstimated: ${pack.estimatedTokens} tokens (count-based heuristic, ±50% — not a tokenizer measurement)\n${
+		pack.capped ? "**Budget reached — some reachable symbols excluded.**\n" : ""
+	}`;
+	const lines: string[] = [header];
+	if (pack.items.length === 0) {
+		lines.push("No symbols packed.");
+	} else {
+		for (const it of pack.items) {
+			const roleNote =
+				it.tier === "root" ? "" : ` [${it.tier}, d=${it.depth}, ${it.edgeCount} edge${it.edgeCount === 1 ? "" : "s"}]`;
+			lines.push(`- ${it.name} (${it.kind ?? "?"}) — ${it.file}:${it.line ?? "?"}${roleNote}`);
+		}
+	}
+	lines.push(
+		`Tiers: ${(["root", "api", "direct", "calls", "imports"] as const)
+			.map(
+				(t) =>
+					`${t}=${pack.tiers[t].includedSymbols} in/+${pack.tiers[t].includedEdges} edges${
+						pack.tiers[t].excludedSymbols > 0 ? `/-${pack.tiers[t].excludedSymbols} cut` : ""
+					}`
+			)
+			.join(", ")}`
+	);
+	if (pack.skippedUnresolved > 0)
+		lines.push(`(${pack.skippedUnresolved} unresolved reference${pack.skippedUnresolved > 1 ? "s" : ""} skipped)`);
+	return lines.join("\n");
+}
+
 async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const name = validated.name!.trim();
-
 	const repo = validated.repo?.trim();
 
 	const allSymbols: CodebaseSymbol[] = repo
@@ -113,9 +149,14 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 
 	// Preload 'type' reference rows ONCE per TRACE request (issue #84) — the
 	// related-type traversal reuses this set across every name variant and
-	// depth expansion, avoiding a per-hop DB query.
+	// depth expansion, avoiding a per-hop DB query. When a contextBudget is set
+	// (issue #85) the packer ALSO needs call/instantiation/import/heritage rows,
+	// so preload the repo's full reference set in that case.
 	const typeRefs: CodebaseReference[] =
 		validated.includeRelatedTypes && repo ? db.codebaseReferences.getReferencesByRepo(repo, ["type"]) : [];
+
+	const allRefs: CodebaseReference[] =
+		validated.contextBudget != null && repo ? db.codebaseReferences.getReferencesByRepo(repo) : [];
 
 	function tryTrace(traceName: string): McpResponse | null {
 		try {
@@ -161,11 +202,23 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 				? `\n\n### Related Types\n\n${relatedTypes.edges.length > 0 ? formatRelatedTypeTree(result.symbol.name, relatedTypes.edges) : "None found"}${relatedTypes.skippedUnresolved > 0 ? `\n\n(${relatedTypes.skippedUnresolved} unresolved type edge${relatedTypes.skippedUnresolved > 1 ? "s" : ""} skipped)` : ""}`
 				: "";
 
+			// Token-budgeted context pack (issue #85): when a contextBudget is
+			// set, TRACE returns a bounded, tier-ranked graph pack instead of the
+			// unbounded related-type / reference surface. It combines with
+			// includeRelatedTypes + relationDepth (the pack reuses the same 'type'
+			// edges plus call/instantiation/import/heritage edges for tiers 4/5).
+			const contextPack: PackedContextResult | null =
+				validated.contextBudget != null && repo
+					? packContext(result.symbol, repo, symbols, allRefs, validated.contextBudget, validated.relationDepth ?? 1)
+					: null;
+
+			const packList = contextPack ? `\n\n${formatContextPack(contextPack)}` : "";
+
 			const docPart = (() => {
 				const d = formatDocComment(result.symbol.doc_comment);
 				return d ? `\nDoc: ${d}` : "";
 			})();
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${refList}${hierarchy}${relatedList}`;
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${refList}${hierarchy}${relatedList}${packList}`;
 
 			return createMcpResponse(
 				{
@@ -173,13 +226,17 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 					mode: "trace",
 					originalName: traceName !== name ? name : undefined,
 					relatedTypes: relatedTypes ? relatedTypes.edges : undefined,
-					relatedTypesSkippedUnresolved: relatedTypes?.skippedUnresolved
+					relatedTypesSkippedUnresolved: relatedTypes?.skippedUnresolved,
+					contextPack: contextPack ?? undefined
 				},
 				`Symbol "${traceName}": defined in ${result.definition.file}:${result.definition.line}, ` +
 					`${result.references.length} references, ` +
 					`${result.parent ? `parent ${result.parent.name}, ` : ""}${result.children.length} children found` +
 					(relatedTypes
 						? `, ${relatedTypes.edges.length} related type${relatedTypes.edges.length === 1 ? "" : "s"}`
+						: "") +
+					(contextPack
+						? `, ${contextPack.items.length} symbols packed (~${contextPack.estimatedTokens} est. tokens, ${contextPack.capped ? "budget reached" : "within budget"})`
 						: ""),
 				{ includeJson: true, contentSummary }
 			);

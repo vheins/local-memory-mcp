@@ -205,3 +205,111 @@ export interface RelatedTypesResult {
 	edges: RelatedTypeEdge[];
 	skippedUnresolved: number;
 }
+
+/**
+ * Packing tier of a context-pack item (issue #85). Higher tiers are packed
+ * FIRST — tier order is the single source of truth for prioritization, so the
+ * budget always consumes the most valuable context before lower tiers.
+ *
+ * Order (ascending value):
+ *   1. `root`          — the traced symbol itself.
+ *   2. `api`           — the root's own API surface: direct parameter / return
+ *      / property / alias / generic / constraint type dependencies.
+ *   3. `direct`        — direct type dependencies of the symbols already packed
+ *      (transitive type closure, shallowest-hop first).
+ *   4. `calls`         — high-confidence call / instantiation / heritage
+ *      (extends/implements) relationships from packed symbols.
+ *   5. `imports`       — lower-value import-only relationships (same-file
+ *      intra-module imports outrank cross-module ones via the edge tiebreak).
+ */
+export type ContextPackTier = "root" | "api" | "direct" | "calls" | "imports";
+
+/**
+ * One deduplicated symbol entry in a context pack (issue #85). `kind`/`tier`
+ * describe WHY the symbol was packed; `depth` is the graph-hop distance from
+ * the root; `file`/`line` preserve exact source locations for navigation.
+ */
+export interface PackedContextItem {
+	/** `codebase_symbols(id)` of the packed symbol. */
+	symbolId: string;
+	/** Symbol name. */
+	name: string;
+	/** Symbol kind (function/class/interface/…), when known. */
+	kind: string | null;
+	/** File path of the symbol's definition. */
+	file: string | null;
+	/** 1-based declaration line of the symbol's definition. */
+	line: number | null;
+	/** Packing tier — the priority bucket that admitted this symbol. */
+	tier: ContextPackTier;
+	/** Graph-hop distance from the root symbol (0 = the root itself). */
+	depth: number;
+	/** Count of deduplicated relationship edges included for this symbol. */
+	edgeCount: number;
+	/** Estimated token cost of this item (count-based heuristic). */
+	estimatedTokens: number;
+}
+
+/**
+ * One deduplicated relationship edge in a context pack (issue #85). Edges
+ * carry exact source locations (`file`/`line`) for navigation and the edge
+ * kind/role for the agent to understand the relationship semantics.
+ */
+export interface PackedContextEdge {
+	/** Relationship kind ('type' | 'call' | 'instantiation' | 'import' | 'extends' | 'implements'). */
+	kind: string;
+	/** Relation role for 'type' edges (parameter/return/property/…); null otherwise. */
+	role: string | null;
+	/** Source symbol id of the edge. */
+	fromSymbolId: string;
+	/** Target symbol id of the edge. */
+	toSymbolId: string;
+	/** 1-based line of the reference site in the source file. */
+	line: number | null;
+	/** File containing the reference site. */
+	file: string | null;
+}
+
+/**
+ * Tier accounting for a context pack (issue #85): how many symbols each tier
+ * admitted, how many it had to exclude, and how many relationship edges were
+ * packed per tier.
+ */
+export interface ContextPackTierStats {
+	/** Number of symbols packed in this tier. */
+	includedSymbols: number;
+	/** Number of candidate symbols this tier saw but had to exclude (budget). */
+	excludedSymbols: number;
+	/** Number of relationship edges packed in this tier. */
+	includedEdges: number;
+}
+
+/**
+ * Result of a token-budgeted graph context pack (issue #85).
+ *
+ * `items`/`edges` are fully deduplicated: a symbol appears at most once (at
+ * its highest tier, shallowest depth) and a relationship edge at most once,
+ * so cycles and duplicate graph paths can never duplicate context.
+ * `estimatedTokens` is the SUM of every item's count-based estimate — it is a
+ * documented heuristic with a stated tolerance (±50%), NOT a tokenizer
+ * measurement. `capped` is true when the budget was exhausted before all
+ * reachable candidates were packed.
+ */
+export interface PackedContextResult {
+	/** The packed symbols, highest tier first (root first). */
+	items: PackedContextItem[];
+	/** The deduplicated relationship edges carried by the packed symbols. */
+	edges: PackedContextEdge[];
+	/** Estimated token usage (sum of per-item estimates). */
+	estimatedTokens: number;
+	/** Per-tier included/excluded symbol + edge accounting. */
+	tiers: Record<ContextPackTier, ContextPackTierStats>;
+	/** Symbols the packer could not resolve to indexed rows (never fail the pack). */
+	skippedUnresolved: number;
+	/** Total candidate symbols considered (included + excluded across tiers). */
+	totalSymbols: number;
+	/** Total candidate edges considered before dedup. */
+	totalEdges: number;
+	/** True when the budget stopped packing before all reachable symbols fit. */
+	capped: boolean;
+}

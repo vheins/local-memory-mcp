@@ -66,6 +66,18 @@ export const CodebaseReadSchema = z.object({
 	 * at its shallowest depth.
 	 */
 	relationDepth: z.coerce.number().min(1).max(4).default(1),
+	/**
+	 * TRACE mode: token budget (256–10000) for the on-demand context pack
+	 * (issue #85). When set, TRACE returns a bounded, tier-ranked pack instead
+	 * of the unbounded related-type list: root + API signature first, then
+	 * direct type deps, transitive type deps, high-confidence calls, and
+	 * finally import-only relationships — stopping when the estimated token
+	 * budget is reached. Combines with `includeRelatedTypes` + `relationDepth`.
+	 * Estimated tokens are a deterministic count-based heuristic (documented
+	 * ±50% tolerance), not a tokenizer measurement. The root symbol is always
+	 * included. Omitted ⇒ legacy unbounded behavior (issue #84).
+	 */
+	contextBudget: z.coerce.number().int().min(256).max(10000).optional(),
 	/** Include symbol counts in ARCHITECTURE tree. */
 	includeSymbolCounts: z.coerce.boolean().default(true),
 	/** CODE mode: treat `content` as a regular expression (default: substring). */
