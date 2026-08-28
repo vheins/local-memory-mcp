@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.0] — 2026-08-28
+
+Codebase Index Semantic Intelligence release — `codebase-read` TRACE/FILE modes now
+expose a type-aware dependency graph, token-budgeted context packing, a compact public
+API surface, range-aware file context, and pluggable per-language semantic enrichment.
+
+### Added
+
+- **Type-reference edges (#82)** — `codebase_references` gains `kind='type'` + `role`
+  (parameter/return/property/field/alias/generic/constraint/union/intersection); the
+  TypeScript visitor emits type edges and type-only references keep symbols alive in
+  dead-code analysis (migration v26).
+- **Import alias / canonical resolution (#83)** — `import_kind` + `local_name` /
+  `imported_name` / `module_specifier` columns resolve named/namespace/side-effect
+  imports to canonical targets (migration v27).
+- **Related-type graph traversal (#84)** — TRACE `includeRelatedTypes` + `relationDepth`
+  BFS over type edges, cycle-safe, deduped.
+- **Token-budgeted context packing (#85)** — TRACE `contextBudget` (256–10000) tier-ranked
+  deterministic pack with estimated-token metadata.
+- **Re-export edges + barrel-chain resolution (#87)** — `kind='reexport'` (+ `wildcard`)
+  resolves named/aliased/wildcard barrel chains to canonical declarations, cycle-safe;
+  SEARCH prefers canonical symbols over barrels; TRACE shows the public export chain.
+- **Compact public API surface view (#86)** — TRACE `view:'api'` emits class/interface
+  public signatures (private/protected excluded), bounded.
+- **Range-aware FILE context (#88)** — FILE `startLine`/`endLine` scope with enclosing
+  symbol, related-types fold, and context-budget merge.
+- **TypeScript semantic signature enrichment (#89)** — opt-in `includeSemantic` surfaces
+  TS-compiler-inferred signatures via a timeout-guarded two-phase enrichment pass
+  (migration v28: `semantic_signature` / `semantic_source` / `semantic_updated_at`).
+- **Pluggable semantic adapters (#90)** — `SemanticAdapter` contract + registry with
+  isolation; TypeScript adapter first, PHPStan adapter as a non-TS proof-of-concept.
+
+### Fixed
+
+- Resolved 31 unit-test failures across the semantic-graph features (TASK-017):
+  `packContext` tier-bucket init crash, type-edge role mapping, re-export field swap,
+  adapter selection/`degraded` flag, explicit type-alias preference, `view:'api'`
+  backward-compat, dead-code `role='type'` counting, and 3 migration column assertions.
+
+Resolves epic #91 (TASK-007).
+
 ## [0.41.0] — 2026-08-18
 
 Codebase-index docblock release — symbols are now discoverable by their purpose:
@@ -14,12 +55,12 @@ developer/contributor docs tree is indexed so it is searchable like source code.
 
 ### Added
 
-- **`.agents/**` dot-directory indexing** (TASK-459) — the codebase indexer now
-  discovers files under `.agents` (dev/contributor/AI documentation) via an
-  explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
-  `.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
-  dashboard, CLI, startup auto-index, file watcher) since they all funnel through
-  `discoverFiles`.
+- **`.agents/**`dot-directory indexing** (TASK-459) — the codebase indexer now
+discovers files under`.agents` (dev/contributor/AI documentation) via an
+explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
+`.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
+dashboard, CLI, startup auto-index, file watcher) since they all funnel through
+`discoverFiles`.
 - **`doc_comment` surfaced in all 5 `codebase-read` text formatters** (TASK-460) —
   TRACE (new `Doc:` line), FILE, SEARCH, ARCHITECTURE (new `Top Exports` doc
   block, ~120 chars), and CODE/content modes (enclosing-symbol doc hint via
