@@ -15,7 +15,8 @@
 import fs from "node:fs";
 import type { ParserPool } from "../parser";
 import { resolveConcurrency } from "../parser/worker-pool";
-import type { ParseResult, ParsedReference } from "../parser/language-visitor";
+import type { ParseResult, ParsedReference, ParsedSymbol } from "../parser/language-visitor";
+import type { SemanticSymbolEnrichment } from "../semantic/adapter";
 import type { SQLiteStore } from "../../storage/sqlite";
 import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../types";
 import { logger } from "../../utils/logger";
@@ -34,7 +35,13 @@ import {
 	buildReexportResolverContext,
 	reexportSpecFromParsedReference
 } from "../parser/reexport-resolution";
-import { enrichFileSemanticWithTimeout, symbolKey } from "../semantic/typescript-enricher";
+import { symbolKey } from "../semantic/typescript-enricher";
+import {
+	getDefaultSemanticRegistry,
+	enrichSymbolsSemantic,
+	repoPathFromAbsolute,
+	type SemanticAdapterRegistry
+} from "../semantic/registry";
 import { CODEBASE_SEMANTIC_ENRICH, CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS } from "../../utils/constants";
 
 /** Build a canonical {@link CodebaseReferenceInsert} from a visitor reference. */
@@ -75,6 +82,12 @@ export interface ParsePipelineOptions {
 	 * resolution stance. Re-indexes resolve correctly.
 	 */
 	resolveReexports?: boolean;
+	/**
+	 * Optional semantic adapter registry (issue #90). When omitted, the default
+	 * built-in registry (TypeScript + PHPStan PoC) is used. Injectable for tests
+	 * and for operators who want custom language adapters.
+	 */
+	semanticRegistry?: SemanticAdapterRegistry;
 }
 
 // ── Pipeline result ────────────────────────────────────────────────────────
@@ -375,17 +388,25 @@ export async function runParsePipeline(
 				// indexing writer (delete-by-file + bulk-insert in one txn).
 				const parsedSymbols = resolveFileParents(parseResult.symbols);
 
-				// ── Optional two-phase semantic enrichment (issue #89, TASK-015) ──
+				// ── Optional semantic enrichment (issue #89/#90, TASK-015/TASK-016) ──
 				// Tree-sitter structural indexing above is the PRIMARY indexer and
-				// is ALWAYS applied. This bounded, isolated pass infers type
-				// signatures via the TS compiler API for TS-family files and
-				// attaches them to a SEPARATE set of columns so the structural
-				// `signature` is never overwritten. It is fully guarded: master
-				// flag off ⇒ skip; timeout ⇒ skip; any failure ⇒ degraded (no-op).
-				// Structural indexing proceeds regardless of this pass's outcome.
+				// is ALWAYS applied. This BOUNDED, ISOLATED secondary pass selects a
+				// language adapter (via SemanticAdapterRegistry) and attaches
+				// inferred signatures to a SEPARATE set of columns so the
+				// structural `signature` is never overwritten. It is fully guarded:
+				// master flag off ⇒ skip; no adapter ⇒ skip (structural unchanged);
+				// timeout ⇒ skip; any failure ⇒ degraded (no-op). Structural
+				// indexing proceeds regardless of this pass's outcome.
 				const semanticMap =
-					CODEBASE_SEMANTIC_ENRICH && parsedSymbols.length > 0 && isTypeScriptFamily(plan.filePath)
-						? await safeEnrichSemantic(plan.filePath, content, parsedSymbols)
+					CODEBASE_SEMANTIC_ENRICH && parsedSymbols.length > 0
+						? await safeEnrichSemantic(
+								plan.filePath,
+								plan.absolutePath,
+								plan.language,
+								content,
+								parsedSymbols,
+								options.semanticRegistry
+							)
 						: null;
 
 				for (const sym of parsedSymbols) {
@@ -512,38 +533,32 @@ export async function runParsePipeline(
 	};
 }
 
-/** True for file extensions the TS compiler can structurally check (issue #89). */
-function isTypeScriptFamily(filePath: string): boolean {
-	return /\.(m?tsx?|jsx?)$/i.test(filePath);
-}
-
 /**
  * Run the optional semantic enrichment pass in a crash/timeout-isolated way
- * (issue #89). Returns a `name#startLine` → enrichment map, or null on gate
- * skip. NEVER throws — every failure path degrades to an empty/null result so
+ * (issue #89/#90). Delegates to the language-selected {@link SemanticAdapter}
+ * through {@link enrichSymbolsSemantic}, which selects by language, applies the
+ * wall-clock timeout + try/catch isolation, and returns the `name#startLine` →
+ * enrichment map — or null on gate skip / no adapter / degraded. NEVER throws, so
  * structural indexing is never affected.
  */
 async function safeEnrichSemantic(
 	filePath: string,
+	absolutePath: string,
+	language: string,
 	content: string,
-	symbols: { name: string; startLine: number; kind: string }[]
-): Promise<Map<string, { semanticSignature: string; semanticSource: string }> | null> {
-	try {
-		const result = await enrichFileSemanticWithTimeout(
-			filePath,
-			content,
-			symbols as Parameters<typeof enrichFileSemanticWithTimeout>[2],
-			CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS
-		);
-		if (result.degraded) return null;
-		return result.bySymbolKey;
-	} catch (err) {
-		logger.debug("[ParsePipeline] semantic enrichment degraded (structural indexing unaffected)", {
-			filePath,
-			error: err instanceof Error ? err.message : String(err)
-		});
-		return null;
-	}
+	symbols: ParsedSymbol[],
+	registry?: SemanticAdapterRegistry
+): Promise<Map<string, SemanticSymbolEnrichment> | null> {
+	const repoPath = repoPathFromAbsolute(absolutePath, filePath);
+	return enrichSymbolsSemantic(
+		registry ?? getDefaultSemanticRegistry(),
+		language,
+		filePath,
+		repoPath,
+		content,
+		symbols,
+		CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS
+	);
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────

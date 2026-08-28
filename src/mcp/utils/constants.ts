@@ -341,3 +341,9 @@ export const FILE_CONTENT_MAX_LINES = envInt("FILE_CONTENT_MAX_LINES", 2000);
 export const CODEBASE_SEMANTIC_ENRICH = envBool("CODEBASE_SEMANTIC_ENRICH", true);
 /** Per-file wall-clock ceiling for the enrichment pass (issue #89). */
 export const CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS = envInt("CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS", 3_000);
+/**
+ * Opt-in gate for the proof-of-concept PHPStan adapter (issue #90). When "false"
+ * (default) the adapter returns a graceful "not configured" degraded result so the
+ * pipeline is never affected. A production phpstan wiring would key off this flag.
+ */
+export const CODEBASE_SEMANTIC_PHPSTAN_ENABLED = envBool("CODEBASE_SEMANTIC_PHPSTAN_ENABLED", false);

@@ -23,6 +23,12 @@ import * as ts from "typescript";
 import path from "node:path";
 import { logger } from "../../utils/logger";
 import { SymbolKind, type ParsedSymbol } from "../parser/language-visitor";
+import type {
+	SemanticAdapter,
+	SemanticEnrichmentInput,
+	SemanticEnrichmentResult,
+	SemanticSymbolEnrichment
+} from "./adapter";
 
 /** Provenance tag persisted to `semantic_source`. */
 export const SEMANTIC_SOURCE_TYPESCRIPT = "typescript-compiler";
@@ -313,3 +319,42 @@ export async function enrichFileSemanticWithTimeout(
 			});
 	});
 }
+
+/**
+ * SemanticAdapter implementing the issue #90 contract for the TypeScript family.
+ *
+ * Wraps the existing compiler-API enrichment pass (#89) so it is selectable by
+ * language through the {@link SemanticAdapterRegistry}. `enrich` runs the
+ * (synchronous, never-throwing) `enrichFileSemantic`; the registry adds the
+ * wall-clock timeout + try/catch isolation on top.
+ */
+export class TypeScriptSemanticAdapter implements SemanticAdapter {
+	readonly name = SEMANTIC_SOURCE_TYPESCRIPT;
+
+	/** TS-family languages the compiler API can structurally check (#89). */
+	supports(language: string, _repoPath: string): boolean {
+		return ["typescript", "ts", "tsx", "javascript", "js", "jsx"].includes(language.toLowerCase());
+	}
+
+	async enrich(input: SemanticEnrichmentInput): Promise<SemanticEnrichmentResult> {
+		const result = enrichFileSemantic(input.filePath, input.content, input.symbols);
+		const bySymbolKey = new Map<string, SemanticSymbolEnrichment>();
+		for (const [key, value] of result.bySymbolKey) {
+			bySymbolKey.set(key, {
+				semanticSignature: value.semanticSignature,
+				semanticSource: value.semanticSource
+			});
+		}
+		return {
+			bySymbolKey,
+			source: result.source,
+			provider: this.name,
+			degraded: result.degraded,
+			reason: result.reason,
+			...(result.degraded ? {} : { refreshedAt: new Date().toISOString() })
+		};
+	}
+}
+
+/** Singleton — registered into the default {@link SemanticAdapterRegistry}. */
+export const typescriptSemanticAdapter = new TypeScriptSemanticAdapter();
