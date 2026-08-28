@@ -57,6 +57,7 @@ import {
 	constructorName,
 	emitHeritage,
 	emitImports,
+	emitReexports,
 	emitTypeReferences
 } from "./ts-reference-emission";
 
@@ -163,6 +164,21 @@ export class TypeScriptVisitor implements LanguageVisitor {
 				emitImports(node, callerName, refs);
 				// Do NOT recurse into import children — the import clause itself is
 				// the only meaningful reference surface here.
+				return;
+			}
+			case EXPORT_STATEMENT: {
+				const source = node.childForFieldName("source");
+				if (source) {
+					// Re-export-from (`export { X } from './mod'` / `export * from './mod'`):
+					// emit the reexport edge(s); the clause carries no nested call sites.
+					emitReexports(node, callerName, refs);
+					return;
+				}
+				// Local exports (`export { x }`, `export const y = ...`): descend so
+				// any call-site / type refs inside the exported declaration emit.
+				for (const child of node.namedChildren) {
+					this.walkReferences(child, callerName, refs);
+				}
 				return;
 			}
 			// Heritage edges (Phase 1.1 / TASK-301): emit 'extends'/'implements'

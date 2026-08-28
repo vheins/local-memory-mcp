@@ -66,6 +66,55 @@ export function extractReferencedTokens(heading: string): string[] {
 	return tokens;
 }
 
+// ── BARREL-CANONICAL PREFERENCE (issue #87, TASK-013) ───────────────────
+
+/**
+ * A barrel file is an `index.*` module that re-exports from sibling/canonical
+ * modules (e.g. `src/domain/index.ts`). Search results landing in a barrel file
+ * are usually duplicates of the canonical declaration elsewhere — SEARCH
+ * prefers the canonical declaration (issue #87).
+ */
+export function isBarrelFile(filePath: string): boolean {
+	const base = filePath.split("/").pop() ?? filePath;
+	return /^index\.(ts|tsx|js|jsx|mjs|cjs|d\.ts)$/.test(base);
+}
+
+/**
+ * De-duplicate ranked search results so a canonical declaration wins over its
+ * barrel-file duplicate (issue #87).
+ *
+ * For any symbol name that appears in BOTH a barrel file and a non-barrel
+ * file, every barrel-file copy is dropped (the canonical copy keeps its rank).
+ * When a name appears only in barrel files (no canonical sibling), all copies
+ * are kept — never drop a result outright, only prefer canonical when one
+ * exists. Other names (single occurrence, or collisions across two non-barrel
+ * files) are passed through untouched.
+ */
+export function preferCanonicalSymbols(ranked: RankedSymbol[]): RankedSymbol[] {
+	const byName = new Map<string, RankedSymbol[]>();
+	for (const r of ranked) {
+		const arr = byName.get(r.symbol.name) ?? [];
+		arr.push(r);
+		byName.set(r.symbol.name, arr);
+	}
+
+	const out: RankedSymbol[] = [];
+	for (const group of byName.values()) {
+		if (group.length === 1) {
+			out.push(group[0]);
+			continue;
+		}
+		const barrel = group.filter((r) => isBarrelFile(r.symbol.file_path));
+		const canonical = group.filter((r) => !isBarrelFile(r.symbol.file_path));
+		if (barrel.length > 0 && canonical.length > 0) {
+			out.push(...canonical);
+		} else {
+			out.push(...group);
+		}
+	}
+	return out;
+}
+
 // ── UNIFIED SEARCH ───────────────────────────────────────────────────────
 
 /**
@@ -229,6 +278,11 @@ async function handleSearchMode(
 	// candidates aren't wrongly limited to the single repo; blendVectorRanking
 	// degrades to text-only ranking when vector search is unavailable.
 	ranked = await blendVectorRanking(ranked, query, repo ?? "", vectors);
+
+	// Phase 4b: prefer canonical declarations over barrel-file duplicates
+	// (issue #87) — a `User` declared in `src/domain/user.ts` should win over
+	// the `export { User }` barrel copy in `src/domain/index.ts`.
+	ranked = preferCanonicalSymbols(ranked);
 
 	// Apply pagination
 	const paginated = ranked.slice(validated.offset, validated.offset + limit);

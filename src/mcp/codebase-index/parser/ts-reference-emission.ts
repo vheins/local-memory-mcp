@@ -193,6 +193,76 @@ export function emitImports(node: TSNode, callerName: string | null, refs: Parse
 }
 
 /**
+ * Emit one 'reexport' reference per re-exported binding in an export_statement
+ * that carries a `source` (issue #87, TASK-013).
+ *
+ * Per binding the row's contract (mirrors the 'import' edge from #83):
+ *   - kind                 = 'reexport'
+ *   - symbol_name          = the exported name as written in THIS module
+ *     (`User` of `export { User as DomainUser }`). For wildcard `export *`
+ *     the name is unknown at parse time, so symbol_name carries the raw
+ *     module specifier as a placeholder (resolved transitively at query time).
+ *   - importInfo.localName       = the LOCAL alias (`DomainUser`; for named
+ *     re-exports without alias this equals the exported name; for wildcard '*').
+ *   - importInfo.importedName    = the canonical exported name (`User`); null
+ *     for wildcard `export *`.
+ *   - importInfo.moduleSpecifier  = the RAW specifier as written (`'./user'`).
+ *   - importInfo.importKind       = 'named' | 'wildcard'.
+ *
+ * These edges are structurally emitted only — canonical-target resolution
+ * (barrel-chain chasing) is performed by the reexport resolver at query time
+ * (TRACE) or in the parse pipeline (when `resolveReexports` is enabled), and
+ * written to target_file/target_symbol_id.
+ */
+export function emitReexports(node: TSNode, callerName: string | null, refs: ParsedReference[]): void {
+	const line = node.startPosition.row + 1;
+	const moduleSpecifier = moduleSpecifierOf(node);
+	if (!moduleSpecifier) return;
+
+	// `export * from './types'` — wildcard re-export: NO export_clause node.
+	const clause = node.childForFieldName("export_clause");
+	if (!clause) {
+		refs.push({
+			symbolName: moduleSpecifier,
+			callerFile: "",
+			callerLine: line,
+			callerName,
+			kind: "reexport",
+			importInfo: {
+				localName: "*",
+				importedName: null,
+				moduleSpecifier,
+				importKind: "wildcard"
+			}
+		});
+		return;
+	}
+
+	// `export { A, B as C } from './mod'` — one edge per export_specifier.
+	for (const spec of clause.namedChildren) {
+		if (spec.type !== "export_specifier") continue;
+		const nameNode = spec.childForFieldName("name");
+		const exported = nameNode?.text;
+		if (!exported) continue;
+		const aliasNode = spec.childForFieldName("alias");
+		const alias = aliasNode?.text ?? null;
+		refs.push({
+			symbolName: exported,
+			callerFile: "",
+			callerLine: line,
+			callerName,
+			kind: "reexport",
+			importInfo: {
+				localName: alias ?? exported,
+				importedName: exported,
+				moduleSpecifier,
+				importKind: "named"
+			}
+		});
+	}
+}
+
+/**
  * Resolve the name-based target of a single heritage element.
  *
  * Per ADR-002 (name-based resolution, no LSP / type resolution), the edge

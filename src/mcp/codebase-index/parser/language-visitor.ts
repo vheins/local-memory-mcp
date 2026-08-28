@@ -13,8 +13,10 @@ import type { Tree } from "web-tree-sitter";
  * 'extends' | 'implements' are heritage edges (Phase 1.1, TASK-301); 'type'
  * (issue #82, v26) is a type-only dependency edge (parameter/return/property/
  * alias/generic/union/intersection usage) distinguished by an optional `role`.
+ * 'reexport' (issue #87, TASK-013) is an `export { X } from './mod'` /
+ * `export * from './mod'` edge — reuses ImportInfo metadata for resolution.
  */
-export type ReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements" | "type";
+export type ReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements" | "type" | "reexport";
 
 /** Relation role of a 'type' reference edge (issue #82). Null = no role. */
 export type ReferenceRole =
@@ -30,10 +32,10 @@ export type ReferenceRole =
 	| null;
 
 /**
- * Import form of an 'import' reference edge (issue #83, migration v27):
- * 'default' | 'named' | 'namespace' | 'side-effect'.
+ * Import form of an 'import' / 'reexport' reference edge (#83/#87):
+ * 'default' | 'named' | 'namespace' | 'side-effect' | 'wildcard'.
  */
-export type ImportKind = "default" | "named" | "namespace" | "side-effect" | null;
+export type ImportKind = "default" | "named" | "namespace" | "side-effect" | "wildcard" | null;
 
 /**
  * Import metadata for an 'import' reference edge (issue #83) — persisted by

@@ -26,14 +26,29 @@
  * records BOTH the local binding (DomainUser) and the canonical exported
  * name (User) with the raw module specifier — the info TRACE needs to expose
  * canonical targets for aliased imports.
+ *
+ * Re-export edges (added v27, issue #87 / TASK-013): the 'reexport' kind
+ * covers `export { X } from './mod'`, `export { X as Y } from './mod'`, and
+ * `export * from './mod'`. They reuse the SAME import metadata columns
+ * (local_name = alias, imported_name = canonical name, module_specifier,
+ * import_kind = 'named' | 'wildcard') so canonical-target resolution can be
+ * performed by the reexport resolver against the indexed symbol graph.
  */
-export type CodebaseReferenceKind = "call" | "instantiation" | "import" | "extends" | "implements" | "type";
+export type CodebaseReferenceKind =
+	| "call"
+	| "instantiation"
+	| "import"
+	| "extends"
+	| "implements"
+	| "type"
+	| "reexport";
 
 /**
- * Import form of an 'import' reference edge (issue #83, migration v27).
- * `null` (the stored value for non-import kinds) means "not an import edge".
+ * Import form of an 'import' / 'reexport' reference edge (issue #83/#87).
+ * `null` (the stored value for non-import/reexport kinds) means "not an
+ * module-edge". 'wildcard' is added for `export * from './mod'`.
  */
-export type ImportKind = "default" | "named" | "namespace" | "side-effect" | null;
+export type ImportKind = "default" | "named" | "namespace" | "side-effect" | "wildcard" | null;
 
 /**
  * Optional relation role for a 'type' reference edge (issue #82, migration

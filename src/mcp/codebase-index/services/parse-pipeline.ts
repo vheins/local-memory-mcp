@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import type { ParserPool } from "../parser";
 import { resolveConcurrency } from "../parser/worker-pool";
-import type { ParseResult } from "../parser/language-visitor";
+import type { ParseResult, ParsedReference } from "../parser/language-visitor";
 import type { SQLiteStore } from "../../storage/sqlite";
 import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../types";
 import { logger } from "../../utils/logger";
@@ -29,6 +29,30 @@ import {
 } from "./indexing-cache";
 import { writeParseBatch, type IndexFileError, type IndexProgress } from "./indexing-writer";
 import { resolveFileParents } from "../parser/parent-resolver";
+import {
+	ReexportResolver,
+	buildReexportResolverContext,
+	reexportSpecFromParsedReference
+} from "../parser/reexport-resolution";
+
+/** Build a canonical {@link CodebaseReferenceInsert} from a visitor reference. */
+function referenceInsert(ref: ParsedReference, filePath: string, repo: string): CodebaseReferenceInsert {
+	return {
+		repo,
+		symbol_name: ref.symbolName,
+		caller_file: ref.callerFile || filePath,
+		caller_line: ref.callerLine,
+		caller_name: ref.callerName,
+		kind: ref.kind,
+		target_file: ref.targetFile ?? null,
+		target_symbol_id: ref.targetSymbolId ?? null,
+		role: ref.role ?? null,
+		local_name: ref.importInfo?.localName ?? null,
+		imported_name: ref.importInfo?.importedName ?? null,
+		module_specifier: ref.importInfo?.moduleSpecifier ?? null,
+		import_kind: ref.importInfo?.importKind ?? null
+	};
+}
 
 // ── Pipeline options (narrowed — avoids a circular dep with the orchestrator) ─
 
@@ -39,6 +63,16 @@ export interface ParsePipelineOptions {
 	batchSize?: number;
 	/** Progress callback emitted at each stage. */
 	onProgress?: (progress: IndexProgress) => void;
+	/**
+	 * If true, resolve 'reexport' edges to their canonical targets (issue #87 —
+	 * barrel-chain chasing) during the pipeline, populating
+	 * target_file/target_symbol_id and expanding `export *` into one edge per
+	 * re-exported symbol. The resolver reads the repo's ALREADY-INDEXED symbol
+	 * surface (codebase_references + codebase_symbols + codebase_files); a
+	 * first-time index (empty DB) leaves targets null — matching the #83 import
+	 * resolution stance. Re-indexes resolve correctly.
+	 */
+	resolveReexports?: boolean;
 }
 
 // ── Pipeline result ────────────────────────────────────────────────────────
@@ -100,6 +134,17 @@ export async function runParsePipeline(
 ): Promise<ParsePipelineResult> {
 	const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
 	const errors: IndexFileError[] = [];
+
+	// Build the re-export resolver ONCE from the repo's already-indexed surface
+	// (issue #87). Re-indexes resolve canonical targets correctly; a first-time
+	// index (empty DB) yields null targets (graceful, matching #83 stance).
+	let reexportResolver: ReexportResolver | null = null;
+	if (options.resolveReexports) {
+		const indexedFiles = new Set(db.codebaseFiles.getFilesByRepo(repo).map((f) => f.file_path));
+		const symbols = db.codebaseSymbols.getSymbolsByRepo(repo);
+		const reexportRefs = db.codebaseReferences.getReferencesByRepo(repo, ["reexport"]);
+		reexportResolver = new ReexportResolver(buildReexportResolverContext(reexportRefs, symbols, indexedFiles));
+	}
 
 	// Skip-reason counters
 	let skippedFiles = 0;
@@ -351,21 +396,35 @@ export async function runParsePipeline(
 				// metadata (v27, issue #83) is carried on ref.importInfo for
 				// 'import' edges; absent for every other kind (null-persisted).
 				for (const ref of parseResult.references ?? []) {
-					referenceInserts.push({
-						repo,
-						symbol_name: ref.symbolName,
-						caller_file: ref.callerFile || plan.filePath,
-						caller_line: ref.callerLine,
-						caller_name: ref.callerName,
-						kind: ref.kind,
-						target_file: ref.targetFile ?? null,
-						target_symbol_id: ref.targetSymbolId ?? null,
-						role: ref.role ?? null,
-						local_name: ref.importInfo?.localName ?? null,
-						imported_name: ref.importInfo?.importedName ?? null,
-						module_specifier: ref.importInfo?.moduleSpecifier ?? null,
-						import_kind: ref.importInfo?.importKind ?? null
-					});
+					if (ref.kind === "reexport" && reexportResolver) {
+						const spec = reexportSpecFromParsedReference(ref);
+						if (spec) {
+							const resolved = reexportResolver.resolve(ref.callerFile || plan.filePath, spec);
+							if (resolved.length === 1) {
+								const r = resolved[0];
+								referenceInserts.push({
+									...referenceInsert(ref, plan.filePath, repo),
+									target_file: r.targetFile,
+									target_symbol_id: r.targetSymbolId
+								});
+								continue;
+							}
+							if (resolved.length > 1) {
+								// Wildcard `export *` expansion — one edge per target.
+								for (const r of resolved) {
+									referenceInserts.push({
+										...referenceInsert(ref, plan.filePath, repo),
+										symbol_name: r.canonicalName,
+										target_file: r.targetFile,
+										target_symbol_id: r.targetSymbolId
+									});
+								}
+								continue;
+							}
+						}
+						// Unresolved re-export — still persisted (null targets, visible).
+					}
+					referenceInserts.push(referenceInsert(ref, plan.filePath, repo));
 				}
 
 				fileInserts.push({

@@ -40,6 +40,32 @@ export interface TraceResult {
 	/** Direct children (e.g. a class's methods/properties), ordered by start line. */
 	children: CodebaseSymbol[];
 	disambiguation?: CodebaseSymbol[];
+	/**
+	 * Public export / re-export chain (issue #87, TASK-013): the `export { X }`
+	 * / `export * from` edges whose resolved target is THIS symbol — i.e. every
+	 * module that publicly re-exports it. Empty for symbols with no re-exporters.
+	 */
+	reexportChain: ReexportChainEntry[];
+}
+
+/**
+ * One entry in a symbol's public re-export chain (issue #87): a module that
+ * re-exports the traced symbol via `export { X } from './mod'` /
+ * `export { X as Y } from './mod'` / `export * from './mod'`.
+ */
+export interface ReexportChainEntry {
+	/** File that re-exports the symbol. */
+	filePath: string;
+	/** 1-based line of the re-export statement. */
+	startLine: number | null;
+	/** Local alias (`DomainUser` of `export { User as DomainUser }`); null when none. */
+	aliasName: string | null;
+	/** Canonical exported name as written in the re-exporting module. */
+	canonicalName: string | null;
+	/** Raw module specifier of the re-export (`'./domain/user'`). */
+	moduleSpecifier: string | null;
+	/** 'named' | 'wildcard' (v27, issue #83/#87); null for non re-export rows. */
+	importKind: string | null;
 }
 
 export interface TraceReference {
@@ -847,7 +873,8 @@ export function traceSymbol(
 					line: parentSymbol.start_line
 				}
 			: null,
-		children
+		children,
+		reexportChain: includeReferences ? buildReexportChain(symbol, storedReferences ?? []) : []
 	};
 
 	// Step 4: Find references if requested. The table-backed references
@@ -893,6 +920,40 @@ function mergeStoredAndInMemory(stored: TraceReference[], inMemory: TraceReferen
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────
+
+/**
+ * Build a symbol's public re-export chain (issue #87, TASK-013) from the
+ * stored `reexport` reference edges.
+ *
+ * A re-export edge "points at" the traced symbol when its resolved target is
+ * this symbol — keyed on `target_symbol_id` (the canonical parse-time
+ * resolution), with a name+file fallback (`symbol_name` === symbol name AND
+ * `target_file` === symbol's definition file) for edges whose target_symbol_id
+ * was unresolved at parse time. Each matching edge becomes one
+ * {@link ReexportChainEntry} describing WHO re-exports this symbol and under
+ * which (aliased) name. De-duplicated by (filePath, startLine).
+ */
+export function buildReexportChain(symbol: CodebaseSymbol, storedReferences: TraceReference[]): ReexportChainEntry[] {
+	const matches = storedReferences.filter(
+		(r) => r.kind === "reexport" && (r.targetSymbolId === symbol.id || r.targetFile === symbol.file_path)
+	);
+	const seen = new Set<string>();
+	const out: ReexportChainEntry[] = [];
+	for (const r of matches) {
+		const key = `${r.filePath}:${r.startLine}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push({
+			filePath: r.filePath,
+			startLine: r.startLine,
+			aliasName: r.localName ?? null,
+			canonicalName: r.importedName ?? null,
+			moduleSpecifier: r.moduleSpecifier ?? null,
+			importKind: r.importKind ?? null
+		});
+	}
+	return out;
+}
 
 /**
  * Search other symbols for references to the given name.
