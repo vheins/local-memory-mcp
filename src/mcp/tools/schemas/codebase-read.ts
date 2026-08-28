@@ -59,6 +59,19 @@ export const CodebaseReadSchema = z.object({
 	 */
 	includeRelatedTypes: z.coerce.boolean().default(false),
 	/**
+	 * TRACE mode: renders the traced symbol's compact public API surface
+	 * (issue #86 / TASK-012) instead of the full definition/reference dump.
+	 * `'default'` → legacy TRACE behavior (unchanged). `'api'` → a bounded,
+	 * deterministic contract of the symbol's public members (method/property/
+	 * function signatures without bodies, private/protected excluded when
+	 * recoverable from the stored signature, inherited public members folded
+	 * in from `extends`/`implements` heritage edges). Supported for
+	 * class/interface/module/namespace/enum/type containers; other kinds fall
+	 * back to a single-line signature. The JSON envelope still carries the
+	 * full navigable symbol/file/line metadata under `apiSurface`.
+	 */
+	view: z.enum(["default", "api"]).default("default"),
+	/**
 	 * TRACE mode (with `includeRelatedTypes`): bounded graph traversal depth
 	 * (1–4, default 1). Depth 1 returns the root's direct type edges; depth N
 	 * additionally follows each related symbol's own type edges up to N hops.

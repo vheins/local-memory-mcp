@@ -11,6 +11,7 @@ import {
 } from "../../codebase-index/services/trace-service";
 import { formatDocComment } from "../../utils/doc-comment-format";
 import { logger } from "../../utils/logger";
+import { buildApiSurface, formatApiSurface, type ApiSurface } from "./api-surface";
 
 // ── TRACE ────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,13 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 	const allRefs: CodebaseReference[] =
 		validated.contextBudget != null && repo ? db.codebaseReferences.getReferencesByRepo(repo) : [];
 
+	// Heritage edges (extends/implements) for the API surface view (issue #86):
+	// resolved once per TRACE request so inherited public members can be folded
+	// into the surface without a per-base-class DB round-trip. Only loaded when
+	// view:'api' is requested, so the legacy TRACE path is untouched.
+	const heritageRefs: CodebaseReference[] =
+		validated.view === "api" && repo ? db.codebaseReferences.getReferencesByRepo(repo, ["extends", "implements"]) : [];
+
 	function tryTrace(traceName: string): McpResponse | null {
 		try {
 			// Table-backed reference edges for the exact symbol (TASK-236 / #64;
@@ -218,7 +226,18 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 				const d = formatDocComment(result.symbol.doc_comment);
 				return d ? `\nDoc: ${d}` : "";
 			})();
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${refList}${hierarchy}${relatedList}${packList}`;
+
+			// Compact public API surface view (issue #86): bounded, deterministic
+			// contract of the traced container's public members. Pure additive —
+			// the legacy TRACE response shape is untouched when view:'api' is
+			// omitted. When set, the surface is computed and appended to both the
+			// text body and the JSON envelope (navigable metadata preserved).
+			const apiSurface: ApiSurface | null =
+				validated.view === "api" ? buildApiSurface(result.symbol, result.children, symbols, heritageRefs) : null;
+
+			const apiPart = apiSurface ? `\n\n### API Surface\n\n\`\`\`\n${formatApiSurface(apiSurface)}\n\`\`\`` : "";
+
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${apiPart}${refList}${hierarchy}${relatedList}${packList}`;
 
 			return createMcpResponse(
 				{
@@ -227,7 +246,8 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 					originalName: traceName !== name ? name : undefined,
 					relatedTypes: relatedTypes ? relatedTypes.edges : undefined,
 					relatedTypesSkippedUnresolved: relatedTypes?.skippedUnresolved,
-					contextPack: contextPack ?? undefined
+					contextPack: contextPack ?? undefined,
+					apiSurface: apiSurface ?? undefined
 				},
 				`Symbol "${traceName}": defined in ${result.definition.file}:${result.definition.line}, ` +
 					`${result.references.length} references, ` +
