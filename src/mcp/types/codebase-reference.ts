@@ -161,3 +161,47 @@ export interface TopReferencedSymbolRow {
 	total: number;
 	countsByKind: Record<string, number>;
 }
+
+/**
+ * One resolved related-type hop in a TRACE related-types traversal
+ * (issue #84). Produced by the trace service when `includeRelatedTypes` is
+ * set: each entry is a single 'type' reference edge between two indexed
+ * symbols, enriched with the relation role and the BFS depth at which the
+ * target was first reached from the root symbol.
+ */
+export interface RelatedTypeEdge {
+	/** `codebase_symbols(id)` of the TARGET (the type being referenced). */
+	targetSymbolId: string;
+	/** Symbol name of the target type. */
+	targetName: string;
+	/** File path of the target's definition (when resolvable). */
+	targetFile: string | null;
+	/** Kind of the target symbol (interface/class/type/…), when resolvable. */
+	targetKind: string | null;
+	/** Relation role of the edge (parameter/return/property/…). */
+	role: CodebaseReferenceRole;
+	/**
+	 * BFS traversal depth from the root symbol: 1 = direct type edge,
+	 * 2 = reached via one intermediate related type, etc.
+	 */
+	depth: number;
+	/** Source symbol name of this hop (the root for depth 1). */
+	fromName: string;
+	/** Source symbol id of this hop. */
+	fromSymbolId: string;
+	/** 1-based declaration line of the reference site (root symbol's declaration). */
+	line: number | null;
+}
+
+/**
+ * Result of a related-types graph traversal (issue #84). `edges` is the
+ * deduplicated hop set (each target symbol appears once — cycles and
+ * repeated targets collapse to the shallowest-depth occurrence, carrying all
+ * relation metadata); `skippedUnresolved` counts 'type' reference rows whose
+ * target could not be resolved to an indexed symbol (missing target file /
+ * symbol id / symbol row) and were skipped without failing the traversal.
+ */
+export interface RelatedTypesResult {
+	edges: RelatedTypeEdge[];
+	skippedUnresolved: number;
+}

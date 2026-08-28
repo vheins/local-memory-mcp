@@ -49,6 +49,23 @@ export const CodebaseReadSchema = z.object({
 	depth: z.coerce.number().min(1).max(5).optional(),
 	/** Include usage references in TRACE output. */
 	includeReferences: z.coerce.boolean().default(true),
+	/**
+	 * TRACE mode: also traverse 'type' reference edges (issue #82 / v26) from
+	 * the root symbol and return the related-type subgraph (issue #84).
+	 * Default false — the legacy TRACE response shape is preserved when this
+	 * is omitted. Each returned edge carries the relation role
+	 * (parameter/return/property/…) and the traversal depth at which the
+	 * target was first reached.
+	 */
+	includeRelatedTypes: z.coerce.boolean().default(false),
+	/**
+	 * TRACE mode (with `includeRelatedTypes`): bounded graph traversal depth
+	 * (1–4, default 1). Depth 1 returns the root's direct type edges; depth N
+	 * additionally follows each related symbol's own type edges up to N hops.
+	 * Cycles and repeated symbols are deduplicated — a symbol is reported once,
+	 * at its shallowest depth.
+	 */
+	relationDepth: z.coerce.number().min(1).max(4).default(1),
 	/** Include symbol counts in ARCHITECTURE tree. */
 	includeSymbolCounts: z.coerce.boolean().default(true),
 	/** CODE mode: treat `content` as a regular expression (default: substring). */

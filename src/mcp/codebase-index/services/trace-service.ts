@@ -7,6 +7,7 @@
  */
 
 import type { CodebaseSymbol } from "../../types";
+import type { CodebaseReference, RelatedTypesResult } from "../../types";
 
 // ── Public types ────────────────────────────────────────────────────────
 
@@ -70,6 +71,204 @@ export interface TraceReference {
 	moduleSpecifier?: string | null;
 	/** 'default' | 'named' | 'namespace' | 'side-effect' (v27, issue #83); absent for other kinds. */
 	importKind?: string | null;
+}
+
+// ── Related-types graph traversal (issue #84) ─────────────────────────────
+
+/**
+ * Hop bound for a single BFS level during related-types traversal.
+ *
+ * Each step multiplies the frontier by the fan-out of the previous level, so
+ * an unbounded graph walk could blow up on a wide type surface (a DTO with
+ * dozens of properties, each with generic arguments). 200 per level is far
+ * beyond any realistic type-graph breadth while still bounding worst-case
+ * memory/time deterministically.
+ */
+const MAX_TYPE_EDGES_PER_LEVEL = 200;
+
+/**
+ * Traverse 'type' reference edges (issue #82 / migration v26) from a root
+ * symbol and return the deduplicated related-type subgraph (issue #84).
+ *
+ * The root's OWN type edges are the edges whose reference row sits in the
+ * root's file (`caller_file` = root's definition file, `caller_name` =
+ * root's name) — exactly the rows emitted by the TS type-edge emitter for the
+ * root declaration's parameter/return/property/alias/generic/constraint/
+ * union/intersection surface. Each deeper level repeats the walk from the
+ * related symbols found so far.
+ *
+ * Resolution order per hop (ADR-002 name-based model, prefer structural):
+ *   1. `target_symbol_id` — the parse-time-resolved row directly names the
+ *      indexed symbol (canonical, cross-file safe).
+ *   2. name-based fallback within the root symbol's own file, then repo-wide
+ *      exact-name match, deduped to the first deterministically-ordered row.
+ *   3. Any other fallback is skipped and counted in `skippedUnresolved` —
+ *      an unresolved target never fails the whole traversal.
+ *
+ * Cycle-safe + deduplicated: BFS with a visited set keyed on the target
+ * symbol id. A symbol already reached is never expanded again and its
+ * shallowest-depth occurrence is the one reported, so repeated targets
+ * collapse to a single edge carrying the first-seen relation metadata.
+ *
+ * @param root          the traced symbol (definition row).
+ * @param repo          repo scope (may be undefined for unscoped traces).
+ * @param symbols       ALL symbols loaded by the caller (repo-scoped when
+ *                      `repo` is set) — provides id/name/file/kind lookups.
+ * @param references    the repo's 'type' reference rows (caller filters by
+ *                      kind for efficiency).
+ * @param maxDepth      1..4 — BFS hop limit from the root.
+ */
+export function collectRelatedTypes(
+	root: CodebaseSymbol,
+	repo: string | undefined,
+	symbols: CodebaseSymbol[],
+	references: CodebaseReference[],
+	maxDepth: number
+): RelatedTypesResult {
+	const edges: RelatedTypesResult["edges"] = [];
+	let skippedUnresolved = 0;
+
+	const symbolsById = new Map<string, CodebaseSymbol>();
+	for (const s of symbols) symbolsById.set(s.id, s);
+
+	// Root file index for the same-file name fallback; repo-wide fallback uses
+	// the full `symbols` array. The file index is derived from the repo-scoped
+	// `symbols`, so it never leaks cross-repo rows.
+	const symbolsByFile = new Map<string, CodebaseSymbol[]>();
+	for (const s of symbols) {
+		const arr = symbolsByFile.get(s.file_path) ?? [];
+		arr.push(s);
+		symbolsByFile.set(s.file_path, arr);
+	}
+
+	// BFS bookkeeping. `reported` keys on the target symbol id — a symbol is
+	// reported once, at its shallowest depth. `expanded` keys on the SOURCE
+	// symbol id so a repeated source never re-walks its edges. The root is
+	// pre-registered as reported so a cycle folding back to the root (A → B →
+	// A) never re-emits the root as a related type.
+	const reported = new Set<string>([root.id]);
+	const expanded = new Set<string>();
+
+	// Seed the frontier with the root's own type edges.
+	const rootRefs = typeEdgesOf(root, references);
+	let frontier: Array<{ symbolId: string; depth: number }> = [];
+	for (const ref of rootRefs) {
+		const resolved = resolveTypeTarget(ref, root, repo, symbols, symbolsById, symbolsByFile);
+		if (!resolved) {
+			skippedUnresolved++;
+			continue;
+		}
+		const key = resolved.symbol.id;
+		if (reported.has(key)) continue;
+		reported.add(key);
+		edges.push({
+			targetSymbolId: key,
+			targetName: resolved.symbol.name,
+			targetFile: resolved.symbol.file_path,
+			targetKind: resolved.symbol.kind,
+			role: ref.role ?? null,
+			depth: 1,
+			fromName: root.name,
+			fromSymbolId: root.id,
+			line: ref.caller_line ?? null
+		});
+		frontier.push({ symbolId: key, depth: 1 });
+	}
+	expanded.add(root.id);
+
+	// BFS through the related types. `depth` is the hop distance from the
+	// root; level N expands the symbols first reached at depth N.
+	for (let depth = 2; depth <= maxDepth; depth++) {
+		const next: Array<{ symbolId: string; depth: number }> = [];
+		let levelBreadth = 0;
+		for (const current of frontier) {
+			if (expanded.has(current.symbolId)) continue;
+			expanded.add(current.symbolId);
+			const symbol = symbolsById.get(current.symbolId);
+			if (!symbol) continue;
+			const refs = typeEdgesOf(symbol, references);
+			for (const ref of refs) {
+				if (levelBreadth >= MAX_TYPE_EDGES_PER_LEVEL) break;
+				const resolved = resolveTypeTarget(ref, symbol, repo, symbols, symbolsById, symbolsByFile);
+				if (!resolved) {
+					skippedUnresolved++;
+					continue;
+				}
+				const key = resolved.symbol.id;
+				levelBreadth++;
+				// Repeated target: already reported (or the root itself) — skip
+				// without re-expanding; the shallowest-depth edge is the record.
+				if (reported.has(key)) continue;
+				reported.add(key);
+				edges.push({
+					targetSymbolId: key,
+					targetName: resolved.symbol.name,
+					targetFile: resolved.symbol.file_path,
+					targetKind: resolved.symbol.kind,
+					role: ref.role ?? null,
+					depth,
+					fromName: symbol.name,
+					fromSymbolId: current.symbolId,
+					line: ref.caller_line ?? null
+				});
+				next.push({ symbolId: key, depth });
+			}
+			if (levelBreadth >= MAX_TYPE_EDGES_PER_LEVEL) break;
+		}
+		frontier = next;
+		if (frontier.length === 0) break;
+	}
+
+	return { edges, skippedUnresolved };
+}
+
+/**
+ * All 'type' reference rows whose caller site is the given symbol: rows whose
+ * `caller_file` is the symbol's definition file AND whose `caller_name` is the
+ * symbol's name (the TS type-edge emitter tags function/method/field type
+ * surfaces with the declaration's name; class/interface/alias type surfaces
+ * emit `caller_name` null). Rows in the same file with a DIFFERENT
+ * `caller_name` belong to sibling symbols and are excluded.
+ */
+function typeEdgesOf(symbol: CodebaseSymbol, references: CodebaseReference[]): CodebaseReference[] {
+	return references.filter(
+		(r) => r.kind === "type" && r.caller_file === symbol.file_path && (r.caller_name ?? null) === (symbol.name ?? null)
+	);
+}
+
+/**
+ * Resolve a 'type' reference row to its indexed target symbol.
+ *
+ * Preference order:
+ *   1. `target_symbol_id` → direct id lookup (canonical, cross-file safe).
+ *   2. Same-file exact-name match — the type is declared alongside the caller
+ *      (the overwhelmingly common case for DTOs/interfaces in one module).
+ *   3. Repo-wide exact-name match (first row in deterministic file/line
+ *      order). Name-based per ADR-002; a same-name collision in another file
+ *      may mis-resolve, exactly as reference aggregation does today.
+ *
+ * Returns null when none of the three resolve — the caller skips the hop
+ * (unresolved targets never fail the traversal).
+ */
+function resolveTypeTarget(
+	ref: CodebaseReference,
+	caller: CodebaseSymbol,
+	_repo: string | undefined,
+	symbols: CodebaseSymbol[],
+	symbolsById: Map<string, CodebaseSymbol>,
+	symbolsByFile: Map<string, CodebaseSymbol[]>
+): { symbol: CodebaseSymbol } | null {
+	if (ref.target_symbol_id) {
+		const byId = symbolsById.get(ref.target_symbol_id);
+		if (byId) return { symbol: byId };
+	}
+	if (ref.target_file) {
+		const sameFile = (symbolsByFile.get(ref.target_file) ?? []).find((s) => s.name === ref.symbol_name);
+		if (sameFile) return { symbol: sameFile };
+	}
+	const byName = symbols.find((s) => s.name === ref.symbol_name);
+	if (byName) return { symbol: byName };
+	return null;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────

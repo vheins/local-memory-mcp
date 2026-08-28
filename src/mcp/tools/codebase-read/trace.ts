@@ -1,8 +1,13 @@
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
-import type { CodebaseSymbol, CodebaseReference } from "../../types";
+import type { CodebaseSymbol, CodebaseReference, RelatedTypeEdge } from "../../types";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
-import { traceSymbol, AmbiguousSymbolError, type TraceReference } from "../../codebase-index/services/trace-service";
+import {
+	traceSymbol,
+	AmbiguousSymbolError,
+	collectRelatedTypes,
+	type TraceReference
+} from "../../codebase-index/services/trace-service";
 import { formatDocComment } from "../../utils/doc-comment-format";
 import { logger } from "../../utils/logger";
 
@@ -41,6 +46,60 @@ export function storedReferenceToTraceReference(r: CodebaseReference): TraceRefe
 	};
 }
 
+/**
+ * Render the related-types edge set as an indented tree (issue #84).
+ *
+ * Edges arrive as a flat BFS hop list; the tree groups them by their
+ * `fromSymbolId` source so each level is nested under its parent's line,
+ * mirroring the issue's example:
+ *
+ *   createOrder
+ *   ├─ parameter → CreateOrderDto
+ *   │  └─ property → CreateOrderItemDto
+ *   └─ return → OrderResponseDto
+ *
+ * Cycles/repeated targets are already deduplicated by the traversal (a target
+ * appears once, at its shallowest depth), so the tree is acyclic by
+ * construction. Hops past depth 1 carry a `[d=N]` suffix so transitive
+ * chains stay readable without trusting indentation alone.
+ */
+export function formatRelatedTypeTree(rootName: string, edges: RelatedTypeEdge[]): string {
+	if (edges.length === 0) return rootName;
+	const bySource = new Map<string, RelatedTypeEdge[]>();
+	for (const e of edges) {
+		const arr = bySource.get(e.fromSymbolId) ?? [];
+		arr.push(e);
+		bySource.set(e.fromSymbolId, arr);
+	}
+	const lines: string[] = [rootName];
+
+	// Defensive cycle guard: even though the traversal dedupes targets (each
+	// symbol appears at most once, at its shallowest depth — and the root is
+	// pre-registered as reported), track rendered targets so a malformed or
+	// future edge set can never recurse infinitely on a bySource cycle.
+	const rendered = new Set<string>();
+
+	// Recursively render the edge forest: each edge's line is nested under its
+	// source's line, and its own children (edges whose fromSymbolId is this
+	// edge's target) are nested one level deeper. `prefix` carries the trunk
+	// continuation ("│  ") vs blank ("   ") for the parent's sibling position.
+	const renderEdge = (e: RelatedTypeEdge, prefix: string, isLast: boolean): void => {
+		const branch = isLast ? "└─" : "├─";
+		const depthNote = e.depth > 1 ? ` [d=${e.depth}]` : "";
+		lines.push(`${prefix}${branch} ${e.role ?? "type"} → ${e.targetName}${depthNote}`);
+		if (rendered.has(e.targetSymbolId)) return;
+		rendered.add(e.targetSymbolId);
+		const children = bySource.get(e.targetSymbolId) ?? [];
+		const childPrefix = prefix + (isLast ? "   " : "│  ");
+		children.forEach((c, j) => renderEdge(c, childPrefix, j === children.length - 1));
+	};
+
+	const firstLevel = edges.filter((e) => e.depth === 1);
+	firstLevel.forEach((e, i) => renderEdge(e, "", i === firstLevel.length - 1));
+
+	return lines.join("\n");
+}
+
 async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const name = validated.name!.trim();
 
@@ -51,6 +110,12 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 		: db.codebaseSymbols.getAllSymbols();
 
 	const symbols = allSymbols.length > 0 ? allSymbols : [];
+
+	// Preload 'type' reference rows ONCE per TRACE request (issue #84) — the
+	// related-type traversal reuses this set across every name variant and
+	// depth expansion, avoiding a per-hop DB query.
+	const typeRefs: CodebaseReference[] =
+		validated.includeRelatedTypes && repo ? db.codebaseReferences.getReferencesByRepo(repo, ["type"]) : [];
 
 	function tryTrace(traceName: string): McpResponse | null {
 		try {
@@ -84,17 +149,38 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 							.join("\n")}${result.children.length > 20 ? `\n... and ${result.children.length - 20} more` : ""}`
 					: "";
 
+			// Related-types surface (issue #84): bounded BFS over 'type' edges
+			// when includeRelatedTypes is set. Pure additive — the legacy TRACE
+			// response shape is untouched when the flag is omitted.
+			const relatedTypes =
+				validated.includeRelatedTypes && repo
+					? collectRelatedTypes(result.symbol, repo, symbols, typeRefs, validated.relationDepth ?? 1)
+					: null;
+
+			const relatedList = relatedTypes
+				? `\n\n### Related Types\n\n${relatedTypes.edges.length > 0 ? formatRelatedTypeTree(result.symbol.name, relatedTypes.edges) : "None found"}${relatedTypes.skippedUnresolved > 0 ? `\n\n(${relatedTypes.skippedUnresolved} unresolved type edge${relatedTypes.skippedUnresolved > 1 ? "s" : ""} skipped)` : ""}`
+				: "";
+
 			const docPart = (() => {
 				const d = formatDocComment(result.symbol.doc_comment);
 				return d ? `\nDoc: ${d}` : "";
 			})();
-			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${refList}${hierarchy}`;
+			const contentSummary = `Symbol "${traceName}"\nDefined: ${result.definition.file}:${result.definition.line}-${result.definition.endLine}${docPart}${refList}${hierarchy}${relatedList}`;
 
 			return createMcpResponse(
-				{ ...result, mode: "trace", originalName: traceName !== name ? name : undefined },
+				{
+					...result,
+					mode: "trace",
+					originalName: traceName !== name ? name : undefined,
+					relatedTypes: relatedTypes ? relatedTypes.edges : undefined,
+					relatedTypesSkippedUnresolved: relatedTypes?.skippedUnresolved
+				},
 				`Symbol "${traceName}": defined in ${result.definition.file}:${result.definition.line}, ` +
 					`${result.references.length} references, ` +
-					`${result.parent ? `parent ${result.parent.name}, ` : ""}${result.children.length} children found`,
+					`${result.parent ? `parent ${result.parent.name}, ` : ""}${result.children.length} children found` +
+					(relatedTypes
+						? `, ${relatedTypes.edges.length} related type${relatedTypes.edges.length === 1 ? "" : "s"}`
+						: ""),
 				{ includeJson: true, contentSummary }
 			);
 		} catch (err) {
