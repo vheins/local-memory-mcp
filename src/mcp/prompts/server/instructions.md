@@ -125,12 +125,13 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - Create ONLY for unfinished work (concrete next owner/steps)
 - NO handoff for completion summaries → use task comments (`task-write` with `comment`)
 
-**Codebase Index**: `codebase-index` → `codebase-read`
+**Codebase Index**: `codebase-index` → `codebase-read` — **MANDATORY FIRST for ALL codebase exploration (STRICT)**
 
 - `codebase-index(repo)` = status (freshness + count); `codebase-index(repoPath + repo)` = index (tree-sitter scan)
 - Always check status first. If stale, trigger index before querying.
 - `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, none → architecture. `depth` only applies inside architecture mode.
-- Agents: use codebase index tools FIRST, fall back to explore sub-agent only when index can't answer.
+- **STRICT PRIORITY**: ALL agents (orchestrator + sub-agents) MUST start every codebase context search with `codebase-index`/`codebase-read` — symbols, files, architecture, trace, and content grep.
+- **FORBIDDEN as first resort**: `rg` / `grep` / `glob` / `seed` / `cat` / `bash cat` / `find` / `ls` / brute-force filesystem search — NEVER use before `codebase-read`. Allowed ONLY as fallback after index returns empty/stale or cannot answer, and ONLY via `explore` sub-agent (which itself tries index first before `glob`/`grep`/`cat`). Direct `rg`/`grep`/`cat` without prior `codebase-read` is a violation. `cat` is for reading a **known** file only — never for blind exploration.
 
 ## Who / When
 
@@ -160,4 +161,4 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - `memory-write` is **mandatory** after every task (min 1 entry).
 - Sub-agents **MUST** call `memory-read(query)` during work and `memory-write` (acknowledge) after consuming a memory.
 - Orchestrator calls `memory-read` (recap) at S0.
-- Codebase exploration: codebase index tools FIRST; fall back to explore sub-agent only when the index cannot answer.
+- **Codebase exploration (STRICT — overrides legacy wording below)**: `codebase-index` + `codebase-read` are the MANDATORY first tools for any codebase context discovery. Direct `rg` / `grep` / `glob` / `seed` / `cat` / `find` / `ls` / filesystem brute-force is FORBIDDEN as first resort. Use ONLY via `explore` sub-agent AFTER the index has been tried and cannot answer — `explore` itself will try index first before falling back to `glob`/`grep`/`cat`. `cat` = reading a known path only; using `cat` to brute-force explore unknown files is a violation.
