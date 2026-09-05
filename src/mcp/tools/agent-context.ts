@@ -1,14 +1,19 @@
 import { AgentContextSchema } from "./schemas/index";
 import { SQLiteStore } from "../storage/sqlite";
+import type { MemoryEntry, VectorStore } from "../types";
+import { TASK_STATUS_IN_PROGRESS, TASK_STATUS_PENDING, TASK_STATUS_BACKLOG, TASK_STATUS_BLOCKED } from "../types";
 import {
-	MemoryEntry,
-	Task,
-	VectorStore,
-	TASK_STATUS_IN_PROGRESS,
-	TASK_STATUS_PENDING,
-	TASK_STATUS_BACKLOG,
-	TASK_STATUS_BLOCKED
-} from "../types";
+	AGENT_CONTEXT_SOURCE_ORDER,
+	codeCandidate,
+	handoffCandidate,
+	memoryCandidate,
+	observationCandidate,
+	rankAndPackContext,
+	standardCandidate,
+	taskCandidate,
+	type AgentContextSource,
+	type ContextCandidate
+} from "./agent-context-compiler";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
 
@@ -33,160 +38,190 @@ export async function handleAgentContext(
 	vectors: VectorStore
 ): Promise<McpResponse> {
 	const validated = AgentContextSchema.parse(args);
-	const { owner, repo, query, type_filter, limit, json: isJsonRequest } = validated;
-
-	// 1. Search for relevant memories
-	let memories: MemoryEntry[];
+	const { owner, repo, type_filter, limit, json: isJsonRequest } = validated;
+	const objective = validated.objective ?? validated.query ?? "";
+	const enabled = new Set<AgentContextSource>(validated.sources);
+	const candidateLimit = Math.min(100, Math.max(limit, validated.budget.max_items * 2));
+	let memories: MemoryEntry[] = [];
 	let decisionMemories: MemoryEntry[] = [];
 
-	const shouldFetchDecisions = !type_filter || type_filter === "decision";
-
-	if (query) {
-		// Primary: vector search with hybrid scoring per SPEC-001
-		try {
-			const vectorResults = await vectors.search(query, limit, repo);
-			if (vectorResults.length > 0) {
-				const ids = vectorResults.map((r) => r.id);
-				const idSet = new Set(ids);
-				// Build vector score map for hybrid scoring
-				const vectorScoreMap = new Map<string, number>();
-				for (const vr of vectorResults) {
-					vectorScoreMap.set(vr.id, vr.score);
-				}
-				// Bulk-fetch in a single query (TASK-023), preserving vector rank order
-				const fetched = db.memories.getByIds(ids);
-				const fetchedById = new Map(fetched.map((m) => [m.id, m]));
-				memories = ids
-					.map((id) => fetchedById.get(id))
-					.filter((m): m is MemoryEntry => m !== undefined && idSet.has(m.id));
-				// Apply type_filter post-hoc if set
-				if (type_filter) {
-					memories = memories.filter((m) => m.type === type_filter);
-				}
-				// Apply hybrid scoring: final = (vector × 0.30) + (importance/5 × 0.70)
-				// — deliberate divergence from SPEC-001, see AGENT_CONTEXT_BLEND.
+	if (enabled.has("memories")) {
+		if (objective) {
+			try {
+				const vectorResults = await vectors.search(objective, candidateLimit, repo);
+				const vectorScores = new Map(vectorResults.map((result) => [result.id, result.score]));
+				const byId = new Map(
+					db.memories.getByIds(vectorResults.map((result) => result.id)).map((memory) => [memory.id, memory])
+				);
+				memories = vectorResults
+					.map((result) => byId.get(result.id))
+					.filter((item): item is MemoryEntry => Boolean(item));
+				if (type_filter) memories = memories.filter((memory) => memory.type === type_filter);
 				memories.sort((a, b) => {
-					const vecA = vectorScoreMap.get(a.id) ?? 0;
-					const vecB = vectorScoreMap.get(b.id) ?? 0;
-					const importanceA = (a.importance ?? 3) / 5;
-					const importanceB = (b.importance ?? 3) / 5;
-					const blendedA = vecA * AGENT_CONTEXT_BLEND.vector + importanceA * AGENT_CONTEXT_BLEND.importance;
-					const blendedB = vecB * AGENT_CONTEXT_BLEND.vector + importanceB * AGENT_CONTEXT_BLEND.importance;
-					return blendedB - blendedA;
+					const score = (memory: MemoryEntry) =>
+						(vectorScores.get(memory.id) ?? 0) * AGENT_CONTEXT_BLEND.vector +
+						((memory.importance ?? 3) / 5) * AGENT_CONTEXT_BLEND.importance;
+					return score(b) - score(a) || a.id.localeCompare(b.id);
 				});
-			} else {
-				memories = db.memories.searchByRepo(owner, repo, query, type_filter, limit);
+				if (memories.length === 0)
+					memories = db.memories.searchByRepo(owner, repo, objective, type_filter, candidateLimit);
+			} catch {
+				logger.warn("[Tool] agent-context vector search failed, falling back to keyword", { repo });
+				memories = db.memories.searchByRepo(owner, repo, objective, type_filter, candidateLimit);
 			}
-		} catch {
-			logger.warn("[Tool] agent-context vector search failed, falling back to keyword", { repo });
-			memories = db.memories.searchByRepo(owner, repo, query, type_filter, limit);
+		} else {
+			const excludeTypes: string[] = type_filter ? [] : ["decision"];
+			memories = db.memories.getRecentMemories(owner, repo, candidateLimit, 0, false, excludeTypes);
+			if (type_filter) memories = memories.filter((memory) => memory.type === type_filter);
 		}
-		if (shouldFetchDecisions) {
-			decisionMemories = db.memories.searchByRepo(owner, repo, "", "decision", limit);
-		}
-	} else {
-		const excludeTypes: string[] = type_filter ? [] : ["decision"];
-		memories = db.memories.getRecentMemories(owner, repo, limit, 0, false, excludeTypes);
-		if (type_filter) {
-			memories = memories.filter((m) => m.type === type_filter);
-		}
-		if (shouldFetchDecisions) {
-			decisionMemories = db.memories.searchByRepo(owner, repo, "", "decision", limit);
+	}
+	if (enabled.has("decisions") && (!type_filter || type_filter === "decision")) {
+		decisionMemories = db.memories.searchByRepo(owner, repo, objective, "decision", candidateLimit);
+	}
+
+	const activeTasks = enabled.has("tasks")
+		? db.tasks.getTasksByMultipleStatuses(owner, repo, ACTIVE_TASK_STATUSES, candidateLimit, 0, objective || undefined)
+		: [];
+	if (
+		enabled.has("tasks") &&
+		validated.task_code &&
+		!activeTasks.some((task) => task.task_code === validated.task_code)
+	) {
+		const requested = db.tasks.getTaskByCode(owner, repo, validated.task_code);
+		if (requested) activeTasks.unshift(requested);
+	}
+	const handoffs = enabled.has("handoffs")
+		? db.handoffs.listHandoffs({ owner, repo, status: "pending", limit: candidateLimit, offset: 0 })
+		: [];
+	const standards = enabled.has("standards")
+		? db.standards.search({ query: objective || undefined, owner, repo, limit: candidateLimit, offset: 0 })
+		: [];
+	const observations = enabled.has("observations")
+		? db.explorationObservations.list({
+				owner,
+				repo,
+				include_stale: validated.include_stale,
+				limit: candidateLimit,
+				offset: 0
+			})
+		: [];
+	const codeSymbols =
+		enabled.has("code") && validated.current_file_path
+			? db.codebaseSymbols.getSymbolsByFile(repo, validated.current_file_path).slice(0, candidateLimit)
+			: [];
+	if (enabled.has("code") && validated.current_file_path && validated.budget.code_depth > 0) {
+		const symbolIds = new Set(codeSymbols.map((symbol) => symbol.id));
+		let frontier = [validated.current_file_path];
+		for (let depth = 0; depth < validated.budget.code_depth && frontier.length > 0; depth++) {
+			const nextFiles = new Set<string>();
+			for (const filePath of frontier.sort()) {
+				for (const reference of db.codebaseReferences.getReferencesByFile(repo, filePath).slice(0, candidateLimit)) {
+					const targetSymbols = reference.target_file
+						? db.codebaseSymbols.getSymbolsByFile(repo, reference.target_file)
+						: db.codebaseSymbols.getSymbolByName(repo, reference.symbol_name);
+					const referenced = reference.target_symbol_id
+						? targetSymbols.find((symbol) => symbol.id === reference.target_symbol_id)
+						: targetSymbols.find((symbol) => symbol.name === reference.symbol_name);
+					if (referenced && !symbolIds.has(referenced.id)) {
+						codeSymbols.push(referenced);
+						symbolIds.add(referenced.id);
+					}
+					if (reference.target_file) nextFiles.add(reference.target_file);
+					if (codeSymbols.length >= candidateLimit) break;
+				}
+				if (codeSymbols.length >= candidateLimit) break;
+			}
+			frontier = [...nextFiles];
 		}
 	}
 
-	// 2. Get active tasks
-	const activeTasks = db.tasks.getTasksByMultipleStatuses(owner, repo, ACTIVE_TASK_STATUSES, 10, 0);
+	const memoryIds = new Set(memories.map((memory) => memory.id));
+	const uniqueDecisions = decisionMemories.filter((decision) => !memoryIds.has(decision.id));
+	const candidates: ContextCandidate[] = [];
+	memories.forEach((memory) => candidates.push(memoryCandidate(memory, "memories")));
+	uniqueDecisions.forEach((decision) => candidates.push(memoryCandidate(decision, "decisions")));
+	activeTasks.forEach((task) => candidates.push(taskCandidate(task, validated.task_code)));
+	handoffs.forEach((handoff) => candidates.push(handoffCandidate(handoff)));
+	standards.forEach((standard) => candidates.push(standardCandidate(standard)));
+	observations.forEach((observation) => candidates.push(observationCandidate(observation)));
+	codeSymbols.forEach((symbol) => candidates.push(codeCandidate(symbol)));
+	const packed = rankAndPackContext(candidates, objective, validated.budget);
+	// Keep the legacy projections independent from compiler packing so existing
+	// consumers do not lose rows merely because another source won the budget.
+	const selectedMemories = memories.slice(0, limit);
+	const selectedDecisions = uniqueDecisions.slice(0, limit);
+	const selectedTasks = activeTasks.slice(0, 10);
 
-	// 3. Deduplicate: remove any decision memories already in the general memories list
-	const memoryIds = new Set(memories.map((m) => m.id));
-	const uniqueDecisions = decisionMemories.filter((d) => !memoryIds.has(d.id));
-
-	// 4. Build formatted context block
-	const sections: string[] = [];
+	const sections = [`--- Active Context for "${repo}" ---`, "", "== Relevant Memories =="];
 	sections.push(
-		`--- Active Context for "${repo}" --- (${memories.length} memories, ${activeTasks.length} tasks, ${uniqueDecisions.length} decisions)`
+		...(selectedMemories.length
+			? selectedMemories.map((memory) => `- [${memory.code || "-"}] ${memory.title}: ${memory.content.slice(0, 120)}`)
+			: ["(No relevant memories selected)"])
 	);
-	sections.push("");
-
-	// Memories section
-	sections.push("== Relevant Memories ==");
-	if (memories.length === 0) {
-		sections.push("(No relevant memories found)");
-	} else {
-		for (const m of memories) {
-			const code = m.code || "-";
-			const snippet = m.content.length > 120 ? m.content.slice(0, 120) + "..." : m.content;
-			sections.push(`- [${code}] (${m.type}, importance: ${m.importance}) ${m.title}`);
-			sections.push(`  ${snippet}`);
-		}
-	}
-	sections.push("");
-
-	// Active Tasks section
-	sections.push("== Active Tasks ==");
-	if (activeTasks.length === 0) {
-		sections.push("(No active tasks)");
-	} else {
-		for (const t of activeTasks) {
-			sections.push(`- ${t.task_code} | ${t.status} | priority: ${t.priority} | ${t.title}`);
-		}
-	}
-	sections.push("");
-
-	// Recent Decisions section
-	sections.push("== Recent Decisions ==");
-	if (uniqueDecisions.length === 0) {
-		sections.push("(No recent decision memories)");
-	} else {
-		for (const d of uniqueDecisions) {
-			const code = d.code || "-";
-			const snippet = d.content.length > 150 ? d.content.slice(0, 150) + "..." : d.content;
-			sections.push(`- [${code}] (importance: ${d.importance}) ${d.title}`);
-			sections.push(`  ${snippet}`);
-		}
-	}
-	sections.push("");
-	if (memories.length > 0 || activeTasks.length > 0 || uniqueDecisions.length > 0) {
-		sections.push("Use memory-detail with a memory code for full content.");
-	}
-
+	sections.push("", "== Compiled Context ==");
+	sections.push(
+		...(packed.included.length
+			? packed.included.map((item) => `- [${item.source}/${item.id}] ${item.title}: ${item.text.slice(0, 180)}`)
+			: ["(No candidates fit the requested budget)"])
+	);
+	sections.push(
+		"",
+		`Estimated ${packed.estimatedTokens}/${validated.budget.tokens} tokens across ${packed.included.length} items.`
+	);
 	const contentSummary = sections.join("\n").trim();
-
+	const sourceAllocation = Object.fromEntries(
+		AGENT_CONTEXT_SOURCE_ORDER.map((source) => [
+			source,
+			{
+				included: packed.included.filter((item) => item.source === source).length,
+				excluded: packed.exclusions.filter((item) => item.source === source).length,
+				estimated_tokens: packed.included
+					.filter((item) => item.source === source)
+					.reduce((sum, item) => sum + item.estimated_tokens, 0)
+			}
+		])
+	);
 	const structuredData = {
 		schema: "agent-context" as const,
+		mode: "compiled" as const,
 		repo,
-		query: query || null,
-		memories: memories.map((m) => ({
-			id: m.id,
-			code: m.code || null,
-			title: m.title,
-			type: m.type,
-			importance: m.importance
+		query: objective || null,
+		objective: objective || null,
+		memories: selectedMemories.map((memory) => ({
+			id: memory.id,
+			code: memory.code || null,
+			title: memory.title,
+			type: memory.type,
+			importance: memory.importance
 		})),
-		decisions: uniqueDecisions.map((d) => ({
-			id: d.id,
-			code: d.code || null,
-			title: d.title,
-			importance: d.importance
+		decisions: selectedDecisions.map((decision) => ({
+			id: decision.id,
+			code: decision.code || null,
+			title: decision.title,
+			importance: decision.importance
 		})),
-		tasks: activeTasks.map((t: Task) => ({
-			task_code: t.task_code,
-			title: t.title,
-			status: t.status,
-			priority: t.priority
-		}))
+		tasks: selectedTasks.map((task) => ({
+			task_code: task.task_code,
+			title: task.title,
+			status: task.status,
+			priority: task.priority
+		})),
+		context: packed.included.map(({ priority: _priority, critical: _critical, ...item }) => item),
+		estimated_tokens: packed.estimatedTokens,
+		budget: validated.budget,
+		allocation: {
+			included_items: packed.included.length,
+			excluded_items: packed.exclusions.length,
+			sources: sourceAllocation
+		},
+		exclusions: packed.exclusions
 	};
 
 	logger.info("[Tool] agent-context", {
 		repo,
-		memories: memories.length,
-		decisions: uniqueDecisions.length,
-		tasks: activeTasks.length
+		included: packed.included.length,
+		excluded: packed.exclusions.length,
+		estimatedTokens: packed.estimatedTokens
 	});
-
-	return createMcpResponse(structuredData, contentSummary, {
-		contentSummary,
-		includeJson: isJsonRequest
-	});
+	return createMcpResponse(structuredData, contentSummary, { contentSummary, includeJson: isJsonRequest });
 }
