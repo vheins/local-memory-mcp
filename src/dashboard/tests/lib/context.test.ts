@@ -24,6 +24,7 @@ import fs from "node:fs";
 import type { MemoryEntry } from "../../../mcp/types/memory";
 import { db, embeddingWorker, logger, mcpClient, startTime, vectors } from "../../lib/context";
 import { SQLiteStore } from "../../../mcp/storage/sqlite";
+import { CapabilityAwareVectorStore } from "../../../mcp/storage/lazy-vectors";
 
 const mocks = vi.hoisted(() => {
 	// Force sqlite.ts's module-level `resolveDbPath()` (evaluated at import
@@ -35,6 +36,9 @@ const mocks = vi.hoisted(() => {
 	class RealVectorStoreMock {
 		readonly db: unknown;
 		readonly initialize: ReturnType<typeof vi.fn>;
+		readonly upsert = vi.fn();
+		readonly remove = vi.fn();
+		readonly search = vi.fn();
 		constructor(db: unknown) {
 			this.db = db;
 			this.initialize = vi.fn().mockResolvedValue(undefined);
@@ -99,18 +103,19 @@ describe("context module wiring (deps stubbed, store real)", () => {
 		expect(mcpClient).toBeInstanceOf(mocks.MCPClientMock);
 	});
 
-	it("constructs RealVectorStore with the store instance and initializes it once", () => {
-		const vectorStore = vectors as unknown as { db: unknown; initialize: MockedFn };
-		expect(vectors).toBeInstanceOf(mocks.RealVectorStoreMock);
+	it("wraps RealVectorStore and keeps full-profile startup backward compatible", () => {
+		expect(vectors).toBeInstanceOf(CapabilityAwareVectorStore);
+		const vectorStore = vectors.getInnerStore() as unknown as { db: unknown; initialize: MockedFn };
+		expect(vectorStore).toBeInstanceOf(mocks.RealVectorStoreMock);
 		expect(vectorStore.db).toBe(db);
 		expect(vectorStore.initialize).toHaveBeenCalledTimes(1);
 	});
 
-	it("constructs EmbeddingWorker with (db, vectors)", () => {
+	it("constructs EmbeddingWorker with the real vector store", () => {
 		const worker = embeddingWorker as unknown as { db: unknown; vectors: unknown };
 		expect(embeddingWorker).toBeInstanceOf(mocks.EmbeddingWorkerMock);
 		expect(worker.db).toBe(db);
-		expect(worker.vectors).toBe(vectors);
+		expect(worker.vectors).toBe(vectors.getInnerStore());
 	});
 
 	it("records a finite startTime", () => {

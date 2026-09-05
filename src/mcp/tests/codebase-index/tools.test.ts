@@ -20,6 +20,7 @@ import { handleCodebaseIndex } from "../../tools/codebase-index-sdk";
 import { handleCodebaseRead } from "../../tools/codebase.read";
 import { createTestStore, SQLiteStore } from "../../storage/sqlite";
 import { VectorStore } from "../../types";
+import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "../../runtime-capabilities";
 
 // ── No-op vector store for tests that don't need vectors ────────────────
 
@@ -107,6 +108,36 @@ describe("handleCodebaseIndex (write)", () => {
 
 	beforeEach(() => {
 		vectors = noopVectorStore();
+	});
+
+	it("returns runtime capability status without loading the parser", async () => {
+		setRuntimeCapabilities(new RuntimeCapabilityRegistry("balanced"));
+		const store = await createTestStore();
+		try {
+			const response = await handleCodebaseIndex({ owner: "vheins", repo: "test-repo" }, store, vectors);
+			expect(response.structuredContent).toMatchObject({
+				runtime: { profile: "balanced", capabilities: { indexing: { state: "idle" } } }
+			});
+		} finally {
+			store.close();
+			setRuntimeCapabilities(new RuntimeCapabilityRegistry("full"));
+		}
+	});
+
+	it("warms the index capability explicitly through the existing surface", async () => {
+		const registry = new RuntimeCapabilityRegistry("balanced");
+		setRuntimeCapabilities(registry);
+		const store = await createTestStore();
+		try {
+			const response = await handleCodebaseIndex({ owner: "vheins", repo: "test-repo", warmup: true }, store, vectors);
+			expect(response.structuredContent).toMatchObject({
+				profile: "balanced",
+				capabilities: { indexing: { state: "ready" } }
+			});
+		} finally {
+			store.close();
+			setRuntimeCapabilities(new RuntimeCapabilityRegistry("full"));
+		}
 	});
 
 	it("returns input validation error for missing repoPath", async () => {

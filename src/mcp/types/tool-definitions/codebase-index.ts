@@ -27,7 +27,8 @@ export const CODEBASE_INDEX_TOOL_DEFINITIONS = [
 			"Unified tool for codebase index management. " +
 			"Auto-infers mode from params: " +
 			"`repoPath` + `repo` → index (tree-sitter scan, replaces index_repository); " +
-			"`repo` saja (tanpa repoPath) → status (freshness + count, replaces index_status).",
+			"`repo` saja (tanpa repoPath) → status (freshness + runtime capability state); " +
+			"`warmup:true` explicitly initializes the index engine.",
 		annotations: {
 			readOnlyHint: false,
 			idempotentHint: true,

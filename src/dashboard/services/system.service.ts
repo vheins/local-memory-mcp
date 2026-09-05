@@ -10,6 +10,7 @@ import { getCachedRepoStats, setCachedRepoStats } from "./statsCache";
 import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
 import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
+import { getRuntimeCapabilities, type RuntimeCapabilitySnapshot } from "../../mcp/runtime-capabilities";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -66,6 +67,7 @@ export interface CapabilitySet {
 	tools: Array<Record<string, unknown>>;
 	resources: Array<Record<string, unknown>>;
 	prompts: Array<Record<string, unknown>>;
+	runtime: RuntimeCapabilitySnapshot;
 }
 
 export const SystemService = {
@@ -165,7 +167,7 @@ export const SystemService = {
 			id: prompt.name,
 			attributes: prompt
 		}));
-		return { tools, resources, prompts };
+		return { tools, resources, prompts, runtime: getRuntimeCapabilities().snapshot() };
 	},
 
 	/** Streams a full owner/repo export (memories → tasks → comments). */

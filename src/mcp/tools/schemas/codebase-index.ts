@@ -17,6 +17,7 @@ export const CodebaseIndexSchema = z.object({
 	owner: z.string().min(1).optional(),
 	repo: z.string().min(1).transform(normalizeRepo),
 	repoPath: z.string().optional(),
+	warmup: z.boolean().optional(),
 	force: z.boolean().optional(),
 	includeGlobs: z.array(z.string()).optional(),
 	excludeGlobs: z.array(z.string()).optional()

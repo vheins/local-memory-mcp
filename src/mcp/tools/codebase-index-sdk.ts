@@ -13,8 +13,11 @@ import type { McpResponse } from "../utils/mcp-response";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { handleCodebaseIndexRepository, handleCodebaseIndexStatus } from "./codebase-index";
+import { getCodebaseParserPool } from "../codebase-index/parser/singleton";
 import { logger } from "../utils/logger";
 import { CodebaseIndexSchema } from "./schemas/codebase-index";
+import { getRuntimeCapabilities } from "../runtime-capabilities";
+import { createMcpResponse } from "../utils/mcp-response";
 
 export { CodebaseIndexSchema };
 export type CodebaseIndexInput = z.infer<typeof CodebaseIndexSchema>;
@@ -57,6 +60,23 @@ export async function handleCodebaseIndex(
 ): Promise<McpResponse> {
 	const validated = CodebaseIndexSchema.parse(params);
 	const mode = inferMode(validated);
+	const capabilities = getRuntimeCapabilities();
+	if (!capabilities.hasLoader("indexing")) {
+		capabilities.register("indexing", () => getCodebaseParserPool().initialize());
+	}
+	if (validated.warmup) {
+		if (!capabilities.isAvailable("indexing")) {
+			return createMcpResponse(
+				capabilities.snapshot(),
+				"Index capability is unavailable in the minimal runtime profile.",
+				{ includeJson: true }
+			);
+		}
+		const status = await capabilities.warmup(["indexing"]);
+		return createMcpResponse(status, `Index capability: ${status.capabilities.indexing.state}`, {
+			includeJson: true
+		});
+	}
 
 	logger.info("[Tool] codebase-index", {
 		repo: validated.repo,
@@ -64,8 +84,15 @@ export async function handleCodebaseIndex(
 	});
 
 	switch (mode) {
-		case "index":
+		case "index": {
+			const ready = await capabilities.ensure("indexing");
+			if (!ready) {
+				return createMcpResponse(capabilities.snapshot(), "Index capability unavailable in this runtime profile.", {
+					includeJson: true
+				});
+			}
 			return handleCodebaseIndexRepository(params, db, vectors);
+		}
 		case "status":
 			return handleCodebaseIndexStatus(params, db, vectors);
 	}

@@ -75,6 +75,16 @@ vi.mock("../../../mcp/resources", () => ({
 	}))
 }));
 
+vi.mock("../../../mcp/runtime-capabilities", () => ({
+	getRuntimeCapabilities: () => ({
+		snapshot: () => ({
+			profile: "full",
+			capabilities: { semantic: { state: "ready" } },
+			footprint: { rss_bytes: 1024, heap_used_bytes: 512 }
+		})
+	})
+}));
+
 vi.mock("../../../mcp/prompts/registry", () => ({
 	PROMPTS: {
 		greeter: { name: "greeter", description: "Greets the user" },
@@ -263,6 +273,11 @@ describe("SystemService.getCapabilities", () => {
 
 		expect(caps.prompts.map((p) => p.id)).toEqual(["greeter", "fallback"]);
 		expect(caps.prompts[0]).toMatchObject({ type: "prompt", id: "greeter" });
+		expect(caps.runtime).toMatchObject({
+			profile: "full",
+			capabilities: { semantic: { state: "ready" } },
+			footprint: { rss_bytes: 1024, heap_used_bytes: 512 }
+		});
 	});
 });
 

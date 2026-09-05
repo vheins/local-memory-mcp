@@ -7,13 +7,15 @@ import { createMcpServer } from "./mcp-server";
 import { updateSessionFromInitialize } from "./session";
 import { SQLiteStore } from "./storage/sqlite";
 import { RealVectorStore } from "./storage/vectors";
+import { CapabilityAwareVectorStore } from "./storage/lazy-vectors";
 import { EmbeddingWorker } from "./embedding-queue";
+import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "./runtime-capabilities";
 import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
-import { TreeSitterParserPool } from "./codebase-index/parser/parser-pool";
+import { getCodebaseParserPool } from "./codebase-index/parser/singleton";
 import { FileWatcher, registerRepo } from "./codebase-index/services/file-watcher";
 import fs from "fs";
 import path from "path";
@@ -96,9 +98,13 @@ process.on("uncaughtException", (err: Error) => {
 	});
 });
 
-// Create storage instances
+// Create the core store first. Optional engines are registered below and
+// initialized through one single-flight capability registry.
 const db = await SQLiteStore.create();
-const vectors = new RealVectorStore(db);
+const realVectors = new RealVectorStore(db);
+const runtimeCapabilities = new RuntimeCapabilityRegistry();
+setRuntimeCapabilities(runtimeCapabilities);
+const vectors = new CapabilityAwareVectorStore(realVectors, runtimeCapabilities);
 
 // Register file log sink (same dir as DB, retain last 5 files) BEFORE the
 // embedding worker starts (TASK-457 fix8): embeddingWorker.start() runs the
@@ -110,52 +116,53 @@ addLogSink(createFileSink(path.dirname(db.getDbPath())));
 // Start the embedding/KG outbox worker (TASK-013): drains queue_jobs with
 // batched ONNX inference + KG extraction OUTSIDE the write lock. Startup
 // reconcile/backfill/purge run inside the worker.
-const embeddingWorker = new EmbeddingWorker(db, vectors);
-embeddingWorker.start();
+const embeddingWorker = new EmbeddingWorker(db, realVectors);
+runtimeCapabilities.register("semantic", async () => {
+	// Preserve the worker's independent retry/maintenance loop even if the
+	// first ONNX initialization fails.
+	embeddingWorker.start();
+	await realVectors.initialize();
+});
 
-// Parser pool for codebase indexing — shared by the startup auto-index and
-// the polling file watcher (TASK-322 / US-08). Lazy-initialized on first
-// parse (TreeSitterParserPool.parseFile auto-initializes), so no eager WASM
-// load here. NOTE: tools/codebase-index.ts keeps its own lazy singleton pool
-// (used by MCP tool + dashboard index calls); two pools coexist bounded by
-// the per-language WASM cache.
-const parserPool = new TreeSitterParserPool();
-
-// Polling file watcher (TASK-322 / US-08): sweeps registered repos over
-// autoIndexIfStale with a short TTL — no fs.watch. Hosted ONLY by this MCP
-// server process (the dashboard runs its own index path in a separate
-// process; hosting the loop there too would double-index). Gated by
-// ENABLE_FILE_WATCHER (default enabled). The startup auto-index block below
-// registers the CWD repo so the watcher keeps it fresh.
-const fileWatcher = new FileWatcher(db, parserPool);
-fileWatcher.start();
-
-logger.info("[Server] startup", { pid: process.pid, version: CAPABILITIES.serverInfo.version, db: db.getDbPath() });
-
-// Pre-load vector model — block startup until ready or timeout (30s)
-try {
-	await Promise.race([
-		vectors.initialize(),
-		new Promise((_, reject) => setTimeout(() => reject(new Error("Vector model init timed out after 30s")), 30000))
-	]);
-	logger.info("[Server] Vector model loaded (384-dim)");
-} catch (err) {
-	logger.warn("[Server] Vector model init failed. Will retry on first use.", { error: String(err) });
+// Parser and watcher objects are not constructed until their capabilities are
+// demanded. All paths still share the process-wide parser singleton.
+let fileWatcher: FileWatcher | null = null;
+runtimeCapabilities.register("indexing", () => getCodebaseParserPool().initialize());
+runtimeCapabilities.register("watcher", () => {
+	fileWatcher ??= new FileWatcher(db, getCodebaseParserPool());
+	fileWatcher.start();
+});
+if (process.env.ENABLE_FILE_WATCHER === "false") {
+	runtimeCapabilities.disable("watcher", "Disabled via ENABLE_FILE_WATCHER=false");
 }
+runtimeCapabilities.register("maintenance", async () => {
+	const result = await runStartupMaintenance(db);
+	if (!result.skipped) {
+		logger.info("[Server] Startup maintenance complete", {
+			decayed: result.decay.decayed,
+			archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived
+		});
+	}
+});
 
-// Run startup maintenance: memory decay, expired archiving, and low-score archiving
-runStartupMaintenance(db)
-	.then((result) => {
-		if (!result.skipped) {
-			logger.info("[Server] Startup maintenance complete", {
-				decayed: result.decay.decayed,
-				archived: result.expiredArchived + result.lowScoreArchived + result.decay.archived
-			});
-		}
-	})
-	.catch((err) => {
-		logger.error("[Server] Startup maintenance failed", { error: String(err) });
-	});
+logger.info("[Server] startup", {
+	pid: process.pid,
+	version: CAPABILITIES.serverInfo.version,
+	db: db.getDbPath(),
+	profile: runtimeCapabilities.profile
+});
+
+if (runtimeCapabilities.profile === "full") {
+	try {
+		await Promise.race([
+			runtimeCapabilities.ensure("semantic"),
+			new Promise((_, reject) => setTimeout(() => reject(new Error("Semantic warm-up timed out after 30s")), 30000))
+		]);
+	} catch (error) {
+		logger.warn("[Server] Semantic warm-up failed. Will retry on first use.", { error: String(error) });
+	}
+	void runtimeCapabilities.ensure("maintenance");
+}
 
 // Run startup auto-index: triggers codebase indexing for the current working
 // directory if the index has never been built or is older than TTL (default
@@ -164,28 +171,26 @@ runStartupMaintenance(db)
 // runs in the background; the dashboard polls /api/codebase/index-status.
 // The repo is registered with the file watcher so the polling sweep keeps it
 // fresh after the first build (watch set = startup repo + tool-indexed repos).
-{
+if (runtimeCapabilities.profile === "full" && process.env.CODEBASE_AUTO_INDEX !== "false") {
 	const repoName = path.basename(process.cwd());
 	const repoPath = process.cwd();
 	registerRepo(repoName, repoPath);
-	void parserPool
-		.initialize()
-		.then(() => {
-			void autoIndexIfStale(repoName, repoPath, db, parserPool)
-				.then((result) => {
-					logger.info("[Server] Auto-index check complete", {
-						repo: repoName,
-						status: result.status,
-						reason: result.reason
-					});
-				})
-				.catch((err) => {
-					logger.warn("[Server] Auto-index check failed", { error: String(err) });
+	void runtimeCapabilities.ensure("indexing").then((ready) => {
+		if (!ready) return;
+		void autoIndexIfStale(repoName, repoPath, db, getCodebaseParserPool())
+			.then((result) => {
+				logger.info("[Server] Auto-index check complete", {
+					repo: repoName,
+					status: result.status,
+					reason: result.reason
 				});
-		})
-		.catch((err) => {
-			logger.warn("[Server] Auto-index parser pool initialization failed", { error: String(err) });
-		});
+				void runtimeCapabilities.ensure("watcher");
+			})
+			.catch((err) => {
+				runtimeCapabilities.markDegraded("indexing", String(err));
+				logger.warn("[Server] Auto-index check failed", { error: String(err) });
+			});
+	});
 }
 
 // Ignore EPIPE errors on stdout/stderr (e.g. if the client disconnects prematurely)
@@ -203,7 +208,7 @@ process.stderr.on("error", (err: unknown) => {
 const shutdown = async (signal: string) => {
 	logger.info("[Server] shutdown", { signal, pid: process.pid });
 	embeddingWorker.stop();
-	fileWatcher.stop();
+	fileWatcher?.stop();
 	await handle?.close();
 	db.close();
 	process.exit(0);

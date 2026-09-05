@@ -36,6 +36,7 @@ import { VectorStore } from "./types";
 import { SamplingRequestHandler } from "./sampling";
 import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
+import { getRuntimeCapabilities, isSemanticToolDemand } from "./runtime-capabilities";
 import { decodeCursor, encodeCursor } from "./utils/pagination";
 
 type RouterOptions = {
@@ -175,6 +176,12 @@ export function createRouter(
 		const isWrite = WRITE_TOOLS.has(toolName);
 
 		logger.info(`[Tool] ${toolName}`, { repo, write: isWrite });
+
+		// Same lazy semantic trigger as the SDK path so both transports share
+		// one capability lifecycle.
+		if (isSemanticToolDemand(toolName, args)) {
+			void getRuntimeCapabilities().ensure("semantic");
+		}
 
 		let result: unknown;
 		try {

@@ -96,9 +96,11 @@ that exit as a real failure — the coverage artifacts are still written.
 ## MCP server & tool surface
 
 - Transport is **stdio**; `src/mcp/server.ts` constructs the `McpServer` and
-  registers tools/resources/prompts. Startup also: auto-indexes its **own CWD**
-  (`CODEBASE_AUTO_INDEX`), starts the file-watcher sweep (`ENABLE_FILE_WATCHER`),
-  preloads the vector model (30s timeout), and starts the offloaded embedding worker.
+  registers tools/resources/prompts. Runtime profile `MCP_RUNTIME_PROFILE` controls
+  optional engines: `full` (default, backward-compatible eager startup), `balanced`
+  (semantic/index engines on first demand), or `minimal` (SQLite + lexical core only).
+  Legacy `CODEBASE_AUTO_INDEX` / `ENABLE_FILE_WATCHER` flags still override the full
+  profile's proactive indexing/watcher behavior.
 - **Tool contract is CANONICAL in `src/mcp/prompts/server/instructions.md`**
   (injected as the MCP server's instructions): registered tool names, auto-infer
   semantics, the who/when matrix, and micro-flows. Do NOT re-document the contract
@@ -134,16 +136,17 @@ codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
   = open**), `CODEBASE_AUTO_INDEX` (`"false"` disables startup index),
   `CODEBASE_AUTO_INDEX_TTL` (default 24h), `ENABLE_FILE_WATCHER` (`"false"` disables
   the re-index sweep), `MCP_MODEL`, `CODEBASE_REPOS_DIR` (dashboard only),
-  `EMBEDDING_QUEUE_BATCH_SIZE`, `FILE_WATCH_INTERVAL_MS`. **No `GH_TOKEN`** is used
-  by this repo. **Embeddings are OFFLOADED to an async queue** (migration v9); no
-  explicit env var gate exists — the queue worker starts inline on server startup.
+  `EMBEDDING_QUEUE_BATCH_SIZE`, `FILE_WATCH_INTERVAL_MS`, `MCP_RUNTIME_PROFILE`.
+  **No `GH_TOKEN`** is used by this repo. **Embeddings are OFFLOADED to an async
+  queue** (migration v9); worker startup follows the selected runtime profile.
 - **Semantic model** `Xenova/all-MiniLM-L6-v2` is downloaded at runtime via
   `@xenova/transformers` on first search/upsert — **needs network on first use**
   unless cached.
 - **Embeddings are OFFLOADED to an async queue** (migration v9): after a
   `memory-write`/`standard-write`/`task-write`, the vector is **not instant** — there
   is a brief searchability window (typically <1s) before the semantic score converges.
-  No explicit env var gate exists — the queue worker starts inline on server startup.
+  `full` starts the queue worker eagerly; `balanced` starts it on first semantic
+  read/write; `minimal` leaves semantic enrichment unavailable while lexical tools work.
 - **Memory search uses FTS5** (migration v10) with the `unicode61` tokenizer and `*`
   prefix matching — mid-word substring matches are **not** guaranteed (trigram deferred).
 
@@ -164,6 +167,7 @@ worker starts inline at startup).
 | `LOG_LEVEL`           | `info`                           | Log level (`trace`/`debug`/`info`/`warn`/`error`), lowercased.       |
 | `MCP_CLIENT_NAME`     | — (session fallback)             | Default agent name when a tool call omits `agent`.                   |
 | `MCP_MODEL`           | — (session fallback)             | Default model when a tool call omits `model`.                        |
+| `MCP_RUNTIME_PROFILE` | `full`                           | `minimal`, `balanced`, or backward-compatible `full`.                |
 | `ENABLE_AUTO_ARCHIVE` | `"false"` (disabled)             | Set to `"true"` to enable automatic memory archiving on startup.     |
 
 ### Dashboard

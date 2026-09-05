@@ -79,7 +79,23 @@ Memory usage is bounded by the parse batch — it scales with concurrency and th
 | `DEFAULT_BATCH_SIZE`               | `number` | `100`                              | Rows per DB transaction batch (file/symbol writes). Raise for fewer transaction commits; lower to reduce write-batch memory.                                         |
 | `INDEX_STALENESS_TTL_MS`           | `number` | `30000` (30s)                      | Cache TTL for user-facing `index_status` staleness results (reduces repeated filesystem stats). Set `0` to disable caching.                                          |
 
-**Override priority** (applies to all vars): explicit `options` parameter > environment variable > hardcoded default.
+**Override priority** (applies to all vars): explicit `options` parameter > legacy environment variable > runtime profile default > hardcoded default. `MCP_RUNTIME_PROFILE` supports:
+
+- `minimal`: SQLite and lexical memory/task/handoff/standard operations only; no parser, watcher, maintenance loop, or ONNX startup.
+- `balanced`: semantic and indexing engines initialize through a single-flight loader on first demand; no proactive watcher/maintenance.
+- `full` (default): preserves the historical zero-config behavior. `CODEBASE_AUTO_INDEX=false` and `ENABLE_FILE_WATCHER=false` still disable their respective proactive paths.
+
+`codebase-index({repo, warmup:true})` explicitly initializes the parser engine. Status mode includes `runtime` with profile, per-capability state/error/duration, and current RSS/heap estimates.
+
+Measured against independent copies of a production-sized SQLite database through the bundled stdio server (`n=3`, median, Apple Silicon):
+
+| Profile    | Initialize response | RSS at initialize | RSS after 4s |
+| :--------- | ------------------: | ----------------: | -----------: |
+| `minimal`  |              503 ms |            196 MB |       184 MB |
+| `balanced` |              472 ms |            200 MB |       190 MB |
+| `full`     |            1,095 ms |            405 MB |       225 MB |
+
+The benchmark records process startup only; tool schemas and persistence are identical across profiles. Hardware/model cache affect absolute values, so compare profiles within the same run rather than treating these numbers as universal targets.
 
 ### CLI Flag: `--index`
 

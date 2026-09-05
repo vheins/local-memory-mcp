@@ -65,6 +65,7 @@ import { McpResponse } from "../utils/mcp-response";
 import { toErrorResponse } from "../utils/mcp-error";
 import { logToolAction } from "../utils/action-log";
 import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
+import { getRuntimeCapabilities, isSemanticToolDemand } from "../runtime-capabilities";
 
 // ── Tool definitions ────────────────────────────────────────────────────
 import { TOOL_DEFINITIONS } from "./tool-definitions";
@@ -237,6 +238,13 @@ export function registerAllTools(
 							: undefined,
 					signal: extra?.mcpReq?.signal
 				};
+
+				// Trigger lazy semantic startup only for calls that can use it. The
+				// capability-aware vector store still degrades to lexical results if
+				// the profile disables semantic search or initialization fails.
+				if (isSemanticToolDemand(toolName, normalizedArgs)) {
+					void getRuntimeCapabilities().ensure("semantic");
+				}
 
 				// Execute tool logic under write lock if needed.
 				//
