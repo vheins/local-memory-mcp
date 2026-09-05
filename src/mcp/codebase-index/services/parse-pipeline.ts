@@ -43,6 +43,7 @@ import {
 	type SemanticAdapterRegistry
 } from "../semantic/registry";
 import { CODEBASE_SEMANTIC_ENRICH, CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS } from "../../utils/constants";
+import { fingerprintSourceRange } from "../../utils/source-fingerprint";
 
 /** Build a canonical {@link CodebaseReferenceInsert} from a visitor reference. */
 function referenceInsert(ref: ParsedReference, filePath: string, repo: string): CodebaseReferenceInsert {
@@ -439,7 +440,8 @@ export async function runParsePipeline(
 						parent_symbol_id: sym.resolvedParentSymbolId,
 						semantic_signature: semanticSignature,
 						semantic_source: semanticSource,
-						semantic_updated_at: semanticUpdatedAt
+						semantic_updated_at: semanticUpdatedAt,
+						source_fingerprint: fingerprintSourceRange(content, sym.startLine, sym.endLine)
 					});
 					totalSymbols++;
 				}

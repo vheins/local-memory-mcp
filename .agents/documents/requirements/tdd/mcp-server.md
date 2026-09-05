@@ -53,7 +53,7 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 - `exploration_observations`: Evidence-backed repository findings with subject, fact, confidence, task, agent, and freshness metadata.
 - `exploration_evidence`: Normalized file/symbol/line pointers for exploration observations; raw source content is never stored.
 - `action_log`: Full audit trail of all tool invocations.
-- `_schema_version`: Ordered migration history (current: v30).
+- `_schema_version`: Ordered migration history (current: v31).
 
 ## Search Algorithms
 
@@ -96,7 +96,9 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 
 Use `observation-write` for evidence-backed facts discovered while inspecting a repository, such as a symbol contract, dependency edge, implementation constraint, or verified defect. Every observation belongs to an `owner`/`repo` scope and must include at least one file pointer; symbol and line coordinates are optional. Bulk writes are committed in one transaction and normalized subject/fact/evidence identity makes retries idempotent.
 
-Use `observation-read` to retrieve those findings by id, subject, task, file, symbol, or confidence. Compact reads return evidence counts only; set `hydrate_evidence: true` when exact pointers are needed. Raw source text is deliberately excluded from this domain.
+Use `observation-read` to retrieve those findings by id, subject, task, file, symbol, or confidence. Compact reads return evidence counts only; set `hydrate_evidence: true` when exact pointers are needed. Stale, superseded, and unverifiable observations are excluded from list/context reads unless `include_stale: true`.
+
+Freshness is fingerprint-driven and never invokes an LLM. Each evidence pointer stores the source file checksum plus a structural symbol fingerprint (name, kind, export flags, signature, doc comment, semantic signature). Incremental indexing revalidates only the observations attached to changed files: an unchanged symbol stays `valid` even when its file changed, a changed or deleted symbol becomes `stale`, a missing index makes the observation `unverifiable` rather than silently valid, renames carry evidence pointers to the new path, and deletions mark the row stale with a reason. `observation-write.refresh_ids` is the bounded, owner/repo-scoped lazy revalidation path; a new observation may supersede an old one via `supersedes_id`. Raw source text is deliberately excluded from this domain.
 
 Use `memory-write` instead for durable conclusions that should survive beyond a particular exploration run: architectural decisions, reusable patterns, mistakes, code facts worth recalling semantically, and completed-task archives. An observation is source-grounded evidence; a memory is curated long-term knowledge. Promote a validated observation into memory rather than treating both stores as interchangeable.
 
