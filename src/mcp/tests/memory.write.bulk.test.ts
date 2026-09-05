@@ -146,6 +146,8 @@ describe("MCP Local Memory - memory-write BULK (memories[])", () => {
 			}
 		});
 
+		expect(bulkRes.isError).toBe(true);
+		expect(bulkRes.structuredContent).toMatchObject({ schema: "tool-error", code: "PARTIAL_FAILURE" });
 		expect(bulkRes.structuredContent.success).toBe(false);
 		expect(bulkRes.structuredContent.total).toBe(2);
 		expect(bulkRes.structuredContent.processed).toBe(1);

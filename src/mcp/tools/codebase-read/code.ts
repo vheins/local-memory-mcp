@@ -3,6 +3,7 @@ import path from "node:path";
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import {
 	searchCodeInRepo,
 	InvalidCodeSearchRegexError,
@@ -99,23 +100,21 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 
 	const repo = validated.repo;
 	if (!repo) {
-		return createMcpResponse(
-			{ error: "Mode 'code' requires a concrete 'repo'", code: "REPO_REQUIRED" },
-			"Mode 'code' requires a concrete 'repo'.",
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "REPO_REQUIRED",
+			message: "Mode 'code' requires a concrete 'repo'.",
+			retryable: false
+		});
 	}
 
 	const repoPath = validated.repoPath?.trim();
 	if (!repoPath) {
-		return createMcpResponse(
-			{
-				error: "Code search requires `repoPath` — the absolute path of the indexed repo on disk",
-				code: "REPO_PATH_REQUIRED"
-			},
-			"Code search requires `repoPath`: pass the same absolute path used with index_repository, or run index_repository first.",
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "REPO_PATH_REQUIRED",
+			message:
+				"Code search requires `repoPath`: pass the same absolute path used with index_repository, or run index_repository first.",
+			retryable: false
+		});
 	}
 
 	const resolvedPath = path.resolve(repoPath);
@@ -123,24 +122,18 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 	try {
 		stat = fs.statSync(resolvedPath);
 	} catch {
-		return createMcpResponse(
-			{
-				error: `Repository path not found: ${resolvedPath}. Re-run index_repository or pass the correct repoPath.`,
-				code: "REPO_PATH_NOT_FOUND"
-			},
-			`Repository path not found: ${resolvedPath}`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "REPO_PATH_NOT_FOUND",
+			message: `Repository path not found: ${resolvedPath}. Re-run index_repository or pass the correct repoPath.`,
+			retryable: false
+		});
 	}
 	if (!stat.isDirectory()) {
-		return createMcpResponse(
-			{
-				error: `Repository path is not a directory: ${resolvedPath}`,
-				code: "REPO_PATH_NOT_FOUND"
-			},
-			`Repository path is not a directory: ${resolvedPath}`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "NOT_A_DIRECTORY",
+			message: `Repository path is not a directory: ${resolvedPath}`,
+			retryable: false
+		});
 	}
 
 	const limit = validated.limit ?? CODE_SEARCH_DEFAULT_LIMIT;
@@ -158,14 +151,11 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 		// A repo with zero indexed files is not resolvable as a grep target —
 		// surface guidance instead of a misleading "0 matches".
 		if (result.indexedFiles === 0) {
-			return createMcpResponse(
-				{
-					error: `Repo "${repo}" has no indexed files. Run index_repository first.`,
-					code: "REPO_NOT_INDEXED"
-				},
-				`Repo "${repo}" has no indexed files. Run index_repository first.`,
-				{ includeJson: true }
-			);
+			return createMcpErrorResponse({
+				code: "REPO_NOT_INDEXED",
+				message: `Repo "${repo}" has no indexed files. Run index_repository first.`,
+				retryable: false
+			});
 		}
 
 		// Every in-scope indexed file failed to read ⇒ the repoPath is almost
@@ -173,14 +163,12 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 		// than "0 matches". (A language filter matching no files yields
 		// fileCount 0, which falls through to the normal empty response.)
 		if (result.fileCount > 0 && result.filesScanned === 0) {
-			return createMcpResponse(
-				{
-					error: `None of the ${result.fileCount} indexed files could be read at ${resolvedPath}. Re-run index_repository or pass the correct repoPath.`,
-					code: "REPO_FILES_MISSING"
-				},
-				`None of the ${result.fileCount} indexed files could be read at ${resolvedPath}.`,
-				{ includeJson: true }
-			);
+			return createMcpErrorResponse({
+				code: "REPO_FILES_MISSING",
+				message: `None of the ${result.fileCount} indexed files could be read. Re-run index_repository or pass the correct repoPath.`,
+				retryable: false,
+				details: { fileCount: result.fileCount }
+			});
 		}
 
 		const contentSummary = formatCodeMatchesGrouped(result.matches, result.total, content);
@@ -205,13 +193,15 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 		);
 	} catch (err) {
 		if (err instanceof InvalidCodeSearchRegexError) {
-			return createMcpResponse({ error: err.message, code: "INVALID_REGEX" }, err.message, {
-				includeJson: true
-			});
+			return createMcpErrorResponse({ code: "INVALID_REGEX", message: err.message, retryable: false });
 		}
 		const message = err instanceof Error ? err.message : String(err);
 		logger.error("[handleCodebaseRead:code] Unexpected error", { repo, content, error: message });
-		return createMcpResponse({ error: message, code: "CODE_SEARCH_FAILED" }, message, { includeJson: true });
+		return createMcpErrorResponse({
+			code: "CODE_SEARCH_FAILED",
+			message: "Code search failed",
+			retryable: true
+		});
 	}
 }
 

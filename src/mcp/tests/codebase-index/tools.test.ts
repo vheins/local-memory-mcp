@@ -127,9 +127,11 @@ describe("handleCodebaseIndex (write)", () => {
 				store,
 				vectors
 			);
+			expect(response.isError).toBe(true);
 			expect(response.structuredContent).toMatchObject({
-				success: false,
-				error: "PATH_NOT_FOUND"
+				schema: "tool-error",
+				code: "PATH_NOT_FOUND",
+				retryable: false
 			});
 		} finally {
 			store.close();
@@ -147,9 +149,11 @@ describe("handleCodebaseIndex (write)", () => {
 				store,
 				vectors
 			);
+			expect(response.isError).toBe(true);
 			expect(response.structuredContent).toMatchObject({
-				success: false,
-				error: "NOT_A_DIRECTORY"
+				schema: "tool-error",
+				code: "NOT_A_DIRECTORY",
+				retryable: false
 			});
 		} finally {
 			store.close();
@@ -409,8 +413,13 @@ describe("handleCodebaseRead (file mode)", () => {
 			vectors
 		);
 		const data = response.structuredContent as Record<string, unknown>;
-		expect(data.error).toContain("File not indexed");
-		expect(data.code).toBe("FILE_NOT_INDEXED");
+		expect(response.isError).toBe(true);
+		expect(data).toMatchObject({
+			schema: "tool-error",
+			code: "FILE_NOT_INDEXED",
+			retryable: false,
+			message: expect.stringContaining("not indexed")
+		});
 	});
 });
 

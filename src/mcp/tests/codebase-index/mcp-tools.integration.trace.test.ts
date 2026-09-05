@@ -59,9 +59,9 @@ describe("handleCodebaseRead (trace mode)", () => {
 		const resp = await handleCodebaseRead({ owner: "vheins", name: "Button", repo: REPO }, store, vectors);
 		const d = data(resp);
 
-		expect(d.code).toBe("AMBIGUOUS_SYMBOL");
-		expect(d.disambiguation).toBeDefined();
-		const disamb = d.disambiguation as Array<Record<string, unknown>>;
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "AMBIGUOUS_SYMBOL", retryable: false });
+		const disamb = (d.details as Record<string, unknown>).disambiguation as Array<Record<string, unknown>>;
 		expect(disamb.length).toBe(2);
 
 		const names = disamb.map((s) => s.name);
@@ -183,9 +183,13 @@ describe("handleCodebaseRead (trace mode)", () => {
 		const resp = await handleCodebaseRead({ owner: "vheins", name: "zzzNonexistentFn", repo: REPO }, store, vectors);
 		const d = data(resp);
 
-		expect(d.code).toBe("SYMBOL_NOT_FOUND");
-		expect(d.error).toBeDefined();
-		expect(d.error).toContain("not found");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({
+			schema: "tool-error",
+			code: "SYMBOL_NOT_FOUND",
+			retryable: false,
+			message: expect.stringContaining("not found")
+		});
 	});
 });
 

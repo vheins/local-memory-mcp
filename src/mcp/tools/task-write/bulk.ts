@@ -1,6 +1,7 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { TaskStatus, VectorStore, TASK_STATUS_BACKLOG } from "../../types";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import { extractAcceptedElicitationContent } from "../../elicitation";
 import { handleCreateSingle } from "./create";
 import { executeBulkOperation } from "./bulk-executor";
@@ -163,15 +164,12 @@ export async function handleBulk(
 			throw new Error(failed[0].error as string);
 		}
 		// Partial failure — return error response with results
-		return {
-			isError: true,
-			content: [
-				{
-					type: "text",
-					text: `Processed ${succeeded.length}/${items.length} in "${repo}" (${failed.length} failed). Errors: ${failed.map((r) => `[${r.index}] ${r.error}`).join("; ")}`
-				}
-			],
-			structuredContent: {
+		const message = `Processed ${succeeded.length}/${items.length} in "${repo}" (${failed.length} failed). Errors: ${failed.map((r) => `[${r.index}] ${r.error}`).join("; ")}`;
+		return createMcpErrorResponse({
+			code: "PARTIAL_FAILURE",
+			message,
+			retryable: false,
+			data: {
 				success: false,
 				repo,
 				total: items.length,
@@ -187,7 +185,7 @@ export async function handleBulk(
 					return res;
 				})
 			}
-		};
+		});
 	}
 
 	// Build summary text matching test expectations

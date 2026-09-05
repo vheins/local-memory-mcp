@@ -2,6 +2,7 @@ import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
 import type { CodebaseSymbol, CodebaseReference, RelatedTypeEdge, PackedContextResult } from "../../types";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import {
 	traceSymbol,
 	AmbiguousSymbolError,
@@ -331,10 +332,11 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 		}
 	} catch (err) {
 		if (err instanceof AmbiguousSymbolError) {
-			return createMcpResponse(
-				{
-					error: err.message,
-					code: "AMBIGUOUS_SYMBOL",
+			return createMcpErrorResponse({
+				code: "AMBIGUOUS_SYMBOL",
+				message: err.message,
+				retryable: false,
+				details: {
 					disambiguation: err.disambiguation.map((s) => ({
 						name: s.name,
 						kind: s.kind,
@@ -342,24 +344,20 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 						line: s.start_line,
 						exported: s.exported
 					}))
-				},
-				err.message,
-				{ includeJson: true }
-			);
+				}
+			});
 		}
 		const message = err instanceof Error ? err.message : String(err);
 		logger.error("[handleCodebaseRead:trace] Unexpected error", { name, repo, error: message });
-		return createMcpResponse({ error: message, code: "TRACE_FAILED" }, message, {
-			includeJson: true
-		});
+		return createMcpErrorResponse({ code: "TRACE_FAILED", message: "Symbol trace failed", retryable: true });
 	}
 
 	// All variants failed — return SymbolNotFoundError for the original name
-	return createMcpResponse(
-		{ error: `Symbol "${name}" not found`, code: "SYMBOL_NOT_FOUND" },
-		`Symbol "${name}" not found`,
-		{ includeJson: true }
-	);
+	return createMcpErrorResponse({
+		code: "SYMBOL_NOT_FOUND",
+		message: `Symbol "${name}" not found`,
+		retryable: false
+	});
 }
 
 export { handleTraceMode };

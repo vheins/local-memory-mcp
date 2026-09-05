@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore, MemoryEntry, MEMORY_STATUS_ACTIVE } from "../../types";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import type { McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { resolveMemorySupersedes } from "../../utils/memory-utils";
 import { MEMORY_CONFLICT_THRESHOLD, TTL_MS_PER_DAY } from "../../utils/constants";
@@ -208,8 +209,7 @@ export async function checkCreateConflict(
 	db: SQLiteStore,
 	vectors: VectorStore,
 	isTaskArchive: boolean,
-	resolvedSupersedes: string | null,
-	json?: boolean
+	resolvedSupersedes: string | null
 ): Promise<{ conflict: boolean; response?: McpResponse }> {
 	if (resolvedSupersedes || isTaskArchive) {
 		return { conflict: false };
@@ -235,18 +235,16 @@ export async function checkCreateConflict(
 	if (conflict) {
 		return {
 			conflict: true,
-			response: createMcpResponse(
-				{
-					success: false,
-					error: "MEMORY_CONFLICT",
-					message: `This memory content overlaps significantly with an existing memory (ID: ${conflict.id}).`,
+			response: createMcpErrorResponse({
+				code: "MEMORY_CONFLICT",
+				message: `Rejected due to conflict: "${conflict.title}" (${conflict.id.slice(0, 8)}...). Hint: Use 'id' for update, 'id'+'acknowledge' for acknowledge, or 'supersedes' if replacing.`,
+				retryable: false,
+				details: {
 					conflicting_memory: { id: conflict.id, title: conflict.title, content: conflict.content },
 					instruction:
 						"Provide 'id' for update, 'id'+'acknowledge' for acknowledge, or 'supersedes' if this new memory replaces it."
-				},
-				`Rejected due to conflict: "${conflict.title}" (${conflict.id.slice(0, 8)}...). Hint: Use 'id' for update, 'id'+'acknowledge' for acknowledge, or 'supersedes' if replacing.`,
-				{ includeJson: json }
-			)
+				}
+			})
 		};
 	}
 

@@ -167,6 +167,8 @@ describe("MCP Local Memory - Standard Delete", () => {
 			}
 		});
 
+		expect(delRes.isError).toBe(true);
+		expect(delRes.structuredContent).toMatchObject({ schema: "tool-error", code: "PARTIAL_FAILURE" });
 		expect(delRes.structuredContent.success).toBe(true);
 		expect(delRes.structuredContent.deletedCount).toBe(1);
 		expect(delRes.structuredContent.skippedCount).toBe(1);

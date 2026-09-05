@@ -1,6 +1,7 @@
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import { docSuffix } from "../../utils/doc-comment-format";
 import type { CodebaseSymbol, CodebaseReference, RelatedTypeEdge, PackedContextResult } from "../../types";
 import type { TraceReference } from "../../codebase-index/services/trace-service";
@@ -156,21 +157,22 @@ function mergeContextPacks(packs: PackedContextResult[], budget: number): Packed
 async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const repo = validated.repo;
 	if (!repo) {
-		return createMcpResponse(
-			{ error: "Mode 'file' requires a concrete 'repo'", code: "REPO_REQUIRED" },
-			"Mode 'file' requires a concrete 'repo'.",
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "REPO_REQUIRED",
+			message: "Mode 'file' requires a concrete 'repo'.",
+			retryable: false
+		});
 	}
 	const filePath = validated.filePath!.trim();
 
 	const file = db.codebaseFiles.getFile(repo, filePath);
 	if (!file) {
-		return createMcpResponse(
-			{ error: "File not indexed. Run index_repository first.", code: "FILE_NOT_INDEXED" },
-			`File '${filePath}' not found in index`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "FILE_NOT_INDEXED",
+			message: "File not indexed. Run index_repository first.",
+			retryable: false,
+			details: { filePath }
+		});
 	}
 
 	const allFileSymbols = db.codebaseSymbols.getSymbolsByFile(repo, filePath);
@@ -181,35 +183,30 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 	const hasEnd = endLine != null;
 
 	if (hasStart !== hasEnd) {
-		return createMcpResponse(
-			{
-				error: "startLine and endLine must be provided together for range-aware FILE mode",
-				code: "RANGE_INCOMPLETE"
-			},
-			"startLine and endLine must be provided together for range-aware FILE mode.",
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "RANGE_INCOMPLETE",
+			message: "startLine and endLine must be provided together for range-aware FILE mode.",
+			retryable: false
+		});
 	}
 
 	if (hasStart && hasEnd) {
 		const s = startLine as number;
 		const e = endLine as number;
 		if (s > e) {
-			return createMcpResponse(
-				{ error: `endLine (${e}) must be >= startLine (${s})`, code: "RANGE_OUT_OF_ORDER" },
-				`endLine (${e}) must be >= startLine (${s}).`,
-				{ includeJson: true }
-			);
+			return createMcpErrorResponse({
+				code: "RANGE_OUT_OF_ORDER",
+				message: `endLine (${e}) must be >= startLine (${s}).`,
+				retryable: false
+			});
 		}
 		if (file.lines != null && e > file.lines) {
-			return createMcpResponse(
-				{
-					error: `endLine (${e}) exceeds file length (${file.lines} lines)`,
-					code: "RANGE_OUT_OF_BOUNDS"
-				},
-				`endLine (${e}) exceeds file length (${file.lines} lines).`,
-				{ includeJson: true }
-			);
+			return createMcpErrorResponse({
+				code: "RANGE_OUT_OF_BOUNDS",
+				message: `endLine (${e}) exceeds file length (${file.lines} lines).`,
+				retryable: false,
+				details: { startLine: s, endLine: e, fileLines: file.lines }
+			});
 		}
 		// Range is valid — run the enriched FILE mode.
 		return handleFileRangeMode(validated, db, repo, filePath, file, allFileSymbols, { startLine: s, endLine: e });
