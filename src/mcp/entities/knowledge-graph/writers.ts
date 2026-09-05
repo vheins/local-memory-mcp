@@ -60,7 +60,7 @@ export interface CreateRelationParams {
 	confidence?: number;
 }
 
-/** Insert an entity, ignoring duplicates (entities.name is the primary key). */
+/** Insert an entity, ignoring duplicates within its `(name, repo)` identity. */
 export function upsertEntity(runner: KgWriteRunner, params: UpsertEntityParams): void {
 	runner.run(
 		`INSERT OR IGNORE INTO entities (name, type, description, repo, owner, created_at, updated_at)
@@ -70,7 +70,7 @@ export function upsertEntity(runner: KgWriteRunner, params: UpsertEntityParams):
 }
 
 /**
- * Insert a relation, ignoring duplicates (composite PK on from_entity, to_entity, relation_type).
+ * Insert a relation, ignoring duplicates within `(from_entity, to_entity, relation_type, repo)`.
  *
  * `confidence` is the per-edge KG confidence label (migration v24, [KGCONF-1]
  * / TASK-325): an INSERT-TIME constant chosen by the CALLER SITE (the

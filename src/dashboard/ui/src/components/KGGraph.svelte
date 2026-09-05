@@ -176,13 +176,14 @@
 		if (!deleteTarget) return;
 		try {
 			if (deleteTarget.type === "node") {
-				await api.kgDeleteEntity(deleteTarget.name);
+				await api.kgDeleteEntity(deleteTarget.name, repo);
 			} else if (deleteTarget.type === "edge") {
 				const e = deleteTarget.edge;
 				await api.kgDeleteRelation({
 					from_entity: e.source,
 					to_entity: e.target,
-					relation_type: e.relation_type
+					relation_type: e.relation_type,
+					repo
 				});
 			}
 			showDeleteConfirm = false;
@@ -306,6 +307,7 @@
 		/>
 		<KGEntityDrawer
 			entityName={detailEntityName}
+			{repo}
 			onclose={() => {
 				detailEntityName = "";
 				graphState.selectedNode = null;

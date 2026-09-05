@@ -47,13 +47,13 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 - `standard_vectors`: Embeddings for coding standard similarity search.
 - `handoffs`: Agent-to-agent context transfer with expiry.
 - `claims`: Task ownership tracking (unique per task).
-- `entities`: Knowledge graph nodes (name PK).
-- `relations`: Knowledge graph edges (composite PK).
-- `observations`: Knowledge graph observations per entity.
+- `entities`: Knowledge graph nodes scoped by composite PK `(name, repo)` (v33).
+- `relations`: Knowledge graph edges scoped by `(from_entity, to_entity, relation_type, repo)`.
+- `observations`: Knowledge graph observations with composite FK `(entity_name, repo)`.
 - `exploration_observations`: Evidence-backed repository findings with subject, fact, confidence, task, agent, and freshness metadata.
 - `exploration_evidence`: Normalized file/symbol/line pointers for exploration observations; raw source content is never stored.
 - `action_log`: Full audit trail of all tool invocations.
-- `_schema_version`: Ordered migration history (current: v31).
+- `_schema_version`: Ordered migration history (current: v33).
 
 ## Search Algorithms
 

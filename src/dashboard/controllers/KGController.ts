@@ -32,8 +32,10 @@ export class KGController {
 	static async getEntity(req: express.Request, res: express.Response) {
 		await handleController(req, res, () => {
 			const name = req.params.name as string;
+			const repo = req.query.repo as string;
+			if (!repo) throw new HttpError(400, "repo is required");
 
-			const result = KgService.getEntity(name);
+			const result = KgService.getEntity(name, repo);
 			return jsonApiRes(result, "entity");
 		});
 	}
@@ -107,9 +109,9 @@ export class KGController {
 	static async createEntity(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
-			const { name } = attributes;
+			const { name, repo } = attributes;
 
-			if (!name) throw new HttpError(400, "name is required");
+			if (!name || !repo) throw new HttpError(400, "name and repo are required");
 
 			const entity = await KgService.createEntity(attributes);
 			return jsonApiRes(entity, "entity");
@@ -119,8 +121,10 @@ export class KGController {
 	static async deleteEntity(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const name = req.params.name as string;
+			const repo = req.query.repo as string;
+			if (!repo) throw new HttpError(400, "repo is required");
 
-			const result = await KgService.deleteEntity(name);
+			const result = await KgService.deleteEntity(name, repo);
 			return jsonApiRes(result, "status");
 		});
 	}
@@ -128,10 +132,10 @@ export class KGController {
 	static async createRelation(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
-			const { from_entity, to_entity, relation_type } = attributes;
+			const { from_entity, to_entity, relation_type, repo } = attributes;
 
-			if (!from_entity || !to_entity || !relation_type) {
-				throw new HttpError(400, "from_entity, to_entity, and relation_type are required");
+			if (!from_entity || !to_entity || !relation_type || !repo) {
+				throw new HttpError(400, "from_entity, to_entity, relation_type, and repo are required");
 			}
 
 			const result = await KgService.createRelation(attributes);
@@ -142,13 +146,13 @@ export class KGController {
 	static async deleteRelation(req: express.Request, res: express.Response) {
 		await handleController(req, res, async () => {
 			const attributes = getAttributes(req);
-			const { from_entity, to_entity, relation_type } = attributes;
+			const { from_entity, to_entity, relation_type, repo } = attributes;
 
-			if (!from_entity || !to_entity || !relation_type) {
-				throw new HttpError(400, "from_entity, to_entity, and relation_type are required");
+			if (!from_entity || !to_entity || !relation_type || !repo) {
+				throw new HttpError(400, "from_entity, to_entity, relation_type, and repo are required");
 			}
 
-			const result = await KgService.deleteRelation(from_entity, to_entity, relation_type);
+			const result = await KgService.deleteRelation(from_entity, to_entity, relation_type, repo);
 			return jsonApiRes(result, "status");
 		});
 	}

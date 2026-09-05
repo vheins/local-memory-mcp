@@ -4,34 +4,38 @@ import type { KgEntityRow, KgObservationRow, KgQueryRunner, KgRelationRow } from
 /**
  * Whether an entity with the given name exists.
  */
-export function entityExists(runner: KgQueryRunner, name: string): boolean {
-	return runner.get<{ present: number }>("SELECT 1 AS present FROM entities WHERE name = ?", [name]) !== undefined;
+export function entityExists(runner: KgQueryRunner, name: string, repo: string): boolean {
+	return (
+		runner.get<{ present: number }>("SELECT 1 AS present FROM entities WHERE name = ? AND repo = ?", [name, repo]) !==
+		undefined
+	);
 }
 
 /**
  * Full entity row by name (dashboard detail).
  */
-export function getEntityByName(runner: KgQueryRunner, name: string): KgEntityRow | undefined {
-	return runner.get<KgEntityRow>("SELECT * FROM entities WHERE name = ?", [name]);
+export function getEntityByName(runner: KgQueryRunner, name: string, repo: string): KgEntityRow | undefined {
+	return runner.get<KgEntityRow>("SELECT * FROM entities WHERE name = ? AND repo = ?", [name, repo]);
 }
 
 /**
  * Full relation rows touching the given entity (dashboard detail).
  */
-export function getRelationsByName(runner: KgQueryRunner, name: string): KgRelationRow[] {
+export function getRelationsByName(runner: KgQueryRunner, name: string, repo: string): KgRelationRow[] {
 	return runner.all<KgRelationRow>(
-		"SELECT * FROM relations WHERE from_entity = ? OR to_entity = ? ORDER BY relation_type",
-		[name, name]
+		"SELECT * FROM relations WHERE repo = ? AND (from_entity = ? OR to_entity = ?) ORDER BY relation_type",
+		[repo, name, name]
 	);
 }
 
 /**
  * Full observation rows for the given entity (dashboard detail).
  */
-export function getObservationsByName(runner: KgQueryRunner, name: string): KgObservationRow[] {
-	return runner.all<KgObservationRow>("SELECT * FROM observations WHERE entity_name = ? ORDER BY created_at DESC", [
-		name
-	]);
+export function getObservationsByName(runner: KgQueryRunner, name: string, repo: string): KgObservationRow[] {
+	return runner.all<KgObservationRow>(
+		"SELECT * FROM observations WHERE entity_name = ? AND repo = ? ORDER BY created_at DESC",
+		[name, repo]
+	);
 }
 
 /**

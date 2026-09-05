@@ -271,7 +271,7 @@ describe("KnowledgeGraphEntity — subset-bounded graph edges (TASK-268)", () =>
 		expect(degreeRow.degree).toBe(4);
 
 		// Deleting the relation decrements back to 3.
-		db.knowledgeGraph.deleteRelation("B", "A", "backlink");
+		db.knowledgeGraph.deleteRelation("B", "A", "backlink", REPO);
 		const after = db.db.prepare("SELECT degree FROM kg_degrees WHERE repo = ? AND node = ?").get(REPO, "A") as {
 			degree: number;
 		};

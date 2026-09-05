@@ -33,8 +33,9 @@ import { migration as v29 } from "./v29-kg-relations-index-rebalance";
 import { migration as v30 } from "./v30-exploration-observations";
 import { migration as v31 } from "./v31-observation-freshness";
 import { migration as v32 } from "./v32-reuse-telemetry";
+import { migration as v33 } from "./v33-kg-repo-identity";
 
-export const SCHEMA_VERSION = 32;
+export const SCHEMA_VERSION = 33;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -82,7 +83,8 @@ const MIGRATIONS: Migration[] = [
 	v29,
 	v30,
 	v31,
-	v32
+	v32,
+	v33
 ];
 
 // ──────────────────────────────────────────────

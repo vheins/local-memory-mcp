@@ -196,7 +196,7 @@ describe("migration v29 KG relations index rebalance", () => {
 		const table = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='relations'").get() as {
 			sql: string;
 		};
-		expect(table.sql).toContain("PRIMARY KEY (from_entity, to_entity, relation_type)");
+		expect(table.sql).toContain("PRIMARY KEY (from_entity, to_entity, relation_type, repo)");
 
 		db.close();
 		fs.rmSync(tempDir, { recursive: true, force: true });

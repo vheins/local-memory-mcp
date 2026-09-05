@@ -74,7 +74,7 @@ describe("KnowledgeGraphEntity — relation confidence (TASK-325)", () => {
 			created_at: now
 		});
 
-		const rows = db.knowledgeGraph.getRelationsByName("A");
+		const rows = db.knowledgeGraph.getRelationsByName("A", REPO);
 		expect(rows).toHaveLength(2);
 		const aToB = rows.find((r) => r.from_entity === "A" && r.to_entity === "B");
 		expect(aToB?.confidence).toBe(0.8);
@@ -198,7 +198,8 @@ describe("KnowledgeGraphEntity — relation confidence (TASK-325)", () => {
 		await saveExtractions("Alice and Bob worked on the project", "Memory 1", "test", REPO, db);
 
 		const row = db.db.prepare("SELECT confidence FROM relations WHERE relation_type = 'co_mentioned'").get() as
-			{ confidence: number } | undefined;
+			| { confidence: number }
+			| undefined;
 		expect(row).toBeDefined();
 		expect(row!.confidence).toBe(0.55);
 	});
@@ -249,7 +250,8 @@ describe("KnowledgeGraphEntity — relation confidence (TASK-325)", () => {
 		// Deterministic endpoints (same corpus as the FK-integrity describe):
 		// child "Payroll Module implementation" → parent "Icons theme".
 		const row = db.db.prepare("SELECT confidence FROM relations WHERE relation_type = 'depends_on'").get() as
-			{ confidence: number } | undefined;
+			| { confidence: number }
+			| undefined;
 		expect(row).toBeDefined();
 		expect(row!.confidence).toBe(0.8);
 	});
@@ -272,7 +274,8 @@ describe("KnowledgeGraphEntity — relation confidence (TASK-325)", () => {
 		await saveCodebaseRelations({ filePath, owner: "test", repo: REPO }, db);
 
 		const row = db.db.prepare("SELECT confidence FROM relations WHERE relation_type = 'call'").get() as
-			{ confidence: number } | undefined;
+			| { confidence: number }
+			| undefined;
 		expect(row).toBeDefined();
 		expect(row!.confidence).toBe(0.9);
 	});

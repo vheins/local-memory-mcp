@@ -268,10 +268,8 @@ export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentio
  * to 77% of total DB size at ~70k edges/day on a real deployment with no
  * mechanism to ever shrink.
  *
- * Eligibility requires BOTH an age guard and unreachability, and the endpoint
- * check is repo-agnostic — see `KnowledgeGraphEntity.deleteUnreachableRelations`
- * for why (a name observed in another repo is still live, and `entities.name` is
- * a global primary key).
+ * Eligibility requires BOTH an age guard and same-repository unreachability;
+ * migration v33 makes `(name, repo)` the entity identity.
  *
  * Bounded per run (`maxRows`) and per transaction (`chunkSize`) so a large
  * backlog converges across maintenance cycles instead of blocking one startup

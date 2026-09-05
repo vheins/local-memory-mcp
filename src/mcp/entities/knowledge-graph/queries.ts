@@ -1,9 +1,5 @@
 import { logger } from "../../utils/logger";
-import {
-	KG_MAX_CONTEXT_ENTITIES,
-	KG_CONTEXT_TEXT_TOKENS,
-	KG_MAX_CONTEXT_RELATIONS
-} from "../../utils/constants";
+import { KG_MAX_CONTEXT_ENTITIES, KG_CONTEXT_TEXT_TOKENS, KG_MAX_CONTEXT_RELATIONS } from "../../utils/constants";
 
 // ---------------------------------------------------------------------------
 // Query runner (TASK-176)
@@ -24,38 +20,17 @@ function tokenizeKgText(text: string): string[] {
 // Reads
 // ---------------------------------------------------------------------------
 
-/**
- * Fetch entity name/type rows for the given names.
- *
- * **No `repo` filter — deliberate (audit F6).** `entities.name` is a GLOBAL
- * `PRIMARY KEY` (v01 schema) and every writer uses `INSERT OR IGNORE`, so the
- * FIRST repo to mention a common noun (`priority`, `section`, `assignees`,
- * `due_date`) owns the row forever and every other repo's insert is silently
- * dropped. Adding `AND repo = ?` here therefore filtered on "which repo
- * happened to write this name first", not on ownership — and since the caller
- * has ALREADY scoped the name set by repo (via `observations WHERE repo = ?` or
- * the repo-filtered `entity_names_fts` index), the extra predicate could only
- * remove correct rows, never add safety.
- *
- * What it actually did was break the payload asymmetrically: `getEntitiesFor`
- * dropped the entity while `getRelationsFor` (which filters `relations.repo`,
- * a per-edge column that IS correct) still shipped its edges. Measured on a
- * real database: 2,209 of 19,294 `(entity_name, repo)` pairs (11.4%) referenced
- * an entity row owned by another repo, and for a 50-name window in one repo
- * `getEntitiesFor` returned **0** rows while `getRelationsFor` returned
- * **11,664 edges** whose endpoints were therefore absent from the response —
- * an unusable graph payload.
- *
- * Dropping the redundant predicate closes the payload. The proper fix for the
- * underlying schema flaw is a composite `(name, repo)` primary key, which needs
- * a table rebuild plus FK/trigger migration and is tracked separately.
- */
-export function getEntitiesFor(runner: KgQueryRunner, entityNames: string[]): Array<{ name: string; type: string }> {
+/** Fetch entity name/type rows for names within one repository identity scope. */
+export function getEntitiesFor(
+	runner: KgQueryRunner,
+	entityNames: string[],
+	repo: string
+): Array<{ name: string; type: string }> {
 	if (entityNames.length === 0) return [];
 	const placeholders = entityNames.map(() => "?").join(",");
 	return runner.all<{ name: string; type: string }>(
-		`SELECT name, type FROM entities WHERE name IN (${placeholders})`,
-		entityNames
+		`SELECT name, type FROM entities WHERE repo = ? AND name IN (${placeholders})`,
+		[repo, ...entityNames]
 	);
 }
 

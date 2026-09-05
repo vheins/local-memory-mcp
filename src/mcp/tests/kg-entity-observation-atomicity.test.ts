@@ -64,7 +64,7 @@ describe("KG Archivist — entity+observation pair atomicity (TASK-073)", () => 
 		// insert. Without the BEGIN IMMEDIATE wrapper the upsert would have
 		// autocommitted and left an orphaned entity (referenced by neither an
 		// observation nor a relation) — the exact regression this guards.
-		expect(db.knowledgeGraph.getEntityByName("A")).toBeUndefined();
+		expect(db.knowledgeGraph.getEntityByName("A", REPO)).toBeUndefined();
 	});
 
 	it("an orphan sweep from a second connection cannot delete an endpoint between its upsert and observation insert", async () => {
@@ -122,7 +122,7 @@ describe("KG Archivist — entity+observation pair atomicity (TASK-073)", () => 
 			expect(fkWarns).toHaveLength(0);
 
 			// Both the entity and its observation were persisted atomically.
-			expect(fileDb.knowledgeGraph.getEntityByName("Alice")).toBeDefined();
+			expect(fileDb.knowledgeGraph.getEntityByName("Alice", REPO)).toBeDefined();
 			const observations = fileDb.db
 				.prepare("SELECT entity_name FROM observations WHERE entity_name = 'Alice'")
 				.all() as Array<{ entity_name: string }>;
@@ -203,7 +203,7 @@ describe("KG Archivist — entity+observation pair atomicity (TASK-073)", () => 
 		);
 
 		// The decision entity is upserted by ensureRelation with type "decision".
-		const decision = db.knowledgeGraph.getEntityByName("ADR-006");
+		const decision = db.knowledgeGraph.getEntityByName("ADR-006", REPO);
 		expect(decision).toBeDefined();
 		expect(decision?.type).toBe("decision");
 
@@ -214,7 +214,7 @@ describe("KG Archivist — entity+observation pair atomicity (TASK-073)", () => 
 		expect(rels.length).toBeGreaterThan(0);
 		for (const rel of rels) {
 			expect(rel.to_entity).toBe("ADR-006");
-			expect(db.knowledgeGraph.getEntityByName(rel.from_entity)).toBeDefined();
+			expect(db.knowledgeGraph.getEntityByName(rel.from_entity, REPO)).toBeDefined();
 		}
 	});
 
@@ -226,8 +226,8 @@ describe("KG Archivist — entity+observation pair atomicity (TASK-073)", () => 
 			.all() as Array<{ from_entity: string; to_entity: string }>;
 		expect(rels.length).toBeGreaterThan(0);
 		for (const rel of rels) {
-			expect(db.knowledgeGraph.getEntityByName(rel.from_entity)).toBeDefined();
-			expect(db.knowledgeGraph.getEntityByName(rel.to_entity)).toBeDefined();
+			expect(db.knowledgeGraph.getEntityByName(rel.from_entity, REPO)).toBeDefined();
+			expect(db.knowledgeGraph.getEntityByName(rel.to_entity, REPO)).toBeDefined();
 		}
 	});
 });

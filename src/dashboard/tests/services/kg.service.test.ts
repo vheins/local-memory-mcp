@@ -162,7 +162,7 @@ describe("KgService.getEntity", () => {
 		vi.mocked(mocks.db.knowledgeGraph.getRelationsByName).mockReturnValue([makeRelation()]);
 		vi.mocked(mocks.db.knowledgeGraph.getObservationsByName).mockReturnValue([makeObservation()]);
 
-		const result = KgService.getEntity("User");
+		const result = KgService.getEntity("User", "acme/app");
 
 		expect(result.id).toBe("User");
 		expect(result.entity.name).toBe("User");
@@ -173,7 +173,7 @@ describe("KgService.getEntity", () => {
 	it("throws 404 when the entity does not exist", () => {
 		vi.mocked(mocks.db.knowledgeGraph.getEntityByName).mockReturnValue(undefined);
 
-		expect(() => KgService.getEntity("Ghost")).toThrowError(
+		expect(() => KgService.getEntity("Ghost", "acme/app")).toThrowError(
 			expect.objectContaining({ name: "ServiceError", status: 404, message: "Entity not found" })
 		);
 	});
@@ -260,7 +260,7 @@ describe("KgService.createEntity / deleteEntity", () => {
 		const created = makeEntity({ name: "Fresh", type: "unknown" });
 		vi.mocked(mocks.db.knowledgeGraph.getEntityByName).mockReturnValue(created);
 
-		const result = await KgService.createEntity({ name: "Fresh" });
+		const result = await KgService.createEntity({ name: "Fresh", repo: "acme/app" });
 
 		expect(result).toBe(created);
 		expect(mocks.db.knowledgeGraph.createEntity).toHaveBeenCalledWith(
@@ -268,7 +268,7 @@ describe("KgService.createEntity / deleteEntity", () => {
 				name: "Fresh",
 				type: "unknown",
 				description: null,
-				repo: "",
+				repo: "acme/app",
 				owner: ""
 			})
 		);
@@ -297,7 +297,7 @@ describe("KgService.createEntity / deleteEntity", () => {
 		vi.mocked(mocks.db.knowledgeGraph.listGraphNodes).mockReturnValue([makeEntity()]);
 		KgService.listGraph("acme/app", 10, 0, true);
 
-		await KgService.createEntity({ name: "Fresh" });
+		await KgService.createEntity({ name: "Fresh", repo: "acme/app" });
 
 		// Cache cleared ⇒ next listGraph re-queries the DB.
 		KgService.listGraph("acme/app", 10, 0, true);
@@ -307,16 +307,16 @@ describe("KgService.createEntity / deleteEntity", () => {
 	it("deletes an existing entity and returns the ack", async () => {
 		vi.mocked(mocks.db.knowledgeGraph.entityExists).mockReturnValue(true);
 
-		const result = await KgService.deleteEntity("User");
+		const result = await KgService.deleteEntity("User", "acme/app");
 
 		expect(result).toEqual({ message: "Deleted", name: "User" });
-		expect(mocks.db.knowledgeGraph.deleteEntity).toHaveBeenCalledWith("User");
+		expect(mocks.db.knowledgeGraph.deleteEntity).toHaveBeenCalledWith("User", "acme/app");
 	});
 
 	it("throws 404 when deleting an unknown entity", async () => {
 		vi.mocked(mocks.db.knowledgeGraph.entityExists).mockReturnValue(false);
 
-		await expect(KgService.deleteEntity("Ghost")).rejects.toMatchObject({
+		await expect(KgService.deleteEntity("Ghost", "acme/app")).rejects.toMatchObject({
 			name: "ServiceError",
 			status: 404,
 			message: "Entity not found"
@@ -325,13 +325,14 @@ describe("KgService.createEntity / deleteEntity", () => {
 });
 
 describe("KgService.createRelation", () => {
-	it("creates a relation when both endpoints exist (defaults repo/owner to empty)", async () => {
+	it("creates a relation within the requested repository", async () => {
 		vi.mocked(mocks.db.knowledgeGraph.entityExists).mockReturnValue(true);
 
 		const result = await KgService.createRelation({
 			from_entity: "User",
 			to_entity: "Order",
-			relation_type: "creates"
+			relation_type: "creates",
+			repo: "acme/app"
 		});
 
 		expect(result).toEqual({ from_entity: "User", to_entity: "Order", relation_type: "creates" });
@@ -340,7 +341,7 @@ describe("KgService.createRelation", () => {
 				from_entity: "User",
 				to_entity: "Order",
 				relation_type: "creates",
-				repo: "",
+				repo: "acme/app",
 				owner: ""
 			})
 		);
@@ -350,7 +351,7 @@ describe("KgService.createRelation", () => {
 		vi.mocked(mocks.db.knowledgeGraph.entityExists).mockImplementation((name: string) => name !== "User");
 
 		await expect(
-			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates" })
+			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates", repo: "acme/app" })
 		).rejects.toMatchObject({
 			name: "ServiceError",
 			status: 400,
@@ -363,7 +364,7 @@ describe("KgService.createRelation", () => {
 		vi.mocked(mocks.db.knowledgeGraph.entityExists).mockImplementation((name: string) => name === "User");
 
 		await expect(
-			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates" })
+			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates", repo: "acme/app" })
 		).rejects.toMatchObject({
 			name: "ServiceError",
 			status: 400,
@@ -378,7 +379,7 @@ describe("KgService.createRelation", () => {
 		});
 
 		await expect(
-			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates" })
+			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates", repo: "acme/app" })
 		).rejects.toMatchObject({
 			name: "ServiceError",
 			status: 409,
@@ -393,7 +394,7 @@ describe("KgService.createRelation", () => {
 		});
 
 		await expect(
-			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates" })
+			KgService.createRelation({ from_entity: "User", to_entity: "Order", relation_type: "creates", repo: "acme/app" })
 		).rejects.toThrow("disk full");
 	});
 });
@@ -402,16 +403,16 @@ describe("KgService.deleteRelation / deleteObservation", () => {
 	it("deletes an existing relation and returns the ack", async () => {
 		vi.mocked(mocks.db.knowledgeGraph.deleteRelation).mockReturnValue({ changes: 1 });
 
-		const result = await KgService.deleteRelation("User", "Order", "creates");
+		const result = await KgService.deleteRelation("User", "Order", "creates", "acme/app");
 
 		expect(result).toEqual({ message: "Deleted" });
-		expect(mocks.db.knowledgeGraph.deleteRelation).toHaveBeenCalledWith("User", "Order", "creates");
+		expect(mocks.db.knowledgeGraph.deleteRelation).toHaveBeenCalledWith("User", "Order", "creates", "acme/app");
 	});
 
 	it("throws 404 when the relation matched zero rows", async () => {
 		vi.mocked(mocks.db.knowledgeGraph.deleteRelation).mockReturnValue({ changes: 0 });
 
-		await expect(KgService.deleteRelation("User", "Order", "creates")).rejects.toMatchObject({
+		await expect(KgService.deleteRelation("User", "Order", "creates", "acme/app")).rejects.toMatchObject({
 			name: "ServiceError",
 			status: 404,
 			message: "Relation not found"

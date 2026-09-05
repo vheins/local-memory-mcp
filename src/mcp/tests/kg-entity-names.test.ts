@@ -94,10 +94,9 @@ describe("getEntityNamesByText — cap truncation", () => {
 
 describe("getEntityNamesByText — repo scoping", () => {
 	it("returns only names from the requested repo", () => {
-		// entities.name is the GLOBAL primary key (v01), so identical NAMES
-		// cannot exist across repos — but identical TOKENS can. repoB shares
-		// the "payment" token with repoA to prove the repo filter (both in
-		// the FTS WHERE clause and the INSTR fallback) keeps rows scoped.
+		// Identical entity names can exist across repositories since v33. This
+		// uses distinct names sharing a token to prove both FTS and fallback
+		// queries remain repository-scoped.
 		createEntity("Payment Service", "repoA");
 		createEntity("Payment Gateway", "repoA");
 		createEntity("Payment Ledger", "repoB"); // same token, different name
