@@ -163,7 +163,7 @@ afterAll(() => {
 });
 
 async function readRange(extra: Record<string, unknown>): Promise<McpResponse> {
-	return handleCodebaseRead({ owner: "vheins", repo: REPO, filePath: FILE, ...extra }, store, vectors);
+	return handleCodebaseRead({ owner: "vheins", json: true, repo: REPO, filePath: FILE, ...extra }, store, vectors);
 }
 
 describe("codebase-read FILE mode — range awareness (#88 / TASK-014)", () => {

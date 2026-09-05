@@ -19,7 +19,11 @@ afterAll(() => {
 
 describe("handleCodebaseRead (trace mode)", () => {
 	it("returns definition for a known exported function", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", name: "formatSize", repo: REPO }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, name: "formatSize", repo: REPO },
+			store,
+			vectors
+		);
 		const d = data(resp);
 
 		expect(d.symbol).toBeDefined();
@@ -56,7 +60,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const resp = await handleCodebaseRead({ owner: "vheins", name: "Button", repo: REPO }, store, vectors);
+		const resp = await handleCodebaseRead({ owner: "vheins", json: true, name: "Button", repo: REPO }, store, vectors);
 		const d = data(resp);
 
 		expect(resp.isError).toBe(true);
@@ -180,7 +184,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 	});
 
 	it("returns error for non-existent symbol", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", name: "zzzNonexistentFn", repo: REPO }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, name: "zzzNonexistentFn", repo: REPO },
+			store,
+			vectors
+		);
 		const d = data(resp);
 
 		expect(resp.isError).toBe(true);

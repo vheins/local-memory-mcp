@@ -241,6 +241,7 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 
 	return createMcpResponse(
 		{
+			schema: "codebase-read",
 			mode: "file",
 			file: {
 				path: file.file_path,
@@ -254,7 +255,7 @@ async function handleFileMode(validated: CodebaseReadInput, db: SQLiteStore): Pr
 			total: symbols.length
 		},
 		`Found ${symbols.length} symbols in ${filePath}`,
-		{ includeJson: true, contentSummary }
+		{ includeJson: validated.json, contentSummary }
 	);
 }
 
@@ -383,6 +384,7 @@ async function handleFileRangeMode(
 
 	return createMcpResponse(
 		{
+			schema: "codebase-read",
 			mode: "file",
 			file: {
 				path: file.file_path,
@@ -411,7 +413,7 @@ async function handleFileRangeMode(
 				? `, ${contextPack.items.length} symbols packed (~${contextPack.estimatedTokens} est. tokens${contextPack.capped ? ", budget reached" : ""})`
 				: ""
 		}`,
-		{ includeJson: true, contentSummary }
+		{ includeJson: validated.json, contentSummary }
 	);
 }
 

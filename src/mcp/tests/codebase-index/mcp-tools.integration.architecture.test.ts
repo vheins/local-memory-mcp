@@ -19,7 +19,7 @@ afterAll(() => {
 
 describe("handleCodebaseRead (architecture mode)", () => {
 	it("returns directory tree with correct depth", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, depth: 2 }, store, vectors);
+		const resp = await handleCodebaseRead({ owner: "vheins", json: true, repo: REPO, depth: 2 }, store, vectors);
 		const d = data(resp);
 
 		// Root
@@ -45,7 +45,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 	});
 
 	it("symbol counts are accurate", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, depth: 2 }, store, vectors);
+		const resp = await handleCodebaseRead({ owner: "vheins", json: true, repo: REPO, depth: 2 }, store, vectors);
 		const d = data(resp);
 
 		const summary = d.summary as Record<string, unknown>;
@@ -58,7 +58,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 	});
 
 	it("language breakdown shows TypeScript and TSX", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, depth: 2 }, store, vectors);
+		const resp = await handleCodebaseRead({ owner: "vheins", json: true, repo: REPO, depth: 2 }, store, vectors);
 		const d = data(resp);
 
 		const summary = d.summary as Record<string, unknown>;

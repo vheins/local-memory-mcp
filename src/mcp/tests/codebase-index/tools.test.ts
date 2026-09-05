@@ -61,36 +61,38 @@ describe("IndexRepoSchema", () => {
 	});
 
 	it("rejects empty repo", () => {
-		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "", repoPath: "/tmp" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", json: true, repo: "", repoPath: "/tmp" })).toThrow();
 	});
 
 	it("rejects empty repoPath", () => {
-		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "test", repoPath: "" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", json: true, repo: "test", repoPath: "" })).toThrow();
 	});
 
 	it("rejects missing repoPath entirely", () => {
-		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "test" })).toThrow();
+		expect(() => IndexRepoSchema.parse({ owner: "vheins", json: true, repo: "test" })).toThrow();
 	});
 
 	it("rejects wrong type for force", () => {
-		expect(() => IndexRepoSchema.parse({ owner: "vheins", repo: "test", repoPath: "/tmp", force: "yes" })).toThrow();
+		expect(() =>
+			IndexRepoSchema.parse({ owner: "vheins", json: true, repo: "test", repoPath: "/tmp", force: "yes" })
+		).toThrow();
 	});
 });
 
 describe("IndexStatusSchema", () => {
 	it("validates a complete input", () => {
-		const result = IndexStatusSchema.parse({ owner: "vheins", repo: "test-repo" });
+		const result = IndexStatusSchema.parse({ owner: "vheins", json: true, repo: "test-repo" });
 		expect(result.repo).toBe("test-repo");
 	});
 
 	it("validates with optional repoPath", () => {
-		const result = IndexStatusSchema.parse({ owner: "vheins", repo: "test-repo", repoPath: "/tmp/repo" });
+		const result = IndexStatusSchema.parse({ owner: "vheins", json: true, repo: "test-repo", repoPath: "/tmp/repo" });
 		expect(result.repo).toBe("test-repo");
 		expect(result.repoPath).toBe("/tmp/repo");
 	});
 
 	it("rejects empty repo", () => {
-		expect(() => IndexStatusSchema.parse({ owner: "vheins", repo: "" })).toThrow();
+		expect(() => IndexStatusSchema.parse({ owner: "vheins", json: true, repo: "" })).toThrow();
 	});
 
 	it("rejects missing repo", () => {
@@ -110,7 +112,7 @@ describe("handleCodebaseIndex (write)", () => {
 	it("returns input validation error for missing repoPath", async () => {
 		const store = await createTestStore();
 		try {
-			const response = await handleCodebaseIndex({ owner: "vheins", repo: "test-repo" }, store, vectors);
+			const response = await handleCodebaseIndex({ owner: "vheins", json: true, repo: "test-repo" }, store, vectors);
 			expect(response).toBeDefined();
 		} catch (err: unknown) {
 			expect((err as Error).message).toContain("repoPath");
@@ -123,7 +125,7 @@ describe("handleCodebaseIndex (write)", () => {
 		const store = await createTestStore();
 		try {
 			const response = await handleCodebaseIndex(
-				{ owner: "vheins", repo: "test-repo", repoPath: "/nonexistent/path/abc123xyz" },
+				{ owner: "vheins", json: true, repo: "test-repo", repoPath: "/nonexistent/path/abc123xyz" },
 				store,
 				vectors
 			);
@@ -145,7 +147,7 @@ describe("handleCodebaseIndex (write)", () => {
 
 		try {
 			const response = await handleCodebaseIndex(
-				{ owner: "vheins", repo: "test-repo", repoPath: tmpFile },
+				{ owner: "vheins", json: true, repo: "test-repo", repoPath: tmpFile },
 				store,
 				vectors
 			);
@@ -176,7 +178,7 @@ describe("handleCodebaseRead (status mode)", () => {
 	});
 
 	it("returns architecture with zero files for an unindexed repo", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", repo: "unknown-repo" }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo: "unknown-repo" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.mode).toBe("architecture");
 		const summary = data.summary as Record<string, number>;
@@ -189,8 +191,17 @@ describe("handleCodebaseRead (status mode)", () => {
 		expect(response).toBeDefined();
 	});
 
+	it("keeps default mode text-only and exposes stable discriminators in structured mode", async () => {
+		const text = await handleCodebaseRead({ repo: "test-repo" }, store, vectors);
+		expect(text.structuredContent).toBeUndefined();
+		expect(text.content?.[0]).toMatchObject({ type: "text" });
+
+		const structured = await handleCodebaseRead({ repo: "test-repo", json: true }, store, vectors);
+		expect(structured.structuredContent).toMatchObject({ schema: "codebase-read", mode: "architecture" });
+	});
+
 	it("throws on empty repo", async () => {
-		await expect(handleCodebaseRead({ owner: "vheins", repo: "" }, store, vectors)).rejects.toThrow();
+		await expect(handleCodebaseRead({ owner: "vheins", json: true, repo: "" }, store, vectors)).rejects.toThrow();
 	});
 });
 
@@ -227,7 +238,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 			size_bytes: 200
 		});
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo: "repo", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo: "repo", depth: 3 }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.root).toBeDefined();
@@ -237,7 +248,11 @@ describe("handleCodebaseRead (architecture mode)", () => {
 	});
 
 	it("returns empty architecture for unindexed repo", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", repo: "never-indexed", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", json: true, repo: "never-indexed", depth: 3 },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		const summary = data.summary as Record<string, unknown>;
 		expect(summary.totalFiles).toBe(0);
@@ -267,7 +282,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 		]);
 
 		const response = await handleCodebaseRead(
-			{ owner: "vheins", repo: "repo", depth: 3, includeSymbolCounts: true },
+			{ owner: "vheins", json: true, repo: "repo", depth: 3, includeSymbolCounts: true },
 			store,
 			vectors
 		);
@@ -314,7 +329,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 			{ repo: "repo", symbol_name: "usedFn", caller_file: "src/app.ts", caller_line: 14, kind: "import" }
 		]);
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo: "repo", depth: 3 }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo: "repo", depth: 3 }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 		const deadCode = data.deadCode as Record<string, unknown>;
 
@@ -347,7 +362,7 @@ describe("handleCodebaseRead (architecture mode)", () => {
 		});
 
 		const response = await handleCodebaseRead(
-			{ owner: "vheins", repo: "repo", depth: 3, includeSymbolCounts: false },
+			{ owner: "vheins", json: true, repo: "repo", depth: 3, includeSymbolCounts: false },
 			store,
 			vectors
 		);
@@ -394,7 +409,7 @@ describe("handleCodebaseRead (file mode)", () => {
 		]);
 
 		const response = await handleCodebaseRead(
-			{ owner: "vheins", repo: "repo", filePath: "src/auth.ts" },
+			{ owner: "vheins", json: true, repo: "repo", filePath: "src/auth.ts" },
 			store,
 			vectors
 		);
@@ -408,7 +423,7 @@ describe("handleCodebaseRead (file mode)", () => {
 
 	it("returns FILE_NOT_INDEXED for unknown file", async () => {
 		const response = await handleCodebaseRead(
-			{ owner: "vheins", repo: "repo", filePath: "src/ghost.ts" },
+			{ owner: "vheins", json: true, repo: "repo", filePath: "src/ghost.ts" },
 			store,
 			vectors
 		);
@@ -439,21 +454,33 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("returns empty for short query (1 character)", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", query: "a", repo: "test-repo" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", json: true, query: "a", repo: "test-repo" },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 		expect(data.hasMore).toBe(false);
 	});
 
 	it("returns empty for empty query", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", query: "", repo: "test-repo" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", json: true, query: "", repo: "test-repo" },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 		expect(data.hasMore).toBe(false);
 	});
 
 	it("returns empty for whitespace query", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", query: "  ", repo: "test-repo" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", json: true, query: "  ", repo: "test-repo" },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.total).toBe(0);
 	});
@@ -473,7 +500,7 @@ describe("handleCodebaseIndexRepository (legacy, still exported)", () => {
 			// Import from codebase-index (hyphenated) where it's actually exported
 			const { handleCodebaseIndexRepository: repoHandler } = await import("../../tools/codebase-index");
 			try {
-				await repoHandler({ owner: "vheins", repo: "test-repo" }, store, vectors);
+				await repoHandler({ owner: "vheins", json: true, repo: "test-repo" }, store, vectors);
 				expect.fail("Should have thrown for missing repoPath");
 			} catch (err: unknown) {
 				expect(err).toBeInstanceOf(ZodError);

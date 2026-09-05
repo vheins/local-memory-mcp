@@ -194,7 +194,7 @@ describe("CodebaseService read delegation", () => {
 
 		expect(result).toEqual({ tree: [] });
 		expect(mocks.handleCodebaseRead).toHaveBeenCalledWith(
-			{ repo: "acme/app", depth: "3", includeSymbolCounts: "true", owner: "acme" },
+			{ repo: "acme/app", depth: "3", includeSymbolCounts: "true", json: true, owner: "acme" },
 			mocks.db,
 			expect.any(Object)
 		);
@@ -216,7 +216,7 @@ describe("CodebaseService read delegation", () => {
 		await CodebaseService.traceSymbol("alpha", "  acme/app  ", "true");
 
 		expect(mocks.handleCodebaseRead).toHaveBeenCalledWith(
-			{ name: "alpha", repo: "acme/app", includeReferences: "true", owner: "acme" },
+			{ name: "alpha", repo: "acme/app", includeReferences: "true", json: true, owner: "acme" },
 			mocks.db,
 			expect.any(Object)
 		);

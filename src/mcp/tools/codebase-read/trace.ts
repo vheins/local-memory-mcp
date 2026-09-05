@@ -255,6 +255,7 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 			return createMcpResponse(
 				{
 					...result,
+					schema: "codebase-read",
 					mode: "trace",
 					originalName: traceName !== name ? name : undefined,
 					relatedTypes: relatedTypes ? relatedTypes.edges : undefined,
@@ -279,7 +280,7 @@ async function handleTraceMode(validated: CodebaseReadInput, db: SQLiteStore): P
 					(contextPack
 						? `, ${contextPack.items.length} symbols packed (~${contextPack.estimatedTokens} est. tokens, ${contextPack.capped ? "budget reached" : "within budget"})`
 						: ""),
-				{ includeJson: true, contentSummary }
+				{ includeJson: validated.json, contentSummary }
 			);
 		} catch (err) {
 			// Re-throw ambiguous errors — they should propagate, not fall through

@@ -1,6 +1,6 @@
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskChild, TaskComment } from "../../types";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { createMcpResponse, McpResponse, withEnvelope } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
 import { logger } from "../../utils/logger";
 import { fetchTaskKgContext } from "../kg-archivist/query";
@@ -111,7 +111,7 @@ export async function handleDetailMode(
 		const depended_by = storage.tasks.getDependedByTaskId(task.id);
 
 		let contentSummary: string | undefined;
-		if (!isJsonRequest) {
+		{
 			contentSummary = buildTaskDetailLines(task, comments, children, depended_by).join("\n");
 		}
 
@@ -127,7 +127,7 @@ export async function handleDetailMode(
 		};
 		if (kgContext) data.kg = kgContext;
 
-		return createMcpResponse(data, contentSummary || "", {
+		return createMcpResponse(withEnvelope("task-read/detail", "detail", data), contentSummary || "", {
 			contentSummary,
 			includeJson: isJsonRequest
 		});
@@ -175,7 +175,7 @@ export async function handleDetailMode(
 		: null;
 
 	let contentSummary: string | undefined;
-	if (!isJsonRequest) {
+	{
 		const sections: string[] = [`${enriched.length} task details — repo "${repo}"`];
 		for (const entry of enriched) {
 			sections.push("");
@@ -196,6 +196,7 @@ export async function handleDetailMode(
 
 	const data: Record<string, unknown> = {
 		schema: "task-read/detail" as const,
+		mode: "detail" as const,
 		count: enriched.length,
 		tasks: enriched
 	};

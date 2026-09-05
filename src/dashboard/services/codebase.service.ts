@@ -146,7 +146,7 @@ export const CodebaseService = {
 		if (depth !== undefined) params.depth = depth;
 		if (includeSymbolCounts !== undefined) params.includeSymbolCounts = includeSymbolCounts;
 
-		const result = await handleCodebaseRead(injectOwner(params), db, noopVectors);
+		const result = await handleCodebaseRead(injectOwner({ ...params, json: true }), db, noopVectors);
 
 		if (!result.structuredContent) {
 			throw new ServiceError(500, "Unexpected empty response");
@@ -155,7 +155,7 @@ export const CodebaseService = {
 	},
 
 	async readFileSymbols(repo: string, filePath: string): Promise<unknown> {
-		const result = await handleCodebaseRead(injectOwner({ repo, filePath }), db, noopVectors);
+		const result = await handleCodebaseRead(injectOwner({ repo, filePath, json: true }), db, noopVectors);
 
 		if (!result.structuredContent) {
 			throw new ServiceError(500, "Unexpected empty response");
@@ -164,7 +164,7 @@ export const CodebaseService = {
 	},
 
 	async searchSymbols(query: Record<string, unknown>): Promise<unknown> {
-		const result = await handleCodebaseRead(injectOwner(query), db, noopVectors);
+		const result = await handleCodebaseRead(injectOwner({ ...query, json: true }), db, noopVectors);
 
 		if (!result.structuredContent) {
 			throw new ServiceError(500, "Unexpected empty response");
@@ -190,7 +190,7 @@ export const CodebaseService = {
 			);
 		}
 
-		const result = await handleCodebaseRead(injectOwner({ ...params, repoPath }), db, noopVectors);
+		const result = await handleCodebaseRead(injectOwner({ ...params, repoPath, json: true }), db, noopVectors);
 
 		if (!result.structuredContent) {
 			throw new ServiceError(500, "Unexpected empty response");
@@ -203,7 +203,7 @@ export const CodebaseService = {
 		if (repo !== undefined) params.repo = repo.trim();
 		if (includeReferences !== undefined) params.includeReferences = includeReferences;
 
-		const result = await handleCodebaseRead(injectOwner(params), db, noopVectors);
+		const result = await handleCodebaseRead(injectOwner({ ...params, json: true }), db, noopVectors);
 
 		if (!result.structuredContent) {
 			throw new ServiceError(500, "Unexpected empty response");
