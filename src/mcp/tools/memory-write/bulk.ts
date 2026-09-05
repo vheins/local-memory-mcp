@@ -3,6 +3,7 @@ import { SQLiteStore } from "../../storage/sqlite";
 import { VectorStore, MemoryEntry, MEMORY_STATUS_ARCHIVED } from "../../types";
 import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import { enqueueMemory } from "../../embedding-queue";
 import { resolveEntityRef } from "../../utils/entity-ref";
 import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
@@ -190,8 +191,7 @@ export async function handleBulk(
 						db,
 						vectors,
 						isTaskArchive,
-						resolvedS,
-						json
+						resolvedS
 					);
 					if (conflict) {
 						throw new Error((conflictResponse!.content?.[0] as { text?: string })?.text ?? "Conflict detected");
@@ -261,18 +261,24 @@ export async function handleBulk(
 		opParts.push(`${opLabel}: ${sample}`);
 	}
 
-	return createMcpResponse(
-		{
-			success: errorCount === 0,
-			total: items.length,
-			processed: successCount,
-			results,
-			...(errorCount > 0 ? { errors } : {})
-		},
-		`Processed ${successCount}/${items.length} — ${opParts.join("; ")}${errorCount > 0 ? `; ${errorCount} failed` : ""}.`,
-		{
-			structuredContentPathHint: "results",
-			includeJson: json
-		}
-	);
+	const data = {
+		success: errorCount === 0,
+		total: items.length,
+		processed: successCount,
+		results,
+		...(errorCount > 0 ? { errors } : {})
+	};
+	const summary = `Processed ${successCount}/${items.length} — ${opParts.join("; ")}${errorCount > 0 ? `; ${errorCount} failed` : ""}.`;
+	if (errorCount > 0) {
+		return createMcpErrorResponse({
+			code: successCount > 0 ? "PARTIAL_FAILURE" : "BULK_OPERATION_FAILED",
+			message: summary,
+			retryable: false,
+			data
+		});
+	}
+	return createMcpResponse(data, summary, {
+		structuredContentPathHint: "results",
+		includeJson: json
+	});
 }

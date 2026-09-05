@@ -171,8 +171,8 @@ describe("handleCodebaseRead (code mode)", () => {
 		const resp = await handleCodebaseRead({ owner: "vheins", repo: CODE_REPO, content: "greet" }, store, vectors);
 		const d = data(resp);
 
-		expect(d.code).toBe("REPO_PATH_REQUIRED");
-		expect(d.error).toBeDefined();
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_PATH_REQUIRED", retryable: false });
 	});
 
 	it("non-existent repoPath → REPO_PATH_NOT_FOUND", async () => {
@@ -183,7 +183,8 @@ describe("handleCodebaseRead (code mode)", () => {
 		);
 		const d = data(resp);
 
-		expect(d.code).toBe("REPO_PATH_NOT_FOUND");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_PATH_NOT_FOUND", retryable: false });
 	});
 
 	it("unindexed repo → REPO_NOT_INDEXED", async () => {
@@ -194,7 +195,8 @@ describe("handleCodebaseRead (code mode)", () => {
 		);
 		const d = data(resp);
 
-		expect(d.code).toBe("REPO_NOT_INDEXED");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_NOT_INDEXED", retryable: false });
 	});
 
 	it("invalid regex → INVALID_REGEX", async () => {
@@ -205,6 +207,7 @@ describe("handleCodebaseRead (code mode)", () => {
 		);
 		const d = data(resp);
 
-		expect(d.code).toBe("INVALID_REGEX");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "INVALID_REGEX", retryable: false });
 	});
 });

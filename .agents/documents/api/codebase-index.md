@@ -72,14 +72,30 @@ Unified write + status tool. Mode auto-inferred from parameters per ADR-005:
 }
 ```
 
-### 1.5 INDEX Error Codes
+### 1.5 Tool Error Contract
 
-| Scenario                 | Code                   | Behavior                                                |
-| :----------------------- | :--------------------- | :------------------------------------------------------ |
-| Path does not exist      | `PATH_NOT_FOUND`       | `{ success: false, error: "PATH_NOT_FOUND", message }`  |
-| Path is not a directory  | `NOT_A_DIRECTORY`      | `{ success: false, error: "NOT_A_DIRECTORY", message }` |
-| Index in progress        | `IndexInProgressError` | Thrown as exception; propagates as `isError: true`      |
-| Unexpected runtime error | `INDEX_FAILED`         | `{ success: false, error: "INDEX_FAILED", message }`    |
+Failed operations return `isError: true`, one concise text item, and this stable structured envelope:
+
+```typescript
+{
+	schema: "tool-error";
+	code: string;
+	message: string;
+	retryable: boolean;
+	details?: Record<string, unknown>;
+	error: string; // deprecated compatibility alias of message
+}
+```
+
+Partial bulk operations also use `isError: true` with `code: "PARTIAL_FAILURE"` while retaining successful item results at their existing top-level paths. Unknown exceptions become `INTERNAL_ERROR`; raw exception messages and filesystem details remain server-side in logs.
+
+| Scenario                 | Code                 | Retryable |
+| :----------------------- | :------------------- | :-------- |
+| Invalid arguments        | `VALIDATION_ERROR`   | No        |
+| Path does not exist      | `PATH_NOT_FOUND`     | No        |
+| Path is not a directory  | `NOT_A_DIRECTORY`    | No        |
+| Index failed internally  | `INDEX_FAILED`       | Yes       |
+| Unknown internal failure | `INTERNAL_ERROR`     | No        |
 
 ### 1.6 Runnable Examples
 

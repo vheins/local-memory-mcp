@@ -6,6 +6,7 @@ import { CodingStandardEntry, VectorStore } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import { resolveEntityRef } from "../../utils/entity-ref";
 import { enqueueStandard } from "../../embedding-queue";
 import { StandardWriteParams, resolveStandardParentId } from "./shared";
@@ -156,8 +157,12 @@ export async function handleUpdateSingle(
 	} catch (err: unknown) {
 		const conflictErr = err as Error & { structured?: Record<string, unknown> };
 		if (conflictErr.structured) {
-			return createMcpResponse(conflictErr.structured, `Rejected: update conflicts with existing standard.`, {
-				includeJson: params.json
+			const { error, message, success: _success, ...details } = conflictErr.structured;
+			return createMcpErrorResponse({
+				code: String(error),
+				message: String(message),
+				retryable: false,
+				details
 			});
 		}
 		throw err;

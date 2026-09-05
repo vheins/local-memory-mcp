@@ -272,16 +272,26 @@ export function registerAllTools(
 					// Instrumented on the error path too: a fast-failing tool
 					// must still show up in per-tool latency stats.
 					const errDurationMs = performance.now() - toolStartMs;
-					metrics.recordTool(toolName, errDurationMs);
+					metrics.recordTool(toolName, errDurationMs, "error");
 					logger.error(`[Tool] ${toolName} failed`, {
 						error: String(err),
 						durationMs: Math.round(errDurationMs * 100) / 100
 					});
-					return toCallToolResult(toErrorResponse(err));
+					const errorResponse = toErrorResponse(err);
+					logToolAction(store, toolName, normalizedArgs, errorResponse);
+					return toCallToolResult(errorResponse);
 				}
 
 				const durationMs = performance.now() - toolStartMs;
-				metrics.recordTool(toolName, durationMs);
+				const structured = result.structuredContent as { code?: unknown; degraded?: unknown } | undefined;
+				const outcome = result.isError
+					? structured?.code === "PARTIAL_FAILURE"
+						? "partial"
+						: "error"
+					: structured?.degraded === true
+						? "degraded"
+						: "success";
+				metrics.recordTool(toolName, durationMs, outcome);
 				logger.info(`[Tool] ${toolName} result`, {
 					repo: (normalizedArgs?.repo as string) || "unknown",
 					durationMs: Math.round(durationMs * 100) / 100

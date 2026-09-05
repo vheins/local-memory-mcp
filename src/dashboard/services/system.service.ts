@@ -120,6 +120,7 @@ export const SystemService = {
 			uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
 			pid: process.pid,
 			tools: snapshot.tools,
+			toolOutcomes: snapshot.toolOutcomes,
 			writeHandler: snapshot.writeHandler,
 			embedLatency: snapshot.embedLatency,
 			worker

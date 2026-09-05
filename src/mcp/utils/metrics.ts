@@ -142,9 +142,20 @@ export interface WriteHandlerSnapshot {
 }
 
 /** Serializable snapshot of everything the registry currently tracks. */
+export type ToolOutcome = "success" | "error" | "partial" | "degraded";
+
+export interface ToolOutcomeCounts {
+	success: number;
+	error: number;
+	partial: number;
+	degraded: number;
+}
+
 export interface MetricsSnapshot {
 	/** Per-tool dispatch latency, keyed by tool name. */
 	tools: Record<string, DurationStats>;
+	/** Outcome counts keyed by tool name; error-shaped responses are never counted as success. */
+	toolOutcomes: Record<string, ToolOutcomeCounts>;
 	/** Write-handler duration (store.withWrite fast path — no file lock held) — aggregate + per tool. */
 	writeHandler: WriteHandlerSnapshot;
 	/** Embedding batch latency (embedding-queue/worker.ts). */
@@ -153,6 +164,7 @@ export interface MetricsSnapshot {
 
 export class MetricsRegistry {
 	private readonly tools = new Map<string, DurationSeries>();
+	private readonly toolOutcomes = new Map<string, ToolOutcomeCounts>();
 	private readonly writeHandlerTotal = new DurationSeries();
 	private readonly writeHandlerByTool = new Map<string, DurationSeries>();
 	private readonly embedLatency = new DurationSeries();
@@ -166,9 +178,12 @@ export class MetricsRegistry {
 		return series;
 	}
 
-	/** Record a completed tool dispatch (success or error), ms elapsed. */
-	recordTool(toolName: string, ms: number): void {
+	/** Record a completed tool dispatch, its latency, and classified outcome. */
+	recordTool(toolName: string, ms: number, outcome: ToolOutcome = "success"): void {
 		this.seriesFor(this.tools, toolName).add(ms);
+		const counts = this.toolOutcomes.get(toolName) ?? { success: 0, error: 0, partial: 0, degraded: 0 };
+		counts[outcome]++;
+		this.toolOutcomes.set(toolName, counts);
 	}
 
 	/**
@@ -199,8 +214,12 @@ export class MetricsRegistry {
 		for (const [tool, series] of this.tools) {
 			tools[tool] = series.snapshot();
 		}
+		const toolOutcomes = Object.fromEntries(
+			[...this.toolOutcomes].map(([tool, counts]) => [tool, { ...counts }])
+		) as Record<string, ToolOutcomeCounts>;
 		return {
 			tools,
+			toolOutcomes,
 			writeHandler: {
 				total: this.writeHandlerTotal.snapshot(),
 				byTool: writeHandlerByTool
@@ -213,6 +232,7 @@ export class MetricsRegistry {
 	reset(): void {
 		for (const series of this.tools.values()) series.reset();
 		this.tools.clear();
+		this.toolOutcomes.clear();
 		for (const series of this.writeHandlerByTool.values()) series.reset();
 		this.writeHandlerByTool.clear();
 		this.writeHandlerTotal.reset();

@@ -4,6 +4,7 @@ import { IndexRepoSchema, IndexStatusSchema } from "./schemas/index";
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { createMcpErrorResponse } from "../utils/mcp-error";
 import { createCodebaseIndexService } from "../codebase-index/services/indexing-service";
 import type { ParserPool } from "../codebase-index/parser/language-visitor";
 import { TreeSitterParserPool } from "../codebase-index/parser/parser-pool";
@@ -38,23 +39,19 @@ export async function handleCodebaseIndexRepository(
 	try {
 		stat = fs.statSync(resolvedPath);
 	} catch {
-		return createMcpResponse(
-			{ success: false, error: "PATH_NOT_FOUND", message: `Repository path not found: ${resolvedPath}` },
-			`Repository path not found: ${resolvedPath}`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "PATH_NOT_FOUND",
+			message: `Repository path not found: ${resolvedPath}`,
+			retryable: false
+		});
 	}
 
 	if (!stat.isDirectory()) {
-		return createMcpResponse(
-			{
-				success: false,
-				error: "NOT_A_DIRECTORY",
-				message: `Repository path is not a directory: ${resolvedPath}`
-			},
-			`Repository path is not a directory: ${resolvedPath}`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "NOT_A_DIRECTORY",
+			message: `Repository path is not a directory: ${resolvedPath}`,
+			retryable: false
+		});
 	}
 
 	const pool = getParserPool();
@@ -87,11 +84,11 @@ export async function handleCodebaseIndexRepository(
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		logger.error("[handleCodebaseIndexRepository] Index failed", { repo, error: message });
-		return createMcpResponse(
-			{ success: false, error: "INDEX_FAILED", message },
-			`Index failed for ${repo}: ${message}`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "INDEX_FAILED",
+			message: `Index failed for ${repo}`,
+			retryable: true
+		});
 	}
 }
 

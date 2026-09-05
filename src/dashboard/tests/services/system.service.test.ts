@@ -191,6 +191,7 @@ describe("SystemService.getMetrics", () => {
 		expect(metrics.uptimeSeconds).toEqual(expect.any(Number));
 		expect(metrics.pid).toBe(process.pid);
 		expect(metrics.tools).toBeDefined();
+		expect(metrics.toolOutcomes).toBeDefined();
 		expect(metrics.writeHandler).toBeDefined();
 		expect(metrics.embedLatency).toBeDefined();
 		expect(metrics.worker).toEqual({ pending: 5, running: true });
