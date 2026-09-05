@@ -50,8 +50,10 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 - `entities`: Knowledge graph nodes (name PK).
 - `relations`: Knowledge graph edges (composite PK).
 - `observations`: Knowledge graph observations per entity.
+- `exploration_observations`: Evidence-backed repository findings with subject, fact, confidence, task, agent, and freshness metadata.
+- `exploration_evidence`: Normalized file/symbol/line pointers for exploration observations; raw source content is never stored.
 - `action_log`: Full audit trail of all tool invocations.
-- `_schema_version`: Migration version tracking (current: v2).
+- `_schema_version`: Ordered migration history (current: v30).
 
 ## Search Algorithms
 
@@ -89,6 +91,14 @@ The system implements a local-first Model Context Protocol (MCP) server designed
 - **Library**: `compromise` for entity extraction.
 - **Trigger**: Runs on every `memory-store` via `kg-archivist.ts`.
 - **Output**: Entities stored in `entities` table, relations inferred from co-occurrence.
+
+### Exploration Observations
+
+Use `observation-write` for evidence-backed facts discovered while inspecting a repository, such as a symbol contract, dependency edge, implementation constraint, or verified defect. Every observation belongs to an `owner`/`repo` scope and must include at least one file pointer; symbol and line coordinates are optional. Bulk writes are committed in one transaction and normalized subject/fact/evidence identity makes retries idempotent.
+
+Use `observation-read` to retrieve those findings by id, subject, task, file, symbol, or confidence. Compact reads return evidence counts only; set `hydrate_evidence: true` when exact pointers are needed. Raw source text is deliberately excluded from this domain.
+
+Use `memory-write` instead for durable conclusions that should survive beyond a particular exploration run: architectural decisions, reusable patterns, mistakes, code facts worth recalling semantically, and completed-task archives. An observation is source-grounded evidence; a memory is curated long-term knowledge. Promote a validated observation into memory rather than treating both stores as interchangeable.
 
 ### Write Locking
 

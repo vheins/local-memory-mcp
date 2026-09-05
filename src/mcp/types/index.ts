@@ -8,6 +8,7 @@ export * from "./handoff";
 export * from "./codebase-file";
 export * from "./codebase-symbol";
 export * from "./codebase-reference";
+export * from "./exploration-observation";
 
 import { MemoryEntry } from "./memory";
 export type Memory = MemoryEntry;
