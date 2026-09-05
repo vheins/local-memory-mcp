@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { KG_MAX_COOCCURRENCE_ENTITIES } from "../../utils/constants";
 import { KgObservationDomain, observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
@@ -266,13 +267,37 @@ const ENTITY_NAME_BAD_PATTERN = /^(~|[-→·•])|["'`[\]{}()]|→|=>|->|`|~[\d]
 const ENTITY_NAME_ONLY_SYMBOLS = /^[^a-zA-Z0-9]+$/;
 
 /**
+ * Markdown structure that `compromise` happily reports as a noun phrase but
+ * which carries no domain meaning (audit F8). These are the highest-degree
+ * nodes in a real graph precisely BECAUSE they are boilerplate: the same
+ * task/memory template heading appears in hundreds of documents, so it
+ * co-occurs with everything and links nothing.
+ *
+ * Measured on a 45,160-entity corpus: `'### 3. Acceptance & Verification'`
+ * was the single highest-degree node at 13,787 edges, and 718 heading-shaped
+ * entities (1.6% of all entities) anchored 113,032 edges (8.8% of the graph).
+ *
+ *   - `HEADING`      — a leading `#` (ATX heading, or a `#RRGGBB` color hex)
+ *   - `ORDINAL_LIST` — a leading `1. ` / `2) ` enumerator
+ *
+ * Both are structural markers, never entity names. Prose that legitimately
+ * starts with a digit (`"3D rendering"`, `"2FA"`) has no `.`/`)` separator
+ * and is unaffected.
+ */
+const ENTITY_NAME_HEADING = /^#/;
+const ENTITY_NAME_ORDINAL_LIST = /^\d+[.)]\s/;
+
+/**
  * Reject entity names that are clearly garbage: code fragments, size
- * references, quote/bracket pollution, or pure-symbol strings.
+ * references, quote/bracket pollution, pure-symbol strings, or markdown
+ * structure (headings / ordinal list markers — audit F8).
  */
 function isValidEntityName(name: string): boolean {
 	if (name.length < 2) return false;
 	if (ENTITY_NAME_ONLY_SYMBOLS.test(name)) return false;
 	if (ENTITY_NAME_BAD_PATTERN.test(name)) return false;
+	if (ENTITY_NAME_HEADING.test(name)) return false;
+	if (ENTITY_NAME_ORDINAL_LIST.test(name)) return false;
 	return true;
 }
 
@@ -376,6 +401,12 @@ export const KG_RELATION_CONFIDENCE_AUTO_EXTRACTION = 0.55;
  * write lock is held for the full batch, so a concurrent orphan-sweep cannot
  * interleave between entity upsert and observation insert (pair atomicity
  * preserved, TASK-073 / MEM-482).
+ *
+ * **Audit F0 (bounded co-occurrence)**: entity + observation writes cover
+ * EVERY extracted entity, but the `co_mentioned` clique is capped at
+ * `KG_MAX_COOCCURRENCE_ENTITIES` entities (default 16 → at most 120 pairs per
+ * document). Without the cap one document's edge cost is N(N-1)/2 in its own
+ * entity count, which is how `relations` reached 77% of total DB size.
  */
 export async function saveExtractions(
 	content: string,
@@ -414,6 +445,21 @@ export async function saveExtractions(
 	// Build co-occurrence relation edges. Every pair carries the auto-
 	// extraction confidence 0.55 ([KGCONF-1] / TASK-325, migration v24) —
 	// these are free-text NLP guesses, the most uncertain edge family.
+	//
+	// BOUNDED CLIQUE (audit F0): the pair count of a clique over N entities is
+	// N(N-1)/2, so an unbounded clique makes the write cost of ONE document
+	// quadratic in its own entity count. That is not a theoretical concern —
+	// on a real corpus a single 292-entity file produced 42,486 edges, and the
+	// 1.6% of documents above 30 entities produced 91.5% of all co-occurrence
+	// edges in the database. `relations` then grew to 77% of total DB size at
+	// ~70k edges/day with no retention pass to reclaim it.
+	//
+	// The cap applies ONLY to the co-occurrence fan-out: EVERY extracted
+	// entity still gets its `entities` row and its `observations` row above,
+	// so nothing the graph KNOWS is lost — only the density of the weakest
+	// (0.55-confidence) edge family is bounded. `entities` is ordered
+	// people → places → organizations → nouns, so the retained slice keeps the
+	// most specific entity types and drops generic noun-phrase tail pairs.
 	const relations: Array<{
 		from_entity: string;
 		from_type: string;
@@ -422,19 +468,32 @@ export async function saveExtractions(
 		relation_type: string;
 		confidence: number;
 	}> = [];
-	if (entities.length > 1) {
-		for (let i = 0; i < entities.length; i++) {
-			for (let j = i + 1; j < entities.length; j++) {
+	const cooccurring =
+		KG_MAX_COOCCURRENCE_ENTITIES > 0 ? entities.slice(0, KG_MAX_COOCCURRENCE_ENTITIES) : ([] as ExtractedEntity[]);
+	if (cooccurring.length > 1) {
+		for (let i = 0; i < cooccurring.length; i++) {
+			for (let j = i + 1; j < cooccurring.length; j++) {
 				relations.push({
-					from_entity: entities[i].name,
-					from_type: entities[i].type,
-					to_entity: entities[j].name,
-					to_type: entities[j].type,
+					from_entity: cooccurring[i].name,
+					from_type: cooccurring[i].type,
+					to_entity: cooccurring[j].name,
+					to_type: cooccurring[j].type,
 					relation_type: "co_mentioned",
 					confidence: KG_RELATION_CONFIDENCE_AUTO_EXTRACTION
 				});
 			}
 		}
+	}
+
+	if (entities.length > cooccurring.length) {
+		logger.debug("[KG-Archivist] Co-occurrence clique capped", {
+			title,
+			domain,
+			entities: entities.length,
+			cooccurring: cooccurring.length,
+			pairs: relations.length,
+			pairsUncapped: (entities.length * (entities.length - 1)) / 2
+		});
 	}
 
 	// Single BEGIN IMMEDIATE for the whole document (OPT-PERF-01)
