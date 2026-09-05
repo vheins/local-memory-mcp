@@ -149,7 +149,17 @@ export async function saveCodebaseRelations(
 				db.knowledgeGraph.insertObservation({
 					id: randomUUID(),
 					entity_name: fromName,
-					observation: `${ref.kind} relation: ${fromName} → ${ref.symbol_name}`,
+					// Contract-format text (audit F12 / TASK-045): the old
+					// free-form `"${kind} relation: A → B"` was unreachable by
+					// every deleter (`deleteObservationsAndOrphans` matches on
+					// `observationText(domain, title)`), so those rows leaked
+					// forever and pinned their entities against the orphan sweep
+					// — 18,275 rows (41% of the observations table) on a real
+					// database, 938 entity/repo pairs existing ONLY through them.
+					// The file-scoped text is also what `cleanStaleFiles` and the
+					// rename path already delete, so caller edges now vanish with
+					// their file.
+					observation: observationTextValue,
 					repo,
 					owner,
 					created_at: now
