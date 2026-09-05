@@ -323,10 +323,24 @@ export class ExplorationObservationEntity extends BaseEntity {
 				"SELECT * FROM codebase_symbols WHERE repo = ? AND file_path = ? ORDER BY start_line",
 				[observation.repo, item.file_path]
 			);
-			const matched = symbols.find((symbol) => fingerprintSymbol(symbol) === item.symbol_fingerprint);
-			const current = matched ?? symbols[0];
-			if (!current || (item.symbol_fingerprint && !matched)) {
-				setState("stale", current ? "symbol_changed" : "symbol_deleted");
+			if (!item.symbol_fingerprint) {
+				const exact = symbols.find((symbol) => symbol.id === item.symbol_id);
+				if (!exact) {
+					setState("unverifiable", "symbol_not_indexed");
+					continue;
+				}
+				this.updateEvidenceFingerprint(
+					item.id,
+					file.checksum,
+					exact.id,
+					fingerprintSymbol(exact),
+					file.last_indexed_at
+				);
+				continue;
+			}
+			const current = symbols.find((symbol) => fingerprintSymbol(symbol) === item.symbol_fingerprint);
+			if (!current) {
+				setState("stale", symbols.length > 0 ? "symbol_changed" : "symbol_deleted");
 				continue;
 			}
 			this.updateEvidenceFingerprint(
