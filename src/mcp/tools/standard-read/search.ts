@@ -314,8 +314,9 @@ export async function handleSearchMode(
 		extra: { mode: "search", query: validated.query || "" }
 	});
 
-	// Best-effort KG context (REFACTOR-KG-005)
-	if (paginatedResults.length > 0) {
+	// Best-effort KG context (REFACTOR-KG-005) — gated on the json flag
+	// (audit F3/F4): `kg` only ships inside `structuredContent`.
+	if (validated.json && paginatedResults.length > 0) {
 		const kgData = fetchAggregatedKgContext(
 			db,
 			validated.repo ?? "",
@@ -328,6 +329,8 @@ export async function handleSearchMode(
 	return createMcpResponse(responseData, `Found ${total} coding standards matching your query`, {
 		contentSummary,
 		structuredContentPathHint: "results",
-		includeJson: true
+		// Audit F4: was hardcoded `true` — the `json` flag was silently ignored
+		// in search mode while detail mode honored it.
+		includeJson: validated.json
 	});
 }

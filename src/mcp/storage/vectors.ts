@@ -131,8 +131,14 @@ export class RealVectorStore implements VectorStore {
 					.getSymbolVectorsByRepo(repo || "", 100)
 					.map((row) => ({ id: row.symbol_id, vector: row.vector }));
 			} else {
+				// Owner is deliberately omitted (audit F7): memories carry a real
+				// owner, so passing the hardcoded empty string here produced
+				// `WHERE m.owner = ''` and excluded 46% of vectorized memories on
+				// a real database. `getVectorCandidates` now treats a falsy owner
+				// as "any owner", matching the standard/task stores which take no
+				// owner argument at all.
 				rows = this.db.memoryVectors
-					.getVectorCandidates("", repo, 100)
+					.getVectorCandidates(undefined, repo, 100)
 					.map((row) => ({ id: row.memory_id, vector: row.vector }));
 			}
 

@@ -1,7 +1,9 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { KG_MAX_COOCCURRENCE_ENTITIES } from "../../utils/constants";
 import { KgObservationDomain, observationText } from "./observation-text";
+import { cleanText, isExcludedNoun, isValidEntityName, stripLeadingDeterminer } from "./entity-filter";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -9,271 +11,9 @@ import { KgObservationDomain, observationText } from "./observation-text";
 
 const MAX_CONTENT_LENGTH = 5000;
 
-const PRONOUNS = new Set([
-	"i",
-	"me",
-	"my",
-	"myself",
-	"we",
-	"us",
-	"our",
-	"ours",
-	"ourselves",
-	"you",
-	"your",
-	"yours",
-	"yourself",
-	"yourselves",
-	"he",
-	"him",
-	"his",
-	"himself",
-	"she",
-	"her",
-	"hers",
-	"herself",
-	"it",
-	"its",
-	"itself",
-	"they",
-	"them",
-	"their",
-	"theirs",
-	"themselves",
-	"this",
-	"that",
-	"these",
-	"those",
-	"someone",
-	"somebody",
-	"something",
-	"anyone",
-	"anybody",
-	"anything",
-	"everyone",
-	"everybody",
-	"everything",
-	"nobody",
-	"nothing"
-]);
-
-/** Common English stopwords unlikely to be meaningful "concept" entities. */
-const STOPWORDS = new Set([
-	"a",
-	"an",
-	"the",
-	"and",
-	"but",
-	"or",
-	"if",
-	"because",
-	"as",
-	"until",
-	"while",
-	"of",
-	"at",
-	"by",
-	"for",
-	"with",
-	"about",
-	"against",
-	"between",
-	"into",
-	"through",
-	"during",
-	"before",
-	"after",
-	"above",
-	"below",
-	"to",
-	"from",
-	"up",
-	"down",
-	"in",
-	"out",
-	"on",
-	"off",
-	"over",
-	"under",
-	"again",
-	"further",
-	"then",
-	"once",
-	"here",
-	"there",
-	"when",
-	"where",
-	"why",
-	"how",
-	"all",
-	"each",
-	"every",
-	"both",
-	"few",
-	"more",
-	"most",
-	"other",
-	"some",
-	"such",
-	"no",
-	"nor",
-	"not",
-	"only",
-	"own",
-	"same",
-	"so",
-	"than",
-	"too",
-	"very",
-	"just",
-	"also",
-	"any",
-	"thing",
-	"things",
-	"way",
-	"ways",
-	"person",
-	"people",
-	"man",
-	"woman",
-	"child",
-	"time",
-	"year",
-	"day",
-	"number",
-	"world",
-	"life",
-	"hand",
-	"part",
-	"place",
-	"case",
-	"week",
-	"company",
-	"system",
-	"program",
-	"work",
-	"group",
-	"problem",
-	"fact",
-	"example",
-	"member",
-	"car",
-	"city",
-	"state",
-	"country",
-	"area",
-	"water",
-	"air",
-	"money",
-	"data",
-	"information",
-	"software",
-	"code",
-	"file",
-	"server",
-	"database",
-	"application",
-	"user",
-	"users",
-	"project",
-	"task",
-	"memory",
-	"value",
-	"name",
-	"type",
-	"list",
-	"set",
-	"number",
-	"id",
-	"key",
-	"text",
-	"content",
-	"title",
-	"description",
-	"status",
-	"time",
-	"dan",
-	"yang",
-	"di",
-	"ke",
-	"dari",
-	"dengan",
-	"ini",
-	"itu",
-	"ada",
-	"akan",
-	"bisa",
-	"telah",
-	"sudah",
-	"juga",
-	"atau",
-	"karena",
-	"untuk",
-	"pada",
-	"sebagai",
-	"oleh",
-	"saat",
-	"setelah",
-	"antara",
-	"tentang"
-]);
-
-const DETERMINERS = /^(a|an|the)\s+/i;
-
-const TRAILING_PUNCTUATION = /[.,!?;:()"'[\]]+$/g;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface ExtractedEntity {
 	name: string;
 	type: "person" | "place" | "organization" | "concept";
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Clean trailing punctuation from extracted entity text.
- */
-function cleanText(raw: string): string {
-	return raw.replace(TRAILING_PUNCTUATION, "").trim();
-}
-
-/**
- * Remove leading determiners ("a ", "an ", "the ") from a noun phrase.
- */
-function stripLeadingDeterminer(phrase: string): string {
-	return phrase.replace(DETERMINERS, "").trim();
-}
-
-/**
- * Check whether a noun-phrase candidate should be excluded from concept
- * extraction (pronouns, stopwords, too short, etc.).
- */
-function isExcludedNoun(candidate: string): boolean {
-	const lower = candidate.toLowerCase();
-	if (lower.length < 2) return true;
-	if (PRONOUNS.has(lower)) return true;
-	if (STOPWORDS.has(lower)) return true;
-	if (/^\d+$/.test(candidate)) return true;
-	return false;
-}
-
-const ENTITY_NAME_BAD_PATTERN = /^(~|[-→·•])|["'`[\]{}()]|→|=>|->|`|~[\d]/;
-const ENTITY_NAME_ONLY_SYMBOLS = /^[^a-zA-Z0-9]+$/;
-
-/**
- * Reject entity names that are clearly garbage: code fragments, size
- * references, quote/bracket pollution, or pure-symbol strings.
- */
-function isValidEntityName(name: string): boolean {
-	if (name.length < 2) return false;
-	if (ENTITY_NAME_ONLY_SYMBOLS.test(name)) return false;
-	if (ENTITY_NAME_BAD_PATTERN.test(name)) return false;
-	return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -376,6 +116,12 @@ export const KG_RELATION_CONFIDENCE_AUTO_EXTRACTION = 0.55;
  * write lock is held for the full batch, so a concurrent orphan-sweep cannot
  * interleave between entity upsert and observation insert (pair atomicity
  * preserved, TASK-073 / MEM-482).
+ *
+ * **Audit F0 (bounded co-occurrence)**: entity + observation writes cover
+ * EVERY extracted entity, but the `co_mentioned` clique is capped at
+ * `KG_MAX_COOCCURRENCE_ENTITIES` entities (default 16 → at most 120 pairs per
+ * document). Without the cap one document's edge cost is N(N-1)/2 in its own
+ * entity count, which is how `relations` reached 77% of total DB size.
  */
 export async function saveExtractions(
 	content: string,
@@ -414,6 +160,21 @@ export async function saveExtractions(
 	// Build co-occurrence relation edges. Every pair carries the auto-
 	// extraction confidence 0.55 ([KGCONF-1] / TASK-325, migration v24) —
 	// these are free-text NLP guesses, the most uncertain edge family.
+	//
+	// BOUNDED CLIQUE (audit F0): the pair count of a clique over N entities is
+	// N(N-1)/2, so an unbounded clique makes the write cost of ONE document
+	// quadratic in its own entity count. That is not a theoretical concern —
+	// on a real corpus a single 292-entity file produced 42,486 edges, and the
+	// 1.6% of documents above 30 entities produced 91.5% of all co-occurrence
+	// edges in the database. `relations` then grew to 77% of total DB size at
+	// ~70k edges/day with no retention pass to reclaim it.
+	//
+	// The cap applies ONLY to the co-occurrence fan-out: EVERY extracted
+	// entity still gets its `entities` row and its `observations` row above,
+	// so nothing the graph KNOWS is lost — only the density of the weakest
+	// (0.55-confidence) edge family is bounded. `entities` is ordered
+	// people → places → organizations → nouns, so the retained slice keeps the
+	// most specific entity types and drops generic noun-phrase tail pairs.
 	const relations: Array<{
 		from_entity: string;
 		from_type: string;
@@ -422,19 +183,32 @@ export async function saveExtractions(
 		relation_type: string;
 		confidence: number;
 	}> = [];
-	if (entities.length > 1) {
-		for (let i = 0; i < entities.length; i++) {
-			for (let j = i + 1; j < entities.length; j++) {
+	const cooccurring =
+		KG_MAX_COOCCURRENCE_ENTITIES > 0 ? entities.slice(0, KG_MAX_COOCCURRENCE_ENTITIES) : ([] as ExtractedEntity[]);
+	if (cooccurring.length > 1) {
+		for (let i = 0; i < cooccurring.length; i++) {
+			for (let j = i + 1; j < cooccurring.length; j++) {
 				relations.push({
-					from_entity: entities[i].name,
-					from_type: entities[i].type,
-					to_entity: entities[j].name,
-					to_type: entities[j].type,
+					from_entity: cooccurring[i].name,
+					from_type: cooccurring[i].type,
+					to_entity: cooccurring[j].name,
+					to_type: cooccurring[j].type,
 					relation_type: "co_mentioned",
 					confidence: KG_RELATION_CONFIDENCE_AUTO_EXTRACTION
 				});
 			}
 		}
+	}
+
+	if (entities.length > cooccurring.length) {
+		logger.debug("[KG-Archivist] Co-occurrence clique capped", {
+			title,
+			domain,
+			entities: entities.length,
+			cooccurring: cooccurring.length,
+			pairs: relations.length,
+			pairsUncapped: (entities.length * (entities.length - 1)) / 2
+		});
 	}
 
 	// Single BEGIN IMMEDIATE for the whole document (OPT-PERF-01)

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { KG_MAX_TASK_RELATION_ENTITIES } from "../../utils/constants";
 import { KG_RELATION_CONFIDENCE_SEMANTIC } from "./relations-conf";
 import { extractEntities, type ExtractedEntity } from "./extract";
 import { observationText } from "./observation-text";
@@ -24,6 +25,13 @@ import { observationText } from "./observation-text";
  *
  * Observations: Each entity also generates an observation record.
  * Failures are logged at `warn` level but never thrown.
+ *
+ * **Bounded cross-products (audit F13).** `extends` is
+ * `|entities| × |parent entities|` and `related_to` is
+ * `|entities| × |similar entities| × up to 5 similar standards` — the widest
+ * fan-out of any writer in the graph. Both sides of both products are capped at
+ * `KG_MAX_TASK_RELATION_ENTITIES` so one standard write can add at most
+ * N² + 5N² edges instead of an unbounded product of three document sizes.
  */
 export async function saveStandardRelations(
 	standard: {
@@ -58,8 +66,12 @@ export async function saveStandardRelations(
 	const now = new Date().toISOString();
 	const repo = standard.repo ?? "";
 	const owner = standard.owner ?? "";
-	const entityNames = entities.map((e) => e.name);
-	const entityTypeByName = new Map(entities.map((e) => [e.name, e.type]));
+	// Bounded relation fan-out (audit F13) — the entity/observation writes
+	// below still cover EVERY extracted entity; only the cross-products are
+	// capped.
+	const relationEntities = entities.slice(0, KG_MAX_TASK_RELATION_ENTITIES);
+	const entityNames = relationEntities.map((e) => e.name);
+	const entityTypeByName = new Map(relationEntities.map((e) => [e.name, e.type]));
 
 	const observationTextValue = observationText("standard", standard.title);
 	for (const entity of entities) {
@@ -105,7 +117,7 @@ export async function saveStandardRelations(
 
 			if (parentEntities.length > 0) {
 				for (const entityName of entityNames) {
-					for (const parentEntity of parentEntities) {
+					for (const parentEntity of parentEntities.slice(0, KG_MAX_TASK_RELATION_ENTITIES)) {
 						try {
 							// Upsert both endpoints first (parent entities come from
 							// another document and may have been swept) so the FK
@@ -125,7 +137,11 @@ export async function saveStandardRelations(
 							db.knowledgeGraph.insertObservation({
 								id: randomUUID(),
 								entity_name: entityName,
-								observation: `extends relation: ${standard.title} → ${parentStandard.title}`,
+								// Contract-format text (audit F12 / TASK-045): the old
+								// free-form `"extends relation: A → B"` could not be
+								// matched by any deleter, so it leaked forever and
+								// pinned its entity against the orphan sweep.
+								observation: observationTextValue,
 								repo,
 								owner,
 								created_at: now
@@ -173,7 +189,7 @@ export async function saveStandardRelations(
 			if (similarEntities.length === 0) continue;
 
 			for (const entityName of entityNames) {
-				for (const similarEntity of similarEntities) {
+				for (const similarEntity of similarEntities.slice(0, KG_MAX_TASK_RELATION_ENTITIES)) {
 					try {
 						// Upsert both endpoints first (similar-standard entities come
 						// from another document and may have been swept) so the FK
@@ -193,7 +209,8 @@ export async function saveStandardRelations(
 						db.knowledgeGraph.insertObservation({
 							id: randomUUID(),
 							entity_name: entityName,
-							observation: `related_to relation: ${standard.title} ∼ ${similar.title}`,
+							// Contract-format text (audit F12 / TASK-045) — see above.
+							observation: observationTextValue,
 							repo,
 							owner,
 							created_at: now

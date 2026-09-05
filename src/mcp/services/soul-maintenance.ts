@@ -1,6 +1,14 @@
 import { logger } from "../utils/logger";
 import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
-import { TABLE_MEMORIES, TABLE_ACTION_LOG, TTL_MS_PER_DAY, ACTION_LOG_MAX_ROWS } from "../utils/constants";
+import {
+	TABLE_MEMORIES,
+	TABLE_ACTION_LOG,
+	TTL_MS_PER_DAY,
+	ACTION_LOG_MAX_ROWS,
+	KG_RELATION_RETENTION_DAYS,
+	KG_RELATION_PRUNE_MAX_ROWS,
+	KG_RELATION_PRUNE_CHUNK
+} from "../utils/constants";
 import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 
 export interface PruneActionLogResult {
@@ -15,6 +23,18 @@ export interface PruneActionLogResult {
 export interface PruneObservationsResult {
 	/** Number of observations rows deleted */
 	deleted: number;
+}
+
+export interface PruneRelationsResult {
+	/** Relation rows deleted this run (bounded by maxRows). */
+	deleted: number;
+	/** Entity rows removed by the follow-up orphan sweep. */
+	orphanEntitiesDeleted: number;
+	/**
+	 * Eligible rows still remaining after this run — non-zero means the per-run
+	 * cap truncated the sweep and the next maintenance cycle will continue.
+	 */
+	remaining: number;
 }
 
 export interface SoulMaintenanceOptions {
@@ -195,27 +215,104 @@ export function pruneActionLog(
 }
 
 /**
- * Delete observations older than a specified number of days.
+ * Delete observations whose PARENT DOCUMENT is gone, or which no cleanup path
+ * can ever reach (audit F1).
  *
- * Observations are transient knowledge graph annotations that lose relevance
- * quickly. Stale observations bloat the KG and degrade query performance.
+ * **This replaces an age-only prune that was silently destroying live data.**
+ * The previous implementation deleted every observation older than
+ * `retentionDays` regardless of whether its parent memory/task/standard/file
+ * still existed. Since the observation text is the ONLY link from a document to
+ * its graph (`getEntityNamesByObservation`), and nothing re-creates the row
+ * afterwards (`queue_jobs` is already `done`, and the startup backfill skips
+ * entities whose vector is fresh), the effect was permanent: measured on a real
+ * database, 287/710 memories, 611/691 tasks and 297/297 standards had lost
+ * their entire KG context and returned `kg:{entities:[],relations:[]}` forever,
+ * while their edges kept consuming disk.
+ *
+ * The parent-aware version deletes only what is genuinely collectable —
+ * contract-format rows whose parent row is gone, plus inline-format rows
+ * (`"call relation: A → B"`) for entities with no contract-format anchor, which
+ * no deleter can match because they bypass `observationText()`. On the same
+ * database the age-only prune would have deleted 42,838 rows; this deletes
+ * 7,437 and preserves 35,401 live document↔graph links.
  *
  * @param knowledgeGraph - The KnowledgeGraphEntity (sole encapsulation point
  *   for raw SQL against the KG tables)
- * @param retentionDays - Entries older than this many days are deleted (default: 7)
+ * @param retentionDays - Only rows older than this are considered (default: 7)
  * @returns Number of rows deleted
  */
 export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentionDays = 7): PruneObservationsResult {
 	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
-	const deleted = knowledgeGraph.deleteObservationsOlderThan(cutoff);
+	const deleted = knowledgeGraph.deleteStaleObservations(cutoff);
 
 	if (deleted > 0) {
-		logger.info("[SoulMaintenance] Pruned stale observations", {
+		logger.info("[SoulMaintenance] Pruned orphaned observations", {
 			deleted,
-			cutoff
+			cutoff,
+			retentionDays
 		});
 	}
 
 	return { deleted };
+}
+
+/**
+ * Prune relation rows that no read path can reach again (audit F1).
+ *
+ * `observations` was pruned but `relations` never was, and entity names resolve
+ * exclusively through `observations` — so an edge whose endpoints have no
+ * observation is permanently invisible to every reader while still occupying
+ * disk AND still pinning its endpoint entities against `deleteOrphanEntities`
+ * (which keeps any name referenced by a relation). That is why `relations` grew
+ * to 77% of total DB size at ~70k edges/day on a real deployment with no
+ * mechanism to ever shrink.
+ *
+ * Eligibility requires BOTH an age guard and unreachability, and the endpoint
+ * check is repo-agnostic — see `KnowledgeGraphEntity.deleteUnreachableRelations`
+ * for why (a name observed in another repo is still live, and `entities.name` is
+ * a global primary key).
+ *
+ * Bounded per run (`maxRows`) and per transaction (`chunkSize`) so a large
+ * backlog converges across maintenance cycles instead of blocking one startup
+ * and starving sibling writers. Followed by ONE global orphan-entity sweep,
+ * which is where the space actually comes back: entities kept alive only by
+ * now-deleted edges become collectable.
+ *
+ * Verified end-to-end on a copy of a real 536 MB database: 392,445 edges +
+ * 4,937 entities removed, `VACUUM` reclaimed 536 → 368 MB (31%), integrity
+ * check ok, 0 foreign-key violations.
+ *
+ * @param knowledgeGraph - The KnowledgeGraphEntity
+ * @param retentionDays - Age guard in days (default: KG_RELATION_RETENTION_DAYS)
+ * @param maxRows - Hard cap on relation rows deleted this run
+ * @param chunkSize - Rows per transaction (write-lock hold bound)
+ * @returns Relations deleted, entities swept, and the remaining backlog
+ */
+export function pruneRelations(
+	knowledgeGraph: KnowledgeGraphEntity,
+	retentionDays = KG_RELATION_RETENTION_DAYS,
+	maxRows = KG_RELATION_PRUNE_MAX_ROWS,
+	chunkSize = KG_RELATION_PRUNE_CHUNK
+): PruneRelationsResult {
+	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
+
+	const deleted = knowledgeGraph.deleteUnreachableRelations(cutoff, maxRows, chunkSize);
+	if (deleted === 0) return { deleted: 0, orphanEntitiesDeleted: 0, remaining: 0 };
+
+	// The edges are gone; their endpoint entities may now be orphans. This is
+	// the pass that actually reclaims the space.
+	const orphanEntitiesDeleted = knowledgeGraph.deleteOrphanEntities();
+	const remaining = knowledgeGraph.countPrunableRelations(cutoff);
+
+	logger.info("[SoulMaintenance] Pruned unreachable relations", {
+		deleted,
+		orphanEntitiesDeleted,
+		remaining,
+		cutoff,
+		retentionDays,
+		truncated: remaining > 0
+	});
+
+	return { deleted, orphanEntitiesDeleted, remaining };
 }

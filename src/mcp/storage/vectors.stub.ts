@@ -96,7 +96,8 @@ export class StubVectorStore implements VectorStore {
 			} else if (kind === "task") {
 				rawCandidates = this.db.tasks.getTaskVectorCandidates(repo, 100) as unknown as Record<string, unknown>[];
 			} else {
-				rawCandidates = this.db.memoryVectors.getVectorCandidates("", repo, 100) as unknown as Record<
+				// Owner omitted on purpose — see RealVectorStore.search / audit F7.
+				rawCandidates = this.db.memoryVectors.getVectorCandidates(undefined, repo, 100) as unknown as Record<
 					string,
 					unknown
 				>[];

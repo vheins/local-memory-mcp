@@ -51,8 +51,11 @@ export async function handleListMode(
 		offset
 	});
 
-	// Best-effort KG context (REFACTOR-KG-004)
-	if (filteredTasks.length > 0) {
+	// Best-effort KG context (REFACTOR-KG-004) — gated on the json flag
+	// (audit F3): `kg` lives on `structuredData`, which `createMcpResponse`
+	// only emits when `includeJson` is true, so a text-mode read was paying
+	// the full KG lookup and throwing the result away.
+	if (isJsonRequest && filteredTasks.length > 0) {
 		const kgData = fetchAggregatedTaskKgContext(storage, repo, filteredTasks);
 		if (kgData) structuredData.kg = kgData;
 	}

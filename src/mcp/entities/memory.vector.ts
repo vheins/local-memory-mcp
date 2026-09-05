@@ -21,6 +21,27 @@ export class MemoryVectorEntity extends BaseEntity {
 	// In-memory TF vector cache keyed by memory id and validated against
 	// memories.updated_at — self-invalidates on writes without write-path hooks.
 	private readonly tfCache = createTfVectorCache();
+	/**
+	 * Candidate (memory_id, vector) rows for the vector-search fallback,
+	 * optionally scoped by owner and/or repo.
+	 *
+	 * **Empty `owner` means ANY owner (audit F7).** The previous shape treated a
+	 * truthy `repo` as "filter on both columns" and interpolated `owner!` —
+	 * which meant the sole production caller, `RealVectorStore.search`, always
+	 * emitted `WHERE m.owner = '' AND m.repo = ?` because it passes a hardcoded
+	 * empty-string owner. Memories are stored with a REAL owner (the GitHub
+	 * org/username), so on a real database only 380 of 710 vectorized memories
+	 * (54%) had `owner = ''` and the other **330 (46%) could never match the
+	 * query at all** — for one repo the candidate set went from 44 rows with the
+	 * correct owner to 0 rows with the empty one.
+	 *
+	 * The bug was masked because `memory.read` only reaches the vector stage
+	 * when the TF-similarity + FTS pipeline produced zero candidates, so the
+	 * failure looked like "vector search didn't add anything" rather than an
+	 * error. Treating an empty owner as "unscoped" both fixes it and matches the
+	 * sibling stores: `standards.getVectorCandidates(repo)` and
+	 * `tasks.getTaskVectorCandidates(repo)` take no owner at all.
+	 */
 	getVectorCandidates(
 		owner?: string,
 		repo?: string,
@@ -31,13 +52,12 @@ export class MemoryVectorEntity extends BaseEntity {
 	}[] {
 		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN ${TABLE_MEMORIES} m ON mv.memory_id = m.id`;
 		const params: (string | number)[] = [];
-		if (repo) {
-			sql += " WHERE m.owner = ? AND m.repo = ?";
-			params.push(owner!, repo);
-		} else if (owner) {
-			sql += " WHERE m.owner = ?";
-			params.push(owner);
-		}
+		const predicates: string[] = [];
+		if (owner) predicates.push("m.owner = ?");
+		if (repo) predicates.push("m.repo = ?");
+		if (owner) params.push(owner);
+		if (repo) params.push(repo);
+		if (predicates.length > 0) sql += ` WHERE ${predicates.join(" AND ")}`;
 		sql += " LIMIT ?";
 		params.push(limit);
 		return this.all<MemoryIdVector>(sql, params);

@@ -1,6 +1,7 @@
 import { BaseEntity } from "../../storage/base";
+import { KnowledgeGraphRetentionEntity } from "./retention";
 import { logger } from "../../utils/logger";
-import { KG_MAX_CONTEXT_ENTITIES, KG_MAX_GRAPH_EDGES } from "../../utils/constants";
+import { KG_MAX_CONTEXT_ENTITIES, KG_MAX_CONTEXT_RELATIONS, KG_MAX_GRAPH_EDGES } from "../../utils/constants";
 import * as queries from "./queries";
 import type { KgQueryRunner, KgEntityRow, KgRelationRow, KgObservationRow } from "./queries";
 import {
@@ -17,14 +18,10 @@ import {
 	type CreateRelationParams
 } from "./writers";
 
-/**
- * Single encapsulation point for ALL raw SQL against the knowledge-graph
- * tables. Read/query SQL lives in `./queries` (TASK-176); leaf INSERT
- * writers live in `./writers` (TASK-432) — both execute through the shared
- * prepared-statement cache. Orchestration and cascade deletes stay here and
- * run inside `db.transaction`.
- */
+/** KG CRUD orchestration; SQL is delegated to co-located query, writer, and retention modules. */
 export class KnowledgeGraphEntity extends BaseEntity {
+	private readonly retention = new KnowledgeGraphRetentionEntity(this.db);
+
 	/** Read accessor exposing protected BaseEntity helpers to `./queries` (TASK-176). */
 	private get runner(): KgQueryRunner {
 		return {
@@ -40,10 +37,6 @@ export class KnowledgeGraphEntity extends BaseEntity {
 			transaction: <T>(fn: () => T): T => this.transaction(fn)
 		};
 	}
-
-	// -----------------------------------------------------------------------
-	// Writes
-	// -----------------------------------------------------------------------
 
 	/** Insert an entity, ignoring duplicates (entities.name is the primary key). */
 	upsertEntity(params: UpsertEntityParams): void {
@@ -153,10 +146,6 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	insertObservation(params: InsertObservationParams): void {
 		writeInsertObservation(this.writerRunner, params);
 	}
-
-	// -----------------------------------------------------------------------
-	// Batch extraction writes (OPT-PERF-01)
-	// -----------------------------------------------------------------------
 
 	/**
 	 * Persist observations + co-occurrence relations in one BEGIN IMMEDIATE
@@ -276,18 +265,28 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		writeCreateRelation(this.writerRunner, params);
 	}
 
-	// -----------------------------------------------------------------------
-	// Reads (delegated to ./queries — TASK-176)
-	// -----------------------------------------------------------------------
-
-	/** Fetch entity name/type rows for the given names, scoped to a repo. */
-	getEntitiesFor(entityNames: string[], repo: string): Array<{ name: string; type: string }> {
-		return queries.getEntitiesFor(this.runner, entityNames, repo);
+	/**
+	 * Fetch entity name/type rows for the given names. NOT repo-filtered —
+	 * `entities.name` is a global PK, so a repo predicate here filtered on
+	 * first-writer-wins rather than ownership and silently dropped entities
+	 * whose edges the response still shipped (audit F6 — see ./queries).
+	 */
+	getEntitiesFor(entityNames: string[]): Array<{ name: string; type: string }> {
+		return queries.getEntitiesFor(this.runner, entityNames);
 	}
 
-	/** Fetch relations touching any of the given entity names, scoped to a repo. */
-	getRelationsFor(entityNames: string[], repo: string): Array<{ from: string; to: string; type: string }> {
-		return queries.getRelationsFor(this.runner, entityNames, repo);
+	/**
+	 * Fetch relations touching any of the given entity names, scoped to a repo.
+	 * Bounded UNION of two index-served branches, ranked by confidence
+	 * (audit F2 — see ./queries `getRelationsFor` for the plan analysis and
+	 * the measured A/B). `limit = 0` restores unbounded output.
+	 */
+	getRelationsFor(
+		entityNames: string[],
+		repo: string,
+		limit = KG_MAX_CONTEXT_RELATIONS
+	): Array<{ from: string; to: string; type: string }> {
+		return queries.getRelationsFor(this.runner, entityNames, repo, limit);
 	}
 
 	/** Entity names referenced by a single exact observation text. */
@@ -387,10 +386,6 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		return queries.listRelationsForGraph(this.runner, repo, entityNames, limit);
 	}
 
-	// -----------------------------------------------------------------------
-	// Deletes
-	// -----------------------------------------------------------------------
-
 	/** Delete all observations, relations and entities for a repo — atomic. Returns entities deleted. */
 	deleteRepoEntities(repo: string): number {
 		return this.transaction(() => {
@@ -468,7 +463,19 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		return this.run("DELETE FROM observations WHERE id = ?", [id]);
 	}
 
-	/** Delete observations created before the cutoff (soul-maintenance prune; no orphan sweep). */
+	deleteStaleObservations(cutoff: string): number {
+		return this.retention.deleteStaleObservations(cutoff);
+	}
+
+	countPrunableRelations(cutoff: string): number {
+		return this.retention.countPrunableRelations(cutoff);
+	}
+
+	deleteUnreachableRelations(cutoff: string, maxRows: number, chunkSize: number): number {
+		return this.retention.deleteUnreachableRelations(cutoff, maxRows, chunkSize);
+	}
+
+	/** Delete observations created before the cutoff (legacy age-only prune; no orphan sweep). */
 	deleteObservationsOlderThan(cutoff: string): number {
 		const result = this.run("DELETE FROM observations WHERE created_at < ?", [cutoff]);
 		return result.changes;

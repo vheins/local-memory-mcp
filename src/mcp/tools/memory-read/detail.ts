@@ -60,12 +60,16 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 	if (ids !== undefined && ids.length > 0) {
 		const memories = db.memories.getByIds(ids);
 		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given ids.";
-		const kgContext = fetchAggregatedKgContext(
-			db,
-			repo,
-			memories.map((m: MemoryEntry) => m.title),
-			"memory"
-		);
+		// KG context only ships inside `structuredContent`, so computing it for
+		// a text-mode read is pure waste (audit F3).
+		const kgContext = validated.json
+			? fetchAggregatedKgContext(
+					db,
+					repo,
+					memories.map((m: MemoryEntry) => m.title),
+					"memory"
+				)
+			: null;
 		const data: Record<string, unknown> = { memories: memories.map(withAcknowledged) };
 		if (kgContext) data.kg = kgContext;
 		return createMcpResponse(data, contentSummary, {
@@ -78,12 +82,14 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 	if (codes !== undefined && codes.length > 0) {
 		const memories = db.memories.getMemoriesByCodes(codes, owner, repo);
 		const contentSummary = memories.length > 0 ? formatBulkDetail(memories) : "No memories found for given codes.";
-		const kgContext = fetchAggregatedKgContext(
-			db,
-			repo,
-			memories.map((m: MemoryEntry) => m.title),
-			"memory"
-		);
+		const kgContext = validated.json
+			? fetchAggregatedKgContext(
+					db,
+					repo,
+					memories.map((m: MemoryEntry) => m.title),
+					"memory"
+				)
+			: null;
 		const data: Record<string, unknown> = { memories: memories.map(withAcknowledged) };
 		if (kgContext) data.kg = kgContext;
 		return createMcpResponse(data, contentSummary, {
@@ -110,7 +116,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 
 	const content = formatMemoryDetail(memory);
 
-	const kgContext = fetchKgContext(db, repo, memory.title, "memory");
+	const kgContext = validated.json ? fetchKgContext(db, repo, memory.title, "memory") : null;
 	const data: Record<string, unknown> = { memory: withAcknowledged(memory) };
 	if (kgContext) data.kg = kgContext;
 

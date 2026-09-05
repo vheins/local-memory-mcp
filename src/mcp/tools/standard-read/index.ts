@@ -106,8 +106,9 @@ async function handleListMode(validated: StandardReadInput, db: SQLiteStore): Pr
 		offset: validated.offset
 	};
 
-	// Best-effort KG context (REFACTOR-KG-005)
-	if (standards.length > 0) {
+	// Best-effort KG context (REFACTOR-KG-005) — gated on the json flag
+	// (audit F3/F4): `kg` only ships inside `structuredContent`.
+	if (validated.json && standards.length > 0) {
 		const kgData = fetchAggregatedKgContext(
 			db,
 			validated.repo ?? "",
@@ -120,7 +121,12 @@ async function handleListMode(validated: StandardReadInput, db: SQLiteStore): Pr
 	return createMcpResponse(responseData, contentSummary, {
 		contentSummary,
 		structuredContentPathHint: "standards",
-		includeJson: true
+		// Audit F4: was hardcoded `true`, so `standard-read` was the ONE read
+		// tool with no way to opt out of the structured payload — the `json`
+		// flag it already accepts was silently ignored in list/search mode
+		// while detail mode honored it. Now consistent with memory-read,
+		// task-read and its own detail branch.
+		includeJson: validated.json
 	});
 }
 
