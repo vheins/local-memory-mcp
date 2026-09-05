@@ -384,8 +384,18 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 		limit: params.limit
 	});
 
-	// Best-effort KG context (REFACTOR-KG-003)
-	if (paginatedResults.length > 0) {
+	// Best-effort KG context (REFACTOR-KG-003).
+	//
+	// Gated on `params.json` (audit F3): `kg` is attached to `structuredData`
+	// and `createMcpResponse` only emits `structuredContent` when
+	// `includeJson` is true, so on a text-mode read the whole payload was
+	// computed and then discarded. That is not free — the KG lookup is the
+	// dominant cost of the read (measured ~1.0s of a ~1.05s `memory-read` on a
+	// 490k-edge repo), and it was being paid on EVERY text-mode call.
+	// Interleaved A/B before the gate: json=true 667,010 wire bytes / 1012ms
+	// median, json=false 689 wire bytes / 1043ms median — same latency, 1000x
+	// less payload delivered.
+	if (params.json && paginatedResults.length > 0) {
 		const kgData = fetchAggregatedKgContext(
 			db,
 			params.repo,
@@ -499,8 +509,9 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 		limit: recapLimit
 	};
 
-	// Best-effort KG context (REFACTOR-KG-003)
-	if (rows.length > 0) {
+	// Best-effort KG context (REFACTOR-KG-003) — gated on `params.json`
+	// (audit F3): the payload only ships inside `structuredContent`.
+	if (params.json && rows.length > 0) {
 		const kgData = fetchAggregatedKgContext(
 			db,
 			params.repo,

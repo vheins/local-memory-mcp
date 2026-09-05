@@ -130,7 +130,11 @@ describe("onResourcesMutated — resource mutation notification emission (OPT-DR
 
 		const res: any = await router("tools/call", {
 			name: "standard-read",
-			arguments: { limit: 5 }
+			// `json: true` is required to observe structuredContent: audit F4
+			// removed the hardcoded `includeJson: true` from list/search mode, so
+			// standard-read now honours the flag consistently with every other
+			// read tool.
+			arguments: { limit: 5, json: true }
 		});
 
 		// The read itself succeeds (list mode) — the absence of a notification is

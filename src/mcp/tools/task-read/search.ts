@@ -327,8 +327,9 @@ export async function handleSearchMode(
 		extra: { query: queryText }
 	});
 
-	// Best-effort KG context (REFACTOR-KG-004)
-	if (paginated.length > 0) {
+	// Best-effort KG context (REFACTOR-KG-004) — gated on the json flag
+	// (audit F3): the payload only ships inside `structuredContent`.
+	if (isJsonRequest && paginated.length > 0) {
 		const kgData = fetchAggregatedTaskKgContext(
 			storage,
 			repo,

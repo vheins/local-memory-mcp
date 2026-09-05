@@ -115,8 +115,9 @@ export async function handleDetailMode(
 			contentSummary = buildTaskDetailLines(task, comments, children, depended_by).join("\n");
 		}
 
-		// Best-effort KG context fetch based on task title + description
-		const kgContext = fetchTaskKgContext(storage, repo, task.title, task.description || "");
+		// Best-effort KG context fetch based on task title + description.
+		// Gated on the json flag (audit F3): only ships in structuredContent.
+		const kgContext = isJsonRequest ? fetchTaskKgContext(storage, repo, task.title, task.description || "") : null;
 
 		const data: Record<string, unknown> = {
 			...task,
@@ -157,12 +158,21 @@ export async function handleDetailMode(
 	}));
 
 	// Best-effort aggregated KG context from all task titles + descriptions
-	const combinedTitle = enriched.map((t) => t.title).join(" ");
-	const combinedDesc = enriched
-		.map((t) => t.description || "")
-		.filter(Boolean)
-		.join(" ");
-	const kgContext = fetchTaskKgContext(storage, repo, combinedTitle, combinedDesc);
+	// KG context is gated on the json flag (audit F3) — the resolve+relation
+	// lookup is the dominant cost of the read and only ships in
+	// structuredContent, so the combined title/description text is not even
+	// built for a text-mode call.
+	const kgContext = isJsonRequest
+		? fetchTaskKgContext(
+				storage,
+				repo,
+				enriched.map((t) => t.title).join(" "),
+				enriched
+					.map((t) => t.description || "")
+					.filter(Boolean)
+					.join(" ")
+			)
+		: null;
 
 	let contentSummary: string | undefined;
 	if (!isJsonRequest) {
