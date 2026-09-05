@@ -14,8 +14,9 @@ export const AGENT_TOOL_DEFINITIONS = [
 	// ── Agent Context tools ────────────────────────────────────────────────
 	{
 		name: "agent-context",
-		title: "Agent Context Recall",
-		description: "Agent context with memories and tasks.",
+		title: "Agent Context Compiler",
+		description:
+			"Compiles deterministic, token-budgeted context from memories, decisions, tasks, handoffs, standards, fresh observations, and indexed code pointers.",
 		annotations: {
 			readOnlyHint: true,
 			idempotentHint: true,

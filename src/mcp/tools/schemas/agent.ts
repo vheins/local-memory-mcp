@@ -1,14 +1,39 @@
 import { z } from "zod";
 
+export const AGENT_CONTEXT_SOURCES = [
+	"memories",
+	"decisions",
+	"tasks",
+	"handoffs",
+	"standards",
+	"observations",
+	"code"
+] as const;
+
 export const AgentContextSchema = z.object({
 	owner: z.string().min(1),
 	repo: z.string().min(1),
 	query: z
 		.string()
 		.optional()
-		.describe("Search query for vector/hybrid search. When absent, returns most recent memories."),
+		.describe("Backward-compatible search query. objective takes precedence when both are provided."),
+	objective: z.string().min(1).optional().describe("Current objective used to rank candidates from every source."),
+	task_code: z.string().min(1).optional().describe("Task to pin as critical context when it exists in scope."),
+	current_file_path: z.string().min(1).optional().describe("Indexed file used to retrieve compact code pointers."),
 	type_filter: z.enum(["code_fact", "decision", "mistake", "pattern", "task_archive"]).optional(),
 	limit: z.coerce.number().min(1).max(100).default(5),
+	budget: z
+		.object({
+			tokens: z.coerce.number().int().min(256).max(20_000).default(2_000),
+			max_items: z.coerce.number().int().min(1).max(100).default(20),
+			code_depth: z.coerce.number().int().min(0).max(5).default(1)
+		})
+		.default({ tokens: 2_000, max_items: 20, code_depth: 1 }),
+	sources: z
+		.array(z.enum(AGENT_CONTEXT_SOURCES))
+		.min(1)
+		.default([...AGENT_CONTEXT_SOURCES]),
+	include_stale: z.boolean().default(false),
 	json: z.boolean().default(false)
 });
 
