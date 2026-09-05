@@ -124,7 +124,7 @@ describe("TRACE view:'api' — public API surface (issue #86 / TASK-012)", () =>
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "OrderService", repo, owner: "vheins", view: "api" },
+			{ name: "OrderService", repo, owner: "vheins", json: true, view: "api" },
 			store,
 			vectors
 		);
@@ -178,7 +178,7 @@ describe("TRACE view:'api' — public API surface (issue #86 / TASK-012)", () =>
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "PaymentGateway", repo, owner: "vheins", view: "api" },
+			{ name: "PaymentGateway", repo, owner: "vheins", json: true, view: "api" },
 			store,
 			vectors
 		);
@@ -249,7 +249,7 @@ describe("TRACE view:'api' — public API surface (issue #86 / TASK-012)", () =>
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "OrderService", repo, owner: "vheins", view: "api" },
+			{ name: "OrderService", repo, owner: "vheins", json: true, view: "api" },
 			store,
 			vectors
 		);
@@ -325,7 +325,7 @@ describe("TRACE view:'api' — public API surface (issue #86 / TASK-012)", () =>
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "Secretive", repo, owner: "vheins", view: "api" },
+			{ name: "Secretive", repo, owner: "vheins", json: true, view: "api" },
 			store,
 			vectors
 		);
@@ -364,7 +364,11 @@ describe("TRACE view:'api' — public API surface (issue #86 / TASK-012)", () =>
 		]);
 
 		const run = async () => {
-			const r = await handleCodebaseRead({ name: "WideService", repo, owner: "vheins", view: "api" }, store, vectors);
+			const r = await handleCodebaseRead(
+				{ name: "WideService", repo, owner: "vheins", json: true, view: "api" },
+				store,
+				vectors
+			);
 			return (r.structuredContent as Record<string, unknown>).apiSurface as Record<string, unknown>;
 		};
 		const a = await run();
@@ -405,9 +409,9 @@ describe("TRACE view:'api' — public API surface (issue #86 / TASK-012)", () =>
 			}
 		]);
 
-		const omit = await handleCodebaseRead({ name: "OrderService", repo, owner: "vheins" }, store, vectors);
+		const omit = await handleCodebaseRead({ name: "OrderService", repo, owner: "vheins", json: true }, store, vectors);
 		const def = await handleCodebaseRead(
-			{ name: "OrderService", repo, owner: "vheins", view: "default" },
+			{ name: "OrderService", repo, owner: "vheins", json: true, view: "default" },
 			store,
 			vectors
 		);

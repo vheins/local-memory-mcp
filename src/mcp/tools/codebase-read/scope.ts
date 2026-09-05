@@ -1,5 +1,6 @@
 import type { CodebaseReadInput, CodebaseReadMode } from "../schemas/codebase-read";
-import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
+import type { McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 
 // ── SCOPE GUARD ─────────────────────────────────────────────────────────
 
@@ -18,24 +19,22 @@ export function requireRepoScope(validated: CodebaseReadInput, mode: CodebaseRea
 
 	if (mode === "search") {
 		if (!validated.repo && !hasRepos) {
-			return createMcpResponse(
-				{
-					error: "Search requires `repo` or `repos`",
-					code: "REPO_REQUIRED"
-				},
-				"Search requires `repo` or `repos` to scope the query (cross-tenant guard — codebase_symbols has no owner column).",
-				{ includeJson: true }
-			);
+			return createMcpErrorResponse({
+				code: "REPO_REQUIRED",
+				message:
+					"Search requires `repo` or `repos` to scope the query (cross-tenant guard — codebase_symbols has no owner column).",
+				retryable: false
+			});
 		}
 		return null;
 	}
 
 	if (!validated.repo) {
-		return createMcpResponse(
-			{ error: `Mode '${mode}' requires a concrete 'repo'`, code: "REPO_REQUIRED" },
-			`Mode '${mode}' requires a concrete 'repo'.`,
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "REPO_REQUIRED",
+			message: `Mode '${mode}' requires a concrete 'repo'.`,
+			retryable: false
+		});
 	}
 	return null;
 }

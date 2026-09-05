@@ -158,7 +158,7 @@ export const CodebaseReadSchema = z.object({
 	offset: z.coerce.number().min(0).default(0),
 
 	// ── Output ─────────────────────────────────────────────────────────────
-	/** Return raw JSON without Markdown wrapping. */
+	/** Include machine-readable structuredContent alongside the always-present compact text summary. */
 	json: z.boolean().default(false),
 	/**
 	 * Opt-in exposure of the optional semantic signatures (issue #89, TASK-015)

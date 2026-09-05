@@ -31,7 +31,8 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
 	"standard-delete",
 	// Tasks
 	"task-write",
-	"task-delete"
+	"task-delete",
+	"observation-write"
 ]);
 
 /**

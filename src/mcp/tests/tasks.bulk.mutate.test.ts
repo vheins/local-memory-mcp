@@ -371,6 +371,8 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		})) as McpResponse;
 
 		const data = delRes.structuredContent as any;
+		expect(delRes.isError).toBe(true);
+		expect(data).toMatchObject({ schema: "tool-error", code: "PARTIAL_FAILURE" });
 		expect(data.success).toBe(true);
 		expect(data.canceledCount).toBe(1);
 		expect(data.skippedCount).toBe(1);
@@ -418,6 +420,8 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		// The shared success formula `deletedCount > 0 || skippedCount === 0`
 		// flips to false here — nothing was deleted and everything was skipped.
 		const data = delRes.structuredContent as any;
+		expect(delRes.isError).toBe(true);
+		expect(data).toMatchObject({ schema: "tool-error", code: "BULK_OPERATION_FAILED" });
 		expect(data.success).toBe(false);
 		expect(data.canceledCount).toBe(0);
 		expect(data.skippedCount).toBe(2);

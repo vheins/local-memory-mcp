@@ -100,10 +100,10 @@ describe("DurationSeries", () => {
 describe("MetricsRegistry", () => {
 	afterEach(() => metrics.reset());
 
-	it("records tool, write-handler, and embed-latency and snapshots them per key", () => {
+	it("records tool outcomes, write-handler, and embed-latency and snapshots them per key", () => {
 		const reg = createMetricsRegistry();
-		reg.recordTool("memory-read", 20);
-		reg.recordTool("memory-read", 40);
+		reg.recordTool("memory-read", 20, "success");
+		reg.recordTool("memory-read", 40, "error");
 		reg.recordWriteHandler("memory-write", 5);
 		reg.recordWriteHandler("memory-write", 15);
 		reg.recordEmbedLatency(30);
@@ -111,6 +111,7 @@ describe("MetricsRegistry", () => {
 		const snap = reg.snapshot();
 		expect(snap.tools["memory-read"].count).toBe(2);
 		expect(snap.tools["memory-read"].p50Ms).toBe(20);
+		expect(snap.toolOutcomes["memory-read"]).toEqual({ success: 1, error: 1, partial: 0, degraded: 0 });
 		expect(snap.writeHandler.total.count).toBe(2);
 		expect(snap.writeHandler.byTool["memory-write"].count).toBe(2);
 		expect(snap.embedLatency.count).toBe(1);

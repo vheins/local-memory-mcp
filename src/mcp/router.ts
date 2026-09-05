@@ -195,7 +195,9 @@ export function createRouter(
 			// eliminates the legacy "log + rethrow raw exception" divergence so
 			// both transports surface identical shapes for the same failure class.
 			logger.error(`[Tool] ${toolName} failed`, { repo, error: String(err) });
-			return toErrorResponse(err);
+			const errorResponse = toErrorResponse(err);
+			logToolAction(db, toolName, args, errorResponse);
+			return errorResponse;
 		}
 
 		// Log only { repo } — never the full result payload, so memory/task

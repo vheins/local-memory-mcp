@@ -21,12 +21,12 @@ export class CodebaseSymbolEntity extends BaseEntity {
 				INSERT INTO codebase_symbols (
 					id, repo, file_path, name, kind, exported, default_export,
 					start_line, start_col, end_line, end_col, signature, doc_comment,
-					parent_symbol_id, semantic_signature, semantic_source, semantic_updated_at,
+					parent_symbol_id, semantic_signature, semantic_source, semantic_updated_at, source_fingerprint,
 					created_at, updated_at
 				) VALUES (
 					?, ?, ?, ?, ?, ?, ?,
 					?, ?, ?, ?, ?, ?,
-					?, ?, ?, ?,
+					?, ?, ?, ?, ?,
 					?, ?
 				)
 			`);
@@ -54,6 +54,7 @@ export class CodebaseSymbolEntity extends BaseEntity {
 					sym.semantic_signature ?? null,
 					sym.semantic_source ?? null,
 					sym.semantic_updated_at ?? null,
+					sym.source_fingerprint ?? null,
 					now,
 					now
 				);

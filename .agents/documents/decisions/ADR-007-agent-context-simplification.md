@@ -73,19 +73,34 @@ To accommodate the structured formatting previously handled by decision-log and 
   ```
 - If no structured fields are present → content as usual
 
-### `agent-context` — Unchanged
+### `agent-context` — Token-budgeted context compiler
+
+`agent-context` remains the single read surface, but now compiles bounded context from memories, decisions, active tasks, pending handoffs, coding standards, fresh evidence-backed observations, and indexed code pointers. It is deterministic for the same stored state and inputs and does not invoke model sampling.
 
 ```jsonc
 {
-	"objective": "string", // NL query for context
-	"type_filter": "enum", // Filter memory type
-	"limit": "number (5)",
-
+	"objective": "string", // Preferred NL objective; query remains backward-compatible
+	"task_code": "string", // Pin an in-scope task as critical context
+	"current_file_path": "src/example.ts", // Enables indexed code pointers
+	"budget": { "tokens": 2000, "max_items": 20, "code_depth": 1 },
+	"sources": ["memories", "decisions", "tasks", "handoffs", "standards", "observations", "code"],
+	"include_stale": false,
+	"type_filter": "enum",
+	"limit": 5, // Legacy memories/decisions projection cap
 	"repo": "string",
 	"owner": "string (auto)",
-	"json": "boolean"
+	"json": true
 }
 ```
+
+The structured response preserves the legacy `memories`, `decisions`, and `tasks` arrays and adds:
+
+- `context[]`: selected compact items with source, id, text, provenance, and estimated token cost.
+- `allocation`: included/excluded counts and per-source accounting.
+- `exclusions[]`: candidates omitted by token or item budget.
+- `estimated_tokens` and the normalized `budget`.
+
+Token counts use a deterministic character-based estimate rather than pretending to be an exact tokenizer measurement. Every source adapter is bounded before ranking; evidence and source files are represented as pointers, not raw source dumps.
 
 ## Consequences
 

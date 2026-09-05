@@ -34,6 +34,7 @@ export interface CodebaseSymbol {
 	semantic_source?: string | null;
 	/** ISO timestamp of the last successful semantic-enrichment pass (issue #89). */
 	semantic_updated_at?: string | null;
+	source_fingerprint?: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -56,6 +57,7 @@ export interface CodebaseSymbolRow {
 	semantic_signature: string | null;
 	semantic_source: string | null;
 	semantic_updated_at: string | null;
+	source_fingerprint: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -90,6 +92,8 @@ export interface CodebaseSymbolInsert {
 	semantic_source?: string | null;
 	/** ISO timestamp of the last semantic-enrichment pass. */
 	semantic_updated_at?: string | null;
+	/** SHA-256 of the indexed source range for freshness checks. */
+	source_fingerprint?: string | null;
 }
 
 export interface SymbolSearchQuery {

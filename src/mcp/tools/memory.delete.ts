@@ -1,6 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { createMcpErrorResponse } from "../utils/mcp-error";
 import { collectEntityIds } from "../utils/auto-infer";
 import { purgeEntityAndCleanup } from "../utils/purge-entity-cleanup";
 import { logger } from "../utils/logger";
@@ -85,20 +86,26 @@ export async function handleMemoryDelete(
 			? deletedCodes.join(", ")
 			: `${deletedCodes.slice(0, 3).join(", ")}, ... (${deletedCodes.length} total)`;
 
-	return createMcpResponse(
-		{
-			success: overallSuccess,
-			id: id || undefined,
-			ids: ids || undefined,
-			repo: lastRepo,
-			deletedCount,
-			deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes,
-			...(skippedCount > 0 ? { skippedCount, errors: skippedErrors, totalAttempted: resolvedIds.length } : {})
-		},
-		`Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from "${lastRepo}"${deletedCount > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`,
-		{
-			structuredContentPathHint: deletedCount > 0 ? "deletedCount" : "errors",
-			includeJson: json
-		}
-	);
+	const data = {
+		success: overallSuccess,
+		id: id || undefined,
+		ids: ids || undefined,
+		repo: lastRepo,
+		deletedCount,
+		deletedCodes: deletedCount > 10 ? [...deletedCodes.slice(0, 10), "..."] : deletedCodes,
+		...(skippedCount > 0 ? { skippedCount, errors: skippedErrors, totalAttempted: resolvedIds.length } : {})
+	};
+	const summary = `Deleted ${deletedCount} ${deletedCount === 1 ? "memory" : "memories"} from "${lastRepo}"${deletedCount > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`;
+	if (skippedCount > 0) {
+		return createMcpErrorResponse({
+			code: deletedCount > 0 ? "PARTIAL_FAILURE" : "BULK_OPERATION_FAILED",
+			message: summary,
+			retryable: false,
+			data
+		});
+	}
+	return createMcpResponse(data, summary, {
+		structuredContentPathHint: "deletedCount",
+		includeJson: json
+	});
 }

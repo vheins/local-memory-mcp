@@ -352,4 +352,72 @@ describe("indexing-writer", () => {
 			(store.db.prepare("SELECT COUNT(*) as cnt FROM entities WHERE name = 'renamedSym'").get() as { cnt: number }).cnt
 		).toBe(0);
 	});
+
+	it("indexing lifecycle keeps exploration observations honest: reindex, rename, and delete (issue #92)", async () => {
+		const store = await makeStore();
+		const repo = "test-repo";
+		const owner = "test-owner";
+
+		// Index a file with a symbol, then publish an observation against it.
+		expect(
+			await writeParseBatch(
+				base(store, repo),
+				[{ repo, file_path: "svc.ts", checksum: "checksum-a" }],
+				[{ id: "123e4567-e89b-42d3-a456-426614174001", repo, file_path: "svc.ts", name: "run", kind: "function" }],
+				new Map()
+			)
+		).toBe(0);
+		const created = store.explorationObservations.upsertMany(owner, repo, [
+			{
+				subject: "run",
+				fact: "The run function performs the operation.",
+				confidence: 0.9,
+				evidence: [{ file_path: "svc.ts", symbol_id: "123e4567-e89b-42d3-a456-426614174001" }]
+			}
+		])[0]!.observation;
+		expect(created.freshness).toBe("valid");
+
+		// An unrelated file's re-index must not touch the observation.
+		expect(
+			await writeParseBatch(
+				base(store, repo),
+				[{ repo, file_path: "other.ts", checksum: "other-a" }],
+				[{ repo, file_path: "other.ts", name: "other", kind: "function" }],
+				new Map()
+			)
+		).toBe(0);
+		expect(store.explorationObservations.getById(owner, repo, created.id)!.freshness).toBe("valid");
+
+		// Re-indexing the referenced file with a CHANGED symbol marks it stale.
+		expect(
+			await writeParseBatch(
+				base(store, repo),
+				[{ repo, file_path: "svc.ts", checksum: "checksum-b" }],
+				[
+					{
+						id: "123e4567-e89b-42d3-a456-426614174002",
+						repo,
+						file_path: "svc.ts",
+						name: "run",
+						kind: "function",
+						signature: "run(input: string): void"
+					}
+				],
+				new Map()
+			)
+		).toBe(0);
+		expect(store.explorationObservations.getById(owner, repo, created.id)!.freshness).toBe("stale");
+
+		// A rename carries the evidence pointer to the new path.
+		expect(await applyRenames(base(store, repo), new Map([["renamed.ts", "svc.ts"]]))).toBe(0);
+		expect(store.explorationObservations.getById(owner, repo, created.id, true)!.evidence![0].file_path).toBe(
+			"renamed.ts"
+		);
+
+		// Deleting the source marks the observation stale with a delete reason.
+		expect(await cleanStaleFiles(base(store, repo), new Set(["renamed.ts"]))).toBe(0);
+		const afterDelete = store.explorationObservations.getById(owner, repo, created.id)!;
+		expect(afterDelete.freshness).toBe("stale");
+		expect(afterDelete.stale_reason).toBe("file_deleted");
+	});
 });

@@ -46,6 +46,7 @@ export async function handleListMode(
 
 	const structuredData = buildTableResult(COLUMNS, rows, {
 		schema: "task-read/list",
+		mode: "list",
 		key: "tasks",
 		count: rows.length,
 		offset
@@ -61,7 +62,7 @@ export async function handleListMode(
 	}
 
 	let contentSummary: string | undefined;
-	if (!isJsonRequest) {
+	{
 		const statusLabel = describeStatusFilter(effectiveStatus);
 		const taskLabel = rows.length === 1 ? "task" : "tasks";
 

@@ -12,7 +12,7 @@
 
 import { MemoryEntry } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
-import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { createMcpResponse, McpResponse, withEnvelope } from "../../utils/mcp-response";
 import { UUID_REGEX } from "../../utils/uuid";
 import { isMemoryAcknowledged } from "../../utils/memory-utils";
 import { fetchKgContext, fetchAggregatedKgContext } from "../kg-archivist/query";
@@ -72,7 +72,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 			: null;
 		const data: Record<string, unknown> = { memories: memories.map(withAcknowledged) };
 		if (kgContext) data.kg = kgContext;
-		return createMcpResponse(data, contentSummary, {
+		return createMcpResponse(withEnvelope("memory-read", "detail", data), contentSummary, {
 			contentSummary,
 			includeJson: validated.json
 		});
@@ -92,7 +92,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 			: null;
 		const data: Record<string, unknown> = { memories: memories.map(withAcknowledged) };
 		if (kgContext) data.kg = kgContext;
-		return createMcpResponse(data, contentSummary, {
+		return createMcpResponse(withEnvelope("memory-read", "detail", data), contentSummary, {
 			contentSummary,
 			includeJson: validated.json
 		});
@@ -120,7 +120,7 @@ export async function handleDetailMode(validated: MemoryReadInput, db: SQLiteSto
 	const data: Record<string, unknown> = { memory: withAcknowledged(memory) };
 	if (kgContext) data.kg = kgContext;
 
-	return createMcpResponse(data, content, {
+	return createMcpResponse(withEnvelope("memory-read", "detail", data), content, {
 		contentSummary: content,
 		includeJson: validated.json
 	});

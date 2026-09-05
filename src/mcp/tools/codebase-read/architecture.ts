@@ -3,6 +3,7 @@ import path from "node:path";
 import type { CodebaseReadInput } from "../schemas/codebase-read";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, type McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import {
 	buildArchitectureFromData,
 	renderDirTree,
@@ -38,11 +39,11 @@ function resolveOptionalRepoPath(raw: string | undefined): string | null {
 async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteStore): Promise<McpResponse> {
 	const repo = validated.repo;
 	if (!repo) {
-		return createMcpResponse(
-			{ error: "Mode 'architecture' requires a concrete 'repo'", code: "REPO_REQUIRED" },
-			"Mode 'architecture' requires a concrete 'repo'.",
-			{ includeJson: true }
-		);
+		return createMcpErrorResponse({
+			code: "REPO_REQUIRED",
+			message: "Mode 'architecture' requires a concrete 'repo'.",
+			retryable: false
+		});
 	}
 	const depth = validated.depth ?? 2;
 
@@ -113,9 +114,9 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 	}
 
 	return createMcpResponse(
-		{ ...result, mode: "architecture" },
+		{ ...result, schema: "codebase-read", mode: "architecture" },
 		`Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${Object.keys(result.summary.languageBreakdown).length} languages`,
-		{ includeJson: true, contentSummary: archSummary }
+		{ includeJson: validated.json, contentSummary: archSummary }
 	);
 }
 

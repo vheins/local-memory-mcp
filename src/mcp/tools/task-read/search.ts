@@ -319,6 +319,7 @@ export async function handleSearchMode(
 
 	const structuredData = buildTableResult(COLUMNS, rows, {
 		schema: "task-read/search",
+		mode: "search",
 		key: "results",
 		count: paginated.length,
 		total,
@@ -339,7 +340,7 @@ export async function handleSearchMode(
 	}
 
 	let contentSummary: string | undefined;
-	if (!isJsonRequest) {
+	{
 		if (scoredPool.length > 0) {
 			const lines: string[] = [];
 			// Header shows TOTAL matches; the grouped body below represents the

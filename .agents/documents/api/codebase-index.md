@@ -6,6 +6,27 @@
 
 The Codebase Index provides **2 MCP tools** for indexing and querying source code structure. All tools conform to the [MCP 2025-03-26 Structured Content](https://modelcontextprotocol.io/specification/2025-03-26/server/tools#structured-content) specification.
 
+## Shared response contract
+
+Read tools that expose a `json` flag follow one contract in every auto-inferred mode:
+
+| Request                  | `content`                          | `structuredContent`                                      |
+| :----------------------- | :--------------------------------- | :------------------------------------------------------- |
+| `json: false` or omitted | One non-empty compact text summary | Omitted                                                  |
+| `json: true`             | The same compact text summary      | Present; full objects are not serialized again into text |
+
+Successful structured read responses carry stable top-level `schema` and `mode` discriminators. Existing domain fields remain at their historical paths for backward compatibility; payloads are not duplicated under generic aliases because that would waste context tokens.
+
+| Tool            | Stable `schema`                                                  | Modes                                             |
+| :-------------- | :--------------------------------------------------------------- | :------------------------------------------------ |
+| `memory-read`   | `memory-read`                                                    | `recap`, `search`, `detail`                       |
+| `standard-read` | `standard-read`                                                  | `list`, `search`, `detail`                        |
+| `task-read`     | `task-read/<mode>` (legacy value retained)                       | `list`, `search`, `detail`                        |
+| `handoff-read`  | `handoff-read`; `claim-list` for claims (legacy values retained) | `list`, `search`, `claims`, `detail`              |
+| `codebase-read` | `codebase-read`                                                  | `architecture`, `search`, `file`, `trace`, `code` |
+
+`codebase-index` is the documented exception: it has no `json` input and always returns structured content because INDEX/STATUS results are protocol-operational data rather than optional read detail. Errors use the separate `schema: "tool-error"` contract in §1.5.
+
 ---
 
 ## 1. `codebase-index`
@@ -72,14 +93,30 @@ Unified write + status tool. Mode auto-inferred from parameters per ADR-005:
 }
 ```
 
-### 1.5 INDEX Error Codes
+### 1.5 Tool Error Contract
 
-| Scenario                 | Code                   | Behavior                                                |
-| :----------------------- | :--------------------- | :------------------------------------------------------ |
-| Path does not exist      | `PATH_NOT_FOUND`       | `{ success: false, error: "PATH_NOT_FOUND", message }`  |
-| Path is not a directory  | `NOT_A_DIRECTORY`      | `{ success: false, error: "NOT_A_DIRECTORY", message }` |
-| Index in progress        | `IndexInProgressError` | Thrown as exception; propagates as `isError: true`      |
-| Unexpected runtime error | `INDEX_FAILED`         | `{ success: false, error: "INDEX_FAILED", message }`    |
+Failed operations return `isError: true`, one concise text item, and this stable structured envelope:
+
+```typescript
+{
+	schema: "tool-error";
+	code: string;
+	message: string;
+	retryable: boolean;
+	details?: Record<string, unknown>;
+	error: string; // deprecated compatibility alias of message
+}
+```
+
+Partial bulk operations also use `isError: true` with `code: "PARTIAL_FAILURE"` while retaining successful item results at their existing top-level paths. Unknown exceptions become `INTERNAL_ERROR`; raw exception messages and filesystem details remain server-side in logs.
+
+| Scenario                 | Code               | Retryable |
+| :----------------------- | :----------------- | :-------- |
+| Invalid arguments        | `VALIDATION_ERROR` | No        |
+| Path does not exist      | `PATH_NOT_FOUND`   | No        |
+| Path is not a directory  | `NOT_A_DIRECTORY`  | No        |
+| Index failed internally  | `INDEX_FAILED`     | Yes       |
+| Unknown internal failure | `INTERNAL_ERROR`   | No        |
 
 ### 1.6 Runnable Examples
 
@@ -139,7 +176,7 @@ Unified read-only access to the codebase index. Mode auto-inferred from paramete
 
 | Parameter             | Type                 | Required | Default | Mode               | Description                                                                                                                                                                     |
 | :-------------------- | :------------------- | :------- | :------ | :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `repo`                | `string`             | No*      | —       | all                | Repository name (normalized). **SEARCH requires `repo` or `repos`** — without either it rejects to prevent cross-tenant leaks.                                                  |
+| `repo`                | `string`             | No\*     | —       | all                | Repository name (normalized). **SEARCH requires `repo` or `repos`** — without either it rejects to prevent cross-tenant leaks.                                                  |
 | `repos`               | `array<string>`      | No       | —       | SEARCH             | Cross-repo search scope; each value normalized. Capped at 50.                                                                                                                   |
 | `owner`               | `string`             | No       | `""`    | all                | GitHub owner/org; auto-inferred from session when omitted.                                                                                                                      |
 | `name`                | `string`             | No       | —       | TRACE              | Symbol name to trace (exact match with fallback variants).                                                                                                                      |

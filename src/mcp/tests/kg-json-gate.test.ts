@@ -161,6 +161,9 @@ describe("KG audit F3 — the KG lookup is skipped when json is false", () => {
 
 		const json = await handleMemoryRead({ owner: OWNER, repo: REPO, query: "AuthModule", json: true }, db, vectors);
 		expect(spy).toHaveBeenCalled();
+		expect(json.content?.[0]).toMatchObject({ type: "text" });
+		expect((json.content?.[0] as { text: string }).text.length).toBeGreaterThan(0);
+		expect(json.structuredContent).toMatchObject({ schema: "memory-read", mode: "search" });
 		expect((json.structuredContent as Record<string, unknown>).kg).toBeDefined();
 	});
 
@@ -184,8 +187,9 @@ describe("KG audit F3 — the KG lookup is skipped when json is false", () => {
 		await handleMemoryRead({ owner: OWNER, repo: REPO, id: memory.id }, db, vectors);
 		expect(spy).not.toHaveBeenCalled();
 
-		await handleMemoryRead({ owner: OWNER, repo: REPO, id: memory.id, json: true }, db, vectors);
+		const json = await handleMemoryRead({ owner: OWNER, repo: REPO, id: memory.id, json: true }, db, vectors);
 		expect(spy).toHaveBeenCalled();
+		expect(json.structuredContent).toMatchObject({ schema: "memory-read", mode: "detail", memory: { id: memory.id } });
 	});
 
 	it("task-read LIST: resolver untouched in text mode, called in json mode", async () => {
@@ -195,8 +199,11 @@ describe("KG audit F3 — the KG lookup is skipped when json is false", () => {
 		await handleTaskRead({ owner: OWNER, repo: REPO }, db, vectors);
 		expect(spy).not.toHaveBeenCalled();
 
-		await handleTaskRead({ owner: OWNER, repo: REPO, json: true }, db, vectors);
+		const json = await handleTaskRead({ owner: OWNER, repo: REPO, json: true }, db, vectors);
 		expect(spy).toHaveBeenCalled();
+		expect(json.content?.[0]).toMatchObject({ type: "text" });
+		expect((json.content?.[0] as { text: string }).text.length).toBeGreaterThan(0);
+		expect(json.structuredContent).toMatchObject({ schema: "task-read/list", mode: "list" });
 	});
 
 	it("task-read DETAIL: resolver untouched in text mode", async () => {
@@ -204,9 +211,14 @@ describe("KG audit F3 — the KG lookup is skipped when json is false", () => {
 		db.tasks.insertTask(task);
 		const spy = vi.spyOn(db.knowledgeGraph, "getEntityNamesByText");
 
-		await handleTaskRead({ owner: OWNER, repo: REPO, id: task.id }, db, vectors);
-
+		const text = await handleTaskRead({ owner: OWNER, repo: REPO, id: task.id }, db, vectors);
 		expect(spy).not.toHaveBeenCalled();
+		expect(text.structuredContent).toBeUndefined();
+
+		const json = await handleTaskRead({ owner: OWNER, repo: REPO, id: task.id, json: true }, db, vectors);
+		expect(json.content?.[0]).toMatchObject({ type: "text" });
+		expect((json.content?.[0] as { text: string }).text.length).toBeGreaterThan(0);
+		expect(json.structuredContent).toMatchObject({ schema: "task-read/detail", mode: "detail", id: task.id });
 	});
 });
 
@@ -229,7 +241,9 @@ describe("KG audit F4 — standard-read honours the json flag in every mode", ()
 		expect(text.structuredContent).toBeUndefined();
 
 		const json = await handleStandardRead({ owner: OWNER, repo: REPO, json: true }, db, vectors);
-		expect(json.structuredContent).toBeDefined();
+		expect(json.content?.[0]).toMatchObject({ type: "text" });
+		expect((json.content?.[0] as { text: string }).text.length).toBeGreaterThan(0);
+		expect(json.structuredContent).toMatchObject({ schema: "standard-read", mode: "list" });
 	});
 
 	it("SEARCH mode: no structuredContent without json, present with json", async () => {
@@ -237,7 +251,7 @@ describe("KG audit F4 — standard-read honours the json flag in every mode", ()
 		expect(text.structuredContent).toBeUndefined();
 
 		const json = await handleStandardRead({ owner: OWNER, repo: REPO, query: "AuthModule", json: true }, db, vectors);
-		expect(json.structuredContent).toBeDefined();
+		expect(json.structuredContent).toMatchObject({ schema: "standard-read", mode: "search" });
 	});
 
 	it("LIST mode: the KG resolver is not called in text mode", async () => {

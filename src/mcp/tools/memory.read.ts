@@ -378,6 +378,8 @@ async function handleSearch(params: MemoryReadParams, db: SQLiteStore, vectors: 
 	}
 
 	const structuredData = buildTableResult(SEARCH_COLUMNS, rows, {
+		schema: "memory-read",
+		mode: "search",
 		count: paginatedResults.length,
 		total,
 		offset: params.offset,
@@ -498,6 +500,8 @@ async function handleRecap(params: MemoryReadParams, db: SQLiteStore): Promise<M
 	}
 
 	const structuredData: Record<string, unknown> = {
+		schema: "memory-read",
+		mode: "recap",
 		stats: { byType },
 		top: {
 			columns: [...TOP_COLUMNS],

@@ -317,7 +317,7 @@ describe("ARCHITECTURE doc_comment text surface (TASK-460)", () => {
 			{ repo, file_path: "src/a.ts", name: "PlainExport", kind: "function", exported: true, start_line: 5 }
 		]);
 		const res = await handleCodebaseRead(
-			{ repo, owner: "vheins", includeSymbolCounts: true },
+			{ repo, owner: "vheins", json: true, includeSymbolCounts: true },
 			store as unknown as never,
 			vectors as never
 		);
