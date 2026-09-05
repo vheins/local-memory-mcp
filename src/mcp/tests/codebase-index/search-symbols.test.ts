@@ -126,7 +126,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("returns exact match when searching by exact name", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "createUser", repo: "test-repo", owner: "vheins" },
+			{ query: "createUser", repo: "test-repo", owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -141,7 +141,11 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("returns prefix-ranked results for partial name search", async () => {
-		const response = await handleCodebaseRead({ query: "create", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ query: "create", repo: "test-repo", owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
@@ -152,7 +156,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("filters by kind", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "User", repo: "test-repo", owner: "vheins", kind: "class" },
+			{ query: "User", repo: "test-repo", owner: "vheins", json: true, kind: "class" },
 			store,
 			vectors
 		);
@@ -166,7 +170,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("scopes results to the specified repo", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "createUser", repo: "other-repo", owner: "vheins" },
+			{ query: "createUser", repo: "other-repo", owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -178,7 +182,11 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("returns empty for queries under 2 characters", async () => {
-		const response = await handleCodebaseRead({ query: "c", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ query: "c", repo: "test-repo", owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
@@ -187,7 +195,11 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("returns empty for empty query string", async () => {
-		const response = await handleCodebaseRead({ query: "", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ query: "", repo: "test-repo", owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.total as number).toBe(0);
@@ -195,7 +207,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("supports pagination with offset and limit", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "User", repo: "test-repo", owner: "vheins", limit: 2, offset: 1 },
+			{ query: "User", repo: "test-repo", owner: "vheins", json: true, limit: 2, offset: 1 },
 			store,
 			vectors
 		);
@@ -209,7 +221,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 		// Second page should start at offset 3
 		const response2 = await handleCodebaseRead(
-			{ query: "User", repo: "test-repo", owner: "vheins", limit: 2, offset: 3 },
+			{ query: "User", repo: "test-repo", owner: "vheins", json: true, limit: 2, offset: 3 },
 			store,
 			vectors
 		);
@@ -228,7 +240,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("returns empty result for non-existent symbol", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "NonExistentSymbol", repo: "test-repo", owner: "vheins" },
+			{ query: "NonExistentSymbol", repo: "test-repo", owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -241,7 +253,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("filters by exportedOnly", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "Process", repo: "test-repo", owner: "vheins", exportedOnly: true },
+			{ query: "Process", repo: "test-repo", owner: "vheins", json: true, exportedOnly: true },
 			store,
 			vectors
 		);
@@ -256,7 +268,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("searches across repos when `repos` is provided without `repo`", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "createUser", repos: ["test-repo", "other-repo"], owner: "vheins" },
+			{ query: "createUser", repos: ["test-repo", "other-repo"], owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -275,7 +287,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("rejects SEARCH when both `repo` and `repos` are absent (cross-tenant guard)", async () => {
-		const response = await handleCodebaseRead({ query: "createUser", owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead({ query: "createUser", owner: "vheins", json: true }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.code).toBe("REPO_REQUIRED");
@@ -285,7 +297,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	it("keeps single-repo search working (backward compat) and lets `repos` win over `repo`", async () => {
 		// `repo` alone still scopes to one repo (backward compatible).
 		const single = await handleCodebaseRead(
-			{ query: "createUser", repo: "test-repo", owner: "vheins" },
+			{ query: "createUser", repo: "test-repo", owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -299,7 +311,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 		// When both are provided, `repos` governs — a session-injected `repo`
 		// must not narrow an explicit cross-repo scope.
 		const both = await handleCodebaseRead(
-			{ query: "createUser", repo: "test-repo", repos: ["other-repo"], owner: "vheins" },
+			{ query: "createUser", repo: "test-repo", repos: ["other-repo"], owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -313,13 +325,17 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("SEARCH text includes doc_comment per match and omits it when absent (TASK-460)", async () => {
 		const { getPrimaryTextContent } = await import("../../utils/mcp-response.js");
-		const res = await handleCodebaseRead({ query: "createUser", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const res = await handleCodebaseRead(
+			{ query: "createUser", repo: "test-repo", owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const text = getPrimaryTextContent(res);
 		// createUser has doc_comment "Creates a new user" — surfaced as suffix in text lines.
 		expect(text).toMatch(/Creates a new user/);
 		// internalHelper has no doc_comment — its SEARCH line must not have " — " suffix.
 		const internalRes = await handleCodebaseRead(
-			{ query: "internalHelper", repo: "test-repo", owner: "vheins" },
+			{ query: "internalHelper", repo: "test-repo", owner: "vheins", json: true },
 			store,
 			vectors
 		);

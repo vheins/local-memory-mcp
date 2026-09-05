@@ -19,7 +19,11 @@ afterAll(() => {
 
 describe("handleCodebaseRead (file mode)", () => {
 	it("returns all symbols in a known file", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, filePath: "index.ts" }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, repo: REPO, filePath: "index.ts" },
+			store,
+			vectors
+		);
 		const d = data(resp);
 
 		expect(d.error).toBeUndefined();
@@ -40,7 +44,11 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns symbols in declaration order (by start_line)", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, filePath: "index.ts" }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, repo: REPO, filePath: "index.ts" },
+			store,
+			vectors
+		);
 		const d = data(resp);
 		const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -53,7 +61,11 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns error for non-indexed file", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: REPO, filePath: "nonexistent.ts" }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, repo: REPO, filePath: "nonexistent.ts" },
+			store,
+			vectors
+		);
 		const d = data(resp);
 
 		expect(d.error).toBe("File not indexed. Run index_repository first.");

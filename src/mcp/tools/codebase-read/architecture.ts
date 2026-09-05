@@ -114,9 +114,9 @@ async function handleArchitectureMode(validated: CodebaseReadInput, db: SQLiteSt
 	}
 
 	return createMcpResponse(
-		{ ...result, mode: "architecture" },
+		{ ...result, schema: "codebase-read", mode: "architecture" },
 		`Architecture: ${result.summary.totalFiles} files, ${result.summary.totalSymbols} symbols across ${Object.keys(result.summary.languageBreakdown).length} languages`,
-		{ includeJson: true, contentSummary: archSummary }
+		{ includeJson: validated.json, contentSummary: archSummary }
 	);
 }
 

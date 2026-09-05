@@ -480,7 +480,11 @@ describe("handleCodebaseRead (trace mode + related types, issue #84)", () => {
 			target_symbol_id: "dto-1"
 		});
 
-		const response = await handleCodebaseRead({ name: "createOrder", repo, owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ name: "createOrder", repo, owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = traceData(response);
 
 		expect(data.error).toBeUndefined();
@@ -529,7 +533,7 @@ describe("handleCodebaseRead (trace mode + related types, issue #84)", () => {
 		});
 
 		const response = await handleCodebaseRead(
-			{ name: "createOrder", repo, owner: "vheins", includeRelatedTypes: true },
+			{ name: "createOrder", repo, owner: "vheins", json: true, includeRelatedTypes: true },
 			store,
 			vectors
 		);
@@ -597,7 +601,7 @@ describe("handleCodebaseRead (trace mode + related types, issue #84)", () => {
 		});
 
 		const response = await handleCodebaseRead(
-			{ name: "createOrder", repo, owner: "vheins", includeRelatedTypes: true, relationDepth: 2 },
+			{ name: "createOrder", repo, owner: "vheins", json: true, includeRelatedTypes: true, relationDepth: 2 },
 			store,
 			vectors
 		);
@@ -646,7 +650,7 @@ describe("handleCodebaseRead (trace mode + related types, issue #84)", () => {
 		});
 
 		const response = await handleCodebaseRead(
-			{ name: "TypeA", repo, owner: "vheins", includeRelatedTypes: true, relationDepth: 4 },
+			{ name: "TypeA", repo, owner: "vheins", json: true, includeRelatedTypes: true, relationDepth: 4 },
 			store,
 			vectors
 		);
@@ -679,7 +683,7 @@ describe("handleCodebaseRead (trace mode + related types, issue #84)", () => {
 		});
 
 		const response = await handleCodebaseRead(
-			{ name: "createOrder", repo, owner: "vheins", includeRelatedTypes: true },
+			{ name: "createOrder", repo, owner: "vheins", json: true, includeRelatedTypes: true },
 			store,
 			vectors
 		);
@@ -704,14 +708,14 @@ describe("handleCodebaseRead (trace mode + related types, issue #84)", () => {
 		// surfaces from CodebaseReadSchema.parse before any response is built.
 		await expect(
 			handleCodebaseRead(
-				{ name: "root", repo, owner: "vheins", includeRelatedTypes: true, relationDepth: 5 },
+				{ name: "root", repo, owner: "vheins", json: true, includeRelatedTypes: true, relationDepth: 5 },
 				store,
 				vectors
 			)
 		).rejects.toThrow(/relationDepth/);
 		await expect(
 			handleCodebaseRead(
-				{ name: "root", repo, owner: "vheins", includeRelatedTypes: true, relationDepth: 0 },
+				{ name: "root", repo, owner: "vheins", json: true, includeRelatedTypes: true, relationDepth: 0 },
 				store,
 				vectors
 			)

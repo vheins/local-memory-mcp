@@ -81,6 +81,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 	if (content.length === 0) {
 		return createMcpResponse(
 			{
+				schema: "codebase-read",
 				mode: "code",
 				content: "",
 				regex: validated.regex,
@@ -94,7 +95,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 				limit: validated.limit ?? CODE_SEARCH_DEFAULT_LIMIT
 			},
 			"Empty content query — nothing searched (pass `content` to grep indexed file contents)",
-			{ includeJson: true }
+			{ includeJson: validated.json }
 		);
 	}
 
@@ -175,6 +176,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 
 		return createMcpResponse(
 			{
+				schema: "codebase-read",
 				mode: "code",
 				content,
 				regex: validated.regex,
@@ -189,7 +191,7 @@ async function handleCodeSearchMode(validated: CodebaseReadInput, db: SQLiteStor
 				limit
 			},
 			`Found ${result.total} content matches for "${content}" (showing ${result.matches.length}) across ${result.filesScanned} indexed files.`,
-			{ includeJson: true, contentSummary }
+			{ includeJson: validated.json, contentSummary }
 		);
 	} catch (err) {
 		if (err instanceof InvalidCodeSearchRegexError) {

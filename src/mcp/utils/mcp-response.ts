@@ -85,14 +85,16 @@ export function createMcpResponse(
 	}
 
 	const content: McpContent[] = [];
+	const normalizedContentSummary = contentSummary?.trim();
+	const normalizedSummary = summary.trim() || "Request completed.";
 
-	if (contentSummary && contentSummary.trim().length > 0) {
+	if (normalizedContentSummary) {
 		content.push({
 			type: "text",
-			text: contentSummary.trim()
+			text: normalizedContentSummary
 		});
-	} else if (summary && summary.trim().length > 0) {
-		let text = summary.trim();
+	} else {
+		let text = normalizedSummary;
 		const hasStructuredContent =
 			finalData != null &&
 			typeof finalData === "object" &&
@@ -173,6 +175,8 @@ export function createTextOnlyResponse(text: string): McpResponse {
 export type TableResultOptions = {
 	/** Optional top-level `schema` discriminator (e.g. "task-read/search"). */
 	schema?: string;
+	/** Optional stable mode discriminator. */
+	mode?: string;
 	/**
 	 * Optional key under which the `{ columns, rows }` table is nested
 	 * (e.g. "results", "tasks", "handoffs", "claims"). When omitted, the
@@ -187,14 +191,14 @@ export type TableResultOptions = {
 	offset?: number;
 	/** Optional pagination limit. */
 	limit?: number;
-	/** Optional additional top-level fields merged into the envelope (e.g. `query`, `mode`). */
+	/** Optional additional top-level fields merged into the envelope (e.g. `query`). */
 	extra?: Record<string, unknown>;
 };
 
 /**
  * Builds the shared table envelope scaffold:
  *
- *   `{ schema?, <key>?: { columns, rows }, count, total?, offset?, limit? }`
+ *   `{ schema?, mode?, <key>?: { columns, rows }, count, total?, offset?, limit? }`
  *
  * This encapsulates the `COLUMNS = [...] as const` + `rows.map` +
  * `structuredData = { schema, <kind>: { columns, rows }, count, total, offset, limit }`
@@ -211,13 +215,16 @@ export function buildTableResult(
 	rows: readonly unknown[][],
 	options: TableResultOptions = {}
 ): Record<string, unknown> {
-	const { schema, key, count = rows.length, total, offset, limit, extra } = options;
+	const { schema, mode, key, count = rows.length, total, offset, limit, extra } = options;
 
 	const table = { columns: [...columns], rows };
 	const result: Record<string, unknown> = {};
 
 	if (schema !== undefined) {
 		result.schema = schema;
+	}
+	if (mode !== undefined) {
+		result.mode = mode;
 	}
 	if (extra) {
 		Object.assign(result, extra);
@@ -234,6 +241,29 @@ export function buildTableResult(
 	if (limit !== undefined) result.limit = limit;
 
 	return result;
+}
+
+/**
+ * Prepends the two stable envelope discriminators to an existing structured
+ * payload without renaming or duplicating any field (issue #99).
+ *
+ * `schema` identifies the producing tool, `mode` the auto-inferred branch, so a
+ * client can dispatch on `(schema, mode)` instead of probing for domain keys
+ * (`memory` vs `standard` vs a flattened task). Every legacy key is preserved
+ * verbatim at its current path, so no compatibility alias is required — the
+ * envelope only grows.
+ *
+ * Deliberately does NOT mirror the payload under a generic `item`/`items` key:
+ * `structuredContent` is billed to the agent's context window, and duplicating
+ * a full object to satisfy a shape convention would regress the token budget
+ * this issue is meant to protect.
+ */
+export function withEnvelope<T extends object>(
+	schema: string,
+	mode: string,
+	data: T
+): T & { schema: string; mode: string } {
+	return { schema, mode, ...data };
 }
 
 export function getPrimaryTextContent(response: McpResponse): string {

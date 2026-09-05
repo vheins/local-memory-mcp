@@ -93,6 +93,8 @@ export async function handleRecapMode(params: MemoryReadInput, db: SQLiteStore):
 	}
 
 	const structuredData: Record<string, unknown> = {
+		schema: "memory-read",
+		mode: "recap",
 		stats: { byType },
 		top: {
 			columns: [...MEMORY_COLUMNS],

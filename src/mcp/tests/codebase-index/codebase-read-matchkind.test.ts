@@ -101,7 +101,11 @@ describe("handleCodebaseRead SEARCH — matchKind / related / scope (issue #81)"
 	});
 
 	it('(a) Markdown heading results carry matchKind "documentation"', async () => {
-		const response = await handleCodebaseRead({ query: "Models", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ query: "Models", repo: "test-repo", owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		const symbols = data.symbols as Array<Record<string, unknown>>;
 
@@ -112,7 +116,7 @@ describe("handleCodebaseRead SEARCH — matchKind / related / scope (issue #81)"
 
 	it('(b) real source symbols carry matchKind "source"', async () => {
 		const response = await handleCodebaseRead(
-			{ query: "createUser", repo: "test-repo", owner: "vheins" },
+			{ query: "createUser", repo: "test-repo", owner: "vheins", json: true },
 			store,
 			vectors
 		);
@@ -129,7 +133,11 @@ describe("handleCodebaseRead SEARCH — matchKind / related / scope (issue #81)"
 		// "Models" matches the heading (Vheins\Common\Models) via FTS, and the
 		// heading's extracted token lookup finds the User class in
 		// modules/Common/Models/User.php.
-		const response = await handleCodebaseRead({ query: "Models", repo: "test-repo", owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ query: "Models", repo: "test-repo", owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		const related = data.related as Array<Record<string, unknown>>;
 
@@ -143,7 +151,7 @@ describe("handleCodebaseRead SEARCH — matchKind / related / scope (issue #81)"
 
 	it("(d) SEARCH envelope exposes repoRoot and a scope count (files/symbols) for the repo", async () => {
 		const response = await handleCodebaseRead(
-			{ query: "Models", repo: "test-repo", owner: "vheins", repoPath: "/abs/path/to/test-repo" },
+			{ query: "Models", repo: "test-repo", owner: "vheins", json: true, repoPath: "/abs/path/to/test-repo" },
 			store,
 			vectors
 		);

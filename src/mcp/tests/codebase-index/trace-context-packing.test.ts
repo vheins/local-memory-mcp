@@ -434,13 +434,21 @@ describe("handleCodebaseRead TRACE with contextBudget (issue #85)", () => {
 	});
 
 	it("returns an empty contextPack when the flag is omitted (backward compatible)", async () => {
-		const res = await handleCodebaseRead({ name: "alpha", repo, owner: "vheins" }, db, vectors);
+		const res = await handleCodebaseRead({ name: "alpha", repo, owner: "vheins", json: true }, db, vectors);
 		expect(traceData(res).contextPack).toBeUndefined();
 	});
 
 	it("packs within budget and exposes items + tier metadata in the response", async () => {
 		const res = await handleCodebaseRead(
-			{ name: "alpha", repo, owner: "vheins", contextBudget: 10_000, includeRelatedTypes: true, relationDepth: 1 },
+			{
+				name: "alpha",
+				repo,
+				owner: "vheins",
+				json: true,
+				contextBudget: 10_000,
+				includeRelatedTypes: true,
+				relationDepth: 1
+			},
 			db,
 			vectors
 		);
@@ -462,7 +470,7 @@ describe("handleCodebaseRead TRACE with contextBudget (issue #85)", () => {
 
 	it("excludes low-tier candidates when the budget is tight", async () => {
 		const res = await handleCodebaseRead(
-			{ name: "alpha", repo, owner: "vheins", contextBudget: 256 }, // below any single-symbol estimate → only root fits
+			{ name: "alpha", repo, owner: "vheins", json: true, contextBudget: 256 }, // below any single-symbol estimate → only root fits
 			db,
 			vectors
 		);
@@ -477,7 +485,7 @@ describe("handleCodebaseRead TRACE with contextBudget (issue #85)", () => {
 
 	it("rejects an out-of-range contextBudget before any trace runs", async () => {
 		await expect(
-			handleCodebaseRead({ name: "alpha", repo, owner: "vheins", contextBudget: 100 }, db, vectors) // < 256
+			handleCodebaseRead({ name: "alpha", repo, owner: "vheins", json: true, contextBudget: 100 }, db, vectors) // < 256
 		).rejects.toThrow();
 	});
 });
