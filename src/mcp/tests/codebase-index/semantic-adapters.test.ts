@@ -195,6 +195,8 @@ describe("no-adapter fallback", () => {
 		expect(result.failedFiles).toBe(0);
 		expect(result.errors).toHaveLength(0);
 		expect(result.semanticEnriched).toBe(0);
+		const stored = db.codebaseSymbols.getSymbolsByFile("repo", "src/Model.php")[0];
+		expect(stored.source_fingerprint).toMatch(/^[a-f0-9]{64}$/);
 	});
 });
 

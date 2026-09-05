@@ -11,6 +11,7 @@ import type { ParsedReference } from "../../parser/language-visitor";
 import type { CodebaseFileInsert, CodebaseSymbolInsert, CodebaseReferenceInsert } from "../../../types";
 import type { ParseTask } from "./constants";
 import type { SymbolWithSemantic } from "./types";
+import { fingerprintSourceRange } from "../../../utils/source-fingerprint";
 
 /** Build a canonical {@link CodebaseReferenceInsert} from a visitor reference. */
 export function referenceInsert(ref: ParsedReference, filePath: string, repo: string): CodebaseReferenceInsert {
@@ -67,7 +68,12 @@ export function referenceInsertFromRow(row: {
  * replaced atomically per file by the indexing writer (delete-by-file +
  * bulk-insert in one txn), so the entity honors the pre-assigned id.
  */
-export function symbolRow(sym: SymbolWithSemantic, repo: string, filePath: string): CodebaseSymbolInsert {
+export function symbolRow(
+	sym: SymbolWithSemantic,
+	repo: string,
+	filePath: string,
+	content: string
+): CodebaseSymbolInsert {
 	return {
 		id: sym.id,
 		repo,
@@ -85,7 +91,8 @@ export function symbolRow(sym: SymbolWithSemantic, repo: string, filePath: strin
 		parent_symbol_id: sym.resolvedParentSymbolId,
 		semantic_signature: sym.semantic?.semanticSignature ?? null,
 		semantic_source: sym.semantic?.semanticSource ?? null,
-		semantic_updated_at: sym.semanticUpdatedAt
+		semantic_updated_at: sym.semanticUpdatedAt,
+		source_fingerprint: fingerprintSourceRange(content, sym.startLine, sym.endLine)
 	};
 }
 

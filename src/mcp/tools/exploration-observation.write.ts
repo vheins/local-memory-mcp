@@ -8,6 +8,22 @@ export async function handleExplorationObservationWrite(
 	storage: SQLiteStore
 ): Promise<McpResponse> {
 	const validated = ExplorationObservationWriteSchema.parse(args);
+	if (validated.refresh_ids) {
+		const observations = storage.explorationObservations.refreshByIds(
+			validated.owner,
+			validated.repo,
+			validated.refresh_ids
+		);
+		const summary = `Refreshed ${observations.length} observation fingerprint${observations.length === 1 ? "" : "s"}.`;
+		return createMcpResponse(
+			withEnvelope("observation-write", "refresh", { observations, count: observations.length }),
+			summary,
+			{
+				contentSummary: summary,
+				includeJson: validated.json
+			}
+		);
+	}
 	const inputs: ExplorationObservationInput[] = validated.observations ?? [
 		{
 			subject: validated.subject!,
@@ -15,7 +31,8 @@ export async function handleExplorationObservationWrite(
 			confidence: validated.confidence!,
 			evidence: validated.evidence!,
 			task_id: validated.task_id,
-			agent: validated.agent
+			agent: validated.agent,
+			supersedes_id: validated.supersedes_id
 		}
 	];
 	const results = storage.explorationObservations.upsertMany(validated.owner, validated.repo, inputs, validated.id);
