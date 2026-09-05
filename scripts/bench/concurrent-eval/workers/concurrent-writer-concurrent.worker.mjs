@@ -13,8 +13,6 @@ const data = workerData?.dbPath
 			barrierPath: process.env.CONCURRENT_BARRIER_PATH
 		};
 const isChild = !parentPort;
-const barrier = data.barrierPath ? await import("../barrier.mjs") : null;
-const barrierHandle = barrier && barrier.createFileBarrier ? null : null;
 if (data.barrierPath) {
 	const fs = await import("node:fs");
 	const deadline = Date.now() + 20000;
@@ -118,5 +116,7 @@ try {
 } finally {
 	try {
 		db.close();
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup.
+	}
 }

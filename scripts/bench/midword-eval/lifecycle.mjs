@@ -53,11 +53,15 @@ export function withBenchDb(tmpDir, label, fn) {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }
@@ -73,7 +77,7 @@ export function collectBenchRevision() {
 	const evalRoot = path.resolve("scripts/bench/midword-eval");
 	const discovered = [];
 	const walk = (dir) => {
-		let entries = [];
+		let entries;
 		try {
 			entries = fs.readdirSync(dir, { withFileTypes: true });
 		} catch {

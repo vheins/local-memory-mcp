@@ -1,4 +1,3 @@
-import { performance } from "node:perf_hooks";
 import { BENCH_EPOCH_MS } from "../../memory-eval/corpus.mjs";
 import { makeMemoryEntry } from "../fixtures.mjs";
 import { withBenchDbAsync, writeWithEnqueue, claimBatch, drainAll, reconcileExpiredLeases } from "../lifecycle.mjs";

@@ -333,8 +333,6 @@ async function main() {
 	const scaleResults = [];
 
 	try {
-		const betterSqlite3Version = require("better-sqlite3/package.json").version;
-
 		for (const rows of scales) {
 			const scaleTmpDir = path.join(tmpDir, `scale-${rows}`);
 			fs.mkdirSync(scaleTmpDir, { recursive: true });
@@ -655,7 +653,9 @@ async function main() {
 				if (db?.open) {
 					try {
 						db.close();
-					} catch {}
+					} catch {
+						// Best-effort benchmark cleanup or metadata collection.
+					}
 					db = null;
 				}
 				const msg = String(err?.message || err);
@@ -668,7 +668,9 @@ async function main() {
 				if (db?.open) {
 					try {
 						db.close();
-					} catch {}
+					} catch {
+						// Best-effort benchmark cleanup or metadata collection.
+					}
 				}
 			}
 		}
@@ -690,7 +692,9 @@ async function main() {
 				referenceSqliteVersion = probe.prepare("SELECT sqlite_version()").pluck().get();
 				referencePageSize = probe.pragma("page_size", { simple: true });
 				probe.close();
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup or metadata collection.
+			}
 		}
 
 		const lastScale = scaleResults[scaleResults.length - 1];
@@ -699,11 +703,15 @@ async function main() {
 			let dirty = false;
 			try {
 				branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup or metadata collection.
+			}
 			try {
 				const porcel = execSync("git status --porcelain", { encoding: "utf8" }).trim();
 				dirty = porcel.length > 0;
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup or metadata collection.
+			}
 			return { branch, dirty };
 		})();
 		const benchRevision = (() => {

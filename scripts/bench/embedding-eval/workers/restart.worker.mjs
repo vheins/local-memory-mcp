@@ -1,4 +1,3 @@
-import path from "path";
 import { performance } from "node:perf_hooks";
 import { BENCH_EPOCH_MS } from "../../memory-eval/corpus.mjs";
 import { makeMemoryEntry } from "../fixtures.mjs";
@@ -29,7 +28,9 @@ if (op === "seed") {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 	}
 } else if (op === "claim") {
 	const db = createBenchDb(dbPath);
@@ -66,7 +67,9 @@ if (op === "seed") {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 	}
 } else if (op === "recover") {
 	const enqueueRaw = process.argv[4];
@@ -130,7 +133,9 @@ if (op === "seed") {
 	} finally {
 		try {
 			db2.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 	}
 } else {
 	console.error(JSON.stringify({ ok: false, error: `unknown op ${op}` }));

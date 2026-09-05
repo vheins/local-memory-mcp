@@ -3,7 +3,6 @@ import path from "path";
 import { createHash, randomUUID } from "crypto";
 import { execSync } from "child_process";
 import { createConcurrentBenchDb } from "./schema.mjs";
-import { BENCH_EPOCH_ISO } from "./constants.mjs";
 
 export function withConcurrentBenchDb(tmpDir, label, fn) {
 	const dbPath = `${tmpDir}/${label}-${randomUUID()}.db`;
@@ -13,11 +12,15 @@ export function withConcurrentBenchDb(tmpDir, label, fn) {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }
@@ -30,11 +33,15 @@ export async function withConcurrentBenchDbAsync(tmpDir, label, fn) {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }
@@ -45,7 +52,7 @@ export function collectBenchRevision() {
 	const corpusRoot = path.resolve("scripts/bench/memory-eval");
 	const discovered = [];
 	const walk = (dir) => {
-		let entries = [];
+		let entries;
 		try {
 			entries = fs.readdirSync(dir, { withFileTypes: true });
 		} catch {

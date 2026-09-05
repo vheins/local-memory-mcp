@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { performance } from "node:perf_hooks";
 import { randomUUID } from "crypto";
 import { Worker } from "node:worker_threads";
 import { createBenchDb } from "../schema.mjs";
@@ -123,11 +122,15 @@ export async function measureScenarioConcurrentWrites(tmpDir) {
 	} finally {
 		try {
 			primaryDb.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }

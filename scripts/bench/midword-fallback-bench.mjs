@@ -33,12 +33,10 @@ import os from "os";
 import path from "path";
 import { execSync } from "child_process";
 import { createRequire } from "module";
-import Database from "better-sqlite3";
-
-import { buildCorpus, buildStressCorpus, SEED, OWNER, REPO } from "./midword-eval/corpus.mjs";
+import { buildCorpus, SEED, OWNER, REPO } from "./midword-eval/corpus.mjs";
 import { QUERIES, createOracle, runFtsBaseline } from "./midword-eval/queries.mjs";
 import { percentiles, recallAt, recallFull } from "./midword-eval/metrics.mjs";
-import { midwordScan, runFallback, DEFAULT_OPTS } from "./midword-eval/fallback.mjs";
+import { midwordScan, DEFAULT_OPTS } from "./midword-eval/fallback.mjs";
 import { createBenchDb, collectBenchRevision } from "./midword-eval/lifecycle.mjs";
 import { printReport, writeResult } from "./midword-eval/report.mjs";
 
@@ -71,19 +69,27 @@ async function main() {
 	let betterSqlite3Version = null;
 	try {
 		betterSqlite3Version = require("better-sqlite3/package.json").version;
-	} catch {}
+	} catch {
+		// Optional metadata or cleanup is best-effort.
+	}
 	let commitSha = null;
 	let branch = null;
 	let dirty = false;
 	try {
 		commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim() || null;
-	} catch {}
+	} catch {
+		// Optional metadata or cleanup is best-effort.
+	}
 	try {
 		branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
-	} catch {}
+	} catch {
+		// Optional metadata or cleanup is best-effort.
+	}
 	try {
 		dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim().length > 0;
-	} catch {}
+	} catch {
+		// Optional metadata or cleanup is best-effort.
+	}
 	const benchRevision = collectBenchRevision();
 
 	const errors = [];
@@ -352,7 +358,9 @@ async function main() {
 		if (db?.open) {
 			try {
 				db.close();
-			} catch {}
+			} catch {
+				// Optional metadata or cleanup is best-effort.
+			}
 		}
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	}

@@ -5,7 +5,6 @@ import { randomUUID } from "crypto";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "url";
 import { createConcurrentBenchDb } from "../schema.mjs";
-import { OWNER } from "../constants.mjs";
 
 export async function measureScenarioReadersOnly(tmpDir, seedCorpus) {
 	const dbPath = path.join(tmpDir, `concurrent-readers-${randomUUID()}.db`);
@@ -76,7 +75,9 @@ export async function measureScenarioReadersOnly(tmpDir, seedCorpus) {
 		let heapBytes = null;
 		try {
 			heapBytes = process.memoryUsage().heapUsed;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		let dbBytes = null;
 		let walBytes = null;
 		try {
@@ -88,7 +89,9 @@ export async function measureScenarioReadersOnly(tmpDir, seedCorpus) {
 				walBytes = 0;
 			}
 			dbBytes += walBytes;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		const elapsedMs = performance.now() - scenarioStart;
 		return {
 			latencies,
@@ -113,11 +116,15 @@ export async function measureScenarioReadersOnly(tmpDir, seedCorpus) {
 	} finally {
 		try {
 			primaryDb.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }
