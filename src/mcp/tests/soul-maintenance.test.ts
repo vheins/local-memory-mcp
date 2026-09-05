@@ -15,8 +15,9 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { createTestStore, type SQLiteStore } from "../storage/sqlite";
-import { applyDecay, pruneActionLog, pruneObservations } from "../services/soul-maintenance";
+import { applyDecay, pruneActionLog, pruneObservations, pruneRelations } from "../services/soul-maintenance";
 import { runStartupMaintenance } from "../services/maintenance-job";
+import { addLogSink } from "../utils/logger";
 import type { MemoryEntry } from "../types";
 import type { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 
@@ -245,6 +246,40 @@ describe("pruneObservations", () => {
 		const kg = { deleteStaleObservations: vi.fn().mockReturnValue(0) } as unknown as KnowledgeGraphEntity;
 
 		expect(pruneObservations(kg)).toEqual({ deleted: 0 });
+	});
+
+	it("logs the configured retention window", () => {
+		const logs: Array<Record<string, unknown>> = [];
+		const removeSink = addLogSink((payload) => logs.push(payload.data));
+		const kg = { deleteStaleObservations: vi.fn().mockReturnValue(3) } as unknown as KnowledgeGraphEntity;
+
+		try {
+			pruneObservations(kg, 14);
+		} finally {
+			removeSink();
+		}
+
+		expect(logs).toContainEqual(expect.objectContaining({ retentionDays: 14, deleted: 3 }));
+	});
+});
+
+describe("pruneRelations observability", () => {
+	it("logs the configured retention window", () => {
+		const logs: Array<Record<string, unknown>> = [];
+		const removeSink = addLogSink((payload) => logs.push(payload.data));
+		const kg = {
+			deleteUnreachableRelations: vi.fn().mockReturnValue(2),
+			deleteOrphanEntities: vi.fn().mockReturnValue(1),
+			countPrunableRelations: vi.fn().mockReturnValue(4)
+		} as unknown as KnowledgeGraphEntity;
+
+		try {
+			pruneRelations(kg, 21, 100, 10);
+		} finally {
+			removeSink();
+		}
+
+		expect(logs).toContainEqual(expect.objectContaining({ retentionDays: 21, deleted: 2, remaining: 4 }));
 	});
 });
 

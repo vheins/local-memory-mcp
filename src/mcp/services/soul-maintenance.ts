@@ -249,7 +249,8 @@ export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentio
 	if (deleted > 0) {
 		logger.info("[SoulMaintenance] Pruned orphaned observations", {
 			deleted,
-			cutoff
+			cutoff,
+			retentionDays
 		});
 	}
 
@@ -309,6 +310,7 @@ export function pruneRelations(
 		orphanEntitiesDeleted,
 		remaining,
 		cutoff,
+		retentionDays,
 		truncated: remaining > 0
 	});
 
