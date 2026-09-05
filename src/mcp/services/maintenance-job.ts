@@ -4,6 +4,7 @@ import {
 	applyDecay,
 	pruneActionLog,
 	pruneObservations,
+	pruneRelations,
 	type SoulMaintenanceOptions,
 	type DecayResult
 } from "./soul-maintenance";
@@ -16,6 +17,12 @@ export interface MaintenanceResult {
 	skipped: boolean;
 	prunedActionLogRows: number;
 	prunedObservationsRows: number;
+	/** Unreachable relation rows reclaimed this run (audit F1). */
+	prunedRelationRows: number;
+	/** Entity rows removed by the orphan sweep that follows the relation prune. */
+	prunedOrphanEntityRows: number;
+	/** Eligible relation rows still pending — non-zero means the per-run cap truncated the sweep. */
+	prunableRelationsRemaining: number;
 	totalArchived: number;
 }
 
@@ -85,6 +92,9 @@ export async function runStartupMaintenance(
 			skipped: true,
 			prunedActionLogRows: 0,
 			prunedObservationsRows: 0,
+			prunedRelationRows: 0,
+			prunedOrphanEntityRows: 0,
+			prunableRelationsRemaining: 0,
 			totalArchived: 0
 		};
 	}
@@ -111,8 +121,15 @@ export async function runStartupMaintenance(
 		//    keeping the newest ACTION_LOG_MAX_ROWS — OPT-PERF-05)
 		const prunedActionLogResult = pruneActionLog(db.db, 30, ACTION_LOG_MAX_ROWS);
 
-		// 5. Prune stale observations (7-day retention)
+		// 5. Prune observations whose parent document is gone (audit F1 — the
+		//    previous age-only prune severed live documents from their graph)
 		const prunedObservationsResult = pruneObservations(db.knowledgeGraph, 7);
+
+		// 6. Prune relations no read path can reach again, then sweep the
+		//    entities that only those edges kept alive (audit F1). Bounded per
+		//    run and per transaction, so a large backlog converges across
+		//    maintenance cycles instead of blocking this startup.
+		const prunedRelationsResult = pruneRelations(db.knowledgeGraph);
 
 		// Record the maintenance run
 		recordMaintenanceRun(db);
@@ -126,6 +143,9 @@ export async function runStartupMaintenance(
 			skipped: false,
 			prunedActionLogRows: prunedActionLogResult.deleted,
 			prunedObservationsRows: prunedObservationsResult.deleted,
+			prunedRelationRows: prunedRelationsResult.deleted,
+			prunedOrphanEntityRows: prunedRelationsResult.orphanEntitiesDeleted,
+			prunableRelationsRemaining: prunedRelationsResult.remaining,
 			totalArchived
 		};
 	});
@@ -138,7 +158,10 @@ export async function runStartupMaintenance(
 		decayArchived: result.decay.archived,
 		totalArchived: result.totalArchived,
 		prunedActionLogRows: result.prunedActionLogRows,
-		prunedObservationsRows: result.prunedObservationsRows
+		prunedObservationsRows: result.prunedObservationsRows,
+		prunedRelationRows: result.prunedRelationRows,
+		prunedOrphanEntityRows: result.prunedOrphanEntityRows,
+		prunableRelationsRemaining: result.prunableRelationsRemaining
 	});
 
 	return result;
