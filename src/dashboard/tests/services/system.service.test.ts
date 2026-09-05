@@ -24,7 +24,8 @@ const mocks = vi.hoisted(() => {
 		actions: { getRecentActions: vi.fn() },
 		memories: { getAllMemoriesWithStats: vi.fn() },
 		tasks: { getTasksByRepo: vi.fn() },
-		taskComments: { getAllTaskCommentsByRepo: vi.fn() }
+		taskComments: { getAllTaskCommentsByRepo: vi.fn() },
+		reuseTelemetry: { summarize: vi.fn() }
 	};
 	return {
 		db,
@@ -192,6 +193,14 @@ describe("SystemService.getStats", () => {
 });
 
 describe("SystemService.getMetrics", () => {
+	it("includes a repo/time-window reuse summary when scoped", () => {
+		vi.mocked(mocks.embeddingWorker.getStats).mockReturnValue({ pending: 0, running: true });
+		vi.mocked(mocks.db.reuseTelemetry.summarize).mockReturnValue({ from: "from", to: "to", metrics: {} });
+		const result = SystemService.getMetrics("owner", "repo", 48);
+		expect(mocks.db.reuseTelemetry.summarize).toHaveBeenCalledWith("owner", "repo", 48);
+		expect(result.reuse).toEqual({ from: "from", to: "to", metrics: {} });
+	});
+
 	it("merges the runtime snapshot with the embedding worker stats", () => {
 		vi.mocked(mocks.embeddingWorker.getStats).mockReturnValue({ pending: 5, running: true });
 
@@ -205,6 +214,7 @@ describe("SystemService.getMetrics", () => {
 		expect(metrics.writeHandler).toBeDefined();
 		expect(metrics.embedLatency).toBeDefined();
 		expect(metrics.worker).toEqual({ pending: 5, running: true });
+		expect(metrics.reuse).toBeNull();
 	});
 });
 

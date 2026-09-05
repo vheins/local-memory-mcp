@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 export type McpRoot = {
@@ -25,6 +26,9 @@ export type SessionContext = {
 	owner?: string;
 	repo?: string;
 	projectPath?: string;
+
+	// Opaque process-local correlation identifier; never derived from prompt text.
+	sessionId?: string;
 
 	// From initialize handshake (per-connection)
 	clientName?: string;
@@ -60,6 +64,7 @@ export function createSessionContext(): SessionContext {
 		owner,
 		repo,
 		projectPath,
+		sessionId: randomUUID(),
 		clientName: undefined,
 		clientVersion: undefined,
 		lastSeenModel: undefined,

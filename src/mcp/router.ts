@@ -38,6 +38,7 @@ import { ElicitationRequestHandler } from "./elicitation";
 import { getLogLevel, LOG_LEVEL_VALUES, setLogLevel } from "./utils/logger";
 import { getRuntimeCapabilities, isSemanticToolDemand } from "./runtime-capabilities";
 import { decodeCursor, encodeCursor } from "./utils/pagination";
+import { reuseTelemetry } from "./utils/reuse-telemetry";
 
 type RouterOptions = {
 	getSessionContext?: () => SessionContext;
@@ -217,6 +218,16 @@ export function createRouter(
 			// metadata from result.structuredContent and logs under the
 			// no-file-lock policy.
 			logToolAction(db, toolName, args, result);
+			const session = getSessionContext?.();
+			reuseTelemetry.recordTool({
+				owner: String(args.owner ?? ""),
+				repo: String(args.repo ?? "unknown"),
+				session: [session?.sessionId, args.task_code ?? args.task_id ?? ""].join(":"),
+				toolName,
+				args,
+				result
+			});
+			reuseTelemetry.flushIfNeeded(db);
 		} catch (e) {
 			logger.error("Failed to log action", { toolName, error: String(e) });
 		}

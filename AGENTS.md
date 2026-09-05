@@ -160,15 +160,18 @@ worker starts inline at startup).
 
 ### MCP core
 
-| Variable              | Default                          | Purpose                                                              |
-| :-------------------- | :------------------------------- | :------------------------------------------------------------------- |
-| `MEMORY_DB_PATH`      | — (platform config dir fallback) | Explicit SQLite DB path override.                                    |
-| `MCP_SERVER`          | set to `"true"` by `server.ts`   | Marks the running process as the MCP server (affects logging/sinks). |
-| `LOG_LEVEL`           | `info`                           | Log level (`trace`/`debug`/`info`/`warn`/`error`), lowercased.       |
-| `MCP_CLIENT_NAME`     | — (session fallback)             | Default agent name when a tool call omits `agent`.                   |
-| `MCP_MODEL`           | — (session fallback)             | Default model when a tool call omits `model`.                        |
-| `MCP_RUNTIME_PROFILE` | `full`                           | `minimal`, `balanced`, or backward-compatible `full`.                |
-| `ENABLE_AUTO_ARCHIVE` | `"false"` (disabled)             | Set to `"true"` to enable automatic memory archiving on startup.     |
+| Variable                         | Default                          | Purpose                                                              |
+| :------------------------------- | :------------------------------- | :------------------------------------------------------------------- |
+| `MEMORY_DB_PATH`                 | — (platform config dir fallback) | Explicit SQLite DB path override.                                    |
+| `MCP_SERVER`                     | set to `"true"` by `server.ts`   | Marks the running process as the MCP server (affects logging/sinks). |
+| `LOG_LEVEL`                      | `info`                           | Log level (`trace`/`debug`/`info`/`warn`/`error`), lowercased.       |
+| `MCP_CLIENT_NAME`                | — (session fallback)             | Default agent name when a tool call omits `agent`.                   |
+| `MCP_MODEL`                      | — (session fallback)             | Default model when a tool call omits `model`.                        |
+| `MCP_RUNTIME_PROFILE`            | `full`                           | `minimal`, `balanced`, or backward-compatible `full`.                |
+| `ENABLE_AUTO_ARCHIVE`            | `"false"` (disabled)             | Set to `"true"` to enable automatic memory archiving on startup.     |
+| `ENABLE_REUSE_TELEMETRY`         | `"true"`                         | Set to `"false"` to disable aggregate-only context-reuse telemetry.  |
+| `REUSE_TELEMETRY_RETENTION_DAYS` | `30`                             | Hourly aggregate retention in days (bounded to 1–365).               |
+| `REUSE_TELEMETRY_MAX_ROWS`       | `20000`                          | Global cap for aggregate telemetry rows.                             |
 
 ### Dashboard
 

@@ -11,6 +11,7 @@ import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
 import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
 import { getRuntimeCapabilities, type RuntimeCapabilitySnapshot } from "../../mcp/runtime-capabilities";
+import { reuseTelemetry } from "../../mcp/utils/reuse-telemetry";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -110,9 +111,11 @@ export const SystemService = {
 	 * observational — no DB access, so callers skip the `db.refresh()`
 	 * lifecycle to keep high-frequency polling cheap.
 	 */
-	getMetrics(): Record<string, unknown> {
+	getMetrics(owner?: string, repo?: string, hours = 24): Record<string, unknown> {
 		const snapshot = metrics.snapshot();
 		const worker = embeddingWorker.getStats();
+		if (owner && repo && reuseTelemetry.isEnabled()) reuseTelemetry.flush(db);
+		const reuse = owner && repo && reuseTelemetry.isEnabled() ? db.reuseTelemetry.summarize(owner, repo, hours) : null;
 		return {
 			// NIT (OPT-OBS-01): explicit process marker so consumers can
 			// distinguish empty-by-design (tools/writeHandler are always empty
@@ -125,7 +128,8 @@ export const SystemService = {
 			toolOutcomes: snapshot.toolOutcomes,
 			writeHandler: snapshot.writeHandler,
 			embedLatency: snapshot.embedLatency,
-			worker
+			worker,
+			reuse
 		};
 	},
 

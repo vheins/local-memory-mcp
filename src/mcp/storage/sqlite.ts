@@ -19,6 +19,7 @@ import { CodebaseSymbolEntity } from "../entities/codebase-symbol";
 import { CodebaseReferenceEntity } from "../entities/codebase-reference";
 import { KnowledgeGraphEntity } from "../entities/knowledge-graph";
 import { ExplorationObservationEntity } from "../entities/exploration-observation";
+import { ReuseTelemetryEntity } from "../entities/reuse-telemetry";
 import { WriteLock } from "./write-lock";
 import { logger } from "../utils/logger";
 import { WAL_CHECKPOINT_INTERVAL_MS } from "../utils/constants";
@@ -65,6 +66,7 @@ export class SQLiteStore {
 	public codebaseReferences: CodebaseReferenceEntity;
 	public knowledgeGraph: KnowledgeGraphEntity;
 	public explorationObservations: ExplorationObservationEntity;
+	public reuseTelemetry: ReuseTelemetryEntity;
 	public lock: WriteLock;
 	private dbPathInstance: string;
 	/** Last wall-clock time a WAL checkpoint ran (throttles refresh()). */
@@ -131,6 +133,7 @@ export class SQLiteStore {
 		this.codebaseReferences = new CodebaseReferenceEntity(this.db);
 		this.knowledgeGraph = new KnowledgeGraphEntity(this.db);
 		this.explorationObservations = new ExplorationObservationEntity(this.db);
+		this.reuseTelemetry = new ReuseTelemetryEntity(this.db);
 		this.lock = new WriteLock(finalPath);
 	}
 

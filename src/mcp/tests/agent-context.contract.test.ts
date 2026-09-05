@@ -113,6 +113,25 @@ describe("Agent Context - response and performance contract", () => {
 		expect(p95).toBeLessThan(250);
 	});
 
+	it("returns the same opaque pack id for an explicit correlation key", async () => {
+		seedMemory(1);
+		const args = {
+			owner,
+			repo,
+			objective: "bounded compiler",
+			sources: ["memories"] as const,
+			context_pack_id: "shared-pack-key",
+			json: true
+		};
+		const first = await handleAgentContext(args, db, vectors);
+		const second = await handleAgentContext(args, db, vectors);
+		const firstData = first.structuredContent as { context_pack_id: string };
+		const secondData = second.structuredContent as { context_pack_id: string };
+		expect(firstData.context_pack_id).toBe(secondData.context_pack_id);
+		expect(firstData.context_pack_id).not.toContain("shared-pack-key");
+		expect(second).toBe(first);
+	});
+
 	it("keeps compact text without structured JSON and includes it when requested", async () => {
 		seedMemory(1);
 		const args = { owner, repo, objective: "bounded compiler", sources: ["memories"] as const };
@@ -126,6 +145,7 @@ describe("Agent Context - response and performance contract", () => {
 		const structured = await handleAgentContext({ ...args, json: true }, db, vectors);
 		expect(structured.structuredContent).toMatchObject({
 			schema: "agent-context",
+			context_pack_id: expect.stringMatching(/^[a-f0-9]{24}$/),
 			repo,
 			memories: expect.any(Array),
 			decisions: expect.any(Array),

@@ -66,6 +66,7 @@ import { toErrorResponse } from "../utils/mcp-error";
 import { logToolAction } from "../utils/action-log";
 import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
 import { getRuntimeCapabilities, isSemanticToolDemand } from "../runtime-capabilities";
+import { reuseTelemetry } from "../utils/reuse-telemetry";
 
 // ── Tool definitions ────────────────────────────────────────────────────
 import { TOOL_DEFINITIONS } from "./tool-definitions";
@@ -164,7 +165,8 @@ export function buildExecutors(
 		"task-read": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
 		"task-delete": (args, db, _vectors, _extra) => handleTaskDelete(args, db),
 
-		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
+		"agent-context": (args, db, vectors, _extra) =>
+			handleAgentContext(session.sessionId ? { ...args, session_id: session.sessionId } : args, db, vectors),
 		"observation-write": (args, db, _vectors, _extra) => handleExplorationObservationWrite(args, db),
 		"observation-read": (args, db, _vectors, _extra) => handleExplorationObservationRead(args, db),
 		// Codebase index tools — only 2 canonical names
@@ -314,6 +316,15 @@ export function registerAllTools(
 				// lives in logToolAction (utils/action-log.ts) over
 				// ACTION_LOG_TOOLS (utils/tool-plumbing.ts), shared with router.ts.
 				logToolAction(store, toolName, normalizedArgs, result);
+				reuseTelemetry.recordTool({
+					owner: String(normalizedArgs.owner ?? ""),
+					repo: String(normalizedArgs.repo ?? "unknown"),
+					session: [session.sessionId, normalizedArgs.task_code ?? normalizedArgs.task_id ?? ""].join(":"),
+					toolName,
+					args: normalizedArgs,
+					result
+				});
+				reuseTelemetry.flushIfNeeded(store);
 
 				// Resource mutation notifications
 				const affectedUris = collectAffectedResourceUris(toolName, normalizedArgs, result);

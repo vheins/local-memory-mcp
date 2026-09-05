@@ -12,6 +12,7 @@ import { EmbeddingWorker } from "./embedding-queue";
 import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "./runtime-capabilities";
 import { CAPABILITIES } from "./capabilities";
 import { addLogSink, createFileSink, logger } from "./utils/logger";
+import { reuseTelemetry } from "./utils/reuse-telemetry";
 import { runStartupMaintenance } from "./services/maintenance-job";
 import { runCliIndex } from "./codebase-index/cli";
 import { autoIndexIfStale } from "./codebase-index/services/indexing-service";
@@ -210,6 +211,7 @@ const shutdown = async (signal: string) => {
 	embeddingWorker.stop();
 	fileWatcher?.stop();
 	await handle?.close();
+	reuseTelemetry.flush(db);
 	db.close();
 	process.exit(0);
 };

@@ -57,6 +57,7 @@
 		"test:perf": "vitest --run --project perf",
 		"test:unit": "vitest --run --project unit",
 		"test:watch": "vitest",
+		"bench:context-reuse": "node --expose-gc --import tsx scripts/bench/context-reuse-bench.ts",
 		"type-check": "tsc --noEmit && tsc -p tsconfig.test.json && svelte-check --tsconfig ./src/dashboard/ui/tsconfig.json",
 		"lint": "eslint . --ext .ts,.svelte",
 		"lint:fix": "eslint . --ext .ts,.svelte --fix",

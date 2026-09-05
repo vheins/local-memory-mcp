@@ -16,6 +16,7 @@ import {
 } from "./agent-context-compiler";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
 import { logger } from "../utils/logger";
+import { reuseTelemetry } from "../utils/reuse-telemetry";
 
 const ACTIVE_TASK_STATUSES = [TASK_STATUS_IN_PROGRESS, TASK_STATUS_PENDING, TASK_STATUS_BACKLOG, TASK_STATUS_BLOCKED];
 
@@ -40,6 +41,42 @@ export async function handleAgentContext(
 	const validated = AgentContextSchema.parse(args);
 	const { owner, repo, type_filter, limit, json: isJsonRequest } = validated;
 	const objective = validated.objective ?? validated.query ?? "";
+	const packCorrelation = [
+		validated.context_pack_id ?? validated.session_id ?? "anonymous",
+		objective,
+		validated.task_code ?? "",
+		validated.current_file_path ?? "",
+		validated.sources.join(","),
+		JSON.stringify(validated.budget),
+		String(validated.include_stale),
+		String(isJsonRequest)
+	].join("\u001f");
+	const contextPackId = reuseTelemetry.createContextPackId(owner, repo, packCorrelation);
+	type CachedContextPack = {
+		response: McpResponse;
+		allocation: Record<AgentContextSource, { included: number; excluded: number; estimated_tokens: number }>;
+		observationIds: string[];
+		memoryIds: string[];
+		evidencePointers: number;
+	};
+	const cached = validated.context_pack_id ? reuseTelemetry.getCachedPack<CachedContextPack>(contextPackId) : undefined;
+	if (cached) {
+		reuseTelemetry.recordContextPack({
+			owner,
+			repo,
+			session: validated.session_id,
+			packId: contextPackId,
+			cacheLookup: true,
+			cacheHit: true,
+			allocation: cached.allocation,
+			observationIds: cached.observationIds,
+			memoryIds: cached.memoryIds,
+			evidencePointers: cached.evidencePointers,
+			staleRejected: 0
+		});
+		reuseTelemetry.flushIfNeeded(db);
+		return cached.response;
+	}
 	const enabled = new Set<AgentContextSource>(validated.sources);
 	const candidateLimit = Math.min(100, Math.max(limit, validated.budget.max_items * 2));
 	let memories: MemoryEntry[] = [];
@@ -180,10 +217,21 @@ export async function handleAgentContext(
 					.reduce((sum, item) => sum + item.estimated_tokens, 0)
 			}
 		])
-	);
+	) as Record<AgentContextSource, { included: number; excluded: number; estimated_tokens: number }>;
+	const observationIds = packed.included.filter((item) => item.source === "observations").map((item) => item.id);
+	const evidencePointers = packed.included
+		.filter((item) => item.source === "observations")
+		.reduce((sum, item) => sum + Number(item.provenance.evidence_count ?? 0), 0);
+	const staleRejected =
+		reuseTelemetry.isEnabled() && !validated.include_stale && enabled.has("observations")
+			? db.explorationObservations
+					.list({ owner, repo, include_stale: true, limit: candidateLimit, offset: 0 })
+					.filter((observation) => observation.freshness !== "valid" || observation.superseded_by).length
+			: 0;
 	const structuredData = {
 		schema: "agent-context" as const,
 		mode: "compiled" as const,
+		context_pack_id: contextPackId,
 		repo,
 		query: objective || null,
 		objective: objective || null,
@@ -217,11 +265,40 @@ export async function handleAgentContext(
 		exclusions: packed.exclusions
 	};
 
+	reuseTelemetry.recordContextPack({
+		owner,
+		repo,
+		session: validated.session_id,
+		packId: contextPackId,
+		cacheLookup: Boolean(validated.context_pack_id),
+		cacheHit: false,
+		allocation: sourceAllocation,
+		observationIds,
+		memoryIds: packed.included
+			.filter((item) => item.source === "memories" || item.source === "decisions")
+			.map((item) => item.id),
+		evidencePointers,
+		staleRejected
+	});
+	const response = createMcpResponse(structuredData, contentSummary, { contentSummary, includeJson: isJsonRequest });
+	if (validated.context_pack_id) {
+		reuseTelemetry.cachePack(contextPackId, {
+			response,
+			allocation: sourceAllocation,
+			observationIds,
+			memoryIds: packed.included
+				.filter((item) => item.source === "memories" || item.source === "decisions")
+				.map((item) => item.id),
+			evidencePointers
+		});
+	}
+	reuseTelemetry.flushIfNeeded(db);
 	logger.info("[Tool] agent-context", {
 		repo,
+		contextPackId,
 		included: packed.included.length,
 		excluded: packed.exclusions.length,
 		estimatedTokens: packed.estimatedTokens
 	});
-	return createMcpResponse(structuredData, contentSummary, { contentSummary, includeJson: isJsonRequest });
+	return response;
 }

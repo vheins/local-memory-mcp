@@ -34,6 +34,18 @@ export const AgentContextSchema = z.object({
 		.min(1)
 		.default([...AGENT_CONTEXT_SOURCES]),
 	include_stale: z.boolean().default(false),
+	context_pack_id: z
+		.string()
+		.min(8)
+		.max(128)
+		.optional()
+		.describe("Stable opaque id for cache-hit correlation; never prompt text."),
+	session_id: z
+		.string()
+		.min(1)
+		.max(256)
+		.optional()
+		.describe("Opaque session correlation value; stored only as an in-memory hash."),
 	json: z.boolean().default(false)
 });
 
