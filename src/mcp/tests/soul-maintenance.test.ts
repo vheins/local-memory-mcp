@@ -230,9 +230,9 @@ describe("pruneActionLog", () => {
 });
 
 describe("pruneObservations", () => {
-	it("delegates to KnowledgeGraphEntity.deleteObservationsOlderThan with an ISO cutoff", () => {
+	it("delegates to KnowledgeGraphEntity.deleteStaleObservations with an ISO cutoff", () => {
 		const deleteSpy = vi.fn().mockReturnValue(3);
-		const kg = { deleteObservationsOlderThan: deleteSpy } as unknown as KnowledgeGraphEntity;
+		const kg = { deleteStaleObservations: deleteSpy } as unknown as KnowledgeGraphEntity;
 
 		const result = pruneObservations(kg, 7);
 
@@ -242,7 +242,7 @@ describe("pruneObservations", () => {
 	});
 
 	it("returns deleted: 0 when nothing is pruned", () => {
-		const kg = { deleteObservationsOlderThan: vi.fn().mockReturnValue(0) } as unknown as KnowledgeGraphEntity;
+		const kg = { deleteStaleObservations: vi.fn().mockReturnValue(0) } as unknown as KnowledgeGraphEntity;
 
 		expect(pruneObservations(kg)).toEqual({ deleted: 0 });
 	});
@@ -260,7 +260,7 @@ describe("runStartupMaintenance (TASK-124 contract)", () => {
 		withExclusiveWriteSpy = vi.spyOn(db, "withExclusiveWrite").mockImplementation(async (fn) => fn());
 		vi.spyOn(db.memoryArchives, "archiveExpiredMemories").mockReturnValue(2);
 		vi.spyOn(db.memoryArchives, "archiveLowScoreMemories").mockReturnValue(1);
-		vi.spyOn(db.knowledgeGraph, "deleteObservationsOlderThan").mockReturnValue(5);
+		vi.spyOn(db.knowledgeGraph, "deleteStaleObservations").mockReturnValue(5);
 	});
 
 	afterEach(() => {
