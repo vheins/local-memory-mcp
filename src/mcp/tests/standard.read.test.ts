@@ -77,7 +77,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 		it("returns relevant results for specific stacks", async () => {
 			const result = (await handleStandardRead(
 				{
-					stack: ["react"]
+					stack: ["react"],
+					json: true
 				},
 				db,
 				vectors
@@ -93,7 +94,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 		it("returns relevant results for specific languages", async () => {
 			const result = (await handleStandardRead(
 				{
-					language: "python"
+					language: "python",
+					json: true
 				},
 				db,
 				vectors
@@ -106,7 +108,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 		it("returns empty array for invalid language", async () => {
 			const result = (await handleStandardRead(
 				{
-					language: "nonexistent-language-xyz"
+					language: "nonexistent-language-xyz",
+					json: true
 				},
 				db,
 				vectors
@@ -120,7 +123,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 		it("supports text search by query", async () => {
 			const result = (await handleStandardRead(
 				{
-					query: "error"
+					query: "error",
+					json: true
 				},
 				db,
 				vectors
@@ -139,7 +143,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 		it("supports tag filtering", async () => {
 			const result = (await handleStandardRead(
 				{
-					tags: ["testing"]
+					tags: ["testing"],
+					json: true
 				},
 				db,
 				vectors
@@ -178,7 +183,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 
 			const result = (await handleStandardRead(
 				{
-					query: "subscription teardown guidance"
+					query: "subscription teardown guidance",
+					json: true
 				},
 				vectorOnlyDb,
 				mockVectors
@@ -229,7 +235,8 @@ describe("CSL (Coding Standards Library) — standard-read", () => {
 
 			const result = (await handleStandardRead(
 				{
-					query: "Laravel Service Container Singleton vs Scoped Binding"
+					query: "Laravel Service Container Singleton vs Scoped Binding",
+					json: true
 				},
 				rankingDb,
 				mockVectors

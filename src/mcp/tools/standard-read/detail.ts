@@ -59,12 +59,15 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 
 		const summary = standards.length > 0 ? formatBulkDetail(standards) : "No standards found for the given IDs";
 
-		const kgContext = fetchAggregatedKgContext(
-			db,
-			repo ?? "",
-			standards.map((s) => s.title),
-			"standard"
-		);
+		// KG context only ships inside `structuredContent` (audit F3).
+		const kgContext = validated.json
+			? fetchAggregatedKgContext(
+					db,
+					repo ?? "",
+					standards.map((s) => s.title),
+					"standard"
+				)
+			: null;
 		const data: Record<string, unknown> = { standards, count: standards.length };
 		if (kgContext) data.kg = kgContext;
 
@@ -88,12 +91,14 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 
 		const summary = standards.length > 0 ? formatBulkDetail(standards) : "No standards found for the given codes";
 
-		const kgContext = fetchAggregatedKgContext(
-			db,
-			repo ?? "",
-			standards.map((s) => s.title),
-			"standard"
-		);
+		const kgContext = validated.json
+			? fetchAggregatedKgContext(
+					db,
+					repo ?? "",
+					standards.map((s) => s.title),
+					"standard"
+				)
+			: null;
 		const data: Record<string, unknown> = { standards, count: standards.length };
 		if (kgContext) data.kg = kgContext;
 
@@ -125,7 +130,7 @@ export async function handleDetailMode(validated: StandardReadInput, db: SQLiteS
 
 	const content = formatStandardDetail(standard).join("\n");
 
-	const kgContext = fetchKgContext(db, repo ?? "", standard.title, "standard");
+	const kgContext = validated.json ? fetchKgContext(db, repo ?? "", standard.title, "standard") : null;
 	const data: Record<string, unknown> = { standard };
 	if (kgContext) data.kg = kgContext;
 
