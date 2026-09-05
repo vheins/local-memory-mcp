@@ -68,19 +68,23 @@ describe("migration v24 relations confidence", () => {
 		// NO confidence index is added. PRAGMA index_list (repo pattern — see
 		// migrations.standards.test.ts) lists the named CREATE INDEX entries
 		// plus the implicit PK autoindex (sqlite_autoindex_relations_1,
-		// origin='pk') and the v12 composite idx_relations_repo_from_to, so
-		// exact-set equality would be a stale snapshot. Assert containment:
-		// (1) the relations indexes are a superset of the expected pre-existing
-		// index set (4 v01 + v12 composite), and (2) NO index name references
-		// confidence — still fails if v24 ever adds one.
+		// origin='pk') and the v12/v29 composites, so exact-set equality would
+		// be a stale snapshot. Assert containment: (1) the relations indexes are
+		// a superset of the expected set that survives v29's rebalance, and
+		// (2) NO index name references confidence — still fails if v24 ever
+		// adds one.
+		//
+		// v29 DROPs idx_relations_from (PK-prefix redundant) and
+		// idx_relations_type (zero query consumers), so they are deliberately
+		// absent from this list — see v29-kg-relations-index-rebalance.
 		const indexes = db.prepare("PRAGMA index_list(relations)").all() as { name: string }[];
 		const indexNames = indexes.map((i) => i.name);
 		const preExistingIndexes = [
-			"idx_relations_from",
 			"idx_relations_repo",
 			"idx_relations_repo_from_to",
 			"idx_relations_to",
-			"idx_relations_type"
+			"idx_relations_repo_to",
+			"idx_relations_created_at"
 		];
 		expect(preExistingIndexes.every((name) => indexNames.includes(name))).toBe(true);
 		expect(indexNames.some((name) => name.includes("confidence"))).toBe(false);

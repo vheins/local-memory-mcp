@@ -39,6 +39,11 @@ export interface KgResult {
  * names (FTS bm25 ORDER BY rank for the task path, observation-insertion
  * order for the memory/standard path) are kept; the tail beyond the cap is
  * dropped.
+ *
+ * Audit F2/F6: the relation lookup is additionally bounded by
+ * `KG_MAX_CONTEXT_RELATIONS` (a 50-name window over a hub-heavy repo resolved
+ * 37,815 edges ≈ 184k tokens in one read), and the entity lookup is no longer
+ * repo-filtered so entities are never dropped while their edges ship.
  */
 export function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], sourceDomain: string): KgResult | null {
 	try {
@@ -48,7 +53,7 @@ export function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], so
 		const capped = uniqueNames.slice(0, KG_MAX_CONTEXT_ENTITIES);
 
 		const entities = db.knowledgeGraph
-			.getEntitiesFor(capped, repo)
+			.getEntitiesFor(capped)
 			.map((e) => ({ name: e.name, type: e.type, source_domain: sourceDomain }));
 
 		const relations = db.knowledgeGraph.getRelationsFor(capped, repo);

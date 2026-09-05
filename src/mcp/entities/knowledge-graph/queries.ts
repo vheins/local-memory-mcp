@@ -1,5 +1,10 @@
 import { logger } from "../../utils/logger";
-import { KG_MAX_CONTEXT_ENTITIES, KG_CONTEXT_TEXT_TOKENS, KG_MAX_GRAPH_EDGES } from "../../utils/constants";
+import {
+	KG_MAX_CONTEXT_ENTITIES,
+	KG_CONTEXT_TEXT_TOKENS,
+	KG_MAX_CONTEXT_RELATIONS,
+	KG_MAX_GRAPH_EDGES
+} from "../../utils/constants";
 
 // ---------------------------------------------------------------------------
 // Query runner (TASK-176)
@@ -69,35 +74,136 @@ export interface KgObservationRow {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch entity name/type rows for the given names, scoped to a repo.
+ * Fetch entity name/type rows for the given names.
+ *
+ * **No `repo` filter — deliberate (audit F6).** `entities.name` is a GLOBAL
+ * `PRIMARY KEY` (v01 schema) and every writer uses `INSERT OR IGNORE`, so the
+ * FIRST repo to mention a common noun (`priority`, `section`, `assignees`,
+ * `due_date`) owns the row forever and every other repo's insert is silently
+ * dropped. Adding `AND repo = ?` here therefore filtered on "which repo
+ * happened to write this name first", not on ownership — and since the caller
+ * has ALREADY scoped the name set by repo (via `observations WHERE repo = ?` or
+ * the repo-filtered `entity_names_fts` index), the extra predicate could only
+ * remove correct rows, never add safety.
+ *
+ * What it actually did was break the payload asymmetrically: `getEntitiesFor`
+ * dropped the entity while `getRelationsFor` (which filters `relations.repo`,
+ * a per-edge column that IS correct) still shipped its edges. Measured on a
+ * real database: 2,209 of 19,294 `(entity_name, repo)` pairs (11.4%) referenced
+ * an entity row owned by another repo, and for a 50-name window in one repo
+ * `getEntitiesFor` returned **0** rows while `getRelationsFor` returned
+ * **11,664 edges** whose endpoints were therefore absent from the response —
+ * an unusable graph payload.
+ *
+ * Dropping the redundant predicate closes the payload. The proper fix for the
+ * underlying schema flaw is a composite `(name, repo)` primary key, which needs
+ * a table rebuild plus FK/trigger migration and is tracked separately.
  */
-export function getEntitiesFor(
-	runner: KgQueryRunner,
-	entityNames: string[],
-	repo: string
-): Array<{ name: string; type: string }> {
+export function getEntitiesFor(runner: KgQueryRunner, entityNames: string[]): Array<{ name: string; type: string }> {
 	if (entityNames.length === 0) return [];
 	const placeholders = entityNames.map(() => "?").join(",");
 	return runner.all<{ name: string; type: string }>(
-		`SELECT name, type FROM entities WHERE name IN (${placeholders}) AND repo = ?`,
-		[...entityNames, repo]
+		`SELECT name, type FROM entities WHERE name IN (${placeholders})`,
+		entityNames
 	);
 }
 
 /**
  * Fetch relations touching any of the given entity names, scoped to a repo.
+ *
+ * **Audit F2 — why this is a bounded UNION and not one `OR` predicate.**
+ *
+ * The original shape was a single scan-forcing predicate:
+ *
+ * ```sql
+ * WHERE (from_entity IN (...) OR to_entity IN (...)) AND repo = ?
+ * ```
+ *
+ * SQLite cannot serve one `OR` branch from `(repo, from_entity)` and the other
+ * from a `to_entity` index in the same scan, so the planner fell back to
+ * `SEARCH relations USING INDEX idx_relations_repo (repo=?)` — i.e. it walked
+ * EVERY edge in the repo and filtered in memory. Cost was O(edges in repo),
+ * not O(names): on a 490k-edge repo one 50-name enrichment took ~1.2s and
+ * returned 37,815 rows (~184k tokens of JSON) for a payload the caller only
+ * samples.
+ *
+ * Three changes, each necessary:
+ *
+ *  1. **UNION of two index-served branches** — `(repo, from_entity)` is served
+ *     by `idx_relations_repo_from_to` (v12), `(repo, to_entity)` by
+ *     `idx_relations_repo_to` (v29). Both become index seeks per name instead
+ *     of one full-repo scan. An index alone does NOT help: adding
+ *     `(repo, to_entity)` without the UNION rewrite leaves the plan unchanged
+ *     (measured — still `idx_relations_repo`), because the limitation is the
+ *     `OR`, not the available indexes.
+ *  2. **Per-branch `LIMIT`** — each branch is bounded BEFORE the merge, so a
+ *     hub entity with 100k edges cannot materialize its whole adjacency list
+ *     into a temp b-tree just to have the outer LIMIT throw it away.
+ *  3. **`ORDER BY confidence DESC`** — when the cap truncates, the retained
+ *     window is the most trustworthy slice (migration v24): explicit/manual
+ *     1.0 and parser-deterministic codebase 0.9 outrank NLP co-occurrence
+ *     guesses at 0.55. Ties break on `(from, to)` so output is deterministic.
+ *
+ * Measured A/B on a real 1.29M-edge database (median of 5, warm, interleaved,
+ * `limit = 500`):
+ *
+ * ```
+ * repo                  edges     OLD ms   NEW ms   speedup   OLD rows  NEW rows
+ * basecamp-v2          490,255    1218.3     38.0     32.0x     37,815       500
+ * clipper              120,439      47.1      6.2      7.6x      6,000       500
+ * basecamp             207,338      88.1     26.2      3.4x     25,604       500
+ * bot-pm               168,379      68.7     20.1      3.4x     20,169       500
+ * mos-platform          83,218      47.1     26.5      1.8x     30,877       500
+ * frontend-hilir-base   20,857       8.1      4.0      2.0x      3,894       500
+ * ```
+ *
+ * No repo regressed. Aggregate KG-relation payload across the six repos fell
+ * 2,483,541 → 62,412 JSON chars (39.8x).
+ *
+ * @param limit - Max rows returned; `0` disables the cap (unbounded, the
+ *   pre-fix behavior) for callers that genuinely need the full adjacency set.
  */
 export function getRelationsFor(
 	runner: KgQueryRunner,
 	entityNames: string[],
-	repo: string
+	repo: string,
+	limit = KG_MAX_CONTEXT_RELATIONS
 ): Array<{ from: string; to: string; type: string }> {
 	if (entityNames.length === 0) return [];
 	const placeholders = entityNames.map(() => "?").join(",");
+	const columns = `from_entity AS "from", to_entity AS "to", relation_type AS type`;
+
+	if (limit <= 0) {
+		// Unbounded: still the UNION rewrite (both branches index-served), just
+		// without the ranking/truncation window.
+		return runner.all<{ from: string; to: string; type: string }>(
+			`SELECT ${columns} FROM relations WHERE repo = ? AND from_entity IN (${placeholders})
+			 UNION
+			 SELECT ${columns} FROM relations WHERE repo = ? AND to_entity IN (${placeholders})`,
+			[repo, ...entityNames, repo, ...entityNames]
+		);
+	}
+
+	// `confidence` is selected so the merge can rank on it, then dropped from
+	// the projection by the caller's row type — the KG-context payload shape
+	// ({ from, to, type }) is unchanged.
 	return runner.all<{ from: string; to: string; type: string }>(
-		`SELECT from_entity AS "from", to_entity AS "to", relation_type AS type
-		 FROM relations WHERE (from_entity IN (${placeholders}) OR to_entity IN (${placeholders})) AND repo = ?`,
-		[...entityNames, ...entityNames, repo]
+		`SELECT "from", "to", type FROM (
+		   SELECT * FROM (
+		     SELECT ${columns}, confidence FROM relations
+		     WHERE repo = ? AND from_entity IN (${placeholders})
+		     ORDER BY confidence DESC LIMIT ?
+		   )
+		   UNION
+		   SELECT * FROM (
+		     SELECT ${columns}, confidence FROM relations
+		     WHERE repo = ? AND to_entity IN (${placeholders})
+		     ORDER BY confidence DESC LIMIT ?
+		   )
+		 )
+		 ORDER BY confidence DESC, "from", "to"
+		 LIMIT ?`,
+		[repo, ...entityNames, limit, repo, ...entityNames, limit, limit]
 	);
 }
 
