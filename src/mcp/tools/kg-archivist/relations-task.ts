@@ -1,8 +1,10 @@
 import { randomUUID } from "crypto";
 import type { SQLiteStore } from "../../storage/sqlite";
 import { logger } from "../../utils/logger";
+import { KG_MAX_TASK_RELATION_ENTITIES } from "../../utils/constants";
 import { KG_RELATION_CONFIDENCE_SEMANTIC } from "./relations-conf";
 import { extractEntities, type ExtractedEntity } from "./extract";
+import { observationText } from "./observation-text";
 
 // ---------------------------------------------------------------------------
 // Task-specific semantic relations
@@ -20,6 +22,16 @@ import { extractEntities, type ExtractedEntity } from "./extract";
  * Observations: Each relation also generates an observation record to make
  * the linkage queryable via the KG query engine.
  * Failures are logged at `warn` level but never thrown.
+ *
+ * **Bounded cross-products (audit F13).** Both relation families are Cartesian
+ * products — `|task entities| × |parent entities|` and `|task entities| ×
+ * |decision refs|` — so an unbounded writer makes the edge cost quadratic in
+ * the entity count of two documents. Measured on a real corpus: 346 parented
+ * tasks produced 260,421 `depends_on` edges (20.2% of the entire graph), ~750
+ * edges per parent link. Both sides are therefore capped at
+ * `KG_MAX_TASK_RELATION_ENTITIES`; extraction order (people → places →
+ * organizations → nouns) means the retained slice keeps the most specific
+ * entity types.
  */
 export async function saveTaskRelations(
 	content: string,
@@ -48,8 +60,12 @@ export async function saveTaskRelations(
 	if (entities.length === 0) return;
 
 	const now = new Date().toISOString();
-	const entityNames = entities.map((e) => e.name);
-	const entityTypeByName = new Map(entities.map((e) => [e.name, e.type]));
+	// Bounded relation fan-out (audit F13): both sides of every cross-product
+	// are capped, so one task can add at most N² edges per parent link and
+	// N per decision ref.
+	const relationEntities = entities.slice(0, KG_MAX_TASK_RELATION_ENTITIES);
+	const entityNames = relationEntities.map((e) => e.name);
+	const entityTypeByName = new Map(relationEntities.map((e) => [e.name, e.type]));
 
 	// ── 1. parent_id → depends_on relations ──
 	if (options?.parentId) {
@@ -70,8 +86,19 @@ export async function saveTaskRelations(
 			}
 
 			if (parentEntities.length > 0) {
+				const parentSlice = parentEntities.slice(0, KG_MAX_TASK_RELATION_ENTITIES);
+				// The observation text MUST go through observationText() (audit
+				// F12 / TASK-045): the free-form `"depends_on relation: A → B"`
+				// texts this writer used to emit are unreachable by every
+				// deleter — `deleteObservationsAndOrphans` matches on
+				// `observationText(domain, title)` — so they leaked forever and
+				// pinned their entities against the orphan sweep. Anchoring on
+				// the task's own observation text also means the task's KG
+				// context now resolves these entities, which is the point of
+				// writing the observation at all.
+				const taskObservation = observationText("task", title);
 				for (const taskEntityName of entityNames) {
-					for (const parentEntity of parentEntities) {
+					for (const parentEntity of parentSlice) {
 						try {
 							// Upsert BOTH endpoints before the insert: the parent
 							// entities were extracted from ANOTHER document and may
@@ -91,7 +118,7 @@ export async function saveTaskRelations(
 							db.knowledgeGraph.insertObservation({
 								id: randomUUID(),
 								entity_name: taskEntityName,
-								observation: `depends_on relation: ${title} → ${parentTask.title}`,
+								observation: taskObservation,
 								repo,
 								owner: owner ?? "",
 								created_at: now
@@ -143,7 +170,7 @@ export async function saveTaskRelations(
 					db.knowledgeGraph.insertObservation({
 						id: randomUUID(),
 						entity_name: taskEntityName,
-						observation: `inspired_by relation: ${title} → ${decisionName}`,
+						observation: observationText("task", title),
 						repo,
 						owner: owner ?? "",
 						created_at: now
