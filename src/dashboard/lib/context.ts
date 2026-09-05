@@ -1,13 +1,18 @@
 import { MCPClient } from "../../mcp/client";
 import { SQLiteStore } from "../../mcp/storage/sqlite";
 import { RealVectorStore } from "../../mcp/storage/vectors";
+import { CapabilityAwareVectorStore } from "../../mcp/storage/lazy-vectors";
 import { EmbeddingWorker } from "../../mcp/embedding-queue";
+import { RuntimeCapabilityRegistry, setRuntimeCapabilities } from "../../mcp/runtime-capabilities";
 import { EMBEDDING_QUEUE_BACKFILL_CAP } from "../../mcp/utils/constants";
 import { logger } from "../../mcp/utils/logger";
 
 export const db = await SQLiteStore.create();
 export const mcpClient = new MCPClient();
-export const vectors = new RealVectorStore(db);
+const realVectors = new RealVectorStore(db);
+export const runtimeCapabilities = new RuntimeCapabilityRegistry();
+setRuntimeCapabilities(runtimeCapabilities);
+export const vectors = new CapabilityAwareVectorStore(realVectors, runtimeCapabilities);
 // Embedding/KG outbox worker (TASK-013): the dashboard shares the SQLite
 // queue_jobs table with the MCP server — atomic claims serialize work across
 // processes. Started by dashboard/server.ts.
@@ -25,10 +30,12 @@ export const vectors = new RealVectorStore(db);
 // the queue-depth gate (EMBEDDING_QUEUE_BACKFILL_MIN_QUEUE) prevents a deep
 // backlog being double-refilled. Set EMBEDDING_QUEUE_BACKFILL_CAP=0 to restore
 // single-owner (MCP-server-only) backfill.
-export const embeddingWorker = new EmbeddingWorker(db, vectors, { backfillCap: EMBEDDING_QUEUE_BACKFILL_CAP });
+export const embeddingWorker = new EmbeddingWorker(db, realVectors, { backfillCap: EMBEDDING_QUEUE_BACKFILL_CAP });
+runtimeCapabilities.register("semantic", async () => {
+	await realVectors.initialize();
+	embeddingWorker.start();
+});
+runtimeCapabilities.markReady("dashboard");
+if (runtimeCapabilities.profile === "full") void runtimeCapabilities.ensure("semantic");
 export const startTime = Date.now();
 export { logger };
-
-vectors.initialize().catch((err) => {
-	logger.warn("[Dashboard] Initial vector model loading failed. Will retry on first use.", { error: String(err) });
-});

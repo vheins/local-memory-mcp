@@ -38,20 +38,20 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		};
 	}
 
-	/** Insert an entity, ignoring duplicates (entities.name is the primary key). */
+	/** Insert an entity, ignoring duplicates within its `(name, repo)` identity. */
 	upsertEntity(params: UpsertEntityParams): void {
 		writeUpsertEntity(this.writerRunner, params);
 	}
 
 	/**
-	 * Insert a relation, ignoring duplicates (composite PK on from_entity, to_entity, relation_type).
+	 * Insert a relation, ignoring duplicates within `(from_entity, to_entity, relation_type, repo)`.
 	 */
 	upsertRelation(params: UpsertRelationParams): void {
 		writeUpsertRelation(this.writerRunner, params);
 	}
 
 	/**
-	 * Resolve-or-upsert BOTH endpoints (global PK) then insert the relation —
+	 * Resolve-or-upsert BOTH repository-scoped endpoints then insert the relation —
 	 * idempotent against orphan-swept endpoints (TASK-065 / MEM-473). ATOMIC
 	 * (TASK-067 fix #2 / TASK-072): both upserts + insert run in one BEGIN
 	 * IMMEDIATE (base.ts immediate, TASK-064 / MEM-475).
@@ -265,14 +265,9 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		writeCreateRelation(this.writerRunner, params);
 	}
 
-	/**
-	 * Fetch entity name/type rows for the given names. NOT repo-filtered —
-	 * `entities.name` is a global PK, so a repo predicate here filtered on
-	 * first-writer-wins rather than ownership and silently dropped entities
-	 * whose edges the response still shipped (audit F6 — see ./queries).
-	 */
-	getEntitiesFor(entityNames: string[]): Array<{ name: string; type: string }> {
-		return queries.getEntitiesFor(this.runner, entityNames);
+	/** Fetch entity name/type rows for names within one repository identity scope. */
+	getEntitiesFor(entityNames: string[], repo: string): Array<{ name: string; type: string }> {
+		return queries.getEntitiesFor(this.runner, entityNames, repo);
 	}
 
 	/**
@@ -305,23 +300,23 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	}
 
 	/** Whether an entity with the given name exists. */
-	entityExists(name: string): boolean {
-		return queries.entityExists(this.runner, name);
+	entityExists(name: string, repo: string): boolean {
+		return queries.entityExists(this.runner, name, repo);
 	}
 
-	/** Full entity row by name (dashboard detail). */
-	getEntityByName(name: string): KgEntityRow | undefined {
-		return queries.getEntityByName(this.runner, name);
+	/** Full entity row by name within a repository scope (dashboard detail). */
+	getEntityByName(name: string, repo: string): KgEntityRow | undefined {
+		return queries.getEntityByName(this.runner, name, repo);
 	}
 
-	/** Full relation rows touching the given entity (dashboard detail). */
-	getRelationsByName(name: string): KgRelationRow[] {
-		return queries.getRelationsByName(this.runner, name);
+	/** Full relation rows touching the given entity within a repository scope. */
+	getRelationsByName(name: string, repo: string): KgRelationRow[] {
+		return queries.getRelationsByName(this.runner, name, repo);
 	}
 
-	/** Full observation rows for the given entity (dashboard detail). */
-	getObservationsByName(name: string): KgObservationRow[] {
-		return queries.getObservationsByName(this.runner, name);
+	/** Full observation rows for the given entity within a repository scope. */
+	getObservationsByName(name: string, repo: string): KgObservationRow[] {
+		return queries.getObservationsByName(this.runner, name, repo);
 	}
 
 	/** Entities scoped to a repo with optional type/search filters (dashboard); supports pagination. */
@@ -410,28 +405,19 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		});
 	}
 
-	/**
-	 * Delete orphan entities GLOBALLY (repo-agnostic) — not referenced by ANY
-	 * observation or relation in ANY repo. TASK-043: safe ONLY from a
-	 * repo-agnostic maintenance pass (soul-maintenance).
-	 */
+	/** Delete repository-scoped entity rows with no same-repo observation or relation. */
 	deleteOrphanEntities(): number {
-		const result = this.run(`DELETE FROM entities WHERE name NOT IN (
-			SELECT DISTINCT entity_name FROM observations
-			UNION
-			SELECT DISTINCT from_entity FROM relations
-			UNION
-			SELECT DISTINCT to_entity FROM relations
-		)`);
+		const result = this.run(`DELETE FROM entities AS e WHERE
+			NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = e.name AND o.repo = e.repo)
+			AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.from_entity = e.name AND r.repo = e.repo)
+			AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.to_entity = e.name AND r.repo = e.repo)`);
 		return result.changes;
 	}
 
 	/**
-	 * Remove observations matching (text, repo) pairs — REPO-SCOPED — then
-	 * sweep orphan entities once — atomic. Cross-repo safety (TASK-043):
-	 * observation delete is repo-scoped, entity DELETE scoped to touched repos,
-	 * and the reference UNION is deliberately GLOBAL so a delete cannot
-	 * cascade across repos. `deleteOrphanEntities()` remains for maintenance.
+	 * Remove observations matching (text, repo) pairs, then sweep entities that
+	 * lost their last same-repo reference — atomic. Scoping is per repository,
+	 * so another repository's identically named entity is never affected.
 	 */
 	deleteObservationsAndOrphans(items: Array<{ text: string; repo: string }>): number {
 		return this.transaction(() => {
@@ -443,13 +429,10 @@ export class KnowledgeGraphEntity extends BaseEntity {
 			const repos = [...new Set(items.map((i) => i.repo))];
 			let orphanCount = 0;
 			if (repos.length > 0) {
-				const sweep = this.db.prepare(`DELETE FROM entities WHERE repo = ? AND name NOT IN (
-					SELECT DISTINCT entity_name FROM observations
-					UNION
-					SELECT DISTINCT from_entity FROM relations
-					UNION
-					SELECT DISTINCT to_entity FROM relations
-				)`);
+				const sweep = this.db.prepare(`DELETE FROM entities AS e WHERE e.repo = ?
+					AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = e.name AND o.repo = e.repo)
+					AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.from_entity = e.name AND r.repo = e.repo)
+					AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.to_entity = e.name AND r.repo = e.repo)`);
 				for (const repo of repos) {
 					orphanCount += sweep.run(repo).changes;
 				}
@@ -482,16 +465,15 @@ export class KnowledgeGraphEntity extends BaseEntity {
 	}
 
 	/** Delete a relation by its composite key (dashboard). Returns rows changed. */
-	deleteRelation(from_entity: string, to_entity: string, relation_type: string): { changes: number } {
-		return this.run("DELETE FROM relations WHERE from_entity = ? AND to_entity = ? AND relation_type = ?", [
-			from_entity,
-			to_entity,
-			relation_type
-		]);
+	deleteRelation(from_entity: string, to_entity: string, relation_type: string, repo: string): { changes: number } {
+		return this.run(
+			"DELETE FROM relations WHERE from_entity = ? AND to_entity = ? AND relation_type = ? AND repo = ?",
+			[from_entity, to_entity, relation_type, repo]
+		);
 	}
 
-	/** Delete an entity by name (dashboard). Observations/relations removed via FK ON DELETE CASCADE. */
-	deleteEntity(name: string): { changes: number } {
-		return this.run("DELETE FROM entities WHERE name = ?", [name]);
+	/** Delete one repository-scoped entity; observations/relations cascade through composite FKs. */
+	deleteEntity(name: string, repo: string): { changes: number } {
+		return this.run("DELETE FROM entities WHERE name = ? AND repo = ?", [name, repo]);
 	}
 }

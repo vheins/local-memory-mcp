@@ -59,10 +59,14 @@ import { handleTaskRead } from "./task-read";
 import { handleAgentContext } from "./agent-context";
 import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
+import { handleExplorationObservationWrite } from "./exploration-observation.write";
+import { handleExplorationObservationRead } from "./exploration-observation.read";
 import { McpResponse } from "../utils/mcp-response";
 import { toErrorResponse } from "../utils/mcp-error";
 import { logToolAction } from "../utils/action-log";
 import { collectAffectedResourceUris, WRITE_TOOLS } from "../utils/tool-plumbing";
+import { getRuntimeCapabilities, isSemanticToolDemand } from "../runtime-capabilities";
+import { reuseTelemetry } from "../utils/reuse-telemetry";
 
 // ── Tool definitions ────────────────────────────────────────────────────
 import { TOOL_DEFINITIONS } from "./tool-definitions";
@@ -161,7 +165,10 @@ export function buildExecutors(
 		"task-read": (args, db, vectors, _extra) => handleTaskRead(args, db, vectors),
 		"task-delete": (args, db, _vectors, _extra) => handleTaskDelete(args, db),
 
-		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
+		"agent-context": (args, db, vectors, _extra) =>
+			handleAgentContext(session.sessionId ? { ...args, session_id: session.sessionId } : args, db, vectors),
+		"observation-write": (args, db, _vectors, _extra) => handleExplorationObservationWrite(args, db),
+		"observation-read": (args, db, _vectors, _extra) => handleExplorationObservationRead(args, db),
 		// Codebase index tools — only 2 canonical names
 		"codebase-index": (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
 		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors)
@@ -234,6 +241,13 @@ export function registerAllTools(
 					signal: extra?.mcpReq?.signal
 				};
 
+				// Trigger lazy semantic startup only for calls that can use it. The
+				// capability-aware vector store still degrades to lexical results if
+				// the profile disables semantic search or initialization fails.
+				if (isSemanticToolDemand(toolName, normalizedArgs)) {
+					void getRuntimeCapabilities().ensure("semantic");
+				}
+
 				// Execute tool logic under write lock if needed.
 				//
 				// Lock-scope invariant (TASK-064 / MEM-475): handlers MUST NOT
@@ -272,16 +286,26 @@ export function registerAllTools(
 					// Instrumented on the error path too: a fast-failing tool
 					// must still show up in per-tool latency stats.
 					const errDurationMs = performance.now() - toolStartMs;
-					metrics.recordTool(toolName, errDurationMs);
+					metrics.recordTool(toolName, errDurationMs, "error");
 					logger.error(`[Tool] ${toolName} failed`, {
 						error: String(err),
 						durationMs: Math.round(errDurationMs * 100) / 100
 					});
-					return toCallToolResult(toErrorResponse(err));
+					const errorResponse = toErrorResponse(err);
+					logToolAction(store, toolName, normalizedArgs, errorResponse);
+					return toCallToolResult(errorResponse);
 				}
 
 				const durationMs = performance.now() - toolStartMs;
-				metrics.recordTool(toolName, durationMs);
+				const structured = result.structuredContent as { code?: unknown; degraded?: unknown } | undefined;
+				const outcome = result.isError
+					? structured?.code === "PARTIAL_FAILURE"
+						? "partial"
+						: "error"
+					: structured?.degraded === true
+						? "degraded"
+						: "success";
+				metrics.recordTool(toolName, durationMs, outcome);
 				logger.info(`[Tool] ${toolName} result`, {
 					repo: (normalizedArgs?.repo as string) || "unknown",
 					durationMs: Math.round(durationMs * 100) / 100
@@ -292,6 +316,15 @@ export function registerAllTools(
 				// lives in logToolAction (utils/action-log.ts) over
 				// ACTION_LOG_TOOLS (utils/tool-plumbing.ts), shared with router.ts.
 				logToolAction(store, toolName, normalizedArgs, result);
+				reuseTelemetry.recordTool({
+					owner: String(normalizedArgs.owner ?? ""),
+					repo: String(normalizedArgs.repo ?? "unknown"),
+					session: [session.sessionId, normalizedArgs.task_code ?? normalizedArgs.task_id ?? ""].join(":"),
+					toolName,
+					args: normalizedArgs,
+					result
+				});
+				reuseTelemetry.flushIfNeeded(store);
 
 				// Resource mutation notifications
 				const affectedUris = collectAffectedResourceUris(toolName, normalizedArgs, result);

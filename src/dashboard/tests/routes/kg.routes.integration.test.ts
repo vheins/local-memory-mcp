@@ -208,6 +208,14 @@ describe("Knowledge-graph routes", () => {
 			await expectJsonApiError(`${baseUrl}/api/kg/relations`, 400, /repo/);
 		});
 
+		it("GET /api/kg/entities/:name without repo returns 400", async () => {
+			await expectJsonApiError(`${baseUrl}/api/kg/entities/example`, 400, /repo/);
+		});
+
+		it("DELETE /api/kg/entities/:name without repo returns 400", async () => {
+			await expectJsonApiError(`${baseUrl}/api/kg/entities/example`, 400, /repo/, { method: "DELETE" });
+		});
+
 		it("GET /api/kg/graph without repo returns 400", async () => {
 			await expectJsonApiError(`${baseUrl}/api/kg/graph`, 400, /repo/);
 		});
@@ -220,21 +228,21 @@ describe("Knowledge-graph routes", () => {
 			);
 		});
 
-		it("POST /api/kg/entities without name returns 400", async () => {
-			await expectJsonApiError(`${baseUrl}/api/kg/entities`, 400, /name is required/, POST_JSON);
+		it("POST /api/kg/entities without identity fields returns 400", async () => {
+			await expectJsonApiError(`${baseUrl}/api/kg/entities`, 400, /name and repo are required/, POST_JSON);
 		});
 
-		it("POST /api/kg/relations without from/to/relation_type returns 400", async () => {
+		it("POST /api/kg/relations without identity fields returns 400", async () => {
 			await expectJsonApiError(
 				`${baseUrl}/api/kg/relations`,
 				400,
-				/from_entity, to_entity, and relation_type/,
+				/from_entity, to_entity, relation_type, and repo/,
 				POST_JSON
 			);
 		});
 
-		it("DELETE /api/kg/relations without from/to/relation_type returns 400", async () => {
-			await expectJsonApiError(`${baseUrl}/api/kg/relations`, 400, /from_entity, to_entity, and relation_type/, {
+		it("DELETE /api/kg/relations without identity fields returns 400", async () => {
+			await expectJsonApiError(`${baseUrl}/api/kg/relations`, 400, /from_entity, to_entity, relation_type, and repo/, {
 				method: "DELETE",
 				headers: { "content-type": "application/json" },
 				body: "{}"
@@ -244,11 +252,11 @@ describe("Knowledge-graph routes", () => {
 
 	describe("404 handling", () => {
 		it("GET /api/kg/entities/:name with an unknown name returns 404", async () => {
-			await expectJsonApiError(`${baseUrl}/api/kg/entities/does-not-exist`, 404, /Entity not found/);
+			await expectJsonApiError(`${baseUrl}/api/kg/entities/does-not-exist?repo=route-test`, 404, /Entity not found/);
 		});
 
 		it("DELETE /api/kg/entities/:name with an unknown name returns 404", async () => {
-			await expectJsonApiError(`${baseUrl}/api/kg/entities/does-not-exist`, 404, /Entity not found/, {
+			await expectJsonApiError(`${baseUrl}/api/kg/entities/does-not-exist?repo=route-test`, 404, /Entity not found/, {
 				method: "DELETE"
 			});
 		});

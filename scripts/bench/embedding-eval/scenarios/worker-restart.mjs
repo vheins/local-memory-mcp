@@ -1,6 +1,4 @@
-import fs from "fs";
 import path from "path";
-import os from "os";
 import { performance } from "node:perf_hooks";
 import { randomUUID } from "crypto";
 import { spawn } from "node:child_process";
@@ -22,7 +20,7 @@ function onceJsonReadyOrClose(proc) {
 		let out = "";
 		let errOut = "";
 		let settled = false;
-		const tryParse = (payload, code) => {
+		const tryParse = (payload) => {
 			const trimmed = payload.trim();
 			if (!trimmed) return null;
 			const lines = trimmed.split("\n").filter(Boolean);
@@ -30,7 +28,9 @@ function onceJsonReadyOrClose(proc) {
 				try {
 					const parsed = JSON.parse(lines[i]);
 					if (parsed.ok) return parsed;
-				} catch {}
+				} catch {
+					// Best-effort benchmark cleanup or process termination.
+				}
 			}
 			return null;
 		};
@@ -85,11 +85,11 @@ export async function measureScenarioWorkerRestart(tmpDir) {
 	} finally {
 		try {
 			seedDb.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup or process termination.
+		}
 	}
 	const enqueueAt = mems.map((m) => ({ id: m.id, t0: m.t0 }));
-	const ids = mems.map((m) => m.id);
-	const enqueueMap = new Map(enqueueAt.map((e) => [e.id, e.t0]));
 
 	const claimProc = spawnWorker(dbPath, "claim");
 	let claimRes;
@@ -103,12 +103,16 @@ export async function measureScenarioWorkerRestart(tmpDir) {
 				claimProc.kill("SIGKILL");
 				killedLiveWorker = true;
 				await new Promise((r) => claimProc.once("close", r));
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup or process termination.
+			}
 		}
 	} catch (e) {
 		try {
 			claimProc.kill("SIGKILL");
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup or process termination.
+		}
 		const pendingMid = (() => {
 			try {
 				const db = createBenchDb(dbPath);

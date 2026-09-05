@@ -92,14 +92,14 @@ describe("KG Archivist — saveTaskRelations FK integrity (TASK-065)", () => {
 
 		// First pass: ensureRelation upserts BOTH endpoints and inserts the edge.
 		await saveTaskRelations(CHILD_DESCRIPTION, CHILD_TITLE, "test", REPO, db, { parentId: parent.id });
-		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY, REPO)).toBeDefined();
 		expect(getDependsOn(CHILD_ENTITY, PARENT_ENTITY)).toBeDefined();
 
 		// Simulate the orphan sweep of the parent document's entities
 		// (deleteEntity cascades the depends_on edge away — the exact
 		// post-sweep state that used to flood FK warnings on reprocess).
-		db.knowledgeGraph.deleteEntity(PARENT_ENTITY);
-		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeUndefined();
+		db.knowledgeGraph.deleteEntity(PARENT_ENTITY, REPO);
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY, REPO)).toBeUndefined();
 		expect(getDependsOn(CHILD_ENTITY, PARENT_ENTITY)).toBeUndefined();
 
 		// Reprocessing the child after the sweep: ensureRelation must upsert
@@ -107,7 +107,7 @@ describe("KG Archivist — saveTaskRelations FK integrity (TASK-065)", () => {
 		const warnSpy = vi.spyOn(logger, "warn");
 		await saveTaskRelations(CHILD_DESCRIPTION, CHILD_TITLE, "test", REPO, db, { parentId: parent.id });
 
-		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY, REPO)).toBeDefined();
 		expect(getDependsOn(CHILD_ENTITY, PARENT_ENTITY)).toBeDefined();
 		const fkWarns = warnSpy.mock.calls.filter((call) => String(call[0]).includes("Failed to save depends_on relation"));
 		expect(fkWarns).toHaveLength(0);
@@ -137,7 +137,7 @@ describe("KG Archivist — saveTaskRelations FK integrity (TASK-065)", () => {
 			.prepare("SELECT COUNT(*) as cnt FROM relations WHERE relation_type = 'depends_on'")
 			.get() as { cnt: number };
 		expect(dependsOn.cnt).toBe(0);
-		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY)).toBeUndefined();
+		expect(db.knowledgeGraph.getEntityByName(PARENT_ENTITY, REPO)).toBeUndefined();
 	});
 });
 
@@ -195,8 +195,8 @@ describe("KnowledgeGraphEntity — ensureRelation atomicity (TASK-072)", () => {
 
 		// Rollback proof: neither endpoint survives the failed relation insert.
 		// Without the BEGIN IMMEDIATE wrapper these would have autocommitted.
-		expect(db.knowledgeGraph.getEntityByName("A")).toBeUndefined();
-		expect(db.knowledgeGraph.getEntityByName("B")).toBeUndefined();
+		expect(db.knowledgeGraph.getEntityByName("A", REPO)).toBeUndefined();
+		expect(db.knowledgeGraph.getEntityByName("B", REPO)).toBeUndefined();
 	});
 
 	it("nested inside an outer transaction, ensureRelation commits atomically via savepoints", () => {
@@ -231,10 +231,10 @@ describe("KnowledgeGraphEntity — ensureRelation atomicity (TASK-072)", () => {
 			.immediate();
 
 		// Both endpoint pairs and both edges committed atomically.
-		expect(db.knowledgeGraph.getEntityByName("A")).toBeDefined();
-		expect(db.knowledgeGraph.getEntityByName("B")).toBeDefined();
-		expect(db.knowledgeGraph.getEntityByName("C")).toBeDefined();
-		expect(db.knowledgeGraph.getEntityByName("D")).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("A", REPO)).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("B", REPO)).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("C", REPO)).toBeDefined();
+		expect(db.knowledgeGraph.getEntityByName("D", REPO)).toBeDefined();
 		expect(db.knowledgeGraph.listRelations(REPO)).toHaveLength(2);
 	});
 });

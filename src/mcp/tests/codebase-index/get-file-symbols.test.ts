@@ -104,7 +104,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.file).toBeDefined();
@@ -144,7 +144,7 @@ describe("handleCodebaseRead (file mode)", () => {
 		const repo = "test-repo";
 		const filePath = "src/ghost.ts";
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBe("File not indexed. Run index_repository first.");
@@ -161,7 +161,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			{ repo: repoA, file_path: filePath, name: "sharedFn", kind: "function", start_line: 1, end_line: 5 }
 		]);
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo: repoB, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo: repoB, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBe("File not indexed. Run index_repository first.");
@@ -202,7 +202,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.total).toBe(2);
@@ -223,7 +223,7 @@ describe("handleCodebaseRead (file mode)", () => {
 
 		seedFile(store, repo, filePath);
 
-		const response = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, repo, filePath }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.file).toBeDefined();
@@ -232,7 +232,7 @@ describe("handleCodebaseRead (file mode)", () => {
 	});
 
 	it("returns REPO_REQUIRED structured response on missing repo param", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, filePath: "src/test.ts" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.code).toBe("REPO_REQUIRED");
@@ -242,7 +242,7 @@ describe("handleCodebaseRead (file mode)", () => {
 	it("returns REPO_REQUIRED structured response on missing filePath param", async () => {
 		// Without filePath, it falls into status mode (no error), but with filePath it's file mode.
 		// File mode without repo returns a structured REPO_REQUIRED response.
-		const response = await handleCodebaseRead({ owner: "vheins", filePath: "src/test.ts" }, store, vectors);
+		const response = await handleCodebaseRead({ owner: "vheins", json: true, filePath: "src/test.ts" }, store, vectors);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.code).toBe("REPO_REQUIRED");
@@ -251,12 +251,16 @@ describe("handleCodebaseRead (file mode)", () => {
 
 	it("throws on empty repo", async () => {
 		await expect(
-			handleCodebaseRead({ owner: "vheins", repo: "", filePath: "src/test.ts" }, store, vectors)
+			handleCodebaseRead({ owner: "vheins", json: true, repo: "", filePath: "src/test.ts" }, store, vectors)
 		).rejects.toThrow();
 	});
 
 	it("falls back to architecture mode when filePath is empty", async () => {
-		const response = await handleCodebaseRead({ owner: "vheins", repo: "test-repo", filePath: "" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ owner: "vheins", json: true, repo: "test-repo", filePath: "" },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 		expect(data.mode).toBe("architecture");
 	});
@@ -278,7 +282,7 @@ describe("handleCodebaseRead (file mode)", () => {
 			},
 			{ repo, file_path: filePath, name: "plainFn", kind: "function", start_line: 10, end_line: 12 }
 		]);
-		const res = await handleCodebaseRead({ owner: "vheins", repo, filePath }, store, vectors);
+		const res = await handleCodebaseRead({ owner: "vheins", json: true, repo, filePath }, store, vectors);
 		const text = getPrimaryTextContent(res);
 		expect(text).toMatch(/doccedFn/);
 		expect(text).toMatch(/Does the thing/);

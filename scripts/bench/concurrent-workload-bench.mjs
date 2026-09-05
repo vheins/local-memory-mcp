@@ -26,7 +26,9 @@ function resourceSnapshot(dbPath) {
 	let heapBytes = null;
 	try {
 		heapBytes = process.memoryUsage().heapUsed;
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup.
+	}
 	let dbBytes = null;
 	let walBytes = null;
 	try {
@@ -37,7 +39,9 @@ function resourceSnapshot(dbPath) {
 			walBytes = 0;
 		}
 		dbBytes += walBytes;
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup.
+	}
 	return { heapBytes, dbBytes, walBytes };
 }
 
@@ -122,7 +126,9 @@ async function main() {
 		referenceSqliteVersion = probe.prepare("SELECT sqlite_version()").pluck().get();
 		referencePageSize = probe.pragma("page_size", { simple: true });
 		probe.close();
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup.
+	}
 	const seedForScenario = (db) => seedCorpus(db);
 	const scenarioFns = {
 		readers_only: measureScenarioReadersOnly,
@@ -171,15 +177,21 @@ async function main() {
 		let commitSha = null;
 		try {
 			commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim() || null;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		let branch = null;
 		try {
 			branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		let dirty = false;
 		try {
 			dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim().length > 0;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		const result = {
 			meta: {
 				task: "TASK-480",

@@ -28,7 +28,8 @@ describe("WRITE_TOOLS — write-lock membership", () => {
 				"standard-write",
 				"standard-delete",
 				"task-write",
-				"task-delete"
+				"task-delete",
+				"observation-write"
 			])
 		);
 	});

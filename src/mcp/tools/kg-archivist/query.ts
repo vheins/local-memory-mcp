@@ -53,7 +53,7 @@ export function kgQuery(db: SQLiteStore, repo: string, entityNames: string[], so
 		const capped = uniqueNames.slice(0, KG_MAX_CONTEXT_ENTITIES);
 
 		const entities = db.knowledgeGraph
-			.getEntitiesFor(capped)
+			.getEntitiesFor(capped, repo)
 			.map((e) => ({ name: e.name, type: e.type, source_domain: sourceDomain }));
 
 		const relations = db.knowledgeGraph.getRelationsFor(capped, repo);

@@ -63,7 +63,7 @@ describe("migration v24 relations confidence", () => {
 		const pk = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'relations'").get() as {
 			sql: string;
 		};
-		expect(pk.sql).toContain("PRIMARY KEY (from_entity, to_entity, relation_type)");
+		expect(pk.sql).toContain("PRIMARY KEY (from_entity, to_entity, relation_type, repo)");
 
 		// NO confidence index is added. PRAGMA index_list (repo pattern — see
 		// migrations.standards.test.ts) lists the named CREATE INDEX entries

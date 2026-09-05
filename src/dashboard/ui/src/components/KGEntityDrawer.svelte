@@ -5,11 +5,12 @@
 
 	export interface KGEntityDrawerProps {
 		entityName?: string;
+		repo: string;
 		onclose?: () => void;
 		onnavigate?: (name: string) => void;
 	}
 
-	let { entityName = "", onclose, onnavigate }: KGEntityDrawerProps = $props();
+	let { entityName = "", repo, onclose, onnavigate }: KGEntityDrawerProps = $props();
 
 	let show = $state(false);
 	let loading = $state(false);
@@ -25,11 +26,12 @@
 		created_at: string;
 	}> = $state([]);
 	let error = $state("");
-	let prevName = $state("");
+	let prevIdentity = $state("");
 
 	$effect(() => {
-		if (entityName && entityName !== prevName) {
-			prevName = entityName;
+		const identity = `${repo}\u0000${entityName}`;
+		if (entityName && identity !== prevIdentity) {
+			prevIdentity = identity;
 			void loadDetail(entityName);
 		} else if (!entityName) {
 			show = false;
@@ -44,7 +46,7 @@
 		relations = [];
 		observations = [];
 		try {
-			const data = await api.kgEntityDetail(name);
+			const data = await api.kgEntityDetail(name, repo);
 			entity = (data.entity as KgEntityDetail) || null;
 			relations = (data.relations || []) as Array<{
 				from_entity: string;

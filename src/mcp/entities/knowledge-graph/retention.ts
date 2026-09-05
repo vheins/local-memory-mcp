@@ -91,8 +91,8 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 			this.get<{ cnt: number }>(
 				`SELECT COUNT(*) AS cnt FROM relations r
 				 WHERE r.created_at < ?
-				   AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = r.from_entity)
-				   AND NOT EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_name = r.to_entity)`,
+				   AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = r.from_entity AND o.repo = r.repo)
+				   AND NOT EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_name = r.to_entity AND o2.repo = r.repo)`,
 				[cutoff]
 			)?.cnt ?? 0
 		);
@@ -104,23 +104,9 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 	 * Eligibility — BOTH must hold:
 	 *   - `created_at < cutoff` (age guard, so a freshly written edge is never
 	 *     racing the sweep), and
-	 *   - NEITHER endpoint appears in `observations` **in any repo**. Entity
-	 *     names are resolved exclusively through observations, so such an edge
-	 *     is unreachable from every entry point (`fetchKgContext`,
-	 *     `fetchAggregatedKgContext`, `fetchTaskKgContext` and the dashboard's
-	 *     entity detail all start from a name that came out of `observations`
-	 *     or `entity_names_fts`, and the latter only holds names that have an
-	 *     `entities` row — which the orphan sweep keeps only while an
-	 *     observation or relation references it).
-	 *
-	 * The endpoint check is deliberately repo-AGNOSTIC (`NOT EXISTS ... WHERE
-	 * entity_name = ?` with no `repo` predicate), matching
-	 * `deleteOrphanEntities`'s global UNION: a name observed in ANOTHER repo is
-	 * still a live name, and `entities.name` is a GLOBAL primary key, so a
-	 * repo-scoped check would delete edges whose endpoint is legitimately owned
-	 * by a different repo. Measured difference on a real database: repo-scoped
-	 * would have taken 576,674 edges, repo-agnostic takes 395,215 — the 181,459
-	 * difference is exactly the cross-repo-reachable set that must be kept.
+	 *   - NEITHER endpoint appears in `observations` in the SAME repo. Entity
+	 *     identity is `(name, repo)` since migration v33, so observations in a
+	 *     different repository cannot make this edge reachable.
 	 *
 	 * **Bounded by construction.** Every `DELETE` fires the v22 `kg_degrees`
 	 * triggers (2 UPDATEs + 1 conditional DELETE per row), so throughput is
@@ -149,7 +135,10 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 		// entirely. `idx_relations_created_at` (migration v29) makes this a
 		// single index probe (<1ms) instead of paying the correlated NOT EXISTS
 		// scan just to learn there is nothing to do.
-		if (this.get<{ present: number }>("SELECT 1 AS present FROM relations WHERE created_at < ? LIMIT 1", [cutoff]) === undefined) {
+		if (
+			this.get<{ present: number }>("SELECT 1 AS present FROM relations WHERE created_at < ? LIMIT 1", [cutoff]) ===
+			undefined
+		) {
 			return 0;
 		}
 
@@ -165,8 +154,8 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 		const deleteChunkSql = `DELETE FROM relations WHERE rowid IN (
 			   SELECT r.rowid FROM relations r
 			   WHERE r.created_at < ?
-			     AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = r.from_entity)
-			     AND NOT EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_name = r.to_entity)
+			     AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.entity_name = r.from_entity AND o.repo = r.repo)
+			     AND NOT EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_name = r.to_entity AND o2.repo = r.repo)
 			   LIMIT ?
 			 )`;
 

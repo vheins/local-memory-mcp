@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { CodingStandardEntry, VectorStore } from "../../types";
 import { SQLiteStore } from "../../storage/sqlite";
 import { createMcpResponse, McpResponse } from "../../utils/mcp-response";
+import { createMcpErrorResponse } from "../../utils/mcp-error";
 import { enqueueStandard } from "../../embedding-queue";
 import { StandardWriteParams, BulkResult, resolveStandardParentId, toContextSlug, generateNextCode } from "./shared";
 
@@ -103,23 +104,29 @@ export async function handleBulk(
 	const failed = results.filter((r) => !r.success);
 	const allOk = failed.length === 0;
 
-	return createMcpResponse(
-		{
-			success: allOk,
-			total: items.length,
-			processed: succeeded.length,
-			...(failed.length > 0 ? { errors: failed.map((r) => ({ index: r.index, error: r.error })) } : {}),
-			results: results.map((r) => ({
-				index: r.index,
-				operation: r.operation,
-				success: r.success,
-				...(r.id ? { id: r.id } : {}),
-				...(r.code ? { code: r.code } : {}),
-				...(r.title ? { title: r.title } : {}),
-				...(r.error ? { error: r.error } : {})
-			}))
-		},
-		`Processed ${succeeded.length}/${items.length} items${failed.length > 0 ? ` (${failed.length} failed)` : ""}.`,
-		{ includeJson: params.json }
-	);
+	const data = {
+		success: allOk,
+		total: items.length,
+		processed: succeeded.length,
+		...(failed.length > 0 ? { errors: failed.map((r) => ({ index: r.index, error: r.error })) } : {}),
+		results: results.map((r) => ({
+			index: r.index,
+			operation: r.operation,
+			success: r.success,
+			...(r.id ? { id: r.id } : {}),
+			...(r.code ? { code: r.code } : {}),
+			...(r.title ? { title: r.title } : {}),
+			...(r.error ? { error: r.error } : {})
+		}))
+	};
+	const summary = `Processed ${succeeded.length}/${items.length} items${failed.length > 0 ? ` (${failed.length} failed)` : ""}.`;
+	if (!allOk) {
+		return createMcpErrorResponse({
+			code: succeeded.length > 0 ? "PARTIAL_FAILURE" : "BULK_OPERATION_FAILED",
+			message: summary,
+			retryable: false,
+			data
+		});
+	}
+	return createMcpResponse(data, summary, { includeJson: params.json });
 }

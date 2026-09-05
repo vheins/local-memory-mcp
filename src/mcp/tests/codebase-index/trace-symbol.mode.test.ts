@@ -63,7 +63,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "authenticate", repo, owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ name: "authenticate", repo, owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeUndefined();
@@ -106,7 +110,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "authenticate", repo, owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ name: "authenticate", repo, owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toBeDefined();
@@ -130,7 +138,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 			}
 		]);
 
-		const response = await handleCodebaseRead({ name: "nonexistent", repo, owner: "vheins" }, store, vectors);
+		const response = await handleCodebaseRead(
+			{ name: "nonexistent", repo, owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const data = response.structuredContent as Record<string, unknown>;
 
 		expect(data.error).toContain("nonexistent");
@@ -170,7 +182,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "authenticate", repo, owner: "vheins", includeReferences: true },
+			{ name: "authenticate", repo, owner: "vheins", json: true, includeReferences: true },
 			store,
 			vectors
 		);
@@ -212,7 +224,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "authenticate", repo, owner: "vheins", includeReferences: false },
+			{ name: "authenticate", repo, owner: "vheins", json: true, includeReferences: false },
 			store,
 			vectors
 		);
@@ -267,7 +279,7 @@ describe("handleCodebaseRead (trace mode)", () => {
 		]);
 
 		const response = await handleCodebaseRead(
-			{ name: "authenticate", repo, owner: "vheins", includeReferences: true },
+			{ name: "authenticate", repo, owner: "vheins", json: true, includeReferences: true },
 			store,
 			vectors
 		);
@@ -322,7 +334,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 		]);
 
 		// Class trace → children list.
-		const classResponse = await handleCodebaseRead({ name: "UserService", repo, owner: "vheins" }, store, vectors);
+		const classResponse = await handleCodebaseRead(
+			{ name: "UserService", repo, owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const classData = classResponse.structuredContent as Record<string, unknown>;
 		expect(classData.error).toBeUndefined();
 		expect(classData.parent).toBeNull();
@@ -330,7 +346,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 		expect(children.map((c) => c.name).sort()).toEqual(["createUser", "deleteUser"]);
 
 		// Method trace → parent descriptor.
-		const methodResponse = await handleCodebaseRead({ name: "createUser", repo, owner: "vheins" }, store, vectors);
+		const methodResponse = await handleCodebaseRead(
+			{ name: "createUser", repo, owner: "vheins", json: true },
+			store,
+			vectors
+		);
 		const methodData = methodResponse.structuredContent as Record<string, unknown>;
 		expect(methodData.error).toBeUndefined();
 		expect(methodData.parent).toEqual({
@@ -371,11 +391,11 @@ describe("handleCodebaseRead (trace mode)", () => {
 				signature: "function nodocFn()"
 			}
 		]);
-		const docced = await handleCodebaseRead({ name: "doccedFn", repo, owner: "vheins" }, store, vectors);
+		const docced = await handleCodebaseRead({ name: "doccedFn", repo, owner: "vheins", json: true }, store, vectors);
 		expect(getPrimaryTextContent(docced)).toMatch(/Doc:/);
 		expect(getPrimaryTextContent(docced)).toMatch(/Does the docced thing/);
 
-		const nodoc = await handleCodebaseRead({ name: "nodocFn", repo, owner: "vheins" }, store, vectors);
+		const nodoc = await handleCodebaseRead({ name: "nodocFn", repo, owner: "vheins", json: true }, store, vectors);
 		expect(getPrimaryTextContent(nodoc)).not.toMatch(/Doc:/);
 	});
 });

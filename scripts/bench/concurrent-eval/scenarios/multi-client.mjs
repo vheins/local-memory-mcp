@@ -171,21 +171,29 @@ export async function measureScenarioMultiClient(tmpDir, seedCorpus) {
 		for (const worker of workers) {
 			try {
 				await worker.terminate();
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 		for (const child of children) {
 			try {
 				child.kill("SIGTERM");
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 		try {
 			primaryDb.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		barrier.close();
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }

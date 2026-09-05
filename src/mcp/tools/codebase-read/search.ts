@@ -182,9 +182,9 @@ async function handleSearchMode(
 	const rawQuery = (validated.query ?? "").trim();
 	if (rawQuery.length < 2) {
 		return createMcpResponse(
-			{ symbols: [], total: 0, hasMore: false, mode: "search" },
+			{ schema: "codebase-read", symbols: [], total: 0, hasMore: false, mode: "search" },
 			"Search query too short (minimum 2 characters)",
-			{ includeJson: true }
+			{ includeJson: validated.json }
 		);
 	}
 	// Defensive inline tag extraction (TASK-443): pull `key:value` filters out of
@@ -342,6 +342,7 @@ async function handleSearchMode(
 
 	return createMcpResponse(
 		{
+			schema: "codebase-read",
 			symbols: results,
 			related,
 			total,
@@ -354,7 +355,7 @@ async function handleSearchMode(
 			scope
 		},
 		`Found ${total} matching symbols for "${query}" (showing ${results.length}).`,
-		{ includeJson: true, contentSummary }
+		{ includeJson: validated.json, contentSummary }
 	);
 }
 

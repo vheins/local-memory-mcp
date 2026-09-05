@@ -221,6 +221,7 @@ export abstract class BaseEntity {
 			semantic_signature: row.semantic_signature ?? null,
 			semantic_source: row.semantic_source ?? null,
 			semantic_updated_at: row.semantic_updated_at ?? null,
+			source_fingerprint: row.source_fingerprint ?? null,
 			created_at: row.created_at,
 			updated_at: row.updated_at
 		};

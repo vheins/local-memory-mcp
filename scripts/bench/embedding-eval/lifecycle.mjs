@@ -1,9 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import { createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
 import { execSync } from "child_process";
-import { performance } from "node:perf_hooks";
 import { createBenchDb } from "./schema.mjs";
 import { contentHash } from "./fixtures.mjs";
 import { BATCH_SIZE, LEASE_MS, POISON_THRESHOLD, BACKOFF_BASE_MS, BACKOFF_MAX_MS } from "./constants.mjs";
@@ -16,11 +15,15 @@ export function withBenchDb(tmpDir, label, fn) {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup or callback isolation.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup or callback isolation.
+			}
 		}
 	}
 }
@@ -33,11 +36,15 @@ export async function withBenchDbAsync(tmpDir, label, fn) {
 	} finally {
 		try {
 			db.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup or callback isolation.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup or callback isolation.
+			}
 		}
 	}
 }
@@ -157,7 +164,7 @@ export function collectBenchRevision() {
 	const evalRoot = path.resolve("scripts/bench/embedding-eval");
 	const discovered = [];
 	const walk = (dir) => {
-		let entries = [];
+		let entries;
 		try {
 			entries = fs.readdirSync(dir, { withFileTypes: true });
 		} catch {
@@ -266,7 +273,9 @@ export async function drainAll(db, opts = {}) {
 			if (onVisible) {
 				try {
 					onVisible(job.entity_id, Date.now());
-				} catch {}
+				} catch {
+					// Best-effort benchmark cleanup or callback isolation.
+				}
 			}
 			totalProcessed++;
 		}

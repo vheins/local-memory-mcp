@@ -5,7 +5,7 @@
  *   F0  — bounded `co_mentioned` clique in `saveExtractions`
  *   F1  — `deleteStaleObservations` (parent-aware) + `deleteUnreachableRelations`
  *   F2  — `getRelationsFor` bounded UNION with confidence ranking
- *   F6  — `getEntitiesFor` is no longer repo-filtered (global entities PK)
+ *   F6  — `getEntitiesFor` resolves repository-scoped entity identities
  *   F8  — markdown-heading / ordinal entity names rejected
  *   F12 — relation writers emit contract-format observation text
  *   F13 — bounded task/standard relation cross-products
@@ -209,7 +209,7 @@ describe("KG audit F2 — getRelationsFor is bounded and confidence-ranked", () 
 // F6 — entities lookup must not be repo-filtered
 // ---------------------------------------------------------------------------
 
-describe("KG audit F6 — getEntitiesFor resolves entities owned by another repo", () => {
+describe("KG repository-scoped entity identity", () => {
 	let db: SQLiteStore;
 
 	beforeEach(async () => {
@@ -217,24 +217,23 @@ describe("KG audit F6 — getEntitiesFor resolves entities owned by another repo
 	});
 	afterEach(() => db.close());
 
-	it("finds an entity whose row was claimed first by a different repo", () => {
-		// repo-a wins the global PK for the common noun...
+	it("returns the repository-local row when names collide", () => {
 		seedEntity(db, "priority", "repo-a");
-		// ...and repo-b's INSERT OR IGNORE is silently dropped.
 		seedEntity(db, "priority", "repo-b");
 
-		const rows = db.knowledgeGraph.getEntitiesFor(["priority"]);
+		const rows = db.knowledgeGraph.getEntitiesFor(["priority"], "repo-b");
 
 		expect(rows).toHaveLength(1);
 		expect(rows[0].name).toBe("priority");
 	});
 
-	it("no longer drops entities while their edges are still shipped", () => {
+	it("returns every endpoint from the relation's repository", () => {
 		seedEntity(db, "priority", "repo-a");
+		seedEntity(db, "priority", "repo-b");
 		seedEntity(db, "section", "repo-b");
 		seedRelation(db, "priority", "section", { repo: "repo-b" });
 
-		const entities = db.knowledgeGraph.getEntitiesFor(["priority", "section"]);
+		const entities = db.knowledgeGraph.getEntitiesFor(["priority", "section"], "repo-b");
 		const relations = db.knowledgeGraph.getRelationsFor(["priority", "section"], "repo-b", 0);
 
 		// Every endpoint of every shipped edge is present in the entity payload.
@@ -246,7 +245,7 @@ describe("KG audit F6 — getEntitiesFor resolves entities owned by another repo
 	});
 
 	it("returns [] for an empty name set", () => {
-		expect(db.knowledgeGraph.getEntitiesFor([])).toEqual([]);
+		expect(db.knowledgeGraph.getEntitiesFor([], "repo-a")).toEqual([]);
 	});
 });
 
@@ -366,15 +365,15 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		expect(survivor.from_entity).toBe("observedA");
 	});
 
-	it("keeps an edge whose endpoint is observed in ANOTHER repo (global entity names)", () => {
+	it("prunes an edge when its endpoint is observed only in another repository", () => {
 		seedEntity(db, "sharedA", "repo-a", OLD);
+		seedEntity(db, "sharedA", "repo-b", OLD);
 		seedEntity(db, "sharedB", "repo-b", OLD);
-		// Observation lives in repo-a; the edge lives in repo-b.
 		seedObservation(db, "sharedA", observationText("memory", "Cross Memory"), "repo-a", OLD);
 		seedRelation(db, "sharedA", "sharedB", { repo: "repo-b", created_at: OLD });
 
-		expect(db.knowledgeGraph.deleteUnreachableRelations(NOW, 1000, 100)).toBe(0);
-		expect(countRelations(db)).toBe(1);
+		expect(db.knowledgeGraph.deleteUnreachableRelations(NOW, 1000, 100)).toBe(1);
+		expect(countRelations(db)).toBe(0);
 	});
 
 	it("respects the age guard — fresh edges are never swept", () => {
@@ -489,9 +488,11 @@ describe("KG audit F12/F13 — saveTaskRelations", () => {
 
 		await saveTaskRelations("Alice deployed Redis", "Child Task", OWNER, REPO, db, { parentId: parent.id });
 
-		const texts = (db.db.prepare("SELECT DISTINCT observation FROM observations").all() as Array<{
-			observation: string;
-		}>).map((r) => r.observation);
+		const texts = (
+			db.db.prepare("SELECT DISTINCT observation FROM observations").all() as Array<{
+				observation: string;
+			}>
+		).map((r) => r.observation);
 
 		expect(texts.length).toBeGreaterThan(0);
 		// Every row is matchable by deleteObservationsAndOrphans.

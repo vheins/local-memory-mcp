@@ -82,5 +82,7 @@ try {
 } finally {
 	try {
 		db.close();
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup.
+	}
 }

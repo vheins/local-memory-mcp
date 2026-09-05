@@ -332,6 +332,8 @@ export async function handleSearchMode(
 	}
 
 	const structuredData = buildTableResult(MEMORY_COLUMNS, rows, {
+		schema: "memory-read",
+		mode: "search",
 		count: paginatedResults.length,
 		total,
 		offset: params.offset,

@@ -80,6 +80,19 @@ async function connectServer() {
 }
 
 describe("SDK resource discovery (TASK-442 OpenCode compatibility)", () => {
+	it("keeps canonical tools discoverable through the SDK transport", async () => {
+		const { client, server, db } = await connectServer();
+		try {
+			const listed = await client.listTools();
+			expect(listed.tools.map((tool) => tool.name)).toContain("codebase-index");
+			expect(listed.tools.length).toBeGreaterThan(0);
+		} finally {
+			await client.close();
+			await server.close();
+			db.close();
+		}
+	});
+
 	it("advertises the resources capability in the initialize handshake", async () => {
 		const { client, server, db } = await connectServer();
 		try {

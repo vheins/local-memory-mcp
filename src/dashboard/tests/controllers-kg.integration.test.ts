@@ -58,7 +58,7 @@ describe("Dashboard Controllers — KG API", () => {
 		});
 
 		it("GET /api/kg/entities/nonexist returns 404", async () => {
-			const res = await fetch(`${baseUrl}/api/kg/entities/nonexist`);
+			const res = await fetch(`${baseUrl}/api/kg/entities/nonexist?repo=test-repo`);
 			expect(res.status).toBe(404);
 			const body = (await res.json()) as Record<string, any>;
 			expect(body.errors[0].detail).toMatch(/not found/i);
@@ -344,8 +344,7 @@ describe("Dashboard Controllers — KG API", () => {
 
 		it("reflects a relation created via the API immediately (cache invalidation)", async () => {
 			const repo = "kg-cache-inval";
-			// entities.name is a GLOBAL PK — prefix names with the repo so
-			// tests in the same process can never collide (TASK-268).
+			// Keep descriptive names for this cache invalidation fixture.
 			seedEntity(repo, `${repo}-hub`);
 			seedEntity(repo, `${repo}-leaf-a`);
 			seedEntity(repo, `${repo}-leaf-b`);
@@ -394,7 +393,6 @@ describe("Dashboard Controllers — KG API", () => {
 		it("legacy pageSize window ships only subset-bounded edges (both endpoints in window)", async () => {
 			const repo = "kg-subset-window";
 			// 5 entities → legacy default pageSize 20 returns all of them.
-			// Names are repo-prefixed (entities.name is a GLOBAL PK).
 			seedEntity(repo, `${repo}-hub`);
 			seedEntity(repo, `${repo}-node-a`);
 			seedEntity(repo, `${repo}-node-b`);

@@ -3,6 +3,7 @@ import {
 	createMcpResponse,
 	createTextOnlyResponse,
 	buildTableResult,
+	withEnvelope,
 	getPrimaryTextContent,
 	isMcpResponse,
 	McpContentSchema,
@@ -108,9 +109,11 @@ describe("createMcpResponse", () => {
 		expect(data).toEqual({ id: "1", hit_count: 9, title: "t" });
 	});
 
-	it("leaves content empty when summary and contentSummary are both blank", () => {
-		const response = createMcpResponse({ id: "1" }, "");
-		expect(response.content).toEqual([]);
+	it("keeps a concise non-empty text item when summaries are blank", () => {
+		const response = createMcpResponse({ id: "1" }, "", { includeJson: true });
+		expect(response.content).toEqual([
+			{ type: "text", text: "Request completed. Read structuredContent for machine-readable results." }
+		]);
 	});
 });
 
@@ -132,6 +135,7 @@ describe("buildTableResult", () => {
 	it("nests the table under key and merges schema, pagination and extra", () => {
 		const result = buildTableResult(["id"], [["1"]], {
 			schema: "task-read",
+			mode: "list",
 			key: "tasks",
 			total: 10,
 			offset: 5,
@@ -141,6 +145,7 @@ describe("buildTableResult", () => {
 		});
 		expect(result).toEqual({
 			schema: "task-read",
+			mode: "list",
 			query: "q",
 			tasks: { columns: ["id"], rows: [["1"]] },
 			count: 1,
@@ -162,6 +167,21 @@ describe("buildTableResult", () => {
 		expect(result.columns).toEqual(["id"]);
 		expect(result.columns).not.toBe(columns);
 		expect(result.rows).toBe(rows);
+	});
+});
+
+describe("withEnvelope", () => {
+	it("adds stable discriminators without duplicating or renaming legacy fields", () => {
+		const item = { id: "1", title: "kept-at-the-legacy-path" };
+		const result = withEnvelope("memory-read", "detail", { memory: item, stats: { hitCount: 2 } });
+
+		expect(result).toEqual({
+			schema: "memory-read",
+			mode: "detail",
+			memory: item,
+			stats: { hitCount: 2 }
+		});
+		expect(result).not.toHaveProperty("item");
 	});
 });
 

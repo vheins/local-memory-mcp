@@ -1,6 +1,7 @@
 import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { createMcpErrorResponse } from "../utils/mcp-error";
 import { collectEntityIds } from "../utils/auto-infer";
 import { purgeEntityAndCleanup } from "../utils/purge-entity-cleanup";
 import { logger } from "../utils/logger";
@@ -100,11 +101,14 @@ export async function handleStandardDelete(
 		responseData.totalAttempted = resolvedIds.length;
 	}
 
-	return createMcpResponse(
-		responseData,
-		`Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from "${lastRepo}"${deletedCodes.length > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`,
-		{
-			includeJson: json
-		}
-	);
+	const summary = `Deleted ${deletedCount} ${deletedCount === 1 ? "standard" : "standards"} from "${lastRepo}"${deletedCodes.length > 0 ? `: ${codeSample}` : ""}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}.`;
+	if (skippedCount > 0) {
+		return createMcpErrorResponse({
+			code: deletedCount > 0 ? "PARTIAL_FAILURE" : "BULK_OPERATION_FAILED",
+			message: summary,
+			retryable: false,
+			data: responseData
+		});
+	}
+	return createMcpResponse(responseData, summary, { includeJson: json });
 }

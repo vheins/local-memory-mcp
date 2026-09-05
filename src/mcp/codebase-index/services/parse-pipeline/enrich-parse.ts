@@ -72,7 +72,7 @@ export async function enrichParsedOutcome(
 	const { map, enriched } = await semanticPassFor(ctx, outcome, symbols);
 	const resolved: ResolvedSymbols = { symbols, semanticMap: map.size > 0 ? map : null, semanticEnriched: enriched };
 
-	const symbolRows = symbols.map((sym) => symbolRow(sym, ctx.repo, outcome.plan.filePath));
+	const symbolRows = symbols.map((sym) => symbolRow(sym, ctx.repo, outcome.plan.filePath, outcome.content));
 	const referenceInserts = buildReferenceRows(ctx, outcome);
 	return {
 		resolved,

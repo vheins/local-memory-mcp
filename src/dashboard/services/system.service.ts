@@ -10,6 +10,8 @@ import { getCachedRepoStats, setCachedRepoStats } from "./statsCache";
 import { TOOL_DEFINITIONS } from "../../mcp/types/tool-definitions";
 import { listResources } from "../../mcp/resources";
 import { PROMPTS } from "../../mcp/prompts/registry";
+import { getRuntimeCapabilities, type RuntimeCapabilitySnapshot } from "../../mcp/runtime-capabilities";
+import { reuseTelemetry } from "../../mcp/utils/reuse-telemetry";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -66,6 +68,7 @@ export interface CapabilitySet {
 	tools: Array<Record<string, unknown>>;
 	resources: Array<Record<string, unknown>>;
 	prompts: Array<Record<string, unknown>>;
+	runtime: RuntimeCapabilitySnapshot;
 }
 
 export const SystemService = {
@@ -108,9 +111,11 @@ export const SystemService = {
 	 * observational — no DB access, so callers skip the `db.refresh()`
 	 * lifecycle to keep high-frequency polling cheap.
 	 */
-	getMetrics(): Record<string, unknown> {
+	getMetrics(owner?: string, repo?: string, hours = 24): Record<string, unknown> {
 		const snapshot = metrics.snapshot();
 		const worker = embeddingWorker.getStats();
+		if (owner && repo && reuseTelemetry.isEnabled()) reuseTelemetry.flush(db);
+		const reuse = owner && repo && reuseTelemetry.isEnabled() ? db.reuseTelemetry.summarize(owner, repo, hours) : null;
 		return {
 			// NIT (OPT-OBS-01): explicit process marker so consumers can
 			// distinguish empty-by-design (tools/writeHandler are always empty
@@ -120,9 +125,11 @@ export const SystemService = {
 			uptimeSeconds: Math.floor((Date.now() - startTime) / 1000),
 			pid: process.pid,
 			tools: snapshot.tools,
+			toolOutcomes: snapshot.toolOutcomes,
 			writeHandler: snapshot.writeHandler,
 			embedLatency: snapshot.embedLatency,
-			worker
+			worker,
+			reuse
 		};
 	},
 
@@ -164,7 +171,7 @@ export const SystemService = {
 			id: prompt.name,
 			attributes: prompt
 		}));
-		return { tools, resources, prompts };
+		return { tools, resources, prompts, runtime: getRuntimeCapabilities().snapshot() };
 	},
 
 	/** Streams a full owner/repo export (memories → tasks → comments). */

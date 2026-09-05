@@ -1,4 +1,4 @@
-import { percentiles, throughput } from "../memory-eval/metrics.mjs";
+import { percentiles } from "../memory-eval/metrics.mjs";
 
 export function toLatencyStats(samples) {
 	if (!samples || samples.length === 0) return { p50: 0, p95: 0, p99: 0, mean: 0, min: 0, max: 0, n: 0 };

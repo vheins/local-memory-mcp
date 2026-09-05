@@ -252,7 +252,14 @@ describe("codebase-read multi-kind OR (TASK-445)", () => {
 		]);
 
 		const res = await handleCodebaseSearchMode(
-			{ query: "foo kind:function,class", owner: "", repo: "repok", offset: 0, limit: 10 } as CodebaseReadInput,
+			{
+				query: "foo kind:function,class",
+				owner: "",
+				repo: "repok",
+				offset: 0,
+				limit: 10,
+				json: true
+			} as CodebaseReadInput,
 			db,
 			vectors
 		);
@@ -268,7 +275,14 @@ describe("codebase-read multi-kind OR (TASK-445)", () => {
 			.mockReturnValue({ symbols: [], total: 0, hasMore: false });
 
 		await handleCodebaseSearchMode(
-			{ query: "foo kind:function,class", owner: "", repo: "repok", offset: 0, limit: 10 } as CodebaseReadInput,
+			{
+				query: "foo kind:function,class",
+				owner: "",
+				repo: "repok",
+				offset: 0,
+				limit: 10,
+				json: true
+			} as CodebaseReadInput,
 			db,
 			vectors
 		);

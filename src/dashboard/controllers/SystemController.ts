@@ -43,7 +43,16 @@ export class SystemController {
 			req,
 			res,
 			() => {
-				return jsonApiRes(SystemService.getMetrics(), "system-metrics");
+				const repoInput = req.query.repo as string | undefined;
+				let owner = req.query.owner as string | undefined;
+				let repo = repoInput;
+				if (!owner && repoInput?.includes("/")) {
+					const parsed = parseRepoInput(repoInput, undefined);
+					owner = parsed.owner;
+					repo = parsed.repo;
+				}
+				const hours = Math.max(1, Math.min(24 * 90, Number(req.query.hours) || 24));
+				return jsonApiRes(SystemService.getMetrics(owner, repo, hours), "system-metrics");
 			},
 			{ refresh: false }
 		);

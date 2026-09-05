@@ -26,8 +26,9 @@ export const migration: Migration = {
 		// write path (entity methods, dashboard raw inserts, orphan
 		// sweeps) lands on the entities table, so the triggers keep the
 		// index consistent without touching any call site. DELETE is
-		// cascade-safe: entities.name is the table PK, and the _ad trigger
-		// fires per deleted row regardless of the delete's origin.
+		// cascade-safe: the _ad trigger fires per deleted entity row regardless
+		// of the delete's origin. Migration v33 later widens identity to
+		// `(name, repo)` and recreates this FTS table and its triggers.
 		//
 		// Matching semantics (documented in getEntityNamesByText): FTS5
 		// unicode61 tokenization matches NAME TOKENS against search-text

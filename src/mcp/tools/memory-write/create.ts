@@ -44,8 +44,7 @@ export async function handleCreate(
 		db,
 		vectors,
 		isTaskArchive,
-		resolvedSupersedes,
-		json
+		resolvedSupersedes
 	);
 	if (conflict) {
 		return conflictResponse!;

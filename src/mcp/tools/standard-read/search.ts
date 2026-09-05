@@ -306,12 +306,13 @@ export async function handleSearchMode(
 
 	const responseData = buildTableResult(SEARCH_COLUMNS, rows, {
 		schema: "standard-read",
+		mode: "search",
 		key: "results",
 		count: paginatedResults.length,
 		total,
 		offset: validated.offset,
 		limit: validated.limit,
-		extra: { mode: "search", query: validated.query || "" }
+		extra: { query: validated.query || "" }
 	});
 
 	// Best-effort KG context (REFACTOR-KG-005) — gated on the json flag

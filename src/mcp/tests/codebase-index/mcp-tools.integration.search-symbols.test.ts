@@ -19,7 +19,11 @@ afterAll(() => {
 
 describe("handleCodebaseRead (search_symbols mode)", () => {
 	it("returns correct symbol for exact name match", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", query: "initializeApp", repo: REPO }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, query: "initializeApp", repo: REPO },
+			store,
+			vectors
+		);
 		const d = data(resp);
 		const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -30,7 +34,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	});
 
 	it("returns multiple ranked results for prefix query", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", query: "App", repo: REPO }, store, vectors);
+		const resp = await handleCodebaseRead({ owner: "vheins", json: true, query: "App", repo: REPO }, store, vectors);
 		const d = data(resp);
 		const symbols = d.symbols as Array<Record<string, unknown>>;
 
@@ -49,7 +53,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("kind filter returns only matching kind", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", query: "form", repo: REPO, kind: "function" },
+			{ owner: "vheins", json: true, query: "form", repo: REPO, kind: "function" },
 			store,
 			vectors
 		);
@@ -64,7 +68,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 	it("returns empty result for non-existent symbol", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", query: "zzzNonexistentSymbol", repo: REPO },
+			{ owner: "vheins", json: true, query: "zzzNonexistentSymbol", repo: REPO },
 			store,
 			vectors
 		);
@@ -78,7 +82,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 	it("pagination: limit + offset works correctly", async () => {
 		// Get page 1: limit 3
 		const page1 = await handleCodebaseRead(
-			{ owner: "vheins", query: "a", repo: REPO, limit: 3, offset: 0 },
+			{ owner: "vheins", json: true, query: "a", repo: REPO, limit: 3, offset: 0 },
 			store,
 			vectors
 		);
@@ -88,7 +92,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 
 		// Get page 2: offset 3, limit 3
 		const page2 = await handleCodebaseRead(
-			{ owner: "vheins", query: "a", repo: REPO, limit: 3, offset: 3 },
+			{ owner: "vheins", json: true, query: "a", repo: REPO, limit: 3, offset: 3 },
 			store,
 			vectors
 		);

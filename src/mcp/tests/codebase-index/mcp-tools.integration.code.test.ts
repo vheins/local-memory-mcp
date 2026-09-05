@@ -83,7 +83,7 @@ describe("handleCodebaseRead (code mode)", () => {
 
 	it("greps indexed file contents with enclosing-symbol enrichment", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: CODE_REPO, content: "greet", repoPath: tempDir },
+			{ owner: "vheins", json: true, repo: CODE_REPO, content: "greet", repoPath: tempDir },
 			store,
 			vectors
 		);
@@ -128,7 +128,7 @@ describe("handleCodebaseRead (code mode)", () => {
 
 	it("respects the language filter (no files of that language → empty result)", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: CODE_REPO, content: "greet", language: "markdown", repoPath: tempDir },
+			{ owner: "vheins", json: true, repo: CODE_REPO, content: "greet", language: "markdown", repoPath: tempDir },
 			store,
 			vectors
 		);
@@ -142,7 +142,7 @@ describe("handleCodebaseRead (code mode)", () => {
 
 	it("applies the code-mode default limit and pagination", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: CODE_REPO, content: "greet", limit: 2, repoPath: tempDir },
+			{ owner: "vheins", json: true, repo: CODE_REPO, content: "greet", limit: 2, repoPath: tempDir },
 			store,
 			vectors
 		);
@@ -156,7 +156,7 @@ describe("handleCodebaseRead (code mode)", () => {
 
 	it("empty content is a no-op (code mode, empty result — never a full dump)", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: CODE_REPO, content: "", repoPath: tempDir },
+			{ owner: "vheins", json: true, repo: CODE_REPO, content: "", repoPath: tempDir },
 			store,
 			vectors
 		);
@@ -168,43 +168,56 @@ describe("handleCodebaseRead (code mode)", () => {
 	});
 
 	it("missing repoPath → REPO_PATH_REQUIRED", async () => {
-		const resp = await handleCodebaseRead({ owner: "vheins", repo: CODE_REPO, content: "greet" }, store, vectors);
+		const resp = await handleCodebaseRead(
+			{ owner: "vheins", json: true, repo: CODE_REPO, content: "greet" },
+			store,
+			vectors
+		);
 		const d = data(resp);
 
-		expect(d.code).toBe("REPO_PATH_REQUIRED");
-		expect(d.error).toBeDefined();
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_PATH_REQUIRED", retryable: false });
 	});
 
 	it("non-existent repoPath → REPO_PATH_NOT_FOUND", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: CODE_REPO, content: "greet", repoPath: path.join(tempDir, "does-not-exist") },
+			{
+				owner: "vheins",
+				json: true,
+				repo: CODE_REPO,
+				content: "greet",
+				repoPath: path.join(tempDir, "does-not-exist")
+			},
 			store,
 			vectors
 		);
 		const d = data(resp);
 
-		expect(d.code).toBe("REPO_PATH_NOT_FOUND");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_PATH_NOT_FOUND", retryable: false });
 	});
 
 	it("unindexed repo → REPO_NOT_INDEXED", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: "never-indexed", content: "x", repoPath: tempDir },
+			{ owner: "vheins", json: true, repo: "never-indexed", content: "x", repoPath: tempDir },
 			store,
 			vectors
 		);
 		const d = data(resp);
 
-		expect(d.code).toBe("REPO_NOT_INDEXED");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "REPO_NOT_INDEXED", retryable: false });
 	});
 
 	it("invalid regex → INVALID_REGEX", async () => {
 		const resp = await handleCodebaseRead(
-			{ owner: "vheins", repo: CODE_REPO, content: "[", regex: true, repoPath: tempDir },
+			{ owner: "vheins", json: true, repo: CODE_REPO, content: "[", regex: true, repoPath: tempDir },
 			store,
 			vectors
 		);
 		const d = data(resp);
 
-		expect(d.code).toBe("INVALID_REGEX");
+		expect(resp.isError).toBe(true);
+		expect(d).toMatchObject({ schema: "tool-error", code: "INVALID_REGEX", retryable: false });
 	});
 });

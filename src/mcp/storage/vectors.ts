@@ -8,6 +8,7 @@ type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractio
 export class RealVectorStore implements VectorStore {
 	private db: SQLiteStore;
 	private extractor: FeatureExtractionPipeline | null = null;
+	private extractorPromise: Promise<FeatureExtractionPipeline> | null = null;
 	private modelName = "Xenova/all-MiniLM-L6-v2";
 	private transformersModule: typeof import("@xenova/transformers") | null = null;
 
@@ -34,11 +35,19 @@ export class RealVectorStore implements VectorStore {
 	}
 
 	private async getExtractor(): Promise<FeatureExtractionPipeline> {
-		if (!this.extractor) {
-			const tf = await this.getTransformers();
-			this.extractor = await tf.pipeline("feature-extraction", this.modelName);
-		}
-		return this.extractor;
+		if (this.extractor) return this.extractor;
+		if (this.extractorPromise) return this.extractorPromise;
+
+		this.extractorPromise = this.getTransformers()
+			.then((tf) => tf.pipeline("feature-extraction", this.modelName))
+			.then((extractor) => {
+				this.extractor = extractor;
+				return extractor;
+			})
+			.finally(() => {
+				this.extractorPromise = null;
+			});
+		return this.extractorPromise;
 	}
 
 	/**

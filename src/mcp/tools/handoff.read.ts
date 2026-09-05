@@ -1,5 +1,5 @@
 import { SQLiteStore } from "../storage/sqlite";
-import { buildTableResult, createMcpResponse, McpResponse } from "../utils/mcp-response";
+import { buildTableResult, createMcpResponse, McpResponse, withEnvelope } from "../utils/mcp-response";
 import { inferReadMode } from "../utils/auto-infer";
 import { HandoffReadSchema } from "./schemas/index";
 
@@ -93,7 +93,7 @@ function coreDetail(id: string, json: boolean, storage: SQLiteStore): McpRespons
 	const excerpt = handoff.summary.length > 60 ? handoff.summary.slice(0, 60) + "..." : handoff.summary;
 	const contentSummary = `Handoff [${id.slice(0, 8)}] "${excerpt}" — ${handoff.from_agent}→${handoff.to_agent || "unassigned"} (${handoff.status})`;
 
-	return createMcpResponse(handoff, contentSummary, {
+	return createMcpResponse(withEnvelope("handoff-read", "detail", handoff), contentSummary, {
 		contentSummary,
 		includeJson: json
 	});
@@ -135,6 +135,7 @@ function coreListClaims(
 
 	const structuredData = buildTableResult(COLUMNS, rows, {
 		schema: "claim-list",
+		mode: "claims",
 		key: "claims",
 		count: rows.length,
 		offset
@@ -159,6 +160,7 @@ function coreListHandoffs(
 	toAgent: string | undefined,
 	limit: number,
 	offset: number,
+	mode: "list" | "search",
 	json: boolean,
 	storage: SQLiteStore
 ): McpResponse {
@@ -201,6 +203,7 @@ function coreListHandoffs(
 
 	const structuredData = buildTableResult(COLUMNS, rows, {
 		schema: "handoff-read",
+		mode,
 		key: "handoffs",
 		count: rows.length,
 		offset
@@ -276,10 +279,10 @@ export async function handleHandoffRead(args: unknown, storage: SQLiteStore): Pr
 	// ── 3. query present → SEARCH handoffs ───────────────────────
 	if (mode === "search") {
 		requireOwnerRepo(owner, repo);
-		return coreListHandoffs(owner, repo, status, from_agent, to_agent, limit, offset, json, storage);
+		return coreListHandoffs(owner, repo, status, from_agent, to_agent, limit, offset, "search", json, storage);
 	}
 
 	// ── 4. Fallback → LIST HANDOFFS (no filters) ─────────────────
 	requireOwnerRepo(owner, repo);
-	return coreListHandoffs(owner, repo, status, from_agent, to_agent, limit, offset, json, storage);
+	return coreListHandoffs(owner, repo, status, from_agent, to_agent, limit, offset, "list", json, storage);
 }

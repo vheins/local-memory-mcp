@@ -88,7 +88,9 @@ export async function measureScenarioMixed(tmpDir, seedCorpus) {
 		let heapBytes = null;
 		try {
 			heapBytes = process.memoryUsage().heapUsed;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		let dbBytes = null;
 		let walBytes = null;
 		try {
@@ -100,7 +102,9 @@ export async function measureScenarioMixed(tmpDir, seedCorpus) {
 				walBytes = 0;
 			}
 			dbBytes += walBytes;
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		const elapsedMs = performance.now() - scenarioStart;
 		return {
 			latencies,
@@ -137,11 +141,15 @@ export async function measureScenarioMixed(tmpDir, seedCorpus) {
 	} finally {
 		try {
 			primaryDb.close();
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup.
+		}
 		for (const suffix of ["", "-wal", "-shm"]) {
 			try {
 				fs.unlinkSync(`${dbPath}${suffix}`);
-			} catch {}
+			} catch {
+				// Best-effort benchmark cleanup.
+			}
 		}
 	}
 }

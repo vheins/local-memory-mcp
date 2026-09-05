@@ -6,6 +6,8 @@ export type VectorResult = {
 export type VectorEntityKind = "memory" | "standard" | "task" | "codebase_symbol";
 
 export interface VectorStore {
+	initialize?(): Promise<void>;
+	embed?(texts: string[]): Promise<number[][]>;
 	upsert(id: string, text: string, kind?: VectorEntityKind): Promise<void>;
 	remove(id: string, kind?: VectorEntityKind): Promise<void>;
 	search(query: string, limit: number, repo?: string, kind?: VectorEntityKind): Promise<VectorResult[]>;

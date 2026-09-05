@@ -24,7 +24,8 @@ const mocks = vi.hoisted(() => {
 		actions: { getRecentActions: vi.fn() },
 		memories: { getAllMemoriesWithStats: vi.fn() },
 		tasks: { getTasksByRepo: vi.fn() },
-		taskComments: { getAllTaskCommentsByRepo: vi.fn() }
+		taskComments: { getAllTaskCommentsByRepo: vi.fn() },
+		reuseTelemetry: { summarize: vi.fn() }
 	};
 	return {
 		db,
@@ -73,6 +74,16 @@ vi.mock("../../../mcp/resources", () => ({
 			}
 		]
 	}))
+}));
+
+vi.mock("../../../mcp/runtime-capabilities", () => ({
+	getRuntimeCapabilities: () => ({
+		snapshot: () => ({
+			profile: "full",
+			capabilities: { semantic: { state: "ready" } },
+			footprint: { rss_bytes: 1024, heap_used_bytes: 512 }
+		})
+	})
 }));
 
 vi.mock("../../../mcp/prompts/registry", () => ({
@@ -182,6 +193,14 @@ describe("SystemService.getStats", () => {
 });
 
 describe("SystemService.getMetrics", () => {
+	it("includes a repo/time-window reuse summary when scoped", () => {
+		vi.mocked(mocks.embeddingWorker.getStats).mockReturnValue({ pending: 0, running: true });
+		vi.mocked(mocks.db.reuseTelemetry.summarize).mockReturnValue({ from: "from", to: "to", metrics: {} });
+		const result = SystemService.getMetrics("owner", "repo", 48);
+		expect(mocks.db.reuseTelemetry.summarize).toHaveBeenCalledWith("owner", "repo", 48);
+		expect(result.reuse).toEqual({ from: "from", to: "to", metrics: {} });
+	});
+
 	it("merges the runtime snapshot with the embedding worker stats", () => {
 		vi.mocked(mocks.embeddingWorker.getStats).mockReturnValue({ pending: 5, running: true });
 
@@ -191,9 +210,11 @@ describe("SystemService.getMetrics", () => {
 		expect(metrics.uptimeSeconds).toEqual(expect.any(Number));
 		expect(metrics.pid).toBe(process.pid);
 		expect(metrics.tools).toBeDefined();
+		expect(metrics.toolOutcomes).toBeDefined();
 		expect(metrics.writeHandler).toBeDefined();
 		expect(metrics.embedLatency).toBeDefined();
 		expect(metrics.worker).toEqual({ pending: 5, running: true });
+		expect(metrics.reuse).toBeNull();
 	});
 });
 
@@ -262,6 +283,11 @@ describe("SystemService.getCapabilities", () => {
 
 		expect(caps.prompts.map((p) => p.id)).toEqual(["greeter", "fallback"]);
 		expect(caps.prompts[0]).toMatchObject({ type: "prompt", id: "greeter" });
+		expect(caps.runtime).toMatchObject({
+			profile: "full",
+			capabilities: { semantic: { state: "ready" } },
+			footprint: { rss_bytes: 1024, heap_used_bytes: 512 }
+		});
 	});
 });
 

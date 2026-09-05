@@ -5,7 +5,7 @@ import path from "path";
 import { execSync } from "child_process";
 import { createRequire } from "module";
 import Database from "better-sqlite3";
-import { percentiles, throughput } from "./memory-eval/metrics.mjs";
+import { throughput } from "./memory-eval/metrics.mjs";
 import { BENCH_EPOCH_ISO } from "./memory-eval/corpus.mjs";
 import {
 	SEED,
@@ -46,19 +46,27 @@ async function main() {
 	let betterSqlite3Version = null;
 	try {
 		betterSqlite3Version = require("better-sqlite3/package.json").version;
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup or metadata collection.
+	}
 	let commitSha = null;
 	try {
 		commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim() || null;
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup or metadata collection.
+	}
 	let branch = null;
 	try {
 		branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup or metadata collection.
+	}
 	let dirty = false;
 	try {
 		dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim().length > 0;
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup or metadata collection.
+	}
 	const benchRevision = collectBenchRevision();
 	let referenceSqliteVersion = null;
 	let referencePageSize = null;
@@ -67,7 +75,9 @@ async function main() {
 		referenceSqliteVersion = probe.prepare("SELECT sqlite_version()").pluck().get();
 		referencePageSize = probe.pragma("page_size", { simple: true });
 		probe.close();
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup or metadata collection.
+	}
 	const scenarios = {};
 	const errors = [];
 	const run = async (name, fn) => {
@@ -228,7 +238,9 @@ async function main() {
 	} finally {
 		try {
 			fs.rmSync(tmpDir, { recursive: true, force: true });
-		} catch {}
+		} catch {
+			// Best-effort benchmark cleanup or metadata collection.
+		}
 	}
 }
 

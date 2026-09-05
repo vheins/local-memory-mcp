@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { formatZodError, parseArgs, toErrorResponse } from "../utils/mcp-error";
+import {
+	createMcpErrorResponse,
+	formatZodError,
+	parseArgs,
+	ToolError,
+	toErrorResponse
+} from "../utils/mcp-error";
 
 const ScopeSchema = z.object({
 	owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
@@ -9,16 +15,60 @@ const ScopeSchema = z.object({
 const SimpleSchema = z.object({ name: z.string().min(3) });
 
 describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
-	it("produces the Error: <message> envelope for a plain Error", () => {
-		const res = toErrorResponse(new Error("Task not found: abc"));
+	it("creates a machine-readable error envelope", () => {
+		const res = createMcpErrorResponse({
+			code: "PATH_NOT_FOUND",
+			message: "Repository path not found",
+			retryable: false,
+			details: { field: "repoPath" }
+		});
+
 		expect(res.isError).toBe(true);
-		expect(res.content?.[0]).toEqual({ type: "text", text: "Error: Task not found: abc" });
+		expect(res.content).toEqual([{ type: "text", text: "Repository path not found" }]);
+		expect(res.structuredContent).toEqual({
+			field: "repoPath",
+			schema: "tool-error",
+			code: "PATH_NOT_FOUND",
+			message: "Repository path not found",
+			retryable: false,
+			error: "Repository path not found",
+			details: { field: "repoPath" }
+		});
 	});
 
-	it("produces an isError envelope for a non-Error value", () => {
-		const res = toErrorResponse("boom");
+	it("preserves typed expected failures", () => {
+		const res = toErrorResponse(
+			new ToolError("TASK_NOT_FOUND", "Task not found: abc", { retryable: false, details: { task: "abc" } })
+		);
 		expect(res.isError).toBe(true);
-		expect(res.content?.[0]).toMatchObject({ type: "text", text: "Error: boom" });
+		expect(res.content?.[0]).toEqual({ type: "text", text: "Task not found: abc" });
+		expect(res.structuredContent).toMatchObject({
+			schema: "tool-error",
+			code: "TASK_NOT_FOUND",
+			retryable: false,
+			details: { task: "abc" }
+		});
+	});
+
+	it("sanitizes unknown Error messages", () => {
+		const res = toErrorResponse(new Error("SQLITE failure at /private/secret.db"));
+		expect(res.isError).toBe(true);
+		expect(res.content?.[0]).toEqual({ type: "text", text: "Internal tool error" });
+		expect(res.structuredContent).toEqual({
+			schema: "tool-error",
+			code: "INTERNAL_ERROR",
+			message: "Internal tool error",
+			retryable: false,
+			error: "Internal tool error"
+		});
+		expect(JSON.stringify(res)).not.toContain("secret.db");
+	});
+
+	it("sanitizes non-Error values", () => {
+		const res = toErrorResponse("boom /private/path");
+		expect(res.isError).toBe(true);
+		expect(res.structuredContent).toMatchObject({ code: "INTERNAL_ERROR" });
+		expect(JSON.stringify(res)).not.toContain("private/path");
 	});
 
 	it("formats Zod failures with the friendly Missing required fields text for owner/repo", () => {
@@ -39,7 +89,7 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 		}
 	});
 
-	it("toErrorResponse wraps a ZodError with the friendly message", () => {
+	it("toErrorResponse wraps a ZodError with the validation code", () => {
 		const result = ScopeSchema.safeParse({});
 		if (!result.success) {
 			const res = toErrorResponse(result.error);
@@ -47,6 +97,11 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 			expect(res.content?.[0]).toMatchObject({
 				type: "text",
 				text: expect.stringContaining("Missing required fields") as unknown
+			});
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "VALIDATION_ERROR",
+				retryable: false
 			});
 		}
 	});

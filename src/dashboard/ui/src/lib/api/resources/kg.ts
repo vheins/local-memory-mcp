@@ -29,9 +29,9 @@ export const kgApi = {
 		);
 	},
 
-	kgEntityDetail: (name: string) =>
+	kgEntityDetail: (name: string, repo: string) =>
 		apiFetch<{ entity: Record<string, unknown>; relations: unknown[]; observations: unknown[] }>(
-			`/api/kg/entities/${encodeURIComponent(name)}`
+			`/api/kg/entities/${encodeURIComponent(name)}?repo=${encodeURIComponent(repo)}`
 		),
 
 	kgEntities: (repo: string, params?: { type?: string; search?: string; page?: number; pageSize?: number }) => {
@@ -50,8 +50,10 @@ export const kgApi = {
 			body: JSON.stringify(body)
 		}),
 
-	kgDeleteEntity: (name: string) =>
-		apiFetch<{ success: boolean }>(`/api/kg/entities/${encodeURIComponent(name)}`, { method: "DELETE" }),
+	kgDeleteEntity: (name: string, repo: string) =>
+		apiFetch<{ success: boolean }>(`/api/kg/entities/${encodeURIComponent(name)}?repo=${encodeURIComponent(repo)}`, {
+			method: "DELETE"
+		}),
 
 	kgCreateRelation: (body: { from_entity: string; to_entity: string; relation_type: string; repo: string }) =>
 		apiFetch<{ success: boolean }>("/api/kg/relations", {
@@ -60,7 +62,7 @@ export const kgApi = {
 			body: JSON.stringify(body)
 		}),
 
-	kgDeleteRelation: (body: { from_entity: string; to_entity: string; relation_type: string }) =>
+	kgDeleteRelation: (body: { from_entity: string; to_entity: string; relation_type: string; repo: string }) =>
 		apiFetch<{ success: boolean }>("/api/kg/relations", {
 			method: "DELETE",
 			headers: { "Content-Type": "application/json" },

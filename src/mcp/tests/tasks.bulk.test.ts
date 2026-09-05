@@ -362,6 +362,7 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk Operations (create / l
 		});
 		// Partial failure returns isError with structuredContent containing results
 		expect(res.isError).toBe(true);
+		expect(res.structuredContent).toMatchObject({ schema: "tool-error", code: "PARTIAL_FAILURE" });
 		expect(res.structuredContent.createdCount).toBe(2);
 		expect(res.structuredContent.total).toBe(3);
 		expect(res.structuredContent.errors).toBeDefined();

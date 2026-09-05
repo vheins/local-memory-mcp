@@ -112,6 +112,7 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 				db.codebaseFiles.transferFile(repo, oldPath, newPath);
 				db.codebaseSymbols.transferSymbolsFilePath(repo, oldPath, newPath);
 				db.codebaseReferences.transferReferencesFilePath(repo, oldPath, newPath);
+				db.explorationObservations.transferEvidencePath(repo, oldPath, newPath);
 
 				// Purge the old-path queue job — the file record no longer
 				// exists under this entity id, so any pending job would re-run
@@ -160,6 +161,7 @@ export async function applyRenames(base: WriteBaseContext, renameMap: Map<string
 				if (symbols.length > 0 || refs.length > 0) {
 					enqueueCodebaseSymbols(db, repo, newPath, symbols, refs);
 				}
+				db.explorationObservations.refreshForFiles(repo, [newPath]);
 			}
 		});
 	}, "rename-transfer");
@@ -270,6 +272,10 @@ export async function writeParseBatch(
 					// still reverts the whole batch.
 					db.db
 						.transaction(() => {
+							// Mark every affected observation stale first. The bounded
+							// structural refresh below can promote unchanged evidence back to
+							// valid; rows beyond its cap remain conservatively stale.
+							db.explorationObservations.markFilesStale(repo, [...reindexedPaths], "file_reindexed");
 							for (const fp of reindexedPaths) {
 								db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
 							}
@@ -325,6 +331,7 @@ export async function writeParseBatch(
 									enqueueCodebaseSymbols(db, repo, fp, symbols ?? [], refs ?? []);
 								}
 							}
+							db.explorationObservations.refreshForFiles(repo, [...reindexedPaths]);
 						})
 						.immediate();
 				});
@@ -384,6 +391,7 @@ export async function cleanStaleFiles(base: WriteBaseContext, stalePaths: Set<st
 					const chunk = paths.slice(start, start + CLEANUP_TXN_CHUNK);
 					db.db
 						.transaction(() => {
+							db.explorationObservations.markFilesStale(repo, chunk, "file_deleted");
 							for (const fp of chunk) {
 								db.codebaseSymbols.deleteSymbolsByFile(repo, fp);
 								db.codebaseReferences.deleteReferencesByFile(repo, fp);

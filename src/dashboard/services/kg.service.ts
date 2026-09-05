@@ -44,17 +44,20 @@ export const KgService = {
 		return { items, total };
 	},
 
-	getEntity(name: string): {
+	getEntity(
+		name: string,
+		repo: string
+	): {
 		id: string;
 		entity: KgEntityRow;
 		relations: KgRelationRow[];
 		observations: KgObservationRow[];
 	} {
-		const entity = db.knowledgeGraph.getEntityByName(name);
+		const entity = db.knowledgeGraph.getEntityByName(name, repo);
 		if (!entity) throw new ServiceError(404, "Entity not found");
 
-		const relations = db.knowledgeGraph.getRelationsByName(name);
-		const observations = db.knowledgeGraph.getObservationsByName(name);
+		const relations = db.knowledgeGraph.getRelationsByName(name, repo);
+		const observations = db.knowledgeGraph.getObservationsByName(name, repo);
 
 		return { id: entity.name, entity, relations, observations };
 	},
@@ -129,10 +132,11 @@ export const KgService = {
 		name: string;
 		type?: string;
 		description?: string | null;
-		repo?: string;
+		repo: string;
 		owner?: string;
 	}): Promise<KgEntityRow> {
 		const { name, type, description, repo, owner } = attributes;
+		if (!repo) throw new ServiceError(400, "repo is required");
 
 		const now = new Date().toISOString();
 		// Invalidate cached graph payloads — dashboard-initiated mutations are
@@ -153,17 +157,17 @@ export const KgService = {
 			});
 		});
 
-		const entity = db.knowledgeGraph.getEntityByName(name);
+		const entity = db.knowledgeGraph.getEntityByName(name, repo || "");
 		return entity as KgEntityRow;
 	},
 
-	async deleteEntity(name: string): Promise<{ message: string; name: string }> {
+	async deleteEntity(name: string, repo: string): Promise<{ message: string; name: string }> {
 		clearKgGraphCache();
-		if (!db.knowledgeGraph.entityExists(name)) {
+		if (!db.knowledgeGraph.entityExists(name, repo)) {
 			throw new ServiceError(404, "Entity not found");
 		}
 
-		await db.withWrite(() => db.knowledgeGraph.deleteEntity(name));
+		await db.withWrite(() => db.knowledgeGraph.deleteEntity(name, repo));
 		return { message: "Deleted", name };
 	},
 
@@ -171,16 +175,17 @@ export const KgService = {
 		from_entity: string;
 		to_entity: string;
 		relation_type: string;
-		repo?: string;
+		repo: string;
 		owner?: string;
 	}): Promise<{ from_entity: string; to_entity: string; relation_type: string }> {
 		const { from_entity, to_entity, relation_type, repo, owner } = attributes;
 
-		if (!db.knowledgeGraph.entityExists(from_entity)) {
+		if (!repo) throw new ServiceError(400, "repo is required");
+		if (!db.knowledgeGraph.entityExists(from_entity, repo)) {
 			throw new ServiceError(400, `Source entity '${from_entity}' not found`);
 		}
 
-		if (!db.knowledgeGraph.entityExists(to_entity)) {
+		if (!db.knowledgeGraph.entityExists(to_entity, repo)) {
 			throw new ServiceError(400, `Target entity '${to_entity}' not found`);
 		}
 
@@ -208,9 +213,16 @@ export const KgService = {
 		return { from_entity, to_entity, relation_type };
 	},
 
-	async deleteRelation(from_entity: string, to_entity: string, relation_type: string): Promise<{ message: string }> {
+	async deleteRelation(
+		from_entity: string,
+		to_entity: string,
+		relation_type: string,
+		repo: string
+	): Promise<{ message: string }> {
 		clearKgGraphCache();
-		const result = await db.withWrite(() => db.knowledgeGraph.deleteRelation(from_entity, to_entity, relation_type));
+		const result = await db.withWrite(() =>
+			db.knowledgeGraph.deleteRelation(from_entity, to_entity, relation_type, repo)
+		);
 
 		if (result.changes === 0) {
 			throw new ServiceError(404, "Relation not found");

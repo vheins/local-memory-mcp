@@ -5,6 +5,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { db, mcpClient, logger, embeddingWorker } from "./lib/context";
 import { addLogSink, createFileSink } from "../mcp/utils/logger";
+import { reuseTelemetry } from "../mcp/utils/reuse-telemetry";
 import routes from "./routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -154,10 +155,6 @@ if (process.env.DASHBOARD_ENABLE_MCP === "true") {
 	mcpClient.start().catch((e) => logger.error("MCP Client failed", { error: e.message }));
 }
 
-// Start the embedding/KG outbox worker (TASK-013). Shares queue_jobs with the
-// MCP server; atomic claims + lease expiry keep the two workers safe.
-embeddingWorker.start();
-
 function startServer() {
 	const server = app.listen(PORT, HOST, () => {
 		const addr = server.address();
@@ -188,12 +185,14 @@ startServer();
 process.on("SIGINT", () => {
 	embeddingWorker.stop();
 	mcpClient.stop();
+	reuseTelemetry.flush(db);
 	db.close();
 	process.exit(0);
 });
 process.on("SIGTERM", () => {
 	embeddingWorker.stop();
 	mcpClient.stop();
+	reuseTelemetry.flush(db);
 	db.close();
 	process.exit(0);
 });

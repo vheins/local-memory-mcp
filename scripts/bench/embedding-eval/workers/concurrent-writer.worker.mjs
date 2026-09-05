@@ -23,7 +23,6 @@ try {
 		const id = `30000000-0000-4000-a000-${String(i + 1).padStart(12, "0")}`;
 		const mem = makeMemoryEntry(id, new Date(BENCH_EPOCH_MS + i * 10).toISOString(), 9000 + i);
 		let attempt = 0;
-		let done = false;
 		while (attempt < 3) {
 			const tPerf0 = performance.now();
 			const tWall0 = Date.now();
@@ -33,7 +32,6 @@ try {
 				writeLatencies.push(lat);
 				enqueues.push({ id, t0: tWall0, writer: writerIndex });
 				attemptsLog.push({ id, writer: writerIndex, contended: attempt > 0 });
-				done = true;
 				break;
 			} catch (e) {
 				const msg = String(e?.message || e);
@@ -50,8 +48,6 @@ try {
 				break;
 			}
 		}
-		if (!done && attempt >= 3) {
-		}
 	}
 	parentPort.postMessage({
 		ok: true,
@@ -66,5 +62,7 @@ try {
 } finally {
 	try {
 		db.close();
-	} catch {}
+	} catch {
+		// Best-effort benchmark cleanup.
+	}
 }
