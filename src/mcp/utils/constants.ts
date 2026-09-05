@@ -250,6 +250,50 @@ export const KG_MAX_CONTEXT_ENTITIES = envInt("KG_MAX_CONTEXT_ENTITIES", 50);
 // representative sample; the FTS query itself is LIMIT-capped downstream.
 export const KG_CONTEXT_TEXT_TOKENS = envInt("KG_CONTEXT_TEXT_TOKENS", 40);
 
+// Maximum relation rows returned by ONE KG-context enrichment lookup
+// (`getRelationsFor`). The entity-name set is already capped at
+// KG_MAX_CONTEXT_ENTITIES, but the EDGE fan-out of those names is not: a
+// 50-name window over a hub-heavy graph resolved 37,815 edges ≈ 737k JSON
+// chars ≈ 184k tokens in a single `memory-read` on a real 490k-edge repo —
+// larger than most model context windows, for a payload the caller only
+// ever samples. Edges are ranked by `confidence DESC` (migration v24) so
+// the retained window is the most trustworthy slice: parser-deterministic
+// codebase edges (0.9) and explicit/manual edges (1.0) outrank NLP
+// co-occurrence guesses (0.55). Env-overridable; `0` disables the cap.
+export const KG_MAX_CONTEXT_RELATIONS = envInt("KG_MAX_CONTEXT_RELATIONS", 500);
+
+// ── KG co-occurrence extraction bound (audit F0) ──────────────────────────
+// Maximum number of NLP-extracted entities per document that participate in
+// the `co_mentioned` co-occurrence clique built by `saveExtractions`.
+//
+// The pair count of a clique is N(N-1)/2, so the edge cost is QUADRATIC in
+// the entity count of a single document while the information value is not:
+// on a real corpus 1.6% of documents (those above 30 entities) produced
+// 91.5% of all co-occurrence edges, and one 292-entity file alone produced
+// 42,486 of them. Capping the clique at the first N entities (extraction
+// order: people → places → organizations → nouns, i.e. the most specific
+// entity types first) keeps every document's edges bounded at N(N-1)/2 while
+// leaving the entity + observation rows untouched — the cap applies ONLY to
+// the co-occurrence edge fan-out, never to what the graph knows about.
+//
+// Measured on a 19,117-document corpus: 97.1% of documents are below the
+// default cap and their edge sets are byte-identical; total co-occurrence
+// pairs drop 724,843 → 79,067 (9.2x). Env-overridable; `0` disables
+// co-occurrence edge generation entirely (entities/observations still saved).
+export const KG_MAX_COOCCURRENCE_ENTITIES = envInt("KG_MAX_COOCCURRENCE_ENTITIES", 16);
+
+// Maximum entities per side of the task↔parent `depends_on` cross-product
+// built by `saveTaskRelations` (audit F13). The writer links EVERY entity of
+// the child task to EVERY entity of its parent, so the edge cost is
+// |child| × |parent| per task — the same quadratic shape as the co-occurrence
+// clique, one step removed. Measured contribution on a real corpus: 260,421
+// `depends_on` edges (20.2% of the whole graph) from 346 parented tasks, i.e.
+// ~750 edges per parent link, one repo alone producing 136,960 edges from
+// 2,106 × 622 endpoints. Capping both sides bounds each link at N² edges while
+// keeping the most specific entity types (extraction order puts people /
+// places / organizations before generic noun phrases).
+export const KG_MAX_TASK_RELATION_ENTITIES = envInt("KG_MAX_TASK_RELATION_ENTITIES", 12);
+
 // ── Action log retention (OPT-PERF-05) ───────────────────────────────────
 // Row-count cap for action_log: the periodic soul-maintenance prune keeps at
 // most this many NEWEST rows, deleting the oldest tail beyond the cap (the
@@ -257,6 +301,40 @@ export const KG_CONTEXT_TEXT_TOKENS = envInt("KG_CONTEXT_TEXT_TOKENS", 40);
 // remaining rows are all recent. Env-overridable so operators can raise or
 // lower the audit window without code changes.
 export const ACTION_LOG_MAX_ROWS = envInt("ACTION_LOG_MAX_ROWS", 10_000);
+
+// ── KG retention (audit F1) ───────────────────────────────────────────────
+// `relations` had NO retention pass while `observations` was pruned at 7 days.
+// Because entity-name resolution goes exclusively through `observations`, an
+// edge whose endpoints lost every observation is permanently unreachable by
+// every read path — but still occupied disk and still pinned its endpoint
+// entities against the orphan sweep (which keeps any name referenced by a
+// relation). On a real database that was 395,215 unreachable edges and the
+// `relations` family had grown to 77% of total DB size.
+//
+// `pruneRelations` reclaims those edges. Age guard (days): an edge is only
+// eligible once it is older than this AND both endpoints are unobserved, so a
+// freshly written edge is never racing the sweep. 7 days matches the existing
+// observation-retention window, keeping one consistent lifecycle story for the
+// two halves of the same graph: an observation whose parent document is gone is
+// collected after 7 days, and an edge with no observed endpoint after 7 days.
+// The guard is what makes the sweep safe for `saveCodebaseRelations`, which can
+// write an edge whose TARGET entity only gains its observation when the target's
+// own file is indexed (minutes, not days).
+export const KG_RELATION_RETENTION_DAYS = envInt("KG_RELATION_RETENTION_DAYS", 7);
+
+// Per-run row cap for `pruneRelations`. Deleting an edge fires the v22
+// `kg_degrees` triggers, so bulk deletes cost ~14k rows/s: an unbounded sweep
+// of a 392k-row backlog measured 189s and held the write lock in multi-second
+// bursts. The prune therefore reclaims at most this many rows per maintenance
+// run (~4s, worst per-transaction lock hold ~250ms at the 2,000-row chunk
+// size) and converges over successive runs. `0` disables the prune.
+export const KG_RELATION_PRUNE_MAX_ROWS = envInt("KG_RELATION_PRUNE_MAX_ROWS", 50_000);
+
+// Rows deleted per `BEGIN IMMEDIATE` inside the prune. Bounds write-lock hold
+// time so a concurrent MCP server / dashboard / indexer writer is never
+// starved past busy_timeout (same discipline as EMBEDDING_QUEUE's
+// BACKFILL_TXN_CHUNK).
+export const KG_RELATION_PRUNE_CHUNK = envInt("KG_RELATION_PRUNE_CHUNK", 2_000);
 
 // ── Codebase ARCHITECTURE bounds (OPT-PERF-08) ───────────────────────────
 // Max number of top-level exports (exported symbols with no parent) returned
