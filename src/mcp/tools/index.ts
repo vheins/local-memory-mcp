@@ -59,6 +59,8 @@ import { handleTaskRead } from "./task-read";
 import { handleAgentContext } from "./agent-context";
 import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
+import { handleExplorationObservationWrite } from "./exploration-observation.write";
+import { handleExplorationObservationRead } from "./exploration-observation.read";
 import { McpResponse } from "../utils/mcp-response";
 import { toErrorResponse } from "../utils/mcp-error";
 import { logToolAction } from "../utils/action-log";
@@ -162,6 +164,8 @@ export function buildExecutors(
 		"task-delete": (args, db, _vectors, _extra) => handleTaskDelete(args, db),
 
 		"agent-context": (args, db, vectors, _extra) => handleAgentContext(args, db, vectors),
+		"observation-write": (args, db, _vectors, _extra) => handleExplorationObservationWrite(args, db),
+		"observation-read": (args, db, _vectors, _extra) => handleExplorationObservationRead(args, db),
 		// Codebase index tools — only 2 canonical names
 		"codebase-index": (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
 		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors)

@@ -45,3 +45,11 @@ export { IndexRepoSchema, IndexStatusSchema, CodebaseIndexSchema } from "./codeb
 
 export { CodebaseReadSchema } from "./codebase-read";
 export type { CodebaseReadInput, CodebaseReadMode } from "./codebase-read";
+
+export {
+	ExplorationEvidenceSchema,
+	ExplorationObservationItemSchema,
+	ExplorationObservationWriteSchema,
+	ExplorationObservationReadSchema
+} from "./exploration-observation";
+export type { ExplorationObservationWriteInput, ExplorationObservationReadInput } from "./exploration-observation";

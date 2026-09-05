@@ -129,5 +129,7 @@ describe("ADR Backward Compat Aliases — old names route to new handlers", () =
 		expect(names).toContain("memory-write");
 		expect(names).toContain("memory-read");
 		expect(names).toContain("task-write");
+		expect(names).toContain("observation-write");
+		expect(names).toContain("observation-read");
 	});
 });
