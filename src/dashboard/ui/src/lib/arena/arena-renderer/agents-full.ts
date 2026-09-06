@@ -1,5 +1,17 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba, lighten, darken, strHash, HAIR_COLORS, SKIN_TONES, PANT_COLORS } from "./utils";
+import {
+	arenaFont,
+	ARENA_TEXT_LABEL,
+	ARENA_TEXT_MICRO,
+	rr,
+	rgba,
+	lighten,
+	darken,
+	strHash,
+	HAIR_COLORS,
+	SKIN_TONES,
+	PANT_COLORS
+} from "./utils";
 import type { VisualAgent } from "../arenaTypes";
 import { drawHealthRing, drawStatusIcon, drawSpeechBubble, drawHair, drawFace, drawSelfHealingSpinner } from "./agents";
 
@@ -150,9 +162,12 @@ export function drawCharacter(rc: RenderCtx, agent: VisualAgent) {
 	ctx.fill();
 	ctx.restore();
 
-	// Neck
+	// Neck — rounded, not a hard 5x4 rectangle wedged between an elliptical
+	// head and a rounded torso. At the DPR-native resolution the sharp corners
+	// were the most visible remaining hard edge on the character.
 	ctx.fillStyle = skinTone;
-	ctx.fillRect(-2.5, -28, 5, 4);
+	rr(ctx, -2.5, -28, 5, 4, 1.5);
+	ctx.fill();
 
 	// Head
 	const headY = -38 + headBob;
@@ -269,7 +284,7 @@ export function drawCharacter(rc: RenderCtx, agent: VisualAgent) {
 			const zx = x + 5 + Math.cos(zt) * 5 + zt * 2;
 			const zy = y - 10 - zt * 8;
 			ctx.fillStyle = `rgba(150, 150, 200, ${alpha})`;
-			ctx.font = `bold ${8 + zt * 1.5}px monospace`;
+			ctx.font = arenaFont(ARENA_TEXT_MICRO + zt * 1.5, "bold", true);
 			ctx.fillText("Z", zx, zy);
 		}
 	}
@@ -281,7 +296,7 @@ export function drawCharacter(rc: RenderCtx, agent: VisualAgent) {
 
 	// Name label
 	ctx.fillStyle = isDark ? "rgba(226,232,240,0.82)" : "rgba(15,23,42,0.7)";
-	ctx.font = "7px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_LABEL);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 	const lbl = name.length > 12 ? name.slice(0, 12) + "…" : name;
@@ -290,7 +305,7 @@ export function drawCharacter(rc: RenderCtx, agent: VisualAgent) {
 	// Tool name label
 	if (agent.currentTool) {
 		ctx.fillStyle = isDark ? "#94a3b8" : "#64748b";
-		ctx.font = "7px monospace";
+		ctx.font = arenaFont(ARENA_TEXT_LABEL, undefined, true);
 		ctx.textAlign = "center";
 		ctx.textBaseline = "top";
 		ctx.fillText(`🔧 ${agent.currentTool}`, x, y + 20);

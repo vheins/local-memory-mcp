@@ -1,6 +1,6 @@
 // ── Shared agent rendering utilities + re-exports from sub-modules ────────
 import type { RenderCtx } from "./utils";
-import { rr, rgba, lighten, darken } from "./utils";
+import { arenaFont, ARENA_TEXT_BODY, ARENA_TEXT_MICRO, rr, rgba, lighten, darken } from "./utils";
 
 // ── Re-export full & simplified LOD ───────────────────────────────────────
 export { drawCharacter } from "./agents-full";
@@ -52,7 +52,7 @@ export function drawHealthRing(rc: RenderCtx, x: number, y: number, healthRing: 
 
 	ctx.fillStyle = ringColor;
 	ctx.globalAlpha = 0.85;
-	ctx.font = "bold 6px system-ui,monospace";
+	ctx.font = arenaFont(ARENA_TEXT_MICRO, "bold", true);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(`${Math.round(clamped)}`, x, ringY);
@@ -96,7 +96,7 @@ export function drawStatusIcon(
 	rr(ctx, x - pw / 2, iconY - 4, pw, 10, 4);
 	ctx.fill();
 
-	ctx.font = "8px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_BODY);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(icon, x, iconY + 1);
@@ -129,8 +129,8 @@ export function drawSpeechBubble(
 		remaining2 = remaining2.slice(maxCharsPerLine);
 	}
 
-	const fontSize = 9;
-	ctx.font = `${fontSize}px system-ui,sans-serif`;
+	const fontSize = ARENA_TEXT_BODY;
+	ctx.font = arenaFont(fontSize);
 
 	const lineHeight = fontSize + 3;
 	const paddingX = 8;

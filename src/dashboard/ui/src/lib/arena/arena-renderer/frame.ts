@@ -23,7 +23,9 @@ import {
 	pointInRect,
 	matchesAgentFilter,
 	matchesTaskFilter,
-	isFilterActive
+	isFilterActive,
+	getCanvasDpr,
+	getCanvasCssSize
 } from "./utils";
 import { drawGlobalFloor, drawRoom } from "./scene";
 import { drawCharacter, drawCharacterSimplified, drawCharacterAggregate } from "./agents";
@@ -74,7 +76,11 @@ function getViewportCullBounds(zoom: number, panX: number, panY: number, canvas:
 		m = z < 0.5 ? 100 : 50;
 	const l = -panX / z,
 		t = -panY / z;
-	return { left: l - m, top: t - m, right: l + canvas.width / z + m, bottom: t + canvas.height / z + m };
+	// CSS pixels, not the device-pixel backing store: pan/zoom are applied in
+	// CSS space, so using canvas.width here would over-extend the cull box by
+	// the DPR factor and defeat culling entirely on HiDPI displays.
+	const { w, h } = getCanvasCssSize(canvas);
+	return { left: l - m, top: t - m, right: l + w / z + m, bottom: t + h / z + m };
 }
 
 function isInViewport(x: number, y: number, b: { left: number; top: number; right: number; bottom: number }): boolean {
@@ -183,24 +189,23 @@ export function renderArenaFrame(args: ArenaFrameArgs): void {
 	if (!layout) return;
 	syncSections(caches, layoutManager);
 	const lod = (caches.currentLod = computeLOD(z));
-	const rc = makeCtx(
-		ctx,
-		canvas.width,
-		canvas.height,
-		isDark,
-		ts,
-		z,
-		px,
-		py,
-		lod,
-		hoveredId,
-		reducedMotion,
-		reducedTransparency
-	);
+	// The backing store is DPR-scaled; every coordinate below is in CSS pixels.
+	// A single base transform maps one space onto the other, so no drawing
+	// routine has to know the ratio exists.
+	const dpr = getCanvasDpr(canvas);
+	const css = getCanvasCssSize(canvas);
+	const rc = makeCtx(ctx, css.w, css.h, isDark, ts, z, px, py, lod, hoveredId, reducedMotion, reducedTransparency);
 
+	ctx.setTransform(1, 0, 0, 1, 0, 0);
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 	ctx.fillStyle = isDark ? "#0a0e1a" : "#dde3ed";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	// Bilinear filtering for any gradient/pattern resampling. Without this the
+	// browser may pick nearest-neighbour, which reintroduces hard pixel edges —
+	// the exact artefact the DPR fix is meant to remove.
+	ctx.imageSmoothingEnabled = true;
+	ctx.imageSmoothingQuality = "high";
+	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 	ctx.save();
 	ctx.translate(px, py);

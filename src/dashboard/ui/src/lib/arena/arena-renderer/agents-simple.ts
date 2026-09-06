@@ -1,5 +1,5 @@
 import type { RenderCtx } from "./utils";
-import { rgba, lighten, darken, strHash } from "./utils";
+import { arenaFont, ARENA_TEXT_LABEL, rgba, lighten, darken, strHash } from "./utils";
 import type { VisualAgent } from "../arenaTypes";
 import { drawHealthRing } from "./agents";
 
@@ -87,7 +87,7 @@ export function drawCharacterSimplified(rc: RenderCtx, agent: VisualAgent) {
 
 	// Name
 	ctx.fillStyle = isDark ? "rgba(226,232,240,0.82)" : "rgba(15,23,42,0.7)";
-	ctx.font = "7px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_LABEL);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 	ctx.fillText(name.length > 12 ? name.slice(0, 12) + "…" : name, x, drawY + 10);

@@ -5,7 +5,7 @@
  */
 
 import type { RenderCtx } from "./utils";
-import { rgba } from "./utils";
+import { arenaFont, ARENA_TEXT_MICRO, rgba } from "./utils";
 import type { SectionVisual, ZoneRect } from "../arenaTypes";
 import type { ArenaLayoutManager } from "../arena-layout/ArenaLayoutManager";
 import {
@@ -51,7 +51,7 @@ export function drawCooldownRing(
 	ctx.restore();
 	ctx.fillStyle = color;
 	ctx.globalAlpha = 0.8;
-	ctx.font = "bold 5px system-ui,monospace";
+	ctx.font = arenaFont(ARENA_TEXT_MICRO, "bold", true);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(`${Math.round(clamped * 100)}%`, x, y + 1);

@@ -54,6 +54,55 @@ export function tileNoise(x: number, y: number): number {
 	return Math.abs(Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1;
 }
 
+// ─── HiDPI ─────────────────────────────────────────────────────────────────
+/**
+ * Device-pixel ratio the canvas backing store was allocated at.
+ *
+ * The backing store (`canvas.width/height`) is sized in DEVICE pixels so the
+ * scene renders at native panel resolution, while every other coordinate in
+ * the arena — world positions, pan offsets, hit tests, cull bounds — is in CSS
+ * pixels. Deriving the ratio from the element itself keeps the two spaces
+ * reconciled without threading a `dpr` prop through the whole renderer, and it
+ * stays correct if the user drags the window to a display with a different
+ * ratio. Falls back to 1 before layout, when clientWidth is still 0.
+ */
+export function getCanvasDpr(canvas: HTMLCanvasElement): number {
+	const cssW = canvas.clientWidth;
+	if (!cssW) return 1;
+	const ratio = canvas.width / cssW;
+	return ratio > 0 ? ratio : 1;
+}
+
+/** Canvas size in CSS pixels — the space all arena coordinates live in. */
+export function getCanvasCssSize(canvas: HTMLCanvasElement): { w: number; h: number } {
+	const dpr = getCanvasDpr(canvas);
+	return { w: canvas.width / dpr, h: canvas.height / dpr };
+}
+
+// ─── Canvas typography scale ───────────────────────────────────────────────
+/**
+ * Four sizes, one stack. The arena previously carried 18 distinct font
+ * declarations between 4.5px and 10px — below the ~9px legibility floor, so
+ * labels were decoration rather than information, and no two panels agreed on
+ * a size. These are the only sizes any arena draw routine should use.
+ *
+ * Sizes are in CSS pixels at zoom 1; the viewport transform scales them, and
+ * the DPR transform renders them at native resolution.
+ */
+export const ARENA_FONT_STACK = "system-ui,-apple-system,'Segoe UI',sans-serif";
+export const ARENA_FONT_MONO = "ui-monospace,SFMono-Regular,Menlo,monospace";
+
+export const ARENA_TEXT_TITLE = 13;
+export const ARENA_TEXT_BODY = 11;
+export const ARENA_TEXT_LABEL = 10;
+export const ARENA_TEXT_MICRO = 9;
+
+/** Build a canvas font string from the scale. `weight` omitted = regular. */
+export function arenaFont(size: number, weight?: "bold", mono = false): string {
+	const stack = mono ? ARENA_FONT_MONO : ARENA_FONT_STACK;
+	return weight ? `${weight} ${size}px ${stack}` : `${size}px ${stack}`;
+}
+
 // ─── Canvas rounded-rect helper ────────────────────────────────────────────
 /**
  * Path a rounded rectangle. Degenerate-rect safe: transiently negative or

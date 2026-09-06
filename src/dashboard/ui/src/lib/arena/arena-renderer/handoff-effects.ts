@@ -9,6 +9,7 @@ import type { VisualAgent } from "../arenaTypes";
 import { drawWheelchair, drawStretcher } from "./vehicles";
 import { drawHelperCharacter, drawPassiveAgent } from "./characters";
 import { drawRollingSFX } from "./trail-effects";
+import { arenaFont, ARENA_TEXT_LABEL } from "./utils";
 
 // ── Handoff dotted trail path ──────────────────────────────────────────
 export function drawHandoffTrail(rc: RenderCtx, agent: VisualAgent) {
@@ -114,7 +115,7 @@ export function drawHandoffGroup(rc: RenderCtx, agent: VisualAgent) {
 
 	// Name label
 	ctx.fillStyle = isDark ? "rgba(226,232,240,0.82)" : "rgba(15,23,42,0.7)";
-	ctx.font = "7px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_LABEL);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 	const lbl = agent.name.length > 12 ? agent.name.slice(0, 12) + "…" : agent.name;
@@ -123,7 +124,7 @@ export function drawHandoffGroup(rc: RenderCtx, agent: VisualAgent) {
 
 	if (agent.currentTool) {
 		ctx.fillStyle = isDark ? "#94a3b8" : "#64748b";
-		ctx.font = "7px monospace";
+		ctx.font = arenaFont(ARENA_TEXT_LABEL, undefined, true);
 		ctx.textAlign = "center";
 		ctx.textBaseline = "top";
 		ctx.fillText(`🔧 ${agent.currentTool}`, x, nameY + 8);

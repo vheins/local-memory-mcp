@@ -68,8 +68,10 @@ export function drawHelperCharacter(
 
 	if (variant === "male_nurse" || variant === "female_nurse") {
 		ctx.fillStyle = "rgba(255,255,255,0.5)";
-		ctx.fillRect(-1, -17, 2, 5);
-		ctx.fillRect(-2.5, -15.5, 5, 2);
+		rr(ctx, -1, -17, 2, 5, 0.75);
+		ctx.fill();
+		rr(ctx, -2.5, -15.5, 5, 2, 0.75);
+		ctx.fill();
 	}
 
 	ctx.save();
@@ -96,7 +98,8 @@ export function drawHelperCharacter(
 	ctx.restore();
 
 	ctx.fillStyle = skinColor;
-	ctx.fillRect(-2, -22, 4, 3);
+	rr(ctx, -2, -22, 4, 3, 1.25);
+	ctx.fill();
 
 	const headY = -29 + headBob;
 	ctx.fillStyle = skinColor;
@@ -114,8 +117,10 @@ export function drawHelperCharacter(
 		rr(ctx, -5, headY - 8, 10, 5, 2);
 		ctx.fill();
 		ctx.fillStyle = "#ef4444";
-		ctx.fillRect(-1, headY - 7, 2, 3);
-		ctx.fillRect(-2, headY - 6, 4, 1);
+		rr(ctx, -1, headY - 7, 2, 3, 0.5);
+		ctx.fill();
+		rr(ctx, -2, headY - 6, 4, 1, 0.5);
+		ctx.fill();
 	}
 
 	if (facing !== "up") {

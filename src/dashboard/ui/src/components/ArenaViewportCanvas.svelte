@@ -71,11 +71,19 @@
 		if (!canvas || !wrapEl) return;
 		const w = wrapEl.clientWidth || 960;
 		const h = Math.max(520, Math.min(window.innerHeight - 220, 800));
-		const key = `${w}x${h}`;
+		// Backing store is sized in DEVICE pixels, the element in CSS pixels.
+		// Previously both were CSS pixels, so on any HiDPI display (dpr 2 or 3)
+		// the browser upscaled a 1x bitmap to the physical panel — every drawn
+		// pixel doubled, which is the entire source of the "blocky" look. The
+		// ratio is capped at 3 so a dpr-4 device can't allocate a 4x buffer.
+		const dpr = Math.min(window.devicePixelRatio || 1, 3);
+		const key = `${w}x${h}@${dpr}`;
 		if (key === lastInitKey) return;
 		lastInitKey = key;
-		canvas.width = w;
-		canvas.height = h;
+		canvas.width = Math.round(w * dpr);
+		canvas.height = Math.round(h * dpr);
+		canvas.style.width = `${w}px`;
+		canvas.style.height = `${h}px`;
 		// The shared ArenaLayoutManager (module singleton) is the single source
 		// of truth for geometry — the scene transform (buildArenaScene) and the
 		// renderer both consume this same instance, so baked task positions and

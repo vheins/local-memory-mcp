@@ -1,5 +1,5 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba, lighten } from "./utils";
+import { arenaFont, ARENA_TEXT_LABEL, ARENA_TEXT_MICRO, rr, rgba, lighten } from "./utils";
 import type { VisualTask } from "../arenaTypes";
 import { drawMonitorActivity } from "./effects";
 export { drawZoneAggregate } from "./workstation-overlay";
@@ -21,10 +21,14 @@ export function drawWorkstation(
 	const color = zoneColor ?? "#64748b";
 	const active = !!task.claimedByAgentId;
 	const blocked = !!task.blockedReason;
-	const DW = 50,
-		DH = 14,
-		SW = 34,
-		SH = 20;
+	// Desk/monitor scaled up with the grid cell (MIN_CELL_W 58 -> 96). The old
+	// 50x14 desk only ever housed 4.5-6px text; at the legible type scale the
+	// monitor has to be big enough for a task code and a title to sit inside it
+	// rather than spilling over the desk edge.
+	const DW = 78,
+		DH = 20,
+		SW = 56,
+		SH = 32;
 	const drawX = x + (!reducedMotion && blocked ? Math.sin(ts * 0.003) * 2 : 0);
 
 	// Chair
@@ -151,7 +155,7 @@ export function drawWorkstation(
 		rr(ctx, drawX - SW / 2 - bw + 2, mY + 5, bw, 9, 4);
 		ctx.fill();
 		ctx.fillStyle = "#ffffff";
-		ctx.font = "5.5px monospace";
+		ctx.font = arenaFont(ARENA_TEXT_MICRO, undefined, true);
 		ctx.textAlign = "center";
 		ctx.textBaseline = "middle";
 		ctx.fillText(rt, drawX - SW / 2 - bw / 2 + 2, mY + 9.5);
@@ -179,7 +183,7 @@ export function drawWorkstation(
 		ctx.arc(dotX, dotY, 3.5, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.fillStyle = "#ffffff";
-		ctx.font = "6px system-ui,sans-serif";
+		ctx.font = arenaFont(ARENA_TEXT_MICRO);
 		ctx.textAlign = "left";
 		ctx.textBaseline = "middle";
 		ctx.fillText("👤", dotX + 5, dotY + 0.5);
@@ -188,14 +192,14 @@ export function drawWorkstation(
 
 	// Task code
 	ctx.fillStyle = active ? "rgba(255,255,255,0.9)" : isDark ? "#374151" : "#6b7280";
-	ctx.font = "bold 5.5px monospace";
+	ctx.font = arenaFont(ARENA_TEXT_LABEL, "bold", true);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "bottom";
 	ctx.fillText(`${task.repo.split("/").pop()?.slice(0, 5)}·${task.taskCode}`.slice(0, 12), drawX, mY + SH - 1);
 
 	// Title
 	ctx.fillStyle = isDark ? "rgba(148,163,184,0.65)" : "rgba(71,85,105,0.65)";
-	ctx.font = "5.5px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_MICRO);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 	ctx.fillText(task.title.slice(0, 12), drawX, y + DH / 2 + 2);
@@ -219,7 +223,7 @@ export function drawWorkstation(
 		if (tokens && tokens > 0) {
 			const tokText = tokens >= 1000 ? `💰 ${(tokens / 1000).toFixed(1)}k` : `💰 ${tokens}`;
 			ctx.fillStyle = isDark ? "rgba(148,163,184,0.55)" : "rgba(71,85,105,0.55)";
-			ctx.font = "5px monospace";
+			ctx.font = arenaFont(ARENA_TEXT_MICRO, undefined, true);
 			ctx.textAlign = "center";
 			ctx.textBaseline = "top";
 			ctx.fillText(tokText, drawX, y + DH / 2 + 16);
@@ -232,7 +236,7 @@ export function drawWorkstation(
 		if (agent?.currentTool) {
 			const toolY = y + DH / 2 + ((task.tokenCost ?? task.estimatedCost) ? 22 : 16);
 			ctx.fillStyle = isDark ? "#94a3b8" : "#64748b";
-			ctx.font = "4.5px monospace";
+			ctx.font = arenaFont(ARENA_TEXT_MICRO, undefined, true);
 			ctx.textAlign = "center";
 			ctx.textBaseline = "top";
 			ctx.fillText(`🔧 ${agent.currentTool}`, drawX, toolY);
@@ -256,7 +260,7 @@ export function drawWorkstation(
 			rr(ctx, drawX + SW / 2 - 1 - bw2, mY - 3.5, bw2, 7, 2);
 			ctx.stroke();
 			ctx.fillStyle = isDark ? "#cbd5e1" : "#334155";
-			ctx.font = "5px monospace";
+			ctx.font = arenaFont(ARENA_TEXT_MICRO, undefined, true);
 			ctx.textAlign = "center";
 			ctx.textBaseline = "middle";
 			ctx.fillText(durText, drawX + SW / 2 - 1 - bw2 / 2, mY);
@@ -282,7 +286,7 @@ export function drawWorkstation(
 		ctx.arc(bx, by, 5, 0, Math.PI * 2);
 		ctx.stroke();
 		ctx.fillStyle = "#1a1a1a";
-		ctx.font = "bold 6.5px system-ui";
+		ctx.font = arenaFont(ARENA_TEXT_LABEL, "bold");
 		ctx.textAlign = "center";
 		ctx.textBaseline = "middle";
 		ctx.fillText("!", bx, by);
@@ -326,7 +330,7 @@ export function drawWorkstationSimplified(rc: RenderCtx, task: VisualTask) {
 	ctx.fillRect(x - DW / 2, y - DH / 2 + 2, 3, DH - 4);
 
 	ctx.fillStyle = active ? "rgba(255,255,255,0.9)" : isDark ? "#374151" : "#6b7280";
-	ctx.font = "bold 5.5px monospace";
+	ctx.font = arenaFont(ARENA_TEXT_LABEL, "bold", true);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(`${task.repo.split("/").pop()?.slice(0, 5)}·${task.taskCode}`.slice(0, 12), x, y);
@@ -338,14 +342,14 @@ export function drawWorkstationSimplified(rc: RenderCtx, task: VisualTask) {
 		ctx.arc(x + DW / 2 - 2, y - DH / 2 - 2, 5, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.fillStyle = "#ffffff";
-		ctx.font = "bold 5px monospace";
+		ctx.font = arenaFont(ARENA_TEXT_MICRO, "bold", true);
 		ctx.textAlign = "center";
 		ctx.textBaseline = "middle";
 		ctx.fillText(bt, x + DW / 2 - 2, y - DH / 2 - 2);
 	}
 
 	ctx.fillStyle = isDark ? "rgba(148,163,184,0.55)" : "rgba(71,85,105,0.55)";
-	ctx.font = "5px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_MICRO);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 	ctx.fillText(task.title.slice(0, 12), x, y + DH / 2 + 2);
@@ -377,7 +381,7 @@ function drawBlockedBadge(rc: RenderCtx, task: VisualTask, drawX: number, mY: nu
 	rr(ctx, drawX + SW / 2 - bw + 3, mY, bw, 8, 4);
 	ctx.stroke();
 	ctx.fillStyle = "#ffffff";
-	ctx.font = "5px monospace";
+	ctx.font = arenaFont(ARENA_TEXT_MICRO, undefined, true);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(badgeText, drawX + SW / 2 - bw / 2 + 3, mY + 4);

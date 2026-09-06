@@ -52,11 +52,18 @@
 	let selectedEntityId: string | null = null;
 	let selectedEntityType: "agent" | "task" | "repository" | null = null;
 
+	/**
+	 * Pointer position in CSS pixels relative to the canvas — the space hit
+	 * tests, pan and world coordinates all use.
+	 *
+	 * Deliberately NOT scaled by `canvas.width / rect.width`: that ratio is the
+	 * device-pixel ratio now that the backing store is DPR-scaled, so applying
+	 * it would offset every click by the DPR factor on HiDPI displays. The
+	 * element's CSS box already IS the CSS-pixel space.
+	 */
 	function canvasCoords(e: MouseEvent): { cx: number; cy: number } {
 		const rect = canvas.getBoundingClientRect();
-		const sx = canvas.width / rect.width;
-		const sy = canvas.height / rect.height;
-		return { cx: (e.clientX - rect.left) * sx, cy: (e.clientY - rect.top) * sy };
+		return { cx: e.clientX - rect.left, cy: e.clientY - rect.top };
 	}
 
 	function onMouseMove(e: MouseEvent): void {
@@ -65,10 +72,9 @@
 			const dy = e.clientY - panLastY;
 			panLastX = e.clientX;
 			panLastY = e.clientY;
-			const rect = canvas.getBoundingClientRect();
-			const sx2 = canvas.width / rect.width;
-			const sy2 = canvas.height / rect.height;
-			arenaStateManager.setPan(panX + dx * sx2, panY + dy * sy2);
+			// Pointer deltas are already CSS pixels, and pan is stored in CSS
+			// pixels — no backing-store scaling (see canvasCoords).
+			arenaStateManager.setPan(panX + dx, panY + dy);
 			return;
 		}
 		if (!renderer || !scene) {
@@ -324,8 +330,10 @@
 		const startZoom = zoom,
 			startPanX = panX,
 			startPanY = panY;
-		const targetPanX = canvas.width / 2 - worldX * targetZoom;
-		const targetPanY = canvas.height / 2 - worldY * targetZoom;
+		// clientWidth/Height = CSS pixels. canvas.width is the DPR-scaled
+		// backing store and would centre the target off-screen on HiDPI.
+		const targetPanX = canvas.clientWidth / 2 - worldX * targetZoom;
+		const targetPanY = canvas.clientHeight / 2 - worldY * targetZoom;
 		const startTime = performance.now();
 		function tick(now: number): void {
 			const e2 = now - startTime,
