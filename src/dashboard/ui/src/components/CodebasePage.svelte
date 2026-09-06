@@ -2,17 +2,11 @@
 	import Icon from "../lib/Icon.svelte";
 	import { api, type CodeSymbol, type DeadCodeBlock } from "../lib/api";
 	import { currentRepo } from "../lib/stores";
-	import CodebaseSymbolDetail from "./CodebaseSymbolDetail.svelte";
-	import CodebaseIndexStatus from "./CodebaseIndexStatus.svelte";
-	import CodebaseSearchBar from "./CodebaseSearchBar.svelte";
 	import CodebaseFileTree from "./CodebaseFileTree.svelte";
-	import CodebaseSymbolList from "./CodebaseSymbolList.svelte";
+	import CodebaseViewTabs from "./CodebaseViewTabs.svelte";
+	import CodebaseExploreView from "./CodebaseExploreView.svelte";
+	import CodebaseInsightsView from "./CodebaseInsightsView.svelte";
 	import CodebaseEmptyState from "./CodebaseEmptyState.svelte";
-	import CodebaseLanguageBreakdown from "./CodebaseLanguageBreakdown.svelte";
-	import CodebaseDeadCode from "./CodebaseDeadCode.svelte";
-	import CodebaseFileViewer from "./CodebaseFileViewer.svelte";
-	import CodebaseGraphPanel from "./CodebaseGraphPanel.svelte";
-	import CodebaseTopExports from "./CodebaseTopExports.svelte";
 	import { aggregateSymbolCounts } from "../lib/fileTreeUtils";
 
 	let { repo = "" }: { repo: string } = $props();
@@ -263,72 +257,35 @@
 						</div>
 						<div class="repo-badge">{$currentRepo}</div>
 					</header>
-					<div class="view-tabs" role="tablist" aria-label="Codebase views">
-						<button
-							role="tab"
-							aria-selected={activeView === "explore"}
-							class:active={activeView === "explore"}
-							onclick={() => (activeView = "explore")}><Icon name="search" size={16} /> Explore</button
-						>
-						<button
-							role="tab"
-							aria-selected={activeView === "insights"}
-							class:active={activeView === "insights"}
-							onclick={() => (activeView = "insights")}><Icon name="activity" size={16} /> Insights</button
-						>
-					</div>
+					<CodebaseViewTabs {activeView} onSelect={(view) => (activeView = view)} />
 
 					{#if activeView === "explore"}
-						<section class="explore-view" aria-label="Explore codebase">
-							<CodebaseSearchBar {repo} onSymbolSelect={handleSymbolSelect} />
-							<div class="explore-result">
-								{#if selectedSymbol}
-									<CodebaseSymbolDetail
-										symbol={selectedSymbol}
-										references={[]}
-										loading={false}
-										{repo}
-										onSymbolSelect={handleSymbolSelect}
-										onOpenFile={openCodebaseFile}
-									/>
-								{:else if selectedFile}
-									<CodebaseFileViewer {repo} filePath={selectedFile} />
-									<CodebaseSymbolList
-										symbols={fileSymbols}
-										loading={fileSymbolsLoading}
-										onSymbolSelect={handleSymbolSelect}
-									/>
-									{#if fileSymbolsError}<div class="inline-error">{fileSymbolsError}</div>{/if}
-								{:else}
-									<div class="explore-empty">
-										<Icon name="file-text" size={28} /><strong>Choose a file or search for a symbol</strong><span
-											>The file tree keeps your place while results open here.</span
-										>
-									</div>
-								{/if}
-							</div>
-						</section>
+						<CodebaseExploreView
+							{repo}
+							{selectedSymbol}
+							{selectedFile}
+							{fileSymbols}
+							{fileSymbolsLoading}
+							{fileSymbolsError}
+							onSymbolSelect={handleSymbolSelect}
+							onOpenFile={openCodebaseFile}
+						/>
 					{:else}
-						<section class="insights-view" aria-label="Codebase insights">
-							<CodebaseIndexStatus {repo} languageCount={languageEntries.length} kindCounts={indexKindCounts} />
-							<div class="insight-grid">
-								<CodebaseLanguageBreakdown {languageEntries} /><CodebaseTopExports {topLevelExports} />
-							</div>
-							<CodebaseDeadCode
-								block={deadCodeBlock}
-								onOpenFile={(path) => {
-									openCodebaseFile(path);
-									activeView = "explore";
-								}}
-							/>
-							<CodebaseGraphPanel
-								{repo}
-								onSymbolSelect={(symbol) => {
-									handleSymbolSelect(symbol);
-									activeView = "explore";
-								}}
-							/>
-						</section>
+						<CodebaseInsightsView
+							{repo}
+							{languageEntries}
+							{indexKindCounts}
+							{topLevelExports}
+							{deadCodeBlock}
+							onOpenFile={(path) => {
+								openCodebaseFile(path);
+								activeView = "explore";
+							}}
+							onSymbolSelect={(symbol) => {
+								handleSymbolSelect(symbol);
+								activeView = "explore";
+							}}
+						/>
 					{/if}
 				</div>
 			</main>
@@ -469,72 +426,7 @@
 		text-transform: uppercase;
 		color: var(--color-primary);
 	}
-	.view-tabs {
-		display: inline-flex;
-		width: fit-content;
-		padding: 4px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
-	}
-	.view-tabs button {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		min-height: 40px;
-		padding: 0 16px;
-		border: 0;
-		border-radius: calc(var(--radius-md) - 3px);
-		background: transparent;
-		color: var(--color-text-muted);
-		font-weight: 700;
-		cursor: pointer;
-	}
-	.view-tabs button.active {
-		background: var(--color-primary);
-		color: #fff;
-	}
 	@media (pointer: coarse) {
-		.view-tabs button {
-			min-height: 44px;
-		}
-	}
-	.explore-view,
-	.insights-view {
-		display: grid;
-		gap: 20px;
-	}
-	.explore-result {
-		min-height: 360px;
-		padding: 20px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
-	}
-	.explore-empty {
-		display: grid;
-		place-items: center;
-		align-content: center;
-		gap: 8px;
-		min-height: 320px;
-		color: var(--color-text-muted);
-		text-align: center;
-	}
-	.explore-empty strong {
-		color: var(--color-text);
-	}
-	.inline-error {
-		margin-top: 12px;
-		padding: 12px;
-		border-radius: var(--radius-md);
-		background: rgba(239, 68, 68, 0.1);
-		color: var(--color-danger);
-		font-size: 0.8rem;
-	}
-	.insight-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 20px;
 	}
 
 	/* ── Repo badge (reuse pattern) ── */
