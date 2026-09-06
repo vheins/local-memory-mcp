@@ -47,8 +47,8 @@
 	let loading = $state(false);
 	let error = $state("");
 	let hasIndex = $state(false);
-	let indexData = $state<Record<string, unknown> | null>(null);
 	let sidebarOpen = $state(true);
+	let activeView = $state<"explore" | "insights">("explore");
 	let selectedSymbol = $state<CodeSymbol | null>(null);
 	let selectedFile = $state<string | null>(null);
 	let fileSymbols = $state<CodeSymbol[]>([]);
@@ -105,7 +105,6 @@
 	async function loadCodebaseIndex() {
 		if (!repo) {
 			hasIndex = false;
-			indexData = null;
 			return;
 		}
 		loading = true;
@@ -114,18 +113,15 @@
 			const result = await api.codebaseIndexStatus(repo);
 			if (result?.indexed === true) {
 				hasIndex = true;
-				indexData = result as unknown as Record<string, unknown>;
 				liveAnnounce = "Codebase index loaded";
 				void loadArchitecture();
 			} else {
 				hasIndex = false;
-				indexData = null;
 				architectureData = null;
 				liveAnnounce = "No codebase index found";
 			}
 		} catch {
 			hasIndex = false;
-			indexData = null;
 			architectureData = null;
 			liveAnnounce = "Failed to load codebase index";
 		} finally {
@@ -253,69 +249,83 @@
 			<!-- Main content area -->
 			<main class="codebase-content">
 				<div class="codebase-content-scroll">
-					<div class="glass card card-body">
-						<!-- TASK-328: IndexStats strip lives inside CodebaseIndexStatus
-						     (languageCount + kindCounts props). TASK-329: code-graph
-						     force panel below (KGGraphCanvas wrapper) — additive. -->
-						<CodebaseIndexStatus {repo} languageCount={languageEntries.length} kindCounts={indexKindCounts} />
-
-						<!-- TASK-329 [P10-UI]: code-graph force panel — reuses the
-						     generic KGGraphCanvas (GET /api/codebase/graph). Node
-						     click → CodebaseSymbolDetail via handleSymbolSelect. -->
-						<CodebaseGraphPanel {repo} onSymbolSelect={handleSymbolSelect} />
-
-						<div class="search-container">
-							<CodebaseSearchBar {repo} onSymbolSelect={handleSymbolSelect} />
+					<header class="codebase-header">
+						<div>
+							<p class="eyebrow">Workspace intelligence</p>
+							<h1>Codebase</h1>
+							<p>
+								Find a symbol or file first. Switch to insights only when you need architecture, exports, and hotspots.
+							</p>
 						</div>
-
-						<div class="flex items-center gap-2" style="margin-bottom:16px;">
-							<Icon name="code" size={14} strokeWidth={1.75} />
-							<h1 class="section-label">Codebase Overview</h1>
-							<div class="repo-badge">{$currentRepo}</div>
-						</div>
-
-						<!-- ─── Language Breakdown ─── -->
-						<CodebaseLanguageBreakdown {languageEntries} />
-
-						<!-- ─── Top-Level Exports (Enh 5) ─── -->
-						<CodebaseTopExports {topLevelExports} />
-
-						<!-- ─── Dead-code candidates + Hotspots (TASK-320) ─── -->
-						<CodebaseDeadCode block={deadCodeBlock} onOpenFile={openCodebaseFile} />
-
-						{#if selectedSymbol}
-							<CodebaseSymbolDetail
-								symbol={selectedSymbol}
-								references={[]}
-								loading={false}
-								{repo}
-								onSymbolSelect={handleSymbolSelect}
-								onOpenFile={openCodebaseFile}
-							/>
-						{:else if selectedFile}
-							<!-- TASK-328: raw file content viewer (disk-backed). The symbol
-						     list below keeps the existing click-symbol → detail flow. -->
-							<CodebaseFileViewer {repo} filePath={selectedFile} />
-							<CodebaseSymbolList
-								symbols={fileSymbols}
-								loading={fileSymbolsLoading}
-								onSymbolSelect={handleSymbolSelect}
-							/>
-							{#if fileSymbolsError}
-								<div class="muted-text" style="color:#ef4444;margin-top:8px;">{fileSymbolsError}</div>
-							{/if}
-						{:else if indexData}
-							<div class="muted-text">
-								Index loaded with {Object.keys(indexData).length} top-level entries. Select a file from the sidebar to view
-								details.
-							</div>
-						{:else}
-							<div class="muted-text">
-								Codebase content will be displayed here. The index contains structured data about the repository's file
-								system, which can be explored via the file tree sidebar.
-							</div>
-						{/if}
+						<div class="repo-badge">{$currentRepo}</div>
+					</header>
+					<div class="view-tabs" role="tablist" aria-label="Codebase views">
+						<button
+							role="tab"
+							aria-selected={activeView === "explore"}
+							class:active={activeView === "explore"}
+							onclick={() => (activeView = "explore")}><Icon name="search" size={16} /> Explore</button
+						>
+						<button
+							role="tab"
+							aria-selected={activeView === "insights"}
+							class:active={activeView === "insights"}
+							onclick={() => (activeView = "insights")}><Icon name="activity" size={16} /> Insights</button
+						>
 					</div>
+
+					{#if activeView === "explore"}
+						<section class="explore-view" aria-label="Explore codebase">
+							<CodebaseSearchBar {repo} onSymbolSelect={handleSymbolSelect} />
+							<div class="explore-result">
+								{#if selectedSymbol}
+									<CodebaseSymbolDetail
+										symbol={selectedSymbol}
+										references={[]}
+										loading={false}
+										{repo}
+										onSymbolSelect={handleSymbolSelect}
+										onOpenFile={openCodebaseFile}
+									/>
+								{:else if selectedFile}
+									<CodebaseFileViewer {repo} filePath={selectedFile} />
+									<CodebaseSymbolList
+										symbols={fileSymbols}
+										loading={fileSymbolsLoading}
+										onSymbolSelect={handleSymbolSelect}
+									/>
+									{#if fileSymbolsError}<div class="inline-error">{fileSymbolsError}</div>{/if}
+								{:else}
+									<div class="explore-empty">
+										<Icon name="file-text" size={28} /><strong>Choose a file or search for a symbol</strong><span
+											>The file tree keeps your place while results open here.</span
+										>
+									</div>
+								{/if}
+							</div>
+						</section>
+					{:else}
+						<section class="insights-view" aria-label="Codebase insights">
+							<CodebaseIndexStatus {repo} languageCount={languageEntries.length} kindCounts={indexKindCounts} />
+							<div class="insight-grid">
+								<CodebaseLanguageBreakdown {languageEntries} /><CodebaseTopExports {topLevelExports} />
+							</div>
+							<CodebaseDeadCode
+								block={deadCodeBlock}
+								onOpenFile={(path) => {
+									openCodebaseFile(path);
+									activeView = "explore";
+								}}
+							/>
+							<CodebaseGraphPanel
+								{repo}
+								onSymbolSelect={(symbol) => {
+									handleSymbolSelect(symbol);
+									activeView = "explore";
+								}}
+							/>
+						</section>
+					{/if}
 				</div>
 			</main>
 		</div>
@@ -414,12 +424,100 @@
 	}
 
 	.codebase-content-scroll {
+		display: grid;
+		gap: 20px;
 		height: 100%;
 		overflow-y: auto;
+		padding: 24px;
 	}
-
-	.search-container {
-		margin-bottom: 20px;
+	.codebase-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 24px;
+	}
+	.codebase-header h1 {
+		margin: 2px 0 6px;
+		font-size: 1.5rem;
+		letter-spacing: -0.025em;
+		color: var(--color-text);
+	}
+	.codebase-header p:last-child {
+		max-width: 680px;
+		margin: 0;
+		font-size: 0.85rem;
+		line-height: 1.55;
+		color: var(--color-text-muted);
+	}
+	.eyebrow {
+		margin: 0;
+		font-size: 0.68rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-primary);
+	}
+	.view-tabs {
+		display: inline-flex;
+		width: fit-content;
+		padding: 4px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+	}
+	.view-tabs button {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 40px;
+		padding: 0 16px;
+		border: 0;
+		border-radius: calc(var(--radius-md) - 3px);
+		background: transparent;
+		color: var(--color-text-muted);
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.view-tabs button.active {
+		background: var(--color-primary);
+		color: #fff;
+	}
+	.explore-view,
+	.insights-view {
+		display: grid;
+		gap: 20px;
+	}
+	.explore-result {
+		min-height: 360px;
+		padding: 20px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+	}
+	.explore-empty {
+		display: grid;
+		place-items: center;
+		align-content: center;
+		gap: 8px;
+		min-height: 320px;
+		color: var(--color-text-muted);
+		text-align: center;
+	}
+	.explore-empty strong {
+		color: var(--color-text);
+	}
+	.inline-error {
+		margin-top: 12px;
+		padding: 12px;
+		border-radius: var(--radius-md);
+		background: rgba(239, 68, 68, 0.1);
+		color: var(--color-danger);
+		font-size: 0.8rem;
+	}
+	.insight-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 20px;
 	}
 
 	/* ── Repo badge (reuse pattern) ── */

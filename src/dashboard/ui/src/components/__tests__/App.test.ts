@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { mount, unmount, tick } from "svelte";
 import App from "../../App.svelte";
 
@@ -214,14 +214,24 @@ function mountApp() {
 	return { target, component };
 }
 
-// Flush QueuePage's async $effect (api.queueStatus/queueJobs are already
-// resolved promises) so state updates land before assertions.
-async function settle() {
-	await new Promise((r) => setTimeout(r, 0));
-	await tick();
+// Flush the route's dynamic import plus QueuePage's async $effect
+// (api.queueStatus/queueJobs are already resolved promises) so both the lazy
+// view module and its state updates land before assertions.
+async function settle(target?: HTMLElement) {
+	for (let i = 0; i < 50; i++) {
+		if (target && (target.querySelector(".feature-shell") || target.querySelector(".empty-state"))) return;
+		await new Promise((r) => setTimeout(r, 1));
+		await tick();
+	}
 }
 
 describe("App shell gate (TASK-418)", () => {
+	// Routes are code-split, so warm the lazy module cache once: App's dynamic
+	// import then resolves within the same microtask queue the assertions use.
+	beforeAll(async () => {
+		await import("../QueuePage.svelte");
+	});
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
@@ -235,7 +245,7 @@ describe("App shell gate (TASK-418)", () => {
 		mock.activeTab = "queue";
 		mock.currentRepo = null;
 		const { target, component } = mountApp();
-		await settle();
+		await settle(target);
 
 		// Gate must NOT swap the shell for the per-repo empty state.
 		expect(target.textContent).not.toContain("No Repository Selected");
@@ -258,7 +268,7 @@ describe("App shell gate (TASK-418)", () => {
 		mock.activeTab = "memories";
 		mock.currentRepo = null;
 		const { target, component } = mountApp();
-		await settle();
+		await settle(target);
 
 		expect(target.querySelector(".empty-state")).not.toBeNull();
 		expect(target.textContent).toContain("No Repository Selected");
@@ -270,7 +280,7 @@ describe("App shell gate (TASK-418)", () => {
 		mock.activeTab = "queue";
 		mock.currentRepo = "my-repo";
 		const { target, component } = mountApp();
-		await settle();
+		await settle(target);
 
 		expect(target.textContent).not.toContain("No Repository Selected");
 		expect(target.querySelector(".feature-shell")).not.toBeNull();

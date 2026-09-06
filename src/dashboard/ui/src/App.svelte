@@ -27,14 +27,7 @@
 	import MemoryDrawer from "./components/MemoryDrawer.svelte";
 	import BulkImportModal from "./components/BulkImportModal.svelte";
 	import AddTaskModal from "./components/AddTaskModal.svelte";
-	import ReferenceTab from "./components/ReferenceTab.svelte";
 	import FloatingChat from "./components/FloatingChat.svelte";
-	import StandardsPanel from "./components/StandardsPanel.svelte";
-	import CodebasePage from "./components/CodebasePage.svelte";
-	import HandoffsPanel from "./components/HandoffsPanel.svelte";
-	import QueuePage from "./components/QueuePage.svelte";
-	import KGGraph from "./components/KGGraph.svelte";
-	import AgentArena from "./components/AgentArena.svelte";
 	import GlobalCommandCenter from "./components/GlobalCommandCenter.svelte";
 	import Icon from "./lib/Icon.svelte";
 
@@ -292,39 +285,81 @@
 
 				<!-- ════ STANDARDS TAB ════ -->
 				{#if $activeTab === "standards"}
-					<StandardsPanel repo={$currentRepo || ""} />
+					{#await import("./components/StandardsPanel.svelte")}
+						<div class="view-loading">Loading standards…</div>
+					{:then { default: View }}
+						<View repo={$currentRepo || ""} />
+					{:catch error}
+						<div class="error-banner" role="alert">{error.message}</div>
+					{/await}
 				{/if}
 
 				<!-- ════ CODEBASE TAB ════ -->
 				{#if $activeTab === "codebase"}
-					<CodebasePage repo={$currentRepo || ""} />
+					{#await import("./components/CodebasePage.svelte")}
+						<div class="view-loading">Loading codebase…</div>
+					{:then { default: View }}
+						<View repo={$currentRepo || ""} />
+					{:catch error}
+						<div class="error-banner" role="alert">{error.message}</div>
+					{/await}
 				{/if}
 
 				<!-- ════ HANDOFFS TAB ════ -->
 				{#if $activeTab === "handoffs"}
-					<HandoffsPanel repo={$currentRepo || ""} />
+					{#await import("./components/HandoffsPanel.svelte")}
+						<div class="view-loading">Loading coordination…</div>
+					{:then { default: View }}
+						<View repo={$currentRepo || ""} />
+					{:catch error}
+						<div class="error-banner" role="alert">{error.message}</div>
+					{/await}
 				{/if}
 
 				<!-- ════ QUEUE TAB ════ -->
 				{#if $activeTab === "queue"}
-					<QueuePage repo={$currentRepo || ""} />
+					{#await import("./components/QueuePage.svelte")}
+						<div class="view-loading">Loading queue…</div>
+					{:then { default: View }}
+						<View repo={$currentRepo || ""} />
+					{:catch error}
+						<div class="error-banner" role="alert">{error.message}</div>
+					{/await}
 				{/if}
 
 				<!-- ════ KNOWLEDGE GRAPH TAB ════ -->
 				{#if $activeTab === "knowledge-graph"}
-					<KGGraph repo={$currentRepo || ""} />
+					{#await import("./components/KGGraph.svelte")}
+						<div class="view-loading">Loading knowledge graph…</div>
+					{:then { default: View }}
+						<View repo={$currentRepo || ""} />
+					{:catch error}
+						<div class="error-banner" role="alert">{error.message}</div>
+					{/await}
 				{/if}
 
 				<!-- ════ AGENT ARENA TAB ════ -->
 				{#if $activeTab === "arena"}
 					<div class="arena-fullwidth">
-						<AgentArena />
+						{#await import("./components/AgentArena.svelte")}
+							<div class="view-loading">Loading agent arena…</div>
+						{:then { default: View }}
+							<View />
+						{:catch error}
+							<div class="error-banner" role="alert">{error.message}</div>
+						{/await}
 					</div>
 				{/if}
 
 				<!-- ════ REFERENCE TAB ════ -->
 				{#if $activeTab === "reference"}
-					<ReferenceTab handler={app} {appState} {filteredTools} {filteredPrompts} {filteredResources} />
+					{#await import("./components/ReferenceTab.svelte")}
+						<div class="view-loading">Loading reference…</div>
+					{:then { default: View }}
+						<View handler={app} {appState} {filteredTools} {filteredPrompts} {filteredResources} />
+					{:catch error}
+						<div class="error-banner" role="alert">{error.message}</div>
+					{/await}
 				{/if}
 			{/if}
 		</main>
@@ -389,6 +424,29 @@
 	/* ── Section title spacing inside cards ── */
 	:global(.card-section-title) {
 		margin-bottom: 10px;
+	}
+
+	.view-loading {
+		display: grid;
+		place-items: center;
+		min-height: 280px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-top: 16px;
+		padding: 12px 16px;
+		border: 1px solid rgba(239, 68, 68, 0.25);
+		border-radius: var(--radius-md);
+		background: rgba(239, 68, 68, 0.08);
+		color: var(--color-danger);
 	}
 
 	/* ── Empty state layout ── */
