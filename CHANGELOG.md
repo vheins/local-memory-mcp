@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.44.0] — 2026-09-06
+
+Shared-context roadmap + hardened tool contracts. Adds budgeted agent context, exploration observations, bounded telemetry, lazy runtime profiles, and wires import canonical resolution.
+
+### Added
+
+- **`agent-context` tool** — token-budgeted cross-source context compiler
+- **Exploration observations (write/read)** — evidence-backed findings with freshness
+- **Import canonical resolution wired into the parse pipeline (fix #83 follow-up)**
+- **Lazy capability profiles** — minimal/balanced/full runtime profiles
+- **Bounded context-reuse telemetry** — aggregate-only with fingerprint freshness
+
+### Fixed
+
+- **KG per-repo identity (migration v33)** — repo-scoped graph queries
+- **MCP error/response contract normalization** — tool-error and json-mode semantics
+- **Reuse telemetry, resource budgets, and retention bounds**
+
+### Changed / Internal
+
+- Split 8 modules >500 LOC into <500 LOC barrel subdirectories
+- Server instructions synced (19 tools)
+
+Resolves #97 epic (via PR #103) + #91 epic follow-up fix.
+
 ## [0.43.1] — 2026-08-28
 
 Patch release fixing a broken v0.43.0 published package and an enrichment performance regression.
@@ -65,11 +90,11 @@ developer/contributor docs tree is indexed so it is searchable like source code.
 ### Added
 
 - **`.agents/**`dot-directory indexing** (TASK-459) — the codebase indexer now
-discovers files under`.agents` (dev/contributor/AI documentation) via an
-explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
-`.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
-dashboard, CLI, startup auto-index, file watcher) since they all funnel through
-`discoverFiles`.
+  discovers files under`.agents` (dev/contributor/AI documentation) via an
+  explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
+  `.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
+  dashboard, CLI, startup auto-index, file watcher) since they all funnel through
+  `discoverFiles`.
 - **`doc_comment` surfaced in all 5 `codebase-read` text formatters** (TASK-460) —
   TRACE (new `Doc:` line), FILE, SEARCH, ARCHITECTURE (new `Top Exports` doc
   block, ~120 chars), and CODE/content modes (enclosing-symbol doc hint via
