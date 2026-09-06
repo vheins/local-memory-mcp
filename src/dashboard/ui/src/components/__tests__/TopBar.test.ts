@@ -41,6 +41,12 @@ vi.mock("../../lib/stores", () => ({
 			return () => {};
 		}
 	},
+	activeTab: {
+		subscribe: (fn: any) => {
+			fn("dashboard");
+			return () => {};
+		}
+	},
 	derived: (_fn: any) => ({
 		subscribe: (fn2: any) => {
 			fn2(null);

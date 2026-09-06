@@ -13,126 +13,126 @@
 	export let onNewHandoff: () => void = () => {};
 </script>
 
-<div class="feature-toolbar glass card">
+<header class="feature-toolbar card">
 	<div class="toolbar-title">
-		<Icon name="git-branch" size={16} strokeWidth={2} />
+		<Icon name="git-branch" size={18} strokeWidth={2} />
 		<div>
-			<h1 class="section-label">HANDOFFS & CLAIMS</h1>
-			<div class="toolbar-subtitle">Handoffs transfer context between agents. Claims reserve a task for one owner.</div>
+			<h1>Handoffs & claims</h1>
+			<p>Transfer unfinished work between agents and resolve ownership conflicts.</p>
 		</div>
 	</div>
 	<button class="btn btn-primary toolbar-action" on:click={onNewHandoff}>
-		<Icon name="plus" size={14} strokeWidth={2} />
-		New Handoff
+		<Icon name="plus" size={16} strokeWidth={2} />
+		New handoff
 	</button>
-	<div class="toolbar-controls">
-		<select class="form-select" bind:value={status} on:change={onStatusChange}>
-			<option value="">All statuses</option>
-			<option value="pending">Pending</option>
-			<option value="accepted">Accepted</option>
-			<option value="rejected">Rejected</option>
-			<option value="expired">Expired</option>
-		</select>
-		<input
-			class="form-input"
-			placeholder="To agent filter"
-			aria-label="Filter handoffs by recipient agent"
-			bind:value={agentFilter}
-			on:input={onAgentFilterChange}
-		/>
-		<button class="btn btn-ghost" on:click={onRefresh}>
-			<Icon name="refresh-cw" size={14} strokeWidth={2} />
+	<div class="coordination-summary" aria-label="Coordination summary">
+		<span><strong>{pendingCount}</strong> pending</span>
+		<span><strong>{resolvedCount}</strong> resolved</span>
+		<span><strong>{claimsCount}</strong> active claims</span>
+		<span><strong>{totalCount}</strong> total</span>
+	</div>
+	<div class="toolbar-controls" aria-label="Handoff filters">
+		<label>
+			<span>Status</span>
+			<select class="form-select" bind:value={status} on:change={onStatusChange} aria-label="Filter handoffs by status">
+				<option value="">All statuses</option>
+				<option value="pending">Pending</option>
+				<option value="accepted">Accepted</option>
+				<option value="rejected">Rejected</option>
+				<option value="expired">Expired</option>
+			</select>
+		</label>
+		<label class="agent-filter">
+			<span>Recipient</span>
+			<input
+				class="form-input"
+				placeholder="Filter by recipient agent"
+				aria-label="Filter handoffs by recipient agent"
+				bind:value={agentFilter}
+				on:input={onAgentFilterChange}
+			/>
+		</label>
+		<button class="btn btn-ghost refresh-action" on:click={onRefresh}>
+			<Icon name="refresh-cw" size={16} strokeWidth={2} />
 			Refresh
 		</button>
 	</div>
-</div>
-
-<div class="insight-strip">
-	<div class="insight-card">
-		<span>Pending</span>
-		<strong>{pendingCount}</strong>
-	</div>
-	<div class="insight-card">
-		<span>Resolved</span>
-		<strong>{resolvedCount}</strong>
-	</div>
-	<div class="insight-card">
-		<span>Claims</span>
-		<strong>{claimsCount}</strong>
-	</div>
-	<div class="insight-card">
-		<span>Total</span>
-		<strong>{totalCount}</strong>
-	</div>
-</div>
+</header>
 
 <style>
 	.feature-toolbar {
 		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 14px;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 20px;
 		align-items: start;
-		padding: 16px;
+		padding: 24px;
 	}
 	.toolbar-title {
 		display: flex;
-		align-items: center;
-		gap: 10px;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	.toolbar-title h1 {
+		margin: 0;
+		font-size: 1.2rem;
+		line-height: 1.25;
+		color: var(--color-text);
+	}
+	.toolbar-title p {
+		margin: 6px 0 0;
+		max-width: 620px;
+		font-size: 0.85rem;
+		line-height: 1.5;
+		color: var(--color-text-muted);
 	}
 	.toolbar-action {
 		justify-self: end;
 	}
-	.toolbar-subtitle {
-		font-size: 0.72rem;
-		color: var(--color-text-muted);
-		font-weight: 600;
-		margin-top: 2px;
-		line-height: 1.45;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-	}
-	.insight-strip {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 10px;
-	}
-	.insight-card {
-		padding: 12px 14px;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: rgba(255, 255, 255, 0.32);
+	.coordination-summary {
 		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-	.insight-card span {
-		font-size: 0.66rem;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
+		flex-wrap: wrap;
+		gap: 8px 20px;
+		grid-column: 1 / -1;
+		padding-top: 16px;
+		border-top: 1px solid var(--color-border);
+		font-size: 0.8rem;
 		color: var(--color-text-muted);
 	}
-	.insight-card strong {
-		font-size: 0.84rem;
+	.coordination-summary strong {
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 	.toolbar-controls {
 		display: grid;
-		grid-template-columns: 160px minmax(180px, 1fr) auto;
-		gap: 10px;
-		align-items: center;
+		grid-template-columns: 180px minmax(220px, 1fr) auto;
+		gap: 12px;
+		align-items: end;
 		grid-column: 1 / -1;
 	}
+	.toolbar-controls label {
+		display: grid;
+		gap: 6px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: var(--color-text-muted);
+	}
 
-	@media (max-width: 900px) {
-		.insight-strip,
+	@media (max-width: 720px) {
+		.feature-toolbar,
 		.toolbar-controls {
 			grid-template-columns: 1fr;
+		}
+		.feature-toolbar {
+			padding: 20px;
+		}
+		.toolbar-action,
+		.refresh-action {
+			width: 100%;
+			justify-self: stretch;
+		}
+		.coordination-summary {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 </style>

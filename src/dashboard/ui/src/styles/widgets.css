@@ -243,9 +243,13 @@
 	}
 }
 
-@media (max-width: 560px) {
+@media (max-width: 720px) {
 	.kanban-board {
-		grid-auto-columns: minmax(240px, 76vw);
+		grid-auto-flow: row;
+		grid-auto-columns: auto;
+		grid-template-columns: minmax(0, 1fr);
+		overflow-x: visible;
+		scroll-snap-type: none;
 	}
 }
 

@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { healthData, currentRepo, availableRepos, theme, themePreference, chatRefreshSignal } from "../lib/stores";
+	import { healthData, currentRepo, availableRepos, theme, themePreference, chatRefreshSignal, activeTab } from "../lib/stores";
 	import { onMount, onDestroy } from "svelte";
-	import { derived } from "svelte/store";
 	import { createTopBarHandler } from "../lib/composables/useTopBar";
-	import { arenaStateManager } from "../lib/arena/arenaStateManager";
+	import { getNavItem } from "../lib/navigation";
 
 	import TopBarRepoInfo from "./TopBarRepoInfo.svelte";
 	import TopBarLinks from "./TopBarLinks.svelte";
@@ -29,14 +28,10 @@
 		destroy
 	} = handler;
 
-	const arenaMetrics = derived(arenaStateManager.getStore(), ($state) => {
-		if ($state.metrics.successRate === 0 && $state.metrics.throughput === 0) return null;
-		return $state.metrics;
-	});
-
 	$: countdownPct = ($countdownSeconds / 30) * 100;
 	$: countdownColor = $countdownSeconds <= 5 ? "#ef4444" : $countdownSeconds <= 10 ? "#f97316" : "#0ea5e9";
 	$: currentRepoData = $availableRepos.find((r) => r.repo === $currentRepo);
+	$: currentView = getNavItem($activeTab);
 
 	onMount(() => {
 		startCountdown();
@@ -55,7 +50,8 @@
 		<TopBarRepoInfo
 			currentRepo={$currentRepo}
 			repoData={currentRepoData}
-			{getRepoInitials}
+			viewLabel={currentView?.label || "Dashboard"}
+			viewScope={currentView?.scope || "workspace"}
 			{onToggleMobileMenu}
 			{mobileMenuOpen}
 		/>
@@ -77,7 +73,6 @@
 			<div class="top-separator"></div>
 
 			<TopBarActions
-				arenaMetrics={$arenaMetrics}
 				healthData={$healthData}
 				theme={$theme}
 				themePreference={$themePreference}

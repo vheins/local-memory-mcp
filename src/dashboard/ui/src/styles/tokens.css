@@ -54,8 +54,19 @@
 
 /* ─── Focus-Visible (Fix 10) ─────────────────────────────────────────────── */
 *:focus-visible {
-	outline: 2px solid var(--color-primary, #0ea5e9);
+	outline: 2px solid var(--color-primary, #2563eb);
 	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 
 /* Chat input needs focus-visible ring (its outline:none removes browser default) */

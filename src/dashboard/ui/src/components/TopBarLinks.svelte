@@ -17,8 +17,13 @@
 	$: countdownTextColor = countdownSeconds <= 5 ? "#ef4444" : "var(--color-text-muted)";
 </script>
 
-<!-- ── External Links Group ── -->
-<div class="ext-links-group">
+<!-- Project links are secondary context, not primary product actions. -->
+<details class="project-menu">
+	<summary class="btn btn-ghost btn-sm">
+		<Icon name="more-horizontal" size={16} strokeWidth={2} />
+		<span>Project</span>
+	</summary>
+	<div class="ext-links-group" role="menu">
 	<!-- GitHub link -->
 	<a
 		href={GITHUB_URL}
@@ -148,7 +153,8 @@
 		</svg>
 		<span class="ext-link-label">Ecosystem</span>
 	</button>
-</div>
+	</div>
+</details>
 
 <!-- Countdown + Refresh -->
 <div class="refresh-group">
@@ -172,28 +178,46 @@
 </div>
 
 <style>
+	.project-menu {
+		position: relative;
+	}
+
+	.project-menu summary {
+		list-style: none;
+		cursor: pointer;
+	}
+
+	.project-menu summary::-webkit-details-marker {
+		display: none;
+	}
+
 	.ext-links-group {
-		display: flex;
-		align-items: center;
-		gap: 0;
-		background: rgba(241, 245, 249, 0.75);
+		position: absolute;
+		top: calc(100% + 8px);
+		right: 0;
+		display: grid;
+		min-width: 190px;
+		padding: 8px;
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 10px;
+		border-radius: var(--radius-md);
+		box-shadow: var(--glass-shadow-elevated);
+		z-index: 80;
 		overflow: hidden;
-		backdrop-filter: blur(8px);
 	}
 
 	:global(html.dark) .ext-links-group {
-		background: rgba(15, 23, 42, 0.75);
+		background: var(--color-surface);
 		border-color: rgba(148, 163, 184, 0.12);
 	}
 
 	.ext-link-btn {
 		display: flex;
 		align-items: center;
-		gap: 5px;
-		padding: 5px 10px;
-		font-size: 0.72rem;
+		gap: 8px;
+		min-height: 40px;
+		padding: 8px 10px;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		color: var(--color-text-muted);
 		text-decoration: none;
@@ -254,11 +278,7 @@
 	}
 
 	.ext-link-divider {
-		width: 1px;
-		height: 20px;
-		background: var(--color-border);
-		opacity: 0.6;
-		flex-shrink: 0;
+		display: none;
 	}
 
 	.ext-link-label {
@@ -345,7 +365,7 @@
 	}
 
 	@media (max-width: 640px) {
-		.ext-links-group {
+		.project-menu summary span {
 			display: none;
 		}
 	}

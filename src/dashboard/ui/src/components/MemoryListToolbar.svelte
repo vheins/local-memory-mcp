@@ -22,8 +22,8 @@
 </script>
 
 <!-- Toolbar -->
-<div class="flex items-center gap-2 mb-3" style="flex-wrap:wrap;">
-	<div style="position:relative;flex:1;min-width:160px;">
+<div class="memory-toolbar mb-3">
+	<div class="search-field">
 		<span class="search-icon-inner">
 			<Icon name="search" size={20} />
 		</span>
@@ -39,8 +39,8 @@
 	</div>
 
 	<select
-		class="form-select"
-		style="width:140px;font-size:0.8rem;"
+		class="form-select filter-type"
+		style="font-size:0.8rem;"
 		aria-label="Filter memories by type"
 		bind:value={$memoriesTypeFilter}
 		onchange={onFilterChange}
@@ -52,8 +52,8 @@
 	</select>
 
 	<select
-		class="form-select"
-		style="width:100px;font-size:0.8rem;"
+		class="form-select filter-compact"
+		style="font-size:0.8rem;"
 		aria-label="Minimum importance"
 		bind:value={$memoriesImportanceMin}
 		onchange={onFilterChange}
@@ -65,8 +65,8 @@
 	</select>
 
 	<select
-		class="form-select"
-		style="width:100px;font-size:0.8rem;"
+		class="form-select filter-compact"
+		style="font-size:0.8rem;"
 		aria-label="Memories per page"
 		bind:value={$memoriesPageSize}
 		onchange={onPageSizeChange}
@@ -79,13 +79,60 @@
 	<ExportToolbar {onExport} {onImport} />
 
 	<!-- New Memory CTA -->
-	<button class="btn btn-accent btn-sm" onclick={onNewMemory} id="newMemoryBtn" style="margin-left:auto;">
+	<button class="btn btn-primary" onclick={onNewMemory} id="newMemoryBtn">
 		<Icon name="plus" size={13} strokeWidth={2.5} />
 		New Memory
 	</button>
 </div>
 
 <style>
+	.memory-toolbar {
+		display: grid;
+		grid-template-columns: minmax(240px, 1fr) 150px 112px 112px auto auto;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.search-field {
+		position: relative;
+		min-width: 0;
+	}
+
+	@media (max-width: 1050px) {
+		.memory-toolbar {
+			grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(100px, auto));
+		}
+
+		.memory-toolbar :global(.export-toolbar),
+		#newMemoryBtn {
+			grid-row: 2;
+		}
+
+		#newMemoryBtn {
+			grid-column: -2 / -1;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.memory-toolbar {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.search-field,
+		.filter-type,
+		#newMemoryBtn {
+			grid-column: 1 / -1;
+		}
+
+		#newMemoryBtn {
+			grid-row: 1;
+		}
+
+		.filter-compact {
+			width: 100%;
+		}
+	}
+
 	.search-icon-inner {
 		position: absolute;
 		left: 10px;

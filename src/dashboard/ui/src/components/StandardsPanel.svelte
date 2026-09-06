@@ -185,23 +185,10 @@
 		onNewStandard={openCreateDrawer}
 	/>
 
-	<div class="insight-strip">
-		<div class="insight-card">
-			<span>Visible</span>
-			<strong>{standards.length}</strong>
-		</div>
-		<div class="insight-card">
-			<span>Scope</span>
-			<strong>{scope === "repo" ? "Repo + global" : scope === "global" ? "Global only" : "All"}</strong>
-		</div>
-		<div class="insight-card">
-			<span>Total</span>
-			<strong>{totalItems}</strong>
-		</div>
-		<div class="insight-card">
-			<span>Page</span>
-			<strong>{page} / {totalPages}</strong>
-		</div>
+	<div class="results-summary" aria-live="polite">
+		<span><strong>{totalItems}</strong> rules</span>
+		<span>{scope === "repo" ? "Workspace + global" : scope === "global" ? "Global only" : "All workspaces"}</span>
+		{#if totalPages > 1}<span>Page {page} of {totalPages}</span>{/if}
 	</div>
 
 	{#if error}
@@ -240,33 +227,18 @@
 		gap: 14px;
 	}
 
-	.insight-strip {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 10px;
-	}
-
-	.insight-card {
-		padding: 12px 14px;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: rgba(255, 255, 255, 0.32);
+	.results-summary {
 		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.insight-card span {
-		font-size: 0.66rem;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 8px 20px;
+		padding: 0 4px;
+		font-size: 0.8rem;
 		color: var(--color-text-muted);
 	}
-
-	.insight-card strong {
-		font-size: 0.84rem;
+	.results-summary strong {
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 
 	/* ── Banners ── */
@@ -287,11 +259,5 @@
 		padding: 10px 12px;
 		font-size: 0.82rem;
 		font-weight: 700;
-	}
-
-	@media (max-width: 1100px) {
-		.insight-strip {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

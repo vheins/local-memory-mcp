@@ -49,6 +49,17 @@
 		if (e.key === "Escape") onClose();
 	}
 
+	$: dialogLabel =
+		$handlerMode === "memory"
+			? `Memory details: ${$handler.memory?.title || "Untitled memory"}`
+			: $handlerMode === "task"
+				? `Task details: ${$handler.task?.title || "Untitled task"}`
+				: $handlerMode === "standard"
+					? `${standard ? "Standard details" : "New standard"}`
+					: $handlerMode === "new-handoff"
+						? "New handoff"
+						: `Handoff details: ${handoff?.summary || "Untitled handoff"}`;
+
 	// ── Focus management (audit F4/F9 / TASK-272) ──────────────────────────
 	// Move focus into the drawer on open, wrap Tab inside it while open, and
 	// restore focus to the trigger on close. This also fixes Escape closing
@@ -98,6 +109,7 @@
 		on:keydown={handleKeyDown}
 		role="dialog"
 		aria-modal="true"
+		aria-label={dialogLabel}
 		tabindex="-1"
 	>
 		<div class="drawer-header">
@@ -178,7 +190,7 @@
 
 <style>
 	.drawer-header {
-		padding: 20px;
+		padding: 24px;
 		border-bottom: 1px solid var(--color-border);
 		display: flex;
 		align-items: flex-start;
@@ -187,7 +199,7 @@
 		flex-shrink: 0;
 	}
 	.drawer-title {
-		font-size: 1rem;
+		font-size: 1.125rem;
 		font-weight: 700;
 		color: var(--color-text);
 		line-height: 1.3;
@@ -214,8 +226,23 @@
 		opacity: 1;
 	}
 	.drawer-body {
-		padding: 20px;
+		padding: 24px;
 		flex: 1;
 		overflow-y: auto;
+	}
+
+	@media (max-width: 640px) {
+		.drawer-panel {
+			top: auto;
+			width: 100%;
+			max-width: none;
+			height: min(92dvh, 900px);
+			border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+		}
+
+		.drawer-header,
+		.drawer-body {
+			padding: 20px;
+		}
 	}
 </style>

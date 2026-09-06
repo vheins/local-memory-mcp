@@ -7,7 +7,7 @@
 		repoSearchQuery,
 		activeTab
 	} from "../lib/stores";
-	import { NAV_ITEMS } from "../lib/navigation";
+	import { NAV_GROUPS } from "../lib/navigation";
 	import { createRepoSidebarHandler } from "../lib/composables/useRepoSidebar";
 	import Icon from "../lib/Icon.svelte";
 	import RepoItem from "./RepoItem.svelte";
@@ -58,59 +58,66 @@
 		</button>
 	</div>
 
-	<!-- Navigation — TASK-425: single nav surface (moved from the content-area
-	     horizontal tablist; model lives in lib/navigation.ts). Keeps the
-	     TASK-405 a11y pattern: accessible name on the tablist + role=tab +
-	     aria-selected on each item. -->
-	<div class="nav-section" class:collapsed role="tablist" aria-label="Dashboard sections">
-		{#each NAV_ITEMS as tab (tab.id)}
-			<button
-				class="nav-item"
-				class:active={$activeTab === tab.id}
-				class:collapsed
-				on:click={() => onTabSelect(tab.id)}
-				title={collapsed ? tab.label : ""}
-				id="nav-{tab.id}"
-				role="tab"
-				aria-selected={$activeTab === tab.id}
-			>
-				<Icon name={tab.icon} size={collapsed ? 18 : 15} strokeWidth={1.75} />
+	<!-- Scope-aware primary navigation. Groups make the global/workspace/system
+	     boundary explicit without adding another click or changing route ids. -->
+	<nav class="nav-section" class:collapsed aria-label="Primary navigation">
+		{#each NAV_GROUPS as group (group.id)}
+			<div class="nav-group" data-scope={group.id}>
 				{#if !collapsed}
-					<span class="nav-label">{tab.label}</span>
-					{#if $activeTab === tab.id}
-						<span class="nav-active-dot"></span>
-					{/if}
+					<div class="nav-group-label">
+						<span>{group.label}</span>
+						{#if group.id === "workspace" && $currentRepo}
+							<span class="scope-dot" aria-hidden="true"></span>
+						{/if}
+					</div>
 				{/if}
-			</button>
+				{#each group.items as tab (tab.id)}
+					<button
+						class="nav-item"
+						class:active={$activeTab === tab.id}
+						class:collapsed
+						on:click={() => onTabSelect(tab.id)}
+						title={collapsed ? `${tab.label} — ${tab.description}` : tab.description}
+						id="nav-{tab.id}"
+						aria-current={$activeTab === tab.id ? "page" : undefined}
+					>
+						<Icon name={tab.icon} size={collapsed ? 18 : 16} strokeWidth={1.75} />
+						{#if !collapsed}
+							<span class="nav-label">{tab.label}</span>
+							{#if $activeTab === tab.id}<span class="nav-active-dot" aria-hidden="true"></span>{/if}
+						{/if}
+					</button>
+				{/each}
+			</div>
 		{/each}
-	</div>
+	</nav>
 
-	<!-- Search -->
-	{#if !collapsed}
-		<div class="p-3" style="border-bottom: 1px solid var(--color-border);">
+	<!-- Workspace selector -->
+	<div class="workspace-section" class:collapsed>
+		{#if !collapsed}
+			<div class="workspace-heading">
+				<div>
+					<div class="nav-group-label">Workspace</div>
+					<div class="workspace-caption">Choose repository context</div>
+				</div>
+				<span class="repo-count-chip">{$availableRepos.length}</span>
+			</div>
 			<div class="search-wrapper">
-				<span class="search-icon">
-					<Icon name="search" size={13} strokeWidth={2} />
-				</span>
+				<span class="search-icon"><Icon name="search" size={14} strokeWidth={2} /></span>
 				<input
 					class="form-input search-input"
 					type="text"
-					placeholder="Search repos…"
+					placeholder="Find a repository…"
 					aria-label="Search repositories"
 					bind:value={$repoSearchQuery}
 				/>
 			</div>
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	<!-- Repo List -->
-	<div class="overflow-y-auto flex-1 p-2" style="scrollbar-width: thin;">
+	<div class="repo-list overflow-y-auto flex-1 p-2">
 		{#if !collapsed}
-			<!-- Count badge -->
-			<div class="flex items-center justify-between px-2 py-1 mb-1">
-				<span class="section-label">Repositories</span>
-				<span class="repo-count-chip">{$availableRepos.length}</span>
-			</div>
 
 			<!-- Pinned -->
 			{#if $orderedRepos.pinned.length > 0}
@@ -219,24 +226,51 @@
 	.nav-section {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 8px 8px 6px;
+		gap: 12px;
+		padding: 12px 10px;
 		border-bottom: 1px solid var(--color-border);
+	}
+
+	.nav-group {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.nav-group-label {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 18px;
+		padding: 0 10px 4px;
+		font-size: 0.6875rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-faint);
+	}
+
+	.scope-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--color-success);
 	}
 
 	.nav-item {
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 8px 10px;
-		border-radius: 9px;
-		font-size: 0.8rem;
+		min-height: 40px;
+		padding: 9px 10px;
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--color-text-muted);
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		transition: all 0.15s ease;
+		transition: background-color 180ms ease-out, color 180ms ease-out;
 		text-align: left;
 		position: relative;
 		width: 100%;
@@ -278,16 +312,50 @@
 	}
 
 	.nav-section.collapsed {
-		align-items: center;
-		padding: 6px 4px;
+		align-items: stretch;
+		padding: 10px 6px;
+		gap: 10px;
+	}
+
+	.nav-section.collapsed .nav-group {
 		gap: 4px;
 	}
 
 	.nav-item.collapsed {
 		justify-content: center;
-		padding: 8px 4px;
+		padding: 9px 4px;
 		width: auto;
 		align-self: stretch;
+	}
+
+	.workspace-section {
+		padding: 12px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.workspace-section.collapsed {
+		display: none;
+	}
+
+	.workspace-heading {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 8px;
+		margin-bottom: 8px;
+	}
+
+	.workspace-heading .nav-group-label {
+		padding: 0;
+	}
+
+	.workspace-caption {
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+	}
+
+	.repo-list {
+		scrollbar-width: thin;
 	}
 
 	.search-wrapper {
@@ -305,9 +373,10 @@
 	}
 
 	.search-input {
-		padding-left: 32px;
-		font-size: 0.8rem;
-		background: rgba(255, 255, 255, 0.5);
+		min-height: 40px;
+		padding-left: 34px;
+		font-size: 0.8125rem;
+		background: var(--color-surface);
 	}
 
 	:global(html.dark) .search-input {

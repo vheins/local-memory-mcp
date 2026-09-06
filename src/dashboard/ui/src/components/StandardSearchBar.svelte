@@ -16,14 +16,12 @@
 	let importInput: HTMLInputElement;
 </script>
 
-<div class="feature-toolbar glass card">
+<header class="feature-toolbar card">
 	<div class="toolbar-title">
-		<Icon name="check" size={16} strokeWidth={2} />
+		<Icon name="check" size={18} strokeWidth={2} />
 		<div>
-			<h1 class="section-label">CODING STANDARDS</h1>
-			<div class="toolbar-subtitle">
-				Rules the agents follow in this repo. Filter, inspect, import, or add one rule at a time.
-			</div>
+			<h1>Coding standards</h1>
+			<p>Review the rules agents apply in this workspace, then add or import only what is reusable.</p>
 		</div>
 	</div>
 	<button class="btn btn-primary toolbar-action" on:click={onNewStandard}>
@@ -75,20 +73,33 @@
 			<option value="all">All standards</option>
 		</select>
 	</div>
-</div>
+</header>
 
 <style>
 	.feature-toolbar {
 		display: grid;
-		grid-template-columns: 1fr auto auto;
-		gap: 14px;
-		padding: 16px;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		gap: 20px;
+		padding: 24px;
 		align-items: start;
 	}
 	.toolbar-title {
 		display: flex;
-		align-items: center;
-		gap: 10px;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	.toolbar-title h1 {
+		margin: 0;
+		font-size: 1.2rem;
+		line-height: 1.25;
+		color: var(--color-text);
+	}
+	.toolbar-title p {
+		margin: 6px 0 0;
+		max-width: 620px;
+		font-size: 0.85rem;
+		line-height: 1.5;
+		color: var(--color-text-muted);
 	}
 	.toolbar-action {
 		justify-self: end;
@@ -101,20 +112,6 @@
 	}
 	.file-input {
 		display: none;
-	}
-	.toolbar-subtitle {
-		font-size: 0.72rem;
-		color: var(--color-text-muted);
-		font-weight: 600;
-		margin-top: 2px;
-		line-height: 1.45;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
 	}
 	.toolbar-controls {
 		display: grid;

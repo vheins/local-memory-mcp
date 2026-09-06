@@ -146,6 +146,24 @@
 	</table>
 </div>
 
+<div class="standard-cards" aria-label="Coding standards">
+	{#if loading}
+		{#each { length: 3 } as _, i (i)}<div class="standard-card"><div class="skeleton" style="height:124px;border-radius:10px;"></div></div>{/each}
+	{:else if standards.length === 0}
+		<div class="mobile-empty"><Icon name="check" size={24} /><strong>No standards found</strong><span>Adjust the filters or add a reusable rule.</span></div>
+	{:else}
+		{#each standards as std (std.id)}
+			<article class="standard-card" class:selected={$selectedStandardIds.has(std.id)}>
+				<div class="standard-heading"><input type="checkbox" checked={$selectedStandardIds.has(std.id)} on:change={() => toggleSelect(std.id)} aria-label={`Select standard ${std.title}`} /><button class="standard-title" on:click={() => onOpenEditDrawer(std)}>{std.title}</button><span class="scope-chip" class:scope-global={std.is_global} class:scope-repo={!std.is_global}>{formatScopeLabel(std.is_global)}</span></div>
+				{#if std.context}<p>{std.context}</p>{/if}
+				<div class="standard-meta"><span>{std.language || "Any language"}</span><span>v{std.version}</span><span>{formatDate(std.updated_at)}</span></div>
+				{#if std.tags?.length}<div class="standard-tags">{#each std.tags.slice(0, 4) as tag (tag)}<span>{tag}</span>{/each}</div>{/if}
+				<div class="mobile-actions"><button class="btn btn-ghost" on:click={() => onOpenEditDrawer(std)}>Open</button><button class="btn btn-danger" on:click={() => onDeleteRow(std)}>Delete</button></div>
+			</article>
+		{/each}
+	{/if}
+</div>
+
 <!-- Pagination -->
 {#if totalPages > 1}
 	<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
@@ -274,8 +292,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		width: 40px;
+		height: 40px;
 		border-radius: 7px;
 		border: none;
 		cursor: pointer;
@@ -327,6 +345,10 @@
 		border: 1px solid rgba(14, 165, 233, 0.2);
 	}
 
+	.standard-cards {
+		display: none;
+	}
+
 	.bulk-actions-bar {
 		position: fixed;
 		bottom: 24px;
@@ -343,5 +365,87 @@
 		z-index: 100;
 		font-size: 0.85rem;
 		color: var(--color-text);
+	}
+
+	@media (max-width: 720px) {
+		.mem-table-wrap {
+			display: none;
+		}
+		.standard-cards {
+			display: grid;
+			gap: 12px;
+		}
+		.standard-card {
+			display: grid;
+			gap: 12px;
+			padding: 16px;
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-lg);
+			background: var(--color-surface);
+		}
+		.standard-card.selected {
+			border-color: var(--color-primary);
+			background: rgba(37, 99, 235, 0.05);
+		}
+		.standard-heading {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			align-items: start;
+			gap: 10px;
+		}
+		.standard-title {
+			padding: 0;
+			border: 0;
+			background: transparent;
+			color: var(--color-text);
+			font-size: 0.92rem;
+			font-weight: 700;
+			line-height: 1.4;
+			text-align: left;
+		}
+		.standard-card p {
+			margin: 0;
+			font-size: 0.8rem;
+			line-height: 1.5;
+			color: var(--color-text-muted);
+		}
+		.standard-meta,
+		.standard-tags {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px 12px;
+			font-size: 0.72rem;
+			color: var(--color-text-muted);
+		}
+		.standard-tags span {
+			padding: 3px 7px;
+			border-radius: 999px;
+			background: var(--color-hover);
+		}
+		.mobile-actions {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 8px;
+		}
+		.mobile-empty {
+			display: grid;
+			justify-items: center;
+			gap: 8px;
+			padding: 40px 16px;
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-lg);
+			color: var(--color-text-muted);
+			text-align: center;
+		}
+		.mobile-empty strong {
+			color: var(--color-text);
+		}
+		.bulk-actions-bar {
+			left: 16px;
+			right: 16px;
+			transform: none;
+			justify-content: center;
+			flex-wrap: wrap;
+		}
 	}
 </style>

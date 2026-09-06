@@ -3,15 +3,17 @@
 /* Fix 7: Duplicate Google Fonts @import removed — kept only in index.html <link> */
 
 :root {
-	/* ── Glass Surface Tokens ─── */
-	--glass-bg: rgba(255, 255, 255, 0.52);
-	--glass-bg-strong: rgba(255, 255, 255, 0.72);
-	--glass-bg-ultra: rgba(255, 255, 255, 0.88);
-	--glass-border: rgba(255, 255, 255, 0.4);
-	--glass-border-inner: rgba(255, 255, 255, 0.7);
-	--glass-shadow: 0 20px 70px rgba(15, 23, 42, 0.1), 0 4px 16px rgba(15, 23, 42, 0.06);
-	--glass-shadow-elevated: 0 32px 96px rgba(15, 23, 42, 0.16), 0 8px 32px rgba(15, 23, 42, 0.08);
-	--glass-blur: blur(28px) saturate(1.2);
+	/* ── Surface Tokens ───
+	   The dashboard is an operational tool, not a glassmorphism showcase.
+	   Opaque surfaces, quiet borders, and whitespace carry hierarchy. */
+	--glass-bg: rgba(255, 255, 255, 0.96);
+	--glass-bg-strong: #ffffff;
+	--glass-bg-ultra: #ffffff;
+	--glass-border: #dfe7f0;
+	--glass-border-inner: transparent;
+	--glass-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+	--glass-shadow-elevated: 0 12px 32px rgba(15, 23, 42, 0.12);
+	--glass-blur: none;
 
 	/* ── Dark Panel Tokens ─── */
 	--panel-dark: rgba(6, 12, 28, 0.7);
@@ -29,21 +31,31 @@
 	--glow-purple: rgba(168, 85, 247, 0.35);
 	--glow-cyan: rgba(6, 182, 212, 0.35);
 
-	/* ── Layout ─── */
-	--sidebar-width: 280px;
-	--sidebar-collapsed-width: 72px;
-	--header-height: 61px;
+	/* ── Layout and spacing ─── */
+	--sidebar-width: 272px;
+	--sidebar-collapsed-width: 68px;
+	--header-height: 64px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+	--space-6: 32px;
+	--space-7: 40px;
+	--space-8: 48px;
 	--radius-sm: 8px;
-	--radius-md: 12px;
-	--radius-lg: 16px;
+	--radius-md: 14px;
+	--radius-lg: 20px;
 	--radius-xl: 20px;
-	--radius-2xl: 24px;
+	--radius-2xl: 20px;
 
 	/* ── Color Palette ─── */
-	--color-bg: #f0f8ff;
+	--color-bg: #f6f8fb;
 	--color-surface: #ffffff;
-	--color-border: #e1ecf7;
-	--color-text: #0a1628;
+	--color-surface-subtle: #f9fafb;
+	--color-surface-hover: #f1f5f9;
+	--color-border: #dfe7f0;
+	--color-text: #111827;
 	/* TASK-274 / audit F6 (WCAG AA, LIGHT THEME ONLY):
 	   17/21 sampled light-theme text pairs were < 4.5:1 because muted/faint
 	   were too light against the glass surfaces. Darkened here; the .dark
@@ -52,11 +64,11 @@
 	   - faint #8faec4 → #64748b : 4.76:1 on white (was ~2.3:1) */
 	--color-text-muted: #51647a;
 	--color-text-faint: #64748b;
-	--color-primary: #0ea5e9;
-	--color-primary-dark: #0284c7;
-	--color-primary-light: #38bdf8;
-	--color-accent: #6366f1;
-	--color-accent-dark: #4f46e5;
+	--color-primary: #2563eb;
+	--color-primary-dark: #1d4ed8;
+	--color-primary-light: #60a5fa;
+	--color-accent: #2563eb;
+	--color-accent-dark: #1d4ed8;
 	--color-success: #10b981;
 	--color-warning: #f59e0b;
 	--color-danger: #ef4444;
@@ -122,25 +134,15 @@ html {
 	font-family: "Inter", system-ui, sans-serif;
 	font-size: 16px;
 	line-height: 1.5;
-	background:
-		radial-gradient(ellipse at 8% 10%, rgba(56, 189, 248, 0.28) 0%, transparent 38%),
-		radial-gradient(ellipse at 92% 8%, rgba(99, 102, 241, 0.18) 0%, transparent 32%),
-		radial-gradient(ellipse at 75% 88%, rgba(168, 85, 247, 0.12) 0%, transparent 28%),
-		radial-gradient(ellipse at 20% 75%, rgba(14, 165, 233, 0.1) 0%, transparent 26%),
-		linear-gradient(160deg, #eef8ff 0%, #f0f4ff 45%, #f5f0ff 100%) fixed;
+	background: var(--color-bg);
 	min-height: 100vh;
-	transition: background 0.5s ease;
+	transition: background-color 180ms ease-out;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
 
 html.dark {
-	background:
-		radial-gradient(ellipse at 8% 10%, rgba(14, 165, 233, 0.14) 0%, transparent 38%),
-		radial-gradient(ellipse at 92% 8%, rgba(67, 56, 202, 0.12) 0%, transparent 32%),
-		radial-gradient(ellipse at 75% 88%, rgba(88, 28, 135, 0.1) 0%, transparent 28%),
-		radial-gradient(ellipse at 20% 75%, rgba(14, 165, 233, 0.06) 0%, transparent 26%),
-		linear-gradient(160deg, #010c1e 0%, #040d1e 45%, #050c1a 100%) fixed;
+	background: var(--color-bg);
 }
 
 body {
@@ -197,23 +199,12 @@ a:hover {
 	background: var(--glass-bg);
 	border: 1px solid var(--glass-border);
 	box-shadow: var(--glass-shadow);
-	backdrop-filter: var(--glass-blur);
-	-webkit-backdrop-filter: var(--glass-blur);
 	position: relative;
 }
 
 /* Etched glass inner-border effect via pseudo-element */
 .glass::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	border-radius: inherit;
-	border: 1px solid var(--glass-border-inner);
-	border-bottom-color: transparent;
-	border-right-color: transparent;
-	opacity: 0.6;
-	pointer-events: none;
-	z-index: 0;
+	display: none;
 }
 
 .dark .glass {
@@ -223,10 +214,7 @@ a:hover {
 }
 
 .dark .glass::before {
-	border-color: rgba(148, 163, 184, 0.07);
-	border-bottom-color: transparent;
-	border-right-color: transparent;
-	opacity: 0.8;
+	display: none;
 }
 
 .glass-strong {
