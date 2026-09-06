@@ -9,13 +9,20 @@
 	letter-spacing: 0.03em;
 }
 
-/* ─── Section Headers ─────────────────────────────────────────────────────── */
+/* ─── Section labels ────────────────────────────────────────────────────────
+   A GLOBAL rule already existed here, yet six components each redefined
+   `.section-label` in their own <style> block at 0.65rem/700/uppercase —
+   10.4px shouty text overriding a global they never needed to override.
+   Those local copies are deleted; this is the single definition.
+
+   Dropped to a normal-case 12px medium: uppercase-tracked-bold at 10px is
+   decoration pretending to be hierarchy, and it is measurably harder to read. */
 .section-label {
-	font-size: 0.75rem;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
+	font-size: var(--text-label);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.01em;
 	color: var(--color-text-muted);
+	margin-bottom: var(--space-2);
 }
 
 /* ─── Glow Pulse Dot (active indicator) ─────────────────────────────────── */
@@ -312,4 +319,3 @@
 		var(--panel-dark-shadow),
 		0 0 24px rgba(56, 189, 248, 0.08);
 }
-

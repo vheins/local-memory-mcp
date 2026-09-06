@@ -28,7 +28,7 @@
 	}
 
 	.dashboard-shell {
-		padding: 12px;
+		--shell-pad: var(--space-3);
 	}
 
 	.tab-btn {
