@@ -7,6 +7,7 @@
 
 import type { ParserPool } from "../../parser";
 import type { ParseResult } from "../../parser/language-visitor";
+import type { ImportResolver } from "../../parser/import-resolution";
 import type { ResolvedSymbol } from "../../parser/parent-resolver";
 import type { ReexportResolver } from "../../parser/reexport-resolution";
 import type { SemanticSymbolEnrichment } from "../../semantic/adapter";
@@ -78,6 +79,19 @@ export interface ParsePipelineOptions {
 	 */
 	resolveReexports?: boolean;
 	/**
+	 * If true, resolve 'import' edges to their canonical targets (issue #83,
+	 * FIX-83) during the pipeline, populating target_file/target_symbol_id on
+	 * the import rows. Enabled by default (acceptance: new indexes populate
+	 * import targets without an opt-in flag); pass `false` to persist raw
+	 * import rows. Like the re-export resolver, the import resolver reads the
+	 * repo's ALREADY-INDEXED symbol surface (codebase_symbols +
+	 * codebase_files) once per pipeline run — a first-time index (empty DB)
+	 * leaves targets null, and re-indexes resolve correctly. Resolution is
+	 * single-hop and never throws: unresolved specifiers/names degrade to null
+	 * targets and the import row is still persisted.
+	 */
+	resolveImports?: boolean;
+	/**
 	 * Optional semantic adapter registry (issue #90). When omitted, the default
 	 * built-in registry (TypeScript + PHPStan PoC) is used. Injectable for tests
 	 * and for operators who want custom language adapters.
@@ -120,6 +134,13 @@ export interface PipelineContext {
 	 * reference mapper then persists unresolved edges (null targets, visible).
 	 */
 	reexportResolver: ReexportResolver | null;
+	/**
+	 * The import resolver built ONCE from the repo's already-indexed surface
+	 * (issue #83 / FIX-83). Non-null unless imports are disabled (the
+	 * {@link ParsePipelineOptions.resolveImports} opt-out) or the DB is empty;
+	 * unresolved imports are then persisted with null targets.
+	 */
+	importResolver: ImportResolver | null;
 }
 
 /**

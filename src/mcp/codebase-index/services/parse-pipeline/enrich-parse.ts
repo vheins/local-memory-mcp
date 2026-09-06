@@ -84,11 +84,15 @@ export async function enrichParsedOutcome(
 
 /**
  * Map a parsed outcome's reference edges to DB rows, expanding re-export edges
- * to their canonical targets when a resolver is available (issue #87). A
- * reference of kind 'reexport' that resolves to exactly one target is written
- * with that target; a wildcard `export *` that resolves to several targets is
- * expanded into one row per re-exported symbol; an unresolved re-export is
- * still persisted with null targets (visible, matching the #83 import stance).
+ * to their canonical targets when a resolver is available (issue #87) and
+ * resolving import edges to theirs (issue #83 / FIX-83). A reference of kind
+ * 'reexport' that resolves to exactly one target is written with that target;
+ * a wildcard `export *` that resolves to several targets is expanded into one
+ * row per re-exported symbol; an unresolved re-export is still persisted with
+ * null targets (visible, matching the #83 import stance). An 'import'
+ * reference with a resolvable module specifier is written with its canonical
+ * target (file + symbol when the imported name maps to an exported symbol);
+ * unresolved imports keep null targets and stay visible.
  */
 function buildReferenceRows(ctx: PipelineContext, outcome: ParsedOutcome): CodebaseReferenceInsert[] {
 	const { plan, parseResult } = outcome;
@@ -106,11 +110,11 @@ function expandReference(
 	filePath: string,
 	repo: string
 ): CodebaseReferenceInsert[] {
-	const resolver = ctx.reexportResolver;
-	if (ref.kind === "reexport" && resolver) {
+	const reexportResolver = ctx.reexportResolver;
+	if (ref.kind === "reexport" && reexportResolver) {
 		const spec = reexportSpecFromParsedReference(ref);
 		if (spec) {
-			const resolved = resolver.resolve(ref.callerFile || filePath, spec);
+			const resolved = reexportResolver.resolve(ref.callerFile || filePath, spec);
 			if (resolved.length === 1) {
 				const r = resolved[0];
 				return [
@@ -132,6 +136,35 @@ function expandReference(
 			}
 			// No resolved targets — fall through and persist unresolved.
 		}
+	}
+
+	// Import → canonical target (issue #83 / FIX-83). Only references that
+	// carry a module specifier are resolvable; side-effect imports of external
+	// packages and specifier-less references fall through unresolved.
+	const importResolver = ctx.importResolver;
+	const importInfo = ref.importInfo;
+	if (ref.kind === "import" && importResolver && importInfo?.moduleSpecifier) {
+		const resolved = importResolver.resolve(
+			ref.callerFile || filePath,
+			importInfo.moduleSpecifier,
+			importInfo.importedName,
+			importInfo.importKind
+		);
+		if (resolved.targetFile) {
+			// The module resolved to an indexed file. Keep symbol_name (the
+			// canonical imported name / namespace alias) untouched — only the
+			// target columns are populated; a miss on the exported name keeps
+			// the file-level target with a null symbol (namespace, side-effect,
+			// barrel re-export or genuinely unresolved name).
+			return [
+				{
+					...referenceInsert(ref, filePath, repo),
+					target_file: resolved.targetFile,
+					target_symbol_id: resolved.targetSymbolId
+				}
+			];
+		}
+		// Module unresolvable (unindexed/unmatched specifier) — persist as-is.
 	}
 	return [referenceInsert(ref, filePath, repo)];
 }

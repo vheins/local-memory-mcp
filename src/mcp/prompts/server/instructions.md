@@ -127,11 +127,28 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 **Codebase Index**: `codebase-index` → `codebase-read` — **MANDATORY FIRST for ALL codebase exploration (STRICT)**
 
-- `codebase-index(repo)` = status (freshness + count); `codebase-index(repoPath + repo)` = index (tree-sitter scan)
+- `codebase-index(repo)` = status (freshness + count + runtime capability state); `codebase-index(repoPath + repo)` = index (tree-sitter scan); `warmup:true` explicitly initializes the index engine.
 - Always check status first. If stale, trigger index before querying.
 - `codebase-read`: `query` → search, `name` → symbol trace, `filePath` → file symbols, `content` → grep indexed file contents, none → architecture. `depth` only applies inside architecture mode.
 - **STRICT PRIORITY**: ALL agents (orchestrator + sub-agents) MUST start every codebase context search with `codebase-index`/`codebase-read` — symbols, files, architecture, trace, and content grep.
 - **FORBIDDEN as first resort**: `rg` / `grep` / `glob` / `seed` / `cat` / `bash cat` / `find` / `ls` / brute-force filesystem search — NEVER use before `codebase-read`. Allowed ONLY as fallback after index returns empty/stale or cannot answer, and ONLY via `explore` sub-agent (which itself tries index first before `glob`/`grep`/`cat`). Direct `rg`/`grep`/`cat` without prior `codebase-read` is a violation. `cat` is for reading a **known** file only — never for blind exploration.
+
+**Exploration Observations**: `observation-write` → `observation-read`
+
+- `observation-write`: create / update / bulk / refresh high-signal exploration observations with source fingerprints. Auto-infer: `subject`+`fact`+`confidence`+`evidence[]` → create; `id` + fields → update; `observations[]` (1–100) → bulk create; `refresh_ids[]` (1–100) → refresh fingerprints. Repeated normalized facts + evidence are idempotent (deduplicated). Evidence items require `file_path` and optionally `symbol_id`, `start_line`/`end_line`, `commit_sha`.
+- `observation-read`: list / detail evidence-backed observations by `owner`/`repo` scope with filters `subject`, `task_id`, `file_path`, `symbol_id`, `min_confidence` (0–1). Detail via `id` (UUID). Stale and unverifiable findings are excluded by default (`include_stale:false`); set `include_stale:true` to include them. `hydrate_evidence:false` by default (set true to inline evidence). Paginated via `limit` (1–100, default 20) + `offset`.
+
+**Agent Context (budgeted)**: `agent-context`
+
+- Compiles deterministic, token-budgeted context from 7 sources: `memories`, `decisions`, `tasks`, `handoffs`, `standards`, `observations`, `code`.
+- Key params: `objective` (or legacy `query`) ranks candidates from every source; `task_code` pins a task as critical; `current_file_path` retrieves compact code pointers; `sources[]` selects the source set (default all 7); `type_filter` filters memory type.
+- Budget: `budget.tokens` (256–20_000, default 2_000) + `budget.max_items` (1–100, default 20) + `budget.code_depth` (0–5, default 1, graph expansion from `current_file_path`). Candidates are ranked by priority + lexical overlap with `objective`, packed until either budget is hit; overflow is reported in `exclusions` with reason `token_budget` or `item_budget`.
+- `include_stale:false` by default (fresh observations only); `limit` (1–100, default 5) caps legacy memory/task projections. `context_pack_id` / `session_id` enable cache-hit correlation (opaque, never prompt text).
+
+**Synthesis**: `synthesize` (requires client sampling support) + `repo-summarize`
+
+- `synthesize`: composite contextual synthesis via MCP sampling over local memories + tasks; filtered from tool definitions when the client lacks sampling capability.
+- `repo-summarize`: archive session signals as `task_archive` summary (importance=3).
 
 ## Who / When
 
@@ -150,10 +167,83 @@ A `memory-write` update accepts the same fields as create but all are optional (
 | `handoff-write`                   | Create handoff ONLY for unfinished work (concrete next owner + steps)  | Agent leaving work behind              |
 | `standard-read(query)`            | Hydrate (S1) — load applicable coding standards                        | All agents                             |
 | `standard-write`                  | Persist a new standards entry                                          | All agents                             |
+| `standard-delete`                 | Delete coding standards (single/bulk, UUID or code)                    | All agents                             |
+| `memory-delete`                   | Soft-delete memories (single/bulk, UUID or code)                       | All agents                             |
+| `task-delete`                     | Soft-delete tasks → canceled, release claims, expire handoffs          | All agents                             |
+| `repo-summarize`                  | Archive session signals as task_archive summary                        | All agents                             |
+| `synthesize`                      | Composite synthesis via sampling (requires client sampling)             | All agents                             |
+| `agent-context`                   | Compile token-budgeted cross-source context for an objective           | All agents                             |
+| `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints   | All agents                             |
+| `observation-read`                | Read observations by scope, subject, task, file, symbol, confidence    | All agents                             |
 | `codebase-index(repo)`            | Check index freshness/status before querying                           | Orchestrator                           |
 | `codebase-index(repoPath + repo)` | Refresh a stale index                                                  | Orchestrator                           |
+| `codebase-index(warmup:true)`     | Explicitly warm the index engine                                       | Orchestrator                           |
 | `codebase-read(query)`            | Primary codebase exploration (symbol/NL search)                        | Orchestrator                           |
 | `codebase-read(name)`             | Trace definition & usage cross-file                                    | Orchestrator                           |
+
+## Registered Tools (19 canonical)
+
+All 19 tools are registered via `src/mcp/tools/index.ts` (`buildExecutors` + `TOOL_DEFINITIONS`) and `src/mcp/mcp-server.ts:registerAllTools`. No legacy dotted aliases are registered — the router normalizes `'.'` → `'-'` only for backward-compatible dispatch.
+
+| # | Tool | Kind | Description |
+|---|------|------|-------------|
+| 1 | `memory-write` | write | Create / update / acknowledge / bulk memories (auto-infer) |
+| 2 | `memory-read` | read | Search / detail / recap memories (auto-infer) |
+| 3 | `memory-delete` | write | Soft-delete memories (single/bulk) |
+| 4 | `task-write` | write | Create / update / bulk / interactive tasks |
+| 5 | `task-read` | read | Search / detail / list tasks |
+| 6 | `task-delete` | write | Soft-delete tasks → canceled |
+| 7 | `handoff-write` | write | Create / update handoff |
+| 8 | `handoff-read` | read | Detail / list / search handoffs (incl. claims list) |
+| 9 | `claim-manage` | write† | Claim / release / list task claims (auto-infer; list is read-only) |
+| 10 | `standard-write` | write | Create / update / bulk coding standards |
+| 11 | `standard-read` | read | Search / detail / list standards |
+| 12 | `standard-delete` | write | Delete standards (single/bulk) |
+| 13 | `agent-context` | read | Budgeted cross-source context compiler |
+| 14 | `synthesize` | read | Context synthesis via MCP sampling (gated on client capability) |
+| 15 | `repo-summarize` | write | Repository summary from signals |
+| 16 | `observation-write` | write | Create / update / bulk / refresh exploration observations |
+| 17 | `observation-read` | read | Read exploration observations |
+| 18 | `codebase-index` | write | Index or status (incl. warmup) |
+| 19 | `codebase-read` | read | Trace / file / search / architecture / content grep |
+
+† `claim-manage` list modes are read-only and do not emit an `action_log` row; claim/release modes do.
+
+## Tool Error Envelope
+
+Every tool failure is returned as a canonical `ToolError` envelope via `src/mcp/utils/mcp-error.ts:toErrorResponse` (shared by both SDK and router transports):
+
+```json
+{
+  "schema": "tool-error",
+  "code": "VALIDATION_ERROR",
+  "message": "Error: ...",
+  "retryable": false,
+  "error": "Error: ...",
+  "details": {}
+}
+```
+
+- `schema` is always `"tool-error"`.
+- `code` is one of `VALIDATION_ERROR` | `NOT_FOUND` | `CONFLICT` | `UNSUPPORTED_OPERATION` | `CAPABILITY_UNAVAILABLE` | `INTERNAL_ERROR` (open string for forward-compat).
+- `message` and `error` carry the same human-readable text; `error` is a backward-compatible alias.
+- `retryable` is `false` for all currently classified errors; `true` only for explicitly retryable tool errors.
+- `details` is present only when the handler supplies structured details.
+- Successful structured results use `withEnvelope(schema, mode, data)` and `createMcpResponse(..., { includeJson })` — `structuredContent` is populated only when `json:true` or the handler opts in; `content[0].text` always carries a human summary.
+
+## Runtime Profiles & Capabilities
+
+Runtime profile is selected via `MCP_RUNTIME_PROFILE` (`minimal` | `balanced` | `full`, default `full`) in `src/mcp/runtime-capabilities.ts`:
+
+| Profile | Capabilities |
+|---------|--------------|
+| `minimal` | `dashboard` |
+| `balanced` | `semantic`, `indexing`, `dashboard` |
+| `full` | `semantic`, `indexing`, `watcher`, `maintenance`, `dashboard` |
+
+- Each capability has state `unavailable` | `idle` | `loading` | `ready` | `degraded` | `failed`; `snapshot()` exposes `loaded_at`, `duration_ms`, `error`, and footprint.
+- Semantic capability is lazily warmed only for semantic-demanding calls: `isSemanticToolDemand` returns true for **writes** `memory-write` / `standard-write` / `task-write`, and for **reads** `memory-read` / `standard-read` / `task-read` / `agent-context` only when `query` or `objective` is present.
+- `codebase-index` status includes runtime capability state; `warmup:true` explicitly initializes the index engine. Without semantic/indexing, tools degrade to lexical results rather than failing.
 
 ## Rules
 

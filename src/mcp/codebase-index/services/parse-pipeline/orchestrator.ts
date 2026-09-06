@@ -17,6 +17,7 @@
  */
 
 import type { ParserPool } from "../../parser";
+import { ImportResolver, buildImportResolver } from "../../parser/import-resolution";
 import { ReexportResolver, buildReexportResolverContext } from "../../parser/reexport-resolution";
 import { resolveConcurrency } from "../../parser/worker-pool";
 import type { SQLiteStore } from "../../../storage/sqlite";
@@ -60,6 +61,7 @@ export async function runParsePipeline(
 	stalePaths: Set<string>,
 	options: ParsePipelineOptions = {}
 ): Promise<ParsePipelineResult> {
+	const resolvers = buildResolvers(db, repo, options);
 	const context: PipelineContext = {
 		db,
 		parserPool,
@@ -69,7 +71,8 @@ export async function runParsePipeline(
 		renameMap,
 		stalePaths,
 		options,
-		reexportResolver: buildReexportResolver(db, repo, options)
+		reexportResolver: resolvers.reexportResolver,
+		importResolver: resolvers.importResolver
 	};
 	const run = createRun();
 
@@ -154,16 +157,36 @@ function createRun(): PipelineRun {
 }
 
 /**
- * Build the re-export resolver ONCE from the repo's already-indexed surface
- * (issue #87). Re-indexes resolve canonical targets correctly; a first-time
- * index (empty DB) yields null targets (graceful, matching #83 stance).
+ * Build the re-export + import resolvers ONCE from the repo's already-indexed
+ * surface (issue #87 re-export chains; issue #83 / FIX-83 import targets). The
+ * lookup inputs (indexed files + symbols grouped by file) are shared, so both
+ * resolvers load the DB surface a single time per pipeline run.
+ *
+ * Re-indexes resolve canonical targets correctly; a first-time index (empty
+ * DB) yields null targets (graceful, matching the #83 stance). Import
+ * resolution is ON by default (acceptance: new indexes populate import
+ * targets) — pass `resolveImports: false` to persist raw import rows.
+ * Re-export resolution stays opt-in via `resolveReexports`.
  */
-function buildReexportResolver(db: SQLiteStore, repo: string, options: ParsePipelineOptions): ReexportResolver | null {
-	if (!options.resolveReexports) return null;
-	const indexedFiles = new Set(db.codebaseFiles.getFilesByRepo(repo).map((f) => f.file_path));
-	const symbols = db.codebaseSymbols.getSymbolsByRepo(repo);
-	const reexportRefs = db.codebaseReferences.getReferencesByRepo(repo, ["reexport"]);
-	return new ReexportResolver(buildReexportResolverContext(reexportRefs, symbols, indexedFiles));
+function buildResolvers(
+	db: SQLiteStore,
+	repo: string,
+	options: ParsePipelineOptions
+): { reexportResolver: ReexportResolver | null; importResolver: ImportResolver | null } {
+	const resolveReexports = options.resolveReexports === true;
+	const resolveImports = options.resolveImports !== false;
+	let reexportResolver: ReexportResolver | null = null;
+	let importResolver: ImportResolver | null = null;
+	if (resolveReexports || resolveImports) {
+		const indexedFiles = new Set(db.codebaseFiles.getFilesByRepo(repo).map((f) => f.file_path));
+		const symbols = db.codebaseSymbols.getSymbolsByRepo(repo);
+		if (resolveImports) importResolver = buildImportResolver(symbols, indexedFiles);
+		if (resolveReexports) {
+			const reexportRefs = db.codebaseReferences.getReferencesByRepo(repo, ["reexport"]);
+			reexportResolver = new ReexportResolver(buildReexportResolverContext(reexportRefs, symbols, indexedFiles));
+		}
+	}
+	return { reexportResolver, importResolver };
 }
 
 /** Emit a progress event — the callback must never kill the pipeline. */

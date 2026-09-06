@@ -347,3 +347,87 @@ export function resolveImport(
 	if (!target) return { targetFile, targetSymbolId: null };
 	return { targetFile: target.targetFile, targetSymbolId: target.targetSymbolId };
 }
+
+// ── Pipeline-facing resolver (issue #83 / FIX-83) ─────────────────────────
+
+/** Immutable context the import resolver needs from the index. */
+export interface ImportResolverContext {
+	/** Repo-relative paths of all indexed files (codebase_files). */
+	indexedFiles: ReadonlySet<string>;
+	/** Repo symbols grouped by `file_path`. */
+	symbolsByFile: Map<string, CodebaseSymbol[]>;
+	/** Parsed tsconfig baseUrl/paths (nullable). */
+	tsconfig: TsconfigPaths | null;
+}
+
+/**
+ * Per-file import → canonical target resolver for the parse pipeline.
+ *
+ * A thin, stateless wrapper over {@link resolveImport} that snapshots the
+ * repo's already-indexed lookup surface ONCE per pipeline run (mirroring
+ * {@link ReexportResolver}). Single-hop by design: imports never recurse, so
+ * cycles are structurally impossible and no `visiting` set is needed.
+ *
+ * Namespace imports (`import * as ns`) carry the sentinel imported name "*"
+ * in their v27 metadata; a namespace has no single exported name, so they are
+ * normalized to `null` before resolution — the module resolves to its file
+ * with a null symbol target (matching `findExportTarget`'s namespace stance).
+ * Side-effect imports (`import 'x'`) carry a null imported name already and
+ * fall through the same file-only path.
+ */
+export class ImportResolver {
+	constructor(private readonly ctx: ImportResolverContext) {}
+
+	/**
+	 * Resolve one import reference to its canonical target. Returns nulls for
+	 * any miss — the import row is still persisted (issue #83 stance).
+	 *
+	 * @param callerFile   repo-relative path of the importing file
+	 * @param specifier    raw module specifier as written (`'./user'`)
+	 * @param importedName the name as written in the module, or null for
+	 *                     side-effect imports
+	 * @param importKind   the v27 import kind (`default` | `named` |
+	 *                     `namespace` | `side-effect`) — namespace imports
+	 *                     normalize to a file-only resolution
+	 */
+	resolve(
+		callerFile: string,
+		specifier: string,
+		importedName: string | null,
+		importKind: string | null
+	): ImportResolution {
+		const canonicalName = importKind === "namespace" ? null : importedName;
+		return resolveImport(
+			specifier,
+			callerFile,
+			this.ctx.indexedFiles,
+			this.ctx.symbolsByFile,
+			this.ctx.tsconfig,
+			canonicalName
+		);
+	}
+}
+
+/** Build an {@link ImportResolverContext} from the repo index: indexed file paths + symbols grouped by file. */
+export function buildImportResolverContext(
+	symbols: CodebaseSymbol[],
+	indexedFiles: ReadonlySet<string>,
+	tsconfig: TsconfigPaths | null = null
+): ImportResolverContext {
+	const symbolsByFile = new Map<string, CodebaseSymbol[]>();
+	for (const s of symbols) {
+		const arr = symbolsByFile.get(s.file_path) ?? [];
+		arr.push(s);
+		symbolsByFile.set(s.file_path, arr);
+	}
+	return { indexedFiles, symbolsByFile, tsconfig };
+}
+
+/** Convenience: build a ready-to-use {@link ImportResolver}. */
+export function buildImportResolver(
+	symbols: CodebaseSymbol[],
+	indexedFiles: ReadonlySet<string>,
+	tsconfig: TsconfigPaths | null = null
+): ImportResolver {
+	return new ImportResolver(buildImportResolverContext(symbols, indexedFiles, tsconfig));
+}
