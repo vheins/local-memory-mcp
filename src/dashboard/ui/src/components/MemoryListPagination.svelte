@@ -35,8 +35,7 @@
 					onclick={() => onGoToPage(p)}>{p}</button
 				>
 			{/each}
-			<button class="btn btn-ghost btn-sm" onclick={() => onGoToPage(page + 1)} disabled={page >= totalPages}>›</button
-			>
+			<button class="btn btn-ghost btn-sm" onclick={() => onGoToPage(page + 1)} disabled={page >= totalPages}>›</button>
 			<button class="btn btn-ghost btn-sm" onclick={() => onGoToPage(totalPages)} disabled={page >= totalPages}
 				>»</button
 			>

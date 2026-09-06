@@ -2,7 +2,7 @@
  * Props and miscellaneous drawing functions for room decorations.
  */
 
-import { rr } from "./utils";
+import { arenaFont, ARENA_TEXT_BODY, rr } from "./utils";
 
 // ── Hazard sign ───────────────────────────────────────────────────────────
 export function drawHazardSign(ctx: CanvasRenderingContext2D, x: number, y: number) {
@@ -17,7 +17,7 @@ export function drawHazardSign(ctx: CanvasRenderingContext2D, x: number, y: numb
 	ctx.lineWidth = 1;
 	ctx.stroke();
 	ctx.fillStyle = "#1a1a1a";
-	ctx.font = "bold 9px system-ui";
+	ctx.font = arenaFont(ARENA_TEXT_BODY, "bold");
 	ctx.textAlign = "center";
 	ctx.textBaseline = "bottom";
 	ctx.fillText("!", x + 10, y + 15);

@@ -50,9 +50,15 @@
 	transition: margin-left 0.3s var(--ease-smooth);
 }
 
+/* Shell padding is a TOKEN, not a magic number. It was `20px`, off the 8pt
+   scale, while `.arena-fullwidth` cancelled it with `--space-5` (24px) — a 4px
+   mismatch per side that produced a permanent horizontal scrollbar on the arena
+   route. Anything that needs to escape this padding must reference the same
+   custom property. */
 .dashboard-shell {
-	padding: 20px;
-	min-height: calc(100vh - var(--header-height, 61px));
+	--shell-pad: var(--space-5);
+	padding: var(--shell-pad);
+	min-height: calc(100vh - var(--header-height));
 	min-width: 0;
 }
 
@@ -101,7 +107,8 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 7px 14px;
+	min-height: 40px;
+	padding: 8px 14px;
 	border-radius: 9px;
 	font-size: 0.8rem;
 	font-weight: 600;
@@ -156,3 +163,10 @@
 		0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
+/* The 40px .tab-btn clears the pointer minimum but not the WCAG 2.2 touch
+   floor; the tokens.css mobile override shrinks its padding further. */
+@media (pointer: coarse) {
+	.tab-btn {
+		min-height: 44px;
+	}
+}

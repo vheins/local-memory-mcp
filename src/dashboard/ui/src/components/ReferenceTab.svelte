@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
+	import { PageHeader } from "./ui";
 	import type { Readable } from "svelte/store";
 	import type { ReferenceItem } from "../lib/stores";
 	import type { AppState } from "../lib/composables/useApp";
@@ -65,16 +66,14 @@
 </script>
 
 <div class="animate-fade-in">
-	<!-- Header -->
-	<div class="glass card" style="margin-bottom:16px;padding:14px 18px;">
+	<PageHeader title="MCP Reference" description="Every tool, prompt, and resource this server exposes to agents." />
+
+	<!-- The search row is a toolbar, not a header. It was previously wrapped in
+	     a `glass card` alongside the page title, which framed the page heading
+	     as if it were a widget. -->
+	<div class="ref-toolbar">
 		<div class="ref-header">
 			<div class="flex items-center gap-2">
-				<Icon name="book-open" size={15} strokeWidth={1.75} />
-				<!-- Page heading (audit F8/F7): every other tab exposes its
-					purpose as an h1 (Memory Explorer, Coding Standards, …);
-					Reference was the only tab without a heading. Matches the
-					canonical section-label h1 used by the other tabs. -->
-				<h1 class="section-label">MCP Reference</h1>
 				{#if state.capabilities}
 					<span class="ref-total-badge"
 						>{(state.capabilities.tools?.length || 0) + (state.capabilities.prompts?.length || 0)} items</span
@@ -202,19 +201,23 @@
 </div>
 
 <style>
+	.ref-toolbar {
+		margin-bottom: var(--space-4);
+	}
+
 	.ref-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
 
 	.ref-total-badge {
-		font-size: 0.62rem;
+		font-size: 0.72rem;
 		font-weight: 700;
 		background: rgba(14, 165, 233, 0.1);
-		color: #0ea5e9;
+		color: #01607f;
 		padding: 2px 8px;
 		border-radius: 9999px;
 		border: 1px solid rgba(14, 165, 233, 0.2);

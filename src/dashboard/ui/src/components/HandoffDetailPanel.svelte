@@ -70,24 +70,21 @@
 
 	<div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;">
 		<button
-			class="btn"
-			style="background:#10b981;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
+			class="btn action-accept"
 			disabled={$handler.handoffUpdating || $handler.handoff.status !== "pending"}
 			on:click={() => handler.updateHandoffStatus("accepted", onHandoffUpdated)}
 		>
 			Accept
 		</button>
 		<button
-			class="btn"
-			style="background:#ef4444;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
+			class="btn btn-danger"
 			disabled={$handler.handoffUpdating || $handler.handoff.status !== "pending"}
 			on:click={() => handler.updateHandoffStatus("rejected", onHandoffUpdated)}
 		>
 			Reject
 		</button>
 		<button
-			class="btn"
-			style="background:#64748b;color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;border-radius:8px;cursor:pointer;"
+			class="btn btn-ghost"
 			disabled={$handler.handoffUpdating ||
 				$handler.handoff.status === "expired" ||
 				$handler.handoff.status === "accepted"}
@@ -129,7 +126,6 @@
 					on:click={() => handler.handleCopyHandoffContext($handler.handoff?.context || {})}
 					title="Copy to clipboard"
 					aria-label="Copy handoff context to clipboard"
-					style="width:20px;height:20px;padding:0;border:none;background:transparent;"
 				>
 					<Icon
 						name={$handler.contentCopied ? "check" : "copy"}
@@ -145,6 +141,16 @@
 {/if}
 
 <style>
+	.action-accept {
+		background: var(--color-success);
+		border-color: var(--color-success);
+		color: white;
+	}
+
+	.action-accept:hover {
+		filter: brightness(0.92);
+	}
+
 	.std-form-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -162,14 +168,6 @@
 		font-weight: 700;
 		color: var(--color-text);
 		line-height: 1.3;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		margin-bottom: 8px;
 	}
 	.meta-grid {
 		display: grid;

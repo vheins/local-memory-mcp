@@ -7,6 +7,8 @@
 	import type { CodingStandard } from "../lib/stores";
 	import { dedupeTags } from "../lib/utils";
 	import { confirmDelete } from "../lib/confirm";
+	import Icon from "../lib/Icon.svelte";
+	import { ErrorState, PageHeader } from "./ui";
 
 	export let repo = "";
 
@@ -170,7 +172,20 @@
 	});
 </script>
 
-<div class="feature-shell animate-fade-in">
+<PageHeader
+	title="Standards"
+	description="Rules agents apply in this workspace. Add or import only what is genuinely reusable."
+	eyebrow={repo}
+>
+	{#snippet actions()}
+		<button class="btn btn-primary" on:click={openCreateDrawer}>
+			<Icon name="plus" size={16} strokeWidth={2} />
+			Add rule
+		</button>
+	{/snippet}
+</PageHeader>
+
+<div class="feature-shell">
 	<StandardSearchBar
 		bind:query
 		bind:language
@@ -182,33 +197,23 @@
 		{onFilterChange}
 		onExport={exportStandards}
 		onImport={importStandards}
-		onNewStandard={openCreateDrawer}
 	/>
 
-	<div class="insight-strip">
-		<div class="insight-card">
-			<span>Visible</span>
-			<strong>{standards.length}</strong>
-		</div>
-		<div class="insight-card">
-			<span>Scope</span>
-			<strong>{scope === "repo" ? "Repo + global" : scope === "global" ? "Global only" : "All"}</strong>
-		</div>
-		<div class="insight-card">
-			<span>Total</span>
-			<strong>{totalItems}</strong>
-		</div>
-		<div class="insight-card">
-			<span>Page</span>
-			<strong>{page} / {totalPages}</strong>
-		</div>
+	<div class="results-summary" aria-live="polite">
+		<span><strong>{totalItems}</strong> rules</span>
+		<span>{scope === "repo" ? "Workspace + global" : scope === "global" ? "Global only" : "All workspaces"}</span>
+		{#if totalPages > 1}<span>Page {page} of {totalPages}</span>{/if}
 	</div>
 
 	{#if error}
-		<div class="error-banner">{error}</div>
+		<ErrorState title="Couldn't load standards" description="The request failed. No rules were changed.">
+			{#snippet action()}
+				<button class="btn btn-secondary btn-sm" on:click={loadStandards}>Try again</button>
+			{/snippet}
+		</ErrorState>
 	{/if}
 	{#if notice}
-		<div class="notice-banner">{notice}</div>
+		<p class="notice-banner" role="status">{notice}</p>
 	{/if}
 
 	<StandardsList
@@ -237,61 +242,29 @@
 	.feature-shell {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-4);
 	}
 
-	.insight-strip {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 10px;
-	}
-
-	.insight-card {
-		padding: 12px 14px;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: rgba(255, 255, 255, 0.32);
+	.results-summary {
 		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.insight-card span {
-		font-size: 0.66rem;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-5);
+		font-size: var(--text-secondary);
 		color: var(--color-text-muted);
 	}
-
-	.insight-card strong {
-		font-size: 0.84rem;
+	.results-summary strong {
 		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 
-	/* ── Banners ── */
-	.error-banner {
-		border: 1px solid #fecaca;
-		background: #fef2f2;
-		color: #dc2626;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
-	}
 	.notice-banner {
-		border: 1px solid #bae6fd;
-		background: #f0f9ff;
-		color: #0369a1;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
-	}
-
-	@media (max-width: 1100px) {
-		.insight-strip {
-			grid-template-columns: 1fr;
-		}
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-primary);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: var(--text-secondary);
 	}
 </style>

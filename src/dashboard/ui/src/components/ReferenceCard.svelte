@@ -115,24 +115,25 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		font-size: 0.6rem;
+		font-size: 0.68rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		padding: 2px 7px;
+		padding: 3px 8px;
 		border-radius: 9999px;
 		border: 1px solid transparent;
 	}
 
+	/* WCAG AA: light-mode badge text darkened to clear 4.5:1 on its own tint. */
 	:global(.ref-type-tool) {
 		background: rgba(99, 102, 241, 0.1);
-		color: #6366f1;
+		color: #3730a3;
 		border-color: rgba(99, 102, 241, 0.2);
 	}
 
 	:global(.ref-type-prompt) {
 		background: rgba(168, 85, 247, 0.1);
-		color: #a855f7;
+		color: #6b21a8;
 		border-color: rgba(168, 85, 247, 0.2);
 	}
 
@@ -165,10 +166,11 @@
 
 	.ref-param-tag {
 		font-family: "JetBrains Mono", "Fira Code", monospace;
-		font-size: 0.65rem;
+		font-size: 0.72rem;
 		background: rgba(14, 165, 233, 0.08);
-		color: #0ea5e9;
-		padding: 1px 6px;
+		/* WCAG AA: #0ea5e9 on this tint measured 2.5:1 — darkened to pass 4.5:1. */
+		color: #01607f;
+		padding: 2px 6px;
 		border-radius: 5px;
 		border: 1px solid rgba(14, 165, 233, 0.18);
 	}

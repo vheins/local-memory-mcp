@@ -7,7 +7,15 @@ import type { FilterState } from "./arenaEvents";
 // ─── Re-export LOD constants & type ──────────────────────────────────────
 export { LOD_FULL, LOD_NORMAL, LOD_SIMPLIFIED, LOD_AGGREGATE } from "./arena-renderer/utils";
 export type { LODLevel } from "./arena-renderer/utils";
-import { LOD_NORMAL, ZOOM_MAX, ZOOM_MIN, filterEquals, sceneSignature, type WanderState } from "./arena-renderer/utils";
+import {
+	LOD_NORMAL,
+	ZOOM_MAX,
+	ZOOM_MIN,
+	filterEquals,
+	sceneSignature,
+	getCanvasCssSize,
+	type WanderState
+} from "./arena-renderer/utils";
 
 import { renderArenaFrame, type ArenaCaches } from "./arena-renderer/frame";
 import { updateAgents, updateHandoffAnim } from "./arena-renderer/physics";
@@ -169,9 +177,10 @@ export class ArenaRenderer {
 	}
 
 	getViewportWorldBounds(): { x: number; y: number; w: number; h: number } {
-		const cw = this.canvas.width,
-			ch = this.canvas.height,
-			z = this.viewportZoom || 1;
+		// CSS pixels: pan/zoom and every world coordinate live in CSS space,
+		// while canvas.width is the DPR-scaled backing store.
+		const { w: cw, h: ch } = getCanvasCssSize(this.canvas);
+		const z = this.viewportZoom || 1;
 		return { x: -this.viewportPanX / z, y: -this.viewportPanY / z, w: cw / z, h: ch / z };
 	}
 
@@ -181,12 +190,13 @@ export class ArenaRenderer {
 	}
 
 	getViewportInfo() {
+		const { w, h } = getCanvasCssSize(this.canvas);
 		return {
 			zoom: this.viewportZoom,
 			panX: this.viewportPanX,
 			panY: this.viewportPanY,
-			canvasW: this.canvas.width,
-			canvasH: this.canvas.height
+			canvasW: w,
+			canvasH: h
 		};
 	}
 
@@ -232,7 +242,8 @@ export class ArenaRenderer {
 		if (!this.scene || !this.layout) return;
 		const e = type === "agent" ? this.scene.agents.get(id) : this.scene.tasks.get(id);
 		if (!e) return;
-		this.setViewport(2.0, this.canvas.width / 2 - e.x * 2, this.canvas.height / 2 - e.y * 2);
+		const { w, h } = getCanvasCssSize(this.canvas);
+		this.setViewport(2.0, w / 2 - e.x * 2, h / 2 - e.y * 2);
 	}
 
 	// ── Private helpers ─────────────────────────────────────────────────

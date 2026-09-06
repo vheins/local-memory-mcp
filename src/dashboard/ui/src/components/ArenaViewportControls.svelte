@@ -31,8 +31,8 @@
 		user-select: none;
 	}
 	.zoom-btn {
-		width: 28px;
-		height: 28px;
+		width: 36px;
+		height: 36px;
 		border: 1px solid var(--color-border);
 		border-radius: 6px;
 		background: var(--color-surface, rgba(30, 41, 59, 0.85));
@@ -55,8 +55,8 @@
 		border-color: var(--color-primary, #8b5cf6);
 	}
 	.zoom-pct {
-		width: 42px;
-		height: 22px;
+		width: 48px;
+		height: 36px;
 		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		background: var(--color-surface, rgba(30, 41, 59, 0.7));
@@ -80,5 +80,17 @@
 	:global(.reduced-transparency) .zoom-pct {
 		backdrop-filter: none;
 		background: var(--color-surface, #1e293b);
+	}
+
+	/* Local width/height here overrode the global coarse-pointer rule, so the
+	   arena zoom controls stayed 36px on touch devices. */
+	@media (pointer: coarse) {
+		.zoom-btn {
+			width: 44px;
+			height: 44px;
+		}
+		.zoom-pct {
+			height: 44px;
+		}
 	}
 </style>

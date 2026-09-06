@@ -46,8 +46,9 @@
 	.ref-cat-btn {
 		display: flex;
 		align-items: center;
-		gap: 7px;
-		padding: 7px 10px;
+		gap: 8px;
+		min-height: 40px;
+		padding: 8px 12px;
 		border-radius: 9px;
 		font-size: 0.8rem;
 		font-weight: 600;
@@ -67,7 +68,8 @@
 
 	.ref-cat-btn.active {
 		background: rgba(14, 165, 233, 0.1);
-		color: #0ea5e9;
+		/* WCAG AA: #0ea5e9 measured 2.5:1 on this tint — darkened to pass. */
+		color: #01607f;
 		border: 1px solid rgba(14, 165, 233, 0.2);
 	}
 
@@ -79,11 +81,17 @@
 
 	.ref-cat-count {
 		margin-left: auto;
-		font-size: 0.62rem;
+		font-size: 0.72rem;
 		font-weight: 700;
 		background: rgba(100, 116, 139, 0.12);
 		color: var(--color-text-muted);
 		padding: 1px 6px;
 		border-radius: 9999px;
+	}
+
+	@media (pointer: coarse) {
+		.ref-cat-btn {
+			min-height: 44px;
+		}
 	}
 </style>

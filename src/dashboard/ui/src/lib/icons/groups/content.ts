@@ -488,5 +488,5 @@ export const contentIcons: Record<string, IconElement[]> = {
 				y2: "18"
 			}
 		}
-	],
+	]
 };

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Icon from "../lib/Icon.svelte";
+	import { ErrorState, PageHeader } from "./ui";
 	import { api, type QueueJob, type QueueStatus } from "../lib/api";
 	import { confirmAction, confirmDelete } from "../lib/confirm";
 	import QueueStatusCards from "./QueueStatusCards.svelte";
@@ -149,18 +149,21 @@
 	}
 </script>
 
-<div class="feature-shell animate-fade-in">
+<!-- The page title is a real h1 at page-title size, not an 11px uppercase
+     `.section-label` styled div. Scope is stated in the description rather than
+     as a floating pill, because "which queue am I looking at" is the single
+     most consequential fact on this page. -->
+<PageHeader
+	title="Queue"
+	description={repo
+		? "Embedding and knowledge-extraction jobs for this workspace."
+		: "Server-wide embedding and knowledge-extraction outbox, across every workspace."}
+	eyebrow={repo || "Global"}
+/>
+
+<div class="feature-shell">
 	<!-- ARIA live region (STD-002 / TASK-400): scoped, never the whole shell -->
 	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveAnnounce}</div>
-
-	<!-- ════ Header (exactly one h1 per tab — STD-002) ════ -->
-	<div class="queue-header">
-		<div class="flex items-center gap-2">
-			<Icon name="list" size={14} strokeWidth={1.75} />
-			<h1 class="section-label">Queue</h1>
-		</div>
-		<div class="repo-badge">{repo}</div>
-	</div>
 
 	<!-- ════ Status summary (global counts from /api/queue/status) ════ -->
 	<QueueStatusCards {status} />
@@ -170,11 +173,18 @@
 		banner makes that scope explicit so users don't misread it as a
 		cross-repo scan. Rendered only in global view (no repo selected). -->
 	{#if !repo}
-		<div class="notice-banner" role="note">Global queue — jobs from all repos (embedding/KG outbox)</div>
+		<p class="notice-banner" role="note">Global queue — jobs from all repos (embedding/KG outbox)</p>
 	{/if}
 
 	{#if error}
-		<div class="error-banner" role="status" aria-live="polite">{error}</div>
+		<ErrorState
+			title="Queue request failed"
+			description="Job status could not be read. Queued work is unaffected and will still be processed."
+		>
+			{#snippet action()}
+				<button class="btn btn-secondary btn-sm" onclick={() => void loadAll()}>Try again</button>
+			{/snippet}
+		</ErrorState>
 	{/if}
 
 	<!-- ════ Failed (poison) jobs table ════ -->
@@ -198,46 +208,17 @@
 	.feature-shell {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-4);
 	}
 
-	.queue-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-	}
-
-	.repo-badge {
-		font-size: 0.68rem;
-		font-weight: 800;
-		color: var(--color-primary);
-		background: rgba(99, 102, 241, 0.08);
-		border: 1px solid rgba(99, 102, 241, 0.16);
-		padding: 4px 8px;
-		border-radius: 999px;
-	}
-
-	/* ── Error banner ── */
-	.error-banner {
-		border: 1px solid #fecaca;
-		background: #fef2f2;
-		color: #dc2626;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
-	}
-
-	/* ── Global-mode notice banner (TASK-411) — mirrors the .notice-banner
-		style used in StandardsPanel so both panels read the same. ── */
+	/* Matches the StandardsPanel notice treatment so both panels read the same. */
 	.notice-banner {
-		border: 1px solid #bae6fd;
-		background: #f0f9ff;
-		color: #0369a1;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-primary);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: var(--text-secondary);
 	}
 </style>

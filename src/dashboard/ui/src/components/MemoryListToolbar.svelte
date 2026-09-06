@@ -3,92 +3,109 @@
 	import Icon from "../lib/Icon.svelte";
 	import ExportToolbar from "./ExportToolbar.svelte";
 	import { TYPES, TYPE_LABELS } from "../lib/memoryConfig";
+	import Toolbar from "./ui/Toolbar.svelte";
 
+	/**
+	 * Filter row for the memory collection.
+	 *
+	 * The "New Memory" primary action used to live here, as the sixth cell of a
+	 * six-column grid, visually equal to a page-size dropdown. A page's primary
+	 * action does not belong at the end of a filter row — it now sits in the
+	 * page header (MemoriesView), leaving this component with a single
+	 * responsibility: narrowing the list.
+	 *
+	 * The bespoke grid with three breakpoints and `grid-row` reordering hacks is
+	 * replaced by the shared Toolbar primitive, so this row wraps the same way
+	 * as every other collection in the app.
+	 */
 	let {
 		onSearchInput = () => {},
 		onFilterChange = () => {},
 		onPageSizeChange = () => {},
-		onNewMemory = () => {},
 		onExport = (_format: "json" | "csv") => {},
 		onImport = () => {}
 	}: {
 		onSearchInput?: () => void;
 		onFilterChange?: () => void;
 		onPageSizeChange?: () => void;
-		onNewMemory?: () => void;
 		onExport?: (format: "json" | "csv") => void;
 		onImport?: () => void;
 	} = $props();
 </script>
 
-<!-- Toolbar -->
-<div class="flex items-center gap-2 mb-3" style="flex-wrap:wrap;">
-	<div style="position:relative;flex:1;min-width:160px;">
-		<span class="search-icon-inner">
-			<Icon name="search" size={20} />
-		</span>
-		<input
-			class="form-input"
-			style="padding-left:32px;font-size:0.8rem;"
-			type="text"
-			placeholder="Search memories..."
-			aria-label="Search memories"
-			bind:value={$memoriesSearch}
-			oninput={onSearchInput}
-		/>
-	</div>
+<Toolbar label="Memory filters">
+	{#snippet search()}
+		<div class="search-field">
+			<span class="search-icon-inner" aria-hidden="true">
+				<Icon name="search" size={16} />
+			</span>
+			<input
+				class="form-input search-input"
+				type="text"
+				placeholder="Search memories…"
+				aria-label="Search memories"
+				bind:value={$memoriesSearch}
+				oninput={onSearchInput}
+			/>
+		</div>
+	{/snippet}
 
-	<select
-		class="form-select"
-		style="width:140px;font-size:0.8rem;"
-		aria-label="Filter memories by type"
-		bind:value={$memoriesTypeFilter}
-		onchange={onFilterChange}
-	>
-		<option value="">All Types</option>
-		{#each TYPES as t (t)}
-			<option value={t}>{TYPE_LABELS[t]}</option>
-		{/each}
-	</select>
+	{#snippet filters()}
+		<select
+			class="form-select"
+			aria-label="Filter memories by type"
+			bind:value={$memoriesTypeFilter}
+			onchange={onFilterChange}
+		>
+			<option value="">All types</option>
+			{#each TYPES as t (t)}
+				<option value={t}>{TYPE_LABELS[t]}</option>
+			{/each}
+		</select>
 
-	<select
-		class="form-select"
-		style="width:100px;font-size:0.8rem;"
-		aria-label="Minimum importance"
-		bind:value={$memoriesImportanceMin}
-		onchange={onFilterChange}
-	>
-		<option value={null}>Min Imp.</option>
-		{#each [1, 2, 3, 4, 5] as i (i)}
-			<option value={i}>{i}</option>
-		{/each}
-	</select>
+		<select
+			class="form-select"
+			aria-label="Minimum importance"
+			bind:value={$memoriesImportanceMin}
+			onchange={onFilterChange}
+		>
+			<option value={null}>Any importance</option>
+			{#each [1, 2, 3, 4, 5] as i (i)}
+				<option value={i}>Importance {i}+</option>
+			{/each}
+		</select>
 
-	<select
-		class="form-select"
-		style="width:100px;font-size:0.8rem;"
-		aria-label="Memories per page"
-		bind:value={$memoriesPageSize}
-		onchange={onPageSizeChange}
-	>
-		{#each [10, 25, 50, 100] as n (n)}
-			<option value={n}>{n} / page</option>
-		{/each}
-	</select>
+		<select
+			class="form-select"
+			aria-label="Memories per page"
+			bind:value={$memoriesPageSize}
+			onchange={onPageSizeChange}
+		>
+			{#each [10, 25, 50, 100] as n (n)}
+				<option value={n}>{n} per page</option>
+			{/each}
+		</select>
+	{/snippet}
 
-	<ExportToolbar {onExport} {onImport} />
-
-	<!-- New Memory CTA -->
-	<button class="btn btn-accent btn-sm" onclick={onNewMemory} id="newMemoryBtn" style="margin-left:auto;">
-		<Icon name="plus" size={13} strokeWidth={2.5} />
-		New Memory
-	</button>
-</div>
+	{#snippet actions()}
+		<ExportToolbar {onExport} {onImport} />
+	{/snippet}
+</Toolbar>
 
 <style>
+	.search-field {
+		position: relative;
+		min-width: 0;
+	}
+
+	.search-input {
+		width: 100%;
+		padding-left: var(--space-7);
+	}
+
 	.search-icon-inner {
 		position: absolute;
-		left: 10px;
+		left: var(--space-3);
 		top: 50%;
 		transform: translateY(-50%);
 		color: var(--color-text-muted);

@@ -269,14 +269,6 @@
 		font-weight: 600;
 		color: var(--color-text);
 	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		margin-bottom: 8px;
-	}
 	.tag-chip {
 		font-size: 0.72rem;
 		background: rgba(99, 102, 241, 0.1);

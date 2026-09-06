@@ -4,7 +4,8 @@
 
 	export let currentRepo: string | null = null;
 	export let repoData: RepoMeta | undefined = undefined;
-	export let getRepoInitials: (repo: string) => string = () => "RP";
+	export let viewLabel = "Dashboard";
+	export let viewScope: "global" | "workspace" | "system" = "workspace";
 	/** Opens the mobile sidebar menu (wired from the Visible← TopBar row; only shown ≤1024px). */
 	export let onToggleMobileMenu: () => void = () => {};
 	/** Whether the mobile menu is open — drives aria-expanded on the hamburger. */
@@ -24,48 +25,65 @@
 		<Icon name="menu" size={18} strokeWidth={2} />
 	</button>
 
-	{#if currentRepo}
-		<div class="current-repo">
-			<div
-				style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#0ea5e9,#6366f1);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:white;flex-shrink:0;box-shadow:0 4px 10px rgba(14,165,233,0.28);"
-			>
-				{getRepoInitials(currentRepo)}
-			</div>
-			<div>
-				<div class="font-semibold current-repo-name">
-					{currentRepo}
-				</div>
-				{#if repoData}
-					<div class="flex items-center gap-1" style="font-size:0.65rem;color:var(--color-text-muted);">
-						<Icon name="database" size={10} strokeWidth={2} />
-						<span>{repoData.memoryCount || 0} memories</span>
-					</div>
-				{/if}
-			</div>
+	<div class="view-context">
+		<div class="view-eyebrow">
+			{viewScope === "workspace" ? "Workspace" : viewScope === "global" ? "Global" : "System"}
 		</div>
-	{:else}
-		<div style="font-size:0.85rem;color:var(--color-text-muted);" class="flex items-center gap-2">
-			<Icon name="brain" size={14} strokeWidth={1.75} />
-			<span>Select a repository</span>
+		<div class="view-path">
+			{#if viewScope === "workspace"}
+				<span class="workspace-name">{currentRepo || "Select repository"}</span>
+				<span class="path-separator" aria-hidden="true">/</span>
+			{/if}
+			<strong>{viewLabel}</strong>
 		</div>
-	{/if}
+		{#if viewScope === "workspace" && currentRepo && repoData}
+			<div class="view-meta">{repoData.memoryCount || 0} memories in this workspace</div>
+		{:else if viewScope === "global"}
+			<div class="view-meta">Across all repositories</div>
+		{/if}
+	</div>
 </div>
 
 <style>
-	.current-repo {
-		display: flex;
-		align-items: center;
-		gap: 8px;
+	.view-context {
 		min-width: 0;
 	}
 
-	.current-repo-name {
+	.view-eyebrow {
+		font-size: 0.6875rem;
+		font-weight: 700;
+		line-height: 1;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-faint);
+		margin-bottom: 5px;
+	}
+
+	.view-path {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		min-width: 0;
+		font-size: 0.9375rem;
 		color: var(--color-text);
-		font-size: 0.82rem;
-		max-width: 200px;
+	}
+
+	.workspace-name {
+		max-width: 220px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		color: var(--color-text-muted);
+	}
+
+	.path-separator {
+		color: var(--color-text-faint);
+	}
+
+	.view-meta {
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		margin-top: 2px;
 	}
 
 	/* Hidden by default (desktop) — the inline display:none was removed so the
@@ -81,14 +99,20 @@
 	}
 
 	@media (max-width: 760px) {
-		.current-repo-name {
-			max-width: 112px;
+		.workspace-name {
+			max-width: 110px;
+		}
+		.view-meta {
+			display: none;
 		}
 	}
 
 	@media (max-width: 420px) {
-		.current-repo-name {
-			max-width: 82px;
+		.workspace-name {
+			max-width: 72px;
+		}
+		.view-path {
+			font-size: 0.8125rem;
 		}
 	}
 </style>

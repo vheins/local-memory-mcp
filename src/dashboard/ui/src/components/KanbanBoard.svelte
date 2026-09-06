@@ -51,14 +51,14 @@
 	<div class="sr-only" aria-live="polite" aria-atomic="true">{liveRegionText}</div>
 
 	<!-- Toolbar -->
-	<div class="flex items-center justify-between mb-4">
+	<div class="task-toolbar mb-4">
 		<div class="search-wrap">
 			<span class="search-icon-inner">
 				<Icon name="search" size={13} strokeWidth={2} />
 			</span>
 			<input
 				class="form-input"
-				style="padding-left:32px;width:220px;font-size:0.8rem;"
+				style="padding-left:32px;font-size:0.8rem;"
 				type="text"
 				placeholder="Search tasks…"
 				bind:value={$taskSearch}
@@ -195,8 +195,22 @@
 </div>
 
 <style>
+	.task-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+
 	.search-wrap {
 		position: relative;
+		flex: 1 1 240px;
+		max-width: 420px;
+	}
+
+	.search-wrap :global(.form-input) {
+		width: 100%;
 	}
 
 	.search-icon-inner {
@@ -274,5 +288,47 @@
 		z-index: 100;
 		font-size: 0.85rem;
 		color: var(--color-text);
+	}
+
+	@media (max-width: 720px) {
+		.task-toolbar {
+			align-items: stretch;
+		}
+
+		.search-wrap {
+			flex-basis: 100%;
+			max-width: none;
+		}
+
+		.task-toolbar > :global(.flex) {
+			width: 100%;
+			justify-content: flex-end;
+			flex-wrap: wrap;
+		}
+
+		.kanban-board {
+			display: grid;
+			grid-template-columns: 1fr;
+			overflow: visible;
+			gap: 12px;
+		}
+
+		.kanban-col {
+			min-width: 0;
+			width: 100%;
+		}
+
+		.kanban-col > :global(.flex.flex-col) {
+			max-height: none !important;
+		}
+
+		.bulk-actions-bar {
+			left: 12px;
+			right: 12px;
+			bottom: 12px;
+			transform: none;
+			flex-wrap: wrap;
+			padding: 12px;
+		}
 	}
 </style>

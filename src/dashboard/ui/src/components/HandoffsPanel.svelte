@@ -5,6 +5,8 @@
 	import HandoffFilterBar from "./HandoffFilterBar.svelte";
 	import HandoffList from "./HandoffList.svelte";
 	import { confirmDelete } from "../lib/confirm";
+	import Icon from "../lib/Icon.svelte";
+	import { ErrorState, Metric, PageHeader, Surface } from "./ui";
 	import type { Handoff, TaskClaim } from "../lib/interfaces";
 
 	export let repo = "";
@@ -116,22 +118,46 @@
 	});
 </script>
 
-<div class="feature-shell animate-fade-in">
+<PageHeader
+	title="Handoffs"
+	description="Transfer unfinished work between agents and resolve ownership conflicts."
+	eyebrow={repo}
+>
+	{#snippet actions()}
+		<button class="btn btn-primary" onclick={openCreateDrawer}>
+			<Icon name="plus" size={16} strokeWidth={2} />
+			New handoff
+		</button>
+	{/snippet}
+</PageHeader>
+
+<div class="feature-shell">
+	<Surface label="Coordination summary">
+		<div class="coordination-metrics">
+			<Metric label="Pending" value={handoffs.filter((h) => h.status === "pending").length} />
+			<Metric label="Resolved" value={handoffs.filter((h) => h.status !== "pending").length} />
+			<Metric label="Active claims" value={claims.length} />
+			<Metric label="Total" value={handoffs.length} />
+		</div>
+	</Surface>
+
 	<HandoffFilterBar
 		bind:status
 		bind:agentFilter
-		pendingCount={handoffs.filter((h) => h.status === "pending").length}
-		resolvedCount={handoffs.filter((h) => h.status !== "pending").length}
-		claimsCount={claims.length}
-		totalCount={handoffs.length}
 		onStatusChange={loadHandoffs}
 		onAgentFilterChange={loadHandoffs}
 		onRefresh={refreshCoordination}
-		onNewHandoff={openCreateDrawer}
 	/>
 
 	{#if error}
-		<div class="error-banner">{error}</div>
+		<ErrorState
+			title="Coordination request failed"
+			description="Handoffs and claims could not be loaded or updated. Nothing was changed."
+		>
+			{#snippet action()}
+				<button class="btn btn-secondary btn-sm" onclick={refreshCoordination}>Try again</button>
+			{/snippet}
+		</ErrorState>
 	{/if}
 
 	<HandoffList
@@ -160,16 +186,12 @@
 	.feature-shell {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-4);
 	}
 
-	.error-banner {
-		border: 1px solid #fecaca;
-		background: #fef2f2;
-		color: #dc2626;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
+	.coordination-metrics {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: var(--space-4);
 	}
 </style>

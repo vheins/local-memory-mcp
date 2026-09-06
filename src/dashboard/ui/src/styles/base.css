@@ -1,49 +1,100 @@
-/* ─── Agentic Glass Design System v2.0 ──────────────────────────────────── */
+/* ─── Design System ──────────────────────────────────────────────────────────
+   Operational tooling, not a showcase. Hierarchy is carried by typography,
+   whitespace, and a single hairline border — never by glow, blur, or gradient.
+
+   Priority order: Clarity → Simplicity → Speed → Consistency → Beauty.
+   ─────────────────────────────────────────────────────────────────────────── */
 
 /* Fix 7: Duplicate Google Fonts @import removed — kept only in index.html <link> */
 
 :root {
-	/* ── Glass Surface Tokens ─── */
-	--glass-bg: rgba(255, 255, 255, 0.52);
-	--glass-bg-strong: rgba(255, 255, 255, 0.72);
-	--glass-bg-ultra: rgba(255, 255, 255, 0.88);
-	--glass-border: rgba(255, 255, 255, 0.4);
-	--glass-border-inner: rgba(255, 255, 255, 0.7);
-	--glass-shadow: 0 20px 70px rgba(15, 23, 42, 0.1), 0 4px 16px rgba(15, 23, 42, 0.06);
-	--glass-shadow-elevated: 0 32px 96px rgba(15, 23, 42, 0.16), 0 8px 32px rgba(15, 23, 42, 0.08);
-	--glass-blur: blur(28px) saturate(1.2);
+	/* ── Surfaces ───
+	   `glass` is a legacy class name kept for compatibility; it is now an
+	   ordinary opaque surface. Do NOT reintroduce blur or inner highlights. */
+	--glass-bg: #ffffff;
+	--glass-bg-strong: #ffffff;
+	--glass-bg-ultra: #ffffff;
+	--glass-border: #e4e8ee;
+	--glass-border-inner: transparent;
+	--glass-shadow: none;
+	--glass-shadow-elevated: 0 4px 12px rgba(15, 23, 42, 0.08);
+	--glass-blur: none;
 
-	/* ── Dark Panel Tokens ─── */
-	--panel-dark: rgba(6, 12, 28, 0.7);
-	--panel-dark-strong: rgba(4, 9, 22, 0.88);
-	--panel-dark-ultra: rgba(2, 6, 16, 0.96);
-	--panel-dark-border: rgba(148, 163, 184, 0.1);
-	--panel-dark-border-glow: rgba(56, 189, 248, 0.2);
-	--panel-dark-shadow: 0 28px 90px rgba(2, 6, 23, 0.6), inset 0 1px 0 rgba(148, 163, 184, 0.06);
+	/* ── Dark panel tokens (kept as names, drained of drama) ─── */
+	--panel-dark: #0f1524;
+	--panel-dark-strong: #131a2b;
+	--panel-dark-ultra: #0b101c;
+	--panel-dark-border: #232c40;
+	--panel-dark-border-glow: #232c40;
+	--panel-dark-shadow: none;
 
-	/* ── Glow Tokens ─── */
-	--glow-primary: rgba(14, 165, 233, 0.35);
-	--glow-accent: rgba(99, 102, 241, 0.35);
-	--glow-success: rgba(16, 185, 129, 0.35);
-	--glow-danger: rgba(239, 68, 68, 0.35);
-	--glow-purple: rgba(168, 85, 247, 0.35);
-	--glow-cyan: rgba(6, 182, 212, 0.35);
+	/* ── Glow tokens ───
+	   Retained as names because ~40 components reference them. All resolve to
+	   transparent so no component can reintroduce a glow by accident. */
+	--glow-primary: transparent;
+	--glow-accent: transparent;
+	--glow-success: transparent;
+	--glow-danger: transparent;
+	--glow-purple: transparent;
+	--glow-cyan: transparent;
 
 	/* ── Layout ─── */
-	--sidebar-width: 280px;
-	--sidebar-collapsed-width: 72px;
-	--header-height: 61px;
-	--radius-sm: 8px;
-	--radius-md: 12px;
-	--radius-lg: 16px;
-	--radius-xl: 20px;
-	--radius-2xl: 24px;
+	--sidebar-width: 256px;
+	--sidebar-collapsed-width: 64px;
+	--header-height: 56px;
+	--content-max: 1280px;
 
-	/* ── Color Palette ─── */
-	--color-bg: #f0f8ff;
+	/* ── Spacing: 8pt scale, no one-off values ─── */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+	--space-6: 32px;
+	--space-7: 40px;
+	--space-8: 48px;
+	--space-9: 64px;
+
+	/* ── Radius: three steps, one default ─── */
+	--radius-sm: 8px;
+	--radius-md: 14px;
+	--radius-lg: 20px;
+	--radius-xl: 20px;
+	--radius-2xl: 20px;
+	--radius-pill: 999px;
+
+	/* ── Type scale: six levels, nothing else ─── */
+	--text-display: 1.75rem; /* 28px — page hero, rare */
+	--text-title: 1.375rem; /* 22px — one per page */
+	--text-section: 1rem; /* 16px — section headings */
+	--text-body: 0.875rem; /* 14px — default body */
+	--text-secondary: 0.8125rem; /* 13px — metadata, helper */
+	--text-label: 0.75rem; /* 12px — form/section labels */
+
+	--weight-regular: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+	--weight-bold: 700;
+
+	--leading-tight: 1.25;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.65;
+
+	/* ── Elevation: whitespace → border → shade → shadow (last resort) ─── */
+	--shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+	--shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+	--shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+	/* ── Color Palette ───
+	   Neutral canvas, white surfaces, ONE accent. Color signals status or
+	   hierarchy — never decoration. */
+	--color-bg: #f7f8fa;
 	--color-surface: #ffffff;
-	--color-border: #e1ecf7;
-	--color-text: #0a1628;
+	--color-surface-subtle: #fafbfc;
+	--color-surface-hover: #f3f4f6;
+	--color-border: #e4e8ee;
+	--color-border-strong: #d3d9e2;
+	--color-text: #111827;
 	/* TASK-274 / audit F6 (WCAG AA, LIGHT THEME ONLY):
 	   17/21 sampled light-theme text pairs were < 4.5:1 because muted/faint
 	   were too light against the glass surfaces. Darkened here; the .dark
@@ -52,11 +103,20 @@
 	   - faint #8faec4 → #64748b : 4.76:1 on white (was ~2.3:1) */
 	--color-text-muted: #51647a;
 	--color-text-faint: #64748b;
-	--color-primary: #0ea5e9;
-	--color-primary-dark: #0284c7;
-	--color-primary-light: #38bdf8;
-	--color-accent: #6366f1;
-	--color-accent-dark: #4f46e5;
+	--color-primary: #2563eb;
+	--color-primary-dark: #1d4ed8;
+	--color-primary-light: #60a5fa;
+	/* Selected-state tints. Kept as tokens so "active" is one decision, not a
+	   different rgba() literal per component. */
+	--color-primary-soft: rgba(37, 99, 235, 0.1);
+	--color-primary-soft-strong: rgba(37, 99, 235, 0.16);
+	/* Accent text placed ON --color-primary-soft. Must be darker than
+	   --color-primary: the base blue on its own 10% tint is 4.48:1, just under
+	   AA. This is 5.82:1. Dark mode needs the opposite adjustment, so the two
+	   themes cannot share one value. */
+	--color-primary-on-soft: #1d4ed8;
+	--color-accent: #2563eb;
+	--color-accent-dark: #1d4ed8;
 	--color-success: #10b981;
 	--color-warning: #f59e0b;
 	--color-danger: #ef4444;
@@ -77,25 +137,48 @@
 	--stat-orange: #c2410c;
 	--stat-slate: #475569;
 
-	/* ── Motion ─── */
-	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-	--ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+	/* ── Motion ───
+	   180ms for controls, 220ms for large surfaces. Ease-out only. Motion
+	   communicates state change; it is never a flourish. Spring/expo curves
+	   are aliased to the same ease-out so no component can bounce. */
+	--ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 	--ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
-	--duration-fast: 0.15s;
-	--duration-base: 0.25s;
-	--duration-slow: 0.4s;
+	--duration-fast: 0.12s;
+	--duration-base: 0.18s;
+	--duration-slow: 0.22s;
 }
 
 .dark {
-	--color-bg: #010c1e;
-	--color-surface: #070f1f;
-	--color-border: rgba(148, 163, 184, 0.1);
-	--color-text: #e9f1fa;
-	--color-text-muted: #7fa3be;
-	--color-text-faint: #4a6782;
-	--color-primary: #38bdf8;
-	--color-primary-dark: #0ea5e9;
-	--color-primary-light: #7dd3fc;
+	--color-bg: #0b0f18;
+	--color-surface: #131822;
+	--color-surface-subtle: #171d29;
+	--color-surface-hover: #1d2431;
+	--color-border: #262d3b;
+	--color-border-strong: #333c4d;
+	--color-text: #e8ecf2;
+	--color-text-muted: #9aa5b5;
+	--color-text-faint: #6b7787;
+	--color-primary: #60a5fa;
+	--color-primary-dark: #3b82f6;
+	--color-primary-light: #93c5fd;
+	/* Higher alpha than light mode: a 10% tint disappears against a dark
+	   surface, so the selected row would lose its fill entirely. */
+	--color-primary-soft: rgba(96, 165, 250, 0.16);
+	--color-primary-soft-strong: rgba(96, 165, 250, 0.24);
+	/* On dark surfaces the accent must stay LIGHT: #3b82f6 on the dark tint is
+	   3.47:1 (fails), the base #60a5fa is 5.02:1. */
+	--color-primary-on-soft: #60a5fa;
+	--color-accent: #60a5fa;
+	--color-accent-dark: #3b82f6;
+	--glass-bg: #131822;
+	--glass-bg-strong: #171d29;
+	--glass-bg-ultra: #0f141d;
+	--glass-border: #262d3b;
+	--glass-shadow: none;
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+	--shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
 
 	/* Dark-theme stat accent text colors — original bright shades, unchanged
 	   from before TASK-274 (dark theme passed 15/20 samples; no regression). */
@@ -119,28 +202,26 @@
 }
 
 html {
-	font-family: "Inter", system-ui, sans-serif;
+	font-family:
+		"SF Pro Display",
+		"SF Pro Text",
+		-apple-system,
+		BlinkMacSystemFont,
+		"Inter",
+		system-ui,
+		sans-serif;
 	font-size: 16px;
-	line-height: 1.5;
-	background:
-		radial-gradient(ellipse at 8% 10%, rgba(56, 189, 248, 0.28) 0%, transparent 38%),
-		radial-gradient(ellipse at 92% 8%, rgba(99, 102, 241, 0.18) 0%, transparent 32%),
-		radial-gradient(ellipse at 75% 88%, rgba(168, 85, 247, 0.12) 0%, transparent 28%),
-		radial-gradient(ellipse at 20% 75%, rgba(14, 165, 233, 0.1) 0%, transparent 26%),
-		linear-gradient(160deg, #eef8ff 0%, #f0f4ff 45%, #f5f0ff 100%) fixed;
+	line-height: var(--leading-normal);
+	background: var(--color-bg);
 	min-height: 100vh;
-	transition: background 0.5s ease;
+	transition: background-color 180ms ease-out;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 html.dark {
-	background:
-		radial-gradient(ellipse at 8% 10%, rgba(14, 165, 233, 0.14) 0%, transparent 38%),
-		radial-gradient(ellipse at 92% 8%, rgba(67, 56, 202, 0.12) 0%, transparent 32%),
-		radial-gradient(ellipse at 75% 88%, rgba(88, 28, 135, 0.1) 0%, transparent 28%),
-		radial-gradient(ellipse at 20% 75%, rgba(14, 165, 233, 0.06) 0%, transparent 26%),
-		linear-gradient(160deg, #010c1e 0%, #040d1e 45%, #050c1a 100%) fixed;
+	background: var(--color-bg);
 }
 
 body {
@@ -151,15 +232,32 @@ body {
 	overflow-x: hidden;
 }
 
-/* ─── Typography ─────────────────────────────────────────────────────────── */
+/* ─── Typography ─────────────────────────────────────────────────────────────
+   Six levels, applied through the scale tokens. Headings are semibold, not
+   black — weight 800 at 11px reads as noise, not hierarchy. Size and spacing
+   create the hierarchy; weight only reinforces it. */
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-	font-weight: 700;
-	line-height: 1.3;
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-tight);
+	letter-spacing: -0.011em;
+	color: var(--color-text);
+}
+h1 {
+	font-size: var(--text-title);
+}
+h2 {
+	font-size: var(--text-section);
+}
+h3,
+h4,
+h5,
+h6 {
+	font-size: var(--text-body);
 }
 code,
 pre {
@@ -192,28 +290,25 @@ a:hover {
 	background: rgba(51, 65, 85, 0.55);
 }
 
-/* ─── Agentic Glass Panels ───────────────────────────────────────────────── */
+/* ─── Surfaces ───────────────────────────────────────────────────────────────
+   `.glass` is a legacy alias for a plain surface. Nesting a surface inside a
+   surface is a hierarchy bug — a nested `.glass` renders borderless and
+   transparent so double-framing is impossible. */
 .glass {
 	background: var(--glass-bg);
 	border: 1px solid var(--glass-border);
 	box-shadow: var(--glass-shadow);
-	backdrop-filter: var(--glass-blur);
-	-webkit-backdrop-filter: var(--glass-blur);
 	position: relative;
+}
+
+.glass .glass {
+	background: var(--color-surface-subtle);
+	box-shadow: none;
 }
 
 /* Etched glass inner-border effect via pseudo-element */
 .glass::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	border-radius: inherit;
-	border: 1px solid var(--glass-border-inner);
-	border-bottom-color: transparent;
-	border-right-color: transparent;
-	opacity: 0.6;
-	pointer-events: none;
-	z-index: 0;
+	display: none;
 }
 
 .dark .glass {
@@ -223,10 +318,7 @@ a:hover {
 }
 
 .dark .glass::before {
-	border-color: rgba(148, 163, 184, 0.07);
-	border-bottom-color: transparent;
-	border-right-color: transparent;
-	opacity: 0.8;
+	display: none;
 }
 
 .glass-strong {
@@ -236,4 +328,3 @@ a:hover {
 .dark .glass-strong {
 	background: var(--panel-dark-strong) !important;
 }
-

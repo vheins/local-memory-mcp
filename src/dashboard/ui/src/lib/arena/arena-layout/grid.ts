@@ -19,11 +19,15 @@ export const GRID_COLUMNS = 12;
 export const OUTER_MARGIN = 16;
 export const GUTTER = 16;
 export const SECTION_PAD = 18;
-export const LABEL_HEIGHT = 24;
-export const STATS_HEIGHT = 20;
-export const MIN_CELL_W = 58;
-export const MIN_CELL_H = 55;
-export const MAX_CELL_H = 80;
+export const LABEL_HEIGHT = 28;
+export const STATS_HEIGHT = 24;
+/* Cells sized for legible type. The old 58x55 cell was built around 4.5-6px
+   labels; at the 9-13px scale the arena now uses, a task code plus a title no
+   longer fits inside it and neighbouring workstations collide. Widened to fit
+   ~14 characters at 10px monospace plus padding. */
+export const MIN_CELL_W = 96;
+export const MIN_CELL_H = 84;
+export const MAX_CELL_H = 112;
 export const MAX_TASKS_PER_ZONE = 16;
 /** Main band never drops below this fraction of the inner height. */
 export const MAIN_BAND_MIN_RATIO = 0.48;

@@ -219,4 +219,10 @@
 		border-color: rgba(245, 158, 11, 0.3);
 		color: #f59e0b;
 	}
+
+	@media (pointer: coarse) {
+		.timeline-handle {
+			height: 44px;
+		}
+	}
 </style>

@@ -1,5 +1,5 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba, pointInRect } from "./utils";
+import { arenaFont, ARENA_TEXT_BODY, ARENA_TEXT_LABEL, ARENA_TEXT_TITLE, rr, rgba, pointInRect } from "./utils";
 import type { ZoneRect, ArenaScene } from "../arenaTypes";
 
 // ── Zone aggregate overlay (LOD_AGGREGATE) ─────────────────────────────────
@@ -40,7 +40,7 @@ export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaSce
 	ctx.stroke();
 
 	ctx.fillStyle = color;
-	ctx.font = "bold 10px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_TITLE, "bold");
 	ctx.textAlign = "left";
 	ctx.textBaseline = "middle";
 	ctx.fillText(label.toUpperCase(), x + 10, headerY + headerH / 2);
@@ -51,7 +51,7 @@ export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaSce
 	rr(ctx, x + w - 12 - countW, headerY + (headerH - 12) / 2, countW, 12, 6);
 	ctx.fill();
 	ctx.fillStyle = "#ffffff";
-	ctx.font = "bold 8px monospace";
+	ctx.font = arenaFont(ARENA_TEXT_BODY, "bold", true);
 	ctx.textAlign = "center";
 	ctx.textBaseline = "middle";
 	ctx.fillText(countText, x + w - 12 - countW / 2, headerY + headerH / 2);
@@ -83,7 +83,7 @@ export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaSce
 			ctx.fill();
 		}
 		ctx.fillStyle = isDark ? "rgba(148,163,184,0.7)" : "rgba(71,85,105,0.7)";
-		ctx.font = "7px system-ui,sans-serif";
+		ctx.font = arenaFont(ARENA_TEXT_LABEL);
 		ctx.textBaseline = "top";
 		ctx.textAlign = "left";
 		ctx.fillText(`${agentCount} agents`, barX, barY + barH + 2);
@@ -91,7 +91,7 @@ export function drawZoneAggregate(rc: RenderCtx, zone: ZoneRect, scene: ArenaSce
 		ctx.fillText(`${taskCount} tasks`, barX + barW, barY + barH + 2);
 	} else if (taskCount > 0) {
 		ctx.fillStyle = isDark ? "rgba(148,163,184,0.7)" : "rgba(71,85,105,0.7)";
-		ctx.font = "7px system-ui,sans-serif";
+		ctx.font = arenaFont(ARENA_TEXT_LABEL);
 		ctx.textAlign = "center";
 		ctx.textBaseline = "top";
 		ctx.fillText(`${taskCount} tasks`, x + w / 2, headerY + headerH + 4);

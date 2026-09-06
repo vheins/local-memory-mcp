@@ -1,5 +1,5 @@
 import type { RenderCtx } from "./utils";
-import { rr, rgba, darken, LOD_SIMPLIFIED, LOD_AGGREGATE } from "./utils";
+import { arenaFont, ARENA_TEXT_BODY, ARENA_TEXT_LABEL, rr, rgba, darken, LOD_SIMPLIFIED, LOD_AGGREGATE } from "./utils";
 import type { SectionVisual, ZoneRect } from "../arenaTypes";
 import type { ArenaLayoutManager } from "../arena-layout/ArenaLayoutManager";
 import { SECTION_PAD, LABEL_HEIGHT, STATS_HEIGHT } from "../arena-layout/grid";
@@ -58,7 +58,7 @@ export function drawZoneLabel(rc: RenderCtx, zone: ZoneRect) {
 	rr(ctx, bx, by, bw, bh, 5);
 	ctx.stroke();
 	ctx.fillStyle = color;
-	ctx.font = "bold 8px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_BODY, "bold");
 	ctx.textAlign = "left";
 	ctx.textBaseline = "middle";
 	ctx.fillText(label.toUpperCase(), bx + 6, by + bh / 2);
@@ -80,7 +80,7 @@ export function drawZoneStats(rc: RenderCtx, zone: ZoneRect, stats: ZoneStats) {
 	const { ctx, isDark } = rc;
 	const { x, y, w } = zone;
 	const sy = y + SECTION_PAD + LABEL_HEIGHT;
-	ctx.font = "7px system-ui,sans-serif";
+	ctx.font = arenaFont(ARENA_TEXT_LABEL);
 	ctx.textBaseline = "top";
 	ctx.textAlign = "left";
 	ctx.fillStyle = isDark ? "rgba(148,163,184,0.75)" : "rgba(71,85,105,0.75)";

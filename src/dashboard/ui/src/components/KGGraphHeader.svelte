@@ -20,10 +20,7 @@
 
 <div class="kg-toolbar">
 	<div class="kg-toolbar-left">
-		<h1 class="section-label" style="font-size:0.68rem;">
-			<Icon name="share-2" size={12} strokeWidth={1.75} />
-			Knowledge Graph
-		</h1>
+		<h1 class="kg-title">Knowledge Graph</h1>
 		<span class="kg-stats">
 			{nodeCount} nodes · {edgeCount} edges
 		</span>
@@ -116,10 +113,10 @@
 	}
 
 	.kg-zoom-btn {
-		/* TASK-403: ≥32px tap target at 390px (audit: zoom −/+ were 28px). */
-		padding: 6px 8px !important;
-		min-width: 32px;
-		min-height: 32px;
+		/* Zoom controls are primary canvas actions — full 40px target (44px coarse). */
+		padding: 6px 10px !important;
+		min-width: 40px;
+		min-height: 40px;
 		justify-content: center;
 		border-radius: 0 !important;
 		border-right: 1px solid var(--color-border);
@@ -129,10 +126,17 @@
 		border-right-color: rgba(148, 163, 184, 0.15);
 	}
 
+	@media (pointer: coarse) {
+		.kg-zoom-btn,
+		.kg-zoom-label {
+			min-height: 44px;
+		}
+	}
+
 	.kg-zoom-label {
-		padding: 4px 8px !important;
-		min-width: 42px;
-		min-height: 32px;
+		padding: 4px 10px !important;
+		min-width: 48px;
+		min-height: 40px;
 		justify-content: center;
 		border-radius: 0 !important;
 		font-size: 0.68rem;
@@ -141,10 +145,18 @@
 		cursor: pointer;
 	}
 
+	.kg-title {
+		font-size: var(--text-title);
+		font-weight: var(--weight-semibold);
+		letter-spacing: -0.018em;
+		line-height: var(--leading-tight);
+		color: var(--color-text);
+	}
+
 	.kg-stats {
-		font-size: 0.72rem;
+		font-size: var(--text-secondary);
 		color: var(--color-text-muted);
-		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
 	/* Edge confidence legend (TASK-330) — swatches mirror the renderer buckets */

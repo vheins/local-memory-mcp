@@ -300,15 +300,6 @@
 		gap: 8px;
 	}
 
-	.section-label {
-		font-size: 0.75rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		margin-bottom: 4px;
-	}
-
 	.md-card {
 		background: rgba(248, 250, 252, 0.8);
 		border: 1px solid var(--color-border);

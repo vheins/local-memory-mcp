@@ -52,17 +52,17 @@ vi.mock("../RepoItem.svelte", () => ({ default: () => ({}) }));
 // ─── Independent contract (NOT derived from NAV_ITEMS, so a removed/re-ordered
 //     item fails the test instead of making it tautological) ────────────────
 const EXPECTED_NAV = [
-	{ id: "arena", label: "Arena" },
-	{ id: "dashboard", label: "Dashboard" },
-	{ id: "activity", label: "Activity" },
-	{ id: "memories", label: "Memories" },
-	{ id: "tasks", label: "Tasks" },
-	{ id: "codebase", label: "Codebase" },
-	{ id: "handoffs", label: "Handoffs" },
-	{ id: "queue", label: "Queue" },
-	{ id: "knowledge-graph", label: "Knowledge Graph" },
-	{ id: "standards", label: "Standards" },
-	{ id: "reference", label: "Reference" }
+	{ id: "dashboard", label: "Overview", scope: "global" },
+	{ id: "arena", label: "Agent Arena", scope: "global" },
+	{ id: "queue", label: "Queue", scope: "global" },
+	{ id: "tasks", label: "Tasks", scope: "workspace" },
+	{ id: "memories", label: "Memories", scope: "workspace" },
+	{ id: "codebase", label: "Codebase", scope: "workspace" },
+	{ id: "knowledge-graph", label: "Knowledge Graph", scope: "workspace" },
+	{ id: "standards", label: "Standards", scope: "workspace" },
+	{ id: "handoffs", label: "Handoffs", scope: "workspace" },
+	{ id: "activity", label: "Activity", scope: "workspace" },
+	{ id: "reference", label: "MCP Reference", scope: "system" }
 ] as const;
 
 function renderSidebar(onTabSelect = vi.fn(), onRepoSelect = vi.fn()) {
@@ -98,76 +98,63 @@ describe("NAV_ITEMS nav model (TASK-425 contract)", () => {
 
 // ─── RepoSidebar navigation rendering (TASK-435) ────────────────────────────
 describe("RepoSidebar navigation (TASK-435)", () => {
-	it("renders exactly ONE tablist with the accessible name 'Dashboard sections' (no mobile/desktop duplicate)", () => {
-		renderSidebar();
-		const tablists = screen.getAllByRole("tablist");
-		expect(tablists).toHaveLength(1);
-		expect(tablists[0].getAttribute("aria-label")).toBe("Dashboard sections");
+	it("renders one primary navigation landmark with explicit global, workspace, and system groups", () => {
+		const { container } = renderSidebar();
+		expect(screen.getAllByRole("navigation", { name: "Primary navigation" })).toHaveLength(1);
+		expect(
+			Array.from(container.querySelectorAll("[data-scope]")).map((group) => group.getAttribute("data-scope"))
+		).toEqual(["global", "workspace", "system"]);
 	});
 
-	it("renders all 11 nav items as role=tab with id nav-{id} and the correct label", () => {
+	it("renders all 11 destinations as links-in-place with stable ids and labels", () => {
 		renderSidebar();
 		for (const item of EXPECTED_NAV) {
-			const tab = screen.getByRole("tab", { name: item.label });
-			expect(tab.id).toBe(`nav-${item.id}`);
+			const destination = screen.getByRole("button", { name: item.label });
+			expect(destination.id).toBe(`nav-${item.id}`);
 		}
-		expect(screen.getAllByRole("tab")).toHaveLength(EXPECTED_NAV.length);
 	});
 
-	it("marks exactly one tab aria-selected=true (the active one); all others false", () => {
+	it("marks exactly one destination as the current page", () => {
 		activeTab.set("queue");
 		renderSidebar();
 
-		const queue = screen.getByRole("tab", { name: "Queue" });
-		expect(queue.getAttribute("aria-selected")).toBe("true");
-
-		// Negative: a non-active item must NOT be selected.
-		const dashboard = screen.getByRole("tab", { name: "Dashboard" });
-		expect(dashboard.getAttribute("aria-selected")).toBe("false");
-
-		const selected = screen.getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true");
-		expect(selected).toHaveLength(1);
-		expect(selected[0].id).toBe("nav-queue");
+		const queue = screen.getByRole("button", { name: "Queue" });
+		expect(queue.getAttribute("aria-current")).toBe("page");
+		expect(screen.getByRole("button", { name: "Overview" }).hasAttribute("aria-current")).toBe(false);
 	});
 
-	it("syncs aria-selected when the activeTab store changes (re-render path)", async () => {
+	it("syncs aria-current when the activeTab store changes", async () => {
 		renderSidebar();
-		expect(screen.getByRole("tab", { name: "Arena" }).getAttribute("aria-selected")).toBe("true");
+		expect(screen.getByRole("button", { name: "Agent Arena" }).getAttribute("aria-current")).toBe("page");
 
-		// Store update → subscription fires → DOM re-renders with the new selection.
 		activeTab.set("standards");
 		await waitFor(() => {
-			expect(screen.getByRole("tab", { name: "Standards" }).getAttribute("aria-selected")).toBe("true");
-			expect(screen.getByRole("tab", { name: "Arena" }).getAttribute("aria-selected")).toBe("false");
+			expect(screen.getByRole("button", { name: "Standards" }).getAttribute("aria-current")).toBe("page");
+			expect(screen.getByRole("button", { name: "Agent Arena" }).hasAttribute("aria-current")).toBe(false);
 		});
-		const selected = screen.getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true");
-		expect(selected).toHaveLength(1);
-		expect(selected[0].id).toBe("nav-standards");
 	});
 
-	it("emits onTabSelect with the clicked tab id (id, not label)", async () => {
+	it("emits onTabSelect with the clicked destination id", async () => {
 		const onTabSelect = vi.fn();
 		renderSidebar(onTabSelect);
 
-		await fireEvent.click(screen.getByRole("tab", { name: "Memories" }));
-		await fireEvent.click(screen.getByRole("tab", { name: "Tasks" }));
+		await fireEvent.click(screen.getByRole("button", { name: "Memories" }));
+		await fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
 
 		expect(onTabSelect).toHaveBeenCalledTimes(2);
 		expect(onTabSelect).toHaveBeenNthCalledWith(1, "memories");
 		expect(onTabSelect).toHaveBeenNthCalledWith(2, "tasks");
 	});
 
-	it("collapsed state still renders all 11 tabs with title tooltips and no labels", () => {
+	it("collapsed state keeps all destinations with descriptive tooltips and hides labels", () => {
 		isRepoSidebarCollapsed.set(true);
 		const { container } = renderSidebar();
 
-		const tabs = container.querySelectorAll('[role="tab"]');
-		expect(tabs).toHaveLength(EXPECTED_NAV.length);
-		tabs.forEach((tab, i) => {
-			expect(tab.id).toBe(`nav-${EXPECTED_NAV[i].id}`);
-			expect(tab.getAttribute("title")).toBe(EXPECTED_NAV[i].label);
-		});
-		// Negative: labels are hidden in collapsed mode (icon-only tooltips).
+		for (const item of EXPECTED_NAV) {
+			const destination = container.querySelector(`#nav-${item.id}`);
+			expect(destination).not.toBeNull();
+			expect(destination?.getAttribute("title")).toContain(item.label);
+		}
 		expect(container.querySelectorAll(".nav-label")).toHaveLength(0);
 	});
 });

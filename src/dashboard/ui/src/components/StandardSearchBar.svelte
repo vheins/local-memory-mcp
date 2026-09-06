@@ -1,6 +1,19 @@
 <script lang="ts">
 	import Icon from "../lib/Icon.svelte";
+	import Toolbar from "./ui/Toolbar.svelte";
 
+	/**
+	 * Filter row for the coding-standards collection.
+	 *
+	 * As with HandoffFilterBar, this was a `feature-toolbar card` doing four
+	 * jobs at once: the page `<h1>` + description, the primary "Add Rule"
+	 * action, export/import controls, and the filters — laid out in a
+	 * three-column grid whose second row spanned `1 / -1` with its own
+	 * four-column sub-grid and a 1100px breakpoint.
+	 *
+	 * Title and primary action move to the view's PageHeader. Export/import are
+	 * secondary actions and stay here, next to the filters they operate on.
+	 */
 	export let query = "";
 	export let language = "";
 	export let stack = "";
@@ -11,33 +24,51 @@
 	export let onFilterChange: () => void = () => {};
 	export let onExport: () => void = () => {};
 	export let onImport: (event: Event) => void = () => {};
-	export let onNewStandard: () => void = () => {};
 
 	let importInput: HTMLInputElement;
 </script>
 
-<div class="feature-toolbar glass card">
-	<div class="toolbar-title">
-		<Icon name="check" size={16} strokeWidth={2} />
-		<div>
-			<h1 class="section-label">CODING STANDARDS</h1>
-			<div class="toolbar-subtitle">
-				Rules the agents follow in this repo. Filter, inspect, import, or add one rule at a time.
-			</div>
-		</div>
-	</div>
-	<button class="btn btn-primary toolbar-action" on:click={onNewStandard}>
-		<Icon name="plus" size={14} strokeWidth={2} />
-		Add Rule
-	</button>
-	<div class="toolbar-actions">
-		<button class="btn btn-ghost btn-sm" on:click={onExport} disabled={exporting || standardsCount === 0}>
+<Toolbar label="Standard filters">
+	{#snippet search()}
+		<input
+			class="form-input"
+			placeholder="Search standards…"
+			aria-label="Search coding standards"
+			bind:value={query}
+			on:input={onFilterChange}
+		/>
+	{/snippet}
+
+	{#snippet filters()}
+		<input
+			class="form-input filter-input"
+			placeholder="Language"
+			aria-label="Filter by language"
+			bind:value={language}
+			on:input={onFilterChange}
+		/>
+		<input
+			class="form-input filter-input"
+			placeholder="Stack tags"
+			aria-label="Filter by stack tags"
+			bind:value={stack}
+			on:input={onFilterChange}
+		/>
+		<select class="form-select" bind:value={scope} on:change={onFilterChange} aria-label="Standard scope">
+			<option value="repo">Repo + global</option>
+			<option value="global">Global only</option>
+			<option value="all">All standards</option>
+		</select>
+	{/snippet}
+
+	{#snippet actions()}
+		<button class="btn btn-secondary" on:click={onExport} disabled={exporting || standardsCount === 0}>
 			<Icon name="download" size={14} strokeWidth={2} />
-			{exporting ? "Exporting..." : "Export"}
+			{exporting ? "Exporting…" : "Export"}
 		</button>
-		<button class="btn btn-ghost btn-sm" on:click={() => importInput?.click()} disabled={importing}>
+		<button class="btn btn-secondary" on:click={() => importInput?.click()} disabled={importing}>
 			<Icon name="upload" size={14} strokeWidth={2} />
-			{importing ? "Importing..." : "Import"}
+			{importing ? "Importing…" : "Import"}
 		</button>
 		<input
 			bind:this={importInput}
@@ -46,94 +77,21 @@
 			accept="application/json,.json"
 			on:change={onImport}
 		/>
-	</div>
-	<div class="toolbar-controls">
-		<input
-			class="form-input"
-			placeholder="Search standards..."
-			aria-label="Search coding standards"
-			bind:value={query}
-			on:input={onFilterChange}
-		/>
-		<input
-			class="form-input"
-			placeholder="Language, e.g. typescript"
-			aria-label="Filter by language"
-			bind:value={language}
-			on:input={onFilterChange}
-		/>
-		<input
-			class="form-input"
-			placeholder="Stack tags, e.g. svelte, vite"
-			aria-label="Filter by stack tags"
-			bind:value={stack}
-			on:input={onFilterChange}
-		/>
-		<select class="form-select" bind:value={scope} on:change={onFilterChange}>
-			<option value="repo">Repo + global</option>
-			<option value="global">Global only</option>
-			<option value="all">All standards</option>
-		</select>
-	</div>
-</div>
+	{/snippet}
+</Toolbar>
 
 <style>
-	.feature-toolbar {
-		display: grid;
-		grid-template-columns: 1fr auto auto;
-		gap: 14px;
-		padding: 16px;
-		align-items: start;
-	}
-	.toolbar-title {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-	.toolbar-action {
-		justify-self: end;
-	}
-	.toolbar-actions {
-		display: flex;
-		gap: 8px;
-		justify-self: end;
-		flex-wrap: wrap;
-	}
 	.file-input {
 		display: none;
 	}
-	.toolbar-subtitle {
-		font-size: 0.72rem;
-		color: var(--color-text-muted);
-		font-weight: 600;
-		margin-top: 2px;
-		line-height: 1.45;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-	}
-	.toolbar-controls {
-		display: grid;
-		grid-template-columns: minmax(220px, 1.2fr) minmax(130px, 0.6fr) minmax(180px, 1fr) minmax(140px, 0.6fr);
-		gap: 10px;
-		grid-column: 1 / -1;
+
+	.filter-input {
+		max-width: 180px;
 	}
 
-	@media (max-width: 1100px) {
-		.toolbar-controls {
-			grid-template-columns: 1fr;
-		}
-		.feature-toolbar {
-			grid-template-columns: 1fr;
-		}
-		.toolbar-action,
-		.toolbar-actions {
-			justify-self: stretch;
-			justify-content: center;
+	@media (max-width: 720px) {
+		.filter-input {
+			max-width: none;
 		}
 	}
 </style>

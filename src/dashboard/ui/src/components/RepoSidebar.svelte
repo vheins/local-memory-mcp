@@ -1,46 +1,58 @@
 <script lang="ts">
-	import {
-		availableRepos,
-		currentRepo,
-		isRepoSidebarCollapsed,
-		orderedRepos,
-		repoSearchQuery,
-		activeTab
-	} from "../lib/stores";
-	import { NAV_ITEMS } from "../lib/navigation";
+	import { currentRepo, isRepoSidebarCollapsed, activeTab } from "../lib/stores";
+	import { NAV_GROUPS } from "../lib/navigation";
 	import { createRepoSidebarHandler } from "../lib/composables/useRepoSidebar";
 	import Icon from "../lib/Icon.svelte";
-	import RepoItem from "./RepoItem.svelte";
+	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
+	/**
+	 * Sidebar — brand, workspace switcher, navigation. In that order.
+	 *
+	 * The previous order was brand → navigation → workspace search → a long
+	 * scrolling repository list. That inverted the actual dependency: 8 of the
+	 * 11 destinations require a workspace, so the user was offered the
+	 * destinations first and the prerequisite last. Clicking "Memories" before
+	 * choosing a repository landed on a dead-end "No Repository Selected"
+	 * screen with no way forward from that screen.
+	 *
+	 * Two structural fixes:
+	 * 1. The workspace switcher moves directly under the brand and collapses to
+	 *    a popover, so navigation gets the vertical space instead of a
+	 *    permanently-expanded repo list.
+	 * 2. Workspace-scoped items are `disabled` while no workspace is selected,
+	 *    with the reason stated inline. The dead end is now unreachable rather
+	 *    than merely explained after the fact.
+	 */
 	export let onRepoSelect: (repo: string) => void = () => {};
 	export let onTabSelect: (tab: string) => void = () => {};
 
 	const handler = createRepoSidebarHandler(onRepoSelect);
 
 	$: collapsed = $isRepoSidebarCollapsed;
+	// `queue` is global by design (server-wide embedding/KG outbox — MEM-1457),
+	// so it stays reachable without a workspace alongside dashboard/arena.
+	//
+	// Declared as a plain function, not `$: fn = (scope) => ...`. A reactive
+	// assignment holding a function re-creates the closure on every store tick
+	// and re-runs every call site with it, for a pure predicate that does not
+	// need to be reactive at all — the `$currentRepo` read inside the template
+	// already drives the re-render.
+	function needsWorkspace(scope: string, repo: string | null): boolean {
+		return scope === "workspace" && !repo;
+	}
 </script>
 
-<aside
-	class="sidebar glass-strong flex flex-col"
-	class:collapsed
-	style="border-right: 1px solid var(--color-border);"
-	aria-label="Repository sidebar"
->
-	<!-- Header -->
-	<div class="sidebar-header" style="border-bottom: 1px solid var(--color-border);">
+<aside class="sidebar glass-strong flex flex-col" class:collapsed aria-label="Dashboard sidebar">
+	<div class="sidebar-header">
 		{#if !collapsed}
-			<div class="flex items-center gap-2">
-				<div class="brand-icon">
-					<Icon name="brain" size={14} strokeWidth={1.75} />
-				</div>
-				<div>
-					<div class="font-bold text-sm" style="color:var(--color-text);letter-spacing:-0.02em;">Memory MCP</div>
-					<div class="section-label" style="font-size:0.6rem;margin-top:0;">Dashboard</div>
-				</div>
-			</div>
-		{:else}
-			<div class="brand-icon" style="margin:auto;">
-				<Icon name="brain" size={14} strokeWidth={1.75} />
+			<div class="brand">
+				<span class="brand-mark" aria-hidden="true">
+					<Icon name="brain" size={15} strokeWidth={2} />
+				</span>
+				<span class="brand-text">
+					<span class="brand-name">Memory MCP</span>
+					<span class="brand-sub">Dashboard</span>
+				</span>
 			</div>
 		{/if}
 
@@ -48,138 +60,51 @@
 			class="btn btn-ghost btn-icon btn-sm collapse-btn"
 			on:click={handler.toggleCollapse}
 			title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-			aria-label={collapsed ? "Expand" : "Collapse"}
+			aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
 		>
-			<span
-				style="transition: transform 0.3s ease; display:inline-flex; transform: rotate({collapsed ? '180deg' : '0deg'})"
-			>
+			<span class="collapse-chevron" class:flipped={collapsed}>
 				<Icon name="chevron-left" size={14} strokeWidth={2} />
 			</span>
 		</button>
 	</div>
 
-	<!-- Navigation — TASK-425: single nav surface (moved from the content-area
-	     horizontal tablist; model lives in lib/navigation.ts). Keeps the
-	     TASK-405 a11y pattern: accessible name on the tablist + role=tab +
-	     aria-selected on each item. -->
-	<div class="nav-section" class:collapsed role="tablist" aria-label="Dashboard sections">
-		{#each NAV_ITEMS as tab (tab.id)}
-			<button
-				class="nav-item"
-				class:active={$activeTab === tab.id}
-				class:collapsed
-				on:click={() => onTabSelect(tab.id)}
-				title={collapsed ? tab.label : ""}
-				id="nav-{tab.id}"
-				role="tab"
-				aria-selected={$activeTab === tab.id}
-			>
-				<Icon name={tab.icon} size={collapsed ? 18 : 15} strokeWidth={1.75} />
+	<WorkspaceSwitcher {collapsed} onSelect={handler.selectRepo} onTogglePin={handler.togglePin} />
+
+	<nav class="nav" class:collapsed aria-label="Primary navigation">
+		{#each NAV_GROUPS as group (group.id)}
+			<div class="nav-group" data-scope={group.id}>
 				{#if !collapsed}
-					<span class="nav-label">{tab.label}</span>
-					{#if $activeTab === tab.id}
-						<span class="nav-active-dot"></span>
-					{/if}
+					<p class="nav-group-label">{group.label}</p>
 				{/if}
-			</button>
+				{#each group.items as tab (tab.id)}
+					{@const locked = needsWorkspace(tab.scope, $currentRepo)}
+					<button
+						class="nav-item"
+						class:active={$activeTab === tab.id}
+						class:collapsed
+						disabled={locked}
+						on:click={() => onTabSelect(tab.id)}
+						title={locked
+							? `${tab.label} — select a workspace first`
+							: collapsed
+								? `${tab.label} — ${tab.description}`
+								: tab.description}
+						id="nav-{tab.id}"
+						aria-current={$activeTab === tab.id ? "page" : undefined}
+					>
+						<Icon name={tab.icon} size={collapsed ? 18 : 16} strokeWidth={1.75} />
+						{#if !collapsed}
+							<span class="nav-label">{tab.label}</span>
+						{/if}
+					</button>
+				{/each}
+
+				{#if !collapsed && group.id === "workspace" && !$currentRepo}
+					<p class="nav-hint">Select a workspace above to unlock these.</p>
+				{/if}
+			</div>
 		{/each}
-	</div>
-
-	<!-- Search -->
-	{#if !collapsed}
-		<div class="p-3" style="border-bottom: 1px solid var(--color-border);">
-			<div class="search-wrapper">
-				<span class="search-icon">
-					<Icon name="search" size={13} strokeWidth={2} />
-				</span>
-				<input
-					class="form-input search-input"
-					type="text"
-					placeholder="Search repos…"
-					aria-label="Search repositories"
-					bind:value={$repoSearchQuery}
-				/>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Repo List -->
-	<div class="overflow-y-auto flex-1 p-2" style="scrollbar-width: thin;">
-		{#if !collapsed}
-			<!-- Count badge -->
-			<div class="flex items-center justify-between px-2 py-1 mb-1">
-				<span class="section-label">Repositories</span>
-				<span class="repo-count-chip">{$availableRepos.length}</span>
-			</div>
-
-			<!-- Pinned -->
-			{#if $orderedRepos.pinned.length > 0}
-				<div class="group-label">
-					<Icon name="star" size={10} strokeWidth={2} />
-					Pinned
-				</div>
-				{#each $orderedRepos.pinned as item (item.repo)}
-					<RepoItem
-						{item}
-						draggable={true}
-						pinned={true}
-						selected={$currentRepo === item.repo}
-						onSelect={() => handler.selectRepo(item.repo)}
-						onPin={(e) => handler.togglePin(item.repo, e)}
-						on:drag:start={(e) => handler.onDragStart(e.detail.repo, e.detail.event)}
-						on:drag:over={(e) => handler.onDragOver(e.detail.repo, e.detail.event)}
-						on:drop={(e) => handler.onDrop(e.detail.repo, e.detail.event)}
-						on:drag:end={(e) => handler.onDragEnd(e.detail.event)}
-					/>
-				{/each}
-			{/if}
-
-			<!-- Unpinned -->
-			{#if $orderedRepos.unpinned.length > 0}
-				{#if $orderedRepos.pinned.length > 0}
-					<div class="group-label" style="margin-top:6px;">
-						<Icon name="layers" size={10} strokeWidth={2} />
-						All
-					</div>
-				{/if}
-				{#each $orderedRepos.unpinned as item (item.repo)}
-					<RepoItem
-						{item}
-						draggable={false}
-						pinned={false}
-						selected={$currentRepo === item.repo}
-						onSelect={() => handler.selectRepo(item.repo)}
-						onPin={(e) => handler.togglePin(item.repo, e)}
-					/>
-				{/each}
-			{/if}
-
-			{#if $availableRepos.length === 0}
-				<div style="text-align:center;padding:24px 16px;color:var(--color-text-muted);">
-					<Icon name="inbox" size={24} strokeWidth={1.5} />
-					<div style="font-size:0.82rem;margin-top:8px;">No repositories found</div>
-				</div>
-			{/if}
-		{:else}
-			<!-- Collapsed: show initials only -->
-			{#each $availableRepos as item (item.repo)}
-				<div
-					class="repo-item collapsed"
-					class:active={$currentRepo === item.repo}
-					role="button"
-					tabindex="0"
-					on:click={() => handler.selectRepo(item.repo)}
-					on:keydown={(e) => (e.key === "Enter" || e.key === " ") && handler.selectRepo(item.repo)}
-					title={item.repo}
-				>
-					{#if $currentRepo === item.repo}
-						<div class="repo-active-indicator"></div>
-					{/if}
-					<div class="repo-avatar" style="margin:auto;">{handler.getRepoInitials(item.repo)}</div>
-				</div>
-			{/each}
-		{/if}
-	</div>
+	</nav>
 </aside>
 
 <style>
@@ -187,161 +112,192 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 14px 16px;
-		min-height: 60px;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		min-height: var(--header-height);
 	}
 
-	.brand-icon {
-		width: 30px;
-		height: 30px;
-		border-radius: 9px;
-		background: linear-gradient(135deg, #0ea5e9, #6366f1);
+	/* Collapsed the rail is 64px, but brand mark (28) + gap (8) + button (36) +
+	   padding (24) needs 84px — the toggle overflowed by 20px and was clipped,
+	   leaving no way to expand again. The brand is decoration; the toggle is the
+	   only control. Drop the mark and let the button own the row. */
+	.sidebar.collapsed .sidebar-header {
+		justify-content: center;
+		padding: var(--space-3) var(--space-2);
+	}
+
+	.brand {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		color: white;
-		flex-shrink: 0;
-		box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-		transition:
-			box-shadow 0.2s ease,
-			transform 0.2s ease;
+		gap: var(--space-2);
+		min-width: 0;
 	}
 
-	.brand-icon:hover {
-		box-shadow: 0 4px 18px rgba(14, 165, 233, 0.5);
-		transform: scale(1.05);
+	/* A flat mark, not a gradient chip with a coloured drop shadow. The brand is
+	   the least important thing on this screen; it should not be the most
+	   visually energetic element in the sidebar. */
+	.brand-mark {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex-shrink: 0;
+		border-radius: var(--radius-sm);
+		background: var(--color-text);
+		color: var(--color-surface);
+	}
+
+	.brand-text {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.brand-name {
+		font-size: var(--text-secondary);
+		font-weight: var(--weight-semibold);
+		color: var(--color-text);
+		letter-spacing: -0.01em;
+		line-height: 1.25;
+	}
+
+	.brand-sub {
+		font-size: var(--text-label);
+		color: var(--color-text-faint);
+		line-height: 1.25;
 	}
 
 	.collapse-btn {
 		flex-shrink: 0;
 	}
 
-	.nav-section {
+	.collapse-chevron {
+		display: inline-flex;
+		transition: transform 180ms ease-out;
+	}
+
+	.collapse-chevron.flipped {
+		transform: rotate(180deg);
+	}
+
+	.nav {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		padding: var(--space-2) var(--space-3) var(--space-4);
+		overflow-y: auto;
+		flex: 1;
+	}
+
+	.nav.collapsed {
+		padding: var(--space-2);
+		gap: var(--space-3);
+	}
+
+	.nav-group {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		padding: 8px 8px 6px;
-		border-bottom: 1px solid var(--color-border);
+	}
+
+	.nav-group-label {
+		padding: 0 var(--space-2) var(--space-1);
+		font-size: var(--text-label);
+		font-weight: var(--weight-medium);
+		color: var(--color-text-faint);
 	}
 
 	.nav-item {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 8px 10px;
-		border-radius: 9px;
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--color-text-muted);
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		transition: all 0.15s ease;
-		text-align: left;
-		position: relative;
+		gap: var(--space-3);
 		width: 100%;
+		min-height: 36px;
+		padding: var(--space-2);
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-text-muted);
+		font-size: var(--text-body);
+		font-weight: var(--weight-medium);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color 180ms ease-out,
+			color 180ms ease-out;
 	}
 
-	.nav-item:hover {
+	.nav-item:hover:not(:disabled) {
+		background: var(--color-surface-hover);
 		color: var(--color-text);
-		background: rgba(14, 165, 233, 0.07);
 	}
 
+	/* The active item carries the accent, not a near-invisible grey wash. The
+	   previous `--color-surface-hover` fill sat ~2% off the sidebar background,
+	   which made "where am I" unreadable — the same treatment as :hover meant
+	   the state had no distinct signal at all. Accent text + accent tint +
+	   a leading rail give one coherent indicator that survives both themes. */
+	/* Text uses --color-primary-on-soft: #2563eb on its own 10%
+	   tint measures 4.48:1, failing AA by a hair. The token resolves per theme
+	   (darker on light, lighter on dark) — see base.css. */
 	.nav-item.active {
-		color: var(--color-primary, #0ea5e9);
-		background: rgba(14, 165, 233, 0.1);
+		position: relative;
+		background: var(--color-primary-soft);
+		color: var(--color-primary-on-soft);
+		font-weight: var(--weight-semibold);
 	}
 
-	:global(html.dark) .nav-item:hover {
-		background: rgba(14, 165, 233, 0.1);
+	.nav-item.active::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 3px;
+		height: 18px;
+		border-radius: 0 2px 2px 0;
+		background: var(--color-primary-on-soft);
 	}
 
-	:global(html.dark) .nav-item.active {
-		background: rgba(56, 189, 248, 0.12);
-		color: #7dd3fc;
+	/* Collapsed rail: the label is gone, so the icon alone must read as active.
+	   A leading bar on a 40px-wide centred icon looks detached, so the tint and
+	   colour carry it instead. */
+	.nav-item.active.collapsed::before {
+		display: none;
 	}
 
-	.nav-label {
-		flex: 1;
+	.nav-item.active:hover:not(:disabled) {
+		background: var(--color-primary-soft-strong);
+		color: var(--color-primary-on-soft);
 	}
 
-	.nav-active-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--color-primary, #0ea5e9);
-		flex-shrink: 0;
-	}
-
-	:global(html.dark) .nav-active-dot {
-		background: #7dd3fc;
-	}
-
-	.nav-section.collapsed {
-		align-items: center;
-		padding: 6px 4px;
-		gap: 4px;
+	.nav-item:disabled {
+		color: var(--color-text-faint);
+		cursor: not-allowed;
+		opacity: 0.55;
 	}
 
 	.nav-item.collapsed {
 		justify-content: center;
-		padding: 8px 4px;
-		width: auto;
-		align-self: stretch;
+		padding: var(--space-2) 0;
 	}
 
-	.search-wrapper {
-		position: relative;
+	.nav-label {
+		flex: 1;
+		min-width: 0;
 	}
 
-	.search-icon {
-		position: absolute;
-		left: 10px;
-		top: 50%;
-		transform: translateY(-50%);
-		color: var(--color-text-muted);
-		display: flex;
-		pointer-events: none;
+	.nav-hint {
+		padding: var(--space-2);
+		font-size: var(--text-label);
+		color: var(--color-text-faint);
+		line-height: var(--leading-normal);
 	}
 
-	.search-input {
-		padding-left: 32px;
-		font-size: 0.8rem;
-		background: rgba(255, 255, 255, 0.5);
-	}
-
-	:global(html.dark) .search-input {
-		background: rgba(10, 18, 38, 0.5);
-	}
-
-	.group-label {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		font-size: 0.6rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.07em;
-		color: var(--color-text-muted);
-		padding: 6px 10px 4px;
-		opacity: 0.75;
-	}
-
-	.repo-count-chip {
-		font-size: 0.62rem;
-		font-weight: 700;
-		background: rgba(14, 165, 233, 0.12);
-		/* TASK-404: #0ea5e9 @ ~9.92px = 2.77:1 on the light sidebar (fails WCAG
-		   AA 4.5:1). sky-700 #0369a1 ≈ 5.6:1 on white — passes AA for small text. */
-		color: #0369a1;
-		padding: 1px 7px;
-		border-radius: 9999px;
-		border: 1px solid rgba(14, 165, 233, 0.22);
-	}
-
-	/* Dark theme: #0369a1 is too dim on the navy surface — restore a lighter
-	   sky blue that keeps ≥4.5:1 there. */
-	:global(html.dark) .repo-count-chip {
-		color: #38bdf8;
+	@media (pointer: coarse) {
+		.nav-item {
+			min-height: 44px;
+		}
 	}
 </style>

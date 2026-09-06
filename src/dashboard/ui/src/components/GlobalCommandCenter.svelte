@@ -107,8 +107,8 @@
 	<div class="glass card panel-card">
 		<div class="panel-header">
 			<div>
-				<h1 class="section-label">Global Command Center</h1>
-				<div class="panel-copy">Cross-repository orchestration view for workload, coordination, and pressure.</div>
+				<h2 class="panel-title">Across all workspaces</h2>
+				<p class="panel-copy">Workload, coordination, and pressure for every repository on this server.</p>
 			</div>
 			{#if highlightedRepo}
 				<div class="repo-focus">
@@ -228,11 +228,18 @@
 		gap: 12px;
 		margin-bottom: 12px;
 	}
+	.panel-title {
+		font-size: var(--text-section);
+		font-weight: var(--weight-semibold);
+		letter-spacing: -0.01em;
+		color: var(--color-text);
+	}
 	.panel-copy {
+		margin-top: var(--space-1);
 		color: var(--color-text-muted);
-		font-size: 0.76rem;
-		line-height: 1.45;
-		max-width: 620px;
+		font-size: var(--text-secondary);
+		line-height: var(--leading-normal);
+		max-width: 68ch;
 	}
 	.repo-focus {
 		display: inline-flex;

@@ -20,6 +20,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		min-height: 44px;
 		padding: 10px 20px;
 		background: rgba(255, 255, 255, 0.02);
 		border: none;

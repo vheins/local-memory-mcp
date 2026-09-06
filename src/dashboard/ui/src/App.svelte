@@ -2,66 +2,46 @@
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import "./app.css";
-	import {
-		activeTab,
-		currentRepo,
-		recentActionsTotalItems,
-		initPersistedState,
-		dashboardStats,
-		taskTimeStats
-	} from "./lib/stores";
+	import { activeTab, currentRepo, initPersistedState } from "./lib/stores";
 	import { createAppHandler } from "./lib/composables/useApp";
 	import { api } from "./lib/api";
-	import { createChatTask } from "./lib/utils";
+	import { getNavItem } from "./lib/navigation";
 
 	import RepoSidebar from "./components/RepoSidebar.svelte";
 	import TopBar from "./components/TopBar.svelte";
 	import KanbanBoard from "./components/KanbanBoard.svelte";
-	import StatsWidget from "./components/StatsWidget.svelte";
-	import TaskStatsWidget from "./components/TaskStatsWidget.svelte";
-	import TimeStatsWidget from "./components/TimeStatsWidget.svelte";
 	import MemoryList from "./components/MemoryList.svelte";
-	import RecentActions from "./components/RecentActions.svelte";
 	import DetailDrawer from "./components/DetailDrawer.svelte";
 	import ReferenceDrawer from "./components/ReferenceDrawer.svelte";
 	import MemoryDrawer from "./components/MemoryDrawer.svelte";
 	import BulkImportModal from "./components/BulkImportModal.svelte";
 	import AddTaskModal from "./components/AddTaskModal.svelte";
-	import ReferenceTab from "./components/ReferenceTab.svelte";
 	import FloatingChat from "./components/FloatingChat.svelte";
-	import StandardsPanel from "./components/StandardsPanel.svelte";
-	import CodebasePage from "./components/CodebasePage.svelte";
-	import HandoffsPanel from "./components/HandoffsPanel.svelte";
-	import QueuePage from "./components/QueuePage.svelte";
-	import KGGraph from "./components/KGGraph.svelte";
-	import AgentArena from "./components/AgentArena.svelte";
-	import GlobalCommandCenter from "./components/GlobalCommandCenter.svelte";
-	import Icon from "./lib/Icon.svelte";
+
+	import OverviewView from "./views/OverviewView.svelte";
+	import ActivityView from "./views/ActivityView.svelte";
+	import MemoriesView from "./views/MemoriesView.svelte";
+	import TasksView from "./views/TasksView.svelte";
+	import ViewLoader from "./views/ViewLoader.svelte";
+	import WorkspaceGate from "./views/WorkspaceGate.svelte";
+
+	/**
+	 * App — application shell only: sidebar, top bar, route outlet, overlays.
+	 *
+	 * This file used to be a 520-line god component that also owned the layout
+	 * and markup of the Overview and Activity pages, nine blocks of inline
+	 * `style="..."` (including a `calc(100vh - 180px)` magic number and a
+	 * hardcoded gradient avatar), the chat-to-task submit handler, and a
+	 * per-route bespoke loading/error banner.
+	 *
+	 * All page composition now lives in `views/`. The shell's only jobs are:
+	 * mount lifecycle, which view is active, and the overlay layer. If page
+	 * markup starts creeping back in here, it belongs in a view.
+	 */
 
 	let kanbanBoard: KanbanBoard;
 	let memoryList: MemoryList;
 
-	let chatMessage = "";
-	let isSendingChat = false;
-
-	async function sendChat() {
-		const msg = chatMessage.trim();
-		if (!msg || isSendingChat) return;
-		const repo = get(currentRepo);
-		if (!repo) return;
-		isSendingChat = true;
-		try {
-			await createChatTask(msg, repo);
-			chatMessage = "";
-			await app.onRefresh();
-		} catch (e) {
-			console.error("Failed to create task from chat:", e);
-		} finally {
-			isSendingChat = false;
-		}
-	}
-
-	// Init app handler, passing component refs
 	const app = createAppHandler({
 		get kanbanBoard() {
 			return kanbanBoard;
@@ -74,37 +54,24 @@
 	const appState = { subscribe: app.subscribe, set: app.set, update: app.update };
 	const { filteredTools, filteredPrompts, filteredResources, sidebarCollapsed } = app;
 
-	// ARIA live region (STD-002 / TASK-400): scoped sr-only announcement for
-	// the dashboard view's async stats refresh. Subscribes announce on every
-	// stats load (initial + 30s polling), never wrap the whole shell.
-	let dashboardLiveText = "";
-
-	// TASK-425: the sidebar nav is the single navigation surface. Route tab
-	// switches through app.onTabChange (same handler the old horizontal tablist
-	// used) so lazy loads (memories/tasks/reference) keep working, and close
-	// the mobile menu when navigating from it.
 	function handleTabSelect(tab: string) {
 		app.onTabChange(tab);
 		if (get(appState).mobileMenuOpen) app.toggleMobileMenu();
 	}
 
+	// `dashboard`, `arena` and `queue` are server-wide by design (MEM-1457), so
+	// they render without a workspace. Everything else is workspace-scoped.
+	const GLOBAL_VIEWS = new Set(["dashboard", "arena", "queue"]);
+	$: requiresWorkspace = !GLOBAL_VIEWS.has($activeTab) && !$currentRepo;
+	$: activeLabel = getNavItem($activeTab)?.label ?? "view";
+
 	onMount(() => {
-		const unsubStats = dashboardStats.subscribe((s) => {
-			if (s) dashboardLiveText = "Dashboard stats refreshed";
-		});
-		const unsubTimeStats = taskTimeStats.subscribe((ts) => {
-			if (ts) dashboardLiveText = "Dashboard stats refreshed";
-		});
 		void (async () => {
 			initPersistedState();
 			await app.loadRepos();
 			await app.loadHealth();
 			await app.loadData();
 		})();
-		return () => {
-			unsubStats();
-			unsubTimeStats();
-		};
 	});
 
 	$: if ($activeTab === "reference") {
@@ -121,12 +88,9 @@
 <svelte:window on:keydown={app.onKeyDown} />
 
 <div class="app-layout">
-	<!-- Sidebar -->
 	<RepoSidebar onRepoSelect={app.onRepoSelect} onTabSelect={handleTabSelect} />
 
-	<!-- Main content -->
 	<div class="main-content" class:sidebar-collapsed={$sidebarCollapsed}>
-		<!-- Top bar -->
 		<TopBar
 			onRefresh={app.onRefresh}
 			onToggleMobileMenu={app.toggleMobileMenu}
@@ -134,7 +98,6 @@
 			mobileMenuOpen={$appState.mobileMenuOpen}
 		/>
 
-		<!-- Mobile overlay -->
 		{#if $appState.mobileMenuOpen}
 			<div
 				class="drawer-overlay mobile-overlay"
@@ -149,189 +112,90 @@
 			</div>
 		{/if}
 
-		<!-- Content Shell -->
 		<main id="dashboardShell" class="dashboard-shell">
-			<!-- TASK-418: `queue` is global-scope by design (server-wide embedding/KG
-			     outbox — MEM-1457), so it must stay reachable without a repo like
-			     dashboard/arena. All other tabs are per-repo and stay gated. -->
-			{#if !$currentRepo && $activeTab !== "dashboard" && $activeTab !== "arena" && $activeTab !== "queue"}
-				<div class="empty-state animate-fade-in">
-					<div class="empty-state-icon animate-float">
-						<Icon name="brain" size={32} strokeWidth={1.5} />
-					</div>
-					<div class="empty-state-title">No Repository Selected</div>
-					<div class="empty-state-text">Select a repository from the sidebar to get started.</div>
+			{#if requiresWorkspace}
+				<WorkspaceGate onOpenReference={() => handleTabSelect("reference")} />
+			{:else if $activeTab === "dashboard"}
+				<OverviewView />
+			{:else if $activeTab === "activity"}
+				<ActivityView onLoadPage={app.loadRecentActions} onRefresh={app.onRefresh} />
+			{:else if $activeTab === "memories"}
+				<MemoriesView
+					bind:list={memoryList}
+					onMemoryClick={app.openMemoryDrawer}
+					onNewMemory={app.openNewMemoryDrawer}
+					onBulkImport={() => app.openBulkImport("memories")}
+				/>
+			{:else if $activeTab === "tasks"}
+				<TasksView
+					bind:board={kanbanBoard}
+					onTaskClick={app.openTaskDrawer}
+					onAddTask={() => app.toggleAddTaskModal(true)}
+					onBulkImport={() => app.openBulkImport("tasks")}
+				/>
+			{:else if $activeTab === "standards"}
+				{#await import("./components/StandardsPanel.svelte")}
+					<ViewLoader label={activeLabel} />
+				{:then { default: View }}
+					<View repo={$currentRepo || ""} />
+				{:catch}
+					<ViewLoader state="error" label={activeLabel} />
+				{/await}
+			{:else if $activeTab === "codebase"}
+				{#await import("./components/CodebasePage.svelte")}
+					<ViewLoader label={activeLabel} />
+				{:then { default: View }}
+					<View repo={$currentRepo || ""} />
+				{:catch}
+					<ViewLoader state="error" label={activeLabel} />
+				{/await}
+			{:else if $activeTab === "handoffs"}
+				{#await import("./components/HandoffsPanel.svelte")}
+					<ViewLoader label={activeLabel} />
+				{:then { default: View }}
+					<View repo={$currentRepo || ""} />
+				{:catch}
+					<ViewLoader state="error" label={activeLabel} />
+				{/await}
+			{:else if $activeTab === "queue"}
+				{#await import("./components/QueuePage.svelte")}
+					<ViewLoader label={activeLabel} />
+				{:then { default: View }}
+					<View repo={$currentRepo || ""} />
+				{:catch}
+					<ViewLoader state="error" label={activeLabel} />
+				{/await}
+			{:else if $activeTab === "knowledge-graph"}
+				{#await import("./components/KGGraph.svelte")}
+					<ViewLoader label={activeLabel} />
+				{:then { default: View }}
+					<View repo={$currentRepo || ""} />
+				{:catch}
+					<ViewLoader state="error" label={activeLabel} />
+				{/await}
+			{:else if $activeTab === "arena"}
+				<div class="arena-fullwidth">
+					{#await import("./components/AgentArena.svelte")}
+						<ViewLoader label={activeLabel} />
+					{:then { default: View }}
+						<View />
+					{:catch}
+						<ViewLoader state="error" label={activeLabel} />
+					{/await}
 				</div>
-			{:else}
-				<!-- TASK-425: no horizontal tablist in the content area — all
-				     navigation (Arena/Dashboard/Activity/Memories/Tasks/Codebase/
-				     Handoffs/Queue/Knowledge Graph/Standards/Reference) lives in
-				     the RepoSidebar nav (lib/navigation.ts, single source). The
-				     active view below is gated by the same activeTab store. -->
-
-				<!-- ════ DASHBOARD TAB ════ -->
-				{#if $activeTab === "dashboard"}
-					<!-- ARIA live region (STD-002 / TASK-400): scoped, never the whole shell -->
-					<div class="sr-only" aria-live="polite" aria-atomic="true">{dashboardLiveText}</div>
-					<div style="display:grid;grid-template-columns:1fr;gap:12px;align-items:start;" class="dashboard-grid">
-						<GlobalCommandCenter />
-
-						<div class="flex flex-col" style="gap:12px;">
-							{#if $currentRepo}
-								<div class="glass card hover-glow card-body">
-									<div class="flex items-center justify-between card-section-title">
-										<h2 class="section-label">Selected Repo Pulse</h2>
-										<div class="repo-badge">
-											{$currentRepo}
-										</div>
-									</div>
-									<div
-										class="repo-pulse-grid"
-										style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;"
-									>
-										<div class="glass card card-body">
-											<h2 class="section-label card-section-title">Memory Overview</h2>
-											<StatsWidget />
-										</div>
-										<div class="glass card card-body">
-											<h2 class="section-label card-section-title">Task Overview</h2>
-											<TaskStatsWidget />
-										</div>
-									</div>
-								</div>
-								<TimeStatsWidget />
-							{:else}
-								<div class="glass card hover-glow card-body">
-									<h2 class="section-label card-section-title">Per-Repository Pulse</h2>
-									<div class="muted-text">
-										Select a repository from the sidebar to inspect repo-specific memory, task, and execution metrics.
-									</div>
-								</div>
-							{/if}
-						</div>
-					</div>
-				{/if}
-
-				<!-- ════ ACTIVITY TAB ════ -->
-				{#if $activeTab === "activity"}
-					<div
-						class="glass card animate-fade-in"
-						style="height:calc(100vh - 180px);display:flex;flex-direction:column;padding:0;overflow:hidden;border-radius:24px;"
-					>
-						<div
-							style="padding:16px 20px;border-bottom:1px solid var(--color-border);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);"
-						>
-							<div class="flex items-center gap-3">
-								<div
-									style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--color-primary),var(--color-accent));display:flex;align-items:center;justify-content:center;color:white;box-shadow:0 4px 12px var(--glow-primary);"
-								>
-									<Icon name="activity" size={18} strokeWidth={2.2} />
-								</div>
-								<div>
-									<h1 style="font-size:0.95rem;font-weight:800;color:var(--color-text);letter-spacing:-0.01em;">
-										Recent Activity
-									</h1>
-									<div style="font-size:0.68rem;color:var(--color-text-muted);font-weight:600;">
-										{$recentActionsTotalItems} events tracked
-									</div>
-								</div>
-							</div>
-						</div>
-						<RecentActions onLoadPage={app.loadRecentActions} />
-						<div class="chat-send-panel">
-							<div class="chat-input-row">
-								<input
-									type="text"
-									placeholder="Type a message to create a backlog task..."
-									value={chatMessage}
-									on:input={(e) => (chatMessage = e.currentTarget.value)}
-									on:keydown={(e) => e.key === "Enter" && !e.shiftKey && sendChat()}
-									disabled={isSendingChat}
-								/>
-								<button class="chat-send-btn" on:click={sendChat} disabled={!chatMessage.trim() || isSendingChat}>
-									<Icon name="send" size={16} strokeWidth={2} />
-								</button>
-							</div>
-						</div>
-					</div>
-				{/if}
-
-				<!-- ════ MEMORIES TAB ════ -->
-				{#if $activeTab === "memories"}
-					<div class="glass card hover-glow animate-fade-in">
-						<div class="flex items-center gap-2" style="margin-bottom:16px;">
-							<Icon name="brain" size={14} strokeWidth={1.75} />
-							<h1 class="section-label">Memory Explorer</h1>
-						</div>
-						<MemoryList
-							bind:this={memoryList}
-							onMemoryClick={app.openMemoryDrawer}
-							onNewMemory={app.openNewMemoryDrawer}
-							onBulkImport={() => app.openBulkImport("memories")}
-						/>
-					</div>
-				{/if}
-
-				<!-- ════ TASKS TAB ════ -->
-				{#if $activeTab === "tasks"}
-					<div class="animate-fade-in">
-						<div class="glass card hover-glow" style="margin-bottom:20px;">
-							<div class="flex items-center gap-2" style="margin-bottom:16px;">
-								<Icon name="columns" size={14} strokeWidth={1.75} />
-								<h1 class="stat-label">Task Overview</h1>
-							</div>
-							<KanbanBoard
-								bind:this={kanbanBoard}
-								onTaskClick={app.openTaskDrawer}
-								onAddTask={() => app.toggleAddTaskModal(true)}
-								onBulkImport={() => app.openBulkImport("tasks")}
-							/>
-						</div>
-					</div>
-				{/if}
-
-				<!-- ════ STANDARDS TAB ════ -->
-				{#if $activeTab === "standards"}
-					<StandardsPanel repo={$currentRepo || ""} />
-				{/if}
-
-				<!-- ════ CODEBASE TAB ════ -->
-				{#if $activeTab === "codebase"}
-					<CodebasePage repo={$currentRepo || ""} />
-				{/if}
-
-				<!-- ════ HANDOFFS TAB ════ -->
-				{#if $activeTab === "handoffs"}
-					<HandoffsPanel repo={$currentRepo || ""} />
-				{/if}
-
-				<!-- ════ QUEUE TAB ════ -->
-				{#if $activeTab === "queue"}
-					<QueuePage repo={$currentRepo || ""} />
-				{/if}
-
-				<!-- ════ KNOWLEDGE GRAPH TAB ════ -->
-				{#if $activeTab === "knowledge-graph"}
-					<KGGraph repo={$currentRepo || ""} />
-				{/if}
-
-				<!-- ════ AGENT ARENA TAB ════ -->
-				{#if $activeTab === "arena"}
-					<div class="arena-fullwidth">
-						<AgentArena />
-					</div>
-				{/if}
-
-				<!-- ════ REFERENCE TAB ════ -->
-				{#if $activeTab === "reference"}
-					<ReferenceTab handler={app} {appState} {filteredTools} {filteredPrompts} {filteredResources} />
-				{/if}
+			{:else if $activeTab === "reference"}
+				{#await import("./components/ReferenceTab.svelte")}
+					<ViewLoader label={activeLabel} />
+				{:then { default: View }}
+					<View handler={app} {appState} {filteredTools} {filteredPrompts} {filteredResources} />
+				{:catch}
+					<ViewLoader state="error" label={activeLabel} />
+				{/await}
 			{/if}
 		</main>
 	</div>
 </div>
 
-<!-- ════ Unified Detail Drawer (Memory + Task) ════ -->
 <DetailDrawer
 	drawerMode={$appState.selectedMemory ? "memory" : "task"}
 	memory={$appState.selectedMemory}
@@ -358,7 +222,6 @@
 	onDeleted={app.handleMemoryDeleted}
 />
 
-<!-- ════ Add Task Modal ════ -->
 <AddTaskModal
 	open={$appState.addTaskModalOpen}
 	newTask={$appState.newTask}
@@ -377,88 +240,29 @@
 	}}
 />
 
-<!-- ════ Quick Create FAB ════ -->
 <FloatingChat onRefresh={app.onRefresh} />
 
 <style>
-	/* ── Card body padding utility ── */
-	:global(.card-body) {
-		padding: 16px;
+	/* Content is capped so text lines stay readable on ultrawide displays
+	   instead of stretching to 2500px. */
+	.dashboard-shell {
+		max-width: var(--content-max);
+		width: 100%;
+		margin: 0 auto;
 	}
 
-	/* ── Section title spacing inside cards ── */
-	:global(.card-section-title) {
-		margin-bottom: 10px;
-	}
+	/* Arena renders its own canvas and manages its own bounds, so it opts out of
+	   the shell's horizontal padding.
 
-	/* ── Empty state layout ── */
-	.empty-state {
-		text-align: center;
-		padding: 80px 20px;
-	}
-
-	.empty-state-icon {
-		display: inline-flex;
-		width: 72px;
-		height: 72px;
-		border-radius: 20px;
-		background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(99, 102, 241, 0.15));
-		border: 1px solid rgba(14, 165, 233, 0.2);
-		align-items: center;
-		justify-content: center;
-		margin-bottom: 20px;
-	}
-
-	.empty-state-title {
-		font-size: 1.25rem;
-		font-weight: 800;
-		color: var(--color-text);
-		margin-bottom: 8px;
-		letter-spacing: -0.02em;
-	}
-
-	.empty-state-text {
-		color: var(--color-text-muted);
-		font-size: 0.875rem;
-	}
-
-	.repo-badge {
-		font-size: 0.68rem;
-		font-weight: 800;
-		color: var(--color-primary);
-		background: rgba(99, 102, 241, 0.08);
-		border: 1px solid rgba(99, 102, 241, 0.16);
-		padding: 4px 8px;
-		border-radius: 999px;
-	}
-
-	.muted-text {
-		color: var(--color-text-muted);
-		font-size: 0.8rem;
-	}
-
-	@media (max-width: 900px) {
-		.dashboard-grid {
-			grid-template-columns: 1fr !important;
-		}
-		.repo-pulse-grid {
-			grid-template-columns: 1fr !important;
-		}
-	}
-
-	/* Arena full-width: break out of dashboard-shell padding */
+	   Two rules make this safe. It cancels the shell's padding by referencing
+	   the SAME `--shell-pad` custom property rather than restating a value — the
+	   previous code hardcoded `--space-5` (24px) against a `20px` padding, a 4px
+	   mismatch per side that produced a permanent horizontal scrollbar. And it
+	   uses negative margins ONLY, never `width: calc(100% + ...)`, which would
+	   override the centred shell's computed width and overflow again. */
 	.arena-fullwidth {
-		margin-left: -20px;
-		margin-right: -20px;
-		width: calc(100% + 40px);
+		margin-left: calc(var(--shell-pad) * -1);
+		margin-right: calc(var(--shell-pad) * -1);
 		overflow-y: auto;
-	}
-
-	@media (max-width: 1024px) {
-		.arena-fullwidth {
-			margin-left: -12px;
-			margin-right: -12px;
-			width: calc(100% + 24px);
-		}
 	}
 </style>

@@ -103,6 +103,57 @@
 	</table>
 </div>
 
+<!-- Mobile handoff cards -->
+<div class="handoff-cards" aria-label="Handoffs">
+	{#if loading}
+		{#each { length: 3 } as _, i (i)}
+			<div class="handoff-card"><div class="skeleton" style="height:112px;border-radius:10px;"></div></div>
+		{/each}
+	{:else if handoffs.length === 0}
+		<div class="mobile-empty">
+			<Icon name="git-branch" size={24} strokeWidth={1.75} />
+			<strong>No handoffs found</strong>
+			<span>Create one when unfinished work needs context transfer.</span>
+		</div>
+	{:else}
+		{#each handoffs as handoff (handoff.id)}
+			<article class="handoff-card">
+				<button
+					class="card-main"
+					on:click={() => onOpenViewDrawer(handoff)}
+					aria-label={`Open handoff ${handoff.summary}`}
+				>
+					<div class="card-heading">
+						<strong>{handoff.summary}</strong>
+						<span
+							class="status-pill"
+							class:status-pending={handoff.status === "pending"}
+							class:status-accepted={handoff.status === "accepted"}
+							class:status-rejected={handoff.status === "rejected"}
+							class:status-expired={handoff.status === "expired"}>{handoff.status}</span
+						>
+					</div>
+					<div class="route-line">
+						<span>{handoff.from_agent}</span><Icon name="chevron-right" size={14} /><span
+							>{handoff.to_agent || "Unassigned"}</span
+						>
+					</div>
+					<div class="card-meta">
+						<span>{handoff.task_code || handoff.task_id?.slice(0, 8) || "No task"}</span><span
+							>{formatDate(handoff.created_at)}</span
+						>
+					</div>
+				</button>
+				<button
+					class="btn btn-ghost card-expire"
+					on:click={() => onDeleteRow(handoff)}
+					disabled={handoff.status === "expired"}>Expire</button
+				>
+			</article>
+		{/each}
+	{/if}
+</div>
+
 <!-- Claims section -->
 <div class="claims-section">
 	<div class="claims-header">
@@ -208,8 +259,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		width: 40px;
+		height: 40px;
 		border-radius: 7px;
 		border: none;
 		cursor: pointer;
@@ -268,13 +319,6 @@
 		justify-content: space-between;
 		gap: 12px;
 		margin-bottom: 12px;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
 	}
 	.toolbar-subtitle {
 		font-size: 0.72rem;
@@ -335,5 +379,81 @@
 		max-width: 260px;
 		font-size: 0.78rem;
 		line-height: 1.45;
+	}
+	.handoff-cards {
+		display: none;
+	}
+
+	@media (max-width: 720px) {
+		.mem-table-wrap {
+			display: none;
+		}
+		.handoff-cards {
+			display: grid;
+			gap: 12px;
+		}
+		.handoff-card {
+			display: grid;
+			gap: 8px;
+			padding: 16px;
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-lg);
+			background: var(--color-surface);
+		}
+		.card-main {
+			display: grid;
+			gap: 12px;
+			padding: 0;
+			border: 0;
+			background: transparent;
+			color: inherit;
+			text-align: left;
+			cursor: pointer;
+		}
+		.card-heading {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 12px;
+		}
+		.card-heading strong {
+			font-size: 0.92rem;
+			line-height: 1.4;
+		}
+		.route-line,
+		.card-meta {
+			display: flex;
+			align-items: center;
+			flex-wrap: wrap;
+			gap: 8px;
+			font-size: 0.78rem;
+			color: var(--color-text-muted);
+		}
+		.card-meta {
+			justify-content: space-between;
+		}
+		.card-expire {
+			width: 100%;
+		}
+		.mobile-empty {
+			display: grid;
+			justify-items: center;
+			gap: 8px;
+			padding: 40px 20px;
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-lg);
+			color: var(--color-text-muted);
+			text-align: center;
+		}
+		.mobile-empty strong {
+			color: var(--color-text);
+		}
+		.claim-row {
+			align-items: stretch;
+			flex-direction: column;
+		}
+		.claim-row .btn {
+			width: 100%;
+		}
 	}
 </style>

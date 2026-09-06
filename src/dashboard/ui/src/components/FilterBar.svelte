@@ -140,8 +140,9 @@
 	.filter-toggle {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
-		padding: 4px 8px;
+		gap: 6px;
+		min-height: 36px;
+		padding: 6px 12px;
 		border: 1px solid var(--color-border);
 		border-radius: 6px;
 		background: transparent;
@@ -176,5 +177,12 @@
 	/* ── Collapsed state ────────────────────────────────────────────── */
 	.collapsed {
 		padding: 4px 16px;
+	}
+
+	@media (pointer: coarse) {
+		.filter-toggle {
+			min-width: 44px;
+			min-height: 44px;
+		}
 	}
 </style>
