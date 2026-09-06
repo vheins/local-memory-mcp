@@ -180,14 +180,35 @@
 				<div class="job-card"><div class="skeleton" style="height:140px;border-radius:10px;"></div></div>
 			{/each}
 		{:else if jobs.length === 0}
-			<div class="job-empty"><Icon name="circle-check" size={24} /><strong>No failed jobs</strong><span>The queue is healthy. Failed jobs will appear here.</span></div>
+			<div class="job-empty">
+				<Icon name="circle-check" size={24} /><strong>No failed jobs</strong><span
+					>The queue is healthy. Failed jobs will appear here.</span
+				>
+			</div>
 		{:else}
 			{#each jobs as job (job.id)}
 				<article class="job-card">
-					<div class="job-heading"><div class="entity-cell"><span class="entity-kind">{job.entity_kind}</span><strong>{job.entity_id}</strong></div><span class="status-pill status-failed">{statusLabel(job.status)}</span></div>
-					<dl><div><dt>Attempts</dt><dd>{job.attempts} / {job.max_attempts}</dd></div><div><dt>Enqueued</dt><dd>{formatDate(job.enqueued_at)}</dd></div></dl>
+					<div class="job-heading">
+						<div class="entity-cell">
+							<span class="entity-kind">{job.entity_kind}</span><strong>{job.entity_id}</strong>
+						</div>
+						<span class="status-pill status-failed">{statusLabel(job.status)}</span>
+					</div>
+					<dl>
+						<div>
+							<dt>Attempts</dt>
+							<dd>{job.attempts} / {job.max_attempts}</dd>
+						</div>
+						<div>
+							<dt>Enqueued</dt>
+							<dd>{formatDate(job.enqueued_at)}</dd>
+						</div>
+					</dl>
 					{#if job.last_error}<p class="job-error">{job.last_error}</p>{/if}
-					<div class="mobile-actions"><button class="btn btn-ghost" onclick={() => onRetry?.(job)} disabled={busy?.id === job.id}>Re-run</button><button class="btn btn-danger" onclick={() => onClear?.(job)} disabled={busy?.id === job.id}>Clear</button></div>
+					<div class="mobile-actions">
+						<button class="btn btn-ghost" onclick={() => onRetry?.(job)} disabled={busy?.id === job.id}>Re-run</button
+						><button class="btn btn-danger" onclick={() => onClear?.(job)} disabled={busy?.id === job.id}>Clear</button>
+					</div>
 				</article>
 			{/each}
 		{/if}

@@ -18,10 +18,9 @@
 	import MemoryListToolbar from "./MemoryListToolbar.svelte";
 	import MemoryListPagination from "./MemoryListPagination.svelte";
 	import MemoryBulkActions from "./MemoryBulkActions.svelte";
+	import { ErrorState } from "./ui";
 
 	export let onMemoryClick: (mem: Memory) => void = () => {};
-	/** Called when user wants to create a new memory */
-	export let onNewMemory: () => void = () => {};
 	export let onBulkImport: () => void = () => {};
 
 	const memoryHandler = createMemoryHandler();
@@ -66,23 +65,26 @@
 		onSearchInput={() => memoryHandler.onSearchInput()}
 		onFilterChange={() => memoryHandler.onFilterChange()}
 		onPageSizeChange={handlePageSizeChange}
-		{onNewMemory}
 		onExport={(f) => memoryHandler.handleExport(f)}
 		onImport={onBulkImport}
 	/>
 
-	<!-- Count -->
-	<div style="font-size:0.72rem;color:var(--color-text-muted);margin-bottom:8px;">
+	<p class="mem-count">
 		{$memoriesTotal} memories
 		{$selectedMemoryIds.size > 0 ? `· ${$selectedMemoryIds.size} selected` : ""}
-	</div>
+	</p>
 
 	<!-- Error State -->
 	{#if memoryHandler.error}
-		<div class="mem-error">
-			<Icon name="triangle-alert" size={14} strokeWidth={1.75} />
-			<span>Failed to load memories: {memoryHandler.error}</span>
-			<button class="btn btn-ghost btn-sm" on:click={() => memoryHandler.loadMemories()}>Retry</button>
+		<div class="mem-error-slot">
+			<ErrorState
+				title="Couldn't load memories"
+				description="The request failed. Nothing was changed — retrying is safe."
+			>
+				{#snippet action()}
+					<button class="btn btn-secondary btn-sm" onclick={() => memoryHandler.loadMemories()}>Try again</button>
+				{/snippet}
+			</ErrorState>
 		</div>
 	{/if}
 
@@ -95,22 +97,22 @@
 						<input
 							type="checkbox"
 							checked={allSelected}
-							on:change={() => memoryHandler.toggleSelectAll()}
+							onchange={() => memoryHandler.toggleSelectAll()}
 							aria-label="Select all"
 						/>
 					</th>
-					<th class="mem-th sortable" on:click={() => memoryHandler.toggleSort("title")}>
+					<th class="mem-th sortable" onclick={() => memoryHandler.toggleSort("title")}>
 						Title {sortIndicator("title")}
 					</th>
 					<th class="mem-th">Type</th>
 					<th
 						class="mem-th"
 						style="text-align:center;cursor:pointer;"
-						on:click={() => memoryHandler.toggleSort("importance")}
+						onclick={() => memoryHandler.toggleSort("importance")}
 					>
 						Imp. {sortIndicator("importance")}
 					</th>
-					<th class="mem-th sortable" on:click={() => memoryHandler.toggleSort("updated_at")}>
+					<th class="mem-th sortable" onclick={() => memoryHandler.toggleSort("updated_at")}>
 						Updated {sortIndicator("updated_at")}
 					</th>
 					<th class="mem-th" style="text-align:center;">Hits</th>
@@ -148,13 +150,13 @@
 							class="mem-row"
 							class:selected={$selectedMemoryIds.has(mem.id)}
 							tabindex="-1"
-							on:click={() => onMemoryClick(mem)}
+							onclick={() => onMemoryClick(mem)}
 						>
-							<td class="mem-td" on:click|stopPropagation>
+							<td class="mem-td" onclick={(e) => e.stopPropagation()}>
 								<input
 									type="checkbox"
 									checked={$selectedMemoryIds.has(mem.id)}
-									on:change={() => memoryHandler.toggleSelect(mem.id)}
+									onchange={() => memoryHandler.toggleSelect(mem.id)}
 								/>
 							</td>
 							<td class="mem-td" style="max-width:300px;">
@@ -190,10 +192,10 @@
 								style="text-align:center;font-size:0.75rem;font-weight:600;color:var(--color-text-muted);"
 								>{mem.hit_count ?? 0}</td
 							>
-							<td class="mem-td row-actions" on:click|stopPropagation>
+							<td class="mem-td row-actions" onclick={(e) => e.stopPropagation()}>
 								<button
 									class="row-action-btn edit-btn"
-									on:click={() => onMemoryClick(mem)}
+									onclick={() => onMemoryClick(mem)}
 									title="Edit / View"
 									aria-label="Edit memory"
 								>
@@ -201,7 +203,7 @@
 								</button>
 								<button
 									class="row-action-btn delete-btn"
-									on:click={(e) => memoryHandler.handleDeleteRow(mem, e)}
+									onclick={(e) => memoryHandler.handleDeleteRow(mem, e)}
 									title="Delete"
 									aria-label="Delete memory"
 								>
@@ -226,15 +228,18 @@
 							<input
 								type="checkbox"
 								checked={$selectedMemoryIds.has(mem.id)}
-								on:change={() => memoryHandler.toggleSelect(mem.id)}
+								onchange={() => memoryHandler.toggleSelect(mem.id)}
 								aria-label="Select memory {mem.title}"
 							/>
 							<span class="type-chip type-{mem.type}">{TYPE_LABELS[mem.type] || mem.type}</span>
-							<span class="memory-card-importance" style="color:{importanceColor[mem.importance] || importanceColor[1]};">
+							<span
+								class="memory-card-importance"
+								style="color:{importanceColor[mem.importance] || importanceColor[1]};"
+							>
 								Importance {mem.importance}
 							</span>
 						</div>
-						<button class="memory-card-main" on:click={() => onMemoryClick(mem)}>
+						<button class="memory-card-main" onclick={() => onMemoryClick(mem)}>
 							<strong>{mem.title || "Untitled memory"}</strong>
 							<span>{formatDate(mem.updated_at)} · {mem.hit_count ?? 0} hits</span>
 						</button>
@@ -264,18 +269,15 @@
 </div>
 
 <style>
-	.mem-error {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 16px;
-		margin-bottom: 8px;
-		background: rgba(239, 68, 68, 0.08);
-		color: var(--color-danger);
-		font-size: 0.8rem;
-		font-weight: 600;
-		border-radius: 10px;
-		border: 1px solid rgba(239, 68, 68, 0.15);
+	.mem-count {
+		font-size: var(--text-secondary);
+		color: var(--color-text-muted);
+		margin-bottom: var(--space-2);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.mem-error-slot {
+		margin-bottom: var(--space-3);
 	}
 
 	/* ── Table wrapper ── */
@@ -375,15 +377,23 @@
 		opacity: 1;
 	}
 
+	@media (pointer: coarse) {
+		.row-action-btn {
+			width: 44px;
+			height: 44px;
+		}
+	}
+
 	.row-action-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		/* TASK-403: ≥32px tap target at 390px (audit counted 22 buttons <32px);
-		   icon stays 13px centered, row height grows 4px only. */
-		width: 32px;
-		height: 32px;
-		border-radius: 7px;
+		/* 36px minimum, 44px on coarse pointers. The previous 32px was itself a
+		   fix for a 22px original, but 32px still sits below the WCAG 2.2
+		   target-size floor — measured, not assumed. */
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-sm);
 		border: none;
 		cursor: pointer;
 		background: transparent;

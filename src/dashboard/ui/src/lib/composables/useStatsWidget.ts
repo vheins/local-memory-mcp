@@ -16,54 +16,25 @@ export function createStatsHandler() {
 		return $s?.taskStats ?? null;
 	});
 
-	// Derived summary for simple display
-	const summaryItems = derived(dashboardStats, ($s) => {
-		const items = [
-			{ label: "Total", val: $s?.total ?? 0, icon: "brain", color: "#6366f1", glow: "rgba(99,102,241,0.12)" },
-			{
-				label: "Facts",
-				val: $s?.byType?.code_fact ?? 0,
-				icon: "code",
-				color: "#10b981",
-				glow: "rgba(16,185,129,0.12)"
-			},
-			{
-				label: "Decisions",
-				val: $s?.byType?.decision ?? 0,
-				icon: "gavel",
-				color: "#f59e0b",
-				glow: "rgba(245,158,11,0.12)"
-			},
-			{
-				label: "Archive",
-				val: $s?.byType?.task_archive ?? 0,
-				icon: "archive",
-				color: "#0ea5e9",
-				glow: "rgba(14,165,233,0.12)"
-			}
-		];
-		return items;
-	});
+	// Presentation note: these derived stores intentionally carry NO colors.
+	// They previously embedded raw hex values (`#6366f1`, `rgba(99,102,241,0.12)`)
+	// which meant the data layer decided the palette, five brand colors leaked
+	// into a single widget, and neither theme nor contrast could be adjusted
+	// without editing a composable. Colour now lives entirely in the view.
+	const summaryItems = derived(dashboardStats, ($s) => [
+		{ label: "Total", val: $s?.total ?? 0, icon: "brain" },
+		{ label: "Facts", val: $s?.byType?.code_fact ?? 0, icon: "code" },
+		{ label: "Decisions", val: $s?.byType?.decision ?? 0, icon: "gavel" },
+		{ label: "Archive", val: $s?.byType?.task_archive ?? 0, icon: "archive" }
+	]);
 
 	const byTypeStats = derived(dashboardStats, ($s) => {
 		if (!$s?.byType) return [];
 		return Object.entries($s.byType).map(([type, count]) => ({
 			label: type.replace("_", " "),
-			count: count,
-			color: getGlowForType(type)
+			count: count
 		}));
 	});
-
-	function getGlowForType(type: string) {
-		const colors: Record<string, string> = {
-			code_fact: "#10b981",
-			decision: "#f59e0b",
-			mistake: "#ef4444",
-			pattern: "#a855f7",
-			task_archive: "#0ea5e9"
-		};
-		return colors[type] || "#94a3b8";
-	}
 
 	// Derived store for top 5 active tasks (the source is our specific fetch)
 	const activeTasks = derived(activeTasksStore, ($tasks) => $tasks);

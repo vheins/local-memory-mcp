@@ -231,14 +231,6 @@
 {/if}
 
 <style>
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		margin-bottom: 8px;
-	}
 	.meta-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

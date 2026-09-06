@@ -118,15 +118,37 @@
 	{:else}
 		{#each handoffs as handoff (handoff.id)}
 			<article class="handoff-card">
-				<button class="card-main" on:click={() => onOpenViewDrawer(handoff)} aria-label={`Open handoff ${handoff.summary}`}>
+				<button
+					class="card-main"
+					on:click={() => onOpenViewDrawer(handoff)}
+					aria-label={`Open handoff ${handoff.summary}`}
+				>
 					<div class="card-heading">
 						<strong>{handoff.summary}</strong>
-						<span class="status-pill" class:status-pending={handoff.status === "pending"} class:status-accepted={handoff.status === "accepted"} class:status-rejected={handoff.status === "rejected"} class:status-expired={handoff.status === "expired"}>{handoff.status}</span>
+						<span
+							class="status-pill"
+							class:status-pending={handoff.status === "pending"}
+							class:status-accepted={handoff.status === "accepted"}
+							class:status-rejected={handoff.status === "rejected"}
+							class:status-expired={handoff.status === "expired"}>{handoff.status}</span
+						>
 					</div>
-					<div class="route-line"><span>{handoff.from_agent}</span><Icon name="chevron-right" size={14} /><span>{handoff.to_agent || "Unassigned"}</span></div>
-					<div class="card-meta"><span>{handoff.task_code || handoff.task_id?.slice(0, 8) || "No task"}</span><span>{formatDate(handoff.created_at)}</span></div>
+					<div class="route-line">
+						<span>{handoff.from_agent}</span><Icon name="chevron-right" size={14} /><span
+							>{handoff.to_agent || "Unassigned"}</span
+						>
+					</div>
+					<div class="card-meta">
+						<span>{handoff.task_code || handoff.task_id?.slice(0, 8) || "No task"}</span><span
+							>{formatDate(handoff.created_at)}</span
+						>
+					</div>
 				</button>
-				<button class="btn btn-ghost card-expire" on:click={() => onDeleteRow(handoff)} disabled={handoff.status === "expired"}>Expire</button>
+				<button
+					class="btn btn-ghost card-expire"
+					on:click={() => onDeleteRow(handoff)}
+					disabled={handoff.status === "expired"}>Expire</button
+				>
 			</article>
 		{/each}
 	{/if}
@@ -297,13 +319,6 @@
 		justify-content: space-between;
 		gap: 12px;
 		margin-bottom: 12px;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
 	}
 	.toolbar-subtitle {
 		font-size: 0.72rem;

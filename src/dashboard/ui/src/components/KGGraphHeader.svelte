@@ -20,10 +20,7 @@
 
 <div class="kg-toolbar">
 	<div class="kg-toolbar-left">
-		<h1 class="section-label" style="font-size:0.68rem;">
-			<Icon name="share-2" size={12} strokeWidth={1.75} />
-			Knowledge Graph
-		</h1>
+		<h1 class="kg-title">Knowledge Graph</h1>
 		<span class="kg-stats">
 			{nodeCount} nodes · {edgeCount} edges
 		</span>
@@ -148,10 +145,18 @@
 		cursor: pointer;
 	}
 
+	.kg-title {
+		font-size: var(--text-title);
+		font-weight: var(--weight-semibold);
+		letter-spacing: -0.018em;
+		line-height: var(--leading-tight);
+		color: var(--color-text);
+	}
+
 	.kg-stats {
-		font-size: 0.72rem;
+		font-size: var(--text-secondary);
 		color: var(--color-text-muted);
-		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
 	/* Edge confidence legend (TASK-330) — swatches mirror the renderer buckets */

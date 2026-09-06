@@ -7,6 +7,8 @@
 	import type { CodingStandard } from "../lib/stores";
 	import { dedupeTags } from "../lib/utils";
 	import { confirmDelete } from "../lib/confirm";
+	import Icon from "../lib/Icon.svelte";
+	import { ErrorState, PageHeader } from "./ui";
 
 	export let repo = "";
 
@@ -170,7 +172,20 @@
 	});
 </script>
 
-<div class="feature-shell animate-fade-in">
+<PageHeader
+	title="Standards"
+	description="Rules agents apply in this workspace. Add or import only what is genuinely reusable."
+	eyebrow={repo}
+>
+	{#snippet actions()}
+		<button class="btn btn-primary" on:click={openCreateDrawer}>
+			<Icon name="plus" size={16} strokeWidth={2} />
+			Add rule
+		</button>
+	{/snippet}
+</PageHeader>
+
+<div class="feature-shell">
 	<StandardSearchBar
 		bind:query
 		bind:language
@@ -182,7 +197,6 @@
 		{onFilterChange}
 		onExport={exportStandards}
 		onImport={importStandards}
-		onNewStandard={openCreateDrawer}
 	/>
 
 	<div class="results-summary" aria-live="polite">
@@ -192,10 +206,14 @@
 	</div>
 
 	{#if error}
-		<div class="error-banner">{error}</div>
+		<ErrorState title="Couldn't load standards" description="The request failed. No rules were changed.">
+			{#snippet action()}
+				<button class="btn btn-secondary btn-sm" on:click={loadStandards}>Try again</button>
+			{/snippet}
+		</ErrorState>
 	{/if}
 	{#if notice}
-		<div class="notice-banner">{notice}</div>
+		<p class="notice-banner" role="status">{notice}</p>
 	{/if}
 
 	<StandardsList
@@ -224,16 +242,15 @@
 	.feature-shell {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: var(--space-4);
 	}
 
 	.results-summary {
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
-		gap: 8px 20px;
-		padding: 0 4px;
-		font-size: 0.8rem;
+		gap: var(--space-2) var(--space-5);
+		font-size: var(--text-secondary);
 		color: var(--color-text-muted);
 	}
 	.results-summary strong {
@@ -241,23 +258,13 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* ── Banners ── */
-	.error-banner {
-		border: 1px solid #fecaca;
-		background: #fef2f2;
-		color: #dc2626;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
-	}
 	.notice-banner {
-		border: 1px solid #bae6fd;
-		background: #f0f9ff;
-		color: #0369a1;
-		border-radius: 8px;
-		padding: 10px 12px;
-		font-size: 0.82rem;
-		font-weight: 700;
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--color-border);
+		border-left: 3px solid var(--color-primary);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: var(--text-secondary);
 	}
 </style>

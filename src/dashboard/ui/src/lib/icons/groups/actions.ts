@@ -438,5 +438,5 @@ export const actionsIcons: Record<string, IconElement[]> = {
 				y2: "16"
 			}
 		}
-	],
+	]
 };

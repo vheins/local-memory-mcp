@@ -101,11 +101,9 @@ describe("RepoSidebar navigation (TASK-435)", () => {
 	it("renders one primary navigation landmark with explicit global, workspace, and system groups", () => {
 		const { container } = renderSidebar();
 		expect(screen.getAllByRole("navigation", { name: "Primary navigation" })).toHaveLength(1);
-		expect(Array.from(container.querySelectorAll("[data-scope]")).map((group) => group.getAttribute("data-scope"))).toEqual([
-			"global",
-			"workspace",
-			"system"
-		]);
+		expect(
+			Array.from(container.querySelectorAll("[data-scope]")).map((group) => group.getAttribute("data-scope"))
+		).toEqual(["global", "workspace", "system"]);
 	});
 
 	it("renders all 11 destinations as links-in-place with stable ids and labels", () => {

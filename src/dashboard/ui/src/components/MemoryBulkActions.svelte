@@ -17,8 +17,7 @@
 	<div class="bulk-actions-bar">
 		<span><b>{count}</b> selected</span>
 		<div style="width:12px;"></div>
-		<button class="btn btn-sm" style="background:rgba(120,120,120,0.2);color:inherit;" onclick={onCancel}
-			>Cancel</button
+		<button class="btn btn-sm" style="background:rgba(120,120,120,0.2);color:inherit;" onclick={onCancel}>Cancel</button
 		>
 		<button class="btn btn-sm" style="background:#52525b;color:white;border:none;" onclick={onArchive}>Archive</button>
 		<button class="btn btn-sm btn-accent" style="background:#ef4444;color:white;border:none;" onclick={onDelete}

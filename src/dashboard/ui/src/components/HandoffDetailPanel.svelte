@@ -126,7 +126,6 @@
 					on:click={() => handler.handleCopyHandoffContext($handler.handoff?.context || {})}
 					title="Copy to clipboard"
 					aria-label="Copy handoff context to clipboard"
-
 				>
 					<Icon
 						name={$handler.contentCopied ? "check" : "copy"}
@@ -169,14 +168,6 @@
 		font-weight: 700;
 		color: var(--color-text);
 		line-height: 1.3;
-	}
-	.section-label {
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		margin-bottom: 8px;
 	}
 	.meta-grid {
 		display: grid;

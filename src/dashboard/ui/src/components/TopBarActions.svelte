@@ -31,8 +31,6 @@
 	{/if}
 </button>
 
-
-
 <style>
 	.top-status {
 		display: flex;

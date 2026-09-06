@@ -203,11 +203,15 @@
 		     canonical h1 stays visible above the empty-state message so SR
 		     users always get a page heading. CodebaseEmptyState adds none. -->
 		<div class="codebase-empty-head">
-			<div class="flex items-center gap-2" style="margin-bottom:14px;">
-				<Icon name="code" size={14} strokeWidth={1.75} />
-				<h1 class="section-label">Codebase Overview</h1>
-				{#if repo}<div class="repo-badge">{$currentRepo}</div>{/if}
-			</div>
+			<!-- Same heading treatment as the indexed branch below, so the page
+			     title does not change size depending on whether an index exists. -->
+			<header class="codebase-header">
+				<div>
+					{#if repo}<p class="eyebrow">{$currentRepo}</p>{/if}
+					<h1>Codebase</h1>
+					<p>Search files and symbols, then review architecture, exports, and hotspots.</p>
+				</div>
+			</header>
 			<CodebaseEmptyState
 				{repo}
 				{hasIndex}
@@ -438,8 +442,9 @@
 	}
 	.codebase-header h1 {
 		margin: 2px 0 6px;
-		font-size: 1.5rem;
-		letter-spacing: -0.025em;
+		font-size: var(--text-title);
+		font-weight: var(--weight-semibold);
+		letter-spacing: -0.018em;
 		color: var(--color-text);
 	}
 	.codebase-header p:last-child {
