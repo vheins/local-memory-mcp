@@ -122,9 +122,13 @@
 		border: none;
 		background: transparent;
 		color: var(--color-text);
-		font-size: 0.76rem;
+		font-size: var(--text-body);
 		font-weight: 600;
-		padding: 5px 12px;
+		/* 24px tall was below the 36px minimum every other control in the
+		   dashboard meets, and directory rows are the primary way to navigate
+		   this tree. */
+		min-height: 36px;
+		padding: var(--space-2) var(--space-3);
 		cursor: pointer;
 		transition: background 0.12s ease;
 		border-radius: 6px;
@@ -168,9 +172,10 @@
 		border: none;
 		background: transparent;
 		color: var(--color-text-muted);
-		font-size: 0.74rem;
+		font-size: var(--text-body);
 		font-weight: 500;
-		padding: 4px 12px;
+		min-height: 36px;
+		padding: var(--space-2) var(--space-3);
 		cursor: pointer;
 		transition:
 			background 0.12s ease,
@@ -245,5 +250,13 @@
 		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
 		letter-spacing: 0.02em;
 		white-space: nowrap;
+	}
+
+	/* Touch devices need a larger target than the 36px pointer minimum. */
+	@media (pointer: coarse) {
+		.filetree-dir,
+		.filetree-file {
+			min-height: 44px;
+		}
 	}
 </style>

@@ -178,4 +178,11 @@
 	.collapsed {
 		padding: 4px 16px;
 	}
+
+	@media (pointer: coarse) {
+		.filter-toggle {
+			min-width: 44px;
+			min-height: 44px;
+		}
+	}
 </style>

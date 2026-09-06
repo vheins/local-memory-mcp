@@ -422,7 +422,9 @@
 			gap: 10px;
 		}
 		.standard-title {
-			min-height: 40px;
+			/* 44px on touch: this is the card's primary action (opens the
+			   editor), so it has to clear the tap-target floor. */
+			min-height: 44px;
 			padding: 0;
 			border: 0;
 			background: transparent;

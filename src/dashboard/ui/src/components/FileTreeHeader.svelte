@@ -60,12 +60,15 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px 8px;
+		/* Was 21px tall with 10.4px text — under the tap-target minimum and
+		   below the readable floor used everywhere else in the dashboard. */
+		min-height: 36px;
+		padding: var(--space-2) var(--space-3);
 		border-radius: 6px;
 		border: 1px solid var(--color-border);
 		background: transparent;
 		color: var(--color-text-muted);
-		font-size: 0.65rem;
+		font-size: var(--text-label);
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s ease;
@@ -75,5 +78,11 @@
 		background: rgba(255, 255, 255, 0.06);
 		color: var(--color-text);
 		border-color: var(--color-primary);
+	}
+
+	@media (pointer: coarse) {
+		.filetree-toggle-btn {
+			min-height: 44px;
+		}
 	}
 </style>

@@ -411,6 +411,13 @@
 		transition: color 0.15s ease;
 	}
 
+	/* A 36px-wide edge tab is hard to hit with a thumb; widen on touch. */
+	@media (pointer: coarse) {
+		.sidebar-toggle {
+			width: 44px;
+		}
+	}
+
 	.sidebar-toggle:hover {
 		color: var(--color-text);
 	}
@@ -486,6 +493,11 @@
 	.view-tabs button.active {
 		background: var(--color-primary);
 		color: #fff;
+	}
+	@media (pointer: coarse) {
+		.view-tabs button {
+			min-height: 44px;
+		}
 	}
 	.explore-view,
 	.insights-view {

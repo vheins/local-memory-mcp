@@ -88,4 +88,10 @@
 		padding: 1px 6px;
 		border-radius: 9999px;
 	}
+
+	@media (pointer: coarse) {
+		.ref-cat-btn {
+			min-height: 44px;
+		}
+	}
 </style>

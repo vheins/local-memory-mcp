@@ -81,4 +81,16 @@
 		backdrop-filter: none;
 		background: var(--color-surface, #1e293b);
 	}
+
+	/* Local width/height here overrode the global coarse-pointer rule, so the
+	   arena zoom controls stayed 36px on touch devices. */
+	@media (pointer: coarse) {
+		.zoom-btn {
+			width: 44px;
+			height: 44px;
+		}
+		.zoom-pct {
+			height: 44px;
+		}
+	}
 </style>

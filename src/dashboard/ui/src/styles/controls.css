@@ -121,10 +121,19 @@
 
 /* Coarse pointers get the full 44px target regardless of density variant. */
 @media (pointer: coarse) {
+	/* The base .btn is 40px — fine for a mouse, 4px under the WCAG 2.2 touch
+	   floor. The coarse rule previously only covered .btn-sm, so every regular
+	   button on a phone was undersized. */
+	.btn,
+	.btn-sm,
+	.btn-icon,
+	.btn-icon.btn-sm {
+		min-height: 44px;
+	}
+	.btn-icon,
 	.btn-sm,
 	.btn-icon.btn-sm {
 		min-width: 44px;
-		min-height: 44px;
 	}
 }
 .btn-icon {
