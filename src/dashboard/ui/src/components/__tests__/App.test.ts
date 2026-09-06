@@ -13,6 +13,7 @@ const { mock } = vi.hoisted(() => ({
 	mock: {
 		activeTab: "queue" as string,
 		currentRepo: null as string | null,
+		availableRepos: [] as unknown[],
 		initPersistedState: vi.fn(),
 		api: {
 			capabilities: vi.fn().mockResolvedValue(null),
@@ -76,6 +77,12 @@ vi.mock("../../lib/stores", () => ({
 	taskTimeStats: {
 		subscribe: (fn: (v: unknown) => void) => {
 			fn(null);
+			return () => {};
+		}
+	},
+	availableRepos: {
+		subscribe: (fn: (v: unknown[]) => void) => {
+			fn(mock.availableRepos);
 			return () => {};
 		}
 	},
@@ -206,6 +213,7 @@ vi.mock("../HandoffsPanel.svelte", () => ({ default: () => ({}) }));
 vi.mock("../KGGraph.svelte", () => ({ default: () => ({}) }));
 vi.mock("../AgentArena.svelte", () => ({ default: () => ({}) }));
 vi.mock("../GlobalCommandCenter.svelte", () => ({ default: () => ({}) }));
+vi.mock("../WorkspaceSwitcher.svelte", () => ({ default: () => ({}) }));
 vi.mock("../../lib/Icon.svelte", () => ({ default: () => ({}) }));
 
 function mountApp() {
@@ -219,7 +227,7 @@ function mountApp() {
 // view module and its state updates land before assertions.
 async function settle(target?: HTMLElement) {
 	for (let i = 0; i < 50; i++) {
-		if (target && (target.querySelector(".feature-shell") || target.querySelector(".empty-state"))) return;
+		if (target && (target.querySelector(".feature-shell") || target.querySelector(".empty"))) return;
 		await new Promise((r) => setTimeout(r, 1));
 		await tick();
 	}
@@ -247,8 +255,8 @@ describe("App shell gate (TASK-418)", () => {
 		const { target, component } = mountApp();
 		await settle(target);
 
-		// Gate must NOT swap the shell for the per-repo empty state.
-		expect(target.textContent).not.toContain("No Repository Selected");
+		// Gate must NOT swap the shell for the workspace gate.
+		expect(target.textContent).not.toContain("No workspaces yet");
 		// Real QueuePage renders (feature-shell is its root div).
 		expect(target.querySelector(".feature-shell")).not.toBeNull();
 		// TASK-411 global-mode banner is present only with no repo filter.
@@ -267,12 +275,40 @@ describe("App shell gate (TASK-418)", () => {
 	it("gates a per-repo tab (memories) behind a repo selection", async () => {
 		mock.activeTab = "memories";
 		mock.currentRepo = null;
+		mock.availableRepos = [];
 		const { target, component } = mountApp();
 		await settle(target);
 
-		expect(target.querySelector(".empty-state")).not.toBeNull();
-		expect(target.textContent).toContain("No Repository Selected");
+		expect(target.querySelector(".empty")).not.toBeNull();
 		expect(target.querySelector(".feature-shell")).toBeNull();
+		unmount(component);
+	});
+
+	// With zero workspaces the gate is an ONBOARDING screen: telling this user
+	// to "select a repository from the sidebar" is a dead end because the
+	// sidebar is empty. It must state how a workspace comes into existence.
+	it("explains how to create a workspace when none exist", async () => {
+		mock.activeTab = "memories";
+		mock.currentRepo = null;
+		mock.availableRepos = [];
+		const { target, component } = mountApp();
+		await settle(target);
+
+		expect(target.textContent).toContain("No workspaces yet");
+		expect(target.textContent).toContain("codebase-index");
+		unmount(component);
+	});
+
+	// With workspaces present the correct instruction is different: pick one.
+	it("asks the user to choose a workspace when some exist", async () => {
+		mock.activeTab = "memories";
+		mock.currentRepo = null;
+		mock.availableRepos = [{ repo: "alpha" }];
+		const { target, component } = mountApp();
+		await settle(target);
+
+		expect(target.textContent).toContain("Choose a workspace");
+		expect(target.textContent).not.toContain("No workspaces yet");
 		unmount(component);
 	});
 
@@ -282,7 +318,7 @@ describe("App shell gate (TASK-418)", () => {
 		const { target, component } = mountApp();
 		await settle(target);
 
-		expect(target.textContent).not.toContain("No Repository Selected");
+		expect(target.textContent).not.toContain("No workspaces yet");
 		expect(target.querySelector(".feature-shell")).not.toBeNull();
 		// Global banner is global-mode-only.
 		expect(target.querySelector(".notice-banner")).toBeNull();
