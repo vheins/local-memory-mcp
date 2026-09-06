@@ -54,10 +54,6 @@
 					<span class="brand-sub">Dashboard</span>
 				</span>
 			</div>
-		{:else}
-			<span class="brand-mark" aria-hidden="true">
-				<Icon name="brain" size={15} strokeWidth={2} />
-			</span>
 		{/if}
 
 		<button
@@ -119,6 +115,15 @@
 		gap: var(--space-2);
 		padding: var(--space-3);
 		min-height: var(--header-height);
+	}
+
+	/* Collapsed the rail is 64px, but brand mark (28) + gap (8) + button (36) +
+	   padding (24) needs 84px — the toggle overflowed by 20px and was clipped,
+	   leaving no way to expand again. The brand is decoration; the toggle is the
+	   only control. Drop the mark and let the button own the row. */
+	.sidebar.collapsed .sidebar-header {
+		justify-content: center;
+		padding: var(--space-3) var(--space-2);
 	}
 
 	.brand {
@@ -228,13 +233,43 @@
 		color: var(--color-text);
 	}
 
-	/* The active item is marked by weight + colour + an aria-current attribute,
-	   not by a tinted pill plus a trailing dot. Two redundant indicators for one
-	   piece of state is noise. */
+	/* The active item carries the accent, not a near-invisible grey wash. The
+	   previous `--color-surface-hover` fill sat ~2% off the sidebar background,
+	   which made "where am I" unreadable — the same treatment as :hover meant
+	   the state had no distinct signal at all. Accent text + accent tint +
+	   a leading rail give one coherent indicator that survives both themes. */
+	/* Text uses --color-primary-on-soft: #2563eb on its own 10%
+	   tint measures 4.48:1, failing AA by a hair. The token resolves per theme
+	   (darker on light, lighter on dark) — see base.css. */
 	.nav-item.active {
-		background: var(--color-surface-hover);
-		color: var(--color-text);
+		position: relative;
+		background: var(--color-primary-soft);
+		color: var(--color-primary-on-soft);
 		font-weight: var(--weight-semibold);
+	}
+
+	.nav-item.active::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 3px;
+		height: 18px;
+		border-radius: 0 2px 2px 0;
+		background: var(--color-primary-on-soft);
+	}
+
+	/* Collapsed rail: the label is gone, so the icon alone must read as active.
+	   A leading bar on a 40px-wide centred icon looks detached, so the tint and
+	   colour carry it instead. */
+	.nav-item.active.collapsed::before {
+		display: none;
+	}
+
+	.nav-item.active:hover:not(:disabled) {
+		background: var(--color-primary-soft-strong);
+		color: var(--color-primary-on-soft);
 	}
 
 	.nav-item:disabled {

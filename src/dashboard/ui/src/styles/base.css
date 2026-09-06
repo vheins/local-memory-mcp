@@ -106,6 +106,15 @@
 	--color-primary: #2563eb;
 	--color-primary-dark: #1d4ed8;
 	--color-primary-light: #60a5fa;
+	/* Selected-state tints. Kept as tokens so "active" is one decision, not a
+	   different rgba() literal per component. */
+	--color-primary-soft: rgba(37, 99, 235, 0.1);
+	--color-primary-soft-strong: rgba(37, 99, 235, 0.16);
+	/* Accent text placed ON --color-primary-soft. Must be darker than
+	   --color-primary: the base blue on its own 10% tint is 4.48:1, just under
+	   AA. This is 5.82:1. Dark mode needs the opposite adjustment, so the two
+	   themes cannot share one value. */
+	--color-primary-on-soft: #1d4ed8;
 	--color-accent: #2563eb;
 	--color-accent-dark: #1d4ed8;
 	--color-success: #10b981;
@@ -153,6 +162,13 @@
 	--color-primary: #60a5fa;
 	--color-primary-dark: #3b82f6;
 	--color-primary-light: #93c5fd;
+	/* Higher alpha than light mode: a 10% tint disappears against a dark
+	   surface, so the selected row would lose its fill entirely. */
+	--color-primary-soft: rgba(96, 165, 250, 0.16);
+	--color-primary-soft-strong: rgba(96, 165, 250, 0.24);
+	/* On dark surfaces the accent must stay LIGHT: #3b82f6 on the dark tint is
+	   3.47:1 (fails), the base #60a5fa is 5.02:1. */
+	--color-primary-on-soft: #60a5fa;
 	--color-accent: #60a5fa;
 	--color-accent-dark: #3b82f6;
 	--glass-bg: #131822;
