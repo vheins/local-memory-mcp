@@ -78,11 +78,18 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
 	}
 
-	if (!nextArgs.owner && session?.owner) {
+	// An explicit owner (including "") is authoritative: "" means "repo-only"
+	// scoping and must NOT be re-inferred from the session or the repo string.
+	// The spread above preserves the key, so key-presence (typeof string) — not
+	// falsiness — is what distinguishes explicit "" from an omitted owner
+	// (FIX-OWNER-INFER).
+	const ownerExplicit = typeof nextArgs.owner === "string";
+
+	if (!ownerExplicit && !nextArgs.owner && session?.owner) {
 		nextArgs.owner = session.owner;
 	}
 
-	if (!nextArgs.owner) {
+	if (!ownerExplicit && !nextArgs.owner) {
 		const repoVal = (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
 		const inferredOwner = parsed.owner || inferOwnerFromSession(session);
@@ -96,23 +103,32 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		}
 	}
 
-	if (scope && !scope.owner) {
+	// Scope owner is derived from the scoped repo / resolved top-level owner.
+	// An explicit scope.owner:"" is kept as-is; when the TOP-LEVEL owner is
+	// explicitly "" (repo-only) we never fall through to session inference for
+	// the scope either — only an owner segment embedded in the repo string
+	// (e.g. scope.repo "vheins/x") may fill scope.owner.
+	const scopeOwnerExplicit = typeof scope?.owner === "string";
+	if (scope && !scopeOwnerExplicit) {
 		const repoVal = (scope.repo as string) || (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
-		const inferredOwner = parsed.owner || (nextArgs.owner as string) || inferOwnerFromSession(session);
+		const inferredOwner =
+			parsed.owner || (nextArgs.owner as string) || (ownerExplicit ? undefined : inferOwnerFromSession(session));
 		if (inferredOwner !== undefined) {
 			scope.owner = inferredOwner;
 		}
 	}
 
-	const ownerVal = (nextArgs.owner as string) || inferOwnerFromSession(session) || undefined;
-	const repoVal = (nextArgs.repo as string) || inferRepoFromSession(session) || undefined;
+	// `??` (not `||`) keeps an explicit "" as "" so repo-only calls never get a
+	// session-inferred owner injected into per-memory scopes.
+	const ownerVal = (nextArgs.owner as string) ?? inferOwnerFromSession(session) ?? undefined;
+	const repoVal = (nextArgs.repo as string) ?? inferRepoFromSession(session) ?? undefined;
 	const memories = nextArgs.memories as Array<Record<string, unknown>> | undefined;
 	if (memories) {
 		for (const mem of memories) {
 			const memScope = mem.scope as Record<string, unknown> | undefined;
 			if (memScope) {
-				if (!memScope.owner) {
+				if (memScope.owner == null) {
 					const inferredMemOwner =
 						ownerVal || parseRepoInput((memScope.repo as string) || repoVal || "", undefined).owner;
 					if (inferredMemOwner) memScope.owner = inferredMemOwner;

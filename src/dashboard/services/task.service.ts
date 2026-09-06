@@ -26,6 +26,7 @@ function buildToolArgs(
 ): Record<string, unknown> {
 	const toolArgs: Record<string, unknown> = {
 		repo: existingTask.repo,
+		owner: existingTask.owner || undefined,
 		id: idOverride ?? existingTask.id,
 		agent: "dashboard",
 		role: "user",
@@ -34,6 +35,11 @@ function buildToolArgs(
 	};
 
 	for (const [key, value] of Object.entries(attributes)) {
+		// The existing task row's owner is authoritative — updates can never
+		// reassign owner, and forwarding it (vs. omitting it) stops the MCP
+		// server from re-inferring an owner from the dashboard CWD
+		// (FIX-OWNER-INFER).
+		if (key === "owner") continue;
 		if (value !== undefined) {
 			toolArgs[key] = value;
 		}

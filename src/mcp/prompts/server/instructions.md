@@ -67,6 +67,26 @@ Setting these explicitly in the tool call always takes priority over session def
 
 Violation: tasks created with a wrong owner will be invisible to other agents querying with the correct owner.
 
+### Dashboard repo-only view is intentional (ADR-008)
+
+The dashboard aggregates by **short `repo` only** (`owner = ""` reads like `MemoryService.list({ repo })` / `TaskService.getTasksByRepo("", repo)` in `src/dashboard/services/`). A `GET /api/memories?repo=my-app` or tasks/stats equivalent therefore **intentionally merges** `alice/my-app` and `bob/my-app` into one operational view of the single-host SQLite DB. This is not a bug — document a per-owner filter instead if you need isolation. Dashboard rows SHOULD render an **owner badge** (the stored `owner` string) so mixed-owner views are self-explanatory.
+
+### Global vs scoped tables (ADR-008)
+
+| Tables                                                                                                                                | `is_global` | Representation                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------- | :---------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memories`, `coding_standards`                                                                                                        |   **Yes**   | `repo NOT NULL` + `is_global` recommended; `coding_standards.repo` is still nullable for backward compat — new writes SHOULD set `repo` and use `is_global = 1` for globals |
+| `tasks`, `task_comments`, KG (`entities`/`relations`/`observations`), `exploration_observations`, telemetry/audit/queue/vector tables |   **No**    | `repo NOT NULL`, no `is_global`; strict `(owner, repo)` scope                                                                                                               |
+| `codebase_*`                                                                                                                          |     N/A     | Repo-keyed only (no `owner` column) — see below                                                                                                                             |
+
+Reads that support globals use `((owner = ? AND repo = ?) OR is_global = 1)` when `owner` is present; dashboard repo-only reads use strict `repo = ?` (and therefore see all owners). See ADR-008 for the full table policy.
+
+### Codebase owner isolation — out of scope
+
+The codebase index (`codebase_files` / `codebase_symbols` / `codebase_references` plus `codebase_symbols_fts`) is partitioned by `repo` string only; no `owner` column and no per-owner isolation is planned. See ADR-008.
+
+> Full rationale and consequences: `.agents/documents/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`.
+
 ## Core Workflows
 
 **Memory**: `memory-read` (search/detail/recap) → `memory-write` (create/update/acknowledge/bulk) → `memory-delete`
@@ -171,9 +191,9 @@ A `memory-write` update accepts the same fields as create but all are optional (
 | `memory-delete`                   | Soft-delete memories (single/bulk, UUID or code)                       | All agents                             |
 | `task-delete`                     | Soft-delete tasks → canceled, release claims, expire handoffs          | All agents                             |
 | `repo-summarize`                  | Archive session signals as task_archive summary                        | All agents                             |
-| `synthesize`                      | Composite synthesis via sampling (requires client sampling)             | All agents                             |
+| `synthesize`                      | Composite synthesis via sampling (requires client sampling)            | All agents                             |
 | `agent-context`                   | Compile token-budgeted cross-source context for an objective           | All agents                             |
-| `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints   | All agents                             |
+| `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints  | All agents                             |
 | `observation-read`                | Read observations by scope, subject, task, file, symbol, confidence    | All agents                             |
 | `codebase-index(repo)`            | Check index freshness/status before querying                           | Orchestrator                           |
 | `codebase-index(repoPath + repo)` | Refresh a stale index                                                  | Orchestrator                           |
@@ -185,27 +205,27 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 All 19 tools are registered via `src/mcp/tools/index.ts` (`buildExecutors` + `TOOL_DEFINITIONS`) and `src/mcp/mcp-server.ts:registerAllTools`. No legacy dotted aliases are registered — the router normalizes `'.'` → `'-'` only for backward-compatible dispatch.
 
-| # | Tool | Kind | Description |
-|---|------|------|-------------|
-| 1 | `memory-write` | write | Create / update / acknowledge / bulk memories (auto-infer) |
-| 2 | `memory-read` | read | Search / detail / recap memories (auto-infer) |
-| 3 | `memory-delete` | write | Soft-delete memories (single/bulk) |
-| 4 | `task-write` | write | Create / update / bulk / interactive tasks |
-| 5 | `task-read` | read | Search / detail / list tasks |
-| 6 | `task-delete` | write | Soft-delete tasks → canceled |
-| 7 | `handoff-write` | write | Create / update handoff |
-| 8 | `handoff-read` | read | Detail / list / search handoffs (incl. claims list) |
-| 9 | `claim-manage` | write† | Claim / release / list task claims (auto-infer; list is read-only) |
-| 10 | `standard-write` | write | Create / update / bulk coding standards |
-| 11 | `standard-read` | read | Search / detail / list standards |
-| 12 | `standard-delete` | write | Delete standards (single/bulk) |
-| 13 | `agent-context` | read | Budgeted cross-source context compiler |
-| 14 | `synthesize` | read | Context synthesis via MCP sampling (gated on client capability) |
-| 15 | `repo-summarize` | write | Repository summary from signals |
-| 16 | `observation-write` | write | Create / update / bulk / refresh exploration observations |
-| 17 | `observation-read` | read | Read exploration observations |
-| 18 | `codebase-index` | write | Index or status (incl. warmup) |
-| 19 | `codebase-read` | read | Trace / file / search / architecture / content grep |
+| #   | Tool                | Kind   | Description                                                        |
+| --- | ------------------- | ------ | ------------------------------------------------------------------ |
+| 1   | `memory-write`      | write  | Create / update / acknowledge / bulk memories (auto-infer)         |
+| 2   | `memory-read`       | read   | Search / detail / recap memories (auto-infer)                      |
+| 3   | `memory-delete`     | write  | Soft-delete memories (single/bulk)                                 |
+| 4   | `task-write`        | write  | Create / update / bulk / interactive tasks                         |
+| 5   | `task-read`         | read   | Search / detail / list tasks                                       |
+| 6   | `task-delete`       | write  | Soft-delete tasks → canceled                                       |
+| 7   | `handoff-write`     | write  | Create / update handoff                                            |
+| 8   | `handoff-read`      | read   | Detail / list / search handoffs (incl. claims list)                |
+| 9   | `claim-manage`      | write† | Claim / release / list task claims (auto-infer; list is read-only) |
+| 10  | `standard-write`    | write  | Create / update / bulk coding standards                            |
+| 11  | `standard-read`     | read   | Search / detail / list standards                                   |
+| 12  | `standard-delete`   | write  | Delete standards (single/bulk)                                     |
+| 13  | `agent-context`     | read   | Budgeted cross-source context compiler                             |
+| 14  | `synthesize`        | read   | Context synthesis via MCP sampling (gated on client capability)    |
+| 15  | `repo-summarize`    | write  | Repository summary from signals                                    |
+| 16  | `observation-write` | write  | Create / update / bulk / refresh exploration observations          |
+| 17  | `observation-read`  | read   | Read exploration observations                                      |
+| 18  | `codebase-index`    | write  | Index or status (incl. warmup)                                     |
+| 19  | `codebase-read`     | read   | Trace / file / search / architecture / content grep                |
 
 † `claim-manage` list modes are read-only and do not emit an `action_log` row; claim/release modes do.
 
@@ -215,12 +235,12 @@ Every tool failure is returned as a canonical `ToolError` envelope via `src/mcp/
 
 ```json
 {
-  "schema": "tool-error",
-  "code": "VALIDATION_ERROR",
-  "message": "Error: ...",
-  "retryable": false,
-  "error": "Error: ...",
-  "details": {}
+	"schema": "tool-error",
+	"code": "VALIDATION_ERROR",
+	"message": "Error: ...",
+	"retryable": false,
+	"error": "Error: ...",
+	"details": {}
 }
 ```
 
@@ -235,11 +255,11 @@ Every tool failure is returned as a canonical `ToolError` envelope via `src/mcp/
 
 Runtime profile is selected via `MCP_RUNTIME_PROFILE` (`minimal` | `balanced` | `full`, default `full`) in `src/mcp/runtime-capabilities.ts`:
 
-| Profile | Capabilities |
-|---------|--------------|
-| `minimal` | `dashboard` |
-| `balanced` | `semantic`, `indexing`, `dashboard` |
-| `full` | `semantic`, `indexing`, `watcher`, `maintenance`, `dashboard` |
+| Profile    | Capabilities                                                  |
+| ---------- | ------------------------------------------------------------- |
+| `minimal`  | `dashboard`                                                   |
+| `balanced` | `semantic`, `indexing`, `dashboard`                           |
+| `full`     | `semantic`, `indexing`, `watcher`, `maintenance`, `dashboard` |
 
 - Each capability has state `unavailable` | `idle` | `loading` | `ready` | `degraded` | `failed`; `snapshot()` exposes `loaded_at`, `duration_ms`, `error`, and footprint.
 - Semantic capability is lazily warmed only for semantic-demanding calls: `isSemanticToolDemand` returns true for **writes** `memory-write` / `standard-write` / `task-write`, and for **reads** `memory-read` / `standard-read` / `task-read` / `agent-context` only when `query` or `objective` is present.

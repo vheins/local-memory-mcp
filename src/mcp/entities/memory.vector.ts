@@ -85,8 +85,18 @@ export class MemoryVectorEntity extends BaseEntity {
 		repo: string,
 		currentTags: string[]
 	): { predicates: string[]; params: (string | number)[] } {
-		const scopePredicate = "(owner = ? AND repo = ? OR is_global = 1)";
-		const params: (string | number)[] = [owner, repo];
+		// Scope rule shared with every scoped read (queries.ts getByCode /
+		// memory/search.ts): when owner is given the repo scope is
+		// `(owner = ? AND repo = ?) OR is_global = 1` so GLOBAL memories from
+		// other repos re-enter the candidate pool (FIX-GLOBAL-PRECEDENCE).
+		// The parens are load-bearing: without them SQLite parses
+		// `owner = ? AND (repo = ? OR is_global = 1)` and leaks any same-owner
+		// row regardless of repo. A falsy owner falls back to the bare repo
+		// equality so owner-unscoped calls (e.g. empty-owner tests / audit F7
+		// vector fallbacks) keep their strict semantics.
+		const hasOwnerScope = Boolean(owner);
+		const scopePredicate = hasOwnerScope ? "((owner = ? AND repo = ?) OR is_global = 1)" : "(repo = ?)";
+		const params: (string | number)[] = hasOwnerScope ? [owner, repo] : [repo];
 		const predicates: string[] = [];
 
 		if (currentTags.length > 0) {

@@ -1,7 +1,7 @@
-import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { inferOwnerFromGitRemote } from "./utils/owner";
 
 export type McpRoot = {
 	uri: string;
@@ -44,7 +44,7 @@ export function createSessionContext(): SessionContext {
 	const repo = path.basename(cwd);
 	const projectPath = cwd;
 
-	let owner: string | undefined = inferOwnerFromGit(cwd);
+	let owner: string | undefined = inferOwnerFromGitRemote(cwd);
 	if (!owner) {
 		const parts = cwd.split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
@@ -187,38 +187,19 @@ export function inferRepoFromSession(session?: SessionContext): string | undefin
 }
 
 /**
- * Validates that a string is a legal GitHub username per GitHub's validation rules:
- * - 1-39 characters
- * - Starts and ends with alphanumeric
- * - May contain single hyphens internally
+ * Resolves the owner for a session, when one can be determined.
+ *
+ * Inference order:
+ *   1. GitHub remote origin of the active root (or the CWD when the session
+ *      has no file roots) — via the shared `inferOwnerFromGitRemote` helper;
+ *   2. parent directory name of a single explicit file root (a deterministic
+ *      signal the client chose that root — e.g. /Users/alice/myrepo → "alice").
+ *
+ * No owner is fabricated when the session is rootless: with no explicit root
+ * and no git remote, the CWD's parent directory is NOT treated as an owner
+ * (FIX-OWNER-INFER — it previously produced spurious owners such as the
+ * dashboard's working directory for repo-only scoped calls).
  */
-function isValidGitHubUsername(username: string): boolean {
-	return /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(username);
-}
-
-/**
- * Attempts to extract the GitHub owner (username or organization) from
- * the git remote origin URL in the given working directory.
- */
-function inferOwnerFromGit(cwd: string): string | undefined {
-	try {
-		const gitConfigPath = path.join(cwd, ".git", "config");
-		if (!fs.existsSync(gitConfigPath)) return undefined;
-		const content = fs.readFileSync(gitConfigPath, "utf-8");
-
-		// Match SSH: url = git@github.com:owner/repo.git
-		// Match HTTPS: url = https://github.com/owner/repo.git
-		// Match git:  url = git://github.com/owner/repo.git
-		const match = content.match(
-			/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+)/
-		);
-		const rawOwner = match?.[1];
-		return rawOwner && isValidGitHubUsername(rawOwner) ? rawOwner : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
 export function inferOwnerFromSession(session?: SessionContext): string | undefined {
 	const roots = getFilesystemRoots(session);
 
@@ -232,21 +213,14 @@ export function inferOwnerFromSession(session?: SessionContext): string | undefi
 
 	// Primary: infer from git remote origin
 	if (cwd) {
-		const gitOwner = inferOwnerFromGit(cwd);
+		const gitOwner = inferOwnerFromGitRemote(cwd);
 		if (gitOwner) return gitOwner;
 	}
 
-	// Fallback: infer from parent directory name of the root/cwd
+	// Fallback: infer from the parent directory name of a single explicit root
+	// (git remote absent). Deliberately NOT applied to the rootless CWD case.
 	if (roots.length === 1) {
 		const parts = roots[0].split(path.sep).filter(Boolean);
-		if (parts.length >= 2) {
-			return parts[parts.length - 2];
-		}
-	}
-	if (roots.length === 0) {
-		if (!session) return undefined;
-		const workdir = process.cwd();
-		const parts = workdir.split(path.sep).filter(Boolean);
 		if (parts.length >= 2) {
 			return parts[parts.length - 2];
 		}

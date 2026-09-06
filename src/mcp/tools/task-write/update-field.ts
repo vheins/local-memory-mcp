@@ -9,9 +9,17 @@ import { TaskWriteParams } from "./types";
 
 /**
  * Builds the set of updatable fields from params, excluding control fields.
+ *
+ * `owner` (and `repo`) are scoping/identification fields, NOT mutable task
+ * fields — they are destructured out here so a forwarded owner (e.g. from the
+ * dashboard's task-update path, FIX-OWNER-INFER) is used purely for scope
+ * resolution and never persisted into the task row or listed in updatedFields.
  */
 export function buildUpdatesFromParams(params: TaskWriteParams): Record<string, unknown> {
-	const { status, phase, tags, agent, role, model, est_tokens, commit_id, changed_files, ...restUpdates } = params;
+	const { owner, repo, status, phase, tags, agent, role, model, est_tokens, commit_id, changed_files, ...restUpdates } =
+		params;
+	void owner;
+	void repo;
 	const updates: Record<string, unknown> = { ...restUpdates };
 	if (status !== undefined) updates.status = status;
 	if (phase !== undefined) updates.phase = phase;

@@ -8,12 +8,43 @@ import type { MemoryQueryRunner } from "./queries";
 // ---------------------------------------------------------------------------
 
 /**
+ * Build the repo-scope SQL predicate shared by every search path in this
+ * module. The rule is the repo-wide canonical one for scoped reads
+ * (`queries.ts` getByCode/getMemoriesByCodes, `memoryVectors`
+ * searchBySimilarity): when BOTH owner and repo are given the scope is
+ * `((owner = ? AND repo = ?) OR is_global = 1)` — global memories from other
+ * repos ARE included so a repo-scoped agent search still surfaces the
+ * project's global standards/memories. When owner is falsy the scope
+ * degenerates to the bare `repo = ?` equality (owner-unscoped listing /
+ * dashboard-style reads keep strict repo-only semantics).
+ *
+ * Returns the predicate fragment (without the leading "AND") plus the bound
+ * params. Pass `alias` when the predicates must qualify the memories column
+ * (e.g. `m.` inside an FTS5 JOIN); the `memories` table is otherwise
+ * unqualified so callers may join under any alias.
+ */
+function buildScopePredicate(owner: string, repo: string, alias = ""): { clause: string; params: (string | number)[] } {
+	if (owner) {
+		return {
+			clause: `((${alias}owner = ? AND ${alias}repo = ?) OR ${alias}is_global = 1)`,
+			params: [owner, repo]
+		};
+	}
+	return {
+		clause: `${alias}repo = ?`,
+		params: [repo]
+	};
+}
+
+/**
  * FTS5-first keyword search over title/content/tags (MEM-367 / TASK-014).
- * Filters mirror the LIKE path in {@link searchByRepo} exactly (owner/repo,
- * status='active', not expired, optional type); ordering is bm25 relevance
- * first with the historical importance/created_at tie-break preserved.
- * Returns [] on any FTS error or unbuildable query — callers must fall
- * back to the LIKE path.
+ * Filters mirror the LIKE path in {@link searchByRepo} exactly (owner/repo
+ * scope, status='active', not expired, optional type); ordering is bm25
+ * relevance first with the historical importance/created_at tie-break
+ * preserved. Repo scope includes global memories when owner is given —
+ * same `(owner AND repo) OR is_global` rule as {@link searchByFtsScored}
+ * (FIX-GLOBAL-PRECEDENCE). Returns [] on any FTS error or unbuildable
+ * query — callers must fall back to the LIKE path.
  */
 export function searchByFts(
 	runner: MemoryQueryRunner,
@@ -29,13 +60,13 @@ export function searchByFts(
 
 		const conditions = ["memories_fts MATCH ?"];
 		const params: (string | number)[] = [safeQuery];
-		if (owner) {
-			conditions.push("m.owner = ? AND m.repo = ?");
-			params.push(owner, repo);
-		} else {
-			conditions.push("m.repo = ?");
-			params.push(repo);
-		}
+		// Scope mirrors the LIKE path in searchByRepo AND searchByFtsScored:
+		// `((owner = ? AND repo = ?) OR is_global = 1)` when owner is given
+		// (FIX-GLOBAL-PRECEDENCE unifies the global-inclusion policy) so the
+		// strict/non-strict split between the two FTS paths is gone.
+		const scope = buildScopePredicate(owner, repo, "m.");
+		conditions.push(scope.clause);
+		params.push(...scope.params);
 		conditions.push(`m.status = '${MEMORY_STATUS_ACTIVE}'`, "(m.expires_at IS NULL OR m.expires_at > ?)");
 		params.push(new Date().toISOString());
 		if (type) {
@@ -63,7 +94,9 @@ export function searchByFts(
  * bm25-scored FTS search (MEM-367 §6.1): matching memories with their raw
  * `bm25(memories_fts)` scores, ordered most-relevant first. Scope mirrors
  * `memoryVectors.searchBySimilarity` — `(owner AND repo) OR is_global`,
- * active unless includeArchived, not expired. Used by memory.read.ts to
+ * active unless includeArchived, not expired. Shares the scope builder with
+ * {@link searchByFts} so both FTS paths implement the identical
+ * global-inclusion rule (FIX-GLOBAL-PRECEDENCE). Used by memory.read.ts to
  * feed a min-max-normalized bm25 into the 0.30 keyword hybrid weight.
  */
 export function searchByFtsScored(
@@ -80,12 +113,13 @@ export function searchByFtsScored(
 
 		const conditions = ["memories_fts MATCH ?"];
 		const params: (string | number)[] = [safeQuery];
-		if (owner) {
-			conditions.push("((m.owner = ? AND m.repo = ?) OR m.is_global = 1)");
-			params.push(owner, repo);
-		} else if (repo) {
-			conditions.push("m.repo = ?");
-			params.push(repo);
+		// Scope only when a repo (or owner+repo) is given; with BOTH absent the
+		// search is intentionally unscoped (historical searchByFtsScored
+		// contract) — buildScopePredicate would otherwise bind `repo = ''`.
+		if (owner || repo) {
+			const scope = buildScopePredicate(owner, repo, "m.");
+			conditions.push(scope.clause);
+			params.push(...scope.params);
 		}
 		if (!includeArchived) conditions.push(`m.status = '${MEMORY_STATUS_ACTIVE}'`);
 		conditions.push("(m.expires_at IS NULL OR m.expires_at > ?)");
@@ -228,6 +262,8 @@ function tryDashboardFtsSearch(
  * Keyword search over a repo's memories: FTS5-first (MEM-367 / TASK-014),
  * with the LIKE path as a permanent fallback for empty/unbuildable queries,
  * FTS errors, and queries with no FTS match (mirrors codebase-symbol.ts).
+ * Repo scope includes global memories when owner is given, shared with
+ * {@link searchByFts}/{@link searchByFtsScored} (FIX-GLOBAL-PRECEDENCE).
  */
 export function searchByRepo(
 	runner: MemoryQueryRunner,
@@ -247,11 +283,13 @@ export function searchByRepo(
 		if (ftsHits.length > 0) return ftsHits;
 	}
 
-	const ownerClause = owner ? "owner = ? AND " : "";
-	let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE ${ownerClause}repo = ? AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = '${MEMORY_STATUS_ACTIVE}' AND (expires_at IS NULL OR expires_at > ?)`;
-	const params: (string | number)[] = owner
-		? [owner, repo, `%${query}%`, `%${query}%`, `%${query}%`, now]
-		: [repo, `%${query}%`, `%${query}%`, `%${query}%`, now];
+	// LIKE fallback mirrors the FTS path's scope: global memories from other
+	// repos are included when owner is given (FIX-GLOBAL-PRECEDENCE) — the
+	// FTS and LIKE branches of searchByRepo must agree or recall would differ
+	// based on FTS availability.
+	const scope = buildScopePredicate(owner, repo);
+	let sql = `SELECT * FROM ${TABLE_MEMORIES} WHERE ${scope.clause} AND (content LIKE ? OR title LIKE ? OR tags LIKE ?) AND status = '${MEMORY_STATUS_ACTIVE}' AND (expires_at IS NULL OR expires_at > ?)`;
+	const params: (string | number)[] = [...scope.params, `%${query}%`, `%${query}%`, `%${query}%`, now];
 
 	if (type) {
 		sql += " AND type = ?";

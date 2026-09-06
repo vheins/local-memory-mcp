@@ -25,7 +25,7 @@ describe("exploration observation tools", () => {
 	});
 
 	it("installs the observation schema, indexes, foreign key, and idempotent migrations", () => {
-		expect(SCHEMA_VERSION).toBe(33);
+		expect(SCHEMA_VERSION).toBe(34);
 		const tables = db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{
 			name: string;
 		}>;

@@ -103,6 +103,50 @@ describe("normalizeToolArguments", () => {
 		expect(warnSpy).toHaveBeenCalled();
 	});
 
+	it("keeps an explicit empty owner repo-only even when session.owner is set", () => {
+		const result = normalizeToolArguments({ owner: "", repo: "my-repo" }, makeSession({ owner: "acme" }));
+		expect(result.owner).toBe("");
+		expect(result.repo).toBe("my-repo");
+		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
+	it("keeps an explicit empty owner repo-only even when the session could infer an owner", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const result = normalizeToolArguments({ owner: "", repo: "my-repo" }, makeSession({ owner: "acme" }));
+		expect(result.owner).toBe("");
+		expect(warnSpy).not.toHaveBeenCalled();
+		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
+	it("does not inject a session owner into a memory scope when top-level owner is explicitly empty", () => {
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const result = normalizeToolArguments({
+			owner: "",
+			repo: "my-repo",
+			memories: [{ scope: { repo: "my-repo" } }]
+		});
+		const memories = result.memories as Array<{ scope: Record<string, unknown> }>;
+		expect(result.owner).toBe("");
+		expect(memories[0].scope.repo).toBe("my-repo");
+		expect(memories[0].scope.owner).toBeUndefined();
+		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
+	it("fills scope.owner from an owner/repo scoped repo even when top-level owner is explicitly empty", () => {
+		const result = normalizeToolArguments({ owner: "", repo: "my-repo", scope: { repo: "vheins/scoped-repo" } });
+		expect(result.owner).toBe("");
+		expect((result.scope as { owner?: string }).owner).toBe("vheins");
+		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
+	it("keeps an explicit empty scope.owner as-is", () => {
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const result = normalizeToolArguments({ scope: { repo: "my-repo", owner: "" } }, makeSession({ owner: "acme" }));
+		expect((result.scope as { owner?: string }).owner).toBe("");
+		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
 	it("fills scope.owner from the scoped repo", () => {
 		const result = normalizeToolArguments({ scope: { repo: "vheins/my-repo" } });
 		expect((result.scope as { owner?: string }).owner).toBe("vheins");

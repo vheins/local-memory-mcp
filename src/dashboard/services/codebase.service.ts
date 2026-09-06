@@ -9,6 +9,7 @@ import type { ParserPool } from "../../mcp/codebase-index/parser/language-visito
 import { TreeSitterParserPool } from "../../mcp/codebase-index/parser/parser-pool";
 import type { VectorStore } from "../../mcp/types";
 import { parseRepoInput } from "../../mcp/utils/normalize";
+import { withInjectedOwner } from "../../mcp/utils/owner";
 import { buildCodeGraph, getSymbolCallers, readFileContent as readCodebaseFileContent } from "./codebase-graph.service";
 
 // ── Parser pool singleton (lazy, shared across endpoints) ─────────────
@@ -39,39 +40,20 @@ const noopVectors: VectorStore = {
  *
  * The dashboard REST API receives `repo` in `owner/repo` format from the UI,
  * but the MCP tool handler schemas require `owner` as a separate field.
+ *
+ * Delegates to the shared `withInjectedOwner` helper (single source of truth
+ * with the MCP session's owner inference — FIX-OWNER-INFER). Precedence:
+ * explicit non-empty `params.owner` → owner segment of an `owner/repo`
+ * `params.repo` → git remote origin of the dashboard CWD → params unchanged.
  */
 export function injectOwner(params: Record<string, unknown>): Record<string, unknown> {
 	if (params.owner && typeof params.owner === "string" && params.owner.length > 0) {
 		return params;
 	}
 
-	const repo = params.repo as string | undefined;
-	if (!repo) return params;
+	if (!params.repo) return params;
 
-	// Primary: extract owner from "owner/repo" format
-	const parsed = parseRepoInput(repo);
-	if (parsed.owner) {
-		return { ...params, owner: parsed.owner };
-	}
-
-	// Fallback: try to infer owner from git remote origin of CWD
-	try {
-		const gitConfigPath = path.join(process.cwd(), ".git", "config");
-		if (fs.existsSync(gitConfigPath)) {
-			const content = fs.readFileSync(gitConfigPath, "utf-8");
-			const match = content.match(
-				/url\s*=\s*(?:git@github\.com:|https?:\/\/github\.com\/|git:\/\/github\.com\/)([^/\s]+)/
-			);
-			const rawOwner = match?.[1];
-			if (rawOwner && /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(rawOwner)) {
-				return { ...params, owner: rawOwner };
-			}
-		}
-	} catch {
-		// Git config not accessible — proceed without owner
-	}
-
-	return params;
+	return withInjectedOwner(params);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────

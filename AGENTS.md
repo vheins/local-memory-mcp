@@ -131,6 +131,7 @@ codebase.service.ts`). The MCP server ignores it and indexes only its CWD.
   run **automatically** in the `SQLiteStore` constructor — there is **no `migrate`
   script** (ignore any stale `npm run migrate` mention in comments). The codebase
   index lives **inside the same DB** (tables `codebase_*`), not a separate file.
+- **Dashboard repo-only view is intentional** — `GET /api/memories?repo=X` / `GET /api/tasks?repo=X` and stats/coordination controllers aggregate by short `repo` only (`owner = ""` reads like `MemoryService.list` / `TaskService.getTasksByRepo("", repo)` in `src/dashboard/services/`), intentionally merging rows from owners that share the same short repo name (operational single-host SQLite view). Dashboard rows SHOULD render an owner badge (informational). Per-owner isolation must use the MCP tool surface with explicit `(owner, repo)`. Codebase index owner isolation is **out-of-scope** (repo-keyed by design). Full policy: `.agents/documents/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` and `src/mcp/prompts/server/instructions.md` § Data Scoping.
 - No `.env.example` exists. Key vars: `MEMORY_DB_PATH`, `PORT` (dashboard, default
   3456), `DASHBOARD_HOST` (default 127.0.0.1), `DASHBOARD_TOKEN` (auth gate — **none
   = open**), `CODEBASE_AUTO_INDEX` (`"false"` disables startup index),

@@ -260,6 +260,7 @@ describe("TaskService.update", () => {
 			"task-update",
 			expect.objectContaining({
 				repo: "app",
+				owner: "acme",
 				id: "task-1",
 				agent: "dashboard",
 				role: "user",
@@ -269,6 +270,18 @@ describe("TaskService.update", () => {
 			})
 		);
 		expect(mocks.db.refresh).toHaveBeenCalledTimes(1);
+	});
+
+	it("never lets a caller-supplied owner override the task row's owner", async () => {
+		vi.mocked(mocks.db.tasks.getTaskById)
+			.mockReturnValueOnce(makeTask()) // pre-read
+			.mockReturnValueOnce({ ...makeTask(), title: "Renamed" }); // post-refresh read
+		vi.mocked(mocks.db.refresh).mockResolvedValue(undefined);
+
+		await TaskService.update("task-1", { title: "Renamed", owner: "attacker" });
+
+		const toolArgs = mocks.mcpClient.callTool.mock.calls[0][1] as Record<string, unknown>;
+		expect(toolArgs.owner).toBe("acme");
 	});
 
 	it("injects a status-change comment when the status is updated without one", async () => {

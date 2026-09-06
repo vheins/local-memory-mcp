@@ -32,9 +32,9 @@ describe("inferOwnerFromSession()", () => {
 		expect(inferOwnerFromSession(session)).toBe("alice");
 	});
 
-	it("returns parent dir from cwd when session has no roots", () => {
+	it("returns undefined when session has no roots (no owner fabricated from cwd)", () => {
 		const session = createSessionContext();
-		expect(inferOwnerFromSession(session)).toBe("path");
+		expect(inferOwnerFromSession(session)).toBeUndefined();
 	});
 
 	it("returns undefined when session has a root with fewer than 2 path components", () => {
@@ -47,15 +47,15 @@ describe("inferOwnerFromSession()", () => {
 		expect(inferOwnerFromSession()).toBeUndefined();
 	});
 
-	it("returns parent dir from cwd when roots exist but none are file:// URIs", () => {
+	it("returns undefined when roots exist but none are file:// URIs (no cwd fallback)", () => {
 		const session = sessionWithRoots(["not-a-file-uri://some/path"]);
-		expect(inferOwnerFromSession(session)).toBe("path");
+		expect(inferOwnerFromSession(session)).toBeUndefined();
 	});
 
-	it("returns parent dir from cwd with clientInfo.name set and no roots (regression guard)", () => {
+	it("returns undefined with clientInfo.name set and no roots (regression guard)", () => {
 		const session = createSessionContext();
 		session.clientInfo = { name: "claude-desktop", version: "1.0.0" };
-		expect(inferOwnerFromSession(session)).toBe("path");
+		expect(inferOwnerFromSession(session)).toBeUndefined();
 	});
 
 	it("returns undefined when multiple roots exist", () => {
