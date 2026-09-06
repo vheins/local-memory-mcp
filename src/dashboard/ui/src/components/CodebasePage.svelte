@@ -393,8 +393,8 @@
 		top: 50%;
 		transform: translateY(-50%);
 		z-index: 5;
-		width: 20px;
-		height: 40px;
+		width: 36px;
+		height: 44px;
 		border: none;
 		background: var(--color-surface);
 		border-radius: 0 8px 8px 0;

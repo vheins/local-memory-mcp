@@ -251,9 +251,11 @@
 	.mode-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
-		padding: 3px 10px;
-		font-size: 0.68rem;
+		justify-content: center;
+		gap: 6px;
+		min-height: 36px;
+		padding: 6px 14px;
+		font-size: 0.78rem;
 		font-weight: 600;
 		font-family: inherit;
 		color: var(--color-text-muted);
@@ -266,6 +268,12 @@
 
 	.mode-btn:hover {
 		color: var(--color-text);
+	}
+
+	@media (pointer: coarse) {
+		.mode-btn {
+			min-height: 44px;
+		}
 	}
 
 	.mode-btn.active {

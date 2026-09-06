@@ -9,7 +9,10 @@
 	border-radius: var(--radius-md);
 	font-size: 0.875rem;
 	font-weight: 600;
-	transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+	transition:
+		background-color 180ms ease-out,
+		border-color 180ms ease-out,
+		color 180ms ease-out;
 	cursor: pointer;
 	border: 1px solid transparent;
 	position: relative;
@@ -110,9 +113,19 @@
 }
 
 .btn-sm {
+	min-width: 36px;
 	min-height: 36px;
 	padding: 6px 12px;
 	font-size: 0.8125rem;
+}
+
+/* Coarse pointers get the full 44px target regardless of density variant. */
+@media (pointer: coarse) {
+	.btn-sm,
+	.btn-icon.btn-sm {
+		min-width: 44px;
+		min-height: 44px;
+	}
 }
 .btn-icon {
 	min-width: 40px;
@@ -274,4 +287,3 @@
 	color: #d4a08a;
 	border-color: rgba(180, 120, 100, 0.32);
 }
-

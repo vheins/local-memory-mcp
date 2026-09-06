@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { healthData, currentRepo, availableRepos, theme, themePreference, chatRefreshSignal, activeTab } from "../lib/stores";
+	import {
+		healthData,
+		currentRepo,
+		availableRepos,
+		theme,
+		themePreference,
+		chatRefreshSignal,
+		activeTab
+	} from "../lib/stores";
 	import { onMount, onDestroy } from "svelte";
 	import { createTopBarHandler } from "../lib/composables/useTopBar";
 	import { getNavItem } from "../lib/navigation";
@@ -24,7 +32,6 @@
 		toggleTheme,
 		startCountdown,
 		manualRefresh,
-		getRepoInitials,
 		destroy
 	} = handler;
 

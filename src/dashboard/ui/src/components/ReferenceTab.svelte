@@ -211,10 +211,10 @@
 	}
 
 	.ref-total-badge {
-		font-size: 0.62rem;
+		font-size: 0.72rem;
 		font-weight: 700;
 		background: rgba(14, 165, 233, 0.1);
-		color: #0ea5e9;
+		color: #01607f;
 		padding: 2px 8px;
 		border-radius: 9999px;
 		border: 1px solid rgba(14, 165, 233, 0.2);

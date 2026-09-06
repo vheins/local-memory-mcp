@@ -67,7 +67,7 @@
 			<button
 				on:click={() => (isExpanded = !isExpanded)}
 				class="flex items-center justify-between w-full"
-				style="background:none; border:none; padding:0; cursor:pointer; margin-bottom:10px;"
+				style="background:none; border:none; min-height:40px; padding:4px 0; cursor:pointer; margin-bottom:6px;"
 			>
 				<div
 					style="font-size:0.65rem;font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;display:flex;align-items:center;gap:6px;"

@@ -148,17 +148,45 @@
 
 <div class="standard-cards" aria-label="Coding standards">
 	{#if loading}
-		{#each { length: 3 } as _, i (i)}<div class="standard-card"><div class="skeleton" style="height:124px;border-radius:10px;"></div></div>{/each}
+		{#each { length: 3 } as _, i (i)}<div class="standard-card">
+				<div class="skeleton" style="height:124px;border-radius:10px;"></div>
+			</div>{/each}
 	{:else if standards.length === 0}
-		<div class="mobile-empty"><Icon name="check" size={24} /><strong>No standards found</strong><span>Adjust the filters or add a reusable rule.</span></div>
+		<div class="mobile-empty">
+			<Icon name="check" size={24} /><strong>No standards found</strong><span
+				>Adjust the filters or add a reusable rule.</span
+			>
+		</div>
 	{:else}
 		{#each standards as std (std.id)}
 			<article class="standard-card" class:selected={$selectedStandardIds.has(std.id)}>
-				<div class="standard-heading"><input type="checkbox" checked={$selectedStandardIds.has(std.id)} on:change={() => toggleSelect(std.id)} aria-label={`Select standard ${std.title}`} /><button class="standard-title" on:click={() => onOpenEditDrawer(std)}>{std.title}</button><span class="scope-chip" class:scope-global={std.is_global} class:scope-repo={!std.is_global}>{formatScopeLabel(std.is_global)}</span></div>
+				<div class="standard-heading">
+					<input
+						type="checkbox"
+						checked={$selectedStandardIds.has(std.id)}
+						on:change={() => toggleSelect(std.id)}
+						aria-label={`Select standard ${std.title}`}
+					/><button class="standard-title" on:click={() => onOpenEditDrawer(std)}>{std.title}</button><span
+						class="scope-chip"
+						class:scope-global={std.is_global}
+						class:scope-repo={!std.is_global}>{formatScopeLabel(std.is_global)}</span
+					>
+				</div>
 				{#if std.context}<p>{std.context}</p>{/if}
-				<div class="standard-meta"><span>{std.language || "Any language"}</span><span>v{std.version}</span><span>{formatDate(std.updated_at)}</span></div>
-				{#if std.tags?.length}<div class="standard-tags">{#each std.tags.slice(0, 4) as tag (tag)}<span>{tag}</span>{/each}</div>{/if}
-				<div class="mobile-actions"><button class="btn btn-ghost" on:click={() => onOpenEditDrawer(std)}>Open</button><button class="btn btn-danger" on:click={() => onDeleteRow(std)}>Delete</button></div>
+				<div class="standard-meta">
+					<span>{std.language || "Any language"}</span><span>v{std.version}</span><span
+						>{formatDate(std.updated_at)}</span
+					>
+				</div>
+				{#if std.tags?.length}<div class="standard-tags">
+						{#each std.tags.slice(0, 4) as tag (tag)}<span>{tag}</span>{/each}
+					</div>{/if}
+				<div class="mobile-actions">
+					<button class="btn btn-ghost" on:click={() => onOpenEditDrawer(std)}>Open</button><button
+						class="btn btn-danger"
+						on:click={() => onDeleteRow(std)}>Delete</button
+					>
+				</div>
 			</article>
 		{/each}
 	{/if}
@@ -394,6 +422,7 @@
 			gap: 10px;
 		}
 		.standard-title {
+			min-height: 40px;
 			padding: 0;
 			border: 0;
 			background: transparent;

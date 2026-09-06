@@ -116,10 +116,10 @@
 	}
 
 	.kg-zoom-btn {
-		/* TASK-403: ≥32px tap target at 390px (audit: zoom −/+ were 28px). */
-		padding: 6px 8px !important;
-		min-width: 32px;
-		min-height: 32px;
+		/* Zoom controls are primary canvas actions — full 40px target (44px coarse). */
+		padding: 6px 10px !important;
+		min-width: 40px;
+		min-height: 40px;
 		justify-content: center;
 		border-radius: 0 !important;
 		border-right: 1px solid var(--color-border);
@@ -129,10 +129,17 @@
 		border-right-color: rgba(148, 163, 184, 0.15);
 	}
 
+	@media (pointer: coarse) {
+		.kg-zoom-btn,
+		.kg-zoom-label {
+			min-height: 44px;
+		}
+	}
+
 	.kg-zoom-label {
-		padding: 4px 8px !important;
-		min-width: 42px;
-		min-height: 32px;
+		padding: 4px 10px !important;
+		min-width: 48px;
+		min-height: 40px;
 		justify-content: center;
 		border-radius: 0 !important;
 		font-size: 0.68rem;
