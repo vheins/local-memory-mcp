@@ -86,7 +86,36 @@ graph TD
 
 ---
 
-## 3. Technology Rationale
+## 3. Data Flow
+
+End-to-end flows per layer (transport → validation → persistence → retrieval).
+
+### Write path (memory / task / standard)
+
+1. **Transport** — AI agent calls MCP tool over stdio (`src/mcp/server.ts` → `src/mcp/tools/index.ts`).
+2. **Validation** — Zod schema (`src/mcp/tools/schemas/`) validates input; missing `owner`/`repo`/`agent`/`model` auto-injected from session context.
+3. **Write lock** — Mutations run under `WriteLock.withLock()` (`proper-lockfile`) for cross-process safety.
+4. **Persistence** — Entity writes to SQLite (`src/mcp/storage/sqlite.ts` + `src/mcp/entities/`) with FTS5 triggers; embedding queued to `embedding_queue` outbox (migration v9, not inline).
+5. **Action log** — `action_log` row written for every tool call (burst-condensed within 10 min).
+6. **Dashboard** — `GET /api/memories|tasks|standards` reads the same `memory.db` via `src/dashboard/services/`.
+
+### Read path (hybrid search)
+
+1. **FTS5 keyword** — `unicode61` tokenizer with `*` prefix match (memory FTS v10, standards v04, symbols v18).
+2. **Vector** — ONNX `all-MiniLM-L6-v2` embeddings (384-dim) fetched from `memory_vectors` / `standard_vectors`.
+3. **Blend** — `scoreHybrid` combines keyword + vector (40/30/15/15) in `src/mcp/services/search-helpers.ts`.
+4. **KG context** — `kg-context` enrichment enriches results with graph entities when available (dashboard/API-only CRUD).
+5. **Time-tunnel** — Temporal expressions ("yesterday", "last week") parsed in `src/mcp/tools/time-tunnel.ts` inside `memory-read`.
+
+### Codebase index path
+
+`discover` → `compare` (mtime pre-filter) → `parse` (tree-sitter WASM, per-language grammar) → `store` (`writeParseBatch`, 100 rows/txn) → `clean` (stale deletion). Read via `codebase-read` (SEARCH / TRACE / FILE / CONTENT / ARCHITECTURE modes) backed by `codebase_symbols_fts` + `codebase_references` edges. See [Codebase Index Architecture](../codebase-index/architecture.md) and [Operations runbook](../../operations/codebase-index.md).
+
+### Task coordination path
+
+`task-write` (create/pending) → `claim-manage` (claim → `in_progress`, required before `completed`) → `task-write` (`completed` requires `est_tokens`, auto-archives to `task_archive` memory). Handoffs via `handoff-write`/`handoff-read` for cross-agent continuation.
+
+## 4. Technology Rationale
 
 - **Svelte 5 & Vite**: Selected for the dashboard to provide a high-performance, reactive UI with a small footprint.
 - **@xenova/transformers**: Enables production-grade embeddings without API costs or data privacy concerns.
@@ -98,7 +127,7 @@ graph TD
 
 ---
 
-## 4. Soul Maintenance (Memory Decay)
+## 5. Soul Maintenance (Memory Decay)
 
 - Purpose: Automatically archive low-signal memories after periods of inactivity.
 - **Decay Rate**: 0.5 (importance multiplier per decay cycle).
@@ -109,7 +138,7 @@ graph TD
 
 ---
 
-## 5. Knowledge Graph Architecture
+## 6. Knowledge Graph Architecture
 
 - **Tables**: `entities` (name PK), `relations` (composite PK), `observations` (UUID PK).
 - **Cascade Rules**: Deleting an entity cascades to all its relations and observations.

@@ -58,9 +58,13 @@ This document specifies the functional behavior of the `@vheins/local-memory-mcp
 
 ## 5. Agent Tools
 
-- **`agent-context`**: Contextual recall for active session.
-- **`decision-log`**: Structured decision capture with summary/context/rationale/alternatives.
-- **`session-summarize`**: Persist session as searchable task_archive memory.
+- **`agent-context`**: Contextual recall for active session (queries memories + tasks for current agent; `GET /api/agent-context` in dashboard).
+- **`prompt-read` (20th tool)** — Unified LIST / DETAIL access to the prompt catalog (`src/mcp/prompts/definitions/`, 32 prompts). LIST (no `name`) returns catalog `[{ name, description, agent, arguments }]`; DETAIL (`name` present) loads one prompt with `{{var}}` substitution via `substitution.ts` and auto-injects `{{current_owner}}`/`{{current_repo}}` from session context (read-only; no DB/lock; pure loader-cache function — `src/mcp/tools/prompt.read.ts`, `src/mcp/tools/schemas/prompt-read.ts`, `src/mcp/types/tool-definitions/prompt.ts`). Mirrors `prompts/list` + `prompts/get` for tool-only clients (e.g. opencode). Tests: `src/mcp/tests/prompt.read.test.ts` (LIST + DETAIL).
+- **`decision-log`** / **`session-summarize`**: Absorbed into `memory-write` convenience modes (type=`decision` / type=`task_archive`) — ADR-007.
+
+### Runtime profiles (`MCP_RUNTIME_PROFILE`)
+
+`minimal` / `balanced` / `full` (default) — profile defaults are defined in `src/mcp/runtime-capabilities.ts` (`RUNTIME_PROFILES`, `RuntimeCapabilityRegistry`) and honoured by the startup/queue wiring in `src/mcp/server.ts`. See also [Operations runbook](../../operations/codebase-index.md#2-configuration) for the env-var table and benchmark.
 
 ## 6. Reference Catalog (Resources & Prompts)
 

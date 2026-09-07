@@ -290,7 +290,7 @@ const handleCodebaseRead: ToolHandler = (args, db, _vectors, _extra) => {
 };
 ```
 
-For full tool schemas (input, output, error cases), see `../../design/codebase-index/api-contracts.md`.
+For full tool schemas (input, output, error cases), see `../../api/codebase-index.md`.
 
 ### 6. AST Visitors (`ast-visitors.ts`)
 
@@ -472,7 +472,7 @@ sequenceDiagram
 
 ## API Contracts Summary
 
-Full API contract specifications (Zod schemas, input/output types, error codes) are in `../../design/codebase-index/api-contracts.md`.
+Full API contract specifications (Zod schemas, input/output types, error codes) are in `../../api/codebase-index.md`.
 
 | Tool               | Input                                                               | Output                                                                  | Write? |
 | :----------------- | :------------------------------------------------------------------ | :---------------------------------------------------------------------- | :----: |
@@ -718,7 +718,7 @@ tree-sitter grammar WASM files must be loadable at runtime. Two approaches:
 | Product Requirements             | `prd.md`                                           |
 | Functional Specification         | `fsd.md`                                           |
 | Architecture Design              | `../../design/codebase-index/architecture.md`      |
-| API Contracts                    | `../../design/codebase-index/api-contracts.md`     |
+| API Contracts                    | `../../api/codebase-index.md`                      |
 | Domain Model                     | `../../design/codebase-index/domain.md`            |
 | Database Schema                  | `../../design/codebase-index/schema.md`            |
 | ADR-002 (Architecture Decisions) | `../../design/decisions/adr-002-codebase-index.md` |

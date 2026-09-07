@@ -190,7 +190,7 @@ Triggers indexing of a project's source code. Performs full index if no prior in
 | Progress    | Emits `notifications/progress` with `(processed, totalFiles)`                                                                                   |
 | Error cases | 409 (already indexing), 500 (init failure), 403 (path not in roots), 404 (path not found)                                                       |
 
-Reference: `../../design/codebase-index/api-contracts.md` for full input/output schemas.
+Reference: `../../api/codebase-index.md` for full input/output schemas.
 
 ### Tool: `get_file_symbols`
 
@@ -423,14 +423,14 @@ stateDiagram-v2
 
 ## 11. Related Documents
 
-| Document             | Location                                       |
-| :------------------- | :--------------------------------------------- |
-| Product Requirements | `prd.md`                                       |
-| Architecture Design  | `../../design/codebase-index/architecture.md`  |
-| API Contracts        | `../../design/codebase-index/api-contracts.md` |
-| Domain Model         | `../../design/codebase-index/domain.md`        |
-| Database Schema      | `../../design/codebase-index/schema.md`        |
-| Technical Design     | `tdd.md`                                       |
-| Acceptance Criteria  | `acceptance-criteria.md`                       |
-| BDD Scenarios        | `bdd-scenarios.md`                             |
-| Edge Cases           | `edge-cases.md`                                |
+| Document             | Location                                      |
+| :------------------- | :-------------------------------------------- |
+| Product Requirements | `prd.md`                                      |
+| Architecture Design  | `../../design/codebase-index/architecture.md` |
+| API Contracts        | `../../api/codebase-index.md`                 |
+| Domain Model         | `../../design/codebase-index/domain.md`       |
+| Database Schema      | `../../design/codebase-index/schema.md`       |
+| Technical Design     | `tdd.md`                                      |
+| Acceptance Criteria  | `acceptance-criteria.md`                      |
+| BDD Scenarios        | `bdd-scenarios.md`                            |
+| Edge Cases           | `edge-cases.md`                               |

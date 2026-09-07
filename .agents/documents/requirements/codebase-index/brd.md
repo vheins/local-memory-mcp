@@ -200,6 +200,6 @@ This transforms local-memory-mcp from a memory-and-task server into a full-stack
 | Risk Assessment                  | `risk-assessment.md`                               |
 | ADR-002 (Architecture Decisions) | `../../design/decisions/adr-002-codebase-index.md` |
 | Architecture Design              | `../../design/codebase-index/architecture.md`      |
-| API Contracts                    | `../../design/codebase-index/api-contracts.md`     |
+| API Contracts                    | `../../api/codebase-index.md`                      |
 | Domain Model                     | `../../design/codebase-index/domain.md`            |
 | Database Schema                  | `../../design/codebase-index/schema.md`            |

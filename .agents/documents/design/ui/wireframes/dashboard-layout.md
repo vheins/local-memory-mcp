@@ -60,21 +60,16 @@ This document details the specific grid layouts for each primary tab in the dash
 
 ## 10. Global Layout
 
-```text
-+-------------------------------------------------------------+
-| [O] [O] [O] | Logo  | Search Agents...                [☼] | TopBar
-+-------------------------------------------------------------+
-| Side  |                                                     |
-| Bar   |  [Dash] [Activity] [Memories] [Tasks] [Ref] [Std]  | Tab Nav
-| (Repo)|        [Handoffs] [KG]                              |
-+-------+-----------------------------------------------------+
-| [R]   |                                                     |
-| [R]   |  +-----------------------------------------------+  |
-| [R]   |  |                                               |  |
-| [R]   |  |   MAIN CONTENT AREA (Glass Card Container)   |  |
-| [R]   |  |                                               |  |
-| [R]   |  +-----------------------------------------------+  |
-|       |                                                     |
-| [<<]  |                                                     |
-+-------+-----------------------------------------------------+
+```mermaid
+flowchart TB
+    TopBar["TopBar — Window Controls — Logo — Search Agents... — Theme Toggle"]
+    TabNav["Tab Nav — Dash — Activity — Memories — Tasks — Ref — Std — Handoffs — KG"]
+    Sidebar["Sidebar — Repo Avatars — Collapse"]
+    MainContent["MAIN CONTENT AREA — Glass Card Container"]
+
+    TopBar --> TabNav --> Body
+    subgraph Body["Body Layout"]
+        direction LR
+        Sidebar --- MainContent
+    end
 ```

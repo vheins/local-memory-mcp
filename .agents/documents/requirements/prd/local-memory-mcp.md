@@ -30,7 +30,8 @@ Senior software engineers managing complex repositories who require persistent, 
 
 - Capability Reference UI: Auto-generated documentation for all MCP tools.
 - Priority-based task sorting and filtering.
-- Agent Tools: `agent-context`, `decision-log`, `session-summarize`.
+- Agent Tools: `agent-context`, `prompt-read` (32-prompt catalog, LIST/DETAIL — `src/mcp/tools/prompt.read.ts`), `decision-log`/`session-summarize` (absorbed into `memory-write`).
+- Runtime profiles (`MCP_RUNTIME_PROFILE`): `minimal` (SQLite + lexical only) / `balanced` (semantic/index on demand) / `full` (eager; default) — `src/mcp/runtime-capabilities.ts`, `src/mcp/server.ts`.
 - Upstream alias compatibility (`remember_fact`, `recall`, `forget`) — **LEGACY DESIGN INTENT, NOT IMPLEMENTED**: no alias tools were ever shipped (verified 2026-08-08), so the "All Implemented" label does not apply to this item.
 
 ### Won't Have (Rejected)

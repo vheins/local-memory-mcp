@@ -1,6 +1,6 @@
 # Codebase Index — Operations Guide
 
-> **Architecture decision context:** See [ADR-002: Codebase Index Architecture](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for design rationale.
+> **Architecture decision context:** See [ADR-002: Codebase Index Architecture](../design/decisions/adr-002-codebase-index.md) for design rationale.
 > **Feature overview:** [Codebase Index Architecture](../design/codebase-index/architecture.md)
 > **API Reference:** [Codebase Index API](../api/codebase-index.md)
 
@@ -516,4 +516,4 @@ The server can index multiple repositories concurrently (separate repos do not c
 
 - [Codebase Index Architecture](../design/codebase-index/architecture.md) — How it works and how to use it
 - [API Reference: Codebase Index](../api/codebase-index.md) — Complete MCP tool documentation
-- [ADR-002: Codebase Index Architecture](../../.agents/documents/design/decisions/adr-002-codebase-index.md) — Design rationale and phased delivery plan
+- [ADR-002: Codebase Index Architecture](../design/decisions/adr-002-codebase-index.md) — Design rationale and phased delivery plan
