@@ -4,12 +4,12 @@
 
 ## Status
 
-| Sprint  | Title                                                                                     | Date       | Status   | Detail                                                                                            |
-| :------ | :---------------------------------------------------------------------------------------- | :--------- | :------- | :------------------------------------------------------------------------------------------------ |
-| **S01** | Docs Retrofit — `application/` + `design/flows/` + `tasks/` gap + G3 gate                 | 2026-09-07 | **DONE** | [`sprint-01.md`](sprint-01.md)                                                                    |
-| **S02** | Doc-sync sweep — orphan/missing refs, stale test-path/tool-count/DB-path refs             | —          | Planned  | [`../backlog.md`](../backlog.md) P-05 · `grep` inventory                                          |
-| **S03** | CI gate — `ci.yml` (PR + main: type-check, lint, test --coverage blocking)                | —          | Planned  | [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-013      |
-| **S04** | Coverage — `utils`/`routes`/`services`/`lib`/`prompts` suites (TST-006..011 gate TST-012) | —          | Planned  | [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-006..012 |
+| Sprint  | Title                                                                             | Date       | Status      | Detail                                                                                                                             |
+| :------ | :-------------------------------------------------------------------------------- | :--------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| **S01** | Docs Retrofit — `application/` + `design/flows/` + `tasks/` gap + G3 gate         | 2026-09-07 | **DONE**    | [`sprint-01.md`](sprint-01.md)                                                                                                     |
+| **S02** | Doc-sync & API surface hardening — Part A/B, link repair, catalog enrichment      | 2026-09-08 | **DONE**    | [`sprint-02.md`](sprint-02.md) · [`../../application/api/README.md`](../../application/api/README.md)                              |
+| **S03** | CI gate — `ci.yml` (PR + main: type-check, lint, test --coverage blocking)        | —          | **PLANNED** | [`sprint-03.md`](sprint-03.md) · [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-013      |
+| **S04** | Coverage & polish — `utils`/`routes`/`services`/`lib`/`prompts` + perf follow-ups | —          | **PLANNED** | [`sprint-04.md`](sprint-04.md) · [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-006..012 |
 
 ## Cadence & Done definition
 
