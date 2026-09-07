@@ -41,6 +41,9 @@ export type { StandardReadInput } from "./standard-read";
 
 export { AgentContextSchema } from "./agent";
 
+export { PromptReadSchema } from "./prompt-read";
+export type { PromptReadInput } from "./prompt-read";
+
 export { IndexRepoSchema, IndexStatusSchema, CodebaseIndexSchema } from "./codebase-index";
 
 export { CodebaseReadSchema } from "./codebase-read";

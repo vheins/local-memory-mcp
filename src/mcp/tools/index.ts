@@ -61,6 +61,7 @@ import { handleCodebaseIndex } from "./codebase-index-sdk";
 import { handleCodebaseRead } from "./codebase.read";
 import { handleExplorationObservationWrite } from "./exploration-observation.write";
 import { handleExplorationObservationRead } from "./exploration-observation.read";
+import { handlePromptRead } from "./prompt.read";
 import { McpResponse } from "../utils/mcp-response";
 import { toErrorResponse } from "../utils/mcp-error";
 import { logToolAction } from "../utils/action-log";
@@ -169,6 +170,7 @@ export function buildExecutors(
 			handleAgentContext(session.sessionId ? { ...args, session_id: session.sessionId } : args, db, vectors),
 		"observation-write": (args, db, _vectors, _extra) => handleExplorationObservationWrite(args, db),
 		"observation-read": (args, db, _vectors, _extra) => handleExplorationObservationRead(args, db),
+		"prompt-read": async (args, _db, _vectors, _extra) => handlePromptRead(args, session),
 		// Codebase index tools — only 2 canonical names
 		"codebase-index": (args, db, _vectors, _extra) => handleCodebaseIndex(args, db, _vectors),
 		"codebase-read": (args, db, _vectors, _extra) => handleCodebaseRead(args, db, _vectors)

@@ -2,6 +2,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { SessionContext, inferOwnerFromSession, inferRepoFromSession } from "../session";
 import { rankCompletionValues } from "../utils/completion";
 import { loadPromptFromMarkdown, listPromptFiles } from "./loader";
+import { substitutePromptArgs } from "./substitution";
 import type { LoadedPrompt } from "../interfaces";
 import { logger } from "../utils/logger";
 import { decodeCursor, encodeCursor } from "../utils/pagination";
@@ -93,25 +94,14 @@ export async function getPrompt(
 		throw new Error(`Prompt not found: ${name}`);
 	}
 
-	const inferredRepo = inferRepoFromSession(session);
-	const inferredOwner = inferOwnerFromSession(session);
-
-	// Substitute arguments in messages
+	// Substitute arguments in messages (shared helper — reserved context keys
+	// are never honored from args, then session context is auto-injected).
+	const ctx = {
+		owner: inferOwnerFromSession(session) || "unknown-owner",
+		repo: inferRepoFromSession(session) || "unknown-repo"
+	};
 	const messages = prompt.messages.map((m: PromptMessage) => {
-		let text = m.content.text;
-
-		// Standard arguments
-		for (const [key, value] of Object.entries(args)) {
-			// Escape regex metacharacters in the arg key so a client-supplied
-			// key like "(" or "a.b" can never throw SyntaxError in RegExp
-			// (parity with sdk-index.ts prompt substitution).
-			const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			text = text.replace(new RegExp(`\\{{${escapedKey}\\}}`, "g"), value);
-		}
-
-		// Auto-injected context
-		text = text.replace(/{{current_repo}}/g, inferredRepo || "unknown-repo");
-		text = text.replace(/{{current_owner}}/g, inferredOwner || "unknown-owner");
+		const text = substitutePromptArgs(m.content.text, args, ctx);
 
 		return {
 			...m,

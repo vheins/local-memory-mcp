@@ -153,6 +153,12 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - **STRICT PRIORITY**: ALL agents (orchestrator + sub-agents) MUST start every codebase context search with `codebase-index`/`codebase-read` — symbols, files, architecture, trace, and content grep.
 - **FORBIDDEN as first resort**: `rg` / `grep` / `glob` / `seed` / `cat` / `bash cat` / `find` / `ls` / brute-force filesystem search — NEVER use before `codebase-read`. Allowed ONLY as fallback after index returns empty/stale or cannot answer, and ONLY via `explore` sub-agent (which itself tries index first before `glob`/`grep`/`cat`). Direct `rg`/`grep`/`cat` without prior `codebase-read` is a violation. `cat` is for reading a **known** file only — never for blind exploration.
 
+**Prompts (skill-like reads)**: `prompt-read`
+
+- `prompt-read` is a read-only alias/proxy for the protocol-level `prompts/*` surface (`prompts/list` + `prompts/get`) — it mirrors the same catalog and content, so tool-only clients (e.g. OpenCode) can discover and invoke prompts as tools. It does NOT replace the `prompts/*` distinction; both surface the same `src/mcp/prompts/definitions/` files.
+- Auto-infer: `name` present → DETAIL (loads the prompt with `{{var}}` substitution; `{{current_repo}}`/`{{current_owner}}` are reserved keys always auto-injected from session, never read from args); none → LIST (catalog of `{name, description, agent, arguments}`).
+- Detail on unknown/traversal names → NOT_FOUND-classified error envelope (`schema: "tool-error"`, `code: "NOT_FOUND"`).
+
 **Exploration Observations**: `observation-write` → `observation-read`
 
 - `observation-write`: create / update / bulk / refresh high-signal exploration observations with source fingerprints. Auto-infer: `subject`+`fact`+`confidence`+`evidence[]` → create; `id` + fields → update; `observations[]` (1–100) → bulk create; `refresh_ids[]` (1–100) → refresh fingerprints. Repeated normalized facts + evidence are idempotent (deduplicated). Evidence items require `file_path` and optionally `symbol_id`, `start_line`/`end_line`, `commit_sha`.
@@ -200,34 +206,38 @@ A `memory-write` update accepts the same fields as create but all are optional (
 | `codebase-index(warmup:true)`     | Explicitly warm the index engine                                       | Orchestrator                           |
 | `codebase-read(query)`            | Primary codebase exploration (symbol/NL search)                        | Orchestrator                           |
 | `codebase-read(name)`             | Trace definition & usage cross-file                                    | Orchestrator                           |
+| `prompt-read`                     | LIST prompt catalog / DETAIL prompt content with {{var}} substitution  | All agents (skill-like reads)          |
 
-## Registered Tools (19 canonical)
+## Registered Tools (20 canonical)
 
-All 19 tools are registered via `src/mcp/tools/index.ts` (`buildExecutors` + `TOOL_DEFINITIONS`) and `src/mcp/mcp-server.ts:registerAllTools`. No legacy dotted aliases are registered — the router normalizes `'.'` → `'-'` only for backward-compatible dispatch.
+All 20 tools are registered via `src/mcp/tools/index.ts` (`buildExecutors` + `TOOL_DEFINITIONS`) and `src/mcp/mcp-server.ts:registerAllTools`. No legacy dotted aliases are registered — the router normalizes `'.'` → `'-'` only for backward-compatible dispatch.
 
-| #   | Tool                | Kind   | Description                                                        |
-| --- | ------------------- | ------ | ------------------------------------------------------------------ |
-| 1   | `memory-write`      | write  | Create / update / acknowledge / bulk memories (auto-infer)         |
-| 2   | `memory-read`       | read   | Search / detail / recap memories (auto-infer)                      |
-| 3   | `memory-delete`     | write  | Soft-delete memories (single/bulk)                                 |
-| 4   | `task-write`        | write  | Create / update / bulk / interactive tasks                         |
-| 5   | `task-read`         | read   | Search / detail / list tasks                                       |
-| 6   | `task-delete`       | write  | Soft-delete tasks → canceled                                       |
-| 7   | `handoff-write`     | write  | Create / update handoff                                            |
-| 8   | `handoff-read`      | read   | Detail / list / search handoffs (incl. claims list)                |
-| 9   | `claim-manage`      | write† | Claim / release / list task claims (auto-infer; list is read-only) |
-| 10  | `standard-write`    | write  | Create / update / bulk coding standards                            |
-| 11  | `standard-read`     | read   | Search / detail / list standards                                   |
-| 12  | `standard-delete`   | write  | Delete standards (single/bulk)                                     |
-| 13  | `agent-context`     | read   | Budgeted cross-source context compiler                             |
-| 14  | `synthesize`        | read   | Context synthesis via MCP sampling (gated on client capability)    |
-| 15  | `repo-summarize`    | write  | Repository summary from signals                                    |
-| 16  | `observation-write` | write  | Create / update / bulk / refresh exploration observations          |
-| 17  | `observation-read`  | read   | Read exploration observations                                      |
-| 18  | `codebase-index`    | write  | Index or status (incl. warmup)                                     |
-| 19  | `codebase-read`     | read   | Trace / file / search / architecture / content grep                |
+| #   | Tool                | Kind   | Description                                                            |
+| --- | ------------------- | ------ | ---------------------------------------------------------------------- |
+| 1   | `memory-write`      | write  | Create / update / acknowledge / bulk memories (auto-infer)             |
+| 2   | `memory-read`       | read   | Search / detail / recap memories (auto-infer)                          |
+| 3   | `memory-delete`     | write  | Soft-delete memories (single/bulk)                                     |
+| 4   | `task-write`        | write  | Create / update / bulk / interactive tasks                             |
+| 5   | `task-read`         | read   | Search / detail / list tasks                                           |
+| 6   | `task-delete`       | write  | Soft-delete tasks → canceled                                           |
+| 7   | `handoff-write`     | write  | Create / update handoff                                                |
+| 8   | `handoff-read`      | read   | Detail / list / search handoffs (incl. claims list)                    |
+| 9   | `claim-manage`      | write† | Claim / release / list task claims (auto-infer; list is read-only)     |
+| 10  | `standard-write`    | write  | Create / update / bulk coding standards                                |
+| 11  | `standard-read`     | read   | Search / detail / list standards                                       |
+| 12  | `standard-delete`   | write  | Delete standards (single/bulk)                                         |
+| 13  | `agent-context`     | read   | Budgeted cross-source context compiler                                 |
+| 14  | `synthesize`        | read   | Context synthesis via MCP sampling (gated on client capability)        |
+| 15  | `repo-summarize`    | write  | Repository summary from signals                                        |
+| 16  | `observation-write` | write  | Create / update / bulk / refresh exploration observations              |
+| 17  | `observation-read`  | read   | Read exploration observations                                          |
+| 18  | `codebase-index`    | write  | Index or status (incl. warmup)                                         |
+| 19  | `codebase-read`     | read   | Trace / file / search / architecture / content grep                    |
+| 20  | `prompt-read`       | read   | Prompt catalog / prompt content with {{var}} substitution (skill-like) |
 
 † `claim-manage` list modes are read-only and do not emit an `action_log` row; claim/release modes do.
+
+`prompt-read` is a read-only alias/proxy for the protocol-level `prompts/*` surface — see **Prompts (skill-like reads)** above for auto-infer semantics and error behavior.
 
 ## Tool Error Envelope
 

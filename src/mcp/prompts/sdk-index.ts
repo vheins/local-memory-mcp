@@ -3,6 +3,7 @@ import { SQLiteStore } from "../storage/sqlite";
 import { VectorStore } from "../types";
 import { SessionContext, inferRepoFromSession, inferOwnerFromSession } from "../session";
 import { listPromptFiles, loadPromptFromMarkdown } from "./loader";
+import { substitutePromptArgs } from "./substitution";
 import type { LoadedPrompt } from "../interfaces";
 import { logger } from "../utils/logger";
 
@@ -77,23 +78,13 @@ export function registerAllPrompts(
 				description: buildPromptDescription(loaded)
 			},
 			async (args: Record<string, unknown>, _extra) => {
-				const inferredRepo = inferRepoFromSession(session);
-				const inferredOwner = inferOwnerFromSession(session);
-
-				// Substitute arguments in the prompt content
-				let text = loaded.content;
-
-				// Standard arguments (mirrors registry.ts getPrompt)
-				for (const [key, value] of Object.entries(args)) {
-					// Escape regex metacharacters in the arg key so a client-supplied
-					// key like "(" or "a.b" can never throw SyntaxError in RegExp.
-					const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-					text = text.replace(new RegExp(`\\{{${escapedKey}\\}}`, "g"), String(value));
-				}
-
-				// Auto-injected context (always present regardless of args)
-				text = text.replace(/\{\{current_repo\}\}/g, inferredRepo || "unknown-repo");
-				text = text.replace(/\{\{current_owner\}\}/g, inferredOwner || "unknown-owner");
+				// Substitute arguments (shared helper — reserved context keys are
+				// never honored from args), then auto-inject session context.
+				const stringArgs = Object.fromEntries(Object.entries(args).map(([key, value]) => [key, String(value)]));
+				const text = substitutePromptArgs(loaded.content, stringArgs, {
+					owner: inferOwnerFromSession(session) || "unknown-owner",
+					repo: inferRepoFromSession(session) || "unknown-repo"
+				});
 
 				return {
 					description: loaded.description,
