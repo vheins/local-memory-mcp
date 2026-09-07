@@ -1,5 +1,7 @@
 # Main Wireframe (Glass Interface)
 
+> **Note (2026-09-06, v0.44.1):** Superseded by PRs #104–106 — workspace-first navigation (WorkspaceSwitcher), 9 shared primitives, lazy route splitting (-44%), arena HiDPI. See CHANGELOG 0.44.1. Content below is historical.
+
 > **VERIFIED vs IMPLEMENTATION (2026-08-08):** global shell, glass sidebar/header, pill tab bar, detail drawer, Quick Create FAB, and theme toggle all match the shipped dashboard. Tab list below is outdated — shipped tabs also include **Arena**, **Codebase**, and **Queue** (11 tabs total after TASK-297; see design/ui/navigation/site-map.md). The hybrid search bar ("Task codes, Memory content, Standards") is realized via the dashboard search + reference catalog; no single cross-entity search bar ships today.
 
 This document provides a low-fidelity visual map of the primary dashboard screen.

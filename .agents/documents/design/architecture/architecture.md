@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** architecture is accurate with these corrections — (1) "Semantic Search & Hybrid Search (SQLite TF-IDF + ONNX Embeddings)": keyword scoring is FTS5-based (memory FTS v10, standards FTS v04, symbols FTS v18) blended with ONNX vectors via `scoreHybrid` (40/30/15/15); (2) "Knowledge Graph CRUD with NLP-based auto-extraction": there are **no KG MCP tools** — KG CRUD is dashboard/API-only, and extraction runs asynchronously via the embedding outbox worker (ADR-006); (3) "Decision logging and session summarization": `decision-log`/`session-summarize` are absorbed into `memory-write` convenience modes (ADR-007); (4) DB default path is OS-specific (Linux `~/.config/...`, macOS `~/Library/Application Support`, Windows `~/.local-memory-mcp`), not `./storage/memory.db`; (5) task lifecycle is 6 states (backlog/pending/in_progress/completed/canceled/blocked) with `in_progress`→`completed` required ✓. Dashboard responsibilities (Kanban 4 swimlanes, Activity, Reference, KG force-directed viz, Import/Export, Standards) all verified. There are 17 canonical MCP tools, not the 27 implied elsewhere.
+> **VERIFIED vs IMPLEMENTATION (2026-08-08):** architecture is accurate with these corrections — (1) "Semantic Search & Hybrid Search (SQLite TF-IDF + ONNX Embeddings)": keyword scoring is FTS5-based (memory FTS v10, standards FTS v04, symbols FTS v18) blended with ONNX vectors via `scoreHybrid` (40/30/15/15); (2) "Knowledge Graph CRUD with NLP-based auto-extraction": there are **no KG MCP tools** — KG CRUD is dashboard/API-only, and extraction runs asynchronously via the embedding outbox worker (ADR-006); (3) "Decision logging and session summarization": `decision-log`/`session-summarize` are absorbed into `memory-write` convenience modes (ADR-007); (4) DB default path is OS-specific (Linux `~/.config/...`, macOS `~/Library/Application Support`, Windows `~/.local-memory-mcp`), not `./storage/memory.db`; (5) task lifecycle is 6 states (backlog/pending/in_progress/completed/canceled/blocked) with `in_progress`→`completed` required ✓. Dashboard responsibilities (Kanban 4 swimlanes, Activity, Reference, KG force-directed viz, Import/Export, Standards) all verified. There are 20 canonical MCP tools, not the 27 implied elsewhere.
 
 This document specifies the technical architecture and component interactions of the MCP Local Memory system.
 
@@ -14,11 +14,11 @@ The system is designed as a local-first, server-driven developer tool. It operat
 - **Role**: The primary AI-facing engine.
 - **Communication**: Standard Input/Output (stdio) using JSON-RPC.
 - **Key Responsibilities**:
-  - Semantic Search & Hybrid Search (SQLite TF-IDF + ONNX Embeddings).
+  - Hybrid Search: FTS5 (v10 memory, v04 standards, v18 symbols) + vector blend 40/30/15/15.
   - Memory & Task CRUD Operations.
   - Multi-agent coordination (claims, handoffs).
   - Coding Standards management with vector search.
-  - Knowledge Graph CRUD with NLP-based auto-extraction.
+  - Knowledge Graph (dashboard-only): embedding outbox worker auto-extracts entities/relations; no MCP KG CRUD tools (ADR-006).
   - Embedding generation using `@xenova/transformers` (all-MiniLM-L6-v2 ONNX).
   - Soul Maintenance (memory decay and archival).
   - Decision logging and session summarization.
@@ -76,12 +76,13 @@ graph TD
 
 - **Local-First**: No data leaves the machine. Embeddings are generated locally using ONNX.
 - **Modular Storage**: Logic is decoupled into specialized entities (`MemoryEntity`, `TaskEntity`, `StandardEntity`, etc.) that inherit from a shared `BaseEntity` for consistent DB access.
-- **Shared SQLite**: Both the MCP server and Dashboard access the same SQLite file (default: `./storage/memory.db`).
+- **SQLite**: Single shared DB — platform config dir → `./storage/memory.db` fallback (AGENTS.md:128); both MCP server and Dashboard access the same file.
 - **Scope Injection**: `owner`, `repo`, and `folder` are auto-injected from MCP session context (roots) into tool arguments.
 - **Write Locking**: All mutation tools run under `WriteLock.withLock()` using `proper-lockfile`.
 - **Activity Tracking**: Every tool call is logged to the `action_log` table for full audit visibility.
-- **Hybrid Search**: Combines TF-IDF cosine similarity with ONNX neural vector embeddings, with tunable weights.
+- **Hybrid Search**: FTS5 (v10 memory, v04 standards, v18 symbols) + ONNX vector blend 40/30/15/15 via `scoreHybrid`.
 - **Task Lifecycle**: 6-stage state machine: `backlog` → `pending` → `in_progress` → `completed` (with `canceled` and `blocked` as terminal/exception states).
+- **Runtime Profiles** (`MCP_RUNTIME_PROFILE`): `minimal` (SQLite + lexical) / `balanced` (semantic on demand) / `full` (eager; default) — AGENTS.md:99.
 
 ---
 

@@ -46,7 +46,7 @@ Shared-context roadmap + hardened tool contracts. Adds budgeted agent context, e
 ### Changed / Internal
 
 - Split 8 modules >500 LOC into <500 LOC barrel subdirectories
-- Server instructions synced (19 tools)
+- Server instructions synced (20 tools — adds prompt-read)
 
 Resolves #97 epic (via PR #103) + #91 epic follow-up fix.
 

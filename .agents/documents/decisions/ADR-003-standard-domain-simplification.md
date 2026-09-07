@@ -4,7 +4,7 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfin
 
-> **IMPLEMENTED (verified 2026-08-08):** the 3-tool design shipped as `standard-write`, `standard-read`, `standard-delete`. Conflict detection on create/update, bulk `repo` propagation, and `is_global` default `false` are implemented (src/mcp/tools/standard-write/, standard-read/). The 5 legacy tools (`standard-store`, `standard-update`, `standard-detail`, `standard-search`, `standard-delete`) no longer exist in the 17 canonical tool set.
+> **IMPLEMENTED (verified 2026-08-08):** the 3-tool design shipped as `standard-write`, `standard-read`, `standard-delete`. Conflict detection on create/update, bulk `repo` propagation, and `is_global` default `false` are implemented (src/mcp/tools/standard-write/, standard-read/). The 5 legacy tools (`standard-store`, `standard-update`, `standard-detail`, `standard-search`, `standard-delete`) no longer exist in the 20 canonical tool set.
 
 ## Context
 

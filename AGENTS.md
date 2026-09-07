@@ -288,9 +288,12 @@ who it is written for.
   `.agents/documents/api/` (MCP tool API reference, e.g.
   `.agents/documents/api/codebase-index.md`), `.agents/documents/operations/`
   (ops runbooks, e.g. `.agents/documents/operations/codebase-index.md`),
+  `.agents/documents/design/` (architecture, UI, database, decisions — 24 files),
+  `.agents/documents/analysis/` (bench results, `*.json` pairs — 14 files),
   `.agents/documents/optimization/` (design/optimization docs, `en/` + `id/`),
   `.agents/documents/audits/` (UI audits), `.agents/documents/decisions/` &
   `.agents/documents/requirements/` (ADRs, BRD/PRD/FSD/TDD, acceptance criteria),
   and `.agents/documents/_tasks/` (internal task tracking).
+  Consumer docs → GitHub Wiki; internal docs → `.agents/documents`.
 - **`~/.agents/` = cross-project global standards** — rules and skills shared
   across repositories (the senior-authority baseline that applies everywhere).

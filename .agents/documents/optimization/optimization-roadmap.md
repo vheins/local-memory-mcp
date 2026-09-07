@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-The codebase is healthy at the architecture level — the ADR Simplification (44→15 tools at the time, now **17 canonical tools** — `codebase-index` and `codebase-read` joined the unified set later; see `buildExecutors` in `src/mcp/tools/index.ts` — SPEC-001 hybrid scoring, KG atomic writes) landed cleanly. The optimization opportunities cluster into five themes:
+The codebase is healthy at the architecture level — the ADR Simplification (44→15 tools at the time, now **20 canonical tools (19 + prompt-read)** — `codebase-index` and `codebase-read` joined the unified set later; see `buildExecutors` in `src/mcp/tools/index.ts` — SPEC-001 hybrid scoring, KG atomic writes) landed cleanly. The optimization opportunities cluster into five themes:
 
 | Theme                | Count       | Highest Impact                                                                                       |
 | :------------------- | :---------- | :--------------------------------------------------------------------------------------------------- |

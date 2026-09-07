@@ -1,5 +1,7 @@
 # Agent Arena Dashboard — UI/UX & Developer-Friendliness Audit
 
+> **Follow-up (2026-09-06, v0.44.1):** Queue view bundle fix shipped (PRs #104–106, 9 primitives, lazy split). Focus-restore & a11y re-verify pending. Original findings below are historical.
+
 **Tanggal:** 2026-08-11
 **Repo:** vheins/local-memory-mcp
 **Baseline:** STD-002 (Dashboard UI baseline: a11y, focus, contrast, sim-freeze, polling)

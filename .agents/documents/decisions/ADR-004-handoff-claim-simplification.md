@@ -4,7 +4,7 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfin
 
-> **IMPLEMENTED (verified 2026-08-08):** shipped as `handoff-write` (create + status update), `handoff-read` (list/detail/search), and `claim-manage` (claim → auto-promote to in_progress; release; list by agent/all). `decision_refs` is a real `task-write` schema field (persisted in metadata). The 6 legacy tools (`handoff-create`, `handoff-update`, `handoff-list`, `task-claim`, `claim-list`, `claim-release`) no longer exist in the 17 canonical tool set.
+> **IMPLEMENTED (verified 2026-08-08):** shipped as `handoff-write` (create + status update), `handoff-read` (list/detail/search), and `claim-manage` (claim → auto-promote to in_progress; release; list by agent/all). `decision_refs` is a real `task-write` schema field (persisted in metadata). The 6 legacy tools (`handoff-create`, `handoff-update`, `handoff-list`, `task-claim`, `claim-list`, `claim-release`) no longer exist in the 20 canonical tool set.
 
 ## Context
 

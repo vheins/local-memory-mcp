@@ -1,7 +1,7 @@
 # Codebase Index — Operations Guide
 
 > **Architecture decision context:** See [ADR-002: Codebase Index Architecture](../../.agents/documents/design/decisions/adr-002-codebase-index.md) for design rationale.
-> **Feature overview:** [Codebase Index Feature Guide](../features/codebase-index.md)
+> **Feature overview:** [Codebase Index Architecture](../design/codebase-index/architecture.md)
 > **API Reference:** [Codebase Index API](../api/codebase-index.md)
 
 ---
@@ -105,7 +105,7 @@ The `--index` flag triggers a one-time indexing operation without starting the M
 local-memory-mcp --index --repo owner/repo --path /absolute/path/to/repo
 ```
 
-See the [Feature Guide](../features/codebase-index.md#cli---index-flag) for complete CLI documentation.
+See the [Codebase Index Architecture](../design/codebase-index/architecture.md) for complete design documentation.
 
 ### Performance Optimization Options
 
@@ -514,6 +514,6 @@ The server can index multiple repositories concurrently (separate repos do not c
 
 ## Related Documentation
 
-- [Feature Guide: Codebase Index](../features/codebase-index.md) — How it works and how to use it
+- [Codebase Index Architecture](../design/codebase-index/architecture.md) — How it works and how to use it
 - [API Reference: Codebase Index](../api/codebase-index.md) — Complete MCP tool documentation
 - [ADR-002: Codebase Index Architecture](../../.agents/documents/design/decisions/adr-002-codebase-index.md) — Design rationale and phased delivery plan

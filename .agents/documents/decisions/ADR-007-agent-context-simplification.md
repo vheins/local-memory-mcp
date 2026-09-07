@@ -4,7 +4,7 @@
 **Status:** Proposed
 **Deciders:** Muhammad Rheza Alfin
 
-> **IMPLEMENTED (verified 2026-08-08):** `agent-context` is the sole Agent Context tool; `decision-log` and `session-summarize` were absorbed into `memory-write` as convenience modes (`type:"decision"` with context/rationale/alternatives; `type:"task_archive"` with key_decisions/next_steps — auto-formats content, src/mcp/tools/memory-write/helpers.ts). Neither legacy tool is in the 17 canonical set.
+> **IMPLEMENTED (verified 2026-08-08):** `agent-context` is the sole Agent Context tool; `decision-log` and `session-summarize` were absorbed into `memory-write` as convenience modes (`type:"decision"` with context/rationale/alternatives; `type:"task_archive"` with key_decisions/next_steps — auto-formats content, src/mcp/tools/memory-write/helpers.ts). Neither legacy tool is in the 20 canonical set.
 
 ## Context
 

@@ -10,7 +10,7 @@
 
 ## 1. Ringkasan Eksekutif
 
-Arsitektur codebase ini sehat — ADR Simplification (44→15 tools saat digabung, kini **17 alat kanonik** — `codebase-index` dan `codebase-read` masuk ke set terpadu belakangan; lihat `buildExecutors` di `src/mcp/tools/index.ts` — SPEC-001 hybrid scoring, KG atomic writes) sudah terpasang rapi. Peluang optimisasi mengelompok dalam lima tema:
+Arsitektur codebase ini sehat — ADR Simplification (44→15 tools saat digabung, kini **20 alat kanonik (19 + prompt-read)** — `codebase-index` dan `codebase-read` masuk ke set terpadu belakangan; lihat `buildExecutors` di `src/mcp/tools/index.ts` — SPEC-001 hybrid scoring, KG atomic writes) sudah terpasang rapi. Peluang optimisasi mengelompok dalam lima tema:
 
 | Tema                | Jumlah    | Dampak Tertinggi                                                                                              |
 | :------------------ | :-------- | :------------------------------------------------------------------------------------------------------------ |
