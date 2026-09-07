@@ -7,11 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.44.1] — 2026-09-06
 
-Patch release eliminating consumer peer-dependency warnings from the published package.
+Patch + dashboard redesign. Eliminates consumer peer warnings and ships the workspace-first dashboard (PRs #104, #105, #106).
+
+### Added
+
+- Design system — 9 primitives (`PageHeader`, `Surface`, `SectionHeading`, `Toolbar`, `EmptyState`, `ErrorState`, `Skeleton`, `Badge`, `Metric`), 8pt scale, replaces 40 private styles (`e0cb66d`)
+- Workspace-first navigation — `WorkspaceSwitcher` popover, `App.svelte` 522 lines → split into `views/` (`bedc9d5`)
+- Lazy route splitting — entry bundle -44% (`140fda4`)
+- Arena HiDPI — canvas device pixels, 18 font decls → 4-step scale, grid 58×55→96×84 (`703a46e`)
+- Responsive shell rebuild + collections (`8958f3e`)
 
 ### Fixed
 
-- **devDependencies peer warnings** — moved grammar tooling (`tree-sitter-*`), `tsx`, `typescript`, and other build-only packages from `dependencies` to `devDependencies` so consumers no longer see `npm WARN` about missing peers. Runtime uses the bundled WASM grammars, not the npm tree-sitter bindings.
+- Consumer peer warnings — 14 `tree-sitter` grammars `dependencies` → `devDependencies`, 0 nested installs for consumers (`1bc61ab`) [TASK-563] closes #99
+- Owner-repo hardening — global precedence, composite `(owner,repo)` indexes (migration v34, ADR-008) (`c2ed8cb`)
+- Touch targets — 89→0 mobile / 11→0 desktop sub-44px, Lighthouse a11y 100 (`e1df1ee`/`a5418e9`)
+- Active nav — collapse overflow + AA accent token (`ecd16bf`)
+- CI auto-assign reviewer `vheins` (`1df9661`) closes #1
 
 ## [0.44.0] — 2026-09-06
 
@@ -37,6 +49,14 @@ Shared-context roadmap + hardened tool contracts. Adds budgeted agent context, e
 - Server instructions synced (19 tools)
 
 Resolves #97 epic (via PR #103) + #91 epic follow-up fix.
+
+## [0.43.2] — 2026-09-03
+
+Docs-only patch enforcing the codebase exploration contract.
+
+### Changed
+
+- **MCP tool contract (`src/mcp/prompts/server/instructions.md`)** — `codebase-index` + `codebase-read` mandatory first for every codebase exploration (STRICT); `rg`/`grep`/`glob`/`seed`/`cat`/`find`/`ls` forbidden as primary strategy; fallback only via `explore` sub-agent after index empty/stale. Aligns with STD-001/STD-002.
 
 ## [0.43.1] — 2026-08-28
 
