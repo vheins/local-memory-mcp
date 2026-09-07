@@ -1,0 +1,25 @@
+# Sprints — Manifest
+
+> Bridge inventory — link, don't duplicate. Execution lives in MCP task runtime.
+
+## Status
+
+| Sprint  | Title                                                                                     | Date       | Status   | Detail                                                                                            |
+| :------ | :---------------------------------------------------------------------------------------- | :--------- | :------- | :------------------------------------------------------------------------------------------------ |
+| **S01** | Docs Retrofit — `application/` + `design/flows/` + `tasks/` gap + G3 gate                 | 2026-09-07 | **DONE** | [`sprint-01.md`](sprint-01.md)                                                                    |
+| **S02** | Doc-sync sweep — orphan/missing refs, stale test-path/tool-count/DB-path refs             | —          | Planned  | [`../backlog.md`](../backlog.md) P-05 · `grep` inventory                                          |
+| **S03** | CI gate — `ci.yml` (PR + main: type-check, lint, test --coverage blocking)                | —          | Planned  | [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-013      |
+| **S04** | Coverage — `utils`/`routes`/`services`/`lib`/`prompts` suites (TST-006..011 gate TST-012) | —          | Planned  | [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-006..012 |
+
+## Cadence & Done definition
+
+- **Cadence:** S01 shipped as retrofit (no fixed cadence); S02..S04 follow backlog priority P-01 (P1) → P-05 (P2) per [`../backlog.md`](../backlog.md).
+- **Scope:** `tasks/` tracks the Phase 1 gaps only (max 5 items per [`../backlog.md`](../backlog.md) rules). New work → MCP `task-write`.
+- **Done:** Sprint doc exists + linked from [`../README.md`](../README.md) + [`../roadmap.md`](../roadmap.md), no duplication of canonical sources, legacy `_tasks/` untouched for new work.
+
+## Links
+
+- Timeline: [`../roadmap.md`](../roadmap.md)
+- Index: [`../README.md`](../README.md)
+- Backlog: [`../backlog.md`](../backlog.md)
+- Legacy bridge: [`../../_tasks/BRIDGE.md`](../../_tasks/BRIDGE.md)
