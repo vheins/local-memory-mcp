@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.0] — 2026-09-08
+
+### Added
+
+- **prompt-read** — 20th MCP tool (`prompt-read`): skill-like proxy for `prompts/get` with allowlist via `listPromptFiles()`, arg substitution via shared `substitutePromptArgs` helper (`{{current_repo}}`/`{{current_owner}}` injection), path-traversal guard, `json` flag — `src/mcp/tools/prompt.read.ts` + `src/mcp/prompts/substitution.ts` (21 tests, `9abe33d` [TASK-568..571])
+
+### Changed
+
+- Tool contract: 19 → 20 canonical tools (`src/mcp/prompts/server/instructions.md` + `src/mcp/types/tool-definitions/` + who/when matrix)
+- Shared substitution helper extracted (`substitutePromptArgs`) — fixes `$&` pattern bug and DRY violation across `prompt.read.ts`/`sdk-index.ts`/`registry.ts`
+
+### Documentation
+
+- Blueprint Phase 1 compliance: `.agents/documents` restructured to strict `idea-to-blueprint` contract (`requirements/`, `design/`, `tasks/`, `application/` + `_tasks` fallback) — `_archive/` merged via Opsi A (6 dirs, 35 files)
+- Anomaly dirs merged (Opsi A deduplication): `requirements/codebase-index(12)` + `design/codebase-index(8)` + `requirements/optimization(6)` + `requirements/acceptance-criteria(2)` → `application/modules/codebase-index/specs/` + `application/testing/{codebase-index,memory,tasks}` + `design/flows|ui/` (28 files, `2dc3766`)
+- Application docs Part A/B: `application/api/<module>/api-*.md` (6 files, OpenAPI YAML) + `application/modules/<module>/<feature>.md` (8 files, 2-3 mermaid) + `application/testing/<module>/` (14 files, pos/neg/sec/chaos) — `28056d1` [G1/G2 PASS]
+- Mise en place: `tasks/{backlog,roadmap,sprints/sprint-01..04,manifest}` (Phase 1 delivery) + `design/domain/event-storming.md` + `modules/README`/`testing/README` catalogs + `design/decisions/README` bridge
+- Cleanup: removed 47 `VERIFIED vs IMPLEMENTATION` narrative banners (37 files, `9722df9`)
+
+### Fixed
+
+- `prompt-read` allowlist traversal guard (`listPromptFiles()` allowlist, `NOT_FOUND` on mismatch) + reserved-key `current_repo`/`current_owner` override prevention
+
+### Technical
+
+- Full test gate: `type-check` PASS + `lint` PASS + `wasm` 16 copied + `test` **260/260 files, 2680/2680 tests** (334s) — no flake
+- No breaking changes, no migration required (docs-only + additive tool)
+
 ## [0.44.1] — 2026-09-06
 
 Patch + dashboard redesign. Eliminates consumer peer warnings and ships the workspace-first dashboard (PRs #104, #105, #106).
