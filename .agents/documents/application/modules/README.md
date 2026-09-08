@@ -66,9 +66,7 @@ Contract: `src/mcp/prompts/server/instructions.md` · Tool definitions: `src/mcp
 - Manifest: [manifest.md](manifest.md)
 - Application: [../README.md](../README.md) · Brief: [../../brief.md](../../brief.md)
 - API catalog: [../api/README.md](../api/README.md)
-- Testing catalog: [../testing/README.md](../testing/README.md) (7 modules, scenario matrices `ID|Scenario|Input|Expected|Type`)
-- Canonical testing standard: [../../testing.md](../../testing.md)
-- Decisions: [../../_archive/decisions/](../../_archive/decisions/) · Design: [../../design/](../../design/)
+- Testing catalog: [../testing/README.md](../testing/README.md) (7 modules, scenario matrices `ID|Scenario|Input|Expected|Type`design/decisions/design/design/design/)
 
 ## Maintenance
 

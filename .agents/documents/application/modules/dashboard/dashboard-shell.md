@@ -195,7 +195,7 @@ Responsive: collapsible sidebar on narrow viewports; tab bar scrolls horizontall
 - Feature deep-dives: `../codebase-index/codebase-indexing.md` · `../context/context-compilation.md`
 - Testing: `../../testing.md` · `src/dashboard/ui/src/**/__tests__/` (colocated) · `src/dashboard/tests/`
 - Design: `../../../design/ui/dashboard.md` · `../../../design/architecture/dashboard-architecture.md` · `STD-001` · `STD-002`
-- Operations: `../../../_archive/operations/dashboard.md` · Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Operations: `../codebase-index/dashboard.md` · Decisions: `../../../design/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Tool contract: `../../../../src/mcp/prompts/server/instructions.md`
 
 ---

@@ -1,9 +1,10 @@
 # Codebase Index — Operations Guide
 
-> **Architecture decision context:** See [ADR-002: Codebase Index Architecture](../design/decisions/adr-002-codebase-index.md) for design rationale.
-> **Feature overview:** [Codebase Index Architecture](../design/codebase-index/architecture.md)
-> **API Reference:** [Codebase Index API](../api/codebase-index.md)
+> **Architecture decision context:** See [ADR-002: Codebase Index Architecture](../../../design/decisions/adr-002-codebase-index.md) for design rationale.
+> **Feature overview:** [Codebase Index Architecture](../../../design/codebase-index/architecture.md)
+> **API Reference:** [Codebase Index API](../../api/codebase-index/api-codebase.md)
 
+> **Note:** Runbook relocated from `application/modules/codebase-index/runbook.md` → `application/modules/codebase-index/runbook.md` (Opsi A).
 ---
 
 ## Overview
@@ -514,6 +515,6 @@ The server can index multiple repositories concurrently (separate repos do not c
 
 ## Related Documentation
 
-- [Codebase Index Architecture](../design/codebase-index/architecture.md) — How it works and how to use it
-- [API Reference: Codebase Index](../api/codebase-index.md) — Complete MCP tool documentation
-- [ADR-002: Codebase Index Architecture](../design/decisions/adr-002-codebase-index.md) — Design rationale and phased delivery plan
+- [Codebase Index Architecture](../../../design/codebase-index/architecture.md) — How it works and how to use it
+- [API Reference: Codebase Index](../../api/codebase-index/api-codebase.md) — Complete MCP tool documentation
+- [ADR-002: Codebase Index Architecture](../../../design/decisions/adr-002-codebase-index.md) — Design rationale and phased delivery plan

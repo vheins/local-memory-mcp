@@ -196,7 +196,7 @@ Dashboard `Codebase` / `Code Graph` tabs (`src/dashboard/ui/src/lib/components/C
 - Module landings: `../memory/overview.md` · `../tasks/overview.md` · `../standards/overview.md` · `../handoffs/overview.md` · `../dashboard/overview.md`
 - Testing: `../../testing.md` · `../../../testing/codebase-index/codebase-index.test.md` · `src/mcp/tests/codebase-index/` · `src/mcp/tests/codebase.read.test.ts`
 - Design: `../../../design/domain/domain.md` (§ codebase entities) · `../../../design/database/schema.md` (§ `codebase_files`, `codebase_symbols`, `codebase_references`, `kg_degrees`)
-- Operations: `../../../_archive/operations/codebase-index.md` · Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Operations: `runbook.md` · Decisions: `../../../design/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Tool contract: `../../../../src/mcp/prompts/server/instructions.md` · Build: `AGENTS.md`
 
 ---

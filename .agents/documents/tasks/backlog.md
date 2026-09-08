@@ -1,6 +1,6 @@
 # Backlog — Phase 1 Gaps
 
-> **Bridge style — link, don't duplicate.** This file indexes the **5 open gaps** from the Phase 1 blueprint audit. Detail lives in the canonical sources linked per item; this table is the inventory only. Execution lives in the **MCP runtime** (`task-write` → `claim-manage` → `in_progress` → `completed`) — this doc mirrors the backlog, it does not execute it. For the testing-standardization execution plan see [`../_tasks/testing-standardization.md`](../_tasks/testing-standardization.md) and its analysis [`../_archive/analysis/testing-gap-analysis.md`](../_archive/analysis/testing-gap-analysis.md).
+> **Bridge style — link, don't duplicate.** This file indexes the **5 open gaps** from the Phase 1 blueprint audit. Detail lives in the canonical sources linked per item; this table is the inventory only. Execution lives in the **MCP runtime** (`task-write` → `claim-manage` → `in_progress` → `completed`) — this doc mirrors the backlog, it does not execute it. For the testing-standardization execution plan see [`../_tasks/testing-standardization.md`](../_tasks/testing-standardization.md) and its analysis [`../application/testing/benchmarks/testing-gap-analysis.md`](../application/testing/benchmarks/testing-gap-analysis.md).
 
 ## Source
 

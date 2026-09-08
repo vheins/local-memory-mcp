@@ -30,10 +30,10 @@ Legacy detail stays in [`../_tasks/testing-standardization.md`](../_tasks/testin
 - **Application surface:** [`../application/README.md`](../application/README.md) · [`../application/modules/manifest.md`](../application/modules/manifest.md) (6 modules) · [`../application/presentation-brief.md`](../application/presentation-brief.md) (G3 gate)
 - **Design contract:** [`../design/README.md`](../design/README.md) (blueprint `architecture`/`domain`/`database`/`flows`/`decisions` + `codebase-index`/`ui` extensions) · [`../design/flows/README.md`](../design/flows/README.md)
 - **Testing standard:** [`../testing.md`](../testing.md) (canonical) · [`../application/testing/README.md`](../application/testing/README.md) (bridge)
-- **Analysis & audits:** [`../_archive/analysis/testing-gap-analysis.md`](../_archive/analysis/testing-gap-analysis.md) · [`../_archive/analysis/README.md`](../_archive/analysis/README.md) · [`../_archive/audits/dashboard-audit-2026-08-11.md`](../_archive/audits/dashboard-audit-2026-08-11.md)
-- **Decisions:** [`../_archive/decisions/`](../_archive/decisions/) (ADR-001..008, SPEC-001) · [`../design/decisions/`](../design/decisions/)
+- **Analysis & audits:** [`../application/testing/benchmarks/testing-gap-analysis.md`](../application/testing/benchmarks/testing-gap-analysis.md) · [`../application/testing/benchmarks/README.md`](../application/testing/benchmarks/README.md) · [`../design/ui/audits/dashboard-audit-2026-08-11.md`](../design/ui/audits/dashboard-audit-2026-08-11.md)
+- **Decisions:** [`../design/decisions`](../design/decisions) (ADR-001..008, SPEC-001) · [`../design/decisions/`](../design/decisions/)
 - **Requirements:** [`../requirements/`](../requirements/) (BRD/PRD/FSD/TDD, acceptance criteria, user stories)
-- **Operations:** [`../_archive/operations/`](../_archive/operations/)
+- **Operations:** [`../application/modules/codebase-index`](../application/modules/codebase-index)
 - **Tool contract (runtime):** `src/mcp/prompts/server/instructions.md` · Tool definitions `src/mcp/types/tool-definitions/`
 
 ## Guidance for authors

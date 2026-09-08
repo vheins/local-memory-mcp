@@ -124,7 +124,7 @@ Indexes: `idx_handoffs_scope_status` on `(scope_owner, scope_repo, status)`; `id
 - Feature deep-dives: `../tasks/task-lifecycle.md` (FSM) · `../context/context-compilation.md` (agent-context hydration)
 - Testing: `../../testing.md` · `../../../testing/handoffs/handoff-coordination.test.md` · `src/mcp/tests/handoff*.test.ts` · `src/mcp/tests/claim*.test.ts`
 - Design: `../../../design/domain/domain.md` (§7 Handoff, §8 Claim) · `../../../design/database/schema.md` (§ `handoffs`, `claims`, `task_comments`)
-- Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Decisions: `../../../design/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Brief: `../../brief.md`
 
 ---

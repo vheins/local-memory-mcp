@@ -1,8 +1,8 @@
 # Design — Index
 
 > **Scope:** Authoritative design docs for `local-memory-mcp`. For canonical
-> adopted ADRs/specs see [`../_archive/decisions/`](../_archive/decisions/) (`ADR-001`–`ADR-008`,
-> `SPEC-001`). For operations runbooks see [`../_archive/operations/`](../_archive/operations/).
+> adopted ADRs/specs see [`decisions`](decisions) (`ADR-001`–`ADR-008`,
+> `SPEC-001`). For operations runbooks see [`../application/modules/codebase-index`](../application/modules/codebase-index).
 
 ## Blueprint contract
 
@@ -16,7 +16,7 @@ breaking it (see § Extended buckets).
 | `domain`       | [`domain/domain.md`](domain/domain.md)                         | 10 core entities (Memory/Task/TaskComment/Standard/ActionLog/Handoff/Claim/Entity/Relation/Observation) + 6 business-rule invariants                             | ✓ exists                            |
 | `database`     | [`database/schema.md`](database/schema.md)                     | SQLite schema v24: 16+ tables, vectors, FTS5, queue outbox, codebase index, KG `confidence` (v24)                                                                | ✓ exists                            |
 | `flows`        | [`flows/README.md`](flows/README.md)                           | **Bridge/index** — canonical flows live in `ui/flows/` + `codebase-index/`; this dir satisfies the blueprint top-level contract and inventories flows per domain | ✓ bridge (new)                      |
-| `decisions`    | [`decisions/`](decisions/)                                     | Draft-stage ADRs for design iterations; canonical adopted ADRs live in `../_archive/decisions/`                                                                  | ✓ exists (2 drafts + bridge README) |
+| `decisions`    | [`decisions/`](decisions/)                                     | Draft-stage ADRs for design iterations; canonical adopted ADRs live in `decisions`                                                                  | ✓ exists (2 drafts + bridge README) |
 
 ## Extended buckets (beyond contract)
 
@@ -50,11 +50,11 @@ See `flows/README.md` for the full per-domain mapping.
 | Location                 | Purpose                               | Lifecycle                       | Numbering                              |
 | :----------------------- | :------------------------------------ | :------------------------------ | :------------------------------------- |
 | `design/decisions/`      | Draft ADRs tied to a design iteration | Draft → adopted or withdrawn    | `adr-00N-*` (lowercase)                |
-| `../_archive/decisions/` | Canonical adopted ADRs/specs          | Proposed → Adopted → Superseded | `ADR-00N-*` / `SPEC-00N-*` (uppercase) |
+| `decisions` | Canonical adopted ADRs/specs          | Proposed → Adopted → Superseded | `ADR-00N-*` / `SPEC-00N-*` (uppercase) |
 
 Current `design/decisions/` inventory is bridged in
 [`decisions/README.md`](decisions/README.md); canonical ADRs are in
-[`../_archive/decisions/`](../_archive/decisions/).
+[`decisions`](decisions).
 
 ## Reading order
 
@@ -62,5 +62,5 @@ Current `design/decisions/` inventory is bridged in
 2. [`domain/domain.md`](domain/domain.md) — entities & invariants
 3. [`database/schema.md`](database/schema.md) — storage contract
 4. [`flows/README.md`](flows/README.md) → `ui/flows/` / `codebase-index/` — behaviour
-5. [`decisions/README.md`](decisions/README.md) → `../_archive/decisions/` — rationale
+5. [`decisions/README.md`](decisions/README.md) → `decisions` — rationale
 6. Feature deep-dives: [`codebase-index/`](codebase-index/) and [`ui/`](ui/) as needed

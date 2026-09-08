@@ -285,12 +285,11 @@ who it is written for.
 - **`.agents/` = developer, contributor & AI-agent documentation** — internal
   engineering docs for people and agents building on this repo:
   `.agents/documents/testing.md` (the authoritative testing standard),
-  `.agents/documents/design/` (architecture, UI, database, decisions — 24 files),
-  `.agents/documents/requirements/` (ADRs, BRD/PRD/FSD/TDD, acceptance criteria),
-  `.agents/documents/application/` (API catalog, modules, testing bridges),
+  `.agents/documents/design/` (architecture, UI incl. `ui/audits/`, database, decisions — incl. `ADR-001..008` + `SPEC-001`),
+  `.agents/documents/requirements/` (BRD/PRD/FSD/TDD, acceptance criteria, `optimization/` en+id),
+  `.agents/documents/application/` (API catalog incl. `api/codebase-index/`, modules incl. `modules/codebase-index/runbook.md`, testing incl. `testing/benchmarks/`),
   `.agents/documents/tasks/` (backlog, roadmap, sprints),
   `.agents/documents/_tasks/` (internal task tracking, gitignored),
-  `.agents/documents/_archive/` (archived: `api/`, `operations/`, `analysis/`, `optimization/`, `audits/`, `decisions/` — 35 files preserved),
-  Consumer docs → GitHub Wiki; internal docs → `.agents/documents`.
+  Consumer docs → GitHub Wiki; internal docs → `.agents/documents`. Top-level under `.agents/documents/` is strictly 4 dirs (`application/`, `design/`, `requirements/`, `tasks/`) plus `_tasks` (MCP fallback) and `brief.md`/`testing.md`; `_archive/` was removed by Opsi A merge.
 - **`~/.agents/` = cross-project global standards** — rules and skills shared
   across repositories (the senior-authority baseline that applies everywhere).

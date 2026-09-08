@@ -156,4 +156,4 @@ Policy events (purple): `EmbeddingRequested`, `EmbeddingCompleted`, `ConflictDet
 - Domain entities & rules: [`domain.md`](domain.md)
 - DB schema & constraints: [`../database/schema.md`](../database/schema.md)
 - Flows & wireframes: [`../flows/README.md`](../flows/README.md) · [`../ui/wireframes/`](../ui/wireframes/)
-- Tool contract: `src/mcp/prompts/server/instructions.md` · Decisions: [`../_archive/decisions/`](../_archive/decisions/)
+- Tool contract: `src/mcp/prompts/server/instructions.md` · Decisions: [`../design/decisions`](../design/decisions)
