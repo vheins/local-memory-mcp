@@ -35,4 +35,4 @@ Global standards (`is_global=true` in `coding_standards`) are visible across all
 - Zod schemas: `src/mcp/tools/schemas/`
 - Module overviews: `../modules/*/overview.md`
 - Legacy bridge detail: `../../api/` (e.g. `../../api/codebase-index.md`)
-- Operations: `../../operations/`
+- Operations: `../../_archive/operations/`

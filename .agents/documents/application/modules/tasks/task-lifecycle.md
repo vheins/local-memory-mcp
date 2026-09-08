@@ -231,7 +231,7 @@ Dashboard `Tasks` / `Agent Arena` tabs (`src/dashboard/ui/src/lib/components/Tas
 - Module landings: `../handoffs/overview.md` · `../memory/overview.md` · `../standards/overview.md` · `../dashboard/overview.md`
 - Testing: `../../testing.md` · `../../../testing/tasks/task-lifecycle.test.md` · `src/mcp/tests/task*.test.ts` · `src/mcp/tests/claim*.test.ts` · `src/mcp/tests/handoff*.test.ts`
 - Design: `../../../design/domain/domain.md` (§2 Task, §3 Task Comment, §7 Handoff, §8 Claim) · `../../../design/database/schema.md` (§ `tasks`, `task_comments`, `claims`, `handoffs`)
-- Decisions: `../../../decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Tool contract: `../../../../src/mcp/prompts/server/instructions.md`
 
 ---

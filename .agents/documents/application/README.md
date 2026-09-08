@@ -15,6 +15,6 @@ Application surface of `local-memory-mcp`: 20 MCP tools, Svelte dashboard, and s
 
 ## Legacy bridges
 
-- Tool API detail → [.agents/documents/api/](../api/) (e.g. [codebase-index.md](../api/codebase-index.md))
-- Operations → [.agents/documents/operations/](../operations/)
-- Design + ADRs → [.agents/documents/design/](../design/) + [decisions/](../decisions/)
+- Tool API detail → [.agents/documents/_archive/api/](../_archive/api/) (e.g. [codebase-index.md](../_archive/api/codebase-index.md))
+- Operations → [.agents/documents/_archive/operations/](../_archive/operations/)
+- Design + ADRs → [.agents/documents/design/](../design/) + [_archive/decisions/](../_archive/decisions/)

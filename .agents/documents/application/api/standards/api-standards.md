@@ -323,4 +323,4 @@ components:
 | `../../../src/mcp/tools/schemas/standard.ts`                                    | Zod schemas                  |
 | `../../../src/mcp/types/tool-definitions/standard.ts`                           | Derived definitions          |
 | `../memory/api-memory.md`                                                       | Memory API                   |
-| `../../decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` | Global vs scoped ADR         |
+| `../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` | Global vs scoped ADR         |

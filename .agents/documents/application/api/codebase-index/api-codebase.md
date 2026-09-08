@@ -315,4 +315,4 @@ components:
 | `../../../src/mcp/tools/schemas/codebase.ts`                | Zod schemas                          |
 | `../../../src/mcp/types/tool-definitions/codebase-index.ts` | Derived definitions                  |
 | `../../../src/mcp/codebase-index/`                          | Indexer implementation               |
-| `../../operations/codebase-index.md`                        | Operations runbook                   |
+| `../../_archive/operations/codebase-index.md`                        | Operations runbook                   |

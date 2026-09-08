@@ -340,4 +340,4 @@ components:
 | `../../../src/mcp/types/tool-definitions/memory.ts`                             | Derived JSON Schema              |
 | `../tasks/api-tasks.md`                                                         | Task API (task_archive memories) |
 | `../context/api-context.md`                                                     | agent-context / synthesize       |
-| `../../decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` | Scoping ADR                      |
+| `../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md` | Scoping ADR                      |

@@ -200,7 +200,7 @@ Dashboard `Memories` tab (`src/dashboard/ui/src/lib/components/Memory*.svelte`):
 - Module landings: `../standards/overview.md` · `../handoffs/overview.md` · `../codebase-index/overview.md` · `../dashboard/overview.md` · `../context/overview.md`
 - Testing: `../../testing.md` · `../../../testing/memory/memory-search.test.md` · `src/mcp/tests/memory*.test.ts` · `src/mcp/tests/fixtures/`
 - Design: `../../../design/domain/domain.md` (§1 Memory, §10 Observation) · `../../../design/database/schema.md` (§ `memories`, `memory_vectors`, `memories_fts`, `memory_summary`, `queue_jobs`)
-- Decisions: `../../../decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Tool contract: `../../../../src/mcp/prompts/server/instructions.md`
 
 ---

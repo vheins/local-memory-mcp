@@ -285,15 +285,12 @@ who it is written for.
 - **`.agents/` = developer, contributor & AI-agent documentation** — internal
   engineering docs for people and agents building on this repo:
   `.agents/documents/testing.md` (the authoritative testing standard),
-  `.agents/documents/api/` (MCP tool API reference, e.g.
-  `.agents/documents/api/codebase-index.md`), `.agents/documents/operations/`
-  (ops runbooks, e.g. `.agents/documents/operations/codebase-index.md`),
   `.agents/documents/design/` (architecture, UI, database, decisions — 24 files),
-  `.agents/documents/analysis/` (bench results, `*.json` pairs — 14 files),
-  `.agents/documents/optimization/` (design/optimization docs, `en/` + `id/`),
-  `.agents/documents/audits/` (UI audits), `.agents/documents/decisions/` &
   `.agents/documents/requirements/` (ADRs, BRD/PRD/FSD/TDD, acceptance criteria),
-  and `.agents/documents/_tasks/` (internal task tracking).
+  `.agents/documents/application/` (API catalog, modules, testing bridges),
+  `.agents/documents/tasks/` (backlog, roadmap, sprints),
+  `.agents/documents/_tasks/` (internal task tracking, gitignored),
+  `.agents/documents/_archive/` (archived: `api/`, `operations/`, `analysis/`, `optimization/`, `audits/`, `decisions/` — 35 files preserved),
   Consumer docs → GitHub Wiki; internal docs → `.agents/documents`.
 - **`~/.agents/` = cross-project global standards** — rules and skills shared
   across repositories (the senior-authority baseline that applies everywhere).

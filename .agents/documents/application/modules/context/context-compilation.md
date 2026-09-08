@@ -199,7 +199,7 @@ Dashboard `Agent Arena` / `Stats` / `Knowledge Graph` tabs surface compiled cont
 - Feature deep-dives: `../memory/memory-search.md` · `../tasks/task-lifecycle.md` · `../codebase-index/codebase-indexing.md` · `../dashboard/dashboard-shell.md`
 - Testing: `../../testing.md` · `../../../testing/context/agent-context.test.md` · `src/mcp/tests/agent-context*.test.ts`
 - Design: `../../../design/domain/domain.md` (§ all entities) · `../../../design/database/schema.md` (§ all tables) · `../../../design/architecture/context-compilation.md`
-- Operations: `../../../operations/context-compilation.md` · Decisions: `../../../decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Operations: `../../../_archive/operations/context-compilation.md` · Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Tool contract: `../../../../src/mcp/prompts/server/instructions.md`
 
 ---

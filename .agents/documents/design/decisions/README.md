@@ -2,21 +2,21 @@
 
 This folder holds **design-stage ADR drafts** for the codebase-index and storage
 areas currently under active design. Canonical, adopted decisions live at
-[`decisions/`](../../decisions/) (`ADR-001`–`ADR-008` + `SPEC-001`).
+[`_archive/decisions/`](../../_archive/decisions/) (`ADR-001`–`ADR-008` + `SPEC-001`).
 
 ## Ownership split
 
 | Location                          | Purpose                                                                                                  | Lifecycle                       | Numbering                                     |
 | :-------------------------------- | :------------------------------------------------------------------------------------------------------- | :------------------------------ | :-------------------------------------------- |
 | `design/decisions/` (this folder) | Draft ADRs tied to a design iteration. Allowed to be superseded or withdrawn without a migration record. | Draft → adopted or withdrawn    | `adr-00N-*` (lowercase, hyphenated)           |
-| `decisions/`                      | Canonical, adopted ADRs and cross-cutting specs. Source of truth for implemented constraints.            | Proposed → Adopted → Superseded | `ADR-00N-*` / `SPEC-00N-*` (uppercase prefix) |
+| `_archive/decisions/`             | Canonical, adopted ADRs and cross-cutting specs. Source of truth for implemented constraints.            | Proposed → Adopted → Superseded | `ADR-00N-*` / `SPEC-00N-*` (uppercase prefix) |
 
 ## When to put an ADR where
 
 - **Use `design/decisions/`** when the decision is scoped to a design deliverable
   that has not shipped (e.g. a new index pipeline, a storage migration design).
   Promote to `decisions/` on adoption.
-- **Use `decisions/`** when the decision constrains shipped code or cross-cutting
+- **Use `_archive/decisions/`** when the decision constrains shipped code or cross-cutting
   behaviour (domain simplification, ownership model, KG infrastructure, unified
   query spec). Every entry there must have an implementation note or verification
   stamp.
@@ -33,6 +33,6 @@ areas currently under active design. Canonical, adopted decisions live at
 
 ## Links
 
-- Canonical ADRs: [`../../decisions/`](../../decisions/)
+- Canonical ADRs: [`../../_archive/decisions/`](../../_archive/decisions/)
 - Codebase index architecture: [`../codebase-index/architecture.md`](../codebase-index/architecture.md)
-- Operations runbook: [`../../operations/codebase-index.md`](../../operations/codebase-index.md)
+- Operations runbook: [`../../_archive/operations/codebase-index.md`](../../_archive/operations/codebase-index.md)

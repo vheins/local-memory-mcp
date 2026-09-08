@@ -64,7 +64,7 @@ This document specifies the functional behavior of the `@vheins/local-memory-mcp
 
 ### Runtime profiles (`MCP_RUNTIME_PROFILE`)
 
-`minimal` / `balanced` / `full` (default) — profile defaults are defined in `src/mcp/runtime-capabilities.ts` (`RUNTIME_PROFILES`, `RuntimeCapabilityRegistry`) and honoured by the startup/queue wiring in `src/mcp/server.ts`. See also [Operations runbook](../../operations/codebase-index.md#2-configuration) for the env-var table and benchmark.
+`minimal` / `balanced` / `full` (default) — profile defaults are defined in `src/mcp/runtime-capabilities.ts` (`RUNTIME_PROFILES`, `RuntimeCapabilityRegistry`) and honoured by the startup/queue wiring in `src/mcp/server.ts`. See also [Operations runbook](../../_archive/operations/codebase-index.md#2-configuration) for the env-var table and benchmark.
 
 ## 6. Reference Catalog (Resources & Prompts)
 

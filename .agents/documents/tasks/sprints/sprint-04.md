@@ -16,7 +16,7 @@
 | 1   | P1–P6 gap closure   | Remaining `Partial` → `DONE` per `backlog.md` P-01..P-04 gap table               | [`../backlog.md`](../backlog.md) P-01..P-04 · [`../../application/modules/manifest.md`](../../application/modules/manifest.md) |
 | 2   | Coverage suites     | `utils`/`routes`/`services`/`lib`/`prompts` + per-module floors (TST-006..011)   | [`../../_tasks/testing-standardization.md`](../../_tasks/testing-standardization.md) TST-006..012                              |
 | 3   | Coverage gate green | `npm run test -- --coverage --run` meets `70/70/70/60` without exit 1 (TST-012)  | [`../../testing.md`](../../testing.md) §7.1 · `vitest.config.ts`                                                               |
-| 4   | Perf follow-ups     | Queue batch/backoff, `VECTOR_CANDIDATE_CAP`, `KG_MAX_*`, `WAL_CHECKPOINT` tuning | [`../../optimization/roadmap.md`](../../optimization/roadmap.md) · `src/mcp/utils/constants.ts`                                |
+| 4   | Perf follow-ups     | Queue batch/backoff, `VECTOR_CANDIDATE_CAP`, `KG_MAX_*`, `WAL_CHECKPOINT` tuning | [`../../_archive/optimization/roadmap.md`](../../_archive/optimization/roadmap.md) · `src/mcp/utils/constants.ts`                                |
 | 5   | Docs polish         | Final `application/` + `design/` + `tasks/` link + spelling pass                 | [`manifest.md`](manifest.md) · [`../roadmap.md`](../roadmap.md)                                                                |
 | 6   | Quality gates       | `markdownlint` + balanced fences + relative-link + spell-check on all docs       | `AGENTS.md` quality gates · [`../../testing.md`](../../testing.md)                                                             |
 
@@ -37,4 +37,4 @@
 
 - Prior: [S03](sprint-03.md) (PLANNED) · Manifest: [`manifest.md`](manifest.md)
 - Roadmap: [`../roadmap.md`](../roadmap.md) · Backlog: [`../backlog.md`](../backlog.md)
-- Optimization: [`../../optimization/README.md`](../../optimization/README.md) · Testing: [`../../testing.md`](../../testing.md)
+- Optimization: [`../../_archive/optimization/README.md`](../../_archive/optimization/README.md) · Testing: [`../../testing.md`](../../testing.md)

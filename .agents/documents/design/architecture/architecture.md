@@ -109,7 +109,7 @@ End-to-end flows per layer (transport → validation → persistence → retriev
 
 ### Codebase index path
 
-`discover` → `compare` (mtime pre-filter) → `parse` (tree-sitter WASM, per-language grammar) → `store` (`writeParseBatch`, 100 rows/txn) → `clean` (stale deletion). Read via `codebase-read` (SEARCH / TRACE / FILE / CONTENT / ARCHITECTURE modes) backed by `codebase_symbols_fts` + `codebase_references` edges. See [Codebase Index Architecture](../codebase-index/architecture.md) and [Operations runbook](../../operations/codebase-index.md).
+`discover` → `compare` (mtime pre-filter) → `parse` (tree-sitter WASM, per-language grammar) → `store` (`writeParseBatch`, 100 rows/txn) → `clean` (stale deletion). Read via `codebase-read` (SEARCH / TRACE / FILE / CONTENT / ARCHITECTURE modes) backed by `codebase_symbols_fts` + `codebase_references` edges. See [Codebase Index Architecture](../codebase-index/architecture.md) and [Operations runbook](../../_archive/operations/codebase-index.md).
 
 ### Task coordination path
 

@@ -47,4 +47,4 @@ See [Architecture Overview](design/architecture/architecture.md), [DB ERD](desig
 ## Links
 
 - Tool contract: `src/mcp/prompts/server/instructions.md`
-- API docs: `.agents/documents/api/` · Operations: `.agents/documents/operations/`
+- API docs: `.agents/documents/_archive/api/` · Operations: `.agents/documents/_archive/operations/`

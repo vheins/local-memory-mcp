@@ -201,7 +201,7 @@ Dashboard `Standards` tab (`src/dashboard/ui/src/lib/components/Standard*.svelte
 - Module landings: `./overview.md` (standards landing) · `../memory/overview.md` · `../tasks/overview.md` · `../handoffs/overview.md` · `../dashboard/overview.md` · `../context/overview.md`
 - Testing: `../../testing.md` · `../../../testing/standards/standard-catalog.test.md` · `src/mcp/tests/standard*.test.ts`
 - Design: `../../../design/domain/domain.md` (§4 Standard) · `../../../design/database/schema.md` (§ `coding_standards`, `standard_vectors`)
-- Decisions: `../../../decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
+- Decisions: `../../../_archive/decisions/ADR-008-global-vs-scoped-ownership-and-dashboard-repo-view.md`
 - Manifest: `../manifest.md` · Tool contract: `../../../../src/mcp/prompts/server/instructions.md`
 
 ---
