@@ -139,7 +139,6 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 - MANDATORY pre-implementation gate
 - 1 rule/entry, normative contract
-- See also `prompt-read` when you need to load a workflow/skill definition before acting — `standard-write` is for persisting, not fetching.
 
 **Handoffs/Claims**: `handoff-read` → `handoff-write` | `claim-manage`
 
@@ -159,7 +158,6 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - `prompt-read` is a read-only alias/proxy for the protocol-level `prompts/*` surface (`prompts/list` + `prompts/get`) — it mirrors the same catalog and content, so tool-only clients (e.g. OpenCode) can discover and invoke prompts as tools. It does NOT replace the `prompts/*` distinction; both surface the same `src/mcp/prompts/definitions/` files.
 - Auto-infer: `name` present → DETAIL (loads the prompt with `{{var}}` substitution; `{{current_repo}}`/`{{current_owner}}` are reserved keys always auto-injected from session, never read from args); none → LIST (catalog of `{name, description, agent, arguments}`).
 - Detail on unknown/traversal names → NOT_FOUND-classified error envelope (`schema: "tool-error"`, `code: "NOT_FOUND"`).
-- See also `standard-write` when you discover a reusable normative rule worth persisting — `prompt-read` is for loading, not persisting.
 
 **Exploration Observations**: `observation-write` → `observation-read`
 
@@ -178,26 +176,31 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - `synthesize`: composite contextual synthesis via MCP sampling over local memories + tasks; filtered from tool definitions when the client lacks sampling capability.
 - `repo-summarize`: archive session signals as `task_archive` summary (importance=3).
 
-### When to use prompt-read vs standard-write
+### Discovering workflow guidance with prompt-read
 
-Decision rule — load skills before acting, persist standards after discovering them:
+`prompt-read` is read-only with no side effects. Check for available guidance before acting.
 
-- Use `prompt-read` (read-only, no side effects) WHEN:
-  - (a) Task description or orchestrator prompt references a skill/prompt by name (e.g. `create-task`, `task-management`, `code-review`, `session-planner`) — load its definition before executing the workflow.
-  - (b) You need a workflow checklist, template, or definition before acting (read-before-act).
-  - (c) Discovery — call `prompt-read` with no `name` to LIST the catalog of available prompts (`{name, description, agent, arguments}`). With `name` → DETAIL loads the prompt with `{{var}}` substitution; `{{current_repo}}` / `{{current_owner}}` are always auto-injected from session.
+- WHEN to call `prompt-read`:
+  - Before starting any workflow or task — check whether a prompt/skill exists that can guide execution.
+  - When a task description or orchestrator prompt references a skill/prompt by name (e.g. `create-task`, `task-management`, `code-review`, `session-planner`) — load its definition before executing the workflow.
+  - When you need a workflow checklist, template, or definition before acting (read-before-act).
+- HOW it works (auto-infer):
+  - No `name` → LIST the catalog of available prompts (`{name, description, agent, arguments}`).
+  - With `name` → DETAIL loads the prompt with `{{var}}` substitution; `{{current_repo}}` / `{{current_owner}}` are always auto-injected from session.
   - Callable as `prompt-read` tool OR native `prompts/get` / `prompts/list` — same content from `src/mcp/prompts/definitions/`.
-- Use `standard-write` (durable, 1 rule/entry) WHEN:
-  - (a) After completing work you discovered a reusable normative rule/pattern (coding standard, naming, layering, a11y, testing convention) that should persist beyond the session.
-  - (b) `standard-read` (pre-implementation gate) surfaced a missing standard that now needs to be codified.
-  - (c) You were explicitly asked to codify a convention. Writes to `coding_standards`; set `is_global` and `repo` for global vs repo-scoped (see Data Scoping).
-- Anti-pattern: Do NOT use `prompt-read` to persist knowledge; do NOT use `standard-write` to fetch instructions or workflow definitions.
+  - Detail on unknown/traversal names → `NOT_FOUND` error envelope (`schema: "tool-error"`, `code: "NOT_FOUND"`).
 
-| Need                         | Use                                            | Why                                        |
-| :--------------------------- | :--------------------------------------------- | :----------------------------------------- |
-| Execute a skill/workflow     | `prompt-read`                                  | Loads the checklist/template before acting |
-| Discover available skills    | `prompt-read` (no name)                        | Lists catalog                              |
-| Codify a reusable convention | `standard-write` (after `standard-read` check) | Persists a normative rule durably          |
+### Persisting reusable rules with standard-write
+
+`standard-write` is durable with 1 rule per entry. It writes to `coding_standards` for normative, enforceable conventions.
+
+- WHEN to call `standard-write`:
+  - After completing work you discovered a reusable normative rule or convention (naming, layering, a11y, testing) that should outlive the session.
+  - When the `standard-read` pre-implementation gate surfaced a missing standard that now needs to be codified.
+  - When you were explicitly asked to codify a convention. Set `is_global` and `repo` for global vs repo-scoped entries (see Data Scoping).
+- `standard-write` vs `memory-write`:
+  - `standard-write` → normative rule or convention (enforceable standard in `coding_standards`, 1 rule/entry).
+  - `memory-write` → episodic knowledge (decisions, patterns, code facts, `task_archive`) — see Core Workflows → Memory for timing. Use `memory-write` for session-specific findings; use `standard-write` when the finding should become a lasting standard.
 
 ## Who / When
 
