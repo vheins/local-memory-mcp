@@ -1,6 +1,5 @@
 # Domain Model
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** entity model is accurate (memory/task/standard/handoff/claim/KG entities; 6-state task lifecycle with gradual promotion; memory lifecycle with supersedes/decay/immunization). Two corrections: (1) "Conflict Detection ... similarity > 0.55" → the shipped create-conflict threshold is **0.85** (`MEMORY_CONFLICT_THRESHOLD`, src/mcp/utils/constants.ts; 0.55 exists as the legacy `MEMORY_CHECK_CONFLICTS_THRESHOLD`); (2) tool names in §1–§2 are legacy — the canonical write path is `memory-write` (which performs the conflict check), not `memory-store`. KG cascade + composite-PK rules verified (plus `kg_degrees` v22 cache).
 
 This document specifies the core entities and business logic of the MCP Local Memory system.
 
@@ -119,7 +118,6 @@ A directed edge connecting two knowledge graph entities.
   - `confidence`: Per-edge confidence label `0..1` (migration **v24** / TASK-325, `REAL NOT NULL DEFAULT 1.0`), **display-only** — drives the dashboard KG tab's edge label + opacity buckets; not used in any query or filter.
   - **Composite PK**: `(from_entity, to_entity, relation_type)`.
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-10, TASK-325 — relations.confidence v24):** `confidence` is an **insert-time constant** per writer (the `relations` table has no source/creator column — the writer is the provenance): `1.0` explicit/manual + omitted-default (`entity.ts:78,336`), `0.9` codebase edges (`KG_RELATION_CONFIDENCE_CODEBASE`), `0.8` semantic metadata — task `depends_on`/`inspired_by`, standard `extends`/`related_to` (`KG_RELATION_CONFIDENCE_SEMANTIC`), `0.55` NLP auto-extraction `co_mentioned` (`KG_RELATION_CONFIDENCE_AUTO_EXTRACTION`). **Known gap:** `INSERT OR IGNORE` makes confidence **first-write-wins** — a later writer re-attempting an existing edge is a no-op, so within one worker cycle a colliding auto-extraction pair keeps its 0.55; per-edge recomputation from observations is deferred (see the `relations` table in `design/database/schema.md`).
 
 ### 10. Observation (Knowledge Graph)
 

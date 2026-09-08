@@ -1,8 +1,6 @@
 # Value Proposition — Codebase Index
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** "TypeScript/JavaScript only (MVP)" is superseded — the shipped index supports 15 languages (typescript, tsx, vue, go, python, php, dart, rust, java, ruby, kotlin, swift, c, cpp, markdown) plus a generic regex fallback. The dashboard tab ("Graph UI" row) is **implemented** (CodebasePage + Codebase tab in dashboard). Shared-SQLite, local-first, zero-native-deps, and tree-sitter WASM claims all verified. The unified-KG row (code-specific `CALLS`/`IMPLEMENTS` edges) is partially realized — references ship as `codebase_references` (v21) with `call`/`instantiation`/`import` kinds; **dead-code detection and full code-graph visualization are NEXT PHASE**.
 >
-> **VERIFIED vs IMPLEMENTATION (2026-08-10):** the unified-KG row's edges are now realized — `codebase_references` carries `extends`/`implements` heritage kinds plus edge targets since migration **v23** (Phase 1.1; `src/mcp/storage/migrations/v23-codebase-references-edge-targets.ts`). **Dead-code detection is IMPLEMENTED** via the ARCHITECTURE-mode `deadCode` block (`src/mcp/codebase-index/services/dead-code.ts`, TASK-319). The "full code-graph visualization" (dashboard call-graph/DAG view) remains NEXT PHASE — callers/callees render as lists in symbol detail, not as a rendered graph. The §5 phasing below is normalized to the PRD's numbering (see the phasing note in §5); the old "Phase 3" label for dead code is superseded.
 
 ## One-Sentence Pitch
 

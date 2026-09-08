@@ -2,7 +2,6 @@
 
 > **Note (2026-09-06, v0.44.1):** Superseded by PRs #104–106 — workspace-first navigation (WorkspaceSwitcher), 9 shared primitives, lazy route splitting (-44%), arena HiDPI. See CHANGELOG 0.44.1. Content below is historical.
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** token values match src/dashboard/ui/src/app.css — `--glass-bg: rgba(255,255,255,0.52)`, `--glass-blur: blur(28px) saturate(1.2)`, `--panel-dark: rgba(6,12,28,0.7)`, `--radius-2xl: 24px`, `--glass-border: rgba(255,255,255,0.18)`, primary #0ea5e9/#38bdf8, accent #6366f1. Glass card pattern (`.glass`, ::before etched border), interactive glows, and the spring cubic-bezier are implemented. Verified as the shipped design system.
 
 This document defines the visual language and tokens used in the Local Memory Dashboard (Svelte 5).
 

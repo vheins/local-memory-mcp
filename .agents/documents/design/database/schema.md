@@ -206,7 +206,6 @@ Knowledge graph edges (directed).
 | `created_at`                                      | TEXT | ISO-8601 timestamp.                                                                                                                                                                  |
 | **PK**: `(from_entity, to_entity, relation_type)` |
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-10, TASK-325 — confidence v24):** the `confidence` column ships via migration **v24** (`src/mcp/storage/migrations/v24-relations-confidence.ts:61-64` — guarded `ALTER TABLE relations ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0`, idempotent, additive; the DEFAULT backfills every pre-v24 row to 1.0; **no index** is created — it is a display/label field by design). Value is an **insert-time constant chosen per caller site** (the table has no source/creator column — the writer IS the provenance; see `v24-relations-confidence.ts:22-49` for the single source of truth):
 >
 > - `1.0` — explicit/manual (dashboard `createRelation`) + default when omitted (`params.confidence ?? 1.0`, `src/mcp/entities/knowledge-graph/entity.ts:78,336` — backward compatible).
 > - `0.9` — parser-deterministic codebase edges (`saveCodebaseRelations`, `KG_RELATION_CONFIDENCE_CODEBASE`, `src/mcp/tools/kg-archivist/relations.ts:31`): call/instantiation/import/extends/implements from indexed code — no NLP noise, but name-based target resolution (ADR-002).

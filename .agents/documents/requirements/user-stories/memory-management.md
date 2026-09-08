@@ -2,7 +2,6 @@
 
 **Feature:** Persistent Knowledge Base utilizing MCP
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** all 8 stories are implemented via the canonical tools — `memory-store` → `memory-write`, `memory-search` → `memory-read` (hybrid 40/30/15/15 + FTS5 + time-tunnel temporal query in story 8), `memory-synthesize` → `synthesize`, `memory-acknowledge` → `memory-write({ acknowledge })`, `memory-detail` → `memory-read({ id/code })`, `memory-recap` → `memory-read()` (recap mode). Dashboard browse/edit/delete (story 5) ✓.
 
 ## 1. Store Context
 

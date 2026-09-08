@@ -2,9 +2,7 @@
 
 ## MoSCoW Prioritization
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** M1–M5 are shipped (as the unified `codebase-index`/`codebase-read` pair per ADR-005 — `search_symbols`/`get_file_symbols` names are legacy). Storage tables: `codebase_files`+`codebase_symbols` (v01), symbol vectors (v06), FTS (v18), references (v21) — **not** the `codebase_nodes`/`codebase_edges` names in M3. S4 incremental + S5 auto-index are implemented. C1 Dashboard Codebase tab is implemented; C2 graph viz, C3 `search_code`, C4 beyond-15-language additions, C5 dead-code detection are **NEXT PHASE** (roadmap).
 >
-> **VERIFIED vs IMPLEMENTATION (2026-08-10):** C3 `search_code` is **IMPLEMENTED** as the `CODE` mode of `codebase-read` (TASK-316; `src/mcp/codebase-index/services/code-search.ts`) — the tool name itself never shipped (design intent only). **C5 dead-code detection is IMPLEMENTED** via the ARCHITECTURE-mode `deadCode` block (TASK-319; `src/mcp/codebase-index/services/dead-code.ts`). C4 multi-language is superseded by the shipped 15-language matrix (v0.21.0). C2 dashboard graph visualization stays NEXT PHASE.
 
 ### Must Have (MVP Gate)
 

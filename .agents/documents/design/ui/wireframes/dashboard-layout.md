@@ -2,7 +2,6 @@
 
 > **Note (2026-09-06, v0.44.1):** Superseded by PRs #104–106 — workspace-first navigation (WorkspaceSwitcher), 9 shared primitives, lazy route splitting (-44%), arena HiDPI. See CHANGELOG 0.44.1. Content below is historical.
 
-> **VERIFIED vs IMPLEMENTATION (2026-08-08):** grid strategies match shipped tabs (StatsWidget full-width + TaskStats/TimeStats 2-col; Activity single-column; Memories scrollable cards; Tasks 4-column Kanban with min-width ~260px; Reference master-detail drawer; Standards list+detail; Handoffs status-filtered; KG full-viewport canvas). **Three tabs missing from this doc:** the **Arena** tab (default; AgentArena canvas), the **Codebase** tab (CodebasePage layout), and the **Queue** tab (QueuePage — status summary + failed-jobs table with Re-run/Clear; TASK-297 — 11 tabs total). Responsive breakpoints (1024px/768px) verified in shipped CSS.
 
 This document details the specific grid layouts for each primary tab in the dashboard.
 
