@@ -198,9 +198,11 @@ A `memory-write` update accepts the same fields as create but all are optional (
   - After completing work you discovered a reusable normative rule or convention (naming, layering, a11y, testing) that should outlive the session.
   - When the `standard-read` pre-implementation gate surfaced a missing standard that now needs to be codified.
   - When you were explicitly asked to codify a convention. Set `is_global` and `repo` for global vs repo-scoped entries (see Data Scoping).
-- `standard-write` vs `memory-write`:
-  - `standard-write` → normative rule or convention (enforceable standard in `coding_standards`, 1 rule/entry).
-  - `memory-write` → episodic knowledge (decisions, patterns, code facts, `task_archive`) — see Core Workflows → Memory for timing. Use `memory-write` for session-specific findings; use `standard-write` when the finding should become a lasting standard.
+- Priority framework — `standard-write` vs `memory-write` (classify every finding before persisting):
+  - **P1 — Normative & enforceable for future work → `standard-write`**: the finding should be enforced on future tasks. Write 1 rule/entry; check `standard-read` first to avoid duplicates; set `is_global`/`repo` per Data Scoping.
+  - **P2 — Episodic / contextual → `memory-write`**: why/history, code facts, decision rationale, or task-specific patterns. Mandatory after every task — choose correct `type` + `importance`; see Core Workflows → Memory for timing.
+  - **P3 — Both aspects → write BOTH**: `standard-write` for the enforceable rule + `memory-write` for the context/rationale/history that explains why. Do not collapse into one entry.
+  - Examples: naming convention (`use camelCase for service methods`) → P1 `standard-write`; `we chose JWT because legacy sessions lack revocation` → P2 `memory-write` (`type: decision`); style rule + rationale (`max 500 lines/file because review cost spikes beyond that`) → P3 both.
 
 ## Who / When
 
