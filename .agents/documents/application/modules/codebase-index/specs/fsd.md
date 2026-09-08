@@ -11,7 +11,7 @@
 
 ## Overview
 
-This document specifies the functional behavior of the Codebase Index feature. It defines what the system does — not how it's implemented. For implementation details, see the TDD (`tdd.md`) and design documents under `../../design/codebase-index/`.
+This document specifies the functional behavior of the Codebase Index feature. It defines what the system does — not how it's implemented. For implementation details, see the TDD (`tdd.md`) and design documents under `./`.
 
 The Codebase Index follows the same tool/service/resource patterns as the existing Memory, Task, Coding Standards, and Knowledge Graph features.
 
@@ -190,7 +190,7 @@ Triggers indexing of a project's source code. Performs full index if no prior in
 | Progress    | Emits `notifications/progress` with `(processed, totalFiles)`                                                                                   |
 | Error cases | 409 (already indexing), 500 (init failure), 403 (path not in roots), 404 (path not found)                                                       |
 
-Reference: `../../api/codebase-index.md` for full input/output schemas.
+Reference: `../../api/codebase-index/api-codebase.md` for full input/output schemas.
 
 ### Tool: `get_file_symbols`
 
@@ -426,10 +426,10 @@ stateDiagram-v2
 | Document             | Location                                      |
 | :------------------- | :-------------------------------------------- |
 | Product Requirements | `prd.md`                                      |
-| Architecture Design  | `../../design/codebase-index/architecture.md` |
-| API Contracts        | `../../api/codebase-index.md`                 |
-| Domain Model         | `../../design/codebase-index/domain.md`       |
-| Database Schema      | `../../design/codebase-index/schema.md`       |
+| Architecture Design  | `./design-architecture.md` |
+| API Contracts        | `../../api/codebase-index/api-codebase.md`                 |
+| Domain Model         | `./design-domain.md`       |
+| Database Schema      | `./design-schema.md`       |
 | Technical Design     | `tdd.md`                                      |
 | Acceptance Criteria  | `acceptance-criteria.md`                      |
 | BDD Scenarios        | `bdd-scenarios.md`                            |

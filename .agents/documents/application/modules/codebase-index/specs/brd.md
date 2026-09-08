@@ -198,8 +198,8 @@ This transforms local-memory-mcp from a memory-and-task server into a full-stack
 | User Stories                     | `user-stories.md`                                  |
 | Feature Prioritization (RICE)    | `feature-prioritization.md`                        |
 | Risk Assessment                  | `risk-assessment.md`                               |
-| ADR-002 (Architecture Decisions) | `../../design/decisions/adr-002-codebase-index.md` |
-| Architecture Design              | `../../design/codebase-index/architecture.md`      |
-| API Contracts                    | `../../api/codebase-index.md`                      |
-| Domain Model                     | `../../design/codebase-index/domain.md`            |
-| Database Schema                  | `../../design/codebase-index/schema.md`            |
+| ADR-002 (Architecture Decisions) | `../../../../design/decisions/adr-002-codebase-index.md` |
+| Architecture Design              | `./design-architecture.md`      |
+| API Contracts                    | `../../api/codebase-index/api-codebase.md`                      |
+| Domain Model                     | `./design-domain.md`            |
+| Database Schema                  | `./design-schema.md`            |

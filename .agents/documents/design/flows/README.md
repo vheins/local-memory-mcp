@@ -12,7 +12,7 @@
 | :---------------- | :------------------------------------ | :-------------------------------------------- |
 | `design/flows/`   | `design/flows/README.md` (this file)  | Contract fulfilled — bridge/index             |
 | —                 | `design/ui/flows/user-flows.md`       | Canonical: Svelte dashboard flows (7 flows)   |
-| —                 | `design/codebase-index/user-flows.md` | Canonical: Codebase Index tab flows (5 flows) |
+| —                 | `design/flows/codebase-index.md` | Canonical: Codebase Index tab flows (5 flows) |
 
 `design/flows/` was previously missing because flows were authored where they
 are consumed (UI and codebase-index). Per the blueprint this directory must
@@ -22,7 +22,7 @@ per-domain inventory.
 ## Canonical sources
 
 - **Dashboard flows:** [`../ui/flows/user-flows.md`](../ui/flows/user-flows.md)
-- **Codebase Index flows:** [`../codebase-index/user-flows.md`](../codebase-index/user-flows.md)
+- **Codebase Index flows:** [`./codebase-index.md`](./codebase-index.md)
 - **Wireframes (supporting):** [`../ui/wireframes/main-wireframe.md`](../ui/wireframes/main-wireframe.md),
   [`../ui/wireframes/dashboard-layout.md`](../ui/wireframes/dashboard-layout.md)
 - **Navigation:** [`../ui/navigation/site-map.md`](../ui/navigation/site-map.md)
@@ -60,11 +60,11 @@ per-domain inventory.
 
 | #   | Flow                                  | Canonical                      | Summary                                                                                      |
 | :-- | :------------------------------------ | :----------------------------- | :------------------------------------------------------------------------------------------- |
-| 1   | Browsing Project File Tree            | `design/codebase-index` Flow 1 | Codebase tab → lazy file tree → expand → file viewer (syntax-highlighted)                    |
-| 2   | Searching for Symbols by Name         | `design/codebase-index` Flow 2 | Search bar → autocomplete (debounced 200ms) → SymbolList → kind filter → detail panel        |
-| 3   | Viewing Symbol Details and Call Graph | `design/codebase-index` Flow 3 | Symbol detail → Callers/Callees/References tabs → canvas call-DAG + CodebaseGraphPanel       |
-| 4   | Triggering a Re-index                 | `design/codebase-index` Flow 4 | Re-index button → confirm → Indexing/Progress → Complete/Error with retry                    |
-| 5   | Viewing Index Status                  | `design/codebase-index` Flow 5 | Top-bar status indicator (Idle/Indexing/Complete/Partial/Stale/Error) → stats dropdown/toast |
+| 1   | Browsing Project File Tree            | `design/flows/codebase-index` Flow 1 | Codebase tab → lazy file tree → expand → file viewer (syntax-highlighted)                    |
+| 2   | Searching for Symbols by Name         | `design/flows/codebase-index` Flow 2 | Search bar → autocomplete (debounced 200ms) → SymbolList → kind filter → detail panel        |
+| 3   | Viewing Symbol Details and Call Graph | `design/flows/codebase-index` Flow 3 | Symbol detail → Callers/Callees/References tabs → canvas call-DAG + CodebaseGraphPanel       |
+| 4   | Triggering a Re-index                 | `design/flows/codebase-index` Flow 4 | Re-index button → confirm → Indexing/Progress → Complete/Error with retry                    |
+| 5   | Viewing Index Status                  | `design/flows/codebase-index` Flow 5 | Top-bar status indicator (Idle/Indexing/Complete/Partial/Stale/Error) → stats dropdown/toast |
 
 ### Cross-cutting
 
@@ -75,7 +75,7 @@ per-domain inventory.
 ## Guidance for authors
 
 - Add new **dashboard** flows to `design/ui/flows/user-flows.md`.
-- Add new **codebase-index** flows to `design/codebase-index/user-flows.md`.
+- Add new **codebase-index** flows to `design/flows/codebase-index.md`.
 - Update this index table when a new cross-domain flow is added so the
   blueprint-level inventory stays complete.
 - Keep Mermaid diagrams in the canonical files; this bridge stays diagram-free

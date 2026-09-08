@@ -15,7 +15,7 @@ breaking it (see § Extended buckets).
 | `architecture` | [`architecture/architecture.md`](architecture/architecture.md) | Physical & process architecture, component logic, data flows (MCP stdio + Dashboard :3456), tech rationale, soul maintenance, KG architecture                    | ✓ exists                            |
 | `domain`       | [`domain/domain.md`](domain/domain.md)                         | 10 core entities (Memory/Task/TaskComment/Standard/ActionLog/Handoff/Claim/Entity/Relation/Observation) + 6 business-rule invariants                             | ✓ exists                            |
 | `database`     | [`database/schema.md`](database/schema.md)                     | SQLite schema v24: 16+ tables, vectors, FTS5, queue outbox, codebase index, KG `confidence` (v24)                                                                | ✓ exists                            |
-| `flows`        | [`flows/README.md`](flows/README.md)                           | **Bridge/index** — canonical flows live in `ui/flows/` + `codebase-index/`; this dir satisfies the blueprint top-level contract and inventories flows per domain | ✓ bridge (new)                      |
+| `flows`        | [`flows/README.md`](flows/README.md)                           | **Bridge/index** — canonical flows live in `ui/flows/` + `flows/codebase-index.md`; this dir satisfies the blueprint top-level contract and inventories flows per domain | ✓ bridge (new)                      |
 | `decisions`    | [`decisions/`](decisions/)                                     | Draft-stage ADRs for design iterations; canonical adopted ADRs live in `decisions`                                                                  | ✓ exists (2 drafts + bridge README) |
 
 ## Extended buckets (beyond contract)
@@ -25,12 +25,13 @@ five dirs remain the contract; the two below are additive.
 
 | Dir              | Path                                 | Purpose                                                                                                                                                                                                    |
 | :--------------- | :----------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `codebase-index` | [`codebase-index/`](codebase-index/) | Specialized design bundle for the codebase index feature (8 docs: architecture, components, domain, navigation, schema, wireframe, user-flows, reference-edge-markdown-generic)                            |
+| `codebase-index` | [`../application/modules/codebase-index/specs/`](../application/modules/codebase-index/specs/) + [`flows/codebase-index.md`](flows/codebase-index.md) + [`ui/{components,navigation,wireframes}/codebase-index.md`](ui/components/codebase-index.md) | Specialized design bundle for the codebase index feature — relocated per Opsi A (specs: architecture/domain/schema/edge; flows: `flows/codebase-index.md`; ui: `ui/{components,navigation,wireframes}/codebase-index.md`)                            |
 | `ui`             | [`ui/`](ui/)                         | Dashboard Svelte 5 UI design (10 docs: `components/inventory.md`, `flows/user-flows.md` (7 flows), `navigation/site-map.md`, `tokens/design-system.md`, `wireframes/{main-wireframe,dashboard-layout}.md`) |
 
-> **Why not merged?** `codebase-index/` is a cross-cutting index subsystem
-> (tree-sitter WASM, FTS5 `codebase_*`, reference edges) with its own schema
-> and flows — co-locating it keeps the feature reviewable. `ui/` is the
+> **Why not merged?** `codebase-index` was a cross-cutting index subsystem
+> (tree-sitter WASM, FTS5 `codebase_*`, reference edges) — per Opsi A its 8 docs
+> are now split across `application/modules/codebase-index/specs/`, `design/flows/codebase-index.md`,
+> and `design/ui/{components,navigation,wireframes}/codebase-index.md` to avoid overloading the 5 contract dirs. `ui/` is the
 > human-facing dashboard surface (glass shell, Kanban, KG canvas). Merging
 > either into the 5 contract dirs would overload them.
 
@@ -40,7 +41,7 @@ Flows are authored where they are consumed; `design/flows/` is the
 blueprint-level bridge:
 
 - **Dashboard flows** → [`ui/flows/user-flows.md`](ui/flows/user-flows.md) (7 flows: audit, bulk import, reference, Kanban promotion, KG, standards, handoffs)
-- **Codebase Index flows** → [`codebase-index/user-flows.md`](codebase-index/user-flows.md) (5 flows: file tree, symbol search, call graph, re-index, index status)
+- **Codebase Index flows** → [`flows/codebase-index.md`](flows/codebase-index.md) (5 flows: file tree, symbol search, call graph, re-index, index status)
 - **Top-level inventory** → [`flows/README.md`](flows/README.md) (per-domain table + guidance)
 
 See `flows/README.md` for the full per-domain mapping.
@@ -61,6 +62,6 @@ Current `design/decisions/` inventory is bridged in
 1. [`architecture/architecture.md`](architecture/architecture.md) — system shape
 2. [`domain/domain.md`](domain/domain.md) — entities & invariants
 3. [`database/schema.md`](database/schema.md) — storage contract
-4. [`flows/README.md`](flows/README.md) → `ui/flows/` / `codebase-index/` — behaviour
+4. [`flows/README.md`](flows/README.md) → `ui/flows/` / `flows/codebase-index.md` — behaviour
 5. [`decisions/README.md`](decisions/README.md) → `decisions` — rationale
-6. Feature deep-dives: [`codebase-index/`](codebase-index/) and [`ui/`](ui/) as needed
+6. Feature deep-dives: [`application/modules/codebase-index/specs/`](../application/modules/codebase-index/specs/) + [`design/flows/codebase-index.md`](flows/codebase-index.md) + [`ui/`](ui/) as needed

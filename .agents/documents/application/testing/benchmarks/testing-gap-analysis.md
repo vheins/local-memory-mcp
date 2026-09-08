@@ -82,7 +82,7 @@ Structural consolidation (locations + naming) → Coverage gaps → CI gate → 
 
 - **F-5** `CONTRIBUTING.md:15-16` — "Add unit tests in `src/` or update `src/e2e.test.ts`" —
   that path is stale; actual is `src/mcp/tests/e2e.test.ts`.
-- **F-6** `requirements/codebase-index/tdd.md:607-612` — test strategy references
+- **F-6** `application/modules/codebase-index/specs/tdd.md:607-612` — test strategy references
   `src/codebase-index/__tests__/*.test.ts`; actual is `src/mcp/tests/codebase-index/`.
 
 ### 3.3 CI — High impact

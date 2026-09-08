@@ -13,4 +13,4 @@
 | `codebase-index` | `repoPath+repo`→INDEX · `repo` only→STATUS                                                  | `src/mcp/tools/codebase-index.ts` |
 | `codebase-read`  | `name`→TRACE · `filePath`→FILE · `content`→CODE (grep) · `query`→SEARCH · none→ARCHITECTURE | `src/mcp/tools/codebase.read.ts`  |
 
-SEARCH tiers: exact → camelCase → prefix → substring → FTS5. Auto-index: `CODEBASE_AUTO_INDEX` (24h TTL). See [API: codebase-index](../../api/codebase-index.md), [operations guide](../../application/modules/codebase-index/runbook.md), [architecture](../../design/codebase-index/architecture.md), [ADR-002](../../design/decisions/adr-002-codebase-index.md).
+SEARCH tiers: exact → camelCase → prefix → substring → FTS5. Auto-index: `CODEBASE_AUTO_INDEX` (24h TTL). See [API: codebase-index](../../api/codebase-index/api-codebase.md), [operations guide](../../application/modules/codebase-index/runbook.md), [architecture](./specs/design-architecture.md), [ADR-002](../../../design/decisions/adr-002-codebase-index.md).

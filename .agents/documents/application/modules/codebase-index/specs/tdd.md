@@ -15,7 +15,7 @@
 
 The Codebase Index is a self-contained subsystem within the existing MCP server. It follows the same architectural patterns as Memory, Tasks, Coding Standards, and Knowledge Graph: an Entity layer extending `BaseEntity`, a set of MCP tool handlers registered via `registerAllTools()`, and storage in the shared SQLite database.
 
-For the full architecture design including component diagrams, see `../../design/codebase-index/architecture.md`.
+For the full architecture design including component diagrams, see `./design-architecture.md`.
 
 ### High-Level Architecture
 
@@ -290,7 +290,7 @@ const handleCodebaseRead: ToolHandler = (args, db, _vectors, _extra) => {
 };
 ```
 
-For full tool schemas (input, output, error cases), see `../../api/codebase-index.md`.
+For full tool schemas (input, output, error cases), see `../../api/codebase-index/api-codebase.md`.
 
 ### 6. AST Visitors (`ast-visitors.ts`)
 
@@ -472,7 +472,7 @@ sequenceDiagram
 
 ## API Contracts Summary
 
-Full API contract specifications (Zod schemas, input/output types, error codes) are in `../../api/codebase-index.md`.
+Full API contract specifications (Zod schemas, input/output types, error codes) are in `../../api/codebase-index/api-codebase.md`.
 
 | Tool               | Input                                                               | Output                                                                  | Write? |
 | :----------------- | :------------------------------------------------------------------ | :---------------------------------------------------------------------- | :----: |
@@ -519,7 +519,7 @@ Errors:
 
 ## Database Schema Summary
 
-Full schema (DDL, indexes, migration code) is in `../../design/codebase-index/schema.md`.
+Full schema (DDL, indexes, migration code) is in `./design-schema.md`.
 
 ### Tables (Migration v3 — Additive)
 
@@ -717,9 +717,9 @@ tree-sitter grammar WASM files must be loadable at runtime. Two approaches:
 | Business Requirements            | `brd.md`                                           |
 | Product Requirements             | `prd.md`                                           |
 | Functional Specification         | `fsd.md`                                           |
-| Architecture Design              | `../../design/codebase-index/architecture.md`      |
-| API Contracts                    | `../../api/codebase-index.md`                      |
-| Domain Model                     | `../../design/codebase-index/domain.md`            |
-| Database Schema                  | `../../design/codebase-index/schema.md`            |
-| ADR-002 (Architecture Decisions) | `../../design/decisions/adr-002-codebase-index.md` |
+| Architecture Design              | `./design-architecture.md`      |
+| API Contracts                    | `../../api/codebase-index/api-codebase.md`                      |
+| Domain Model                     | `./design-domain.md`            |
+| Database Schema                  | `./design-schema.md`            |
+| ADR-002 (Architecture Decisions) | `../../../../design/decisions/adr-002-codebase-index.md` |
 | Overall Architecture             | `../../design/architecture/architecture.md`        |
