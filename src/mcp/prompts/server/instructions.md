@@ -139,6 +139,7 @@ A `memory-write` update accepts the same fields as create but all are optional (
 
 - MANDATORY pre-implementation gate
 - 1 rule/entry, normative contract
+- See also `prompt-read` when you need to load a workflow/skill definition before acting — `standard-write` is for persisting, not fetching.
 
 **Handoffs/Claims**: `handoff-read` → `handoff-write` | `claim-manage`
 
@@ -158,6 +159,7 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - `prompt-read` is a read-only alias/proxy for the protocol-level `prompts/*` surface (`prompts/list` + `prompts/get`) — it mirrors the same catalog and content, so tool-only clients (e.g. OpenCode) can discover and invoke prompts as tools. It does NOT replace the `prompts/*` distinction; both surface the same `src/mcp/prompts/definitions/` files.
 - Auto-infer: `name` present → DETAIL (loads the prompt with `{{var}}` substitution; `{{current_repo}}`/`{{current_owner}}` are reserved keys always auto-injected from session, never read from args); none → LIST (catalog of `{name, description, agent, arguments}`).
 - Detail on unknown/traversal names → NOT_FOUND-classified error envelope (`schema: "tool-error"`, `code: "NOT_FOUND"`).
+- See also `standard-write` when you discover a reusable normative rule worth persisting — `prompt-read` is for loading, not persisting.
 
 **Exploration Observations**: `observation-write` → `observation-read`
 
@@ -176,37 +178,58 @@ A `memory-write` update accepts the same fields as create but all are optional (
 - `synthesize`: composite contextual synthesis via MCP sampling over local memories + tasks; filtered from tool definitions when the client lacks sampling capability.
 - `repo-summarize`: archive session signals as `task_archive` summary (importance=3).
 
+### When to use prompt-read vs standard-write
+
+Decision rule — load skills before acting, persist standards after discovering them:
+
+- Use `prompt-read` (read-only, no side effects) WHEN:
+  - (a) Task description or orchestrator prompt references a skill/prompt by name (e.g. `create-task`, `task-management`, `code-review`, `session-planner`) — load its definition before executing the workflow.
+  - (b) You need a workflow checklist, template, or definition before acting (read-before-act).
+  - (c) Discovery — call `prompt-read` with no `name` to LIST the catalog of available prompts (`{name, description, agent, arguments}`). With `name` → DETAIL loads the prompt with `{{var}}` substitution; `{{current_repo}}` / `{{current_owner}}` are always auto-injected from session.
+  - Callable as `prompt-read` tool OR native `prompts/get` / `prompts/list` — same content from `src/mcp/prompts/definitions/`.
+- Use `standard-write` (durable, 1 rule/entry) WHEN:
+  - (a) After completing work you discovered a reusable normative rule/pattern (coding standard, naming, layering, a11y, testing convention) that should persist beyond the session.
+  - (b) `standard-read` (pre-implementation gate) surfaced a missing standard that now needs to be codified.
+  - (c) You were explicitly asked to codify a convention. Writes to `coding_standards`; set `is_global` and `repo` for global vs repo-scoped (see Data Scoping).
+- Anti-pattern: Do NOT use `prompt-read` to persist knowledge; do NOT use `standard-write` to fetch instructions or workflow definitions.
+
+| Need                         | Use                                            | Why                                        |
+| :--------------------------- | :--------------------------------------------- | :----------------------------------------- |
+| Execute a skill/workflow     | `prompt-read`                                  | Loads the checklist/template before acting |
+| Discover available skills    | `prompt-read` (no name)                        | Lists catalog                              |
+| Codify a reusable convention | `standard-write` (after `standard-read` check) | Persists a normative rule durably          |
+
 ## Who / When
 
-| Operation                         | When                                                                   | Who                                    |
-| :-------------------------------- | :--------------------------------------------------------------------- | :------------------------------------- |
-| `memory-read(query)`              | Start of task, during work — find past decisions, patterns, code facts | All agents (orchestrator + sub-agents) |
-| `memory-write`                    | After completing work — persist decisions, patterns, code facts        | All agents (orchestrator + sub-agents) |
-| `memory-read(id/code)`            | When task prompt includes a memory code — retrieve full context        | Sub-agents only                        |
-| `memory-write` (acknowledge)      | After consuming a memory — mark it as used/reviewed                    | Sub-agents only                        |
-| `memory-read` (recap)             | At macro-workflow start (S0) — summary of recent memory activity       | Orchestrator                           |
-| `memory-write` (`type=decision`)  | Log a structured architectural decision (importance=4)                 | All agents                             |
-| `task-read`                       | Sync — list/search/detail of pending, backlog, in_progress             | Orchestrator + sub-agents              |
-| `claim-manage`                    | Claim task start (`task_code` + `agent`) → `in_progress`               | Agent executing the task               |
-| `task-write(status=completed)`    | Mark task done — auto-releases claim, expires linked handoffs          | Agent executing the task               |
-| `handoff-read`                    | Check incoming handoffs (S0); search/list pending                      | Orchestrator                           |
-| `handoff-write`                   | Create handoff ONLY for unfinished work (concrete next owner + steps)  | Agent leaving work behind              |
-| `standard-read(query)`            | Hydrate (S1) — load applicable coding standards                        | All agents                             |
-| `standard-write`                  | Persist a new standards entry                                          | All agents                             |
-| `standard-delete`                 | Delete coding standards (single/bulk, UUID or code)                    | All agents                             |
-| `memory-delete`                   | Soft-delete memories (single/bulk, UUID or code)                       | All agents                             |
-| `task-delete`                     | Soft-delete tasks → canceled, release claims, expire handoffs          | All agents                             |
-| `repo-summarize`                  | Archive session signals as task_archive summary                        | All agents                             |
-| `synthesize`                      | Composite synthesis via sampling (requires client sampling)            | All agents                             |
-| `agent-context`                   | Compile token-budgeted cross-source context for an objective           | All agents                             |
-| `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints  | All agents                             |
-| `observation-read`                | Read observations by scope, subject, task, file, symbol, confidence    | All agents                             |
-| `codebase-index(repo)`            | Check index freshness/status before querying                           | Orchestrator                           |
-| `codebase-index(repoPath + repo)` | Refresh a stale index                                                  | Orchestrator                           |
-| `codebase-index(warmup:true)`     | Explicitly warm the index engine                                       | Orchestrator                           |
-| `codebase-read(query)`            | Primary codebase exploration (symbol/NL search)                        | Orchestrator                           |
-| `codebase-read(name)`             | Trace definition & usage cross-file                                    | Orchestrator                           |
-| `prompt-read`                     | LIST prompt catalog / DETAIL prompt content with {{var}} substitution  | All agents (skill-like reads)          |
+| Operation                         | When                                                                                                                           | Who                                                          |
+| :-------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------- |
+| `memory-read(query)`              | Start of task, during work — find past decisions, patterns, code facts                                                         | All agents (orchestrator + sub-agents)                       |
+| `memory-write`                    | After completing work — persist decisions, patterns, code facts                                                                | All agents (orchestrator + sub-agents)                       |
+| `memory-read(id/code)`            | When task prompt includes a memory code — retrieve full context                                                                | Sub-agents only                                              |
+| `memory-write` (acknowledge)      | After consuming a memory — mark it as used/reviewed                                                                            | Sub-agents only                                              |
+| `memory-read` (recap)             | At macro-workflow start (S0) — summary of recent memory activity                                                               | Orchestrator                                                 |
+| `memory-write` (`type=decision`)  | Log a structured architectural decision (importance=4)                                                                         | All agents                                                   |
+| `task-read`                       | Sync — list/search/detail of pending, backlog, in_progress                                                                     | Orchestrator + sub-agents                                    |
+| `claim-manage`                    | Claim task start (`task_code` + `agent`) → `in_progress`                                                                       | Agent executing the task                                     |
+| `task-write(status=completed)`    | Mark task done — auto-releases claim, expires linked handoffs                                                                  | Agent executing the task                                     |
+| `handoff-read`                    | Check incoming handoffs (S0); search/list pending                                                                              | Orchestrator                                                 |
+| `handoff-write`                   | Create handoff ONLY for unfinished work (concrete next owner + steps)                                                          | Agent leaving work behind                                    |
+| `standard-read(query)`            | Hydrate (S1) — load applicable coding standards                                                                                | All agents                                                   |
+| `standard-write`                  | After discovering a durable reusable pattern/convention worth persisting (check `standard-read` first)                         | Any agent that produced code/docs and found a normative rule |
+| `standard-delete`                 | Delete coding standards (single/bulk, UUID or code)                                                                            | All agents                                                   |
+| `memory-delete`                   | Soft-delete memories (single/bulk, UUID or code)                                                                               | All agents                                                   |
+| `task-delete`                     | Soft-delete tasks → canceled, release claims, expire handoffs                                                                  | All agents                                                   |
+| `repo-summarize`                  | Archive session signals as task_archive summary                                                                                | All agents                                                   |
+| `synthesize`                      | Composite synthesis via sampling (requires client sampling)                                                                    | All agents                                                   |
+| `agent-context`                   | Compile token-budgeted cross-source context for an objective                                                                   | All agents                                                   |
+| `observation-write`               | Create/update/bulk/refresh exploration observations with fingerprints                                                          | All agents                                                   |
+| `observation-read`                | Read observations by scope, subject, task, file, symbol, confidence                                                            | All agents                                                   |
+| `codebase-index(repo)`            | Check index freshness/status before querying                                                                                   | Orchestrator                                                 |
+| `codebase-index(repoPath + repo)` | Refresh a stale index                                                                                                          | Orchestrator                                                 |
+| `codebase-index(warmup:true)`     | Explicitly warm the index engine                                                                                               | Orchestrator                                                 |
+| `codebase-read(query)`            | Primary codebase exploration (symbol/NL search)                                                                                | Orchestrator                                                 |
+| `codebase-read(name)`             | Trace definition & usage cross-file                                                                                            | Orchestrator                                                 |
+| `prompt-read(name?)`              | Before executing a skill/workflow — load its definition/template (LIST catalog when no name, DETAIL with {{var}} substitution) | Orchestrator + sub-agents needing guided execution           |
 
 ## Registered Tools (20 canonical)
 
