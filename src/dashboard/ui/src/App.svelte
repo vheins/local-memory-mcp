@@ -245,13 +245,13 @@
 <FloatingChat onRefresh={app.onRefresh} />
 
 <style>
-	/* All dashboard views render full-width with a uniform 8px horizontal gutter. */
+	/* All dashboard views render full-width with a uniform 16px horizontal gutter. */
 	.dashboard-shell {
 		max-width: 100%;
 		width: 100%;
 		margin: 0;
-		padding-left: var(--space-2);
-		padding-right: var(--space-2);
+		padding-left: var(--space-4);
+		padding-right: var(--space-4);
 	}
 
 	/* Workspace gate onboarding card stays bounded so it does not stretch full-bleed. */
