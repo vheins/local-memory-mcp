@@ -74,6 +74,17 @@ describe("MCP handoff-write, handoff-read, and claim-manage tools", () => {
 		expect(listRes.structuredContent.handoffs.rows[0][10]).toEqual({ file: "src/mcp/router.ts" });
 	});
 
+	it("handoff-read treats empty-string id/query as absent (list, not detail/search)", async () => {
+		const res = await router("tools/call", {
+			name: "handoff-read",
+			arguments: { repo: REPO, owner: "test", id: "", query: "" }
+		});
+
+		expect(res.isError).toBeFalsy();
+		expect(res.structuredContent.schema).toBe("handoff-read");
+		expect(res.structuredContent.mode).toBe("list");
+	});
+
 	it("rejects completion-summary handoffs without transfer context", async () => {
 		const res = await router("tools/call", {
 			name: "handoff-write",

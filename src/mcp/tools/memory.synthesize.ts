@@ -319,11 +319,13 @@ function matchSeededSnapshot(
 	}
 
 	if (toolName === "memory-read") {
-		// Recap mode — same rule as memory.read.ts: no query / identifier.
+		// Recap mode — same rule as memory-read/index.ts: no non-empty
+		// identifier / query. DETAIL precedes SEARCH and both use "non-empty"
+		// presence so a serialize-all `query: ""` cannot hijack the mode.
 		const mode = inferReadMode(normalized, {
 			rules: [
-				{ mode: "search", fields: ["query"] },
-				{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+				{ mode: "detail", fields: ["id", "code", "ids", "codes"], presence: "non-empty" },
+				{ mode: "search", fields: ["query"], presence: "non-empty" }
 			],
 			fallback: "recap"
 		});
@@ -339,10 +341,14 @@ function matchSeededSnapshot(
 	if (toolName === "task-read") {
 		// List mode — mirrors task-read/index.ts, including the
 		// code ← task_code / codes ← task_codes detail resolution.
+		// DETAIL precedes SEARCH and both use "non-empty" presence so a
+		// serialize-all `query: ""` cannot hijack the mode.
 		const mode = inferReadMode(normalized, {
 			rules: [
-				{ mode: "search", fields: ["query"] },
-				{ mode: "detail", fields: ["id", "code", "ids", "codes", "task_code", "task_codes"] }
+				{ mode: "detail", fields: ["id", "code", "ids", "codes", "task_code", "task_codes"], presence: "non-empty" },
+				// issue_ref also enters SEARCH — mirrors task-read/index.ts so the
+				// mirror's classification never diverges from the handler.
+				{ mode: "search", fields: ["query", "issue_ref"], presence: "non-empty" }
 			],
 			fallback: "list"
 		});

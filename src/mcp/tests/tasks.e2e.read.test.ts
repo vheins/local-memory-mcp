@@ -226,6 +226,89 @@ describe("MCP Local Memory - Consolidated Task Tools E2E (read + delete)", () =>
 		expect(res.structuredContent.tasks.rows.length).toBeGreaterThanOrEqual(1);
 	});
 
+	// ─── empty-string discriminator hardening (FIX-READMODE-001) ──────
+	// A serialize-all-optional-fields client sends `query: ""` for unset
+	// strings. "non-empty" presence + DETAIL-before-SEARCH must keep that from
+	// hijacking mode selection.
+
+	it("task-read auto-infers DETAIL for {query:'', code} (empty query must not hijack)", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "DOC-004",
+				phase: "implementation",
+				title: "Empty query detail regression",
+				description: "query:'' plus a non-empty code must resolve DETAIL.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, query: "", code: "DOC-004" }
+		});
+
+		expect(res.isError).toBeFalsy();
+		expect(res.structuredContent.task_code).toBe("DOC-004");
+		expect(res.structuredContent.results).toBeUndefined();
+	});
+
+	it("task-read auto-infers LIST for {query:'', id:'', code:''} (no DETAIL throw)", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "EMPTY-DISCRIMINATOR",
+				phase: "testing",
+				title: "Empty discriminators fall through to list",
+				description: "All-empty identifiers must not route to DETAIL.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, query: "", id: "", code: "", status: "all" }
+		});
+
+		expect(res.isError).toBeFalsy();
+		expect(res.structuredContent.tasks).toBeDefined();
+		expect(res.structuredContent.tasks.rows.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("task-read gives a non-empty identifier precedence over a non-empty query", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				task_code: "PRIORITY-CODE",
+				phase: "testing",
+				title: "Identifier precedence over query",
+				description: "code must win over a non-empty query.",
+				status: "pending",
+				priority: 3,
+				est_tokens: 30
+			}
+		});
+
+		const res: any = await router("tools/call", {
+			name: "task-read",
+			arguments: { owner: "test", repo: REPO, query: "zzz-no-such-task", code: "PRIORITY-CODE" }
+		});
+
+		expect(res.isError).toBeFalsy();
+		expect(res.structuredContent.task_code).toBe("PRIORITY-CODE");
+		expect(res.structuredContent.results).toBeUndefined();
+	});
+
 	// ───────────────────────────────────────────────────────────────────
 
 	it("should list tasks by phase via task-read", async () => {

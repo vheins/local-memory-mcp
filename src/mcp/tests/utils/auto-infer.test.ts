@@ -14,7 +14,9 @@ function makeStorage() {
 	return { storage, memoryGetByCode, standardGetByCode, taskGetByCode };
 }
 
-const readSpec: ReadModeSpec<"search" | "detail" | "recap"> = {
+// Legacy spec: search-first with default "defined" presence (codebase-read
+// keeps this shape; TASK-316 depends on `content: ""` staying present).
+const definedSpec: ReadModeSpec<"search" | "detail" | "recap"> = {
 	rules: [
 		{ mode: "search", fields: ["query"] },
 		{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
@@ -22,24 +24,64 @@ const readSpec: ReadModeSpec<"search" | "detail" | "recap"> = {
 	fallback: "recap"
 };
 
+// Read-tool spec (task-read / memory-read / standard-read / handoff.read):
+// identifier-first with "non-empty" presence so a serialize-all client that
+// emits `query: ""` cannot hijack the mode.
+const nonEmptySpec: ReadModeSpec<"search" | "detail" | "recap"> = {
+	rules: [
+		{ mode: "detail", fields: ["id", "code", "ids", "codes"], presence: "non-empty" },
+		{ mode: "search", fields: ["query"], presence: "non-empty" }
+	],
+	fallback: "recap"
+};
+
 describe("inferReadMode", () => {
-	it("selects the first matching rule (search beats detail)", () => {
-		expect(inferReadMode({ query: "q", id: "1" }, readSpec)).toBe("search");
+	it("selects the first matching rule (search beats detail under 'defined')", () => {
+		expect(inferReadMode({ query: "q", id: "1" }, definedSpec)).toBe("search");
+	});
+
+	it("gives identifier precedence over query under the read-tool 'non-empty' spec", () => {
+		expect(inferReadMode({ query: "q", id: "1" }, nonEmptySpec)).toBe("detail");
+		expect(inferReadMode({ query: "q", code: "C-1" }, nonEmptySpec)).toBe("detail");
 	});
 
 	it("selects detail when an identifier field is present", () => {
-		expect(inferReadMode({ id: "1" }, readSpec)).toBe("detail");
-		expect(inferReadMode({ ids: ["1"] }, readSpec)).toBe("detail");
-		expect(inferReadMode({ codes: ["C-1"] }, readSpec)).toBe("detail");
+		expect(inferReadMode({ id: "1" }, nonEmptySpec)).toBe("detail");
+		expect(inferReadMode({ ids: ["1"] }, nonEmptySpec)).toBe("detail");
+		expect(inferReadMode({ codes: ["C-1"] }, nonEmptySpec)).toBe("detail");
 	});
 
-	it("treats an explicit empty query as present ('defined' semantics)", () => {
-		expect(inferReadMode({ query: "" }, readSpec)).toBe("search");
+	it("treats an explicit empty query as present under 'defined' semantics", () => {
+		expect(inferReadMode({ query: "" }, definedSpec)).toBe("search");
+	});
+
+	it("treats empty / whitespace-only / empty-array values as absent under 'non-empty'", () => {
+		expect(inferReadMode({ query: "" }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ query: "   " }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ query: "\t\n" }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ query: null }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ id: "" }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ ids: [] }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ codes: [] }, nonEmptySpec)).toBe("recap");
+		// Blank-only arrays must be absent too — `.length > 0` alone would route
+		// `ids: [""]` to DETAIL, where collectEntityIds filters the blank and
+		// handleDetailMode throws (FIX-READMODE-002 L1).
+		expect(inferReadMode({ ids: [""] }, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ codes: ["  "] }, nonEmptySpec)).toBe("recap");
+	});
+
+	it("treats non-empty strings and non-empty arrays as present under 'non-empty'", () => {
+		expect(inferReadMode({ query: "q" }, nonEmptySpec)).toBe("search");
+		expect(inferReadMode({ id: "1" }, nonEmptySpec)).toBe("detail");
+		expect(inferReadMode({ ids: ["1"] }, nonEmptySpec)).toBe("detail");
+		expect(inferReadMode({ code: " C-1 " }, nonEmptySpec)).toBe("detail");
+		// An array with at least one non-blank element stays present.
+		expect(inferReadMode({ ids: ["", "1"] }, nonEmptySpec)).toBe("detail");
 	});
 
 	it("returns the fallback when no rule matches", () => {
-		expect(inferReadMode({}, readSpec)).toBe("recap");
-		expect(inferReadMode({ unrelated: 1 }, readSpec)).toBe("recap");
+		expect(inferReadMode({}, nonEmptySpec)).toBe("recap");
+		expect(inferReadMode({ unrelated: 1 }, nonEmptySpec)).toBe("recap");
 	});
 
 	it("honors 'truthy' presence for boolean flags", () => {

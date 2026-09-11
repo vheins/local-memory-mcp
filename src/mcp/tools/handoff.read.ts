@@ -243,10 +243,13 @@ function requireOwnerRepo(owner: string, repo: string): void {
  * Unified handoff read handler. Replaces handoff-list and claim-list.
  *
  * **Auto-infer logic:**
- * - `id` present → **DETAIL** single handoff (no owner/repo needed)
+ * - `id` non-empty → **DETAIL** single handoff (no owner/repo needed)
  * - `claim: true` or `agent` present → **LIST CLAIMS** (was claim-list)
- * - `query` present → **SEARCH** handoffs with filters (was handoff-list)
+ * - `query` non-empty → **SEARCH** handoffs with filters (was handoff-list)
  * - none → **LIST HANDOFFS** (was handoff-list, no filters)
+ *
+ * `id`/`query` use "non-empty" presence so a serialize-all client sending
+ * `id: ""`/`query: ""` does not hijack the mode.
  */
 export async function handleHandoffRead(args: unknown, storage: SQLiteStore): Promise<McpResponse> {
 	const validated = HandoffReadSchema.parse(args);
@@ -254,13 +257,14 @@ export async function handleHandoffRead(args: unknown, storage: SQLiteStore): Pr
 
 	// ── Auto-infer mode via the shared helper (OPT-DRY-06) ──
 	// `claim`/`agent` use truthy presence — `claim` defaults to `false` after
-	// schema parse, so "defined" would match on every call. `id` uses "defined"
-	// presence to match the identifier semantics of the other read tools.
+	// schema parse, so "defined" would match on every call. `id`/`query` use
+	// "non-empty" presence to match the identifier semantics of the other read
+	// tools (an empty string from a serialize-all client is treated as absent).
 	const mode = inferReadMode(validated, {
 		rules: [
-			{ mode: "detail", fields: ["id"] },
+			{ mode: "detail", fields: ["id"], presence: "non-empty" },
 			{ mode: "claims", fields: ["claim", "agent"], presence: "truthy" },
-			{ mode: "search", fields: ["query"] }
+			{ mode: "search", fields: ["query"], presence: "non-empty" }
 		],
 		fallback: "list"
 	});

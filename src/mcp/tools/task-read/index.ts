@@ -1,8 +1,12 @@
 /**
  * task-read orchestrator — auto-infers detail/search/list mode from field presence:
- *   - query → SEARCH (hybrid vector + keyword)
- *   - id/task_code/ids/task_codes/code/codes → DETAIL (single or bulk)
+ *   - id/task_code/ids/task_codes/code/codes (non-empty) → DETAIL (single or bulk)
+ *   - query/issue_ref (non-empty) → SEARCH (hybrid vector + keyword)
  *   - none → LIST (filtered by status/phase with pagination)
+ *
+ * DETAIL is evaluated before SEARCH so a non-empty identifier always wins; all
+ * discriminators use "non-empty" presence so a client that serializes unset
+ * optional fields as `""` cannot hijack the mode with an empty query.
  */
 
 import { SQLiteStore } from "../../storage/sqlite";
@@ -51,15 +55,17 @@ export async function handleTaskRead(args: unknown, storage: SQLiteStore, vector
 	const effectiveCodes = codes ?? task_codes;
 
 	// ── Auto-infer mode from field presence via the shared helper (OPT-DRY-06):
-	//    query → SEARCH · id/code/ids/codes → DETAIL · none → LIST
+	//    id/code/ids/codes → DETAIL · query/issue_ref → SEARCH · none → LIST.
+	//    DETAIL precedes SEARCH so a non-empty identifier beats a query, and
+	//    "non-empty" presence ignores `query: ""` from serialize-all clients.
 	const mode = inferReadMode(
 		{ ...validated, code: effectiveCode, codes: effectiveCodes },
 		{
 			rules: [
+				{ mode: "detail", fields: ["id", "code", "ids", "codes"], presence: "non-empty" },
 				// issue_ref also enters SEARCH: listing tasks linked to an issue
 				// is a search-style filter even when no free-text query is given.
-				{ mode: "search", fields: ["query", "issue_ref"] },
-				{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+				{ mode: "search", fields: ["query", "issue_ref"], presence: "non-empty" }
 			],
 			fallback: "list"
 		}

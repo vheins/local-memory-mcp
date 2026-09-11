@@ -417,6 +417,42 @@ describe("MCP Local Memory - memory-read (Search, Detail, Recap)", () => {
 		expect(res.structuredContent.memory).toBeDefined();
 	});
 
+	it("should auto-infer DETAIL when code is present alongside an empty query", async () => {
+		const createRes = await router("tools/call", {
+			name: "memory-write",
+			arguments: {
+				type: "code_fact",
+				title: "Empty Query Detail",
+				content: "Regression: an empty query must not hijack detail mode.",
+				importance: 3,
+				scope: { owner: "test", repo: REPO },
+				agent: "test-agent",
+				model: "test-model"
+			}
+		});
+		const memoryCode = createRes.structuredContent.code;
+
+		const res = await router("tools/call", {
+			name: "memory-read",
+			arguments: { query: "", code: memoryCode, owner: "test", repo: REPO }
+		});
+
+		expect(res.isError).toBeFalsy();
+		expect(res.structuredContent.memory).toBeDefined();
+		expect(res.structuredContent.memory.code).toBe(memoryCode);
+	});
+
+	it("should auto-infer RECAP when only empty-string discriminators are sent", async () => {
+		const res = await router("tools/call", {
+			name: "memory-read",
+			arguments: { query: "", id: "", code: "", owner: "test", repo: REPO }
+		});
+
+		expect(res.isError).toBeFalsy();
+		expect(res.structuredContent.stats).toBeDefined();
+		expect(res.structuredContent.columns).toBeUndefined();
+	});
+
 	it("should auto-infer RECAP when no query/id/code/ids/codes present", async () => {
 		const res = await router("tools/call", {
 			name: "memory-read",

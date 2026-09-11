@@ -4,9 +4,13 @@
  * Replaces 3 existing tools (memory-search, memory-detail, memory-recap)
  * with a single handler that auto-infers mode from parameter presence:
  *
- *   query present         → SEARCH  (hybrid vector + keyword scoring)
  *   id/code/ids/codes     → DETAIL  (full MemoryEntry, single or bulk)
+ *   query                 → SEARCH  (hybrid vector + keyword scoring)
  *   none of the above     → RECAP   (stats + top memories)
+ *
+ * DETAIL precedes SEARCH so a non-empty identifier beats a query, and every
+ * discriminator uses "non-empty" presence so a serialize-all client sending
+ * `query: ""` cannot hijack the mode.
  *
  * SPEC-001 hybrid scoring: 0.40 similarity + 0.30 keyword + 0.15 recency + 0.15 domain
  * No hit_count increments on read.
@@ -41,11 +45,13 @@ export async function handleMemoryRead(params: unknown, db: SQLiteStore, vectors
 	const validated = parseArgs(MemoryReadSchema, params);
 
 	// Auto-infer mode from field presence via the shared helper (OPT-DRY-06):
-	//   query → SEARCH · id/code/ids/codes → DETAIL · none → RECAP
+	//   id/code/ids/codes → DETAIL · query → SEARCH · none → RECAP.
+	//   DETAIL precedes SEARCH so a non-empty identifier beats a query, and
+	//   "non-empty" presence ignores `query: ""` from serialize-all clients.
 	const mode = inferReadMode(validated, {
 		rules: [
-			{ mode: "search", fields: ["query"] },
-			{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+			{ mode: "detail", fields: ["id", "code", "ids", "codes"], presence: "non-empty" },
+			{ mode: "search", fields: ["query"], presence: "non-empty" }
 		],
 		fallback: "recap"
 	});

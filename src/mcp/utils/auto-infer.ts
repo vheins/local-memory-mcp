@@ -12,6 +12,13 @@
  * This module centralizes BOTH inferences so all tools share one precedence
  * engine and one identifier collector. Per-tool mode IMPLEMENTATIONS stay in
  * the tools; only the inference and the identifier collection are shared.
+ *
+ * Presence semantics: identifier/query discriminators use `"non-empty"` so a
+ * serialize-all-optional-fields client (which sends `""` for unset strings)
+ * cannot hijack mode selection with an empty value — `query: ""` is treated as
+ * absent, and identifier rules are evaluated before the query rule so a
+ * non-empty identifier always wins. `"defined"`/`"truthy"` are retained for
+ * callers that depend on them (e.g. codebase-read's TASK-316 `content: ""`).
  */
 
 import { SQLiteStore } from "../storage/sqlite";
@@ -21,7 +28,7 @@ import { resolveEntityRef, type EntityRefKind } from "./entity-ref";
 // inferReadMode — auto-infer the read mode from param field presence
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type FieldPresence = "defined" | "truthy";
+export type FieldPresence = "defined" | "truthy" | "non-empty";
 
 export interface ReadModeRule<TMode extends string = string> {
 	/** Mode selected when the rule matches. */
@@ -30,9 +37,17 @@ export interface ReadModeRule<TMode extends string = string> {
 	fields: readonly string[];
 	/**
 	 * Presence semantics:
-	 * - `"defined"` — `value !== undefined` (canonical for query/identifier
-	 *   fields; an explicit empty string still counts as present, e.g.
-	 *   `query: ""` → SEARCH, matching the other read tools).
+	 * - `"non-empty"` — canonical for string/array discriminators (query,
+	 *   identifier fields). A value is present iff it is not `undefined`/`null`,
+	 *   a string has `.trim().length > 0`, an array has at least one non-blank
+	 *   element, and any other value is present. This guards against the
+	 *   empty-string footgun:
+	 *   clients that serialize every optional field send `query: ""` /
+	 *   `code: ""`, which under `"defined"` would count as present and hijack
+	 *   mode selection.
+	 * - `"defined"` — `value !== undefined` (legacy; an explicit empty string
+	 *   counts as present, e.g. codebase-read's TASK-316 `content: ""` → CODE
+	 *   no-op).
 	 * - `"truthy"`  — `Boolean(value)` (canonical for boolean flags; a field
 	 *   with a schema default like `claim: false` is never "present" after
 	 *   parsing, so `"defined"` would always match).
@@ -49,6 +64,22 @@ export interface ReadModeSpec<TMode extends string = string> {
 }
 
 /**
+ * Returns whether a discriminator value counts as present under `"non-empty"`
+ * semantics: absent for `undefined`/`null`, blank strings, empty arrays, and
+ * blank-only arrays; present otherwise.
+ *
+ * @param value Raw field value pulled from the parsed params object.
+ * @returns True when the value is a non-blank string, an array with at least
+ * one non-blank element, or any non-nullish non-string/non-array value.
+ */
+function isNonEmptyValue(value: unknown): boolean {
+	if (value === undefined || value === null) return false;
+	if (typeof value === "string") return value.trim().length > 0;
+	if (Array.isArray(value)) return value.some((v) => typeof v !== "string" || v.trim().length > 0);
+	return true;
+}
+
+/**
  * Resolves which mode a read tool should run by checking discriminator field
  * presence against a declarative spec (first matching rule wins).
  *
@@ -56,8 +87,8 @@ export interface ReadModeSpec<TMode extends string = string> {
  * ```ts
  * const mode = inferReadMode(validated, {
  *   rules: [
- *     { mode: "search", fields: ["query"] },
- *     { mode: "detail", fields: ["id", "code", "ids", "codes"] }
+ *     { mode: "detail", fields: ["id", "code", "ids", "codes"], presence: "non-empty" },
+ *     { mode: "search", fields: ["query"], presence: "non-empty" }
  *   ],
  *   fallback: "recap"
  * });
@@ -68,7 +99,9 @@ export function inferReadMode<TMode extends string, T extends object>(params: T,
 	for (const rule of spec.rules) {
 		const matches = rule.fields.some((field) => {
 			const value = record[field];
-			return rule.presence === "truthy" ? Boolean(value) : value !== undefined;
+			if (rule.presence === "truthy") return Boolean(value);
+			if (rule.presence === "non-empty") return isNonEmptyValue(value);
+			return value !== undefined;
 		});
 		if (matches) return rule.mode;
 	}

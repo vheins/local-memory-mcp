@@ -2,9 +2,13 @@
  * standard-read — orchestrator + re-exports.
  *
  * Auto-infer logic:
- * - `query` present → SEARCH  (hybrid scoring per SPEC-001)
- * - `id`/`code`/`ids`/`codes` → DETAIL (single or bulk)
- * - none                    → LIST   (paginated list of all standards)
+ * - `id`/`code`/`ids`/`codes` (non-empty) → DETAIL (single or bulk)
+ * - `query` (non-empty)                   → SEARCH (hybrid scoring per SPEC-001)
+ * - none                                  → LIST   (paginated list of all standards)
+ *
+ * DETAIL precedes SEARCH so a non-empty identifier beats a query, and every
+ * discriminator uses "non-empty" presence so a serialize-all client sending
+ * `query: ""` cannot hijack the mode.
  */
 
 import { StandardReadSchema, StandardReadInput } from "../schemas/index";
@@ -136,9 +140,9 @@ async function handleListMode(validated: StandardReadInput, db: SQLiteStore): Pr
  * Unified standard-read handler.
  *
  * Auto-infer logic:
- * - `query` present → SEARCH  (hybrid scoring per SPEC-001)
- * - `id`/`code`/`ids`/`codes` → DETAIL (single or bulk)
- * - none                    → LIST   (paginated list of all standards)
+ * - `id`/`code`/`ids`/`codes` (non-empty) → DETAIL (single or bulk)
+ * - `query` (non-empty)                   → SEARCH (hybrid scoring per SPEC-001)
+ * - none                                  → LIST   (paginated list of all standards)
  */
 export async function handleStandardRead(
 	params: Record<string, unknown>,
@@ -148,14 +152,14 @@ export async function handleStandardRead(
 	const validated = StandardReadSchema.parse(params);
 
 	// Auto-infer mode via the shared helper (OPT-DRY-06):
-	//   query → SEARCH · id/code/ids/codes → DETAIL · none → LIST
-	// `query` uses "defined" presence — an explicit empty-string query routes
-	// to SEARCH like the other read tools (previously truthy here, so
-	// `query: ""` fell through to LIST).
+	//   id/code/ids/codes → DETAIL · query → SEARCH · none → LIST.
+	// DETAIL precedes SEARCH so a non-empty identifier beats a query. Every
+	// discriminator uses "non-empty" presence so an explicit empty-string
+	// `query: ""` (serialize-all client) is treated as absent, not SEARCH.
 	const mode = inferReadMode(validated, {
 		rules: [
-			{ mode: "search", fields: ["query"] },
-			{ mode: "detail", fields: ["id", "code", "ids", "codes"] }
+			{ mode: "detail", fields: ["id", "code", "ids", "codes"], presence: "non-empty" },
+			{ mode: "search", fields: ["query"], presence: "non-empty" }
 		],
 		fallback: "list"
 	});
