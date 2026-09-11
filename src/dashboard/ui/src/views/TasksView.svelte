@@ -41,6 +41,6 @@
 	{/snippet}
 </PageHeader>
 
-<Surface padding="lg" label="Task board">
-	<KanbanBoard bind:this={board} {onTaskClick} {onAddTask} {onBulkImport} />
+<Surface variant="plain" padding="none" label="Task board">
+	<KanbanBoard bind:this={board} {onTaskClick} {onBulkImport} />
 </Surface>

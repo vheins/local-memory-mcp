@@ -112,7 +112,7 @@
 			</div>
 		{/if}
 
-		<main id="dashboardShell" class="dashboard-shell">
+		<main id="dashboardShell" class="dashboard-shell" class:dashboard-shell-fullwidth={$activeTab === "tasks"}>
 			{#if requiresWorkspace}
 				<WorkspaceGate onOpenReference={() => handleTabSelect("reference")} />
 			{:else if $activeTab === "dashboard"}
@@ -244,11 +244,19 @@
 
 <style>
 	/* Content is capped so text lines stay readable on ultrawide displays
-	   instead of stretching to 2500px. */
+	   instead of stretching to 2500px. Tasks board opts out to span the full
+	   content area without side gaps. */
 	.dashboard-shell {
 		max-width: var(--content-max);
 		width: 100%;
 		margin: 0 auto;
+	}
+
+	.dashboard-shell.dashboard-shell-fullwidth {
+		max-width: 100%;
+		margin: 0;
+		padding-left: 0;
+		padding-right: 0;
 	}
 
 	/* Arena renders its own canvas and manages its own bounds, so it opts out of

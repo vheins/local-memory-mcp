@@ -9,7 +9,6 @@
 	import { confirmDelete } from "../lib/confirm";
 
 	export let onTaskClick: (task: Task) => void = () => {};
-	export let onAddTask: () => void = () => {};
 	export let onBulkImport: () => void = () => {};
 
 	const kanban = createKanbanHandler();
@@ -66,10 +65,6 @@
 		</div>
 		<div class="flex gap-2">
 			<ExportToolbar onExport={(f) => kanban.handleExport(f)} onImport={onBulkImport} />
-			<button class="btn btn-accent btn-sm" on:click={onAddTask}>
-				<Icon name="plus" size={14} strokeWidth={2.5} />
-				Add Task
-			</button>
 		</div>
 	</div>
 
