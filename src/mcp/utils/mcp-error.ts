@@ -115,6 +115,16 @@ export function toErrorResponse(err: unknown): McpResponse {
 	});
 }
 
+/**
+ * Maps a thrown Error to a stable machine code when it is a known,
+ * caller-actionable failure; returns null for unexpected failures (the
+ * transport then emits the sanitized generic INTERNAL_ERROR).
+ *
+ * Transient SQLite lock contention is surfaced with the real message and
+ * `retryable: true`; task state-machine/children-gate violations are surfaced
+ * as VALIDATION_ERROR so callers can correct the payload instead of retrying
+ * the same invalid request against the generic "Internal tool error".
+ */
 function classifyExpectedError(error: Error): {
 	code: ToolErrorCode;
 	message: string;
@@ -135,7 +145,10 @@ function classifyExpectedError(error: Error): {
 		) ||
 		/\bmust be\b|\bis required\b|\brequire(?:s)? type=|\bvalidation\b|\bappears to contain metadata\b|\bcompleted-work summaries\b/i.test(
 			error.message
-		)
+		) ||
+		// Task state-machine + children-gate violations (FIX-ERRCLASS) are
+		// caller-actionable: surface the real message instead of masking it.
+		/\bcannot transition\b|\bmust go through\b|\bincomplete child task/i.test(error.message)
 	) {
 		return { code: "VALIDATION_ERROR", message: error.message, retryable: false };
 	}
@@ -144,6 +157,12 @@ function classifyExpectedError(error: Error): {
 	}
 	if (/\bunsupported\b/i.test(error.message)) {
 		return { code: "UNSUPPORTED_OPERATION", message: error.message, retryable: false };
+	}
+	// Transient SQLite write-lock contention (FIX-ERRCLASS): better-sqlite3
+	// surfaces SQLITE_BUSY / SQLITE_BUSY_SNAPSHOT as "database is locked". The
+	// operation may succeed on retry, so keep the real message and flag it.
+	if (/database is locked|\bSQLITE_BUSY\b/i.test(error.message)) {
+		return { code: "INTERNAL_ERROR", message: error.message, retryable: true };
 	}
 	return null;
 }

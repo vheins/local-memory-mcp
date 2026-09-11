@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-	createMcpErrorResponse,
-	formatZodError,
-	parseArgs,
-	ToolError,
-	toErrorResponse
-} from "../utils/mcp-error";
+import { createMcpErrorResponse, formatZodError, parseArgs, ToolError, toErrorResponse } from "../utils/mcp-error";
 
 const ScopeSchema = z.object({
 	owner: z.string().min(1, "owner is required — provide it explicitly or configure MCP workspace roots"),
@@ -69,6 +63,63 @@ describe("mcp-error — canonical error envelope (OPT-CODE-01)", () => {
 		expect(res.isError).toBe(true);
 		expect(res.structuredContent).toMatchObject({ code: "INTERNAL_ERROR" });
 		expect(JSON.stringify(res)).not.toContain("private/path");
+	});
+
+	describe("classifyExpectedError — per-condition codes (FIX-ERRCLASS)", () => {
+		it("positive: task state-machine transition violation maps to VALIDATION_ERROR with the real message", () => {
+			const message = "Cannot transition from 'backlog' directly to 'completed'. Must go through 'in_progress' first.";
+			const res = toErrorResponse(new Error(message));
+			expect(res.isError).toBe(true);
+			expect(res.content?.[0]).toEqual({ type: "text", text: message });
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "VALIDATION_ERROR",
+				retryable: false,
+				message
+			});
+		});
+
+		it("positive: incomplete-children completion gate maps to VALIDATION_ERROR with the real message", () => {
+			const message =
+				'Cannot complete task [TASK-1] "Parent" — it has 1 incomplete child task(s). Complete the following child task(s) first: [TASK-2] Child (pending)';
+			const res = toErrorResponse(new Error(message));
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "VALIDATION_ERROR",
+				retryable: false,
+				message
+			});
+		});
+
+		it("positive: transient SQLite lock contention keeps the real message and is retryable", () => {
+			const res = toErrorResponse(new Error("database is locked"));
+			expect(res.isError).toBe(true);
+			expect(res.content?.[0]).toEqual({ type: "text", text: "database is locked" });
+			expect(res.structuredContent).toMatchObject({
+				schema: "tool-error",
+				code: "INTERNAL_ERROR",
+				retryable: true,
+				message: "database is locked"
+			});
+		});
+
+		it("positive: SQLITE_BUSY code text is treated as transient", () => {
+			const res = toErrorResponse(new Error("SqliteError: SQLITE_BUSY"));
+			expect(res.structuredContent).toMatchObject({ code: "INTERNAL_ERROR", retryable: true });
+		});
+
+		it("negative: an unrelated unexpected error still maps to the generic non-retryable INTERNAL_ERROR", () => {
+			const res = toErrorResponse(new Error("segmentation fault in widget parser"));
+			expect(res.isError).toBe(true);
+			expect(res.content?.[0]).toEqual({ type: "text", text: "Internal tool error" });
+			expect(res.structuredContent).toEqual({
+				schema: "tool-error",
+				code: "INTERNAL_ERROR",
+				message: "Internal tool error",
+				retryable: false,
+				error: "Internal tool error"
+			});
+		});
 	});
 
 	it("formats Zod failures with the friendly Missing required fields text for owner/repo", () => {
