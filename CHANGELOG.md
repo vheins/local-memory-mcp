@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.9] — 2026-09-11
+
+### Fixed
+
+- **MCP — empty-string parameters**: any tool input parameter whose value is exactly `""` is now treated as "not provided" on both the MCP SDK (JSON Schema/AJV) and router transports, so defaults, optional semantics, and auto-infer fallback apply instead of failing validation or misrouting. `normalizeToolArguments` performs a recursive, non-mutating key strip (top-level, nested `scope`/`budget`, and array-of-object items such as `memories[]`/`tasks[]`/`observations[]`/`standards[]`/`evidence[]`), while array elements (`tags: [""]`, `signals: [""]`) and record-valued `metadata`/`context`/`args` entries are preserved. A new JSON-schema rule wraps constrained string nodes (minLength/enum/pattern/format) as `anyOf: [<node>, { const: "" }]` so SDK AJV accepts `""` and hands it to the executor/normalize (zod remains the authoritative gate for non-empty values). `codebase-read` now treats empty `query`/`content` as not provided and falls through to architecture mode instead of a degenerate search/no-op (`FIX-EMPTY-PARAMS`).
+
 ## [0.45.8] — 2026-09-11
 
 ### Fixed
@@ -217,11 +223,11 @@ developer/contributor docs tree is indexed so it is searchable like source code.
 ### Added
 
 - **`.agents/**`dot-directory indexing** (TASK-459) — the codebase indexer now
-discovers files under`.agents` (dev/contributor/AI documentation) via an
-explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
-`.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
-dashboard, CLI, startup auto-index, file watcher) since they all funnel through
-`discoverFiles`.
+  discovers files under`.agents` (dev/contributor/AI documentation) via an
+  explicit allowlist second stream; every other dot-directory (`.git`, `.github`,
+  `.opencode`, `.cache`, …) stays excluded. Covers all entry points (MCP tool,
+  dashboard, CLI, startup auto-index, file watcher) since they all funnel through
+  `discoverFiles`.
 - **`doc_comment` surfaced in all 5 `codebase-read` text formatters** (TASK-460) —
   TRACE (new `Doc:` line), FILE, SEARCH, ARCHITECTURE (new `Top Exports` doc
   block, ~120 chars), and CODE/content modes (enclosing-symbol doc hint via
