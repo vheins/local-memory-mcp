@@ -14,9 +14,10 @@ import { parseRepoInput } from "./normalize";
  * Returns the owner segment of an `owner/repo` input string (via the shared
  * `parseRepoInput`), or undefined when the input has no owner segment.
  *
- * Note: this is a syntax-level split. An explicit `owner: ""` that must stay
- * repo-only is handled by callers with `??` semantics — see
- * `normalize-args.ts` (FIX-OWNER-INFER).
+ * Note: this is a syntax-level split. An empty/whitespace-only `owner` is
+ * treated as "not provided" (never as an explicit repo-only scope) by
+ * `normalize-args.ts` (FIX-OWNER-EMPTY); only a non-empty owner is
+ * authoritative.
  */
 export function ownerFromRepoInput(repo: string | undefined): string | undefined {
 	if (!repo) return undefined;

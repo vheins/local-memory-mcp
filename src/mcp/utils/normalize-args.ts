@@ -78,12 +78,16 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		scope.repo = (nextArgs.repo as string) ?? inferRepoFromSession(session);
 	}
 
-	// An explicit owner (including "") is authoritative: "" means "repo-only"
-	// scoping and must NOT be re-inferred from the session or the repo string.
-	// The spread above preserves the key, so key-presence (typeof string) — not
-	// falsiness — is what distinguishes explicit "" from an omitted owner
+	// An owner is explicit only when it is a non-empty (after trim) string. An
+	// empty or whitespace-only owner is treated as "not provided" and dropped so
+	// the fallback chain below runs (FIX-OWNER-EMPTY). A non-empty owner stays
+	// authoritative and is never re-inferred from the session or the repo string
 	// (FIX-OWNER-INFER).
-	const ownerExplicit = typeof nextArgs.owner === "string";
+	const ownerValue = nextArgs.owner;
+	const ownerExplicit = typeof ownerValue === "string" && ownerValue.trim().length > 0;
+	if (typeof ownerValue === "string" && !ownerExplicit) {
+		delete nextArgs.owner;
+	}
 
 	if (!ownerExplicit && !nextArgs.owner && session?.owner) {
 		nextArgs.owner = session.owner;
@@ -103,12 +107,15 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		}
 	}
 
-	// Scope owner is derived from the scoped repo / resolved top-level owner.
-	// An explicit scope.owner:"" is kept as-is; when the TOP-LEVEL owner is
-	// explicitly "" (repo-only) we never fall through to session inference for
-	// the scope either — only an owner segment embedded in the repo string
-	// (e.g. scope.repo "vheins/x") may fill scope.owner.
-	const scopeOwnerExplicit = typeof scope?.owner === "string";
+	// Scope owner mirrors the top-level rule: an empty/whitespace-only
+	// scope.owner is treated as "not provided" and dropped, then derived from
+	// the scoped repo / resolved top-level owner (FIX-OWNER-EMPTY). A non-empty
+	// scope.owner stays authoritative and is kept as-is (FIX-OWNER-INFER).
+	const scopeOwnerValue = scope?.owner;
+	const scopeOwnerExplicit = typeof scopeOwnerValue === "string" && scopeOwnerValue.trim().length > 0;
+	if (scope && typeof scopeOwnerValue === "string" && !scopeOwnerExplicit) {
+		delete scope.owner;
+	}
 	if (scope && !scopeOwnerExplicit) {
 		const repoVal = (scope.repo as string) || (nextArgs.repo as string) || "";
 		const parsed = parseRepoInput(repoVal, undefined);
@@ -119,8 +126,8 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		}
 	}
 
-	// `??` (not `||`) keeps an explicit "" as "" so repo-only calls never get a
-	// session-inferred owner injected into per-memory scopes.
+	// `nextArgs.owner` is already normalized above, so an empty/whitespace owner
+	// can no longer shadow session inference here (FIX-OWNER-EMPTY).
 	const ownerVal = (nextArgs.owner as string) ?? inferOwnerFromSession(session) ?? undefined;
 	const repoVal = (nextArgs.repo as string) ?? inferRepoFromSession(session) ?? undefined;
 	const memories = nextArgs.memories as Array<Record<string, unknown>> | undefined;
@@ -128,7 +135,12 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 		for (const mem of memories) {
 			const memScope = mem.scope as Record<string, unknown> | undefined;
 			if (memScope) {
-				if (memScope.owner == null) {
+				// Empty/whitespace-only memory-scope owners are "not provided"
+				// too, so they are filled from the resolved owner/repo
+				// (FIX-OWNER-EMPTY).
+				const memOwner = memScope.owner;
+				if (memOwner == null || (typeof memOwner === "string" && memOwner.trim().length === 0)) {
+					delete memScope.owner;
 					const inferredMemOwner =
 						ownerVal || parseRepoInput((memScope.repo as string) || repoVal || "", undefined).owner;
 					if (inferredMemOwner) memScope.owner = inferredMemOwner;

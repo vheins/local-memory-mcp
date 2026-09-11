@@ -75,6 +75,12 @@ describe("normalizeToolArguments", () => {
 		expect((result.scope as Record<string, unknown>).repo).toBe("session-repo");
 	});
 
+	it("treats an empty repo as not provided and fills it from session.repo (unchanged)", () => {
+		const result = normalizeToolArguments({ repo: "", scope: {} }, makeSession({ repo: "session-repo" }));
+		expect(result.repo).toBe("session-repo");
+		expect((result.scope as Record<string, unknown>).repo).toBe("session-repo");
+	});
+
 	it("falls back to inferRepoFromSession when no repo is provided", () => {
 		vi.mocked(inferRepoFromSession).mockReturnValue("inferred-repo");
 		const result = normalizeToolArguments({ query: "q" }, makeSession());
@@ -103,23 +109,37 @@ describe("normalizeToolArguments", () => {
 		expect(warnSpy).toHaveBeenCalled();
 	});
 
-	it("keeps an explicit empty owner repo-only even when session.owner is set", () => {
+	it("treats an empty owner as not provided and fills it from session.owner", () => {
 		const result = normalizeToolArguments({ owner: "", repo: "my-repo" }, makeSession({ owner: "acme" }));
-		expect(result.owner).toBe("");
+		expect(result.owner).toBe("acme");
 		expect(result.repo).toBe("my-repo");
 		expect(inferOwnerFromSession).not.toHaveBeenCalled();
 	});
 
-	it("keeps an explicit empty owner repo-only even when the session could infer an owner", () => {
-		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
-		const result = normalizeToolArguments({ owner: "", repo: "my-repo" }, makeSession({ owner: "acme" }));
-		expect(result.owner).toBe("");
-		expect(warnSpy).not.toHaveBeenCalled();
+	it("treats a whitespace-only owner as not provided and fills it from session.owner", () => {
+		const result = normalizeToolArguments({ owner: "   ", repo: "my-repo" }, makeSession({ owner: "acme" }));
+		expect(result.owner).toBe("acme");
+		expect(result.repo).toBe("my-repo");
 		expect(inferOwnerFromSession).not.toHaveBeenCalled();
 	});
 
-	it("does not inject a session owner into a memory scope when top-level owner is explicitly empty", () => {
+	it("infers an empty owner from the session when no session.owner is set", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const result = normalizeToolArguments({ owner: "", repo: "my-repo" });
+		expect(result.owner).toBe("vheins");
+		expect(warnSpy).toHaveBeenCalled();
+	});
+
+	it("never re-infers an explicit non-empty owner (FIX-OWNER-INFER regression guard)", () => {
+		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
+		const result = normalizeToolArguments({ owner: "explicit", repo: "my-repo" }, makeSession({ owner: "acme" }));
+		expect(result.owner).toBe("explicit");
+		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
+	it("fills a memory scope's inferred owner when the top-level owner is empty", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
 		const result = normalizeToolArguments({
 			owner: "",
@@ -127,24 +147,28 @@ describe("normalizeToolArguments", () => {
 			memories: [{ scope: { repo: "my-repo" } }]
 		});
 		const memories = result.memories as Array<{ scope: Record<string, unknown> }>;
-		expect(result.owner).toBe("");
+		expect(result.owner).toBe("vheins");
 		expect(memories[0].scope.repo).toBe("my-repo");
-		expect(memories[0].scope.owner).toBeUndefined();
-		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+		expect(memories[0].scope.owner).toBe("vheins");
+		expect(warnSpy).toHaveBeenCalled();
 	});
 
-	it("fills scope.owner from an owner/repo scoped repo even when top-level owner is explicitly empty", () => {
+	it("fills scope.owner from an owner/repo scoped repo when the top-level owner is empty", () => {
 		const result = normalizeToolArguments({ owner: "", repo: "my-repo", scope: { repo: "vheins/scoped-repo" } });
-		expect(result.owner).toBe("");
+		expect(result.owner).toBeUndefined();
 		expect((result.scope as { owner?: string }).owner).toBe("vheins");
-		expect(inferOwnerFromSession).not.toHaveBeenCalled();
 	});
 
-	it("keeps an explicit empty scope.owner as-is", () => {
+	it("treats an empty scope.owner as not provided and fills it from the resolved owner", () => {
 		vi.mocked(inferOwnerFromSession).mockReturnValue("vheins");
 		const result = normalizeToolArguments({ scope: { repo: "my-repo", owner: "" } }, makeSession({ owner: "acme" }));
-		expect((result.scope as { owner?: string }).owner).toBe("");
+		expect((result.scope as { owner?: string }).owner).toBe("acme");
 		expect(inferOwnerFromSession).not.toHaveBeenCalled();
+	});
+
+	it("treats a whitespace-only scope.owner as not provided and fills it from the resolved owner", () => {
+		const result = normalizeToolArguments({ scope: { repo: "my-repo", owner: "   " } }, makeSession({ owner: "acme" }));
+		expect((result.scope as { owner?: string }).owner).toBe("acme");
 	});
 
 	it("fills scope.owner from the scoped repo", () => {

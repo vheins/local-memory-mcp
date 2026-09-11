@@ -46,9 +46,11 @@ import { toJSONSchema, type z } from "zod";
  *   4. Collapse open records (`z.record(z.string(), z.unknown())`) to
  *      `{ type: "object" }` — matches the repo convention for `metadata` etc.
  *   5. Drop `minLength: 1` only on fields named `owner`/`repo` (any level) —
- *      the empty-string session auto-heal (`!args.owner && session.owner`)
- *      would break if the SDK rejected `""` first. `minLength`/`minItems` on
- *      other fields are kept (they mirror the handler Zod validation).
+ *      an empty/whitespace-only `owner`/`repo` is treated as "not provided"
+ *      and auto-healed from the session/roots by `normalizeToolArguments`, so
+ *      the SDK must not reject `""` first (FIX-OWNER-EMPTY). `minLength`/
+ *      `minItems` on other fields are kept (they mirror the handler Zod
+ *      validation).
  *   6. `type: "integer"` → `"number"` — repo convention; `z.coerce.number()
  *      .int()` still enforces integers at the handler.
  *   7. Drop `minimum`/`maximum` equal to ±`Number.MAX_SAFE_INTEGER` — artifacts
