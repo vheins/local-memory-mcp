@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.8] — 2026-09-11
+
+### Fixed
+
+- **MCP — owner/scope normalization**: empty or whitespace-only `owner`, `scope.owner`, and per-memory scope `owner` are now treated as "not provided" instead of explicit values, so the auto-infer fallback chain (`session.owner` → owner segment of `repo` → `inferOwnerFromSession`) runs; an explicit non-empty `owner` remains authoritative and is never re-inferred; `repo`/`scope.repo` behavior is unchanged and the dashboard repo-only view (ADR-008) is unaffected (`FIX-OWNER-EMPTY`).
+
 ## [0.45.7] — 2026-09-11
 
 ### Fixed
