@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.3] — 2026-09-11
+
+### Changed
+
+- **Dashboard layout standard** — every top-level view now spans full width with a uniform 8px (`--space-2`) horizontal gutter; removed the centered `max-width` side gaps (`99ad4f9` [LAYOUT-UNIFY-002])
+- `WorkspaceGate` onboarding stays bounded/centered; removed the redundant `dashboard-shell-fullwidth` modifier and Arena negative horizontal margins
 
 ## [0.45.2] — 2026-09-11
 
