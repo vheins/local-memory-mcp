@@ -69,7 +69,7 @@
 	</div>
 
 	<!-- Kanban Board -->
-	<div class="kanban-board" style="padding-bottom:16px;">
+	<div class="kanban-board">
 		{#each COLUMNS as col (col.status)}
 			<!-- svelte-ignore a11y-no-static-element-interactions -->
 			<div
@@ -111,23 +111,19 @@
 						{/if}
 					{:else}
 						{#each $kanbanState.columnTasks[col.status] as task, i (`${task.id}-${i}`)}
-							<div class="task-card-wrapper" class:selected={$kanbanState.selectedTaskIds.has(task.id)}>
-								<div class="task-select">
-									<input
-										type="checkbox"
-										checked={$kanbanState.selectedTaskIds.has(task.id)}
-										on:change={() => kanban.toggleSelectTask(task.id)}
-										aria-label="Select task {task.title}"
-									/>
-								</div>
-								<!-- svelte-ignore a11y-no-static-element-interactions -->
-								<div
-									draggable="true"
-									on:dragstart={(e) => kanban.handleDragStart(e, task, col.status)}
-									style="cursor: grab;flex:1;"
-								>
-									<TaskCard {task} on:click={() => onTaskClick(task)} />
-								</div>
+							<!-- svelte-ignore a11y-no-static-element-interactions -->
+							<div
+								class="task-card-wrapper"
+								draggable="true"
+								on:dragstart={(e) => kanban.handleDragStart(e, task, col.status)}
+								style="cursor: grab;"
+							>
+								<TaskCard
+									{task}
+									selected={$kanbanState.selectedTaskIds.has(task.id)}
+									onToggleSelect={() => kanban.toggleSelectTask(task.id)}
+									on:click={() => onTaskClick(task)}
+								/>
 							</div>
 						{/each}
 
@@ -239,32 +235,7 @@
 	}
 
 	.task-card-wrapper {
-		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-		padding: 4px;
-		border-radius: 12px;
-		transition: background-color 0.15s;
-	}
-
-	.task-card-wrapper:hover {
-		background-color: rgba(99, 102, 241, 0.05);
-	}
-
-	.task-card-wrapper.selected {
-		background-color: rgba(99, 102, 241, 0.1);
-		border: 1px solid rgba(99, 102, 241, 0.3);
-	}
-
-	.task-select {
-		padding-top: 12px;
-	}
-
-	.task-select input[type="checkbox"] {
-		width: 16px;
-		height: 16px;
-		cursor: pointer;
-		accent-color: var(--color-accent);
+		min-width: 0;
 	}
 
 	.bulk-actions-bar {

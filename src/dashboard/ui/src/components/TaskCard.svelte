@@ -5,6 +5,8 @@
 	import { priorityColors, statusIconMap, statusColors, cleanDesc } from "../lib/taskConfig";
 
 	export let task: Task;
+	export let selected: boolean = false;
+	export let onToggleSelect: (() => void) | undefined = undefined;
 
 	$: priorityColor = task ? priorityColors[task.priority] : "#94a3b8";
 	$: statusIcon = task ? statusIconMap[task.status] : "circle-dot";
@@ -13,13 +15,25 @@
 	$: coordination = task?.coordination;
 </script>
 
-<div class="task-card animate-fade-in" role="button" tabindex="0" on:click on:keydown>
+<div class="task-card animate-fade-in" class:selected role="button" tabindex="0" on:click on:keydown>
 	<!-- Priority top bar -->
 	<div class="priority-bar" style="background:{priorityColor};"></div>
 
 	<!-- Header row: status icon + code + phase chip -->
 	<div class="card-header">
 		<div class="code-row">
+			{#if onToggleSelect}
+				<input
+					type="checkbox"
+					class="task-card-checkbox"
+					checked={selected}
+					on:change|stopPropagation={() => onToggleSelect?.()}
+					on:click|stopPropagation
+					on:keydown|stopPropagation
+					on:dragstart|stopPropagation
+					aria-label="Select task {task?.title || task?.task_code || ''}"
+				/>
+			{/if}
 			<span class="status-icon-dot" style="color:{statusColor};">
 				<Icon name={statusIcon} size={11} strokeWidth={2.5} />
 			</span>
@@ -137,6 +151,16 @@
 		gap: 4px;
 		min-width: 0;
 		flex: 1;
+	}
+
+	.task-card-checkbox {
+		width: 14px;
+		height: 14px;
+		cursor: pointer;
+		accent-color: var(--color-accent);
+		border-radius: 3px;
+		margin: 0;
+		flex-shrink: 0;
 	}
 
 	.status-icon-dot {
