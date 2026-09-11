@@ -112,9 +112,11 @@
 			</div>
 		{/if}
 
-		<main id="dashboardShell" class="dashboard-shell" class:dashboard-shell-fullwidth={$activeTab === "tasks"}>
+		<main id="dashboardShell" class="dashboard-shell">
 			{#if requiresWorkspace}
-				<WorkspaceGate onOpenReference={() => handleTabSelect("reference")} />
+				<div class="workspace-gate-container">
+					<WorkspaceGate onOpenReference={() => handleTabSelect("reference")} />
+				</div>
 			{:else if $activeTab === "dashboard"}
 				<OverviewView />
 			{:else if $activeTab === "activity"}
@@ -243,34 +245,23 @@
 <FloatingChat onRefresh={app.onRefresh} />
 
 <style>
-	/* Content is capped so text lines stay readable on ultrawide displays
-	   instead of stretching to 2500px. Tasks board opts out to span the full
-	   content area without side gaps. */
+	/* All dashboard views render full-width with a uniform 8px horizontal gutter. */
 	.dashboard-shell {
+		max-width: 100%;
+		width: 100%;
+		margin: 0;
+		padding-left: var(--space-2);
+		padding-right: var(--space-2);
+	}
+
+	/* Workspace gate onboarding card stays bounded so it does not stretch full-bleed. */
+	.workspace-gate-container {
 		max-width: var(--content-max);
 		width: 100%;
 		margin: 0 auto;
 	}
 
-	.dashboard-shell.dashboard-shell-fullwidth {
-		max-width: 100%;
-		margin: 0;
-		padding-left: 0;
-		padding-right: 0;
-	}
-
-	/* Arena renders its own canvas and manages its own bounds, so it opts out of
-	   the shell's horizontal padding.
-
-	   Two rules make this safe. It cancels the shell's padding by referencing
-	   the SAME `--shell-pad` custom property rather than restating a value — the
-	   previous code hardcoded `--space-5` (24px) against a `20px` padding, a 4px
-	   mismatch per side that produced a permanent horizontal scrollbar. And it
-	   uses negative margins ONLY, never `width: calc(100% + ...)`, which would
-	   override the centred shell's computed width and overflow again. */
 	.arena-fullwidth {
-		margin-left: calc(var(--shell-pad) * -1);
-		margin-right: calc(var(--shell-pad) * -1);
 		overflow-y: auto;
 	}
 </style>
