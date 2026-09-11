@@ -5,6 +5,7 @@
 	import { SvelteSet } from "svelte/reactivity";
 	import { buildPaginationPages, formatScopeLabel } from "../lib/standardsPanelUtils";
 	import { writable } from "svelte/store";
+	import EmptyState from "./ui/EmptyState.svelte";
 
 	export let standards: CodingStandard[] = [];
 	export let loading = false;
@@ -66,17 +67,19 @@
 			{#if loading}
 				{#each { length: 5 } as _, i (i)}
 					<tr>
-						<td colspan="7" class="mem-td">
+						<td colspan="8" class="mem-td">
 							<div class="skeleton" style="height:20px;border-radius:6px;"></div>
 						</td>
 					</tr>
 				{/each}
 			{:else if standards.length === 0}
 				<tr>
-					<td colspan="7" class="mem-td" style="padding:40px;text-align:center;color:var(--color-text-muted);">
-						<Icon name="check" size={22} strokeWidth={1.75} />
-						<div style="margin-top:8px;">No standards found</div>
-						<div style="font-size:0.78rem;margin-top:4px;">Adjust the filters or create a standard.</div>
+					<td colspan="8" class="mem-td" style="padding:0;border-bottom:none;">
+						<EmptyState
+							icon="check"
+							title="No standards found"
+							description="Adjust the filters or create a standard."
+						/>
 					</td>
 				</tr>
 			{:else}
@@ -121,7 +124,7 @@
 								>{formatScopeLabel(std.is_global)}</span
 							>
 						</td>
-						<td class="mem-td row-actions" on:click|stopPropagation>
+						<td class="mem-td row-actions reveal-on-hover" on:click|stopPropagation>
 							<button
 								class="row-action-btn edit-btn"
 								on:click={() => onOpenEditDrawer(std)}
@@ -153,9 +156,7 @@
 			</div>{/each}
 	{:else if standards.length === 0}
 		<div class="mobile-empty">
-			<Icon name="check" size={24} /><strong>No standards found</strong><span
-				>Adjust the filters or add a reusable rule.</span
-			>
+			<EmptyState icon="check" title="No standards found" description="Adjust the filters or add a reusable rule." />
 		</div>
 	{:else}
 		{#each standards as std (std.id)}
@@ -235,123 +236,6 @@
 {/if}
 
 <style>
-	.mem-table-wrap {
-		overflow-x: auto;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: var(--color-surface, #fff);
-	}
-
-	.mem-table {
-		width: 100%;
-		border-collapse: collapse;
-		min-width: 600px;
-	}
-
-	.mem-thead-row {
-		border-bottom: 1px solid var(--color-border);
-		background: rgba(248, 250, 252, 0.9);
-	}
-
-	:global(html.dark) .mem-thead-row {
-		background: rgba(10, 18, 38, 0.85);
-	}
-
-	.mem-th {
-		padding: 10px 12px;
-		text-align: left;
-		font-size: 0.7rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		white-space: nowrap;
-		user-select: none;
-	}
-
-	.mem-td {
-		padding: 10px 12px;
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	:global(html.dark) .mem-td {
-		border-color: rgba(148, 163, 184, 0.08);
-	}
-
-	.mem-row {
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-
-	.mem-row:hover {
-		background: rgba(241, 245, 249, 0.7);
-	}
-
-	:global(html.dark) .mem-row:hover {
-		background: rgba(14, 165, 233, 0.05);
-	}
-
-	.mem-row:last-child .mem-td {
-		border-bottom: none;
-	}
-
-	.row-actions {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		opacity: 0;
-		transition: opacity 0.15s ease;
-		white-space: nowrap;
-	}
-
-	.mem-row:hover .row-actions {
-		opacity: 1;
-	}
-
-	.mem-row.selected {
-		background: rgba(99, 102, 241, 0.1);
-	}
-
-	:global(html.dark) .mem-row.selected {
-		background: rgba(99, 102, 241, 0.15);
-	}
-
-	.row-action-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 40px;
-		height: 40px;
-		border-radius: 7px;
-		border: none;
-		cursor: pointer;
-		background: transparent;
-		transition:
-			background 0.15s ease,
-			color 0.15s ease;
-		color: var(--color-text-muted);
-	}
-
-	.edit-btn:hover {
-		background: rgba(14, 165, 233, 0.1);
-		color: #0ea5e9;
-	}
-
-	:global(html.dark) .edit-btn:hover {
-		background: rgba(14, 165, 233, 0.15);
-		color: #38bdf8;
-	}
-
-	.delete-btn:hover {
-		background: rgba(239, 68, 68, 0.1);
-		color: #ef4444;
-	}
-
-	:global(html.dark) .delete-btn:hover {
-		background: rgba(239, 68, 68, 0.15);
-		color: #fca5a5;
-	}
-
 	/* ── Scope chips ── */
 	.scope-chip {
 		font-size: 0.68rem;
@@ -396,24 +280,21 @@
 	}
 
 	@media (max-width: 720px) {
-		.mem-table-wrap {
-			display: none;
-		}
 		.standard-cards {
 			display: grid;
-			gap: 12px;
+			gap: var(--space-3);
 		}
 		.standard-card {
 			display: grid;
-			gap: 12px;
-			padding: 16px;
+			gap: var(--space-3);
+			padding: var(--space-4);
 			border: 1px solid var(--color-border);
 			border-radius: var(--radius-lg);
 			background: var(--color-surface);
 		}
 		.standard-card.selected {
 			border-color: var(--color-primary);
-			background: rgba(37, 99, 235, 0.05);
+			background: var(--color-primary-soft);
 		}
 		.standard-heading {
 			display: grid;
@@ -451,7 +332,7 @@
 		.standard-tags span {
 			padding: 3px 7px;
 			border-radius: 999px;
-			background: var(--color-hover);
+			background: var(--color-hover, var(--color-surface-hover));
 		}
 		.mobile-actions {
 			display: grid;
@@ -467,9 +348,6 @@
 			border-radius: var(--radius-lg);
 			color: var(--color-text-muted);
 			text-align: center;
-		}
-		.mobile-empty strong {
-			color: var(--color-text);
 		}
 		.bulk-actions-bar {
 			left: 16px;

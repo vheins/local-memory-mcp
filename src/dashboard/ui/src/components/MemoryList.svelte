@@ -19,7 +19,7 @@
 	import MemoryListToolbar from "./MemoryListToolbar.svelte";
 	import MemoryListPagination from "./MemoryListPagination.svelte";
 	import MemoryBulkActions from "./MemoryBulkActions.svelte";
-	import { ErrorState } from "./ui";
+	import { EmptyState, ErrorState } from "./ui";
 
 	export let onMemoryClick: (mem: Memory) => void = () => {};
 	export let onBulkImport: () => void = () => {};
@@ -137,9 +137,12 @@
 					{/each}
 				{:else if $memories.length === 0}
 					<tr>
-						<td colspan="7" class="mem-td" style="padding:40px;text-align:center;color:var(--color-text-muted);">
-							<div style="font-size:2rem;margin-bottom:8px;">🔍</div>
-							No memories found
+						<td colspan="7" class="mem-td" style="padding:0;border-bottom:none;">
+							<EmptyState
+								icon="search"
+								title="No memories found"
+								description="Adjust your search or create a new memory."
+							/>
 						</td>
 					</tr>
 				{:else}
@@ -193,7 +196,7 @@
 								style="text-align:center;font-size:0.75rem;font-weight:600;color:var(--color-text-muted);"
 								>{mem.hit_count ?? 0}</td
 							>
-							<td class="mem-td row-actions" onclick={(e) => e.stopPropagation()}>
+							<td class="mem-td row-actions reveal-on-hover" onclick={(e) => e.stopPropagation()}>
 								<button
 									class="row-action-btn edit-btn"
 									onclick={() => onMemoryClick(mem)}
@@ -216,16 +219,16 @@
 				{/if}
 			</tbody>
 		</table>
-
-		<MemoryCards
-			memories={$memories}
-			loading={memoryHandler.loading}
-			hasError={!!memoryHandler.error}
-			selectedIds={$selectedMemoryIds}
-			onToggleSelect={(id) => memoryHandler.toggleSelect(id)}
-			{onMemoryClick}
-		/>
 	</div>
+
+	<MemoryCards
+		memories={$memories}
+		loading={memoryHandler.loading}
+		hasError={!!memoryHandler.error}
+		selectedIds={$selectedMemoryIds}
+		onToggleSelect={(id) => memoryHandler.toggleSelect(id)}
+		{onMemoryClick}
+	/>
 
 	<MemoryListPagination
 		page={$memoriesPage}
@@ -251,156 +254,5 @@
 
 	.mem-error-slot {
 		margin-bottom: var(--space-3);
-	}
-
-	/* ── Table wrapper ── */
-	.mem-table-wrap {
-		overflow-x: auto;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: var(--color-surface, #fff);
-	}
-
-	.mem-table {
-		width: 100%;
-		border-collapse: collapse;
-		min-width: 680px;
-	}
-
-	/* ── Head ── */
-	.mem-thead-row {
-		border-bottom: 1px solid var(--color-border);
-		background: rgba(248, 250, 252, 0.9);
-	}
-
-	:global(html.dark) .mem-thead-row {
-		background: rgba(10, 18, 38, 0.85);
-	}
-
-	.mem-th {
-		padding: 10px 12px;
-		text-align: left;
-		font-size: 0.7rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		white-space: nowrap;
-		user-select: none;
-	}
-
-	.mem-th.sortable {
-		cursor: pointer;
-	}
-	.mem-th.sortable:hover {
-		color: var(--color-text);
-	}
-
-	/* ── Rows ── */
-	.mem-td {
-		padding: 10px 12px;
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	:global(html.dark) .mem-td {
-		border-color: rgba(148, 163, 184, 0.08);
-	}
-
-	.mem-row {
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-
-	.mem-row:hover {
-		background: rgba(241, 245, 249, 0.7);
-	}
-
-	:global(html.dark) .mem-row:hover {
-		background: rgba(14, 165, 233, 0.05);
-	}
-
-	.mem-row.selected {
-		background: rgba(14, 165, 233, 0.05);
-	}
-
-	:global(html.dark) .mem-row.selected {
-		background: rgba(14, 165, 233, 0.08);
-	}
-
-	/* last row: no bottom border */
-	.mem-row:last-child .mem-td {
-		border-bottom: none;
-	}
-
-	/* ── Row actions ── */
-	.row-actions {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		opacity: 0;
-		transition: opacity 0.15s ease;
-		white-space: nowrap;
-	}
-
-	.mem-row:hover .row-actions {
-		opacity: 1;
-	}
-
-	@media (pointer: coarse) {
-		.row-action-btn {
-			width: 44px;
-			height: 44px;
-		}
-	}
-
-	.row-action-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		/* 36px minimum, 44px on coarse pointers. The previous 32px was itself a
-		   fix for a 22px original, but 32px still sits below the WCAG 2.2
-		   target-size floor — measured, not assumed. */
-		width: 36px;
-		height: 36px;
-		border-radius: var(--radius-sm);
-		border: none;
-		cursor: pointer;
-		background: transparent;
-		transition:
-			background 0.15s ease,
-			color 0.15s ease;
-		color: var(--color-text-muted);
-	}
-
-	.edit-btn:hover {
-		background: rgba(14, 165, 233, 0.1);
-		color: #0ea5e9;
-	}
-
-	:global(html.dark) .edit-btn:hover {
-		background: rgba(14, 165, 233, 0.15);
-		color: #38bdf8;
-	}
-
-	.delete-btn:hover {
-		background: rgba(239, 68, 68, 0.1);
-		color: #ef4444;
-	}
-
-	:global(html.dark) .delete-btn:hover {
-		background: rgba(239, 68, 68, 0.15);
-		color: #fca5a5;
-	}
-
-	@media (max-width: 720px) {
-		.mem-table {
-			display: none;
-		}
-
-		.mem-table-wrap {
-			overflow: visible;
-			border: 0;
-			background: transparent;
-		}
 	}
 </style>

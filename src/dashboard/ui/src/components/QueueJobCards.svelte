@@ -11,9 +11,9 @@
 	 * Purely presentational: every mutation is a callback, matching the
 	 * table's contract.
 	 */
-	import Icon from "../lib/Icon.svelte";
 	import type { QueueJob } from "../lib/api";
 	import { formatDate } from "../lib/utils";
+	import { EmptyState } from "./ui";
 
 	let {
 		jobs = [],
@@ -38,11 +38,11 @@
 			<div class="job-card"><div class="skeleton" style="height:140px;border-radius:10px;"></div></div>
 		{/each}
 	{:else if jobs.length === 0}
-		<div class="job-empty">
-			<Icon name="circle-check" size={24} /><strong>No failed jobs</strong><span
-				>The queue is healthy. Failed jobs will appear here.</span
-			>
-		</div>
+		<EmptyState
+			icon="circle-check"
+			title="No failed jobs"
+			description="Failed (poison) jobs will appear here for re-run or clearing."
+		/>
 	{:else}
 		{#each jobs as job (job.id)}
 			<article class="job-card">
@@ -115,12 +115,12 @@
 	@media (max-width: 720px) {
 		.job-cards {
 			display: grid;
-			gap: 12px;
+			gap: var(--space-3);
 		}
 		.job-card {
 			display: grid;
 			gap: 14px;
-			padding: 16px;
+			padding: var(--space-4);
 			border: 1px solid var(--color-border);
 			border-radius: var(--radius-lg);
 			background: var(--color-surface);
@@ -169,17 +169,6 @@
 			display: grid;
 			grid-template-columns: 1fr 1fr;
 			gap: 8px;
-		}
-		.job-empty {
-			display: grid;
-			justify-items: center;
-			gap: 8px;
-			padding: 36px 16px;
-			color: var(--color-text-muted);
-			text-align: center;
-		}
-		.job-empty strong {
-			color: var(--color-text);
 		}
 	}
 </style>

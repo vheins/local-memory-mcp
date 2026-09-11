@@ -2,6 +2,7 @@
 	import Icon from "../lib/Icon.svelte";
 	import { formatDate } from "../lib/utils";
 	import type { Handoff, TaskClaim } from "../lib/interfaces";
+	import EmptyState from "./ui/EmptyState.svelte";
 
 	export let handoffs: Handoff[] = [];
 	export let loading = false;
@@ -39,12 +40,12 @@
 				{/each}
 			{:else if handoffs.length === 0}
 				<tr>
-					<td colspan="8" class="mem-td" style="padding:40px;text-align:center;color:var(--color-text-muted);">
-						<Icon name="git-branch" size={22} strokeWidth={1.75} />
-						<div style="margin-top:8px;">No handoffs found</div>
-						<div style="font-size:0.78rem;margin-top:4px;">
-							Create a handoff when work needs context transfer between agents.
-						</div>
+					<td colspan="8" class="mem-td" style="padding:0;border-bottom:none;">
+						<EmptyState
+							icon="git-branch"
+							title="No handoffs found"
+							description="Create a handoff when work needs context transfer between agents."
+						/>
 					</td>
 				</tr>
 			{:else}
@@ -85,7 +86,7 @@
 						<td class="mem-td" style="font-size:0.75rem;color:var(--color-text-muted);white-space:nowrap;">
 							{handoff.expires_at ? formatDate(handoff.expires_at) : "—"}
 						</td>
-						<td class="mem-td row-actions" on:click|stopPropagation>
+						<td class="mem-td row-actions reveal-on-hover" on:click|stopPropagation>
 							<button
 								class="row-action-btn delete-btn"
 								on:click={() => onDeleteRow(handoff)}
@@ -111,9 +112,11 @@
 		{/each}
 	{:else if handoffs.length === 0}
 		<div class="mobile-empty">
-			<Icon name="git-branch" size={24} strokeWidth={1.75} />
-			<strong>No handoffs found</strong>
-			<span>Create one when unfinished work needs context transfer.</span>
+			<EmptyState
+				icon="git-branch"
+				title="No handoffs found"
+				description="Create one when unfinished work needs context transfer."
+			/>
 		</div>
 	{:else}
 		{#each handoffs as handoff (handoff.id)}
@@ -163,11 +166,11 @@
 	{#if claimsLoading}
 		<div class="muted-state">Loading claims...</div>
 	{:else if claims.length === 0}
-		<div class="empty-claims">
-			<Icon name="check" size={20} strokeWidth={1.75} />
-			<div class="empty-title">No active claims</div>
-			<div class="empty-copy">Claimed tasks will appear here so you can inspect or release them.</div>
-		</div>
+		<EmptyState
+			icon="check"
+			title="No active claims"
+			description="Claimed tasks will appear here so you can inspect or release them."
+		/>
 	{:else}
 		<div class="claim-list">
 			{#each claims as claim, i (`${claim.id}-${i}`)}
@@ -194,91 +197,6 @@
 </div>
 
 <style>
-	/* ── Table ── */
-	.mem-table-wrap {
-		overflow-x: auto;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: var(--color-surface, #fff);
-	}
-	.mem-table {
-		width: 100%;
-		border-collapse: collapse;
-		min-width: 750px;
-	}
-	.mem-thead-row {
-		border-bottom: 1px solid var(--color-border);
-		background: rgba(248, 250, 252, 0.9);
-	}
-	:global(html.dark) .mem-thead-row {
-		background: rgba(10, 18, 38, 0.85);
-	}
-	.mem-th {
-		padding: 10px 12px;
-		text-align: left;
-		font-size: 0.7rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		white-space: nowrap;
-		user-select: none;
-	}
-	.mem-td {
-		padding: 10px 12px;
-		border-bottom: 1px solid var(--color-border);
-	}
-	:global(html.dark) .mem-td {
-		border-color: rgba(148, 163, 184, 0.08);
-	}
-	.mem-row {
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-	.mem-row:hover {
-		background: rgba(241, 245, 249, 0.7);
-	}
-	:global(html.dark) .mem-row:hover {
-		background: rgba(14, 165, 233, 0.05);
-	}
-	.mem-row:last-child .mem-td {
-		border-bottom: none;
-	}
-	.row-actions {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		opacity: 0;
-		transition: opacity 0.15s ease;
-		white-space: nowrap;
-	}
-	.mem-row:hover .row-actions {
-		opacity: 1;
-	}
-	.row-action-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 40px;
-		height: 40px;
-		border-radius: 7px;
-		border: none;
-		cursor: pointer;
-		background: transparent;
-		transition:
-			background 0.15s ease,
-			color 0.15s ease;
-		color: var(--color-text-muted);
-	}
-	.delete-btn:hover {
-		background: rgba(239, 68, 68, 0.1);
-		color: #ef4444;
-	}
-	:global(html.dark) .delete-btn:hover {
-		background: rgba(239, 68, 68, 0.15);
-		color: #fca5a5;
-	}
-
 	/* ── Status pills ── */
 	.status-pill {
 		border-radius: 999px;
@@ -360,42 +278,19 @@
 		padding: 24px 4px;
 		text-align: center;
 	}
-	.empty-claims {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		color: var(--color-text-muted);
-		text-align: center;
-		padding: 24px;
-	}
-	.empty-title {
-		color: var(--color-text);
-		font-size: 0.92rem;
-		font-weight: 850;
-	}
-	.empty-copy {
-		max-width: 260px;
-		font-size: 0.78rem;
-		line-height: 1.45;
-	}
 	.handoff-cards {
 		display: none;
 	}
 
 	@media (max-width: 720px) {
-		.mem-table-wrap {
-			display: none;
-		}
 		.handoff-cards {
 			display: grid;
-			gap: 12px;
+			gap: var(--space-3);
 		}
 		.handoff-card {
 			display: grid;
 			gap: 8px;
-			padding: 16px;
+			padding: var(--space-4);
 			border: 1px solid var(--color-border);
 			border-radius: var(--radius-lg);
 			background: var(--color-surface);
@@ -444,9 +339,6 @@
 			border-radius: var(--radius-lg);
 			color: var(--color-text-muted);
 			text-align: center;
-		}
-		.mobile-empty strong {
-			color: var(--color-text);
 		}
 		.claim-row {
 			align-items: stretch;

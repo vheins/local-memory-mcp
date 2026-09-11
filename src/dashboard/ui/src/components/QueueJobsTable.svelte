@@ -3,6 +3,7 @@
 	import type { QueueJob } from "../lib/api";
 	import QueueJobCards from "./QueueJobCards.svelte";
 	import { formatDate } from "../lib/utils";
+	import EmptyState from "./ui/EmptyState.svelte";
 
 	/**
 	 * Failed (poison) jobs table (TASK-297 split — F2). Renders the jobs array
@@ -100,12 +101,12 @@
 					{/each}
 				{:else if jobs.length === 0}
 					<tr>
-						<td colspan="7" class="mem-td" style="padding:40px;text-align:center;color:var(--color-text-muted);">
-							<Icon name="circle-check" size={22} strokeWidth={1.75} />
-							<div style="margin-top:8px;">No failed jobs</div>
-							<div style="font-size:0.78rem;margin-top:4px;">
-								Failed (poison) jobs will appear here for re-run or clearing.
-							</div>
+						<td colspan="7" class="mem-td" style="padding:0;border-bottom:none;">
+							<EmptyState
+								icon="circle-check"
+								title="No failed jobs"
+								description="Failed (poison) jobs will appear here for re-run or clearing."
+							/>
 						</td>
 					</tr>
 				{:else}
@@ -143,7 +144,7 @@
 							<td class="mem-td">
 								<div class="row-actions">
 									<button
-										class="row-action-btn retry-btn"
+										class="row-action-btn has-label retry-btn"
 										onclick={() => onRetry?.(job)}
 										disabled={busy?.id === job.id}
 										title="Re-run job"
@@ -155,7 +156,7 @@
 										</span>
 									</button>
 									<button
-										class="row-action-btn delete-btn"
+										class="row-action-btn has-label delete-btn"
 										onclick={() => onClear?.(job)}
 										disabled={busy?.id === job.id}
 										title="Clear job"
@@ -204,7 +205,7 @@
 
 <style>
 	.queue-section {
-		border-radius: 14px;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--color-border);
 		background: var(--color-surface, #fff);
 		padding: 16px;
@@ -236,66 +237,6 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-	}
-
-	/* ── Table ── */
-	.mem-table-wrap {
-		overflow-x: auto;
-		border-radius: 14px;
-		border: 1px solid var(--color-border);
-		background: var(--color-surface, #fff);
-	}
-
-	.mem-table {
-		width: 100%;
-		border-collapse: collapse;
-		min-width: 900px;
-	}
-
-	.mem-thead-row {
-		border-bottom: 1px solid var(--color-border);
-		background: rgba(248, 250, 252, 0.9);
-	}
-
-	:global(html.dark) .mem-thead-row {
-		background: rgba(10, 18, 38, 0.85);
-	}
-
-	.mem-th {
-		padding: 10px 12px;
-		text-align: left;
-		font-size: 0.7rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
-		white-space: nowrap;
-		user-select: none;
-	}
-
-	.mem-td {
-		padding: 10px 12px;
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	:global(html.dark) .mem-td {
-		border-color: rgba(148, 163, 184, 0.08);
-	}
-
-	.mem-row {
-		transition: background 0.15s ease;
-	}
-
-	.mem-row:hover {
-		background: rgba(241, 245, 249, 0.7);
-	}
-
-	:global(html.dark) .mem-row:hover {
-		background: rgba(14, 165, 233, 0.05);
-	}
-
-	.mem-row:last-child .mem-td {
-		border-bottom: none;
 	}
 
 	/* ── Entity cell ── */
@@ -354,57 +295,6 @@
 		max-width: 320px;
 	}
 
-	/* ── Row actions ── */
-	.row-actions {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		white-space: nowrap;
-	}
-
-	.row-action-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		padding: 5px 9px;
-		border-radius: 7px;
-		border: 1px solid var(--color-border);
-		cursor: pointer;
-		background: transparent;
-		transition:
-			background 0.15s ease,
-			color 0.15s ease,
-			border-color 0.15s ease;
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-		font-weight: 700;
-	}
-
-	.row-action-btn:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-
-	.retry-btn:hover:not(:disabled) {
-		background: rgba(14, 165, 233, 0.1);
-		color: #0369a1;
-		border-color: rgba(14, 165, 233, 0.25);
-	}
-
-	.delete-btn:hover:not(:disabled) {
-		background: rgba(239, 68, 68, 0.1);
-		color: #b91c1c;
-		border-color: rgba(239, 68, 68, 0.25);
-	}
-
-	:global(html.dark) .retry-btn:hover:not(:disabled) {
-		color: #7dd3fc;
-	}
-
-	:global(html.dark) .delete-btn:hover:not(:disabled) {
-		color: #fca5a5;
-	}
-
 	.action-label {
 		line-height: 1;
 	}
@@ -438,9 +328,6 @@
 		}
 		.table-actions .btn {
 			justify-content: center;
-		}
-		.mem-table-wrap {
-			display: none;
 		}
 		.pagination {
 			justify-content: space-between;

@@ -15,6 +15,7 @@
 	import type { Memory } from "../lib/stores";
 	import { formatDate } from "../lib/utils";
 	import { TYPE_LABELS, importanceColor } from "../lib/memoryConfig";
+	import { EmptyState } from "./ui";
 
 	let {
 		memories = [],
@@ -39,31 +40,35 @@
 			<div class="memory-card skeleton" style="height:112px;"></div>
 		{/each}
 	{:else if !hasError}
-		{#each memories as mem (mem.id)}
-			<article class="memory-card" class:selected={selectedIds.has(mem.id)}>
-				<div class="memory-card-topline">
-					<input
-						type="checkbox"
-						checked={selectedIds.has(mem.id)}
-						onchange={() => onToggleSelect(mem.id)}
-						aria-label="Select memory {mem.title}"
-					/>
-					<span class="type-chip type-{mem.type}">{TYPE_LABELS[mem.type] || mem.type}</span>
-					<span class="memory-card-importance" style="color:{importanceColor[mem.importance] || importanceColor[1]};">
-						Importance {mem.importance}
-					</span>
-				</div>
-				<button class="memory-card-main" onclick={() => onMemoryClick(mem)}>
-					<strong>{mem.title || "Untitled memory"}</strong>
-					<span>{formatDate(mem.updated_at)} · {mem.hit_count ?? 0} hits</span>
-				</button>
-				{#if mem.tags?.length}
-					<div class="memory-card-tags">
-						{#each mem.tags.slice(0, 3) as tag (tag)}<span>{tag}</span>{/each}
+		{#if memories.length === 0}
+			<EmptyState icon="search" title="No memories found" description="Adjust your search or create a new memory." />
+		{:else}
+			{#each memories as mem (mem.id)}
+				<article class="memory-card" class:selected={selectedIds.has(mem.id)}>
+					<div class="memory-card-topline">
+						<input
+							type="checkbox"
+							checked={selectedIds.has(mem.id)}
+							onchange={() => onToggleSelect(mem.id)}
+							aria-label="Select memory {mem.title}"
+						/>
+						<span class="type-chip type-{mem.type}">{TYPE_LABELS[mem.type] || mem.type}</span>
+						<span class="memory-card-importance" style="color:{importanceColor[mem.importance] || importanceColor[1]};">
+							Importance {mem.importance}
+						</span>
 					</div>
-				{/if}
-			</article>
-		{/each}
+					<button class="memory-card-main" onclick={() => onMemoryClick(mem)}>
+						<strong>{mem.title || "Untitled memory"}</strong>
+						<span>{formatDate(mem.updated_at)} · {mem.hit_count ?? 0} hits</span>
+					</button>
+					{#if mem.tags?.length}
+						<div class="memory-card-tags">
+							{#each mem.tags.slice(0, 3) as tag (tag)}<span>{tag}</span>{/each}
+						</div>
+					{/if}
+				</article>
+			{/each}
+		{/if}
 	{/if}
 </div>
 
@@ -76,19 +81,20 @@
 	@media (max-width: 720px) {
 		.memory-cards {
 			display: grid;
-			gap: 10px;
+			gap: var(--space-3);
 		}
 
 		.memory-card {
-			padding: 14px;
+			padding: var(--space-4);
 			border: 1px solid var(--color-border);
-			border-radius: var(--radius-md);
+			border-radius: var(--radius-lg);
 			background: var(--color-surface);
 		}
 
 		.memory-card.selected {
 			border-color: var(--color-primary);
 			box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+			background: var(--color-primary-soft);
 		}
 
 		.memory-card-topline {
