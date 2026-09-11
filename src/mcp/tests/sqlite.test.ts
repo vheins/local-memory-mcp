@@ -279,36 +279,44 @@ describe("Property 10: archiveExpiredMemories() is idempotent", () => {
 
 describe("Property 18: listRepos() returns unique and sorted list", () => {
 	it("no duplicates and sorted ascending", async () => {
-		await fc.assert(
-			fc.asyncProperty(
-				fc.array(fc.stringMatching(/^[a-z][a-z0-9-]{1,10}$/), { minLength: 2, maxLength: 10 }),
-				async (repos: string[]) => {
-					const store = await freshStore();
+		// One migrated store for all runs: constructing a fresh SQLiteStore (and
+		// re-running all migrations) per run was the dominant cost and pushed this
+		// property past the 15s timeout under the full forks pool (FIX-0452). Each
+		// run still starts from a clean memories table, so isolation is preserved.
+		const store = await freshStore();
+		try {
+			await fc.assert(
+				fc.asyncProperty(
+					fc.array(fc.stringMatching(/^[a-z][a-z0-9-]{1,10}$/), { minLength: 2, maxLength: 10 }),
+					async (repos: string[]) => {
+						store.db.exec("DELETE FROM memories");
 
-					repos.forEach((repo: string, i: number) => {
-						store.memories.insert(
-							makeEntry({
-								id: `p18-${i}-${repo}`,
-								repo
-							})
-						);
-					});
+						repos.forEach((repo: string, i: number) => {
+							store.memories.insert(
+								makeEntry({
+									id: `p18-${i}-${repo}`,
+									repo
+								})
+							);
+						});
 
-					const result = store.system.listRepos();
-					store.close();
+						const result = store.system.listRepos();
 
-					const unique = new Set(result);
-					if (unique.size !== result.length) return false;
+						const unique = new Set(result);
+						if (unique.size !== result.length) return false;
 
-					for (let i = 1; i < result.length; i++) {
-						if (result[i] < result[i - 1]) return false;
+						for (let i = 1; i < result.length; i++) {
+							if (result[i] < result[i - 1]) return false;
+						}
+
+						return true;
 					}
-
-					return true;
-				}
-			),
-			{ numRuns: 50 }
-		);
+				),
+				{ numRuns: 50 }
+			);
+		} finally {
+			store.close();
+		}
 	}, 15000);
 });
 
