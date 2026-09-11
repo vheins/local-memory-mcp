@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.6] — 2026-09-11
+
+### Fixed
+
+- **MCP read tools**: harden auto-infer against empty-string discriminators (`query: ""`, blank arrays) — DETAIL is now chosen before SEARCH; `{query: "", code: "DOC-004"}` resolves to DETAIL, all-empty resolves to LIST/RECAP (`FIX-READMODE-001`).
+- **Dashboard — Kanban**: cap column width (`minmax(260px, 340px)`) and improve horizontal-scroll affordance so columns no longer clip; move the per-row selection checkbox inside the task card with full event isolation (`DASH-KANBAN-001`).
+- **Dashboard — Codebase**: fix Explore/Insights layouts — responsive pane split, loading + themed empty state, single-column fallback, and no more horizontal clipping in dead-code rows and language badges (`DASH-CB-VIEWS-001`).
+- **Dashboard — filter badge**: remove redundant `badge`/`active-badge` classes so the active-filter badge is not overridden by the global `.badge` rule (`FIX-DASH-FILTER-002`).
+
+### Changed
+
+- **Dashboard — data tables**: extract one shared `styles/table.css` and adopt it across Memories, Standards, Handoffs and Queue tables (unified header, row, hover, selected, action-button and mobile-card styling; shared `EmptyState`) (`DASH-TABLE-STD-001`).
+- **Dashboard — pagination**: extract a single `ui/TablePagination` primitive and adopt it across Memories, Standards and Queue tables; delete the redundant `MemoryListPagination` (`DASH-TABLE-STD-002`).
+- **Dashboard — Standards filter**: align with the Memories filter pattern (constrained controls, active-filter badge, clear-all) with shared filter/search CSS in `controls.css` (`DASH-FILTER-STD-001`).
+
+### Tests
+
+- Stabilize `sqlite.test.ts` Property 18 under the full pool by reusing one migrated store (runtime 9021ms → 201ms) (`FIX-0452-FLAKE`).
+
 ## [0.45.5] — 2026-09-11
 
 ### Fixed
