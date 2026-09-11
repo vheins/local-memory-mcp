@@ -17,9 +17,8 @@
 	import { TYPE_LABELS, importanceColor, importanceBg } from "../lib/memoryConfig";
 	import MemoryCards from "./MemoryCards.svelte";
 	import MemoryListToolbar from "./MemoryListToolbar.svelte";
-	import MemoryListPagination from "./MemoryListPagination.svelte";
 	import MemoryBulkActions from "./MemoryBulkActions.svelte";
-	import { EmptyState, ErrorState } from "./ui";
+	import { EmptyState, ErrorState, TablePagination } from "./ui";
 
 	export let onMemoryClick: (mem: Memory) => void = () => {};
 	export let onBulkImport: () => void = () => {};
@@ -230,10 +229,10 @@
 		{onMemoryClick}
 	/>
 
-	<MemoryListPagination
+	<TablePagination
 		page={$memoriesPage}
 		totalPages={$memoriesTotalPages}
-		onGoToPage={(p) => memoryHandler.goToPage(p)}
+		onPageChange={(p: number) => memoryHandler.goToPage(p)}
 	/>
 
 	<MemoryBulkActions

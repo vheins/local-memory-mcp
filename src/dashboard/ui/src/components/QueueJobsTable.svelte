@@ -3,7 +3,7 @@
 	import type { QueueJob } from "../lib/api";
 	import QueueJobCards from "./QueueJobCards.svelte";
 	import { formatDate } from "../lib/utils";
-	import EmptyState from "./ui/EmptyState.svelte";
+	import { EmptyState, TablePagination } from "./ui";
 
 	/**
 	 * Failed (poison) jobs table (TASK-297 split — F2). Renders the jobs array
@@ -178,29 +178,7 @@
 
 	<QueueJobCards {jobs} {loading} {busy} {statusLabel} {onRetry} {onClear} />
 
-	{#if totalPages > 1}
-		<div class="pagination">
-			<button
-				class="btn btn-ghost btn-sm"
-				onclick={() => onPageChange?.(page - 1)}
-				disabled={page <= 1 || loading}
-				aria-label="Previous page"
-			>
-				<Icon name="chevron-left" size={13} strokeWidth={2} /> Prev
-			</button>
-			<span class="pagination-info">
-				Page {page} of {totalPages} ({totalItems} jobs)
-			</span>
-			<button
-				class="btn btn-ghost btn-sm"
-				onclick={() => onPageChange?.(page + 1)}
-				disabled={page >= totalPages || loading}
-				aria-label="Next page"
-			>
-				Next <Icon name="chevron-right" size={13} strokeWidth={2} />
-			</button>
-		</div>
-	{/if}
+	<TablePagination {page} {totalPages} {totalItems} itemLabel="jobs" {loading} {onPageChange} />
 </section>
 
 <style>
@@ -299,21 +277,6 @@
 		line-height: 1;
 	}
 
-	/* ── Pagination ── */
-	.pagination {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 12px;
-		margin-top: 12px;
-	}
-
-	.pagination-info {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--color-text-muted);
-	}
-
 	@media (max-width: 720px) {
 		.queue-section {
 			padding: 16px;
@@ -328,15 +291,6 @@
 		}
 		.table-actions .btn {
 			justify-content: center;
-		}
-		.pagination {
-			justify-content: space-between;
-			flex-wrap: wrap;
-		}
-		.pagination-info {
-			order: -1;
-			width: 100%;
-			text-align: center;
 		}
 	}
 </style>

@@ -213,6 +213,34 @@ html.dark .row-action-btn.delete-btn:hover:not(:disabled) {
 	background: var(--color-primary-soft);
 }
 
+/* ── Shared Table Pagination ── */
+.table-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+}
+
+.table-pagination-info {
+	font-size: var(--text-label);
+	color: var(--color-text-muted);
+	font-variant-numeric: tabular-nums;
+	user-select: none;
+}
+
+.table-pagination-controls {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+}
+
+.table-pagination-btn {
+	min-width: 32px;
+	padding-left: 8px;
+	padding-right: 8px;
+}
+
 @media (max-width: 720px) {
 	.mem-table-wrap {
 		display: none;
@@ -220,5 +248,19 @@ html.dark .row-action-btn.delete-btn:hover:not(:disabled) {
 	.data-cards {
 		display: grid;
 		gap: var(--space-3);
+	}
+	.table-pagination {
+		justify-content: space-between;
+		flex-wrap: wrap;
+	}
+	.table-pagination-info {
+		order: -1;
+		width: 100%;
+		text-align: center;
+	}
+	.table-pagination-controls {
+		width: 100%;
+		justify-content: center;
+		flex-wrap: wrap;
 	}
 }

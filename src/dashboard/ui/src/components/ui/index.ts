@@ -17,4 +17,5 @@ export { default as PageHeader } from "./PageHeader.svelte";
 export { default as SectionHeading } from "./SectionHeading.svelte";
 export { default as Skeleton } from "./Skeleton.svelte";
 export { default as Surface } from "./Surface.svelte";
+export { default as TablePagination } from "./TablePagination.svelte";
 export { default as Toolbar } from "./Toolbar.svelte";

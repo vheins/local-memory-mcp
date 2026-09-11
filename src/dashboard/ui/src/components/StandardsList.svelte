@@ -3,9 +3,9 @@
 	import { formatDate } from "../lib/utils";
 	import type { CodingStandard } from "../lib/stores";
 	import { SvelteSet } from "svelte/reactivity";
-	import { buildPaginationPages, formatScopeLabel } from "../lib/standardsPanelUtils";
+	import { formatScopeLabel } from "../lib/standardsPanelUtils";
 	import { writable } from "svelte/store";
-	import EmptyState from "./ui/EmptyState.svelte";
+	import { EmptyState, TablePagination } from "./ui";
 
 	export let standards: CodingStandard[] = [];
 	export let loading = false;
@@ -18,7 +18,6 @@
 
 	const selectedStandardIds = writable<SvelteSet<string>>(new SvelteSet());
 
-	$: paginationPages = buildPaginationPages(page, totalPages);
 	$: allSelected = standards.length > 0 && $selectedStandardIds.size === standards.length;
 
 	function toggleSelect(id: string) {
@@ -194,30 +193,7 @@
 </div>
 
 <!-- Pagination -->
-{#if totalPages > 1}
-	<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
-		<span style="font-size:0.75rem;color:var(--color-text-muted);">
-			Page {page} of {totalPages}
-		</span>
-		<div style="display:flex;gap:4px;">
-			<button class="btn btn-ghost btn-sm" on:click={() => onGoToPage(1)} disabled={page <= 1}>«</button>
-			<button class="btn btn-ghost btn-sm" on:click={() => onGoToPage(page - 1)} disabled={page <= 1}>‹</button>
-			{#each paginationPages as p (p)}
-				<button
-					class="btn btn-sm"
-					class:btn-primary={p === page}
-					class:btn-ghost={p !== page}
-					on:click={() => onGoToPage(p)}>{p}</button
-				>
-			{/each}
-			<button class="btn btn-ghost btn-sm" on:click={() => onGoToPage(page + 1)} disabled={page >= totalPages}>›</button
-			>
-			<button class="btn btn-ghost btn-sm" on:click={() => onGoToPage(totalPages)} disabled={page >= totalPages}
-				>»</button
-			>
-		</div>
-	</div>
-{/if}
+<TablePagination {page} {totalPages} {loading} onPageChange={onGoToPage} />
 
 <!-- Bulk Action Toolbar -->
 {#if $selectedStandardIds.size > 0}
