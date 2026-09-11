@@ -55,14 +55,30 @@
 </section>
 
 <style>
-	/* Moved verbatim from CodebasePage so the split is presentation-neutral. */
 	.insights-view {
 		display: grid;
 		gap: 20px;
 	}
+
+	/* Normalize children so vertical rhythm is governed exclusively by grid gap */
+	.insights-view > :global(*) {
+		margin-top: 0;
+		margin-bottom: 0;
+	}
+
 	.insight-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 20px;
+	}
+
+	.insight-grid > :global(*) {
+		margin-bottom: 0;
+	}
+
+	@media (max-width: 900px) {
+		.insight-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

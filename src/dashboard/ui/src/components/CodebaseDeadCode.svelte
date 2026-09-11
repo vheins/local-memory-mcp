@@ -129,6 +129,7 @@
 
 		<ul class="dc-list" role="list" aria-label="Hotspots — most referenced symbols">
 			{#each deadCode.hotspots as hp (hp.file_path + ":" + hp.name)}
+				{@const kinds = kindBreakdown(hp.topKinds)}
 				<li role="listitem">
 					<button
 						class="dc-row"
@@ -141,9 +142,22 @@
 						<span class="dc-kind">{getKindLabel(hp.kind)}</span>
 						<span class="dc-loc">{hotspotLocation(hp)}</span>
 						<span class="dc-refs">{refsLabel(hp.refCount)}</span>
-						{#each kindBreakdown(hp.topKinds) as k (k.label)}
-							<span class="dc-kind-chip">{k.count} {k.label}</span>
-						{/each}
+						<span class="dc-chips-wrap">
+							{#each kinds.slice(0, 3) as k (k.label)}
+								<span class="dc-kind-chip">{k.count} {k.label}</span>
+							{/each}
+							{#if kinds.length > 3}
+								<span
+									class="dc-kind-chip dc-kind-chip-more"
+									title={kinds
+										.slice(3)
+										.map((k) => `${k.count} ${k.label}`)
+										.join(", ")}
+								>
+									+{kinds.length - 3}
+								</span>
+							{/if}
+						</span>
 					</button>
 				</li>
 			{/each}
@@ -155,6 +169,10 @@
 	/* ── Section (matches the Codebase tab overview-section pattern) ── */
 	.dc-section {
 		margin-bottom: 20px;
+	}
+
+	.dc-section:last-child {
+		margin-bottom: 0;
 	}
 
 	.dc-section-label {
@@ -202,8 +220,12 @@
 	.dc-row {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 6px;
+		row-gap: 4px;
 		width: 100%;
+		max-width: 100%;
+		box-sizing: border-box;
 		border: 1px solid var(--color-border);
 		background: rgba(255, 255, 255, 0.03);
 		color: var(--color-text-muted);
@@ -216,6 +238,7 @@
 			background 0.12s ease,
 			border-color 0.12s ease;
 		text-align: left;
+		overflow: hidden;
 	}
 
 	.dc-row:hover {
@@ -240,7 +263,10 @@
 		color: var(--color-text);
 		font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
 		white-space: nowrap;
-		flex-shrink: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 200px;
+		flex-shrink: 1;
 	}
 
 	.dc-kind {
@@ -250,6 +276,10 @@
 		opacity: 0.85;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 80px;
 		flex-shrink: 0;
 	}
 
@@ -261,7 +291,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		flex: 1;
+		flex: 1 1 120px;
 		min-width: 0;
 	}
 
@@ -312,6 +342,14 @@
 		white-space: nowrap;
 	}
 
+	.dc-chips-wrap {
+		display: inline-flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
 	.dc-kind-chip {
 		font-size: 0.52rem;
 		font-weight: 600;
@@ -322,6 +360,21 @@
 		border-radius: 4px;
 		flex-shrink: 0;
 		white-space: nowrap;
+	}
+
+	.dc-kind-chip-more {
+		opacity: 0.8;
+		font-style: italic;
+	}
+
+	@media (max-width: 640px) {
+		.dc-name {
+			max-width: 140px;
+		}
+
+		.dc-kind {
+			max-width: 60px;
+		}
 	}
 
 	/* ── Language-coverage footnote (subtle) ── */

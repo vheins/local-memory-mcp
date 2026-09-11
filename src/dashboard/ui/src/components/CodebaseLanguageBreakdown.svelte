@@ -48,7 +48,7 @@
 
 <style>
 	.overview-section {
-		margin-bottom: 20px;
+		margin-bottom: 0;
 	}
 
 	.overview-section-label {
@@ -78,7 +78,10 @@
 		border: 1px solid var(--color-border);
 		background: rgba(255, 255, 255, 0.03);
 		transition: background 0.12s ease;
-		min-width: 140px;
+		flex: 1 1 140px;
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
 	}
 
 	.lang-badge:hover {
@@ -96,24 +99,29 @@
 		font-weight: 600;
 		color: var(--color-text);
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		flex-shrink: 1;
 	}
 
 	.lang-count {
 		font-size: 0.62rem;
 		font-weight: 700;
 		color: var(--color-text-muted);
-		min-width: 18px;
+		min-width: 16px;
 		text-align: right;
+		flex-shrink: 0;
 	}
 
 	.lang-bar {
-		flex: 1;
+		flex: 1 1 auto;
 		height: 4px;
 		border-radius: 999px;
 		background: rgba(255, 255, 255, 0.06);
 		overflow: hidden;
-		min-width: 40px;
+		min-width: 20px;
 		max-width: 80px;
+		flex-shrink: 1;
 	}
 
 	.lang-bar-fill {
@@ -127,7 +135,8 @@
 		font-size: 0.58rem;
 		font-weight: 600;
 		color: var(--color-text-muted);
-		min-width: 28px;
+		min-width: 24px;
 		text-align: right;
+		flex-shrink: 0;
 	}
 </style>
