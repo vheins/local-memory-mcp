@@ -154,11 +154,9 @@
      as a floating pill, because "which queue am I looking at" is the single
      most consequential fact on this page. -->
 <PageHeader
-	title="Queue"
 	description={repo
 		? "Embedding and knowledge-extraction jobs for this workspace."
 		: "Server-wide embedding and knowledge-extraction outbox, across every workspace."}
-	eyebrow={repo || "Global"}
 />
 
 <div class="feature-shell">

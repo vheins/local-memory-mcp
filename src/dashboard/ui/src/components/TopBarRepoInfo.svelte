@@ -34,12 +34,14 @@
 				<span class="workspace-name">{currentRepo || "Select repository"}</span>
 				<span class="path-separator" aria-hidden="true">/</span>
 			{/if}
-			<strong>{viewLabel}</strong>
+			<h1 class="view-title">{viewLabel}</h1>
 		</div>
 		{#if viewScope === "workspace" && currentRepo && repoData}
 			<div class="view-meta">{repoData.memoryCount || 0} memories in this workspace</div>
 		{:else if viewScope === "global"}
 			<div class="view-meta">Across all repositories</div>
+		{:else if viewScope === "system"}
+			<div class="view-meta">Tools, prompts, and resources</div>
 		{/if}
 	</div>
 </div>
@@ -66,6 +68,15 @@
 		min-width: 0;
 		font-size: 0.9375rem;
 		color: var(--color-text);
+	}
+
+	.view-title {
+		font-size: inherit;
+		font-weight: 700;
+		margin: 0;
+		display: inline;
+		line-height: inherit;
+		color: inherit;
 	}
 
 	.workspace-name {

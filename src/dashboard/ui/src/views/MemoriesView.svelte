@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentRepo, type Memory } from "../lib/stores";
+	import type { Memory } from "../lib/stores";
 	import MemoryList from "../components/MemoryList.svelte";
 	import Icon from "../lib/Icon.svelte";
 	import { PageHeader, Surface } from "../components/ui";
@@ -30,11 +30,7 @@
 	} = $props();
 </script>
 
-<PageHeader
-	title="Memories"
-	description="Decisions, patterns, code facts, and mistakes this workspace has recorded."
-	eyebrow={$currentRepo || ""}
->
+<PageHeader description="Decisions, patterns, code facts, and mistakes this workspace has recorded.">
 	{#snippet actions()}
 		<button class="btn btn-primary" onclick={onNewMemory} id="newMemoryBtn">
 			<Icon name="plus" size={16} strokeWidth={2} />

@@ -20,7 +20,6 @@
 
 <div class="kg-toolbar">
 	<div class="kg-toolbar-left">
-		<h1 class="kg-title">Knowledge Graph</h1>
 		<span class="kg-stats">
 			{nodeCount} nodes · {edgeCount} edges
 		</span>
@@ -143,14 +142,6 @@
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		cursor: pointer;
-	}
-
-	.kg-title {
-		font-size: var(--text-title);
-		font-weight: var(--weight-semibold);
-		letter-spacing: -0.018em;
-		line-height: var(--leading-tight);
-		color: var(--color-text);
 	}
 
 	.kg-stats {

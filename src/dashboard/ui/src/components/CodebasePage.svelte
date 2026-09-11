@@ -201,8 +201,6 @@
 			     title does not change size depending on whether an index exists. -->
 			<header class="codebase-header">
 				<div>
-					{#if repo}<p class="eyebrow">{$currentRepo}</p>{/if}
-					<h1>Codebase</h1>
 					<p>Search files and symbols, then review architecture, exports, and hotspots.</p>
 				</div>
 			</header>
@@ -249,8 +247,6 @@
 				<div class="codebase-content-scroll">
 					<header class="codebase-header">
 						<div>
-							<p class="eyebrow">Workspace intelligence</p>
-							<h1>Codebase</h1>
 							<p>
 								Find a symbol or file first. Switch to insights only when you need architecture, exports, and hotspots.
 							</p>
@@ -404,27 +400,12 @@
 		justify-content: space-between;
 		gap: 24px;
 	}
-	.codebase-header h1 {
-		margin: 2px 0 6px;
-		font-size: var(--text-title);
-		font-weight: var(--weight-semibold);
-		letter-spacing: -0.018em;
-		color: var(--color-text);
-	}
 	.codebase-header p:last-child {
 		max-width: 680px;
 		margin: 0;
 		font-size: 0.85rem;
 		line-height: 1.55;
 		color: var(--color-text-muted);
-	}
-	.eyebrow {
-		margin: 0;
-		font-size: 0.68rem;
-		font-weight: 800;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--color-primary);
 	}
 	@media (pointer: coarse) {
 	}

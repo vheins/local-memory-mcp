@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentRepo, type Task } from "../lib/stores";
+	import type { Task } from "../lib/stores";
 	import KanbanBoard from "../components/KanbanBoard.svelte";
 	import Icon from "../lib/Icon.svelte";
 	import { PageHeader, Surface } from "../components/ui";
@@ -28,11 +28,7 @@
 	} = $props();
 </script>
 
-<PageHeader
-	title="Tasks"
-	description="Planned, active, and completed work for this workspace."
-	eyebrow={$currentRepo || ""}
->
+<PageHeader description="Planned, active, and completed work for this workspace.">
 	{#snippet actions()}
 		<button class="btn btn-primary" onclick={onAddTask}>
 			<Icon name="plus" size={16} strokeWidth={2} />

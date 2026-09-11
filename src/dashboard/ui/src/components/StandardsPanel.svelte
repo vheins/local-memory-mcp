@@ -172,11 +172,7 @@
 	});
 </script>
 
-<PageHeader
-	title="Standards"
-	description="Rules agents apply in this workspace. Add or import only what is genuinely reusable."
-	eyebrow={repo}
->
+<PageHeader description="Rules agents apply in this workspace. Add or import only what is genuinely reusable.">
 	{#snippet actions()}
 		<button class="btn btn-primary" on:click={openCreateDrawer}>
 			<Icon name="plus" size={16} strokeWidth={2} />

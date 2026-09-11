@@ -118,11 +118,7 @@
 	});
 </script>
 
-<PageHeader
-	title="Handoffs"
-	description="Transfer unfinished work between agents and resolve ownership conflicts."
-	eyebrow={repo}
->
+<PageHeader description="Transfer unfinished work between agents and resolve ownership conflicts.">
 	{#snippet actions()}
 		<button class="btn btn-primary" onclick={openCreateDrawer}>
 			<Icon name="plus" size={16} strokeWidth={2} />

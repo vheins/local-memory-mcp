@@ -21,7 +21,6 @@
 			<Icon name="cpu" size={16} strokeWidth={1.75} />
 		</div>
 		<div>
-			<h1 class="arena-title">Agent Arena</h1>
 			<p class="arena-sub">Live view of agents and tasks across every workspace.</p>
 		</div>
 	</div>
@@ -78,16 +77,8 @@
 		flex-shrink: 0;
 	}
 
-	.arena-title {
-		font-size: var(--text-title);
-		font-weight: var(--weight-semibold);
-		letter-spacing: -0.018em;
-		line-height: var(--leading-tight);
-		color: var(--color-text);
-	}
-
 	.arena-sub {
-		margin-top: var(--space-1);
+		margin: 0;
 		font-size: var(--text-secondary);
 		color: var(--color-text-muted);
 	}

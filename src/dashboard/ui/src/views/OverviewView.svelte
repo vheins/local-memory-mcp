@@ -5,7 +5,7 @@
 	import StatsWidget from "../components/StatsWidget.svelte";
 	import TaskStatsWidget from "../components/TaskStatsWidget.svelte";
 	import TimeStatsWidget from "../components/TimeStatsWidget.svelte";
-	import { EmptyState, PageHeader, SectionHeading, Surface } from "../components/ui";
+	import { EmptyState, SectionHeading, Surface } from "../components/ui";
 
 	/**
 	 * Overview — the answer to "what needs my attention right now?".
@@ -37,8 +37,6 @@
 </script>
 
 <div class="sr-only" aria-live="polite" aria-atomic="true">{liveText}</div>
-
-<PageHeader title="Overview" description="Server-wide health, then the workspace you have selected." />
 
 <div class="overview-stack">
 	<GlobalCommandCenter />

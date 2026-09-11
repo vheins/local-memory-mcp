@@ -66,7 +66,7 @@
 </script>
 
 <div class="animate-fade-in">
-	<PageHeader title="MCP Reference" description="Every tool, prompt, and resource this server exposes to agents." />
+	<PageHeader description="Every tool, prompt, and resource this server exposes to agents." />
 
 	<!-- The search row is a toolbar, not a header. It was previously wrapped in
 	     a `glass card` alongside the page title, which framed the page heading

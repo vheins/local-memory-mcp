@@ -2,7 +2,7 @@
 	import type { Snippet } from "svelte";
 
 	/**
-	 * PageHeader — the single page-title contract for every view.
+	 * PageHeader — optional view-level banner/toolbar for descriptions and actions.
 	 *
 	 * Before this existed, all 11 views hand-rolled their own header: some used
 	 * `.section-label` inside a `glass card`, some used an inline-styled flex row
@@ -10,7 +10,8 @@
 	 * to "where am I?".
 	 *
 	 * Contract:
-	 * - exactly one `<h1>` per page, at the page-title size
+	 * - the canonical <h1> lives in the shell chrome (TopBarRepoInfo).
+	 * - optional section <h2> if title is provided
 	 * - optional one-line description; never a paragraph
 	 * - `actions` holds AT MOST one primary action; everything else is
 	 *   secondary/tertiary or lives in an overflow menu
@@ -20,12 +21,12 @@
 	 * one more widget competing with the content.
 	 */
 	let {
-		title,
+		title = "",
 		description = "",
 		eyebrow = "",
 		actions
 	}: {
-		title: string;
+		title?: string;
 		description?: string;
 		/** Small contextual label above the title (e.g. workspace or scope). */
 		eyebrow?: string;
@@ -34,15 +35,19 @@
 </script>
 
 <header class="page-header">
-	<div class="page-header-text">
-		{#if eyebrow}
-			<p class="page-eyebrow">{eyebrow}</p>
-		{/if}
-		<h1 class="page-title">{title}</h1>
-		{#if description}
-			<p class="page-description">{description}</p>
-		{/if}
-	</div>
+	{#if eyebrow || title || description}
+		<div class="page-header-text">
+			{#if eyebrow}
+				<p class="page-eyebrow">{eyebrow}</p>
+			{/if}
+			{#if title}
+				<h2 class="page-title">{title}</h2>
+			{/if}
+			{#if description}
+				<p class="page-description">{description}</p>
+			{/if}
+		</div>
+	{/if}
 
 	{#if actions}
 		<div class="page-header-actions">{@render actions()}</div>
@@ -52,7 +57,7 @@
 <style>
 	.page-header {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-4);
 		flex-wrap: wrap;
@@ -80,11 +85,19 @@
 	}
 
 	.page-description {
-		margin-top: var(--space-2);
+		margin: 0;
 		font-size: var(--text-secondary);
 		color: var(--color-text-muted);
 		line-height: var(--leading-normal);
 		max-width: 68ch;
+	}
+
+	.page-title + .page-description {
+		margin-top: var(--space-2);
+	}
+
+	.page-eyebrow + .page-description {
+		margin-top: var(--space-1);
 	}
 
 	.page-header-actions {

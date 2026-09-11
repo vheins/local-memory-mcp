@@ -55,11 +55,7 @@
 	}
 </script>
 
-<PageHeader
-	title="Activity"
-	description="Every tool call and mutation recorded for this workspace, newest first."
-	eyebrow={$currentRepo || ""}
->
+<PageHeader description="Every tool call and mutation recorded for this workspace, newest first.">
 	{#snippet actions()}
 		<span class="event-count">{$recentActionsTotalItems} events</span>
 	{/snippet}
