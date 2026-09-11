@@ -194,6 +194,116 @@
 		0 0 16px rgba(56, 189, 248, 0.08);
 }
 
+/* ─── Search & Filter Toolbar Controls ───────────────────────────────────────── */
+.search-field {
+	position: relative;
+	min-width: 0;
+}
+
+.search-input {
+	width: 100%;
+	padding-left: var(--space-7);
+}
+
+.search-icon-inner {
+	position: absolute;
+	left: var(--space-3);
+	top: 50%;
+	transform: translateY(-50%);
+	color: var(--color-text-muted);
+	display: flex;
+	pointer-events: none;
+}
+
+.filter-select,
+.filter-input {
+	width: auto;
+	flex: 0 1 auto;
+	max-width: 180px;
+	min-width: 0;
+}
+
+.filter-status {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex-shrink: 0;
+}
+
+.filter-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	min-height: 28px;
+	padding: 2px var(--space-2);
+	border-radius: var(--radius-pill);
+	background: var(--color-primary-soft);
+	color: var(--color-primary-on-soft);
+	border: 1px solid rgba(37, 99, 235, 0.2);
+	font-size: var(--text-label);
+	font-weight: var(--weight-medium);
+	letter-spacing: 0.02em;
+}
+
+.filter-count {
+	font-size: 0.65rem;
+	background: var(--color-primary);
+	color: #ffffff;
+	border-radius: var(--radius-pill);
+	padding: 0 var(--space-1);
+	min-width: 16px;
+	text-align: center;
+	line-height: 16px;
+	font-weight: var(--weight-bold);
+}
+
+.clear-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	min-height: 28px;
+	padding: 2px var(--space-2);
+	border: 1px solid rgba(239, 68, 68, 0.25);
+	border-radius: var(--radius-sm);
+	background: rgba(239, 68, 68, 0.08);
+	color: var(--stat-red, var(--color-danger));
+	cursor: pointer;
+	font-size: var(--text-label);
+	font-weight: var(--weight-semibold);
+	transition: all var(--duration-base) var(--ease-smooth);
+	white-space: nowrap;
+}
+
+.clear-btn:hover {
+	background: rgba(239, 68, 68, 0.16);
+	border-color: rgba(239, 68, 68, 0.45);
+}
+
+.clear-btn:focus-visible {
+	outline: 2px solid var(--color-danger);
+	outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+	.filter-select,
+	.filter-input {
+		max-width: none;
+		width: 100%;
+	}
+
+	.filter-status {
+		width: 100%;
+		justify-content: center;
+	}
+}
+
+@media (pointer: coarse) {
+	.clear-btn {
+		min-height: 44px;
+		min-width: 44px;
+	}
+}
+
 /* ─── Cards ─────────────────────────────────────────────────────────────────── */
 .card {
 	border-radius: var(--radius-lg);

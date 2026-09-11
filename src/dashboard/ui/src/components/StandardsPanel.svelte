@@ -66,6 +66,16 @@
 		void loadStandards();
 	}
 
+	/**
+	 * Reset filter state before reloading standards.
+	 */
+	function handleClear() {
+		language = "";
+		stack = "";
+		scope = "repo";
+		page = 1;
+	}
+
 	function goToPage(p: number) {
 		if (p < 1 || p > totalPages) return;
 		page = p;
@@ -191,6 +201,7 @@
 		{importing}
 		standardsCount={standards.length}
 		{onFilterChange}
+		onClear={handleClear}
 		onExport={exportStandards}
 		onImport={importStandards}
 	/>
