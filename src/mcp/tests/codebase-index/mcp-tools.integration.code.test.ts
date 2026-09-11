@@ -154,7 +154,7 @@ describe("handleCodebaseRead (code mode)", () => {
 		expect(d.hasMore).toBe(true);
 	});
 
-	it("empty content is a no-op (code mode, empty result — never a full dump)", async () => {
+	it("empty content routes to architecture mode (empty string is not provided)", async () => {
 		const resp = await handleCodebaseRead(
 			{ owner: "vheins", json: true, repo: CODE_REPO, content: "", repoPath: tempDir },
 			store,
@@ -162,9 +162,8 @@ describe("handleCodebaseRead (code mode)", () => {
 		);
 		const d = data(resp);
 
-		expect(d.mode).toBe("code");
-		expect(d.matches).toEqual([]);
-		expect(d.total).toBe(0);
+		expect(d.mode).toBe("architecture");
+		expect(d.summary).toBeDefined();
 	});
 
 	it("missing repoPath → REPO_PATH_REQUIRED", async () => {

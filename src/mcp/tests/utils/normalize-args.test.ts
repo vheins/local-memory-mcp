@@ -231,6 +231,61 @@ describe("normalizeToolArguments", () => {
 	});
 });
 
+describe("empty-string parameters are treated as not provided (FIX-EMPTY-PARAMS)", () => {
+	it("removes top-level empty-string keys", () => {
+		const result = normalizeToolArguments({ query: "", status: "" });
+		expect("query" in result).toBe(false);
+		expect("status" in result).toBe(false);
+	});
+
+	it("removes nested empty-string keys inside plain objects", () => {
+		const result = normalizeToolArguments({ scope: { branch: "" } });
+		expect("branch" in (result.scope as Record<string, unknown>)).toBe(false);
+	});
+
+	it("removes empty-string keys inside array-of-object items", () => {
+		const result = normalizeToolArguments({ memories: [{ content: "", title: "keep" }] });
+		const memories = result.memories as Array<Record<string, unknown>>;
+		expect("content" in memories[0]).toBe(false);
+		expect(memories[0].title).toBe("keep");
+	});
+
+	it("preserves empty-string values inside record-valued fields", () => {
+		const result = normalizeToolArguments({
+			metadata: { k: "" },
+			context: { note: "" },
+			args: { variable: "" }
+		});
+		expect((result.metadata as Record<string, unknown>).k).toBe("");
+		expect((result.context as Record<string, unknown>).note).toBe("");
+		expect((result.args as Record<string, unknown>).variable).toBe("");
+	});
+
+	it("strips a string-valued context (not a record)", () => {
+		const result = normalizeToolArguments({ context: "" });
+		expect("context" in result).toBe(false);
+	});
+
+	it("preserves array elements even when they are empty strings", () => {
+		const result = normalizeToolArguments({ tags: [""], signals: ["", "x"] });
+		expect(result.tags).toEqual([""]);
+		expect(result.signals).toEqual(["", "x"]);
+	});
+
+	it("does not mutate the caller's object", () => {
+		const args = { query: "", scope: { branch: "" }, metadata: { k: "" }, tags: [""] };
+		const snapshot = structuredClone(args);
+		normalizeToolArguments(args);
+		expect(args).toEqual(snapshot);
+	});
+
+	it("passes non-empty values through unchanged", () => {
+		const result = normalizeToolArguments({ query: "q", status: "pending" });
+		expect(result.query).toBe("q");
+		expect(result.status).toBe("pending");
+	});
+});
+
 describe("validateRootBoundPath", () => {
 	it("accepts relative and in-root absolute paths", () => {
 		const session = makeSession();

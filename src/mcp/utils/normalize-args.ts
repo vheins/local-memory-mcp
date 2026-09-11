@@ -19,10 +19,53 @@ export function validateRootBoundPath(value: unknown, field: string, session?: S
 }
 
 /**
+ * Record-valued argument fields whose inner empty strings are legitimate stored
+ * data — they must never be stripped or recursed into. Matched by field name AND
+ * plain-object value: a string-valued `context` (memory/standard) is still an
+ * empty-string parameter and is stripped like any other (FIX-EMPTY-PARAMS).
+ */
+const RECORD_VALUED_FIELDS = new Set(["metadata", "context", "args"]);
+
+/**
+ * Clones an argument value, deleting every object key whose value is exactly
+ * the empty string and recursing into plain objects and array items.
+ *
+ * Empty strings are "not provided" for every tool parameter (universal policy,
+ * FIX-EMPTY-PARAMS). Record-valued fields (`metadata`/`context`/`args`) are
+ * copied verbatim — their inner empty strings are stored data, not parameters —
+ * and array ELEMENTS are preserved (`tags: [""]` stays intact). The input value
+ * is never mutated.
+ *
+ * @param value  Raw argument value (object, array, or primitive).
+ * @returns A structurally-cloned value with empty-string object keys removed.
+ */
+function stripEmptyStringKeys(value: unknown): unknown {
+	if (Array.isArray(value)) {
+		return value.map((item) => stripEmptyStringKeys(item));
+	}
+	if (value === null || typeof value !== "object") {
+		return value;
+	}
+
+	const source = value as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	for (const [key, child] of Object.entries(source)) {
+		if (child === "") continue; // exact empty string → treat as not provided
+		const isRecordValued =
+			RECORD_VALUED_FIELDS.has(key) && child !== null && typeof child === "object" && !Array.isArray(child);
+		out[key] = isRecordValued ? child : stripEmptyStringKeys(child);
+	}
+	return out;
+}
+
+/**
  * Normalizes tool call arguments by injecting owner/repo/scope from session
  * context when not explicitly provided. Handles string scope (JSON or plain
  * repo name), session-wide owner/repo preference, agent/model lazy capture,
  * and scope.folder derivation from current_file_path.
+ *
+ * Before any session fill, every empty-string parameter (at any nesting depth)
+ * is stripped so it is treated as "not provided" (FIX-EMPTY-PARAMS).
  *
  * Used by both the upstream MCP router (router.ts) and the native MCP SDK
  * tool registration (tools/index.ts).
@@ -37,9 +80,10 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 	}
 
 	const anyArgs = args as Record<string, unknown>;
-	const scopeVal = anyArgs.scope;
+	const strippedArgs = stripEmptyStringKeys(anyArgs) as Record<string, unknown>;
+	const scopeVal = strippedArgs.scope;
 	const nextArgs: Record<string, unknown> = {
-		...anyArgs,
+		...strippedArgs,
 		// Handle string scope gracefully:
 		//   "my-repo" → { repo: "my-repo" }
 		//   '{"owner":"vheins","repo":"my-repo"}' → { owner: "vheins", repo: "my-repo" }
@@ -49,7 +93,7 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 						try {
 							const parsed = JSON.parse(scopeVal);
 							if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-								return parsed as Record<string, unknown>;
+								return stripEmptyStringKeys(parsed) as Record<string, unknown>;
 							}
 						} catch {
 							/* not JSON, treat as plain repo name */
@@ -57,7 +101,7 @@ export function normalizeToolArguments(args: unknown, session?: SessionContext):
 						return { repo: scopeVal };
 					})()
 				: scopeVal
-					? { ...(scopeVal as Record<string, unknown>) }
+					? (stripEmptyStringKeys(scopeVal) as Record<string, unknown>)
 					: undefined
 	};
 

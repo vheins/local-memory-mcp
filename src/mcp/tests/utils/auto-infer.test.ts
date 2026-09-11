@@ -14,8 +14,8 @@ function makeStorage() {
 	return { storage, memoryGetByCode, standardGetByCode, taskGetByCode };
 }
 
-// Legacy spec: search-first with default "defined" presence (codebase-read
-// keeps this shape; TASK-316 depends on `content: ""` staying present).
+// Legacy spec: search-first with default "defined" presence (an explicit empty
+// string still counts as present; retained for callers that need that shape).
 const definedSpec: ReadModeSpec<"search" | "detail" | "recap"> = {
 	rules: [
 		{ mode: "search", fields: ["query"] },

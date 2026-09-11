@@ -17,8 +17,9 @@
  * serialize-all-optional-fields client (which sends `""` for unset strings)
  * cannot hijack mode selection with an empty value — `query: ""` is treated as
  * absent, and identifier rules are evaluated before the query rule so a
- * non-empty identifier always wins. `"defined"`/`"truthy"` are retained for
- * callers that depend on them (e.g. codebase-read's TASK-316 `content: ""`).
+ * non-empty identifier always wins. `"defined"`/`"truthy"` remain available for
+ * callers that need them (`"defined"` counts an explicit `""` as present;
+ * `"truthy"` is the boolean-flag canonical).
  */
 
 import { SQLiteStore } from "../storage/sqlite";
@@ -45,9 +46,9 @@ export interface ReadModeRule<TMode extends string = string> {
 	 *   clients that serialize every optional field send `query: ""` /
 	 *   `code: ""`, which under `"defined"` would count as present and hijack
 	 *   mode selection.
-	 * - `"defined"` — `value !== undefined` (legacy; an explicit empty string
-	 *   counts as present, e.g. codebase-read's TASK-316 `content: ""` → CODE
-	 *   no-op).
+	 * - `"defined"` — `value !== undefined` (an explicit empty string counts as
+	 *   present; retained for callers that intentionally distinguish `""` from
+	 *   absence).
 	 * - `"truthy"`  — `Boolean(value)` (canonical for boolean flags; a field
 	 *   with a schema default like `claim: false` is never "present" after
 	 *   parsing, so `"defined"` would always match).

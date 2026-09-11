@@ -45,18 +45,19 @@ import { toJSONSchema, type z } from "zod";
  *      arguments (current behavior).
  *   4. Collapse open records (`z.record(z.string(), z.unknown())`) to
  *      `{ type: "object" }` — matches the repo convention for `metadata` etc.
- *   5. Drop `minLength: 1` only on fields named `owner`/`repo` (any level) —
- *      an empty/whitespace-only `owner`/`repo` is treated as "not provided"
- *      and auto-healed from the session/roots by `normalizeToolArguments`, so
- *      the SDK must not reject `""` first (FIX-OWNER-EMPTY). `minLength`/
- *      `minItems` on other fields are kept (they mirror the handler Zod
- *      validation).
- *   6. `type: "integer"` → `"number"` — repo convention; `z.coerce.number()
+ *   5. `type: "integer"` → `"number"` — repo convention; `z.coerce.number()
  *      .int()` still enforces integers at the handler.
- *   7. Drop `minimum`/`maximum` equal to ±`Number.MAX_SAFE_INTEGER` — artifacts
+ *   6. Drop `minimum`/`maximum` equal to ±`Number.MAX_SAFE_INTEGER` — artifacts
  *      of `z.number().int()`.
- *   8. Drop `pattern` when `format` is present — Zod's uuid regex artifact
+ *   7. Drop `pattern` when `format` is present — Zod's uuid regex artifact
  *      (the repo only ever used `format: "uuid"`).
+ *   8. Relax every string-typed property that would reject `""` (via
+ *      `minLength`, `enum`, `pattern`, or `format`) to `anyOf: [<node>,
+ *      { const: "" }]` — an empty-string parameter is "not provided" for every
+ *      tool and is stripped by `normalizeToolArguments` AFTER the SDK AJV
+ *      validation, so AJV must not reject it first (FIX-EMPTY-PARAMS). The
+ *      non-empty constraints remain enforced; the handler Zod schema stays the
+ *      authoritative gate for non-empty values.
  *
  * `description` fields (from `.describe()`) are kept — they are part of the
  * Zod contract and richer than the old handwritten copies.
@@ -69,12 +70,32 @@ const SESSION_INJECTABLE = new Set(["owner", "repo"]);
 type JsonNode = unknown;
 
 /**
+ * Detect whether a JSON Schema node is string-typed and would reject the empty
+ * string under AJV (`minLength`, `enum`, `pattern`, or `format` constraint).
+ *
+ * @param node  normalized JSON Schema node
+ * @returns true when `""` must be explicitly allowed for this node
+ */
+function rejectsEmptyString(node: Record<string, unknown>): boolean {
+	const isStringType =
+		node.type === "string" ||
+		(Array.isArray(node.type) && node.type.includes("string")) ||
+		(Array.isArray(node.enum) && node.enum.length > 0 && node.enum.every((value) => typeof value === "string"));
+	if (!isStringType) return false;
+
+	if (typeof node.minLength === "number" && node.minLength > 0) return true;
+	if (Array.isArray(node.enum) && !node.enum.includes("")) return true;
+	if (typeof node.pattern === "string") return true;
+	if (typeof node.format === "string") return true;
+	return false;
+}
+
+/**
  * Recursively apply the normalization rules above.
  *
- * @param node     current JSON Schema node
- * @param propName the property name this node is bound to (for rule 5)
+ * @param node  current JSON Schema node
  */
-function normalizeNode(node: JsonNode, propName?: string): JsonNode {
+function normalizeNode(node: JsonNode): JsonNode {
 	if (Array.isArray(node)) {
 		return node.map((item) => normalizeNode(item));
 	}
@@ -86,7 +107,7 @@ function normalizeNode(node: JsonNode, propName?: string): JsonNode {
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(obj)) {
 		if (key === "$schema") continue; // rule 1
-		out[key] = normalizeNode(value, key);
+		out[key] = normalizeNode(value);
 	}
 
 	const hasProperties = "properties" in out;
@@ -120,21 +141,36 @@ function normalizeNode(node: JsonNode, propName?: string): JsonNode {
 		delete out.additionalProperties;
 	}
 
-	// Rule 5: empty-string session auto-heal only applies to owner/repo fields
-	if (out.minLength === 1 && propName !== undefined && SESSION_INJECTABLE.has(propName)) {
-		delete out.minLength;
-	}
-
-	// Rule 6: integer → number (repo convention)
+	// Rule 5: integer → number (repo convention)
 	if (out.type === "integer") out.type = "number";
 
-	// Rule 7: safe-integer bounds are artifacts of z.number().int()
+	// Rule 6: safe-integer bounds are artifacts of z.number().int()
 	if (out.minimum === -Number.MAX_SAFE_INTEGER) delete out.minimum;
 	if (out.maximum === Number.MAX_SAFE_INTEGER) delete out.maximum;
 
-	// Rule 8: uuid regex pattern artifact
+	// Rule 7: uuid regex pattern artifact
 	if (typeof out.format === "string" && "pattern" in out) {
 		delete out.pattern;
+	}
+
+	// Rule 8: allow "" for any string-typed property (FIX-EMPTY-PARAMS). The SDK
+	// validates args against this schema via AJV BEFORE normalizeToolArguments
+	// strips empty strings, so a constrained string/enum must accept "" here.
+	// Non-empty constraints stay enforced; the handler Zod schema is the
+	// authoritative gate for non-empty values.
+	if (rejectsEmptyString(out)) {
+		const inner = { ...out };
+		const wrapper: Record<string, unknown> = { anyOf: [inner, { const: "" }] };
+		// Keep the doc metadata on the outer node so clients still surface it.
+		if (typeof inner.description === "string") {
+			wrapper.description = inner.description;
+			delete inner.description;
+		}
+		if (typeof inner.title === "string") {
+			wrapper.title = inner.title;
+			delete inner.title;
+		}
+		return wrapper;
 	}
 
 	return out;

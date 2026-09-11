@@ -194,7 +194,7 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 		expect(symbols.length).toBe(0);
 	});
 
-	it("returns empty for empty query string", async () => {
+	it("routes an empty query string to architecture mode", async () => {
 		const response = await handleCodebaseRead(
 			{ query: "", repo: "test-repo", owner: "vheins", json: true },
 			store,
@@ -202,7 +202,8 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 		);
 		const data = response.structuredContent as Record<string, unknown>;
 
-		expect(data.total as number).toBe(0);
+		expect(data.mode).toBe("architecture");
+		expect(data.summary).toBeDefined();
 	});
 
 	it("supports pagination with offset and limit", async () => {

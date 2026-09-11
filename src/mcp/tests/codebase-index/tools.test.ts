@@ -495,25 +495,26 @@ describe("handleCodebaseRead (search_symbols mode)", () => {
 		expect(data.hasMore).toBe(false);
 	});
 
-	it("returns empty for empty query", async () => {
+	it("routes an empty query to architecture mode (empty string is not provided)", async () => {
 		const response = await handleCodebaseRead(
 			{ owner: "vheins", json: true, query: "", repo: "test-repo" },
 			store,
 			vectors
 		);
 		const data = response.structuredContent as Record<string, unknown>;
-		expect(data.total).toBe(0);
-		expect(data.hasMore).toBe(false);
+		expect(data.mode).toBe("architecture");
+		expect(data.summary).toBeDefined();
 	});
 
-	it("returns empty for whitespace query", async () => {
+	it("routes a whitespace-only query to architecture mode", async () => {
 		const response = await handleCodebaseRead(
 			{ owner: "vheins", json: true, query: "  ", repo: "test-repo" },
 			store,
 			vectors
 		);
 		const data = response.structuredContent as Record<string, unknown>;
-		expect(data.total).toBe(0);
+		expect(data.mode).toBe("architecture");
+		expect(data.summary).toBeDefined();
 	});
 });
 

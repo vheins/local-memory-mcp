@@ -4,7 +4,8 @@
  * Replaces 5 individual read-only tools with auto-inferred modes.
  * Per ADR-005: "Zero oneOf — auto-infer dari parameter mana yang diisi"
  *
- * Modes (auto-inferred from mutual-exclusive params):
+ * Modes (auto-inferred from mutual-exclusive params — all use non-empty
+ * presence, so an empty-string param falls through to ARCHITECTURE):
  *   name     → TRACE  (was trace_symbol)
  *   filePath → FILE   (was get_file_symbols)
  *   content  → CODE   (TASK-316 — grep indexed file contents)
@@ -44,16 +45,17 @@ import { logger } from "../utils/logger";
  */
 function inferMode(params: CodebaseReadInput): CodebaseReadMode {
 	// Shared auto-infer engine (OPT-DRY-06). `name`/`filePath` keep truthy
-	// presence — an empty symbol/file name is meaningless — while `query` and
-	// `content` use "defined" presence so an explicit empty string still routes
-	// to its mode (`query: ""` → SEARCH-all-symbols; `content: ""` → CODE
-	// no-op per TASK-316, never a full-file dump).
+	// presence (an empty string is already "not provided"); `query`/`content`
+	// use non-empty presence so an empty string is "not provided"
+	// (FIX-EMPTY-PARAMS) and falls through to ARCHITECTURE instead of the
+	// degenerate SEARCH-all/CODE-no-op modes (TASK-316 intent preserved —
+	// architecture never dumps file contents).
 	return inferReadMode(params, {
 		rules: [
 			{ mode: "trace", fields: ["name"], presence: "truthy" },
 			{ mode: "file", fields: ["filePath"], presence: "truthy" },
-			{ mode: "code", fields: ["content"] },
-			{ mode: "search", fields: ["query"] }
+			{ mode: "code", fields: ["content"], presence: "non-empty" },
+			{ mode: "search", fields: ["query"], presence: "non-empty" }
 		],
 		fallback: "architecture"
 	});
@@ -72,6 +74,10 @@ function inferMode(params: CodebaseReadInput): CodebaseReadMode {
  * - `content`  → CODE (TASK-316 — grep indexed file contents, symbol-enriched)
  * - `query`    → SEARCH (unified: 5-tier ranking + semantic vector blending)
  * - (nothing)  → ARCHITECTURE (tree overview of the codebase)
+ *
+ * Every discriminator uses non-empty presence (FIX-EMPTY-PARAMS), so an
+ * empty-string `query`/`content`/`name`/`filePath` is "not provided" and routes
+ * to ARCHITECTURE.
  *
  * All old tool names route here for backward compatibility (REFACTOR-CI-003).
  */
