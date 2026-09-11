@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.5] — 2026-09-11
+
+### Fixed
+
+- **Dashboard** — removed redundant page headers across dashboard views; each view now relies on the shell title instead of a duplicated in-page header (`e6b45c9` [DASH-HEADER-DUP-001])
+- **Dashboard — Memories filter** — fixed filter layout wrapping and alignment; added an active-filter indicator with a clear-all action so filtered state is visible and quickly resettable (`c081154` [DASH-FILTER-001])
+
+### Changed
+
+- **Dashboard — Data tables** — standardized dashboard data tables into a shared `table.css` pattern: unified header/row/hover/selected/action styling, consistent `EmptyState` usage, and mobile card tokens (`d1cfa68` [DASH-TABLE-STD-001])
+
 ## [0.45.4] — 2026-09-11
 
 ### Fixed
