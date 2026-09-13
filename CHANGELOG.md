@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.0] — 2026-09-13
+
+### Added
+
+- **Database shrink infrastructure**: incremental auto-vacuum plumbing and a guarded vacuum service (`src/mcp/services/vacuum.ts`), higher relation-prune throughput (cap 50k → 500k, with a tail-only remaining count), and `task_archive` retention (180-day TTL) plus batch aggregation.
+- **`agent-context` ranking controls**: `budget.min_relevance` threshold, conditional decision criticality, rebalanced relevance/importance blend, code-graph BFS kind allowlist, legacy-memory dedup, and source-aware token estimation.
+
+### Changed
+
+- **Schema migrations v35/v36/v37** (`SCHEMA_VERSION` 34 → 37). They run automatically on the first startup after upgrade (~12s on a 4.9 GiB database, measured):
+  - v35 — drop the never-populated `codebase_symbol_vectors` table.
+  - v36 — drop redundant `relations` indexes (`idx_relations_repo`, `idx_relations_to`); reclaims ~400 MB.
+  - v37 — store embeddings as float32 BLOB instead of JSON TEXT; reclaims ~127 MB with no recall impact.
+
+### Fixed
+
+- KG relation prune no longer freezes the event loop (~28s) on the first maintenance run after the cap increase — the loop now yields between chunks.
+- Bulk `tasks[]` status transitions: `comment`, `force`, `commit_id`, `changed_files`, and `model` were silently stripped by the item schema, breaking all bulk status changes.
+- Maintenance log now prints the exact `VACUUM` command an operator can run.
+
+### Notes
+
+- **Downgrade warning**: after v37, embeddings are stored as float32 BLOB. Rolling back to a pre-0.46.0 binary makes vector search return 0 results (falling back to FTS/keyword) because older code `JSON.parse`s the BLOB. Re-upgrading restores it.
+- **File size does not shrink automatically**: v36 + v37 free ~590 MB into the freelist, but with `auto_vacuum=0` the database file keeps its size until a manual `VACUUM`.
+
 ## [0.45.9] — 2026-09-11
 
 ### Fixed
