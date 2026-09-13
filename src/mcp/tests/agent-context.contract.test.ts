@@ -1,7 +1,8 @@
 import { beforeEach, describe, it, expect } from "vitest";
 import { AgentContextSchema } from "../tools/schemas/index";
 import { MemoryWriteSchema } from "../tools/schemas/memory";
-import { handleAgentContext } from "../tools/agent-context";
+import { handleAgentContext, AGENT_CONTEXT_BLEND, deriveCandidateLimit } from "../tools/agent-context";
+import { DECISION_CRITICAL_MIN_SCORE } from "../tools/agent-context-compiler";
 import { createTestStore } from "../storage/sqlite";
 import { StubVectorStore } from "../storage/vectors.stub";
 import type { MemoryEntry, VectorStore } from "../types";
@@ -42,13 +43,45 @@ describe("Agent Context - Schema Validation (AgentContextSchema)", () => {
 
 	it("accepts compiler inputs and applies bounded defaults", () => {
 		const result = AgentContextSchema.parse({ owner: "test", repo: "test", objective: "ship feature" });
-		expect(result.budget).toEqual({ tokens: 2000, max_items: 20, code_depth: 1 });
+		expect(result.budget).toEqual({ tokens: 2000, max_items: 20, code_depth: 1, min_relevance: 0 });
 		expect(result.sources).toEqual(["memories", "decisions", "tasks", "handoffs", "standards", "observations", "code"]);
+	});
+
+	it("defaults min_relevance to 0 and rejects out-of-range values", () => {
+		const result = AgentContextSchema.parse({ owner: "test", repo: "test" });
+		expect(result.budget.min_relevance).toBe(0);
+		expect(
+			AgentContextSchema.parse({ owner: "test", repo: "test", budget: { min_relevance: 0.5 } }).budget.min_relevance
+		).toBe(0.5);
+		expect(() => AgentContextSchema.parse({ owner: "test", repo: "test", budget: { min_relevance: -0.1 } })).toThrow();
+		expect(() => AgentContextSchema.parse({ owner: "test", repo: "test", budget: { min_relevance: 1.5 } })).toThrow();
 	});
 
 	it("rejects unsafe compiler budgets and unknown sources", () => {
 		expect(() => AgentContextSchema.parse({ owner: "test", repo: "test", budget: { tokens: 255 } })).toThrow();
 		expect(() => AgentContextSchema.parse({ owner: "test", repo: "test", sources: ["internet"] })).toThrow();
+	});
+});
+
+describe("Agent Context - blend + candidate pool constants (TASK-027 / TASK-031)", () => {
+	it("weights relevance above importance in AGENT_CONTEXT_BLEND", () => {
+		expect(AGENT_CONTEXT_BLEND).toEqual({ vector: 0.6, importance: 0.4 });
+		expect(AGENT_CONTEXT_BLEND.vector).toBeGreaterThan(AGENT_CONTEXT_BLEND.importance);
+	});
+
+	it("derives the candidate pool primarily from max_items, using limit only as a floor", () => {
+		// Default legacy limit (5) no longer starves a larger item budget.
+		expect(deriveCandidateLimit(20, 5)).toBe(60);
+		// limit is a floor when it exceeds the budget-derived pool.
+		expect(deriveCandidateLimit(1, 50)).toBe(50);
+		// Clamped to the vector store's hard ceiling.
+		expect(deriveCandidateLimit(100, 5)).toBe(100);
+		expect(deriveCandidateLimit(40, 5)).toBe(100);
+	});
+
+	it("keeps DECISION_CRITICAL_MIN_SCORE a small, non-zero threshold", () => {
+		expect(DECISION_CRITICAL_MIN_SCORE).toBeGreaterThan(0);
+		expect(DECISION_CRITICAL_MIN_SCORE).toBeLessThanOrEqual(1);
 	});
 });
 

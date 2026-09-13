@@ -14,7 +14,7 @@ Context compilation and observation persistence.
 | `observation-read`  | read  | List/detail exploration observations                              |
 | `observation-write` | write | Create/update/bulk/refresh observations with fingerprints         |
 
-`agent-context` compiles from: `memories`, `decisions`, `tasks`, `handoffs`, `standards`, `observations`, `code`. Ranked by priority + lexical overlap with `objective`; packed until `budget.tokens` (256–20k, default 2000) or `budget.max_items` (1–100, default 20) hit. Overflow in `exclusions` (`token_budget`/`item_budget`). `budget.code_depth` 0–5 graph expansion from `current_file_path`.
+`agent-context` compiles from: `memories`, `decisions`, `tasks`, `handoffs`, `standards`, `observations`, `code`. Ranked by priority + lexical overlap with `objective`; packed until `budget.tokens` (256–20k, default 2000) or `budget.max_items` (1–100, default 20) hit. Overflow in `exclusions` (`token_budget`/`item_budget`/`below_relevance`). `budget.code_depth` 0–5 graph expansion from `current_file_path`.
 
 ## 2. Authentication
 
@@ -29,20 +29,21 @@ Context compilation and observation persistence.
 
 ### agent-context
 
-| Name                  | Type                | Required | Default | Description                      |
-| :-------------------- | :------------------ | :------- | :------ | :------------------------------- |
-| `query` / `objective` | `string`            | No       | —       | Ranking objective (alias)        |
-| `task_code`           | `string`            | No       | —       | Pin task as critical             |
-| `current_file_path`   | `string`            | No       | —       | Code pointer for graph expansion |
-| `sources`             | `string[]`          | No       | all 7   | Subset of sources to include     |
-| `type_filter`         | `enum`              | No       | —       | Memory type filter               |
-| `budget.tokens`       | `integer` 256–20000 | No       | `2000`  | Token budget                     |
-| `budget.max_items`    | `integer` 1–100     | No       | `20`    | Item cap                         |
-| `budget.code_depth`   | `integer` 0–5       | No       | `1`     | Code graph depth                 |
-| `include_stale`       | `boolean`           | No       | `false` | Include stale observations       |
-| `limit`               | `integer` 1–100     | No       | `5`     | Legacy projection cap            |
-| `owner` / `repo`      | `string`            | No       | session | Scope                            |
-| `json`                | `boolean`           | No       | `false` | Structured flag                  |
+| Name                   | Type                | Required | Default | Description                                                                                                          |
+| :--------------------- | :------------------ | :------- | :------ | :------------------------------------------------------------------------------------------------------------------- |
+| `query` / `objective`  | `string`            | No       | —       | Ranking objective (alias)                                                                                            |
+| `task_code`            | `string`            | No       | —       | Pin task as critical                                                                                                 |
+| `current_file_path`    | `string`            | No       | —       | Code pointer for graph expansion                                                                                     |
+| `sources`              | `string[]`          | No       | all 7   | Subset of sources to include                                                                                         |
+| `type_filter`          | `enum`              | No       | —       | Memory type filter                                                                                                   |
+| `budget.tokens`        | `integer` 256–20000 | No       | `2000`  | Token budget                                                                                                         |
+| `budget.max_items`     | `integer` 1–100     | No       | `20`    | Item cap                                                                                                             |
+| `budget.code_depth`    | `integer` 0–5       | No       | `1`     | Code graph depth                                                                                                     |
+| `budget.min_relevance` | `number` 0–1        | No       | `0`     | Minimum lexical relevance a candidate must reach to be packed when an objective is set; critical/pinned items exempt |
+| `include_stale`        | `boolean`           | No       | `false` | Include stale observations                                                                                           |
+| `limit`                | `integer` 1–100     | No       | `5`     | Legacy projection cap                                                                                                |
+| `owner` / `repo`       | `string`            | No       | session | Scope                                                                                                                |
+| `json`                 | `boolean`           | No       | `false` | Structured flag                                                                                                      |
 
 ### synthesize
 

@@ -26,9 +26,17 @@ export const AgentContextSchema = z.object({
 		.object({
 			tokens: z.coerce.number().int().min(256).max(20_000).default(2_000),
 			max_items: z.coerce.number().int().min(1).max(100).default(20),
-			code_depth: z.coerce.number().int().min(0).max(5).default(1)
+			code_depth: z.coerce.number().int().min(0).max(5).default(1),
+			min_relevance: z.coerce
+				.number()
+				.min(0)
+				.max(1)
+				.default(0)
+				.describe(
+					"Minimum lexical relevance (0..1) a candidate must reach to be packed when an objective is set; lower-scoring candidates are excluded as below_relevance. Default 0 disables filtering."
+				)
 		})
-		.default({ tokens: 2_000, max_items: 20, code_depth: 1 }),
+		.default({ tokens: 2_000, max_items: 20, code_depth: 1, min_relevance: 0 }),
 	sources: z
 		.array(z.enum(AGENT_CONTEXT_SOURCES))
 		.min(1)
