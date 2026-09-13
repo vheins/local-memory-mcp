@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import sharp from "sharp";
 import { createTestStore } from "../storage/sqlite";
 import { RealVectorStore } from "../storage/vectors";
+import { decodeVector } from "../utils/vector";
 import type { SQLiteStore } from "../storage/sqlite";
 
 /**
@@ -75,7 +76,8 @@ describe("RealVectorStore embedding smoke (sharp 0.35 override)", () => {
 
 			const rows = db.memoryVectors.getVectorCandidates("smoke", "smoke-repo", 10);
 			expect(rows.length).toBe(1);
-			const vector = JSON.parse(rows[0].vector) as number[];
+			// Dense embeddings are stored as a float32 BLOB post-TASK-038.
+			const vector = Array.from(decodeVector(rows[0].vector));
 			expect(vector.length).toBe(384); // all-MiniLM-L6-v2 embedding dim
 			// normalized output: L2 norm ≈ 1
 			const norm = Math.sqrt(vector.reduce((acc, v) => acc + v * v, 0));

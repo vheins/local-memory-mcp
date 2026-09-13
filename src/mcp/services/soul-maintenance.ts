@@ -7,7 +7,8 @@ import {
 	ACTION_LOG_MAX_ROWS,
 	KG_RELATION_RETENTION_DAYS,
 	KG_RELATION_PRUNE_MAX_ROWS,
-	KG_RELATION_PRUNE_CHUNK
+	KG_RELATION_PRUNE_CHUNK,
+	KG_RELATION_PRUNE_REMAINING_UNKNOWN
 } from "../utils/constants";
 import { MEMORY_STATUS_ACTIVE, MEMORY_STATUS_ARCHIVED } from "../types";
 
@@ -31,8 +32,13 @@ export interface PruneRelationsResult {
 	/** Entity rows removed by the follow-up orphan sweep. */
 	orphanEntitiesDeleted: number;
 	/**
-	 * Eligible rows still remaining after this run — non-zero means the per-run
-	 * cap truncated the sweep and the next maintenance cycle will continue.
+	 * Eligible rows still remaining after this run. `0` means the sweep drained
+	 * every eligible row (nothing left to prune). A POSITIVE value is an exact
+	 * count, only computed when the run did NOT hit the cap (i.e. the tail was
+	 * reached), so it is cheap. `KG_RELATION_PRUNE_REMAINING_UNKNOWN` (-1) is
+	 * reported when the run hit the cap: a backlog provably remains, so the
+	 * expensive correlated count is skipped (TASK-041). Test `!== 0` for
+	 * "is there more work?".
 	 */
 	remaining: number;
 }
@@ -277,6 +283,15 @@ export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentio
  * which is where the space actually comes back: entities kept alive only by
  * now-deleted edges become collectable.
  *
+ * Observability (TASK-041): the exact remaining backlog is only counted when
+ * this run did NOT hit `maxRows` (the tail). When the cap was hit the count is
+ * skipped and `remaining` is reported as
+ * `KG_RELATION_PRUNE_REMAINING_UNKNOWN` (-1) — the correlated
+ * `countPrunableRelations` scan is ~105s on a 7.4M-row table and would
+ * dominate the bounded delete it is meant to observe. The default per-run cap
+ * was raised to 500,000 (KG_RELATION_PRUNE_MAX_ROWS) so the accumulated
+ * backlog drains in days rather than months.
+ *
  * Verified end-to-end on a copy of a real 536 MB database: 392,445 edges +
  * 4,937 entities removed, `VACUUM` reclaimed 536 → 368 MB (31%), integrity
  * check ok, 0 foreign-key violations.
@@ -285,7 +300,8 @@ export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentio
  * @param retentionDays - Age guard in days (default: KG_RELATION_RETENTION_DAYS)
  * @param maxRows - Hard cap on relation rows deleted this run
  * @param chunkSize - Rows per transaction (write-lock hold bound)
- * @returns Relations deleted, entities swept, and the remaining backlog
+ * @returns Relations deleted, entities swept, and the remaining backlog (exact
+ *   when the run drained the tail, else KG_RELATION_PRUNE_REMAINING_UNKNOWN)
  */
 export function pruneRelations(
 	knowledgeGraph: KnowledgeGraphEntity,
@@ -301,7 +317,17 @@ export function pruneRelations(
 	// The edges are gone; their endpoint entities may now be orphans. This is
 	// the pass that actually reclaims the space.
 	const orphanEntitiesDeleted = knowledgeGraph.deleteOrphanEntities();
-	const remaining = knowledgeGraph.countPrunableRelations(cutoff);
+
+	// TASK-041: only pay for the correlated remaining-count at the tail.
+	// `deleteUnreachableRelations` stops early ONLY when a chunk deletes 0 rows
+	// (it exhausts the eligible set), so `deleted < maxRows` proves the sweep
+	// reached the tail and the count is bounded and exact. When `deleted`
+	// EQUALS the cap the delete stopped because it ran out of budget, not work:
+	// a backlog provably remains, and running the ~105s correlated scan just to
+	// learn a number we already know is positive would dwarf the delete itself.
+	// Report the sentinel instead (test `remaining !== 0` for "more work").
+	const hitCap = deleted >= maxRows;
+	const remaining = hitCap ? KG_RELATION_PRUNE_REMAINING_UNKNOWN : knowledgeGraph.countPrunableRelations(cutoff);
 
 	logger.info("[SoulMaintenance] Pruned unreachable relations", {
 		deleted,
@@ -309,7 +335,7 @@ export function pruneRelations(
 		remaining,
 		cutoff,
 		retentionDays,
-		truncated: remaining > 0
+		truncated: remaining !== 0
 	});
 
 	return { deleted, orphanEntitiesDeleted, remaining };

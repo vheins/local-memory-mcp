@@ -1,9 +1,3 @@
-export interface CodebaseSymbolVector {
-	symbol_id: string;
-	vector: string;
-	updated_at: string;
-}
-
 export interface CodebaseSymbol {
 	id: string;
 	repo: string;

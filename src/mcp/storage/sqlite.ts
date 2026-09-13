@@ -105,6 +105,14 @@ export class SQLiteStore {
 		// under multi-writer traffic caused checkpoint thrash (TASK-064).
 		this.db.pragma("wal_autocheckpoint = 1000");
 
+		// NOTE (TASK-033): `PRAGMA auto_vacuum` is deliberately NOT set here.
+		// On an existing database the pragma alone is a silent no-op — it only
+		// takes effect after a full VACUUM — so setting it in the constructor
+		// would mislead readers into thinking space reclamation was enabled
+		// when it was not. The one-time conversion (auto_vacuum=INCREMENTAL +
+		// VACUUM, disk-guarded) and the bounded incremental reclaim live in
+		// services/vacuum.ts and are invoked explicitly, never implicitly here.
+
 		// Lightweight WAL checkpoint on startup (passive — does not block readers)
 		if (finalPath !== ":memory:") {
 			try {

@@ -85,6 +85,15 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 	 * Count relation rows eligible for pruning: older than `cutoff` and with
 	 * NEITHER endpoint referenced by any observation (audit F1). Used for
 	 * observability — the prune itself selects and deletes in bounded chunks.
+	 *
+	 * **Expensive.** The two `NOT EXISTS` probes are correlated against
+	 * `observations` per candidate row, so this is a full-table scan with
+	 * per-row subqueries (~105s on a 7.4M-row `relations` table) — it dwarfs
+	 * the bounded delete it observes. TASK-041 therefore calls it ONLY at the
+	 * tail of a prune run (when the delete did NOT hit its cap and so proved
+	 * the eligible set was drained); a capped run reports a sentinel instead
+	 * (see `KG_RELATION_PRUNE_REMAINING_UNKNOWN`). Callers that need "is there
+	 * more to prune?" should prefer that tail check over this count.
 	 */
 	countPrunableRelations(cutoff: string): number {
 		return (

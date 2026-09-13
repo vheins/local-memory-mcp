@@ -214,10 +214,13 @@ describe("EmbeddingWorker — codebase_symbol → KG auto-population (TASK-293)"
 		expect(callRel).toBeDefined();
 		expect(callRel!.relation_type).toBe("call");
 
-		// No vector writes: codebase symbols keep their own (currently
-		// unpopulated) vector tables, and the worker must NOT fall into the
-		// task-vector branch either — the double-vector guard (TASK-293).
-		expect(countRows(db, "SELECT COUNT(*) as cnt FROM codebase_symbol_vectors")).toBe(0);
+		// No vector writes: codebase symbols have no vector store (the dead
+		// codebase_symbol_vectors table was dropped in migration v35, TASK-042),
+		// and the worker must NOT fall into the task-vector branch either — the
+		// double-vector guard (TASK-293).
+		expect(
+			db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codebase_symbol_vectors'").get()
+		).toBeUndefined();
 		expect(countRows(db, "SELECT COUNT(*) as cnt FROM task_vectors")).toBe(0);
 	});
 
@@ -301,7 +304,9 @@ describe("EmbeddingWorker — codebase_symbol → KG auto-population (TASK-293)"
 		expect(countRows(db, "SELECT COUNT(*) as cnt FROM observations WHERE observation = ?", [obsText])).toBeGreaterThan(
 			0
 		);
-		expect(countRows(db, "SELECT COUNT(*) as cnt FROM codebase_symbol_vectors")).toBe(0);
+		expect(
+			db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codebase_symbol_vectors'").get()
+		).toBeUndefined();
 		expect(countRows(db, "SELECT COUNT(*) as cnt FROM task_vectors")).toBe(0);
 	});
 

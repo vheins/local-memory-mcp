@@ -12,6 +12,7 @@ import {
 	taskStatusOrderBy
 } from "./queries";
 import { VECTOR_CANDIDATE_CAP, TABLE_TASKS } from "../../utils/constants";
+import { encodeVector } from "../../utils/vector";
 import { buildUpdateClause } from "../../utils/sql-builder";
 import { buildTaskInsert, TASK_UPDATE_COLUMNS, TASK_JSON_KEYS } from "./serializers";
 
@@ -411,15 +412,20 @@ export class TaskEntity extends BaseEntity {
 	}
 
 	upsertTaskVectorEmbedding(taskId: string, vector: unknown): void {
+		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
+		// TEXT — see encodeVector (TASK-038).
 		this.run(
 			`INSERT INTO task_vectors (task_id, vector, updated_at)
 			VALUES (?, ?, ?)
 			ON CONFLICT(task_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
-			[taskId, JSON.stringify(vector), new Date().toISOString()]
+			[taskId, encodeVector(vector), new Date().toISOString()]
 		);
 	}
 
-	getTaskVectorCandidates(repo?: string, limit = VECTOR_CANDIDATE_CAP): { task_id: string; vector: string }[] {
+	getTaskVectorCandidates(
+		repo?: string,
+		limit = VECTOR_CANDIDATE_CAP
+	): { task_id: string; vector: string | Uint8Array }[] {
 		let sql = `SELECT tv.task_id, tv.vector
 			FROM task_vectors tv
 			JOIN ${TABLE_TASKS} t ON t.id = tv.task_id`;
@@ -432,7 +438,7 @@ export class TaskEntity extends BaseEntity {
 
 		sql += " ORDER BY tv.updated_at DESC LIMIT ?";
 		params.push(limit);
-		return this.all<{ task_id: string; vector: string }>(sql, params);
+		return this.all<{ task_id: string; vector: string | Uint8Array }>(sql, params);
 	}
 
 	removeTaskVector(taskId: string): void {

@@ -127,6 +127,30 @@ export const MEMORY_UNACKNOWLEDGED_DOMAIN_BOOST = 0.15;
 // capped per group by the search renderer.
 export const MEMORY_TASK_ARCHIVE_DOMAIN_PENALTY = 0.2;
 
+// ── task_archive retention (TASK-039) ────────────────────────────────────
+// Completed-task archives (type='task_archive') are the single largest memory
+// class — 65% of all memory rows and ~13MB of content on a real deployment,
+// growing ~66/day — and were COMPLETELY unbounded: archiveTaskToMemory wrote
+// them with no TTL, so nothing ever expired them. The existing maintenance
+// sweep already flips any memory whose expires_at has passed into
+// status='archived' (MemoryArchiveEntity.archiveExpiredMemories, invoked with
+// force=true by runStartupMaintenance), so giving archives a TTL is all that
+// is needed to feed them into that sweep — no new maintenance code. A 180-day
+// window keeps the recent session history agents actually consult while
+// bounding steady-state growth (65% of memories ⇒ the largest lever). Env-
+// overridable so operators can widen/narrow the retention window without a
+// code change.
+export const TASK_ARCHIVE_TTL_DAYS = envInt("TASK_ARCHIVE_TTL_DAYS", 180);
+
+// Content cap for the AGGREGATED task_archive memory written when one
+// archiveCompletedTasks call handles multiple task ids for the same repo
+// (TASK-039). Coalescing N per-task archives into a single memory would
+// otherwise let the merged content grow linearly with the batch size; the
+// builder appends per-task summaries until this many characters are used and
+// then notes how many tasks were elided. Individual (single-task) archives
+// are NOT capped here — they retain the full task body as before.
+export const TASK_ARCHIVE_AGGREGATE_MAX_CHARS = envInt("TASK_ARCHIVE_AGGREGATE_MAX_CHARS", 5_000);
+
 // ── Conflict thresholds ──────────────────────────────────────────────────
 // memory-write rejects creates whose content overlaps an existing memory
 // above this cosine threshold.
@@ -326,15 +350,43 @@ export const KG_RELATION_RETENTION_DAYS = envInt("KG_RELATION_RETENTION_DAYS", 7
 // `kg_degrees` triggers, so bulk deletes cost ~14k rows/s: an unbounded sweep
 // of a 392k-row backlog measured 189s and held the write lock in multi-second
 // bursts. The prune therefore reclaims at most this many rows per maintenance
-// run (~4s, worst per-transaction lock hold ~250ms at the 2,000-row chunk
-// size) and converges over successive runs. `0` disables the prune.
-export const KG_RELATION_PRUNE_MAX_ROWS = envInt("KG_RELATION_PRUNE_MAX_ROWS", 50_000);
+// run and converges over successive runs. `0` disables the prune.
+//
+// BACKLOG-DRAIN RATIONALE (TASK-041). The prune runs at most once per 24h
+// (`MAINTENANCE_INTERVAL_MS`). At the previous 50,000 default, a real
+// deployment carrying a 4.28M-row prunable backlog against ~13-26k rows/day of
+// new growth had a per-day reclaim capacity (50k) only ~2-4x the daily inflow,
+// i.e. a ~116-178 day convergence window — the backlog effectively never
+// drained. Raising the default to 500,000 gives ~20-40x headroom so the
+// accumulated backlog drains in days, not months, while staying well inside a
+// single maintenance run's budget.
+//
+// LOCK-HOLD TRADE-OFF. The run is still chunked (KG_RELATION_PRUNE_CHUNK) so
+// each `BEGIN IMMEDIATE` holds the write lock for only ~250ms regardless of
+// the per-run cap; raising the cap lengthens the TOTAL run (~4s at 50k → ~40s
+// at 500k) but not any individual lock hold, so sibling writers are never
+// starved past `busy_timeout`. Env-overridable (`KG_RELATION_PRUNE_MAX_ROWS`)
+// so operators can dial it back on a slow disk.
+export const KG_RELATION_PRUNE_MAX_ROWS = envInt("KG_RELATION_PRUNE_MAX_ROWS", 500_000);
 
 // Rows deleted per `BEGIN IMMEDIATE` inside the prune. Bounds write-lock hold
 // time so a concurrent MCP server / dashboard / indexer writer is never
 // starved past busy_timeout (same discipline as EMBEDDING_QUEUE's
-// BACKFILL_TXN_CHUNK).
+// BACKFILL_TXN_CHUNK). Deliberately kept small and independent of the per-run
+// cap: raising KG_RELATION_PRUNE_MAX_ROWS lengthens the TOTAL run but never the
+// individual lock hold. The prune loop clamps the batch to
+// `min(chunkSize, maxRows - deleted)` so it also never over-deletes.
 export const KG_RELATION_PRUNE_CHUNK = envInt("KG_RELATION_PRUNE_CHUNK", 2_000);
+
+// Sentinel reported as `PruneRelationsResult.remaining` when a prune run hit
+// the per-run cap and the exact remaining backlog was deliberately NOT counted
+// (TASK-041). `countPrunableRelations` is a correlated full-table scan
+// (~105s on a 7.4M-row table) that dwarfs the bounded delete, so it is only
+// worth paying at the tail (when `deleted < maxRows` proves the sweep drained
+// every eligible row). A negative value is unambiguous: every real count is
+// >= 0. Consumers that only need "is there more work?" should test
+// `remaining !== 0` (see maintenance-job's `truncated` log field).
+export const KG_RELATION_PRUNE_REMAINING_UNKNOWN = -1;
 
 // ── Codebase ARCHITECTURE bounds (OPT-PERF-08) ───────────────────────────
 // Max number of top-level exports (exported symbols with no parent) returned
@@ -432,3 +484,35 @@ export const CODEBASE_SEMANTIC_ENRICH_TIMEOUT_MS = envInt("CODEBASE_SEMANTIC_ENR
  * pipeline is never affected. A production phpstan wiring would key off this flag.
  */
 export const CODEBASE_SEMANTIC_PHPSTAN_ENABLED = envBool("CODEBASE_SEMANTIC_PHPSTAN_ENABLED", false);
+
+// ── Space reclamation / vacuum (TASK-033, TASK-034) ──────────────────────
+// Pruning DELETE statements (action_log, observations, relations) free pages
+// into SQLite's freelist but never shrink the file: without auto_vacuum, freed
+// pages are reused by later writes, so a database whose peak working set has
+// passed keeps its high-water-mark file size (measured: 4.93 GiB file, 25.18%
+// freelist ≈ 1.24 GiB reclaimable). Reclaiming it needs either a one-time
+// `VACUUM` (rewrites the whole DB; needs ~2x free disk + a full write lock) or
+// `auto_vacuum = INCREMENTAL` + cheap `PRAGMA incremental_vacuum(N)` calls.
+// These constants bound the operator-triggered conversion and the bounded
+// per-maintenance-run incremental reclaim. See services/vacuum.ts.
+
+// Freelist-ratio trigger for the operator recommendation log. When
+// freelist_count / page_count reaches this ratio the maintenance sweep logs a
+// one-line recommendation to run the deliberate vacuum path (a full VACUUM is
+// never automatic — it is too heavy for startup). Env-overridable.
+export const VACUUM_FREELIST_RATIO_THRESHOLD = envInt("VACUUM_FREELIST_RATIO_THRESHOLD", 0.2);
+
+// Upper bound on pages freed by ONE `PRAGMA incremental_vacuum(N)` call in the
+// maintenance sweep. incremental_vacuum is cheap (it moves up to N freelist
+// pages to the end of the file and truncates) but each page move touches the
+// file, so the per-run work is capped to keep the sweep's write-lock hold in
+// the ms range. Bounded reclaim converges across maintenance cycles. Env-
+// overridable. `0` disables the incremental reclaim.
+export const VACUUM_INCREMENTAL_MAX_PAGES = envInt("VACUUM_INCREMENTAL_MAX_PAGES", 20000);
+
+// Free-disk headroom multiplier required before a full `VACUUM` is attempted:
+// VACUUM rewrites the entire database into a temporary file, so it needs at
+// least ~1x the DB size free (2x is the safe working figure including the
+// final copy + WAL). `ensureIncrementalAutoVacuum` skips with reason
+// "insufficient_disk" when available < multiplier * dbBytes. Env-overridable.
+export const VACUUM_DISK_HEADROOM_MULTIPLIER = envInt("VACUUM_DISK_HEADROOM_MULTIPLIER", 2);

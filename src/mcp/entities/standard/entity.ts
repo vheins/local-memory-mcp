@@ -1,6 +1,6 @@
 import { BaseEntity } from "../../storage/base";
 import { CodingStandardEntry, CodingStandardRow } from "../../types";
-import { computeVector, cosineSimilarity, createTfVectorCache } from "../../utils/vector";
+import { computeVector, cosineSimilarity, createTfVectorCache, encodeVector } from "../../utils/vector";
 import { buildUpdateClause } from "../../utils/sql-builder";
 import { chunksOf } from "../../utils/chunk";
 import {
@@ -406,7 +406,10 @@ export class StandardEntity extends BaseEntity {
 		}
 	}
 
-	getVectorCandidates(repo?: string, limit = VECTOR_CANDIDATE_CAP): { standard_id: string; vector: string }[] {
+	getVectorCandidates(
+		repo?: string,
+		limit = VECTOR_CANDIDATE_CAP
+	): { standard_id: string; vector: string | Uint8Array }[] {
 		let sql = `SELECT sv.standard_id, sv.vector
 			FROM standard_vectors sv
 			JOIN coding_standards cs ON cs.id = sv.standard_id`;
@@ -419,15 +422,17 @@ export class StandardEntity extends BaseEntity {
 
 		sql += " ORDER BY cs.updated_at DESC LIMIT ?";
 		params.push(limit);
-		return this.all<{ standard_id: string; vector: string }>(sql, params);
+		return this.all<{ standard_id: string; vector: string | Uint8Array }>(sql, params);
 	}
 
 	upsertVectorEmbedding(standardId: string, vector: unknown): void {
+		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
+		// TEXT — see encodeVector (TASK-038).
 		this.run(
 			`INSERT INTO standard_vectors (standard_id, vector, updated_at)
 			VALUES (?, ?, ?)
 			ON CONFLICT(standard_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
-			[standardId, JSON.stringify(vector), new Date().toISOString()]
+			[standardId, encodeVector(vector), new Date().toISOString()]
 		);
 	}
 }

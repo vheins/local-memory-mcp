@@ -8,7 +8,7 @@ describe("migration v33 KG repository identity", () => {
 		db.pragma("foreign_keys = ON");
 		new MigrationManager(db).migrate();
 
-		expect(SCHEMA_VERSION).toBe(34);
+		expect(SCHEMA_VERSION).toBe(37);
 		const now = new Date().toISOString();
 		const insertEntity = db.prepare(
 			"INSERT INTO entities (name, type, description, repo, owner, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?)"

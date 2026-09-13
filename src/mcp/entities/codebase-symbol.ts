@@ -3,7 +3,6 @@ import {
 	CodebaseSymbol,
 	CodebaseSymbolRow,
 	CodebaseSymbolInsert,
-	CodebaseSymbolVector,
 	SymbolCountGroupRow,
 	SymbolSearchQuery,
 	SymbolSearchResult,
@@ -11,7 +10,6 @@ import {
 } from "../types";
 import { randomUUID } from "crypto";
 import { sanitizeFtsTerm } from "../utils/fts";
-import { VECTOR_CANDIDATE_CAP } from "../utils/constants";
 
 export class CodebaseSymbolEntity extends BaseEntity {
 	bulkUpsertSymbols(symbols: CodebaseSymbolInsert[]): number {
@@ -276,35 +274,6 @@ export class CodebaseSymbolEntity extends BaseEntity {
 
 	deleteSymbolsByRepo(repo: string): number {
 		const result = this.run("DELETE FROM codebase_symbols WHERE repo = ?", [repo]);
-		return result.changes;
-	}
-
-	upsertSymbolVector(symbolId: string, vector: number[]): void {
-		this.run(
-			`INSERT OR REPLACE INTO codebase_symbol_vectors (symbol_id, vector, updated_at)
-			 VALUES (?, ?, datetime('now'))`,
-			[symbolId, JSON.stringify(vector)]
-		);
-	}
-
-	getSymbolVectorsByRepo(repo: string, limit: number = VECTOR_CANDIDATE_CAP): CodebaseSymbolVector[] {
-		return this.all<CodebaseSymbolVector>(
-			`SELECT csv.* FROM codebase_symbol_vectors csv
-			 JOIN codebase_symbols cs ON cs.id = csv.symbol_id
-			 WHERE cs.repo = ?
-			 ORDER BY csv.updated_at DESC
-			 LIMIT ?`,
-			[repo, limit]
-		);
-	}
-
-	deleteSymbolVectorsByFile(repo: string, filePath: string): number {
-		const result = this.run(
-			`DELETE FROM codebase_symbol_vectors WHERE symbol_id IN (
-				SELECT id FROM codebase_symbols WHERE repo = ? AND file_path = ?
-			)`,
-			[repo, filePath]
-		);
 		return result.changes;
 	}
 

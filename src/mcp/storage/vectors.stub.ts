@@ -105,7 +105,7 @@ export class StubVectorStore implements VectorStore {
 
 			const candidates = rawCandidates.map((c) => ({
 				id: (c.task_id ?? c.standard_id ?? c.memory_id ?? "") as string,
-				vector: c.vector as string
+				vector: c.vector as string | Uint8Array
 			}));
 
 			if (candidates.length === 0) return [];
@@ -113,6 +113,11 @@ export class StubVectorStore implements VectorStore {
 			const results: VectorResult[] = [];
 			for (const candidate of candidates) {
 				try {
+					// StubVectorStore persists sparse TF maps as JSON TEXT. A dense
+					// float32 BLOB (written by RealVectorStore, TASK-038) is not
+					// scorable against a sparse query vector — skip it rather than
+					// feed it to the sparse cosine.
+					if (typeof candidate.vector !== "string") continue;
 					const storedVector = JSON.parse(candidate.vector) as Record<string, number>;
 					const score = cosineSimilarity(queryFreq, storedVector);
 					results.push({ id: candidate.id, score });

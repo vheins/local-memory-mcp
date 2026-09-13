@@ -11,8 +11,9 @@
  *   completed as a no-op exactly as before.
  * - Phase 3 — split the batch: only memory/standard/task jobs consume an ONNX
  *   embedding. codebase_symbol jobs are KG-only — writeVector is a deliberate
- *   NO-OP for them (TASK-293) and codebase_symbol_vectors is never populated,
- *   so batch-embedding them would burn 150-500ms of CPU per file for a vector
+ *   NO-OP for them (TASK-293) and no symbol vector store exists (the dead
+ *   codebase_symbol_vectors table was dropped in migration v35, TASK-042), so
+ *   batch-embedding them would burn 150-500ms of CPU per file for a vector
  *   that is immediately discarded (TASK-338 / code-review F1). Embed only the
  *   embed-needed subset and hand codebase jobs a placeholder vector that
  *   applyJob's writeVector branch never persists.

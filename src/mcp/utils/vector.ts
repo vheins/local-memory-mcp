@@ -60,15 +60,93 @@ export function cosineSimilarity(v1: Record<string, number>, v2: Record<string, 
 /**
  * Cosine similarity between two dense equal-length vectors (e.g. fixed-dim
  * model embeddings). Returns 0 when lengths differ or either vector has zero
- * norm. Identical math to {@link cosineSimilarity} but for positional arrays.
+ * norm. Identical math to {@link cosineSimilarity} but for positional vectors.
+ *
+ * Accepts any positional `ArrayLike<number>` (plain `number[]`, `Float32Array`,
+ * ...) so decoded BLOB vectors can be scored without first copying them into a
+ * JS array (TASK-038).
  */
-export function cosineSimilarityArrays(a: number[], b: number[]): number {
+export function cosineSimilarityArrays(a: ArrayLike<number>, b: ArrayLike<number>): number {
 	if (a.length !== b.length) return 0;
-	const dot = a.reduce((sum, v, i) => sum + v * (b[i] ?? 0), 0);
-	const magA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
-	const magB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
+	let dot = 0;
+	let magA = 0;
+	let magB = 0;
+	for (let i = 0; i < a.length; i++) {
+		const va = a[i];
+		const vb = b[i] ?? 0;
+		dot += va * vb;
+		magA += va * va;
+		magB += vb * vb;
+	}
 	if (magA === 0 || magB === 0) return 0;
-	return dot / (magA * magB);
+	return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+}
+
+/**
+ * Encode a vector for storage in a `*_vectors.vector` column (TASK-038).
+ *
+ * - Dense embeddings (`Float32Array` or `number[]`, e.g. the 384-dim
+ *   all-MiniLM-L6-v2 output) are stored as a **float32 little-endian BLOB**
+ *   (384 * 4 = 1,536 bytes) instead of a ~8 KB JSON decimal array — 5.24x
+ *   smaller with zero recall loss (no quantization) and no JSON.parse on the
+ *   search hot path.
+ * - Sparse term-frequency maps (plain objects, written by `StubVectorStore`)
+ *   keep the legacy JSON TEXT encoding; they have no fixed dimension and
+ *   cannot be represented as a dense float32 array.
+ *
+ * `Buffer.from(f32.buffer, byteOffset, byteLength)` is a zero-copy view over
+ * the float32 bytes; better-sqlite3 binds it as a SQLite BLOB. The returned
+ * `Buffer` shares the source `Float32Array`'s memory, so callers must not
+ * mutate the array afterwards.
+ */
+export function encodeVector(value: unknown): Buffer | string {
+	if (value instanceof Float32Array) {
+		return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+	}
+	if (Array.isArray(value)) {
+		const f32 = Float32Array.from(value as number[]);
+		return Buffer.from(f32.buffer, f32.byteOffset, f32.byteLength);
+	}
+	// Sparse TF vector (plain object) — keep the legacy JSON encoding.
+	return JSON.stringify(value);
+}
+
+/**
+ * Decode a `*_vectors.vector` column value into a dense `Float32Array`
+ * (TASK-038). Dual-format on purpose so a partially-migrated database never
+ * crashes during rollout:
+ *
+ * - BLOB (`Buffer` / `Uint8Array`) → zero-copy `Float32Array` view when the
+ *   byte offset is 4-byte aligned (the common case); otherwise a one-time
+ *   realigning copy.
+ * - Legacy JSON TEXT (a `number[]` decimal array) → `Float32Array.from`.
+ *
+ * Non-array JSON (a sparse TF map) and any unrecognized value decode to an
+ * empty vector; those are only ever produced/consumed by `StubVectorStore`,
+ * which keeps its own sparse JSON read path.
+ */
+export function decodeVector(value: unknown): Float32Array {
+	if (value == null) return new Float32Array(0);
+	if (typeof value === "string") {
+		try {
+			const parsed = JSON.parse(value) as unknown;
+			if (Array.isArray(parsed)) return Float32Array.from(parsed as number[]);
+		} catch {
+			// Malformed legacy JSON — fall through to an empty vector.
+		}
+		return new Float32Array(0);
+	}
+	if (value instanceof Uint8Array) {
+		// `Buffer` is a `Uint8Array`, so this also covers better-sqlite3 BLOBs.
+		const bytes = value;
+		if (bytes.byteOffset % 4 === 0 && bytes.byteLength % 4 === 0) {
+			return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+		}
+		const aligned = new Uint8Array(bytes.byteLength);
+		aligned.set(bytes);
+		return new Float32Array(aligned.buffer, 0, Math.floor(aligned.byteLength / 4));
+	}
+	return new Float32Array(0);
 }
 
 export interface TfVectorCache {

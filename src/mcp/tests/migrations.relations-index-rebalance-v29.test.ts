@@ -20,10 +20,14 @@ import { MigrationManager, SCHEMA_VERSION } from "../storage/migrations";
  *   DROP idx_relations_from  — redundant: `from_entity` is the PK's leftmost
  *        column.
  *
- * `idx_relations_to` must SURVIVE: `getRelationsByName` (dashboard entity
- * detail) filters `to_entity` with NO repo predicate, so the (repo, to_entity)
- * composite cannot serve it and dropping it collapses that query to a full
- * table scan.
+ * At v29 `idx_relations_to` was deliberately KEPT: `getRelationsByName`
+ * (dashboard entity detail) then filtered `to_entity` with NO repo predicate,
+ * so the (repo, to_entity) composite could not serve it. Migration v36
+ * (relations-index-consolidation, TASK-040) removes that repo-less shape and
+ * drops BOTH `idx_relations_to` and `idx_relations_repo` as redundant, so this
+ * suite now pins the post-v36 index set: the two dropped single-column
+ * indexes are GONE while the composites survive and keep every repo-scoped
+ * query index-served.
  *
  * These tests pin the applied-DB contract, the plan consequences that justify
  * each change, and idempotent re-application after a simulated crash.
@@ -50,22 +54,28 @@ describe("migration v29 KG relations index rebalance", () => {
 	it("fresh DB migrates to latest SCHEMA_VERSION with the rebalanced index set", () => {
 		const { db, tempDir } = freshDb("fresh");
 
-		const applied = (db.prepare("SELECT version FROM _schema_version ORDER BY version").all() as { version: number }[])
-			.map((r) => r.version);
+		const applied = (
+			db.prepare("SELECT version FROM _schema_version ORDER BY version").all() as { version: number }[]
+		).map((r) => r.version);
 		expect(applied.at(-1)).toBe(SCHEMA_VERSION);
 		expect(applied).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1));
 
 		const names = indexNames(db);
-		// Added.
+		// Added by v29.
 		expect(names).toContain("idx_relations_repo_to");
 		expect(names).toContain("idx_relations_created_at");
-		// Dropped.
+		// Dropped by v29.
 		expect(names).not.toContain("idx_relations_type");
 		expect(names).not.toContain("idx_relations_from");
-		// Kept — needed by the repo-less to_entity lookup.
-		expect(names).toContain("idx_relations_to");
-		expect(names).toContain("idx_relations_repo");
+		// Dropped by v36 (relations-index-consolidation): idx_relations_to was
+		// v29-kept for the repo-less getRelationsByName, but that shape is gone
+		// post-v33; idx_relations_repo is a prefix of the two composites.
+		expect(names).not.toContain("idx_relations_to");
+		expect(names).not.toContain("idx_relations_repo");
+		// Kept — serve every repo-scoped relation query.
 		expect(names).toContain("idx_relations_repo_from_to");
+		expect(names).toContain("idx_relations_repo_to");
+		expect(names).toContain("idx_relations_created_at");
 
 		db.close();
 		fs.rmSync(tempDir, { recursive: true, force: true });
@@ -117,10 +127,14 @@ describe("migration v29 KG relations index rebalance", () => {
 		);
 
 		// A single OR cannot consume two indexes, so even WITH both composites
-		// present the planner degrades to a repo-wide scan. This is why the
-		// index alone was not enough and the query had to be rewritten.
-		expect(detail).toContain("idx_relations_repo");
-		expect(detail).not.toContain("idx_relations_repo_to");
+		// present the planner degrades to a repo-wide scan on ONE composite.
+		// This is why the index alone was not enough and the query had to be
+		// rewritten. Post-v36 the repo-wide scan is served by
+		// idx_relations_repo_to (idx_relations_repo is gone) — still a full
+		// scan of the repo's edges, which is exactly the regression the UNION
+		// rewrite avoids.
+		expect(detail).toContain("idx_relations_repo_to");
+		expect(detail).not.toContain("idx_relations_repo_from_to");
 
 		db.close();
 		fs.rmSync(tempDir, { recursive: true, force: true });
@@ -138,14 +152,31 @@ describe("migration v29 KG relations index rebalance", () => {
 		fs.rmSync(tempDir, { recursive: true, force: true });
 	});
 
-	it("dropping idx_relations_from does not regress the repo-less OR lookup (PK autoindex + idx_relations_to cover it)", () => {
+	it("the production getRelationsByName (repo-scoped) stays index-served after v36 drops idx_relations_to/idx_relations_repo", () => {
 		const { db, tempDir } = freshDb("plan-byname");
 
-		const detail = plan(db, "SELECT * FROM relations WHERE from_entity = 'x' OR to_entity = 'x' ORDER BY relation_type");
+		// Production shape (dashboard-queries.ts getRelationsByName): repo-scoped
+		// from/to OR. v33 made `repo` part of the KG identity, so this is the
+		// ONLY shape that ships — the old repo-less variant no longer exists.
+		const detail = plan(
+			db,
+			"SELECT * FROM relations WHERE repo = 'r' AND (from_entity = 'x' OR to_entity = 'x') ORDER BY relation_type"
+		);
 
-		expect(detail).toContain("MULTI-INDEX OR");
-		expect(detail).toContain("sqlite_autoindex_relations_1");
-		expect(detail).toContain("idx_relations_to");
+		// Served by the (repo, to_entity) composite — a repo-scoped seek, not a
+		// full-table scan.
+		expect(detail).toContain("idx_relations_repo_to");
+		expect(detail).not.toContain("SCAN relations");
+
+		// The repo-less shape (which v29 kept idx_relations_to for) is no longer
+		// a production query; dropping idx_relations_to collapses it to a full
+		// scan, acceptable precisely because nothing ships it. Pinning the scan
+		// documents the trade-off and guards against reintroduction.
+		const repoLess = plan(
+			db,
+			"SELECT * FROM relations WHERE from_entity = 'x' OR to_entity = 'x' ORDER BY relation_type"
+		);
+		expect(repoLess).toContain("SCAN relations");
 
 		db.close();
 		fs.rmSync(tempDir, { recursive: true, force: true });

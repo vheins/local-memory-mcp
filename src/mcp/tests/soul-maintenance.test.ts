@@ -281,6 +281,35 @@ describe("pruneRelations observability", () => {
 
 		expect(logs).toContainEqual(expect.objectContaining({ retentionDays: 21, deleted: 2, remaining: 4 }));
 	});
+
+	it("counts the exact remainder when the run does NOT hit the cap (TASK-041)", () => {
+		const kg = {
+			deleteUnreachableRelations: vi.fn().mockReturnValue(2),
+			deleteOrphanEntities: vi.fn().mockReturnValue(1),
+			countPrunableRelations: vi.fn().mockReturnValue(4)
+		} as unknown as KnowledgeGraphEntity;
+
+		// deleted 2 < maxRows 100 → tail reached → exact count is consulted.
+		const result = pruneRelations(kg, 21, 100, 10);
+
+		expect(result).toEqual({ deleted: 2, orphanEntitiesDeleted: 1, remaining: 4 });
+		expect(kg.countPrunableRelations).toHaveBeenCalledTimes(1);
+	});
+
+	it("SKIPS the expensive count and reports the sentinel when the run hits the cap (TASK-041)", () => {
+		const kg = {
+			deleteUnreachableRelations: vi.fn().mockReturnValue(100),
+			deleteOrphanEntities: vi.fn().mockReturnValue(1),
+			countPrunableRelations: vi.fn().mockReturnValue(4)
+		} as unknown as KnowledgeGraphEntity;
+
+		// deleted 100 === maxRows 100 → cap hit → a backlog provably remains,
+		// so the correlated count must NOT run.
+		const result = pruneRelations(kg, 21, 100, 10);
+
+		expect(result).toEqual({ deleted: 100, orphanEntitiesDeleted: 1, remaining: -1 });
+		expect(kg.countPrunableRelations).not.toHaveBeenCalled();
+	});
 });
 
 describe("runStartupMaintenance (TASK-124 contract)", () => {
@@ -316,6 +345,10 @@ describe("runStartupMaintenance (TASK-124 contract)", () => {
 		expect(result.prunedActionLogRows).toBe(0);
 		expect(result.prunedObservationsRows).toBe(5);
 		expect(result.totalArchived).toBe(2 + 1 + 0);
+
+		// TASK-033: the bounded incremental vacuum runs after the prunes and
+		// reports its reclaimed-page count (0 on an in-memory / NONE-mode DB).
+		expect(result.incrementalVacuumPages).toBe(0);
 
 		// TASK-102: the whole sweep crosses the write-lock boundary exactly once.
 		expect(withExclusiveWriteSpy).toHaveBeenCalledTimes(1);

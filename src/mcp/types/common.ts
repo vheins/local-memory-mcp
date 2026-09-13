@@ -28,7 +28,8 @@ export interface RepoResult {
 
 export interface MemoryIdVector {
 	memory_id: string;
-	vector: string;
+	/** float32 BLOB (dense embedding) or legacy JSON TEXT (sparse TF map). */
+	vector: string | Uint8Array;
 }
 
 export interface LastUsedResult {

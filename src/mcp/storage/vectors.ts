@@ -1,7 +1,7 @@
 import { VectorEntityKind, VectorStore, VectorResult } from "../types";
 import { SQLiteStore } from "./sqlite";
 import { logger } from "../utils/logger";
-import { cosineSimilarityArrays } from "../utils/vector";
+import { cosineSimilarityArrays, decodeVector } from "../utils/vector";
 
 type FeatureExtractionPipeline = import("@xenova/transformers").FeatureExtractionPipeline;
 
@@ -110,35 +110,26 @@ export class RealVectorStore implements VectorStore {
 		kind: VectorEntityKind = "memory"
 	): Promise<VectorResult[]> {
 		try {
-			// Gate the codebase_symbol vector stage on the populated-vector row
-			// count: codebase_symbol_vectors is never populated (upsertSymbolEmbeddings
-			// has zero callers), so running a full ONNX query inference per
-			// codebase-read search is pure waste. When the table is empty we skip
-			// inference entirely and blendVectorRanking falls back to text-only
-			// ranking. The probe is a LIMIT 1 query (never loads candidate rows).
-			if (kind === "codebase_symbol") {
-				const vectorRows = this.db.codebaseSymbols.getSymbolVectorsByRepo(repo || "", 1);
-				if (vectorRows.length === 0) {
-					logger.debug("[Vectors] Skipping codebase_symbol search — no symbol vectors populated", { repo });
-					return [];
-				}
-			}
+			// codebase_symbol vectors are not persisted by any production path:
+			// the write is an intentional NO-OP (TASK-293) and the dead
+			// `codebase_symbol_vectors` table was dropped in migration v35. There
+			// is therefore no candidate source — return no vector results so
+			// blendVectorRanking falls back to text-only ranking. The explicit
+			// early return also keeps codebase_symbol from falling through to the
+			// memory branch below.
+			if (kind === "codebase_symbol") return [];
 
 			const extractor = await this.getExtractor();
 			const output = await extractor(query, { pooling: "mean", normalize: true });
 			const queryVector = Array.from(output.data as Float32Array);
 
-			let rows: { id: string; vector: string }[];
+			let rows: { id: string; vector: string | Uint8Array }[];
 			if (kind === "standard") {
 				rows = this.db.standards
 					.getVectorCandidates(repo, 100)
 					.map((row) => ({ id: row.standard_id, vector: row.vector }));
 			} else if (kind === "task") {
 				rows = this.db.tasks.getTaskVectorCandidates(repo, 100).map((row) => ({ id: row.task_id, vector: row.vector }));
-			} else if (kind === "codebase_symbol") {
-				rows = this.db.codebaseSymbols
-					.getSymbolVectorsByRepo(repo || "", 100)
-					.map((row) => ({ id: row.symbol_id, vector: row.vector }));
 			} else {
 				// Owner is deliberately omitted (audit F7): memories carry a real
 				// owner, so passing the hardcoded empty string here produced
@@ -152,7 +143,10 @@ export class RealVectorStore implements VectorStore {
 			}
 
 			const results: VectorResult[] = rows.map((row) => {
-				const memoryVector = JSON.parse(row.vector) as number[];
+				// Dual-format read (TASK-038): decodeVector accepts both the new
+				// float32 BLOB and the legacy JSON TEXT so a partially-migrated
+				// database never crashes mid-rollout.
+				const memoryVector = decodeVector(row.vector);
 				return {
 					id: row.id,
 					score: cosineSimilarityArrays(queryVector, memoryVector)

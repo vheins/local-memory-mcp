@@ -163,12 +163,12 @@ export function writeVector(store: SQLiteStore, kind: QueueJobKind, id: string, 
 		store.tasks.upsertTaskVectorEmbedding(id, vector);
 	} else {
 		// codebase_symbol — intentionally NO-OP (TASK-293): symbols keep
-		// their OWN vector lifecycle. codebase_symbol_vectors is not
-		// populated by any production path today (`upsertSymbolVector` has
-		// no callers — RealVectorStore.search gates on it and falls back
-		// to text-only ranking), so writing here would be a double vector
-		// with no consumer. The pre-TASK-293 else-branch would have written
-		// task_vectors keyed by a symbol id — the exact pollution this
+		// their OWN vector lifecycle. No production path persists symbol
+		// vectors (the dead codebase_symbol_vectors table was dropped in
+		// migration v35 — TASK-042), and RealVectorStore.search returns no
+		// candidates for codebase_symbol, so writing here would be a double
+		// vector with no consumer. The pre-TASK-293 else-branch would have
+		// written task_vectors keyed by a symbol id — the exact pollution this
 		// guard prevents. runOnce skips ONNX inference for codebase jobs
 		// entirely and passes a placeholder vector that is discarded here
 		// (TASK-338).

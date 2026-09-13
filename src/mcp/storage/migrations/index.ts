@@ -35,8 +35,11 @@ import { migration as v31 } from "./v31-observation-freshness";
 import { migration as v32 } from "./v32-reuse-telemetry";
 import { migration as v33 } from "./v33-kg-repo-identity";
 import { migration as v34 } from "./v34-owner-repo-indexes-handoffs-claims-comments-standards";
+import { migration as v35 } from "./v35-drop-codebase-symbol-vectors";
+import { migration as v36 } from "./v36-relations-index-consolidation";
+import { migration as v37 } from "./v37-vector-blob-format";
 
-export const SCHEMA_VERSION = 34;
+export const SCHEMA_VERSION = 37;
 
 /**
  * A single versioned schema migration. `up` runs inside the migration runner's
@@ -86,7 +89,10 @@ const MIGRATIONS: Migration[] = [
 	v31,
 	v32,
 	v33,
-	v34
+	v34,
+	v35,
+	v36,
+	v37
 ];
 
 // ──────────────────────────────────────────────

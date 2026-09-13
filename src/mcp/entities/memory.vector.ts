@@ -8,7 +8,7 @@ import {
 	MEMORY_STATUS_ARCHIVED
 } from "../types";
 import { TABLE_MEMORIES } from "../utils/constants";
-import { computeVector, cosineSimilarity, createTfVectorCache } from "../utils/vector";
+import { computeVector, cosineSimilarity, createTfVectorCache, encodeVector } from "../utils/vector";
 import {
 	VECTOR_CANDIDATE_CAP,
 	MIN_CANDIDATES,
@@ -48,7 +48,7 @@ export class MemoryVectorEntity extends BaseEntity {
 		limit = VECTOR_CANDIDATE_CAP
 	): {
 		memory_id: string;
-		vector: string;
+		vector: string | Uint8Array;
 	}[] {
 		let sql = `SELECT mv.memory_id, mv.vector FROM memory_vectors mv JOIN ${TABLE_MEMORIES} m ON mv.memory_id = m.id`;
 		const params: (string | number)[] = [];
@@ -64,10 +64,12 @@ export class MemoryVectorEntity extends BaseEntity {
 	}
 
 	upsertVectorEmbedding(memoryId: string, vector: unknown): void {
+		// Dense embeddings are stored as a float32 BLOB, sparse TF maps as JSON
+		// TEXT — see encodeVector (TASK-038).
 		this.run(
 			`INSERT INTO memory_vectors (memory_id, vector, updated_at) VALUES (?, ?, ?)
 			ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, updated_at = excluded.updated_at`,
-			[memoryId, JSON.stringify(vector), new Date().toISOString()]
+			[memoryId, encodeVector(vector), new Date().toISOString()]
 		);
 	}
 

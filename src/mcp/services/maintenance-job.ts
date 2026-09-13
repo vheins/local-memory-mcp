@@ -8,7 +8,14 @@ import {
 	type SoulMaintenanceOptions,
 	type DecayResult
 } from "./soul-maintenance";
-import { TABLE_MEMORY_SUMMARY, TTL_MS_PER_DAY, ACTION_LOG_MAX_ROWS } from "../utils/constants";
+import { getVacuumState, incrementalVacuum, shouldVacuum } from "./vacuum";
+import {
+	TABLE_MEMORY_SUMMARY,
+	TTL_MS_PER_DAY,
+	ACTION_LOG_MAX_ROWS,
+	VACUUM_INCREMENTAL_MAX_PAGES,
+	VACUUM_FREELIST_RATIO_THRESHOLD
+} from "../utils/constants";
 
 export interface MaintenanceResult {
 	decay: DecayResult;
@@ -21,8 +28,17 @@ export interface MaintenanceResult {
 	prunedRelationRows: number;
 	/** Entity rows removed by the orphan sweep that follows the relation prune. */
 	prunedOrphanEntityRows: number;
-	/** Eligible relation rows still pending — non-zero means the per-run cap truncated the sweep. */
+	/**
+	 * Eligible relation rows still pending. `0` means the sweep drained the
+	 * tail; a positive value is an exact remaining count (computed only when
+	 * the run did NOT hit the per-run cap); `KG_RELATION_PRUNE_REMAINING_UNKNOWN`
+	 * (-1) means the cap was hit and a backlog provably remains (TASK-041 —
+	 * the exact count is skipped because the correlated scan would dominate the
+	 * bounded delete). Test `!== 0` for "more work remains".
+	 */
 	prunableRelationsRemaining: number;
+	/** Freelist pages reclaimed by the bounded incremental vacuum this run (TASK-033). */
+	incrementalVacuumPages: number;
 	totalArchived: number;
 }
 
@@ -95,6 +111,7 @@ export async function runStartupMaintenance(
 			prunedRelationRows: 0,
 			prunedOrphanEntityRows: 0,
 			prunableRelationsRemaining: 0,
+			incrementalVacuumPages: 0,
 			totalArchived: 0
 		};
 	}
@@ -131,6 +148,11 @@ export async function runStartupMaintenance(
 		//    maintenance cycles instead of blocking this startup.
 		const prunedRelationsResult = pruneRelations(db.knowledgeGraph);
 
+		// 7. Reclaim freelist pages freed by the prunes above (TASK-033). Bounded
+		//    and cheap, and a no-op unless the DB is already auto_vacuum=INCREMENTAL
+		//    — a full VACUUM is deliberately NOT run here (too heavy for startup).
+		const incrementalVacuumResult = incrementalVacuum(db, VACUUM_INCREMENTAL_MAX_PAGES);
+
 		// Record the maintenance run
 		recordMaintenanceRun(db);
 
@@ -146,6 +168,7 @@ export async function runStartupMaintenance(
 			prunedRelationRows: prunedRelationsResult.deleted,
 			prunedOrphanEntityRows: prunedRelationsResult.orphanEntitiesDeleted,
 			prunableRelationsRemaining: prunedRelationsResult.remaining,
+			incrementalVacuumPages: incrementalVacuumResult.reclaimedPages,
 			totalArchived
 		};
 	});
@@ -161,8 +184,29 @@ export async function runStartupMaintenance(
 		prunedObservationsRows: result.prunedObservationsRows,
 		prunedRelationRows: result.prunedRelationRows,
 		prunedOrphanEntityRows: result.prunedOrphanEntityRows,
-		prunableRelationsRemaining: result.prunableRelationsRemaining
+		prunableRelationsRemaining: result.prunableRelationsRemaining,
+		incrementalVacuumPages: result.incrementalVacuumPages
 	});
+
+	// Discoverability without action: a full VACUUM is never automatic (it needs
+	// ~2x free disk and a full write lock), so when the freelist is large enough
+	// to be worth reclaiming we log a recommendation for an operator to run the
+	// deliberate path (ensureIncrementalAutoVacuum → incremental_vacuum). Pure
+	// read; never triggers a rewrite. TASK-034.
+	try {
+		const vacuumState = getVacuumState(db);
+		if (shouldVacuum(vacuumState, { freelistRatioThreshold: VACUUM_FREELIST_RATIO_THRESHOLD })) {
+			logger.info("[MaintenanceJob] VACUUM recommended — large freelist", {
+				freelistCount: vacuumState.freelistCount,
+				pageCount: vacuumState.pageCount,
+				freelistBytes: vacuumState.freelistBytes,
+				autoVacuum: vacuumState.autoVacuum,
+				hint: "Run the deliberate vacuum path (ensureIncrementalAutoVacuum) to reclaim space"
+			});
+		}
+	} catch (err) {
+		logger.warn("[MaintenanceJob] Failed to read vacuum state", { error: String(err) });
+	}
 
 	return result;
 }

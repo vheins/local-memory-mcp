@@ -63,7 +63,10 @@ function insertMemory(db: SQLiteStore, id: string, content: string): void {
 function storedVector(db: SQLiteStore, id: string): Record<string, unknown> {
 	const row = db.memoryVectors.getVectorCandidates().find((c) => c.memory_id === id);
 	expect(row).toBeDefined();
-	return JSON.parse(row!.vector) as Record<string, unknown>;
+	// StubVectorStore persists sparse TF maps as JSON TEXT (dense embeddings are
+	// the float32 BLOB written by RealVectorStore — TASK-038).
+	expect(typeof row!.vector).toBe("string");
+	return JSON.parse(row!.vector as string) as Record<string, unknown>;
 }
 
 describe("StubVectorStore prototype-key token corruption (TASK-381)", () => {

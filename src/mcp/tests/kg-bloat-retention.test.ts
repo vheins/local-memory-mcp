@@ -19,7 +19,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestStore, type SQLiteStore } from "../storage/sqlite";
 import { extractEntities, saveExtractions, saveTaskRelations, observationText } from "../tools/kg-archivist";
 import { pruneObservations, pruneRelations } from "../services/soul-maintenance";
-import { KG_MAX_COOCCURRENCE_ENTITIES, KG_MAX_TASK_RELATION_ENTITIES } from "../utils/constants";
+import {
+	KG_MAX_COOCCURRENCE_ENTITIES,
+	KG_MAX_TASK_RELATION_ENTITIES,
+	KG_RELATION_PRUNE_MAX_ROWS,
+	KG_RELATION_PRUNE_REMAINING_UNKNOWN
+} from "../utils/constants";
 import type { MemoryEntry, Task } from "../types";
 
 const REPO = "kg-audit-test";
@@ -415,19 +420,63 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		expect(countRelations(db)).toBe(1);
 	});
 
-	it("pruneRelations sweeps the now-orphaned entities and reports the remainder", () => {
+	it("pruneRelations sweeps the now-orphaned entities and reports the exact remainder at the tail", () => {
 		for (let i = 0; i < 6; i++) {
 			seedEntity(db, `o${i}`, REPO, OLD);
 			seedEntity(db, `t${i}`, REPO, OLD);
 			seedRelation(db, `o${i}`, `t${i}`, { created_at: OLD });
 		}
 
+		// maxRows 4 with chunk 2: deletes 4 (< cap is impossible here since it
+		// hits the cap)... so drive the TAIL explicitly: first a capped run,
+		// then a tail run.
+		const capped = pruneRelations(db.knowledgeGraph, 0, 4, 2);
+
+		expect(capped.deleted).toBe(4);
+		// 8 endpoints lost their only reference.
+		expect(capped.orphanEntitiesDeleted).toBe(8);
+		// Hit the cap → remaining is the sentinel (expensive count skipped).
+		expect(capped.remaining).toBe(KG_RELATION_PRUNE_REMAINING_UNKNOWN);
+
+		// Second run: only 2 eligible rows remain, cap is 4 → tail reached, so
+		// the exact remaining count IS computed (and is 0).
+		const tail = pruneRelations(db.knowledgeGraph, 0, 4, 2);
+
+		expect(tail.deleted).toBe(2);
+		expect(tail.remaining).toBe(0);
+	});
+
+	it("pruneRelations reports an EXACT remaining count when the run does not hit the cap", () => {
+		for (let i = 0; i < 6; i++) {
+			seedEntity(db, `o${i}`, REPO, OLD);
+			seedEntity(db, `t${i}`, REPO, OLD);
+			seedRelation(db, `o${i}`, `t${i}`, { created_at: OLD });
+		}
+
+		// Cap of 100 > 6 eligible: the sweep drains the tail, so the correlated
+		// count runs once and returns the (exact) zero.
+		const result = pruneRelations(db.knowledgeGraph, 0, 100, 2);
+
+		expect(result.deleted).toBe(6);
+		expect(result.remaining).toBe(0);
+	});
+
+	it("pruneRelations SKIPS the expensive remaining count when the run hits the cap (TASK-041)", () => {
+		for (let i = 0; i < 10; i++) {
+			seedEntity(db, `o${i}`, REPO, OLD);
+			seedEntity(db, `t${i}`, REPO, OLD);
+			seedRelation(db, `o${i}`, `t${i}`, { created_at: OLD });
+		}
+
+		// Spy on the exact count and assert it is never invoked on a capped run.
+		const countSpy = vi.spyOn(db.knowledgeGraph, "countPrunableRelations");
+
 		const result = pruneRelations(db.knowledgeGraph, 0, 4, 2);
 
 		expect(result.deleted).toBe(4);
-		// 8 endpoints lost their only reference.
-		expect(result.orphanEntitiesDeleted).toBe(8);
-		expect(result.remaining).toBe(2);
+		expect(result.remaining).toBe(KG_RELATION_PRUNE_REMAINING_UNKNOWN);
+		// A backlog provably remains, so the ~105s correlated scan is skipped.
+		expect(countSpy).not.toHaveBeenCalled();
 	});
 
 	it("pruneRelations short-circuits with zeros when nothing is eligible", () => {
@@ -436,6 +485,35 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 			orphanEntitiesDeleted: 0,
 			remaining: 0
 		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// TASK-041 — prune cap default + env override
+// ---------------------------------------------------------------------------
+
+describe("KG_RELATION_PRUNE_MAX_ROWS (TASK-041 backlog drain)", () => {
+	afterEach(() => {
+		delete process.env.KG_RELATION_PRUNE_MAX_ROWS;
+	});
+
+	it("defaults to 500,000 so the accumulated backlog drains in days", () => {
+		expect(KG_RELATION_PRUNE_MAX_ROWS).toBe(500_000);
+	});
+
+	it("is env-overridable (envInt reads the var at module load)", async () => {
+		process.env.KG_RELATION_PRUNE_MAX_ROWS = "1234";
+
+		// The constant is bound at module-load time, so drop the cached module
+		// and re-import so `envInt` re-reads process.env.
+		vi.resetModules();
+		const mod = await import("../utils/constants");
+
+		expect(mod.KG_RELATION_PRUNE_MAX_ROWS).toBe(1234);
+	});
+
+	it("exposes the sentinel as an unambiguous negative value", () => {
+		expect(KG_RELATION_PRUNE_REMAINING_UNKNOWN).toBe(-1);
 	});
 });
 

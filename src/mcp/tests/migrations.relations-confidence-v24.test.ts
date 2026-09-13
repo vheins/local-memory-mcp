@@ -77,16 +77,15 @@ describe("migration v24 relations confidence", () => {
 		// v29 DROPs idx_relations_from (PK-prefix redundant) and
 		// idx_relations_type (zero query consumers), so they are deliberately
 		// absent from this list — see v29-kg-relations-index-rebalance.
+		// v36 (relations-index-consolidation) further DROPs idx_relations_repo
+		// (a prefix of the composites) and idx_relations_to (repo-less lookup
+		// removed by v33), so they are absent too.
 		const indexes = db.prepare("PRAGMA index_list(relations)").all() as { name: string }[];
 		const indexNames = indexes.map((i) => i.name);
-		const preExistingIndexes = [
-			"idx_relations_repo",
-			"idx_relations_repo_from_to",
-			"idx_relations_to",
-			"idx_relations_repo_to",
-			"idx_relations_created_at"
-		];
+		const preExistingIndexes = ["idx_relations_repo_from_to", "idx_relations_repo_to", "idx_relations_created_at"];
 		expect(preExistingIndexes.every((name) => indexNames.includes(name))).toBe(true);
+		expect(indexNames).not.toContain("idx_relations_repo");
+		expect(indexNames).not.toContain("idx_relations_to");
 		expect(indexNames.some((name) => name.includes("confidence"))).toBe(false);
 
 		db.close();
