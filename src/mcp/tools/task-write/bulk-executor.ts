@@ -1,14 +1,14 @@
 import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskStatus, TaskPriority, VectorStore, TASK_STATUS_BACKLOG } from "../../types";
-import { logger } from "../../utils/logger";
 import { UUID_REGEX } from "../../utils/uuid";
 import { resolveEntityRef } from "../../utils/entity-ref";
 import { resolveEntityCode } from "../../utils/code-generator";
 import { enqueueTask } from "../../embedding-queue";
-import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps, archiveTaskToMemory } from "../task.helpers";
+import { resolveParentId, resolveDependsOn, deriveTaskStatusTimestamps } from "../task.helpers";
 import { applyDecisionRefs } from "./effects";
 import { validateStatusTransition, validateBulkStatus } from "./state-machine";
+import { archiveCompletedTasks } from "./update-status";
 import { inferItemMode } from "./bulk-infer";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +43,15 @@ export async function executeBulkOperation(
 		if (tc) localCodeMap.set(tc, randomUUID());
 		if (!tc) localCodeMap.set("__create_" + Math.random().toString(36).slice(2, 8), randomUUID());
 	}
+
+	// Completed task ids collected during the per-item loop, grouped by repo.
+	// TASK-044: instead of archiving each completed item inline (one memory per
+	// task), collect them here and archive ONCE per repo after the loop so a
+	// bulk `tasks[]` completion that finishes N tasks in the same repo coalesces
+	// into ONE aggregated task_archive memory (archiveTasksToMemory), matching
+	// the `ids[]` bulk path (handleBulkUpdateByIds). A single completion keeps
+	// the exact per-task archive shape.
+	const completedByRepo = new Map<string, string[]>();
 
 	for (let i = 0; i < items.length; i++) {
 		const raw = items[i];
@@ -191,23 +200,25 @@ export async function executeBulkOperation(
 					}
 				}
 
-				// Archive for completed — awaited BEFORE the tool response resolves
-				// so the task_archive memory rows exist the moment the caller
-				// observes the write (deterministic for the bulk path, no
-				// setImmediate race). Each archive is a compound mutation (task
-				// update + memory INSERT + outbox enqueue via handleMemoryWrite)
-				// and runs under the exclusive file lock (withExclusiveWrite,
-				// OPT-PERF-09) so it never interleaves with another process's
-				// same-class sequence. Best-effort: a per-task archival failure is
-				// logged and does not fail the item or the batch.
+				// Archive for completed — collected here and flushed ONCE per
+				// repo after the loop (TASK-044). Deferring lets a bulk batch
+				// that completes N tasks in one repo coalesce into ONE
+				// aggregated task_archive memory (via archiveCompletedTasks →
+				// archiveTasksToMemory) instead of N per-task rows. The flush
+				// runs under the exclusive file lock (withExclusiveWrite,
+				// OPT-PERF-09) before the response resolves, so the archive
+				// rows exist the moment the caller observes the write.
+				// Best-effort: a batch archival failure is logged and does not
+				// fail the item or the batch.
 				if (itemUpdates.status === "completed" && existing.status !== "completed") {
-					try {
-						await storage.withExclusiveWrite(() => archiveTaskToMemory(resolvedId, repo, storage, vectors));
-					} catch (err) {
-						logger.error("Failed to archive task to memory", { taskId: resolvedId, error: String(err) });
+					const taskRepo = existing.repo || repo;
+					const bucket = completedByRepo.get(taskRepo);
+					if (bucket) {
+						bucket.push(resolvedId);
+					} else {
+						completedByRepo.set(taskRepo, [resolvedId]);
 					}
 				}
-
 				results.push({
 					index: i,
 					operation: "update",
@@ -328,6 +339,15 @@ export async function executeBulkOperation(
 				error: msg
 			});
 		}
+	}
+
+	// Flush collected completions ONCE per repo (TASK-044). A repo with N
+	// completed tasks produces ONE aggregated task_archive memory; a repo with
+	// a single completion keeps the exact per-task archive shape. Best-effort:
+	// archiveCompletedTasks logs and swallows failures so the batch result is
+	// unaffected.
+	for (const [taskRepo, ids] of completedByRepo) {
+		await archiveCompletedTasks(ids, taskRepo, storage, vectors);
 	}
 
 	const failed = results.filter((r) => !r.success);

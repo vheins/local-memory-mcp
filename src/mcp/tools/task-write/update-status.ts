@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { SQLiteStore } from "../../storage/sqlite";
 import { Task, TaskStatus, VectorStore } from "../../types";
 import { logger } from "../../utils/logger";
-import { archiveTaskToMemory } from "../task.helpers";
+import { archiveTasksToMemory } from "../task.helpers";
 
 // ---------------------------------------------------------------------------
 // Status transition logic
@@ -83,10 +83,15 @@ export function handleCoordinationCleanup(
  * Callers await this BEFORE returning the tool response so the task_archive
  * memory rows exist the moment the caller observes the write (deterministic
  * for tests and agents alike — no race window, no deferred work leaking into
- * later requests). Each archive is a compound mutation (task update + memory
+ * later requests). The archive is a compound mutation (task update + memory
  * INSERT + outbox enqueue via handleMemoryWrite), so it runs under the
  * exclusive file lock (withExclusiveWrite, OPT-PERF-09) to never interleave
  * with another process's same-class sequence.
+ *
+ * TASK-039: a multi-id batch (bulk update by ids) is coalesced into ONE
+ * task_archive memory by archiveTasksToMemory — capped content +
+ * metadata.task_ids — instead of N per-task rows. A single id keeps the
+ * per-task archive shape.
  *
  * The archival is intentionally cheap: task_archive skips the conflict check
  * (memory-write/helpers.ts) and ONNX embedding + KG extraction run later via
@@ -99,11 +104,15 @@ export async function archiveCompletedTasks(
 	storage: SQLiteStore,
 	vectors: VectorStore
 ): Promise<void> {
-	for (const taskId of completedTaskIds) {
-		try {
-			await storage.withExclusiveWrite(() => archiveTaskToMemory(taskId, repo, storage, vectors));
-		} catch (err) {
-			logger.error("Failed to archive task to memory", { taskId, error: String(err) });
-		}
+	if (completedTaskIds.length === 0) return;
+	try {
+		// TASK-039: archiveTasksToMemory coalesces a multi-task batch into ONE
+		// task_archive memory (capped content, metadata.task_ids) and delegates
+		// to the per-task archiveTaskToMemory for a single id. The whole batch
+		// runs under one exclusive write so the task_archive row(s) exist the
+		// moment the caller observes the completion.
+		await storage.withExclusiveWrite(() => archiveTasksToMemory(completedTaskIds, repo, storage, vectors));
+	} catch (err) {
+		logger.error("Failed to archive tasks to memory", { taskIds: completedTaskIds, error: String(err) });
 	}
 }

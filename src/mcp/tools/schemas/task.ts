@@ -120,27 +120,25 @@ const TaskWriteFieldDefs = {
 	force: z.boolean().optional()
 } as const;
 
-/** Schema for a single item in the tasks[] bulk array. All fields optional — handler infers create vs update per item. */
+/**
+ * Schema for a single item in the tasks[] bulk array. All fields optional — handler
+ * infers create vs update per item.
+ *
+ * TASK-044 / schema-drift fix: this item schema is built by spreading the canonical
+ * `TaskWriteFieldDefs` so bulk items can NEVER drift from the single-item write path.
+ * The previous hand-rolled copy omitted `commit_id`, `changed_files`, and `model`
+ * (silently stripped by zod, so bulk updates lost those fields) and used a lax
+ * `phase: z.string()` that let an empty phase through. Reusing `TaskWriteFieldDefs`
+ * restores all fields — including `comment`/`force` (read by validateStatusTransition
+ * to drive bulk status transitions), `model` (the status-comment author), and
+ * `phase: z.string().min(1)`.
+ */
 export const TaskWriteItemSchema = z
 	.object({
 		id: z.string().optional(),
 		code: z.string().optional(),
 		task_code: z.string().optional(),
-		phase: z.string().optional(),
-		title: z.string().min(3).max(100).optional(),
-		description: z.string().optional(),
-		status: TaskStatusSchema.optional(),
-		priority: TaskPrioritySchema.optional(),
-		agent: z.string().optional(),
-		role: z.string().optional(),
-		doc_path: z.string().optional(),
-		tags: z.array(z.string()).optional(),
-		suggested_skills: z.array(z.string()).optional(),
-		metadata: z.record(z.string(), z.unknown()).optional(),
-		decision_refs: z.array(z.string()).optional(),
-		parent_id: z.string().optional(),
-		depends_on: z.string().optional(),
-		est_tokens: z.coerce.number().int().min(0).optional()
+		...TaskWriteFieldDefs
 	})
 	.transform((data) => {
 		if (data.task_code !== undefined && data.code === undefined) {

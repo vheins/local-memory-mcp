@@ -183,16 +183,125 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 			expect(t.est_tokens).toBe(500);
 		});
 
-		// Verify task archive memory created
+		// Verify task archive memory created — TASK-039: the multi-id batch is
+		// coalesced into ONE aggregated task_archive memory (not 3 per-task rows).
 		const memories = db.memories.searchByRepo("test", REPO);
 		const archMemories = memories.filter((m) => m.type === "task_archive");
-		expect(archMemories.length).toBe(3);
+		expect(archMemories.length).toBe(1);
+
+		const aggregated = archMemories[0];
+		const aggMeta = aggregated.metadata as { aggregated?: boolean; count?: number; task_ids?: string[] };
+		expect(aggMeta.aggregated).toBe(true);
+		expect(aggMeta.count).toBe(3);
+		expect(aggMeta.task_ids).toEqual(expect.arrayContaining(ids));
+		expect(aggMeta.task_ids?.length).toBe(3);
+		// TASK-039: aggregated archives carry a retention TTL.
+		expect(aggregated.expires_at).not.toBeNull();
 
 		// Verify comments created
 		const comments = db.taskComments.getTaskCommentsByTaskId(ids[0]);
 		expect(comments.length).toBe(1);
 		expect(comments[0].comment).toBe("Bulk completion test");
 		expect(comments[0].next_status).toBe("completed");
+	});
+
+	it("TASK-044: aggregates a tasks[] bulk completion of N tasks into ONE task_archive memory", async () => {
+		// Create 3 tasks in one bulk call.
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [
+					{ task_code: "T44-1", title: "Task 1", description: "D", phase: "p", status: "pending" },
+					{ task_code: "T44-2", title: "Task 2", description: "D", phase: "p", status: "pending" },
+					{ task_code: "T44-3", title: "Task 3", description: "D", phase: "p", status: "pending" }
+				]
+			}
+		});
+
+		const tasks = db.tasks.getTasksByRepo("test", REPO);
+		const ids = tasks.map((t) => t.id);
+
+		// Move all three to in_progress in one bulk `tasks[]` call (no archive yet).
+		const startRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: ids.map((id) => ({ id, status: "in_progress", comment: "starting" }))
+			}
+		});
+		expect(startRes.isError).toBe(false);
+
+		// Complete all three in ONE bulk `tasks[]` call → one aggregated archive.
+		const doneRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: ids.map((id) => ({ id, status: "completed", comment: "done" }))
+			}
+		});
+		expect(doneRes.isError).toBe(false);
+
+		const updatedTasks = db.tasks.getTasksByRepo("test", REPO);
+		updatedTasks.forEach((t) => expect(t.status).toBe("completed"));
+
+		// Exactly ONE aggregated task_archive memory — not three per-task rows.
+		const archMemories = db.memories.searchByRepo("test", REPO).filter((m) => m.type === "task_archive");
+		expect(archMemories.length).toBe(1);
+
+		const aggMeta = archMemories[0].metadata as { aggregated?: boolean; count?: number; task_ids?: string[] };
+		expect(aggMeta.aggregated).toBe(true);
+		expect(aggMeta.count).toBe(3);
+		expect(aggMeta.task_ids).toEqual(expect.arrayContaining(ids));
+		expect(aggMeta.task_ids?.length).toBe(3);
+		// Retention TTL is applied by archiveTasksToMemory.
+		expect(archMemories[0].expires_at).not.toBeNull();
+	});
+
+	it("TASK-044: a single-task tasks[] bulk completion keeps the exact per-task archive shape", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [{ task_code: "T44S-1", title: "Solo Task", description: "D", phase: "p", status: "pending" }]
+			}
+		});
+
+		const task = db.tasks.getTasksByRepo("test", REPO).find((t) => t.task_code === "T44S-1")!;
+
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [{ id: task.id, status: "in_progress", comment: "starting" }]
+			}
+		});
+
+		const doneRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [{ id: task.id, status: "completed", comment: "done" }]
+			}
+		});
+		expect(doneRes.isError).toBe(false);
+
+		const archMemories = db.memories.searchByRepo("test", REPO).filter((m) => m.type === "task_archive");
+		expect(archMemories.length).toBe(1);
+
+		const archive = archMemories[0];
+		// Per-task shape: title names the task, metadata carries task_id (no aggregate).
+		expect(archive.title).toBe("Completed Task: Solo Task");
+		const meta = archive.metadata as { task_id?: string; aggregated?: boolean };
+		expect(meta.task_id).toBe(task.id);
+		expect(meta.aggregated).toBeUndefined();
+		expect(archive.expires_at).not.toBeNull();
 	});
 
 	it("should bulk update statuses and record in-progress timestamps", async () => {
@@ -382,6 +491,130 @@ describe("MCP Local Memory - Consolidated Task Tools Bulk (update / soft-delete 
 		// The real task was canceled; the phantom id changed nothing.
 		const stored = db.tasks.getTaskById(realId);
 		expect(stored!.status).toBe("canceled");
+	});
+
+	// ─── Schema-drift regression: bulk tasks[] item must expose EVERY field ──
+	// The item schema is now built from the canonical TaskWriteFieldDefs. These
+	// tests pin the fields that the old hand-rolled copy silently stripped
+	// (comment/force/model/commit_id/changed_files) plus the tightened phase min.
+
+	it("schema-drift: a bulk tasks[] status update with force:true and NO comment succeeds", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [{ task_code: "FORCE-1", title: "Force Task", description: "D", phase: "p", status: "pending" }]
+			}
+		});
+
+		const task = db.tasks.getTasksByRepo("test", REPO).find((t) => t.task_code === "FORCE-1")!;
+
+		// backlog/pending → completed must pass through in_progress first.
+		const startRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [{ id: task.id, status: "in_progress", comment: "starting" }]
+			}
+		});
+		expect(startRes.isError).toBe(false);
+
+		// force:true bypasses the "comment is required" gate — the item schema
+		// MUST carry `force` or zod strips it and this transition fails.
+		const doneRes = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [{ id: task.id, status: "completed", force: true }]
+			}
+		});
+		expect(doneRes.isError).toBe(false);
+
+		const updated = db.tasks.getTaskById(task.id);
+		expect(updated?.status).toBe("completed");
+	});
+
+	it("schema-drift: a bulk tasks[] update persists commit_id + changed_files", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [{ task_code: "CF-1", title: "Commit Files", description: "D", phase: "p", status: "pending" }]
+			}
+		});
+
+		const task = db.tasks.getTasksByRepo("test", REPO).find((t) => t.task_code === "CF-1")!;
+
+		const res = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [
+					{
+						id: task.id,
+						commit_id: "abc1234",
+						changed_files: ["src/a.ts", "src/b.ts"]
+					}
+				]
+			}
+		});
+		expect(res.isError).toBe(false);
+
+		// Read back — commit_id/changed_files MUST persist (they were stripped
+		// from the old item schema, so the update silently no-op'd).
+		const stored = db.tasks.getTaskById(task.id);
+		expect(stored?.commit_id).toBe("abc1234");
+		expect(stored?.changed_files).toEqual(["src/a.ts", "src/b.ts"]);
+	});
+
+	it("schema-drift: a bulk tasks[] item with phase:'' is rejected at the schema layer (min 1)", async () => {
+		const res = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [{ task_code: "EMPTY-1", title: "Empty Phase", description: "D", phase: "", status: "pending" }]
+			}
+		});
+
+		expect(res.isError).toBe(true);
+		expect(getTextContent(res)).toMatch(/phase/i);
+		// Nothing was created — the request failed before execution.
+		expect(db.tasks.getTasksByRepo("test", REPO).length).toBe(0);
+	});
+
+	it("schema-drift: a bulk tasks[] status update records the provided model on the comment", async () => {
+		await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				repo: REPO,
+				owner: "test",
+				tasks: [{ task_code: "MODEL-1", title: "Model Task", description: "D", phase: "p", status: "pending" }]
+			}
+		});
+
+		const task = db.tasks.getTasksByRepo("test", REPO).find((t) => t.task_code === "MODEL-1")!;
+
+		const res = await router("tools/call", {
+			name: "task-write",
+			arguments: {
+				owner: "test",
+				repo: REPO,
+				tasks: [{ id: task.id, status: "in_progress", comment: "starting", model: "claude-test-model" }]
+			}
+		});
+		expect(res.isError).toBe(false);
+
+		const comments = db.taskComments.getTaskCommentsByTaskId(task.id);
+		expect(comments.length).toBe(1);
+		// `model` is read off the raw item to author the status comment; if the
+		// item schema stripped it, this would fall back to "unknown".
+		expect(comments[0].model).toBe("claude-test-model");
 	});
 
 	it("should report success:false when every target of a bulk delete is missing (all-negative)", async () => {
