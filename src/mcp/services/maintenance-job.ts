@@ -124,7 +124,7 @@ export async function runStartupMaintenance(
 	// (OPT-PERF-09: routed through withExclusiveWrite). All sweep steps are
 	// synchronous SQL work, so lock hold time stays in the ms range; the "ran
 	// recently" check above is a pure read and stays outside the lock.
-	const result = await db.withExclusiveWrite((): MaintenanceResult => {
+	const result = await db.withExclusiveWrite(async (): Promise<MaintenanceResult> => {
 		// 1. Apply biological decay
 		const decay = applyDecay(db.db, decayOptions);
 
@@ -146,7 +146,7 @@ export async function runStartupMaintenance(
 		//    entities that only those edges kept alive (audit F1). Bounded per
 		//    run and per transaction, so a large backlog converges across
 		//    maintenance cycles instead of blocking this startup.
-		const prunedRelationsResult = pruneRelations(db.knowledgeGraph);
+		const prunedRelationsResult = await pruneRelations(db.knowledgeGraph);
 
 		// 7. Reclaim freelist pages freed by the prunes above (TASK-033). Bounded
 		//    and cheap, and a no-op unless the DB is already auto_vacuum=INCREMENTAL
@@ -190,8 +190,10 @@ export async function runStartupMaintenance(
 
 	// Discoverability without action: a full VACUUM is never automatic (it needs
 	// ~2x free disk and a full write lock), so when the freelist is large enough
-	// to be worth reclaiming we log a recommendation for an operator to run the
-	// deliberate path (ensureIncrementalAutoVacuum → incremental_vacuum). Pure
+	// to be worth reclaiming we log a recommendation for an operator to reclaim
+	// it. A plain SQLite `VACUUM` reclaims the freelist, and that is the only
+	// mechanism an installed user can actually run today (there is no CLI
+	// subcommand, npm script, or env var that triggers the vacuum helpers). Pure
 	// read; never triggers a rewrite. TASK-034.
 	try {
 		const vacuumState = getVacuumState(db);
@@ -201,7 +203,7 @@ export async function runStartupMaintenance(
 				pageCount: vacuumState.pageCount,
 				freelistBytes: vacuumState.freelistBytes,
 				autoVacuum: vacuumState.autoVacuum,
-				hint: "Run the deliberate vacuum path (ensureIncrementalAutoVacuum) to reclaim space"
+				hint: `Reclaim freed pages by running a full VACUUM on the database file with the server stopped: sqlite3 "${db.getDbPath()}" 'VACUUM;'`
 			});
 		}
 	} catch (err) {

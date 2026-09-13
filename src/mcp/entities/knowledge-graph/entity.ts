@@ -454,7 +454,7 @@ export class KnowledgeGraphEntity extends BaseEntity {
 		return this.retention.countPrunableRelations(cutoff);
 	}
 
-	deleteUnreachableRelations(cutoff: string, maxRows: number, chunkSize: number): number {
+	deleteUnreachableRelations(cutoff: string, maxRows: number, chunkSize: number): Promise<number> {
 		return this.retention.deleteUnreachableRelations(cutoff, maxRows, chunkSize);
 	}
 

@@ -132,12 +132,20 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 	 * (31%), `PRAGMA integrity_check` = ok, `PRAGMA foreign_key_check` = 0
 	 * violations.
 	 *
+	 * **Async only to yield between chunks.** The sweep is otherwise pure
+	 * synchronous better-sqlite3 work, but a 500k-row cap (TASK-041) would hold
+	 * the Node.js event loop for ~28s in one shot, starving the MCP server and
+	 * letting `proper-lockfile`'s 15s heartbeat go stale (stale=30s) while the
+	 * whole sweep holds `withExclusiveWrite`. Yielding between chunks keeps the
+	 * server responsive and the exclusive lock refreshed without changing the
+	 * cap/chunk/tail semantics.
+	 *
 	 * @param cutoff - ISO timestamp; only edges older than this are eligible.
 	 * @param maxRows - Hard cap on rows deleted this call. `0` = no-op.
 	 * @param chunkSize - Rows per transaction (write-lock hold bound).
 	 * @returns Number of relation rows deleted.
 	 */
-	deleteUnreachableRelations(cutoff: string, maxRows: number, chunkSize: number): number {
+	async deleteUnreachableRelations(cutoff: string, maxRows: number, chunkSize: number): Promise<number> {
 		if (maxRows <= 0) return 0;
 
 		// Cheap terminal gate: if NO edge is even age-eligible, skip the sweep
@@ -174,6 +182,10 @@ export class KnowledgeGraphRetentionEntity extends BaseEntity {
 			const removed = this.transaction(() => this.run(deleteChunkSql, [cutoff, want]).changes);
 			if (removed === 0) break;
 			deleted += removed;
+			// Yield to the event loop between chunks so the MCP server stays
+			// responsive and the exclusive write lock (proper-lockfile) can refresh
+			// its 15s heartbeat — a 500k-row sweep is otherwise a ~28s main-thread freeze.
+			await new Promise<void>((resolve) => setImmediate(resolve));
 		}
 		return deleted;
 	}

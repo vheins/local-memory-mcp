@@ -352,7 +352,7 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 	});
 	afterEach(() => db.close());
 
-	it("deletes only OLD edges whose BOTH endpoints are unobserved", () => {
+	it("deletes only OLD edges whose BOTH endpoints are unobserved", async () => {
 		seedEntity(db, "orphanA", REPO, OLD);
 		seedEntity(db, "orphanB", REPO, OLD);
 		seedRelation(db, "orphanA", "orphanB", { created_at: OLD });
@@ -362,7 +362,7 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		seedObservation(db, "observedA", observationText("memory", "Some Memory"), REPO, OLD);
 		seedRelation(db, "observedA", "observedB", { created_at: OLD });
 
-		const deleted = db.knowledgeGraph.deleteUnreachableRelations(NOW, 1000, 100);
+		const deleted = await db.knowledgeGraph.deleteUnreachableRelations(NOW, 1000, 100);
 
 		expect(deleted).toBe(1);
 		expect(countRelations(db)).toBe(1);
@@ -370,44 +370,44 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		expect(survivor.from_entity).toBe("observedA");
 	});
 
-	it("prunes an edge when its endpoint is observed only in another repository", () => {
+	it("prunes an edge when its endpoint is observed only in another repository", async () => {
 		seedEntity(db, "sharedA", "repo-a", OLD);
 		seedEntity(db, "sharedA", "repo-b", OLD);
 		seedEntity(db, "sharedB", "repo-b", OLD);
 		seedObservation(db, "sharedA", observationText("memory", "Cross Memory"), "repo-a", OLD);
 		seedRelation(db, "sharedA", "sharedB", { repo: "repo-b", created_at: OLD });
 
-		expect(db.knowledgeGraph.deleteUnreachableRelations(NOW, 1000, 100)).toBe(1);
+		expect(await db.knowledgeGraph.deleteUnreachableRelations(NOW, 1000, 100)).toBe(1);
 		expect(countRelations(db)).toBe(0);
 	});
 
-	it("respects the age guard — fresh edges are never swept", () => {
+	it("respects the age guard — fresh edges are never swept", async () => {
 		seedEntity(db, "freshA", REPO, NOW);
 		seedEntity(db, "freshB", REPO, NOW);
 		seedRelation(db, "freshA", "freshB", { created_at: NOW });
 
-		expect(db.knowledgeGraph.deleteUnreachableRelations(OLD, 1000, 100)).toBe(0);
+		expect(await db.knowledgeGraph.deleteUnreachableRelations(OLD, 1000, 100)).toBe(0);
 	});
 
-	it("honours maxRows and converges across successive runs", () => {
+	it("honours maxRows and converges across successive runs", async () => {
 		for (let i = 0; i < 10; i++) {
 			seedEntity(db, `a${i}`, REPO, OLD);
 			seedEntity(db, `b${i}`, REPO, OLD);
 			seedRelation(db, `a${i}`, `b${i}`, { created_at: OLD });
 		}
 
-		expect(db.knowledgeGraph.deleteUnreachableRelations(NOW, 4, 2)).toBe(4);
+		expect(await db.knowledgeGraph.deleteUnreachableRelations(NOW, 4, 2)).toBe(4);
 		expect(countRelations(db)).toBe(6);
-		expect(db.knowledgeGraph.deleteUnreachableRelations(NOW, 100, 2)).toBe(6);
+		expect(await db.knowledgeGraph.deleteUnreachableRelations(NOW, 100, 2)).toBe(6);
 		expect(countRelations(db)).toBe(0);
 	});
 
-	it("maxRows <= 0 is a no-op", () => {
+	it("maxRows <= 0 is a no-op", async () => {
 		seedEntity(db, "x", REPO, OLD);
 		seedEntity(db, "y", REPO, OLD);
 		seedRelation(db, "x", "y", { created_at: OLD });
 
-		expect(db.knowledgeGraph.deleteUnreachableRelations(NOW, 0, 100)).toBe(0);
+		expect(await db.knowledgeGraph.deleteUnreachableRelations(NOW, 0, 100)).toBe(0);
 		expect(countRelations(db)).toBe(1);
 	});
 
@@ -420,7 +420,29 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		expect(countRelations(db)).toBe(1);
 	});
 
-	it("pruneRelations sweeps the now-orphaned entities and reports the exact remainder at the tail", () => {
+	it("yields to the event loop between chunks so the sweep never blocks the main thread", async () => {
+		// 10 prunable edges; cap 4 / chunk 2 → two chunks, so the sweep must
+		// yield at least once between them.
+		for (let i = 0; i < 10; i++) {
+			seedEntity(db, `a${i}`, REPO, OLD);
+			seedEntity(db, `b${i}`, REPO, OLD);
+			seedRelation(db, `a${i}`, `b${i}`, { created_at: OLD });
+		}
+
+		const order: string[] = [];
+
+		// Scheduled BEFORE the sweep starts: if the loop never yielded, the
+		// sweep would run to completion in the same tick, so the microtask
+		// continuation would push "sweep" BEFORE this macrotask ever fires.
+		setImmediate(() => order.push("external"));
+
+		const sweep = db.knowledgeGraph.deleteUnreachableRelations(NOW, 4, 2);
+		await sweep.then(() => order.push("sweep"));
+
+		expect(order).toEqual(["external", "sweep"]);
+	});
+
+	it("pruneRelations sweeps the now-orphaned entities and reports the exact remainder at the tail", async () => {
 		for (let i = 0; i < 6; i++) {
 			seedEntity(db, `o${i}`, REPO, OLD);
 			seedEntity(db, `t${i}`, REPO, OLD);
@@ -430,7 +452,7 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		// maxRows 4 with chunk 2: deletes 4 (< cap is impossible here since it
 		// hits the cap)... so drive the TAIL explicitly: first a capped run,
 		// then a tail run.
-		const capped = pruneRelations(db.knowledgeGraph, 0, 4, 2);
+		const capped = await pruneRelations(db.knowledgeGraph, 0, 4, 2);
 
 		expect(capped.deleted).toBe(4);
 		// 8 endpoints lost their only reference.
@@ -440,13 +462,13 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 
 		// Second run: only 2 eligible rows remain, cap is 4 → tail reached, so
 		// the exact remaining count IS computed (and is 0).
-		const tail = pruneRelations(db.knowledgeGraph, 0, 4, 2);
+		const tail = await pruneRelations(db.knowledgeGraph, 0, 4, 2);
 
 		expect(tail.deleted).toBe(2);
 		expect(tail.remaining).toBe(0);
 	});
 
-	it("pruneRelations reports an EXACT remaining count when the run does not hit the cap", () => {
+	it("pruneRelations reports an EXACT remaining count when the run does not hit the cap", async () => {
 		for (let i = 0; i < 6; i++) {
 			seedEntity(db, `o${i}`, REPO, OLD);
 			seedEntity(db, `t${i}`, REPO, OLD);
@@ -455,13 +477,13 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 
 		// Cap of 100 > 6 eligible: the sweep drains the tail, so the correlated
 		// count runs once and returns the (exact) zero.
-		const result = pruneRelations(db.knowledgeGraph, 0, 100, 2);
+		const result = await pruneRelations(db.knowledgeGraph, 0, 100, 2);
 
 		expect(result.deleted).toBe(6);
 		expect(result.remaining).toBe(0);
 	});
 
-	it("pruneRelations SKIPS the expensive remaining count when the run hits the cap (TASK-041)", () => {
+	it("pruneRelations SKIPS the expensive remaining count when the run hits the cap (TASK-041)", async () => {
 		for (let i = 0; i < 10; i++) {
 			seedEntity(db, `o${i}`, REPO, OLD);
 			seedEntity(db, `t${i}`, REPO, OLD);
@@ -471,7 +493,7 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		// Spy on the exact count and assert it is never invoked on a capped run.
 		const countSpy = vi.spyOn(db.knowledgeGraph, "countPrunableRelations");
 
-		const result = pruneRelations(db.knowledgeGraph, 0, 4, 2);
+		const result = await pruneRelations(db.knowledgeGraph, 0, 4, 2);
 
 		expect(result.deleted).toBe(4);
 		expect(result.remaining).toBe(KG_RELATION_PRUNE_REMAINING_UNKNOWN);
@@ -479,8 +501,8 @@ describe("KG audit F1 — deleteUnreachableRelations", () => {
 		expect(countSpy).not.toHaveBeenCalled();
 	});
 
-	it("pruneRelations short-circuits with zeros when nothing is eligible", () => {
-		expect(pruneRelations(db.knowledgeGraph, 0, 1000, 100)).toEqual({
+	it("pruneRelations short-circuits with zeros when nothing is eligible", async () => {
+		expect(await pruneRelations(db.knowledgeGraph, 0, 1000, 100)).toEqual({
 			deleted: 0,
 			orphanEntitiesDeleted: 0,
 			remaining: 0

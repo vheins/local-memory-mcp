@@ -264,17 +264,17 @@ describe("pruneObservations", () => {
 });
 
 describe("pruneRelations observability", () => {
-	it("logs the configured retention window", () => {
+	it("logs the configured retention window", async () => {
 		const logs: Array<Record<string, unknown>> = [];
 		const removeSink = addLogSink((payload) => logs.push(payload.data));
 		const kg = {
-			deleteUnreachableRelations: vi.fn().mockReturnValue(2),
+			deleteUnreachableRelations: vi.fn().mockResolvedValue(2),
 			deleteOrphanEntities: vi.fn().mockReturnValue(1),
 			countPrunableRelations: vi.fn().mockReturnValue(4)
 		} as unknown as KnowledgeGraphEntity;
 
 		try {
-			pruneRelations(kg, 21, 100, 10);
+			await pruneRelations(kg, 21, 100, 10);
 		} finally {
 			removeSink();
 		}
@@ -282,30 +282,30 @@ describe("pruneRelations observability", () => {
 		expect(logs).toContainEqual(expect.objectContaining({ retentionDays: 21, deleted: 2, remaining: 4 }));
 	});
 
-	it("counts the exact remainder when the run does NOT hit the cap (TASK-041)", () => {
+	it("counts the exact remainder when the run does NOT hit the cap (TASK-041)", async () => {
 		const kg = {
-			deleteUnreachableRelations: vi.fn().mockReturnValue(2),
+			deleteUnreachableRelations: vi.fn().mockResolvedValue(2),
 			deleteOrphanEntities: vi.fn().mockReturnValue(1),
 			countPrunableRelations: vi.fn().mockReturnValue(4)
 		} as unknown as KnowledgeGraphEntity;
 
 		// deleted 2 < maxRows 100 → tail reached → exact count is consulted.
-		const result = pruneRelations(kg, 21, 100, 10);
+		const result = await pruneRelations(kg, 21, 100, 10);
 
 		expect(result).toEqual({ deleted: 2, orphanEntitiesDeleted: 1, remaining: 4 });
 		expect(kg.countPrunableRelations).toHaveBeenCalledTimes(1);
 	});
 
-	it("SKIPS the expensive count and reports the sentinel when the run hits the cap (TASK-041)", () => {
+	it("SKIPS the expensive count and reports the sentinel when the run hits the cap (TASK-041)", async () => {
 		const kg = {
-			deleteUnreachableRelations: vi.fn().mockReturnValue(100),
+			deleteUnreachableRelations: vi.fn().mockResolvedValue(100),
 			deleteOrphanEntities: vi.fn().mockReturnValue(1),
 			countPrunableRelations: vi.fn().mockReturnValue(4)
 		} as unknown as KnowledgeGraphEntity;
 
 		// deleted 100 === maxRows 100 → cap hit → a backlog provably remains,
 		// so the correlated count must NOT run.
-		const result = pruneRelations(kg, 21, 100, 10);
+		const result = await pruneRelations(kg, 21, 100, 10);
 
 		expect(result).toEqual({ deleted: 100, orphanEntitiesDeleted: 1, remaining: -1 });
 		expect(kg.countPrunableRelations).not.toHaveBeenCalled();

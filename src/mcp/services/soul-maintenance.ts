@@ -296,6 +296,13 @@ export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentio
  * 4,937 entities removed, `VACUUM` reclaimed 536 → 368 MB (31%), integrity
  * check ok, 0 foreign-key violations.
  *
+ * **Async only because the underlying bounded delete yields between chunks.**
+ * A 500k-row cap (KG_RELATION_PRUNE_MAX_ROWS) would otherwise hold the Node.js
+ * event loop for ~28s; `deleteUnreachableRelations` now awaits a `setImmediate`
+ * between chunks so the MCP server stays responsive and `proper-lockfile`'s
+ * 15s heartbeat can refresh while `withExclusiveWrite` is held. All other
+ * semantics (cap/chunk/tail/sentinel) are unchanged.
+ *
  * @param knowledgeGraph - The KnowledgeGraphEntity
  * @param retentionDays - Age guard in days (default: KG_RELATION_RETENTION_DAYS)
  * @param maxRows - Hard cap on relation rows deleted this run
@@ -303,15 +310,15 @@ export function pruneObservations(knowledgeGraph: KnowledgeGraphEntity, retentio
  * @returns Relations deleted, entities swept, and the remaining backlog (exact
  *   when the run drained the tail, else KG_RELATION_PRUNE_REMAINING_UNKNOWN)
  */
-export function pruneRelations(
+export async function pruneRelations(
 	knowledgeGraph: KnowledgeGraphEntity,
 	retentionDays = KG_RELATION_RETENTION_DAYS,
 	maxRows = KG_RELATION_PRUNE_MAX_ROWS,
 	chunkSize = KG_RELATION_PRUNE_CHUNK
-): PruneRelationsResult {
+): Promise<PruneRelationsResult> {
 	const cutoff = new Date(Date.now() - retentionDays * TTL_MS_PER_DAY).toISOString();
 
-	const deleted = knowledgeGraph.deleteUnreachableRelations(cutoff, maxRows, chunkSize);
+	const deleted = await knowledgeGraph.deleteUnreachableRelations(cutoff, maxRows, chunkSize);
 	if (deleted === 0) return { deleted: 0, orphanEntitiesDeleted: 0, remaining: 0 };
 
 	// The edges are gone; their endpoint entities may now be orphans. This is
