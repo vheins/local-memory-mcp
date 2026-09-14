@@ -137,9 +137,17 @@
 			</div>
 			<div style="font-size:0.75rem;color:var(--color-text-muted);">Execution throughput</div>
 		</div>
-		<div class="flex gap-1" style="background:rgba(241,245,249,0.5);padding:3px;border-radius:10px;">
+		<div
+			class="flex gap-1"
+			role="tablist"
+			aria-label="Time performance periods"
+			style="background:rgba(241,245,249,0.5);padding:3px;border-radius:10px;"
+		>
 			{#each periods as p, i (`${p.id}-${i}`)}
 				<button
+					role="tab"
+					aria-selected={$activePeriod === p.id}
+					tabindex={$activePeriod === p.id ? 0 : -1}
 					class="tab-btn"
 					class:active={$activePeriod === p.id}
 					on:click={() => setActivePeriod(p.id)}

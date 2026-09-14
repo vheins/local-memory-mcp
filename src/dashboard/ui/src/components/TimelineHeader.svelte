@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Icon from "$lib/Icon.svelte";
+	import Icon from "../lib/Icon.svelte";
 
 	export let expanded: boolean = false;
 	export let paused: boolean = false;
@@ -25,17 +25,47 @@
 <!-- Expanded panel -->
 {#if expanded}
 	<div class="timeline-filters">
-		<div class="filter-group">
-			<button class="filter-btn" class:active={activeFilter === "all"} on:click={() => onSetFilter("all")}>All</button>
-			<button class="filter-btn" class:active={activeFilter === "errors"} on:click={() => onSetFilter("errors")}
-				>Errors</button
+		<div class="filter-group" role="tablist" aria-label="Event log filters">
+			<button
+				role="tab"
+				aria-selected={activeFilter === "all"}
+				tabindex={activeFilter === "all" ? 0 : -1}
+				class="filter-btn"
+				class:active={activeFilter === "all"}
+				on:click={() => onSetFilter("all")}
 			>
-			<button class="filter-btn" class:active={activeFilter === "tasks"} on:click={() => onSetFilter("tasks")}
-				>Tasks</button
+				All
+			</button>
+			<button
+				role="tab"
+				aria-selected={activeFilter === "errors"}
+				tabindex={activeFilter === "errors" ? 0 : -1}
+				class="filter-btn"
+				class:active={activeFilter === "errors"}
+				on:click={() => onSetFilter("errors")}
 			>
-			<button class="filter-btn" class:active={activeFilter === "agents"} on:click={() => onSetFilter("agents")}
-				>Agents</button
+				Errors
+			</button>
+			<button
+				role="tab"
+				aria-selected={activeFilter === "tasks"}
+				tabindex={activeFilter === "tasks" ? 0 : -1}
+				class="filter-btn"
+				class:active={activeFilter === "tasks"}
+				on:click={() => onSetFilter("tasks")}
 			>
+				Tasks
+			</button>
+			<button
+				role="tab"
+				aria-selected={activeFilter === "agents"}
+				tabindex={activeFilter === "agents" ? 0 : -1}
+				class="filter-btn"
+				class:active={activeFilter === "agents"}
+				on:click={() => onSetFilter("agents")}
+			>
+				Agents
+			</button>
 		</div>
 		<div class="spacer"></div>
 		<button
