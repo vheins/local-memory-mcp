@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { hasMetadataLikeTitle, resolveMemorySupersedes } from "../../utils/memory-utils";
+import { hasMetadataLikeTitle, isMemoryAcknowledged, resolveMemorySupersedes } from "../../utils/memory-utils";
 import type { SQLiteStore } from "../../storage/sqlite";
 
 function makeStorage() {
@@ -61,5 +61,16 @@ describe("resolveMemorySupersedes", () => {
 		const getByCode = vi.mocked(storage.memories.getByCode) as ReturnType<typeof vi.fn>;
 		getByCode.mockReturnValue(null);
 		expect(() => resolveMemorySupersedes("MEM-404", storage)).toThrow("Memory not found: MEM-404");
+	});
+});
+
+describe("isMemoryAcknowledged", () => {
+	it("returns true when recall_count is greater than zero", () => {
+		expect(isMemoryAcknowledged({ recall_count: 1 })).toBe(true);
+		expect(isMemoryAcknowledged({ recall_count: 7 })).toBe(true);
+	});
+
+	it("returns false when recall_count is zero", () => {
+		expect(isMemoryAcknowledged({ recall_count: 0 })).toBe(false);
 	});
 });

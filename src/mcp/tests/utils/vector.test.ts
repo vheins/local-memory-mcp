@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
-import { computeVector, cosineSimilarity, cosineSimilarityArrays, createTfVectorCache } from "../../utils/vector";
+import {
+	computeVector,
+	cosineSimilarity,
+	cosineSimilarityArrays,
+	createTfVectorCache,
+	decodeVector,
+	encodeVector
+} from "../../utils/vector";
 import { tokenize } from "../../utils/normalize";
 
 // Null-prototype accumulator so arbitrary tokens (including Object.prototype
@@ -194,5 +201,77 @@ describe("createTfVectorCache", () => {
 		const a2 = cache.get("a", "alpha", "t1");
 		expect(a2).not.toBe(a1);
 		expect(a2).toEqual({ alpha: 1 });
+	});
+});
+
+describe("encodeVector", () => {
+	it("encodes a Float32Array as a float32 BLOB", () => {
+		const encoded = encodeVector(Float32Array.from([1, 2, 3]));
+		expect(encoded).toBeInstanceOf(Buffer);
+		expect((encoded as Buffer).byteLength).toBe(3 * 4);
+	});
+
+	it("encodes a number[] as a float32 BLOB", () => {
+		const encoded = encodeVector([1.5, 2.5]);
+		expect(encoded).toBeInstanceOf(Buffer);
+		expect((encoded as Buffer).byteLength).toBe(2 * 4);
+	});
+
+	it("keeps sparse term-frequency maps (plain objects) as legacy JSON TEXT", () => {
+		const encoded = encodeVector({ constructor: 2, pattern: 1 });
+		expect(typeof encoded).toBe("string");
+		expect(JSON.parse(encoded as string)).toEqual({ constructor: 2, pattern: 1 });
+	});
+
+	it("keeps primitives as legacy JSON TEXT", () => {
+		expect(encodeVector(42)).toBe("42");
+		expect(encodeVector(null)).toBe("null");
+	});
+});
+
+describe("decodeVector", () => {
+	it("decodes a float32 BLOB back into a Float32Array", () => {
+		const decoded = decodeVector(encodeVector(Float32Array.from([1, 2, 3])));
+		expect(decoded).toBeInstanceOf(Float32Array);
+		expect(Array.from(decoded)).toEqual([1, 2, 3]);
+	});
+
+	it("decodes a legacy JSON number[] string", () => {
+		const decoded = decodeVector("[1.5, 2.5, 3]");
+		expect(decoded).toBeInstanceOf(Float32Array);
+		expect(Array.from(decoded)).toEqual([1.5, 2.5, 3]);
+	});
+
+	it("realigns an unaligned BLOB view via a one-time copy", () => {
+		const source = Float32Array.from([1, 2, 3]);
+		const raw = Buffer.from(source.buffer, source.byteOffset, source.byteLength);
+		// Back the same bytes with a 1-byte leading pad so the Uint8Array view
+		// has a byteOffset that is not 4-byte aligned.
+		const misaligned = new Uint8Array(new ArrayBuffer(raw.byteLength + 1), 1, raw.byteLength);
+		misaligned.set(raw);
+		expect(misaligned.byteOffset % 4).not.toBe(0);
+
+		const decoded = decodeVector(misaligned);
+		expect(decoded).toBeInstanceOf(Float32Array);
+		expect(Array.from(decoded)).toEqual([1, 2, 3]);
+	});
+
+	it("returns an empty Float32Array for null/undefined", () => {
+		expect(Array.from(decodeVector(null))).toEqual([]);
+		expect(Array.from(decodeVector(undefined))).toEqual([]);
+	});
+
+	it("returns an empty Float32Array for malformed JSON", () => {
+		expect(Array.from(decodeVector("{not json"))).toEqual([]);
+	});
+
+	it("returns an empty Float32Array for non-array JSON", () => {
+		expect(Array.from(decodeVector('{"a":1}'))).toEqual([]);
+		expect(Array.from(decodeVector("42"))).toEqual([]);
+	});
+
+	it("returns an empty Float32Array for unrecognized value types", () => {
+		expect(Array.from(decodeVector(123))).toEqual([]);
+		expect(Array.from(decodeVector({ a: 1 }))).toEqual([]);
 	});
 });
